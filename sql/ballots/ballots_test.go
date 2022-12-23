@@ -13,7 +13,7 @@ import (
 func TestLayer(t *testing.T) {
 	db := sql.InMemory()
 	start := types.NewLayerID(1)
-	pub := []byte{1, 1, 1}
+	pub := types.BytesToNodeID([]byte{1, 1, 1})
 	ballots := []types.Ballot{
 		types.NewExistingBallot(types.BallotID{1}, nil, pub, types.InnerBallot{LayerIndex: start}),
 		types.NewExistingBallot(types.BallotID{2}, nil, pub, types.InnerBallot{LayerIndex: start}),
@@ -33,7 +33,7 @@ func TestLayer(t *testing.T) {
 		require.Equal(t, &ballots[i], ballot)
 	}
 
-	require.NoError(t, identities.SetMalicious(db, pub))
+	require.NoError(t, identities.SetMalicious(db, pub.Bytes()))
 	rst, err = Layer(db, start)
 	require.NoError(t, err)
 	require.Len(t, rst, len(ballots))
@@ -44,9 +44,8 @@ func TestLayer(t *testing.T) {
 
 func TestAdd(t *testing.T) {
 	db := sql.InMemory()
-	pub := []byte{1, 1}
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub,
-		types.InnerBallot{})
+	pub := types.BytesToNodeID([]byte{1, 1})
+	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.InnerBallot{})
 	_, err := Get(db, ballot.ID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
@@ -57,7 +56,7 @@ func TestAdd(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, &ballot, stored)
 
-	require.NoError(t, identities.SetMalicious(db, pub))
+	require.NoError(t, identities.SetMalicious(db, pub.Bytes()))
 	stored, err = Get(db, ballot.ID())
 	require.NoError(t, err)
 	require.True(t, stored.IsMalicious())
@@ -65,8 +64,7 @@ func TestAdd(t *testing.T) {
 
 func TestHas(t *testing.T) {
 	db := sql.InMemory()
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{}, []byte{},
-		types.InnerBallot{})
+	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{}, types.NodeID{}, types.InnerBallot{})
 
 	exists, err := Has(db, ballot.ID())
 	require.NoError(t, err)
@@ -84,15 +82,13 @@ func TestLatest(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.LayerID{}, latest)
 
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{}, []byte{},
-		types.InnerBallot{LayerIndex: types.NewLayerID(11)})
+	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{}, types.NodeID{}, types.InnerBallot{LayerIndex: types.NewLayerID(11)})
 	require.NoError(t, Add(db, &ballot))
 	latest, err = LatestLayer(db)
 	require.NoError(t, err)
 	require.Equal(t, ballot.LayerIndex, latest)
 
-	newBallot := types.NewExistingBallot(types.BallotID{2}, []byte{}, []byte{},
-		types.InnerBallot{LayerIndex: types.NewLayerID(12)})
+	newBallot := types.NewExistingBallot(types.BallotID{2}, []byte{}, types.NodeID{}, types.InnerBallot{LayerIndex: types.NewLayerID(12)})
 	require.NoError(t, Add(db, &newBallot))
 	latest, err = LatestLayer(db)
 	require.NoError(t, err)
@@ -102,8 +98,8 @@ func TestLatest(t *testing.T) {
 func TestCountByPubkeyLayer(t *testing.T) {
 	db := sql.InMemory()
 	lid := types.NewLayerID(1)
-	pub1 := []byte{1, 1, 1}
-	pub2 := []byte{2, 2, 2}
+	pub1 := types.BytesToNodeID([]byte{1, 1, 1})
+	pub2 := types.BytesToNodeID([]byte{2, 2, 2})
 	ballots := []types.Ballot{
 		types.NewExistingBallot(types.BallotID{1}, nil, pub1, types.InnerBallot{LayerIndex: lid}),
 		types.NewExistingBallot(types.BallotID{2}, nil, pub1, types.InnerBallot{LayerIndex: lid.Add(1)}),
@@ -114,10 +110,10 @@ func TestCountByPubkeyLayer(t *testing.T) {
 		require.NoError(t, Add(db, &ballot))
 	}
 
-	count, err := CountByPubkeyLayer(db, lid, pub1)
+	count, err := CountByPubkeyLayer(db, lid, pub1.Bytes())
 	require.NoError(t, err)
 	require.Equal(t, 1, count)
-	count, err = CountByPubkeyLayer(db, lid, pub2)
+	count, err = CountByPubkeyLayer(db, lid, pub2.Bytes())
 	require.NoError(t, err)
 	require.Equal(t, 2, count)
 }
@@ -130,10 +126,10 @@ func TestGetRefBallot(t *testing.T) {
 	lid4 := types.NewLayerID(4)
 	lid5 := types.NewLayerID(5)
 	lid6 := types.NewLayerID(6)
-	pub1 := []byte{1, 1, 1}
-	pub2 := []byte{2, 2, 2}
-	pub3 := []byte{3, 3, 3}
-	pub4 := []byte{4, 4, 4}
+	pub1 := types.BytesToNodeID([]byte{1, 1, 1})
+	pub2 := types.BytesToNodeID([]byte{2, 2, 2})
+	pub3 := types.BytesToNodeID([]byte{3, 3, 3})
+	pub4 := types.BytesToNodeID([]byte{4, 4, 4})
 	ballots := []types.Ballot{
 		types.NewExistingBallot(types.BallotID{1}, nil, pub1, types.InnerBallot{LayerIndex: lid2}),
 		types.NewExistingBallot(types.BallotID{2}, nil, pub1, types.InnerBallot{LayerIndex: lid3}),
@@ -146,18 +142,18 @@ func TestGetRefBallot(t *testing.T) {
 		require.NoError(t, Add(db, &ballot))
 	}
 
-	count, err := GetRefBallot(db, 1, pub1)
+	count, err := GetRefBallot(db, 1, pub1.Bytes())
 	require.NoError(t, err)
 	require.Equal(t, types.BallotID{2}, count)
 
-	count, err = GetRefBallot(db, 1, pub2)
+	count, err = GetRefBallot(db, 1, pub2.Bytes())
 	require.NoError(t, err)
 	require.Equal(t, types.BallotID{3}, count)
 
-	count, err = GetRefBallot(db, 1, pub3)
+	count, err = GetRefBallot(db, 1, pub3.Bytes())
 	require.NoError(t, err)
 	require.Equal(t, types.BallotID{5}, count)
 
-	_, err = GetRefBallot(db, 1, pub4)
+	_, err = GetRefBallot(db, 1, pub4.Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }

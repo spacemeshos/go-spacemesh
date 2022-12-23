@@ -71,7 +71,7 @@ func genTX(tb testing.TB, nonce uint64, recipient types.Address, signer *signing
 	tb.Helper()
 
 	raw := wallet.Spend(signer.PrivateKey(), recipient, defaultFee,
-		types.Nonce{Counter: nonce},
+		nonce,
 	)
 	tx := types.Transaction{
 		RawTx:    types.NewRawTx(raw),
@@ -80,7 +80,7 @@ func genTX(tb testing.TB, nonce uint64, recipient types.Address, signer *signing
 	tx.MaxGas = defaultGasLimit
 	tx.MaxSpend = defaultFee
 	tx.GasPrice = 1
-	tx.Nonce = types.Nonce{Counter: nonce}
+	tx.Nonce = nonce
 	tx.Principal = types.GenerateAddress(signer.PublicKey().Bytes())
 	return &tx
 }
@@ -324,7 +324,7 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3).Add(1)
 	refBallot := types.NewExistingBallot(
-		types.BallotID{1}, nil, b.ProposalBuilder.signer.PublicKey().Bytes(), types.InnerBallot{LayerIndex: layerID.Sub(1)})
+		types.BallotID{1}, nil, b.ProposalBuilder.signer.NodeID(), types.InnerBallot{LayerIndex: layerID.Sub(1)})
 	require.NoError(t, ballots.Add(b.cdb, &refBallot))
 	beacon := types.RandomBeacon()
 	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
@@ -500,7 +500,7 @@ func TestBuilder_HandleLayer_Duplicate(t *testing.T) {
 	ballot := types.NewExistingBallot(
 		types.BallotID{1},
 		nil,
-		b.signer.PublicKey().Bytes(),
+		b.signer.NodeID(),
 		types.InnerBallot{LayerIndex: layerID},
 	)
 	require.NoError(t, ballots.Add(b.cdb, &ballot))

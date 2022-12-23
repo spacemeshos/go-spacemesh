@@ -22,7 +22,7 @@ func WithReceived(received time.Time) MeshTransactionOption {
 
 func createMeshTX(t *testing.T, signer *signing.EdSigner, lid types.LayerID, opts ...MeshTransactionOption) *types.MeshTransaction {
 	t.Helper()
-	nonce := types.Nonce{Counter: 223}
+	nonce := uint64(223)
 	amount := uint64(rand.Int())
 	tx := wallet.Spend(signer.PrivateKey(), types.Address{1, 2, 3}, amount, nonce)
 	parsed := types.Transaction{
@@ -96,7 +96,7 @@ func TestBetter_PanicOnInvalidArguments(t *testing.T) {
 
 	received = received.Add(time.Nanosecond)
 	ntx2 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}, WithReceived(received)))
-	ntx2.Nonce.Counter = ntx0.Nonce.Counter + 1
+	ntx2.Nonce = ntx0.Nonce + 1
 	require.Panics(t, func() { ntx0.Better(ntx2, nil) })
 }
 

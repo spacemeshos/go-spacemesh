@@ -65,9 +65,7 @@ func createTestGenerator(t *testing.T) *testGenerator {
 
 func genTx(t testing.TB, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
 	t.Helper()
-	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
-		types.Nonce{Counter: nonce},
-	)
+	raw := wallet.Spend(signer.PrivateKey(), dest, amount, nonce)
 	tx := types.Transaction{
 		RawTx:    types.NewRawTx(raw),
 		TxHeader: &types.TxHeader{},
@@ -75,7 +73,7 @@ func genTx(t testing.TB, signer *signing.EdSigner, dest types.Address, amount, n
 	tx.MaxGas = 100
 	tx.MaxSpend = amount
 	tx.GasPrice = price
-	tx.Nonce = types.Nonce{Counter: nonce}
+	tx.Nonce = nonce
 	tx.Principal = types.GenerateAddress(signer.PublicKey().Bytes())
 	return tx
 }
@@ -114,8 +112,6 @@ func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID
 			nil,
 		)
 		require.NoError(t, activation.SignAtx(signer, atx))
-		require.NoError(t, atx.CalcAndSetID())
-		require.NoError(t, atx.CalcAndSetNodeID())
 		vAtx, err := onAtx(atx)
 		require.NoError(t, err)
 

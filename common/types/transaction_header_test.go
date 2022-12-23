@@ -21,11 +21,3 @@ func FuzzLayerLimitsConsistency(f *testing.F) {
 func FuzzLayerLimitsSafety(f *testing.F) {
 	tester.FuzzSafety[LayerLimits](f)
 }
-
-func FuzzNonceConsistency(f *testing.F) {
-	tester.FuzzConsistency[Nonce](f)
-}
-
-func FuzzNonceSafety(f *testing.F) {
-	tester.FuzzSafety[Nonce](f)
-}

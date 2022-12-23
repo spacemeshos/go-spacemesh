@@ -89,6 +89,7 @@ func New(
 	nodeID types.NodeID,
 	publisher pubsub.Publisher,
 	edSigner *signing.EdSigner,
+	sigVerifier *signing.PubKeyExtractor,
 	vrfSigner *signing.VRFSigner,
 	cdb *datastore.CachedDB,
 	clock layerClock,
@@ -101,6 +102,7 @@ func New(
 		nodeID:         nodeID,
 		publisher:      publisher,
 		edSigner:       edSigner,
+		sigVerifier:    sigVerifier,
 		vrfSigner:      vrfSigner,
 		cdb:            cdb,
 		clock:          clock,
@@ -139,6 +141,7 @@ type ProtocolDriver struct {
 	sync        system.SyncStateProvider
 	publisher   pubsub.Publisher
 	edSigner    *signing.EdSigner
+	sigVerifier *signing.PubKeyExtractor
 	vrfSigner   *signing.VRFSigner
 	vrfVerifier signing.VRFVerifier
 	weakCoin    coin
