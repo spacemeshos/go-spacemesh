@@ -83,7 +83,7 @@ func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
 	if err != nil {
 		cs.logger.With().Fatal("failed to get balance", log.Err(err))
 	}
-	return nonce.Counter, balance
+	return nonce, balance
 }
 
 // SelectBlockTXs combined the transactions in the proposals and put them in a stable order.
