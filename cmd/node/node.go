@@ -500,6 +500,7 @@ func (app *App) initServices(ctx context.Context,
 		vm.WithLogger(app.addLogger(VMLogger, lg)))
 	app.conState = txs.NewConservativeState(state, sqlDB,
 		txs.WithCSConfig(txs.CSConfig{
+			BlockGasLimit:     app.Config.BlockGasLimit,
 			NumTXsPerProposal: app.Config.TxsPerProposal,
 		}),
 		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
@@ -663,7 +664,6 @@ func (app *App) initServices(ctx context.Context,
 		newSyncer,
 		app.conState,
 		miner.WithMinerID(nodeID),
-		miner.WithTxsPerProposal(app.Config.TxsPerProposal),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
