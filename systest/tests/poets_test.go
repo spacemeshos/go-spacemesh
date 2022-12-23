@@ -9,6 +9,7 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
@@ -58,10 +59,11 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 			}
 
 			if proposal.Status == pb.Proposal_Created {
-				tctx.Log.Debugw("received proposal event",
-					"client", client.Name,
-					"layer", proposal.Layer.Number,
-					"eligibilities", len(proposal.Eligibilities),
+				tctx.Log.Desugar().Debug("received proposal event",
+					zap.String("client", client.Name),
+					zap.Uint32("layer", proposal.Layer.Number),
+					zap.String("smesher", prettyHex(proposal.Smesher.Id)),
+					zap.Int("eligibilities", len(proposal.Eligibilities)),
 				)
 				createdch <- proposal
 			}
@@ -102,11 +104,16 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 			if _, exist := beacons[proposal.Epoch.Value]; !exist {
 				beacons[proposal.Epoch.Value] = map[string]struct{}{}
 			}
+			tctx.Log.Desugar().Debug("new beacon",
+				zap.String("smesher", prettyHex(proposal.Smesher.Id)),
+				zap.String("beacon", prettyHex(edata.Beacon)),
+				zap.Uint64("epoch", proposal.Epoch.Value),
+			)
 			beacons[proposal.Epoch.Value][prettyHex(edata.Beacon)] = struct{}{}
 		}
 	}
 
-	requireEqualEligibilities(t, created)
+	requireEqualEligibilities(tctx, t, created)
 
 	for epoch := range beacons {
 		assert.Len(t, beacons[epoch], 1, "epoch=%d", epoch)

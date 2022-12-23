@@ -342,7 +342,7 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 		if err != nil {
 			return nil, fmt.Errorf("failed to get proof ref: %w", err)
 		}
-		nb.log.With().Debug("Selected the best proof", log.Uint64("leafCount", bestProof.LeafCount), log.Binary("ref", ref))
+		nb.log.With().Info("Selected the best proof", log.Uint64("leafCount", bestProof.LeafCount), log.Binary("ref", ref))
 		return ref, nil
 	}
 
