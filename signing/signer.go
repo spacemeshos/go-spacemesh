@@ -113,11 +113,6 @@ func (es *EdSigner) PrivateKey() PrivateKey {
 	return es.priv
 }
 
-// LittleEndian indicates whether byte order in a signature is little-endian.
-func (es *EdSigner) LittleEndian() bool {
-	return true
-}
-
 // VRFSigner wraps same ed25519 key to provide ecvrf.
 func (es *EdSigner) VRFSigner(opts ...VRFOptionFunc) (*VRFSigner, error) {
 	cfg := &vrfOption{}
