@@ -7,7 +7,7 @@
     "poet": {
         "phase-shift": "10m",
         "cycle-gap": "10s",
-        "grace-period": "3s"   
+        "grace-period": "5s"
     },
     "tortoise": {
         "tortoise-zdist": 4,
@@ -16,7 +16,7 @@
     "hare": {
         "hare-wakeup-delta": 5,
         "hare-round-duration-sec": 2,
-        "hare-limit-iterations": 4 
+        "hare-limit-iterations": 4
     },
     "hare-eligibility": {
         "eligibility-confidence-param": 50
