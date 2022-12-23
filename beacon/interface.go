@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
+//go:generate mockgen -package=beacon -destination=./mocks.go -source=./interface.go
 
 type coin interface {
 	StartEpoch(context.Context, types.EpochID, weakcoin.UnitAllowances)

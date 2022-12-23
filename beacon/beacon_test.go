@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/beacon/mocks"
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -36,7 +35,7 @@ const (
 
 func coinValueMock(tb testing.TB, value bool) coin {
 	ctrl := gomock.NewController(tb)
-	coinMock := mocks.NewMockcoin(ctrl)
+	coinMock := NewMockcoin(ctrl)
 	coinMock.EXPECT().StartEpoch(
 		gomock.Any(),
 		gomock.AssignableToTypeOf(types.EpochID(0)),
@@ -70,10 +69,10 @@ type testProtocolDriver struct {
 	*ProtocolDriver
 	ctrl      *gomock.Controller
 	cdb       *datastore.CachedDB
-	mClock    *mocks.MocklayerClock
+	mClock    *MocklayerClock
 	mSync     *smocks.MockSyncStateProvider
-	mSigner   *mocks.MockvrfSigner
-	mVerifier *mocks.MockvrfVerifier
+	mSigner   *MockvrfSigner
+	mVerifier *MockvrfVerifier
 }
 
 func setUpProtocolDriver(tb testing.TB) *testProtocolDriver {
@@ -84,10 +83,10 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	ctrl := gomock.NewController(tb)
 	tpd := &testProtocolDriver{
 		ctrl:      ctrl,
-		mClock:    mocks.NewMocklayerClock(ctrl),
+		mClock:    NewMocklayerClock(ctrl),
 		mSync:     smocks.NewMockSyncStateProvider(ctrl),
-		mSigner:   mocks.NewMockvrfSigner(ctrl),
-		mVerifier: mocks.NewMockvrfVerifier(ctrl),
+		mSigner:   NewMockvrfSigner(ctrl),
+		mVerifier: NewMockvrfVerifier(ctrl),
 	}
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(tb, err)

@@ -54,9 +54,9 @@ func (e PubKeyExtractor) Extract(m, sig []byte) (*PublicKey, error) {
 
 // ExtractNodeID from a signature.
 func (e PubKeyExtractor) ExtractNodeID(m, sig []byte) (types.NodeID, error) {
-	msg := make([]byte, len(m)+len(e.prefix))
-	copy(msg, e.prefix)
-	copy(msg[len(e.prefix):], m)
-	pub, err := ed25519.ExtractPublicKey(msg, sig)
-	return types.BytesToNodeID(pub), err
+	pub, err := e.Extract(m, sig)
+	if err != nil {
+		return types.EmptyNodeID, err
+	}
+	return types.BytesToNodeID(pub.PublicKey), nil
 }

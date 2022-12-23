@@ -975,7 +975,7 @@ func buildSignedProposal(ctx context.Context, signer vrfSigner, epoch types.Epoc
 	p := buildProposal(epoch, logger)
 	signature, err := signer.Sign(p)
 	if err != nil {
-		logger.With().Panic("failed to sign proposal", log.Err(err))
+		logger.With().Fatal("failed to sign proposal", log.Err(err))
 	}
 	logger.WithContext(ctx).With().Debug("calculated signature",
 		epoch,

@@ -10,7 +10,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/beacon/mocks"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -67,7 +66,7 @@ func setMinerFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.Epoch
 func mockAlwaysFalseProposalChecker(t *testing.T, pd *ProtocolDriver, epoch types.EpochID) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
-	mockChecker := mocks.NewMockeligibilityChecker(ctrl)
+	mockChecker := NewMockeligibilityChecker(ctrl)
 	mockChecker.EXPECT().IsProposalEligible(gomock.Any()).Return(false).Times(1)
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
@@ -448,7 +447,7 @@ func Test_handleProposal_BadSignature(t *testing.T) {
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
-	mVerifier := mocks.NewMockvrfVerifier(tpd.ctrl)
+	mVerifier := NewMockvrfVerifier(tpd.ctrl)
 	mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(false).Times(1)
 	tpd.vrfVerifier = mVerifier
 
@@ -522,7 +521,7 @@ func Test_handleProposal_ProposalNotEligible(t *testing.T) {
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(epoch.FirstLayer()).Times(1)
 	createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10)
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
-	require.ErrorIs(t, got, errProposalBelowThreshold)
+	require.ErrorIs(t, got, errProposalNotEligible)
 
 	checkProposed(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), true)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})

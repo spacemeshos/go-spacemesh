@@ -59,3 +59,19 @@ func Fuzz_PubKeyExtractor(f *testing.F) {
 		require.Equal(t, pub.Bytes(), signer.PublicKey().Bytes())
 	})
 }
+
+func Fuzz_PubKeyExtractorNodeID(f *testing.F) {
+	f.Fuzz(func(t *testing.T, msg []byte, prefix []byte) {
+		signer, err := NewEdSigner(WithPrefix(prefix))
+		require.NoError(t, err)
+
+		extractor, err := NewPubKeyExtractor(WithExtractorPrefix(prefix))
+		require.NoError(t, err)
+
+		sig := signer.Sign(msg)
+
+		nodeID, err := extractor.ExtractNodeID(msg, sig)
+		require.NoError(t, err)
+		require.Equal(t, nodeID, signer.NodeID())
+	})
+}

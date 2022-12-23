@@ -26,15 +26,15 @@ const (
 )
 
 var (
-	errVRFNotVerified         = errors.New("proposal failed vrf verification")
-	errProposalBelowThreshold = errors.New("proposal below threshold")
-	errAlreadyProposed        = errors.New("already proposed")
-	errAlreadyVoted           = errors.New("already voted")
-	errMinerATXNotFound       = errors.New("miner ATX not found in previous epoch")
-	errProtocolNotRunning     = errors.New("beacon protocol not running")
-	errEpochNotActive         = errors.New("epoch not active")
-	errMalformedMessage       = errors.New("malformed msg")
-	errUntimelyMessage        = errors.New("untimely msg")
+	errVRFNotVerified      = errors.New("proposal failed vrf verification")
+	errProposalNotEligible = errors.New("proposal not eligible")
+	errAlreadyProposed     = errors.New("already proposed")
+	errAlreadyVoted        = errors.New("already voted")
+	errMinerATXNotFound    = errors.New("miner ATX not found in previous epoch")
+	errProtocolNotRunning  = errors.New("beacon protocol not running")
+	errEpochNotActive      = errors.New("epoch not active")
+	errMalformedMessage    = errors.New("malformed msg")
+	errUntimelyMessage     = errors.New("untimely msg")
 )
 
 // HandleWeakCoinProposal handles weakcoin proposal from gossip.
@@ -195,7 +195,7 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 	}
 
 	if !pd.checkProposalEligibility(logger, m.EpochID, m.VRFSignature) {
-		return types.ATXID{}, fmt.Errorf("[proposal] not eligible (miner ID %v): %w", minerID, errProposalBelowThreshold)
+		return types.ATXID{}, fmt.Errorf("[proposal] not eligible (miner ID %v): %w", minerID, errProposalNotEligible)
 	}
 
 	return atxID, nil
