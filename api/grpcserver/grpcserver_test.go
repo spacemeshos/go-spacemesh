@@ -40,7 +40,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
@@ -98,10 +97,10 @@ var (
 	signer2     = signing.NewEdSigner()
 	globalTx    = NewTx(0, addr1, signer1)
 	globalTx2   = NewTx(1, addr2, signer2)
-	ballot1     = types.GenLayerBallot(types.LayerID{})
-	block1      = types.GenLayerBlock(types.LayerID{}, nil)
-	block2      = types.GenLayerBlock(types.LayerID{}, nil)
-	block3      = types.GenLayerBlock(types.LayerID{}, nil)
+	ballot1     = genLayerBallot(types.LayerID{})
+	block1      = genLayerBlock(types.LayerID{}, nil)
+	block2      = genLayerBlock(types.LayerID{}, nil)
+	block3      = genLayerBlock(types.LayerID{}, nil)
 	meshAPI     = &MeshAPIMock{}
 	conStateAPI = &ConStateAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
@@ -118,6 +117,26 @@ var (
 	}
 	stateRoot = types.HexToHash32("11111")
 )
+
+func genLayerBallot(layerID types.LayerID) *types.Ballot {
+	b := types.RandomBallot()
+	b.LayerIndex = layerID
+	signer := signing.NewEdSigner()
+	b.Signature = signer.Sign(b.SignedBytes())
+	b.Initialize()
+	return b
+}
+
+func genLayerBlock(layerID types.LayerID, txs []types.TransactionID) *types.Block {
+	b := &types.Block{
+		InnerBlock: types.InnerBlock{
+			LayerIndex: layerID,
+			TxIDs:      txs,
+		},
+	}
+	b.Initialize()
+	return b
+}
 
 func dialGrpc(ctx context.Context, tb testing.TB, cfg config.Config) *grpc.ClientConn {
 	tb.Helper()
@@ -345,7 +364,6 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 			types.Nonce{},
 			sdk.WithGasPrice(0),
 		))
-		tx.MaxGas = wallet.TotalGasSpawn
 	} else {
 		tx.RawTx = types.NewRawTx(
 			wallet.Spend(signer.PrivateKey(), recipient, 1,
@@ -354,7 +372,6 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 			),
 		)
 		tx.MaxSpend = 1
-		tx.MaxGas = wallet.TotalGasSpend
 	}
 	return &tx
 }
@@ -993,7 +1010,7 @@ func TestSmesherService(t *testing.T) {
 		opts := &pb.PostSetupOpts{}
 		opts.DataDir = t.TempDir()
 		opts.NumUnits = 1
-		opts.NumFiles = 1
+		opts.MaxFileSize = 1024
 
 		coinbase := &pb.AccountId{Address: addr1.String()}
 
@@ -2659,7 +2676,6 @@ func TestDebugService(t *testing.T) {
 func TestGatewayService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	verifier := mocks.NewMockChallengeVerifier(ctrl)
 
@@ -2777,7 +2793,7 @@ func TestEventsReceived(t *testing.T) {
 	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
 	conState.AddToCache(context.Background(), globalTx)
 
-	weight := util.WeightFromFloat64(18.7)
+	weight := new(big.Rat).SetFloat64(18.7)
 	require.NoError(t, err)
 	rewards := []types.AnyReward{{Coinbase: addr2, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}}}
 	svm.Apply(vm.ApplyContext{Layer: types.GetEffectiveGenesis()},

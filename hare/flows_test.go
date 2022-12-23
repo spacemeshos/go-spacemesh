@@ -390,7 +390,7 @@ func Test_multipleCPs(t *testing.T) {
 	pList := make(map[types.LayerID][]types.ProposalID)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
 		for i := uint64(0); i < 200; i++ {
-			p := types.GenLayerProposal(j, []types.TransactionID{})
+			p := genLayerProposal(j, []types.TransactionID{})
 			p.EpochData = &types.EpochData{
 				Beacon: types.EmptyBeacon,
 			}
@@ -485,7 +485,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	pList := make(map[types.LayerID][]types.ProposalID)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
 		for i := uint64(0); i < 200; i++ {
-			p := types.GenLayerProposal(j, []types.TransactionID{})
+			p := genLayerProposal(j, []types.TransactionID{})
 			p.EpochData = &types.EpochData{
 				Beacon: types.EmptyBeacon,
 			}

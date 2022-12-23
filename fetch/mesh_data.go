@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
+
+	"github.com/hashicorp/go-multierror"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -22,53 +23,42 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)))
 	hashes := types.ATXIDsToHashes(ids)
-	if errs := f.getHashes(ctx, hashes, datastore.ATXDB, f.atxHandler.HandleAtxData); len(errs) > 0 {
-		return errs[0]
-	}
-	return nil
+	return f.getHashes(ctx, hashes, datastore.ATXDB, f.atxHandler.HandleAtxData)
 }
 
 type dataReceiver func(context.Context, []byte) error
 
-func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datastore.Hint, receiver dataReceiver) []error {
-	done := make(chan error, len(hashes))
-	var wg sync.WaitGroup
+func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datastore.Hint, receiver dataReceiver) error {
+	var eg multierror.Group
 	for _, hash := range hashes {
 		p, err := f.getHash(ctx, hash, hint, receiver)
 		if err != nil {
-			return []error{err}
+			return err
 		}
 		if p == nil {
 			// data is available locally
 			continue
 		}
-		wg.Add(1)
+
 		h := hash
-		f.eg.Go(func() error {
+		eg.Go(func() error {
 			select {
 			case <-ctx.Done():
-				done <- ctx.Err()
+				return ctx.Err()
 			case <-p.completed:
 				if p.err != nil {
 					f.logger.WithContext(ctx).With().Warning("failed to get hash",
 						log.String("hint", string(hint)),
 						log.Stringer("hash", h),
 						log.Err(p.err))
-					done <- p.err
+					return p.err
 				}
 			}
-			wg.Done()
 			return nil
 		})
 	}
 
-	wg.Wait()
-	close(done)
-	errs := make([]error, 0, len(done))
-	for err := range done {
-		errs = append(errs, err)
-	}
-	return errs
+	return eg.Wait().ErrorOrNil()
 }
 
 // GetBallots gets data for the specified BallotIDs and validates them.
@@ -78,10 +68,7 @@ func (f *Fetch) GetBallots(ctx context.Context, ids []types.BallotID) error {
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting ballots from peer", log.Int("num_ballots", len(ids)))
 	hashes := types.BallotIDsToHashes(ids)
-	if errs := f.getHashes(ctx, hashes, datastore.BallotDB, f.ballotHandler.HandleSyncedBallot); len(errs) > 0 {
-		return errs[0]
-	}
-	return nil
+	return f.getHashes(ctx, hashes, datastore.BallotDB, f.ballotHandler.HandleSyncedBallot)
 }
 
 // GetProposals gets the data for given proposal IDs from peers.
@@ -91,10 +78,7 @@ func (f *Fetch) GetProposals(ctx context.Context, ids []types.ProposalID) error 
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting proposals from peer", log.Int("num_proposals", len(ids)))
 	hashes := types.ProposalIDsToHashes(ids)
-	if errs := f.getHashes(ctx, hashes, datastore.ProposalDB, f.proposalHandler.HandleSyncedProposal); len(errs) > 0 {
-		return errs[0]
-	}
-	return nil
+	return f.getHashes(ctx, hashes, datastore.ProposalDB, f.proposalHandler.HandleSyncedProposal)
 }
 
 // GetBlocks gets the data for given block IDs from peers.
@@ -104,10 +88,7 @@ func (f *Fetch) GetBlocks(ctx context.Context, ids []types.BlockID) error {
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting blocks from peer", log.Int("num_blocks", len(ids)))
 	hashes := types.BlockIDsToHashes(ids)
-	if errs := f.getHashes(ctx, hashes, datastore.BlockDB, f.blockHandler.HandleSyncedBlock); len(errs) > 0 {
-		return errs[0]
-	}
-	return nil
+	return f.getHashes(ctx, hashes, datastore.BlockDB, f.blockHandler.HandleSyncedBlock)
 }
 
 // GetProposalTxs fetches the txs provided as IDs and validates them, returns an error if one TX failed to be fetched.
@@ -127,10 +108,7 @@ func (f *Fetch) getTxs(ctx context.Context, ids []types.TransactionID, receiver 
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting txs from peer", log.Int("num_txs", len(ids)))
 	hashes := types.TransactionIDsToHashes(ids)
-	if errs := f.getHashes(ctx, hashes, datastore.TXDB, receiver); len(errs) > 0 {
-		return errs[0]
-	}
-	return nil
+	return f.getHashes(ctx, hashes, datastore.TXDB, receiver)
 }
 
 // GetPoetProof gets poet proof from remote peer.

@@ -5,30 +5,21 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"math/big"
 	"sync"
-
-	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-const (
-	// Prefix defines weak coin proposal prefix.
-	proposalPrefix = "WeakCoin"
-	// equal to 2^256 / 2.
-	defaultThreshold = "0x8000000000000000000000000000000000000000000000000000000000000000"
-)
-
 func defaultConfig() config {
 	return config{
-		Threshold:           util.FromHex(defaultThreshold),
-		VRFPrefix:           proposalPrefix,
-		NextRoundBufferSize: 10000, // ~1mb given the size of Message is ~100b
+		Threshold:           new(big.Int).Lsh(big.NewInt(1), 255).Bytes(), // equal to 2^255
+		VRFPrefix:           "WeakCoin",                                   // Prefix defines weak coin proposal prefix.
+		NextRoundBufferSize: 10000,                                        // ~1mb given the size of Message is ~100b
 		MaxRound:            300,
 	}
 }
@@ -43,6 +34,8 @@ type config struct {
 // UnitAllowances is a map from miner identifier to the number of units of spacetime.
 type UnitAllowances map[string]uint64
 
+//go:generate scalegen -types Message
+
 // Message defines weak coin message format.
 type Message struct {
 	Epoch     types.EpochID
@@ -52,124 +45,39 @@ type Message struct {
 	Signature []byte
 }
 
-// EncodeScale implements scale codec interface.
-func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.Epoch))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.Round))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact64(enc, uint64(t.Unit))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteSlice(enc, t.MinerPK)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteSlice(enc, t.Signature)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-// DecodeScale implements scale codec interface.
-func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Epoch = types.EpochID(field)
-	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Round = types.RoundID(field)
-	}
-	{
-		field, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Unit = uint64(field)
-	}
-	{
-		field, n, err := scale.DecodeByteSlice(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.MinerPK = field
-	}
-	{
-		field, n, err := scale.DecodeByteSlice(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Signature = field
-	}
-	return total, nil
-}
-
-// Option for optional configuration adjustments.
-type Option func(*WeakCoin)
+// OptionFunc for optional configuration adjustments.
+type OptionFunc func(*WeakCoin)
 
 // WithLog changes logger.
-func WithLog(logger log.Log) Option {
+func WithLog(logger log.Log) OptionFunc {
 	return func(wc *WeakCoin) {
 		wc.logger = logger
 	}
 }
 
 // WithMaxRound changes max round.
-func WithMaxRound(round types.RoundID) Option {
+func WithMaxRound(round types.RoundID) OptionFunc {
 	return func(wc *WeakCoin) {
 		wc.config.MaxRound = round
 	}
 }
 
 // WithThreshold changes signature threshold.
-func WithThreshold(threshold []byte) Option {
+func WithThreshold(threshold []byte) OptionFunc {
 	return func(wc *WeakCoin) {
 		wc.config.Threshold = threshold
 	}
 }
 
 // WithNextRoundBufferSize changes size of the buffer for messages from future rounds.
-func WithNextRoundBufferSize(size int) Option {
+func WithNextRoundBufferSize(size int) OptionFunc {
 	return func(wc *WeakCoin) {
 		wc.config.NextRoundBufferSize = size
 	}
 }
 
 // WithVerifier changes the verifier of the weakcoin messages.
-func WithVerifier(v signing.Verifier) Option {
+func WithVerifier(v signing.Verifier) OptionFunc {
 	return func(wc *WeakCoin) {
 		wc.verifier = v
 	}
@@ -179,7 +87,7 @@ func WithVerifier(v signing.Verifier) Option {
 func New(
 	publisher pubsub.Publisher,
 	signer signing.Signer,
-	opts ...Option,
+	opts ...OptionFunc,
 ) *WeakCoin {
 	wc := &WeakCoin{
 		logger:    log.NewNop(),
@@ -187,14 +95,12 @@ func New(
 		signer:    signer,
 		publisher: publisher,
 		coins:     make(map[types.RoundID]bool),
+		verifier:  signing.VRFVerifier{},
 	}
 	for _, opt := range opts {
 		opt(wc)
 	}
 
-	if wc.verifier == nil {
-		wc.verifier = signing.VRFVerifier{}
-	}
 	wc.nextRoundBuffer = make([]Message, 0, wc.config.NextRoundBufferSize)
 	return wc
 }
@@ -300,12 +206,14 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 	return nil
 }
 
-func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (broadcast, smallest []byte) {
+func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([]byte, []byte) {
 	// TODO(dshulyak) double check that 10 means that 10 units are allowed
 	allowed, exists := wc.allowances[string(wc.signer.PublicKey().Bytes())]
 	if !exists {
-		return
+		return nil, nil
 	}
+	var broadcast []byte
+	var smallest []byte
 	for unit := uint64(0); unit < allowed; unit++ {
 		proposal := wc.encodeProposal(epoch, round, unit)
 		signature := wc.signer.Sign(proposal)
@@ -329,7 +237,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (b
 			smallest = signature
 		}
 	}
-	return
+	return broadcast, smallest
 }
 
 func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, round types.RoundID) error {

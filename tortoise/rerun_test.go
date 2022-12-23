@@ -80,17 +80,14 @@ func TestWindowSizeVoteCounting(t *testing.T) {
 	t.Run("FixesMisverified", func(t *testing.T) {
 		testWindowCounting(t, 3, 10, true)
 	})
-	t.Run("ShortWindow", func(t *testing.T) {
-		testWindowCounting(t, 3, 3, false)
-	})
 }
 
 func testWindowCounting(tb testing.TB, maliciousLayers, windowSize int, expectedValidity bool) {
 	genesis := types.GetEffectiveGenesis()
 	ctx := context.Background()
-	const size = 10
+	const size = 4
 	s := sim.New(sim.WithLayerSize(size))
-	s.Setup(sim.WithSetupUnitsRange(2, 2))
+	s.Setup(sim.WithSetupMinerRange(size, size))
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
@@ -106,10 +103,11 @@ func testWindowCounting(tb testing.TB, maliciousLayers, windowSize int, expected
 	var last types.LayerID
 	for _, last = range sim.GenLayers(s,
 		sim.WithSequence(firstBatch, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
-		// in this layer voting is malicious. it doesn't support previous layer so there will be no valid blocks in it
-		sim.WithSequence(1, sim.WithVoteGenerator(gapVote), sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
+		// next layer will not vote on the previous layer, layer 9 will be expected to be empty
+		sim.WithSequence(1, sim.WithVoteGenerator(skipLayers(1)), sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
+		// next N-1 layers are not voting for layer 9 as well
 		sim.WithSequence(maliciousLayers-1, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
-		// in this layer we skip previously malicious voting.
+		// starting from this layer ballots will support layer 9
 		sim.WithSequence(1, sim.WithVoteGenerator(skipLayers(maliciousLayers)), sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
 		sim.WithSequence(10, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
 	) {
@@ -179,7 +177,7 @@ func benchmarkTallyVotes(b *testing.B, size int, windowsize uint32, opts ...sim.
 	b.Log("generated state", time.Since(start))
 	// count ballots and form initial opinion
 	tortoise.TallyVotes(ctx, last)
-	b.Log("counted votes", time.Since(start))
+	b.Log("loaded state", time.Since(start))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

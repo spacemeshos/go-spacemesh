@@ -1,6 +1,7 @@
 package proposals
 
 import (
+	"math/big"
 	"strings"
 	"testing"
 	"time"
@@ -8,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	putil "github.com/spacemeshos/go-spacemesh/proposals/util"
@@ -35,7 +35,7 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 		atx.SetID(&id)
 		atx.SetNodeID(&types.NodeID{})
 		if id == rb.AtxID {
-			nodeID := types.BytesToNodeID(signer.PublicKey().Bytes())
+			nodeID := signer.NodeID()
 			atx.SetNodeID(&nodeID)
 			atx.NumUnits = testedATXUnit
 		}
@@ -43,11 +43,11 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
 	}
-	expectedWeight := util.WeightFromUint64(uint64(testedATXUnit)).Div(util.WeightFromUint64(uint64(eligibleSlots)))
+	expectedWeight := big.NewRat(int64(testedATXUnit), int64(eligibleSlots))
 	for _, b := range blts {
 		got, err := ComputeWeightPerEligibility(cdb, b, layerAvgSize, layersPerEpoch)
 		require.NoError(t, err)
-		require.False(t, got.IsNil())
+		require.NotNil(t, got)
 		require.Equal(t, 0, got.Cmp(expectedWeight))
 	}
 }
@@ -63,7 +63,7 @@ func TestComputeWeightPerEligibility_EmptyRefBallotID(t *testing.T) {
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	got, err := ComputeWeightPerEligibility(cdb, b, layerAvgSize, layersPerEpoch)
 	require.ErrorIs(t, err, putil.ErrBadBallotData)
-	require.True(t, got.IsNil())
+	require.Nil(t, got)
 }
 
 func TestComputeWeightPerEligibility_FailToGetRefBallot(t *testing.T) {
@@ -76,7 +76,7 @@ func TestComputeWeightPerEligibility_FailToGetRefBallot(t *testing.T) {
 	got, err := ComputeWeightPerEligibility(cdb, blts[1], layerAvgSize, layersPerEpoch)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.True(t, strings.Contains(err.Error(), "missing ref ballot"))
-	require.True(t, got.IsNil())
+	require.Nil(t, got)
 }
 
 func TestComputeWeightPerEligibility_FailATX(t *testing.T) {
@@ -88,5 +88,5 @@ func TestComputeWeightPerEligibility_FailATX(t *testing.T) {
 	got, err := ComputeWeightPerEligibility(cdb, blts[0], layerAvgSize, layersPerEpoch)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.True(t, strings.Contains(err.Error(), "missing atx"))
-	require.True(t, got.IsNil())
+	require.Nil(t, got)
 }

@@ -97,7 +97,7 @@ func (m *Msg) String() string {
 func (m *Msg) Bytes() []byte {
 	buf, err := codec.Encode(&m.Message)
 	if err != nil {
-		log.Panic("could not marshal innermsg before send")
+		log.Panic("could not marshal inner msg before send")
 	}
 	return buf
 }
@@ -109,7 +109,7 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQ
 	logger = logger.WithContext(ctx)
 
 	// extract pub key
-	pubKey, err := signing.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
+	nodeId, err := types.ExtractNodeIDFromSig(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
 	if err != nil {
 		logger.With().Error("newmsg construction failed: could not extract public key",
 			log.Err(err),
@@ -118,12 +118,10 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQ
 	}
 
 	// query if identity is active
-	pub := signing.NewPublicKey(pubKey)
-	nid := types.BytesToNodeID(pub.Bytes())
-	res, err := querier.IsIdentityActiveOnConsensusView(ctx, nid, hareMsg.InnerMsg.InstanceID)
+	res, err := querier.IsIdentityActiveOnConsensusView(ctx, nodeId, hareMsg.InnerMsg.InstanceID)
 	if err != nil {
 		logger.With().Error("error while checking if identity is active",
-			log.String("sender_id", pub.ShortString()),
+			log.String("sender_id", nodeId.ShortString()),
 			log.Err(err),
 			hareMsg.InnerMsg.InstanceID,
 			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
@@ -133,13 +131,13 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQ
 	// check query result
 	if !res {
 		logger.With().Error("identity is not active",
-			log.String("sender_id", pub.ShortString()),
+			log.String("sender_id", nodeId.ShortString()),
 			hareMsg.InnerMsg.InstanceID,
 			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
 	}
 
-	msg := &Msg{Message: hareMsg, PubKey: pub}
+	msg := &Msg{Message: hareMsg, PubKey: signing.NewPublicKey(nodeId.Bytes())}
 
 	// add reqID from context
 	if reqID, ok := log.ExtractRequestID(ctx); ok {
@@ -176,7 +174,6 @@ type consensusProcess struct {
 	notifyTracker     *notifyTracker
 	cfg               config.Config
 	pending           map[string]*Msg // buffer for early messages that are pending process
-	notifySent        bool            // flag to set in case a notification had already been sent by this instance
 	mTracker          *msgsTracker    // tracks valid messages
 	terminating       bool
 	eligibilityCount  uint16
@@ -199,7 +196,6 @@ func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, or
 		nid:               nid,
 		publisher:         p2p,
 		preRoundTracker:   newPreRoundTracker(cfg.F+1, cfg.N, logger),
-		notifyTracker:     newNotifyTracker(cfg.N),
 		cfg:               cfg,
 		terminationReport: terminationReport,
 		pending:           make(map[string]*Msg, cfg.N),
@@ -597,18 +593,13 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 
 func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 	logger := proc.WithContext(ctx).WithFields(proc.instanceID)
+	proc.notifyTracker = newNotifyTracker(proc.cfg.N)
 
 	// release proposal & commit trackers
 	defer func() {
 		proc.commitTracker = nil
 		proc.proposalTracker = nil
 	}()
-
-	// send notify message only once
-	if proc.notifySent {
-		logger.Debug("begin notify round: notify already sent")
-		return
-	}
 
 	if proc.proposalTracker.IsConflicting() {
 		logger.Warning("begin notify round: proposal is conflicting")
@@ -653,9 +644,7 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 	builder = builder.SetType(notify).SetCertificate(proc.certificate).Sign(proc.signing)
 	notifyMsg := builder.Build()
 	logger.With().Debug("sending notify message", notifyMsg)
-	if proc.sendMessage(ctx, notifyMsg) { // on success, mark sent
-		proc.notifySent = true
-	}
+	proc.sendMessage(ctx, notifyMsg)
 }
 
 // passes all pending messages to the inbox of the process so they will be handled.
@@ -739,6 +728,11 @@ func (proc *consensusProcess) processCommitMsg(ctx context.Context, msg *Msg) {
 }
 
 func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
+	if proc.notifyTracker == nil {
+		proc.WithContext(ctx).Error("notify tracker is nil")
+		return
+	}
+
 	s := NewSet(msg.InnerMsg.Values)
 
 	if ignored := proc.notifyTracker.OnNotify(msg); ignored {

@@ -97,17 +97,6 @@ ifeq ($(HOST_OS),$(filter $(HOST_OS),linux darwin))
 windows:
 	CC=x86_64-w64-mingw32-gcc $(MAKE) GOOS=$@ GOARCH=amd64 BIN_DIR=$(PROJ_DIR)build/ go-spacemesh
 .PHONY: windows
-arm6:
-	$(error gpu lib is  not available for arm6 yet)
-	#CC=x86_64-arm6-gcc $(MAKE) GOOS=$@ GOARCH=arm6 GOARM=6 BIN_DIR=$(PROJ_DIR)build/arm6/ go-spacemesh
-.PHONY: arm6
-$(HOST_OS): go-spacemesh
-.PHONY: $(HOST_OS)
-endif
-
-ifeq ($(HOST_OS),windows)
-windows: go-spacemesh
-.PHONY: windows
 endif
 
 # available only for linux host because CGO usage

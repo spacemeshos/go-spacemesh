@@ -9,7 +9,7 @@ import (
 
 // Config is the configuration of the beacon.
 type Config struct {
-	Kappa                    uint64        `mapstructure:"beacon-kappa"`                       // Security parameter (for calculating ATX threshold)
+	Kappa                    int           `mapstructure:"beacon-kappa"`                       // Security parameter (for calculating ATX threshold)
 	Q                        *big.Rat      `mapstructure:"beacon-q"`                           // Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.
 	RoundsNumber             types.RoundID `mapstructure:"beacon-rounds-number"`               // Amount of rounds in every epoch
 	GracePeriodDuration      time.Duration `mapstructure:"beacon-grace-period-duration"`       // Grace period duration
@@ -19,7 +19,7 @@ type Config struct {
 	WeakCoinRoundDuration    time.Duration `mapstructure:"beacon-weak-coin-round-duration"`    // Weak coin round duration
 	Theta                    *big.Rat      `mapstructure:"beacon-theta"`                       // Ratio of votes for reaching consensus
 	VotesLimit               uint32        `mapstructure:"beacon-votes-limit"`                 // Maximum allowed number of votes to be sent
-	BeaconSyncNumBallots     uint32        `mapstructure:"beacon-sync-num-blocks"`             // Numbers of layers to wait before determining beacon values from ballots when the node didn't participate in previous epoch.
+	BeaconSyncWeightUnits    int           `mapstructure:"beacon-sync-weight-units"`           // Numbers of layers to wait before determining beacon values from ballots when the node didn't participate in previous epoch.
 }
 
 // DefaultConfig returns the default configuration for the beacon.
@@ -34,15 +34,15 @@ func DefaultConfig() Config {
 		VotingRoundDuration:      30 * time.Minute,
 		WeakCoinRoundDuration:    1 * time.Minute,
 		Theta:                    big.NewRat(1, 4),
-		VotesLimit:               100,  // TODO: around 100, find the calculation in the forum
-		BeaconSyncNumBallots:     1600, // should be 2 clusters of 800 ballots
+		VotesLimit:               100, // TODO: around 100, find the calculation in the forum
+		BeaconSyncWeightUnits:    800, // at least 1 cluster of 800 weight units
 	}
 }
 
 // UnitTestConfig returns the unit test configuration for the beacon.
 func UnitTestConfig() Config {
 	return Config{
-		Kappa:                    400000,
+		Kappa:                    40,
 		Q:                        big.NewRat(1, 3),
 		RoundsNumber:             10,
 		GracePeriodDuration:      20 * time.Millisecond,
@@ -52,23 +52,23 @@ func UnitTestConfig() Config {
 		WeakCoinRoundDuration:    20 * time.Millisecond,
 		Theta:                    big.NewRat(1, 25000),
 		VotesLimit:               100,
-		BeaconSyncNumBallots:     2,
+		BeaconSyncWeightUnits:    2,
 	}
 }
 
 // NodeSimUnitTestConfig returns configuration for the beacon the unit tests with node simulation .
 func NodeSimUnitTestConfig() Config {
 	return Config{
-		Kappa:                    400000,
+		Kappa:                    40,
 		Q:                        big.NewRat(1, 3),
 		RoundsNumber:             2,
 		GracePeriodDuration:      200 * time.Millisecond,
-		ProposalDuration:         100 * time.Millisecond,
-		FirstVotingRoundDuration: 100 * time.Millisecond,
-		VotingRoundDuration:      100 * time.Millisecond,
-		WeakCoinRoundDuration:    100 * time.Millisecond,
+		ProposalDuration:         500 * time.Millisecond,
+		FirstVotingRoundDuration: time.Second,
+		VotingRoundDuration:      500 * time.Millisecond,
+		WeakCoinRoundDuration:    200 * time.Millisecond,
 		Theta:                    big.NewRat(1, 25000),
 		VotesLimit:               100,
-		BeaconSyncNumBallots:     10,
+		BeaconSyncWeightUnits:    10,
 	}
 }

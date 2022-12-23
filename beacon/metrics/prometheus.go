@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/spacemeshos/fixed"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -16,10 +17,10 @@ const (
 
 // BeaconStats hold metadata for each beacon value.
 type BeaconStats struct {
-	Epoch  types.EpochID
-	Beacon string
-	Count  uint64
-	Weight uint64
+	Epoch      types.EpochID
+	Beacon     string
+	Weight     fixed.Fixed
+	WeightUnit int
 }
 
 // GatherCB returns stats for the observed and calculated beacons.
@@ -92,13 +93,13 @@ func (bmc *BeaconMetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	observed, calculated := bmc.gather()
 	for _, ob := range observed {
 		epochStr := ob.Epoch.String()
-		ch <- prometheus.MustNewConstMetric(bmc.observedBeaconCount, prometheus.CounterValue, float64(ob.Count), epochStr, ob.Beacon)
-		ch <- prometheus.MustNewConstMetric(bmc.observedBeaconWeight, prometheus.CounterValue, float64(ob.Weight), epochStr, ob.Beacon)
+		ch <- prometheus.MustNewConstMetric(bmc.observedBeaconCount, prometheus.CounterValue, float64(ob.WeightUnit), epochStr, ob.Beacon)
+		ch <- prometheus.MustNewConstMetric(bmc.observedBeaconWeight, prometheus.CounterValue, ob.Weight.Float(), epochStr, ob.Beacon)
 	}
 
 	if calculated == nil {
 		return
 	}
 	// export the calculated beacon for the target epoch for ease of monitoring along with the observed beacons
-	ch <- prometheus.MustNewConstMetric(bmc.calculatedBeaconWeight, prometheus.CounterValue, float64(calculated.Weight), calculated.Epoch.String(), calculated.Beacon)
+	ch <- prometheus.MustNewConstMetric(bmc.calculatedBeaconWeight, prometheus.CounterValue, float64(0), calculated.Epoch.String(), calculated.Beacon)
 }

@@ -2,19 +2,19 @@ package tortoise
 
 import (
 	"fmt"
-	"math/big"
 	"sort"
 
+	"github.com/spacemeshos/fixed"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 )
 
-var (
+const (
 	// by assumption adversarial weight can't be larger than 1/3.
-	adversarialWeightFraction = big.NewRat(1, 3)
+	adversarialWeightFraction = 3
 	// nodes should not be on different sides of the local threshold if they receive different adversarial votes.
-	localThresholdFraction = big.NewRat(1, 3)
+	localThresholdFraction = 3
 	// for comleteness:
 	// global threshold is set in a such way so that if adversary
 	// cancels their weight (adversarialWeightFraction) - honest nodes should still cross local threshold.
@@ -26,21 +26,6 @@ func getBallotHeight(cdb *datastore.CachedDB, ballot *types.Ballot) (uint64, err
 		return 0, fmt.Errorf("read atx for ballot height: %w", err)
 	}
 	return atx.TickHeight(), nil
-}
-
-func extractAtxsData(cdb *datastore.CachedDB, epoch types.EpochID) (uint64, uint64, error) {
-	var (
-		weight  uint64
-		heights []uint64
-	)
-	if err := cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
-		weight += header.GetWeight()
-		heights = append(heights, header.TickHeight())
-		return true
-	}); err != nil {
-		return 0, 0, fmt.Errorf("computing epoch data for %d: %w", epoch, err)
-	}
-	return weight, getMedian(heights), nil
 }
 
 func getMedian(heights []uint64) uint64 {
@@ -67,32 +52,31 @@ func computeExpectedWeight(epochs map[types.EpochID]*epochInfo, target, last typ
 	length := types.GetLayersPerEpoch()
 	if startEpoch == lastEpoch {
 		einfo := epochs[startEpoch]
-		return util.WeightFromUint64(einfo.weight).Fraction(big.NewRat(
-			int64(last.Difference(start)+1),
-			int64(length),
-		))
+		return einfo.weight.
+			Mul(fixed.New64(int64(last.Difference(start)) + 1)).
+			Div(fixed.New64(int64(length)))
 	}
-	weight := util.WeightFromUint64(epochs[startEpoch].weight).Fraction(big.NewRat(
-		int64(length-start.OrdinalInEpoch()),
-		int64(length),
-	))
+	weight := epochs[startEpoch].weight.
+		Mul(fixed.New64(int64(length - start.OrdinalInEpoch()))).
+		Div(fixed.New64(int64(length)))
 	for epoch := startEpoch + 1; epoch < lastEpoch; epoch++ {
 		einfo := epochs[epoch]
-		weight = weight.Add(util.WeightFromUint64(einfo.weight))
+		weight = weight.Add(einfo.weight)
 	}
-	weight = weight.Add(util.WeightFromUint64(epochs[lastEpoch].weight).
-		Fraction(big.NewRat(int64(last.OrdinalInEpoch()+1), int64(length))))
-	return weight
+	return weight.Add(epochs[lastEpoch].weight.
+		Mul(fixed.New64(int64(last.OrdinalInEpoch() + 1))).
+		Div(fixed.New64(int64(length))),
+	)
 }
 
 // computeGlobalTreshold computes global treshold based on the expected weight.
-func computeGlobalThreshold(config Config, localThreshold weight, epochs map[types.EpochID]*epochInfo, target, processed, last types.LayerID) util.Weight {
+func computeGlobalThreshold(config Config, localThreshold weight, epochs map[types.EpochID]*epochInfo, target, processed, last types.LayerID) weight {
 	return computeExpectedWeightInWindow(config, epochs, target, processed, last).
-		Fraction(adversarialWeightFraction).
+		Div(fixed.New(adversarialWeightFraction)).
 		Add(localThreshold)
 }
 
-func computeExpectedWeightInWindow(config Config, epochs map[types.EpochID]*epochInfo, target, processed, last types.LayerID) util.Weight {
+func computeExpectedWeightInWindow(config Config, epochs map[types.EpochID]*epochInfo, target, processed, last types.LayerID) weight {
 	window := last
 	if last.Difference(target) > config.WindowSize {
 		window = target.Add(config.WindowSize)
@@ -101,4 +85,14 @@ func computeExpectedWeightInWindow(config Config, epochs map[types.EpochID]*epoc
 		}
 	}
 	return computeExpectedWeight(epochs, target, window)
+}
+
+func crossesThreshold(w, t weight) sign {
+	if w.Float() > 0 && w.GreaterThan(t) {
+		return support
+	}
+	if w.Float() < 0 && w.Abs().GreaterThan(t) {
+		return against
+	}
+	return neutral
 }

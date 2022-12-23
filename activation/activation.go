@@ -188,14 +188,13 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	ctx, stop := context.WithCancel(b.parentCtx)
 	b.stop = stop
 
-	commitmentAtx, err := b.getCommitmentAtx(ctx)
-	if err != nil {
-		b.started.Store(false)
-		return fmt.Errorf("failed to start post setup session: %w", err)
-	}
-
 	b.eg.Go(func() error {
 		defer b.started.Store(false)
+
+		commitmentAtx, err := b.getCommitmentAtx(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to start post setup session: %w", err)
+		}
 
 		if err := b.postSetupProvider.StartSession(ctx, opts, *commitmentAtx); err != nil {
 			return err
@@ -391,7 +390,7 @@ func (b *Builder) loop(ctx context.Context) {
 				b.layerClock.GetCurrentLayer(),
 				b.currentEpoch(),
 				log.Err(err))
-			if errors.Is(err, ErrStopRequested) {
+			if errors.Is(err, context.Canceled) {
 				return
 			}
 			switch {
@@ -428,7 +427,7 @@ func (b *Builder) loop(ctx context.Context) {
 func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
-		return ErrStopRequested
+		return ctx.Err()
 	case <-b.syncer.RegisterForATXSynced():
 	}
 	challenge := &types.NIPostChallenge{}
@@ -516,12 +515,6 @@ func (b *Builder) getCommitmentAtx(ctx context.Context) (*types.ATXID, error) {
 		return b.commitmentAtx, nil
 	}
 
-	select {
-	case <-ctx.Done():
-		return nil, ErrStopRequested
-	case <-b.syncer.RegisterForATXSynced():
-	}
-
 	// if this node has already published an ATX, get its initial ATX and from it the commitment ATX
 	atxId, err := atxs.GetFirstIDByNodeID(b.cdb, b.nodeID)
 	if err == nil {
@@ -537,6 +530,13 @@ func (b *Builder) getCommitmentAtx(ctx context.Context) (*types.ATXID, error) {
 	atxId, err = kvstore.GetCommitmentATXForNode(b.cdb, b.nodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
+		// wait for ATX to be synced before selecting commitment ATX
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-b.syncer.RegisterForATXSynced():
+		}
+
 		atxId, err := b.findCommitmentAtx()
 		if err != nil {
 			return nil, fmt.Errorf("failed to determine commitment ATX: %w", err)
@@ -607,10 +607,10 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 			b.discardChallenge()
 			return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
 		case <-ctx.Done():
-			return ErrStopRequested
+			return ctx.Err()
 		}
 	case <-ctx.Done():
-		return ErrStopRequested
+		return ctx.Err()
 	}
 	b.discardChallenge()
 	return nil
@@ -687,7 +687,7 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	// ensure we are synced before generating the ATX's view
 	select {
 	case <-ctx.Done():
-		return nil, ErrStopRequested
+		return nil, ctx.Err()
 	case <-b.syncer.RegisterForATXSynced():
 	}
 

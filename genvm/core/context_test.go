@@ -109,7 +109,6 @@ func TestApply(t *testing.T) {
 		}
 
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 
 		updater := mocks.NewMockAccountUpdater(ctrl)
 		actual := []core.Address{}
@@ -155,7 +154,6 @@ func TestRelay(t *testing.T) {
 		for _, receiver1 := range []core.Address{{'a', 'n', 'y'}, principal} {
 			t.Run(string(receiver1[:3]), func(t *testing.T) {
 				ctrl := gomock.NewController(t)
-				defer ctrl.Finish()
 
 				encoded := []byte("test")
 

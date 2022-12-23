@@ -78,13 +78,6 @@ func (n *NetMock) Publish(_ context.Context, _ string, d []byte) error {
 	if err != nil {
 		return err
 	}
-	if err := atx.CalcAndSetID(); err != nil {
-		return err
-	}
-	if err := atx.CalcAndSetNodeID(); err != nil {
-		return err
-	}
-
 	if atxDb, ok := n.atxHdlr.(*Handler); ok {
 		vAtx, err := atx.Verify(0, 1)
 		if err != nil {
@@ -459,7 +452,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 			ch := make(chan struct{})
 			close(ch)
 			return ch
-		})
+		}).AnyTimes()
 
 		builder := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock,
 			&postSetupProviderMock{},
@@ -473,7 +466,6 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			require.NoError(t, builder.StartSmeshing(types.Address{}, PostSetupOpts{}))
 			require.Never(t, func() bool { return !builder.Smeshing() }, 400*time.Microsecond, 50*time.Microsecond, "failed on execution %d", i)
-			require.Truef(t, builder.Smeshing(), "failed on execution %d", i)
 			require.NoError(t, builder.StopSmeshing(true))
 			require.Eventually(t, func() bool { return !builder.Smeshing() }, 100*time.Millisecond, time.Millisecond, "failed on execution %d", i)
 		}
@@ -484,7 +476,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		// It cannot check `builder.Smeshing()` as Start/Stop is happening from many goroutines simultaneously.
 		// Both Start and Stop can fail as it is not known if builder is smeshing or not.
 		builder := getBuilder(t)
-		eg, _ := errgroup.WithContext(context.Background())
+		var eg errgroup.Group
 		for worker := 0; worker < 10; worker += 1 {
 			eg.Go(func() error {
 				for i := 0; i < 100; i++ {
@@ -506,14 +498,14 @@ func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
 	require.ErrorContains(t, builder.StopSmeshing(true), "not started")
 }
 
-func TestBuilder_StopSmeshing_doesNotStopOnPoSTError(t *testing.T) {
+func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 
 	postSetupMock := NewMockpostSetupProvider(ctrl)
-	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	postSetupMock.EXPECT().GenerateProof(gomock.Any()).Return(nil, nil, nil)
+	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	postSetupMock.EXPECT().GenerateProof(gomock.Any()).Return(nil, nil, nil).AnyTimes()
 	postSetupMock.EXPECT().Reset().Return(errors.New("couldn't delete files"))
 
 	net.atxHdlr = atxHdlr
@@ -796,7 +788,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.WithName("db"))
 
 	signer := signing.NewEdSigner()
-	nodeId := types.BytesToNodeID(signer.PublicKey().Bytes())
+	nodeId := signer.NodeID()
 
 	otherSigner := signing.NewEdSigner()
 
@@ -885,12 +877,10 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	net.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
 		atx, err := types.BytesToAtx(msg)
 		r.NoError(err)
-		r.NoError(atx.CalcAndSetID())
-		r.NoError(atx.CalcAndSetNodeID())
-		r.Equal(nodeId, atx.NodeID())
 
 		vAtx, err := atx.Verify(0, 1)
 		r.NoError(err)
+		r.Equal(nodeId, vAtx.NodeID())
 
 		r.NoError(atxs.Add(cdb, vAtx, time.Now()))
 
@@ -919,7 +909,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.WithName("db"))
 
 	signer := signing.NewEdSigner()
-	nodeId := types.BytesToNodeID(signer.PublicKey().Bytes())
+	nodeId := signer.NodeID()
 
 	otherSigner := signing.NewEdSigner()
 
@@ -999,12 +989,10 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	net.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
 		atx, err := types.BytesToAtx(msg)
 		r.NoError(err)
-		r.NoError(atx.CalcAndSetID())
-		r.NoError(atx.CalcAndSetNodeID())
-		r.Equal(nodeId, atx.NodeID())
 
 		vAtx, err := atx.Verify(0, 1)
 		r.NoError(err)
+		r.Equal(nodeId, vAtx.NodeID())
 
 		r.NoError(atxs.Add(cdb, vAtx, time.Now()))
 
@@ -1185,9 +1173,11 @@ func TestBuilder_SignAtx(t *testing.T) {
 	err = b.SignAtx(atx)
 	assert.NoError(t, err)
 
-	pubkey, err := signing.ExtractPublicKey(atxBytes, atx.Sig)
+	extractor := signing.NewPubKeyExtractor()
+
+	nodeId, err := extractor.ExtractNodeID(atxBytes, atx.Sig)
 	assert.NoError(t, err)
-	assert.Equal(t, sig.NodeID().Bytes(), []byte(pubkey))
+	assert.Equal(t, sig.NodeID(), nodeId)
 }
 
 func TestBuilder_NIPostPublishRecovery(t *testing.T) {
@@ -1241,7 +1231,9 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	challengeHash, err := challenge.Hash()
 	assert.NoError(t, err)
 	npst2 := newNIPostWithChallenge(challengeHash, poetRef)
+	layerClockMock.mu.Lock()
 	layerClockMock.currentLayer = types.EpochID(1).FirstLayer().Add(3)
+	layerClockMock.mu.Unlock()
 	err = b.PublishActivationTx(context.Background())
 	assert.ErrorIs(t, err, ErrATXChallengeExpired)
 
@@ -1267,7 +1259,9 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	b.commitmentAtx = &goldenATXID
 	err = b.loadChallenge()
 	assert.NoError(t, err)
+	layerClockMock.mu.Lock()
 	layerClockMock.currentLayer = types.EpochID(4).FirstLayer().Add(3)
+	layerClockMock.mu.Unlock()
 	err = b.PublishActivationTx(context.Background())
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	assert.ErrorIs(t, err, ErrATXChallengeExpired)

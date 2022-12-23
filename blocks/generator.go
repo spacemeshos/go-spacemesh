@@ -5,13 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"sort"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hare"
@@ -230,7 +230,7 @@ func (g *Generator) generateBlock(ctx context.Context, layerID types.LayerID, pr
 }
 
 func (g *Generator) extractCoinbasesAndHeight(logger log.Log, props []*types.Proposal) (uint64, []types.AnyReward, error) {
-	weights := make(map[types.Address]util.Weight)
+	weights := make(map[types.Address]*big.Rat)
 	coinbases := make([]types.Address, 0, len(props))
 	max := uint64(0)
 	for _, p := range props {
@@ -254,12 +254,12 @@ func (g *Generator) extractCoinbasesAndHeight(logger log.Log, props []*types.Pro
 			return 0, nil, err
 		}
 		logger.With().Debug("weight per eligibility", p.ID(), log.Stringer("weight_per", weightPer))
-		actual := weightPer.Mul(util.WeightFromUint64(uint64(len(ballot.EligibilityProofs))))
-		if _, ok := weights[atx.Coinbase]; !ok {
+		actual := weightPer.Mul(weightPer, new(big.Rat).SetUint64(uint64(len(ballot.EligibilityProofs))))
+		if weight, ok := weights[atx.Coinbase]; !ok {
 			weights[atx.Coinbase] = actual
 			coinbases = append(coinbases, atx.Coinbase)
 		} else {
-			weights[atx.Coinbase].Add(actual)
+			weights[atx.Coinbase].Add(weight, actual)
 		}
 		events.ReportProposal(events.ProposalIncluded, p)
 	}

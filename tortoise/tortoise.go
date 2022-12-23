@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
+	"github.com/spacemeshos/fixed"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	putil "github.com/spacemeshos/go-spacemesh/proposals/util"
@@ -18,11 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
-)
-
-var (
-	errNoBaseBallotFound    = errors.New("no good base ballot within exception vector limit")
-	errstrTooManyExceptions = "too many exceptions to base ballot vote"
 )
 
 type turtle struct {
@@ -65,7 +62,6 @@ func newTurtle(
 	t.epochs[genesis.GetEpoch()] = &epochInfo{}
 	t.layers[genesis] = &layerInfo{
 		lid:            genesis,
-		empty:          util.WeightFromUint64(0),
 		hareTerminated: true,
 	}
 	t.verifying = newVerifying(config, t.state)
@@ -134,103 +130,49 @@ func (t *turtle) evict(ctx context.Context) {
 // EncodeVotes by choosing base ballot and explicit votes.
 func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opinion, error) {
 	var (
-		logger        = t.logger.WithContext(ctx)
-		disagreements = map[types.BallotID]types.LayerID{}
-		choices       []*ballotInfo
-		base          *ballotInfo
+		logger = t.logger.WithContext(ctx)
+		err    error
 
-		opinion *types.Opinion
 		current = t.last.Add(1)
-		err     error
 	)
 	if conf.current != nil {
 		current = *conf.current
 	}
-
-	for lid := t.evicted.Add(1); lid.Before(current); lid = lid.Add(1) {
-		for _, ballot := range t.ballots[lid] {
-			if ballot.weight.IsNil() {
+	for lid := current.Sub(1); lid.After(t.evicted); lid = lid.Sub(1) {
+		var choices []*ballotInfo
+		if lid == types.GetEffectiveGenesis() {
+			choices = []*ballotInfo{{layer: types.GetEffectiveGenesis()}}
+		} else {
+			choices = t.ballots[lid]
+		}
+		for _, base := range choices {
+			if base.malicious {
+				// skip them as they are candidates for pruning
 				continue
 			}
-			dis, err := t.firstDisagreement(ctx, current, ballot, disagreements)
-			if err != nil {
-				logger.With().Error("failed to compute first disagreement", ballot.id, log.Err(err))
-				continue
-			}
-			disagreements[ballot.id] = dis
-			choices = append(choices, ballot)
-		}
-	}
-
-	prioritizeBallots(choices, disagreements)
-	if len(choices) == 0 {
-		choices = append(choices, &ballotInfo{layer: types.GetEffectiveGenesis()})
-	}
-	for _, base = range choices {
-		opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
-		if err == nil {
-			break
-		}
-		logger.With().Warning("error calculating vote exceptions for ballot",
-			base.id,
-			log.Err(err),
-			log.Stringer("current layer", current),
-		)
-	}
-
-	if opinion == nil {
-		// TODO: special error encoding when exceeding exception list size
-		return nil, errNoBaseBallotFound
-	}
-	logger.With().Info("choose base ballot",
-		log.Stringer("base layer", base.layer),
-		log.Stringer("voting layer", current),
-		log.Inline(opinion),
-	)
-	metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last.Value - base.layer.Value))
-	return opinion, nil
-}
-
-// firstDisagreement returns first layer where local opinion is different from ballot's opinion within sliding window.
-func (t *turtle) firstDisagreement(ctx context.Context, current types.LayerID, ballot *ballotInfo, disagreements map[types.BallotID]types.LayerID) (types.LayerID, error) {
-	// using it as a mark that the votes for block are completely consistent
-	// with a local opinion. so if two blocks have consistent histories select block
-	// from a higher layer as it is more consistent.
-	consistent := ballot.layer
-	if basedis, exists := disagreements[ballot.base.id]; exists && basedis != ballot.base.layer {
-		return basedis, nil
-	}
-
-	for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
-		if lvote.lid.Before(ballot.base.layer) {
-			break
-		}
-		if lvote.vote == abstain && lvote.hareTerminated {
-			t.logger.With().Debug("ballot votes abstain on a terminated layer. can't use as a base ballot",
-				ballot.id,
-				lvote.lid,
-			)
-			return types.LayerID{}, nil
-		}
-		for _, block := range lvote.blocks {
-			vote, _, err := t.getFullVote(t.verified, current, block)
-			if err != nil {
-				return types.LayerID{}, err
-			}
-			if bvote := lvote.getVote(block.id); vote != bvote {
-				t.logger.With().Debug("found disagreement on a block",
-					ballot.id,
-					block.id,
-					log.Stringer("block_layer", lvote.lid),
-					log.Stringer("ballot_layer", ballot.layer),
-					log.Stringer("local_vote", vote),
-					log.Stringer("vote", bvote),
+			var opinion *types.Opinion
+			opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
+			if err == nil {
+				metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last.Value - base.layer.Value))
+				logger.With().Info("encoded votes",
+					log.Stringer("base ballot", base.id),
+					log.Stringer("base layer", base.layer),
+					log.Stringer("voting layer", current),
+					log.Inline(opinion),
 				)
-				return lvote.lid, nil
+				return opinion, nil
 			}
+			logger.With().Debug("failed to encode votes using base ballot id",
+				base.id,
+				log.Err(err),
+				log.Stringer("current layer", current),
+			)
 		}
 	}
-	return consistent, nil
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode votes: %w", err)
+	}
+	return nil, fmt.Errorf("no ballots within a sliding window")
 }
 
 // encode differences between selected base ballot and local votes.
@@ -324,7 +266,7 @@ func (t *turtle) encodeVotes(
 	}
 
 	if explen := len(votes.Support) + len(votes.Against); explen > t.MaxExceptions {
-		return nil, fmt.Errorf("%s (%v)", errstrTooManyExceptions, explen)
+		return nil, fmt.Errorf("too many exceptions (%v)", explen)
 	}
 	decoded, err := t.decodeExceptions(current, base, votes)
 	if err != nil {
@@ -344,7 +286,7 @@ func (t *turtle) getFullVote(verified, current types.LayerID, block *blockInfo) 
 	if !(vote == abstain && reason == reasonValidity) {
 		return vote, reason, nil
 	}
-	vote = sign(block.margin.Cmp(t.localThreshold))
+	vote = crossesThreshold(block.margin, t.localThreshold)
 	if vote != abstain {
 		return vote, reasonLocalThreshold, nil
 	}
@@ -383,12 +325,12 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 		t.processed = process
 		processedLayer.Set(float64(t.processed.Value))
 
-		for _, ballot := range t.ballots[process] {
-			t.countBallot(t.logger, ballot)
-		}
 		if t.isFull {
 			t.full.countDelayed(t.logger, process)
 			t.full.counted = process
+		}
+		for _, ballot := range t.ballots[process] {
+			t.countBallot(t.logger, ballot)
 		}
 
 		if err := t.loadBlocksData(process); err != nil {
@@ -438,7 +380,7 @@ func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) error {
 	}
 	ballot.conditions.badBeacon = badBeacon
 	t.verifying.countBallot(logger, ballot)
-	if t.isFull {
+	if !ballot.layer.After(t.full.counted) {
 		t.full.countBallot(logger, ballot)
 	}
 	return nil
@@ -579,14 +521,12 @@ func (t *turtle) loadAtxs(epoch types.EpochID) error {
 	einfo.height = getMedian(heights)
 	t.logger.With().Info("computed height and weight for epoch",
 		epoch,
-		log.Uint64("weight", einfo.weight),
+		log.Stringer("weight", einfo.weight),
 		log.Uint64("height", einfo.height),
 	)
 	return nil
 }
 
-// loadBallots from database.
-// must be loaded in order, as base ballot information needs to be in the state.
 func (t *turtle) loadBallots(lid types.LayerID) error {
 	blts, err := ballots.Layer(t.cdb, lid)
 	if err != nil {
@@ -615,7 +555,6 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) error {
 		layer:  block.LayerIndex,
 		hare:   neutral,
 		height: block.TickHeight,
-		margin: util.WeightFromUint64(0),
 	}
 	if t.layer(block.LayerIndex).hareTerminated {
 		binfo.hare = against
@@ -694,12 +633,16 @@ func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
 			log.Uint64("weight", atx.GetWeight()),
 		)
 		epoch.atxs[atx.ID] = atx.GetWeight()
-		epoch.weight += atx.GetWeight()
+		if atx.GetWeight() > math.MaxInt64 {
+			// atx weight is not expected to overflow int64
+			t.logger.With().Fatal("fixme: atx size overflows int64", log.Uint64("weight", atx.GetWeight()))
+		}
+		epoch.weight = epoch.weight.Add(fixed.New64(int64(atx.GetWeight())))
 	}
 	if atx.TargetEpoch() == t.last.GetEpoch() {
-		t.localThreshold = util.WeightFromUint64(epoch.weight).
-			Fraction(localThresholdFraction).
-			Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch())))
+		t.localThreshold = epoch.weight.
+			Div(fixed.New(localThresholdFraction)).
+			Div(fixed.New64(int64(types.GetLayersPerEpoch())))
 	}
 	addAtxDuration.Observe(float64(time.Since(start).Nanoseconds()))
 }
@@ -721,7 +664,6 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 
 	var (
 		base    *ballotInfo
-		weight  util.Weight
 		refinfo *referenceInfo
 	)
 
@@ -770,19 +712,6 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 		refinfo = ref.reference
 	}
 
-	if !ballot.IsMalicious() {
-		weight = refinfo.weight.Copy().Mul(
-			util.WeightFromUint64(uint64(len(ballot.EligibilityProofs))))
-	} else {
-		t.logger.With().Warning("malicious ballot with zeroed weight", ballot.LayerIndex, ballot.ID())
-	}
-
-	t.logger.With().Debug("computed weight and height for ballot",
-		ballot.ID(),
-		log.Stringer("weight", weight),
-		log.Uint64("height", refinfo.height),
-		log.Uint32("lid", ballot.LayerIndex.Value),
-	)
 	binfo := &ballotInfo{
 		id: ballot.ID(),
 		base: baseInfo{
@@ -791,8 +720,25 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 		},
 		reference: refinfo,
 		layer:     ballot.LayerIndex,
-		weight:    weight,
 	}
+
+	if !ballot.IsMalicious() {
+		binfo.weight = fixed.DivUint64(
+			refinfo.weight.Num().Uint64(),
+			refinfo.weight.Denom().Uint64(),
+		).Mul(fixed.New(len(ballot.EligibilityProofs)))
+	} else {
+		binfo.malicious = true
+		t.logger.With().Warning("malicious ballot with zeroed weight", ballot.LayerIndex, ballot.ID())
+	}
+
+	t.logger.With().Debug("computed weight and height for ballot",
+		ballot.ID(),
+		log.Stringer("weight", binfo.weight),
+		log.Uint64("height", refinfo.height),
+		log.Uint32("lid", ballot.LayerIndex.Value),
+	)
+
 	var err error
 	binfo.votes, err = t.decodeExceptions(binfo.layer, base, ballot.Votes)
 	if err != nil {

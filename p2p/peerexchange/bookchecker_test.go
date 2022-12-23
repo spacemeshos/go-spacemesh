@@ -223,7 +223,11 @@ func setupOverNodes(t *testing.T, nodesCount int) ([]host.Host, []*Discovery) {
 	for i := 0; i < nodesCount; i++ {
 		cm, err := connmgr.NewConnManager(40, 100, connmgr.WithGracePeriod(30*time.Second))
 		require.NoError(t, err)
-		h, err := libp2p.New(libp2p.ConnectionManager(cm))
+		lopts := []libp2p.Option{
+			libp2p.ConnectionManager(cm),
+			libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"),
+		}
+		h, err := libp2p.New(lopts...)
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			require.NoError(t, h.Close())

@@ -66,10 +66,8 @@ func Test_ValidateVRFNonce(t *testing.T) {
 		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits))
 	})
 
-	t.Run("numUnits can be smaller or larger", func(t *testing.T) {
+	t.Run("numUnits can be smaller", func(t *testing.T) {
 		t.Parallel()
-
-		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits+1))
 
 		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits-1))
 	})

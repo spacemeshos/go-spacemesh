@@ -102,9 +102,9 @@ func generateLayerContent(t *testing.T) []byte {
 
 func TestFetch_getHashes(t *testing.T) {
 	blks := []*types.Block{
-		types.GenLayerBlock(types.NewLayerID(10), types.RandomTXSet(10)),
-		types.GenLayerBlock(types.NewLayerID(11), types.RandomTXSet(10)),
-		types.GenLayerBlock(types.NewLayerID(20), types.RandomTXSet(10)),
+		genLayerBlock(types.NewLayerID(10), types.RandomTXSet(10)),
+		genLayerBlock(types.NewLayerID(11), types.RandomTXSet(10)),
+		genLayerBlock(types.NewLayerID(20), types.RandomTXSet(10)),
 	}
 	blockIDs := types.ToBlockIDs(blks)
 	hashes := types.BlockIDsToHashes(blockIDs)
@@ -188,8 +188,8 @@ func TestFetch_getHashes(t *testing.T) {
 
 func TestFetch_GetBlocks(t *testing.T) {
 	blks := []*types.Block{
-		types.GenLayerBlock(types.NewLayerID(10), types.RandomTXSet(10)),
-		types.GenLayerBlock(types.NewLayerID(20), types.RandomTXSet(10)),
+		genLayerBlock(types.NewLayerID(10), types.RandomTXSet(10)),
+		genLayerBlock(types.NewLayerID(20), types.RandomTXSet(10)),
 	}
 	blockIDs := types.ToBlockIDs(blks)
 	f := createFetch(t)
@@ -206,8 +206,8 @@ func TestFetch_GetBlocks(t *testing.T) {
 
 func TestFetch_GetBallots(t *testing.T) {
 	blts := []*types.Ballot{
-		types.GenLayerBallot(types.NewLayerID(10)),
-		types.GenLayerBallot(types.NewLayerID(20)),
+		genLayerBallot(types.NewLayerID(10)),
+		genLayerBallot(types.NewLayerID(20)),
 	}
 	ballotIDs := types.ToBallotIDs(blts)
 	f := createFetch(t)
@@ -222,10 +222,53 @@ func TestFetch_GetBallots(t *testing.T) {
 	require.NoError(t, eg.Wait())
 }
 
+func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.Proposal {
+	p := &types.Proposal{
+		InnerProposal: types.InnerProposal{
+			Ballot: types.Ballot{
+				InnerBallot: types.InnerBallot{
+					AtxID:      types.RandomATXID(),
+					LayerIndex: layerID,
+					EpochData: &types.EpochData{
+						ActiveSet: types.RandomActiveSet(10),
+						Beacon:    types.RandomBeacon(),
+					},
+				},
+			},
+			TxIDs: txs,
+		},
+	}
+	signer := signing.NewEdSigner()
+	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
+	p.Signature = signer.Sign(p.Bytes())
+	p.Initialize()
+	return p
+}
+
+func genLayerBallot(layerID types.LayerID) *types.Ballot {
+	b := types.RandomBallot()
+	b.LayerIndex = layerID
+	signer := signing.NewEdSigner()
+	b.Signature = signer.Sign(b.SignedBytes())
+	b.Initialize()
+	return b
+}
+
+func genLayerBlock(layerID types.LayerID, txs []types.TransactionID) *types.Block {
+	b := &types.Block{
+		InnerBlock: types.InnerBlock{
+			LayerIndex: layerID,
+			TxIDs:      txs,
+		},
+	}
+	b.Initialize()
+	return b
+}
+
 func TestFetch_GetProposals(t *testing.T) {
 	proposals := []*types.Proposal{
-		types.GenLayerProposal(types.NewLayerID(10), nil),
-		types.GenLayerProposal(types.NewLayerID(20), nil),
+		genLayerProposal(types.NewLayerID(10), nil),
+		genLayerProposal(types.NewLayerID(20), nil),
 	}
 	proposalIDs := types.ToProposalIDs(proposals)
 	f := createFetch(t)

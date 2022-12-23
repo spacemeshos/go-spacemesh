@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"math/big"
 	"sort"
 
 	"github.com/spacemeshos/go-scale"
@@ -67,6 +68,14 @@ type RatNum struct {
 // String implements fmt.Stringer interface for RatNum.
 func (r *RatNum) String() string {
 	return fmt.Sprintf("%d/%d", r.Num, r.Denom)
+}
+
+// ToBigRat creates big.Rat instance.
+func (r *RatNum) ToBigRat() *big.Rat {
+	return new(big.Rat).SetFrac(
+		new(big.Int).SetUint64(r.Num),
+		new(big.Int).SetUint64(r.Denom),
+	)
 }
 
 // AnyReward contains the reward information.

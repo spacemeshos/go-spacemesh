@@ -1,6 +1,7 @@
 package presets
 
 import (
+	"math/big"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -60,17 +61,18 @@ func fastnet() config.Config {
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
 	conf.SMESHING.Opts.ComputeProviderID = 1
-	conf.SMESHING.Opts.NumFiles = 1
 	conf.SMESHING.Opts.NumUnits = 2
 	conf.SMESHING.Opts.Throttle = true
 
+	conf.Beacon.Kappa = 40
+	conf.Beacon.Theta = big.NewRat(1, 4)
 	conf.Beacon.FirstVotingRoundDuration = 10 * time.Second
 	conf.Beacon.GracePeriodDuration = 2 * time.Second
 	conf.Beacon.ProposalDuration = 2 * time.Second
 	conf.Beacon.VotingRoundDuration = 2 * time.Second
 	conf.Beacon.WeakCoinRoundDuration = 2 * time.Second
 	conf.Beacon.RoundsNumber = 4
-	conf.Beacon.BeaconSyncNumBallots = 30
+	conf.Beacon.BeaconSyncWeightUnits = 20
 	conf.Beacon.VotesLimit = 100
 
 	return conf

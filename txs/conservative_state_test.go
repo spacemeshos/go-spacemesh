@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"math/big"
 	"math/rand"
 	"testing"
 	"time"
@@ -43,7 +44,7 @@ func newTx(t *testing.T, nonce uint64, amount, fee uint64, signer *signing.EdSig
 	return newTxWthRecipient(t, dest, nonce, amount, fee, signer)
 }
 
-func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
+func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner, opts ...sdk.Opt) *types.Transaction {
 	t.Helper()
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
 		types.Nonce{Counter: nonce},
@@ -70,6 +71,29 @@ type testConState struct {
 
 func (t *testConState) handler() *TxHandler {
 	return NewTxHandler(t, t.logger)
+}
+
+func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.Proposal {
+	p := &types.Proposal{
+		InnerProposal: types.InnerProposal{
+			Ballot: types.Ballot{
+				InnerBallot: types.InnerBallot{
+					AtxID:      types.RandomATXID(),
+					LayerIndex: layerID,
+					EpochData: &types.EpochData{
+						ActiveSet: types.RandomActiveSet(10),
+						Beacon:    types.RandomBeacon(),
+					},
+				},
+			},
+			TxIDs: txs,
+		},
+	}
+	signer := signing.NewEdSigner()
+	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
+	p.Signature = signer.Sign(p.Bytes())
+	p.Initialize()
+	return p
 }
 
 func createTestState(t *testing.T, gasLimit uint64) *testConState {
@@ -121,7 +145,7 @@ func createProposalsDupTXs(lid types.LayerID, hash types.Hash32, step, numPer, n
 		if end >= total {
 			end = total
 		}
-		p := types.GenLayerProposal(lid, tids[offset:end])
+		p := genLayerProposal(lid, tids[offset:end])
 		p.MeshHash = hash
 		proposals = append(proposals, p)
 	}
@@ -263,7 +287,7 @@ func TestSelectBlockTXs_NodeHasDifferentMesh(t *testing.T) {
 	lid := types.NewLayerID(1333)
 	proposals := make([]*types.Proposal, 0, numProposals)
 	for i := 0; i < numProposals; i++ {
-		p := types.GenLayerProposal(lid, nil)
+		p := genLayerProposal(lid, nil)
 		p.MeshHash = meshHash
 		proposals = append(proposals, p)
 	}
@@ -280,7 +304,7 @@ func TestSelectBlockTXs_OwnNodeMissingMeshHash(t *testing.T) {
 	lid := types.NewLayerID(1333)
 	proposals := make([]*types.Proposal, 0, numProposals)
 	for i := 0; i < numProposals; i++ {
-		p := types.GenLayerProposal(lid, nil)
+		p := genLayerProposal(lid, nil)
 		p.MeshHash = meshHash
 		proposals = append(proposals, p)
 	}
@@ -592,7 +616,7 @@ func Test_ApplyLayer_UpdateHeader(t *testing.T) {
 	require.Nil(t, got.TxHeader)
 
 	coinbase := types.GenerateAddress(types.RandomBytes(types.AddressLength))
-	weight := util.WeightFromFloat64(200.56)
+	weight := new(big.Rat).SetFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
 			LayerIndex: lid,
@@ -630,7 +654,7 @@ func TestApplyLayer(t *testing.T) {
 	lid := types.NewLayerID(1)
 	ids, txs := addBatch(t, tcs, numTXs)
 	coinbase := types.GenerateAddress(types.RandomBytes(types.AddressLength))
-	weight := util.WeightFromFloat64(200.56)
+	weight := new(big.Rat).SetFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
 			LayerIndex: lid,
@@ -695,7 +719,7 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 		tcs.mvm.EXPECT().GetNonce(principal).Return(types.Nonce{Counter: nonce + 1}, nil).Times(1)
 	}
 	coinbase := types.GenerateAddress(types.RandomBytes(types.AddressLength))
-	weight := util.WeightFromFloat64(200.56)
+	weight := new(big.Rat).SetFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
 			LayerIndex: lid,
@@ -749,7 +773,7 @@ func TestApplyLayer_VMError(t *testing.T) {
 	lid := types.NewLayerID(1)
 	ids, txs := addBatch(t, tcs, numTXs)
 	coinbase := types.GenerateAddress(types.RandomBytes(types.AddressLength))
-	weight := util.WeightFromFloat64(200.56)
+	weight := new(big.Rat).SetFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
 			LayerIndex: lid,
