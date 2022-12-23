@@ -247,7 +247,6 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 
 func TestConsensusProcess_handleMessage(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	r := require.New(t)
 	net := &mockP2p{}
@@ -365,7 +364,6 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 
 func TestConsensusProcess_isEligible_NotEligible(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	proc := generateConsensusProcess(t)
 	mo := mocks.NewMockRolacle(ctrl)
@@ -379,7 +377,6 @@ func TestConsensusProcess_isEligible_NotEligible(t *testing.T) {
 
 func TestConsensusProcess_isEligible_Eligible(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	proc := generateConsensusProcess(t)
 	mo := mocks.NewMockRolacle(ctrl)
@@ -393,7 +390,6 @@ func TestConsensusProcess_isEligible_Eligible(t *testing.T) {
 
 func TestConsensusProcess_isEligible_ActiveSetFailed(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	proc := generateConsensusProcess(t)
 	mo := mocks.NewMockRolacle(ctrl)
@@ -405,7 +401,6 @@ func TestConsensusProcess_isEligible_ActiveSetFailed(t *testing.T) {
 
 func TestConsensusProcess_isEligible_NotActive(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	proc := generateConsensusProcess(t)
 	mo := mocks.NewMockRolacle(ctrl)
@@ -573,7 +568,6 @@ func TestIterationFromCounter(t *testing.T) {
 
 func TestConsensusProcess_beginStatusRound(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound(context.TODO())
@@ -599,7 +593,6 @@ func TestConsensusProcess_beginStatusRound(t *testing.T) {
 
 func TestConsensusProcess_beginProposalRound(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound(context.TODO())
@@ -628,7 +621,6 @@ func TestConsensusProcess_beginProposalRound(t *testing.T) {
 
 func TestConsensusProcess_beginCommitRound(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	proc := generateConsensusProcess(t)
 	network := &mockP2p{}

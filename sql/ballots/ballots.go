@@ -7,7 +7,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -26,7 +25,7 @@ func decodeBallot(id types.BallotID, pubkey, body *bytes.Reader, malicious bool)
 		}
 	}
 	ballot.SetID(id)
-	ballot.SetSmesherID(signing.NewPublicKey(pubkeyBytes))
+	ballot.SetSmesherID(types.BytesToNodeID(pubkeyBytes))
 	if malicious {
 		ballot.SetMalicious()
 	}

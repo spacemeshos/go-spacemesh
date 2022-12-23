@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 //go:generate scalegen
@@ -267,12 +266,11 @@ func (atx *ActivationTx) CalcAndSetNodeID() error {
 	if err != nil {
 		return fmt.Errorf("failed to derive NodeID: %w", err)
 	}
-	pub, err := signing.ExtractPublicKey(b, atx.Sig)
+	nodeId, err := ExtractNodeIDFromSig(b, atx.Sig)
 	if err != nil {
 		return fmt.Errorf("failed to derive NodeID: %w", err)
 	}
-	nodeID := BytesToNodeID(pub)
-	atx.nodeID = &nodeID
+	atx.nodeID = &nodeId
 	return nil
 }
 
@@ -477,8 +475,7 @@ func (p *Post) MarshalLogObject(encoder log.ObjectEncoder) error {
 // String returns a string representation of the PostProof, for logging purposes.
 // It implements the Stringer interface.
 func (p *Post) String() string {
-	return fmt.Sprintf("nonce: %v, indices: %v",
-		p.Nonce, bytesToShortString(p.Indices))
+	return fmt.Sprintf("nonce: %v, indices: %v", p.Nonce, bytesToShortString(p.Indices))
 }
 
 func bytesToShortString(b []byte) string {
