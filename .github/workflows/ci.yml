@@ -268,7 +268,7 @@ jobs:
       - filter-changes
       - dockerpush
     timeout-minutes: 90
-    concurrency: cloud-limits
+    concurrency: ${{ github.workflow }}-${{ github.ref }}
     steps:
       - uses: actions/checkout@v3
 
@@ -326,7 +326,7 @@ jobs:
           size: 50
           bootstrap: 10m
           level: info
-          clusters: 2
+          clusters: 4
         run: make -C systest run test_name=.
 
       - name: Run tests II
@@ -339,7 +339,7 @@ jobs:
           size: 30
           bootstrap: 10m
           level: info
-          clusters: 2
+          clusters: 4
         run: make -C systest run test_name=.
 
       - name: Delete pod

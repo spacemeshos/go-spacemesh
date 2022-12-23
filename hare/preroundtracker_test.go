@@ -23,7 +23,30 @@ const (
 )
 
 func getProposalID(i int) types.ProposalID {
-	return types.GenLayerProposal(types.NewLayerID(1), nil).ID()
+	return genLayerProposal(types.NewLayerID(1), nil).ID()
+}
+
+func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.Proposal {
+	p := &types.Proposal{
+		InnerProposal: types.InnerProposal{
+			Ballot: types.Ballot{
+				InnerBallot: types.InnerBallot{
+					AtxID:      types.RandomATXID(),
+					LayerIndex: layerID,
+					EpochData: &types.EpochData{
+						ActiveSet: types.RandomActiveSet(10),
+						Beacon:    types.RandomBeacon(),
+					},
+				},
+			},
+			TxIDs: txs,
+		},
+	}
+	signer := signing.NewEdSigner()
+	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
+	p.Signature = signer.Sign(p.Bytes())
+	p.Initialize()
+	return p
 }
 
 var (

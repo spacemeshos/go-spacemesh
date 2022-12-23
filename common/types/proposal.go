@@ -9,7 +9,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 const (
@@ -77,13 +76,12 @@ func (p *Proposal) Initialize() error {
 	}
 
 	// check proposal signature consistent with ballot's
-	pubkey, err := signing.ExtractPublicKey(p.Bytes(), p.Signature)
+	nodeId, err := ExtractNodeIDFromSig(p.Bytes(), p.Signature)
 	if err != nil {
-		return fmt.Errorf("proposal extract key: %w", err)
+		return fmt.Errorf("proposal extract nodeId: %w", err)
 	}
-	pPubKey := signing.NewPublicKey(pubkey)
-	if !p.Ballot.SmesherID().Equals(pPubKey) {
-		return fmt.Errorf("inconsistent smesher in proposal %v and ballot %v", pPubKey.ShortString(), p.Ballot.SmesherID().ShortString())
+	if p.Ballot.SmesherID() != nodeId {
+		return fmt.Errorf("inconsistent smesher in proposal %v and ballot %v", nodeId.ShortString(), p.Ballot.SmesherID().ShortString())
 	}
 
 	p.proposalID = ProposalID(CalcObjectHash32(p).ToHash20())

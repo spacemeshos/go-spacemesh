@@ -42,7 +42,6 @@ func TestSyncGetOffset(t *testing.T) {
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 		tm := mocks.NewMockTime(ctrl)
 		peers := []p2p.Peer{}
 		tm.EXPECT().Now().Return(roundStartTime)
@@ -62,7 +61,6 @@ func TestSyncGetOffset(t *testing.T) {
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 		tm := mocks.NewMockTime(ctrl)
 		peers := []p2p.Peer{}
 		tm.EXPECT().Now().Return(roundStartTime)
@@ -96,7 +94,6 @@ func TestSyncTerminateOnError(t *testing.T) {
 	mesh, err := mocknet.FullMeshConnected(4)
 	require.NoError(t, err)
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	waiter := bootmocks.NewMockWaiter(ctrl)
 	tm := mocks.NewMockTime(ctrl)
 
