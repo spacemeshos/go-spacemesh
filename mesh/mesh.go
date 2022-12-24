@@ -334,7 +334,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	var err error
 	defer func() {
 		if err != nil {
-			logger.With().Error("failed to process layer", log.Err(err))
+			logger.With().Warning("failed to process layer", log.Err(err))
 		} else {
 			logger.Info("successfully processed layer")
 		}
