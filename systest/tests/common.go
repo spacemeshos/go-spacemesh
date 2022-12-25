@@ -70,8 +70,21 @@ func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.Sugar
 				)
 			}
 			for j := 0; j < batch; j++ {
-				if err := submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), client); err != nil {
-					return false, fmt.Errorf("spend failed %s %w", client.Name, err)
+				// in case spawn isn't executed on this particular client
+				retries := 3
+				spendClient := client
+				for k := 0; k < retries; k++ {
+					err = submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), spendClient)
+					if err == nil {
+						break
+					}
+					if logger != nil {
+						logger.Warnw("failed to spend", "client", spendClient.Name, "err", err.Error())
+					}
+					spendClient = cl.Client((i + k + 1) % cl.Total())
+				}
+				if err != nil {
+					return false, fmt.Errorf("spend failed %s %w", spendClient.Name, err)
 				}
 			}
 			return true, nil

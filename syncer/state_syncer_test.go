@@ -70,15 +70,16 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 			})
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(lid.Sub(1), nil)
-		ts.mConState.EXPECT().ApplyLayer(gomock.Any(), lid, gomock.Any()).DoAndReturn(
-			func(_ context.Context, _ types.LayerID, got *types.Block) error {
-				require.Equal(t, adopted[lid], got.ID())
+		ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
+		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, gomock.Any(), nil, nil).DoAndReturn(
+			func(_ context.Context, _ types.LayerID, got types.BlockID, _ []types.TransactionWithResult, _ []types.Transaction) error {
+				require.Equal(t, adopted[lid], got)
 				return nil
 			})
-		ts.mConState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
+		ts.mVm.EXPECT().GetStateRoot()
 	}
 	require.False(t, ts.syncer.stateSynced())
-	require.NoError(t, ts.syncer.processLayers(context.TODO()))
+	require.NoError(t, ts.syncer.processLayers(context.Background()))
 	require.True(t, ts.syncer.stateSynced())
 }
 
@@ -145,12 +146,9 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 				require.NoError(t, blocks.Add(ts.cdb, types.NewExistingBlock(tc.localCert, types.InnerBlock{LayerIndex: lid})))
 				require.NoError(t, certificates.Add(ts.cdb, lid, &types.Certificate{BlockID: tc.localCert}))
 				require.NoError(t, blocks.SetValid(ts.cdb, tc.localCert))
-				ts.mConState.EXPECT().ApplyLayer(gomock.Any(), lid, gomock.Any()).DoAndReturn(
-					func(_ context.Context, _ types.LayerID, got *types.Block) error {
-						require.Equal(t, tc.localCert, got.ID())
-						return nil
-					})
-				ts.mConState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
+				ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
+				ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, tc.localCert, nil, nil)
+				ts.mVm.EXPECT().GetStateRoot()
 			}
 			ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
 			ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
@@ -169,7 +167,7 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 			ts.mTortoise.EXPECT().Updates().Return(gLid, nil)
 
 			require.False(t, ts.syncer.stateSynced())
-			require.NoError(t, ts.syncer.processLayers(context.TODO()))
+			require.NoError(t, ts.syncer.processLayers(context.Background()))
 			require.True(t, ts.syncer.stateSynced())
 		})
 	}
@@ -183,7 +181,7 @@ func TestProcessLayers_BeaconNotAvailable(t *testing.T) {
 	ts.mTicker.advanceToLayer(lastSynced.Add(1))
 	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, errBeaconNotAvailable)
 	require.False(t, ts.syncer.stateSynced())
-	require.ErrorIs(t, ts.syncer.processLayers(context.TODO()), errBeaconNotAvailable)
+	require.ErrorIs(t, ts.syncer.processLayers(context.Background()), errBeaconNotAvailable)
 	require.False(t, ts.syncer.stateSynced())
 }
 
@@ -194,12 +192,12 @@ func TestProcessLayers_ATXsNotSynced(t *testing.T) {
 	ts.syncer.setLastSyncedLayer(current.Sub(1))
 	ts.mTicker.advanceToLayer(current)
 	require.False(t, ts.syncer.stateSynced())
-	require.ErrorIs(t, ts.syncer.processLayers(context.TODO()), errATXsNotSynced)
+	require.ErrorIs(t, ts.syncer.processLayers(context.Background()), errATXsNotSynced)
 	require.False(t, ts.syncer.stateSynced())
 }
 
 func TestProcessLayers_Shutdown(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.TODO())
+	ctx, cancel := context.WithCancel(context.Background())
 	ts := newTestSyncer(ctx, t, never)
 	ts.syncer.setATXSynced()
 
@@ -208,7 +206,7 @@ func TestProcessLayers_Shutdown(t *testing.T) {
 	ts.mTicker.advanceToLayer(lastSynced.Add(1))
 
 	cancel()
-	require.ErrorIs(t, ts.syncer.processLayers(context.TODO()), errShuttingDown)
+	require.ErrorIs(t, ts.syncer.processLayers(context.Background()), errShuttingDown)
 	require.False(t, ts.syncer.stateSynced())
 }
 
@@ -222,7 +220,7 @@ func TestProcessLayers_HareIsStillWorking(t *testing.T) {
 	require.False(t, ts.syncer.stateSynced())
 	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(lastSynced).Return(true)
-	require.ErrorIs(t, ts.syncer.processLayers(context.TODO()), errHareInCharge)
+	require.ErrorIs(t, ts.syncer.processLayers(context.Background()), errHareInCharge)
 	require.False(t, ts.syncer.stateSynced())
 
 	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
@@ -230,9 +228,10 @@ func TestProcessLayers_HareIsStillWorking(t *testing.T) {
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced).Return(nil, nil)
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
 	ts.mTortoise.EXPECT().Updates().Return(lastSynced, nil)
-	ts.mConState.EXPECT().ApplyLayer(gomock.Any(), lastSynced, nil)
-	ts.mConState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
-	require.NoError(t, ts.syncer.processLayers(context.TODO()))
+	ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
+	ts.mConState.EXPECT().UpdateCache(gomock.Any(), lastSynced, types.EmptyBlockID, nil, nil)
+	ts.mVm.EXPECT().GetStateRoot()
+	require.NoError(t, ts.syncer.processLayers(context.Background()))
 	require.True(t, ts.syncer.stateSynced())
 }
 
@@ -255,7 +254,7 @@ func TestProcessLayers_HareTakesTooLong(t *testing.T) {
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(glayer, nil)
 	}
-	require.NoError(t, ts.syncer.processLayers(context.TODO()))
+	require.NoError(t, ts.syncer.processLayers(context.Background()))
 	require.True(t, ts.syncer.stateSynced())
 }
 
@@ -271,7 +270,7 @@ func TestProcessLayers_OpinionsOptional(t *testing.T) {
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
 	ts.mTortoise.EXPECT().Updates().Return(types.GetEffectiveGenesis(), nil)
 	require.False(t, ts.syncer.stateSynced())
-	require.NoError(t, ts.syncer.processLayers(context.TODO()))
+	require.NoError(t, ts.syncer.processLayers(context.Background()))
 	require.True(t, ts.syncer.stateSynced())
 }
 
@@ -281,13 +280,14 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	current := types.GetEffectiveGenesis().Add(131)
 	ts.mTicker.advanceToLayer(current)
 	for lid := types.GetEffectiveGenesis().Add(1); lid.Before(current); lid = lid.Add(1) {
-		ts.msh.SetZeroBlockLayer(context.TODO(), lid)
+		ts.msh.SetZeroBlockLayer(context.Background(), lid)
 		ts.mTortoise.EXPECT().OnHareOutput(lid, types.EmptyBlockID)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(lid.Sub(1), nil)
-		ts.mConState.EXPECT().ApplyLayer(gomock.Any(), lid, nil)
-		ts.mConState.EXPECT().GetStateRoot().Return(types.RandomHash(), nil)
-		require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), lid, types.EmptyBlockID))
+		ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
+		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
+		ts.mVm.EXPECT().GetStateRoot()
+		require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.Background(), lid, types.EmptyBlockID, false))
 	}
 	instate := ts.syncer.mesh.LatestLayerInState()
 	require.Equal(t, current.Sub(1), instate)
@@ -377,5 +377,5 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), instate)
 	ts.mTortoise.EXPECT().Updates().Return(instate, nil)
-	require.NoError(t, ts.syncer.processLayers(context.TODO()))
+	require.NoError(t, ts.syncer.processLayers(context.Background()))
 }
