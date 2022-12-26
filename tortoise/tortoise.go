@@ -510,12 +510,17 @@ func (t *turtle) loadContextualValidity(lid types.LayerID) error {
 // loadAtxs and compute reference height.
 func (t *turtle) loadAtxs(epoch types.EpochID) error {
 	var heights []uint64
-	if err := t.cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
-		t.onAtx(header)
-		heights = append(heights, header.TickHeight())
-		return true
-	}); err != nil {
-		return fmt.Errorf("computing epoch data for %d: %w", epoch, err)
+	_, ids, err := t.cdb.GetEpochWeight(epoch)
+	if err != nil {
+		return fmt.Errorf("get epoch %d weight: %w", epoch, err)
+	}
+	for _, id := range ids {
+		atx, err := t.cdb.GetFullAtx(id)
+		if err != nil {
+			return fmt.Errorf("get atx %v: %w", id, err)
+		}
+		t.onAtx(atx)
+		heights = append(heights, atx.TickHeight())
 	}
 	einfo := t.epoch(epoch)
 	einfo.height = getMedian(heights)
@@ -623,16 +628,16 @@ func (t *turtle) onOpinionChange(lid types.LayerID) {
 	}
 }
 
-func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
+func (t *turtle) onAtx(atx *types.VerifiedActivationTx) {
 	start := time.Now()
 	epoch := t.epoch(atx.TargetEpoch())
-	if _, exist := epoch.atxs[atx.ID]; !exist {
+	if _, exist := epoch.atxs[atx.ID()]; !exist {
 		t.logger.With().Debug("on atx",
-			log.Stringer("id", atx.ID),
+			log.Stringer("id", atx.ID()),
 			log.Uint32("epoch", uint32(atx.TargetEpoch())),
 			log.Uint64("weight", atx.GetWeight()),
 		)
-		epoch.atxs[atx.ID] = atx.GetWeight()
+		epoch.atxs[atx.ID()] = atx.GetWeight()
 		if atx.GetWeight() > math.MaxInt64 {
 			// atx weight is not expected to overflow int64
 			t.logger.With().Fatal("fixme: atx size overflows int64", log.Uint64("weight", atx.GetWeight()))

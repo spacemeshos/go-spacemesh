@@ -37,7 +37,7 @@ func (m *MockatxReceiver) EXPECT() *MockatxReceiverMockRecorder {
 }
 
 // OnAtx mocks base method.
-func (m *MockatxReceiver) OnAtx(arg0 *types.ActivationTxHeader) {
+func (m *MockatxReceiver) OnAtx(arg0 *types.VerifiedActivationTx) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "OnAtx", arg0)
 }

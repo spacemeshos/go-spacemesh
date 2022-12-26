@@ -80,6 +80,7 @@ func TestHandler_processBlockATXs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	validator := NewMocknipostValidator(ctrl)
 	receiver := NewMockatxReceiver(ctrl)
+	receiver.EXPECT().OnAtx(gomock.Any()).AnyTimes()
 	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, validator, receiver, log)
 
 	coinbase1 := types.GenerateAddress([]byte("aaaa"))
@@ -142,8 +143,11 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 	log := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
-	validator := NewMocknipostValidator(gomock.NewController(t))
-	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, nil, log)
+	ctrl := gomock.NewController(t)
+	validator := NewMocknipostValidator(ctrl)
+	receiver := NewMockatxReceiver(ctrl)
+	receiver.EXPECT().OnAtx(gomock.Any()).AnyTimes()
+	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, receiver, log)
 
 	coinbase := types.GenerateAddress([]byte("aaaa"))
 
@@ -528,6 +532,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	validator := NewMocknipostValidator(ctrl)
 	receiver := NewMockatxReceiver(ctrl)
+	receiver.EXPECT().OnAtx(gomock.Any()).AnyTimes()
 	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, validator, receiver, log)
 
 	coinbase := types.GenerateAddress([]byte("aaaa"))
@@ -749,6 +754,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
 	validator := NewMocknipostValidator(gomock.NewController(t))
 	receiver := NewMockatxReceiver(gomock.NewController(t))
+	receiver.EXPECT().OnAtx(gomock.Any()).AnyTimes()
 	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, receiver, log)
 
 	// Act & Assert

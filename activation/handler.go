@@ -129,6 +129,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 	} else {
 		h.log.WithContext(ctx).With().Info("atx is valid", atx.ID())
 	}
+	h.atxReceiver.OnAtx(atx)
 	if err := h.StoreAtx(ctx, atx); err != nil {
 		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
@@ -385,11 +386,6 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 		return fmt.Errorf("cannot process atx %v: %v", atx.ShortString(), err)
 		// TODO(anton): blacklist peer
 	}
-	header, err := h.cdb.GetAtxHeader(vAtx.ID())
-	if err != nil {
-		return fmt.Errorf("get header for processed atx %s: %w", vAtx.ID(), err)
-	}
-	h.atxReceiver.OnAtx(header)
 	events.ReportNewActivation(vAtx)
 	logger.With().Info("got new atx", log.Inline(atx), log.Int("size", len(data)))
 	return nil

@@ -1627,12 +1627,14 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	// and then do rerun
 	partitionEnd := last
 	s1.Merge(s2)
-	require.NoError(t, s1.GetState(0).DB.IterateEpochATXHeaders(
-		partitionEnd.GetEpoch(), func(header *types.ActivationTxHeader) bool {
-			tortoise1.OnAtx(header)
-			tortoise2.OnAtx(header)
-			return true
-		}))
+	_, ids, err := s1.GetState(0).DB.GetEpochWeight(partitionEnd.GetEpoch())
+	require.NoError(t, err)
+	for _, id := range ids {
+		atx, err := s1.GetState(0).DB.GetFullAtx(id)
+		require.NoError(t, err)
+		tortoise1.OnAtx(atx)
+		tortoise2.OnAtx(atx)
+	}
 	for lid := partitionStart; !lid.After(partitionEnd); lid = lid.Add(1) {
 		mergedBlocks, err := blocks.Layer(s1.GetState(0).DB, lid)
 		require.NoError(t, err)
@@ -2272,9 +2274,14 @@ func TestSwitchMode(t *testing.T) {
 		template.Votes.Support = nil
 
 		// add an atx to increase optimistic threshold in verifying tortoise to trigger a switch
-		header := &types.ActivationTxHeader{ID: types.ATXID{1}, NumUnits: 1, TickCount: 200}
-		header.PubLayerID = types.EpochID(1).FirstLayer()
-		tortoise.OnAtx(header)
+		atx := &types.ActivationTx{}
+		atx.SetID(&types.ATXID{1})
+		atx.SetNodeID(&types.NodeID{})
+		atx.NumUnits = 1
+		atx.PubLayerID = types.EpochID(1).FirstLayer()
+		vatx, err := atx.Verify(0, 200)
+		require.NoError(t, err)
+		tortoise.OnAtx(vatx)
 		// feed ballots that vote against previously validated layer
 		// without the fix they would be ignored
 		for i := 1; i <= 16; i++ {

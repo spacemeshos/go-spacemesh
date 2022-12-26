@@ -10,7 +10,7 @@ import (
 //go:generate mockgen -package=activation -destination=./mocks.go -source=./interface.go
 
 type atxReceiver interface {
-	OnAtx(*types.ActivationTxHeader)
+	OnAtx(*types.VerifiedActivationTx)
 }
 
 type poetValidatorPersister interface {
