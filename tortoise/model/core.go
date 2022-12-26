@@ -27,6 +27,10 @@ const (
 
 func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 	cdb := datastore.NewCachedDB(sql.InMemory(), logger)
+	sig, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+	if err != nil {
+		panic(err)
+	}
 	c := &core{
 		id:      id,
 		logger:  logger,
@@ -34,7 +38,7 @@ func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 		cdb:     cdb,
 		beacons: newBeaconStore(),
 		units:   units,
-		signer:  signing.NewEdSignerFromRand(rng),
+		signer:  sig,
 	}
 	cfg := tortoise.DefaultConfig()
 	cfg.LayerSize = layerSize
@@ -57,7 +61,7 @@ type core struct {
 
 	// generated on setup
 	units  uint32
-	signer signing.Signer
+	signer signer
 
 	// set in the first layer of each epoch
 	refBallot     *types.BallotID

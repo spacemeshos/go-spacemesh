@@ -41,7 +41,8 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	t.Helper()
 	types.SetLayersPerEpoch(3)
 	db := sql.InMemory()
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	nid := signer.NodeID()
 	ctrl := gomock.NewController(t)
 	mo := hmocks.NewMockRolacle(ctrl)
@@ -72,9 +73,10 @@ func generateBlock(t *testing.T, db *sql.Database) *types.Block {
 	return block
 }
 
-func genCertifyMsg(t *testing.T, lid types.LayerID, bid types.BlockID, cnt uint16) (types.NodeID, *types.CertifyMessage) {
-	t.Helper()
-	signer := signing.NewEdSigner()
+func genCertifyMsg(tb testing.TB, lid types.LayerID, bid types.BlockID, cnt uint16) (types.NodeID, *types.CertifyMessage) {
+	tb.Helper()
+	signer, err := signing.NewEdSigner()
+	require.NoError(tb, err)
 	msg := &types.CertifyMessage{
 		CertifyContent: types.CertifyContent{
 			LayerID:        lid,
@@ -580,15 +582,17 @@ func Test_CertifyIfEligible(t *testing.T) {
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 	proof := []byte("not a fraud")
+
+	extractor, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
+
 	tc.mOracle.EXPECT().Proof(gomock.Any(), b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
 	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, proof).Return(defaultCnt, nil)
-
-	extractor := signing.NewPubKeyExtractor()
-
 	tc.mPub.EXPECT().Publish(gomock.Any(), pubsub.BlockCertify, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
 			var msg types.CertifyMessage
 			require.NoError(t, codec.Decode(got, &msg))
+
 			nodeId, err := extractor.ExtractNodeID(msg.Bytes(), msg.Signature)
 			require.NoError(t, err)
 			require.Equal(t, tc.nodeID, nodeId)

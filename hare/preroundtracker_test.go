@@ -42,7 +42,7 @@ func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.P
 			TxIDs: txs,
 		},
 	}
-	signer := signing.NewEdSigner()
+	signer, _ := signing.NewEdSigner()
 	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(p.Bytes())
 	p.Initialize()
@@ -75,27 +75,28 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
 	s.Add(value2)
-	verifier := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 
-	m1 := BuildPreRoundMsg(verifier, s, nil)
+	m1 := BuildPreRoundMsg(signer, s, nil)
 	tracker := newPreRoundTracker(lowThresh10, lowThresh10, logtest.New(t))
-	tracker.OnPreRound(context.TODO(), m1)
+	tracker.OnPreRound(context.Background(), m1)
 	assert.Equal(t, 1, len(tracker.preRound))      // one msg
 	assert.Equal(t, 2, len(tracker.tracker.table)) // two Values
-	g := tracker.preRound[verifier.PublicKey().String()]
+	g := tracker.preRound[signer.PublicKey().String()]
 	assert.True(t, s.Equals(g))
 	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value1))
 	nSet := NewSetFromValues(value3, value4)
-	m2 := BuildPreRoundMsg(verifier, nSet, nil)
+	m2 := BuildPreRoundMsg(signer, nSet, nil)
 	m2.InnerMsg.EligibilityCount = 2
-	tracker.OnPreRound(context.TODO(), m2)
-	h := tracker.preRound[verifier.PublicKey().String()]
+	tracker.OnPreRound(context.Background(), m2)
+	h := tracker.preRound[signer.PublicKey().String()]
 	assert.True(t, h.Equals(s.Union(nSet)))
 
 	interSet := NewSetFromValues(value1, value2, value5)
-	m3 := BuildPreRoundMsg(verifier, interSet, nil)
-	tracker.OnPreRound(context.TODO(), m3)
-	h = tracker.preRound[verifier.PublicKey().String()]
+	m3 := BuildPreRoundMsg(signer, interSet, nil)
+	tracker.OnPreRound(context.Background(), m3)
+	h = tracker.preRound[signer.PublicKey().String()]
 	assert.True(t, h.Equals(s.Union(nSet).Union(interSet)))
 	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value1))
 	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value2))
@@ -110,8 +111,10 @@ func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {
 
 	for i := 0; i < lowThresh10; i++ {
 		assert.False(t, tracker.CanProveSet(s))
-		m1 := BuildPreRoundMsg(signing.NewEdSigner(), s, nil)
-		tracker.OnPreRound(context.TODO(), m1)
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		m1 := BuildPreRoundMsg(sig, s, nil)
+		tracker.OnPreRound(context.Background(), m1)
 	}
 
 	assert.True(t, tracker.CanProveValue(value1))
@@ -121,12 +124,16 @@ func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {
 
 func TestPreRoundTracker_UpdateSet(t *testing.T) {
 	tracker := newPreRoundTracker(2, 2, logtest.New(t))
+	sig1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	sig2, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	s1 := NewSetFromValues(value1, value2, value3)
 	s2 := NewSetFromValues(value1, value2, value4)
-	prMsg1 := BuildPreRoundMsg(signing.NewEdSigner(), s1, nil)
-	tracker.OnPreRound(context.TODO(), prMsg1)
-	prMsg2 := BuildPreRoundMsg(signing.NewEdSigner(), s2, nil)
-	tracker.OnPreRound(context.TODO(), prMsg2)
+	prMsg1 := BuildPreRoundMsg(sig1, s1, nil)
+	tracker.OnPreRound(context.Background(), prMsg1)
+	prMsg2 := BuildPreRoundMsg(sig2, s2, nil)
+	tracker.OnPreRound(context.Background(), prMsg2)
 	assert.True(t, tracker.CanProveValue(value1))
 	assert.True(t, tracker.CanProveValue(value2))
 	assert.False(t, tracker.CanProveSet(s1))
@@ -136,22 +143,27 @@ func TestPreRoundTracker_UpdateSet(t *testing.T) {
 func TestPreRoundTracker_OnPreRound2(t *testing.T) {
 	tracker := newPreRoundTracker(2, 2, logtest.New(t))
 	s1 := NewSetFromValues(value1)
-	verifier := signing.NewEdSigner()
-	prMsg1 := BuildPreRoundMsg(verifier, s1, nil)
-	tracker.OnPreRound(context.TODO(), prMsg1)
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	prMsg1 := BuildPreRoundMsg(sig, s1, nil)
+	tracker.OnPreRound(context.Background(), prMsg1)
 	assert.Equal(t, 1, len(tracker.preRound))
-	prMsg2 := BuildPreRoundMsg(verifier, s1, nil)
-	tracker.OnPreRound(context.TODO(), prMsg2)
+	prMsg2 := BuildPreRoundMsg(sig, s1, nil)
+	tracker.OnPreRound(context.Background(), prMsg2)
 	assert.Equal(t, 1, len(tracker.preRound))
 }
 
 func TestPreRoundTracker_FilterSet(t *testing.T) {
 	tracker := newPreRoundTracker(2, 2, logtest.New(t))
+	sig1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	sig2, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	s1 := NewSetFromValues(value1, value2)
-	prMsg1 := BuildPreRoundMsg(signing.NewEdSigner(), s1, nil)
-	tracker.OnPreRound(context.TODO(), prMsg1)
-	prMsg2 := BuildPreRoundMsg(signing.NewEdSigner(), s1, nil)
-	tracker.OnPreRound(context.TODO(), prMsg2)
+	prMsg1 := BuildPreRoundMsg(sig1, s1, nil)
+	tracker.OnPreRound(context.Background(), prMsg1)
+	prMsg2 := BuildPreRoundMsg(sig2, s1, nil)
+	tracker.OnPreRound(context.Background(), prMsg2)
 	set := NewSetFromValues(value1, value2, value3)
 	tracker.FilterSet(set)
 	assert.True(t, set.Equals(s1))
@@ -188,8 +200,10 @@ func TestPreRoundTracker_BestVRF(t *testing.T) {
 		sha := hash.Sum(v.proof)
 		shaUint32 := binary.LittleEndian.Uint32(sha[:4])
 		r.Equal(v.val, shaUint32, "mismatch in hash output")
-		prMsg := BuildPreRoundMsg(signing.NewEdSigner(), s1, v.proof)
-		tracker.OnPreRound(context.TODO(), prMsg)
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		prMsg := BuildPreRoundMsg(sig, s1, v.proof)
+		tracker.OnPreRound(context.Background(), prMsg)
 		r.Equal(v.bestVal, tracker.bestVRF, "mismatch in best VRF value")
 		r.Equal(v.coin, tracker.coinflip, "mismatch in weak coin flip")
 	}

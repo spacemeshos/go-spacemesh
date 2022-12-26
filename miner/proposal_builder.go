@@ -65,14 +65,6 @@ type config struct {
 	layersPerEpoch uint32
 	hdist          uint32
 	minerID        types.NodeID
-	txsPerProposal int
-}
-
-// defaultConfig for ProposalBuilder.
-func defaultConfig() config {
-	return config{
-		txsPerProposal: 100,
-	}
 }
 
 // Opt for configuring ProposalBuilder.
@@ -96,13 +88,6 @@ func WithLayerPerEpoch(layers uint32) Opt {
 func WithMinerID(id types.NodeID) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.cfg.minerID = id
-	}
-}
-
-// WithTxsPerProposal defines the number of TXs in a Proposal.
-func WithTxsPerProposal(numTxs int) Opt {
-	return func(pb *ProposalBuilder) {
-		pb.cfg.txsPerProposal = numTxs
 	}
 }
 
@@ -142,7 +127,6 @@ func NewProposalBuilder(
 	sctx, cancel := context.WithCancel(ctx)
 	pb := &ProposalBuilder{
 		logger:         log.NewNop(),
-		cfg:            defaultConfig(),
 		ctx:            sctx,
 		cancel:         cancel,
 		signer:         signer,

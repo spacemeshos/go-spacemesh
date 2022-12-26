@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
@@ -59,7 +58,7 @@ type NIPostBuilder struct {
 	poetDB            poetDbAPI
 	state             *types.NIPostBuilderState
 	log               log.Log
-	signer            signing.Signer
+	signer            signer
 }
 
 type poetDbAPI interface {
@@ -76,7 +75,7 @@ func NewNIPostBuilder(
 	poetDB poetDbAPI,
 	db *sql.Database,
 	log log.Log,
-	signer signing.Signer,
+	signer signer,
 ) *NIPostBuilder {
 	return &NIPostBuilder{
 		minerID:           minerID.Bytes(),

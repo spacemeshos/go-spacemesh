@@ -25,7 +25,8 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	db := sql.InMemory()
 	bs := datastore.NewBlobStore(db)
 
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -63,11 +64,14 @@ func TestBlobStore_GetBallotBlob(t *testing.T) {
 	db := sql.InMemory()
 	bs := datastore.NewBlobStore(db)
 
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
 	blt := types.RandomBallot()
-	blt.Signature = signing.NewEdSigner().Sign(blt.SignedBytes())
+	blt.Signature = sig.Sign(blt.SignedBytes())
 	require.NoError(t, blt.Initialize())
 
-	_, err := bs.Get(datastore.BallotDB, blt.ID().Bytes())
+	_, err = bs.Get(datastore.BallotDB, blt.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.NoError(t, ballots.Add(db, blt))
 	got, err := bs.Get(datastore.BallotDB, blt.ID().Bytes())
@@ -130,7 +134,8 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 	db := sql.InMemory()
 	bs := datastore.NewBlobStore(db)
 
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	blt := types.RandomBallot()
 	blt.Signature = signer.Sign(blt.SignedBytes())
 	p := types.Proposal{
@@ -142,7 +147,7 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 	p.Signature = signer.Sign(p.Bytes())
 	require.NoError(t, p.Initialize())
 
-	_, err := bs.Get(datastore.ProposalDB, p.ID().Bytes())
+	_, err = bs.Get(datastore.ProposalDB, p.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.NoError(t, ballots.Add(db, blt))
 	require.NoError(t, proposals.Add(db, &p))

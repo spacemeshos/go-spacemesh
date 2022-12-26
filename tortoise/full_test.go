@@ -85,7 +85,10 @@ func TestFullCountVotes(t *testing.T) {
 	}
 	const localHeight = 100
 	rng := rand.New(rand.NewSource(0))
-	signer := signing.NewEdSignerFromRand(rng)
+	signer, err := signing.NewEdSigner(
+		signing.WithKeyFromRand(rng),
+	)
+	require.NoError(t, err)
 
 	getDiff := func(layers [][]types.Block, choices [][2]int) []types.BlockID {
 		var rst []types.BlockID

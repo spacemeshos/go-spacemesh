@@ -1,22 +1,20 @@
 package blocks
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
-	"sort"
+	"math"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/proposals"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbproposals "github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -32,24 +30,32 @@ type Generator struct {
 	ctx    context.Context
 	cancel func()
 
-	hareCh   chan hare.LayerOutput
 	cdb      *datastore.CachedDB
 	msh      meshProvider
-	conState conservativeState
+	executor executor
 	fetcher  system.ProposalFetcher
 	cert     certifier
+
+	hareCh      chan hare.LayerOutput
+	hareOutputs map[types.LayerID]hare.LayerOutput
 }
 
 // Config is the config for Generator.
 type Config struct {
-	LayerSize      uint32
-	LayersPerEpoch uint32
+	LayerSize          uint32
+	LayersPerEpoch     uint32
+	GenBlockInterval   time.Duration
+	BlockGasLimit      uint64
+	OptFilterThreshold int
 }
 
 func defaultConfig() Config {
 	return Config{
-		LayerSize:      50,
-		LayersPerEpoch: 3,
+		LayerSize:          50,
+		LayersPerEpoch:     3,
+		GenBlockInterval:   time.Second,
+		BlockGasLimit:      math.MaxUint64,
+		OptFilterThreshold: 90,
 	}
 }
 
@@ -86,18 +92,19 @@ func WithHareOutputChan(ch chan hare.LayerOutput) GeneratorOpt {
 
 // NewGenerator creates new block generator.
 func NewGenerator(
-	cdb *datastore.CachedDB, cState conservativeState, m meshProvider, f system.ProposalFetcher, c certifier,
+	cdb *datastore.CachedDB, exec executor, m meshProvider, f system.ProposalFetcher, c certifier,
 	opts ...GeneratorOpt,
 ) *Generator {
 	g := &Generator{
-		logger:   log.NewNop(),
-		cfg:      defaultConfig(),
-		ctx:      context.Background(),
-		cdb:      cdb,
-		msh:      m,
-		conState: cState,
-		fetcher:  f,
-		cert:     c,
+		logger:      log.NewNop(),
+		cfg:         defaultConfig(),
+		ctx:         context.Background(),
+		cdb:         cdb,
+		msh:         m,
+		executor:    exec,
+		fetcher:     f,
+		cert:        c,
+		hareOutputs: map[types.LayerID]hare.LayerOutput{},
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -130,12 +137,34 @@ func (g *Generator) run() error {
 		case <-g.ctx.Done():
 			return fmt.Errorf("context done: %w", g.ctx.Err())
 		case out := <-g.hareCh:
-			// TODO: change this to sequential block processing
-			// https://github.com/spacemeshos/go-spacemesh/issues/3297
-			g.eg.Go(func() error {
-				_ = g.processHareOutput(out)
-				return nil
-			})
+			g.logger.WithContext(out.Ctx).With().Info("received hare output",
+				out.Layer,
+				log.Int("num_proposals", len(out.Proposals)))
+			g.hareOutputs[out.Layer] = out
+			g.tryGenBlock()
+		case <-time.After(g.cfg.GenBlockInterval):
+			if len(g.hareOutputs) > 0 {
+				g.tryGenBlock()
+			}
+		}
+	}
+}
+
+func (g *Generator) tryGenBlock() {
+	lastApplied, err := layers.GetLastApplied(g.cdb)
+	if err != nil {
+		g.logger.Error("failed to get latest applied layer", log.Err(err))
+		return
+	}
+	next := lastApplied.Add(1)
+	for {
+		if out, ok := g.hareOutputs[next]; !ok {
+			break
+		} else {
+			g.logger.WithContext(out.Ctx).With().Info("ready to process hare output", next)
+			_ = g.processHareOutput(out)
+			delete(g.hareOutputs, next)
+			next = next.Add(1)
 		}
 	}
 }
@@ -159,6 +188,10 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) error {
 	ctx := out.Ctx
 	logger := g.logger.WithContext(ctx).WithFields(out.Layer)
 	hareOutput := types.EmptyBlockID
+	var (
+		block    *types.Block
+		executed bool
+	)
 	if len(out.Proposals) > 0 {
 		// fetch proposals from peers if not locally available
 		if err := g.fetcher.GetProposals(ctx, out.Proposals); err != nil {
@@ -175,10 +208,13 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) error {
 			return err
 		}
 
-		if block, err := g.generateBlock(ctx, out.Layer, props); err != nil {
+		block, executed, err = g.generateBlock(ctx, logger, out.Layer, props)
+		if err != nil {
+			logger.With().Error("failed to generate block", log.Err(err))
 			failGenCnt.Inc()
 			return err
 		} else if err = g.msh.AddBlockWithTXs(ctx, block); err != nil {
+			logger.With().Error("failed to add block", log.Err(err))
 			failErrCnt.Inc()
 			return err
 		} else {
@@ -197,92 +233,63 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) error {
 		logger.With().Warning("failed to certify block", hareOutput, log.Err(err))
 	}
 
-	if err := g.msh.ProcessLayerPerHareOutput(ctx, out.Layer, hareOutput); err != nil {
+	if err := g.msh.ProcessLayerPerHareOutput(ctx, out.Layer, hareOutput, executed); err != nil {
 		logger.With().Error("mesh failed to process layer", log.Err(err))
 		return err
 	}
 	return nil
 }
 
-// generateBlock generates a block from the list of Proposal.
-func (g *Generator) generateBlock(ctx context.Context, layerID types.LayerID, proposals []*types.Proposal) (*types.Block, error) {
-	logger := g.logger.WithContext(ctx).WithFields(layerID, log.Int("num_proposals", len(proposals)))
-	txIDs, err := g.conState.SelectBlockTXs(layerID, proposals)
+// generateBlock combines the transactions in the proposals and put them in a stable order.
+// if optimistic filtering is ON, it also executes the transactions in situ.
+// else, prune the transactions up to block gas limit allows.
+func (g *Generator) generateBlock(ctx context.Context, logger log.Log, lid types.LayerID, proposals []*types.Proposal) (*types.Block, bool, error) {
+	md, err := getProposalMetadata(logger, g.cdb, g.cfg, lid, proposals)
 	if err != nil {
-		logger.With().Error("failed to select block txs", layerID, log.Err(err))
-		return nil, fmt.Errorf("select block txs: %w", err)
+		return nil, false, fmt.Errorf("collect proposal metadata: %w", err)
 	}
-	tickHeight, rewards, err := g.extractCoinbasesAndHeight(logger, proposals)
-	if err != nil {
-		return nil, err
+	if md.optFilter {
+		return g.genBlockOptimistic(ctx, logger, md)
+	}
+
+	var tids []types.TransactionID
+	if len(md.mtxs) > 0 {
+		blockSeed := types.CalcProposalsHash32(types.ToProposalIDs(proposals), nil).Bytes()
+		tids, err = getBlockTXs(logger, md, blockSeed, g.cfg.BlockGasLimit)
+		if err != nil {
+			return nil, false, err
+		}
 	}
 	b := &types.Block{
 		InnerBlock: types.InnerBlock{
-			LayerIndex: layerID,
-			TickHeight: tickHeight,
-			Rewards:    rewards,
-			TxIDs:      txIDs,
+			LayerIndex: lid,
+			TickHeight: md.tickHeight,
+			Rewards:    md.rewards,
+			TxIDs:      tids,
 		},
 	}
 	b.Initialize()
 	logger.With().Info("block generated", log.Inline(b))
-	return b, nil
+	return b, false, nil
 }
 
-func (g *Generator) extractCoinbasesAndHeight(logger log.Log, props []*types.Proposal) (uint64, []types.AnyReward, error) {
-	weights := make(map[types.Address]*big.Rat)
-	coinbases := make([]types.Address, 0, len(props))
-	max := uint64(0)
-	for _, p := range props {
-		if p.AtxID == *types.EmptyATXID {
-			// this proposal would not have been validated
-			logger.Error("proposal with invalid ATXID, skipping reward distribution", p.LayerIndex, p.ID())
-			return 0, nil, errInvalidATXID
-		}
-		atx, err := g.cdb.GetAtxHeader(p.AtxID)
-		if atx.BaseTickHeight > max {
-			max = atx.BaseTickHeight
-		}
+func (g *Generator) genBlockOptimistic(ctx context.Context, logger log.Log, md *proposalMetadata) (*types.Block, bool, error) {
+	var (
+		tids []types.TransactionID
+		err  error
+	)
+	if len(md.mtxs) > 0 {
+		blockSeed := types.CalcProposalsHash32(types.ToProposalIDs(md.proposals), nil).Bytes()
+		tids, err = getBlockTXs(logger, md, blockSeed, 0)
 		if err != nil {
-			logger.With().Warning("proposal ATX not found", p.ID(), p.AtxID, log.Err(err))
-			return 0, nil, fmt.Errorf("block gen get ATX: %w", err)
+			return nil, false, err
 		}
-		ballot := &p.Ballot
-		weightPer, err := proposals.ComputeWeightPerEligibility(g.cdb, ballot, g.cfg.LayerSize, g.cfg.LayersPerEpoch)
-		if err != nil {
-			logger.With().Error("failed to calculate weight per eligibility", p.ID(), log.Err(err))
-			return 0, nil, err
-		}
-		logger.With().Debug("weight per eligibility", p.ID(), log.Stringer("weight_per", weightPer))
-		actual := weightPer.Mul(weightPer, new(big.Rat).SetUint64(uint64(len(ballot.EligibilityProofs))))
-		if weight, ok := weights[atx.Coinbase]; !ok {
-			weights[atx.Coinbase] = actual
-			coinbases = append(coinbases, atx.Coinbase)
-		} else {
-			weights[atx.Coinbase].Add(weight, actual)
-		}
-		events.ReportProposal(events.ProposalIncluded, p)
 	}
-	// make sure we output coinbase in a stable order.
-	sort.Slice(coinbases, func(i, j int) bool {
-		return bytes.Compare(coinbases[i].Bytes(), coinbases[j].Bytes()) < 0
-	})
-	rewards := make([]types.AnyReward, 0, len(weights))
-	for _, coinbase := range coinbases {
-		weight, ok := weights[coinbase]
-		if !ok {
-			g.logger.With().Fatal("coinbase missing", coinbase)
-		}
-		rewards = append(rewards, types.AnyReward{
-			Coinbase: coinbase,
-			Weight: types.RatNum{
-				Num:   weight.Num().Uint64(),
-				Denom: weight.Denom().Uint64(),
-			},
-		})
-		logger.With().Debug("adding coinbase weight",
-			log.Stringer("coinbase", coinbase),
-			log.Stringer("weight", weight))
+	logger.With().Info("executing txs in situ", log.Int("num_txs", len(tids)))
+	block, err := g.executor.ExecuteOptimistic(ctx, md.lid, md.tickHeight, md.rewards, tids)
+	if err != nil {
+		return nil, false, fmt.Errorf("execute in situ: %w", err)
 	}
-	return max, rewards, nil
+	logger.With().Info("block generated and executed", log.Inline(block))
+	return block, true, nil
 }
