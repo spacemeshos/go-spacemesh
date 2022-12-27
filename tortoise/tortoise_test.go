@@ -33,8 +33,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
 
-var sig = signing.NewEdSigner()
-
 func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(4)
 
@@ -770,12 +768,16 @@ func BenchmarkTortoiseBaseBallot(b *testing.B) {
 
 func randomRefBallot(tb testing.TB, lyrID types.LayerID, beacon types.Beacon) *types.Ballot {
 	tb.Helper()
+
+	signer, err := signing.NewEdSigner()
+	require.NoError(tb, err)
+
 	ballot := types.RandomBallot()
 	ballot.LayerIndex = lyrID
 	ballot.EpochData = &types.EpochData{
 		Beacon: beacon,
 	}
-	ballot.Signature = signing.NewEdSigner().Sign(ballot.SignedBytes())
+	ballot.Signature = signer.Sign(ballot.SignedBytes())
 	require.NoError(tb, ballot.Initialize())
 	return ballot
 }
@@ -1555,6 +1557,9 @@ func TestComputeBallotWeight(t *testing.T) {
 				} else {
 					ballot.RefBallot = blts[b.RefBallot].ID()
 				}
+
+				sig, err := signing.NewEdSigner()
+				require.NoError(t, err)
 
 				ballot.Signature = sig.Sign(ballot.SignedBytes())
 				require.NoError(t, ballot.Initialize())

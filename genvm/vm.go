@@ -268,7 +268,6 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 
 	v.logger.With().Info("applied layer",
 		lctx.Layer,
-		lctx.Block,
 		log.Int("count", len(txs)-len(skipped)),
 		log.Duration("duration", time.Since(t1)),
 		log.Stringer("state_hash", hash),
@@ -375,7 +374,6 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 
 		rst := types.TransactionWithResult{}
 		rst.Layer = lctx.Layer
-		rst.Block = lctx.Block
 
 		err = ctx.Consume(ctx.Header.MaxGas)
 		if err == nil {
@@ -575,5 +573,4 @@ func verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool {
 // ApplyContext has information on layer and block id.
 type ApplyContext struct {
 	Layer types.LayerID
-	Block types.BlockID
 }

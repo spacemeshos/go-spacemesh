@@ -26,15 +26,15 @@ const (
 )
 
 var (
-	errVRFNotVerified              = errors.New("proposal failed vrf verification")
-	errProposalDoesntPassThreshold = errors.New("proposal doesn't pass threshold")
-	errAlreadyProposed             = errors.New("already proposed")
-	errAlreadyVoted                = errors.New("already voted")
-	errMinerATXNotFound            = errors.New("miner ATX not found in previous epoch")
-	errProtocolNotRunning          = errors.New("beacon protocol not running")
-	errEpochNotActive              = errors.New("epoch not active")
-	errMalformedMessage            = errors.New("malformed msg")
-	errUntimelyMessage             = errors.New("untimely msg")
+	errVRFNotVerified      = errors.New("proposal failed vrf verification")
+	errProposalNotEligible = errors.New("proposal not eligible")
+	errAlreadyProposed     = errors.New("already proposed")
+	errAlreadyVoted        = errors.New("already voted")
+	errMinerATXNotFound    = errors.New("miner ATX not found in previous epoch")
+	errProtocolNotRunning  = errors.New("beacon protocol not running")
+	errEpochNotActive      = errors.New("epoch not active")
+	errMalformedMessage    = errors.New("malformed msg")
+	errUntimelyMessage     = errors.New("untimely msg")
 )
 
 // HandleWeakCoinProposal handles weakcoin proposal from gossip.
@@ -182,20 +182,20 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to get ATX for epoch (miner ID %v): %w", minerID, err)
 	}
 
-	vrfPK := signing.NewPublicKey(m.NodeID.Bytes())
 	currentEpochProposal := buildProposal(m.EpochID, logger)
-	if !pd.vrfVerifier.Verify(vrfPK, currentEpochProposal, m.VRFSignature) {
+	if !pd.vrfVerifier.Verify(m.NodeID, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
 		logger.Warning("[proposal] failed to verify VRF signature")
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to verify VRF signature (miner ID %v): %w", minerID, errVRFNotVerified)
 	}
 
+	vrfPK := signing.NewPublicKey(m.NodeID.Bytes())
 	if err := pd.registerProposed(logger, m.EpochID, vrfPK); err != nil {
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to register proposal (miner ID %v): %w", minerID, err)
 	}
 
 	if !pd.checkProposalEligibility(logger, m.EpochID, m.VRFSignature) {
-		return types.ATXID{}, fmt.Errorf("[proposal] not eligible (miner ID %v): %w", minerID, errProposalDoesntPassThreshold)
+		return types.ATXID{}, fmt.Errorf("[proposal] not eligible (miner ID %v): %w", minerID, errProposalNotEligible)
 	}
 
 	return atxID, nil
@@ -269,7 +269,7 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 		logger.With().Panic("failed to serialize first voting message", log.Err(err))
 	}
 
-	minerPK, err := pd.sigVerifier.Extract(messageBytes, m.Signature)
+	minerPK, err := pd.pubKeyExtractor.Extract(messageBytes, m.Signature)
 	if err != nil {
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] unable to recover ID from signature %x: %w", types.FirstRound, m.Signature, err)
 	}
@@ -400,7 +400,7 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 		pd.logger.With().Panic("failed to serialize voting message", log.Err(err))
 	}
 
-	minerPK, err := pd.sigVerifier.Extract(messageBytes, m.Signature)
+	minerPK, err := pd.pubKeyExtractor.Extract(messageBytes, m.Signature)
 	if err != nil {
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] unable to recover ID from signature %x: %w", round, m.Signature, err)
 	}

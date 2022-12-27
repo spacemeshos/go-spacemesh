@@ -17,12 +17,11 @@ const (
 	cantVerify          = "verify"
 	rejectedBadNonce    = "badNonce"
 	rejectedInternalErr = "err"
-	rawFromDB           = "raw"
+	RawFromDB           = "raw"
 	updated             = "updated"
 
 	// label for tx acceptance state by the mempool.
 	mempool         = "mempool"
-	nonceTooBig     = "nonce"
 	balanceTooSmall = "balance"
 	tooManyNonce    = "too_many"
 	accepted        = "ok"
@@ -47,7 +46,7 @@ var (
 		"number of block transactions",
 		[]string{"outcome"},
 	)
-	rawTxCount = metrics.NewCounter(
+	RawTxCount = metrics.NewCounter(
 		"raw_txs",
 		namespace,
 		"number of unparsed/raw transactions",
