@@ -15,6 +15,7 @@ import (
 
 	"github.com/gofrs/flock"
 	grpcmw "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
@@ -169,13 +170,12 @@ func GetCommand() *cobra.Command {
 
 var (
 	appLog  log.Log
-	grpcLog *zap.Logger
+	grpclog grpc_logsettable.SettableLoggerV2
 )
 
 func init() {
 	appLog = log.NewNop()
-	grpcLog = appLog.WithName(GRPCLogger).WithFields(log.String("module", GRPCLogger)).Zap()
-	grpczap.ReplaceGrpcLoggerV2(grpcLog)
+	grpclog = grpc_logsettable.ReplaceGrpcLoggerV2()
 }
 
 // Service is a general service interface that specifies the basic start/stop functionality.
@@ -797,14 +797,15 @@ func (app *App) startAPIServices(ctx context.Context) {
 	var services []grpcserver.ServiceAPI
 	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.grpcAPIService == nil {
-			app.addLogger(GRPCLogger, app.log)
+			logger := app.addLogger(GRPCLogger, app.log).Zap()
+			grpczap.SetGrpcLoggerV2(grpclog, logger)
 			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
 				grpcmw.WithStreamServerChain(
 					grpctags.StreamServerInterceptor(),
-					grpczap.StreamServerInterceptor(grpcLog)),
+					grpczap.StreamServerInterceptor(logger)),
 				grpcmw.WithUnaryServerChain(
 					grpctags.UnaryServerInterceptor(),
-					grpczap.UnaryServerInterceptor(grpcLog)),
+					grpczap.UnaryServerInterceptor(logger)),
 			)
 		}
 		services = append(services, svc)
