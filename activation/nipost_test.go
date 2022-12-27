@@ -396,7 +396,9 @@ func TestNIPostBuilder_ManyPoETs_DeadlineReached(t *testing.T) {
 		poets = append(poets, poet)
 	}
 
-	nb := NewNIPostBuilder(minerID, &postSetupProviderMock{}, poets, poetDb, sql.InMemory(), logtest.New(t), signing.NewEdSigner())
+	sig, err := signing.NewEdSigner()
+	req.NoError(err)
+	nb := NewNIPostBuilder(minerID, &postSetupProviderMock{}, poets, poetDb, sql.InMemory(), logtest.New(t), sig)
 
 	// Act
 	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, time.Now().Add(time.Second))
@@ -441,7 +443,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 
 	sig, err := signing.NewEdSigner()
 	req.NoError(err)
-	nb := NewNIPostBuilder(minerID, &postSetupProviderMock{}, poets, poetDb, sql.InMemory(), logtest.New(t), signing.NewEdSigner())
+	nb := NewNIPostBuilder(minerID, &postSetupProviderMock{}, poets, poetDb, sql.InMemory(), logtest.New(t), sig)
 
 	// Act
 	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, time.Now().Add(time.Hour))
@@ -580,7 +582,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		poetProver.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any()).Return(&types.PoetRound{}, nil)
 
 		nb := NewNIPostBuilder(minerID, postProver, []PoetProvingServiceClient{poetProver},
-			poetDb, sql.InMemory(), logtest.New(t), signing.NewEdSigner())
+			poetDb, sql.InMemory(), logtest.New(t), sig)
 		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge, time.Time{})
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
@@ -591,7 +593,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		poetProver.EXPECT().GetProof(gomock.Any(), "").Return(nil, errors.New("failed"))
 
 		nb := NewNIPostBuilder(minerID, postProver, []PoetProvingServiceClient{poetProver},
-			poetDb, sql.InMemory(), logtest.New(t), signing.NewEdSigner())
+			poetDb, sql.InMemory(), logtest.New(t), sig)
 		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge, time.Now().Add(time.Second))
 		require.ErrorIs(t, err, ErrPoetProofNotReceived)
 		require.Nil(t, nipst)
@@ -602,7 +604,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		poetProver.EXPECT().GetProof(gomock.Any(), "").Return(&types.PoetProofMessage{PoetProof: types.PoetProof{}}, nil)
 
 		nb := NewNIPostBuilder(minerID, postProver, []PoetProvingServiceClient{poetProver},
-			poetDb, sql.InMemory(), logtest.New(t), signing.NewEdSigner())
+			poetDb, sql.InMemory(), logtest.New(t), sig)
 		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge, time.Now().Add(time.Second))
 		require.ErrorIs(t, err, ErrPoetProofNotReceived)
 		require.Nil(t, nipst)
