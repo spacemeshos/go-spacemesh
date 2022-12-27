@@ -274,11 +274,11 @@ func (b *Builder) run(ctx context.Context) {
 		return
 	}
 
-	// ensure layer 1 has arrived
+	// ensure layer 0 has arrived
 	select {
 	case <-ctx.Done():
 		return
-	case <-b.layerClock.AwaitLayer(types.NewLayerID(1)):
+	case <-b.layerClock.AwaitLayer(types.NewLayerID(0)):
 	}
 
 	b.waitForFirstATX(ctx)
