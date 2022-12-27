@@ -132,6 +132,10 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	case pm.err == nil:
 		return nil
 	case errors.Is(pm.err, activation.ErrObjectExists):
+		// PoET proofs are concurrently stored in DB in two places:
+		// fetcher and nipost builder. Hence it might happen that
+		// a proof had been inserted into the DB while the fetcher
+		// was fetching.
 		return nil
 	default:
 		f.logger.WithContext(ctx).With().Warning("failed to get hash",
