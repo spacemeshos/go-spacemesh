@@ -37,6 +37,15 @@ var (
 		"configuration for smesher service",
 		fastnet.SmesherConfig,
 	)
+
+	smesherLimit = apiv1.ResourceList{
+		apiv1.ResourceCPU:    resource.MustParse("1"),
+		apiv1.ResourceMemory: resource.MustParse("500Mi"),
+	}
+	bootLimit = apiv1.ResourceList{
+		apiv1.ResourceCPU:    resource.MustParse("2"),
+		apiv1.ResourceMemory: resource.MustParse("500Mi"),
+	}
 )
 
 const (
@@ -274,7 +283,7 @@ func labelSelector(id string) string {
 	return fmt.Sprintf("id=%s", id)
 }
 
-func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []DeploymentFlag) ([]*NodeClient, error) {
+func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []DeploymentFlag, resources apiv1.ResourceList) ([]*NodeClient, error) {
 	var (
 		eg      errgroup.Group
 		clients = make(chan *NodeClient, to-from)
@@ -292,7 +301,7 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 			podname := fmt.Sprintf("%s-0", setname)
 			labels := nodeLabels(name, podname)
 			labels["bucket"] = strconv.Itoa(i % buckets)
-			if err := deployNode(ctx, setname, labels, finalFlags); err != nil {
+			if err := deployNode(ctx, setname, labels, finalFlags, resources); err != nil {
 				return err
 			}
 			node, err := waitNode(ctx, podname, Smesher)
@@ -334,7 +343,7 @@ func deleteNode(ctx *testcontext.Context, podname string) error {
 	return nil
 }
 
-func deployNode(ctx *testcontext.Context, name string, labels map[string]string, flags []DeploymentFlag) error {
+func deployNode(ctx *testcontext.Context, name string, labels map[string]string, flags []DeploymentFlag, resources apiv1.ResourceList) error {
 	svc := corev1.Service(headlessSvc(name), ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(corev1.ServiceSpec().
@@ -407,18 +416,8 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
 						).
 						WithResources(corev1.ResourceRequirements().
-							WithRequests(
-								apiv1.ResourceList{
-									apiv1.ResourceCPU:    resource.MustParse("1"),
-									apiv1.ResourceMemory: resource.MustParse("500Mi"),
-								},
-							).
-							WithLimits(
-								apiv1.ResourceList{
-									apiv1.ResourceCPU:    resource.MustParse("1"),
-									apiv1.ResourceMemory: resource.MustParse("500Mi"),
-								},
-							),
+							WithRequests(resources).
+							WithLimits(resources),
 						).
 						WithStartupProbe(
 							corev1.Probe().WithTCPSocket(
