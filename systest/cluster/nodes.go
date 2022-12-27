@@ -425,7 +425,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 							).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
 						).
 						WithEnv(
-							corev1.EnvVar().WithName("GOMAXPROCS").WithValue("2"),
+							corev1.EnvVar().WithName("GOMAXPROCS").WithValue("4"),
 						).
 						WithCommand(cmd...),
 					)),
