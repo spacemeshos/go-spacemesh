@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"go.uber.org/zap"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
@@ -56,7 +58,11 @@ func (s *GatewayService) BroadcastPoet(ctx context.Context, in *pb.BroadcastPoet
 
 // VerifyChallenge implements v1.GatewayServiceServer.
 func (s *GatewayService) VerifyChallenge(ctx context.Context, in *pb.VerifyChallengeRequest) (*pb.VerifyChallengeResponse, error) {
-	log.Info("GRPC GatewayService.VerifyChallenge")
+	ctx = log.WithNewRequestID(ctx)
+	requestId, _ := log.ExtractRequestID(ctx)
+	ctxzap.AddFields(ctx, zap.String("request_id", requestId))
+	logger := ctxzap.Extract(ctx)
+	logger.Info("GRPC GatewayService.VerifyChallenge")
 	result, err := s.verifier.Verify(ctx, in.Challenge, in.Signature)
 	if err == nil {
 		return &pb.VerifyChallengeResponse{Hash: result.Hash.Bytes(), NodeId: result.NodeID.Bytes()}, nil
