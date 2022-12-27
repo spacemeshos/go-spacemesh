@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -25,15 +26,16 @@ func BuildProposalMsg(signing Signer, s *Set) *Msg {
 
 func TestProposalTracker_OnProposalConflict(t *testing.T) {
 	s := NewSetFromValues(value1, value2)
-	verifier := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 
-	m1 := BuildProposalMsg(verifier, s)
+	m1 := BuildProposalMsg(signer, s)
 	tracker := newProposalTracker(logtest.New(t))
-	tracker.OnProposal(context.TODO(), m1)
+	tracker.OnProposal(context.Background(), m1)
 	assert.False(t, tracker.IsConflicting())
 	g := NewSetFromValues(value3)
-	m2 := BuildProposalMsg(verifier, g)
-	tracker.OnProposal(context.TODO(), m2)
+	m2 := BuildProposalMsg(signer, g)
+	tracker.OnProposal(context.Background(), m2)
 	assert.True(t, tracker.IsConflicting())
 }
 
@@ -43,21 +45,25 @@ func TestProposalTracker_IsConflicting(t *testing.T) {
 	tracker := newProposalTracker(logtest.New(t))
 
 	for i := 0; i < lowThresh10; i++ {
-		tracker.OnProposal(context.TODO(), BuildProposalMsg(signing.NewEdSigner(), s))
+		signer, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		tracker.OnProposal(context.Background(), BuildProposalMsg(signer, s))
 		assert.False(t, tracker.IsConflicting())
 	}
 }
 
 func TestProposalTracker_OnLateProposal(t *testing.T) {
 	s := NewSetFromValues(value1, value2)
-	verifier := signing.NewEdSigner()
-	m1 := BuildProposalMsg(verifier, s)
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	m1 := BuildProposalMsg(signer, s)
 	tracker := newProposalTracker(logtest.New(t))
-	tracker.OnProposal(context.TODO(), m1)
+	tracker.OnProposal(context.Background(), m1)
 	assert.False(t, tracker.IsConflicting())
 	g := NewSetFromValues(value3)
-	m2 := BuildProposalMsg(verifier, g)
-	tracker.OnLateProposal(context.TODO(), m2)
+	m2 := BuildProposalMsg(signer, g)
+	tracker.OnLateProposal(context.Background(), m2)
 	assert.True(t, tracker.IsConflicting())
 }
 
@@ -66,16 +72,19 @@ func TestProposalTracker_ProposedSet(t *testing.T) {
 	proposedSet := tracker.ProposedSet()
 	assert.Nil(t, proposedSet)
 	s1 := NewSetFromValues(value1, value2)
-	tracker.OnProposal(context.TODO(), buildProposalMsg(signing.NewEdSigner(), s1, []byte{1, 2, 3}))
+	signer1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	tracker.OnProposal(context.Background(), buildProposalMsg(signer1, s1, []byte{1, 2, 3}))
 	proposedSet = tracker.ProposedSet()
 	assert.NotNil(t, proposedSet)
 	assert.True(t, s1.Equals(proposedSet))
 	s2 := NewSetFromValues(value3, value4, value5)
-	pub := signing.NewEdSigner()
-	tracker.OnProposal(context.TODO(), buildProposalMsg(pub, s2, []byte{0}))
+	signer2, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	tracker.OnProposal(context.Background(), buildProposalMsg(signer2, s2, []byte{0}))
 	proposedSet = tracker.ProposedSet()
 	assert.True(t, s2.Equals(proposedSet))
-	tracker.OnProposal(context.TODO(), buildProposalMsg(pub, s1, []byte{0}))
+	tracker.OnProposal(context.Background(), buildProposalMsg(signer2, s1, []byte{0}))
 	proposedSet = tracker.ProposedSet()
 	assert.Nil(t, proposedSet)
 }

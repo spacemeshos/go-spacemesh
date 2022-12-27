@@ -209,14 +209,21 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	g.prevHeight = make([]uint64, miners)
 
 	for i := uint32(0); i < miners; i++ {
-		g.keys = append(g.keys, signing.NewEdSignerFromRand(g.rng))
+		sig, err := signing.NewEdSigner(signing.WithKeyFromRand(g.rng))
+		if err != nil {
+			panic(err)
+		}
+		g.keys = append(g.keys, sig)
 	}
 }
 
 func (g *Generator) generateAtxs() {
 	for i := range g.activations {
 		units := intInRange(g.rng, g.units)
-		sig := signing.NewEdSigner()
+		sig, err := signing.NewEdSigner()
+		if err != nil {
+			panic(err)
+		}
 		address := types.GenerateAddress(sig.PublicKey().Bytes())
 
 		nipost := types.NIPostChallenge{

@@ -92,6 +92,7 @@ const (
 	VMLogger               = "vm"
 	GRPCLogger             = "grpc"
 	ConStateLogger         = "conState"
+	Executor               = "executor"
 )
 
 func GetCommand() *cobra.Command {
@@ -497,9 +498,8 @@ func (app *App) initServices(ctx context.Context,
 		vm.WithLogger(app.addLogger(VMLogger, lg)))
 	app.conState = txs.NewConservativeState(state, sqlDB,
 		txs.WithCSConfig(txs.CSConfig{
-			BlockGasLimit:      app.Config.BlockGasLimit,
-			NumTXsPerProposal:  app.Config.TxsPerProposal,
-			OptFilterThreshold: app.Config.OptFilterThreshold,
+			BlockGasLimit:     app.Config.BlockGasLimit,
+			NumTXsPerProposal: app.Config.TxsPerProposal,
 		}),
 		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
 
@@ -521,12 +521,21 @@ func (app *App) initServices(ctx context.Context,
 		return errors.New("invalid golden atx id")
 	}
 
-	app.keyExtractor = signing.NewPubKeyExtractor(
-		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()),
+	app.keyExtractor, err = signing.NewPubKeyExtractor(
+		signing.WithExtractorPrefix(app.Config.Genesis.GenesisID().Bytes()),
 	)
+	if err != nil {
+		return fmt.Errorf("failed to create key extractor: %w", err)
+	}
+
 	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
 
-	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, cdb, clock,
+	vrfVerifier, err := signing.NewVRFVerifier(signing.WithNonceFromDB(cdb))
+	if err != nil {
+		return fmt.Errorf("failed to create vrf verifier: %w", err)
+	}
+
+	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifier, cdb, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
@@ -540,7 +549,8 @@ func (app *App) initServices(ctx context.Context,
 		tortoise.WithConfig(trtlCfg),
 	)
 
-	msh, err := mesh.NewMesh(cdb, trtl, app.conState, app.addLogger(MeshLogger, lg))
+	executor := mesh.NewExecutor(sqlDB, state, app.conState, app.addLogger(Executor, lg))
+	msh, err := mesh.NewMesh(cdb, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
@@ -570,7 +580,7 @@ func (app *App) initServices(ctx context.Context,
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
 
-	hOracle := eligibility.New(beaconProtocol, cdb, signing.VRFVerifier{}, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+	hOracle := eligibility.New(beaconProtocol, cdb, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
 	app.certifier = blocks.NewCertifier(sqlDB, hOracle, nodeID, sgn, app.host, clock, beaconProtocol, trtl,
@@ -612,11 +622,14 @@ func (app *App) initServices(ctx context.Context,
 	beaconProtocol.SetSyncState(newSyncer)
 
 	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
-	app.blockGen = blocks.NewGenerator(cdb, app.conState, msh, fetcherWrapped, app.certifier,
+	app.blockGen = blocks.NewGenerator(cdb, executor, msh, fetcherWrapped, app.certifier,
 		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
-			LayerSize:      layerSize,
-			LayersPerEpoch: layersPerEpoch,
+			LayerSize:          layerSize,
+			LayersPerEpoch:     layersPerEpoch,
+			BlockGasLimit:      app.Config.BlockGasLimit,
+			OptFilterThreshold: app.Config.OptFilterThreshold,
+			GenBlockInterval:   500 * time.Millisecond,
 		}),
 		blocks.WithHareOutputChan(hareOutputCh),
 		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
@@ -649,7 +662,6 @@ func (app *App) initServices(ctx context.Context,
 		newSyncer,
 		app.conState,
 		miner.WithMinerID(nodeID),
-		miner.WithTxsPerProposal(app.Config.TxsPerProposal),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
@@ -941,9 +953,13 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 
 		log.Info("Identity file not found. Creating new identity...")
 
-		edSgn := signing.NewEdSigner(signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()))
-		err := os.MkdirAll(filepath.Dir(filename), 0o700)
+		edSgn, err := signing.NewEdSigner(
+			signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
+		)
 		if err != nil {
+			return nil, fmt.Errorf("failed to create identity: %w", err)
+		}
+		if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
 		}
 		err = os.WriteFile(filename, edSgn.PrivateKey(), 0o600)
@@ -954,7 +970,10 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		log.With().Info("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
-	edSgn, err := signing.NewEdSignerFromKey(data, signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()))
+	edSgn, err := signing.NewEdSigner(
+		signing.WithPrivateKey(data),
+		signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
 	}
@@ -1039,7 +1058,10 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	edPubkey := app.edSgn.PublicKey()
-	vrfSigner := app.edSgn.VRFSigner()
+	vrfSigner, err := app.edSgn.VRFSigner(signing.WithNonceFromDB(&app.atxDB))
+	if err != nil {
+		return fmt.Errorf("could not create vrf signer: %w", err)
+	}
 
 	nodeID := types.BytesToNodeID(edPubkey.Bytes())
 

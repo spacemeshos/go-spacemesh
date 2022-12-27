@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func defaultConfig() config {
@@ -76,17 +75,11 @@ func WithNextRoundBufferSize(size int) OptionFunc {
 	}
 }
 
-// WithVerifier changes the verifier of the weakcoin messages.
-func WithVerifier(v signing.Verifier) OptionFunc {
-	return func(wc *WeakCoin) {
-		wc.verifier = v
-	}
-}
-
 // New creates an instance of weak coin protocol.
 func New(
 	publisher pubsub.Publisher,
-	signer signing.Signer,
+	signer vrfSigner,
+	verifier vrfVerifier,
 	opts ...OptionFunc,
 ) *WeakCoin {
 	wc := &WeakCoin{
@@ -95,7 +88,7 @@ func New(
 		signer:    signer,
 		publisher: publisher,
 		coins:     make(map[types.RoundID]bool),
-		verifier:  signing.VRFVerifier{},
+		verifier:  verifier,
 	}
 	for _, opt := range opts {
 		opt(wc)
@@ -109,8 +102,8 @@ func New(
 type WeakCoin struct {
 	logger    log.Log
 	config    config
-	verifier  signing.Verifier
-	signer    signing.Signer
+	verifier  vrfVerifier
+	signer    vrfSigner
 	publisher pubsub.Publisher
 
 	mu                         sync.RWMutex
@@ -193,7 +186,7 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 	buf := wc.encodeProposal(message.Epoch, message.Round, message.Unit)
-	if !wc.verifier.Verify(signing.NewPublicKey(message.MinerPK), buf, message.Signature) {
+	if !wc.verifier.Verify(types.BytesToNodeID(message.MinerPK), buf, message.Signature) {
 		return fmt.Errorf("signature is invalid signature %x", message.Signature)
 	}
 
@@ -216,7 +209,10 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 	var smallest []byte
 	for unit := uint64(0); unit < allowed; unit++ {
 		proposal := wc.encodeProposal(epoch, round, unit)
-		signature := wc.signer.Sign(proposal)
+		signature, err := wc.signer.Sign(proposal)
+		if err != nil {
+			wc.logger.With().Panic("failed to sign proposal", log.Err(err))
+		}
 		if wc.aboveThreshold(signature) {
 			continue
 		}
@@ -313,7 +309,7 @@ func (wc *WeakCoin) aboveThreshold(proposal []byte) bool {
 }
 
 func (wc *WeakCoin) encodeProposal(epoch types.EpochID, round types.RoundID, unit uint64) []byte {
-	proposal := bytes.Buffer{}
+	var proposal bytes.Buffer
 	proposal.WriteString(wc.config.VRFPrefix)
 	if _, err := proposal.Write(epoch.ToBytes()); err != nil {
 		wc.logger.With().Panic("can't write epoch to a buffer", log.Err(err))

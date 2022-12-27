@@ -82,37 +82,32 @@ var (
 
 	networkMock = NetworkMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
-	addr1       = wallet.Address(signer1.PublicKey().Bytes())
-	addr2       = wallet.Address(signer2.PublicKey().Bytes())
+	addr1       types.Address
+	addr2       types.Address
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
 	poetRef     = []byte("66666")
 	nipost      = newNIPostWithChallenge(&chlng, poetRef)
 	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	signer      = NewMockSigner()
 	globalAtx   *types.VerifiedActivationTx
 	globalAtx2  *types.VerifiedActivationTx
-	signer1     = signing.NewEdSigner()
-	signer2     = signing.NewEdSigner()
-	globalTx    = NewTx(0, addr1, signer1)
-	globalTx2   = NewTx(1, addr2, signer2)
+	signer      *signing.EdSigner
+	signer1     *signing.EdSigner
+	signer2     *signing.EdSigner
+	globalTx    *types.Transaction
+	globalTx2   *types.Transaction
 	ballot1     = genLayerBallot(types.LayerID{})
 	block1      = genLayerBlock(types.LayerID{}, nil)
 	block2      = genLayerBlock(types.LayerID{}, nil)
 	block3      = genLayerBlock(types.LayerID{}, nil)
 	meshAPI     = &MeshAPIMock{}
 	conStateAPI = &ConStateAPIMock{
-		returnTx:     make(map[types.TransactionID]*types.Transaction),
-		layerApplied: make(map[types.TransactionID]*types.LayerID),
-		balances: map[types.Address]*big.Int{
-			addr1: big.NewInt(int64(accountBalance)),
-			addr2: big.NewInt(int64(accountBalance)),
-		},
-		nonces: map[types.Address]uint64{
-			globalTx.Principal: uint64(accountCounter),
-		},
+		returnTx:      make(map[types.TransactionID]*types.Transaction),
+		layerApplied:  make(map[types.TransactionID]*types.LayerID),
+		balances:      make(map[types.Address]*big.Int),
+		nonces:        make(map[types.Address]uint64),
 		poolByAddress: make(map[types.Address]types.TransactionID),
-		poolByTxid:    make(map[types.TransactionID]*types.Transaction),
+		poolByTxId:    make(map[types.TransactionID]*types.Transaction),
 	}
 	stateRoot = types.HexToHash32("11111")
 )
@@ -120,7 +115,7 @@ var (
 func genLayerBallot(layerID types.LayerID) *types.Ballot {
 	b := types.RandomBallot()
 	b.LayerIndex = layerID
-	signer := signing.NewEdSigner()
+	signer, _ := signing.NewEdSigner()
 	b.Signature = signer.Sign(b.SignedBytes())
 	b.Initialize()
 	return b
@@ -153,12 +148,31 @@ func TestMain(m *testing.M) {
 	// run on a random port
 	cfg.GrpcServerPort = 1024 + rand.Intn(9999)
 
+	var err error
+	signer, err = signing.NewEdSigner()
+	if err != nil {
+		log.Println("failed to create signer:", err)
+		os.Exit(1)
+	}
+	signer1, err = signing.NewEdSigner()
+	if err != nil {
+		log.Println("failed to create signer:", err)
+		os.Exit(1)
+	}
+	signer2, err = signing.NewEdSigner()
+	if err != nil {
+		log.Println("failed to create signer:", err)
+		os.Exit(1)
+	}
+
+	addr1 = wallet.Address(signer1.PublicKey().Bytes())
+	addr2 = wallet.Address(signer2.PublicKey().Bytes())
+
 	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil, nil)
 	if err := activation.SignAtx(signer, atx); err != nil {
 		log.Println("failed to sign atx:", err)
 		os.Exit(1)
 	}
-	var err error
 	globalAtx, err = atx.Verify(0, 1)
 	if err != nil {
 		log.Println("failed to verify atx:", err)
@@ -180,9 +194,17 @@ func TestMain(m *testing.M) {
 	// after the global vars
 	ballot1.AtxID = globalAtx.ID()
 	ballot1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
+
+	globalTx = NewTx(0, addr1, signer1)
+	globalTx2 = NewTx(1, addr2, signer2)
+
 	block1.TxIDs = []types.TransactionID{globalTx.ID, globalTx2.ID}
 	conStateAPI.returnTx[globalTx.ID] = globalTx
 	conStateAPI.returnTx[globalTx2.ID] = globalTx2
+	conStateAPI.balances[addr1] = big.NewInt(int64(accountBalance))
+	conStateAPI.balances[addr2] = big.NewInt(int64(accountBalance))
+	conStateAPI.nonces[globalTx.Principal] = uint64(accountCounter)
+
 	types.SetLayersPerEpoch(layersPerEpoch)
 
 	res := m.Run()
@@ -273,11 +295,11 @@ type ConStateAPIMock struct {
 	// In the real txs.txPool struct, there are multiple data structures and they're more complex,
 	// but we just mock a very simple use case here and only store some of these data
 	poolByAddress map[types.Address]types.TransactionID
-	poolByTxid    map[types.TransactionID]*types.Transaction
+	poolByTxId    map[types.TransactionID]*types.Transaction
 }
 
 func (t *ConStateAPIMock) Put(id types.TransactionID, tx *types.Transaction) {
-	t.poolByTxid[id] = tx
+	t.poolByTxId[id] = tx
 	t.poolByAddress[tx.Principal] = id
 	events.ReportNewTx(types.LayerID{}, tx)
 }
@@ -312,7 +334,7 @@ func (t *ConStateAPIMock) GetMeshTransaction(id types.TransactionID) (*types.Mes
 	if ok {
 		return &types.MeshTransaction{Transaction: *tx, State: types.APPLIED}, nil
 	}
-	tx, ok = t.poolByTxid[id]
+	tx, ok = t.poolByTxId[id]
 	if ok {
 		return &types.MeshTransaction{Transaction: *tx, State: types.MEMPOOL}, nil
 	}
@@ -332,10 +354,10 @@ func (t *ConStateAPIMock) GetTransactionsByAddress(from, to types.LayerID, accou
 	return txs, nil
 }
 
-func (t *ConStateAPIMock) GetMeshTransactions(txids []types.TransactionID) (txs []*types.MeshTransaction, missing map[types.TransactionID]struct{}) {
-	for _, txid := range txids {
+func (t *ConStateAPIMock) GetMeshTransactions(txIds []types.TransactionID) (txs []*types.MeshTransaction, missing map[types.TransactionID]struct{}) {
+	for _, txId := range txIds {
 		for _, tx := range t.returnTx {
-			if tx.ID == txid {
+			if tx.ID == txId {
 				txs = append(txs, &types.MeshTransaction{Transaction: *tx})
 			}
 		}
@@ -382,19 +404,6 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID t
 		PubLayerID:     pubLayerID,
 		PositioningATX: posAtxID,
 	}
-}
-
-func NewMockSigner() *MockSigning {
-	return &MockSigning{signing.NewEdSigner()}
-}
-
-// TODO(mafa): replace this mock with the generated mock from "github.com/spacemeshos/go-spacemesh/signing/mocks".
-type MockSigning struct {
-	*signing.EdSigner
-}
-
-func (ms *MockSigning) NodeID() types.NodeID {
-	return types.BytesToNodeID(ms.PublicKey().Bytes())
 }
 
 // PostAPIMock is a mock for Post API.
@@ -1109,7 +1118,7 @@ func TestMeshService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, grpcService)
-	defer shutDown()
+	t.Cleanup(func() { shutDown() })
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
