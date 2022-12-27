@@ -119,12 +119,12 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 					).
 					WithResources(corev1.ResourceRequirements().WithRequests(
 						apiv1.ResourceList{
-							apiv1.ResourceCPU:    resource.MustParse("1.2"),
+							apiv1.ResourceCPU:    resource.MustParse("2"),
 							apiv1.ResourceMemory: resource.MustParse("2Gi"),
 						},
 					).WithLimits(
 						apiv1.ResourceList{
-							apiv1.ResourceCPU:    resource.MustParse("1.2"),
+							apiv1.ResourceCPU:    resource.MustParse("2"),
 							apiv1.ResourceMemory: resource.MustParse("2Gi"),
 						},
 					)),
@@ -409,13 +409,13 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 						WithResources(corev1.ResourceRequirements().
 							WithRequests(
 								apiv1.ResourceList{
-									apiv1.ResourceCPU:    resource.MustParse("0.5"),
+									apiv1.ResourceCPU:    resource.MustParse("1"),
 									apiv1.ResourceMemory: resource.MustParse("500Mi"),
 								},
 							).
 							WithLimits(
 								apiv1.ResourceList{
-									apiv1.ResourceCPU:    resource.MustParse("0.5"),
+									apiv1.ResourceCPU:    resource.MustParse("1"),
 									apiv1.ResourceMemory: resource.MustParse("500Mi"),
 								},
 							),
