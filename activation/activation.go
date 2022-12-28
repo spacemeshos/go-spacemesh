@@ -658,7 +658,9 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		challenge.InitialPost = b.initialPost
 		challenge.InitialPostMetadata = b.initialPostMeta
 	}
-	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(ctx, &challenge, poetProofDeadline)
+	buildingNipostCtx, cancel := context.WithDeadline(ctx, nextPoetRoundStart)
+	defer cancel()
+	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(buildingNipostCtx, &challenge, poetProofDeadline)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build NIPost: %w", err)
 	}
