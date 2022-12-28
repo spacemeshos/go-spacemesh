@@ -39,11 +39,11 @@ var (
 	)
 
 	smesherLimit = apiv1.ResourceList{
-		apiv1.ResourceCPU:    resource.MustParse("2"),
+		apiv1.ResourceCPU:    resource.MustParse("1"),
 		apiv1.ResourceMemory: resource.MustParse("500Mi"),
 	}
 	bootLimit = apiv1.ResourceList{
-		apiv1.ResourceCPU:    resource.MustParse("2"),
+		apiv1.ResourceCPU:    resource.MustParse("1"),
 		apiv1.ResourceMemory: resource.MustParse("500Mi"),
 	}
 )
@@ -423,9 +423,6 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 							corev1.Probe().WithTCPSocket(
 								corev1.TCPSocketAction().WithPort(intstr.FromInt(9092)),
 							).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
-						).
-						WithEnv(
-							corev1.EnvVar().WithName("GOMAXPROCS").WithValue("4"),
 						).
 						WithCommand(cmd...),
 					)),
