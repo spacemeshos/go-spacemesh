@@ -88,27 +88,29 @@ func withWeakCoin(wc coin) Opt {
 func New(
 	nodeID types.NodeID,
 	publisher pubsub.Publisher,
-	edSigner *signing.EdSigner,
-	sigVerifier *signing.PubKeyExtractor,
-	vrfSigner *signing.VRFSigner,
+	edSigner signer,
+	pubKeyExtractor pubKeyExtractor,
+	vrfSigner vrfSigner,
+	vrfVerifier vrfVerifier,
 	cdb *datastore.CachedDB,
 	clock layerClock,
 	opts ...Opt,
 ) *ProtocolDriver {
 	pd := &ProtocolDriver{
-		ctx:            context.Background(),
-		logger:         log.NewNop(),
-		config:         DefaultConfig(),
-		nodeID:         nodeID,
-		publisher:      publisher,
-		edSigner:       edSigner,
-		sigVerifier:    sigVerifier,
-		vrfSigner:      vrfSigner,
-		cdb:            cdb,
-		clock:          clock,
-		beacons:        make(map[types.EpochID]types.Beacon),
-		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
-		states:         make(map[types.EpochID]*state),
+		ctx:             context.Background(),
+		logger:          log.NewNop(),
+		config:          DefaultConfig(),
+		nodeID:          nodeID,
+		publisher:       publisher,
+		edSigner:        edSigner,
+		pubKeyExtractor: pubKeyExtractor,
+		vrfSigner:       vrfSigner,
+		vrfVerifier:     vrfVerifier,
+		cdb:             cdb,
+		clock:           clock,
+		beacons:         make(map[types.EpochID]types.Beacon),
+		ballotsBeacons:  make(map[types.EpochID]map[types.Beacon]*beaconWeight),
+		states:          make(map[types.EpochID]*state),
 	}
 	for _, opt := range opts {
 		opt(pd)
@@ -117,7 +119,7 @@ func New(
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(pd.config.Theta)
 	if pd.weakCoin == nil {
-		pd.weakCoin = weakcoin.New(pd.publisher, vrfSigner,
+		pd.weakCoin = weakcoin.New(pd.publisher, vrfSigner, vrfVerifier,
 			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
 			weakcoin.WithMaxRound(pd.config.RoundsNumber),
 		)
@@ -136,16 +138,16 @@ type ProtocolDriver struct {
 	cancel     context.CancelFunc
 	startOnce  sync.Once
 
-	config      Config
-	nodeID      types.NodeID
-	sync        system.SyncStateProvider
-	publisher   pubsub.Publisher
-	edSigner    *signing.EdSigner
-	sigVerifier *signing.PubKeyExtractor
-	vrfSigner   *signing.VRFSigner
-	vrfVerifier signing.VRFVerifier
-	weakCoin    coin
-	theta       *big.Float
+	config          Config
+	nodeID          types.NodeID
+	sync            system.SyncStateProvider
+	publisher       pubsub.Publisher
+	edSigner        signer
+	pubKeyExtractor pubKeyExtractor
+	vrfSigner       vrfSigner
+	vrfVerifier     vrfVerifier
+	weakCoin        coin
+	theta           *big.Float
 
 	clock       layerClock
 	layerTicker chan types.LayerID
@@ -969,13 +971,17 @@ func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 	return threshold
 }
 
-func buildSignedProposal(ctx context.Context, signer signing.Signer, epoch types.EpochID, logger log.Log) []byte {
+func buildSignedProposal(ctx context.Context, signer vrfSigner, epoch types.EpochID, logger log.Log) []byte {
 	p := buildProposal(epoch, logger)
-	signature := signer.Sign(p)
+	signature, err := signer.Sign(p)
+	if err != nil {
+		logger.With().Fatal("failed to sign proposal", log.Err(err))
+	}
 	logger.WithContext(ctx).With().Debug("calculated signature",
 		epoch,
 		log.String("proposal", hex.EncodeToString(p)),
-		log.String("signature", string(signature)))
+		log.String("signature", hex.EncodeToString(signature)),
+	)
 
 	return signature
 }

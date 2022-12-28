@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	vm "github.com/spacemeshos/go-spacemesh/genvm"
 )
 
 // MockconservativeState is a mock of conservativeState interface.
@@ -33,35 +34,6 @@ func NewMockconservativeState(ctrl *gomock.Controller) *MockconservativeState {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 	return m.recorder
-}
-
-// ApplyLayer mocks base method.
-func (m *MockconservativeState) ApplyLayer(arg0 context.Context, arg1 types.LayerID, arg2 *types.Block) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ApplyLayer", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// ApplyLayer indicates an expected call of ApplyLayer.
-func (mr *MockconservativeStateMockRecorder) ApplyLayer(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyLayer", reflect.TypeOf((*MockconservativeState)(nil).ApplyLayer), arg0, arg1, arg2)
-}
-
-// GetStateRoot mocks base method.
-func (m *MockconservativeState) GetStateRoot() (types.Hash32, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetStateRoot")
-	ret0, _ := ret[0].(types.Hash32)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetStateRoot indicates an expected call of GetStateRoot.
-func (mr *MockconservativeStateMockRecorder) GetStateRoot() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateRoot", reflect.TypeOf((*MockconservativeState)(nil).GetStateRoot))
 }
 
 // LinkTXsWithBlock mocks base method.
@@ -92,16 +64,98 @@ func (mr *MockconservativeStateMockRecorder) LinkTXsWithProposal(arg0, arg1, arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkTXsWithProposal", reflect.TypeOf((*MockconservativeState)(nil).LinkTXsWithProposal), arg0, arg1, arg2)
 }
 
-// RevertState mocks base method.
-func (m *MockconservativeState) RevertState(arg0 types.LayerID) error {
+// RevertCache mocks base method.
+func (m *MockconservativeState) RevertCache(arg0 types.LayerID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RevertState", arg0)
+	ret := m.ctrl.Call(m, "RevertCache", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// RevertState indicates an expected call of RevertState.
-func (mr *MockconservativeStateMockRecorder) RevertState(arg0 interface{}) *gomock.Call {
+// RevertCache indicates an expected call of RevertCache.
+func (mr *MockconservativeStateMockRecorder) RevertCache(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevertState", reflect.TypeOf((*MockconservativeState)(nil).RevertState), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevertCache", reflect.TypeOf((*MockconservativeState)(nil).RevertCache), arg0)
+}
+
+// UpdateCache mocks base method.
+func (m *MockconservativeState) UpdateCache(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID, arg3 []types.TransactionWithResult, arg4 []types.Transaction) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateCache", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateCache indicates an expected call of UpdateCache.
+func (mr *MockconservativeStateMockRecorder) UpdateCache(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateCache", reflect.TypeOf((*MockconservativeState)(nil).UpdateCache), arg0, arg1, arg2, arg3, arg4)
+}
+
+// MockvmState is a mock of vmState interface.
+type MockvmState struct {
+	ctrl     *gomock.Controller
+	recorder *MockvmStateMockRecorder
+}
+
+// MockvmStateMockRecorder is the mock recorder for MockvmState.
+type MockvmStateMockRecorder struct {
+	mock *MockvmState
+}
+
+// NewMockvmState creates a new mock instance.
+func NewMockvmState(ctrl *gomock.Controller) *MockvmState {
+	mock := &MockvmState{ctrl: ctrl}
+	mock.recorder = &MockvmStateMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockvmState) EXPECT() *MockvmStateMockRecorder {
+	return m.recorder
+}
+
+// Apply mocks base method.
+func (m *MockvmState) Apply(arg0 vm.ApplyContext, arg1 []types.Transaction, arg2 []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Apply", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]types.Transaction)
+	ret1, _ := ret[1].([]types.TransactionWithResult)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// Apply indicates an expected call of Apply.
+func (mr *MockvmStateMockRecorder) Apply(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockvmState)(nil).Apply), arg0, arg1, arg2)
+}
+
+// GetStateRoot mocks base method.
+func (m *MockvmState) GetStateRoot() (types.Hash32, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetStateRoot")
+	ret0, _ := ret[0].(types.Hash32)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetStateRoot indicates an expected call of GetStateRoot.
+func (mr *MockvmStateMockRecorder) GetStateRoot() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateRoot", reflect.TypeOf((*MockvmState)(nil).GetStateRoot))
+}
+
+// Revert mocks base method.
+func (m *MockvmState) Revert(arg0 types.LayerID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Revert", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Revert indicates an expected call of Revert.
+func (mr *MockvmStateMockRecorder) Revert(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Revert", reflect.TypeOf((*MockvmState)(nil).Revert), arg0)
 }

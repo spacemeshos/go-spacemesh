@@ -167,12 +167,13 @@ type hareWithMocks struct {
 	mockRoracle *mocks.MockRolacle
 }
 
-func createTestHare(t testing.TB, db *sql.Database, tcfg config.Config, clock *mockClock, pid p2p.Peer, p2p pubsub.PublishSubsciber, name string) *hareWithMocks {
-	t.Helper()
-	ed := signing.NewEdSigner()
-	pub := ed.PublicKey()
+func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *mockClock, pid p2p.Peer, p2p pubsub.PublishSubsciber, name string) *hareWithMocks {
+	tb.Helper()
+	signer, err := signing.NewEdSigner()
+	require.NoError(tb, err)
+	pub := signer.PublicKey()
 	nodeID := types.BytesToNodeID(pub.Bytes())
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(tb)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
 	patrol.EXPECT().CompleteHare(gomock.Any()).AnyTimes()
@@ -186,8 +187,8 @@ func createTestHare(t testing.TB, db *sql.Database, tcfg config.Config, clock *m
 
 	mockRoracle := mocks.NewMockRolacle(ctrl)
 
-	hare := New(db, tcfg, pid, p2p, ed, nodeID, make(chan LayerOutput, 100), mockSyncS, mockBeacons, mockRoracle, patrol, 10,
-		mockStateQ, clock, logtest.New(t).WithName(name+"_"+ed.PublicKey().ShortString()))
+	hare := New(db, tcfg, pid, p2p, signer, nodeID, make(chan LayerOutput, 100), mockSyncS, mockBeacons, mockRoracle, patrol, 10,
+		mockStateQ, clock, logtest.New(tb).WithName(name+"_"+signer.PublicKey().ShortString()))
 	p2p.Register(pubsub.HareProtocol, hare.GetHareMsgHandler())
 
 	return &hareWithMocks{
