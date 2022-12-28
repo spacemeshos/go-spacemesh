@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -15,58 +17,59 @@ const numOfClients = 100
 
 func TestMockHashOracle_Register(t *testing.T) {
 	oracle := newMockHashOracle(numOfClients)
-	oracle.Register(signing.NewEdSigner().PublicKey().String())
-	oracle.Register(signing.NewEdSigner().PublicKey().String())
+	oracle.Register(types.RandomNodeID().String())
+	oracle.Register(types.RandomNodeID().String())
 	assert.Equal(t, 2, len(oracle.clients))
 }
 
 func TestMockHashOracle_Unregister(t *testing.T) {
 	oracle := newMockHashOracle(numOfClients)
-	pub := signing.NewEdSigner()
-	oracle.Register(pub.PublicKey().String())
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	oracle.Register(signer.PublicKey().String())
 	assert.Equal(t, 1, len(oracle.clients))
-	oracle.Unregister(pub.PublicKey().String())
+	oracle.Unregister(signer.PublicKey().String())
 	assert.Equal(t, 0, len(oracle.clients))
 }
 
 func TestMockHashOracle_Concurrency(t *testing.T) {
 	oracle := newMockHashOracle(numOfClients)
-	c := make(chan Signer, 1000)
-	done := make(chan int, 2)
+	c := make(chan types.NodeID, 1000)
 
-	go func() {
+	var eg errgroup.Group
+	eg.Go(func() error {
 		for i := 0; i < 500; i++ {
-			pub := signing.NewEdSigner()
-			oracle.Register(pub.PublicKey().String())
-			c <- pub
+			id := types.RandomNodeID()
+			oracle.Register(id.String())
+			c <- id
 		}
-		done <- 1
-	}()
+		return nil
+	})
 
-	go func() {
+	eg.Go(func() error {
 		for i := 0; i < 400; i++ {
-			s := <-c
-			oracle.Unregister(s.PublicKey().String())
+			id := <-c
+			oracle.Unregister(id.String())
 		}
-		done <- 1
-	}()
+		return nil
+	})
 
-	<-done
-	<-done
+	assert.NoError(t, eg.Wait())
 	assert.Equal(t, len(oracle.clients), 100)
 }
 
 func TestMockHashOracle_Role(t *testing.T) {
 	oracle := newMockHashOracle(numOfClients)
 	for i := 0; i < numOfClients; i++ {
-		pub := signing.NewEdSigner()
-		oracle.Register(pub.PublicKey().String())
+		signer, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		oracle.Register(signer.PublicKey().String())
 	}
 
 	committeeSize := 20
 	counter := 0
 	for i := 0; i < numOfClients; i++ {
-		res, _ := oracle.eligible(context.TODO(), types.LayerID{}, 1, committeeSize, types.BytesToNodeID(signing.NewEdSigner().PublicKey().Bytes()), types.RandomBytes(4))
+		res, _ := oracle.eligible(context.Background(), types.LayerID{}, 1, committeeSize, types.RandomNodeID(), types.RandomBytes(4))
 		if res {
 			counter++
 		}
@@ -80,8 +83,8 @@ func TestMockHashOracle_Role(t *testing.T) {
 
 func TestMockHashOracle_calcThreshold(t *testing.T) {
 	oracle := newMockHashOracle(2)
-	oracle.Register(signing.NewEdSigner().PublicKey().String())
-	oracle.Register(signing.NewEdSigner().PublicKey().String())
+	oracle.Register(types.RandomNodeID().String())
+	oracle.Register(types.RandomNodeID().String())
 	assert.Equal(t, uint32(math.MaxUint32/2), oracle.calcThreshold(1))
 	assert.Equal(t, uint32(math.MaxUint32), oracle.calcThreshold(2))
 }

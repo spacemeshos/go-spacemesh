@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
@@ -145,12 +146,14 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	validator := NewMocknipostValidator(gomock.NewController(t))
 	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, nil, log)
 
-	otherSig := NewTestSigner()
 	coinbase := types.GenerateAddress([]byte("aaaa"))
 
-	sig1 := NewTestSigner()
-	sig2 := NewTestSigner()
-	sig3 := NewTestSigner()
+	sig1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	sig2, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	sig3, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	atxList := []*types.VerifiedActivationTx{
 		newActivationTx(t, sig1, 0, *types.EmptyATXID, *types.EmptyATXID, &goldenATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
 		newActivationTx(t, sig2, 0, *types.EmptyATXID, *types.EmptyATXID, &goldenATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
@@ -437,8 +440,10 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 	receiver := NewMockatxReceiver(gomock.NewController(t))
 	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, receiver, log)
 
-	sig1 := NewTestSigner()
-	otherSig := NewTestSigner()
+	sig1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	otherSig, err := signing.NewEdSigner()
+	require.NoError(t, err)
 
 	coinbase := types.GenerateAddress([]byte("aaaa"))
 	chlng := types.HexToHash32("0x3333")

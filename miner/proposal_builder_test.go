@@ -26,7 +26,6 @@ import (
 
 const (
 	layersPerEpoch  = 3
-	txCount         = 100
 	defaultGasLimit = 10
 	defaultFee      = 1
 )
@@ -60,7 +59,6 @@ func createBuilder(tb testing.TB) *testBuilder {
 		WithLogger(lg),
 		WithLayerSize(20),
 		WithLayerPerEpoch(3),
-		WithTxsPerProposal(txCount),
 		WithMinerID(nodeID),
 		WithHdist(3),
 		withOracle(pb.mOracle))
@@ -130,7 +128,9 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	numSlots := 2
 	proofs := genProofs(t, numSlots)
 
-	tx1 := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	tx1 := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 	base := types.RandomBallotID()
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
@@ -144,7 +144,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	minVerified := layerID.Sub(b.cfg.hdist + 1)
 	b.mTortoise.EXPECT().LatestComplete().Return(minVerified)
 	for lid := minVerified; lid.Before(layerID); lid = lid.Add(1) {
-		certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID)
+		require.NoError(t, certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID))
 	}
 	meshHash := types.RandomHash()
 	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
@@ -182,7 +182,9 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	activeSet := genActiveSet(t)
 	proofs := genProofs(t, 1)
 
-	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 	bb := types.RandomBallotID()
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
@@ -197,7 +199,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	minVerified := layerID.Sub(b.cfg.hdist + 1)
 	b.mTortoise.EXPECT().LatestComplete().Return(minVerified)
 	for lid := minVerified; lid.Before(layerID); lid = lid.Add(1) {
-		certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID)
+		require.NoError(t, certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID))
 	}
 	meshHash := types.RandomHash()
 	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
@@ -296,7 +298,9 @@ func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	activeSet := genActiveSet(t)
-	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
@@ -327,7 +331,9 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 		types.BallotID{1}, nil, b.ProposalBuilder.signer.NodeID(), types.InnerBallot{LayerIndex: layerID.Sub(1)})
 	require.NoError(t, ballots.Add(b.cdb, &refBallot))
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
@@ -357,7 +363,9 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
@@ -379,7 +387,9 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
@@ -403,7 +413,9 @@ func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
@@ -414,7 +426,7 @@ func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 	minVerified := layerID.Sub(b.cfg.hdist + 1)
 	b.mTortoise.EXPECT().LatestComplete().Return(minVerified.Sub(1))
 	for lid := minVerified; lid.Before(layerID); lid = lid.Add(1) {
-		certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID)
+		require.NoError(t, certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID))
 	}
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
@@ -435,7 +447,9 @@ func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 5)
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
@@ -446,7 +460,7 @@ func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 	minVerified := layerID.Sub(b.cfg.hdist + 1)
 	b.mTortoise.EXPECT().LatestComplete().Return(minVerified)
 	for lid := minVerified; lid.Before(layerID.Sub(1)); lid = lid.Add(1) {
-		certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID)
+		require.NoError(t, certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID))
 	}
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
@@ -467,7 +481,9 @@ func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
@@ -478,7 +494,7 @@ func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 	minVerified := layerID.Sub(b.cfg.hdist + 1)
 	b.mTortoise.EXPECT().LatestComplete().Return(minVerified)
 	for lid := minVerified; lid.Before(layerID); lid = lid.Add(1) {
-		certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID)
+		require.NoError(t, certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID))
 	}
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {

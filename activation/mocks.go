@@ -480,6 +480,44 @@ func (mr *MocksignerMockRecorder) Sign(m interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sign", reflect.TypeOf((*Mocksigner)(nil).Sign), m)
 }
 
+// MockkeyExtractor is a mock of keyExtractor interface.
+type MockkeyExtractor struct {
+	ctrl     *gomock.Controller
+	recorder *MockkeyExtractorMockRecorder
+}
+
+// MockkeyExtractorMockRecorder is the mock recorder for MockkeyExtractor.
+type MockkeyExtractorMockRecorder struct {
+	mock *MockkeyExtractor
+}
+
+// NewMockkeyExtractor creates a new mock instance.
+func NewMockkeyExtractor(ctrl *gomock.Controller) *MockkeyExtractor {
+	mock := &MockkeyExtractor{ctrl: ctrl}
+	mock.recorder = &MockkeyExtractorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockkeyExtractor) EXPECT() *MockkeyExtractorMockRecorder {
+	return m.recorder
+}
+
+// ExtractNodeID mocks base method.
+func (m_2 *MockkeyExtractor) ExtractNodeID(m, sig []byte) (types.NodeID, error) {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "ExtractNodeID", m, sig)
+	ret0, _ := ret[0].(types.NodeID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ExtractNodeID indicates an expected call of ExtractNodeID.
+func (mr *MockkeyExtractorMockRecorder) ExtractNodeID(m, sig interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExtractNodeID", reflect.TypeOf((*MockkeyExtractor)(nil).ExtractNodeID), m, sig)
+}
+
 // Mocksyncer is a mock of syncer interface.
 type Mocksyncer struct {
 	ctrl     *gomock.Controller

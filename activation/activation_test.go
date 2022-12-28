@@ -39,13 +39,27 @@ const (
 func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
+	var err error
+	sig, err = signing.NewEdSigner()
+	if err != nil {
+		log.Println("failed to create signer", err)
+		os.Exit(1)
+	}
+
+	otherSig, err = signing.NewEdSigner()
+	if err != nil {
+		log.Println("failed to create signer", err)
+		os.Exit(1)
+	}
+
 	res := m.Run()
 	os.Exit(res)
 }
 
 var (
-	sig         = NewTestSigner()
-	otherSig    = NewTestSigner()
+	sig      *signing.EdSigner
+	otherSig *signing.EdSigner
+
 	coinbase    = types.GenerateAddress([]byte("33333"))
 	goldenATXID = types.ATXID(types.HexToHash32("77777"))
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
@@ -86,15 +100,6 @@ func (n *NetMock) Publish(_ context.Context, _ string, d []byte) error {
 		return atxDb.StoreAtx(context.Background(), vAtx)
 	}
 	return nil
-}
-
-func NewTestSigner() *TestSigner {
-	return &TestSigner{signing.NewEdSigner()}
-}
-
-// TODO(mafa): replace this mock with the generated mock from "github.com/spacemeshos/go-spacemesh/signing/mocks".
-type TestSigner struct {
-	*signing.EdSigner
 }
 
 type NIPostBuilderMock struct {
@@ -306,7 +311,7 @@ func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID) *types.Verif
 	return addAtx(t, db, sig, atx)
 }
 
-func addAtx(t *testing.T, db sql.Executor, sig signing.Signer, atx *types.ActivationTx) *types.VerifiedActivationTx {
+func addAtx(t *testing.T, db sql.Executor, sig signer, atx *types.ActivationTx) *types.VerifiedActivationTx {
 	require.NoError(t, SignAtx(sig, atx))
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
@@ -571,8 +576,11 @@ func TestBuilder_getCommitmentAtx_getsStoredCommitmentAtx(t *testing.T) {
 	builder.commitmentAtx = nil
 	commitmentAtx := types.RandomATXID()
 
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
 	// add a newer ATX by a different node
-	newATX := addAtx(t, cdb, NewTestSigner(), &types.ActivationTx{
+	newATX := addAtx(t, cdb, signer, &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PubLayerID: types.LayerID{Value: 1},
@@ -580,7 +588,7 @@ func TestBuilder_getCommitmentAtx_getsStoredCommitmentAtx(t *testing.T) {
 		},
 	})
 
-	err := kvstore.AddCommitmentATXForNode(cdb, commitmentAtx, builder.nodeID)
+	err = kvstore.AddCommitmentATXForNode(cdb, commitmentAtx, builder.nodeID)
 	require.NoError(t, err)
 
 	atx, err := builder.getCommitmentAtx(context.Background())
@@ -783,10 +791,12 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.WithName("db"))
 
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	r.NoError(err)
 	nodeId := signer.NodeID()
 
-	otherSigner := signing.NewEdSigner()
+	otherSigner, err := signing.NewEdSigner()
+	r.NoError(err)
 
 	initialPost := &types.Post{
 		Nonce:   0,
@@ -904,10 +914,12 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.WithName("db"))
 
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	r.NoError(err)
 	nodeId := signer.NodeID()
 
-	otherSigner := signing.NewEdSigner()
+	otherSigner, err := signing.NewEdSigner()
+	r.NoError(err)
 
 	currentLayer := postGenesisEpochLayer.Add(3)
 	posAtxLayer := postGenesisEpochLayer.Sub(layersPerEpoch)
@@ -1151,7 +1163,8 @@ func TestBuilder_SignAtx(t *testing.T) {
 		LayersPerEpoch:  layersPerEpoch,
 	}
 
-	sig := NewTestSigner()
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	cdb := newCachedDB(t)
 	ctrl := gomock.NewController(t)
 	validator := NewMocknipostValidator(ctrl)
@@ -1169,7 +1182,8 @@ func TestBuilder_SignAtx(t *testing.T) {
 	err = b.SignAtx(atx)
 	assert.NoError(t, err)
 
-	extractor := signing.NewPubKeyExtractor()
+	extractor, err := signing.NewPubKeyExtractor()
+	assert.NoError(t, err)
 
 	nodeId, err := extractor.ExtractNodeID(atxBytes, atx.Sig)
 	assert.NoError(t, err)
@@ -1182,7 +1196,8 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	nipostBuilder := &NIPostBuilderMock{}
 	layersPerEpoch := uint32(10)
 
-	sig := NewTestSigner()
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	cdb := newCachedDB(t)
 	ctrl := gomock.NewController(t)
 	validator := NewMocknipostValidator(ctrl)
@@ -1214,7 +1229,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 
 	atx := newActivationTx(t, sig, 1, prevAtx, prevAtx, nil, types.NewLayerID(15), 1, 100, coinbase, 100, npst)
 
-	err := atxHdlr.StoreAtx(context.Background(), atx)
+	err = atxHdlr.StoreAtx(context.Background(), atx)
 	assert.NoError(t, err)
 
 	challenge := types.NIPostChallenge{

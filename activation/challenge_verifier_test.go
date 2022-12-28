@@ -59,12 +59,13 @@ func createInitialChallenge(post types.Post, meta types.PostMetadata, numUnits u
 func Test_SignatureVerification(t *testing.T) {
 	t.Parallel()
 	req := require.New(t)
-	extractor := signing.NewPubKeyExtractor()
 
 	ctrl := gomock.NewController(t)
 	atxProvider := activation.NewMockatxProvider(ctrl)
 	validator := activation.NewMocknipostValidator(ctrl)
 
+	extractor, err := signing.NewPubKeyExtractor()
+	req.NoError(err)
 	challenge := types.PoetChallenge{
 		NIPostChallenge: &types.NIPostChallenge{
 			Sequence:  1,
@@ -93,7 +94,8 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 	req.NoError(err)
 	nodeID := types.BytesToNodeID(pubKey)
 
-	sigVerifier := signing.NewPubKeyExtractor()
+	sigVerifier, err := signing.NewPubKeyExtractor()
+	req.NoError(err)
 
 	ctrl := gomock.NewController(t)
 	atxProvider := activation.NewMockatxProvider(ctrl)
@@ -262,7 +264,8 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 	req.NoError(err)
 	nodeID := types.BytesToNodeID(pubKey)
 
-	sigVerifier := signing.NewPubKeyExtractor()
+	sigVerifier, err := signing.NewPubKeyExtractor()
+	req.NoError(err)
 
 	challenge := types.PoetChallenge{
 		NIPostChallenge: &types.NIPostChallenge{
