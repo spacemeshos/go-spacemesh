@@ -39,7 +39,7 @@ var (
 	)
 
 	smesherLimit = apiv1.ResourceList{
-		apiv1.ResourceCPU:    resource.MustParse("0.3"),
+		apiv1.ResourceCPU:    resource.MustParse("0.5"),
 		apiv1.ResourceMemory: resource.MustParse("500Mi"),
 	}
 	bootLimit = apiv1.ResourceList{
