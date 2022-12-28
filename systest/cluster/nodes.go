@@ -67,7 +67,10 @@ func persistentVolumeClaim(podname string) string {
 	return fmt.Sprintf("%s-%s", persistentVolumeName, podname)
 }
 
-const prometheusScrapePort = 9216
+const (
+	prometheusScrapePort = 9216
+	phlareScrapePort     = 6060
+)
 
 // Node ...
 type Node struct {
@@ -391,8 +394,10 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 			WithTemplate(corev1.PodTemplateSpec().
 				WithAnnotations(
 					map[string]string{
-						"prometheus.io/port":   strconv.Itoa(prometheusScrapePort),
-						"prometheus.io/scrape": "true",
+						"prometheus.io/port":        strconv.Itoa(prometheusScrapePort),
+						"prometheus.io/scrape":      "true",
+						"phlare.grafana.com.port":   strconv.Itoa(phlareScrapePort),
+						"phlare.grafana.com.scrape": "true",
 					},
 				).
 				WithLabels(labels).
@@ -410,6 +415,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 							corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
 							corev1.ContainerPort().WithContainerPort(9092).WithName("grpc"),
 							corev1.ContainerPort().WithContainerPort(prometheusScrapePort).WithName("prometheus"),
+							corev1.ContainerPort().WithContainerPort(phlareScrapePort).WithName("pprof"),
 						).
 						WithVolumeMounts(
 							corev1.VolumeMount().WithName("data").WithMountPath("/data"),
