@@ -238,16 +238,8 @@ jobs:
         if: env.status != 'success'
         run: exit 1
 
-  ## workflow for regular pull requests ends here
-  ## everything below here only runs in a push when bors is invoked
-  ## so we can safely assume that all secrets are accessible here below
-
-  ## stage 2: next run docker push, as system tests rely on this
-
+  ## stage 2
   dockerpush:
-    # only run on push, not on pull_request
-    # note that this does NOT run on pushes to branch develop, see separate workflow file for that
-    if: github.event_name == 'push'
     # should take 2-3 mins
     timeout-minutes: 7
     needs:
@@ -263,7 +255,7 @@ jobs:
   ## Run new system tests
   systest:
     runs-on: ubuntu-latest
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
       - filter-changes
       - dockerpush
@@ -351,7 +343,7 @@ jobs:
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
   # all tests that are required to pass before a bors merge must be listed here!
   ci-stage2:
-    if: always() && github.event_name == 'push' && needs.ci-stage1.result == 'success'
+    if: always() && needs.ci-stage1.result == 'success'
     needs:
       - filter-changes
       - ci-stage1
