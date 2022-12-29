@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/spacemeshos/go-scale"
 	poetShared "github.com/spacemeshos/poet/shared"
@@ -235,7 +236,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if err == nil && h != nil {
 		encoder.AddString("challenge", h.String())
 	}
-	encoder.AddString("id", atx.id.String())
+	atx.id.Field().AddTo(encoder)
 	encoder.AddString("sender_id", atx.nodeID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
@@ -347,6 +348,35 @@ type PoetProof struct {
 	LeafCount uint64
 }
 
+func (p *PoetProof) MarshalLogObject(encoder log.ObjectEncoder) error {
+	if p == nil {
+		return nil
+	}
+	encoder.AddUint64("LeafCount", p.LeafCount)
+	encoder.AddArray("Indicies", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, member := range p.Members {
+			encoder.AppendString(hex.EncodeToString(member))
+		}
+		return nil
+	}))
+
+	encoder.AddString("MerkleProof.Root", hex.EncodeToString(p.Root))
+	encoder.AddArray("MerkleProof.ProvenLeaves", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, v := range p.ProvenLeaves {
+			encoder.AppendString(hex.EncodeToString(v))
+		}
+		return nil
+	}))
+	encoder.AddArray("MerkleProof.ProofNodes", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, v := range p.ProofNodes {
+			encoder.AppendString(hex.EncodeToString(v))
+		}
+		return nil
+	}))
+
+	return nil
+}
+
 // PoetProofMessage is the envelope which includes the PoetProof, service ID, round ID and signature.
 type PoetProofMessage struct {
 	PoetProof
@@ -355,11 +385,23 @@ type PoetProofMessage struct {
 	Signature     []byte
 }
 
+func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
+	if p == nil {
+		return nil
+	}
+	encoder.AddObject("PoetProof", &p.PoetProof)
+	encoder.AddString("PoetServiceID", hex.EncodeToString(p.PoetServiceID))
+	encoder.AddString("RoundID", p.RoundID)
+	encoder.AddString("Signature", hex.EncodeToString(p.Signature))
+
+	return nil
+}
+
 // Ref returns the reference to the PoET proof message. It's the sha256 sum of the entire proof message.
-func (proofMessage PoetProofMessage) Ref() (PoetProofRef, error) {
+func (proofMessage *PoetProofMessage) Ref() (PoetProofRef, error) {
 	poetProofBytes, err := codec.Encode(&proofMessage.PoetProof)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %v",
+		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %w",
 			proofMessage.PoetServiceID, proofMessage.RoundID, err)
 	}
 	ref := hash.Sum(poetProofBytes)
@@ -367,10 +409,40 @@ func (proofMessage PoetProofMessage) Ref() (PoetProofRef, error) {
 	return h.Bytes(), nil
 }
 
+type RoundEnd time.Time
+
+func (re *RoundEnd) IntoTime() time.Time {
+	return (time.Time)(*re)
+}
+
+func (p *RoundEnd) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	t := p.IntoTime()
+	n, err := scale.EncodeString(enc, t.Format(time.RFC3339Nano))
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// DecodeScale implements scale codec interface.
+func (p *RoundEnd) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	field, n, err := scale.DecodeString(dec)
+	if err != nil {
+		return 0, err
+	}
+	t, err := time.Parse(time.RFC3339Nano, field)
+	if err != nil {
+		return n, err
+	}
+	*p = (RoundEnd)(t)
+	return n, nil
+}
+
 // PoetRound includes the PoET's round ID.
 type PoetRound struct {
 	ID            string
-	ChallengeHash []byte
+	ChallengeHash Hash32
+	End           RoundEnd
 }
 
 // NIPost is Non-Interactive Proof of Space-Time.

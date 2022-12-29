@@ -1408,7 +1408,7 @@ func TestBuilder_UpdatePoets(t *testing.T) {
 	atxHdlr := newAtxHandler(t, cdb)
 	b := newBuilder(t, cdb, atxHdlr, WithPoETClientInitializer(func(string) PoetProvingServiceClient {
 		poet := NewMockPoetProvingServiceClient(gomock.NewController(t))
-		poet.EXPECT().PoetServiceID(gomock.Any()).Times(1).Return([]byte("poetid"), nil)
+		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return([]byte("poetid"), nil)
 		return poet
 	}))
 
@@ -1430,7 +1430,7 @@ func TestBuilder_UpdatePoetsUnstable(t *testing.T) {
 	atxHdlr := newAtxHandler(t, cdb)
 	b := newBuilder(t, cdb, atxHdlr, WithPoETClientInitializer(func(string) PoetProvingServiceClient {
 		poet := NewMockPoetProvingServiceClient(gomock.NewController(t))
-		poet.EXPECT().PoetServiceID(gomock.Any()).Times(1).Return([]byte("poetid"), errors.New("ERROR"))
+		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return([]byte("poetid"), errors.New("ERROR"))
 		return poet
 	}))
 

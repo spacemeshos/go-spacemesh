@@ -74,6 +74,10 @@ func FieldNamed(name string, field LoggableField) Field {
 	return f
 }
 
+func (f Field) AddTo(enc ObjectEncoder) {
+	(zapcore.Field)(f).AddTo(enc)
+}
+
 // String returns a string Field.
 func String(name, val string) Field {
 	return Field(zap.String(name, val))

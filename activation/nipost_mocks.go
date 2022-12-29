@@ -35,11 +35,26 @@ func (m *MockPoetProvingServiceClient) EXPECT() *MockPoetProvingServiceClientMoc
 	return m.recorder
 }
 
+// GetProof mocks base method.
+func (m *MockPoetProvingServiceClient) GetProof(ctx context.Context, roundID string) (*types.PoetProofMessage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProof", ctx, roundID)
+	ret0, _ := ret[0].(*types.PoetProofMessage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetProof indicates an expected call of GetProof.
+func (mr *MockPoetProvingServiceClientMockRecorder) GetProof(ctx, roundID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProof", reflect.TypeOf((*MockPoetProvingServiceClient)(nil).GetProof), ctx, roundID)
+}
+
 // PoetServiceID mocks base method.
-func (m *MockPoetProvingServiceClient) PoetServiceID(arg0 context.Context) ([]byte, error) {
+func (m *MockPoetProvingServiceClient) PoetServiceID(arg0 context.Context) (types.PoetServiceID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PoetServiceID", arg0)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].(types.PoetServiceID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -88,21 +103,6 @@ func (m *MockpoetDbAPI) EXPECT() *MockpoetDbAPIMockRecorder {
 	return m.recorder
 }
 
-// GetMembershipMap mocks base method.
-func (m *MockpoetDbAPI) GetMembershipMap(proofRef types.PoetProofRef) (map[types.Hash32]bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMembershipMap", proofRef)
-	ret0, _ := ret[0].(map[types.Hash32]bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetMembershipMap indicates an expected call of GetMembershipMap.
-func (mr *MockpoetDbAPIMockRecorder) GetMembershipMap(proofRef interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMembershipMap", reflect.TypeOf((*MockpoetDbAPI)(nil).GetMembershipMap), proofRef)
-}
-
 // GetProof mocks base method.
 func (m *MockpoetDbAPI) GetProof(arg0 types.PoetProofRef) (*types.PoetProof, error) {
 	m.ctrl.T.Helper()
@@ -118,17 +118,16 @@ func (mr *MockpoetDbAPIMockRecorder) GetProof(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProof", reflect.TypeOf((*MockpoetDbAPI)(nil).GetProof), arg0)
 }
 
-// GetProofRef mocks base method.
-func (m *MockpoetDbAPI) GetProofRef(poetID []byte, roundID string) (types.PoetProofRef, error) {
+// ValidateAndStore mocks base method.
+func (m *MockpoetDbAPI) ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProofRef", poetID, roundID)
-	ret0, _ := ret[0].(types.PoetProofRef)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "ValidateAndStore", ctx, proofMessage)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
-// GetProofRef indicates an expected call of GetProofRef.
-func (mr *MockpoetDbAPIMockRecorder) GetProofRef(poetID, roundID interface{}) *gomock.Call {
+// ValidateAndStore indicates an expected call of ValidateAndStore.
+func (mr *MockpoetDbAPIMockRecorder) ValidateAndStore(ctx, proofMessage interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProofRef", reflect.TypeOf((*MockpoetDbAPI)(nil).GetProofRef), poetID, roundID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndStore", reflect.TypeOf((*MockpoetDbAPI)(nil).ValidateAndStore), ctx, proofMessage)
 }
