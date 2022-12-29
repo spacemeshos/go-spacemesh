@@ -2,8 +2,8 @@
     "preset": "fastnet",
     "poet": {
         "phase-shift": "20s",
-        "cycle-gap": "10s",
-        "grace-period": "3s"  
+        "cycle-gap": "20s",
+        "grace-period": "5s"
     },
     "logging": {
         "trtl": "debug"

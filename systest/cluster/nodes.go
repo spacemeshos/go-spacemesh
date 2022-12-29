@@ -396,8 +396,8 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 					map[string]string{
 						"prometheus.io/port":        strconv.Itoa(prometheusScrapePort),
 						"prometheus.io/scrape":      "true",
-						"phlare.grafana.com.port":   strconv.Itoa(phlareScrapePort),
-						"phlare.grafana.com.scrape": "true",
+						"phlare.grafana.com/port":   strconv.Itoa(phlareScrapePort),
+						"phlare.grafana.com/scrape": "true",
 					},
 				).
 				WithLabels(labels).

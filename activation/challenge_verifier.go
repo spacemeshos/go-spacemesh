@@ -84,7 +84,7 @@ func (v *challengeVerifier) Verify(ctx context.Context, challengeBytes, signatur
 }
 
 func (v *challengeVerifier) verifyChallenge(ctx context.Context, challenge *types.PoetChallenge, nodeID types.NodeID) error {
-	log.With().Info("verifying challenge", log.Object("challenge", challenge))
+	log.GetLogger().WithContext(ctx).With().Info("Verifying challenge", log.Object("challenge", challenge))
 
 	if err := validateNumUnits(&v.cfg, challenge.NumUnits); err != nil {
 		return fmt.Errorf("%w: %v", ErrChallengeInvalid, err)
