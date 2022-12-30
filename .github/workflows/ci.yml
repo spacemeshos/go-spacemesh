@@ -268,7 +268,9 @@ jobs:
       - filter-changes
       - dockerpush
     timeout-minutes: 90
-    concurrency: ${{ github.workflow }}-${{ github.ref }}
+    concurrency:
+      group: ${{ github.base_ref == 'staging' && format('{0}-staging', github.workflow) || format('{0}-{1}', github.workflow, github.ref) }}
+      cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
     steps:
       - uses: actions/checkout@v3
 
@@ -326,7 +328,7 @@ jobs:
           size: 50
           bootstrap: 10m
           level: info
-          clusters: 2
+          clusters: 4
         run: make -C systest run test_name=.
 
       - name: Run tests II
@@ -339,7 +341,7 @@ jobs:
           size: 30
           bootstrap: 10m
           level: info
-          clusters: 2
+          clusters: 4
         run: make -C systest run test_name=.
 
       - name: Delete pod

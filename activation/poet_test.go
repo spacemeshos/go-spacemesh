@@ -3,6 +3,7 @@ package activation_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
@@ -19,9 +20,15 @@ type gatewayService struct {
 	pb.UnimplementedGatewayServiceServer
 }
 
+func hash32FromBytes(b []byte) types.Hash32 {
+	hash := types.Hash32{}
+	hash.SetBytes(b)
+	return hash
+}
+
 func (*gatewayService) VerifyChallenge(ctx context.Context, req *pb.VerifyChallengeRequest) (*pb.VerifyChallengeResponse, error) {
 	return &pb.VerifyChallengeResponse{
-		Hash: []byte("hash"),
+		Hash: hash32FromBytes([]byte("hash")).Bytes(),
 	}, nil
 }
 
@@ -38,7 +45,9 @@ func TestHTTPPoet(t *testing.T) {
 	t.Cleanup(func() { r.NoError(eg.Wait()) })
 	t.Cleanup(gtw.Stop)
 
-	c, err := activation.NewHTTPPoetHarness(true, activation.WithGateway(gtw.Target()))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	c, err := activation.NewHTTPPoetHarness(ctx, activation.WithGateway(gtw.Target()))
 	r.NoError(err)
 	r.NotNil(c)
 
@@ -49,9 +58,11 @@ func TestHTTPPoet(t *testing.T) {
 		}
 	})
 
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	ch := types.RandomHash()
-	poetRound, err := c.Submit(context.Background(), ch.Bytes(), signing.NewEdSigner().Sign(ch.Bytes()))
+	poetRound, err := c.Submit(context.Background(), ch.Bytes(), signer.Sign(ch.Bytes()))
 	r.NoError(err)
 	r.NotNil(poetRound)
-	r.Equal([]byte("hash"), poetRound.ChallengeHash)
+	r.Equal(hash32FromBytes([]byte("hash")), poetRound.ChallengeHash)
 }

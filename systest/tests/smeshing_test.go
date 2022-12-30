@@ -9,6 +9,8 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
@@ -93,7 +95,7 @@ func testSmeshing(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 			beaconSet[prettyHex(edata.Beacon)] = struct{}{}
 		}
 	}
-	requireEqualEligibilities(t, created)
+	requireEqualEligibilities(tctx, t, created)
 	requireEqualProposals(t, created, includedAll)
 	for epoch := range beacons {
 		require.Len(t, beacons[epoch], 1, "epoch=%d", epoch)
@@ -124,7 +126,7 @@ func requireEqualProposals(tb testing.TB, reference map[uint32][]*pb.Proposal, r
 	}
 }
 
-func requireEqualEligibilities(tb testing.TB, proposals map[uint32][]*pb.Proposal) {
+func requireEqualEligibilities(tctx *testcontext.Context, tb testing.TB, proposals map[uint32][]*pb.Proposal) {
 	tb.Helper()
 
 	aggregated := map[string]int{}
@@ -133,6 +135,14 @@ func requireEqualEligibilities(tb testing.TB, proposals map[uint32][]*pb.Proposa
 			aggregated[string(proposal.Smesher.Id)] += len(proposal.Eligibilities)
 		}
 	}
+
+	tctx.Log.Desugar().Info("aggregated eligibilities", zap.Object("per-smesher", zapcore.ObjectMarshalerFunc(func(enc zapcore.ObjectEncoder) error {
+		for smesher, eligibilities := range aggregated {
+			enc.AddInt(prettyHex([]byte(smesher)), eligibilities)
+		}
+		return nil
+	})))
+
 	referenceEligibilities := -1
 	for smesher, eligibilities := range aggregated {
 		if referenceEligibilities < 0 {

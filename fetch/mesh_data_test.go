@@ -206,8 +206,8 @@ func TestFetch_GetBlocks(t *testing.T) {
 
 func TestFetch_GetBallots(t *testing.T) {
 	blts := []*types.Ballot{
-		genLayerBallot(types.NewLayerID(10)),
-		genLayerBallot(types.NewLayerID(20)),
+		genLayerBallot(t, types.NewLayerID(10)),
+		genLayerBallot(t, types.NewLayerID(20)),
 	}
 	ballotIDs := types.ToBallotIDs(blts)
 	f := createFetch(t)
@@ -222,7 +222,8 @@ func TestFetch_GetBallots(t *testing.T) {
 	require.NoError(t, eg.Wait())
 }
 
-func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.Proposal {
+func genLayerProposal(tb testing.TB, layerID types.LayerID, txs []types.TransactionID) *types.Proposal {
+	tb.Helper()
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
@@ -238,17 +239,19 @@ func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.P
 			TxIDs: txs,
 		},
 	}
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(tb, err)
 	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(p.Bytes())
 	p.Initialize()
 	return p
 }
 
-func genLayerBallot(layerID types.LayerID) *types.Ballot {
+func genLayerBallot(tb testing.TB, layerID types.LayerID) *types.Ballot {
 	b := types.RandomBallot()
 	b.LayerIndex = layerID
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(tb, err)
 	b.Signature = signer.Sign(b.SignedBytes())
 	b.Initialize()
 	return b
@@ -267,8 +270,8 @@ func genLayerBlock(layerID types.LayerID, txs []types.TransactionID) *types.Bloc
 
 func TestFetch_GetProposals(t *testing.T) {
 	proposals := []*types.Proposal{
-		genLayerProposal(types.NewLayerID(10), nil),
-		genLayerProposal(types.NewLayerID(20), nil),
+		genLayerProposal(t, types.NewLayerID(10), nil),
+		genLayerProposal(t, types.NewLayerID(20), nil),
 	}
 	proposalIDs := types.ToProposalIDs(proposals)
 	f := createFetch(t)
@@ -283,8 +286,8 @@ func TestFetch_GetProposals(t *testing.T) {
 	require.NoError(t, eg.Wait())
 }
 
-func genTx(t *testing.T, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
-	t.Helper()
+func genTx(tb testing.TB, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
+	tb.Helper()
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
 		nonce,
 	)
@@ -300,11 +303,13 @@ func genTx(t *testing.T, signer *signing.EdSigner, dest types.Address, amount, n
 	return tx
 }
 
-func genTransactions(t *testing.T, num int) []*types.Transaction {
-	t.Helper()
+func genTransactions(tb testing.TB, num int) []*types.Transaction {
+	tb.Helper()
 	txs := make([]*types.Transaction, 0, num)
 	for i := 0; i < num; i++ {
-		tx := genTx(t, signing.NewEdSigner(), types.Address{1}, 1, 1, 1)
+		signer, err := signing.NewEdSigner()
+		require.NoError(tb, err)
+		tx := genTx(tb, signer, types.Address{1}, 1, 1, 1)
 		txs = append(txs, &tx)
 	}
 	return txs
@@ -341,15 +346,16 @@ func TestFetch_GetTxs(t *testing.T) {
 	}
 }
 
-func genATXs(t *testing.T, num uint32) []*types.ActivationTx {
-	t.Helper()
-	sig := signing.NewEdSigner()
+func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
+	tb.Helper()
+	sig, err := signing.NewEdSigner()
+	require.NoError(tb, err)
 	atxs := make([]*types.ActivationTx, 0, num)
 	for i := uint32(0); i < num; i++ {
 		atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{1, 2, 3}, &types.NIPost{}, i, nil, nil)
-		require.NoError(t, activation.SignAtx(sig, atx))
-		require.NoError(t, atx.CalcAndSetID())
-		require.NoError(t, atx.CalcAndSetNodeID())
+		require.NoError(tb, activation.SignAtx(sig, atx))
+		require.NoError(tb, atx.CalcAndSetID())
+		require.NoError(tb, atx.CalcAndSetNodeID())
 		atxs = append(atxs, atx)
 	}
 	return atxs

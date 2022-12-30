@@ -8,7 +8,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 var (
@@ -42,29 +41,28 @@ type ChallengeVerifier interface {
 }
 
 type challengeVerifier struct {
-	atxDB             atxProvider
-	signatureVerifier signing.VerifyExtractor
-	cfg               PostConfig
-	goldenATXID       types.ATXID
-	layersPerEpoch    uint32
+	atxDB          atxProvider
+	keyExtractor   keyExtractor
+	cfg            PostConfig
+	goldenATXID    types.ATXID
+	layersPerEpoch uint32
 }
 
-func NewChallengeVerifier(cdb atxProvider, signatureVerifier signing.VerifyExtractor, cfg PostConfig, goldenATX types.ATXID, layersPerEpoch uint32) ChallengeVerifier {
+func NewChallengeVerifier(cdb atxProvider, signatureVerifier keyExtractor, cfg PostConfig, goldenATX types.ATXID, layersPerEpoch uint32) ChallengeVerifier {
 	return &challengeVerifier{
-		atxDB:             cdb,
-		signatureVerifier: signatureVerifier,
-		cfg:               cfg,
-		goldenATXID:       goldenATX,
-		layersPerEpoch:    layersPerEpoch,
+		atxDB:          cdb,
+		keyExtractor:   signatureVerifier,
+		cfg:            cfg,
+		goldenATXID:    goldenATX,
+		layersPerEpoch: layersPerEpoch,
 	}
 }
 
 func (v *challengeVerifier) Verify(ctx context.Context, challengeBytes, signature []byte) (*ChallengeVerificationResult, error) {
-	pubkey, err := v.signatureVerifier.Extract(challengeBytes, signature)
+	nodeID, err := v.keyExtractor.ExtractNodeID(challengeBytes, signature)
 	if err != nil {
 		return nil, ErrSignatureInvalid
 	}
-	nodeID := types.BytesToNodeID(pubkey.Bytes())
 
 	challenge := types.PoetChallenge{}
 	if err := codec.Decode(challengeBytes, &challenge); err != nil {
@@ -86,7 +84,7 @@ func (v *challengeVerifier) Verify(ctx context.Context, challengeBytes, signatur
 }
 
 func (v *challengeVerifier) verifyChallenge(ctx context.Context, challenge *types.PoetChallenge, nodeID types.NodeID) error {
-	log.With().Info("verifying challenge", log.Object("challenge", challenge))
+	log.GetLogger().WithContext(ctx).With().Info("Verifying challenge", log.Object("challenge", challenge))
 
 	if err := validateNumUnits(&v.cfg, challenge.NumUnits); err != nil {
 		return fmt.Errorf("%w: %v", ErrChallengeInvalid, err)

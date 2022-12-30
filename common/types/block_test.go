@@ -28,7 +28,8 @@ func Test_CertifyMessage(t *testing.T) {
 			Proof:          []byte("not a fraud"),
 		},
 	}
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	msg.Signature = signer.Sign(msg.Bytes())
 	data, err := codec.Encode(&msg)
 	require.NoError(t, err)

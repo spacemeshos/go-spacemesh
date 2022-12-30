@@ -3,6 +3,7 @@ package activation
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,10 +11,17 @@ import (
 
 	"github.com/spacemeshos/poet/integration"
 	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api"
+	"github.com/spacemeshos/poet/shared"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
+)
+
+var (
+	ErrNotFound    = errors.New("not found")
+	ErrUnavailable = errors.New("unavailable")
 )
 
 // HTTPPoetHarness utilizes a local self-contained poet server instance
@@ -35,14 +43,25 @@ func WithGateway(endpoint string) HTTPPoetOpt {
 	}
 }
 
+func WithGenesis(genesis time.Time) HTTPPoetOpt {
+	return func(cfg *integration.ServerConfig) {
+		cfg.Genesis = genesis
+	}
+}
+
+func WithEpochDuration(epoch time.Duration) HTTPPoetOpt {
+	return func(cfg *integration.ServerConfig) {
+		cfg.EpochDuration = epoch
+	}
+}
+
 // NewHTTPPoetHarness returns a new instance of HTTPPoetHarness.
-func NewHTTPPoetHarness(disableBroadcast bool, opts ...HTTPPoetOpt) (*HTTPPoetHarness, error) {
+func NewHTTPPoetHarness(ctx context.Context, opts ...HTTPPoetOpt) (*HTTPPoetHarness, error) {
 	cfg, err := integration.DefaultConfig()
 	if err != nil {
 		return nil, fmt.Errorf("default integration config: %w", err)
 	}
 
-	cfg.DisableBroadcast = disableBroadcast
 	cfg.Reset = true
 	cfg.Genesis = time.Now().Add(5 * time.Second)
 	cfg.EpochDuration = 4 * time.Second
@@ -50,8 +69,6 @@ func NewHTTPPoetHarness(disableBroadcast bool, opts ...HTTPPoetOpt) (*HTTPPoetHa
 		opt(cfg)
 	}
 
-	ctx, cancel := context.WithDeadline(context.Background(), cfg.Genesis)
-	defer cancel()
 	h, err := integration.NewHarness(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("new harness: %w", err)
@@ -69,8 +86,9 @@ func NewHTTPPoetHarness(disableBroadcast bool, opts ...HTTPPoetOpt) (*HTTPPoetHa
 
 // HTTPPoetClient implements PoetProvingServiceClient interface.
 type HTTPPoetClient struct {
-	baseURL    string
-	ctxFactory func(ctx context.Context) (context.Context, context.CancelFunc)
+	baseURL       string
+	ctxFactory    func(ctx context.Context) (context.Context, context.CancelFunc)
+	poetServiceID *types.PoetServiceID
 }
 
 func defaultPoetClientFunc(target string) PoetProvingServiceClient {
@@ -108,19 +126,60 @@ func (c *HTTPPoetClient) Submit(ctx context.Context, challenge []byte, signature
 	if err := c.req(ctx, "POST", "/submit", &request, &resBody); err != nil {
 		return nil, err
 	}
-
-	return &types.PoetRound{ID: resBody.RoundId, ChallengeHash: resBody.Hash}, nil
+	roundEnd := time.Time{}
+	if resBody.RoundEnd != nil {
+		roundEnd = time.Now().Add(resBody.RoundEnd.AsDuration())
+	}
+	if len(resBody.Hash) != types.Hash32Length {
+		return nil, fmt.Errorf("invalid hash len (%d instead of %d)", len(resBody.Hash), types.Hash32Length)
+	}
+	hash := types.Hash32{}
+	hash.SetBytes(resBody.Hash)
+	return &types.PoetRound{ID: resBody.RoundId, ChallengeHash: hash, End: types.RoundEnd(roundEnd)}, nil
 }
 
 // PoetServiceID returns the public key of the PoET proving service.
-func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) ([]byte, error) {
+func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) (types.PoetServiceID, error) {
+	if c.poetServiceID != nil {
+		return *c.poetServiceID, nil
+	}
 	resBody := rpcapi.GetInfoResponse{}
 
 	if err := c.req(ctx, "GET", "/info", nil, &resBody); err != nil {
 		return nil, err
 	}
 
-	return resBody.ServicePubKey, nil
+	id := types.PoetServiceID(resBody.ServicePubKey)
+	c.poetServiceID = &id
+	return id, nil
+}
+
+// GetProof implements PoetProvingServiceClient.
+func (c *HTTPPoetClient) GetProof(ctx context.Context, roundID string) (*types.PoetProofMessage, error) {
+	resBody := rpcapi.GetProofResponse{}
+
+	if err := c.req(ctx, "GET", fmt.Sprintf("/proofs/%s", roundID), nil, &resBody); err != nil {
+		return nil, fmt.Errorf("get proof: %w", err)
+	}
+
+	proof := types.PoetProofMessage{
+		PoetProof: types.PoetProof{
+			MerkleProof: shared.MerkleProof{
+				Root:         resBody.Proof.GetProof().GetRoot(),
+				ProvenLeaves: resBody.Proof.GetProof().GetProvenLeaves(),
+				ProofNodes:   resBody.Proof.GetProof().GetProofNodes(),
+			},
+			Members:   resBody.Proof.GetMembers(),
+			LeafCount: resBody.Proof.GetLeaves(),
+		},
+		PoetServiceID: resBody.Pubkey,
+		RoundID:       roundID,
+	}
+	if c.poetServiceID == nil {
+		c.poetServiceID = &proof.PoetServiceID
+	}
+
+	return &proof, nil
 }
 
 func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, reqBody proto.Message, resBody proto.Message) error {
@@ -151,8 +210,15 @@ func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, 
 	if err != nil {
 		return fmt.Errorf("failed to read response body (%w)", err)
 	}
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("response status code: %d, body: %s", res.StatusCode, string(data))
+
+	log.GetLogger().WithContext(ctx).With().Debug("response from poet", log.String("status", res.Status), log.String("body", string(data)))
+
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		return fmt.Errorf("%w: response status code: %s, body: %s", ErrNotFound, res.Status, string(data))
+	case http.StatusServiceUnavailable:
+		return fmt.Errorf("%w: response status code: %s, body: %s", ErrUnavailable, res.Status, string(data))
 	}
 
 	if resBody != nil {
