@@ -76,7 +76,7 @@ func (s *state) addVote(proposal string, vote uint, voteWeight *big.Int) {
 	if _, ok := s.votesMargin[proposal]; !ok {
 		// voteMargin is updated during the proposal phase.
 		// ignore votes on proposals not in the original proposals.
-		s.logger.Warning("ignoring vote for unknown proposal", log.Binary("proposal", []byte(proposal)))
+		s.logger.With().Warning("ignoring vote for unknown proposal", log.Binary("proposal", []byte(proposal)))
 		return
 	}
 	if vote == up {

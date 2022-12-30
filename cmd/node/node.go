@@ -86,7 +86,6 @@ const (
 	TxHandlerLogger        = "txHandler"
 	ProposalBuilderLogger  = "proposalBuilder"
 	ProposalListenerLogger = "proposalListener"
-	PoetListenerLogger     = "poetListener"
 	NipostBuilderLogger    = "nipostBuilder"
 	Fetcher                = "fetcher"
 	TimeSyncLogger         = "timesync"
@@ -298,7 +297,6 @@ type App struct {
 	postSetupMgr     *activation.PostSetupManager
 	atxBuilder       *activation.Builder
 	atxHandler       *activation.Handler
-	poetListener     *activation.PoetListener
 	edSgn            *signing.EdSigner
 	keyExtractor     *signing.PubKeyExtractor
 	beaconProtocol   *beacon.ProtocolDriver
@@ -669,8 +667,6 @@ func (app *App) initServices(ctx context.Context,
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)))
 
-	poetListener := activation.NewPoetListener(poetDb, app.addLogger(PoetListenerLogger, lg))
-
 	postSetupMgr, err := activation.NewPostSetupManager(nodeID, app.Config.POST, app.addLogger(PostLogger, lg), cdb, goldenATXID)
 	if err != nil {
 		app.log.Panic("failed to create post setup manager: %v", err)
@@ -727,7 +723,6 @@ func (app *App) initServices(ctx context.Context,
 		},
 		atxHandler.HandleGossipAtx))
 	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
-	app.host.Register(pubsub.PoetProofProtocol, poetListener.HandlePoetProofMessage)
 	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()))
 	app.host.Register(pubsub.BlockCertify, pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage))
 
@@ -737,7 +732,6 @@ func (app *App) initServices(ctx context.Context,
 	app.syncer = newSyncer
 	app.clock = clock
 	app.svm = state
-	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	app.postSetupMgr = postSetupMgr
 	app.atxHandler = atxHandler
@@ -823,7 +817,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 	}
 	if apiConf.StartGatewayService {
 		verifier := activation.NewChallengeVerifier(&app.atxDB, app.keyExtractor, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
-		registerService(grpcserver.NewGatewayService(app.host, verifier))
+		registerService(grpcserver.NewGatewayService(verifier))
 	}
 	if apiConf.StartGlobalStateService {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
