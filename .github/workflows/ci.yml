@@ -210,40 +210,13 @@ jobs:
           annotate_only: true
           fail_on_failure: ${{ matrix.allow-failure == 'false' }}
 
-  # checkpoint and print a single, clean status message to slack
-  ci-stage1:
-    # run regardless of status of previous jobs but skip if the required secret is not accessible
-    if: always()
-    needs:
-      - filter-changes
-      - quicktests
-      - lint
-      - unittests
-    runs-on: ubuntu-latest
-    env:
-      # short-circuit success if no non-doc files were modified
-      # this is the easiest way to access success/failure state of previous jobs in this workflow
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.lint.result == 'success' && needs.unittests.result == 'success')) && 'success' || 'failure' }}
-    steps:
-      - uses: act10ns/slack@v2
-        name: Slack notification
-        # skip if the secret is not accessible
-        if: env.SLACK_WEBHOOK_URL
-        with:
-          status: ${{ env.status }}
-      - name: Mark the job as succeeded
-        if: env.status == 'success'
-        run: exit 0
-      - name: Mark the job as failed
-        if: env.status != 'success'
-        run: exit 1
-
-  ## stage 2
   dockerpush:
     # should take 2-3 mins
     timeout-minutes: 7
     needs:
-      - ci-stage1
+      - quicktests
+      - lint
+      - unittests
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -251,7 +224,6 @@ jobs:
       - name: push to docker hub
         run: make dockerpush
 
-  ## stage 3: finally run system tests in parallel if everything else passes
   ## Run new system tests
   systest:
     runs-on: ubuntu-latest
@@ -342,27 +314,25 @@ jobs:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
         run: make -C systest clean
 
-  # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
-  # all tests that are required to pass before a bors merge must be listed here!
-  ci-stage2:
-    if: always() && needs.ci-stage1.result == 'success'
+  # print a single, clean status message to slack
+  slack_notification:
+    # run regardless of status of previous jobs but skip if the required secret is not accessible
+    if: always()
     needs:
       - filter-changes
-      - ci-stage1
+      - quicktests
+      - lint
+      - unittests
       - systest
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || needs.systest.result == 'success') && 'success' || 'failure' }}
+      # this is the easiest way to access success/failure state of previous jobs in this workflow
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.lint.result == 'success' && needs.unittests.result == 'success' && needs.systest.result == 'success')) && 'success' || 'failure' }}
     steps:
-      # print a single, clean status update to slack
       - uses: act10ns/slack@v2
         name: Slack notification
+        # skip if the secret is not accessible
+        if: env.SLACK_WEBHOOK_URL
         with:
           status: ${{ env.status }}
-      - name: Mark the job as succeeded
-        if: env.status == 'success'
-        run: exit 0
-      - name: Mark the job as failed
-        if: env.status != 'success'
-        run: exit 1
