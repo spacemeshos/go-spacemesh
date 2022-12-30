@@ -315,20 +315,21 @@ jobs:
         run: make -C systest clean
 
   # print a single, clean status message to slack
-  slack_notification:
+  ci-status:
     # run regardless of status of previous jobs but skip if the required secret is not accessible
     if: always()
     needs:
       - filter-changes
       - quicktests
       - lint
+      - build
       - unittests
       - systest
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
       # this is the easiest way to access success/failure state of previous jobs in this workflow
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.lint.result == 'success' && needs.unittests.result == 'success' && needs.systest.result == 'success')) && 'success' || 'failure' }}
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.build.result == 'success' && needs.lint.result == 'success' && needs.unittests.result == 'success' && needs.systest.result == 'success')) && 'success' || 'failure' }}
     steps:
       - uses: act10ns/slack@v2
         name: Slack notification
@@ -336,3 +337,9 @@ jobs:
         if: env.SLACK_WEBHOOK_URL
         with:
           status: ${{ env.status }}
+      - name: Mark the job as succeeded
+        if: env.status == 'success'
+        run: exit 0
+      - name: Mark the job as failed
+        if: env.status != 'success'
+        run: exit 1
