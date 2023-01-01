@@ -110,8 +110,10 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 }
 
 func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig signer, numUnits uint32) {
+	nodeID := sig.NodeID()
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PubLayerID: lid},
+		&nodeID,
 		types.Address{},
 		nil,
 		numUnits,
@@ -119,7 +121,7 @@ func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig sig
 		nil,
 	)
 
-	require.NoError(tb, activation.SignAtx(sig, atx))
+	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(tb, err)
 	require.NoError(tb, atxs.Add(db, vAtx, time.Now().Add(-1*time.Second)))

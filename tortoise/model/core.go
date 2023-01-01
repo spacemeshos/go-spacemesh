@@ -140,8 +140,9 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			PubLayerID: ev.LayerID,
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
-		atx := types.NewActivationTx(nipost, addr, nil, c.units, nil, nil)
-		if err := activation.SignAtx(c.signer, atx); err != nil {
+		nodeID := c.signer.NodeID()
+		atx := types.NewActivationTx(nipost, &nodeID, addr, nil, c.units, nil, nil)
+		if err := activation.SignAndFinalizeAtx(c.signer, atx); err != nil {
 			panic(err)
 		}
 		vAtx, err := atx.Verify(1, 2)
