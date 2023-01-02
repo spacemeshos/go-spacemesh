@@ -52,7 +52,7 @@ func TestLogLevel(t *testing.T) {
 	r.NoError(lvl.UnmarshalText([]byte("INFO")))
 	svcName := "mysvc"
 	subLogger := logger.SetLevel(&lvl).WithName(svcName)
-	prefix := fmt.Sprintf("%s.%-13s", loggerName, svcName)
+	prefix := fmt.Sprintf("%s.%s", loggerName, svcName)
 
 	// Test the default app logger
 	// This is NOT hooked
