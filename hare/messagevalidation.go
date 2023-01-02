@@ -130,10 +130,10 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 		return errNilInner
 	}
 
-	currentRound := currentK % 4
+	currentRound := currentK % RoundsPerIteration
 	// the message must match the current iteration unless it is a notify or pre-round message
-	currentIteration := currentK / 4
-	msgIteration := m.InnerMsg.Round / 4
+	currentIteration := currentK / RoundsPerIteration
+	msgIteration := m.InnerMsg.Round / RoundsPerIteration
 	sameIter := currentIteration == msgIteration
 
 	// first validate pre-round and notify
@@ -241,7 +241,7 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(ctx context.Contex
 		return false
 	}
 
-	claimedRound := m.InnerMsg.Round % 4
+	claimedRound := m.InnerMsg.Round % RoundsPerIteration
 	switch m.InnerMsg.Type {
 	case pre:
 		return true

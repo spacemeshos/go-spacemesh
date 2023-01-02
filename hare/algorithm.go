@@ -210,7 +210,7 @@ func newConsensusProcess(cfg config.Config, layer types.LayerID, s *Set, oracle 
 
 // Returns the iteration number from a given round counter.
 func iterationFromCounter(roundCounter uint32) uint32 {
-	return roundCounter / 4
+	return roundCounter / RoundsPerIteration
 }
 
 // Start the consensus process.
@@ -785,7 +785,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 }
 
 func (proc *consensusProcess) currentRound() uint32 {
-	return proc.getRound() % 4
+	return proc.getRound() % RoundsPerIteration
 }
 
 // returns a function to validate status messages.
