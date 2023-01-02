@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -48,8 +50,7 @@ type Broker struct {
 	limit          int // max number of simultaneous consensus processes
 	ctx            context.Context
 	cancel         context.CancelFunc
-	eventLoopWg    sync.WaitGroup
-	queueMessageWg sync.WaitGroup
+	eg             errgroup.Group
 }
 
 func newBroker(peer p2p.Peer, eValidator validator, stateQuerier stateQuerier, syncState system.SyncStateProvider, layersPerEpoch uint16, limit int, log log.Log) *Broker {
@@ -86,8 +87,10 @@ func (b *Broker) Start(ctx context.Context) error {
 	b.ctx, b.cancel = context.WithCancel(ctx)
 	b.queue = priorityq.New(b.ctx)
 
-	b.eventLoopWg.Add(1)
-	go b.eventLoop(log.WithNewSessionID(ctx))
+	b.eg.Go(func() error {
+		b.eventLoop(log.WithNewSessionID(ctx))
+		return nil
+	})
 
 	return nil
 }
@@ -167,9 +170,6 @@ func (b *Broker) HandleMessage(ctx context.Context, peer p2p.Peer, msg []byte) p
 }
 
 func (b *Broker) queueMessage(ctx context.Context, peer p2p.Peer, msg []byte) (*msgRPC, error) {
-	b.queueMessageWg.Add(1)
-	defer b.queueMessageWg.Done()
-
 	logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.getLatestLayer()))
 	logger.Debug("hare broker received inbound gossip message")
 
@@ -199,8 +199,6 @@ func (b *Broker) queueMessage(ctx context.Context, peer p2p.Peer, msg []byte) (*
 
 // listens to incoming messages and incoming tasks.
 func (b *Broker) eventLoop(ctx context.Context) {
-	defer b.eventLoopWg.Done()
-
 	for {
 		b.WithContext(ctx).With().Debug("broker queue sizes",
 			log.Int("msg_queue_size", len(b.queueChannel)),
@@ -451,9 +449,8 @@ func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
 // Close closes broker.
 func (b *Broker) Close() {
 	b.cancel()
-	b.queueMessageWg.Wait()
-	b.eventLoopWg.Wait()
 	close(b.queueChannel)
+	b.eg.Wait()
 }
 
 func (b *Broker) getLatestLayer() types.LayerID {

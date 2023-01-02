@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -92,10 +94,10 @@ type Hare struct {
 	nid types.NodeID
 
 	totalCPs int32
-	wg       sync.WaitGroup
 
 	ctx    context.Context
 	cancel context.CancelFunc
+	eg     errgroup.Group
 }
 
 // New returns a new Hare struct.
@@ -289,13 +291,14 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	}()
 
 	// call to start the calculation of active set size beforehand
-	go func() {
+	h.eg.Go(func() error {
 		// this is called only for its side effects, but at least print the error if it returns one
 		if isActive, err := h.rolacle.IsIdentityActiveOnConsensusView(ctx, h.nid, id); err != nil {
 			logger.With().Error("error checking if identity is active",
 				log.Bool("isActive", isActive), log.Err(err))
 		}
-	}()
+		return nil
+	})
 
 	logger.With().Debug("hare got tick, sleeping", log.String("delta", fmt.Sprint(h.networkDelta)))
 
@@ -407,8 +410,6 @@ func (h *Hare) getResult(lid types.LayerID) ([]types.ProposalID, error) {
 
 // listens to outputs arriving from consensus processes.
 func (h *Hare) outputCollectionLoop(ctx context.Context) {
-	defer h.wg.Done()
-
 	h.WithContext(ctx).With().Info("starting collection loop")
 	for {
 		select {
@@ -438,8 +439,6 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 
 // listens to new layers.
 func (h *Hare) tickLoop(ctx context.Context) {
-	defer h.wg.Done()
-
 	for layer := h.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
 		select {
 		case <-h.layerClock.AwaitLayer(layer):
@@ -472,9 +471,14 @@ func (h *Hare) Start(ctx context.Context) error {
 		return fmt.Errorf("start broker: %w", err)
 	}
 
-	h.wg.Add(2)
-	go h.tickLoop(ctxTickLoop)
-	go h.outputCollectionLoop(ctxOutputLoop)
+	h.eg.Go(func() error {
+		h.tickLoop(ctxTickLoop)
+		return nil
+	})
+	h.eg.Go(func() error {
+		h.outputCollectionLoop(ctxOutputLoop)
+		return nil
+	})
 
 	return nil
 }
@@ -482,5 +486,5 @@ func (h *Hare) Start(ctx context.Context) error {
 // Close sends a termination signal to hare goroutines and waits for their termination.
 func (h *Hare) Close() {
 	h.cancel()
-	h.wg.Wait()
+	h.eg.Wait()
 }

@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
@@ -154,6 +156,7 @@ type consensusProcess struct {
 
 	ctx               context.Context
 	cancel            context.CancelFunc
+	eg                errgroup.Group
 	mu                sync.RWMutex
 	layer             types.LayerID
 	oracle            Rolacle // the roles oracle provider
@@ -229,7 +232,10 @@ func (proc *consensusProcess) Start(ctx context.Context) error {
 		proc.cancel()
 	}
 	proc.ctx, proc.cancel = context.WithCancel(ctx)
-	go proc.eventLoop()
+	proc.eg.Go(func() error {
+		proc.eventLoop()
+		return nil
+	})
 
 	return nil
 }
@@ -249,6 +255,7 @@ func (proc *consensusProcess) SetInbox(inbox chan *Msg) {
 
 func (proc *consensusProcess) terminate() {
 	proc.cancel()
+	proc.eg.Wait()
 }
 
 func (proc *consensusProcess) terminating() bool {
@@ -269,14 +276,14 @@ func (proc *consensusProcess) eventLoop() {
 		log.Int("set_size", proc.value.Size()))
 
 	// check participation and send message
-	go func() {
+	proc.eg.Go(func() error {
 		// check participation
 		if proc.shouldParticipate(ctx) {
 			// set pre-round InnerMsg and send
 			builder, err := proc.initDefaultBuilder(proc.value)
 			if err != nil {
 				logger.With().Error("failed to init msg builder", log.Err(err))
-				return
+				return nil
 			}
 			m := builder.SetType(pre).Sign(proc.signing).Build()
 			proc.sendMessage(ctx, m)
@@ -284,7 +291,8 @@ func (proc *consensusProcess) eventLoop() {
 			logger.With().Debug("should not participate",
 				log.Uint32("current_round", proc.getRound()))
 		}
-	}()
+		return nil
+	})
 
 	endOfRound := proc.clock.AwaitEndOfRound(preRound)
 
@@ -680,7 +688,10 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 	// handle pending messages
 	pendingProcess := proc.pending
 	proc.pending = make(map[string]*Msg, proc.cfg.N)
-	go proc.handlePending(pendingProcess)
+	proc.eg.Go(func() error {
+		proc.handlePending(pendingProcess)
+		return nil
+	})
 }
 
 // init a new message builder with the current state (s, k, ki) for this instance.
