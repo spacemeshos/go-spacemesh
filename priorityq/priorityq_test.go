@@ -1,6 +1,7 @@
 package priorityq
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ var defLen = 1000
 
 func TestPriorityQ_Write(t *testing.T) {
 	r := require.New(t)
-	pq := New()
+	pq := New(context.Background())
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
@@ -37,7 +38,9 @@ func TestPriorityQ_Write(t *testing.T) {
 
 func TestPriorityQ_Read(t *testing.T) {
 	r := require.New(t)
-	pq := New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	pq := New(ctx)
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
@@ -90,14 +93,16 @@ func TestPriorityQ_Read(t *testing.T) {
 	}()
 
 	time.Sleep(1500 * time.Millisecond)
-	pq.Close()
+	cancel()
 	rg.Wait()
 	r.Equal(3*defLen, i)
 }
 
 func TestPriorityQ_Close(t *testing.T) {
 	r := require.New(t)
-	pq := New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	pq := New(ctx)
 	prios := []Priority{Low, Mid, High}
 	for i := 0; i < 1000; i++ {
 		r.NoError(pq.Write(Priority(i%len(prios)), []byte("LOLOLOLLZ")))
@@ -124,6 +129,6 @@ func TestPriorityQ_Close(t *testing.T) {
 	}()
 
 	// close it right away
-	pq.Close()
+	cancel()
 	<-c
 }

@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -30,7 +29,6 @@ type msgRPC struct {
 // Broker is the dispatcher of incoming Hare messages.
 // The broker validates that the sender is eligible and active and forwards the message to the corresponding outbox.
 type Broker struct {
-	util.Closer
 	log.Log
 	mu             sync.RWMutex
 	peer           p2p.Peer
@@ -48,14 +46,14 @@ type Broker struct {
 	isStarted      bool
 	minDeleted     types.LayerID
 	limit          int // max number of simultaneous consensus processes
-	stop           context.CancelFunc
+	ctx            context.Context
+	cancel         context.CancelFunc
 	eventLoopWg    sync.WaitGroup
 	queueMessageWg sync.WaitGroup
 }
 
-func newBroker(peer p2p.Peer, eValidator validator, stateQuerier stateQuerier, syncState system.SyncStateProvider, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
-	return &Broker{
-		Closer:         closer,
+func newBroker(peer p2p.Peer, eValidator validator, stateQuerier stateQuerier, syncState system.SyncStateProvider, layersPerEpoch uint16, limit int, log log.Log) *Broker {
+	b := &Broker{
 		Log:            log,
 		peer:           peer,
 		eValidator:     eValidator,
@@ -68,9 +66,11 @@ func newBroker(peer p2p.Peer, eValidator validator, stateQuerier stateQuerier, s
 		latestLayer:    types.GetEffectiveGenesis(),
 		limit:          limit,
 		minDeleted:     types.GetEffectiveGenesis(),
-		queue:          priorityq.New(),
+		queue:          priorityq.New(context.Background()),
 		queueChannel:   make(chan struct{}, inboxCapacity),
 	}
+	b.ctx, b.cancel = context.WithCancel(context.Background())
+	return b
 }
 
 // Start listening to Hare messages (non-blocking).
@@ -80,9 +80,11 @@ func (b *Broker) Start(ctx context.Context) error {
 		return errors.New("hare broker already started")
 	}
 	b.isStarted = true
-	ctx, cancel := context.WithCancel(ctx)
-
-	b.stop = cancel
+	if b.cancel != nil {
+		b.cancel()
+	}
+	b.ctx, b.cancel = context.WithCancel(ctx)
+	b.queue = priorityq.New(b.ctx)
 
 	b.eventLoopWg.Add(1)
 	go b.eventLoop(log.WithNewSessionID(ctx))
@@ -134,9 +136,18 @@ func (b *Broker) validate(ctx context.Context, m *Message) error {
 	return fmt.Errorf("%w: msg %v, latest %v", errFutureMsg, msgInstID, latestLayer)
 }
 
+func (b *Broker) isClosed() bool {
+	select {
+	case <-b.ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
 // HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
 func (b *Broker) HandleMessage(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
-	if b.IsClosed() {
+	if b.isClosed() {
 		return pubsub.ValidationIgnore
 	}
 
@@ -179,7 +190,7 @@ func (b *Broker) queueMessage(ctx context.Context, peer p2p.Peer, msg []byte) (*
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case <-b.Closer.CloseChannel():
+	case <-b.ctx.Done():
 		return nil, errClosed
 	case b.queueChannel <- struct{}{}:
 	}
@@ -196,8 +207,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			log.Int("task_queue_size", len(b.tasks)))
 
 		select {
-		case <-b.Closer.CloseChannel():
-			b.queue.Close()
+		case <-b.ctx.Done():
 			return
 		case <-b.queueChannel:
 			logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.getLatestLayer()))
@@ -429,8 +439,7 @@ func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 	select {
 	case b.tasks <- f:
 		wg.Wait()
-	case <-b.Closer.CloseChannel():
-		// waiting on b.Closer.CloseChannel waits until termination is initiated
+	case <-b.ctx.Done():
 	}
 }
 
@@ -441,24 +450,10 @@ func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
 
 // Close closes broker.
 func (b *Broker) Close() {
-	b.Closer.Close()
-	<-b.CloseChannel()
+	b.cancel()
 	b.queueMessageWg.Wait()
 	b.eventLoopWg.Wait()
 	close(b.queueChannel)
-}
-
-// CloseChannel returns the channel to wait on for close signal.
-func (b *Broker) CloseChannel() chan struct{} {
-	ch := make(chan struct{})
-
-	go func() {
-		<-b.Closer.CloseChannel()
-		b.eventLoopWg.Wait()
-		close(ch)
-	}()
-
-	return ch
 }
 
 func (b *Broker) getLatestLayer() types.LayerID {

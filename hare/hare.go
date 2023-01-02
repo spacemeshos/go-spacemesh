@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -29,8 +28,6 @@ type consensusFactory func(cfg config.Config, instanceId types.LayerID, s *Set, 
 // Consensus represents an item that acts like a consensus process.
 type Consensus interface {
 	ID() types.LayerID
-	Close()
-	CloseChannel() chan struct{}
 	Start(ctx context.Context) error
 	SetInbox(chan *Msg)
 }
@@ -66,7 +63,6 @@ type LayerOutput struct {
 
 // Hare is the orchestrator that starts new consensus processes and collects their output.
 type Hare struct {
-	util.Closer
 	log.Log
 	db            *sql.Database
 	config        config.Config
@@ -97,6 +93,9 @@ type Hare struct {
 
 	totalCPs int32
 	wg       sync.WaitGroup
+
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // New returns a new Hare struct.
@@ -120,8 +119,6 @@ func New(
 	h := new(Hare)
 	h.db = db
 
-	h.Closer = util.NewCloser()
-
 	h.Log = logger
 	h.config = conf
 	h.publisher = publisher
@@ -138,7 +135,7 @@ func New(
 	}
 
 	ev := newEligibilityValidator(rolacle, layersPerEpoch, conf.N, conf.ExpectedLeaders, logger)
-	h.broker = newBroker(peer, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
+	h.broker = newBroker(peer, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, logger)
 	h.sign = sign
 	h.blockGenCh = ch
 
@@ -156,7 +153,7 @@ func New(
 	}
 
 	h.nid = nid
-
+	h.ctx, h.cancel = context.WithCancel(context.Background())
 	return h
 }
 
@@ -251,11 +248,20 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	return nil
 }
 
+func (h *Hare) isClosed() bool {
+	select {
+	case <-h.ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
 // the logic that happens when a new layer arrives.
 // this function triggers the start of new consensus processes.
 func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	logger := h.WithContext(ctx).WithFields(id)
-	if h.IsClosed() {
+	if h.isClosed() {
 		logger.Info("hare exiting")
 		return false, nil
 	}
@@ -297,7 +303,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	select {
 	case <-clock.AwaitWakeup():
 		break // keep going
-	case <-h.CloseChannel():
+	case <-h.ctx.Done():
 		return false, errors.New("closed while waiting for hare delta")
 	}
 
@@ -424,7 +430,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 			h.broker.Unregister(ctx, out.ID())
 			logger.With().Debug("number of consensus processes (after unregister)",
 				log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
-		case <-h.CloseChannel():
+		case <-h.ctx.Done():
 			return
 		}
 	}
@@ -442,7 +448,7 @@ func (h *Hare) tickLoop(ctx context.Context) {
 				continue
 			}
 			_, _ = h.onTick(ctx, layer)
-		case <-h.CloseChannel():
+		case <-h.ctx.Done():
 			return
 		}
 	}
@@ -450,6 +456,11 @@ func (h *Hare) tickLoop(ctx context.Context) {
 
 // Start starts listening for layers and outputs.
 func (h *Hare) Start(ctx context.Context) error {
+	if h.cancel != nil {
+		h.cancel()
+	}
+	h.ctx, h.cancel = context.WithCancel(ctx)
+	ctx = h.ctx
 	h.WithContext(ctx).With().Info("starting protocol", log.String("protocol", pubsub.HareProtocol))
 
 	// Create separate contexts for each subprocess. This allows us to better track the flow of messages.
@@ -470,6 +481,6 @@ func (h *Hare) Start(ctx context.Context) error {
 
 // Close sends a termination signal to hare goroutines and waits for their termination.
 func (h *Hare) Close() {
-	h.Closer.Close()
+	h.cancel()
 	h.wg.Wait()
 }

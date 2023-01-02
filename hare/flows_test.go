@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
@@ -29,7 +28,7 @@ import (
 
 type HareWrapper struct {
 	totalCP     uint32
-	termination util.Closer
+	termination chan struct{}
 	clock       *mockClock
 	hare        []*Hare
 	initialSets []*Set // all initial sets
@@ -40,7 +39,7 @@ func newHareWrapper(totalCp uint32) *HareWrapper {
 	hs := new(HareWrapper)
 	hs.clock = newMockClock()
 	hs.totalCP = totalCp
-	hs.termination = util.NewCloser()
+	hs.termination = make(chan struct{})
 	hs.outputs = make(map[types.LayerID][]*Set, 0)
 
 	return hs
@@ -76,7 +75,7 @@ func (his *HareWrapper) waitForTermination() {
 		}
 	}
 
-	his.termination.Close()
+	close(his.termination)
 }
 
 func (his *HareWrapper) WaitForTimedTermination(t *testing.T, timeout time.Duration) {
@@ -87,7 +86,7 @@ func (his *HareWrapper) WaitForTimedTermination(t *testing.T, timeout time.Durat
 	case <-timer:
 		t.Fatal("Timeout")
 		return
-	case <-his.termination.CloseChannel():
+	case <-his.termination:
 		for i := types.NewLayerID(1); !i.After(total); i = i.Add(1) {
 			his.checkResult(t, i)
 		}

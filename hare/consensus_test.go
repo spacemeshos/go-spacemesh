@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -31,7 +30,7 @@ type fullRolacle interface {
 }
 
 type HareSuite struct {
-	termination util.Closer
+	termination chan struct{}
 	procs       []*consensusProcess
 	dishonest   []*consensusProcess
 	brokers     []*Broker
@@ -42,7 +41,7 @@ type HareSuite struct {
 
 func newHareSuite() *HareSuite {
 	hs := new(HareSuite)
-	hs.termination = util.NewCloser()
+	hs.termination = make(chan struct{})
 	hs.outputs = make([]*Set, 0)
 
 	return hs
@@ -56,15 +55,14 @@ func (his *HareSuite) fill(set *Set, begin, end int) {
 
 func (his *HareSuite) waitForTermination() {
 	for _, p := range his.procs {
-		<-p.CloseChannel()
+		<-p.ctx.Done()
 		his.outputs = append(his.outputs, p.value)
 	}
 	for _, b := range his.brokers {
 		b.Close()
-		<-b.CloseChannel()
 	}
 
-	his.termination.Close()
+	close(his.termination)
 }
 
 func (his *HareSuite) WaitForTimedTermination(t *testing.T, timeout time.Duration) {
@@ -74,7 +72,7 @@ func (his *HareSuite) WaitForTimedTermination(t *testing.T, timeout time.Duratio
 	case <-timer:
 		t.Fatal("Timeout")
 		return
-	case <-his.termination.CloseChannel():
+	case <-his.termination:
 		his.checkResult(t)
 		return
 	}

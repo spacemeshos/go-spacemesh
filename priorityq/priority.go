@@ -2,10 +2,9 @@ package priorityq
 
 import (
 	"container/heap"
+	"context"
 	"errors"
 	"sync"
-
-	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
 var (
@@ -19,7 +18,6 @@ var (
 type PriorityQueue interface {
 	Write(priority Priority, value any) error
 	Read() (any, error)
-	Close()
 	Length() int
 }
 
@@ -46,24 +44,28 @@ type HeapQueueItem struct {
 
 // A HeapQueue implements priority.Interface using container/heap and holds Items.
 type HeapQueue struct {
-	util.Closer
+	ctx   context.Context
 	mu    sync.Mutex
 	queue []*HeapQueueItem
 }
 
 // New creates a new priority queue based on HeapQueue.
-func New() PriorityQueue {
+func New(ctx context.Context) PriorityQueue {
 	pq := &HeapQueue{
-		Closer: util.NewCloser(),
-		queue:  make([]*HeapQueueItem, 0),
+		ctx:   ctx,
+		queue: make([]*HeapQueueItem, 0),
 	}
 	heap.Init(pq)
 	return pq
 }
 
-// Close closes priority queue.
-func (pq *HeapQueue) Close() {
-	pq.Closer.Close()
+func (pq *HeapQueue) isClosed() bool {
+	select {
+	case <-pq.ctx.Done():
+		return true
+	default:
+		return false
+	}
 }
 
 // Length returns priority queue length. It's just a wrapper for Len now.
@@ -79,7 +81,7 @@ func (pq *HeapQueue) Read() (any, error) {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
 
-	if pq.IsClosed() {
+	if pq.isClosed() {
 		return nil, ErrClosed
 	}
 
@@ -96,7 +98,7 @@ func (pq *HeapQueue) Write(priority Priority, value any) error {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
 
-	if pq.IsClosed() {
+	if pq.isClosed() {
 		return ErrClosed
 	}
 

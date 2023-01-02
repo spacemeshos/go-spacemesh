@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
@@ -160,7 +159,7 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
 	return &testBroker{
 		Broker: newBroker("self", &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
-			4, limit, util.NewCloser(), logtest.New(tb).WithName(testName)),
+			4, limit, logtest.New(tb).WithName(testName)),
 		mockSyncS:  mockSyncS,
 		mockStateQ: mockStateQ,
 	}
@@ -236,12 +235,12 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		proc.eventLoop(context.Background())
+		proc.eventLoop()
 		wg.Done()
 	}()
 	time.Sleep(500 * time.Millisecond)
 	assert.Equal(t, 1, net.getCount())
-	proc.Close()
+	proc.terminate()
 	wg.Wait()
 }
 
@@ -530,7 +529,7 @@ func TestConsensusProcess_Termination(t *testing.T) {
 		proc.processNotifyMsg(context.Background(), BuildNotifyMsg(signer, s))
 	}
 
-	require.Equal(t, true, proc.terminating)
+	require.Equal(t, true, proc.terminating())
 }
 
 func TestConsensusProcess_currentRound(t *testing.T) {

@@ -244,7 +244,7 @@ func TestBroker_Abort(t *testing.T) {
 	go broker.Close()
 
 	select {
-	case <-broker.CloseChannel():
+	case <-broker.ctx.Done():
 		assert.True(t, true)
 	case <-timer.C:
 		assert.Fail(t, "timeout")
@@ -700,6 +700,6 @@ func closeBrokerAndWait(t *testing.T, b *Broker) {
 	select {
 	case <-timer.C:
 		t.Errorf("timeout")
-	case <-b.CloseChannel():
+	case <-b.ctx.Done():
 	}
 }

@@ -11,7 +11,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -152,7 +151,9 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQ
 type consensusProcess struct {
 	log.Log
 	State
-	util.Closer
+
+	ctx               context.Context
+	cancel            context.CancelFunc
 	mu                sync.RWMutex
 	layer             types.LayerID
 	oracle            Rolacle // the roles oracle provider
@@ -171,7 +172,6 @@ type consensusProcess struct {
 	cfg               config.Config
 	pending           map[string]*Msg // buffer for early messages that are pending process
 	mTracker          *msgsTracker    // tracks valid messages
-	terminating       bool
 	eligibilityCount  uint16
 	clock             RoundClock
 }
@@ -185,7 +185,6 @@ func newConsensusProcess(cfg config.Config, layer types.LayerID, s *Set, oracle 
 	msgsTracker := newMsgsTracker()
 	proc := &consensusProcess{
 		State:             State{preRound, preRound, s.Clone(), nil},
-		Closer:            util.NewCloser(),
 		layer:             layer,
 		oracle:            oracle,
 		signing:           signing,
@@ -199,6 +198,8 @@ func newConsensusProcess(cfg config.Config, layer types.LayerID, s *Set, oracle 
 		mTracker:          msgsTracker,
 		clock:             clock,
 	}
+	// provide a default context. overwritten when the consensus process is started.
+	proc.ctx, proc.cancel = context.WithCancel(context.Background())
 	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, ev, msgsTracker, logger)
 
 	return proc
@@ -223,8 +224,12 @@ func (proc *consensusProcess) Start(ctx context.Context) error {
 	}
 
 	proc.isStarted = true
-
-	go proc.eventLoop(ctx)
+	if proc.cancel != nil {
+		// GC the default cancel func
+		proc.cancel()
+	}
+	proc.ctx, proc.cancel = context.WithCancel(ctx)
+	go proc.eventLoop()
 
 	return nil
 }
@@ -242,8 +247,22 @@ func (proc *consensusProcess) SetInbox(inbox chan *Msg) {
 	proc.inbox = inbox
 }
 
+func (proc *consensusProcess) terminate() {
+	proc.cancel()
+}
+
+func (proc *consensusProcess) terminating() bool {
+	select {
+	case <-proc.ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
 // runs the main loop of the protocol.
-func (proc *consensusProcess) eventLoop(ctx context.Context) {
+func (proc *consensusProcess) eventLoop() {
+	ctx := proc.ctx
 	logger := proc.WithContext(ctx).WithFields(proc.layer)
 	logger.With().Info("consensus process started",
 		log.String("current_set", proc.value.String()),
@@ -277,7 +296,7 @@ PreRound:
 			proc.handleMessage(ctx, msg)
 		case <-endOfRound:
 			break PreRound
-		case <-proc.CloseChannel():
+		case <-proc.ctx.Done():
 			logger.With().Info("terminating: received signal during preround",
 				log.Uint32("current_round", proc.getRound()))
 			return
@@ -301,16 +320,14 @@ PreRound:
 	for {
 		select {
 		case msg := <-proc.inbox: // msg event
-			if proc.terminating {
-				proc.Close()
+			if proc.terminating() {
 				return
 			}
 			proc.handleMessage(ctx, msg)
 
 		case <-endOfRound: // next round event
 			proc.onRoundEnd(ctx)
-			if proc.terminating {
-				proc.Close()
+			if proc.terminating() {
 				return
 			}
 			proc.advanceToNextRound(ctx)
@@ -322,12 +339,12 @@ PreRound:
 					log.Int("limit", proc.cfg.LimitIterations),
 					log.Uint32("current_round", round))
 				proc.report(notCompleted)
-				proc.Close()
+				proc.terminate()
 			}
 			proc.onRoundBegin(ctx)
 			endOfRound = proc.clock.AwaitEndOfRound(round)
 
-		case <-proc.CloseChannel(): // close event
+		case <-proc.ctx.Done(): // close event
 			logger.With().Info("terminating: received signal",
 				log.Uint32("current_round", proc.getRound()))
 			return
@@ -753,7 +770,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 		log.Int("set_size", proc.value.Size()))
 	proc.report(completed)
 	numIterations.Observe(float64(proc.getRound()))
-	proc.terminating = true
+	proc.terminate()
 }
 
 func (proc *consensusProcess) currentRound() uint32 {

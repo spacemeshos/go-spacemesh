@@ -43,7 +43,7 @@ func (w *TestHareWrapper) LayerTicker(interval time.Duration) {
 	for ; j.Before(last); j = j.Add(1) {
 		w.clock.advanceLayer()
 		select {
-		case <-w.termination.CloseChannel():
+		case <-w.termination:
 			return
 		case <-ticker.C:
 			// do nothing
