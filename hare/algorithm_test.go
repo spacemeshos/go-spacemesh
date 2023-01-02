@@ -188,7 +188,7 @@ func TestConsensusProcess_Start(t *testing.T) {
 	inbox, err := broker.Register(context.Background(), proc.ID())
 	require.NoError(t, err)
 	proc.SetInbox(inbox)
-	proc.s = NewSetFromValues(value1)
+	proc.value = NewSetFromValues(value1)
 	err = proc.Start(context.Background())
 	require.NoError(t, err)
 	err = proc.Start(context.Background())
@@ -208,7 +208,7 @@ func TestConsensusProcess_TerminationLimit(t *testing.T) {
 	require.NoError(t, p.Start(context.Background()))
 	time.Sleep(time.Duration(6*p.cfg.RoundDuration) * time.Second)
 
-	assert.EqualValues(t, 1, p.getK()/4)
+	assert.EqualValues(t, 1, p.getRound()/4)
 }
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
@@ -225,13 +225,13 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	proc.publisher = net
 
 	mo := mocks.NewMockRolacle(ctrl)
-	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.instanceID).Return(true, nil).Times(1)
-	mo.EXPECT().Proof(gomock.Any(), proc.instanceID, proc.getK()).Return(nil, nil).Times(2)
-	mo.EXPECT().CalcEligibility(gomock.Any(), proc.instanceID, proc.getK(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
+	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), proc.layer, proc.getRound()).Return(nil, nil).Times(2)
+	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
 	proc.oracle = mo
 
 	proc.inbox, _ = broker.Register(context.Background(), proc.ID())
-	proc.s = NewSetFromValues(value1, value2)
+	proc.value = NewSetFromValues(value1, value2)
 	proc.cfg.F = 2
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -300,9 +300,9 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	proc.inbox, _ = broker.Register(context.Background(), proc.ID())
 	proc.advanceToNextRound(context.Background())
 	proc.advanceToNextRound(context.Background())
-	assert.EqualValues(t, 1, proc.getK())
+	assert.EqualValues(t, 1, proc.getRound())
 	proc.advanceToNextRound(context.Background())
-	assert.EqualValues(t, 2, proc.getK())
+	assert.EqualValues(t, 2, proc.getRound())
 }
 
 func generateConsensusProcess(t *testing.T) *consensusProcess {
@@ -332,15 +332,15 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config) *conse
 
 func TestConsensusProcess_Id(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.instanceID = instanceID1
+	proc.layer = instanceID1
 	assert.Equal(t, instanceID1, proc.ID())
 }
 
 func TestNewConsensusProcess_AdvanceToNextRound(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	k := proc.getK()
+	k := proc.getRound()
 	proc.advanceToNextRound(context.Background())
-	assert.Equal(t, k+1, proc.getK())
+	assert.Equal(t, k+1, proc.getRound())
 }
 
 func TestConsensusProcess_CreateInbox(t *testing.T) {
@@ -360,9 +360,9 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	assert.True(t, NewSet(builder.inner.Values).Equals(s))
 	verifier := builder.msg.PubKey
 	assert.Nil(t, verifier)
-	assert.Equal(t, builder.inner.K, proc.getK())
-	assert.Equal(t, builder.inner.Ki, proc.ki)
-	assert.Equal(t, builder.inner.InstanceID, proc.instanceID)
+	assert.Equal(t, builder.inner.Round, proc.getRound())
+	assert.Equal(t, builder.inner.CommittedRound, proc.committedRound)
+	assert.Equal(t, builder.inner.Layer, proc.layer)
 }
 
 func TestConsensusProcess_isEligible_NotEligible(t *testing.T) {
@@ -372,9 +372,9 @@ func TestConsensusProcess_isEligible_NotEligible(t *testing.T) {
 	mo := mocks.NewMockRolacle(ctrl)
 	proc.oracle = mo
 
-	mo.EXPECT().Proof(gomock.Any(), proc.instanceID, proc.getK()).Return(nil, nil).Times(1)
-	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.instanceID).Return(true, nil).Times(1)
-	mo.EXPECT().CalcEligibility(gomock.Any(), proc.instanceID, proc.getK(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(0), nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), proc.layer, proc.getRound()).Return(nil, nil).Times(1)
+	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
+	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(0), nil).Times(1)
 	assert.False(t, proc.shouldParticipate(context.Background()))
 }
 
@@ -385,9 +385,9 @@ func TestConsensusProcess_isEligible_Eligible(t *testing.T) {
 	mo := mocks.NewMockRolacle(ctrl)
 	proc.oracle = mo
 
-	mo.EXPECT().Proof(gomock.Any(), proc.instanceID, proc.getK()).Return(nil, nil).Times(1)
-	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.instanceID).Return(true, nil).Times(1)
-	mo.EXPECT().CalcEligibility(gomock.Any(), proc.instanceID, proc.getK(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), proc.layer, proc.getRound()).Return(nil, nil).Times(1)
+	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
+	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
 	assert.True(t, proc.shouldParticipate(context.Background()))
 }
 
@@ -398,7 +398,7 @@ func TestConsensusProcess_isEligible_ActiveSetFailed(t *testing.T) {
 	mo := mocks.NewMockRolacle(ctrl)
 	proc.oracle = mo
 
-	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.instanceID).Return(false, errors.New("some err")).Times(1)
+	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(false, errors.New("some err")).Times(1)
 	assert.False(t, proc.shouldParticipate(context.Background()))
 }
 
@@ -409,7 +409,7 @@ func TestConsensusProcess_isEligible_NotActive(t *testing.T) {
 	mo := mocks.NewMockRolacle(ctrl)
 	proc.oracle = mo
 
-	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.instanceID).Return(false, nil).Times(1)
+	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(false, nil).Times(1)
 	assert.False(t, proc.shouldParticipate(context.Background()))
 }
 
@@ -425,7 +425,7 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 	r.False(b)
 	signer, err := signing.NewEdSigner()
 	r.NoError(err)
-	msg := buildStatusMsg(signer, proc.s, 0)
+	msg := buildStatusMsg(signer, proc.value, 0)
 
 	net.setErr(errors.New("mock network failed error"))
 	b = proc.sendMessage(context.Background(), msg)
@@ -510,12 +510,12 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 	signer2, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m = BuildNotifyMsg(signer2, s)
-	proc.ki = 0
-	m.InnerMsg.K = proc.ki
-	proc.s.Add(value5)
-	proc.setK(notifyRound)
+	proc.committedRound = 0
+	m.InnerMsg.Round = proc.committedRound
+	proc.value.Add(value5)
+	proc.setRound(notifyRound)
 	proc.processNotifyMsg(context.Background(), m)
-	assert.True(t, s.Equals(proc.s))
+	assert.True(t, s.Equals(proc.value))
 }
 
 func TestConsensusProcess_Termination(t *testing.T) {
@@ -601,9 +601,9 @@ func TestConsensusProcess_beginStatusRound(t *testing.T) {
 	proc.publisher = network
 
 	mo := mocks.NewMockRolacle(ctrl)
-	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.instanceID).Return(true, nil).Times(1)
-	mo.EXPECT().Proof(gomock.Any(), proc.instanceID, proc.getK()).Return(nil, nil).Times(2)
-	mo.EXPECT().CalcEligibility(gomock.Any(), proc.instanceID, proc.getK(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
+	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), proc.layer, proc.getRound()).Return(nil, nil).Times(2)
+	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
 	proc.oracle = mo
 
 	s := NewDefaultEmptySet()
@@ -625,12 +625,12 @@ func TestConsensusProcess_beginProposalRound(t *testing.T) {
 	proc.advanceToNextRound(context.Background())
 	network := &mockP2p{}
 	proc.publisher = network
-	proc.k = 1
+	proc.round = 1
 
 	mo := mocks.NewMockRolacle(ctrl)
-	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.instanceID).Return(true, nil).Times(1)
-	mo.EXPECT().Proof(gomock.Any(), proc.instanceID, proc.getK()).Return(nil, nil).Times(2)
-	mo.EXPECT().CalcEligibility(gomock.Any(), proc.instanceID, proc.getK(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
+	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), proc.layer, proc.getRound()).Return(nil, nil).Times(2)
+	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
 	proc.oracle = mo
 
 	statusTracker := newStatusTracker(1, 1)
@@ -663,18 +663,18 @@ func TestConsensusProcess_beginCommitRound(t *testing.T) {
 	mpt.proposedSet = NewSetFromValues(value1)
 
 	preCommitTracker := proc.commitTracker
-	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.instanceID).Return(true, nil).Times(1)
-	mo.EXPECT().Proof(gomock.Any(), proc.instanceID, proc.getK()).Return(nil, nil).Times(1)
-	mo.EXPECT().CalcEligibility(gomock.Any(), proc.instanceID, proc.getK(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(0), nil).Times(1)
+	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), proc.layer, proc.getRound()).Return(nil, nil).Times(1)
+	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(0), nil).Times(1)
 	proc.beginCommitRound(context.Background())
 	assert.NotEqual(t, preCommitTracker, proc.commitTracker)
 
 	mpt.isConflicting = false
 	mpt.proposedSet = NewSetFromValues(value1)
 	proc.SetInbox(make(chan *Msg, 1))
-	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.instanceID).Return(true, nil).Times(1)
-	mo.EXPECT().Proof(gomock.Any(), proc.instanceID, proc.getK()).Return(nil, nil).Times(2)
-	mo.EXPECT().CalcEligibility(gomock.Any(), proc.instanceID, proc.getK(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
+	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), proc.layer, proc.getRound()).Return(nil, nil).Times(2)
+	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
 	proc.beginCommitRound(context.Background())
 	assert.Equal(t, 1, network.getCount())
 }
@@ -751,9 +751,9 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	proc.commitTracker = mct
 	mct.certificate = &Certificate{}
 	mpt.proposedSet = nil
-	proc.s = NewDefaultEmptySet()
+	proc.value = NewDefaultEmptySet()
 	proc.beginNotifyRound(context.Background())
-	r.NotNil(proc.s)
+	r.NotNil(proc.value)
 	r.Nil(proc.proposalTracker)
 	r.Nil(proc.commitTracker)
 
@@ -761,7 +761,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	proc.commitTracker = mct
 	mpt.proposedSet = NewSetFromValues(value1)
 	proc.beginNotifyRound(context.Background())
-	r.True(proc.s.Equals(mpt.proposedSet))
+	r.True(proc.value.Equals(mpt.proposedSet))
 	r.Equal(mct.certificate, proc.certificate)
 	r.Nil(proc.proposalTracker)
 	r.Nil(proc.commitTracker)

@@ -38,7 +38,7 @@ func (nt *notifyTracker) OnNotify(msg *Msg) bool {
 
 	// track that set
 	s := NewSet(msg.InnerMsg.Values)
-	nt.onCertificate(msg.InnerMsg.Cert.AggMsgs.Messages[0].InnerMsg.K, s)
+	nt.onCertificate(msg.InnerMsg.Cert.AggMsgs.Messages[0].InnerMsg.Round, s)
 	nt.tracker.Track(s.ID(), eligibilityCount)
 
 	return false

@@ -14,8 +14,8 @@ import (
 
 // Message is the tuple of a message and its corresponding signature.
 type Message struct {
-	Sig      []byte
-	InnerMsg *InnerMessage
+	Signature []byte
+	InnerMsg  *InnerMessage
 }
 
 // MessageFromBuffer builds an Hare message from the provided bytes buffer.
@@ -29,18 +29,15 @@ func MessageFromBuffer(buf []byte) (Message, error) {
 	return msg, nil
 }
 
-func (m *Message) String() string {
-	sig := hex.EncodeToString(m.Sig)
-	l := len(sig)
-	if l > 5 {
-		l = 5
-	}
-	return fmt.Sprintf("Sig: %v… InnerMsg: %v", sig[:l], m.InnerMsg.String())
+func (m *Message) MarshalLogObject(encoder log.ObjectEncoder) error {
+	_ = encoder.AddObject("inner_msg", m.InnerMsg)
+	encoder.AddString("signature", hex.EncodeToString(m.Signature))
+	return nil
 }
 
 // Field returns a log field. Implements the LoggableField interface.
 func (m *Message) Field() log.Field {
-	return log.String("message", m.String())
+	return log.Object("hare_msg", m)
 }
 
 // Certificate is a collection of messages and the set of values.
@@ -58,9 +55,9 @@ type AggregatedMessages struct {
 // InnerMessage is the actual set of fields that describe a message in the Hare protocol.
 type InnerMessage struct {
 	Type             MessageType
-	InstanceID       types.LayerID
-	K                uint32 // the round counter
-	Ki               uint32
+	Layer            types.LayerID
+	Round            uint32              // the round counter (K)
+	CommittedRound   uint32              // the round Values (S) is committed (Ki)
 	Values           []types.ProposalID  // the set S. optional for commit InnerMsg in a certificate
 	RoleProof        []byte              // role is implicit by InnerMsg type, this is the proof
 	EligibilityCount uint16              // the number of claimed eligibilities
@@ -72,16 +69,17 @@ type InnerMessage struct {
 func (im *InnerMessage) Bytes() []byte {
 	buf, err := codec.Encode(im)
 	if err != nil {
-		log.Panic("could not marshal InnerMsg before send")
+		log.With().Fatal("failed to encode InnerMessage", log.Err(err))
 	}
 	return buf
 }
 
-func (im *InnerMessage) String() string {
-	if im == nil {
-		return ""
-	}
-	return fmt.Sprintf("Type: %v InstanceID: %v K: %v Ki: %v", im.Type, im.InstanceID, im.K, im.Ki)
+func (im *InnerMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("msg_type", im.Type.String())
+	encoder.AddUint32("layer_id", im.Layer.Value)
+	encoder.AddUint32("round", im.Round)
+	encoder.AddUint32("committed_round", im.CommittedRound)
+	return nil
 }
 
 // messageBuilder is the impl of the builder DP.
@@ -113,7 +111,7 @@ func (builder *messageBuilder) SetCertificate(certificate *Certificate) *message
 
 // Sign calls the provided signer to calculate the signature and then set it accordingly.
 func (builder *messageBuilder) Sign(signing Signer) *messageBuilder {
-	builder.msg.Sig = signing.Sign(builder.inner.Bytes())
+	builder.msg.Signature = signing.Sign(builder.inner.Bytes())
 
 	return builder
 }
@@ -131,21 +129,21 @@ func (builder *messageBuilder) SetType(msgType MessageType) *messageBuilder {
 	return builder
 }
 
-// SetInstanceID sets instance ID.
-func (builder *messageBuilder) SetInstanceID(id types.LayerID) *messageBuilder {
-	builder.inner.InstanceID = id
+// SetLayer sets the layer.
+func (builder *messageBuilder) SetLayer(id types.LayerID) *messageBuilder {
+	builder.inner.Layer = id
 	return builder
 }
 
-// SetRoundCounter sets round counter.
-func (builder *messageBuilder) SetRoundCounter(k uint32) *messageBuilder {
-	builder.inner.K = k
+// SetRoundCounter sets the round counter.
+func (builder *messageBuilder) SetRoundCounter(round uint32) *messageBuilder {
+	builder.inner.Round = round
 	return builder
 }
 
-// SetKi sets ki.
-func (builder *messageBuilder) SetKi(ki uint32) *messageBuilder {
-	builder.inner.Ki = ki
+// SetCommittedRound sets the committed round of the set values.
+func (builder *messageBuilder) SetCommittedRound(round uint32) *messageBuilder {
+	builder.inner.CommittedRound = round
 	return builder
 }
 

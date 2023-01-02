@@ -17,8 +17,6 @@ import (
 
 const inboxCapacity = 1024 // inbox size per instance
 
-type startInstanceError error
-
 type validator interface {
 	Validate(context.Context, *Msg) bool
 }
@@ -79,7 +77,7 @@ func newBroker(peer p2p.Peer, eValidator validator, stateQuerier stateQuerier, s
 func (b *Broker) Start(ctx context.Context) error {
 	if b.isStarted { // Start has been called at least twice
 		b.WithContext(ctx).Error("could not start instance")
-		return startInstanceError(errors.New("instance already started"))
+		return errors.New("hare broker already started")
 	}
 	b.isStarted = true
 	ctx, cancel := context.WithCancel(ctx)
@@ -104,7 +102,7 @@ var (
 
 // validate the message is contextually valid and that the node is synced for processing the message.
 func (b *Broker) validate(ctx context.Context, m *Message) error {
-	msgInstID := m.InnerMsg.InstanceID
+	msgInstID := m.InnerMsg.Layer
 
 	b.mu.RLock()
 	_, exist := b.outbox[msgInstID.Uint32()]
@@ -210,7 +208,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			}
 			msg, ok := rawMsg.(*msgRPC)
 			if !ok {
-				logger.Error("could not convert priority queue message, ignoring")
+				logger.Error("failed to convert priority queue message, ignoring")
 				msg.Error <- errBadMsg
 				continue
 			}
@@ -222,24 +220,24 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			msgLogger := logger.WithContext(messageCtx).WithFields(h)
 			hareMsg, err := MessageFromBuffer(msg.Data)
 			if err != nil {
-				msgLogger.With().Error("could not build message", h, log.Err(err))
+				msgLogger.With().Error("failed to build message", h, log.Err(err))
 				msg.Error <- err
 				continue
 			}
 			msgLogger = msgLogger.WithFields(&hareMsg)
 
 			if hareMsg.InnerMsg == nil {
-				msgLogger.With().Error("hare msg missing inner msg", log.Err(errNilInner))
+				msgLogger.With().Warning("hare msg missing inner msg", log.Err(errNilInner))
 				msg.Error <- errNilInner
 				continue
 			}
 			msgLogger.Debug("broker received hare message")
 
-			msgInstID := hareMsg.InnerMsg.InstanceID
+			msgLayer := hareMsg.InnerMsg.Layer
 
-			msgLogger = msgLogger.WithFields(log.Stringer("msg_layer_id", msgInstID))
+			msgLogger = msgLogger.WithFields(log.Stringer("msg_layer_id", msgLayer))
 
-			if !b.Synced(ctx, msgInstID) {
+			if !b.Synced(ctx, msgLayer) {
 				msg.Error <- errNotSynced
 				continue
 			}
@@ -269,7 +267,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			// validate msg
 			if !b.eValidator.Validate(messageCtx, iMsg) {
 				msgLogger.With().Warning("message validation failed: eligibility validator returned false",
-					log.String("hare_msg", hareMsg.String()))
+					log.Object("hare_msg", &hareMsg))
 				msg.Error <- errors.New("not eligible")
 				continue
 			}
@@ -280,15 +278,15 @@ func (b *Broker) eventLoop(ctx context.Context) {
 
 			if isEarly {
 				b.mu.Lock()
-				if _, exist := b.pending[msgInstID.Uint32()]; !exist { // create buffer if first msg
-					b.pending[msgInstID.Uint32()] = make([]*Msg, 0)
+				if _, exist := b.pending[msgLayer.Uint32()]; !exist { // create buffer if first msg
+					b.pending[msgLayer.Uint32()] = make([]*Msg, 0)
 				}
 				b.mu.Unlock()
 
 				// we want to write all buffered messages to a chan with InboxCapacity len
 				// hence, we limit the buffer for pending messages
 				b.mu.RLock()
-				chCount := len(b.pending[msgInstID.Uint32()])
+				chCount := len(b.pending[msgLayer.Uint32()])
 				b.mu.RUnlock()
 				if chCount == inboxCapacity {
 					msgLogger.With().Error("too many pending messages, ignoring message",
@@ -297,17 +295,17 @@ func (b *Broker) eventLoop(ctx context.Context) {
 					continue
 				}
 				b.mu.Lock()
-				b.pending[msgInstID.Uint32()] = append(b.pending[msgInstID.Uint32()], iMsg)
+				b.pending[msgLayer.Uint32()] = append(b.pending[msgLayer.Uint32()], iMsg)
 				b.mu.Unlock()
 				continue
 			}
 
 			// has instance, just send
 			b.mu.RLock()
-			out, exist := b.outbox[msgInstID.Uint32()]
+			out, exist := b.outbox[msgLayer.Uint32()]
 			b.mu.RUnlock()
 			if !exist {
-				msgLogger.With().Panic("missing broker instance for layer")
+				msgLogger.With().Fatal("missing broker instance for layer", msgLayer)
 			}
 			msgLogger.With().Debug("broker forwarding message to outbox",
 				log.Int("outbox_queue_size", len(out)))

@@ -57,7 +57,7 @@ func (his *HareSuite) fill(set *Set, begin, end int) {
 func (his *HareSuite) waitForTermination() {
 	for _, p := range his.procs {
 		<-p.CloseChannel()
-		his.outputs = append(his.outputs, p.s)
+		his.outputs = append(his.outputs, p.value)
 	}
 	for _, b := range his.brokers {
 		b.Close()
