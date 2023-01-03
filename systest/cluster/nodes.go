@@ -430,6 +430,9 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 								corev1.TCPSocketAction().WithPort(intstr.FromInt(9092)),
 							).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
 						).
+						WithEnv(
+							corev1.EnvVar().WithName("GOMAXPROCS").WithValue("8"),
+						).
 						WithCommand(cmd...),
 					)),
 			),
