@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -104,7 +103,6 @@ type Hare struct {
 func New(
 	db *sql.Database,
 	conf config.Config,
-	peer p2p.Peer,
 	publisher pubsub.PublishSubsciber,
 	sign Signer,
 	nid types.NodeID,
@@ -137,7 +135,7 @@ func New(
 	}
 
 	ev := newEligibilityValidator(rolacle, layersPerEpoch, conf.N, conf.ExpectedLeaders, logger)
-	h.broker = newBroker(peer, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, logger)
+	h.broker = newBroker(ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, logger)
 	h.sign = sign
 	h.blockGenCh = ch
 
@@ -490,5 +488,5 @@ func (h *Hare) Start(ctx context.Context) error {
 // Close sends a termination signal to hare goroutines and waits for their termination.
 func (h *Hare) Close() {
 	h.cancel()
-	h.eg.Wait()
+	_ = h.eg.Wait()
 }

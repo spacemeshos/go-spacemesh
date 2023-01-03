@@ -95,7 +95,7 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 		require.NoError(t, err)
 		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 
-		th := &testHare{createTestHare(t, dbs[i], cfg, w.clock, host.ID(), mp2p, t.Name()), i}
+		th := &testHare{createTestHare(t, dbs[i], cfg, w.clock, mp2p, t.Name()), i}
 		th.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 		th.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return([]byte{}, nil).AnyTimes()
 		th.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(

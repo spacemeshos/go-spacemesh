@@ -130,20 +130,20 @@ func TestHare_New(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := logtest.New(t).WithName(t.Name())
-	h := New(sql.InMemory(), cfg, "", noopPubSub(t), signer, types.NodeID{}, make(chan LayerOutput, 1),
+	h := New(sql.InMemory(), cfg, noopPubSub(t), signer, types.NodeID{}, make(chan LayerOutput, 1),
 		smocks.NewMockSyncStateProvider(ctrl), smocks.NewMockBeaconGetter(ctrl),
 		eligibility.New(logger), mocks.NewMocklayerPatrol(ctrl), 10, mocks.NewMockstateQuerier(ctrl), newMockClock(), logger)
 	assert.NotNil(t, h)
 }
 
 func TestHare_Start(t *testing.T) {
-	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), "test", noopPubSub(t), t.Name())
+	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 	assert.NoError(t, h.Start(context.Background()))
 	h.Close()
 }
 
 func TestHare_collectOutputAndGetResult(t *testing.T) {
-	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), "test", noopPubSub(t), t.Name())
+	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 
 	lyrID := types.NewLayerID(10)
 	res, err := h.getResult(lyrID)
@@ -167,7 +167,7 @@ func TestHare_collectOutputAndGetResult(t *testing.T) {
 }
 
 func TestHare_collectOutputGetResult_TerminateTooLate(t *testing.T) {
-	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), "test", noopPubSub(t), t.Name())
+	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 
 	lyrID := types.NewLayerID(10)
 	res, err := h.getResult(lyrID)
@@ -192,7 +192,7 @@ func TestHare_collectOutputGetResult_TerminateTooLate(t *testing.T) {
 }
 
 func TestHare_OutputCollectionLoop(t *testing.T) {
-	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), "test", noopPubSub(t), t.Name())
+	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 	require.NoError(t, h.Start(context.Background()))
 
 	lyrID := types.NewLayerID(8)
@@ -219,7 +219,7 @@ func TestHare_onTick(t *testing.T) {
 	cfg.F = 1
 	cfg.RoundDuration = 1
 	clock := newMockClock()
-	h := createTestHare(t, sql.InMemory(), cfg, clock, "test", noopPubSub(t), t.Name())
+	h := createTestHare(t, sql.InMemory(), cfg, clock, noopPubSub(t), t.Name())
 
 	h.networkDelta = 0
 	h.bufferSize = 1
@@ -289,7 +289,7 @@ func TestHare_onTick_BeaconFromRefBallot(t *testing.T) {
 	cfg.F = 1
 	cfg.RoundDuration = 1
 	clock := newMockClock()
-	h := createTestHare(t, sql.InMemory(), cfg, clock, "test", noopPubSub(t), t.Name())
+	h := createTestHare(t, sql.InMemory(), cfg, clock, noopPubSub(t), t.Name())
 
 	h.networkDelta = 0
 	h.bufferSize = 1
@@ -349,7 +349,7 @@ func TestHare_onTick_SomeBadBallots(t *testing.T) {
 	cfg.F = 1
 	cfg.RoundDuration = 1
 	clock := newMockClock()
-	h := createTestHare(t, sql.InMemory(), cfg, clock, "test", noopPubSub(t), t.Name())
+	h := createTestHare(t, sql.InMemory(), cfg, clock, noopPubSub(t), t.Name())
 
 	h.networkDelta = 0
 	h.bufferSize = 1
@@ -406,7 +406,7 @@ func TestHare_onTick_NoGoodBallots(t *testing.T) {
 	cfg.F = 1
 	cfg.RoundDuration = 1
 	clock := newMockClock()
-	h := createTestHare(t, sql.InMemory(), cfg, clock, "test", noopPubSub(t), t.Name())
+	h := createTestHare(t, sql.InMemory(), cfg, clock, noopPubSub(t), t.Name())
 
 	h.networkDelta = 0
 	h.bufferSize = 1
@@ -459,7 +459,7 @@ func TestHare_onTick_NoGoodBallots(t *testing.T) {
 func TestHare_onTick_NoBeacon(t *testing.T) {
 	lyr := types.NewLayerID(199)
 
-	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), "test", noopPubSub(t), t.Name())
+	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
 	h.beacons = mockBeacons
 	mockBeacons.EXPECT().GetBeacon(lyr.GetEpoch()).Return(types.EmptyBeacon, errors.New("whatever")).Times(1)
@@ -473,7 +473,7 @@ func TestHare_onTick_NoBeacon(t *testing.T) {
 func TestHare_onTick_NotSynced(t *testing.T) {
 	lyr := types.NewLayerID(199)
 
-	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), "test", noopPubSub(t), t.Name())
+	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 	h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyr).Return(true, nil).AnyTimes()
 	mockSyncS := smocks.NewMockSyncStateProvider(gomock.NewController(t))
 	h.broker.nodeSyncState = mockSyncS
@@ -492,7 +492,7 @@ func TestHare_onTick_NotSynced(t *testing.T) {
 }
 
 func TestHare_outputBuffer(t *testing.T) {
-	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), "test", noopPubSub(t), t.Name())
+	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 	var lyr types.LayerID
 	for i := uint32(1); i <= h.bufferSize; i++ {
 		lyr = types.GetEffectiveGenesis().Add(i)
@@ -519,7 +519,7 @@ func TestHare_outputBuffer(t *testing.T) {
 }
 
 func TestHare_IsTooLate(t *testing.T) {
-	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), "test", noopPubSub(t), t.Name())
+	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 	var lyr types.LayerID
 	for i := uint32(1); i <= h.bufferSize*2; i++ {
 		lyr = types.GetEffectiveGenesis().Add(i)
@@ -542,7 +542,7 @@ func TestHare_IsTooLate(t *testing.T) {
 }
 
 func TestHare_oldestInBuffer(t *testing.T) {
-	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), "test", noopPubSub(t), t.Name())
+	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 	var lyr types.LayerID
 	for i := uint32(1); i <= h.bufferSize; i++ {
 		lyr = types.GetEffectiveGenesis().Add(i)
@@ -577,7 +577,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 // make sure that Hare writes a weak coin value for a layer to the mesh after the CP completes,
 // regardless of whether it succeeds or fails.
 func TestHare_WeakCoin(t *testing.T) {
-	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), "test", noopPubSub(t), t.Name())
+	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 	layerID := types.NewLayerID(10)
 	h.setLastLayer(layerID)
 

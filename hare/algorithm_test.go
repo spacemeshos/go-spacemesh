@@ -158,7 +158,7 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 	mockStateQ := mocks.NewMockstateQuerier(ctrl)
 	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
 	return &testBroker{
-		Broker: newBroker("self", &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
+		Broker: newBroker(&mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
 			4, limit, logtest.New(tb).WithName(testName)),
 		mockSyncS:  mockSyncS,
 		mockStateQ: mockStateQ,

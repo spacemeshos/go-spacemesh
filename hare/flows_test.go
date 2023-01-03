@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -166,7 +165,7 @@ type hareWithMocks struct {
 	mockRoracle *mocks.MockRolacle
 }
 
-func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *mockClock, pid p2p.Peer, p2p pubsub.PublishSubsciber, name string) *hareWithMocks {
+func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *mockClock, p2p pubsub.PublishSubsciber, name string) *hareWithMocks {
 	tb.Helper()
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
@@ -186,7 +185,7 @@ func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *
 
 	mockRoracle := mocks.NewMockRolacle(ctrl)
 
-	hare := New(db, tcfg, pid, p2p, signer, nodeID, make(chan LayerOutput, 100), mockSyncS, mockBeacons, mockRoracle, patrol, 10,
+	hare := New(db, tcfg, p2p, signer, nodeID, make(chan LayerOutput, 100), mockSyncS, mockBeacons, mockRoracle, patrol, 10,
 		mockStateQ, clock, logtest.New(tb).WithName(name+"_"+signer.PublicKey().ShortString()))
 	p2p.Register(pubsub.HareProtocol, hare.GetHareMsgHandler())
 
@@ -411,7 +410,7 @@ func Test_multipleCPs(t *testing.T) {
 		require.NoError(t, err)
 		src := NewSimRoundClock(ps, scMap)
 		pubsubs = append(pubsubs, ps)
-		h := createTestHare(t, dbs[i], cfg, test.clock, host.ID(), src, t.Name())
+		h := createTestHare(t, dbs[i], cfg, test.clock, src, t.Name())
 		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 100), nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
@@ -507,7 +506,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		pubsubs = append(pubsubs, ps)
 		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		src := NewSimRoundClock(mp2p, scMap)
-		h := createTestHare(t, dbs[i], cfg, test.clock, host.ID(), src, t.Name())
+		h := createTestHare(t, dbs[i], cfg, test.clock, src, t.Name())
 		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 100), nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
