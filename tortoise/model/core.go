@@ -143,11 +143,11 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		nodeID := c.signer.NodeID()
 		atx := types.NewActivationTx(nipost, &nodeID, addr, nil, c.units, nil, nil)
 		if err := activation.SignAndFinalizeAtx(c.signer, atx); err != nil {
-			panic(err)
+			c.logger.With().Fatal("failed to sign atx", log.Err(err))
 		}
 		vAtx, err := atx.Verify(1, 2)
 		if err != nil {
-			panic(err)
+			c.logger.With().Fatal("failed to verify atx", log.Err(err))
 		}
 
 		c.refBallot = nil

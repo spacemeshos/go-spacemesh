@@ -355,8 +355,6 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 	for i := uint32(0); i < num; i++ {
 		atx := types.NewActivationTx(types.NIPostChallenge{}, &nodeID, types.Address{1, 2, 3}, &types.NIPost{}, i, nil, nil)
 		require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
-		require.NoError(tb, atx.CalcAndSetID())
-		require.NoError(tb, atx.CalcAndSetNodeID())
 		atxs = append(atxs, atx)
 	}
 	return atxs

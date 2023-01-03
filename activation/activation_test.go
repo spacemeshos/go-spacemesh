@@ -28,6 +28,7 @@ import (
 
 const (
 	layersPerEpoch                 = 10
+	layerDuration                  = time.Second
 	postGenesisEpoch types.EpochID = 2
 
 	testTickSize = 1
@@ -82,7 +83,7 @@ type testAtxBuilder struct {
 	*Builder
 	cdb         *datastore.CachedDB
 	sig         *signing.EdSigner
-	nodeID      *types.NodeID
+	nodeID      types.NodeID
 	coinbase    types.Address
 	goldenATXID types.ATXID
 
@@ -98,12 +99,11 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 	lg := logtest.New(tb)
 	edSigner, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	nid := edSigner.NodeID()
 	ctrl := gomock.NewController(tb)
 	tab := &testAtxBuilder{
 		cdb:         datastore.NewCachedDB(sql.InMemory(), lg),
 		sig:         edSigner,
-		nodeID:      &nid,
+		nodeID:      edSigner.NodeID(),
 		coinbase:    types.GenerateAddress([]byte("33333")),
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
 		mhdlr:       NewMockatxHandler(ctrl),
@@ -166,7 +166,6 @@ func publishAtx(
 	posAtxLayer types.LayerID,
 	currLayer *types.LayerID, // pointer to keep current layer consistent across calls
 	buildNIPostLayerDuration uint32,
-	publishErr error,
 ) (*types.ActivationTx, error) {
 	t.Helper()
 
@@ -179,7 +178,9 @@ func publishAtx(
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			require.Equal(t, publishEpoch.FirstLayer(), got)
-			return time.Now().Add(100 * time.Second)
+			// time.Now() ~= currentLayer
+			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got.Value))
 		})
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
@@ -205,26 +206,18 @@ func publishAtx(
 			require.NoError(t, err)
 			built = gotAtx
 			require.NoError(t, built.CalcAndSetID())
-			if publishErr != nil {
-				return publishErr
-			}
 			vatx, err := built.Verify(0, 1)
 			require.NoError(t, err)
 			require.NoError(t, atxs.Add(tab.cdb, vatx, time.Now()))
 			return nil
 		})
 	never := make(chan struct{}, 1)
-	if publishErr == nil {
-		tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(ch)
-		tab.mclock.EXPECT().AwaitLayer((publishEpoch + 2).FirstLayer()).Return(never)
-		tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any()).DoAndReturn(
-			func(got types.ATXID) {
-				require.Equal(t, built.ID(), got)
-			})
-	} else {
-		tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(never)
-		tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any())
-	}
+	tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(ch)
+	tab.mclock.EXPECT().AwaitLayer((publishEpoch + 2).FirstLayer()).Return(never)
+	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any()).DoAndReturn(
+		func(got types.ATXID) {
+			require.Equal(t, built.ID(), got)
+		})
 	// create and publish ATX
 	err := tab.PublishActivationTx(context.Background())
 	return built, err
@@ -259,9 +252,9 @@ func TestBuilder_waitForFirstATX(t *testing.T) {
 	t.Run("new miner", func(t *testing.T) {
 		tab := newTestBuilder(t)
 		current := types.NewLayerID(layersPerEpoch * 2) // first layer of epoch 2
-		addPrevAtx(t, tab.cdb, current.GetEpoch()-1, tab.sig, tab.nodeID)
+		addPrevAtx(t, tab.cdb, current.GetEpoch()-1, tab.sig, &tab.nodeID)
 		tab.mclock.EXPECT().GetCurrentLayer().Return(current).AnyTimes()
-		tab.mclock.EXPECT().LayerToTime(current).AnyTimes().Return(time.Now().Add(100 * time.Millisecond))
+		tab.mclock.EXPECT().LayerToTime(current).Return(time.Now().Add(100 * time.Millisecond)).AnyTimes()
 		require.True(t, tab.waitForFirstATX(context.Background()))
 	})
 
@@ -274,7 +267,7 @@ func TestBuilder_waitForFirstATX(t *testing.T) {
 		tab := newTestBuilder(t, WithPoetConfig(poetCfg))
 		current := types.NewLayerID(layersPerEpoch * 2) // first layer of epoch 2
 		next := types.NewLayerID(current.Value + layersPerEpoch)
-		addPrevAtx(t, tab.cdb, current.GetEpoch()-1, tab.sig, tab.nodeID)
+		addPrevAtx(t, tab.cdb, current.GetEpoch()-1, tab.sig, &tab.nodeID)
 		tab.mclock.EXPECT().GetCurrentLayer().Return(current)
 		tab.mclock.EXPECT().LayerToTime(current).Return(time.Now().Add(-5 * time.Millisecond))
 		tab.mclock.EXPECT().LayerToTime(next).Return(time.Now().Add(100 * time.Millisecond))
@@ -287,7 +280,7 @@ func TestBuilder_waitForFirstATX(t *testing.T) {
 		tab := newTestBuilder(t)
 		current := types.NewLayerID(layersPerEpoch * 2) // first layer of epoch 2
 		tab.mclock.EXPECT().GetCurrentLayer().Return(current)
-		addPrevAtx(t, tab.cdb, current.GetEpoch(), tab.sig, tab.nodeID)
+		addPrevAtx(t, tab.cdb, current.GetEpoch(), tab.sig, &tab.nodeID)
 		require.False(t, tab.waitForFirstATX(context.Background()))
 	})
 }
@@ -381,7 +374,7 @@ func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 
 func TestBuilder_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 	tab := newTestBuilder(t)
-	latestAtx := addPrevAtx(t, tab.cdb, 1, tab.sig, tab.nodeID)
+	latestAtx := addPrevAtx(t, tab.cdb, 1, tab.sig, &tab.nodeID)
 	atx, err := tab.findCommitmentAtx()
 	require.NoError(t, err)
 	require.Equal(t, latestAtx.ID(), atx)
@@ -401,7 +394,7 @@ func TestBuilder_getCommitmentAtx_storesCommitmentAtx(t *testing.T) {
 	atx, err := tab.getCommitmentAtx(context.Background())
 	require.NoError(t, err)
 
-	stored, err := kvstore.GetCommitmentATXForNode(tab.cdb, *tab.nodeID)
+	stored, err := kvstore.GetCommitmentATXForNode(tab.cdb, tab.nodeID)
 	require.NoError(t, err)
 
 	require.Equal(t, *atx, stored)
@@ -419,7 +412,7 @@ func TestBuilder_getCommitmentAtx_getsStoredCommitmentAtx(t *testing.T) {
 	// add a newer ATX by a different node
 	atx := types.NewActivationTx(types.NIPostChallenge{}, &diffNid, types.Address{}, nil, 1, nil, nil)
 	vatx := addAtx(t, tab.cdb, diffSigner, atx)
-	err = kvstore.AddCommitmentATXForNode(tab.cdb, commitmentAtx, *tab.nodeID)
+	err = kvstore.AddCommitmentATXForNode(tab.cdb, commitmentAtx, tab.nodeID)
 	require.NoError(t, err)
 
 	atxid, err := tab.getCommitmentAtx(context.Background())
@@ -434,7 +427,7 @@ func TestBuilder_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *testing.T) 
 	commitmentAtx := types.RandomATXID()
 
 	// add an atx by the same node
-	atx := types.NewActivationTx(types.NIPostChallenge{}, tab.nodeID, types.Address{}, nil, 1, nil, nil)
+	atx := types.NewActivationTx(types.NIPostChallenge{}, &tab.nodeID, types.Address{}, nil, 1, nil, nil)
 	atx.CommitmentATX = &commitmentAtx
 	vatx := addAtx(t, tab.cdb, tab.sig, atx)
 
@@ -451,19 +444,19 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	currLayer := posAtxLayer
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
-	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	prevAtx := newAtx(t, tab.sig, &tab.nodeID, challenge, nipost, 2, types.Address{})
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx, time.Now()))
 
 	// create and publish ATX
-	atx1, err := publishAtx(t, tab, prevAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch, nil)
+	atx1, err := publishAtx(t, tab, prevAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, atx1)
 
 	// create and publish another ATX
 	currLayer = (posAtxLayer.GetEpoch() + 1).FirstLayer()
-	atx2, err := publishAtx(t, tab, atx1.ID(), atx1.PubLayerID, &currLayer, layersPerEpoch, nil)
+	atx2, err := publishAtx(t, tab, atx1.ID(), atx1.PubLayerID, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotEqual(t, atx1, atx2)
 	require.Equal(t, atx1.TargetEpoch()+1, atx2.TargetEpoch())
@@ -475,20 +468,60 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	currLayer := posAtxLayer
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
-	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	prevAtx := newAtx(t, tab.sig, &tab.nodeID, challenge, nipost, 2, types.Address{})
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx, time.Now()))
 
+	publishEpoch := posAtxLayer.GetEpoch() + 1
+	tab.mclock.EXPECT().GetCurrentLayer().DoAndReturn(
+		func() types.LayerID {
+			return currLayer
+		}).AnyTimes()
+	tab.mhdlr.EXPECT().GetPosAtxID().Return(prevAtx.ID(), nil)
+	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
+		func(got types.LayerID) time.Time {
+			require.Equal(t, publishEpoch.FirstLayer(), got)
+			// time.Now() ~= currentLayer
+			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got.Value))
+		})
+	lastOpts := DefaultPostSetupOpts()
+	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, challenge *types.PoetChallenge, _ time.Time) (*types.NIPost, time.Duration, error) {
+			currLayer = currLayer.Add(layersPerEpoch)
+			return newNIPostWithChallenge(challenge.Hash(), []byte("66666")), 0, nil
+		})
+	done := make(chan struct{}, 1)
+	close(done)
+	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
+		func(got types.LayerID) chan struct{} {
+			// advance to publish layer
+			if currLayer.Before(got) {
+				currLayer = got
+			}
+			return done
+		})
+	var built *types.ActivationTx
 	publishErr := errors.New("blah")
-	built, err := publishAtx(t, tab, prevAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch, publishErr)
+	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, got []byte) error {
+			gotAtx, err := types.BytesToAtx(got)
+			require.NoError(t, err)
+			built = gotAtx
+			require.NoError(t, built.CalcAndSetID())
+			return publishErr
+		})
+	never := make(chan struct{}, 1)
+	tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(never)
+	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any())
+	// create and publish ATX
+	err = tab.PublishActivationTx(context.Background())
 	require.ErrorIs(t, err, publishErr)
 	require.NotNil(t, built)
 
 	// now causing it to publish again, it should use the same atx
-	never := make(chan struct{}, 1)
-	done := make(chan struct{}, 1)
-	close(done)
 	tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(never)
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
@@ -498,7 +531,6 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 			require.Equal(t, gotAtx, built)
 			return nil
 		})
-	publishEpoch := posAtxLayer.GetEpoch() + 1
 	expireEpoch := publishEpoch + 2
 	tab.mclock.EXPECT().AwaitLayer(expireEpoch.FirstLayer()).Return(done)
 	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any()).DoAndReturn(
@@ -510,11 +542,11 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	// if the network works and we try to publish a new ATX, the timeout should result in a clean state (so a NIPost should be built)
 	posAtxLayer = posAtxLayer.Add(layersPerEpoch + 1)
 	challenge = newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
-	posAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	posAtx := newAtx(t, tab.sig, &tab.nodeID, challenge, nipost, 2, types.Address{})
 	vPosAtx, err := posAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPosAtx, time.Now()))
-	built2, err := publishAtx(t, tab, posAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch, nil)
+	built2, err := publishAtx(t, tab, posAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, built2)
 	require.NotEqual(t, built.NIPost, built2.NIPost)
@@ -527,13 +559,56 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	currLayer := posAtxLayer
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
-	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	prevAtx := newAtx(t, tab.sig, &tab.nodeID, challenge, nipost, 2, types.Address{})
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx, time.Now()))
 
+	publishEpoch := posAtxLayer.GetEpoch() + 1
+	tab.mclock.EXPECT().GetCurrentLayer().DoAndReturn(
+		func() types.LayerID {
+			return currLayer
+		}).AnyTimes()
+	tab.mhdlr.EXPECT().GetPosAtxID().Return(prevAtx.ID(), nil)
+	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
+		func(got types.LayerID) time.Time {
+			require.Equal(t, publishEpoch.FirstLayer(), got)
+			// time.Now() ~= currentLayer
+			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got.Value))
+		})
+	lastOpts := DefaultPostSetupOpts()
+	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, challenge *types.PoetChallenge, _ time.Time) (*types.NIPost, time.Duration, error) {
+			currLayer = currLayer.Add(layersPerEpoch)
+			return newNIPostWithChallenge(challenge.Hash(), []byte("66666")), 0, nil
+		})
+	done := make(chan struct{}, 1)
+	close(done)
+	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
+		func(got types.LayerID) chan struct{} {
+			// advance to publish layer
+			if currLayer.Before(got) {
+				currLayer = got
+			}
+			return done
+		})
+	var built *types.ActivationTx
 	publishErr := errors.New("blah")
-	built, err := publishAtx(t, tab, prevAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch, publishErr)
+	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, got []byte) error {
+			gotAtx, err := types.BytesToAtx(got)
+			require.NoError(t, err)
+			built = gotAtx
+			require.NoError(t, built.CalcAndSetID())
+			return publishErr
+		})
+	never := make(chan struct{}, 1)
+	tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(never)
+	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any())
+	// create and publish ATX
+	err = tab.PublishActivationTx(context.Background())
 	require.ErrorIs(t, err, publishErr)
 	require.NotNil(t, built)
 
@@ -543,11 +618,11 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	posAtxLayer = posAtxLayer.Add(3 * layersPerEpoch)
 	currLayer = posAtxLayer
 	challenge = newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
-	posAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	posAtx := newAtx(t, tab.sig, &tab.nodeID, challenge, nipost, 2, types.Address{})
 	vPosAtx, err := posAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPosAtx, time.Now()))
-	built2, err := publishAtx(t, tab, posAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch, nil)
+	built2, err := publishAtx(t, tab, posAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, built2)
 	require.NotEqual(t, built.NIPost, built2.NIPost)
@@ -571,7 +646,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	// create and publish ATX
 	vrfNonce := types.VRFPostIndex(123)
 	tab.mpost.EXPECT().VRFNonce().Return(&vrfNonce, nil)
-	atx, err := publishAtx(t, tab, posAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch, nil)
+	atx, err := publishAtx(t, tab, posAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, atx)
 }
@@ -605,7 +680,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 
 	challenge = newChallenge(0, *types.EmptyATXID, posAtx.ID(), prevAtxLayer, nil)
 	challenge.InitialPostIndices = initialPost.Indices
-	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	prevAtx := newAtx(t, tab.sig, &tab.nodeID, challenge, nipost, 2, types.Address{})
 	prevAtx.InitialPost = initialPost
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	r.NoError(err)
@@ -651,7 +726,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 
 		vAtx, err := atx.Verify(0, 1)
 		r.NoError(err)
-		r.Equal(*tab.nodeID, vAtx.NodeID())
+		r.Equal(tab.nodeID, vAtx.NodeID())
 
 		r.NoError(atxs.Add(tab.cdb, vAtx, time.Now()))
 
@@ -733,7 +808,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 
 		vAtx, err := atx.Verify(0, 1)
 		r.NoError(err)
-		r.Equal(*tab.nodeID, vAtx.NodeID())
+		r.Equal(tab.nodeID, vAtx.NodeID())
 
 		r.NoError(atxs.Add(tab.cdb, vAtx, time.Now()))
 
@@ -758,7 +833,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 	posAtxLayer := types.NewLayerID(22)
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
-	posAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	posAtx := newAtx(t, tab.sig, &tab.nodeID, challenge, nipost, 2, types.Address{})
 	vPosAtx, err := posAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPosAtx, time.Now()))
@@ -802,7 +877,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
 	challenge := newChallenge(1, prevAtx, prevAtx, types.NewLayerID(15), nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
-	atx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 100, types.Address{})
+	atx := newAtx(t, tab.sig, &tab.nodeID, challenge, nipost, 100, types.Address{})
 	atxBytes, err := codec.Encode(&atx.InnerActivationTx)
 	require.NoError(t, err)
 	err = SignAndFinalizeAtx(tab, atx)
@@ -813,7 +888,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 
 	nodeId, err := extractor.ExtractNodeID(atxBytes, atx.Sig)
 	require.NoError(t, err)
-	require.Equal(t, *tab.nodeID, nodeId)
+	require.Equal(t, tab.nodeID, nodeId)
 }
 
 func TestBuilder_NIPostPublishRecovery(t *testing.T) {
@@ -822,13 +897,56 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	currLayer := posAtxLayer
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
-	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	prevAtx := newAtx(t, tab.sig, &tab.nodeID, challenge, nipost, 2, types.Address{})
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx, time.Now()))
 
+	publishEpoch := posAtxLayer.GetEpoch() + 1
+	tab.mclock.EXPECT().GetCurrentLayer().DoAndReturn(
+		func() types.LayerID {
+			return currLayer
+		}).AnyTimes()
+	tab.mhdlr.EXPECT().GetPosAtxID().Return(prevAtx.ID(), nil)
+	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
+		func(got types.LayerID) time.Time {
+			require.Equal(t, publishEpoch.FirstLayer(), got)
+			// time.Now() ~= currentLayer
+			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got.Value))
+		})
+	lastOpts := DefaultPostSetupOpts()
+	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, challenge *types.PoetChallenge, _ time.Time) (*types.NIPost, time.Duration, error) {
+			currLayer = currLayer.Add(layersPerEpoch)
+			return newNIPostWithChallenge(challenge.Hash(), []byte("66666")), 0, nil
+		})
+	done := make(chan struct{}, 1)
+	close(done)
+	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
+		func(got types.LayerID) chan struct{} {
+			// advance to publish layer
+			if currLayer.Before(got) {
+				currLayer = got
+			}
+			return done
+		})
+	var built *types.ActivationTx
 	publishErr := errors.New("blah")
-	built, err := publishAtx(t, tab, prevAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch, publishErr)
+	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, got []byte) error {
+			gotAtx, err := types.BytesToAtx(got)
+			require.NoError(t, err)
+			built = gotAtx
+			require.NoError(t, built.CalcAndSetID())
+			return publishErr
+		})
+	never := make(chan struct{}, 1)
+	tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(never)
+	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any())
+	// create and publish ATX
+	err = tab.PublishActivationTx(context.Background())
 	require.ErrorIs(t, err, publishErr)
 	require.NotNil(t, built)
 
@@ -838,9 +956,6 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	require.NotEmpty(t, got)
 
 	// now causing it to publish again, it should use the same atx
-	never := make(chan struct{}, 1)
-	done := make(chan struct{}, 1)
-	close(done)
 	tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(never)
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
@@ -850,7 +965,6 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 			require.Equal(t, gotAtx, built)
 			return nil
 		})
-	publishEpoch := posAtxLayer.GetEpoch() + 1
 	expireEpoch := publishEpoch + 2
 	tab.mclock.EXPECT().AwaitLayer(expireEpoch.FirstLayer()).Return(done)
 	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any()).DoAndReturn(
@@ -865,11 +979,11 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 
 	posAtxLayer = posAtxLayer.Add(layersPerEpoch + 1)
 	challenge = newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
-	posAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	posAtx := newAtx(t, tab.sig, &tab.nodeID, challenge, nipost, 2, types.Address{})
 	vPosAtx, err := posAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPosAtx, time.Now()))
-	built2, err := publishAtx(t, tab, posAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch, nil)
+	built2, err := publishAtx(t, tab, posAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, built2)
 	require.NotEqual(t, built.NIPost, built2.NIPost)
@@ -887,7 +1001,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	poetBytes := []byte("66666")
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), poetBytes)
-	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	prevAtx := newAtx(t, tab.sig, &tab.nodeID, challenge, nipost, 2, types.Address{})
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx, time.Now()))
@@ -942,16 +1056,16 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	poetByte := []byte("66666")
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), poetByte)
-	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	prevAtx := newAtx(t, tab.sig, &tab.nodeID, challenge, nipost, 2, types.Address{})
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx, time.Now()))
 
 	currLayer := posAtxLayer.Add(1)
-	atx, err := publishAtx(t, tab, prevAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch, nil)
+	atx, err := publishAtx(t, tab, prevAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, atx)
-	assertLastAtx(require.New(t), *tab.nodeID, types.BytesToHash(poetByte), atx, vPrevAtx, vPrevAtx, layersPerEpoch)
+	assertLastAtx(require.New(t), tab.nodeID, types.BytesToHash(poetByte), atx, vPrevAtx, vPrevAtx, layersPerEpoch)
 
 	// GenerateProof() should not be called again
 	require.NoError(t, tab.generateProof(context.Background()))

@@ -97,8 +97,10 @@ func defaultPoetServiceMock(tb testing.TB, id []byte) *MockPoetProvingServiceCli
 	poetClient := NewMockPoetProvingServiceClient(gomock.NewController(tb))
 	poetClient.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
 		func(_ context.Context, challenge, _ []byte) (*types.PoetRound, error) {
+			hash, err := getSerializedChallengeHash(challenge)
+			require.NoError(tb, err)
 			return &types.PoetRound{
-				ChallengeHash: getSerializedChallengeHash(challenge),
+				ChallengeHash: hash,
 			}, nil
 		})
 	poetClient.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(id, nil)
@@ -224,17 +226,21 @@ type gatewayService struct {
 	pb.UnimplementedGatewayServiceServer
 }
 
-func getSerializedChallengeHash(challenge []byte) types.Hash32 {
+func getSerializedChallengeHash(challenge []byte) (types.Hash32, error) {
 	challengeDecoded := types.PoetChallenge{}
 	if err := codec.Decode(challenge, &challengeDecoded); err != nil {
-		return types.Hash32{}
+		return types.Hash32{}, err
 	}
-	return challengeDecoded.Hash()
+	return challengeDecoded.Hash(), nil
 }
 
 func (*gatewayService) VerifyChallenge(_ context.Context, req *pb.VerifyChallengeRequest) (*pb.VerifyChallengeResponse, error) {
+	hash, err := getSerializedChallengeHash(req.Challenge)
+	if err != nil {
+		return nil, err
+	}
 	return &pb.VerifyChallengeResponse{
-		Hash: getSerializedChallengeHash(req.Challenge).Bytes(),
+		Hash: hash.Bytes(),
 	}, nil
 }
 
