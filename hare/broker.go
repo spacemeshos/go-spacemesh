@@ -81,14 +81,18 @@ func (b *Broker) Start(ctx context.Context) error {
 		return errors.New("hare broker already started")
 	}
 	b.isStarted = true
-	if b.cancel != nil {
-		b.cancel()
+	{
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		if b.cancel != nil {
+			b.cancel()
+		}
+		b.ctx, b.cancel = context.WithCancel(ctx)
+		b.queue = priorityq.New(b.ctx)
 	}
-	b.ctx, b.cancel = context.WithCancel(ctx)
-	b.queue = priorityq.New(b.ctx)
 
 	b.eg.Go(func() error {
-		b.eventLoop(log.WithNewSessionID(ctx))
+		b.eventLoop(ctx)
 		return nil
 	})
 
@@ -139,27 +143,16 @@ func (b *Broker) validate(ctx context.Context, m *Message) error {
 	return fmt.Errorf("%w: msg %v, latest %v", errFutureMsg, msgInstID, latestLayer)
 }
 
-func (b *Broker) isClosed() bool {
-	select {
-	case <-b.ctx.Done():
-		return true
-	default:
-		return false
-	}
-}
-
 // HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
 func (b *Broker) HandleMessage(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
-	if b.isClosed() {
-		return pubsub.ValidationIgnore
-	}
-
 	m, err := b.queueMessage(ctx, peer, msg)
 	if err != nil {
 		return pubsub.ValidationIgnore
 	}
 	select {
 	case <-ctx.Done():
+		return pubsub.ValidationIgnore
+	case <-b.ctx.Done():
 		return pubsub.ValidationIgnore
 	case err := <-m.Error:
 		if err != nil {

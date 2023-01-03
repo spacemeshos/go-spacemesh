@@ -51,16 +51,14 @@ func (m mockReport) Coinflip() bool {
 }
 
 type mockConsensusProcess struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	t      chan TerminationOutput
-	id     types.LayerID
-	set    *Set
+	started chan struct{}
+	t       chan TerminationOutput
+	id      types.LayerID
+	set     *Set
 }
 
-func (mcp *mockConsensusProcess) Start(ctx context.Context) error {
-	mcp.ctx, mcp.cancel = context.WithCancel(ctx)
-	mcp.cancel()
+func (mcp *mockConsensusProcess) Start() error {
+	close(mcp.started)
 	mcp.t <- mockReport{mcp.id, mcp.set, true, false}
 	return nil
 }
@@ -74,8 +72,9 @@ func (mcp *mockConsensusProcess) SetInbox(chan *Msg) {
 
 var _ Consensus = (*mockConsensusProcess)(nil)
 
-func newMockConsensusProcess(_ config.Config, instanceID types.LayerID, s *Set, _ Rolacle, _ Signer, _ pubsub.Publisher, outputChan chan TerminationOutput) *mockConsensusProcess {
+func newMockConsensusProcess(_ config.Config, instanceID types.LayerID, s *Set, _ Rolacle, _ Signer, _ pubsub.Publisher, outputChan chan TerminationOutput, started chan struct{}) *mockConsensusProcess {
 	mcp := new(mockConsensusProcess)
+	mcp.started = started
 	mcp.id = instanceID
 	mcp.t = outputChan
 	mcp.set = s
@@ -224,11 +223,12 @@ func TestHare_onTick(t *testing.T) {
 
 	h.networkDelta = 0
 	h.bufferSize = 1
-	createdChan := make(chan struct{})
+	createdChan := make(chan struct{}, 1)
+	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput) Consensus {
-		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
-		createdChan <- struct{}{}
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput) Consensus {
+		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan, startedChan)
+		close(createdChan)
 		return nmcp
 	}
 
@@ -256,7 +256,7 @@ func TestHare_onTick(t *testing.T) {
 	go func() {
 		clock.advanceLayer()
 		<-createdChan
-		<-nmcp.ctx.Done()
+		<-startedChan
 		wg.Done()
 	}()
 
@@ -293,11 +293,12 @@ func TestHare_onTick_BeaconFromRefBallot(t *testing.T) {
 
 	h.networkDelta = 0
 	h.bufferSize = 1
-	createdChan := make(chan struct{})
+	createdChan := make(chan struct{}, 1)
+	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput) Consensus {
-		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
-		createdChan <- struct{}{}
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput) Consensus {
+		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan, startedChan)
+		close(createdChan)
 		return nmcp
 	}
 
@@ -331,7 +332,7 @@ func TestHare_onTick_BeaconFromRefBallot(t *testing.T) {
 	go func() {
 		clock.advanceLayer()
 		<-createdChan
-		<-nmcp.ctx.Done()
+		<-startedChan
 		wg.Done()
 	}()
 
@@ -352,11 +353,12 @@ func TestHare_onTick_SomeBadBallots(t *testing.T) {
 
 	h.networkDelta = 0
 	h.bufferSize = 1
-	createdChan := make(chan struct{})
+	createdChan := make(chan struct{}, 1)
+	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput) Consensus {
-		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
-		createdChan <- struct{}{}
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput) Consensus {
+		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan, startedChan)
+		close(createdChan)
 		return nmcp
 	}
 
@@ -387,7 +389,7 @@ func TestHare_onTick_SomeBadBallots(t *testing.T) {
 	go func() {
 		clock.advanceLayer()
 		<-createdChan
-		<-nmcp.ctx.Done()
+		<-startedChan
 		wg.Done()
 	}()
 
@@ -408,11 +410,12 @@ func TestHare_onTick_NoGoodBallots(t *testing.T) {
 
 	h.networkDelta = 0
 	h.bufferSize = 1
-	createdChan := make(chan struct{})
+	createdChan := make(chan struct{}, 1)
+	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput) Consensus {
-		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
-		createdChan <- struct{}{}
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput) Consensus {
+		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan, startedChan)
+		close(createdChan)
 		return nmcp
 	}
 
@@ -442,7 +445,7 @@ func TestHare_onTick_NoGoodBallots(t *testing.T) {
 	go func() {
 		clock.advanceLayer()
 		<-createdChan
-		<-nmcp.ctx.Done()
+		<-startedChan
 		wg.Done()
 	}()
 

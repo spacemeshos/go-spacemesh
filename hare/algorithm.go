@@ -180,7 +180,7 @@ type consensusProcess struct {
 }
 
 // newConsensusProcess creates a new consensus process instance.
-func newConsensusProcess(cfg config.Config, layer types.LayerID, s *Set, oracle Rolacle, stateQuerier stateQuerier,
+func newConsensusProcess(ctx context.Context, cfg config.Config, layer types.LayerID, s *Set, oracle Rolacle, stateQuerier stateQuerier,
 	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p pubsub.Publisher,
 	terminationReport chan TerminationOutput,
 	ev roleValidator, clock RoundClock, logger log.Log,
@@ -201,8 +201,7 @@ func newConsensusProcess(cfg config.Config, layer types.LayerID, s *Set, oracle 
 		mTracker:          msgsTracker,
 		clock:             clock,
 	}
-	// provide a default context. overwritten when the consensus process is started.
-	proc.ctx, proc.cancel = context.WithCancel(context.Background())
+	proc.ctx, proc.cancel = context.WithCancel(ctx)
 	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, ev, msgsTracker, logger)
 
 	return proc
@@ -217,21 +216,20 @@ func iterationFromCounter(roundCounter uint32) uint32 {
 // It starts the PreRound round and then iterates through the rounds until consensus is reached or the instance is canceled.
 // It is assumed that the inbox is set before the call to Start.
 // It returns an error if Start has been called more than once or the inbox is nil.
-func (proc *consensusProcess) Start(ctx context.Context) error {
+func (proc *consensusProcess) Start() error {
 	if proc.isStarted { // called twice on same instance
 		return fmt.Errorf("consensus process already started for layer %v", proc.layer)
 	}
 
-	if proc.inbox == nil { // no inbox
-		return fmt.Errorf("consensus process for layer %v is missing inbox", proc.layer)
+	{
+		proc.mu.RLock()
+		defer proc.mu.RUnlock()
+		if proc.inbox == nil { // no inbox
+			return fmt.Errorf("consensus process for layer %v is missing inbox", proc.layer)
+		}
 	}
-
 	proc.isStarted = true
-	if proc.cancel != nil {
-		// GC the default cancel func
-		proc.cancel()
-	}
-	proc.ctx, proc.cancel = context.WithCancel(ctx)
+
 	proc.eg.Go(func() error {
 		proc.eventLoop()
 		return nil

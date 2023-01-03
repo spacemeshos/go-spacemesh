@@ -25,12 +25,12 @@ import (
 // LayerBuffer is the number of layer results we keep at a given time.
 const LayerBuffer = 20
 
-type consensusFactory func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput) Consensus
+type consensusFactory func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput) Consensus
 
 // Consensus represents an item that acts like a consensus process.
 type Consensus interface {
 	ID() types.LayerID
-	Start(ctx context.Context) error
+	Start() error
 	SetInbox(chan *Msg)
 }
 
@@ -150,8 +150,8 @@ func New(
 	h.bufferSize = LayerBuffer // XXX: must be at least the size of `hdist`
 	h.outputChan = make(chan TerminationOutput, h.bufferSize)
 	h.outputs = make(map[types.LayerID][]types.ProposalID, h.bufferSize) // we keep results about LayerBuffer past layers
-	h.factory = func(conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput) Consensus {
-		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, clock, logger)
+	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput) Consensus {
+		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, clock, logger)
 	}
 
 	h.nid = nid
@@ -329,9 +329,9 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		logger.With().Error("could not register consensus process on broker", log.Err(err))
 		return false, fmt.Errorf("broker register: %w", err)
 	}
-	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.publisher, clock, h.outputChan)
+	cp := h.factory(h.ctx, h.config, instID, set, h.rolacle, h.sign, h.publisher, clock, h.outputChan)
 	cp.SetInbox(c)
-	if err = cp.Start(log.WithNewSessionID(ctx)); err != nil {
+	if err = cp.Start(); err != nil {
 		logger.With().Error("could not start consensus process", log.Err(err))
 		h.broker.Unregister(ctx, cp.ID())
 		return false, fmt.Errorf("start consensus: %w", err)
@@ -455,11 +455,15 @@ func (h *Hare) tickLoop(ctx context.Context) {
 
 // Start starts listening for layers and outputs.
 func (h *Hare) Start(ctx context.Context) error {
-	if h.cancel != nil {
-		h.cancel()
+	{
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		if h.cancel != nil {
+			h.cancel()
+		}
+		h.ctx, h.cancel = context.WithCancel(ctx)
+		ctx = h.ctx
 	}
-	h.ctx, h.cancel = context.WithCancel(ctx)
-	ctx = h.ctx
 	h.WithContext(ctx).With().Info("starting protocol", log.String("protocol", pubsub.HareProtocol))
 
 	// Create separate contexts for each subprocess. This allows us to better track the flow of messages.

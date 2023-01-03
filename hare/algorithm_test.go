@@ -188,9 +188,9 @@ func TestConsensusProcess_Start(t *testing.T) {
 	require.NoError(t, err)
 	proc.SetInbox(inbox)
 	proc.value = NewSetFromValues(value1)
-	err = proc.Start(context.Background())
+	err = proc.Start()
 	require.NoError(t, err)
-	err = proc.Start(context.Background())
+	err = proc.Start()
 	require.Error(t, err, "instance already started")
 
 	closeBrokerAndWait(t, broker.Broker)
@@ -204,7 +204,7 @@ func TestConsensusProcess_TerminationLimit(t *testing.T) {
 	p.SetInbox(make(chan *Msg, 10))
 	p.cfg.LimitIterations = 1
 	p.cfg.RoundDuration = 1
-	require.NoError(t, p.Start(context.Background()))
+	require.NoError(t, p.Start())
 	time.Sleep(time.Duration(6*p.cfg.RoundDuration) * time.Second)
 
 	assert.EqualValues(t, 1, p.getRound()/4)
@@ -323,7 +323,7 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config) *conse
 	ctrl := gomock.NewController(tb)
 	sq := mocks.NewMockstateQuerier(ctrl)
 	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-	return newConsensusProcess(cfg, instanceID1, s, oracle, sq,
+	return newConsensusProcess(context.Background(), cfg, instanceID1, s, oracle, sq,
 		4, edSigner, types.BytesToNodeID(edPubkey.Bytes()),
 		noopPubSub(tb), output, truer{}, newRoundClockFromCfg(logger, cfg),
 		logtest.New(tb).WithName(edPubkey.String()))
