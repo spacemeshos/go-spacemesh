@@ -189,7 +189,7 @@ func publishAtx(
 			*currLayer = currLayer.Add(buildNIPostLayerDuration)
 			return newNIPostWithChallenge(challenge.Hash(), []byte("66666")), 0, nil
 		})
-	ch := make(chan struct{}, 1)
+	ch := make(chan struct{})
 	close(ch)
 	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
 		func(got types.LayerID) chan struct{} {
@@ -211,7 +211,7 @@ func publishAtx(
 			require.NoError(t, atxs.Add(tab.cdb, vatx, time.Now()))
 			return nil
 		})
-	never := make(chan struct{}, 1)
+	never := make(chan struct{})
 	tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(ch)
 	tab.mclock.EXPECT().AwaitLayer((publishEpoch + 2).FirstLayer()).Return(never)
 	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any()).DoAndReturn(
@@ -295,7 +295,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 
 	tab.mpost.EXPECT().StartSession(gomock.Any(), postSetupOpts, gomock.Any())
 	tab.mpost.EXPECT().GenerateProof(gomock.Any())
-	ch := make(chan struct{}, 1)
+	ch := make(chan struct{})
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch)
 	require.NoError(t, tab.StartSmeshing(coinbase, postSetupOpts))
 	require.Equal(t, coinbase, tab.Builder.Coinbase())
@@ -313,7 +313,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 		tab.mpost.EXPECT().GenerateProof(gomock.Any()).AnyTimes()
 		tab.mpost.EXPECT().Reset().AnyTimes()
-		ch := make(chan struct{}, 1)
+		ch := make(chan struct{})
 		close(ch)
 		tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch).AnyTimes()
 		tab.mclock.EXPECT().GetCurrentLayer().Return(types.NewLayerID(0)).AnyTimes()
@@ -359,7 +359,7 @@ func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	tab := newTestBuilder(t)
 	tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	tab.mpost.EXPECT().GenerateProof(gomock.Any()).Return(nil, nil, nil).AnyTimes()
-	ch := make(chan struct{}, 1)
+	ch := make(chan struct{})
 	close(ch)
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch).AnyTimes()
 	tab.mclock.EXPECT().GetCurrentLayer().Return(types.NewLayerID(0)).AnyTimes()
@@ -493,7 +493,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 			currLayer = currLayer.Add(layersPerEpoch)
 			return newNIPostWithChallenge(challenge.Hash(), []byte("66666")), 0, nil
 		})
-	done := make(chan struct{}, 1)
+	done := make(chan struct{})
 	close(done)
 	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
 		func(got types.LayerID) chan struct{} {
@@ -513,7 +513,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 			require.NoError(t, built.CalcAndSetID())
 			return publishErr
 		})
-	never := make(chan struct{}, 1)
+	never := make(chan struct{})
 	tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(never)
 	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any())
 	// create and publish ATX
@@ -584,7 +584,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 			currLayer = currLayer.Add(layersPerEpoch)
 			return newNIPostWithChallenge(challenge.Hash(), []byte("66666")), 0, nil
 		})
-	done := make(chan struct{}, 1)
+	done := make(chan struct{})
 	close(done)
 	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
 		func(got types.LayerID) chan struct{} {
@@ -604,7 +604,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 			require.NoError(t, built.CalcAndSetID())
 			return publishErr
 		})
-	never := make(chan struct{}, 1)
+	never := make(chan struct{})
 	tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(never)
 	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any())
 	// create and publish ATX
@@ -922,7 +922,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 			currLayer = currLayer.Add(layersPerEpoch)
 			return newNIPostWithChallenge(challenge.Hash(), []byte("66666")), 0, nil
 		})
-	done := make(chan struct{}, 1)
+	done := make(chan struct{})
 	close(done)
 	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
 		func(got types.LayerID) chan struct{} {
@@ -942,7 +942,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 			require.NoError(t, built.CalcAndSetID())
 			return publishErr
 		})
-	never := make(chan struct{}, 1)
+	never := make(chan struct{})
 	tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(never)
 	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any())
 	// create and publish ATX
@@ -1012,7 +1012,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now().Add(100 * time.Second)).AnyTimes()
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
-	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{}, 1)).AnyTimes()
+	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
 
 	expectedTries := 3
 	tries := 0
