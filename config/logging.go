@@ -6,7 +6,8 @@ import "go.uber.org/zap/zapcore"
 type LogEncoder = string
 
 const (
-	defaultLoggingLevel = zapcore.WarnLevel
+	defaultLoggingLevel = zapcore.ErrorLevel
+
 	// ConsoleLogEncoder represents logging with plain text.
 	ConsoleLogEncoder LogEncoder = "console"
 	// JSONLogEncoder represents logging with JSON.

@@ -29,7 +29,7 @@ type Level = zapcore.Level
 
 // DefaultLevel returns the zapcore level of logging.
 func DefaultLevel() Level {
-	return zapcore.InfoLevel
+	return zapcore.ErrorLevel
 }
 
 // Logger is an interface for our logging API.
