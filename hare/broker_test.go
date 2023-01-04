@@ -46,7 +46,7 @@ func createMessage(tb testing.TB, instanceID types.LayerID) []byte {
 	sr, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	b := newMessageBuilder()
-	msg := b.SetPubKey(sr.PublicKey()).SetInstanceID(instanceID).Sign(sr).Build()
+	msg := b.SetPubKey(sr.PublicKey()).SetLayer(instanceID).Sign(sr).Build()
 	return mustEncode(tb, msg.Message)
 }
 
@@ -58,7 +58,7 @@ func TestBroker_Start(t *testing.T) {
 
 	err = broker.Start(context.Background())
 	assert.NotNil(t, err)
-	assert.Equal(t, "instance already started", err.Error())
+	assert.Equal(t, "hare broker already started", err.Error())
 
 	closeBrokerAndWait(t, broker.Broker)
 }
@@ -79,111 +79,6 @@ func TestBroker_Received(t *testing.T) {
 	waitForMessages(t, inbox, instanceID1, 1)
 
 	closeBrokerAndWait(t, broker.Broker)
-}
-
-// test that self-generated (outbound) messages are handled before incoming messages.
-func TestBroker_Priority(t *testing.T) {
-	broker := buildBroker(t, t.Name())
-
-	// this allows us to pause and release broker processing of incoming messages
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	wg2 := sync.WaitGroup{}
-	wg2.Add(1)
-	once := sync.Once{}
-	broker.eValidator = &mockEligibilityValidator{validationFn: func(context.Context, *Msg) bool {
-		// tell the sender that we've got one message
-		once.Do(wg2.Done)
-		// wait until all the messages are queued
-		wg.Wait()
-		return true
-	}}
-	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-
-	require.NoError(t, broker.Start(context.Background()))
-
-	// take control of the broker inbox so we can feed it messages in a deterministic order
-	// make the channel blocking (no buffer) so we can be sure the messages have been processed
-	outbox, err := broker.Register(context.Background(), instanceID1)
-	assert.Nil(t, err)
-
-	createMessageWithRoleProof := func(roleProof []byte) []byte {
-		signer, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		b := newMessageBuilder()
-		msg := b.SetPubKey(signer.PublicKey()).SetInstanceID(instanceID1).SetRoleProof(roleProof).Sign(signer).Build()
-		return mustEncode(t, msg.Message)
-	}
-	roleProofInbound := []byte{1, 2, 3}
-	roleProofOutbound := []byte{3, 2, 1}
-	serMsgInbound := createMessageWithRoleProof(roleProofInbound)
-	serMsgOutbound := createMessageWithRoleProof(roleProofOutbound)
-
-	// first, broadcast a bunch of simulated inbound messages
-	for i := 0; i < 10; i++ {
-		// channel send is blocking, so we're sure the messages have been processed
-		broker.queueMessage(context.Background(), "not-self", serMsgInbound)
-	}
-
-	// make sure the listener has gotten at least one message
-	wg2.Wait()
-
-	// now broadcast one outbound message
-	broker.queueMessage(context.Background(), broker.peer, serMsgOutbound)
-
-	// all messages are queued, release the waiting listener (hare event loop)
-	wg.Done()
-
-	// we expect the outbound message to be prioritized
-	tm := time.NewTimer(3 * time.Minute)
-	for i := 0; i < 11; i++ {
-		select {
-		case x := <-outbox:
-			switch i {
-			case 0:
-				// first message (already queued) should be inbound
-				assert.Equal(t, roleProofInbound, x.InnerMsg.RoleProof, "expected inbound msg %d", i)
-			case 1:
-				// second message should be outbound
-				assert.Equal(t, roleProofOutbound, x.InnerMsg.RoleProof, "expected outbound msg %d", i)
-			default:
-				// all subsequent messages should be inbound
-				assert.Equal(t, roleProofInbound, x.InnerMsg.RoleProof, "expected inbound msg %d", i)
-			}
-		case <-tm.C:
-			assert.Fail(t, "timed out waiting for message", "msg %d", i)
-			return
-		}
-	}
-	assert.Len(t, outbox, 0, "expected broker queue to be empty")
-
-	// Test shutdown flow
-
-	// Listener to make sure internal queue channel is closed
-	wg3 := sync.WaitGroup{}
-	wg3.Add(1)
-	res := make(chan bool)
-	go func() {
-		timeout := time.NewTimer(time.Second)
-		wg3.Done()
-		select {
-		case <-timeout.C:
-			assert.Fail(t, "timed out waiting for channel close")
-			res <- false
-		case _, ok := <-broker.queueChannel:
-			assert.False(t, ok, "expected channel close")
-			res <- !ok
-		}
-	}()
-
-	// Make sure the listener is listening
-	wg3.Wait()
-	broker.Close()
-	_, err = broker.queue.Read()
-	assert.Error(t, err, "expected broker priority queue to be closed")
-	assert.True(t, <-res)
 }
 
 // test that after registering the maximum number of protocols,
@@ -244,7 +139,7 @@ func TestBroker_Abort(t *testing.T) {
 	go broker.Close()
 
 	select {
-	case <-broker.CloseChannel():
+	case <-broker.ctx.Done():
 		assert.True(t, true)
 	case <-timer.C:
 		assert.Fail(t, "timeout")
@@ -264,7 +159,7 @@ func waitForMessages(t *testing.T, inbox chan *Msg, instanceID types.LayerID, ms
 		for {
 			select {
 			case x := <-inbox:
-				assert.True(t, x.InnerMsg.InstanceID == instanceID)
+				assert.True(t, x.InnerMsg.Layer == instanceID)
 				i++
 				if i >= msgCount {
 					return
@@ -362,10 +257,10 @@ func TestBroker_Send(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	msg := BuildPreRoundMsg(signer, NewSetFromValues(value1), nil).Message
-	msg.InnerMsg.InstanceID = instanceID2
+	msg.InnerMsg.Layer = instanceID2
 	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
 
-	msg.InnerMsg.InstanceID = instanceID1
+	msg.InnerMsg.Layer = instanceID1
 	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
 	// nothing happens since this is an invalid InnerMsg
 
@@ -410,12 +305,12 @@ func TestBroker_Register2(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildPreRoundMsg(signer, NewSetFromValues(value1), nil).Message
-	m.InnerMsg.InstanceID = instanceID1
+	m.InnerMsg.Layer = instanceID1
 
 	msg := newMockGossipMsg(m).Message
 	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(context.Background(), "", mustEncode(t, msg)))
 
-	m.InnerMsg.InstanceID = instanceID2
+	m.InnerMsg.Layer = instanceID2
 	msg = newMockGossipMsg(m).Message
 	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(context.Background(), "", mustEncode(t, msg)))
 
@@ -432,7 +327,7 @@ func TestBroker_Register3(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildPreRoundMsg(signer, NewSetFromValues(value1), nil).Message
-	m.InnerMsg.InstanceID = instanceID1
+	m.InnerMsg.Layer = instanceID1
 
 	broker.HandleMessage(context.Background(), "", mustEncode(t, m))
 	time.Sleep(1 * time.Millisecond)
@@ -461,7 +356,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildPreRoundMsg(signer, NewSetFromValues(value1), nil).Message
-	m.InnerMsg.InstanceID = instanceID1
+	m.InnerMsg.Layer = instanceID1
 
 	broker.HandleMessage(context.Background(), "", mustEncode(t, m))
 
@@ -557,7 +452,7 @@ func TestBroker_eventLoop(t *testing.T) {
 	m := BuildPreRoundMsg(signer, NewSetFromValues(value1), nil).Message
 
 	// not synced
-	m.InnerMsg.InstanceID = instanceID1
+	m.InnerMsg.Layer = instanceID1
 	msg := newMockGossipMsg(m).Message
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
 	r.Equal(pubsub.ValidationIgnore, b.HandleMessage(context.Background(), "", mustEncode(t, msg)))
@@ -576,12 +471,12 @@ func TestBroker_eventLoop(t *testing.T) {
 	r.Equal(msg, recM.Message)
 
 	// early message
-	m.InnerMsg.InstanceID = instanceID2
+	m.InnerMsg.Layer = instanceID2
 	msg = newMockGossipMsg(m).Message
 	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.Background(), "", mustEncode(t, msg)))
 
 	// future message
-	m.InnerMsg.InstanceID = instanceID3
+	m.InnerMsg.Layer = instanceID3
 	msg = newMockGossipMsg(m).Message
 	r.Equal(pubsub.ValidationIgnore, b.HandleMessage(context.Background(), "", mustEncode(t, msg)))
 
@@ -601,20 +496,20 @@ func Test_validate(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildStatusMsg(signer, NewDefaultEmptySet())
-	m.InnerMsg.InstanceID = instanceID1
+	m.InnerMsg.Layer = instanceID1
 	b.setLatestLayer(context.Background(), instanceID2)
 	e := b.validate(context.Background(), &m.Message)
 	r.ErrorIs(e, errUnregistered)
 
-	m.InnerMsg.InstanceID = instanceID2
+	m.InnerMsg.Layer = instanceID2
 	e = b.validate(context.Background(), &m.Message)
 	r.ErrorIs(e, errRegistration)
 
-	m.InnerMsg.InstanceID = instanceID3
+	m.InnerMsg.Layer = instanceID3
 	e = b.validate(context.Background(), &m.Message)
 	r.ErrorIs(e, errEarlyMsg)
 
-	m.InnerMsg.InstanceID = instanceID4
+	m.InnerMsg.Layer = instanceID4
 	e = b.validate(context.Background(), &m.Message)
 	r.ErrorIs(e, errFutureMsg)
 
@@ -655,7 +550,7 @@ func TestBroker_Flow(t *testing.T) {
 	signer1, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildStatusMsg(signer1, NewDefaultEmptySet())
-	m.InnerMsg.InstanceID = instanceID1
+	m.InnerMsg.Layer = instanceID1
 	b.HandleMessage(context.Background(), "", mustEncode(t, m.Message))
 
 	ch1, e := b.Register(context.Background(), instanceID1)
@@ -665,7 +560,7 @@ func TestBroker_Flow(t *testing.T) {
 	signer2, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m2 := BuildStatusMsg(signer2, NewDefaultEmptySet())
-	m2.InnerMsg.InstanceID = instanceID2
+	m2.InnerMsg.Layer = instanceID2
 	ch2, e := b.Register(context.Background(), instanceID2)
 	r.Nil(e)
 
@@ -700,6 +595,6 @@ func closeBrokerAndWait(t *testing.T, b *Broker) {
 	select {
 	case <-timer.C:
 		t.Errorf("timeout")
-	case <-b.CloseChannel():
+	case <-b.ctx.Done():
 	}
 }

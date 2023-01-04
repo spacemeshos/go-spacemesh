@@ -11,7 +11,7 @@ import (
 
 func BuildCommitMsg(signing Signer, s *Set) *Msg {
 	builder := newMessageBuilder()
-	builder.SetType(commit).SetInstanceID(instanceID1).SetRoundCounter(commitRound).SetKi(ki).SetValues(s)
+	builder.SetType(commit).SetLayer(instanceID1).SetRoundCounter(commitRound).SetCommittedRound(ki).SetValues(s)
 	builder.SetEligibilityCount(1)
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
