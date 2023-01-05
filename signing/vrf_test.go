@@ -58,7 +58,7 @@ func Test_VRFSignAndVerify(t *testing.T) {
 			VRFNonce: &nonce,
 		},
 	}
-	atx.Sig = signer.Sign(atx.SignedBytes())
+	atx.Signature = signer.Sign(atx.SignedBytes())
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 

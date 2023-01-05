@@ -349,7 +349,7 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 		return fmt.Errorf("failed to derive ID from atx: %w", err)
 	}
 	if err := atx.CalcAndSetNodeID(); err != nil {
-		return fmt.Errorf("failed to derive Node ID from ATX with sig %v: %w", atx.Sig, err)
+		return fmt.Errorf("failed to derive Node ID from ATX with sig %v: %w", atx.Signature, err)
 	}
 	logger := h.log.WithContext(ctx).WithFields(atx.ID())
 	existing, _ := h.cdb.GetAtxHeader(atx.ID())

@@ -242,7 +242,7 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	atx.Sig = signer.Sign(atx.SignedBytes())
+	atx.Signature = signer.Sign(atx.SignedBytes())
 	vatx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	return vatx

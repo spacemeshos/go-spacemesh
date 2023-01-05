@@ -145,6 +145,8 @@ func dialGrpc(ctx context.Context, tb testing.TB, cfg config.Config) *grpc.Clien
 }
 
 func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+
 	// run on a random port
 	cfg.GrpcServerPort = 1024 + rand.Intn(9999)
 
