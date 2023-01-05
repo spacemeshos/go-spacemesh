@@ -13,7 +13,7 @@ import (
 
 func buildProposalMsg(signing Signer, s *Set, signature []byte) *Msg {
 	builder := newMessageBuilder().SetRoleProof(signature)
-	builder.SetType(proposal).SetInstanceID(instanceID1).SetRoundCounter(proposalRound).SetKi(ki).SetValues(s).SetSVP(buildSVP(ki, NewSetFromValues(value1)))
+	builder.SetType(proposal).SetLayer(instanceID1).SetRoundCounter(proposalRound).SetCommittedRound(ki).SetValues(s).SetSVP(buildSVP(ki, NewSetFromValues(value1)))
 	builder.SetEligibilityCount(1)
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 

@@ -121,12 +121,12 @@ func New(
 ) *Oracle {
 	vmc, err := lru.New(vrfMsgCacheSize)
 	if err != nil {
-		logger.With().Panic("could not create lru cache", log.Err(err))
+		logger.With().Fatal("failed to create lru cache for vrf msg", log.Err(err))
 	}
 
 	ac, err := lru.New(activesCacheSize)
 	if err != nil {
-		logger.With().Panic("could not create lru cache", log.Err(err))
+		logger.With().Fatal("failed to create lru cache for active set", log.Err(err))
 	}
 
 	return &Oracle{
@@ -188,11 +188,6 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	// get value from beacon
 	v, err := o.getBeaconValue(ctx, layer.GetEpoch())
 	if err != nil {
-		o.WithContext(ctx).With().Error("could not get beacon value for epoch",
-			log.Err(err),
-			layer,
-			layer.GetEpoch(),
-			log.Uint32("round", round))
 		return nil, fmt.Errorf("get beacon: %w", err)
 	}
 
@@ -209,7 +204,6 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
-		o.WithContext(ctx).With().Error("failed to get active set", log.Err(err), layer)
 		return 0, err
 	}
 
@@ -223,7 +217,6 @@ func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, 
 func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error) {
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
-		o.With().Error("minerWeight erred while calling actives func", log.Err(err), layer)
 		return 0, err
 	}
 
@@ -259,6 +252,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 
 	msg, err := o.buildVRFMessage(ctx, layer, round)
 	if err != nil {
+		logger.With().Warning("could not get beacon value for epoch", log.Err(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
@@ -273,6 +267,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	// get active set size
 	totalWeight, err := o.totalWeight(ctx, layer)
 	if err != nil {
+		logger.With().Error("failed to get total weight", log.Err(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
@@ -285,6 +280,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	// calc hash & check threshold
 	minerWeight, err := o.minerWeight(ctx, layer, id)
 	if err != nil {
+		logger.With().Error("failed to get miner weight", log.Err(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
@@ -296,7 +292,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 
 	// ensure miner weight fits in int
 	if uint64(n) != minerWeight {
-		logger.Panic(fmt.Sprintf("minerWeight overflows int (%d)", minerWeight))
+		logger.Fatal(fmt.Sprintf("minerWeight overflows int (%d)", minerWeight))
 	}
 
 	// calc p
@@ -328,13 +324,12 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32
 
 	defer func() {
 		if msg := recover(); msg != nil {
-			o.WithContext(ctx).With().Error("panic in validate",
+			o.WithContext(ctx).With().Fatal("panic in validate",
 				log.String("msg", fmt.Sprint(msg)),
 				log.Int("n", n),
 				log.String("p", p.String()),
 				log.String("vrf_frac", vrfFrac.String()),
 			)
-			o.Panic("%s", msg)
 		}
 	}()
 
@@ -368,7 +363,7 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 
 	defer func() {
 		if msg := recover(); msg != nil {
-			o.With().Error("panic in calc eligibility",
+			o.With().Fatal("panic in calc eligibility",
 				layer, layer.GetEpoch(), log.Uint32("round_id", round),
 				log.String("msg", fmt.Sprint(msg)),
 				log.Int("committee_size", committeeSize),
@@ -376,7 +371,6 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 				log.String("p", fmt.Sprintf("%g", p.Float())),
 				log.String("vrf_frac", fmt.Sprintf("%g", vrfFrac.Float())),
 			)
-			o.Panic("%s", msg)
 		}
 	}()
 
@@ -400,7 +394,6 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
 	msg, err := o.buildVRFMessage(ctx, layer, round)
 	if err != nil {
-		o.WithContext(ctx).With().Error("proof: could not build vrf message", log.Err(err))
 		return nil, err
 	}
 
@@ -468,7 +461,6 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 		epoch = layerID.GetEpoch()
 		if _, exist := beacons[epoch]; !exist {
 			if beacon, err = o.beacons.GetBeacon(epoch); err != nil {
-				logger.With().Error("actives failed to get beacon", epoch, log.Err(err))
 				return nil, fmt.Errorf("error getting beacon for epoch %v: %w", epoch, err)
 			}
 			logger.With().Debug("found beacon for epoch", epoch, beacon)
@@ -476,7 +468,6 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 		}
 		blts, err := ballots.Layer(o.cdb, layerID)
 		if err != nil {
-			logger.With().Warning("failed to get layer ballots", layerID, log.Err(err))
 			return nil, fmt.Errorf("error getting ballots for layer %v (target layer %v): %w",
 				layerID, targetLayer, err)
 		}
@@ -533,7 +524,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 			return nil, fmt.Errorf("hare actives (target layer %v) get bad beacon ATX: %w", targetLayer, err)
 		}
 		delete(hareActiveSet, atx.NodeID)
-		logger.With().Error("smesher removed from hare active set", log.Stringer("node_key", atx.NodeID))
+		logger.With().Warning("smesher removed from hare active set", log.Stringer("node_key", atx.NodeID))
 	}
 
 	if len(hareActiveSet) > 0 {

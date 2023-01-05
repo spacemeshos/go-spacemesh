@@ -23,7 +23,7 @@ func TestBuilder_TestBuild(t *testing.T) {
 	b := newMessageBuilder()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	msg := b.SetPubKey(signer.PublicKey()).SetInstanceID(instanceID1).Sign(signer).Build()
+	msg := b.SetPubKey(signer.PublicKey()).SetLayer(instanceID1).Sign(signer).Build()
 
 	m := marshallUnmarshall(t, &msg.Message)
 	assert.Equal(t, m, &msg.Message)

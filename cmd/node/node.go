@@ -636,7 +636,6 @@ func (app *App) initServices(ctx context.Context,
 	app.hare = hare.New(
 		sqlDB,
 		app.Config.HARE,
-		app.host.ID(),
 		app.host,
 		sgn,
 		nodeID,
