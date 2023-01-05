@@ -66,7 +66,7 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 	for lyr := start; !lyr.After(end); lyr = lyr.Add(1) {
 		for _, atx := range activeSet {
 			b := types.RandomBallot()
-			b.LayerIndex = lyr
+			b.Layer = lyr
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
@@ -374,7 +374,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	for lyr := start; !lyr.After(end); lyr = lyr.Add(1) {
 		for _, atx := range activeSet {
 			b := types.RandomBallot()
-			b.LayerIndex = lyr
+			b.Layer = lyr
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
@@ -467,7 +467,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	activeSet := types.RandomActiveSet(numMiners)
 	for _, atx := range activeSet {
 		b := types.RandomBallot()
-		b.LayerIndex = start
+		b.Layer = start
 		b.AtxID = atx
 		b.RefBallot = types.EmptyBallotID
 		b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
@@ -650,7 +650,7 @@ func TestActives_HareActiveSetDifferentBeacon(t *testing.T) {
 	for lyr := start; !lyr.After(end); lyr = lyr.Add(1) {
 		for _, atx := range atxIDs {
 			b := types.RandomBallot()
-			b.LayerIndex = lyr
+			b.Layer = lyr
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			if atx == badBeaconATX {

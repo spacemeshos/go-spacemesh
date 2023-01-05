@@ -120,7 +120,7 @@ func withAbstain(layers ...types.LayerID) createBallotOpt {
 
 func withLayer(lid types.LayerID) createBallotOpt {
 	return func(b *types.Ballot) {
-		b.LayerIndex = lid
+		b.Layer = lid
 	}
 }
 
@@ -697,7 +697,7 @@ func TestBallot_DecodeBeforeVotesConsistency(t *testing.T) {
 	b := createBallot(t)
 	b.Votes.Against = b.Votes.Support
 	for _, bid := range b.Votes.Support {
-		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(1)})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: b.Layer.Sub(1)})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	expected := errors.New("test")
@@ -865,7 +865,7 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, collectHashes(*p))
 	errUnknown := errors.New("unknown")
-	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(errUnknown).Times(1)
+	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.Layer, p.ID(), p.TxIDs).Return(errUnknown).Times(1)
 	require.ErrorIs(t, th.HandleSyncedProposal(context.Background(), data), errUnknown)
 	checkProposal(t, th.cdb, p, true)
 }
@@ -901,7 +901,7 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 			return nil
 		}).MinTimes(1).MaxTimes(2)
 	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil).MinTimes(1).MaxTimes(2)
-	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
+	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.Layer, p.ID(), p.TxIDs).Return(nil).Times(1)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -977,7 +977,7 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 			if tc.propFetched {
 				require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), p2p.NoPeer, data))
 			} else {
-				th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
+				th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.Layer, p.ID(), p.TxIDs).Return(nil).Times(1)
 				require.Equal(t, pubsub.ValidationAccept, th.HandleProposal(context.Background(), p2p.NoPeer, data))
 			}
 			checkProposal(t, th.cdb, p, true)
@@ -1015,7 +1015,7 @@ func TestProposal_ValidProposal(t *testing.T) {
 		})
 	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, collectHashes(*p))
-	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
+	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.Layer, p.ID(), p.TxIDs).Return(nil).Times(1)
 	require.NoError(t, th.HandleSyncedProposal(context.Background(), data))
 	checkProposal(t, th.cdb, p, true)
 }
@@ -1050,7 +1050,7 @@ func TestMetrics(t *testing.T) {
 		})
 	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, collectHashes(*p))
-	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
+	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.Layer, p.ID(), p.TxIDs).Return(nil).Times(1)
 	require.NoError(t, th.HandleSyncedProposal(context.Background(), data))
 	checkProposal(t, th.cdb, p, true)
 	counts, err := testutil.GatherAndCount(prometheus.DefaultGatherer, "spacemesh_proposals_proposal_size")

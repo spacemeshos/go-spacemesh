@@ -96,10 +96,10 @@ var (
 	signer2     *signing.EdSigner
 	globalTx    *types.Transaction
 	globalTx2   *types.Transaction
-	ballot1     = genLayerBallot(types.LayerID{})
-	block1      = genLayerBlock(types.LayerID{}, nil)
-	block2      = genLayerBlock(types.LayerID{}, nil)
-	block3      = genLayerBlock(types.LayerID{}, nil)
+	ballot1     = genLayerBallot(types.NewLayerID(11))
+	block1      = genLayerBlock(types.NewLayerID(11), nil)
+	block2      = genLayerBlock(types.NewLayerID(11), nil)
+	block3      = genLayerBlock(types.NewLayerID(11), nil)
 	meshAPI     = &MeshAPIMock{}
 	conStateAPI = &ConStateAPIMock{
 		returnTx:      make(map[types.TransactionID]*types.Transaction),
@@ -114,7 +114,7 @@ var (
 
 func genLayerBallot(layerID types.LayerID) *types.Ballot {
 	b := types.RandomBallot()
-	b.LayerIndex = layerID
+	b.Layer = layerID
 	signer, _ := signing.NewEdSigner()
 	b.Signature = signer.Sign(b.SignedBytes())
 	b.Initialize()

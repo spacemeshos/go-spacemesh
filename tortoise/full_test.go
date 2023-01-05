@@ -376,10 +376,10 @@ func TestFullCountVotes(t *testing.T) {
 				lid := genesis.Add(uint32(i) + 1)
 				for j, b := range layer {
 					ballot := &types.Ballot{}
-					ballot.EligibilityProofs = []types.VotingEligibilityProof{{J: uint32(j)}}
+					ballot.EligibilityProofs = []types.VotingEligibility{{J: uint32(j)}}
 					ballot.AtxID = activeset[b.ATX]
 					ballot.EpochData = &types.EpochData{ActiveSet: activeset}
-					ballot.LayerIndex = lid
+					ballot.Layer = lid
 					// don't vote on genesis for simplicity,
 					// since we don't care about block goodness in this test
 					if i > 0 {
@@ -394,6 +394,7 @@ func TestFullCountVotes(t *testing.T) {
 						}
 						ballot.Votes.Base = ballotsList[b.Base[0]][b.Base[1]].ID()
 					}
+					ballot.OpinionHash = types.RandomHash() // fake opinion, only to make sure each ballot has a unique ID
 					ballot.Signature = signer.Sign(ballot.SignedBytes())
 					require.NoError(t, ballot.Initialize())
 					layerBallots = append(layerBallots, ballot)

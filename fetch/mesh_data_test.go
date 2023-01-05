@@ -227,9 +227,11 @@ func genLayerProposal(tb testing.TB, layerID types.LayerID, txs []types.Transact
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
+				BallotMetadata: types.BallotMetadata{
+					Layer: layerID,
+				},
 				InnerBallot: types.InnerBallot{
-					AtxID:      types.RandomATXID(),
-					LayerIndex: layerID,
+					AtxID: types.RandomATXID(),
 					EpochData: &types.EpochData{
 						ActiveSet: types.RandomActiveSet(10),
 						Beacon:    types.RandomBeacon(),
@@ -249,7 +251,7 @@ func genLayerProposal(tb testing.TB, layerID types.LayerID, txs []types.Transact
 
 func genLayerBallot(tb testing.TB, layerID types.LayerID) *types.Ballot {
 	b := types.RandomBallot()
-	b.LayerIndex = layerID
+	b.Layer = layerID
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	b.Signature = signer.Sign(b.SignedBytes())
