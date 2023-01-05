@@ -40,6 +40,11 @@ func (m *Message) Field() log.Field {
 	return log.Object("hare_msg", m)
 }
 
+// SignedBytes returns the signed data for hare message.
+func (m *Message) SignedBytes() []byte {
+	return m.InnerMsg.Bytes()
+}
+
 // Certificate is a collection of messages and the set of values.
 // Typically used as a collection of commit messages.
 type Certificate struct {
@@ -99,74 +104,74 @@ func newMessageBuilder() *messageBuilder {
 }
 
 // Build returns the protocol message as type Msg.
-func (builder *messageBuilder) Build() *Msg {
-	return builder.msg
+func (mb *messageBuilder) Build() *Msg {
+	return mb.msg
 }
 
 // SetCertificate sets certificate.
-func (builder *messageBuilder) SetCertificate(certificate *Certificate) *messageBuilder {
-	builder.inner.Cert = certificate
-	return builder
+func (mb *messageBuilder) SetCertificate(certificate *Certificate) *messageBuilder {
+	mb.inner.Cert = certificate
+	return mb
 }
 
 // Sign calls the provided signer to calculate the signature and then set it accordingly.
-func (builder *messageBuilder) Sign(signing Signer) *messageBuilder {
-	builder.msg.Signature = signing.Sign(builder.inner.Bytes())
+func (mb *messageBuilder) Sign(signing Signer) *messageBuilder {
+	mb.msg.Signature = signing.Sign(mb.msg.SignedBytes())
 
-	return builder
+	return mb
 }
 
 // SetPubKey sets the public key of the message.
 // Note: the message itself does not contain the public key. The builder returns the wrapper of the message which does.
-func (builder *messageBuilder) SetPubKey(pub *signing.PublicKey) *messageBuilder {
-	builder.msg.PubKey = pub
-	return builder
+func (mb *messageBuilder) SetPubKey(pub *signing.PublicKey) *messageBuilder {
+	mb.msg.PubKey = pub
+	return mb
 }
 
 // SetType sets message type.
-func (builder *messageBuilder) SetType(msgType MessageType) *messageBuilder {
-	builder.inner.Type = msgType
-	return builder
+func (mb *messageBuilder) SetType(msgType MessageType) *messageBuilder {
+	mb.inner.Type = msgType
+	return mb
 }
 
 // SetLayer sets the layer.
-func (builder *messageBuilder) SetLayer(id types.LayerID) *messageBuilder {
-	builder.inner.Layer = id
-	return builder
+func (mb *messageBuilder) SetLayer(id types.LayerID) *messageBuilder {
+	mb.inner.Layer = id
+	return mb
 }
 
 // SetRoundCounter sets the round counter.
-func (builder *messageBuilder) SetRoundCounter(round uint32) *messageBuilder {
-	builder.inner.Round = round
-	return builder
+func (mb *messageBuilder) SetRoundCounter(round uint32) *messageBuilder {
+	mb.inner.Round = round
+	return mb
 }
 
 // SetCommittedRound sets the committed round of the set values.
-func (builder *messageBuilder) SetCommittedRound(round uint32) *messageBuilder {
-	builder.inner.CommittedRound = round
-	return builder
+func (mb *messageBuilder) SetCommittedRound(round uint32) *messageBuilder {
+	mb.inner.CommittedRound = round
+	return mb
 }
 
 // SetValues sets values.
-func (builder *messageBuilder) SetValues(set *Set) *messageBuilder {
-	builder.inner.Values = set.ToSlice()
-	return builder
+func (mb *messageBuilder) SetValues(set *Set) *messageBuilder {
+	mb.inner.Values = set.ToSlice()
+	return mb
 }
 
 // SetRoleProof sets role proof.
-func (builder *messageBuilder) SetRoleProof(sig []byte) *messageBuilder {
-	builder.inner.RoleProof = sig
-	return builder
+func (mb *messageBuilder) SetRoleProof(sig []byte) *messageBuilder {
+	mb.inner.RoleProof = sig
+	return mb
 }
 
 // SetEligibilityCount sets eligibility count.
-func (builder *messageBuilder) SetEligibilityCount(eligibilityCount uint16) *messageBuilder {
-	builder.inner.EligibilityCount = eligibilityCount
-	return builder
+func (mb *messageBuilder) SetEligibilityCount(eligibilityCount uint16) *messageBuilder {
+	mb.inner.EligibilityCount = eligibilityCount
+	return mb
 }
 
 // SetSVP sets svp.
-func (builder *messageBuilder) SetSVP(svp *AggregatedMessages) *messageBuilder {
-	builder.inner.Svp = svp
-	return builder
+func (mb *messageBuilder) SetSVP(svp *AggregatedMessages) *messageBuilder {
+	mb.inner.Svp = svp
+	return mb
 }

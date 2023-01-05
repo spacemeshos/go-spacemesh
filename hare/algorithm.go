@@ -106,7 +106,7 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQ
 	logger = logger.WithContext(ctx)
 
 	// extract pub key
-	nodeId, err := types.ExtractNodeIDFromSig(hareMsg.InnerMsg.Bytes(), hareMsg.Signature)
+	nodeId, err := types.ExtractNodeIDFromSig(hareMsg.SignedBytes(), hareMsg.Signature)
 	if err != nil {
 		logger.With().Error("failed to extract public key",
 			log.Err(err),
