@@ -26,7 +26,7 @@ type layerClock interface {
 }
 
 type nipostBuilder interface {
-	updatePoETProvers([]PoetProvingServiceClient)
+	UpdatePoETProvers([]PoetProvingServiceClient)
 	BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error)
 }
 

@@ -10,7 +10,9 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 var id = types.NodeID{}
@@ -29,7 +31,8 @@ func getTestConfig(t *testing.T) (PostConfig, PostSetupOpts) {
 func TestPostSetupManager(t *testing.T) {
 	req := require.New(t)
 
-	cdb := newCachedDB(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	goldenATXID := types.ATXID{2, 3, 4}
 	cfg, opts := getTestConfig(t)
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
@@ -61,7 +64,7 @@ func TestPostSetupManager(t *testing.T) {
 	// Create data.
 	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 	cancel()
-	eg.Wait()
+	_ = eg.Wait()
 
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
@@ -79,7 +82,8 @@ func TestPostSetupManager(t *testing.T) {
 func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req := require.New(t)
 
-	cdb := newCachedDB(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	goldenATXID := types.ATXID{2, 3, 4}
 	cfg, opts := getTestConfig(t)
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
@@ -107,7 +111,8 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req := require.New(t)
 	ch := make([]byte, 32)
 
-	cdb := newCachedDB(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	goldenATXID := types.ATXID{2, 3, 4}
 	cfg, opts := getTestConfig(t)
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
@@ -135,7 +140,8 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 func TestPostSetupManager_VRFNonce(t *testing.T) {
 	req := require.New(t)
 
-	cdb := newCachedDB(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	goldenATXID := types.ATXID{2, 3, 4}
 	cfg, opts := getTestConfig(t)
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
@@ -164,7 +170,8 @@ func TestPostSetupManager_VRFNonce(t *testing.T) {
 func TestPostSetupManager_Stop(t *testing.T) {
 	req := require.New(t)
 
-	cdb := newCachedDB(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	goldenATXID := types.ATXID{2, 3, 4}
 	cfg, opts := getTestConfig(t)
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
@@ -196,7 +203,8 @@ func TestPostSetupManager_Stop(t *testing.T) {
 func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	req := require.New(t)
 
-	cdb := newCachedDB(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	goldenATXID := types.ATXID{2, 3, 4}
 	cfg, opts := getTestConfig(t)
 	opts.NumUnits *= 10
 

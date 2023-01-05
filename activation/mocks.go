@@ -218,16 +218,16 @@ func (mr *MocknipostBuilderMockRecorder) BuildNIPost(ctx, challenge, poetProofDe
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildNIPost", reflect.TypeOf((*MocknipostBuilder)(nil).BuildNIPost), ctx, challenge, poetProofDeadline)
 }
 
-// updatePoETProvers mocks base method.
-func (m *MocknipostBuilder) updatePoETProvers(arg0 []PoetProvingServiceClient) {
+// UpdatePoETProvers mocks base method.
+func (m *MocknipostBuilder) UpdatePoETProvers(arg0 []PoetProvingServiceClient) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "updatePoETProvers", arg0)
+	m.ctrl.Call(m, "UpdatePoETProvers", arg0)
 }
 
-// updatePoETProvers indicates an expected call of updatePoETProvers.
-func (mr *MocknipostBuilderMockRecorder) updatePoETProvers(arg0 interface{}) *gomock.Call {
+// UpdatePoETProvers indicates an expected call of UpdatePoETProvers.
+func (mr *MocknipostBuilderMockRecorder) UpdatePoETProvers(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "updatePoETProvers", reflect.TypeOf((*MocknipostBuilder)(nil).updatePoETProvers), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePoETProvers", reflect.TypeOf((*MocknipostBuilder)(nil).UpdatePoETProvers), arg0)
 }
 
 // MockatxHandler is a mock of atxHandler interface.
