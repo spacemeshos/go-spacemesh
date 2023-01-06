@@ -90,7 +90,7 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value1))
 	nSet := NewSetFromValues(value3, value4)
 	m2 := BuildPreRoundMsg(signer, nSet, nil)
-	m2.InnerMsg.EligibilityCount = 2
+	m2.Eligibility.Count = 2
 	tracker.OnPreRound(context.Background(), m2)
 	h := tracker.preRound[signer.PublicKey().String()]
 	assert.True(t, h.Equals(s.Union(nSet)))

@@ -115,7 +115,7 @@ func (m *p2pManipulator) Register(protocol string, handler pubsub.GossipHandler)
 
 func (m *p2pManipulator) Publish(ctx context.Context, protocol string, payload []byte) error {
 	msg, _ := MessageFromBuffer(payload)
-	if msg.InnerMsg.Layer == m.stalledLayer && msg.InnerMsg.Round < 8 && msg.InnerMsg.Round != preRound {
+	if msg.Layer == m.stalledLayer && msg.Round < 8 && msg.Round != preRound {
 		return m.err
 	}
 
@@ -350,7 +350,7 @@ func extractInstanceID(payload []byte) (types.LayerID, uint16) {
 	if err != nil {
 		panic(err)
 	}
-	return m.InnerMsg.Layer, m.InnerMsg.EligibilityCount
+	return m.Layer, m.Eligibility.Count
 }
 
 func (c *SimRoundClock) NewRoundClock(layerID types.LayerID) RoundClock {

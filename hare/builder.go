@@ -10,12 +10,22 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-//go:generate scalegen -types Message,Certificate,AggregatedMessages,InnerMessage
+//go:generate scalegen -types Metadata,Message,Certificate,AggregatedMessages,InnerMessage
 
-// Message is the tuple of a message and its corresponding signature.
+type Metadata struct {
+	Layer types.LayerID
+	// the round counter (K)
+	Round uint32
+	// hash of InnerMsg
+	MsgHash types.Hash32
+}
+
 type Message struct {
-	Signature []byte
-	InnerMsg  *InnerMessage
+	Metadata
+	// signature over Metadata
+	Signature   []byte
+	InnerMsg    *InnerMessage
+	Eligibility types.HareEligibility
 }
 
 // MessageFromBuffer builds an Hare message from the provided bytes buffer.
@@ -25,13 +35,15 @@ func MessageFromBuffer(buf []byte) (Message, error) {
 	if err := codec.Decode(buf, &msg); err != nil {
 		return msg, fmt.Errorf("serialize: %w", err)
 	}
-
 	return msg, nil
 }
 
 func (m *Message) MarshalLogObject(encoder log.ObjectEncoder) error {
 	_ = encoder.AddObject("inner_msg", m.InnerMsg)
+	encoder.AddUint32("layer_id", m.Layer.Value)
+	encoder.AddUint32("round", m.Round)
 	encoder.AddString("signature", hex.EncodeToString(m.Signature))
+	_ = encoder.AddObject("eligibility", &m.Eligibility)
 	return nil
 }
 
@@ -40,9 +52,21 @@ func (m *Message) Field() log.Field {
 	return log.Object("hare_msg", m)
 }
 
+func (m *Message) SetMetadata() {
+	if m.Layer == (types.LayerID{}) {
+		log.Fatal("Message is missing layer")
+	}
+	m.MsgHash = types.BytesToHash(m.InnerMsg.Bytes())
+}
+
 // SignedBytes returns the signed data for hare message.
 func (m *Message) SignedBytes() []byte {
-	return m.InnerMsg.Bytes()
+	m.SetMetadata()
+	buf, err := codec.Encode(&m.Metadata)
+	if err != nil {
+		log.With().Fatal("failed to encode Metadata", log.Err(err))
+	}
+	return buf
 }
 
 // Certificate is a collection of messages and the set of values.
@@ -59,15 +83,11 @@ type AggregatedMessages struct {
 
 // InnerMessage is the actual set of fields that describe a message in the Hare protocol.
 type InnerMessage struct {
-	Type             MessageType
-	Layer            types.LayerID
-	Round            uint32              // the round counter (K)
-	CommittedRound   uint32              // the round Values (S) is committed (Ki)
-	Values           []types.ProposalID  // the set S. optional for commit InnerMsg in a certificate
-	RoleProof        []byte              // role is implicit by InnerMsg type, this is the proof
-	EligibilityCount uint16              // the number of claimed eligibilities
-	Svp              *AggregatedMessages // optional. only for proposal Messages
-	Cert             *Certificate        // optional
+	Type           MessageType
+	CommittedRound uint32              // the round Values (S) is committed (Ki)
+	Values         []types.ProposalID  // the set S. optional for commit InnerMsg in a certificate
+	Svp            *AggregatedMessages // optional. only for proposal Messages
+	Cert           *Certificate        // optional
 }
 
 // Bytes returns the message as bytes.
@@ -81,8 +101,6 @@ func (im *InnerMessage) Bytes() []byte {
 
 func (im *InnerMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("msg_type", im.Type.String())
-	encoder.AddUint32("layer_id", im.Layer.Value)
-	encoder.AddUint32("round", im.Round)
 	encoder.AddUint32("committed_round", im.CommittedRound)
 	return nil
 }
@@ -136,13 +154,13 @@ func (mb *messageBuilder) SetType(msgType MessageType) *messageBuilder {
 
 // SetLayer sets the layer.
 func (mb *messageBuilder) SetLayer(id types.LayerID) *messageBuilder {
-	mb.inner.Layer = id
+	mb.msg.Layer = id
 	return mb
 }
 
 // SetRoundCounter sets the round counter.
 func (mb *messageBuilder) SetRoundCounter(round uint32) *messageBuilder {
-	mb.inner.Round = round
+	mb.msg.Round = round
 	return mb
 }
 
@@ -160,13 +178,13 @@ func (mb *messageBuilder) SetValues(set *Set) *messageBuilder {
 
 // SetRoleProof sets role proof.
 func (mb *messageBuilder) SetRoleProof(sig []byte) *messageBuilder {
-	mb.inner.RoleProof = sig
+	mb.msg.Eligibility.Proof = sig
 	return mb
 }
 
 // SetEligibilityCount sets eligibility count.
 func (mb *messageBuilder) SetEligibilityCount(eligibilityCount uint16) *messageBuilder {
-	mb.inner.EligibilityCount = eligibilityCount
+	mb.msg.Eligibility.Count = eligibilityCount
 	return mb
 }
 

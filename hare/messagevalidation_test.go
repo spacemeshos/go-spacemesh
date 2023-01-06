@@ -122,7 +122,7 @@ func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 	require.NoError(t, err)
 
 	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), nil)
-	m.InnerMsg.Layer = types.NewLayerID(111)
+	m.Layer = types.NewLayerID(111)
 	myErr := errors.New("my error")
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, myErr).Times(1)
@@ -141,7 +141,7 @@ func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
 	require.NoError(t, err)
 
 	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), nil)
-	m.InnerMsg.Layer = types.NewLayerID(111)
+	m.Layer = types.NewLayerID(111)
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil).Times(1)
 	res, err := ev.validateRole(context.Background(), m)
@@ -158,7 +158,7 @@ func TestEligibilityValidator_validateRole_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), nil)
-	m.InnerMsg.Layer = types.NewLayerID(111)
+	m.Layer = types.NewLayerID(111)
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
 	res, err := ev.validateRole(context.Background(), m)
@@ -268,8 +268,8 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 func makeMessages(eligibilityCount int) []Message {
 	return []Message{
 		{
-			InnerMsg: &InnerMessage{
-				EligibilityCount: uint16(eligibilityCount),
+			Eligibility: types.HareEligibility{
+				Count: uint16(eligibilityCount),
 			},
 		},
 	}
@@ -283,7 +283,7 @@ func TestSyntaxContextValidator_PreRoundContext(t *testing.T) {
 	pre := BuildPreRoundMsg(signer, NewDefaultEmptySet(), nil)
 	for i := uint32(0); i < 10; i++ {
 		k := i * 4
-		pre.InnerMsg.Round = k
+		pre.Round = k
 		e := validator.ContextuallyValidateMessage(context.Background(), pre, k)
 		r.Nil(e)
 	}
@@ -296,23 +296,23 @@ func TestSyntaxContextValidator_ContextuallyValidateMessageForIteration(t *testi
 	require.NoError(t, err)
 	set := NewDefaultEmptySet()
 	pre := BuildPreRoundMsg(signer, set, nil)
-	pre.InnerMsg.Round = preRound
+	pre.Round = preRound
 	r.Nil(v.ContextuallyValidateMessage(context.Background(), pre, 1))
 
 	status := BuildStatusMsg(signer, set)
-	status.InnerMsg.Round = 100
+	status.Round = 100
 	r.Equal(errInvalidIter, v.ContextuallyValidateMessage(context.Background(), status, 1))
 
 	proposal := BuildCommitMsg(signer, set)
-	proposal.InnerMsg.Round = 100
+	proposal.Round = 100
 	r.Equal(errInvalidIter, v.ContextuallyValidateMessage(context.Background(), proposal, 1))
 
 	commit := BuildCommitMsg(signer, set)
-	commit.InnerMsg.Round = 100
+	commit.Round = 100
 	r.Equal(errInvalidIter, v.ContextuallyValidateMessage(context.Background(), commit, 1))
 
 	notify := BuildNotifyMsg(signer, set)
-	notify.InnerMsg.Round = 100
+	notify.Round = 100
 	r.Equal(errInvalidIter, v.ContextuallyValidateMessage(context.Background(), notify, 1))
 }
 
@@ -417,7 +417,7 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	m.InnerMsg.Svp.Messages[0].InnerMsg.Type = commit
 	assert.False(t, validator.validateSVP(context.Background(), m))
 	m.InnerMsg.Svp = buildSVP(preRound, s1)
-	m.InnerMsg.Svp.Messages[0].InnerMsg.Round = 4
+	m.InnerMsg.Svp.Messages[0].Round = 4
 	assert.False(t, validator.validateSVP(context.Background(), m))
 	m.InnerMsg.Svp = buildSVP(preRound, s1)
 	assert.False(t, validator.validateSVP(context.Background(), m))
@@ -464,7 +464,7 @@ func validateMatrix(tb testing.TB, mType MessageType, msgK uint32, exp []error) 
 	}
 
 	for i, round := range rounds {
-		m.InnerMsg.Round = msgK
+		m.Round = msgK
 		e := v.ContextuallyValidateMessage(context.Background(), m, round)
 		r.Equal(exp[i], e, "msgK=%v\tround=%v\texp=%v\tactual=%v", msgK, round, exp[i], e)
 	}

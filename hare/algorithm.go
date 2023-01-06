@@ -115,12 +115,12 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQ
 	}
 
 	// query if identity is active
-	res, err := querier.IsIdentityActiveOnConsensusView(ctx, nodeId, hareMsg.InnerMsg.Layer)
+	res, err := querier.IsIdentityActiveOnConsensusView(ctx, nodeId, hareMsg.Layer)
 	if err != nil {
 		logger.With().Error("failed to check if identity is active",
 			log.String("sender_id", nodeId.ShortString()),
 			log.Err(err),
-			hareMsg.InnerMsg.Layer,
+			hareMsg.Layer,
 			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, fmt.Errorf("check active identity: %w", err)
 	}
@@ -129,7 +129,7 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQ
 	if !res {
 		logger.With().Warning("identity is not active",
 			log.String("sender_id", nodeId.ShortString()),
-			hareMsg.InnerMsg.Layer,
+			hareMsg.Layer,
 			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
 	}
@@ -393,7 +393,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.FieldNamed("sender_id", m.PubKey),
 		log.Uint32("current_round", proc.getRound()),
-		log.Uint32("msg_round", m.InnerMsg.Round),
+		log.Uint32("msg_round", m.Round),
 		proc.layer)
 
 	// Try to extract reqID from message and restore it to context
@@ -481,9 +481,9 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 	// generate a new requestID for this message
 	ctx = log.WithNewRequestID(ctx,
 		proc.layer,
-		log.Uint32("msg_round", msg.InnerMsg.Round),
+		log.Uint32("msg_round", msg.Round),
 		log.String("msg_type", msg.InnerMsg.Type.String()),
-		log.Int("eligibility_count", int(msg.InnerMsg.EligibilityCount)),
+		log.Int("eligibility_count", int(msg.Eligibility.Count)),
 		log.String("current_set", proc.value.String()),
 		log.Uint32("current_round", proc.getRound()),
 	)
@@ -728,7 +728,7 @@ func (proc *consensusProcess) processProposalMsg(ctx context.Context, msg *Msg) 
 	} else {
 		proc.WithContext(ctx).With().Warning("received proposal message for processing in an invalid context",
 			log.Uint32("current_round", proc.getRound()),
-			log.Uint32("msg_round", msg.InnerMsg.Round))
+			log.Uint32("msg_round", msg.Round))
 	}
 }
 
@@ -753,7 +753,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 
 	if proc.currentRound() == notifyRound { // not necessary to update otherwise
 		// we assume that this expression was checked before
-		if msg.InnerMsg.Cert.AggMsgs.Messages[0].InnerMsg.Round >= proc.committedRound { // update state iff K >= Ki
+		if msg.InnerMsg.Cert.AggMsgs.Messages[0].Round >= proc.committedRound { // update state iff K >= Ki
 			proc.value = s
 			proc.certificate = msg.InnerMsg.Cert
 			proc.committedRound = msg.InnerMsg.CommittedRound
