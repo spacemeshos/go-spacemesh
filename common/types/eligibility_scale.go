@@ -7,6 +7,59 @@ import (
 	"github.com/spacemeshos/go-scale"
 )
 
+func (t *Eligibility) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeCompact16(enc, uint16(t.Type))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteSlice(enc, t.PubKey)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeSliceOfByteSlice(enc, t.Proofs)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *Eligibility) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeCompact16(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Type = EligibilityType(field)
+	}
+	{
+		field, n, err := scale.DecodeByteSlice(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.PubKey = field
+	}
+	{
+		field, n, err := scale.DecodeSliceOfByteSlice(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Proofs = field
+	}
+	return total, nil
+}
+
 func (t *HareEligibility) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeByteSlice(enc, t.Proof)
@@ -41,6 +94,67 @@ func (t *HareEligibility) DecodeScale(dec *scale.Decoder) (total int, err error)
 		}
 		total += n
 		t.Count = uint16(field)
+	}
+	return total, nil
+}
+
+func (t *VotingEligibility) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.J))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteSlice(enc, t.Sig)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *VotingEligibility) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.J = uint32(field)
+	}
+	{
+		field, n, err := scale.DecodeByteSlice(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Sig = field
+	}
+	return total, nil
+}
+
+func (t *BeaconEligibility) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeByteSlice(enc, t.Proof)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *BeaconEligibility) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeByteSlice(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Proof = field
 	}
 	return total, nil
 }

@@ -146,6 +146,7 @@ func New(
 
 // VrfMessage is a verification message.
 type VrfMessage struct {
+	Type   types.EligibilityType
 	Beacon uint32
 	Round  uint32
 	Layer  types.LayerID
@@ -192,7 +193,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	}
 
 	// marshal message
-	msg := VrfMessage{Beacon: v, Round: round, Layer: layer}
+	msg := VrfMessage{Type: types.EligibilityHare, Beacon: v, Round: round, Layer: layer}
 	buf, err := codec.Encode(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Fatal("failed to encode", log.Err(err))

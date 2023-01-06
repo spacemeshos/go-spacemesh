@@ -2,7 +2,6 @@ package types
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
@@ -195,24 +194,6 @@ type EpochData struct {
 	ActiveSet []ATXID
 	// the beacon value the smesher recorded for this epoch
 	Beacon Beacon
-}
-
-// VotingEligibility includes the required values that, along with the smesher's VRF public key,
-// allow non-interactive voting eligibility validation. this proof provides eligibility for both voting and
-// making proposals.
-type VotingEligibility struct {
-	// the counter value used to generate this eligibility proof. if the value of J is 3, this is the smesher's
-	// eligibility proof of the 3rd ballot/proposal in the epoch.
-	J uint32
-	// the VRF signature of some epoch specific data and J. one can derive a Ballot's layerID from this signature.
-	Sig []byte
-}
-
-// MarshalLogObject implements logging interface.
-func (v *VotingEligibility) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddUint32("j", v.J)
-	encoder.AddString("sig", hex.EncodeToString(v.Sig))
-	return nil
 }
 
 // Initialize calculates and sets the Ballot's cached ballotID and smesherID.

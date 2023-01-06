@@ -888,8 +888,8 @@ func TestBeacon_buildProposal(t *testing.T) {
 	}{
 		{
 			name:   "Case 1",
-			epoch:  0x12345678,
-			result: string(util.Hex2Bytes("084250e259d148")),
+			epoch:  13110,
+			result: string(util.Hex2Bytes("04d9cc")),
 		},
 	}
 
@@ -927,12 +927,12 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: sign("08425004"),
+			result: sign("0404"),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: sign("08425008"),
+			result: sign("0408"),
 		},
 	}
 
