@@ -135,26 +135,3 @@ func (t *VotingEligibility) DecodeScale(dec *scale.Decoder) (total int, err erro
 	}
 	return total, nil
 }
-
-func (t *BeaconEligibility) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeByteSlice(enc, t.Proof)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *BeaconEligibility) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		field, n, err := scale.DecodeByteSlice(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Proof = field
-	}
-	return total, nil
-}

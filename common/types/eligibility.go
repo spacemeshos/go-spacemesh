@@ -59,7 +59,3 @@ func (v *VotingEligibility) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("sig", hex.EncodeToString(v.Sig))
 	return nil
 }
-
-type BeaconEligibility struct {
-	Proof []byte
-}
