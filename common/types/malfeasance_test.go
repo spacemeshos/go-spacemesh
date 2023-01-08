@@ -1,0 +1,95 @@
+package types_test
+
+import (
+	"os"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+)
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(3)
+
+	res := m.Run()
+	os.Exit(res)
+}
+
+func TestCodec_MultipleATXs(t *testing.T) {
+	nodeID := types.BytesToNodeID([]byte{1, 1, 1})
+	lid := types.NewLayerID(11)
+
+	a1 := types.NewActivationTx(types.NIPostChallenge{PubLayerID: lid}, &nodeID, types.Address{1, 2, 3}, nil, 10, nil, nil)
+	a2 := types.NewActivationTx(types.NIPostChallenge{PubLayerID: lid}, &nodeID, types.Address{3, 2, 1}, nil, 11, nil, nil)
+
+	proof := &types.MalfeasanceProof{
+		Layer: lid,
+		Type:  types.MultipleATXs,
+	}
+	for _, a := range []*types.ActivationTx{a1, a2} {
+		a.SetMetadata()
+		proof.Messages = append(proof.Messages, types.MultiATXsMsg{
+			InnerMsg:  a.ATXMetadata,
+			Signature: a.Signature,
+		})
+	}
+	encoded, err := codec.Encode(proof)
+	require.NoError(t, err)
+
+	var decoded types.MalfeasanceProof
+	require.NoError(t, codec.Decode(encoded, &decoded))
+	require.Equal(t, *proof, decoded)
+}
+
+func TestCodec_MultipleBallot(t *testing.T) {
+	nodeID := types.BytesToNodeID([]byte{1, 1, 1})
+	lid := types.NewLayerID(11)
+
+	b1 := types.NewExistingBallot(types.BallotID{1}, nil, nodeID, types.BallotMetadata{Layer: lid})
+	b2 := types.NewExistingBallot(types.BallotID{2}, nil, nodeID, types.BallotMetadata{Layer: lid})
+
+	proof := &types.MalfeasanceProof{
+		Layer: lid,
+		Type:  types.MultipleBallots,
+	}
+	for _, b := range []types.Ballot{b1, b2} {
+		b.SetMetadata()
+		proof.Messages = append(proof.Messages, types.MultiBallotsMsg{
+			InnerMsg:  b.BallotMetadata,
+			Signature: b.Signature,
+		})
+	}
+	encoded, err := codec.Encode(proof)
+	require.NoError(t, err)
+
+	var decoded types.MalfeasanceProof
+	require.NoError(t, codec.Decode(encoded, &decoded))
+	require.Equal(t, *proof, decoded)
+}
+
+func TestCodec_HareEquivocation(t *testing.T) {
+	lid := types.NewLayerID(11)
+	round := uint32(3)
+
+	hm1 := types.HareMetadata{Layer: lid, Round: round, MsgHash: types.RandomHash()}
+	hm2 := types.HareMetadata{Layer: lid, Round: round, MsgHash: types.RandomHash()}
+
+	proof := &types.MalfeasanceProof{
+		Layer: lid,
+		Type:  types.HareEquivocation,
+	}
+	for _, hm := range []types.HareMetadata{hm1, hm2} {
+		proof.Messages = append(proof.Messages, types.HareEquivocationMsg{
+			InnerMsg:  hm,
+			Signature: types.RandomBytes(64),
+		})
+	}
+	encoded, err := codec.Encode(proof)
+	require.NoError(t, err)
+
+	var decoded types.MalfeasanceProof
+	require.NoError(t, codec.Decode(encoded, &decoded))
+	require.Equal(t, *proof, decoded)
+}

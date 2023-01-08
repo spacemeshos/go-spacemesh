@@ -10,18 +10,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-//go:generate scalegen -types Metadata,Message,Certificate,AggregatedMessages,InnerMessage
-
-type Metadata struct {
-	Layer types.LayerID
-	// the round counter (K)
-	Round uint32
-	// hash of InnerMsg
-	MsgHash types.Hash32
-}
+//go:generate scalegen -types Message,Certificate,AggregatedMessages,InnerMessage
 
 type Message struct {
-	Metadata
+	types.HareMetadata
 	// signature over Metadata
 	Signature   []byte
 	InnerMsg    *InnerMessage
@@ -62,9 +54,9 @@ func (m *Message) SetMetadata() {
 // SignedBytes returns the signed data for hare message.
 func (m *Message) SignedBytes() []byte {
 	m.SetMetadata()
-	buf, err := codec.Encode(&m.Metadata)
+	buf, err := codec.Encode(&m.HareMetadata)
 	if err != nil {
-		log.With().Fatal("failed to encode Metadata", log.Err(err))
+		log.With().Fatal("failed to encode HareMetadata", log.Err(err))
 	}
 	return buf
 }
