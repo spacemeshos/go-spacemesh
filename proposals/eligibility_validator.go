@@ -59,6 +59,9 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		refBallot              = ballot
 		epoch                  = ballot.LayerIndex.GetEpoch()
 	)
+	if len(ballot.EligibilityProofs) == 0 {
+		return false, fmt.Errorf("empty eligibility list is invalid (ballot %s)", ballot.ID())
+	}
 
 	if ballot.RefBallot != types.EmptyBallotID {
 		if refBallot, err = ballots.Get(v.cdb, ballot.RefBallot); err != nil {

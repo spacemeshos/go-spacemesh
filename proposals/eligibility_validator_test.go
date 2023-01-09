@@ -415,6 +415,12 @@ func TestCheckEligibility_IncorrectLayerIndex(t *testing.T) {
 	require.ErrorIs(t, err, errIncorrectVRFSig)
 	require.False(t, eligible)
 }
+func TestCheckEligibility_EmptyEligibilityList(t *testing.T) {
+	tv := createTestValidator(t)
+	eligibile, err := tv.CheckEligibility(context.Background(), &types.Ballot{})
+	require.ErrorContains(t, err, "empty eligibility list")
+	require.False(t, eligibile)
+}
 
 func TestCheckEligibility(t *testing.T) {
 	tv := createTestValidator(t)
