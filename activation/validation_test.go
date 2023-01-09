@@ -3,6 +3,7 @@ package activation
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -502,14 +503,124 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 	})
 }
 
-func Test_Validation_NIPost(t *testing.T) {
-	// TODO(mafa): implement
-}
-
 func Test_Validate_NumUnits(t *testing.T) {
-	// TODO(mafa): implement
+	r := require.New(t)
+
+	// Arrange
+	layers := types.GetLayersPerEpoch()
+	types.SetLayersPerEpoch(layersPerEpochBig)
+	t.Cleanup(func() { types.SetLayersPerEpoch(layers) })
+
+	ctrl := gomock.NewController(t)
+	poetDbAPI := NewMockpoetDbAPI(ctrl)
+	postCfg := DefaultPostConfig()
+
+	v := NewValidator(poetDbAPI, postCfg)
+
+	// Act & Assert
+	t.Run("valid number of num units passes", func(t *testing.T) {
+		t.Parallel()
+
+		err := v.NumUnits(&postCfg, postCfg.MinNumUnits)
+		r.NoError(err)
+
+		err = v.NumUnits(&postCfg, postCfg.MaxNumUnits)
+		r.NoError(err)
+	})
+
+	t.Run("invalid number of num units fails", func(t *testing.T) {
+		t.Parallel()
+
+		err := v.NumUnits(&postCfg, postCfg.MinNumUnits-1)
+		r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", postCfg.MinNumUnits, postCfg.MinNumUnits-1))
+
+		err = v.NumUnits(&postCfg, postCfg.MaxNumUnits+1)
+		r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", postCfg.MaxNumUnits, postCfg.MaxNumUnits+1))
+	})
 }
 
 func Test_Validate_PostMetadata(t *testing.T) {
-	// TODO(mafa): implement
+	r := require.New(t)
+
+	// Arrange
+	layers := types.GetLayersPerEpoch()
+	types.SetLayersPerEpoch(layersPerEpochBig)
+	t.Cleanup(func() { types.SetLayersPerEpoch(layers) })
+
+	ctrl := gomock.NewController(t)
+	poetDbAPI := NewMockpoetDbAPI(ctrl)
+	postCfg := DefaultPostConfig()
+
+	v := NewValidator(poetDbAPI, postCfg)
+
+	// Act & Assert
+	t.Run("valid post metadata", func(t *testing.T) {
+		t.Parallel()
+
+		meta := &types.PostMetadata{
+			BitsPerLabel:  postCfg.BitsPerLabel,
+			LabelsPerUnit: postCfg.LabelsPerUnit,
+			K1:            postCfg.K1,
+			K2:            postCfg.K2,
+		}
+
+		err := v.PostMetadata(&postCfg, meta)
+		r.NoError(err)
+	})
+
+	t.Run("wrong bits per label", func(t *testing.T) {
+		t.Parallel()
+
+		meta := &types.PostMetadata{
+			BitsPerLabel:  postCfg.BitsPerLabel - 1,
+			LabelsPerUnit: postCfg.LabelsPerUnit,
+			K1:            postCfg.K1,
+			K2:            postCfg.K2,
+		}
+
+		err := v.PostMetadata(&postCfg, meta)
+		r.EqualError(err, fmt.Sprintf("invalid `BitsPerLabel`; expected: >=%d, given: %d", postCfg.BitsPerLabel, postCfg.BitsPerLabel-1))
+	})
+
+	t.Run("wrong labels per unit", func(t *testing.T) {
+		t.Parallel()
+
+		meta := &types.PostMetadata{
+			BitsPerLabel:  postCfg.BitsPerLabel,
+			LabelsPerUnit: postCfg.LabelsPerUnit - 1,
+			K1:            postCfg.K1,
+			K2:            postCfg.K2,
+		}
+
+		err := v.PostMetadata(&postCfg, meta)
+		r.EqualError(err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", postCfg.LabelsPerUnit, postCfg.LabelsPerUnit-1))
+	})
+
+	t.Run("wrong k1", func(t *testing.T) {
+		t.Parallel()
+
+		meta := &types.PostMetadata{
+			BitsPerLabel:  postCfg.BitsPerLabel,
+			LabelsPerUnit: postCfg.LabelsPerUnit,
+			K1:            postCfg.K1 + 1,
+			K2:            postCfg.K2,
+		}
+
+		err := v.PostMetadata(&postCfg, meta)
+		r.EqualError(err, fmt.Sprintf("invalid `K1`; expected: <=%d, given: %d", postCfg.K1, postCfg.K1+1))
+	})
+
+	t.Run("wrong k2", func(t *testing.T) {
+		t.Parallel()
+
+		meta := &types.PostMetadata{
+			BitsPerLabel:  postCfg.BitsPerLabel,
+			LabelsPerUnit: postCfg.LabelsPerUnit,
+			K1:            postCfg.K1,
+			K2:            postCfg.K2 - 1,
+		}
+
+		err := v.PostMetadata(&postCfg, meta)
+		r.EqualError(err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", postCfg.K2, postCfg.K2-1))
+	})
 }
