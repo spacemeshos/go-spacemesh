@@ -297,7 +297,6 @@ type App struct {
 	postSetupMgr     *activation.PostSetupManager
 	atxBuilder       *activation.Builder
 	atxHandler       *activation.Handler
-	poetListener     *activation.PoetListener
 	validator        *activation.Validator
 	edSgn            *signing.EdSigner
 	keyExtractor     *signing.PubKeyExtractor
