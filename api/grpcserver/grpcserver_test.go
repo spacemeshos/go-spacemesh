@@ -154,6 +154,7 @@ func TestMain(m *testing.M) {
 		log.Println("failed to create signer:", err)
 		os.Exit(1)
 	}
+	nodeID := signer.NodeID()
 	signer1, err = signing.NewEdSigner()
 	if err != nil {
 		log.Println("failed to create signer:", err)
@@ -168,8 +169,8 @@ func TestMain(m *testing.M) {
 	addr1 = wallet.Address(signer1.PublicKey().Bytes())
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
-	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil, nil)
-	if err := activation.SignAtx(signer, atx); err != nil {
+	atx := types.NewActivationTx(challenge, &nodeID, addr1, nipost, numUnits, nil, nil)
+	if err := activation.SignAndFinalizeAtx(signer, atx); err != nil {
 		log.Println("failed to sign atx:", err)
 		os.Exit(1)
 	}
@@ -179,8 +180,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil, nil)
-	if err := activation.SignAtx(signer, atx2); err != nil {
+	atx2 := types.NewActivationTx(challenge, &nodeID, addr2, nipost, numUnits, nil, nil)
+	if err := activation.SignAndFinalizeAtx(signer, atx2); err != nil {
 		log.Println("failed to sign atx:", err)
 		os.Exit(1)
 	}
@@ -2684,10 +2685,10 @@ func TestDebugService(t *testing.T) {
 func TestGatewayService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	ctrl := gomock.NewController(t)
-	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	verifier := mocks.NewMockChallengeVerifier(ctrl)
+	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(&activation.ChallengeVerificationResult{}, nil)
 
-	svc := NewGatewayService(publisher, verifier)
+	svc := NewGatewayService(verifier)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -2696,22 +2697,11 @@ func TestGatewayService(t *testing.T) {
 	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewGatewayServiceClient(conn)
 
-	// This should fail
-	poetMessage := []byte("")
-	req := &pb.BroadcastPoetRequest{Data: poetMessage}
-	res, err := c.BroadcastPoet(ctx, req)
-	require.Nil(t, res, "expected request to fail")
-	require.Error(t, err, "expected request to fail")
-
-	// This should work. Any nonzero byte string should work as we don't perform any additional validation.
-	poetMessage = []byte("123")
-	req.Data = poetMessage
-
-	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Eq(poetMessage)).Return(nil)
-	res, err = c.BroadcastPoet(ctx, req)
-	require.NotNil(t, res, "expected request to succeed")
-	require.Equal(t, int32(code.Code_OK), res.Status.Code)
-	require.NoError(t, err, "expected request to succeed")
+	req := &pb.VerifyChallengeRequest{}
+	_, err := c.VerifyChallenge(ctx, req)
+	s, ok := status.FromError(err)
+	require.True(t, ok)
+	require.Equal(t, codes.OK, s.Code())
 }
 
 func TestEventsReceived(t *testing.T) {

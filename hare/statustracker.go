@@ -9,12 +9,12 @@ import (
 // statusTracker tracks status messages.
 // Provides functions to build a proposal and validate the statuses.
 type statusTracker struct {
-	statuses  map[string]*Msg // maps PubKey->StatusMsg
-	threshold uint16          // threshold to indicate a set can be proved
-	maxKi     uint32          // tracks max Ki in tracked status Messages
-	maxSet    *Set            // tracks the max raw set in the tracked status Messages
-	count     uint16          // the count of valid status messages
-	analyzed  bool            // indicates if the Messages have already been analyzed
+	statuses          map[string]*Msg // maps PubKey->StatusMsg
+	threshold         uint16          // threshold to indicate a set can be proved
+	maxCommittedRound uint32          // tracks max committed round (Ki) value in tracked status Messages
+	maxSet            *Set            // tracks the max raw set in the tracked status Messages
+	count             uint16          // the count of valid status messages
+	analyzed          bool            // indicates if the Messages have already been analyzed
 	log.Log
 }
 
@@ -22,7 +22,7 @@ func newStatusTracker(threshold, expectedSize int) *statusTracker {
 	st := &statusTracker{}
 	st.statuses = make(map[string]*Msg, expectedSize)
 	st.threshold = uint16(threshold)
-	st.maxKi = preRound
+	st.maxCommittedRound = preRound
 	st.maxSet = nil
 	st.analyzed = false
 
@@ -50,8 +50,8 @@ func (st *statusTracker) AnalyzeStatuses(isValid func(m *Msg) bool) {
 			delete(st.statuses, key)
 		} else {
 			st.count += m.InnerMsg.EligibilityCount
-			if m.InnerMsg.Ki >= st.maxKi || st.maxKi == preRound { // track max Ki & matching raw set
-				st.maxKi = m.InnerMsg.Ki
+			if m.InnerMsg.CommittedRound >= st.maxCommittedRound || st.maxCommittedRound == preRound { // track max Ki & matching raw set
+				st.maxCommittedRound = m.InnerMsg.CommittedRound
 				st.maxSet = NewSet(m.InnerMsg.Values)
 			}
 		}
@@ -67,12 +67,12 @@ func (st *statusTracker) IsSVPReady() bool {
 
 // ProposalSet returns the proposed set if available, nil otherwise.
 func (st *statusTracker) ProposalSet(expectedSize int) *Set {
-	if st.maxKi == preRound {
+	if st.maxCommittedRound == preRound {
 		return st.buildUnionSet(expectedSize)
 	}
 
 	if st.maxSet == nil { // should be impossible to reach
-		panic("maxSet is unexpectedly nil")
+		log.Fatal("maxSet is unexpectedly nil")
 	}
 
 	return st.maxSet

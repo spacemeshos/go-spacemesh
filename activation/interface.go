@@ -13,12 +13,6 @@ type atxReceiver interface {
 	OnAtx(*types.ActivationTxHeader)
 }
 
-type poetValidatorPersister interface {
-	HasProof(types.PoetProofRef) bool
-	Validate(types.PoetProof, []byte, string, []byte) error
-	StoreProof(context.Context, types.PoetProofRef, *types.PoetProofMessage) error
-}
-
 type nipostValidator interface {
 	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID, expectedPostIndices []byte) error
 	NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error
@@ -39,7 +33,7 @@ type layerClock interface {
 }
 
 type nipostBuilder interface {
-	updatePoETProvers([]PoetProvingServiceClient)
+	UpdatePoETProvers([]PoetProvingServiceClient)
 	BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error)
 }
 

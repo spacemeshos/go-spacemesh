@@ -17,6 +17,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
+var memberHash = []byte{0x17, 0x51, 0xac, 0x12, 0xe7, 0xe, 0x15, 0xb4, 0xf7, 0x6c, 0x16, 0x77, 0x5c, 0xd3, 0x29, 0xae, 0x55, 0x97, 0x3b, 0x61, 0x25, 0x21, 0xda, 0xb2, 0xde, 0x82, 0x8a, 0x5c, 0xdb, 0x6c, 0x8a, 0xb3}
+
 func readPoetProofFromDisk(t *testing.T) *types.PoetProofMessage {
 	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
 	require.NoError(t, err)
@@ -24,7 +26,7 @@ func readPoetProofFromDisk(t *testing.T) *types.PoetProofMessage {
 	var poetProof types.PoetProof
 	_, err = codec.DecodeFrom(file, &poetProof)
 	require.NoError(t, err)
-	require.EqualValues(t, [][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
+	require.EqualValues(t, [][]byte{memberHash}, poetProof.Members)
 	poetID := []byte("poet_id_123456")
 	roundID := "1337"
 	return &types.PoetProofMessage{
@@ -55,7 +57,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 
 	membership, err := poetDb.GetMembershipMap(ref)
 	require.NoError(t, err)
-	assert.True(t, membership[types.BytesToHash([]byte("1"))])
+	assert.True(t, membership[types.BytesToHash(memberHash)])
 	assert.False(t, membership[types.BytesToHash([]byte("5"))])
 }
 
@@ -70,7 +72,7 @@ func TestPoetDbPoetProofNoMembers(t *testing.T) {
 	var poetProof types.PoetProof
 	_, err = codec.DecodeFrom(file, &poetProof)
 	r.NoError(err)
-	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
+	r.EqualValues([][]byte{memberHash}, poetProof.Members)
 	poetID := []byte("poet_id_123456")
 	roundID := "1337"
 	poetProof.Root = []byte("some other root")

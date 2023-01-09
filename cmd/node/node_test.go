@@ -116,7 +116,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	app.log = app.addLogger(mylogger, myLog)
 	msg1 := "hi there"
 	app.log.Info(msg1)
-	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg1, mylogger), buf1.String())
+	r.Equal(fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg1, mylogger), buf1.String())
 	r.NoError(app.SetLogLevel(mylogger, "warn"))
 	r.Equal("warn", app.loggers[mylogger].String())
 	buf1.Reset()
@@ -129,7 +129,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	app.log.Info(msg2)
 	// This one should be printed
 	app.log.Warning(msg3)
-	r.Equal(fmt.Sprintf("WARN\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg3, mylogger), buf1.String())
+	r.Equal(fmt.Sprintf("WARN\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg3, mylogger), buf1.String())
 	r.Equal(fmt.Sprintf("INFO\t%s\n", msg1), buf2.String())
 	buf1.Reset()
 
@@ -138,7 +138,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	msg4 := "nihao"
 	app.log.Info(msg4)
 	r.Equal("info", app.loggers[mylogger].String())
-	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg4, mylogger), buf1.String())
+	r.Equal(fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg4, mylogger), buf1.String())
 
 	// test bad logger name
 	r.Error(app.SetLogLevel("anton3", "warn"))
@@ -160,7 +160,7 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	subLogger.Debug("should not get printed")
 	teststr := "should get printed"
 	subLogger.Info(teststr)
-	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, teststr, mylogger), buf.String())
+	r.Equal(fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, teststr, mylogger), buf.String())
 }
 
 func testArgs(ctx context.Context, root *cobra.Command, args ...string) (string, error) {
@@ -525,7 +525,9 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	require.NoError(t, err)
 	cfg := getTestDefaultConfig()
 
-	poetHarness, err := activation.NewHTTPPoetHarness(false)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	poetHarness, err := activation.NewHTTPPoetHarness(ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		err := poetHarness.Teardown(true)
@@ -565,7 +567,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		require.NoError(t, app.Start(appCtx))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.

@@ -123,17 +123,19 @@ func createModifiedATXs(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerI
 	for i := 0; i < numATXs; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(tb, err)
+		nodeID := signer.NodeID()
 		signers = append(signers, signer)
 		address := types.GenerateAddress(signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(
 			types.NIPostChallenge{PubLayerID: lid},
+			&nodeID,
 			address,
 			nil,
 			numUnit,
 			nil,
 			nil,
 		)
-		require.NoError(tb, activation.SignAtx(signer, atx))
+		require.NoError(tb, activation.SignAndFinalizeAtx(signer, atx))
 		vAtx, err := onAtx(atx)
 		require.NoError(tb, err)
 

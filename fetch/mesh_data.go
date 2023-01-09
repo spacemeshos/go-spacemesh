@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -126,14 +127,23 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-pm.completed:
-		if pm.err != nil {
-			f.logger.WithContext(ctx).With().Warning("failed to get hash",
-				log.String("hint", string(datastore.POETDB)),
-				log.Stringer("hash", id),
-				log.Err(pm.err))
-		}
 	}
-	return pm.err
+	switch {
+	case pm.err == nil:
+		return nil
+	case errors.Is(pm.err, activation.ErrObjectExists):
+		// PoET proofs are concurrently stored in DB in two places:
+		// fetcher and nipost builder. Hence it might happen that
+		// a proof had been inserted into the DB while the fetcher
+		// was fetching.
+		return nil
+	default:
+		f.logger.WithContext(ctx).With().Warning("failed to get hash",
+			log.String("hint", string(datastore.POETDB)),
+			log.Stringer("hash", id),
+			log.Err(pm.err))
+		return pm.err
+	}
 }
 
 // GetLayerData get layer data from peers.

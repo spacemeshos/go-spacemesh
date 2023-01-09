@@ -64,7 +64,7 @@ var (
 
 func BuildPreRoundMsg(signing Signer, s *Set, roleProof []byte) *Msg {
 	builder := newMessageBuilder()
-	builder.SetType(pre).SetInstanceID(instanceID1).SetRoundCounter(k).SetKi(ki).SetValues(s).SetRoleProof(roleProof)
+	builder.SetType(pre).SetLayer(instanceID1).SetRoundCounter(k).SetCommittedRound(ki).SetValues(s).SetRoleProof(roleProof)
 	builder.SetPubKey(signing.PublicKey())
 	builder.SetEligibilityCount(1)
 

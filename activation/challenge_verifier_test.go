@@ -120,12 +120,11 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 		challenge := createInitialChallenge(*validPost, *validPostMeta, postConfig.MinNumUnits)
 		challengeBytes, err := codec.Encode(&challenge)
 		req.NoError(err)
-		challengeHash, err := challenge.Hash()
-		req.NoError(err)
+		challengeHash := challenge.Hash()
 
 		result, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.NoError(err)
-		req.Equal(*challengeHash, result.Hash)
+		req.Equal(challengeHash, result.Hash)
 		req.EqualValues(pubKey, result.NodeID.Bytes())
 	})
 	t.Run("Sequence != 0", func(t *testing.T) {
@@ -280,8 +279,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 	}
 	challengeBytes, err := codec.Encode(&challenge)
 	req.NoError(err)
-	challengeHash, err := challenge.Hash()
-	req.NoError(err)
+	challengeHash := challenge.Hash()
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
@@ -299,7 +297,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		result, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.NoError(err)
-		req.Equal(*challengeHash, result.Hash)
+		req.Equal(challengeHash, result.Hash)
 		req.EqualValues(pubKey, result.NodeID.Bytes())
 	})
 	t.Run("positioning ATX unavailable", func(t *testing.T) {

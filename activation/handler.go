@@ -167,11 +167,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		baseTickHeight = posAtx.TickHeight()
 	}
 
-	expectedChallengeHash, err := atx.NIPostChallenge.Hash()
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute NIPost's expected challenge hash: %w", err)
-	}
-
+	expectedChallengeHash := atx.NIPostChallenge.Hash()
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
 	commitmentATX, err := h.getCommitmentAtx(atx)
@@ -179,7 +175,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		return nil, fmt.Errorf("validation failed: initial atx not found: %w", err)
 	}
 
-	leaves, err := h.nipostValidator.NIPost(atx.NodeID(), *commitmentATX, atx.NIPost, *expectedChallengeHash, atx.NumUnits)
+	leaves, err := h.nipostValidator.NIPost(atx.NodeID(), *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}

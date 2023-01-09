@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/spacemeshos/go-scale"
 	poetShared "github.com/spacemeshos/poet/shared"
@@ -149,13 +150,12 @@ func (c *PoetChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 // Hash serializes the NIPostChallenge and returns its hash.
-func (challenge *NIPostChallenge) Hash() (*Hash32, error) {
+func (challenge *NIPostChallenge) Hash() Hash32 {
 	ncBytes, err := codec.Encode(challenge)
 	if err != nil {
-		return nil, err
+		log.With().Fatal("failed to encode NIPostChallenge", log.Err(err))
 	}
-	hash := CalcHash32(ncBytes)
-	return &hash, nil
+	return CalcHash32(ncBytes)
 }
 
 // String returns a string representation of the NIPostChallenge, for logging purposes.
@@ -205,7 +205,15 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint32, initialPost *Post, nonce *VRFPostIndex) *ActivationTx {
+func NewActivationTx(
+	challenge NIPostChallenge,
+	nodeID *NodeID,
+	coinbase Address,
+	nipost *NIPost,
+	numUnits uint32,
+	initialPost *Post,
+	nonce *VRFPostIndex,
+) *ActivationTx {
 	atx := &ActivationTx{
 		InnerActivationTx: InnerActivationTx{
 			NIPostChallenge: challenge,
@@ -216,14 +224,25 @@ func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost
 			InitialPost: initialPost,
 
 			VRFNonce: nonce,
+
+			nodeID: nodeID,
 		},
 	}
 	return atx
 }
 
+// SignedBytes returns a signed data of the ActivationTx.
+func (atx *ActivationTx) SignedBytes() []byte {
+	return atx.InnerBytes()
+}
+
 // InnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
-func (atx *ActivationTx) InnerBytes() ([]byte, error) {
-	return codec.Encode(&atx.InnerActivationTx)
+func (atx *ActivationTx) InnerBytes() []byte {
+	data, err := codec.Encode(&atx.InnerActivationTx)
+	if err != nil {
+		log.With().Fatal("failed to encode InnerActivationTx", log.Err(err))
+	}
+	return data
 }
 
 // MarshalLogObject implements logging interface.
@@ -231,11 +250,8 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if atx.InitialPost != nil {
 		encoder.AddString("nipost", atx.InitialPost.String())
 	}
-	h, err := atx.NIPostChallenge.Hash()
-	if err == nil && h != nil {
-		encoder.AddString("challenge", h.String())
-	}
-	encoder.AddString("id", atx.id.String())
+	encoder.AddString("challenge", atx.NIPostChallenge.Hash().String())
+	atx.id.Field().AddTo(encoder)
 	encoder.AddString("sender_id", atx.nodeID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
@@ -262,13 +278,12 @@ func (atx *ActivationTx) CalcAndSetID() error {
 
 // CalcAndSetNodeID calculates and sets the cached Node ID field. This field must be set before calling the NodeID() method.
 func (atx *ActivationTx) CalcAndSetNodeID() error {
-	b, err := atx.InnerBytes()
-	if err != nil {
-		return fmt.Errorf("failed to derive NodeID: %w", err)
+	if atx.nodeID != nil {
+		return nil
 	}
-	nodeId, err := ExtractNodeIDFromSig(b, atx.Sig)
+	nodeId, err := ExtractNodeIDFromSig(atx.SignedBytes(), atx.Sig)
 	if err != nil {
-		return fmt.Errorf("failed to derive NodeID: %w", err)
+		return fmt.Errorf("extract NodeID: %w", err)
 	}
 	atx.nodeID = &nodeId
 	return nil
@@ -347,6 +362,35 @@ type PoetProof struct {
 	LeafCount uint64
 }
 
+func (p *PoetProof) MarshalLogObject(encoder log.ObjectEncoder) error {
+	if p == nil {
+		return nil
+	}
+	encoder.AddUint64("LeafCount", p.LeafCount)
+	encoder.AddArray("Indicies", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, member := range p.Members {
+			encoder.AppendString(hex.EncodeToString(member))
+		}
+		return nil
+	}))
+
+	encoder.AddString("MerkleProof.Root", hex.EncodeToString(p.Root))
+	encoder.AddArray("MerkleProof.ProvenLeaves", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, v := range p.ProvenLeaves {
+			encoder.AppendString(hex.EncodeToString(v))
+		}
+		return nil
+	}))
+	encoder.AddArray("MerkleProof.ProofNodes", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, v := range p.ProofNodes {
+			encoder.AppendString(hex.EncodeToString(v))
+		}
+		return nil
+	}))
+
+	return nil
+}
+
 // PoetProofMessage is the envelope which includes the PoetProof, service ID, round ID and signature.
 type PoetProofMessage struct {
 	PoetProof
@@ -355,11 +399,23 @@ type PoetProofMessage struct {
 	Signature     []byte
 }
 
+func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
+	if p == nil {
+		return nil
+	}
+	encoder.AddObject("PoetProof", &p.PoetProof)
+	encoder.AddString("PoetServiceID", hex.EncodeToString(p.PoetServiceID))
+	encoder.AddString("RoundID", p.RoundID)
+	encoder.AddString("Signature", hex.EncodeToString(p.Signature))
+
+	return nil
+}
+
 // Ref returns the reference to the PoET proof message. It's the sha256 sum of the entire proof message.
-func (proofMessage PoetProofMessage) Ref() (PoetProofRef, error) {
+func (proofMessage *PoetProofMessage) Ref() (PoetProofRef, error) {
 	poetProofBytes, err := codec.Encode(&proofMessage.PoetProof)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %v",
+		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %w",
 			proofMessage.PoetServiceID, proofMessage.RoundID, err)
 	}
 	ref := hash.Sum(poetProofBytes)
@@ -367,10 +423,40 @@ func (proofMessage PoetProofMessage) Ref() (PoetProofRef, error) {
 	return h.Bytes(), nil
 }
 
+type RoundEnd time.Time
+
+func (re *RoundEnd) IntoTime() time.Time {
+	return (time.Time)(*re)
+}
+
+func (p *RoundEnd) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	t := p.IntoTime()
+	n, err := scale.EncodeString(enc, t.Format(time.RFC3339Nano))
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// DecodeScale implements scale codec interface.
+func (p *RoundEnd) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	field, n, err := scale.DecodeString(dec)
+	if err != nil {
+		return 0, err
+	}
+	t, err := time.Parse(time.RFC3339Nano, field)
+	if err != nil {
+		return n, err
+	}
+	*p = (RoundEnd)(t)
+	return n, nil
+}
+
 // PoetRound includes the PoET's round ID.
 type PoetRound struct {
 	ID            string
-	ChallengeHash []byte
+	ChallengeHash Hash32
+	End           RoundEnd
 }
 
 // NIPost is Non-Interactive Proof of Space-Time.

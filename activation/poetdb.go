@@ -16,6 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 )
 
+var ErrObjectExists = sql.ErrObjectExists
+
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
 	sqlDB *sql.Database

@@ -15,6 +15,7 @@ import (
 
 	"github.com/gofrs/flock"
 	grpcmw "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
@@ -86,7 +87,6 @@ const (
 	TxHandlerLogger        = "txHandler"
 	ProposalBuilderLogger  = "proposalBuilder"
 	ProposalListenerLogger = "proposalListener"
-	PoetListenerLogger     = "poetListener"
 	NipostBuilderLogger    = "nipostBuilder"
 	Fetcher                = "fetcher"
 	TimeSyncLogger         = "timesync"
@@ -170,13 +170,12 @@ func GetCommand() *cobra.Command {
 
 var (
 	appLog  log.Log
-	grpcLog *zap.Logger
+	grpclog grpc_logsettable.SettableLoggerV2
 )
 
 func init() {
 	appLog = log.NewNop()
-	grpcLog = appLog.WithName(GRPCLogger).WithFields(log.String("module", GRPCLogger)).Zap()
-	grpczap.ReplaceGrpcLoggerV2(grpcLog)
+	grpclog = grpc_logsettable.ReplaceGrpcLoggerV2()
 }
 
 // Service is a general service interface that specifies the basic start/stop functionality.
@@ -640,7 +639,6 @@ func (app *App) initServices(ctx context.Context,
 	app.hare = hare.New(
 		sqlDB,
 		app.Config.HARE,
-		app.host.ID(),
 		app.host,
 		sgn,
 		nodeID,
@@ -670,8 +668,6 @@ func (app *App) initServices(ctx context.Context,
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)))
-
-	poetListener := activation.NewPoetListener(poetDb, app.addLogger(PoetListenerLogger, lg))
 
 	postSetupMgr, err := activation.NewPostSetupManager(nodeID, app.Config.POST, app.addLogger(PostLogger, lg), cdb, goldenATXID)
 	if err != nil {
@@ -729,7 +725,6 @@ func (app *App) initServices(ctx context.Context,
 		},
 		atxHandler.HandleGossipAtx))
 	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
-	app.host.Register(pubsub.PoetProofProtocol, poetListener.HandlePoetProofMessage)
 	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()))
 	app.host.Register(pubsub.BlockCertify, pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage))
 
@@ -739,7 +734,6 @@ func (app *App) initServices(ctx context.Context,
 	app.syncer = newSyncer
 	app.clock = clock
 	app.svm = state
-	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	app.postSetupMgr = postSetupMgr
 	app.atxHandler = atxHandler
@@ -805,14 +799,15 @@ func (app *App) startAPIServices(ctx context.Context) {
 	var services []grpcserver.ServiceAPI
 	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.grpcAPIService == nil {
-			app.addLogger(GRPCLogger, app.log)
+			logger := app.addLogger(GRPCLogger, app.log).Zap()
+			grpczap.SetGrpcLoggerV2(grpclog, logger)
 			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
 				grpcmw.WithStreamServerChain(
 					grpctags.StreamServerInterceptor(),
-					grpczap.StreamServerInterceptor(grpcLog)),
+					grpczap.StreamServerInterceptor(logger)),
 				grpcmw.WithUnaryServerChain(
 					grpctags.UnaryServerInterceptor(),
-					grpczap.UnaryServerInterceptor(grpcLog)),
+					grpczap.UnaryServerInterceptor(logger)),
 			)
 		}
 		services = append(services, svc)
@@ -825,7 +820,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 	}
 	if apiConf.StartGatewayService {
 		verifier := activation.NewChallengeVerifier(&app.atxDB, app.keyExtractor, app.validator, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
-		registerService(grpcserver.NewGatewayService(app.host, verifier))
+		registerService(grpcserver.NewGatewayService(verifier))
 	}
 	if apiConf.StartGlobalStateService {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
