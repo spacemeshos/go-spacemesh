@@ -76,8 +76,6 @@ func Test_Validation_VRFNonce(t *testing.T) {
 }
 
 func Test_Validation_InitialNIPostChallenge(t *testing.T) {
-	r := require.New(t)
-
 	// Arrange
 	layers := types.GetLayersPerEpoch()
 	types.SetLayersPerEpoch(layersPerEpochBig)
@@ -112,7 +110,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		}, nil)
 
 		err := v.InitialNIPostChallenge(&challenge, atxProvider, goldenATXID, initialPost.Indices)
-		r.NoError(err)
+		require.NoError(t, err)
 	})
 
 	t.Run("valid initial nipost challenge in epoch 1 passes", func(t *testing.T) {
@@ -130,7 +128,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 
 		err := v.InitialNIPostChallenge(&challenge, atxProvider, goldenATXID, initialPost.Indices)
-		r.NoError(err)
+		require.NoError(t, err)
 	})
 
 	t.Run("sequence number is not zero", func(t *testing.T) {
@@ -140,7 +138,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Sequence: 1,
 		}
 		err := v.InitialNIPostChallenge(challenge, nil, goldenATXID, nil)
-		r.EqualError(err, "no prevATX declared, but sequence number not zero")
+		require.EqualError(t, err, "no prevATX declared, but sequence number not zero")
 	})
 
 	t.Run("missing initial post indices", func(t *testing.T) {
@@ -150,7 +148,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		challenge := newChallenge(0, *types.EmptyATXID, posAtxId, types.NewLayerID(2), &goldenATXID)
 
 		err := v.InitialNIPostChallenge(&challenge, nil, goldenATXID, nil)
-		r.EqualError(err, "no prevATX declared, but initial Post indices is not included in challenge")
+		require.EqualError(t, err, "no prevATX declared, but initial Post indices is not included in challenge")
 	})
 
 	t.Run("wrong initial post indices", func(t *testing.T) {
@@ -167,7 +165,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		challenge.InitialPostIndices[0] = 1
 
 		err := v.InitialNIPostChallenge(&challenge, nil, goldenATXID, initialPost.Indices)
-		r.EqualError(err, "initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
+		require.EqualError(t, err, "initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
 	})
 
 	t.Run("missing commitment atx", func(t *testing.T) {
@@ -183,7 +181,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		challenge.InitialPostIndices = initialPost.Indices
 
 		err := v.InitialNIPostChallenge(&challenge, nil, goldenATXID, initialPost.Indices)
-		r.EqualError(err, "no prevATX declared, but commitmentATX is missing")
+		require.EqualError(t, err, "no prevATX declared, but commitmentATX is missing")
 	})
 
 	t.Run("commitment atx from wrong pub layer", func(t *testing.T) {
@@ -207,13 +205,11 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		}, nil)
 
 		err := v.InitialNIPostChallenge(&challenge, atxProvider, goldenATXID, initialPost.Indices)
-		r.EqualError(err, "challenge publayer (1012) must be after commitment atx publayer (1200)")
+		require.EqualError(t, err, "challenge publayer (1012) must be after commitment atx publayer (1200)")
 	})
 }
 
 func Test_Validation_NIPostChallenge(t *testing.T) {
-	r := require.New(t)
-
 	// Arrange
 	layers := types.GetLayersPerEpoch()
 	types.SetLayersPerEpoch(layersPerEpochBig)
@@ -246,7 +242,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		}, nil)
 
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
-		r.NoError(err)
+		require.NoError(t, err)
 	})
 
 	t.Run("prev atx missing", func(t *testing.T) {
@@ -263,8 +259,8 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(nil, errors.New("not found"))
 
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
-		r.ErrorIs(err, &ErrAtxNotFound{Id: prevAtxId})
-		r.ErrorContains(err, "not found")
+		require.ErrorIs(t, err, &ErrAtxNotFound{Id: prevAtxId})
+		require.ErrorContains(t, err, "not found")
 	})
 
 	t.Run("prev ATX from different miner", func(t *testing.T) {
@@ -288,7 +284,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		}, nil)
 
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
-		r.ErrorContains(err, "previous atx belongs to different miner")
+		require.ErrorContains(t, err, "previous atx belongs to different miner")
 	})
 
 	t.Run("prev atx from wrong publication layer", func(t *testing.T) {
@@ -311,7 +307,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		}, nil)
 
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
-		r.EqualError(err, "prevAtx epoch (1, layer 1200) isn't older than current atx epoch (1, layer 1012)")
+		require.EqualError(t, err, "prevAtx epoch (1, layer 1200) isn't older than current atx epoch (1, layer 1012)")
 	})
 
 	t.Run("prev atx sequence not lower than current", func(t *testing.T) {
@@ -334,7 +330,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		}, nil)
 
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
-		r.EqualError(err, "sequence number is not one more than prev sequence number")
+		require.EqualError(t, err, "sequence number is not one more than prev sequence number")
 	})
 
 	t.Run("challenge contains initial post indices", func(t *testing.T) {
@@ -358,7 +354,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		}, nil)
 
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
-		r.EqualError(err, "prevATX declared, but initial Post indices is included in challenge")
+		require.EqualError(t, err, "prevATX declared, but initial Post indices is included in challenge")
 	})
 
 	t.Run("challenge contains commitment atx", func(t *testing.T) {
@@ -382,13 +378,11 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		}, nil)
 
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
-		r.EqualError(err, "prevATX declared, but commitmentATX is included")
+		require.EqualError(t, err, "prevATX declared, but commitmentATX is included")
 	})
 }
 
 func Test_Validation_PositioningAtx(t *testing.T) {
-	r := require.New(t)
-
 	// Arrange
 	layers := types.GetLayersPerEpoch()
 	types.SetLayersPerEpoch(layersPerEpochBig)
@@ -416,7 +410,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		}, nil)
 
 		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.NewLayerID(1012), layersPerEpochBig)
-		r.NoError(err)
+		require.NoError(t, err)
 	})
 
 	t.Run("golden ATX is allowed as positioning atx in genesis epoch", func(t *testing.T) {
@@ -427,7 +421,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 
 		err := v.PositioningAtx(&goldenAtxId, atxProvider, goldenAtxId, types.NewLayerID(1012), layersPerEpochBig)
-		r.NoError(err)
+		require.NoError(t, err)
 	})
 
 	t.Run("golden ATX is not allowed as positioning atx in non-genesis epoch", func(t *testing.T) {
@@ -438,7 +432,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 
 		err := v.PositioningAtx(&goldenAtxId, atxProvider, goldenAtxId, types.NewLayerID(2012), layersPerEpochBig)
-		r.EqualError(err, "golden atx used for positioning atx in epoch 2, but is only valid in epoch 1")
+		require.EqualError(t, err, "golden atx used for positioning atx in epoch 2, but is only valid in epoch 1")
 	})
 
 	t.Run("fail at empty positioning atx", func(t *testing.T) {
@@ -449,7 +443,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 
 		err := v.PositioningAtx(types.EmptyATXID, atxProvider, goldenAtxId, types.NewLayerID(1012), layersPerEpochBig)
-		r.EqualError(err, "empty positioning atx")
+		require.EqualError(t, err, "empty positioning atx")
 	})
 
 	t.Run("fail when posAtx is not found", func(t *testing.T) {
@@ -462,8 +456,8 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(nil, errors.New("db error"))
 
 		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.NewLayerID(1012), layersPerEpochBig)
-		r.ErrorIs(err, &ErrAtxNotFound{Id: posAtxId})
-		r.ErrorContains(err, "db error")
+		require.ErrorIs(t, err, &ErrAtxNotFound{Id: posAtxId})
+		require.ErrorContains(t, err, "db error")
 	})
 
 	t.Run("positioning atx published in higher layer than expected", func(t *testing.T) {
@@ -481,7 +475,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		}, nil)
 
 		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.NewLayerID(1012), layersPerEpochBig)
-		r.EqualError(err, "positioning atx layer (2000) must be before 1012")
+		require.EqualError(t, err, "positioning atx layer (2000) must be before 1012")
 	})
 
 	t.Run("positioning atx with larger distance than expected", func(t *testing.T) {
@@ -499,13 +493,11 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		}, nil)
 
 		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.NewLayerID(2000), layersPerEpochBig)
-		r.EqualError(err, "expected distance of one epoch (1000 layers) from positioning atx but found 1112")
+		require.EqualError(t, err, "expected distance of one epoch (1000 layers) from positioning atx but found 1112")
 	})
 }
 
 func Test_Validate_NumUnits(t *testing.T) {
-	r := require.New(t)
-
 	// Arrange
 	layers := types.GetLayersPerEpoch()
 	types.SetLayersPerEpoch(layersPerEpochBig)
@@ -522,26 +514,24 @@ func Test_Validate_NumUnits(t *testing.T) {
 		t.Parallel()
 
 		err := v.NumUnits(&postCfg, postCfg.MinNumUnits)
-		r.NoError(err)
+		require.NoError(t, err)
 
 		err = v.NumUnits(&postCfg, postCfg.MaxNumUnits)
-		r.NoError(err)
+		require.NoError(t, err)
 	})
 
 	t.Run("invalid number of num units fails", func(t *testing.T) {
 		t.Parallel()
 
 		err := v.NumUnits(&postCfg, postCfg.MinNumUnits-1)
-		r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", postCfg.MinNumUnits, postCfg.MinNumUnits-1))
+		require.EqualError(t, err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", postCfg.MinNumUnits, postCfg.MinNumUnits-1))
 
 		err = v.NumUnits(&postCfg, postCfg.MaxNumUnits+1)
-		r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", postCfg.MaxNumUnits, postCfg.MaxNumUnits+1))
+		require.EqualError(t, err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", postCfg.MaxNumUnits, postCfg.MaxNumUnits+1))
 	})
 }
 
 func Test_Validate_PostMetadata(t *testing.T) {
-	r := require.New(t)
-
 	// Arrange
 	layers := types.GetLayersPerEpoch()
 	types.SetLayersPerEpoch(layersPerEpochBig)
@@ -565,7 +555,7 @@ func Test_Validate_PostMetadata(t *testing.T) {
 		}
 
 		err := v.PostMetadata(&postCfg, meta)
-		r.NoError(err)
+		require.NoError(t, err)
 	})
 
 	t.Run("wrong bits per label", func(t *testing.T) {
@@ -579,7 +569,7 @@ func Test_Validate_PostMetadata(t *testing.T) {
 		}
 
 		err := v.PostMetadata(&postCfg, meta)
-		r.EqualError(err, fmt.Sprintf("invalid `BitsPerLabel`; expected: >=%d, given: %d", postCfg.BitsPerLabel, postCfg.BitsPerLabel-1))
+		require.EqualError(t, err, fmt.Sprintf("invalid `BitsPerLabel`; expected: >=%d, given: %d", postCfg.BitsPerLabel, postCfg.BitsPerLabel-1))
 	})
 
 	t.Run("wrong labels per unit", func(t *testing.T) {
@@ -593,7 +583,7 @@ func Test_Validate_PostMetadata(t *testing.T) {
 		}
 
 		err := v.PostMetadata(&postCfg, meta)
-		r.EqualError(err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", postCfg.LabelsPerUnit, postCfg.LabelsPerUnit-1))
+		require.EqualError(t, err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", postCfg.LabelsPerUnit, postCfg.LabelsPerUnit-1))
 	})
 
 	t.Run("wrong k1", func(t *testing.T) {
@@ -607,7 +597,7 @@ func Test_Validate_PostMetadata(t *testing.T) {
 		}
 
 		err := v.PostMetadata(&postCfg, meta)
-		r.EqualError(err, fmt.Sprintf("invalid `K1`; expected: <=%d, given: %d", postCfg.K1, postCfg.K1+1))
+		require.EqualError(t, err, fmt.Sprintf("invalid `K1`; expected: <=%d, given: %d", postCfg.K1, postCfg.K1+1))
 	})
 
 	t.Run("wrong k2", func(t *testing.T) {
@@ -621,6 +611,6 @@ func Test_Validate_PostMetadata(t *testing.T) {
 		}
 
 		err := v.PostMetadata(&postCfg, meta)
-		r.EqualError(err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", postCfg.K2, postCfg.K2-1))
+		require.EqualError(t, err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", postCfg.K2, postCfg.K2-1))
 	})
 }

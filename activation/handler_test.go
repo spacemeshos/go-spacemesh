@@ -200,10 +200,37 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("valid atx with decreasing num units", func(t *testing.T) {
+		challenge := newChallenge(1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), nil)
+		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 90, coinbase) // numunits decreased from 100 to 90 between atx and prevAtx
+		atx.NIPost = newNIPostWithChallenge(atx.NIPostChallenge.Hash(), poetRef)
+		require.NoError(t, SignAndFinalizeAtx(sig, atx))
+
+		validator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).Times(1)
+		validator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		require.NoError(t, err)
+	})
+
+	t.Run("invalid atx with increasing num units", func(t *testing.T) {
+		challenge := newChallenge(1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), nil)
+		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 110, coinbase) // numunits increased from 100 to 110 between atx and prevAtx
+		atx.NIPost = newNIPostWithChallenge(atx.NIPostChallenge.Hash(), poetRef)
+		require.NoError(t, SignAndFinalizeAtx(sig, atx))
+
+		validator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		require.EqualError(t, err, "num units 110 is greater than previous atx num units 100")
+	})
+
 	initialPost := &types.Post{
 		Nonce:   0,
 		Indices: make([]byte, 10),
 	}
+
 	t.Run("valid initial atx", func(t *testing.T) {
 		ctxID := prevAtx.ID()
 		challenge := newChallenge(0, *types.EmptyATXID, prevAtx.ID(), types.NewLayerID(1012), &ctxID)

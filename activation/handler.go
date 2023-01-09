@@ -217,6 +217,15 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 		return err
 	}
 
+	prevAtx, err := h.cdb.GetAtxHeader(atx.PrevATXID)
+	if err != nil {
+		return err
+	}
+
+	if atx.NumUnits > prevAtx.NumUnits {
+		return fmt.Errorf("num units %d is greater than previous atx num units %d", atx.NumUnits, prevAtx.NumUnits)
+	}
+
 	if atx.InitialPost != nil {
 		return fmt.Errorf("prevATX declared, but initial Post is included")
 	}
