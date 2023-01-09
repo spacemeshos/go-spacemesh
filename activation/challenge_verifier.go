@@ -49,7 +49,7 @@ type challengeVerifier struct {
 	layersPerEpoch uint32
 }
 
-func NewChallengeVerifier(cdb atxProvider, signatureVerifier keyExtractor, validator nipostValidator, cfg PostConfig, goldenATX types.ATXID, layersPerEpoch uint32) ChallengeVerifier {
+func NewChallengeVerifier(cdb atxProvider, signatureVerifier keyExtractor, validator nipostValidator, cfg PostConfig, goldenATX types.ATXID, layersPerEpoch uint32) *challengeVerifier {
 	return &challengeVerifier{
 		atxDB:          cdb,
 		keyExtractor:   signatureVerifier,
