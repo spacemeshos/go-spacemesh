@@ -30,6 +30,11 @@ on:
       - staging
       - trying
 
+concurrency:
+  group: ${{ github.base_ref == 'staging' && format('{0}-staging', github.workflow) || format('{0}-{1}', github.workflow, github.ref) }}
+  cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
+
+
 jobs:
   ## stage 0: check which files were changed
   filter-changes:
@@ -268,9 +273,6 @@ jobs:
       - filter-changes
       - dockerpush
     timeout-minutes: 90
-    concurrency:
-      group: ${{ github.base_ref == 'staging' && format('{0}-staging', github.workflow) || format('{0}-{1}', github.workflow, github.ref) }}
-      cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
     steps:
       - uses: actions/checkout@v3
 
