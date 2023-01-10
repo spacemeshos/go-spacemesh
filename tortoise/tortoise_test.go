@@ -818,19 +818,16 @@ func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
 
 	beacon, err := s.GetState(0).Beacons.GetBeacon(last.GetEpoch())
 	require.NoError(t, err)
+
 	s.GetState(0).Beacons.Delete(last.GetEpoch() - 1)
+	tortoise.TallyVotes(ctx, last)
+	_, err = tortoise.EncodeVotes(ctx)
+	require.Error(t, err)
 
-	blts, err := ballots.Layer(s.GetState(0).DB, last)
-	require.NoError(t, err)
-	for _, ballot := range blts {
-		tortoise.OnBallot(ballot)
-	}
 	s.GetState(0).Beacons.StoreBeacon(last.GetEpoch()-1, beacon)
-
 	tortoise.TallyVotes(ctx, last)
-	last = s.Next()
-	tortoise.TallyVotes(ctx, last)
-	require.Equal(t, last.Sub(1), tortoise.LatestComplete())
+	_, err = tortoise.EncodeVotes(ctx)
+	require.NoError(t, err)
 }
 
 func TestVotesDecodingWithoutBaseBallot(t *testing.T) {

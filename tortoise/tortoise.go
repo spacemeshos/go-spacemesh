@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"container/list"
 	"context"
 	"errors"
 	"fmt"
@@ -22,6 +23,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
 
+var errBeaconUnavailable = errors.New("beacon unavailable")
+
 type turtle struct {
 	Config
 	logger log.Log
@@ -31,6 +34,12 @@ type turtle struct {
 	updated []types.BlockContextualValidity
 
 	*state
+
+	// a linked list with retriable ballots
+	// the purpose is to add ballot to the state even
+	// if beacon is not available locally, as tortoise
+	// can't count ballots without knowing local beacon
+	retriable list.List
 
 	verifying *verifying
 
@@ -129,6 +138,9 @@ func (t *turtle) evict(ctx context.Context) {
 
 // EncodeVotes by choosing base ballot and explicit votes.
 func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opinion, error) {
+	if err := t.checkDrained(); err != nil {
+		return nil, err
+	}
 	var (
 		logger = t.logger.WithContext(ctx)
 		err    error
@@ -308,6 +320,9 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 		t.last = last
 		lastLayer.Set(float64(t.last.Value))
 	}
+	if err := t.drainRetriable(); err != nil {
+		return nil
+	}
 	for process := t.processed.Add(1); !process.After(t.last); process = process.Add(1) {
 		if process.FirstInEpoch() {
 			if err := t.loadAtxs(process.GetEpoch()); err != nil {
@@ -330,7 +345,13 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 			t.full.counted = process
 		}
 		for _, ballot := range t.ballots[process] {
-			t.countBallot(t.logger, ballot)
+			if err := t.countBallot(t.logger, ballot); err != nil {
+				if errors.Is(err, errBeaconUnavailable) {
+					t.retryLater(ballot)
+				} else {
+					return err
+				}
+			}
 		}
 
 		if err := t.loadBlocksData(process); err != nil {
@@ -355,7 +376,8 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 			}
 		}
 	}
-	return t.verifyLayers()
+	t.verifyLayers()
+	return nil
 }
 
 func (t *turtle) switchModes(logger log.Log) {
@@ -374,11 +396,11 @@ func (t *turtle) switchModes(logger log.Log) {
 }
 
 func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) error {
-	badBeacon, err := t.compareBeacons(t.logger, ballot.id, ballot.layer, ballot.reference.beacon)
+	bad, err := t.compareBeacons(t.logger, ballot.id, ballot.layer, ballot.reference.beacon)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %s", errBeaconUnavailable, err.Error())
 	}
-	ballot.conditions.badBeacon = badBeacon
+	ballot.conditions.badBeacon = bad
 	t.verifying.countBallot(logger, ballot)
 	if !ballot.layer.After(t.full.counted) {
 		t.full.countBallot(logger, ballot)
@@ -386,7 +408,7 @@ func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) error {
 	return nil
 }
 
-func (t *turtle) verifyLayers() error {
+func (t *turtle) verifyLayers() {
 	var (
 		logger = t.logger.WithFields(
 			log.Stringer("last layer", t.last),
@@ -458,7 +480,6 @@ func (t *turtle) verifyLayers() error {
 	}
 	t.verified = verified
 	verifiedLayer.Set(float64(t.verified.Value))
-	return nil
 }
 
 // loadBlocksData loads blocks, hare output and contextual validity.
@@ -758,7 +779,11 @@ func (t *turtle) storeBallot(ballot *ballotInfo) error {
 	}
 	if !ballot.layer.After(t.processed) {
 		if err := t.countBallot(t.logger, ballot); err != nil {
-			return err
+			if errors.Is(err, errBeaconUnavailable) {
+				t.retryLater(ballot)
+			} else {
+				return err
+			}
 		}
 	}
 	t.state.addBallot(ballot)
@@ -855,6 +880,34 @@ func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, exceptio
 		decoded.append(&lvote)
 	}
 	return decoded, nil
+}
+
+func (t *turtle) retryLater(ballot *ballotInfo) {
+	t.retriable.PushBack(ballot)
+}
+
+func (t *turtle) drainRetriable() error {
+	for front := t.retriable.Front(); front != nil; {
+		if err := t.countBallot(t.logger, front.Value.(*ballotInfo)); err != nil {
+			// if beacon is still unavailable - exit and wait for the next call
+			// to drain this queue
+			if errors.Is(err, errBeaconUnavailable) {
+				return nil
+			}
+			return err
+		}
+		next := front.Next()
+		t.retriable.Remove(front)
+		front = next
+	}
+	return nil
+}
+
+func (t *turtle) checkDrained() error {
+	if lth := t.retriable.Len(); lth != 0 {
+		return fmt.Errorf("all ballots from processed layers (%d) must be counted before encoding votes", lth)
+	}
+	return nil
 }
 
 func withinDistance(dist uint32, lid, last types.LayerID) bool {
