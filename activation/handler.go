@@ -291,8 +291,7 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	if err != nil {
 		return fmt.Errorf("store atx: %w", err)
 	}
-	fmt.Printf("storing layer %v epoch %v\n", atx.PubLayerID, atx.PublishEpoch())
-	var proofBytes []byte
+	var proof *types.MalfeasanceProof
 	h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
 		if !malicious {
 			prev, err := atxs.GetByEpochAndNodeID(tx, atx.PublishEpoch(), atx.NodeID())
@@ -300,17 +299,21 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				return err
 			}
 			if prev != nil {
-				proof := &types.MalfeasanceProof{
-					Layer: h.clock.GetCurrentLayer(),
-					Type:  types.MultipleATXs,
-				}
-				for _, a := range []*types.VerifiedActivationTx{prev, atx} {
-					proof.Messages = append(proof.Messages, types.MultiATXsMsg{
+				var atxProof types.AtxProof
+				for i, a := range []*types.VerifiedActivationTx{prev, atx} {
+					atxProof.Messages[i] = types.AtxProofMsg{
 						InnerMsg:  a.ATXMetadata,
 						Signature: a.Signature,
-					})
+					}
 				}
-				if proofBytes, err = codec.Encode(proof); err != nil {
+				proof = &types.MalfeasanceProof{
+					Layer: h.clock.GetCurrentLayer(),
+					ProofData: types.TypedProof{
+						Type:  types.MultipleATXs,
+						Proof: &atxProof,
+					},
+				}
+				if proofBytes, err := codec.Encode(proof); err != nil {
 					return err
 				} else if err = identities.SetMalicious(tx, atx.NodeID(), proofBytes); err != nil {
 					return err
@@ -337,8 +340,15 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 
 	// broadcast malfeasance proof last as the verification of the proof will take place
 	// in the same goroutine
-	if proofBytes != nil {
-		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, proofBytes); err != nil {
+	if proof != nil {
+		gossip := types.MalfeasanceGossip{
+			MalfeasanceProof: *proof,
+		}
+		encodedProof, err := codec.Encode(&gossip)
+		if err != nil {
+			h.log.Fatal("failed to encode MalfeasanceGossip", log.Err(err))
+		}
+		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
 			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))
 			return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
 		}

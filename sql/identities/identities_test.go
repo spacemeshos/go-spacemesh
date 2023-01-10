@@ -18,26 +18,23 @@ func TestMalicious(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, mal)
 
+	var ballotProof types.BallotProof
+	for i := 0; i < 2; i++ {
+		ballotProof.Messages[i] = types.BallotProofMsg{
+			InnerMsg: types.BallotMetadata{
+				Layer:   types.NewLayerID(9),
+				MsgHash: types.RandomHash(),
+			},
+			Signature: types.RandomBytes(64),
+		}
+	}
 	proof := &types.MalfeasanceProof{
 		Layer: types.NewLayerID(11),
-		Type:  types.MultipleBallots,
+		ProofData: types.TypedProof{
+			Type:  types.MultipleBallots,
+			Proof: &ballotProof,
+		},
 	}
-	proof.Messages = append(proof.Messages,
-		types.MultiBallotsMsg{
-			InnerMsg: types.BallotMetadata{
-				Layer:   types.NewLayerID(9),
-				MsgHash: types.Hash32{1, 2, 3},
-			},
-			Signature: []byte{3},
-		})
-	proof.Messages = append(proof.Messages,
-		types.MultiBallotsMsg{
-			InnerMsg: types.BallotMetadata{
-				Layer:   types.NewLayerID(9),
-				MsgHash: types.Hash32{1, 2, 3},
-			},
-			Signature: []byte{3},
-		})
 	data, err := codec.Encode(proof)
 	require.NoError(t, err)
 	require.NoError(t, SetMalicious(db, nodeID, data))

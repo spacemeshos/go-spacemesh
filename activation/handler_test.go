@@ -597,7 +597,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	// another atx for the same epoch is considered malicious
 	atx2 := newActivationTx(t, sig, &nid, 1, atx1.ID(), atx1.ID(), nil, types.NewLayerID(layersPerEpoch+1), 0, 100, coinbase, 100, &types.NIPost{})
 	mclock.EXPECT().GetCurrentLayer().Return(atx2.PubLayerID)
-	var got types.MalfeasanceProof
+	var got types.MalfeasanceGossip
 	mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			require.NoError(t, codec.Decode(data, &got))
@@ -606,7 +606,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	require.ErrorIs(t, atxHdlr.ProcessAtx(context.Background(), atx2), errMaliciousATX)
 	proof, err = identities.GetMalfeasanceProof(cdb, nid)
 	require.NoError(t, err)
-	require.Equal(t, got, *proof)
+	require.Equal(t, got.MalfeasanceProof, *proof)
 }
 
 func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {

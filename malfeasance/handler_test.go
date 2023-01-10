@@ -24,21 +24,35 @@ func TestHandler_handleProof_multipleATXs(t *testing.T) {
 	lid := types.NewLayerID(11)
 
 	t.Run("same msg hash", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid,
-			Type:  types.MultipleATXs,
-		}
-		msg := types.MultiATXsMsg{
-			InnerMsg: types.ATXMetadata{
-				Target:  types.EpochID(3),
-				MsgHash: types.RandomHash(),
+		msgHash := types.RandomHash()
+		atxProof := types.AtxProof{
+			Messages: [2]types.AtxProofMsg{
+				{
+					InnerMsg: types.ATXMetadata{
+						Target:  types.EpochID(3),
+						MsgHash: msgHash,
+					},
+				},
+				{
+					InnerMsg: types.ATXMetadata{
+						Target:  types.EpochID(3),
+						MsgHash: msgHash,
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		atxProof.Messages[0].Signature = sig.Sign(atxProof.Messages[0].SignedBytes())
+		atxProof.Messages[1].Signature = sig.Sign(atxProof.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				ProofData: types.TypedProof{
+					Type:  types.MultipleATXs,
+					Proof: &atxProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
@@ -48,22 +62,35 @@ func TestHandler_handleProof_multipleATXs(t *testing.T) {
 	})
 
 	t.Run("different epoch", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid,
-			Type:  types.MultipleATXs,
-		}
-		msg := types.MultiATXsMsg{
-			InnerMsg: types.ATXMetadata{
-				Target:  types.EpochID(3),
-				MsgHash: types.RandomHash(),
+		atxProof := types.AtxProof{
+			Messages: [2]types.AtxProofMsg{
+				{
+					InnerMsg: types.ATXMetadata{
+						Target:  types.EpochID(3),
+						MsgHash: types.RandomHash(),
+					},
+				},
+				{
+					InnerMsg: types.ATXMetadata{
+						Target:  types.EpochID(4),
+						MsgHash: types.RandomHash(),
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		msg.InnerMsg.Target = msg.InnerMsg.Target + 1
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		for _, msg := range atxProof.Messages {
+			msg.Signature = sig.Sign(msg.SignedBytes())
+		}
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				ProofData: types.TypedProof{
+					Type:  types.MultipleATXs,
+					Proof: &atxProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
@@ -73,23 +100,36 @@ func TestHandler_handleProof_multipleATXs(t *testing.T) {
 	})
 
 	t.Run("different signer", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid,
-			Type:  types.MultipleATXs,
-		}
-		msg := types.MultiATXsMsg{
-			InnerMsg: types.ATXMetadata{
-				Target:  types.EpochID(3),
-				MsgHash: types.RandomHash(),
+		atxProof := types.AtxProof{
+			Messages: [2]types.AtxProofMsg{
+				{
+					InnerMsg: types.ATXMetadata{
+						Target:  types.EpochID(3),
+						MsgHash: types.RandomHash(),
+					},
+				},
+				{
+					InnerMsg: types.ATXMetadata{
+						Target:  types.EpochID(4),
+						MsgHash: types.RandomHash(),
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
+		atxProof.Messages[0].Signature = sig.Sign(atxProof.Messages[0].SignedBytes())
 		sig2, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		msg.Signature = sig2.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		atxProof.Messages[1].Signature = sig2.Sign(atxProof.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				ProofData: types.TypedProof{
+					Type:  types.MultipleATXs,
+					Proof: &atxProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
@@ -99,53 +139,77 @@ func TestHandler_handleProof_multipleATXs(t *testing.T) {
 	})
 
 	t.Run("valid", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid,
-			Type:  types.MultipleATXs,
-		}
-		msg := types.MultiATXsMsg{
-			InnerMsg: types.ATXMetadata{
-				Target:  types.EpochID(3),
-				MsgHash: types.RandomHash(),
+		atxProof := types.AtxProof{
+			Messages: [2]types.AtxProofMsg{
+				{
+					InnerMsg: types.ATXMetadata{
+						Target:  types.EpochID(3),
+						MsgHash: types.RandomHash(),
+					},
+				},
+				{
+					InnerMsg: types.ATXMetadata{
+						Target:  types.EpochID(3),
+						MsgHash: types.RandomHash(),
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		msg.InnerMsg.MsgHash = types.RandomHash()
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		atxProof.Messages[0].Signature = sig.Sign(atxProof.Messages[0].SignedBytes())
+		atxProof.Messages[1].Signature = sig.Sign(atxProof.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				ProofData: types.TypedProof{
+					Type:  types.MultipleATXs,
+					Proof: &atxProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationAccept, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
-		require.EqualValues(t, proof, malProof)
+		require.Equal(t, gossip.MalfeasanceProof, *malProof)
 	})
 
 	t.Run("proof equivalence", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid.Add(11),
-			Type:  types.MultipleATXs,
-		}
-		msg := types.MultiATXsMsg{
-			InnerMsg: types.ATXMetadata{
-				Target:  types.EpochID(4),
-				MsgHash: types.RandomHash(),
+		atxProof := types.AtxProof{
+			Messages: [2]types.AtxProofMsg{
+				{
+					InnerMsg: types.ATXMetadata{
+						Target:  types.EpochID(4),
+						MsgHash: types.RandomHash(),
+					},
+				},
+				{
+					InnerMsg: types.ATXMetadata{
+						Target:  types.EpochID(4),
+						MsgHash: types.RandomHash(),
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		msg.InnerMsg.MsgHash = types.RandomHash()
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		atxProof.Messages[0].Signature = sig.Sign(atxProof.Messages[0].SignedBytes())
+		atxProof.Messages[1].Signature = sig.Sign(atxProof.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid.Add(11),
+				ProofData: types.TypedProof{
+					Type:  types.MultipleATXs,
+					Proof: &atxProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
-		require.NotEqualValues(t, proof, malProof)
+		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 	})
 }
 
@@ -157,21 +221,35 @@ func TestHandler_handleProof_multipleBallots(t *testing.T) {
 	lid := types.NewLayerID(11)
 
 	t.Run("same msg hash", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid,
-			Type:  types.MultipleBallots,
-		}
-		msg := types.MultiBallotsMsg{
-			InnerMsg: types.BallotMetadata{
-				Layer:   lid.Sub(1),
-				MsgHash: types.RandomHash(),
+		msgHash := types.RandomHash()
+		ballotProof := types.BallotProof{
+			Messages: [2]types.BallotProofMsg{
+				{
+					InnerMsg: types.BallotMetadata{
+						Layer:   lid,
+						MsgHash: msgHash,
+					},
+				},
+				{
+					InnerMsg: types.BallotMetadata{
+						Layer:   lid,
+						MsgHash: msgHash,
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		ballotProof.Messages[0].Signature = sig.Sign(ballotProof.Messages[0].SignedBytes())
+		ballotProof.Messages[1].Signature = sig.Sign(ballotProof.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				ProofData: types.TypedProof{
+					Type:  types.MultipleBallots,
+					Proof: &ballotProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
@@ -181,22 +259,34 @@ func TestHandler_handleProof_multipleBallots(t *testing.T) {
 	})
 
 	t.Run("different layer", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid,
-			Type:  types.MultipleBallots,
-		}
-		msg := types.MultiBallotsMsg{
-			InnerMsg: types.BallotMetadata{
-				Layer:   lid.Sub(1),
-				MsgHash: types.RandomHash(),
+		ballotProof := types.BallotProof{
+			Messages: [2]types.BallotProofMsg{
+				{
+					InnerMsg: types.BallotMetadata{
+						Layer:   lid,
+						MsgHash: types.RandomHash(),
+					},
+				},
+				{
+					InnerMsg: types.BallotMetadata{
+						Layer:   lid.Sub(1),
+						MsgHash: types.RandomHash(),
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		msg.InnerMsg.Layer = msg.InnerMsg.Layer.Add(1)
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		ballotProof.Messages[0].Signature = sig.Sign(ballotProof.Messages[0].SignedBytes())
+		ballotProof.Messages[1].Signature = sig.Sign(ballotProof.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				ProofData: types.TypedProof{
+					Type:  types.MultipleBallots,
+					Proof: &ballotProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
@@ -206,23 +296,36 @@ func TestHandler_handleProof_multipleBallots(t *testing.T) {
 	})
 
 	t.Run("different signer", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid,
-			Type:  types.MultipleBallots,
-		}
-		msg := types.MultiBallotsMsg{
-			InnerMsg: types.BallotMetadata{
-				Layer:   lid.Sub(1),
-				MsgHash: types.RandomHash(),
+		ballotProof := types.BallotProof{
+			Messages: [2]types.BallotProofMsg{
+				{
+					InnerMsg: types.BallotMetadata{
+						Layer:   lid,
+						MsgHash: types.RandomHash(),
+					},
+				},
+				{
+					InnerMsg: types.BallotMetadata{
+						Layer:   lid,
+						MsgHash: types.RandomHash(),
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
+		ballotProof.Messages[0].Signature = sig.Sign(ballotProof.Messages[0].SignedBytes())
 		sig2, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		msg.Signature = sig2.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		ballotProof.Messages[1].Signature = sig2.Sign(ballotProof.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				ProofData: types.TypedProof{
+					Type:  types.MultipleBallots,
+					Proof: &ballotProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
@@ -232,53 +335,77 @@ func TestHandler_handleProof_multipleBallots(t *testing.T) {
 	})
 
 	t.Run("valid", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid,
-			Type:  types.MultipleBallots,
-		}
-		msg := types.MultiBallotsMsg{
-			InnerMsg: types.BallotMetadata{
-				Layer:   lid.Sub(1),
-				MsgHash: types.RandomHash(),
+		ballotProof := types.BallotProof{
+			Messages: [2]types.BallotProofMsg{
+				{
+					InnerMsg: types.BallotMetadata{
+						Layer:   lid,
+						MsgHash: types.RandomHash(),
+					},
+				},
+				{
+					InnerMsg: types.BallotMetadata{
+						Layer:   lid,
+						MsgHash: types.RandomHash(),
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		msg.InnerMsg.MsgHash = types.RandomHash()
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		ballotProof.Messages[0].Signature = sig.Sign(ballotProof.Messages[0].SignedBytes())
+		ballotProof.Messages[1].Signature = sig.Sign(ballotProof.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				ProofData: types.TypedProof{
+					Type:  types.MultipleBallots,
+					Proof: &ballotProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationAccept, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
-		require.EqualValues(t, proof, malProof)
+		require.Equal(t, gossip.MalfeasanceProof, *malProof)
 	})
 
 	t.Run("proof equivalence", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid.Add(10),
-			Type:  types.MultipleBallots,
-		}
-		msg := types.MultiBallotsMsg{
-			InnerMsg: types.BallotMetadata{
-				Layer:   lid.Add(9),
-				MsgHash: types.RandomHash(),
+		ballotProof := types.BallotProof{
+			Messages: [2]types.BallotProofMsg{
+				{
+					InnerMsg: types.BallotMetadata{
+						Layer:   lid.Add(9),
+						MsgHash: types.RandomHash(),
+					},
+				},
+				{
+					InnerMsg: types.BallotMetadata{
+						Layer:   lid.Add(9),
+						MsgHash: types.RandomHash(),
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		msg.InnerMsg.MsgHash = types.RandomHash()
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		ballotProof.Messages[0].Signature = sig.Sign(ballotProof.Messages[0].SignedBytes())
+		ballotProof.Messages[1].Signature = sig.Sign(ballotProof.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid.Add(11),
+				ProofData: types.TypedProof{
+					Type:  types.MultipleBallots,
+					Proof: &ballotProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
-		require.NotEqualValues(t, proof, malProof)
+		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 	})
 }
 
@@ -290,22 +417,37 @@ func TestHandler_handleProof_hareEquivocation(t *testing.T) {
 	lid := types.NewLayerID(11)
 
 	t.Run("same msg hash", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid,
-			Type:  types.HareEquivocation,
-		}
-		msg := types.HareEquivocationMsg{
-			InnerMsg: types.HareMetadata{
-				Layer:   lid.Sub(1),
-				Round:   3,
-				MsgHash: types.RandomHash(),
+		msgHash := types.RandomHash()
+		hareProof := types.HareProof{
+			Messages: [2]types.HareProofMsg{
+				{
+					InnerMsg: types.HareMetadata{
+						Layer:   lid,
+						Round:   3,
+						MsgHash: msgHash,
+					},
+				},
+				{
+					InnerMsg: types.HareMetadata{
+						Layer:   lid,
+						Round:   3,
+						MsgHash: msgHash,
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		hareProof.Messages[0].Signature = sig.Sign(hareProof.Messages[0].SignedBytes())
+		hareProof.Messages[1].Signature = sig.Sign(hareProof.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				ProofData: types.TypedProof{
+					Type:  types.HareEquivocation,
+					Proof: &hareProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
@@ -315,23 +457,36 @@ func TestHandler_handleProof_hareEquivocation(t *testing.T) {
 	})
 
 	t.Run("different layer", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid,
-			Type:  types.HareEquivocation,
-		}
-		msg := types.HareEquivocationMsg{
-			InnerMsg: types.HareMetadata{
-				Layer:   lid.Sub(1),
-				Round:   3,
-				MsgHash: types.RandomHash(),
+		hareProof := types.HareProof{
+			Messages: [2]types.HareProofMsg{
+				{
+					InnerMsg: types.HareMetadata{
+						Layer:   lid,
+						Round:   3,
+						MsgHash: types.RandomHash(),
+					},
+				},
+				{
+					InnerMsg: types.HareMetadata{
+						Layer:   lid.Sub(1),
+						Round:   3,
+						MsgHash: types.RandomHash(),
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		msg.InnerMsg.Layer = msg.InnerMsg.Layer.Add(1)
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		hareProof.Messages[0].Signature = sig.Sign(hareProof.Messages[0].SignedBytes())
+		hareProof.Messages[1].Signature = sig.Sign(hareProof.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				ProofData: types.TypedProof{
+					Type:  types.HareEquivocation,
+					Proof: &hareProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
@@ -341,23 +496,36 @@ func TestHandler_handleProof_hareEquivocation(t *testing.T) {
 	})
 
 	t.Run("different round", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid,
-			Type:  types.HareEquivocation,
-		}
-		msg := types.HareEquivocationMsg{
-			InnerMsg: types.HareMetadata{
-				Layer:   lid.Sub(1),
-				Round:   3,
-				MsgHash: types.RandomHash(),
+		hareProof := types.HareProof{
+			Messages: [2]types.HareProofMsg{
+				{
+					InnerMsg: types.HareMetadata{
+						Layer:   lid,
+						Round:   2,
+						MsgHash: types.RandomHash(),
+					},
+				},
+				{
+					InnerMsg: types.HareMetadata{
+						Layer:   lid,
+						Round:   3,
+						MsgHash: types.RandomHash(),
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		msg.InnerMsg.Round = msg.InnerMsg.Round + 1
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		hareProof.Messages[0].Signature = sig.Sign(hareProof.Messages[0].SignedBytes())
+		hareProof.Messages[1].Signature = sig.Sign(hareProof.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				ProofData: types.TypedProof{
+					Type:  types.HareEquivocation,
+					Proof: &hareProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
@@ -367,24 +535,38 @@ func TestHandler_handleProof_hareEquivocation(t *testing.T) {
 	})
 
 	t.Run("different signer", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid,
-			Type:  types.HareEquivocation,
-		}
-		msg := types.HareEquivocationMsg{
-			InnerMsg: types.HareMetadata{
-				Layer:   lid.Sub(1),
-				Round:   3,
-				MsgHash: types.RandomHash(),
+		hareProof := types.HareProof{
+			Messages: [2]types.HareProofMsg{
+				{
+					InnerMsg: types.HareMetadata{
+						Layer:   lid,
+						Round:   3,
+						MsgHash: types.RandomHash(),
+					},
+				},
+				{
+					InnerMsg: types.HareMetadata{
+						Layer:   lid.Sub(1),
+						Round:   3,
+						MsgHash: types.RandomHash(),
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
+		hareProof.Messages[0].Signature = sig.Sign(hareProof.Messages[0].SignedBytes())
 		sig2, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		msg.Signature = sig2.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		hareProof.Messages[1].Signature = sig2.Sign(hareProof.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				ProofData: types.TypedProof{
+					Type:  types.HareEquivocation,
+					Proof: &hareProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
@@ -394,54 +576,80 @@ func TestHandler_handleProof_hareEquivocation(t *testing.T) {
 	})
 
 	t.Run("valid", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid,
-			Type:  types.HareEquivocation,
-		}
-		msg := types.HareEquivocationMsg{
-			InnerMsg: types.HareMetadata{
-				Layer:   lid.Sub(1),
-				Round:   3,
-				MsgHash: types.RandomHash(),
+		hareProof := types.HareProof{
+			Messages: [2]types.HareProofMsg{
+				{
+					InnerMsg: types.HareMetadata{
+						Layer:   lid,
+						Round:   3,
+						MsgHash: types.RandomHash(),
+					},
+				},
+				{
+					InnerMsg: types.HareMetadata{
+						Layer:   lid,
+						Round:   3,
+						MsgHash: types.RandomHash(),
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		msg.InnerMsg.MsgHash = types.RandomHash()
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		hareProof.Messages[0].Signature = sig.Sign(hareProof.Messages[0].SignedBytes())
+		hareProof.Messages[1].Signature = sig.Sign(hareProof.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				ProofData: types.TypedProof{
+					Type:  types.HareEquivocation,
+					Proof: &hareProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationAccept, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
-		require.EqualValues(t, proof, malProof)
+		require.Equal(t, gossip.MalfeasanceProof, *malProof)
 	})
 
 	t.Run("proof equivalence", func(t *testing.T) {
-		proof := &types.MalfeasanceProof{
-			Layer: lid.Add(11),
-			Type:  types.HareEquivocation,
-		}
-		msg := types.HareEquivocationMsg{
-			InnerMsg: types.HareMetadata{
-				Layer:   lid.Add(11),
-				Round:   3,
-				MsgHash: types.RandomHash(),
+		hareProof := types.HareProof{
+			Messages: [2]types.HareProofMsg{
+				{
+					InnerMsg: types.HareMetadata{
+						Layer:   lid.Add(11),
+						Round:   3,
+						MsgHash: types.RandomHash(),
+					},
+				},
+				{
+					InnerMsg: types.HareMetadata{
+						Layer:   lid.Add(11),
+						Round:   3,
+						MsgHash: types.RandomHash(),
+					},
+				},
 			},
 		}
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		msg.InnerMsg.MsgHash = types.RandomHash()
-		msg.Signature = sig.Sign(msg.SignedBytes())
-		proof.Messages = append(proof.Messages, msg)
-		data, err := codec.Encode(proof)
+		hareProof.Messages[0].Signature = sig.Sign(hareProof.Messages[0].SignedBytes())
+		hareProof.Messages[1].Signature = sig.Sign(hareProof.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid.Add(11),
+				ProofData: types.TypedProof{
+					Type:  types.HareEquivocation,
+					Proof: &hareProof,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
-		require.NotEqualValues(t, proof, malProof)
+		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 	})
 }

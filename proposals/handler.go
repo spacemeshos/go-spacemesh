@@ -269,7 +269,14 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 	// broadcast malfeasance proof last as the verification of the proof will take place
 	// in the same goroutine
 	if proof != nil {
-		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, proof); err != nil {
+		gossip := types.MalfeasanceGossip{
+			MalfeasanceProof: *proof,
+		}
+		encodedProof, err := codec.Encode(&gossip)
+		if err != nil {
+			h.logger.Fatal("failed to encode MalfeasanceGossip", log.Err(err))
+		}
+		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
 			logger.With().Error("failed to broadcast malfeasance proof", log.Err(err))
 			return fmt.Errorf("broadcast ballot malfeasance proof: %w", err)
 		}
@@ -278,7 +285,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 	return nil
 }
 
-func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ballot) ([]byte, error) {
+func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ballot) (*types.MalfeasanceProof, error) {
 	t0 := time.Now()
 	if has, err := ballots.Has(h.cdb, b.ID()); err != nil {
 		logger.With().Error("failed to look up ballot", log.Err(err))

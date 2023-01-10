@@ -7,9 +7,45 @@ import (
 	"github.com/spacemeshos/go-scale"
 )
 
+func (t *MalfeasanceProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := t.Layer.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.ProofData.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *MalfeasanceProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := t.Layer.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.ProofData.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
 func (t *MalfeasanceGossip) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := t.Proof.EncodeScale(enc)
+		n, err := t.MalfeasanceProof.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -27,7 +63,7 @@ func (t *MalfeasanceGossip) EncodeScale(enc *scale.Encoder) (total int, err erro
 
 func (t *MalfeasanceGossip) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := t.Proof.DecodeScale(dec)
+		n, err := t.MalfeasanceProof.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
@@ -44,7 +80,73 @@ func (t *MalfeasanceGossip) DecodeScale(dec *scale.Decoder) (total int, err erro
 	return total, nil
 }
 
-func (t *MultiATXsMsg) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *AtxProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeStructArray(enc, t.Messages[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *AtxProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := scale.DecodeStructArray(dec, t.Messages[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *BallotProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeStructArray(enc, t.Messages[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *BallotProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := scale.DecodeStructArray(dec, t.Messages[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *HareProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeStructArray(enc, t.Messages[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *HareProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := scale.DecodeStructArray(dec, t.Messages[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *AtxProofMsg) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := t.InnerMsg.EncodeScale(enc)
 		if err != nil {
@@ -62,7 +164,7 @@ func (t *MultiATXsMsg) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	return total, nil
 }
 
-func (t *MultiATXsMsg) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *AtxProofMsg) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		n, err := t.InnerMsg.DecodeScale(dec)
 		if err != nil {
@@ -81,7 +183,7 @@ func (t *MultiATXsMsg) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	return total, nil
 }
 
-func (t *MultiBallotsMsg) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *BallotProofMsg) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := t.InnerMsg.EncodeScale(enc)
 		if err != nil {
@@ -99,7 +201,7 @@ func (t *MultiBallotsMsg) EncodeScale(enc *scale.Encoder) (total int, err error)
 	return total, nil
 }
 
-func (t *MultiBallotsMsg) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *BallotProofMsg) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		n, err := t.InnerMsg.DecodeScale(dec)
 		if err != nil {
@@ -118,7 +220,7 @@ func (t *MultiBallotsMsg) DecodeScale(dec *scale.Decoder) (total int, err error)
 	return total, nil
 }
 
-func (t *HareEquivocationMsg) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *HareProofMsg) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := t.InnerMsg.EncodeScale(enc)
 		if err != nil {
@@ -136,7 +238,7 @@ func (t *HareEquivocationMsg) EncodeScale(enc *scale.Encoder) (total int, err er
 	return total, nil
 }
 
-func (t *HareEquivocationMsg) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *HareProofMsg) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		n, err := t.InnerMsg.DecodeScale(dec)
 		if err != nil {

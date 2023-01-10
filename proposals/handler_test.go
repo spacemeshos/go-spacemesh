@@ -664,7 +664,7 @@ func TestBallot_Success(t *testing.T) {
 	require.NoError(t, th.HandleSyncedBallot(context.Background(), data))
 }
 
-func TestBallot_MaliciousIgnored(t *testing.T) {
+func TestBallot_MaliciousProofIgnoredInSyncFlow(t *testing.T) {
 	th := createTestHandler(t)
 	lid := types.NewLayerID(100)
 	supported := []*types.Block{
@@ -688,7 +688,7 @@ func TestBallot_MaliciousIgnored(t *testing.T) {
 			require.Equal(t, b.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(context.Background(), b).Return([]byte("malicious ballot proof"), nil)
+	th.mm.EXPECT().AddBallot(context.Background(), b).Return(&types.MalfeasanceProof{Layer: lid}, nil)
 	decoded := &tortoise.DecodedBallot{Ballot: b}
 	th.md.EXPECT().DecodeBallot(b).Return(decoded, nil)
 	th.md.EXPECT().StoreBallot(decoded).Return(nil)
@@ -823,7 +823,7 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 			return true, nil
 		})
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) ([]byte, error) {
+		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
 			require.NoError(t, ballots.Add(th.cdb, got))
 			return nil, nil
 		})
@@ -857,7 +857,7 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 			return true, nil
 		})
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) ([]byte, error) {
+		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
 			require.NoError(t, ballots.Add(th.cdb, got))
 			return nil, nil
 		})
@@ -892,7 +892,7 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 			return true, nil
 		})
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) ([]byte, error) {
+		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
 			require.NoError(t, ballots.Add(th.cdb, got))
 			return nil, nil
 		})
@@ -930,7 +930,7 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 			return true, nil
 		}).MinTimes(1).MaxTimes(2)
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) ([]byte, error) {
+		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
 			_ = ballots.Add(th.cdb, got)
 			return nil, nil
 		}).MinTimes(1).MaxTimes(2)
@@ -958,7 +958,7 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 	checkProposal(t, th.cdb, p, true)
 }
 
-func TestProposal_Malicious(t *testing.T) {
+func TestProposal_BroadcastMaliciousGossip(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	lid := types.NewLayerID(100)
 	p := createProposal(t, withLayer(lid))
@@ -986,9 +986,21 @@ func TestProposal_Malicious(t *testing.T) {
 			require.Equal(t, pMal.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
-	proof := []byte("malicious proof")
+	ballotProof := types.BallotProof{
+		Messages: [2]types.BallotProofMsg{
+			{},
+			{},
+		},
+	}
+	proof := &types.MalfeasanceProof{
+		Layer: lid,
+		ProofData: types.TypedProof{
+			Type:  types.MultipleBallots,
+			Proof: &ballotProof,
+		},
+	}
 	th.mm.EXPECT().AddBallot(context.Background(), &pMal.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) ([]byte, error) {
+		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
 			_ = ballots.Add(th.cdb, got)
 			return proof, nil
 		})
@@ -996,7 +1008,9 @@ func TestProposal_Malicious(t *testing.T) {
 	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), pMal.Layer, pMal.ID(), pMal.TxIDs)
 	th.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
-			require.Equal(t, proof, data)
+			var gossip types.MalfeasanceGossip
+			require.NoError(t, codec.Decode(data, &gossip))
+			require.Equal(t, *proof, gossip.MalfeasanceProof)
 			return nil
 		})
 	data := encodeProposal(t, pMal)
@@ -1089,7 +1103,7 @@ func TestProposal_ValidProposal(t *testing.T) {
 			return true, nil
 		})
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) ([]byte, error) {
+		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
 			require.NoError(t, ballots.Add(th.cdb, got))
 			return nil, nil
 		})
@@ -1124,7 +1138,7 @@ func TestMetrics(t *testing.T) {
 			return true, nil
 		})
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) ([]byte, error) {
+		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
 			require.NoError(t, ballots.Add(th.cdb, got))
 			return nil, nil
 		})

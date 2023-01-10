@@ -24,16 +24,21 @@ func TestCodec_MultipleATXs(t *testing.T) {
 	a1 := types.NewActivationTx(types.NIPostChallenge{PubLayerID: lid}, &nodeID, types.Address{1, 2, 3}, nil, 10, nil, nil)
 	a2 := types.NewActivationTx(types.NIPostChallenge{PubLayerID: lid}, &nodeID, types.Address{3, 2, 1}, nil, 11, nil, nil)
 
-	proof := &types.MalfeasanceProof{
-		Layer: lid,
-		Type:  types.MultipleATXs,
-	}
-	for _, a := range []*types.ActivationTx{a1, a2} {
+	var atxProof types.AtxProof
+	for i, a := range []*types.ActivationTx{a1, a2} {
 		a.SetMetadata()
-		proof.Messages = append(proof.Messages, types.MultiATXsMsg{
+		a.Signature = types.RandomBytes(64)
+		atxProof.Messages[i] = types.AtxProofMsg{
 			InnerMsg:  a.ATXMetadata,
 			Signature: a.Signature,
-		})
+		}
+	}
+	proof := &types.MalfeasanceProof{
+		Layer: lid,
+		ProofData: types.TypedProof{
+			Type:  types.MultipleATXs,
+			Proof: &atxProof,
+		},
 	}
 	encoded, err := codec.Encode(proof)
 	require.NoError(t, err)
@@ -50,16 +55,21 @@ func TestCodec_MultipleBallot(t *testing.T) {
 	b1 := types.NewExistingBallot(types.BallotID{1}, nil, nodeID, types.BallotMetadata{Layer: lid})
 	b2 := types.NewExistingBallot(types.BallotID{2}, nil, nodeID, types.BallotMetadata{Layer: lid})
 
-	proof := &types.MalfeasanceProof{
-		Layer: lid,
-		Type:  types.MultipleBallots,
-	}
-	for _, b := range []types.Ballot{b1, b2} {
+	var ballotProof types.BallotProof
+	for i, b := range []types.Ballot{b1, b2} {
 		b.SetMetadata()
-		proof.Messages = append(proof.Messages, types.MultiBallotsMsg{
+		b.Signature = types.RandomBytes(64)
+		ballotProof.Messages[i] = types.BallotProofMsg{
 			InnerMsg:  b.BallotMetadata,
 			Signature: b.Signature,
-		})
+		}
+	}
+	proof := &types.MalfeasanceProof{
+		Layer: lid,
+		ProofData: types.TypedProof{
+			Type:  types.MultipleBallots,
+			Proof: &ballotProof,
+		},
 	}
 	encoded, err := codec.Encode(proof)
 	require.NoError(t, err)
@@ -76,15 +86,19 @@ func TestCodec_HareEquivocation(t *testing.T) {
 	hm1 := types.HareMetadata{Layer: lid, Round: round, MsgHash: types.RandomHash()}
 	hm2 := types.HareMetadata{Layer: lid, Round: round, MsgHash: types.RandomHash()}
 
-	proof := &types.MalfeasanceProof{
-		Layer: lid,
-		Type:  types.HareEquivocation,
-	}
-	for _, hm := range []types.HareMetadata{hm1, hm2} {
-		proof.Messages = append(proof.Messages, types.HareEquivocationMsg{
+	var hareProof types.HareProof
+	for i, hm := range []types.HareMetadata{hm1, hm2} {
+		hareProof.Messages[i] = types.HareProofMsg{
 			InnerMsg:  hm,
 			Signature: types.RandomBytes(64),
-		})
+		}
+	}
+	proof := &types.MalfeasanceProof{
+		Layer: lid,
+		ProofData: types.TypedProof{
+			Type:  types.HareEquivocation,
+			Proof: &hareProof,
+		},
 	}
 	encoded, err := codec.Encode(proof)
 	require.NoError(t, err)
@@ -92,4 +106,45 @@ func TestCodec_HareEquivocation(t *testing.T) {
 	var decoded types.MalfeasanceProof
 	require.NoError(t, codec.Decode(encoded, &decoded))
 	require.Equal(t, *proof, decoded)
+}
+
+func TestCodec_MalfeasanceGossip(t *testing.T) {
+	lid := types.NewLayerID(11)
+	round := uint32(3)
+
+	hm1 := types.HareMetadata{Layer: lid, Round: round, MsgHash: types.RandomHash()}
+	hm2 := types.HareMetadata{Layer: lid, Round: round, MsgHash: types.RandomHash()}
+
+	var hareProof types.HareProof
+	for i, hm := range []types.HareMetadata{hm1, hm2} {
+		hareProof.Messages[i] = types.HareProofMsg{
+			InnerMsg:  hm,
+			Signature: types.RandomBytes(64),
+		}
+	}
+	gossip := &types.MalfeasanceGossip{
+		MalfeasanceProof: types.MalfeasanceProof{
+			Layer: lid,
+			ProofData: types.TypedProof{
+				Type:  types.HareEquivocation,
+				Proof: &hareProof,
+			},
+		},
+	}
+	encoded, err := codec.Encode(gossip)
+	require.NoError(t, err)
+
+	var decoded types.MalfeasanceGossip
+	require.NoError(t, codec.Decode(encoded, &decoded))
+	require.Equal(t, *gossip, decoded)
+
+	gossip.Eligibility = &types.HareEligibility{
+		Proof: []byte{1, 2, 3},
+		Count: 12,
+	}
+	encoded, err = codec.Encode(gossip)
+	require.NoError(t, err)
+
+	require.NoError(t, codec.Decode(encoded, &decoded))
+	require.Equal(t, *gossip, decoded)
 }

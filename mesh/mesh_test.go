@@ -9,7 +9,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
@@ -793,19 +792,20 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, malProof)
 	require.True(t, blts[1].IsMalicious())
-	var got types.MalfeasanceProof
-	require.NoError(t, codec.Decode(malProof, &got))
-	require.Equal(t, types.MultipleBallots, got.Type)
-	require.Equal(t, blts[0].BallotMetadata, got.Messages[0].(types.MultiBallotsMsg).InnerMsg)
-	require.Equal(t, blts[0].Signature, got.Messages[0].(types.MultiBallotsMsg).Signature)
-	require.Equal(t, blts[1].BallotMetadata, got.Messages[1].(types.MultiBallotsMsg).InnerMsg)
-	require.Equal(t, blts[1].Signature, got.Messages[1].(types.MultiBallotsMsg).Signature)
+	require.EqualValues(t, types.MultipleBallots, malProof.ProofData.Type)
+	proof, ok := malProof.ProofData.Proof.(*types.BallotProof)
+	require.True(t, ok)
+	require.Equal(t, blts[0].BallotMetadata, proof.Messages[0].InnerMsg)
+	require.Equal(t, blts[0].Signature, proof.Messages[0].Signature)
+	require.Equal(t, blts[1].BallotMetadata, proof.Messages[1].InnerMsg)
+	require.Equal(t, blts[1].Signature, proof.Messages[1].Signature)
 	mal, err = identities.IsMalicious(tm.cdb, nodeID)
 	require.NoError(t, err)
 	require.True(t, mal)
 	saved, err = identities.GetMalfeasanceProof(tm.cdb, nodeID)
 	require.NoError(t, err)
-	require.Equal(t, got, *saved)
+	require.EqualValues(t, malProof, saved)
+	expected := malProof
 
 	// third one will NOT generate another MalfeasanceProof
 	malProof, err = tm.AddBallot(context.Background(), &blts[2])
@@ -817,5 +817,5 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.True(t, mal)
 	saved, err = identities.GetMalfeasanceProof(tm.cdb, nodeID)
 	require.NoError(t, err)
-	require.Equal(t, got, *saved)
+	require.EqualValues(t, expected, saved)
 }

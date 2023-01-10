@@ -610,7 +610,7 @@ func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, 
 }
 
 // AddBallot to the mesh.
-func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) ([]byte, error) {
+func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.MalfeasanceProof, error) {
 	malicious, err := identities.IsMalicious(msh.cdb, ballot.SmesherID())
 	if err != nil {
 		return nil, err
@@ -618,7 +618,7 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) ([]byte, e
 	if malicious {
 		ballot.SetMalicious()
 	}
-	var proofBytes []byte
+	var proof *types.MalfeasanceProof
 	// ballots.LayerBallotByNodeID and ballots.Add should be atomic
 	// otherwise concurrent ballots.Add from the same smesher may not be noticed
 	if err = msh.cdb.WithTx(ctx, func(tx *sql.Tx) error {
@@ -628,17 +628,21 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) ([]byte, e
 				return err
 			}
 			if prev != nil {
-				proof := &types.MalfeasanceProof{
-					Layer: msh.clock.GetCurrentLayer(),
-					Type:  types.MultipleBallots,
-				}
-				for _, b := range []*types.Ballot{prev, ballot} {
-					proof.Messages = append(proof.Messages, types.MultiBallotsMsg{
+				var ballotProof types.BallotProof
+				for i, b := range []*types.Ballot{prev, ballot} {
+					ballotProof.Messages[i] = types.BallotProofMsg{
 						InnerMsg:  b.BallotMetadata,
 						Signature: b.Signature,
-					})
+					}
 				}
-				if proofBytes, err = codec.Encode(proof); err != nil {
+				proof = &types.MalfeasanceProof{
+					Layer: msh.clock.GetCurrentLayer(),
+					ProofData: types.TypedProof{
+						Type:  types.MultipleBallots,
+						Proof: &ballotProof,
+					},
+				}
+				if proofBytes, err := codec.Encode(proof); err != nil {
 					return err
 				} else if err = identities.SetMalicious(tx, ballot.SmesherID(), proofBytes); err != nil {
 					return err
@@ -657,7 +661,7 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) ([]byte, e
 	}); err != nil {
 		return nil, err
 	}
-	return proofBytes, nil
+	return proof, nil
 }
 
 // AddBlockWithTXs adds the block and its TXs in into the database.
