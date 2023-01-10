@@ -11,6 +11,7 @@ import (
 
 	"go.uber.org/atomic"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -32,6 +33,7 @@ var errMissingHareOutput = errors.New("missing hare output")
 type Mesh struct {
 	logger log.Log
 	cdb    *datastore.CachedDB
+	clock  layerClock
 
 	executor *Executor
 	conState conservativeState
@@ -52,10 +54,11 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(cdb *datastore.CachedDB, trtl system.Tortoise, exec *Executor, state conservativeState, logger log.Log) (*Mesh, error) {
+func NewMesh(cdb *datastore.CachedDB, c layerClock, trtl system.Tortoise, exec *Executor, state conservativeState, logger log.Log) (*Mesh, error) {
 	msh := &Mesh{
 		logger:              logger,
 		cdb:                 cdb,
+		clock:               c,
 		trtl:                trtl,
 		executor:            exec,
 		conState:            state,
@@ -607,27 +610,37 @@ func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, 
 }
 
 // AddBallot to the mesh.
-func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) error {
-	malicious, err := identities.IsMalicious(msh.cdb, ballot.SmesherID().Bytes())
+func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) ([]byte, error) {
+	malicious, err := identities.IsMalicious(msh.cdb, ballot.SmesherID())
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if malicious {
 		ballot.SetMalicious()
 	}
-	// ballots.Add and ballots.Count should be atomic
+	var proofBytes []byte
+	// ballots.LayerBallotByNodeID and ballots.Add should be atomic
 	// otherwise concurrent ballots.Add from the same smesher may not be noticed
-	return msh.cdb.WithTx(ctx, func(tx *sql.Tx) error {
-		if err := ballots.Add(tx, ballot); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-			return err
-		}
+	if err = msh.cdb.WithTx(ctx, func(tx *sql.Tx) error {
 		if !malicious {
-			count, err := ballots.CountByPubkeyLayer(tx, ballot.Layer, ballot.SmesherID().Bytes())
-			if err != nil {
+			prev, err := ballots.LayerBallotByNodeID(tx, ballot.Layer, ballot.SmesherID())
+			if err != nil && !errors.Is(err, sql.ErrNotFound) {
 				return err
 			}
-			if count > 1 {
-				if err := identities.SetMalicious(tx, ballot.SmesherID().Bytes()); err != nil {
+			if prev != nil {
+				proof := &types.MalfeasanceProof{
+					Layer: msh.clock.GetCurrentLayer(),
+					Type:  types.MultipleBallots,
+				}
+				for _, b := range []*types.Ballot{prev, ballot} {
+					proof.Messages = append(proof.Messages, types.MultiBallotsMsg{
+						InnerMsg:  b.BallotMetadata,
+						Signature: b.Signature,
+					})
+				}
+				if proofBytes, err = codec.Encode(proof); err != nil {
+					return err
+				} else if err = identities.SetMalicious(tx, ballot.SmesherID(), proofBytes); err != nil {
 					return err
 				}
 				ballot.SetMalicious()
@@ -637,8 +650,14 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) error {
 				)
 			}
 		}
+		if err = ballots.Add(tx, ballot); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+			return err
+		}
 		return nil
-	})
+	}); err != nil {
+		return nil, err
+	}
+	return proofBytes, nil
 }
 
 // AddBlockWithTXs adds the block and its TXs in into the database.

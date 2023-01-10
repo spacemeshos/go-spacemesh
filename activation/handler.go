@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/post/shared"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -17,12 +18,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var (
 	errKnownAtx      = errors.New("known atx")
 	errMalformedData = errors.New("malformed data")
+	errMaliciousATX  = errors.New("malicious atx")
 )
 
 type atxChan struct {
@@ -35,6 +38,8 @@ type Handler struct {
 	sync.RWMutex
 
 	cdb             *datastore.CachedDB
+	clock           layerClock
+	publisher       pubsub.Publisher
 	layersPerEpoch  uint32
 	tickSize        uint64
 	goldenATXID     types.ATXID
@@ -47,9 +52,11 @@ type Handler struct {
 }
 
 // NewHandler returns a data handler for ATX.
-func NewHandler(cdb *datastore.CachedDB, fetcher system.Fetcher, layersPerEpoch uint32, tickSize uint64, goldenATXID types.ATXID, nipostValidator nipostValidator, atxReceiver atxReceiver, log log.Log) *Handler {
+func NewHandler(cdb *datastore.CachedDB, c layerClock, pub pubsub.Publisher, fetcher system.Fetcher, layersPerEpoch uint32, tickSize uint64, goldenATXID types.ATXID, nipostValidator nipostValidator, atxReceiver atxReceiver, log log.Log) *Handler {
 	return &Handler{
 		cdb:             cdb,
+		clock:           c,
+		publisher:       pub,
 		layersPerEpoch:  layersPerEpoch,
 		tickSize:        tickSize,
 		goldenATXID:     goldenATXID,
@@ -280,12 +287,45 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	h.Lock()
 	defer h.Unlock()
 
-	if err := atxs.Add(h.cdb, atx, time.Now()); err != nil {
-		if errors.Is(err, sql.ErrObjectExists) {
-			return nil
-		}
-		return fmt.Errorf("add atx to db: %w", err)
+	malicious, err := identities.IsMalicious(h.cdb, atx.NodeID())
+	if err != nil {
+		return fmt.Errorf("store atx: %w", err)
 	}
+	fmt.Printf("storing layer %v epoch %v\n", atx.PubLayerID, atx.PublishEpoch())
+	var proofBytes []byte
+	h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
+		if !malicious {
+			prev, err := atxs.GetByEpochAndNodeID(tx, atx.PublishEpoch(), atx.NodeID())
+			if err != nil && !errors.Is(err, sql.ErrNotFound) {
+				return err
+			}
+			if prev != nil {
+				proof := &types.MalfeasanceProof{
+					Layer: h.clock.GetCurrentLayer(),
+					Type:  types.MultipleATXs,
+				}
+				for _, a := range []*types.VerifiedActivationTx{prev, atx} {
+					proof.Messages = append(proof.Messages, types.MultiATXsMsg{
+						InnerMsg:  a.ATXMetadata,
+						Signature: a.Signature,
+					})
+				}
+				if proofBytes, err = codec.Encode(proof); err != nil {
+					return err
+				} else if err = identities.SetMalicious(tx, atx.NodeID(), proofBytes); err != nil {
+					return err
+				}
+				h.log.With().Warning("smesher produced more than one atx in the same epoch",
+					log.Stringer("smesher", atx.NodeID()),
+					log.Inline(atx),
+				)
+			}
+		}
+		if err = atxs.Add(tx, atx, time.Now()); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+			return fmt.Errorf("add atx to db: %w", err)
+		}
+		return nil
+	})
 
 	// notify subscribers
 	if ch, found := h.atxChannels[atx.ID()]; found {
@@ -294,6 +334,16 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	}
 
 	h.log.WithContext(ctx).With().Info("finished storing atx in epoch", atx.ID(), atx.PublishEpoch())
+
+	// broadcast malfeasance proof last as the verification of the proof will take place
+	// in the same goroutine
+	if proofBytes != nil {
+		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, proofBytes); err != nil {
+			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))
+			return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
+		}
+		return errMaliciousATX
+	}
 	return nil
 }
 
