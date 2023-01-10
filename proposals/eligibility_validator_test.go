@@ -219,14 +219,15 @@ func TestCheckEligibility_FailToGetBallotATXHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
+
 	blts := createBallots(t, signer, activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
-	require.NoError(t, ballots.Add(tv.cdb, rb))
-	b := blts[1]
-	b.AtxID = types.RandomATXID()
-	eligible, err := tv.CheckEligibility(context.Background(), b)
+	randomAtx := types.RandomATXID()
+	rb.EpochData.ActiveSet = append(rb.EpochData.ActiveSet, randomAtx)
+	rb.AtxID = randomAtx
+	eligible, err := tv.CheckEligibility(context.Background(), rb)
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.True(t, strings.Contains(err.Error(), "get ballot ATX header"))
+	require.ErrorContains(t, err, "get ATX header")
 	require.False(t, eligible)
 }
 
@@ -438,4 +439,47 @@ func TestCheckEligibility(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, got)
 	}
+}
+
+func TestCheckEligibility_AtxIdMismatch(t *testing.T) {
+	tv := createTestValidator(t)
+	refballot := types.Ballot{}
+	refballot.SetID(types.BallotID{1})
+	refballot.AtxID = types.ATXID{1}
+	refballot.EpochData = &types.EpochData{}
+	require.NoError(t, ballots.Add(tv.cdb, &refballot))
+
+	ballot := &types.Ballot{}
+	ballot.RefBallot = refballot.ID()
+	ballot.AtxID = types.ATXID{2}
+
+	eligibile, err := tv.CheckEligibility(context.Background(), ballot)
+	require.ErrorContains(t, err, "should be sharing atx")
+	require.False(t, eligibile)
+}
+
+func TestCheckEligibility_AtxNotIncluded(t *testing.T) {
+	tv := createTestValidator(t)
+
+	atx1 := &types.VerifiedActivationTx{ActivationTx: &types.ActivationTx{}}
+	atx1.SetID(&types.ATXID{1})
+	atx1.SetNodeID(&types.NodeID{})
+	atx2 := &types.VerifiedActivationTx{ActivationTx: &types.ActivationTx{}}
+	atx2.SetID(&types.ATXID{2})
+	atx2.SetNodeID(&types.NodeID{})
+	require.NoError(t, atxs.Add(tv.cdb, atx1, time.Time{}))
+	require.NoError(t, atxs.Add(tv.cdb, atx2, time.Time{}))
+
+	ballot := &types.Ballot{}
+	ballot.SetID(types.BallotID{1})
+	ballot.AtxID = types.ATXID{3}
+	ballot.EpochData = &types.EpochData{
+		ActiveSet: []types.ATXID{atx1.ID(), atx2.ID()},
+		Beacon:    types.Beacon{1},
+	}
+	require.NoError(t, ballots.Add(tv.cdb, ballot))
+
+	eligibile, err := tv.CheckEligibility(context.Background(), ballot)
+	require.ErrorContains(t, err, "is not included into the active set")
+	require.False(t, eligibile)
 }
