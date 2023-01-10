@@ -38,13 +38,13 @@ var (
 		fastnet.SmesherConfig,
 	)
 
-	smesherLimit = apiv1.ResourceList{
+	smesherRequests = apiv1.ResourceList{
 		apiv1.ResourceCPU:    resource.MustParse("0.5"),
-		apiv1.ResourceMemory: resource.MustParse("500Mi"),
+		apiv1.ResourceMemory: resource.MustParse("1Gi"),
 	}
-	bootLimit = apiv1.ResourceList{
-		apiv1.ResourceCPU:    resource.MustParse("1.5"),
-		apiv1.ResourceMemory: resource.MustParse("500Mi"),
+	smesherLimits = apiv1.ResourceList{
+		apiv1.ResourceCPU:    resource.MustParse("4"),
+		apiv1.ResourceMemory: resource.MustParse("1Gi"),
 	}
 )
 
@@ -132,12 +132,12 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 					WithResources(corev1.ResourceRequirements().WithRequests(
 						apiv1.ResourceList{
 							apiv1.ResourceCPU:    resource.MustParse("1"),
-							apiv1.ResourceMemory: resource.MustParse("2Gi"),
+							apiv1.ResourceMemory: resource.MustParse("16Gi"),
 						},
 					).WithLimits(
 						apiv1.ResourceList{
-							apiv1.ResourceCPU:    resource.MustParse("1"),
-							apiv1.ResourceMemory: resource.MustParse("2Gi"),
+							apiv1.ResourceCPU:    resource.MustParse("2"),
+							apiv1.ResourceMemory: resource.MustParse("16Gi"),
 						},
 					)),
 				),
@@ -286,7 +286,7 @@ func labelSelector(id string) string {
 	return fmt.Sprintf("id=%s", id)
 }
 
-func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []DeploymentFlag, resources apiv1.ResourceList) ([]*NodeClient, error) {
+func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []DeploymentFlag) ([]*NodeClient, error) {
 	var (
 		eg      errgroup.Group
 		clients = make(chan *NodeClient, to-from)
@@ -304,7 +304,7 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 			podname := fmt.Sprintf("%s-0", setname)
 			labels := nodeLabels(name, podname)
 			labels["bucket"] = strconv.Itoa(i % buckets)
-			if err := deployNode(ctx, setname, labels, finalFlags, resources); err != nil {
+			if err := deployNode(ctx, setname, labels, finalFlags); err != nil {
 				return err
 			}
 			node, err := waitNode(ctx, podname, Smesher)
@@ -346,7 +346,7 @@ func deleteNode(ctx *testcontext.Context, podname string) error {
 	return nil
 }
 
-func deployNode(ctx *testcontext.Context, name string, labels map[string]string, flags []DeploymentFlag, resources apiv1.ResourceList) error {
+func deployNode(ctx *testcontext.Context, name string, labels map[string]string, flags []DeploymentFlag) error {
 	svc := corev1.Service(headlessSvc(name), ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(corev1.ServiceSpec().
@@ -422,8 +422,8 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
 						).
 						WithResources(corev1.ResourceRequirements().
-							WithRequests(resources).
-							WithLimits(resources),
+							WithRequests(smesherRequests).
+							WithLimits(smesherLimits),
 						).
 						WithStartupProbe(
 							corev1.Probe().WithTCPSocket(
@@ -431,7 +431,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 							).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
 						).
 						WithEnv(
-							corev1.EnvVar().WithName("GOMAXPROCS").WithValue("8"),
+							corev1.EnvVar().WithName("GOMAXPROCS").WithValue("4"),
 						).
 						WithCommand(cmd...),
 					)),
