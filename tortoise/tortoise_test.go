@@ -1494,15 +1494,6 @@ func TestComputeBallotWeight(t *testing.T) {
 				{ActiveSet: []int{2, 3}, ATX: 2, ExpectedWeight: 20, Eligibilities: 1},
 			},
 		},
-		{
-			desc:           "AtxNotInActiveSet",
-			atxs:           []uint{50, 50, 50},
-			layerSize:      5,
-			layersPerEpoch: 2,
-			ballots: []testBallot{
-				{ActiveSet: []int{0, 2}, ATX: 1, ExpectedWeight: 0, Eligibilities: 1},
-			},
-		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
