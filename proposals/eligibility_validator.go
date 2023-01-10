@@ -57,7 +57,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		atxWeight, totalWeight uint64
 		err                    error
 		refBallot              = ballot
-		epoch                  = ballot.LayerIndex.GetEpoch()
+		epoch                  = ballot.Layer.GetEpoch()
 	)
 
 	if ballot.RefBallot != types.EmptyBallotID {
@@ -130,15 +130,15 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		}
 
 		eligibleLayer := CalcEligibleLayer(epoch, v.layersPerEpoch, vrfSig)
-		if ballot.LayerIndex != eligibleLayer {
+		if ballot.Layer != eligibleLayer {
 			return false, fmt.Errorf("%w: ballot layer (%v), eligible layer (%v)",
-				errIncorrectLayerIndex, ballot.LayerIndex, eligibleLayer)
+				errIncorrectLayerIndex, ballot.Layer, eligibleLayer)
 		}
 	}
 
 	v.logger.WithContext(ctx).With().Debug("ballot eligibility verified",
 		ballot.ID(),
-		ballot.LayerIndex,
+		ballot.Layer,
 		epoch,
 		beacon,
 	)
@@ -153,7 +153,7 @@ func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*ty
 		v.logger.WithContext(ctx).Panic("empty ATXID in ballot")
 	}
 
-	epoch := ballot.LayerIndex.GetEpoch()
+	epoch := ballot.Layer.GetEpoch()
 	atx, err := v.cdb.GetAtxHeader(ballot.AtxID)
 	if err != nil {
 		return nil, fmt.Errorf("get ballot ATX %v epoch %v: %w", ballot.AtxID.ShortString(), epoch, err)

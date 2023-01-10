@@ -14,7 +14,7 @@ import (
 func TestAdd(t *testing.T) {
 	db := sql.InMemory()
 	pub := types.BytesToNodeID([]byte{1, 1})
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.InnerBallot{})
+	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.BallotMetadata{})
 
 	require.NoError(t, ballots.Add(db, &ballot))
 	require.NoError(t, identities.SetMalicious(db, pub.Bytes()))
@@ -35,7 +35,7 @@ func TestAdd(t *testing.T) {
 func TestHas(t *testing.T) {
 	db := sql.InMemory()
 	pub := types.BytesToNodeID([]byte{1, 1})
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.InnerBallot{})
+	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.BallotMetadata{})
 
 	require.NoError(t, ballots.Add(db, &ballot))
 	require.NoError(t, identities.SetMalicious(db, pub.Bytes()))
@@ -60,7 +60,7 @@ func TestGet(t *testing.T) {
 	db := sql.InMemory()
 
 	pub := types.BytesToNodeID([]byte{1, 1})
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.InnerBallot{})
+	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.BallotMetadata{})
 
 	require.NoError(t, ballots.Add(db, &ballot))
 	require.NoError(t, identities.SetMalicious(db, pub.Bytes()))
