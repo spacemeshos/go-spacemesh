@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility/mocks"
@@ -62,22 +61,22 @@ func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publish
 	return vAtx
 }
 
-func genBallotWithEligibility(tb testing.TB, signer *signing.EdSigner, lid types.LayerID, atxID types.ATXID, proof types.VotingEligibilityProof, activeSet []types.ATXID, beacon types.Beacon) *types.Ballot {
+func genBallotWithEligibility(tb testing.TB, signer *signing.EdSigner, lid types.LayerID, atxID types.ATXID, proof types.VotingEligibility, activeSet []types.ATXID, beacon types.Beacon) *types.Ballot {
 	tb.Helper()
 	ballot := &types.Ballot{
+		BallotMetadata: types.BallotMetadata{
+			Layer: lid,
+		},
 		InnerBallot: types.InnerBallot{
-			AtxID:             atxID,
-			EligibilityProofs: []types.VotingEligibilityProof{proof},
-			LayerIndex:        lid,
+			AtxID: atxID,
 			EpochData: &types.EpochData{
 				ActiveSet: activeSet,
 				Beacon:    beacon,
 			},
 		},
+		EligibilityProofs: []types.VotingEligibility{proof},
 	}
-	bytes, err := codec.Encode(&ballot.InnerBallot)
-	require.NoError(tb, err)
-	ballot.Signature = signer.Sign(bytes)
+	ballot.Signature = signer.Sign(ballot.SignedBytes())
 	require.NoError(tb, ballot.Initialize())
 	return ballot
 }

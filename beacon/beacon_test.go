@@ -129,9 +129,9 @@ func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig sig
 
 func createRandomATXs(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, num int) {
 	for i := 0; i < num; i++ {
-		signing, err := signing.NewEdSigner()
+		sig, err := signing.NewEdSigner()
 		require.NoError(tb, err)
-		createATX(tb, db, lid, signing, 1)
+		createATX(tb, db, lid, sig, 1)
 	}
 }
 
@@ -230,10 +230,10 @@ func TestBeaconNotSynced_ReleaseMemory(t *testing.T) {
 	start := types.EpochID(2)
 	end := start + numEpochsToKeep + 10
 	for eid := start; eid <= end; eid++ {
-		b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
-			LayerIndex:        start.FirstLayer(),
-			EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
+		b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+			Layer: start.FirstLayer(),
 		})
+		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		tpd.ReportBeaconFromBallot(eid, &b, types.RandomBeacon(), fixed.New64(1))
 		require.ErrorIs(t, tpd.onNewEpoch(context.Background(), eid), errNodeNotSynced)
 	}
@@ -284,15 +284,15 @@ func TestBeaconWithMetrics(t *testing.T) {
 			require.NoError(t, tpd.onNewEpoch(context.Background(), layer.GetEpoch()))
 		}
 		thisEpoch := layer.GetEpoch()
-		b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
-			LayerIndex:        thisEpoch.FirstLayer(),
-			EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
+		b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+			Layer: thisEpoch.FirstLayer(),
 		})
+		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		tpd.recordBeacon(thisEpoch, &b, beacon1, fixed.New64(1))
-		b = types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
-			LayerIndex:        thisEpoch.FirstLayer(),
-			EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
+		b = types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+			Layer: thisEpoch.FirstLayer(),
 		})
+		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		tpd.recordBeacon(thisEpoch, &b, beacon2, fixed.New64(1))
 
 		numCalculated := 0
@@ -424,10 +424,10 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 		e := epoch + types.EpochID(i)
 		err := pd.setBeacon(e, types.RandomBeacon())
 		require.NoError(t, err)
-		b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
-			LayerIndex:        e.FirstLayer(),
-			EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
+		b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+			Layer: e.FirstLayer(),
 		})
+		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		pd.ReportBeaconFromBallot(e, &b, types.RandomBeacon(), fixed.New64(1))
 		pd.cleanupEpoch(e)
 		require.Equal(t, i+1, len(pd.beacons))
@@ -439,10 +439,10 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	epoch = epoch + numEpochsToKeep
 	err := pd.setBeacon(epoch, types.RandomBeacon())
 	require.NoError(t, err)
-	b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
-		LayerIndex:        epoch.FirstLayer(),
-		EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
+	b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+		Layer: epoch.FirstLayer(),
 	})
+	b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 	pd.recordBeacon(epoch, &b, types.RandomBeacon(), fixed.New64(1))
 	require.Equal(t, numEpochsToKeep+1, len(pd.beacons))
 	require.Equal(t, numEpochsToKeep+1, len(pd.ballotsBeacons))
@@ -529,10 +529,10 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 			epoch := types.EpochID(3)
 			for beacon, weights := range tc.beaconBallots {
 				for _, w := range weights {
-					b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
-						LayerIndex:        epoch.FirstLayer(),
-						EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
+					b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+						Layer: epoch.FirstLayer(),
 					})
+					b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 					pd.ReportBeaconFromBallot(epoch, &b, beacon, w)
 				}
 			}
@@ -559,10 +559,10 @@ func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 
-	b1 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
-		LayerIndex:        epoch.FirstLayer(),
-		EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
+	b1 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+		Layer: epoch.FirstLayer(),
 	})
+	b1.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 	pd.ReportBeaconFromBallot(epoch, &b1, beacon1, fixed.New64(1))
 	pd.ReportBeaconFromBallot(epoch, &b1, beacon1, fixed.New64(1))
 	// same ballotID does not count twice
@@ -570,10 +570,10 @@ func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	require.Equal(t, errBeaconNotCalculated, err)
 	require.Equal(t, types.EmptyBeacon, got)
 
-	b2 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
-		LayerIndex:        epoch.FirstLayer(),
-		EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
+	b2 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+		Layer: epoch.FirstLayer(),
 	})
+	b2.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 	pd.ReportBeaconFromBallot(epoch, &b2, beacon2, fixed.New64(2))
 	got, err = pd.GetBeacon(epoch)
 	require.NoError(t, err)
@@ -600,15 +600,15 @@ func TestBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, beacon, got)
 
-	b1 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
-		LayerIndex:        epoch.FirstLayer(),
-		EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
+	b1 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+		Layer: epoch.FirstLayer(),
 	})
+	b1.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 	pd.ReportBeaconFromBallot(epoch, &b1, beaconFromBallots, fixed.New64(1))
-	b2 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
-		LayerIndex:        epoch.FirstLayer(),
-		EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
+	b2 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+		Layer: epoch.FirstLayer(),
 	})
+	b2.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 	pd.ReportBeaconFromBallot(epoch, &b2, beaconFromBallots, fixed.New64(1))
 
 	// should not change the beacon value
@@ -888,8 +888,8 @@ func TestBeacon_buildProposal(t *testing.T) {
 	}{
 		{
 			name:   "Case 1",
-			epoch:  0x12345678,
-			result: string(util.Hex2Bytes("084250e259d148")),
+			epoch:  13110,
+			result: string(util.Hex2Bytes("04d9cc")),
 		},
 	}
 
@@ -927,12 +927,12 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: sign("08425004"),
+			result: sign("0404"),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: sign("08425008"),
+			result: sign("0408"),
 		},
 	}
 

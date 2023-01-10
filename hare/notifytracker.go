@@ -28,7 +28,7 @@ func newNotifyTracker(expectedSize int) *notifyTracker {
 // Returns true if the InnerMsg didn't affect the state, false otherwise.
 func (nt *notifyTracker) OnNotify(msg *Msg) bool {
 	pub := msg.PubKey
-	eligibilityCount := uint32(msg.InnerMsg.EligibilityCount)
+	eligibilityCount := uint32(msg.Eligibility.Count)
 	if _, exist := nt.notifies[pub.String()]; exist { // already seenSenders
 		return true // ignored
 	}
@@ -38,7 +38,7 @@ func (nt *notifyTracker) OnNotify(msg *Msg) bool {
 
 	// track that set
 	s := NewSet(msg.InnerMsg.Values)
-	nt.onCertificate(msg.InnerMsg.Cert.AggMsgs.Messages[0].InnerMsg.Round, s)
+	nt.onCertificate(msg.InnerMsg.Cert.AggMsgs.Messages[0].Round, s)
 	nt.tracker.Track(s.ID(), eligibilityCount)
 
 	return false

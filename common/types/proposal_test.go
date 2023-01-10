@@ -82,5 +82,5 @@ func FuzzInnerProposalSafety(f *testing.F) {
 }
 
 func TestProposalEncoding(t *testing.T) {
-	types.CheckLayerFirstEncoding(t, func(object types.Proposal) types.LayerID { return object.LayerIndex })
+	types.CheckLayerFirstEncoding(t, func(object types.Proposal) types.LayerID { return object.Layer })
 }

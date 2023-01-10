@@ -146,6 +146,7 @@ func New(
 
 // VrfMessage is a verification message.
 type VrfMessage struct {
+	Type   types.EligibilityType
 	Beacon uint32
 	Round  uint32
 	Layer  types.LayerID
@@ -192,7 +193,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	}
 
 	// marshal message
-	msg := VrfMessage{Beacon: v, Round: round, Layer: layer}
+	msg := VrfMessage{Type: types.EligibilityHare, Beacon: v, Round: round, Layer: layer}
 	buf, err := codec.Encode(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Fatal("failed to encode", log.Err(err))
@@ -493,13 +494,13 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 			// not a ref ballot, no beacon value to check
 			continue
 		}
-		beacon = beacons[ballot.LayerIndex.GetEpoch()]
+		beacon = beacons[ballot.Layer.GetEpoch()]
 		if ballot.EpochData.Beacon != beacon {
 			badBeaconATXIDs[ballot.AtxID] = struct{}{}
 			logger.With().Warning("hare actives find ballot with different beacon",
 				ballot.ID(),
 				ballot.AtxID,
-				ballot.LayerIndex.GetEpoch(),
+				ballot.Layer.GetEpoch(),
 				log.String("ballot_beacon", ballot.EpochData.Beacon.ShortString()),
 				log.String("epoch_beacon", beacon.ShortString()))
 			continue

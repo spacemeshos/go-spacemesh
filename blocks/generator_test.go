@@ -192,12 +192,14 @@ func createProposal(
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
-				InnerBallot: types.InnerBallot{
-					AtxID:             atxID,
-					LayerIndex:        lid,
-					EligibilityProofs: make([]types.VotingEligibilityProof, numEligibility),
-					EpochData:         epochData,
+				BallotMetadata: types.BallotMetadata{
+					Layer: lid,
 				},
+				InnerBallot: types.InnerBallot{
+					AtxID:     atxID,
+					EpochData: epochData,
+				},
+				EligibilityProofs: make([]types.VotingEligibility, numEligibility),
 			},
 			TxIDs:    txIDs,
 			MeshHash: meshHash,

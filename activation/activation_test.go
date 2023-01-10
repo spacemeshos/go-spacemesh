@@ -878,7 +878,8 @@ func TestBuilder_SignAtx(t *testing.T) {
 	challenge := newChallenge(1, prevAtx, prevAtx, types.NewLayerID(15), nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
 	atx := newAtx(t, tab.sig, &tab.nodeID, challenge, nipost, 100, types.Address{})
-	atxBytes, err := codec.Encode(&atx.InnerActivationTx)
+	atx.SetMetadata()
+	atxBytes, err := codec.Encode(&atx.ATXMetadata)
 	require.NoError(t, err)
 	err = SignAndFinalizeAtx(tab, atx)
 	require.NoError(t, err)
@@ -886,7 +887,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 	extractor, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
 
-	nodeId, err := extractor.ExtractNodeID(atxBytes, atx.Sig)
+	nodeId, err := extractor.ExtractNodeID(atxBytes, atx.Signature)
 	require.NoError(t, err)
 	require.Equal(t, tab.nodeID, nodeId)
 }

@@ -650,7 +650,7 @@ func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
 func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 	start := time.Now()
 
-	if !ballot.LayerIndex.After(t.evicted) {
+	if !ballot.Layer.After(t.evicted) {
 		return nil, nil
 	}
 	if _, exist := t.state.ballotRefs[ballot.ID()]; exist {
@@ -678,9 +678,9 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 			return nil, nil
 		}
 	}
-	if !base.layer.Before(ballot.LayerIndex) {
+	if !base.layer.Before(ballot.Layer) {
 		return nil, fmt.Errorf("votes for ballot (%s/%s) should be encoded with base ballot (%s/%s) from previous layers",
-			ballot.LayerIndex, ballot.ID(), base.layer, base.id)
+			ballot.Layer, ballot.ID(), base.layer, base.id)
 	}
 
 	if ballot.EpochData != nil {
@@ -719,7 +719,7 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 			layer: base.layer,
 		},
 		reference: refinfo,
-		layer:     ballot.LayerIndex,
+		layer:     ballot.Layer,
 	}
 
 	if !ballot.IsMalicious() {
@@ -729,14 +729,14 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 		).Mul(fixed.New(len(ballot.EligibilityProofs)))
 	} else {
 		binfo.malicious = true
-		t.logger.With().Warning("malicious ballot with zeroed weight", ballot.LayerIndex, ballot.ID())
+		t.logger.With().Warning("malicious ballot with zeroed weight", ballot.Layer, ballot.ID())
 	}
 
 	t.logger.With().Debug("computed weight and height for ballot",
 		ballot.ID(),
 		log.Stringer("weight", binfo.weight),
 		log.Uint64("height", refinfo.height),
-		log.Uint32("lid", ballot.LayerIndex.Value),
+		log.Uint32("lid", ballot.Layer.Value),
 	)
 
 	var err error

@@ -197,11 +197,20 @@ type InnerActivationTx struct {
 	nodeID *NodeID // the id of the Node that created the ATX (public key)
 }
 
+// ATXMetadata is the signed data of ActivationTx.
+type ATXMetadata struct {
+	Target EpochID
+	// hash of InnerActivationTx
+	MsgHash Hash32
+}
+
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
 	InnerActivationTx
-	Sig []byte
+	ATXMetadata
+	// signature over ATXMetadata
+	Signature []byte
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
@@ -231,9 +240,20 @@ func NewActivationTx(
 	return atx
 }
 
+// SetMetadata sets ATXMetadata.
+func (atx *ActivationTx) SetMetadata() {
+	atx.Target = atx.TargetEpoch()
+	atx.MsgHash = BytesToHash(atx.InnerBytes())
+}
+
 // SignedBytes returns a signed data of the ActivationTx.
 func (atx *ActivationTx) SignedBytes() []byte {
-	return atx.InnerBytes()
+	atx.SetMetadata()
+	data, err := codec.Encode(&atx.ATXMetadata)
+	if err != nil {
+		log.With().Fatal("failed to encode InnerActivationTx", log.Err(err))
+	}
+	return data
 }
 
 // InnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
@@ -268,7 +288,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
 func (atx *ActivationTx) CalcAndSetID() error {
-	if atx.Sig == nil {
+	if atx.Signature == nil {
 		return fmt.Errorf("cannot calculate ATX ID: sig is nil")
 	}
 	id := ATXID(CalcObjectHash32(atx))
@@ -281,7 +301,7 @@ func (atx *ActivationTx) CalcAndSetNodeID() error {
 	if atx.nodeID != nil {
 		return nil
 	}
-	nodeId, err := ExtractNodeIDFromSig(atx.SignedBytes(), atx.Sig)
+	nodeId, err := ExtractNodeIDFromSig(atx.SignedBytes(), atx.Signature)
 	if err != nil {
 		return fmt.Errorf("extract NodeID: %w", err)
 	}

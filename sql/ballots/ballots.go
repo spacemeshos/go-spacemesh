@@ -43,7 +43,7 @@ func Add(db sql.Executor, ballot *types.Ballot) error {
 		values (?1, ?2, ?4, ?5);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, ballot.ID().Bytes())
-			stmt.BindInt64(2, int64(ballot.LayerIndex.Value))
+			stmt.BindInt64(2, int64(ballot.Layer.Value))
 			stmt.BindBytes(4, ballot.SmesherID().Bytes())
 			stmt.BindBytes(5, bytes)
 		}, nil); err != nil {

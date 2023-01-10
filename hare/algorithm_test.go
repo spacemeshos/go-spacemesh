@@ -359,9 +359,9 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	assert.True(t, NewSet(builder.inner.Values).Equals(s))
 	verifier := builder.msg.PubKey
 	assert.Nil(t, verifier)
-	assert.Equal(t, builder.inner.Round, proc.getRound())
+	assert.Equal(t, builder.msg.Round, proc.getRound())
 	assert.Equal(t, builder.inner.CommittedRound, proc.committedRound)
-	assert.Equal(t, builder.inner.Layer, proc.layer)
+	assert.Equal(t, builder.msg.Layer, proc.layer)
 }
 
 func TestConsensusProcess_isEligible_NotEligible(t *testing.T) {
@@ -510,7 +510,7 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 	require.NoError(t, err)
 	m = BuildNotifyMsg(signer2, s)
 	proc.committedRound = 0
-	m.InnerMsg.Round = proc.committedRound
+	m.Round = proc.committedRound
 	proc.value.Add(value5)
 	proc.setRound(notifyRound)
 	proc.processNotifyMsg(context.Background(), m)

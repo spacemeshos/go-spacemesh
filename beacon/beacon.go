@@ -988,16 +988,16 @@ func buildSignedProposal(ctx context.Context, signer vrfSigner, epoch types.Epoc
 
 //go:generate scalegen -types BuildProposalMessage
 
-// BuildProposalMessage is a message for buildProposal below.
-type BuildProposalMessage struct {
-	Prefix string
-	Epoch  uint32
+// ProposalVrfMessage is a message for buildProposal below.
+type ProposalVrfMessage struct {
+	Type  types.EligibilityType
+	Epoch uint32
 }
 
 func buildProposal(epoch types.EpochID, logger log.Log) []byte {
-	message := &BuildProposalMessage{
-		Prefix: proposalPrefix,
-		Epoch:  uint32(epoch),
+	message := &ProposalVrfMessage{
+		Type:  types.EligibilityBeacon,
+		Epoch: uint32(epoch),
 	}
 
 	b, err := codec.Encode(message)

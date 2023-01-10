@@ -88,7 +88,7 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 	slots, err := GetNumEligibleSlots(uint64(testedATXUnit), totalWeight, layerAvgSize, layersPerEpoch)
 	require.NoError(tb, err)
 	require.Equal(tb, eligibleSlots, slots)
-	eligibilityProofs := map[types.LayerID][]types.VotingEligibilityProof{}
+	eligibilityProofs := map[types.LayerID][]types.VotingEligibility{}
 	order := make([]types.LayerID, 0, eligibleSlots)
 
 	vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
@@ -103,7 +103,7 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 		if _, exist := eligibilityProofs[eligibleLayer]; !exist {
 			order = append(order, eligibleLayer)
 		}
-		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.VotingEligibilityProof{
+		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.VotingEligibility{
 			J:   counter,
 			Sig: vrfSig,
 		})
@@ -115,7 +115,7 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 		isRef := len(blts) == 0
 		b := types.RandomBallot()
 		b.AtxID = activeSet[0]
-		b.LayerIndex = lyr
+		b.Layer = lyr
 		if isRef {
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{
@@ -351,7 +351,7 @@ func TestCheckEligibility_BadCounter(t *testing.T) {
 func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	tv := createTestValidator(t)
 	signer, err := signing.NewEdSigner(
-		signing.WithKeyFromRand(rand.New(rand.NewSource(2222))),
+		signing.WithKeyFromRand(rand.New(rand.NewSource(1121))),
 	)
 	require.NoError(t, err)
 
@@ -368,7 +368,7 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	require.False(t, eligible)
 
 	rb.EligibilityProofs[0], rb.EligibilityProofs[1] = rb.EligibilityProofs[1], rb.EligibilityProofs[0]
-	rb.EligibilityProofs = append(rb.EligibilityProofs, types.VotingEligibilityProof{J: 2})
+	rb.EligibilityProofs = append(rb.EligibilityProofs, types.VotingEligibility{J: 2})
 	eligible, err = tv.CheckEligibility(context.Background(), rb)
 	require.ErrorIs(t, err, errInvalidProofsOrder)
 	require.False(t, eligible)

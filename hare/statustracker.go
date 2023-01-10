@@ -49,7 +49,7 @@ func (st *statusTracker) AnalyzeStatuses(isValid func(m *Msg) bool) {
 		if !isValid(m) { // only keep valid Messages
 			delete(st.statuses, key)
 		} else {
-			st.count += m.InnerMsg.EligibilityCount
+			st.count += m.Eligibility.Count
 			if m.InnerMsg.CommittedRound >= st.maxCommittedRound || st.maxCommittedRound == preRound { // track max Ki & matching raw set
 				st.maxCommittedRound = m.InnerMsg.CommittedRound
 				st.maxSet = NewSet(m.InnerMsg.Values)

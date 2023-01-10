@@ -622,7 +622,7 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) error {
 			return err
 		}
 		if !malicious {
-			count, err := ballots.CountByPubkeyLayer(tx, ballot.LayerIndex, ballot.SmesherID().Bytes())
+			count, err := ballots.CountByPubkeyLayer(tx, ballot.Layer, ballot.SmesherID().Bytes())
 			if err != nil {
 				return err
 			}
