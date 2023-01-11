@@ -68,7 +68,11 @@ func (h *Handler) handleProof(ctx context.Context, data []byte) error {
 			h.logger.WithContext(ctx).With().Debug("known malicious identity", nodeID)
 			return errors.New("known proof")
 		}
-		if err = identities.SetMalicious(h.db, nodeID, data); err == nil {
+		proofBytes, err := codec.Encode(&p.MalfeasanceProof)
+		if err != nil {
+			h.logger.WithContext(ctx).With().Fatal("failed to encode MalfeasanceProof", log.Err(err))
+		}
+		if err = identities.SetMalicious(h.db, nodeID, proofBytes); err == nil {
 			switch p.ProofData.Type {
 			case types.HareEquivocation:
 				numProofsHare.Inc()
