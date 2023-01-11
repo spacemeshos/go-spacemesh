@@ -27,6 +27,9 @@ func MessageFromBuffer(buf []byte) (Message, error) {
 	if err := codec.Decode(buf, &msg); err != nil {
 		return msg, fmt.Errorf("serialize: %w", err)
 	}
+	if msg.MsgHash != types.BytesToHash(msg.InnerMsg.Bytes()) {
+		return Message{}, fmt.Errorf("bad message hash")
+	}
 	return msg, nil
 }
 
