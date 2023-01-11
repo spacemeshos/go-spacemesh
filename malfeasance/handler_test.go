@@ -18,7 +18,7 @@ import (
 
 func TestHandler_handleProof_multipleATXs(t *testing.T) {
 	db := sql.InMemory()
-	h := malfeasance.NewHandler(db, logtest.New(t))
+	h := malfeasance.NewHandler(db, logtest.New(t), "self")
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.NewLayerID(11)
@@ -206,8 +206,12 @@ func TestHandler_handleProof_multipleATXs(t *testing.T) {
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
+		require.NoError(t, err)
+		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
+
+		require.Equal(t, pubsub.ValidationAccept, h.HandleMalfeasanceProof(context.Background(), "self", data))
+		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 	})
@@ -215,7 +219,7 @@ func TestHandler_handleProof_multipleATXs(t *testing.T) {
 
 func TestHandler_handleProof_multipleBallots(t *testing.T) {
 	db := sql.InMemory()
-	h := malfeasance.NewHandler(db, logtest.New(t))
+	h := malfeasance.NewHandler(db, logtest.New(t), "self")
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.NewLayerID(11)
@@ -402,8 +406,12 @@ func TestHandler_handleProof_multipleBallots(t *testing.T) {
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
+		require.NoError(t, err)
+		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
+
+		require.Equal(t, pubsub.ValidationAccept, h.HandleMalfeasanceProof(context.Background(), "self", data))
+		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 	})
@@ -411,7 +419,7 @@ func TestHandler_handleProof_multipleBallots(t *testing.T) {
 
 func TestHandler_handleProof_hareEquivocation(t *testing.T) {
 	db := sql.InMemory()
-	h := malfeasance.NewHandler(db, logtest.New(t))
+	h := malfeasance.NewHandler(db, logtest.New(t), "self")
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.NewLayerID(11)
@@ -647,8 +655,12 @@ func TestHandler_handleProof_hareEquivocation(t *testing.T) {
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
+		require.NoError(t, err)
+		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
+
+		require.Equal(t, pubsub.ValidationAccept, h.HandleMalfeasanceProof(context.Background(), "self", data))
+		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 	})

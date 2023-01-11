@@ -20,15 +20,16 @@ var errMalformedData = errors.New("malformed data")
 type Handler struct {
 	logger log.Log
 	db     *sql.Database
+	self   p2p.Peer
 }
 
-func NewHandler(db *sql.Database, lg log.Log) *Handler {
-	return &Handler{logger: lg, db: db}
+func NewHandler(db *sql.Database, lg log.Log, self p2p.Peer) *Handler {
+	return &Handler{logger: lg, db: db, self: self}
 }
 
 // HandleMalfeasanceProof is the gossip receiver for MalfeasanceProof.
-func (h *Handler) HandleMalfeasanceProof(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
-	err := h.handleProof(ctx, msg)
+func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+	err := h.handleProof(ctx, peer, msg)
 	switch {
 	case err == nil:
 		return pubsub.ValidationAccept
@@ -39,17 +40,18 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, _ p2p.Peer, msg []
 	}
 }
 
-func (h *Handler) handleProof(ctx context.Context, data []byte) error {
-	var p types.MalfeasanceGossip
-	if err := codec.Decode(data, &p); err != nil {
+func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) error {
+	var (
+		p          types.MalfeasanceGossip
+		nodeID     types.NodeID
+		malicious  bool
+		proofBytes []byte
+		err        error
+	)
+	if err = codec.Decode(data, &p); err != nil {
 		h.logger.WithContext(ctx).With().Error("malformed message", log.Err(err))
 		return errMalformedData
 	}
-	var (
-		nodeID    types.NodeID
-		malicious bool
-		err       error
-	)
 	switch p.ProofData.Type {
 	case types.HareEquivocation:
 		nodeID, err = validateHareEquivocation(h.logger.WithContext(ctx), &p.MalfeasanceProof)
@@ -60,30 +62,39 @@ func (h *Handler) handleProof(ctx context.Context, data []byte) error {
 	default:
 		return errors.New("unknown malfeasance type")
 	}
+
+	updateMetrics(p.ProofData)
 	if err == nil {
 		// TODO: pass on to hare if it's types.HareEquivocation
 		if malicious, err = identities.IsMalicious(h.db, nodeID); err != nil {
 			return err
 		} else if malicious {
+			if peer == h.self {
+				// node saves malfeasance proof eagerly/atomically with the malicious data.
+				return nil
+			}
 			h.logger.WithContext(ctx).With().Debug("known malicious identity", nodeID)
 			return errors.New("known proof")
 		}
-		proofBytes, err := codec.Encode(&p.MalfeasanceProof)
-		if err != nil {
+		if proofBytes, err = codec.Encode(&p.MalfeasanceProof); err != nil {
 			h.logger.WithContext(ctx).With().Fatal("failed to encode MalfeasanceProof", log.Err(err))
 		}
-		if err = identities.SetMalicious(h.db, nodeID, proofBytes); err == nil {
-			switch p.ProofData.Type {
-			case types.HareEquivocation:
-				numProofsHare.Inc()
-			case types.MultipleATXs:
-				numProofsATX.Inc()
-			case types.MultipleBallots:
-				numProofsBallot.Inc()
-			}
+		if err = identities.SetMalicious(h.db, nodeID, proofBytes); err != nil {
+			h.logger.WithContext(ctx).With().Error("failed to save MalfeasanceProof", log.Err(err))
 		}
 	}
 	return err
+}
+
+func updateMetrics(tp types.TypedProof) {
+	switch tp.Type {
+	case types.HareEquivocation:
+		numProofsHare.Inc()
+	case types.MultipleATXs:
+		numProofsATX.Inc()
+	case types.MultipleBallots:
+		numProofsBallot.Inc()
+	}
 }
 
 func validateHareEquivocation(logger log.Log, proof *types.MalfeasanceProof) (types.NodeID, error) {
