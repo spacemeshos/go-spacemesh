@@ -266,7 +266,7 @@ func TestBuilder_waitForFirstATX(t *testing.T) {
 		}
 		tab := newTestBuilder(t, WithPoetConfig(poetCfg))
 		current := types.NewLayerID(layersPerEpoch * 2) // first layer of epoch 2
-		next := types.NewLayerID(current.Value + layersPerEpoch)
+		next := current.Add(layersPerEpoch)
 		addPrevAtx(t, tab.cdb, current.GetEpoch()-1, tab.sig, &tab.nodeID)
 		tab.mclock.EXPECT().GetCurrentLayer().Return(current)
 		tab.mclock.EXPECT().LayerToTime(current).Return(time.Now().Add(-5 * time.Millisecond))
