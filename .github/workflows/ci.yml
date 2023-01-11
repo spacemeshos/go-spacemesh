@@ -20,6 +20,7 @@ env:
   CI_GCP_CREDENTIALS: ${{ secrets.CI_GCP_CREDENTIALS }}
   CI_GCP_PROJECT_ID: ${{ secrets.CI_GCP_PROJECT_ID }}
   CI_REGION_NAME: ${{ secrets.CI_REGION_NAME }}
+  USE_GKE_GCLOUD_AUTH_PLUGIN: True
 
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:
