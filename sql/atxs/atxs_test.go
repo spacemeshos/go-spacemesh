@@ -327,7 +327,7 @@ func newAtx(sig *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActiva
 		},
 	}
 
-	atx.Sig = sig.Sign(atx.SignedBytes())
+	atx.Signature = sig.Sign(atx.SignedBytes())
 	return atx.Verify(0, 1)
 }
 
@@ -377,7 +377,7 @@ func TestPositioningID(t *testing.T) {
 
 				sig, err := signing.NewEdSigner()
 				require.NoError(t, err)
-				full.Sig = sig.Sign(full.SignedBytes())
+				full.Signature = sig.Sign(full.SignedBytes())
 
 				vAtx, err := full.Verify(atx.base, atx.count)
 				require.NoError(t, err)

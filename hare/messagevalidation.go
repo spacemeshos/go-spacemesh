@@ -41,7 +41,7 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 	}
 
 	pub := m.PubKey
-	layer := m.InnerMsg.Layer
+	layer := m.Layer
 	if layer.GetEpoch().IsGenesis() {
 		return true, nil // TODO: remove this lie after inception problem is addressed
 	}
@@ -49,7 +49,7 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 	nID := types.BytesToNodeID(pub.Bytes())
 
 	// validate role
-	res, err := ev.oracle.Validate(ctx, layer, m.InnerMsg.Round, expectedCommitteeSize(m.InnerMsg.Round, ev.maxExpActives, ev.expLeaders), nID, m.InnerMsg.RoleProof, m.InnerMsg.EligibilityCount)
+	res, err := ev.oracle.Validate(ctx, layer, m.Round, expectedCommitteeSize(m.Round, ev.maxExpActives, ev.expLeaders), nID, m.Eligibility.Proof, m.Eligibility.Count)
 	if err != nil {
 		return false, fmt.Errorf("validate eligibility: %w", err)
 	}
@@ -69,7 +69,7 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 		ev.WithContext(ctx).With().Error("failed to validate role",
 			log.Err(err),
 			log.String("sender_id", m.PubKey.ShortString()),
-			m.InnerMsg.Layer,
+			m.Layer,
 			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
@@ -78,7 +78,7 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 	if !res {
 		ev.WithContext(ctx).With().Warning("validate message failed: role is invalid",
 			log.String("sender_id", m.PubKey.ShortString()),
-			m.InnerMsg.Layer,
+			m.Layer,
 			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
@@ -133,7 +133,7 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 	currentRound := currentK % RoundsPerIteration
 	// the message must match the current iteration unless it is a notify or pre-round message
 	currentIteration := currentK / RoundsPerIteration
-	msgIteration := m.InnerMsg.Round / RoundsPerIteration
+	msgIteration := m.Round / RoundsPerIteration
 	sameIter := currentIteration == msgIteration
 
 	// first validate pre-round and notify
@@ -152,12 +152,12 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 		}
 
 		// old notify is accepted
-		if m.InnerMsg.Round <= currentK {
+		if m.Round <= currentK {
 			return nil
 		}
 
 		// early notify detected
-		if m.InnerMsg.Round == currentK+1 && currentRound == commitRound {
+		if m.Round == currentK+1 && currentRound == commitRound {
 			return errEarlyMsg
 		}
 
@@ -241,7 +241,7 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(ctx context.Contex
 		return false
 	}
 
-	claimedRound := m.InnerMsg.Round % RoundsPerIteration
+	claimedRound := m.Round % RoundsPerIteration
 	switch m.InnerMsg.Type {
 	case pre:
 		return true
@@ -287,7 +287,7 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 
 	var count int
 	for _, m := range aggMsg.Messages {
-		count += int(m.InnerMsg.EligibilityCount)
+		count += int(m.Eligibility.Count)
 	}
 
 	if count < v.threshold { // must fit eligibility threshold
@@ -351,13 +351,13 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 		logger.With().Debug("svp validation duration",
 			log.String("duration", time.Since(startTime).String()))
 	}(time.Now())
-	proposalIter := iterationFromCounter(msg.InnerMsg.Round)
+	proposalIter := iterationFromCounter(msg.Round)
 	validateSameIteration := func(m *Msg) bool {
-		statusIter := iterationFromCounter(m.InnerMsg.Round)
+		statusIter := iterationFromCounter(m.Round)
 		if proposalIter != statusIter { // not same iteration
 			logger.With().Warning("proposal validation failed: not same iteration",
 				log.String("sender_id", m.PubKey.ShortString()),
-				types.LayerID(m.InnerMsg.Layer),
+				types.LayerID(m.Layer),
 				log.Uint32("expected", proposalIter),
 				log.Uint32("actual", statusIter))
 			return false
@@ -365,7 +365,7 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 
 		return true
 	}
-	logger = logger.WithFields(log.String("sender_id", msg.PubKey.ShortString()), msg.InnerMsg.Layer)
+	logger = logger.WithFields(log.String("sender_id", msg.PubKey.ShortString()), msg.Layer)
 	validators := []func(m *Msg) bool{validateStatusType, validateSameIteration, v.statusValidator}
 	if err := v.validateAggregatedMessage(ctx, msg.InnerMsg.Svp, validators); err != nil {
 		logger.With().Warning("invalid proposal", log.Err(err))
@@ -427,7 +427,7 @@ func (v *syntaxContextValidator) validateCertificate(ctx context.Context, cert *
 	}
 
 	// Note: no need to validate notify.Values=commits.Values because we refill the InnerMsg with notify.Values
-	validateSameK := func(m *Msg) bool { return m.InnerMsg.Round == cert.AggMsgs.Messages[0].InnerMsg.Round }
+	validateSameK := func(m *Msg) bool { return m.Round == cert.AggMsgs.Messages[0].Round }
 	validators := []func(m *Msg) bool{validateCommitType, validateSameK}
 	if err := v.validateAggregatedMessage(ctx, cert.AggMsgs, validators); err != nil {
 		logger.With().Warning("invalid certificate", log.Err(err))

@@ -155,7 +155,7 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, data []byte) error {
 	h.fetcher.AddPeersFromHash(b.ID().AsHash32(), collectHashes(b))
 	ballotDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t1)))
 
-	logger = logger.WithFields(b.ID(), b.LayerIndex)
+	logger = logger.WithFields(b.ID(), b.Layer)
 	if err := h.processBallot(ctx, logger, &b); err != nil {
 		if errors.Is(err, errKnownBallot) {
 			return nil
@@ -211,7 +211,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 	}
 	proposalDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
 
-	logger = logger.WithFields(p.ID(), p.Ballot.ID(), p.LayerIndex)
+	logger = logger.WithFields(p.ID(), p.Ballot.ID(), p.Layer)
 	t1 := time.Now()
 	if has, err := proposals.Has(h.cdb, p.ID()); err != nil {
 		logger.With().Error("failed to look up proposal", log.Err(err))
@@ -254,7 +254,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 	logger.With().Info("added proposal to database")
 
 	t6 := time.Now()
-	if err := h.mesh.AddTXsFromProposal(ctx, p.LayerIndex, p.ID(), p.TxIDs); err != nil {
+	if err := h.mesh.AddTXsFromProposal(ctx, p.Layer, p.ID(), p.TxIDs); err != nil {
 		return fmt.Errorf("proposal add TXs: %w", err)
 	}
 	proposalDuration.WithLabelValues(linkTxs).Observe(float64(time.Since(t6)))
@@ -393,10 +393,10 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 		}
 		if voted, ok := layers[vote.LayerID]; ok {
 			// already voted for a block in this layer
-			if voted != vote.ID && vote.LayerID.Add(h.cfg.Hdist).After(b.LayerIndex) {
+			if voted != vote.ID && vote.LayerID.Add(h.cfg.Hdist).After(b.Layer) {
 				h.logger.WithContext(ctx).With().Warning("ballot doubly voted within hdist, set smesher malicious",
 					b.ID(),
-					b.LayerIndex,
+					b.Layer,
 					log.Stringer("smesher", b.SmesherID()),
 					log.Stringer("voted_bid", voted),
 					log.Stringer("voted_bid", vote.ID),
@@ -410,9 +410,9 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 	// a ballot should not vote support and against on the same block.
 	for _, vote := range b.Votes.Against {
 		if _, exist := exceptions[vote.ID]; exist {
-			h.logger.WithContext(ctx).With().Warning("conflicting votes on block", vote.ID, b.ID(), b.LayerIndex)
+			h.logger.WithContext(ctx).With().Warning("conflicting votes on block", vote.ID, b.ID(), b.Layer)
 			return fmt.Errorf("%w: block %s is referenced multiple times in exceptions of ballot %s at layer %v",
-				errConflictingExceptions, vote.ID, b.ID(), b.LayerIndex)
+				errConflictingExceptions, vote.ID, b.ID(), b.Layer)
 		}
 		block, err := blocks.Get(h.cdb, vote.ID)
 		if err != nil {
@@ -428,7 +428,7 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 	if len(exceptions) > h.cfg.MaxExceptions {
 		h.logger.WithContext(ctx).With().Warning("exceptions exceed limits",
 			b.ID(),
-			b.LayerIndex,
+			b.Layer,
 			log.Int("len", len(exceptions)),
 			log.Int("max_allowed", h.cfg.MaxExceptions))
 		return fmt.Errorf("%w: %d exceptions with max allowed %d in ballot %s",
@@ -439,7 +439,7 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 		if _, ok := layers[lid]; ok {
 			h.logger.WithContext(ctx).With().Warning("conflicting votes on layer",
 				b.ID(),
-				b.LayerIndex,
+				b.Layer,
 				log.Stringer("conflict_layer", lid))
 			return errConflictingExceptions
 		}

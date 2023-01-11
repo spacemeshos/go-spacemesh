@@ -141,7 +141,7 @@ func Add(db sql.Executor, proposal *types.Proposal) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, proposal.ID().Bytes())
 		stmt.BindBytes(2, proposal.Ballot.ID().Bytes())
-		stmt.BindInt64(3, int64(proposal.LayerIndex.Uint32()))
+		stmt.BindInt64(3, int64(proposal.Layer.Uint32()))
 		stmt.BindBytes(4, txIDsBytes)
 		stmt.BindBytes(5, proposal.MeshHash.Bytes())
 		stmt.BindBytes(6, proposal.Signature)

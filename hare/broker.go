@@ -96,7 +96,7 @@ var (
 
 // validate the message is contextually valid and that the node is synced for processing the message.
 func (b *Broker) validate(ctx context.Context, m *Message) error {
-	msgInstID := m.InnerMsg.Layer
+	msgInstID := m.Layer
 
 	b.mu.RLock()
 	_, exist := b.outbox[msgInstID.Uint32()]
@@ -160,7 +160,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 
 	logger.Debug("broker received hare message")
 
-	msgLayer := hareMsg.InnerMsg.Layer
+	msgLayer := hareMsg.Layer
 	if !b.Synced(ctx, msgLayer) {
 		return errNotSynced
 	}

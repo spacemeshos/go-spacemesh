@@ -36,7 +36,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 			NumUnits: 11,
 		},
 	}
-	atx.Sig = signer.Sign(atx.SignedBytes())
+	atx.Signature = signer.Sign(atx.SignedBytes())
 	require.NoError(t, atx.CalcAndSetID())
 	require.NoError(t, atx.CalcAndSetNodeID())
 

@@ -197,7 +197,7 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	if len(g.layers) == 0 {
 		genesis := types.NewLayer(types.GetEffectiveGenesis())
 		ballot := &types.Ballot{}
-		ballot.LayerIndex = genesis.Index()
+		ballot.Layer = genesis.Index()
 		genesis.AddBallot(ballot)
 		g.layers = append(g.layers, genesis)
 	}

@@ -196,7 +196,7 @@ func extractCoinbasesAndHeight(logger log.Log, cdb *datastore.CachedDB, cfg Conf
 	for _, p := range props {
 		if p.AtxID == *types.EmptyATXID {
 			// this proposal would not have been validated
-			logger.With().Error("proposal with invalid ATXID, skipping reward distribution", p.LayerIndex, p.ID())
+			logger.With().Error("proposal with invalid ATXID, skipping reward distribution", p.Layer, p.ID())
 			return 0, nil, errInvalidATXID
 		}
 		atx, err := cdb.GetAtxHeader(p.AtxID)

@@ -159,7 +159,7 @@ func waitForMessages(t *testing.T, inbox chan *Msg, instanceID types.LayerID, ms
 		for {
 			select {
 			case x := <-inbox:
-				assert.True(t, x.InnerMsg.Layer == instanceID)
+				assert.True(t, x.Layer == instanceID)
 				i++
 				if i >= msgCount {
 					return
@@ -257,10 +257,10 @@ func TestBroker_Send(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	msg := BuildPreRoundMsg(signer, NewSetFromValues(value1), nil).Message
-	msg.InnerMsg.Layer = instanceID2
+	msg.Layer = instanceID2
 	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
 
-	msg.InnerMsg.Layer = instanceID1
+	msg.Layer = instanceID1
 	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
 	// nothing happens since this is an invalid InnerMsg
 
@@ -305,12 +305,12 @@ func TestBroker_Register2(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildPreRoundMsg(signer, NewSetFromValues(value1), nil).Message
-	m.InnerMsg.Layer = instanceID1
+	m.Layer = instanceID1
 
 	msg := newMockGossipMsg(m).Message
 	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(context.Background(), "", mustEncode(t, msg)))
 
-	m.InnerMsg.Layer = instanceID2
+	m.Layer = instanceID2
 	msg = newMockGossipMsg(m).Message
 	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(context.Background(), "", mustEncode(t, msg)))
 
@@ -327,7 +327,7 @@ func TestBroker_Register3(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildPreRoundMsg(signer, NewSetFromValues(value1), nil).Message
-	m.InnerMsg.Layer = instanceID1
+	m.Layer = instanceID1
 
 	broker.HandleMessage(context.Background(), "", mustEncode(t, m))
 	time.Sleep(1 * time.Millisecond)
@@ -356,7 +356,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildPreRoundMsg(signer, NewSetFromValues(value1), nil).Message
-	m.InnerMsg.Layer = instanceID1
+	m.Layer = instanceID1
 
 	broker.HandleMessage(context.Background(), "", mustEncode(t, m))
 
@@ -452,7 +452,7 @@ func TestBroker_eventLoop(t *testing.T) {
 	m := BuildPreRoundMsg(signer, NewSetFromValues(value1), nil).Message
 
 	// not synced
-	m.InnerMsg.Layer = instanceID1
+	m.Layer = instanceID1
 	msg := newMockGossipMsg(m).Message
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
 	r.Equal(pubsub.ValidationIgnore, b.HandleMessage(context.Background(), "", mustEncode(t, msg)))
@@ -471,12 +471,12 @@ func TestBroker_eventLoop(t *testing.T) {
 	r.Equal(msg, recM.Message)
 
 	// early message
-	m.InnerMsg.Layer = instanceID2
+	m.Layer = instanceID2
 	msg = newMockGossipMsg(m).Message
 	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.Background(), "", mustEncode(t, msg)))
 
 	// future message
-	m.InnerMsg.Layer = instanceID3
+	m.Layer = instanceID3
 	msg = newMockGossipMsg(m).Message
 	r.Equal(pubsub.ValidationIgnore, b.HandleMessage(context.Background(), "", mustEncode(t, msg)))
 
@@ -496,20 +496,20 @@ func Test_validate(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildStatusMsg(signer, NewDefaultEmptySet())
-	m.InnerMsg.Layer = instanceID1
+	m.Layer = instanceID1
 	b.setLatestLayer(context.Background(), instanceID2)
 	e := b.validate(context.Background(), &m.Message)
 	r.ErrorIs(e, errUnregistered)
 
-	m.InnerMsg.Layer = instanceID2
+	m.Layer = instanceID2
 	e = b.validate(context.Background(), &m.Message)
 	r.ErrorIs(e, errRegistration)
 
-	m.InnerMsg.Layer = instanceID3
+	m.Layer = instanceID3
 	e = b.validate(context.Background(), &m.Message)
 	r.ErrorIs(e, errEarlyMsg)
 
-	m.InnerMsg.Layer = instanceID4
+	m.Layer = instanceID4
 	e = b.validate(context.Background(), &m.Message)
 	r.ErrorIs(e, errFutureMsg)
 
@@ -550,7 +550,7 @@ func TestBroker_Flow(t *testing.T) {
 	signer1, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildStatusMsg(signer1, NewDefaultEmptySet())
-	m.InnerMsg.Layer = instanceID1
+	m.Layer = instanceID1
 	b.HandleMessage(context.Background(), "", mustEncode(t, m.Message))
 
 	ch1, e := b.Register(context.Background(), instanceID1)
@@ -560,7 +560,7 @@ func TestBroker_Flow(t *testing.T) {
 	signer2, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m2 := BuildStatusMsg(signer2, NewDefaultEmptySet())
-	m2.InnerMsg.Layer = instanceID2
+	m2.Layer = instanceID2
 	ch2, e := b.Register(context.Background(), instanceID2)
 	r.Nil(e)
 

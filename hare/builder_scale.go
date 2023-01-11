@@ -8,7 +8,65 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+func (t *Metadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := t.Layer.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.Round))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.MsgHash[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *Metadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := t.Layer.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Round = uint32(field)
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.MsgHash[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
 func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := t.Metadata.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		n, err := scale.EncodeByteSlice(enc, t.Signature)
 		if err != nil {
@@ -23,10 +81,24 @@ func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
+	{
+		n, err := t.Eligibility.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
 func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := t.Metadata.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		field, n, err := scale.DecodeByteSlice(dec)
 		if err != nil {
@@ -42,6 +114,13 @@ func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.InnerMsg = field
+	}
+	{
+		n, err := t.Eligibility.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
 	}
 	return total, nil
 }
@@ -116,20 +195,6 @@ func (t *InnerMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := t.Layer.EncodeScale(enc)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.Round))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := scale.EncodeCompact32(enc, uint32(t.CommittedRound))
 		if err != nil {
 			return total, err
@@ -138,20 +203,6 @@ func (t *InnerMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	}
 	{
 		n, err := scale.EncodeStructSlice(enc, t.Values)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteSlice(enc, t.RoleProof)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact16(enc, uint16(t.EligibilityCount))
 		if err != nil {
 			return total, err
 		}
@@ -184,21 +235,6 @@ func (t *InnerMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Type = MessageType(field)
 	}
 	{
-		n, err := t.Layer.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Round = uint32(field)
-	}
-	{
 		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
@@ -213,22 +249,6 @@ func (t *InnerMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.Values = field
-	}
-	{
-		field, n, err := scale.DecodeByteSlice(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.RoleProof = field
-	}
-	{
-		field, n, err := scale.DecodeCompact16(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.EligibilityCount = uint16(field)
 	}
 	{
 		field, n, err := scale.DecodeOption[AggregatedMessages](dec)

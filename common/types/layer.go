@@ -183,8 +183,8 @@ func (l Layer) Hash() Hash32 {
 
 // AddBallot adds a ballot to this layer. Panics if the ballot's index doesn't match the layer.
 func (l *Layer) AddBallot(b *Ballot) {
-	if b.LayerIndex != l.index {
-		log.Panic("add ballot with wrong layer number act %v exp %v", b.LayerIndex, l.index)
+	if b.Layer != l.index {
+		log.Panic("add ballot with wrong layer number act %v exp %v", b.Layer, l.index)
 	}
 	l.ballots = append(l.ballots, b)
 }

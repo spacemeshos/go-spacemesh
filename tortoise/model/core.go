@@ -94,12 +94,12 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			panic(err)
 		}
 		ballot := &types.Ballot{}
-		ballot.LayerIndex = ev.LayerID
+		ballot.Layer = ev.LayerID
 		ballot.Votes = votes.Votes
 		ballot.OpinionHash = votes.Hash
 		ballot.AtxID = c.atx
 		for i := uint32(0); i < c.eligibilities; i++ {
-			ballot.EligibilityProofs = append(ballot.EligibilityProofs, types.VotingEligibilityProof{J: i})
+			ballot.EligibilityProofs = append(ballot.EligibilityProofs, types.VotingEligibility{J: i})
 		}
 		if c.refBallot != nil {
 			ballot.RefBallot = *c.refBallot

@@ -41,7 +41,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	pub := msg.PubKey
 
 	// check for winning VRF
-	sha := hash.Sum(msg.InnerMsg.RoleProof)
+	sha := hash.Sum(msg.Eligibility.Proof)
 	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
 	logger.With().Debug("received preround message",
 		log.String("sender_id", pub.ShortString()),
@@ -58,7 +58,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 			log.Bool("weak_coin", pre.coinflip))
 	}
 
-	eligibilityCount := uint32(msg.InnerMsg.EligibilityCount)
+	eligibilityCount := uint32(msg.Eligibility.Count)
 	sToTrack := NewSet(msg.InnerMsg.Values) // assume track all Values
 	alreadyTracked := NewDefaultEmptySet()  // assume nothing tracked so far
 
