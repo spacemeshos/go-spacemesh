@@ -159,7 +159,7 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
 	return &testBroker{
 		Broker: newBroker(&mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
-			4, limit, logtest.New(tb).WithName(testName)),
+			limit, logtest.New(tb).WithName(testName)),
 		mockSyncS:  mockSyncS,
 		mockStateQ: mockStateQ,
 	}
@@ -324,7 +324,7 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config) *conse
 	sq := mocks.NewMockstateQuerier(ctrl)
 	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	return newConsensusProcess(context.Background(), cfg, instanceID1, s, oracle, sq,
-		4, edSigner, types.BytesToNodeID(edPubkey.Bytes()),
+		edSigner, types.BytesToNodeID(edPubkey.Bytes()),
 		noopPubSub(tb), output, truer{}, newRoundClockFromCfg(logger, cfg),
 		logtest.New(tb).WithName(edPubkey.String()))
 }

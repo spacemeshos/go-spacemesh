@@ -180,12 +180,21 @@ type consensusProcess struct {
 }
 
 // newConsensusProcess creates a new consensus process instance.
-func newConsensusProcess(ctx context.Context, cfg config.Config, layer types.LayerID, s *Set, oracle Rolacle, stateQuerier stateQuerier,
-	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p pubsub.Publisher,
+func newConsensusProcess(
+	ctx context.Context,
+	cfg config.Config,
+	layer types.LayerID,
+	s *Set,
+	oracle Rolacle,
+	stateQuerier stateQuerier,
+	signing Signer,
+	nid types.NodeID,
+	p2p pubsub.Publisher,
 	terminationReport chan TerminationOutput,
-	ev roleValidator, clock RoundClock, logger log.Log,
+	ev roleValidator,
+	clock RoundClock,
+	logger log.Log,
 ) *consensusProcess {
-	msgsTracker := newMsgsTracker()
 	proc := &consensusProcess{
 		State:             State{preRound, preRound, s.Clone(), nil},
 		layer:             layer,
@@ -198,11 +207,11 @@ func newConsensusProcess(ctx context.Context, cfg config.Config, layer types.Lay
 		terminationReport: terminationReport,
 		pending:           make(map[string]*Msg, cfg.N),
 		Log:               logger,
-		mTracker:          msgsTracker,
+		mTracker:          newMsgsTracker(),
 		clock:             clock,
 	}
 	proc.ctx, proc.cancel = context.WithCancel(ctx)
-	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, ev, msgsTracker, logger)
+	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, ev, proc.mTracker, logger)
 
 	return proc
 }
@@ -794,10 +803,9 @@ func (proc *consensusProcess) statusValidator() func(m *Msg) bool {
 			if proc.preRoundTracker.CanProveSet(s) { // can prove s
 				return true
 			}
-		} else { // if CommittedRound (Ki) >= 0, we should have received a certificate for that set
-			if proc.notifyTracker.HasCertificate(m.InnerMsg.CommittedRound, s) { // can prove s
-				return true
-			}
+		} else if proc.notifyTracker.HasCertificate(m.InnerMsg.CommittedRound, s) { // can prove s
+			// if CommittedRound (Ki) >= 0, we should have received a certificate for that set
+			return true
 		}
 		return false
 	}

@@ -111,7 +111,6 @@ func New(
 	beacons system.BeaconGetter,
 	rolacle Rolacle,
 	patrol layerPatrol,
-	layersPerEpoch uint16,
 	stateQ stateQuerier,
 	layerClock LayerClock,
 	logger log.Log,
@@ -134,8 +133,8 @@ func New(
 		return NewSimpleRoundClock(layerTime, wakeupDelta, roundDuration)
 	}
 
-	ev := newEligibilityValidator(rolacle, layersPerEpoch, conf.N, conf.ExpectedLeaders, logger)
-	h.broker = newBroker(ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, logger)
+	ev := newEligibilityValidator(rolacle, conf.N, conf.ExpectedLeaders, logger)
+	h.broker = newBroker(ev, stateQ, syncState, conf.LimitConcurrent, logger)
 	h.sign = sign
 	h.blockGenCh = ch
 
@@ -149,7 +148,7 @@ func New(
 	h.outputChan = make(chan TerminationOutput, h.bufferSize)
 	h.outputs = make(map[types.LayerID][]types.ProposalID, h.bufferSize) // we keep results about LayerBuffer past layers
 	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput) Consensus {
-		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, clock, logger)
+		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, nid, p2p, terminationReport, ev, clock, logger)
 	}
 
 	h.nid = nid
