@@ -164,7 +164,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		}
 	}
 
-	if err := validatePositioningAtx(&atx.PositioningATX, h.cdb, h.goldenATXID, atx.PubLayerID, h.layersPerEpoch); err != nil {
+	if err := h.nipostValidator.PositioningAtx(&atx.PositioningATX, h.cdb, h.goldenATXID, atx.PubLayerID, h.layersPerEpoch); err != nil {
 		return nil, err
 	}
 
@@ -182,7 +182,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		return nil, fmt.Errorf("validation failed: initial atx not found: %w", err)
 	}
 
-	leaves, err := h.nipostValidator.Validate(atx.NodeID(), *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
+	leaves, err := h.nipostValidator.NIPost(atx.NodeID(), *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
@@ -195,7 +195,7 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 		return fmt.Errorf("no prevATX declared, but initial Post is not included")
 	}
 
-	if err := validateInitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, h.goldenATXID, atx.InitialPost.Indices); err != nil {
+	if err := h.nipostValidator.InitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, h.goldenATXID, atx.InitialPost.Indices); err != nil {
 		return err
 	}
 
@@ -204,7 +204,7 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 	initialPostMetadata := *atx.NIPost.PostMetadata
 	initialPostMetadata.Challenge = shared.ZeroChallenge
 
-	if err := h.nipostValidator.ValidatePost(atx.NodeID(), *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
+	if err := h.nipostValidator.Post(atx.NodeID(), *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid initial Post: %w", err)
 	}
 
@@ -212,7 +212,7 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 		return fmt.Errorf("no prevATX declared, but VRFNonce is missing")
 	}
 
-	if err := h.nipostValidator.ValidateVRFNonce(atx.NodeID(), *atx.CommitmentATX, atx.VRFNonce, &initialPostMetadata, atx.NumUnits); err != nil {
+	if err := h.nipostValidator.VRFNonce(atx.NodeID(), *atx.CommitmentATX, atx.VRFNonce, &initialPostMetadata, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid VRFNonce: %w", err)
 	}
 
@@ -220,8 +220,17 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 }
 
 func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.ActivationTx) error {
-	if err := validateNonInitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, atx.NodeID()); err != nil {
+	if err := h.nipostValidator.NIPostChallenge(&atx.NIPostChallenge, h.cdb, atx.NodeID()); err != nil {
 		return err
+	}
+
+	prevAtx, err := h.cdb.GetAtxHeader(atx.PrevATXID)
+	if err != nil {
+		return err
+	}
+
+	if atx.NumUnits > prevAtx.NumUnits {
+		return fmt.Errorf("num units %d is greater than previous atx num units %d", atx.NumUnits, prevAtx.NumUnits)
 	}
 
 	if atx.InitialPost != nil {

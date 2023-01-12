@@ -12,20 +12,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-type AtxNotFoundError struct {
+type ErrAtxNotFound struct {
 	Id types.ATXID
 	// the source (if any) that caused the error
 	source error
 }
 
-func (e *AtxNotFoundError) Error() string {
+func (e *ErrAtxNotFound) Error() string {
 	return fmt.Sprintf("ATX ID (%v) not found (%v)", e.Id.String(), e.source)
 }
 
-func (e *AtxNotFoundError) Unwrap() error { return e.source }
+func (e *ErrAtxNotFound) Unwrap() error { return e.source }
 
-func (e *AtxNotFoundError) Is(target error) bool {
-	if err, ok := target.(*AtxNotFoundError); ok {
+func (e *ErrAtxNotFound) Is(target error) bool {
+	if err, ok := target.(*ErrAtxNotFound); ok {
 		return err.Id == e.Id
 	}
 	return false
@@ -42,21 +42,21 @@ func NewValidator(poetDb poetDbAPI, cfg PostConfig) *Validator {
 	return &Validator{poetDb, cfg}
 }
 
-// Validate validates a NIPost, given a miner id and expected challenge. It returns an error if an issue is found or nil
-// if the NIPost is valid.
+// NIPost validates a NIPost, given a node id and expected challenge. It returns an error if the NIPost is invalid.
+//
 // Some of the Post metadata fields validation values is ought to eventually be derived from
 // consensus instead of local configuration. If so, their validation should be removed to contextual validation,
 // while still syntactically-validate them here according to locally configured min/max values.
-func (v *Validator) Validate(nodeId types.NodeID, commitmentAtxId types.ATXID, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error) {
+func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error) {
 	if !bytes.Equal(nipost.Challenge[:], expectedChallenge[:]) {
 		return 0, fmt.Errorf("invalid `Challenge`; expected: %x, given: %x", expectedChallenge, nipost.Challenge)
 	}
 
-	if err := validateNumUnits(&v.cfg, numUnits); err != nil {
+	if err := v.NumUnits(&v.cfg, numUnits); err != nil {
 		return 0, err
 	}
 
-	if err := validatePostMetadata(&v.cfg, nipost.PostMetadata); err != nil {
+	if err := v.PostMetadata(&v.cfg, nipost.PostMetadata); err != nil {
 		return 0, err
 	}
 
@@ -69,17 +69,11 @@ func (v *Validator) Validate(nodeId types.NodeID, commitmentAtxId types.ATXID, n
 		return 0, fmt.Errorf("challenge is not included in the proof %x", nipost.PostMetadata.Challenge)
 	}
 
-	if err := validatePost(nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits); err != nil {
+	if err := v.Post(nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits); err != nil {
 		return 0, fmt.Errorf("invalid Post: %v", err)
 	}
 
 	return proof.LeafCount, nil
-}
-
-// ValidatePost validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
-// validation failed.
-func (*Validator) ValidatePost(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
-	return validatePost(nodeId, commitmentAtxId, PoST, PostMetadata, numUnits)
 }
 
 func contains(proof *types.PoetProof, member []byte) bool {
@@ -91,37 +85,9 @@ func contains(proof *types.PoetProof, member []byte) bool {
 	return false
 }
 
-func validateNumUnits(cfg *PostConfig, numUnits uint32) error {
-	if numUnits < cfg.MinNumUnits {
-		return fmt.Errorf("invalid `numUnits`; expected: >=%d, given: %d", cfg.MinNumUnits, numUnits)
-	}
-
-	if numUnits > cfg.MaxNumUnits {
-		return fmt.Errorf("invalid `numUnits`; expected: <=%d, given: %d", cfg.MaxNumUnits, numUnits)
-	}
-	return nil
-}
-
-func validatePostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error {
-	if metadata.BitsPerLabel < cfg.BitsPerLabel {
-		return fmt.Errorf("invalid `BitsPerLabel`; expected: >=%d, given: %d", cfg.BitsPerLabel, metadata.BitsPerLabel)
-	}
-
-	if metadata.LabelsPerUnit < uint64(cfg.LabelsPerUnit) {
-		return fmt.Errorf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", cfg.LabelsPerUnit, metadata.LabelsPerUnit)
-	}
-
-	if metadata.K1 > cfg.K1 {
-		return fmt.Errorf("invalid `K1`; expected: <=%d, given: %d", cfg.K1, metadata.K1)
-	}
-
-	if metadata.K2 < cfg.K2 {
-		return fmt.Errorf("invalid `K2`; expected: >=%d, given: %d", cfg.K2, metadata.K2)
-	}
-	return nil
-}
-
-func validatePost(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
+// Post validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
+// validation failed.
+func (*Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
 	p := (*proving.Proof)(PoST)
 
 	m := &proving.ProofMetadata{
@@ -142,7 +108,37 @@ func validatePost(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.
 	return nil
 }
 
-func (*Validator) ValidateVRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error {
+func (*Validator) NumUnits(cfg *PostConfig, numUnits uint32) error {
+	if numUnits < cfg.MinNumUnits {
+		return fmt.Errorf("invalid `numUnits`; expected: >=%d, given: %d", cfg.MinNumUnits, numUnits)
+	}
+
+	if numUnits > cfg.MaxNumUnits {
+		return fmt.Errorf("invalid `numUnits`; expected: <=%d, given: %d", cfg.MaxNumUnits, numUnits)
+	}
+	return nil
+}
+
+func (*Validator) PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error {
+	if metadata.BitsPerLabel < cfg.BitsPerLabel {
+		return fmt.Errorf("invalid `BitsPerLabel`; expected: >=%d, given: %d", cfg.BitsPerLabel, metadata.BitsPerLabel)
+	}
+
+	if metadata.LabelsPerUnit < uint64(cfg.LabelsPerUnit) {
+		return fmt.Errorf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", cfg.LabelsPerUnit, metadata.LabelsPerUnit)
+	}
+
+	if metadata.K1 > cfg.K1 {
+		return fmt.Errorf("invalid `K1`; expected: <=%d, given: %d", cfg.K1, metadata.K1)
+	}
+
+	if metadata.K2 < cfg.K2 {
+		return fmt.Errorf("invalid `K2`; expected: >=%d, given: %d", cfg.K2, metadata.K2)
+	}
+	return nil
+}
+
+func (*Validator) VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error {
 	if vrfNonce == nil {
 		return errors.New("VRFNonce is nil")
 	}
@@ -161,7 +157,7 @@ func (*Validator) ValidateVRFNonce(nodeId types.NodeID, commitmentAtxId types.AT
 	return nil
 }
 
-func validateInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID, expectedPostIndices []byte) error {
+func (*Validator) InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID, expectedPostIndices []byte) error {
 	if challenge.Sequence != 0 {
 		return fmt.Errorf("no prevATX declared, but sequence number not zero")
 	}
@@ -181,7 +177,7 @@ func validateInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxPr
 	if *challenge.CommitmentATX != goldenATXID {
 		commitmentAtx, err := atxs.GetAtxHeader(*challenge.CommitmentATX)
 		if err != nil {
-			return &AtxNotFoundError{Id: *challenge.CommitmentATX, source: err}
+			return &ErrAtxNotFound{Id: *challenge.CommitmentATX, source: err}
 		}
 		if !challenge.PubLayerID.After(commitmentAtx.PubLayerID) {
 			return fmt.Errorf("challenge publayer (%v) must be after commitment atx publayer (%v)", challenge.PubLayerID, commitmentAtx.PubLayerID)
@@ -195,10 +191,10 @@ func validateInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxPr
 	return nil
 }
 
-func validateNonInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error {
+func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error {
 	prevATX, err := atxs.GetAtxHeader(challenge.PrevATXID)
 	if err != nil {
-		return &AtxNotFoundError{Id: challenge.PrevATXID, source: err}
+		return &ErrAtxNotFound{Id: challenge.PrevATXID, source: err}
 	}
 
 	if prevATX.NodeID != nodeID {
@@ -230,7 +226,7 @@ func validateNonInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs at
 	return nil
 }
 
-func validatePositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, publayer types.LayerID, layersPerEpoch uint32) error {
+func (*Validator) PositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, publayer types.LayerID, layersPerEpoch uint32) error {
 	if *id == *types.EmptyATXID {
 		return fmt.Errorf("empty positioning atx")
 	}
@@ -242,7 +238,7 @@ func validatePositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types
 	if *id != goldenATXID {
 		posAtx, err := atxs.GetAtxHeader(*id)
 		if err != nil {
-			return &AtxNotFoundError{Id: *id, source: err}
+			return &ErrAtxNotFound{Id: *id, source: err}
 		}
 		if !posAtx.PubLayerID.Before(publayer) {
 			return fmt.Errorf("positioning atx layer (%v) must be before %v", posAtx.PubLayerID, publayer)
