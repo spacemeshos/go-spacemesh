@@ -37,12 +37,12 @@ func (m *MockproposalOracle) EXPECT() *MockproposalOracleMockRecorder {
 }
 
 // GetProposalEligibility mocks base method.
-func (m *MockproposalOracle) GetProposalEligibility(arg0 types.LayerID, arg1 types.Beacon) (types.ATXID, []types.ATXID, []types.VotingEligibilityProof, error) {
+func (m *MockproposalOracle) GetProposalEligibility(arg0 types.LayerID, arg1 types.Beacon) (types.ATXID, []types.ATXID, []types.VotingEligibility, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetProposalEligibility", arg0, arg1)
 	ret0, _ := ret[0].(types.ATXID)
 	ret1, _ := ret[1].([]types.ATXID)
-	ret2, _ := ret[2].([]types.VotingEligibilityProof)
+	ret2, _ := ret[2].([]types.VotingEligibility)
 	ret3, _ := ret[3].(error)
 	return ret0, ret1, ret2, ret3
 }

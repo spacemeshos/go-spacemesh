@@ -96,10 +96,10 @@ var (
 	signer2     *signing.EdSigner
 	globalTx    *types.Transaction
 	globalTx2   *types.Transaction
-	ballot1     = genLayerBallot(types.LayerID{})
-	block1      = genLayerBlock(types.LayerID{}, nil)
-	block2      = genLayerBlock(types.LayerID{}, nil)
-	block3      = genLayerBlock(types.LayerID{}, nil)
+	ballot1     = genLayerBallot(types.NewLayerID(11))
+	block1      = genLayerBlock(types.NewLayerID(11), nil)
+	block2      = genLayerBlock(types.NewLayerID(11), nil)
+	block3      = genLayerBlock(types.NewLayerID(11), nil)
 	meshAPI     = &MeshAPIMock{}
 	conStateAPI = &ConStateAPIMock{
 		returnTx:      make(map[types.TransactionID]*types.Transaction),
@@ -114,7 +114,7 @@ var (
 
 func genLayerBallot(layerID types.LayerID) *types.Ballot {
 	b := types.RandomBallot()
-	b.LayerIndex = layerID
+	b.Layer = layerID
 	signer, _ := signing.NewEdSigner()
 	b.Signature = signer.Sign(b.SignedBytes())
 	b.Initialize()
@@ -145,6 +145,8 @@ func dialGrpc(ctx context.Context, tb testing.TB, cfg config.Config) *grpc.Clien
 }
 
 func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+
 	// run on a random port
 	cfg.GrpcServerPort = 1024 + rand.Intn(9999)
 
@@ -154,6 +156,7 @@ func TestMain(m *testing.M) {
 		log.Println("failed to create signer:", err)
 		os.Exit(1)
 	}
+	nodeID := signer.NodeID()
 	signer1, err = signing.NewEdSigner()
 	if err != nil {
 		log.Println("failed to create signer:", err)
@@ -168,8 +171,8 @@ func TestMain(m *testing.M) {
 	addr1 = wallet.Address(signer1.PublicKey().Bytes())
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
-	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil, nil)
-	if err := activation.SignAtx(signer, atx); err != nil {
+	atx := types.NewActivationTx(challenge, &nodeID, addr1, nipost, numUnits, nil, nil)
+	if err := activation.SignAndFinalizeAtx(signer, atx); err != nil {
 		log.Println("failed to sign atx:", err)
 		os.Exit(1)
 	}
@@ -179,8 +182,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil, nil)
-	if err := activation.SignAtx(signer, atx2); err != nil {
+	atx2 := types.NewActivationTx(challenge, &nodeID, addr2, nipost, numUnits, nil, nil)
+	if err := activation.SignAndFinalizeAtx(signer, atx2); err != nil {
 		log.Println("failed to sign atx:", err)
 		os.Exit(1)
 	}

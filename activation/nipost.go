@@ -90,8 +90,8 @@ func NewNIPostBuilder(
 	}
 }
 
-// updatePoETProver updates poetProver reference. It should not be executed concurrently with BuildNIPoST.
-func (nb *NIPostBuilder) updatePoETProvers(poetProvers []PoetProvingServiceClient) {
+// UpdatePoETProvers updates poetProver reference. It should not be executed concurrently with BuildNIPoST.
+func (nb *NIPostBuilder) UpdatePoETProvers(poetProvers []PoetProvingServiceClient) {
 	// reset the state for safety to avoid accidental erroneous wait in Phase 1.
 	nb.state = &types.NIPostBuilderState{
 		NIPost: &types.NIPost{},
@@ -104,11 +104,8 @@ func (nb *NIPostBuilder) updatePoETProvers(poetProvers []PoetProvingServiceClien
 // The process can take considerable time, because it includes waiting for the poet service to
 // publish a proof - a process that takes about an epoch.
 func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error) {
-	challengeHash, err := challenge.Hash()
-	if err != nil {
-		return nil, 0, err
-	}
-	nb.load(*challengeHash)
+	challengeHash := challenge.Hash()
+	nb.load(challengeHash)
 
 	if s := nb.postSetupProvider.Status(); s.State != PostSetupStateComplete {
 		return nil, 0, errors.New("post setup not complete")
@@ -143,8 +140,8 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 		if len(validPoetRequests) == 0 {
 			return nil, 0, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET"}
 		}
-		nipost.Challenge = challengeHash
-		nb.state.Challenge = *challengeHash
+		nipost.Challenge = &challengeHash
+		nb.state.Challenge = challengeHash
 		nb.state.PoetRequests = validPoetRequests
 		nb.persist()
 	}
@@ -153,7 +150,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 	if nb.state.PoetProofRef == nil {
 		getProofsCtx, cancel := context.WithDeadline(ctx, poetProofDeadline)
 		defer cancel()
-		poetProofRef, err := nb.getBestProof(getProofsCtx, challengeHash)
+		poetProofRef, err := nb.getBestProof(getProofsCtx, &challengeHash)
 		if err != nil {
 			return nil, 0, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}

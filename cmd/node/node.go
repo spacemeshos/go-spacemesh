@@ -15,6 +15,7 @@ import (
 
 	"github.com/gofrs/flock"
 	grpcmw "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
@@ -169,13 +170,12 @@ func GetCommand() *cobra.Command {
 
 var (
 	appLog  log.Log
-	grpcLog *zap.Logger
+	grpclog grpc_logsettable.SettableLoggerV2
 )
 
 func init() {
 	appLog = log.NewNop()
-	grpcLog = appLog.WithName(GRPCLogger).WithFields(log.String("module", GRPCLogger)).Zap()
-	grpczap.ReplaceGrpcLoggerV2(grpcLog)
+	grpclog = grpc_logsettable.ReplaceGrpcLoggerV2()
 }
 
 // Service is a general service interface that specifies the basic start/stop functionality.
@@ -297,6 +297,7 @@ type App struct {
 	postSetupMgr     *activation.PostSetupManager
 	atxBuilder       *activation.Builder
 	atxHandler       *activation.Handler
+	validator        *activation.Validator
 	edSgn            *signing.EdSigner
 	keyExtractor     *signing.PubKeyExtractor
 	beaconProtocol   *beacon.ProtocolDriver
@@ -485,6 +486,7 @@ func (app *App) initServices(ctx context.Context,
 	app.atxDB = *cdb
 	poetDb := activation.NewPoetDb(sqlDB, app.addLogger(PoetDbLogger, lg))
 	validator := activation.NewValidator(poetDb, app.Config.POST)
+	app.validator = validator
 
 	if err := os.MkdirAll(dbStorepath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbStorepath, err)
@@ -636,7 +638,6 @@ func (app *App) initServices(ctx context.Context,
 	app.hare = hare.New(
 		sqlDB,
 		app.Config.HARE,
-		app.host.ID(),
 		app.host,
 		sgn,
 		nodeID,
@@ -797,14 +798,15 @@ func (app *App) startAPIServices(ctx context.Context) {
 	var services []grpcserver.ServiceAPI
 	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.grpcAPIService == nil {
-			app.addLogger(GRPCLogger, app.log)
+			logger := app.addLogger(GRPCLogger, app.log).Zap()
+			grpczap.SetGrpcLoggerV2(grpclog, logger)
 			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
 				grpcmw.WithStreamServerChain(
 					grpctags.StreamServerInterceptor(),
-					grpczap.StreamServerInterceptor(grpcLog)),
+					grpczap.StreamServerInterceptor(logger)),
 				grpcmw.WithUnaryServerChain(
 					grpctags.UnaryServerInterceptor(),
-					grpczap.UnaryServerInterceptor(grpcLog)),
+					grpczap.UnaryServerInterceptor(logger)),
 			)
 		}
 		services = append(services, svc)
@@ -816,7 +818,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewDebugService(app.conState, app.host))
 	}
 	if apiConf.StartGatewayService {
-		verifier := activation.NewChallengeVerifier(&app.atxDB, app.keyExtractor, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
+		verifier := activation.NewChallengeVerifier(&app.atxDB, app.keyExtractor, app.validator, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
 		registerService(grpcserver.NewGatewayService(verifier))
 	}
 	if apiConf.StartGlobalStateService {
