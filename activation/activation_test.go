@@ -170,10 +170,7 @@ func publishAtx(
 	t.Helper()
 
 	publishEpoch := posAtxLayer.GetEpoch() + 1
-	tab.mclock.EXPECT().GetCurrentLayer().DoAndReturn(
-		func() types.LayerID {
-			return *currLayer
-		}).AnyTimes()
+	tab.mclock.EXPECT().GetCurrentLayer().Return(*currLayer).AnyTimes()
 	tab.mhdlr.EXPECT().GetPosAtxID().Return(posAtxId, nil)
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
@@ -213,7 +210,7 @@ func publishAtx(
 	never := make(chan struct{})
 	tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(ch)
 	tab.mclock.EXPECT().AwaitLayer((publishEpoch + 2).FirstLayer()).Return(never)
-	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any()).DoAndReturn(
+	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any()).Do(
 		func(got types.ATXID) {
 			require.Equal(t, built.ID(), got)
 		})
@@ -562,7 +559,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 		})
 	expireEpoch := publishEpoch + 2
 	tab.mclock.EXPECT().AwaitLayer(expireEpoch.FirstLayer()).Return(done)
-	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any()).DoAndReturn(
+	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any()).Do(
 		func(got types.ATXID) {
 			require.Equal(t, built.ID(), got)
 		})
@@ -1009,7 +1006,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 		})
 	expireEpoch := publishEpoch + 2
 	tab.mclock.EXPECT().AwaitLayer(expireEpoch.FirstLayer()).Return(done)
-	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any()).DoAndReturn(
+	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any()).Do(
 		func(got types.ATXID) {
 			require.Equal(t, built.ID(), got)
 		})
