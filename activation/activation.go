@@ -136,9 +136,19 @@ func WithPoetConfig(c PoetConfig) BuilderOption {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(conf Config, nodeID types.NodeID, signer signer, cdb *datastore.CachedDB, hdlr atxHandler, publisher pubsub.Publisher,
-	nipostBuilder nipostBuilder, postSetupProvider postSetupProvider, layerClock layerClock,
-	syncer syncer, log log.Log, opts ...BuilderOption,
+func NewBuilder(
+	conf Config,
+	nodeID types.NodeID,
+	signer signer,
+	cdb *datastore.CachedDB,
+	hdlr atxHandler,
+	publisher pubsub.Publisher,
+	nipostBuilder nipostBuilder,
+	postSetupProvider postSetupProvider,
+	layerClock layerClock,
+	syncer syncer,
+	log log.Log,
+	opts ...BuilderOption,
 ) *Builder {
 	b := &Builder{
 		parentCtx:             context.Background(),
@@ -254,19 +264,6 @@ func (b *Builder) SmesherID() types.NodeID {
 	return b.nodeID
 }
 
-// SignAtx signs the atx and assigns the signature into atx.Sig
-// this function returns an error if atx could not be converted to bytes.
-func (b *Builder) SignAtx(atx *types.ActivationTx) error {
-	if err := SignAtx(b, atx); err != nil {
-		return err
-	}
-	if err := atx.CalcAndSetID(); err != nil {
-		return err
-	}
-	atx.SetNodeID(&b.nodeID)
-	return nil
-}
-
 func (b *Builder) run(ctx context.Context) {
 	if err := b.generateProof(ctx); err != nil {
 		b.log.Error("Failed to generate proof: %w", err)
@@ -374,7 +371,7 @@ func (b *Builder) loop(ctx context.Context) {
 	defer b.log.Info("atx builder is stopped")
 	for {
 		if poetClients := b.receivePendingPoetClients(); poetClients != nil {
-			b.nipostBuilder.updatePoETProvers(*poetClients)
+			b.nipostBuilder.UpdatePoETProvers(*poetClients)
 		}
 
 		ctx := log.WithNewSessionID(ctx)
@@ -449,7 +446,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 	return challenge, nil
 }
 
-// UpdatePoETServer updates poet client. Context is used to verify that the target is responsive.
+// UpdatePoETServers updates poet client. Context is used to verify that the target is responsive.
 func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) error {
 	b.log.WithContext(ctx).With().Debug("request to update poet services",
 		log.Array("endpoints", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
@@ -570,7 +567,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		logger.With().Info("building new atx challenge", log.Stringer("current_epoch", b.currentEpoch()))
 		ch, err := b.buildNIPostChallenge(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to build new atx challenge: %w", err)
+			return fmt.Errorf("build new atx challenge: %w", err)
 		}
 		challenge = ch
 	}
@@ -589,10 +586,6 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	}
 
 	atx := b.pendingATX
-	if err := b.SignAtx(atx); err != nil {
-		return fmt.Errorf("sign: %w", err)
-	}
-
 	atxReceived := b.atxHandler.AwaitAtx(atx.ID())
 	defer b.atxHandler.UnsubscribeAtx(atx.ID())
 	size, err := b.broadcast(ctx, atx)
@@ -604,11 +597,11 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 
 	select {
 	case <-atxReceived:
-		logger.With().Info(fmt.Sprintf("received atx in db %v", atx.ID().ShortString()), atx.ID())
+		logger.With().Info("received atx in db", atx.ID())
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
 		select {
 		case <-atxReceived:
-			logger.With().Info(fmt.Sprintf("received atx in db %v (in the last moment)", atx.ID().ShortString()), atx.ID())
+			logger.With().Info("received atx in db (in the last moment)", atx.ID())
 		case <-b.syncer.RegisterForATXSynced(): // ensure we've seen all ATXs before concluding that the ATX was lost
 			b.discardChallenge()
 			return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
@@ -677,7 +670,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	defer cancel()
 	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(buildingNipostCtx, &poetChallenge, poetProofDeadline)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build NIPost: %w", err)
+		return nil, fmt.Errorf("build NIPost: %w", err)
 	}
 	metrics.PostDuration.Set(float64(postDuration.Nanoseconds()))
 
@@ -688,7 +681,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	)
 	select {
 	case <-ctx.Done():
-		return nil, fmt.Errorf("failed to wait for publication epoch: %w", err)
+		return nil, fmt.Errorf("wait for publication epoch: %w", err)
 	case <-b.layerClock.AwaitLayer(pubEpoch.FirstLayer()):
 	}
 	b.log.Info("publication epoch has arrived!")
@@ -715,18 +708,22 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 		initialPost = b.initialPost
 		nonce, err = b.postSetupProvider.VRFNonce()
 		if err != nil {
-			return nil, fmt.Errorf("failed to build atx: %w", err)
+			return nil, fmt.Errorf("build atx: %w", err)
 		}
 	}
 
 	atx := types.NewActivationTx(
 		*challenge,
+		&b.nodeID,
 		b.Coinbase(),
 		nipost,
 		b.postSetupProvider.LastOpts().NumUnits,
 		initialPost,
 		nonce,
 	)
+	if err = SignAndFinalizeAtx(b.signer, atx); err != nil {
+		return nil, fmt.Errorf("sign atx: %w", err)
+	}
 	return atx, nil
 }
 
@@ -769,15 +766,10 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 	return id, atx.PubLayerID, nil
 }
 
-// SignAtx signs the atx with specified signer and assigns the signature into atx.Sig
-// this function returns an error if atx could not be converted to bytes.
-func SignAtx(signer signer, atx *types.ActivationTx) error {
-	bts, err := atx.InnerBytes()
-	if err != nil {
-		return fmt.Errorf("inner bytes of ATX: %w", err)
-	}
-	atx.Sig = signer.Sign(bts)
-	return nil
+// SignAndFinalizeAtx signs the atx with specified signer and calculates the ID of the ATX.
+func SignAndFinalizeAtx(signer signer, atx *types.ActivationTx) error {
+	atx.Signature = signer.Sign(atx.SignedBytes())
+	return atx.CalcAndSetID()
 }
 
 func isStale(challenge *types.NIPostChallenge, currentEpoch types.EpochID) bool {

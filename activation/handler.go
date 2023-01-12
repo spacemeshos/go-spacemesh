@@ -167,11 +167,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		baseTickHeight = posAtx.TickHeight()
 	}
 
-	expectedChallengeHash, err := atx.NIPostChallenge.Hash()
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute NIPost's expected challenge hash: %w", err)
-	}
-
+	expectedChallengeHash := atx.NIPostChallenge.Hash()
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
 	commitmentATX, err := h.getCommitmentAtx(atx)
@@ -179,7 +175,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		return nil, fmt.Errorf("validation failed: initial atx not found: %w", err)
 	}
 
-	leaves, err := h.nipostValidator.Validate(atx.NodeID(), *commitmentATX, atx.NIPost, *expectedChallengeHash, atx.NumUnits)
+	leaves, err := h.nipostValidator.Validate(atx.NodeID(), *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
@@ -353,7 +349,7 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 		return fmt.Errorf("failed to derive ID from atx: %w", err)
 	}
 	if err := atx.CalcAndSetNodeID(); err != nil {
-		return fmt.Errorf("failed to derive Node ID from ATX with sig %v: %w", atx.Sig, err)
+		return fmt.Errorf("failed to derive Node ID from ATX with sig %v: %w", atx.Signature, err)
 	}
 	logger := h.log.WithContext(ctx).WithFields(atx.ID())
 	existing, _ := h.cdb.GetAtxHeader(atx.ID())

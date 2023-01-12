@@ -25,7 +25,7 @@ type oracleCache struct {
 	epoch     types.EpochID
 	atx       *types.ActivationTxHeader
 	activeSet []types.ATXID
-	proofs    map[types.LayerID][]types.VotingEligibilityProof
+	proofs    map[types.LayerID][]types.VotingEligibility
 }
 
 // Oracle provides proposal eligibility proofs for the miner.
@@ -55,7 +55,7 @@ func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, v
 
 // GetProposalEligibility returns the miner's ATXID and the active set for the layer's epoch, along with the list of eligibility
 // proofs for that layer.
-func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) (types.ATXID, []types.ATXID, []types.VotingEligibilityProof, error) {
+func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) (types.ATXID, []types.ATXID, []types.VotingEligibility, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
@@ -70,7 +70,7 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) 
 
 	logger.Info("asked for proposal eligibility")
 
-	var layerProofs []types.VotingEligibilityProof
+	var layerProofs []types.VotingEligibility
 	if o.cache.epoch == epoch { // use the cached value
 		layerProofs = o.cache.proofs[lid]
 		logger.With().Info("got cached eligibility", log.Int("num_proposals", len(layerProofs)))
@@ -129,7 +129,7 @@ func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxH
 
 // calcEligibilityProofs calculates the eligibility proofs of proposals for the miner in the given epoch
 // and returns the proofs along with the epoch's active set.
-func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beacon types.Beacon) (map[types.LayerID][]types.VotingEligibilityProof, []types.ATXID, error) {
+func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beacon types.Beacon) (map[types.LayerID][]types.VotingEligibility, []types.ATXID, error) {
 	logger := o.log.WithFields(epoch, beacon, log.Uint64("weight", weight))
 
 	// get the previous epoch's total weight
@@ -153,7 +153,7 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 		return nil, nil, fmt.Errorf("oracle get num slots: %w", err)
 	}
 
-	eligibilityProofs := map[types.LayerID][]types.VotingEligibilityProof{}
+	eligibilityProofs := map[types.LayerID][]types.VotingEligibility{}
 	for counter := uint32(0); counter < numEligibleSlots; counter++ {
 		message, err := proposals.SerializeVRFMessage(beacon, epoch, counter)
 		if err != nil {
@@ -165,7 +165,7 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 			return nil, nil, fmt.Errorf("oracle failed to sign: %w", err)
 		}
 		eligibleLayer := proposals.CalcEligibleLayer(epoch, o.layersPerEpoch, vrfSig)
-		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.VotingEligibilityProof{
+		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.VotingEligibility{
 			J:   counter,
 			Sig: vrfSig,
 		})

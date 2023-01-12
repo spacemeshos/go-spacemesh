@@ -133,7 +133,7 @@ func createLayerBlocks(t *testing.T, db sql.Executor, mesh *Mesh, lyrID types.La
 
 func genLayerBallot(tb testing.TB, layerID types.LayerID) *types.Ballot {
 	b := types.RandomBallot()
-	b.LayerIndex = layerID
+	b.Layer = layerID
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	b.Signature = sig.Sign(b.SignedBytes())
@@ -199,7 +199,7 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 func TestMesh_WakeUp(t *testing.T) {
 	tm := createTestMesh(t)
 	latest := types.NewLayerID(11)
-	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, []byte{}, types.NodeID{}, types.InnerBallot{LayerIndex: latest})
+	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, []byte{}, types.NodeID{}, types.BallotMetadata{Layer: latest})
 	require.NoError(t, ballots.Add(tm.cdb, &b))
 	require.NoError(t, layers.SetProcessed(tm.cdb, latest))
 	latestState := latest.Sub(1)
@@ -766,9 +766,9 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	pub := types.BytesToNodeID([]byte{1, 1, 1})
 
 	blts := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{1}, nil, pub, types.InnerBallot{LayerIndex: lid}),
-		types.NewExistingBallot(types.BallotID{2}, nil, pub, types.InnerBallot{LayerIndex: lid}),
-		types.NewExistingBallot(types.BallotID{3}, nil, pub, types.InnerBallot{LayerIndex: lid}),
+		types.NewExistingBallot(types.BallotID{1}, nil, pub, types.BallotMetadata{Layer: lid}),
+		types.NewExistingBallot(types.BallotID{2}, nil, pub, types.BallotMetadata{Layer: lid}),
+		types.NewExistingBallot(types.BallotID{3}, nil, pub, types.BallotMetadata{Layer: lid}),
 	}
 	require.NoError(t, tm.AddBallot(context.Background(), &blts[0]))
 	require.False(t, blts[0].IsMalicious())

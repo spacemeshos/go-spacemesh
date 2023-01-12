@@ -50,7 +50,7 @@ func (ct *commitTracker) OnCommit(msg *Msg) {
 
 	// add msg
 	ct.commits = append(ct.commits, msg.Message)
-	ct.eligibilityCount += int(msg.InnerMsg.EligibilityCount)
+	ct.eligibilityCount += int(msg.Eligibility.Count)
 }
 
 // HasEnoughCommits returns true if the tracker can build a certificate, false otherwise.
