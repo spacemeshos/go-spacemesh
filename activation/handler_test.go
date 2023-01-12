@@ -192,16 +192,45 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.NIPost = newNIPostWithChallenge(atx.NIPostChallenge.Hash(), poetRef)
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
-		validator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).Times(1)
+		validator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).Times(1)
+		validator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.NoError(t, err)
+	})
+
+	t.Run("valid atx with decreasing num units", func(t *testing.T) {
+		challenge := newChallenge(1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), nil)
+		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 90, coinbase) // numunits decreased from 100 to 90 between atx and prevAtx
+		atx.NIPost = newNIPostWithChallenge(atx.NIPostChallenge.Hash(), poetRef)
+		require.NoError(t, SignAndFinalizeAtx(sig, atx))
+
+		validator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).Times(1)
+		validator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		require.NoError(t, err)
+	})
+
+	t.Run("invalid atx with increasing num units", func(t *testing.T) {
+		challenge := newChallenge(1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), nil)
+		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 110, coinbase) // numunits increased from 100 to 110 between atx and prevAtx
+		atx.NIPost = newNIPostWithChallenge(atx.NIPostChallenge.Hash(), poetRef)
+		require.NoError(t, SignAndFinalizeAtx(sig, atx))
+
+		validator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		require.EqualError(t, err, "num units 110 is greater than previous atx num units 100")
 	})
 
 	initialPost := &types.Post{
 		Nonce:   0,
 		Indices: make([]byte, 10),
 	}
+
 	t.Run("valid initial atx", func(t *testing.T) {
 		ctxID := prevAtx.ID()
 		challenge := newChallenge(0, *types.EmptyATXID, prevAtx.ID(), types.NewLayerID(1012), &ctxID)
@@ -213,71 +242,38 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.NIPost = newNIPostWithChallenge(atx.NIPostChallenge.Hash(), poetRef)
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
-		validator.EXPECT().ValidateVRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
-		validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
-		validator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).Times(1)
+		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).Times(1)
+		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.NoError(t, err)
 	})
 
-	t.Run("wrong sequence", func(t *testing.T) {
+	t.Run("failing nipost challenge validation", func(t *testing.T) {
 		challenge := newChallenge(0, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
+
+		validator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("nipost error")).Times(1)
+
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.EqualError(t, err, "sequence number is not one more than prev sequence number")
+		require.EqualError(t, err, "nipost error")
 	})
 
-	t.Run("wrong positioning atx", func(t *testing.T) {
-		challenge := newChallenge(1, prevAtx.ID(), atxList[0].ID(), types.NewLayerID(1012), nil)
+	t.Run("failing positioning atx validation", func(t *testing.T) {
+		challenge := newChallenge(0, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
+
+		validator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("bad positioning atx")).Times(1)
+
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.EqualError(t, err, "expected distance of one epoch (1000 layers) from positioning atx but found 1011")
+		require.EqualError(t, err, "bad positioning atx")
 	})
 
-	t.Run("empty positioning atx", func(t *testing.T) {
-		challenge := newChallenge(1, prevAtx.ID(), *types.EmptyATXID, types.NewLayerID(2000), nil)
-		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 3, coinbase)
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.EqualError(t, err, "empty positioning atx")
-	})
-
-	t.Run("golden atx as posAtx in epoch 2", func(t *testing.T) {
-		challenge := newChallenge(1, prevAtx.ID(), goldenATXID, types.NewLayerID(2000), nil)
-		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 3, coinbase)
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.EqualError(t, err, "golden atx used for positioning atx in epoch 2, but is only valid in epoch 1")
-	})
-
-	t.Run("golden atx as commitmentAtx in epoch 2", func(t *testing.T) {
-		challenge := newChallenge(0, *types.EmptyATXID, types.ATXID{1, 2, 3}, types.NewLayerID(2000), &goldenATXID)
-		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 3, coinbase)
-		atx.InitialPost = initialPost
-		atx.InitialPostIndices = initialPost.Indices
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.EqualError(t, err, "golden atx used for commitment atx in epoch 2, but is only valid in epoch 1")
-	})
-
-	t.Run("invalid prevAtx", func(t *testing.T) {
-		challenge := newChallenge(1, atxList[0].ID(), posAtx.ID(), types.NewLayerID(1012), nil)
-		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.ErrorContains(t, err, "previous atx belongs to different miner")
-		require.ErrorContains(t, err, fmt.Sprintf("nodeID: %v", atx.NodeID()))
-		require.ErrorContains(t, err, fmt.Sprintf("prevAtx.ID: %v", atxList[0].ID()))
-		require.ErrorContains(t, err, fmt.Sprintf("prevAtx.NodeID: %v", atxList[0].NodeID()))
-	})
-
-	t.Run("wrong layer for positioning atx", func(t *testing.T) {
-		posAtx2 := newActivationTx(t, otherSig, &otherNid, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.NewLayerID(1020), 0, 100, coinbase, 100, npst)
-		require.NoError(t, atxHdlr.StoreAtx(context.Background(), posAtx2))
-		challenge := newChallenge(1, prevAtx.ID(), posAtx2.ID(), types.NewLayerID(1012), nil)
-		atx := newAtx(t, sig, &nid, challenge, npst, 100, coinbase)
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.EqualError(t, err, "positioning atx layer (1020) must be before 1012")
-	})
-
-	t.Run("wrong layer for commitment atx", func(t *testing.T) {
+	t.Run("bad initial nipost challenge", func(t *testing.T) {
 		commitmentAtx := newActivationTx(t, otherSig, &otherNid, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.NewLayerID(1020), 0, 100, coinbase, 100, npst)
 		require.NoError(t, atxHdlr.StoreAtx(context.Background(), commitmentAtx))
 
@@ -286,8 +282,11 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx := newAtx(t, sig, &nid, challenge, npst, 100, coinbase)
 		atx.InitialPost = initialPost
 		atx.InitialPostIndices = initialPost.Indices
+
+		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("bad initial nipost")).Times(1)
+
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.EqualError(t, err, "challenge publayer (1012) must be after commitment atx publayer (1020)")
+		require.EqualError(t, err, "bad initial nipost")
 	})
 
 	t.Run("missing VRF nonce in initial atx", func(t *testing.T) {
@@ -299,7 +298,8 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.NIPost = newNIPostWithChallenge(atx.NIPostChallenge.Hash(), poetRef)
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
-		validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.ErrorContains(t, err, "VRFNonce is missing")
@@ -316,19 +316,12 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.NIPost = newNIPostWithChallenge(atx.NIPostChallenge.Hash(), poetRef)
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
-		validator.EXPECT().ValidateVRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(errors.New("invalid VRF nonce"))
-		validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(errors.New("invalid VRF nonce"))
+		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.ErrorContains(t, err, "invalid VRF nonce")
-	})
-
-	t.Run("prevAtx not declared but sequence number not zero", func(t *testing.T) {
-		challenge := newChallenge(1, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), nil)
-		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
-		atx.InitialPost = initialPost
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.EqualError(t, err, "no prevATX declared, but sequence number not zero")
 	})
 
 	t.Run("prevAtx not declared but initial Post not included", func(t *testing.T) {
@@ -336,16 +329,9 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
 		atx.InitialPostIndices = []byte{}
 		atx.CommitmentATX = &goldenATXID
+
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.EqualError(t, err, "no prevATX declared, but initial Post is not included")
-	})
-
-	t.Run("prevAtx not declared but initial Post indices not included", func(t *testing.T) {
-		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), nil)
-		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
-		atx.InitialPost = initialPost
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.EqualError(t, err, "no prevATX declared, but initial Post indices is not included in challenge")
 	})
 
 	t.Run("prevAtx not declared but validation of initial post fails", func(t *testing.T) {
@@ -355,85 +341,22 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.InitialPost = initialPost
 		atx.InitialPostIndices = initialPost.Indices
 
-		validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("failed validation")).Times(1)
+		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("failed post validation")).Times(1)
 
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.EqualError(t, err, "invalid initial Post: failed validation")
-	})
-
-	t.Run("challenge and initial Post indices mismatch", func(t *testing.T) {
-		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), nil)
-		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
-		atx.InitialPost = initialPost
-		atx.InitialPostIndices = append([]byte{}, initialPost.Indices...)
-		atx.InitialPostIndices[0]++
-		atx.CommitmentATX = &goldenATXID
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.EqualError(t, err, "initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
-	})
-
-	t.Run("prevAtx not declared but commitmentAtx is missing", func(t *testing.T) {
-		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), nil)
-		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
-		atx.InitialPost = initialPost
-		atx.InitialPostIndices = initialPost.Indices
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.EqualError(t, err, "no prevATX declared, but commitmentATX is missing")
-	})
-
-	t.Run("commitmentATX declared but not found", func(t *testing.T) {
-		cATX := types.RandomATXID()
-		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), &cATX)
-		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
-		atx.InitialPost = initialPost
-		atx.InitialPostIndices = initialPost.Indices
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.ErrorIs(t, err, &AtxNotFoundError{Id: cATX})
-	})
-
-	t.Run("prevAtx declared but not found", func(t *testing.T) {
-		challenge := newChallenge(1, types.RandomATXID(), posAtx.ID(), types.NewLayerID(1012), nil)
-		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.ErrorIs(t, err, &AtxNotFoundError{Id: challenge.PrevATXID})
-	})
-
-	t.Run("posAtx declared but not found", func(t *testing.T) {
-		challenge := newChallenge(1, prevAtx.ID(), types.RandomATXID(), types.NewLayerID(1012), nil)
-		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.ErrorIs(t, err, &AtxNotFoundError{Id: challenge.PositioningATX})
+		require.ErrorContains(t, err, "failed post validation")
 	})
 
 	t.Run("prevAtx declared but initial Post is included", func(t *testing.T) {
 		challenge := newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
 		atx.InitialPost = initialPost
+
+		validator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.EqualError(t, err, "prevATX declared, but initial Post is included")
-	})
-
-	t.Run("prevAtx declared but initial Post indices is included", func(t *testing.T) {
-		challenge := newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012), nil)
-		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
-		atx.InitialPostIndices = initialPost.Indices
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.EqualError(t, err, "prevATX declared, but initial Post indices is included in challenge")
-	})
-
-	t.Run("prevAtx declared but commitmentAtx is included", func(t *testing.T) {
-		cATX := prevAtx.ID()
-		challenge := newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012), &cATX)
-		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.EqualError(t, err, "prevATX declared, but commitmentATX is included")
-	})
-
-	t.Run("prevAtx has publication layer in the same epoch as the atx", func(t *testing.T) {
-		challenge := newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(100), nil)
-		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.EqualError(t, err, "prevAtx epoch (0, layer 100) isn't older than current atx epoch (0, layer 100)")
 	})
 }
 
@@ -568,7 +491,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	lg := logtest.New(b)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	validator := NewMocknipostValidator(gomock.NewController(b))
-	validator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).AnyTimes()
+	validator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).AnyTimes()
 	receiver := NewMockatxReceiver(gomock.NewController(b))
 	goldenATXID := types.ATXID{2, 3, 4}
 	sig, err := signing.NewEdSigner()
@@ -952,9 +875,11 @@ func TestHandler_AtxWeight(t *testing.T) {
 	require.NoError(t, err)
 
 	mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any()).Times(1)
-	mvalidator.EXPECT().ValidateVRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
-	mvalidator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
-	mvalidator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
+	mvalidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mvalidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mvalidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
+	mvalidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	mvalidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	receiver.EXPECT().OnAtx(gomock.Any()).Times(1)
 	require.NoError(t, handler.HandleAtxData(context.Background(), buf))
 
@@ -988,7 +913,9 @@ func TestHandler_AtxWeight(t *testing.T) {
 
 	mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any()).Times(1)
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).Times(1)
-	mvalidator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
+	mvalidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
+	mvalidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	mvalidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	receiver.EXPECT().OnAtx(gomock.Any()).Times(1)
 	require.NoError(t, handler.HandleAtxData(context.Background(), buf))
 
