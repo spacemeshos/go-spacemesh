@@ -138,9 +138,14 @@ func TestCodec_MalfeasanceGossip(t *testing.T) {
 	require.NoError(t, codec.Decode(encoded, &decoded))
 	require.Equal(t, *gossip, decoded)
 
-	gossip.Eligibility = &types.HareEligibility{
-		Proof: []byte{1, 2, 3},
-		Count: 12,
+	gossip.Eligibility = &types.HareEligibilityGossip{
+		Layer:  lid,
+		Round:  round,
+		PubKey: types.RandomBytes(32),
+		Eligibility: types.HareEligibility{
+			Proof: []byte{1, 2, 3},
+			Count: 12,
+		},
 	}
 	encoded, err = codec.Encode(gossip)
 	require.NoError(t, err)

@@ -93,7 +93,7 @@ func (e *TypedProof) DecodeScale(dec *scale.Decoder) (int, error) {
 
 type MalfeasanceGossip struct {
 	MalfeasanceProof
-	Eligibility *HareEligibility // optional, only useful in live hare rounds
+	Eligibility *HareEligibilityGossip // optional, only useful in live hare rounds
 }
 
 type AtxProof struct {

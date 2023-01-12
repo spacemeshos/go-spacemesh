@@ -67,10 +67,8 @@ var (
 func BuildPreRoundMsg(signing Signer, s *Set, roleProof []byte) *Msg {
 	builder := newMessageBuilder()
 	builder.SetType(pre).SetLayer(instanceID1).SetRoundCounter(k).SetCommittedRound(ki).SetValues(s).SetRoleProof(roleProof)
-	builder.SetPubKey(signing.PublicKey())
 	builder.SetEligibilityCount(1)
-
-	return builder.Sign(signing).Build()
+	return builder.SetPubKey(signing.PublicKey()).Sign(signing).Build()
 }
 
 func TestPreRoundTracker_OnPreRound(t *testing.T) {
@@ -81,12 +79,13 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	require.NoError(t, err)
 
 	m1 := BuildPreRoundMsg(signer, s, nil)
-	tracker := newPreRoundTracker(lowThresh10, lowThresh10, logtest.New(t))
+	mch := make(chan types.MalfeasanceGossip, lowThresh10)
+	tracker := newPreRoundTracker(logtest.New(t), mch, lowThresh10, lowThresh10)
 	tracker.OnPreRound(context.Background(), m1)
 	assert.Equal(t, 1, len(tracker.preRound))      // one msg
 	assert.Equal(t, 2, len(tracker.tracker.table)) // two Values
 	g := tracker.preRound[signer.PublicKey().String()]
-	assert.True(t, s.Equals(g))
+	assert.True(t, s.Equals(g.Set))
 	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value1))
 	nSet := NewSetFromValues(value3, value4)
 	m2 := BuildPreRoundMsg(signer, nSet, nil)
@@ -94,6 +93,35 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	tracker.OnPreRound(context.Background(), m2)
 	h := tracker.preRound[signer.PublicKey().String()]
 	assert.True(t, h.Equals(s.Union(nSet)))
+	require.Len(t, mch, 1)
+	expected := types.MalfeasanceGossip{
+		MalfeasanceProof: types.MalfeasanceProof{
+			Layer: m1.Layer,
+			ProofData: types.TypedProof{
+				Type: types.HareEquivocation,
+				Proof: &types.HareProof{
+					Messages: [2]types.HareProofMsg{
+						{
+							InnerMsg:  m1.HareMetadata,
+							Signature: m1.Signature,
+						},
+						{
+							InnerMsg:  m2.HareMetadata,
+							Signature: m2.Signature,
+						},
+					},
+				},
+			},
+		},
+		Eligibility: &types.HareEligibilityGossip{
+			Layer:       m2.Layer,
+			Round:       m2.Round,
+			PubKey:      m2.PubKey.Bytes(),
+			Eligibility: m2.Eligibility,
+		},
+	}
+	gossip := <-mch
+	require.Equal(t, expected, gossip)
 
 	interSet := NewSetFromValues(value1, value2, value5)
 	m3 := BuildPreRoundMsg(signer, interSet, nil)
@@ -105,11 +133,12 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	assert.EqualValues(t, 2, tracker.tracker.CountStatus(value3))
 	assert.EqualValues(t, 2, tracker.tracker.CountStatus(value4))
 	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value5))
+	require.Len(t, mch, 1)
 }
 
 func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {
 	s := NewSetFromValues(value1, value2)
-	tracker := newPreRoundTracker(lowThresh10, lowThresh10, logtest.New(t))
+	tracker := newPreRoundTracker(logtest.New(t), make(chan types.MalfeasanceGossip, lowThresh10), lowThresh10, lowThresh10)
 
 	for i := 0; i < lowThresh10; i++ {
 		assert.False(t, tracker.CanProveSet(s))
@@ -125,7 +154,8 @@ func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {
 }
 
 func TestPreRoundTracker_UpdateSet(t *testing.T) {
-	tracker := newPreRoundTracker(2, 2, logtest.New(t))
+	mch := make(chan types.MalfeasanceGossip, 2)
+	tracker := newPreRoundTracker(logtest.New(t), mch, 2, 2)
 	sig1, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	sig2, err := signing.NewEdSigner()
@@ -140,10 +170,12 @@ func TestPreRoundTracker_UpdateSet(t *testing.T) {
 	assert.True(t, tracker.CanProveValue(value2))
 	assert.False(t, tracker.CanProveSet(s1))
 	assert.False(t, tracker.CanProveSet(s2))
+	require.Empty(t, mch)
 }
 
 func TestPreRoundTracker_OnPreRound2(t *testing.T) {
-	tracker := newPreRoundTracker(2, 2, logtest.New(t))
+	mch := make(chan types.MalfeasanceGossip, 2)
+	tracker := newPreRoundTracker(logtest.New(t), mch, 2, 2)
 	s1 := NewSetFromValues(value1)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -153,10 +185,12 @@ func TestPreRoundTracker_OnPreRound2(t *testing.T) {
 	prMsg2 := BuildPreRoundMsg(sig, s1, nil)
 	tracker.OnPreRound(context.Background(), prMsg2)
 	assert.Equal(t, 1, len(tracker.preRound))
+	require.Empty(t, mch)
 }
 
 func TestPreRoundTracker_FilterSet(t *testing.T) {
-	tracker := newPreRoundTracker(2, 2, logtest.New(t))
+	mch := make(chan types.MalfeasanceGossip, 2)
+	tracker := newPreRoundTracker(logtest.New(t), mch, 2, 2)
 	sig1, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	sig2, err := signing.NewEdSigner()
@@ -169,6 +203,7 @@ func TestPreRoundTracker_FilterSet(t *testing.T) {
 	set := NewSetFromValues(value1, value2, value3)
 	tracker.FilterSet(set)
 	assert.True(t, set.Equals(s1))
+	require.Empty(t, mch)
 }
 
 func TestPreRoundTracker_BestVRF(t *testing.T) {
@@ -193,7 +228,7 @@ func TestPreRoundTracker_BestVRF(t *testing.T) {
 	}
 
 	// check default coin value
-	tracker := newPreRoundTracker(2, 2, logtest.New(t))
+	tracker := newPreRoundTracker(logtest.New(t), make(chan types.MalfeasanceGossip, 2), 2, 2)
 	r.False(tracker.coinflip, "expected initial coinflip value to be false")
 	r.Equal(tracker.bestVRF, uint32(math.MaxUint32), "expected initial best VRF to be max uint32")
 	s1 := NewSetFromValues(value1, value2)

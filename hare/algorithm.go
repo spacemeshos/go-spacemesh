@@ -166,6 +166,7 @@ type consensusProcess struct {
 	isStarted         bool
 	inbox             chan *Msg
 	terminationReport chan TerminationOutput
+	malCh             chan types.MalfeasanceGossip
 	validator         messageValidator
 	preRoundTracker   *preRoundTracker
 	statusesTracker   *statusTracker
@@ -193,6 +194,7 @@ func newConsensusProcess(
 	terminationReport chan TerminationOutput,
 	ev roleValidator,
 	clock RoundClock,
+	mch chan types.MalfeasanceGossip,
 	logger log.Log,
 ) *consensusProcess {
 	proc := &consensusProcess{
@@ -202,9 +204,10 @@ func newConsensusProcess(
 		signing:           signing,
 		nid:               nid,
 		publisher:         p2p,
-		preRoundTracker:   newPreRoundTracker(cfg.F+1, cfg.N, logger),
+		preRoundTracker:   newPreRoundTracker(logger, mch, cfg.F+1, cfg.N),
 		cfg:               cfg,
 		terminationReport: terminationReport,
+		malCh:             mch,
 		pending:           make(map[string]*Msg, cfg.N),
 		Log:               logger,
 		mTracker:          newMsgsTracker(),
@@ -544,8 +547,7 @@ func (proc *consensusProcess) advanceToNextRound(ctx context.Context) {
 }
 
 func (proc *consensusProcess) beginStatusRound(ctx context.Context) {
-	proc.statusesTracker = newStatusTracker(proc.cfg.F+1, proc.cfg.N)
-	proc.statusesTracker.Log = proc.Log
+	proc.statusesTracker = newStatusTracker(proc.Log, proc.malCh, proc.cfg.F+1, proc.cfg.N)
 
 	// check participation
 	if !proc.shouldParticipate(ctx) {
@@ -562,7 +564,7 @@ func (proc *consensusProcess) beginStatusRound(ctx context.Context) {
 }
 
 func (proc *consensusProcess) beginProposalRound(ctx context.Context) {
-	proc.proposalTracker = newProposalTracker(proc.Log)
+	proc.proposalTracker = newProposalTracker(proc.Log, proc.malCh)
 
 	// done with building proposal, reset statuses tracking
 	defer func() { proc.statusesTracker = nil }()
@@ -587,7 +589,7 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 	proposedSet := proc.proposalTracker.ProposedSet()
 
 	// proposedSet may be nil, in such case the tracker will ignore Messages
-	proc.commitTracker = newCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
+	proc.commitTracker = newCommitTracker(proc.Log, proc.malCh, proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
 
 	if proposedSet == nil {
 		return
@@ -610,7 +612,7 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 
 func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 	logger := proc.WithContext(ctx).WithFields(proc.layer)
-	proc.notifyTracker = newNotifyTracker(proc.cfg.N)
+	proc.notifyTracker = newNotifyTracker(proc.Log, proc.malCh, proc.cfg.N)
 
 	// release proposal & commit trackers
 	defer func() {
@@ -667,7 +669,10 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 // passes all pending messages to the inbox of the process so they will be handled.
 func (proc *consensusProcess) handlePending(pending map[string]*Msg) {
 	for _, m := range pending {
-		proc.inbox <- m
+		select {
+		case <-proc.ctx.Done():
+		case proc.inbox <- m:
+		}
 	}
 }
 
@@ -743,7 +748,7 @@ func (proc *consensusProcess) processProposalMsg(ctx context.Context, msg *Msg) 
 
 func (proc *consensusProcess) processCommitMsg(ctx context.Context, msg *Msg) {
 	proc.mTracker.Track(msg) // a commit msg passed for processing is assumed to be valid
-	proc.commitTracker.OnCommit(msg)
+	proc.commitTracker.OnCommit(ctx, msg)
 }
 
 func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
@@ -754,7 +759,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 
 	s := NewSet(msg.InnerMsg.Values)
 
-	if ignored := proc.notifyTracker.OnNotify(msg); ignored {
+	if ignored := proc.notifyTracker.OnNotify(ctx, msg); ignored {
 		proc.WithContext(ctx).With().Warning("ignoring notification",
 			log.String("sender_id", msg.PubKey.ShortString()))
 		return

@@ -70,7 +70,7 @@ func (t *MalfeasanceGossip) DecodeScale(dec *scale.Decoder) (total int, err erro
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeOption[HareEligibility](dec)
+		field, n, err := scale.DecodeOption[HareEligibilityGossip](dec)
 		if err != nil {
 			return total, err
 		}
