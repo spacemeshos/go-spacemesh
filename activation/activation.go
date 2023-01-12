@@ -401,7 +401,7 @@ func (b *Builder) loop(ctx context.Context) {
 				case <-poetRetryTimer.C:
 				}
 			default:
-				b.log.WithContext(ctx).Warning("Unknown error", log.Err(err))
+				b.log.WithContext(ctx).With().Warning("Unknown error", log.Err(err))
 				// other failures are related to in-process software. we may as well panic here
 				currentLayer := b.layerClock.GetCurrentLayer()
 				select {
@@ -493,6 +493,15 @@ func (b *Builder) loadChallenge() (*types.NIPostChallenge, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load nipost challenge from DB: %w", err)
 	}
+	if nipost != nil && nipost.TargetEpoch() < b.currentEpoch() {
+		b.log.With().Info("atx nipost challenge is stale - discarding it",
+			log.FieldNamed("target_epoch", nipost.TargetEpoch()),
+			log.FieldNamed("publish_epoch", nipost.PublishEpoch()),
+			log.FieldNamed("current_epoch", b.currentEpoch()),
+		)
+		b.discardChallenge()
+		return nil, nil
+	}
 	return nipost, nil
 }
 
@@ -549,18 +558,8 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 
 	challenge, err := b.loadChallenge()
 	if err != nil {
-		b.log.With().Info("challenge not loaded", log.Err(err))
+		logger.With().Info("challenge not loaded", log.Err(err))
 	}
-	if challenge != nil && isStale(challenge, b.currentEpoch()) {
-		b.log.With().Info("atx challenge is stale - discarding it",
-			log.FieldNamed("target_epoch", challenge.TargetEpoch()),
-			log.FieldNamed("publish_epoch", challenge.PublishEpoch()),
-			log.FieldNamed("current_epoch", b.currentEpoch()),
-		)
-		b.discardChallenge()
-		challenge = nil
-	}
-
 	if challenge != nil {
 		logger.With().Info("using existing atx challenge", log.Stringer("current_epoch", b.currentEpoch()))
 	} else {
@@ -686,7 +685,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	}
 	b.log.Info("publication epoch has arrived!")
 
-	if isStale(challenge, b.currentEpoch()) {
+	if challenge.TargetEpoch() < b.currentEpoch() {
 		b.discardChallenge()
 		return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", ErrATXChallengeExpired)
 	}
@@ -770,8 +769,4 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 func SignAndFinalizeAtx(signer signer, atx *types.ActivationTx) error {
 	atx.Signature = signer.Sign(atx.SignedBytes())
 	return atx.CalcAndSetID()
-}
-
-func isStale(challenge *types.NIPostChallenge, currentEpoch types.EpochID) bool {
-	return challenge.TargetEpoch() < currentEpoch
 }
