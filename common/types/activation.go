@@ -150,13 +150,12 @@ func (c *PoetChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 // Hash serializes the NIPostChallenge and returns its hash.
-func (challenge *NIPostChallenge) Hash() (*Hash32, error) {
+func (challenge *NIPostChallenge) Hash() Hash32 {
 	ncBytes, err := codec.Encode(challenge)
 	if err != nil {
-		return nil, err
+		log.With().Fatal("failed to encode NIPostChallenge", log.Err(err))
 	}
-	hash := CalcHash32(ncBytes)
-	return &hash, nil
+	return CalcHash32(ncBytes)
 }
 
 // String returns a string representation of the NIPostChallenge, for logging purposes.
@@ -198,15 +197,32 @@ type InnerActivationTx struct {
 	nodeID *NodeID // the id of the Node that created the ATX (public key)
 }
 
+// ATXMetadata is the signed data of ActivationTx.
+type ATXMetadata struct {
+	Target EpochID
+	// hash of InnerActivationTx
+	MsgHash Hash32
+}
+
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
 	InnerActivationTx
-	Sig []byte
+	ATXMetadata
+	// signature over ATXMetadata
+	Signature []byte
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint32, initialPost *Post, nonce *VRFPostIndex) *ActivationTx {
+func NewActivationTx(
+	challenge NIPostChallenge,
+	nodeID *NodeID,
+	coinbase Address,
+	nipost *NIPost,
+	numUnits uint32,
+	initialPost *Post,
+	nonce *VRFPostIndex,
+) *ActivationTx {
 	atx := &ActivationTx{
 		InnerActivationTx: InnerActivationTx{
 			NIPostChallenge: challenge,
@@ -217,14 +233,36 @@ func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost
 			InitialPost: initialPost,
 
 			VRFNonce: nonce,
+
+			nodeID: nodeID,
 		},
 	}
 	return atx
 }
 
+// SetMetadata sets ATXMetadata.
+func (atx *ActivationTx) SetMetadata() {
+	atx.Target = atx.TargetEpoch()
+	atx.MsgHash = BytesToHash(atx.InnerBytes())
+}
+
+// SignedBytes returns a signed data of the ActivationTx.
+func (atx *ActivationTx) SignedBytes() []byte {
+	atx.SetMetadata()
+	data, err := codec.Encode(&atx.ATXMetadata)
+	if err != nil {
+		log.With().Fatal("failed to encode InnerActivationTx", log.Err(err))
+	}
+	return data
+}
+
 // InnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
-func (atx *ActivationTx) InnerBytes() ([]byte, error) {
-	return codec.Encode(&atx.InnerActivationTx)
+func (atx *ActivationTx) InnerBytes() []byte {
+	data, err := codec.Encode(&atx.InnerActivationTx)
+	if err != nil {
+		log.With().Fatal("failed to encode InnerActivationTx", log.Err(err))
+	}
+	return data
 }
 
 // MarshalLogObject implements logging interface.
@@ -232,10 +270,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if atx.InitialPost != nil {
 		encoder.AddString("nipost", atx.InitialPost.String())
 	}
-	h, err := atx.NIPostChallenge.Hash()
-	if err == nil && h != nil {
-		encoder.AddString("challenge", h.String())
-	}
+	encoder.AddString("challenge", atx.NIPostChallenge.Hash().String())
 	atx.id.Field().AddTo(encoder)
 	encoder.AddString("sender_id", atx.nodeID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
@@ -253,7 +288,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
 func (atx *ActivationTx) CalcAndSetID() error {
-	if atx.Sig == nil {
+	if atx.Signature == nil {
 		return fmt.Errorf("cannot calculate ATX ID: sig is nil")
 	}
 	id := ATXID(CalcObjectHash32(atx))
@@ -263,13 +298,12 @@ func (atx *ActivationTx) CalcAndSetID() error {
 
 // CalcAndSetNodeID calculates and sets the cached Node ID field. This field must be set before calling the NodeID() method.
 func (atx *ActivationTx) CalcAndSetNodeID() error {
-	b, err := atx.InnerBytes()
-	if err != nil {
-		return fmt.Errorf("failed to derive NodeID: %w", err)
+	if atx.nodeID != nil {
+		return nil
 	}
-	nodeId, err := ExtractNodeIDFromSig(b, atx.Sig)
+	nodeId, err := ExtractNodeIDFromSig(atx.SignedBytes(), atx.Signature)
 	if err != nil {
-		return fmt.Errorf("failed to derive NodeID: %w", err)
+		return fmt.Errorf("extract NodeID: %w", err)
 	}
 	atx.nodeID = &nodeId
 	return nil

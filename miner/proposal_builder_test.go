@@ -92,11 +92,11 @@ func genActiveSet(tb testing.TB) []types.ATXID {
 	return activeSet
 }
 
-func genProofs(tb testing.TB, size int) []types.VotingEligibilityProof {
+func genProofs(tb testing.TB, size int) []types.VotingEligibility {
 	tb.Helper()
-	proofs := make([]types.VotingEligibilityProof, 0, size)
+	proofs := make([]types.VotingEligibility, 0, size)
 	for i := 0; i < size; i++ {
-		proofs = append(proofs, types.VotingEligibilityProof{J: uint32(i)})
+		proofs = append(proofs, types.VotingEligibility{J: uint32(i)})
 	}
 	return proofs
 }
@@ -156,7 +156,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 			require.Equal(t, types.EmptyBallotID, p.RefBallot)
 			require.Equal(t, base, p.Votes.Base)
 			require.Equal(t, atxID, p.AtxID)
-			require.Equal(t, p.LayerIndex, layerID)
+			require.Equal(t, p.Layer, layerID)
 			require.NotNil(t, p.EpochData)
 			require.Equal(t, activeSet, p.EpochData.ActiveSet)
 			require.Equal(t, beacon, p.EpochData.Beacon)
@@ -211,7 +211,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 			require.Equal(t, types.EmptyBallotID, p.RefBallot)
 			require.Equal(t, bb, p.Votes.Base)
 			require.Equal(t, atxID, p.AtxID)
-			require.Equal(t, p.LayerIndex, layerID)
+			require.Equal(t, p.Layer, layerID)
 			require.NotNil(t, p.EpochData)
 			require.Equal(t, activeSet, p.EpochData.ActiveSet)
 			require.Equal(t, beacon, p.EpochData.Beacon)
@@ -271,7 +271,7 @@ func TestBuilder_HandleLayer_NotEligible(t *testing.T) {
 	beacon := types.RandomBeacon()
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), []types.VotingEligibilityProof{}, nil)
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), []types.VotingEligibility{}, nil)
 
 	require.NoError(t, b.handleLayer(context.TODO(), layerID))
 }
@@ -328,7 +328,7 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3).Add(1)
 	refBallot := types.NewExistingBallot(
-		types.BallotID{1}, nil, b.ProposalBuilder.signer.NodeID(), types.InnerBallot{LayerIndex: layerID.Sub(1)})
+		types.BallotID{1}, nil, b.ProposalBuilder.signer.NodeID(), types.BallotMetadata{Layer: layerID.Sub(1)})
 	require.NoError(t, ballots.Add(b.cdb, &refBallot))
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
@@ -517,7 +517,7 @@ func TestBuilder_HandleLayer_Duplicate(t *testing.T) {
 		types.BallotID{1},
 		nil,
 		b.signer.NodeID(),
-		types.InnerBallot{LayerIndex: layerID},
+		types.BallotMetadata{Layer: layerID},
 	)
 	require.NoError(t, ballots.Add(b.cdb, &ballot))
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)

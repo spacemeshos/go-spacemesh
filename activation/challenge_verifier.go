@@ -73,12 +73,8 @@ func (v *challengeVerifier) Verify(ctx context.Context, challengeBytes, signatur
 		return nil, err
 	}
 
-	hash, err := challenge.Hash()
-	if err != nil {
-		return nil, err
-	}
 	return &ChallengeVerificationResult{
-		Hash:   *hash,
+		Hash:   challenge.Hash(),
 		NodeID: nodeID,
 	}, nil
 }
