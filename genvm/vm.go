@@ -231,6 +231,12 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 		if err := rewards.Add(tx, &reward); err != nil {
 			return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 		}
+		events.ReportRewardReceived(events.Reward{
+			Layer:       reward.Layer,
+			Total:       reward.TotalReward,
+			LayerReward: reward.LayerReward,
+			Coinbase:    reward.Coinbase,
+		})
 	}
 
 	ss.IterateChanged(func(account *core.Account) bool {
