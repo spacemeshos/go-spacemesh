@@ -206,6 +206,10 @@ func (b *Ballot) Initialize() error {
 		return fmt.Errorf("cannot calculate Ballot ID: signature is nil")
 	}
 
+	if b.MsgHash != BytesToHash(b.InnerBytes()) {
+		return fmt.Errorf("bad message hash")
+	}
+
 	hasher := hash.New()
 	_, err := codec.EncodeTo(hasher, &b.InnerBallot)
 	if err != nil {

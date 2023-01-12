@@ -36,3 +36,13 @@ func FuzzActivationTxStateSafety(f *testing.F) {
 func TestActivationEncoding(t *testing.T) {
 	types.CheckLayerFirstEncoding(t, func(object types.ActivationTx) types.LayerID { return object.PubLayerID })
 }
+
+func TestActivation_BadMsgHash(t *testing.T) {
+	challenge := types.NIPostChallenge{
+		PubLayerID: types.NewLayerID(11),
+	}
+	atx := types.NewActivationTx(challenge, &types.NodeID{1}, types.Address{}, nil, 1, nil, nil)
+	atx.Signature = types.RandomBytes(64)
+	atx.MsgHash = types.RandomHash()
+	require.Error(t, atx.CalcAndSetID())
+}

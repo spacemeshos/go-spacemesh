@@ -17,7 +17,7 @@ func TestAdd(t *testing.T) {
 	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.BallotMetadata{})
 
 	require.NoError(t, ballots.Add(db, &ballot))
-	require.NoError(t, identities.SetMalicious(db, pub.Bytes()))
+	require.NoError(t, identities.SetMalicious(db, pub, []byte("proof")))
 	proposal := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot:   ballot,
@@ -38,7 +38,7 @@ func TestHas(t *testing.T) {
 	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.BallotMetadata{})
 
 	require.NoError(t, ballots.Add(db, &ballot))
-	require.NoError(t, identities.SetMalicious(db, pub.Bytes()))
+	require.NoError(t, identities.SetMalicious(db, pub, []byte("proof")))
 	proposal := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot:   ballot,
@@ -63,7 +63,7 @@ func TestGet(t *testing.T) {
 	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.BallotMetadata{})
 
 	require.NoError(t, ballots.Add(db, &ballot))
-	require.NoError(t, identities.SetMalicious(db, pub.Bytes()))
+	require.NoError(t, identities.SetMalicious(db, pub, []byte("proof")))
 	ballot.SetMalicious()
 
 	proposal := &types.Proposal{

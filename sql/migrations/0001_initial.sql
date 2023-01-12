@@ -18,8 +18,8 @@ CREATE INDEX ballots_by_layer_by_pubkey ON ballots (layer asc, pubkey);
 
 CREATE TABLE identities
 (
-    pubkey    VARCHAR PRIMARY KEY,
-    malicious bool
+    pubkey VARCHAR PRIMARY KEY,
+    proof  BLOB
 ) WITHOUT ROWID;
 
 CREATE TABLE layers

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -51,4 +52,32 @@ func TestMessageBuilder_SetCertificate(t *testing.T) {
 	c := newMessageBuilder().SetCertificate(cert).Build().Message
 	cert2 := marshallUnmarshall(t, &c).InnerMsg.Cert
 	assert.Equal(t, cert.Values, cert2.Values)
+}
+
+func TestMessageFromBuffer(t *testing.T) {
+	b := newMessageBuilder()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	msg := b.SetPubKey(signer.PublicKey()).SetLayer(instanceID1).Sign(signer).Build().Message
+
+	buf, err := codec.Encode(&msg)
+	require.NoError(t, err)
+
+	got, err := MessageFromBuffer(buf)
+	require.NoError(t, err)
+	require.Equal(t, msg, got)
+}
+
+func TestMessageFromBuffer_BadMsgHash(t *testing.T) {
+	b := newMessageBuilder()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	msg := b.SetPubKey(signer.PublicKey()).SetLayer(instanceID1).Sign(signer).Build().Message
+	msg.MsgHash = types.RandomHash()
+
+	buf, err := codec.Encode(&msg)
+	require.NoError(t, err)
+
+	_, err = MessageFromBuffer(buf)
+	require.Error(t, err)
 }

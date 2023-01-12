@@ -143,6 +143,47 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
+func TestGetByEpochAndNodeID(t *testing.T) {
+	db := sql.InMemory()
+
+	sig1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	sig2, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	atx1, err := newAtx(sig1, types.NewLayerID(uint32(1*layersPerEpoch)))
+	require.NoError(t, err)
+	require.NoError(t, atx1.CalcAndSetID())
+
+	atx2, err := newAtx(sig2, types.NewLayerID(uint32(2*layersPerEpoch)))
+	require.NoError(t, err)
+	require.NoError(t, atx2.CalcAndSetID())
+
+	now := time.Now()
+	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2} {
+		require.NoError(t, atxs.Add(db, atx, now))
+		now = now.Add(time.Nanosecond)
+	}
+
+	// Act & Assert
+
+	got, err := atxs.GetByEpochAndNodeID(db, types.EpochID(1), sig1.NodeID())
+	require.NoError(t, err)
+	require.EqualValues(t, atx1, got)
+
+	got, err = atxs.GetByEpochAndNodeID(db, types.EpochID(2), sig1.NodeID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, got)
+
+	got, err = atxs.GetByEpochAndNodeID(db, types.EpochID(1), sig2.NodeID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, got)
+
+	got, err = atxs.GetByEpochAndNodeID(db, types.EpochID(2), sig2.NodeID())
+	require.NoError(t, err)
+	require.EqualValues(t, atx2, got)
+}
+
 func TestGetLastIDByNodeID(t *testing.T) {
 	db := sql.InMemory()
 
