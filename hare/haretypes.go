@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hash"
@@ -191,12 +193,7 @@ func (s *Set) ID() types.Hash32 {
 }
 
 func (s *Set) sortedLocked() []types.ProposalID {
-	result := make([]types.ProposalID, 0, len(s.values))
-
-	for id := range s.values {
-		result = append(result, id)
-	}
-
+	result := maps.Keys(s.values)
 	sort.Slice(result, func(i, j int) bool { return bytes.Compare(result[i].Bytes(), result[j].Bytes()) == -1 })
 
 	return result
