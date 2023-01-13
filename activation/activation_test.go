@@ -287,8 +287,7 @@ func TestBuilder_waitForFirstATX(t *testing.T) {
 
 func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	// cancel the parent context, so it doesn't run the building loop
-	cancel()
+	defer cancel()
 	tab := newTestBuilder(t, WithContext(ctx))
 	coinbase := types.Address{1, 1, 1}
 	postSetupOpts := PostSetupOpts{}
