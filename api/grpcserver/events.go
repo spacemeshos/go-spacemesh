@@ -21,18 +21,23 @@ var (
 	errErrorsBufferFull      = "errors buffer is full"
 )
 
-func consumeEvents(ctx context.Context, subscription event.Subscription) (out <-chan any, bufFull <-chan struct{}) {
-	outCh := make(chan any, subscriptionChanBufSize)
+func consumeEvents[T any](ctx context.Context, subscription event.Subscription) (out <-chan T, bufFull <-chan struct{}) {
+	outCh := make(chan T, subscriptionChanBufSize)
 	bufFullCh := make(chan struct{})
 
 	go func() {
 		defer closeSubscription(subscription)
 
 		for e := range subscription.Out() {
+			event, ok := e.(T)
+			if !ok {
+				log.With().Warning("received invalid event type - dropping")
+				continue
+			}
 			select {
 			case <-ctx.Done():
 				return
-			case outCh <- e:
+			case outCh <- event:
 			default:
 				log.With().Debug("subscriber's event buffer is full")
 				close(bufFullCh)

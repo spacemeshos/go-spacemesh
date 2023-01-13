@@ -16,14 +16,11 @@ const (
 	EligibilityVoting
 )
 
-type Eligibility struct {
-	Type   EligibilityType
-	PubKey []byte
-	// list of proofs:
-	// 1 proof of BeaconEligibility where the identity is eligible to propose beacon value for an epoch.
-	// M proofs of HareEligibility where the identity is eligible in M layer/rounds.
-	// N proofs of VotingEligibility where the identity has N slots in an epoch.
-	Proofs [][]byte
+type HareEligibilityGossip struct {
+	Layer       LayerID
+	Round       uint32
+	PubKey      []byte
+	Eligibility HareEligibility
 }
 
 // HareEligibility includes the required values that, along with the smesher's VRF public key,

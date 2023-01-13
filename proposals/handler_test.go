@@ -994,9 +994,9 @@ func TestProposal_BroadcastMaliciousGossip(t *testing.T) {
 	}
 	proof := &types.MalfeasanceProof{
 		Layer: lid,
-		ProofData: types.TypedProof{
-			Type:  types.MultipleBallots,
-			Proof: &ballotProof,
+		Proof: types.Proof{
+			Type: types.MultipleBallots,
+			Data: &ballotProof,
 		},
 	}
 	th.mm.EXPECT().AddBallot(context.Background(), &pMal.Ballot).DoAndReturn(

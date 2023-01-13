@@ -149,7 +149,9 @@ func Test_consensusIterations(t *testing.T) {
 		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
 		require.NoError(t, err)
 		p2pm := &p2pManipulator{nd: ps, stalledLayer: instanceID1, err: errors.New("fake err")}
-		proc, broker := createConsensusProcess(t, ctx, true, cfg, oracle, p2pm, test.initialSets[i], instanceID1, t.Name())
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		proc, broker := createConsensusProcess(t, ctx, sig, true, cfg, oracle, p2pm, test.initialSets[i], instanceID1)
 		test.procs = append(test.procs, proc)
 		test.brokers = append(test.brokers, broker)
 		i++
@@ -185,7 +187,7 @@ func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *
 
 	mockRoracle := mocks.NewMockRolacle(ctrl)
 
-	hare := New(db, tcfg, p2p, signer, nodeID, make(chan LayerOutput, 100), mockSyncS, mockBeacons, mockRoracle, patrol, 10,
+	hare := New(db, tcfg, p2p, signer, nodeID, make(chan LayerOutput, 100), mockSyncS, mockBeacons, mockRoracle, patrol,
 		mockStateQ, clock, logtest.New(tb).WithName(name+"_"+signer.PublicKey().ShortString()))
 	p2p.Register(pubsub.HareProtocol, hare.GetHareMsgHandler())
 

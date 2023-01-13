@@ -206,7 +206,7 @@ func (b *Ballot) Initialize() error {
 		return fmt.Errorf("cannot calculate Ballot ID: signature is nil")
 	}
 
-	if b.MsgHash != BytesToHash(b.InnerBytes()) {
+	if b.MsgHash != BytesToHash(b.HashInnerBytes()) {
 		return fmt.Errorf("bad message hash")
 	}
 
@@ -235,7 +235,7 @@ func (b *Ballot) SetMetadata() {
 	if b.Layer == (LayerID{}) {
 		log.Fatal("ballot is missing layer")
 	}
-	b.MsgHash = BytesToHash(b.InnerBytes())
+	b.MsgHash = BytesToHash(b.HashInnerBytes())
 }
 
 // SignedBytes returns the serialization of the BallotMetadata for signing.
@@ -248,13 +248,14 @@ func (b *Ballot) SignedBytes() []byte {
 	return data
 }
 
-// InnerBytes returns the serialization of the InnerBallot.
-func (b *Ballot) InnerBytes() []byte {
-	data, err := codec.Encode(&b.InnerBallot)
+// HashInnerBytes returns the hash of the InnerBallot.
+func (b *Ballot) HashInnerBytes() []byte {
+	hshr := hash.New()
+	_, err := codec.EncodeTo(hshr, &b.InnerBallot)
 	if err != nil {
-		log.With().Fatal("failed to serialize InnerBallot", log.Err(err))
+		log.Fatal("failed to encode InnerBallot for hashing")
 	}
-	return data
+	return hshr.Sum(nil)
 }
 
 // SetID from stored data.
