@@ -149,16 +149,17 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 	// The tx channel tells us about newly received and newly created transactions
 	// The layer channel tells us about status updates
 	var (
-		txCh, layerCh           <-chan any
+		txCh                    <-chan events.Transaction
+		layerCh                 <-chan events.LayerUpdate
 		txBufFull, layerBufFull <-chan struct{}
 	)
 
 	if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
-		txCh, txBufFull = consumeEvents(stream.Context(), txsSubscription)
+		txCh, txBufFull = consumeEvents[events.Transaction](stream.Context(), txsSubscription)
 	}
 
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
-		layerCh, layerBufFull = consumeEvents(stream.Context(), layersSubscription)
+		layerCh, layerBufFull = consumeEvents[events.LayerUpdate](stream.Context(), layersSubscription)
 	}
 
 	if err := stream.SendHeader(metadata.MD{}); err != nil {
@@ -173,9 +174,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 		case <-layerBufFull:
 			log.Info("layer buffer is full, shutting down")
 			return status.Error(codes.Canceled, errLayerBufferFull)
-		case txEvent := <-txCh:
-			tx := txEvent.(events.Transaction)
-
+		case tx := <-txCh:
 			// Filter
 			for _, txid := range in.TransactionId {
 				if bytes.Equal(tx.Transaction.ID.Bytes(), txid.Id) {
@@ -205,8 +204,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 					break
 				}
 			}
-		case layerEvent := <-layerCh:
-			layer := layerEvent.(events.LayerUpdate)
+		case layer := <-layerCh:
 			// Transaction objects do not have an associated status. The status we assign them here is based on the
 			// status of the layer (really, the block) they're contained in. Here, we receive updates to layer status.
 			// In order to update tx status, we have to read every transaction in the layer.

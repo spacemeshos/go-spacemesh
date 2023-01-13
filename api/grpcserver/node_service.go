@@ -144,12 +144,12 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 	log.Info("GRPC NodeService.StatusStream")
 
 	var (
-		statusCh      <-chan any
+		statusCh      <-chan events.Status
 		statusBufFull <-chan struct{}
 	)
 
 	if statusSubscription := events.SubscribeStatus(); statusSubscription != nil {
-		statusCh, statusBufFull = consumeEvents(stream.Context(), statusSubscription)
+		statusCh, statusBufFull = consumeEvents[events.Status](stream.Context(), statusSubscription)
 	}
 
 	for {
@@ -193,12 +193,12 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 	log.Info("GRPC NodeService.ErrorStream")
 
 	var (
-		errorsCh      <-chan any
+		errorsCh      <-chan events.NodeError
 		errorsBufFull <-chan struct{}
 	)
 
 	if errorsSubscription := events.SubscribeErrors(); errorsSubscription != nil {
-		errorsCh, errorsBufFull = consumeEvents(stream.Context(), errorsSubscription)
+		errorsCh, errorsBufFull = consumeEvents[events.NodeError](stream.Context(), errorsSubscription)
 	}
 	if err := stream.SendHeader(metadata.MD{}); err != nil {
 		return status.Errorf(codes.Unavailable, "can't send header")
@@ -209,13 +209,11 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 		case <-errorsBufFull:
 			log.Info("errors buffer is full, shutting down")
 			return status.Error(codes.Canceled, errErrorsBufferFull)
-		case nodeErrorEvent, ok := <-errorsCh:
+		case nodeError, ok := <-errorsCh:
 			if !ok {
 				log.Info("ErrorStream closed, shutting down")
 				return nil
 			}
-
-			nodeError := nodeErrorEvent.(events.NodeError)
 
 			resp := &pb.ErrorStreamResponse{Error: &pb.NodeError{
 				Level:      convertErrorLevel(nodeError.Level),
