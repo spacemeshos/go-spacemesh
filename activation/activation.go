@@ -500,7 +500,7 @@ func (b *Builder) loadChallenge() (*types.NIPostChallenge, error) {
 			log.FieldNamed("current_epoch", b.currentEpoch()),
 		)
 		b.discardChallenge()
-		return nil, nil
+		return nil, errors.New("atx nipost challenge is stale")
 	}
 	return nipost, nil
 }
@@ -559,16 +559,11 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	challenge, err := b.loadChallenge()
 	if err != nil {
 		logger.With().Info("challenge not loaded", log.Err(err))
-	}
-	if challenge != nil {
-		logger.With().Info("using existing atx challenge", log.Stringer("current_epoch", b.currentEpoch()))
-	} else {
 		logger.With().Info("building new atx challenge", log.Stringer("current_epoch", b.currentEpoch()))
-		ch, err := b.buildNIPostChallenge(ctx)
+		challenge, err = b.buildNIPostChallenge(ctx)
 		if err != nil {
 			return fmt.Errorf("build new atx challenge: %w", err)
 		}
-		challenge = ch
 	}
 
 	logger.With().Info("new atx challenge is ready",
