@@ -493,7 +493,7 @@ func (b *Builder) loadChallenge() (*types.NIPostChallenge, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load nipost challenge from DB: %w", err)
 	}
-	if nipost != nil && nipost.TargetEpoch() < b.currentEpoch() {
+	if nipost.TargetEpoch() < b.currentEpoch() {
 		b.log.With().Info("atx nipost challenge is stale - discarding it",
 			log.FieldNamed("target_epoch", nipost.TargetEpoch()),
 			log.FieldNamed("publish_epoch", nipost.PublishEpoch()),
