@@ -125,7 +125,7 @@ func (mct *mockCommitTracker) CommitCount() int {
 	return 0
 }
 
-func (mct *mockCommitTracker) OnCommit(*Msg) {
+func (mct *mockCommitTracker) OnCommit(context.Context, *Msg) {
 	mct.countOnCommit++
 }
 
@@ -159,7 +159,7 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
 	return &testBroker{
 		Broker: newBroker(&mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
-			4, limit, logtest.New(tb).WithName(testName)),
+			limit, logtest.New(tb).WithName(testName)),
 		mockSyncS:  mockSyncS,
 		mockStateQ: mockStateQ,
 	}
@@ -324,8 +324,9 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config) *conse
 	sq := mocks.NewMockstateQuerier(ctrl)
 	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	return newConsensusProcess(context.Background(), cfg, instanceID1, s, oracle, sq,
-		4, edSigner, types.BytesToNodeID(edPubkey.Bytes()),
+		edSigner, types.BytesToNodeID(edPubkey.Bytes()),
 		noopPubSub(tb), output, truer{}, newRoundClockFromCfg(logger, cfg),
+		make(chan types.MalfeasanceGossip),
 		logtest.New(tb).WithName(edPubkey.String()))
 }
 
@@ -486,7 +487,7 @@ func TestConsensusProcess_procCommit(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound(context.Background())
 	s := NewDefaultEmptySet()
-	proc.commitTracker = newCommitTracker(1, 1, s)
+	proc.commitTracker = newCommitTracker(logtest.New(t), make(chan types.MalfeasanceGossip), 1, 1, s)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildCommitMsg(signer, s)
@@ -498,7 +499,7 @@ func TestConsensusProcess_procCommit(t *testing.T) {
 
 func TestConsensusProcess_procNotify(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.notifyTracker = newNotifyTracker(proc.cfg.N)
+	proc.notifyTracker = newNotifyTracker(logtest.New(t), make(chan types.MalfeasanceGossip), proc.cfg.N)
 	proc.advanceToNextRound(context.Background())
 	s := NewSetFromValues(value1)
 	signer1, err := signing.NewEdSigner()
@@ -519,7 +520,7 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 
 func TestConsensusProcess_Termination(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.notifyTracker = newNotifyTracker(proc.cfg.N)
+	proc.notifyTracker = newNotifyTracker(logtest.New(t), make(chan types.MalfeasanceGossip), proc.cfg.N)
 	proc.advanceToNextRound(context.Background())
 	s := NewSetFromValues(value1)
 
@@ -632,7 +633,7 @@ func TestConsensusProcess_beginProposalRound(t *testing.T) {
 	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
 	proc.oracle = mo
 
-	statusTracker := newStatusTracker(1, 1)
+	statusTracker := newStatusTracker(logtest.New(t), make(chan types.MalfeasanceGossip), 1, 1)
 	s := NewSetFromValues(value1)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)

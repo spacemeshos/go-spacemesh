@@ -637,9 +637,9 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 				}
 				proof = &types.MalfeasanceProof{
 					Layer: msh.clock.GetCurrentLayer(),
-					ProofData: types.TypedProof{
-						Type:  types.MultipleBallots,
-						Proof: &ballotProof,
+					Proof: types.Proof{
+						Type: types.MultipleBallots,
+						Data: &ballotProof,
 					},
 				}
 				if proofBytes, err := codec.Encode(proof); err != nil {

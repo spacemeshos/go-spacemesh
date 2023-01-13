@@ -52,7 +52,7 @@ func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) e
 		h.logger.WithContext(ctx).With().Error("malformed message", log.Err(err))
 		return errMalformedData
 	}
-	switch p.ProofData.Type {
+	switch p.Proof.Type {
 	case types.HareEquivocation:
 		nodeID, err = validateHareEquivocation(h.logger.WithContext(ctx), &p.MalfeasanceProof)
 	case types.MultipleATXs:
@@ -63,7 +63,7 @@ func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) e
 		return errors.New("unknown malfeasance type")
 	}
 
-	updateMetrics(p.ProofData)
+	updateMetrics(p.Proof)
 	if err == nil {
 		// TODO: pass on to hare if it's types.HareEquivocation
 		if malicious, err = identities.IsMalicious(h.db, nodeID); err != nil {
@@ -86,7 +86,7 @@ func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) e
 	return err
 }
 
-func updateMetrics(tp types.TypedProof) {
+func updateMetrics(tp types.Proof) {
 	switch tp.Type {
 	case types.HareEquivocation:
 		numProofsHare.Inc()
@@ -98,15 +98,15 @@ func updateMetrics(tp types.TypedProof) {
 }
 
 func validateHareEquivocation(logger log.Log, proof *types.MalfeasanceProof) (types.NodeID, error) {
-	if proof.ProofData.Type != types.HareEquivocation {
-		return types.NodeID{}, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.HareEquivocation, proof.ProofData.Type)
+	if proof.Proof.Type != types.HareEquivocation {
+		return types.NodeID{}, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.HareEquivocation, proof.Proof.Type)
 	}
 	var (
 		firstNid, nid types.NodeID
 		firstMsg, msg types.HareProofMsg
 		err           error
 	)
-	hp, ok := proof.ProofData.Proof.(*types.HareProof)
+	hp, ok := proof.Proof.Data.(*types.HareProof)
 	if !ok {
 		return types.NodeID{}, errors.New("wrong message type for hare equivocation")
 	}
@@ -140,15 +140,15 @@ func validateHareEquivocation(logger log.Log, proof *types.MalfeasanceProof) (ty
 }
 
 func validateMultipleATXs(logger log.Log, proof *types.MalfeasanceProof) (types.NodeID, error) {
-	if proof.ProofData.Type != types.MultipleATXs {
-		return types.NodeID{}, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.MultipleATXs, proof.ProofData.Type)
+	if proof.Proof.Type != types.MultipleATXs {
+		return types.NodeID{}, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.MultipleATXs, proof.Proof.Type)
 	}
 	var (
 		firstNid, nid types.NodeID
 		firstMsg, msg types.AtxProofMsg
 		err           error
 	)
-	ap, ok := proof.ProofData.Proof.(*types.AtxProof)
+	ap, ok := proof.Proof.Data.(*types.AtxProof)
 	if !ok {
 		return types.NodeID{}, errors.New("wrong message type for multiple ATXs")
 	}
@@ -179,15 +179,15 @@ func validateMultipleATXs(logger log.Log, proof *types.MalfeasanceProof) (types.
 }
 
 func validateMultipleBallots(logger log.Log, proof *types.MalfeasanceProof) (types.NodeID, error) {
-	if proof.ProofData.Type != types.MultipleBallots {
-		return types.NodeID{}, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.MultipleBallots, proof.ProofData.Type)
+	if proof.Proof.Type != types.MultipleBallots {
+		return types.NodeID{}, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.MultipleBallots, proof.Proof.Type)
 	}
 	var (
 		firstNid, nid types.NodeID
 		firstMsg, msg types.BallotProofMsg
 		err           error
 	)
-	bp, ok := proof.ProofData.Proof.(*types.BallotProof)
+	bp, ok := proof.Proof.Data.(*types.BallotProof)
 	if !ok {
 		return types.NodeID{}, errors.New("wrong message type for multi ballots")
 	}

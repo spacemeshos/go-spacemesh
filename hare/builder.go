@@ -6,6 +6,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -27,7 +28,7 @@ func MessageFromBuffer(buf []byte) (Message, error) {
 	if err := codec.Decode(buf, &msg); err != nil {
 		return msg, fmt.Errorf("serialize: %w", err)
 	}
-	if msg.MsgHash != types.BytesToHash(msg.InnerMsg.Bytes()) {
+	if msg.MsgHash != types.BytesToHash(msg.InnerMsg.HashBytes()) {
 		return Message{}, fmt.Errorf("bad message hash")
 	}
 	return msg, nil
@@ -51,7 +52,7 @@ func (m *Message) SetMetadata() {
 	if m.Layer == (types.LayerID{}) {
 		log.Fatal("Message is missing layer")
 	}
-	m.MsgHash = types.BytesToHash(m.InnerMsg.Bytes())
+	m.MsgHash = types.BytesToHash(m.InnerMsg.HashBytes())
 }
 
 // SignedBytes returns the signed data for hare message.
@@ -85,13 +86,14 @@ type InnerMessage struct {
 	Cert           *Certificate        // optional
 }
 
-// Bytes returns the message as bytes.
-func (im *InnerMessage) Bytes() []byte {
-	buf, err := codec.Encode(im)
+// HashBytes returns the message as bytes.
+func (im *InnerMessage) HashBytes() []byte {
+	hshr := hash.New()
+	_, err := codec.EncodeTo(hshr, im)
 	if err != nil {
-		log.With().Fatal("failed to encode InnerMessage", log.Err(err))
+		log.Fatal("failed to encode InnerMsg for hashing")
 	}
-	return buf
+	return hshr.Sum(nil)
 }
 
 func (im *InnerMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -130,7 +132,6 @@ func (mb *messageBuilder) SetCertificate(certificate *Certificate) *messageBuild
 // Sign calls the provided signer to calculate the signature and then set it accordingly.
 func (mb *messageBuilder) Sign(signing Signer) *messageBuilder {
 	mb.msg.Signature = signing.Sign(mb.msg.SignedBytes())
-
 	return mb
 }
 

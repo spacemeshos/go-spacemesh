@@ -648,7 +648,6 @@ func (app *App) initServices(ctx context.Context,
 		beaconProtocol,
 		hOracle,
 		patrol,
-		uint16(app.Config.LayersPerEpoch),
 		hOracle,
 		clock,
 		app.addLogger(HareLogger, lg))

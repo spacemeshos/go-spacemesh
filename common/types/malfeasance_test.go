@@ -35,9 +35,9 @@ func TestCodec_MultipleATXs(t *testing.T) {
 	}
 	proof := &types.MalfeasanceProof{
 		Layer: lid,
-		ProofData: types.TypedProof{
-			Type:  types.MultipleATXs,
-			Proof: &atxProof,
+		Proof: types.Proof{
+			Type: types.MultipleATXs,
+			Data: &atxProof,
 		},
 	}
 	encoded, err := codec.Encode(proof)
@@ -66,9 +66,9 @@ func TestCodec_MultipleBallot(t *testing.T) {
 	}
 	proof := &types.MalfeasanceProof{
 		Layer: lid,
-		ProofData: types.TypedProof{
-			Type:  types.MultipleBallots,
-			Proof: &ballotProof,
+		Proof: types.Proof{
+			Type: types.MultipleBallots,
+			Data: &ballotProof,
 		},
 	}
 	encoded, err := codec.Encode(proof)
@@ -95,9 +95,9 @@ func TestCodec_HareEquivocation(t *testing.T) {
 	}
 	proof := &types.MalfeasanceProof{
 		Layer: lid,
-		ProofData: types.TypedProof{
-			Type:  types.HareEquivocation,
-			Proof: &hareProof,
+		Proof: types.Proof{
+			Type: types.HareEquivocation,
+			Data: &hareProof,
 		},
 	}
 	encoded, err := codec.Encode(proof)
@@ -125,9 +125,9 @@ func TestCodec_MalfeasanceGossip(t *testing.T) {
 	gossip := &types.MalfeasanceGossip{
 		MalfeasanceProof: types.MalfeasanceProof{
 			Layer: lid,
-			ProofData: types.TypedProof{
-				Type:  types.HareEquivocation,
-				Proof: &hareProof,
+			Proof: types.Proof{
+				Type: types.HareEquivocation,
+				Data: &hareProof,
 			},
 		},
 	}
@@ -138,9 +138,14 @@ func TestCodec_MalfeasanceGossip(t *testing.T) {
 	require.NoError(t, codec.Decode(encoded, &decoded))
 	require.Equal(t, *gossip, decoded)
 
-	gossip.Eligibility = &types.HareEligibility{
-		Proof: []byte{1, 2, 3},
-		Count: 12,
+	gossip.Eligibility = &types.HareEligibilityGossip{
+		Layer:  lid,
+		Round:  round,
+		PubKey: types.RandomBytes(32),
+		Eligibility: types.HareEligibility{
+			Proof: []byte{1, 2, 3},
+			Count: 12,
+		},
 	}
 	encoded, err = codec.Encode(gossip)
 	require.NoError(t, err)
