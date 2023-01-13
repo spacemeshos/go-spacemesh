@@ -2,6 +2,7 @@ package atxs
 
 import (
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -141,6 +142,51 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 	return id, err
 }
 
+// GetByEpochAndNodeID gets any ATX by the specified NodeID in the given epoch.
+func GetByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (*types.VerifiedActivationTx, error) {
+	var (
+		atx *types.VerifiedActivationTx
+		err error
+	)
+	enc := func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(epoch))
+		stmt.BindBytes(2, nodeID.Bytes())
+	}
+	dec := func(stmt *sql.Statement) bool {
+		var (
+			v  types.ActivationTx
+			id types.ATXID
+			n  int
+		)
+		stmt.ColumnBytes(0, id[:])
+		if n, err = codec.DecodeFrom(stmt.ColumnReader(1), &v); err != nil {
+			if err != io.EOF {
+				err = fmt.Errorf("atx decode epoch %v nodeID %v: %w", epoch, nodeID, err)
+				return false
+			}
+		} else if n == 0 {
+			err = fmt.Errorf("atx data missing epoch %v nodeID %v", epoch, nodeID)
+			return false
+		}
+		v.SetID(&id)
+		v.SetNodeID(&nodeID)
+		baseTickHeight := uint64(stmt.ColumnInt64(2))
+		tickCount := uint64(stmt.ColumnInt64(3))
+		atx, err = v.Verify(baseTickHeight, tickCount)
+		return err == nil
+	}
+
+	if rows, err := db.Exec(`
+		select id, atx, base_tick_height, tick_count from atxs
+		where epoch = ?1 and smesher = ?2
+		limit 1;`, enc, dec); err != nil {
+		return nil, fmt.Errorf("atx by epoch %v nodeID %v: %w", epoch, nodeID, err)
+	} else if rows == 0 {
+		return nil, sql.ErrNotFound
+	}
+	return atx, err
+}
+
 // GetIDsByEpoch gets ATX IDs for a given epoch.
 func GetIDsByEpoch(db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {
@@ -203,19 +249,6 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx, timestamp time.Time) 
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
-	return nil
-}
-
-// DeleteATXsByNodeID deletes ATXs by node ID.
-func DeleteATXsByNodeID(db sql.Executor, nodeID types.NodeID) error {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.Bytes())
-	}
-
-	if _, err := db.Exec("delete from atxs where smesher = ?1;", enc, nil); err != nil {
-		return fmt.Errorf("exec %v: %w", nodeID, err)
-	}
-
 	return nil
 }
 

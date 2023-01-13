@@ -71,6 +71,8 @@ const (
 	BeaconFirstVotesProtocol = "bf1"
 	// BeaconFollowingVotesProtocol is the protocol id for beacon following votes.
 	BeaconFollowingVotesProtocol = "bo1"
+
+	MalfeasanceProof = "mp1"
 )
 
 // DefaultConfig for PubSub.

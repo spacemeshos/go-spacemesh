@@ -15,7 +15,7 @@ func Get(db sql.Executor, id types.ProposalID) (proposal *types.Proposal, err er
 		select 
 			ballots.pubkey, 
 			ballots.ballot, 
-			identities.malicious, 
+			length(identities.proof),
 			proposals.id, 
 			proposals.ballot_id, 
 			proposals.tx_ids, 
@@ -52,34 +52,13 @@ func Has(db sql.Executor, id types.ProposalID) (bool, error) {
 	return rows > 0, nil
 }
 
-// GetIDsByLayer gets IDs for a given layer.
-func GetIDsByLayer(db sql.Executor, layer types.LayerID) (ids []types.ProposalID, err error) {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(layer.Uint32()))
-	}
-	dec := func(stmt *sql.Statement) bool {
-		var id types.ProposalID
-		stmt.ColumnBytes(0, id[:])
-		ids = append(ids, id)
-		return true
-	}
-
-	if rows, err := db.Exec("select id from proposals where layer = ?1;", enc, dec); err != nil {
-		return nil, fmt.Errorf("exec layer %v: %w", layer, err)
-	} else if rows == 0 {
-		return []types.ProposalID{}, sql.ErrNotFound
-	}
-
-	return ids, nil
-}
-
 // GetByLayer gets proposals by a given layer ID.
 func GetByLayer(db sql.Executor, layerID types.LayerID) (proposals []*types.Proposal, err error) {
 	if rows, err := db.Exec(`
 		select 
 			ballots.pubkey, 
 			ballots.ballot, 
-			identities.malicious, 
+			length(identities.proof),
 			proposals.id, 
 			proposals.ballot_id, 
 			proposals.tx_ids, 

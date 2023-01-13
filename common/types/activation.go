@@ -291,6 +291,11 @@ func (atx *ActivationTx) CalcAndSetID() error {
 	if atx.Signature == nil {
 		return fmt.Errorf("cannot calculate ATX ID: sig is nil")
 	}
+
+	if atx.MsgHash != BytesToHash(atx.InnerBytes()) {
+		return fmt.Errorf("bad message hash")
+	}
+
 	id := ATXID(CalcObjectHash32(atx))
 	atx.id = &id
 	return nil
@@ -301,6 +306,7 @@ func (atx *ActivationTx) CalcAndSetNodeID() error {
 	if atx.nodeID != nil {
 		return nil
 	}
+
 	nodeId, err := ExtractNodeIDFromSig(atx.SignedBytes(), atx.Signature)
 	if err != nil {
 		return fmt.Errorf("extract NodeID: %w", err)

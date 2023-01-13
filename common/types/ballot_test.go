@@ -65,6 +65,16 @@ func TestBallot_Initialize_BadSignature(t *testing.T) {
 	require.EqualError(t, err, "ballot extract key: ed25519: bad signature format")
 }
 
+func TestBallot_Initialize_BadMsgHash(t *testing.T) {
+	b := types.RandomBallot()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	b.Signature = signer.Sign(b.SignedBytes())
+	b.MsgHash = types.RandomHash()
+	err = b.Initialize()
+	require.EqualError(t, err, "bad message hash")
+}
+
 func FuzzBallotConsistency(f *testing.F) {
 	tester.FuzzConsistency[types.Ballot](f)
 }
