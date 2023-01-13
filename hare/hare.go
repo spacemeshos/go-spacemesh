@@ -23,9 +23,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-// LayerBuffer is the number of layer results we keep at a given time.
-const LayerBuffer = 20
-
 type consensusFactory func(context.Context, config.Config, types.LayerID, *Set, Rolacle, Signer, pubsub.Publisher, RoundClock, chan TerminationOutput, chan types.MalfeasanceGossip) Consensus
 
 // Consensus represents an item that acts like a consensus process.
@@ -84,8 +81,6 @@ type Hare struct {
 
 	layerLock sync.RWMutex
 	lastLayer types.LayerID
-
-	bufferSize uint32
 
 	outputChan chan TerminationOutput
 	mu         sync.RWMutex
@@ -147,10 +142,8 @@ func New(
 	h.patrol = patrol
 
 	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
-	// todo: this should be loaded from global config
-	h.bufferSize = LayerBuffer // XXX: must be at least the size of `hdist`
-	h.outputChan = make(chan TerminationOutput, h.bufferSize)
-	h.outputs = make(map[types.LayerID][]types.ProposalID, h.bufferSize) // we keep results about LayerBuffer past layers
+	h.outputChan = make(chan TerminationOutput, h.config.Hdist)
+	h.outputs = make(map[types.LayerID][]types.ProposalID, h.config.Hdist) // we keep results about LayerBuffer past layers
 	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput, malCh chan types.MalfeasanceGossip) Consensus {
 		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, nid, p2p, terminationReport, ev, clock, malCh, logger)
 	}
@@ -188,10 +181,10 @@ func (h *Hare) setLastLayer(layerID types.LayerID) {
 // checks if the provided id is too late/old to be requested.
 func (h *Hare) outOfBufferRange(id types.LayerID) bool {
 	last := h.getLastLayer()
-	if !last.After(types.NewLayerID(h.bufferSize)) {
+	if !last.After(types.NewLayerID(h.config.Hdist)) {
 		return false
 	}
-	if id.Before(last.Sub(h.bufferSize)) { // bufferSize>=0
+	if id.Before(last.Sub(h.config.Hdist)) { // bufferSize>=0
 		return true
 	}
 	return false
@@ -243,7 +236,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if uint32(len(h.outputs)) >= h.bufferSize {
+	if uint32(len(h.outputs)) >= h.config.Hdist {
 		delete(h.outputs, h.oldestResultInBuffer())
 	}
 	h.outputs[layerID] = pids

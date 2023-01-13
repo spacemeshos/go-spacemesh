@@ -22,8 +22,6 @@ import (
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
-var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000}
-
 func newRoundClockFromCfg(logger log.Log, cfg config.Config) *SimpleRoundClock {
 	return NewSimpleRoundClock(time.Now(),
 		time.Duration(cfg.WakeupDelta)*time.Second,
@@ -150,6 +148,7 @@ type testBroker struct {
 }
 
 func buildBroker(tb testing.TB, testName string) *testBroker {
+	cfg := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	return buildBrokerWithLimit(tb, testName, cfg.LimitIterations)
 }
 
@@ -197,7 +196,7 @@ func TestConsensusProcess_Start(t *testing.T) {
 }
 
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
-	c := cfg
+	c := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	c.LimitConcurrent = 1
 	c.RoundDuration = 1
 	p := generateConsensusProcessWithConfig(t, c)
@@ -218,7 +217,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	require.NoError(t, broker.Start(context.Background()))
-	c := cfg
+	c := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	c.F = 2
 	proc := generateConsensusProcessWithConfig(t, c)
 	proc.publisher = net
@@ -305,6 +304,7 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 }
 
 func generateConsensusProcess(t *testing.T) *consensusProcess {
+	cfg := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	return generateConsensusProcessWithConfig(t, cfg)
 }
 
@@ -524,6 +524,7 @@ func TestConsensusProcess_Termination(t *testing.T) {
 	proc.advanceToNextRound(context.Background())
 	s := NewSetFromValues(value1)
 
+	cfg := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	for i := 0; i < cfg.F+1; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
