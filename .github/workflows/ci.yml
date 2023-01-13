@@ -31,6 +31,11 @@ on:
       - staging
       - trying
 
+concurrency:
+  group: ${{ github.base_ref == 'staging' && format('{0}-staging', github.workflow) || format('{0}-{1}', github.workflow, github.ref) }}
+  cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
+
+
 jobs:
   ## stage 0: check which files were changed
   filter-changes:
@@ -269,9 +274,6 @@ jobs:
       - filter-changes
       - dockerpush
     timeout-minutes: 90
-    concurrency:
-      group: ${{ github.base_ref == 'staging' && format('{0}-staging', github.workflow) || format('{0}-{1}', github.workflow, github.ref) }}
-      cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
     steps:
       - uses: actions/checkout@v3
 
@@ -331,7 +333,7 @@ jobs:
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 50
           bootstrap: 10m
-          level: info
+          level: debug
           clusters: 4
         run: make -C systest run test_name=.
 
@@ -344,7 +346,7 @@ jobs:
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 30
           bootstrap: 10m
-          level: info
+          level: debug
           clusters: 4
         run: make -C systest run test_name=.
 

@@ -1894,7 +1894,7 @@ func TestMaliciousBallotsAreIgnored(t *testing.T) {
 	blts, err := ballots.Layer(s.GetState(0).DB, last)
 	require.NoError(t, err)
 	for _, ballot := range blts {
-		require.NoError(t, identities.SetMalicious(s.GetState(0).DB, ballot.SmesherID().Bytes()))
+		require.NoError(t, identities.SetMalicious(s.GetState(0).DB, ballot.SmesherID(), []byte("proof")))
 	}
 
 	tortoise.TallyVotes(ctx, s.Next())

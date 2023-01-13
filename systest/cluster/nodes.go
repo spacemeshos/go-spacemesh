@@ -37,6 +37,15 @@ var (
 		"configuration for smesher service",
 		fastnet.SmesherConfig,
 	)
+
+	smesherRequests = apiv1.ResourceList{
+		apiv1.ResourceCPU:    resource.MustParse("0.5"),
+		apiv1.ResourceMemory: resource.MustParse("1Gi"),
+	}
+	smesherLimits = apiv1.ResourceList{
+		apiv1.ResourceCPU:    resource.MustParse("4"),
+		apiv1.ResourceMemory: resource.MustParse("1Gi"),
+	}
 )
 
 const (
@@ -58,7 +67,10 @@ func persistentVolumeClaim(podname string) string {
 	return fmt.Sprintf("%s-%s", persistentVolumeName, podname)
 }
 
-const prometheusScrapePort = 9216
+const (
+	prometheusScrapePort = 9216
+	phlareScrapePort     = 6060
+)
 
 // Node ...
 type Node struct {
@@ -119,8 +131,13 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 					).
 					WithResources(corev1.ResourceRequirements().WithRequests(
 						apiv1.ResourceList{
-							apiv1.ResourceCPU:    resource.MustParse("0.5"),
-							apiv1.ResourceMemory: resource.MustParse("1Gi"),
+							apiv1.ResourceCPU:    resource.MustParse("1"),
+							apiv1.ResourceMemory: resource.MustParse("16Gi"),
+						},
+					).WithLimits(
+						apiv1.ResourceList{
+							apiv1.ResourceCPU:    resource.MustParse("2"),
+							apiv1.ResourceMemory: resource.MustParse("16Gi"),
 						},
 					)),
 				),
@@ -377,8 +394,10 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 			WithTemplate(corev1.PodTemplateSpec().
 				WithAnnotations(
 					map[string]string{
-						"prometheus.io/port":   strconv.Itoa(prometheusScrapePort),
-						"prometheus.io/scrape": "true",
+						"prometheus.io/port":        strconv.Itoa(prometheusScrapePort),
+						"prometheus.io/scrape":      "true",
+						"phlare.grafana.com/port":   strconv.Itoa(phlareScrapePort),
+						"phlare.grafana.com/scrape": "true",
 					},
 				).
 				WithLabels(labels).
@@ -396,24 +415,15 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 							corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
 							corev1.ContainerPort().WithContainerPort(9092).WithName("grpc"),
 							corev1.ContainerPort().WithContainerPort(prometheusScrapePort).WithName("prometheus"),
+							corev1.ContainerPort().WithContainerPort(phlareScrapePort).WithName("pprof"),
 						).
 						WithVolumeMounts(
 							corev1.VolumeMount().WithName("data").WithMountPath("/data"),
 							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
 						).
 						WithResources(corev1.ResourceRequirements().
-							WithRequests(
-								apiv1.ResourceList{
-									apiv1.ResourceCPU:    resource.MustParse("0.5"),
-									apiv1.ResourceMemory: resource.MustParse("200Mi"),
-								},
-							).
-							WithLimits(
-								apiv1.ResourceList{
-									apiv1.ResourceCPU:    resource.MustParse("2"),
-									apiv1.ResourceMemory: resource.MustParse("1Gi"),
-								},
-							),
+							WithRequests(smesherRequests).
+							WithLimits(smesherLimits),
 						).
 						WithStartupProbe(
 							corev1.Probe().WithTCPSocket(
@@ -421,7 +431,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 							).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
 						).
 						WithEnv(
-							corev1.EnvVar().WithName("GOMAXPROCS").WithValue("2"),
+							corev1.EnvVar().WithName("GOMAXPROCS").WithValue("4"),
 						).
 						WithCommand(cmd...),
 					)),

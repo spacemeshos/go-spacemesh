@@ -2,6 +2,7 @@ package ballots
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 
@@ -11,18 +12,22 @@ import (
 )
 
 func decodeBallot(id types.BallotID, pubkey, body *bytes.Reader, malicious bool) (*types.Ballot, error) {
-	pubkeyBytes := make([]byte, pubkey.Len())
-	if _, err := pubkey.Read(pubkeyBytes); err != nil {
+	size := pubkey.Len()
+	pubkeyBytes := make([]byte, size)
+	if n, err := pubkey.Read(pubkeyBytes); err != nil {
 		if err != io.EOF {
 			return nil, fmt.Errorf("copy pubkey: %w", err)
 		}
-		pubkeyBytes = nil
+	} else if n != size {
+		return nil, errors.New("public key data missing")
 	}
 	ballot := types.Ballot{}
-	if _, err := codec.DecodeFrom(body, &ballot); err != nil {
+	if n, err := codec.DecodeFrom(body, &ballot); err != nil {
 		if err != io.EOF {
 			return nil, fmt.Errorf("decode body of the %s: %w", id, err)
 		}
+	} else if n == 0 {
+		return nil, errors.New("ballot data missing")
 	}
 	ballot.SetID(id)
 	ballot.SetSmesherID(types.BytesToNodeID(pubkeyBytes))
@@ -67,7 +72,7 @@ func Has(db sql.Executor, id types.BallotID) (bool, error) {
 
 // Get ballot with id from database.
 func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
-	if rows, err := db.Exec(`select pubkey, ballot, identities.malicious 
+	if rows, err := db.Exec(`select pubkey, ballot, length(identities.proof)
 	from ballots left join identities using(pubkey)
 	where id = ?1;`,
 		func(stmt *sql.Statement) {
@@ -89,7 +94,7 @@ func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
 
 // Layer returns full body ballot for layer.
 func Layer(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) {
-	if _, err = db.Exec(`select id, pubkey, ballot, identities.malicious
+	if _, err = db.Exec(`select id, pubkey, ballot, length(identities.proof)
 		from ballots left join identities using(pubkey)
 		where layer = ?1;`, func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Value))
@@ -138,6 +143,46 @@ func CountByPubkeyLayer(db sql.Executor, lid types.LayerID, pubkey []byte) (int,
 		return 0, fmt.Errorf("counting layer %s: %w", lid, err)
 	}
 	return rows, nil
+}
+
+// LayerBallotByNodeID returns any ballot by the specified NodeID in a given layer.
+func LayerBallotByNodeID(db sql.Executor, lid types.LayerID, nodeID types.NodeID) (*types.Ballot, error) {
+	var (
+		ballot types.Ballot
+		err    error
+	)
+	enc := func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(lid.Value))
+		stmt.BindBytes(2, nodeID.Bytes())
+	}
+	dec := func(stmt *sql.Statement) bool {
+		var (
+			n   int
+			bid types.BallotID
+		)
+		stmt.ColumnBytes(0, bid[:])
+		if n, err = codec.DecodeFrom(stmt.ColumnReader(1), &ballot); err != nil {
+			if err != io.EOF {
+				err = fmt.Errorf("ballot data layer %v, nodeID %v: %w", lid, nodeID, err)
+				return false
+			}
+		} else if n == 0 {
+			err = fmt.Errorf("ballot data missing layer %v, nodeID %v", lid, nodeID)
+			return false
+		}
+		ballot.SetID(bid)
+		ballot.SetSmesherID(nodeID)
+		return true
+	}
+	if rows, err := db.Exec(`
+		select id, ballot from ballots
+		where layer = ?1 and pubkey = ?2
+		limit 1;`, enc, dec); err != nil {
+		return nil, fmt.Errorf("same layer ballot %v: %w", lid, err)
+	} else if rows == 0 {
+		return nil, sql.ErrNotFound
+	}
+	return &ballot, err
 }
 
 // GetRefBallot gets a ref ballot for a layer and a pubkey.

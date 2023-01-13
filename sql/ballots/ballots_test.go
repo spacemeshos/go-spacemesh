@@ -33,7 +33,7 @@ func TestLayer(t *testing.T) {
 		require.Equal(t, &ballots[i], ballot)
 	}
 
-	require.NoError(t, identities.SetMalicious(db, pub.Bytes()))
+	require.NoError(t, identities.SetMalicious(db, pub, []byte("proof")))
 	rst, err = Layer(db, start)
 	require.NoError(t, err)
 	require.Len(t, rst, len(ballots))
@@ -56,7 +56,7 @@ func TestAdd(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, &ballot, stored)
 
-	require.NoError(t, identities.SetMalicious(db, pub.Bytes()))
+	require.NoError(t, identities.SetMalicious(db, pub, []byte("proof")))
 	stored, err = Get(db, ballot.ID())
 	require.NoError(t, err)
 	require.True(t, stored.IsMalicious())
@@ -116,6 +116,28 @@ func TestCountByPubkeyLayer(t *testing.T) {
 	count, err = CountByPubkeyLayer(db, lid, pub2.Bytes())
 	require.NoError(t, err)
 	require.Equal(t, 2, count)
+}
+
+func TestLayerBallotBySmesher(t *testing.T) {
+	db := sql.InMemory()
+	lid := types.NewLayerID(1)
+	pub1 := types.BytesToNodeID([]byte{1, 1, 1})
+	pub2 := types.BytesToNodeID([]byte{2, 2, 2})
+	ballots := []types.Ballot{
+		types.NewExistingBallot(types.BallotID{2}, nil, pub1, types.BallotMetadata{Layer: lid.Add(1)}),
+		types.NewExistingBallot(types.BallotID{3}, nil, pub2, types.BallotMetadata{Layer: lid}),
+	}
+	for _, ballot := range ballots {
+		require.NoError(t, Add(db, &ballot))
+	}
+
+	prev, err := LayerBallotByNodeID(db, lid, pub1)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, prev)
+	prev, err = LayerBallotByNodeID(db, lid, pub2)
+	require.NoError(t, err)
+	require.NotNil(t, prev)
+	require.Equal(t, ballots[1], *prev)
 }
 
 func TestGetRefBallot(t *testing.T) {
