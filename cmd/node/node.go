@@ -637,9 +637,12 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		blocks.WithHareOutputChan(hareOutputCh),
 		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
+
+	hareCfg := app.Config.HARE
+	hareCfg.Hdist = app.Config.Tortoise.Hdist
 	app.hare = hare.New(
 		sqlDB,
-		app.Config.HARE,
+		hareCfg,
 		app.host,
 		sgn,
 		nodeID,
