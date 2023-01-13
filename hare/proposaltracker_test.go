@@ -41,9 +41,9 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 	expected := types.MalfeasanceGossip{
 		MalfeasanceProof: types.MalfeasanceProof{
 			Layer: m1.Layer,
-			ProofData: types.TypedProof{
+			Proof: types.Proof{
 				Type: types.HareEquivocation,
-				Proof: &types.HareProof{
+				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{
 						{
 							InnerMsg:  m1.HareMetadata,
@@ -101,9 +101,9 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 	expected := types.MalfeasanceGossip{
 		MalfeasanceProof: types.MalfeasanceProof{
 			Layer: m1.Layer,
-			ProofData: types.TypedProof{
+			Proof: types.Proof{
 				Type: types.HareEquivocation,
-				Proof: &types.HareProof{
+				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{
 						{
 							InnerMsg:  m1.HareMetadata,
@@ -155,9 +155,9 @@ func TestProposalTracker_ProposedSet(t *testing.T) {
 	expected := types.MalfeasanceGossip{
 		MalfeasanceProof: types.MalfeasanceProof{
 			Layer: m1.Layer,
-			ProofData: types.TypedProof{
+			Proof: types.Proof{
 				Type: types.HareEquivocation,
-				Proof: &types.HareProof{
+				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{
 						{
 							InnerMsg:  m1.HareMetadata,

@@ -550,9 +550,9 @@ func reportEquivocation(
 	gossip := types.MalfeasanceGossip{
 		MalfeasanceProof: types.MalfeasanceProof{
 			Layer: old.InnerMsg.Layer,
-			ProofData: types.TypedProof{
+			Proof: types.Proof{
 				Type: types.HareEquivocation,
-				Proof: &types.HareProof{
+				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{*old, *new},
 				},
 			},

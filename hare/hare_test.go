@@ -226,9 +226,9 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 	gossip := types.MalfeasanceGossip{
 		MalfeasanceProof: types.MalfeasanceProof{
 			Layer: lid,
-			ProofData: types.TypedProof{
+			Proof: types.Proof{
 				Type: types.HareEquivocation,
-				Proof: &types.HareProof{
+				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{
 						{
 							InnerMsg: types.HareMetadata{

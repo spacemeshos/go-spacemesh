@@ -46,9 +46,9 @@ func TestHandler_handleProof_multipleATXs(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
-				ProofData: types.TypedProof{
-					Type:  types.MultipleATXs,
-					Proof: &atxProof,
+				Proof: types.Proof{
+					Type: types.MultipleATXs,
+					Data: &atxProof,
 				},
 			},
 		}
@@ -84,9 +84,9 @@ func TestHandler_handleProof_multipleATXs(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
-				ProofData: types.TypedProof{
-					Type:  types.MultipleATXs,
-					Proof: &atxProof,
+				Proof: types.Proof{
+					Type: types.MultipleATXs,
+					Data: &atxProof,
 				},
 			},
 		}
@@ -123,9 +123,9 @@ func TestHandler_handleProof_multipleATXs(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
-				ProofData: types.TypedProof{
-					Type:  types.MultipleATXs,
-					Proof: &atxProof,
+				Proof: types.Proof{
+					Type: types.MultipleATXs,
+					Data: &atxProof,
 				},
 			},
 		}
@@ -160,9 +160,9 @@ func TestHandler_handleProof_multipleATXs(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
-				ProofData: types.TypedProof{
-					Type:  types.MultipleATXs,
-					Proof: &atxProof,
+				Proof: types.Proof{
+					Type: types.MultipleATXs,
+					Data: &atxProof,
 				},
 			},
 		}
@@ -197,9 +197,9 @@ func TestHandler_handleProof_multipleATXs(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid.Add(11),
-				ProofData: types.TypedProof{
-					Type:  types.MultipleATXs,
-					Proof: &atxProof,
+				Proof: types.Proof{
+					Type: types.MultipleATXs,
+					Data: &atxProof,
 				},
 			},
 		}
@@ -247,9 +247,9 @@ func TestHandler_handleProof_multipleBallots(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
-				ProofData: types.TypedProof{
-					Type:  types.MultipleBallots,
-					Proof: &ballotProof,
+				Proof: types.Proof{
+					Type: types.MultipleBallots,
+					Data: &ballotProof,
 				},
 			},
 		}
@@ -284,9 +284,9 @@ func TestHandler_handleProof_multipleBallots(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
-				ProofData: types.TypedProof{
-					Type:  types.MultipleBallots,
-					Proof: &ballotProof,
+				Proof: types.Proof{
+					Type: types.MultipleBallots,
+					Data: &ballotProof,
 				},
 			},
 		}
@@ -323,9 +323,9 @@ func TestHandler_handleProof_multipleBallots(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
-				ProofData: types.TypedProof{
-					Type:  types.MultipleBallots,
-					Proof: &ballotProof,
+				Proof: types.Proof{
+					Type: types.MultipleBallots,
+					Data: &ballotProof,
 				},
 			},
 		}
@@ -360,9 +360,9 @@ func TestHandler_handleProof_multipleBallots(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
-				ProofData: types.TypedProof{
-					Type:  types.MultipleBallots,
-					Proof: &ballotProof,
+				Proof: types.Proof{
+					Type: types.MultipleBallots,
+					Data: &ballotProof,
 				},
 			},
 		}
@@ -397,9 +397,9 @@ func TestHandler_handleProof_multipleBallots(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid.Add(11),
-				ProofData: types.TypedProof{
-					Type:  types.MultipleBallots,
-					Proof: &ballotProof,
+				Proof: types.Proof{
+					Type: types.MultipleBallots,
+					Data: &ballotProof,
 				},
 			},
 		}
@@ -449,9 +449,9 @@ func TestHandler_handleProof_hareEquivocation(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
-				ProofData: types.TypedProof{
-					Type:  types.HareEquivocation,
-					Proof: &hareProof,
+				Proof: types.Proof{
+					Type: types.HareEquivocation,
+					Data: &hareProof,
 				},
 			},
 		}
@@ -488,9 +488,9 @@ func TestHandler_handleProof_hareEquivocation(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
-				ProofData: types.TypedProof{
-					Type:  types.HareEquivocation,
-					Proof: &hareProof,
+				Proof: types.Proof{
+					Type: types.HareEquivocation,
+					Data: &hareProof,
 				},
 			},
 		}
@@ -527,9 +527,9 @@ func TestHandler_handleProof_hareEquivocation(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
-				ProofData: types.TypedProof{
-					Type:  types.HareEquivocation,
-					Proof: &hareProof,
+				Proof: types.Proof{
+					Type: types.HareEquivocation,
+					Data: &hareProof,
 				},
 			},
 		}
@@ -568,9 +568,9 @@ func TestHandler_handleProof_hareEquivocation(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
-				ProofData: types.TypedProof{
-					Type:  types.HareEquivocation,
-					Proof: &hareProof,
+				Proof: types.Proof{
+					Type: types.HareEquivocation,
+					Data: &hareProof,
 				},
 			},
 		}
@@ -607,9 +607,9 @@ func TestHandler_handleProof_hareEquivocation(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
-				ProofData: types.TypedProof{
-					Type:  types.HareEquivocation,
-					Proof: &hareProof,
+				Proof: types.Proof{
+					Type: types.HareEquivocation,
+					Data: &hareProof,
 				},
 			},
 		}
@@ -646,9 +646,9 @@ func TestHandler_handleProof_hareEquivocation(t *testing.T) {
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid.Add(11),
-				ProofData: types.TypedProof{
-					Type:  types.HareEquivocation,
-					Proof: &hareProof,
+				Proof: types.Proof{
+					Type: types.HareEquivocation,
+					Data: &hareProof,
 				},
 			},
 		}

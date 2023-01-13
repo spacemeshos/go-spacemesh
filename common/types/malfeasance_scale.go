@@ -16,7 +16,7 @@ func (t *MalfeasanceProof) EncodeScale(enc *scale.Encoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := t.ProofData.EncodeScale(enc)
+		n, err := t.Proof.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -34,7 +34,7 @@ func (t *MalfeasanceProof) DecodeScale(dec *scale.Decoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := t.ProofData.DecodeScale(dec)
+		n, err := t.Proof.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}

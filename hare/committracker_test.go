@@ -74,9 +74,9 @@ func TestCommitTracker_OnCommitEquivocate(t *testing.T) {
 	expected := types.MalfeasanceGossip{
 		MalfeasanceProof: types.MalfeasanceProof{
 			Layer: msg1.Layer,
-			ProofData: types.TypedProof{
+			Proof: types.Proof{
 				Type: types.HareEquivocation,
-				Proof: &types.HareProof{
+				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{
 						{
 							InnerMsg:  msg1.HareMetadata,

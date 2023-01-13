@@ -12,25 +12,25 @@ import (
 //go:generate scalegen -types MalfeasanceProof,MalfeasanceGossip,AtxProof,BallotProof,HareProof,AtxProofMsg,BallotProofMsg,HareProofMsg,HareMetadata
 
 const (
-	MultipleATXs uint8 = iota + 1
+	MultipleATXs byte = iota + 1
 	MultipleBallots
 	HareEquivocation
 )
 
 type MalfeasanceProof struct {
 	// for network upgrade
-	Layer     LayerID
-	ProofData TypedProof
+	Layer LayerID
+	Proof Proof
 }
 
-type TypedProof struct {
+type Proof struct {
 	// MultipleATXs | MultipleBallots | HareEquivocation
 	Type uint8
 	// AtxProof | BallotProof | HareProof
-	Proof scale.Type
+	Data scale.Type
 }
 
-func (e *TypedProof) EncodeScale(enc *scale.Encoder) (int, error) {
+func (e *Proof) EncodeScale(enc *scale.Encoder) (int, error) {
 	var total int
 	{
 		// not compact, as scale spec uses "full" uint8 for enums
@@ -41,7 +41,7 @@ func (e *TypedProof) EncodeScale(enc *scale.Encoder) (int, error) {
 		total += n
 	}
 	{
-		n, err := e.Proof.EncodeScale(enc)
+		n, err := e.Data.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -50,7 +50,7 @@ func (e *TypedProof) EncodeScale(enc *scale.Encoder) (int, error) {
 	return total, nil
 }
 
-func (e *TypedProof) DecodeScale(dec *scale.Decoder) (int, error) {
+func (e *Proof) DecodeScale(dec *scale.Decoder) (int, error) {
 	var total int
 	{
 		typ, n, err := scale.DecodeByte(dec)
@@ -67,7 +67,7 @@ func (e *TypedProof) DecodeScale(dec *scale.Decoder) (int, error) {
 		if err != nil {
 			return total, err
 		}
-		e.Proof = &proof
+		e.Data = &proof
 		total += n
 	case MultipleBallots:
 		var proof BallotProof
@@ -75,7 +75,7 @@ func (e *TypedProof) DecodeScale(dec *scale.Decoder) (int, error) {
 		if err != nil {
 			return total, err
 		}
-		e.Proof = &proof
+		e.Data = &proof
 		total += n
 	case HareEquivocation:
 		var proof HareProof
@@ -83,7 +83,7 @@ func (e *TypedProof) DecodeScale(dec *scale.Decoder) (int, error) {
 		if err != nil {
 			return total, err
 		}
-		e.Proof = &proof
+		e.Data = &proof
 		total += n
 	default:
 		return total, errors.New("unknown malfeasance type")
