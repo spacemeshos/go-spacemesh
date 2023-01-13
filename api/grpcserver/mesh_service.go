@@ -442,18 +442,19 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 
 	// Subscribe to the stream of transactions and activations
 	var (
-		txCh, activationsCh           <-chan any
+		txCh                          <-chan events.Transaction
+		activationsCh                 <-chan events.ActivationTx
 		txBufFull, activationsBufFull <-chan struct{}
 	)
 
 	if filterTx {
 		if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
-			txCh, txBufFull = consumeEvents(stream.Context(), txsSubscription)
+			txCh, txBufFull = consumeEvents[events.Transaction](stream.Context(), txsSubscription)
 		}
 	}
 	if filterActivations {
 		if activationsSubscription := events.SubscribeActivations(); activationsSubscription != nil {
-			activationsCh, activationsBufFull = consumeEvents(stream.Context(), activationsSubscription)
+			activationsCh, activationsBufFull = consumeEvents[events.ActivationTx](stream.Context(), activationsSubscription)
 		}
 	}
 
@@ -466,7 +467,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 			log.Info("activations buffer is full, shutting down")
 			return status.Error(codes.Canceled, errActivationsBufferFull)
 		case activationEvent := <-activationsCh:
-			activation := activationEvent.(events.ActivationTx).VerifiedActivationTx
+			activation := activationEvent.VerifiedActivationTx
 			// Apply address filter
 			if activation.Coinbase == addr {
 				resp := &pb.AccountMeshDataStreamResponse{
@@ -480,8 +481,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
-		case txEvent := <-txCh:
-			tx := txEvent.(events.Transaction)
+		case tx := <-txCh:
 			// Apply address filter
 			if tx.Valid && tx.Transaction.TxHeader != nil && tx.Transaction.Principal == addr {
 				resp := &pb.AccountMeshDataStreamResponse{
@@ -512,12 +512,12 @@ func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService
 	log.Info("GRPC MeshService.LayerStream")
 
 	var (
-		layerCh       <-chan any
+		layerCh       <-chan events.LayerUpdate
 		layersBufFull <-chan struct{}
 	)
 
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
-		layerCh, layersBufFull = consumeEvents(stream.Context(), layersSubscription)
+		layerCh, layersBufFull = consumeEvents[events.LayerUpdate](stream.Context(), layersSubscription)
 	}
 
 	for {
@@ -525,12 +525,11 @@ func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService
 		case <-layersBufFull:
 			log.Info("layer buffer is full, shutting down")
 			return status.Error(codes.Canceled, errAccountBufferFull)
-		case layerEvent, ok := <-layerCh:
+		case layer, ok := <-layerCh:
 			if !ok {
 				log.Info("LayerStream closed, shutting down")
 				return nil
 			}
-			layer := layerEvent.(events.LayerUpdate)
 			pbLayer, err := s.readLayer(stream.Context(), layer.LayerID, convertLayerStatus(layer.Status))
 			if err != nil {
 				return fmt.Errorf("read layer: %w", err)
