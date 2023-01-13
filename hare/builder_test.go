@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -45,8 +47,8 @@ func TestMessageBuilder_SetCertificate(t *testing.T) {
 	require.NoError(t, err)
 
 	s := NewSetFromValues(value5)
-	tr := newCommitTracker(1, 1, s)
-	tr.OnCommit(BuildCommitMsg(signer, s))
+	tr := newCommitTracker(logtest.New(t), make(chan types.MalfeasanceGossip), 1, 1, s)
+	tr.OnCommit(context.Background(), BuildCommitMsg(signer, s))
 	cert := tr.BuildCertificate()
 	assert.NotNil(t, cert)
 	c := newMessageBuilder().SetCertificate(cert).Build().Message

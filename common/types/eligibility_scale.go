@@ -7,9 +7,16 @@ import (
 	"github.com/spacemeshos/go-scale"
 )
 
-func (t *Eligibility) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *HareEligibilityGossip) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeCompact16(enc, uint16(t.Type))
+		n, err := t.Layer.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.Round))
 		if err != nil {
 			return total, err
 		}
@@ -23,7 +30,7 @@ func (t *Eligibility) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeSliceOfByteSlice(enc, t.Proofs)
+		n, err := t.Eligibility.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -32,14 +39,21 @@ func (t *Eligibility) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	return total, nil
 }
 
-func (t *Eligibility) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *HareEligibilityGossip) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeCompact16(dec)
+		n, err := t.Layer.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Type = EligibilityType(field)
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Round = uint32(field)
 	}
 	{
 		field, n, err := scale.DecodeByteSlice(dec)
@@ -50,12 +64,11 @@ func (t *Eligibility) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.PubKey = field
 	}
 	{
-		field, n, err := scale.DecodeSliceOfByteSlice(dec)
+		n, err := t.Eligibility.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Proofs = field
 	}
 	return total, nil
 }

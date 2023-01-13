@@ -25,37 +25,35 @@ type validator interface {
 // The broker validates that the sender is eligible and active and forwards the message to the corresponding outbox.
 type Broker struct {
 	log.Log
-	mu             sync.RWMutex
-	eValidator     validator                // provides eligibility validation
-	stateQuerier   stateQuerier             // provides activeness check
-	nodeSyncState  system.SyncStateProvider // provider function to check if the node is currently synced
-	layersPerEpoch uint16
-	outbox         map[uint32]chan *Msg
-	pending        map[uint32][]*Msg // the buffer of pending early messages for the next layer
-	tasks          chan func()       // a channel to synchronize tasks (register/unregister) with incoming messages handling
-	latestLayerMu  sync.RWMutex
-	latestLayer    types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
-	isStarted      bool
-	minDeleted     types.LayerID
-	limit          int // max number of simultaneous consensus processes
-	ctx            context.Context
-	cancel         context.CancelFunc
-	eg             errgroup.Group
+	mu            sync.RWMutex
+	eValidator    validator                // provides eligibility validation
+	stateQuerier  stateQuerier             // provides activeness check
+	nodeSyncState system.SyncStateProvider // provider function to check if the node is currently synced
+	outbox        map[uint32]chan *Msg
+	pending       map[uint32][]*Msg // the buffer of pending early messages for the next layer
+	tasks         chan func()       // a channel to synchronize tasks (register/unregister) with incoming messages handling
+	latestLayerMu sync.RWMutex
+	latestLayer   types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
+	isStarted     bool
+	minDeleted    types.LayerID
+	limit         int // max number of simultaneous consensus processes
+	ctx           context.Context
+	cancel        context.CancelFunc
+	eg            errgroup.Group
 }
 
-func newBroker(eValidator validator, stateQuerier stateQuerier, syncState system.SyncStateProvider, layersPerEpoch uint16, limit int, log log.Log) *Broker {
+func newBroker(eValidator validator, stateQuerier stateQuerier, syncState system.SyncStateProvider, limit int, log log.Log) *Broker {
 	b := &Broker{
-		Log:            log,
-		eValidator:     eValidator,
-		stateQuerier:   stateQuerier,
-		nodeSyncState:  syncState,
-		layersPerEpoch: layersPerEpoch,
-		outbox:         make(map[uint32]chan *Msg),
-		pending:        make(map[uint32][]*Msg),
-		tasks:          make(chan func()),
-		latestLayer:    types.GetEffectiveGenesis(),
-		limit:          limit,
-		minDeleted:     types.GetEffectiveGenesis(),
+		Log:           log,
+		eValidator:    eValidator,
+		stateQuerier:  stateQuerier,
+		nodeSyncState: syncState,
+		outbox:        make(map[uint32]chan *Msg),
+		pending:       make(map[uint32][]*Msg),
+		tasks:         make(chan func()),
+		latestLayer:   types.GetEffectiveGenesis(),
+		limit:         limit,
+		minDeleted:    types.GetEffectiveGenesis(),
 	}
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 	return b

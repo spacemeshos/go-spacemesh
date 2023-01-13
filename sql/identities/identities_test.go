@@ -30,9 +30,9 @@ func TestMalicious(t *testing.T) {
 	}
 	proof := &types.MalfeasanceProof{
 		Layer: types.NewLayerID(11),
-		ProofData: types.TypedProof{
-			Type:  types.MultipleBallots,
-			Proof: &ballotProof,
+		Proof: types.Proof{
+			Type: types.MultipleBallots,
+			Data: &ballotProof,
 		},
 	}
 	data, err := codec.Encode(proof)

@@ -166,6 +166,7 @@ type consensusProcess struct {
 	isStarted         bool
 	inbox             chan *Msg
 	terminationReport chan TerminationOutput
+	malCh             chan types.MalfeasanceGossip
 	validator         messageValidator
 	preRoundTracker   *preRoundTracker
 	statusesTracker   *statusTracker
@@ -180,12 +181,22 @@ type consensusProcess struct {
 }
 
 // newConsensusProcess creates a new consensus process instance.
-func newConsensusProcess(ctx context.Context, cfg config.Config, layer types.LayerID, s *Set, oracle Rolacle, stateQuerier stateQuerier,
-	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p pubsub.Publisher,
+func newConsensusProcess(
+	ctx context.Context,
+	cfg config.Config,
+	layer types.LayerID,
+	s *Set,
+	oracle Rolacle,
+	stateQuerier stateQuerier,
+	signing Signer,
+	nid types.NodeID,
+	p2p pubsub.Publisher,
 	terminationReport chan TerminationOutput,
-	ev roleValidator, clock RoundClock, logger log.Log,
+	ev roleValidator,
+	clock RoundClock,
+	mch chan types.MalfeasanceGossip,
+	logger log.Log,
 ) *consensusProcess {
-	msgsTracker := newMsgsTracker()
 	proc := &consensusProcess{
 		State:             State{preRound, preRound, s.Clone(), nil},
 		layer:             layer,
@@ -193,16 +204,17 @@ func newConsensusProcess(ctx context.Context, cfg config.Config, layer types.Lay
 		signing:           signing,
 		nid:               nid,
 		publisher:         p2p,
-		preRoundTracker:   newPreRoundTracker(cfg.F+1, cfg.N, logger),
+		preRoundTracker:   newPreRoundTracker(logger, mch, cfg.F+1, cfg.N),
 		cfg:               cfg,
 		terminationReport: terminationReport,
+		malCh:             mch,
 		pending:           make(map[string]*Msg, cfg.N),
 		Log:               logger,
-		mTracker:          msgsTracker,
+		mTracker:          newMsgsTracker(),
 		clock:             clock,
 	}
 	proc.ctx, proc.cancel = context.WithCancel(ctx)
-	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, ev, msgsTracker, logger)
+	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, ev, proc.mTracker, logger)
 
 	return proc
 }
@@ -535,8 +547,7 @@ func (proc *consensusProcess) advanceToNextRound(ctx context.Context) {
 }
 
 func (proc *consensusProcess) beginStatusRound(ctx context.Context) {
-	proc.statusesTracker = newStatusTracker(proc.cfg.F+1, proc.cfg.N)
-	proc.statusesTracker.Log = proc.Log
+	proc.statusesTracker = newStatusTracker(proc.Log, proc.malCh, proc.cfg.F+1, proc.cfg.N)
 
 	// check participation
 	if !proc.shouldParticipate(ctx) {
@@ -553,7 +564,7 @@ func (proc *consensusProcess) beginStatusRound(ctx context.Context) {
 }
 
 func (proc *consensusProcess) beginProposalRound(ctx context.Context) {
-	proc.proposalTracker = newProposalTracker(proc.Log)
+	proc.proposalTracker = newProposalTracker(proc.Log, proc.malCh)
 
 	// done with building proposal, reset statuses tracking
 	defer func() { proc.statusesTracker = nil }()
@@ -578,7 +589,7 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 	proposedSet := proc.proposalTracker.ProposedSet()
 
 	// proposedSet may be nil, in such case the tracker will ignore Messages
-	proc.commitTracker = newCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
+	proc.commitTracker = newCommitTracker(proc.Log, proc.malCh, proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
 
 	if proposedSet == nil {
 		return
@@ -601,7 +612,7 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 
 func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 	logger := proc.WithContext(ctx).WithFields(proc.layer)
-	proc.notifyTracker = newNotifyTracker(proc.cfg.N)
+	proc.notifyTracker = newNotifyTracker(proc.Log, proc.malCh, proc.cfg.N)
 
 	// release proposal & commit trackers
 	defer func() {
@@ -658,7 +669,11 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 // passes all pending messages to the inbox of the process so they will be handled.
 func (proc *consensusProcess) handlePending(pending map[string]*Msg) {
 	for _, m := range pending {
-		proc.inbox <- m
+		select {
+		case <-proc.ctx.Done():
+			return
+		case proc.inbox <- m:
+		}
 	}
 }
 
@@ -734,7 +749,7 @@ func (proc *consensusProcess) processProposalMsg(ctx context.Context, msg *Msg) 
 
 func (proc *consensusProcess) processCommitMsg(ctx context.Context, msg *Msg) {
 	proc.mTracker.Track(msg) // a commit msg passed for processing is assumed to be valid
-	proc.commitTracker.OnCommit(msg)
+	proc.commitTracker.OnCommit(ctx, msg)
 }
 
 func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
@@ -745,7 +760,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 
 	s := NewSet(msg.InnerMsg.Values)
 
-	if ignored := proc.notifyTracker.OnNotify(msg); ignored {
+	if ignored := proc.notifyTracker.OnNotify(ctx, msg); ignored {
 		proc.WithContext(ctx).With().Warning("ignoring notification",
 			log.String("sender_id", msg.PubKey.ShortString()))
 		return
@@ -794,10 +809,9 @@ func (proc *consensusProcess) statusValidator() func(m *Msg) bool {
 			if proc.preRoundTracker.CanProveSet(s) { // can prove s
 				return true
 			}
-		} else { // if CommittedRound (Ki) >= 0, we should have received a certificate for that set
-			if proc.notifyTracker.HasCertificate(m.InnerMsg.CommittedRound, s) { // can prove s
-				return true
-			}
+		} else if proc.notifyTracker.HasCertificate(m.InnerMsg.CommittedRound, s) { // can prove s
+			// if CommittedRound (Ki) >= 0, we should have received a certificate for that set
+			return true
 		}
 		return false
 	}

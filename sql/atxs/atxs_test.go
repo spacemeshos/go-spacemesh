@@ -112,8 +112,9 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 	require.NoError(t, atx1.CalcAndSetID())
 
 	atx2, err := newAtx(sig1, types.NewLayerID(uint32(2*layersPerEpoch)))
-	atx2.Sequence = atx1.Sequence + 1
 	require.NoError(t, err)
+	atx2.Sequence = atx1.Sequence + 1
+	atx2.Signature = sig1.Sign(atx2.SignedBytes())
 	require.NoError(t, atx2.CalcAndSetID())
 
 	atx3, err := newAtx(sig2, types.NewLayerID(uint32(3*layersPerEpoch)))
@@ -121,8 +122,9 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 	require.NoError(t, atx3.CalcAndSetID())
 
 	atx4, err := newAtx(sig2, types.NewLayerID(uint32(4*layersPerEpoch)))
-	atx4.Sequence = atx3.Sequence + 1
 	require.NoError(t, err)
+	atx4.Sequence = atx3.Sequence + 1
+	atx4.Signature = sig2.Sign(atx4.SignedBytes())
 	require.NoError(t, atx4.CalcAndSetID())
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
@@ -201,8 +203,9 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	require.NoError(t, atx1.CalcAndSetID())
 
 	atx2, err := newAtx(sig1, types.NewLayerID(uint32(2*layersPerEpoch)))
-	atx2.Sequence = atx1.Sequence + 1
 	require.NoError(t, err)
+	atx2.Sequence = atx1.Sequence + 1
+	atx2.Signature = sig1.Sign(atx2.SignedBytes())
 	require.NoError(t, atx2.CalcAndSetID())
 
 	atx3, err := newAtx(sig2, types.NewLayerID(uint32(3*layersPerEpoch)))
@@ -210,8 +213,9 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	require.NoError(t, atx3.CalcAndSetID())
 
 	atx4, err := newAtx(sig2, types.NewLayerID(uint32(3*layersPerEpoch)))
-	atx4.Sequence = atx3.Sequence + 1
 	require.NoError(t, err)
+	atx4.Sequence = atx3.Sequence + 1
+	atx4.Signature = sig2.Sign(atx4.SignedBytes())
 	require.NoError(t, atx4.CalcAndSetID())
 
 	now := time.Now()
