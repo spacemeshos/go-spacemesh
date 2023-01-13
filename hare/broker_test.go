@@ -57,7 +57,7 @@ func TestBroker_Received(t *testing.T) {
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.Background())
-	defer broker.Close()
+	t.Cleanup(broker.Close)
 
 	inbox, err := broker.Register(context.Background(), instanceID1)
 	assert.Nil(t, err)
@@ -75,7 +75,7 @@ func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.Background())
-	defer broker.Close()
+	t.Cleanup(broker.Close)
 
 	broker.Register(context.Background(), instanceID1)
 	broker.Register(context.Background(), instanceID2)
@@ -167,7 +167,7 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.Background())
-	defer broker.Close()
+	t.Cleanup(broker.Close)
 
 	inbox1, err := broker.Register(context.Background(), instanceID1)
 	require.NoError(t, err)
@@ -209,7 +209,7 @@ func TestBroker_RegisterUnregister(t *testing.T) {
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.Start(context.Background())
-	defer broker.Close()
+	t.Cleanup(broker.Close)
 
 	broker.Register(context.Background(), instanceID1)
 
@@ -236,7 +236,7 @@ func TestBroker_Send(t *testing.T) {
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(ctx)
-	defer broker.Close()
+	t.Cleanup(broker.Close)
 
 	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", nil))
 
@@ -259,7 +259,7 @@ func TestBroker_Register(t *testing.T) {
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.Start(context.Background())
-	defer broker.Close()
+	t.Cleanup(broker.Close)
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -283,7 +283,7 @@ func TestBroker_Register2(t *testing.T) {
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.Background())
-	defer broker.Close()
+	t.Cleanup(broker.Close)
 	broker.Register(context.Background(), instanceID1)
 
 	signer, err := signing.NewEdSigner()
@@ -305,7 +305,7 @@ func TestBroker_Register3(t *testing.T) {
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.Background())
-	defer broker.Close()
+	t.Cleanup(broker.Close)
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -333,7 +333,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.Background())
-	defer broker.Close()
+	t.Cleanup(broker.Close)
 	inbox, _ := broker.Register(context.Background(), instanceID1)
 
 	signer, err := signing.NewEdSigner()
@@ -405,7 +405,7 @@ func TestBroker_Register4(t *testing.T) {
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true)
 	b.Start(context.Background())
-	defer b.Close()
+	t.Cleanup(b.Close)
 
 	c, e := b.Register(context.Background(), instanceID1)
 	r.NoError(e)
@@ -424,7 +424,7 @@ func TestBroker_eventLoop(t *testing.T) {
 	b := buildBroker(t, t.Name())
 	b.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	b.Start(context.Background())
-	defer b.Close()
+	t.Cleanup(b.Close)
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -520,7 +520,7 @@ func TestBroker_Flow(t *testing.T) {
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	b.Start(context.Background())
-	defer b.Close()
+	t.Cleanup(b.Close)
 
 	signer1, err := signing.NewEdSigner()
 	require.NoError(t, err)

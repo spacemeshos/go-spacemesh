@@ -182,7 +182,7 @@ func TestConsensusProcess_Start(t *testing.T) {
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.Start(context.Background())
-	defer broker.Close()
+	t.Cleanup(broker.Close)
 	proc := generateConsensusProcess(t)
 	inbox, err := broker.Register(context.Background(), proc.ID())
 	require.NoError(t, err)
@@ -220,7 +220,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.Start(context.Background())
-	defer broker.Close()
+	t.Cleanup(broker.Close)
 	c := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	c.F = 2
 	proc := generateConsensusProcessWithConfig(t, c)
