@@ -671,6 +671,7 @@ func (proc *consensusProcess) handlePending(pending map[string]*Msg) {
 	for _, m := range pending {
 		select {
 		case <-proc.ctx.Done():
+			return
 		case proc.inbox <- m:
 		}
 	}
