@@ -1923,7 +1923,6 @@ func TestTransactionService(t *testing.T) {
 			// We expect the tx to go to the mempool
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, response.TransactionState.State)
 			checkTransaction(t, response.Transaction)
-
 		}},
 		{"TransactionsStateStream_ManySubscribers", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -1961,7 +1960,6 @@ func TestTransactionService(t *testing.T) {
 				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionState.State)
 				checkTransaction(t, res.Transaction)
 			}
-
 		}},
 		{"TransactionsStateStream_NoEventReceiving", func(t *testing.T) {
 			logtest.SetupGlobal(t)
