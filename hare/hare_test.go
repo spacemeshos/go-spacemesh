@@ -537,7 +537,8 @@ func TestHare_onTick_NoBeacon(t *testing.T) {
 	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
 	h.beacons = mockBeacons
 	mockBeacons.EXPECT().GetBeacon(lyr.GetEpoch()).Return(types.EmptyBeacon, errors.New("whatever")).Times(1)
-	require.NoError(t, h.broker.Start(context.Background()))
+	h.broker.Start(context.Background())
+	defer h.broker.Close()
 
 	started, err := h.onTick(context.Background(), lyr)
 	assert.NoError(t, err)
@@ -551,7 +552,8 @@ func TestHare_onTick_NotSynced(t *testing.T) {
 	h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyr).Return(true, nil).AnyTimes()
 	mockSyncS := smocks.NewMockSyncStateProvider(gomock.NewController(t))
 	h.broker.nodeSyncState = mockSyncS
-	require.NoError(t, h.broker.Start(context.Background()))
+	h.broker.Start(context.Background())
+	defer h.broker.Close()
 
 	mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
 	started, err := h.onTick(context.Background(), lyr)

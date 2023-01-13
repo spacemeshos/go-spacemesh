@@ -506,9 +506,7 @@ func (h *Hare) Start(ctx context.Context) error {
 	ctxOutputLoop := log.WithNewSessionID(ctx, log.String("protocol", pubsub.HareProtocol+"_outputloop"))
 	ctxMalfLoop := log.WithNewSessionID(ctx, log.String("protocol", pubsub.HareProtocol+"_malfloop"))
 
-	if err := h.broker.Start(ctxBroker); err != nil {
-		return fmt.Errorf("start broker: %w", err)
-	}
+	h.broker.Start(ctxBroker)
 
 	h.eg.Go(func() error {
 		h.tickLoop(ctxTickLoop)

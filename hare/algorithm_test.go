@@ -181,7 +181,8 @@ func TestConsensusProcess_Start(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	require.NoError(t, broker.Start(context.Background()))
+	broker.Start(context.Background())
+	defer broker.Close()
 	proc := generateConsensusProcess(t)
 	inbox, err := broker.Register(context.Background(), proc.ID())
 	require.NoError(t, err)
@@ -189,10 +190,12 @@ func TestConsensusProcess_Start(t *testing.T) {
 	proc.value = NewSetFromValues(value1)
 	err = proc.Start()
 	require.NoError(t, err)
-	err = proc.Start()
-	require.Error(t, err, "instance already started")
+}
 
-	closeBrokerAndWait(t, broker.Broker)
+func TestConsensusProcess_StartWithoutInbox(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	err := proc.Start()
+	require.Error(t, err)
 }
 
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
@@ -216,7 +219,8 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	require.NoError(t, broker.Start(context.Background()))
+	broker.Start(context.Background())
+	defer broker.Close()
 	c := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	c.F = 2
 	proc := generateConsensusProcessWithConfig(t, c)
@@ -251,7 +255,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	r.NoError(broker.Start(context.Background()))
+	broker.Start(context.Background())
 	proc := generateConsensusProcess(t)
 	proc.publisher = net
 	mo := mocks.NewMockRolacle(ctrl)
@@ -293,7 +297,7 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	require.NoError(t, broker.Start(context.Background()))
+	broker.Start(context.Background())
 	proc := generateConsensusProcess(t)
 	proc.inbox, _ = broker.Register(context.Background(), proc.ID())
 	proc.advanceToNextRound(context.Background())
