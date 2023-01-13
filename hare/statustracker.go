@@ -78,7 +78,7 @@ func (st *statusTracker) AnalyzeStatuses(isValid func(m *Msg) bool) {
 	st.analyzed = true
 }
 
-// IsSVPReady returns true if theere are enough statuses to build an SVP, false otherwise.
+// IsSVPReady returns true if there are enough statuses to build an SVP, false otherwise.
 func (st *statusTracker) IsSVPReady() bool {
 	return st.analyzed && st.count >= st.threshold
 }
@@ -100,8 +100,8 @@ func (st *statusTracker) ProposalSet(expectedSize int) *Set {
 func (st *statusTracker) buildUnionSet(expectedSize int) *Set {
 	unionSet := NewEmptySet(expectedSize)
 	for _, m := range st.statuses {
-		for _, bid := range NewSet(m.InnerMsg.Values).elements() {
-			unionSet.Add(bid) // assuming add is unique
+		for _, v := range NewSet(m.InnerMsg.Values).ToSlice() {
+			unionSet.Add(v) // assuming add is unique
 		}
 	}
 

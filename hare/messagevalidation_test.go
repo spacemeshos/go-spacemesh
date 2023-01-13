@@ -183,7 +183,7 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 	assert.True(t, validator.SyntacticallyValidateMessage(context.Background(), m))
 	m.InnerMsg.Values = nil
 	assert.True(t, validator.SyntacticallyValidateMessage(context.Background(), m))
-	m.InnerMsg.Values = NewDefaultEmptySet().ToSlice()
+	m.InnerMsg.Values = []types.ProposalID{}
 	assert.True(t, validator.SyntacticallyValidateMessage(context.Background(), m))
 }
 
@@ -396,8 +396,7 @@ func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 	m := buildProposalMsg(signer, NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	m.InnerMsg.Svp = buildSVP(preRound, s1)
-	s := NewSetFromValues(value1)
-	m.InnerMsg.Values = s.ToSlice()
+	m.InnerMsg.Values = NewSetFromValues(value1).ToSlice()
 	v := defaultValidator(t)
 	assert.False(t, v.validateSVPTypeB(context.Background(), m, NewSetFromValues(value5)))
 	assert.True(t, v.validateSVPTypeB(context.Background(), m, NewSetFromValues(value1)))

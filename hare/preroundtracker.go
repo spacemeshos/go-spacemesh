@@ -92,7 +92,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	}
 
 	// record Values
-	for _, v := range sToTrack.elements() {
+	for _, v := range sToTrack.ToSlice() {
 		pre.tracker.Track(v, eligibilityCount)
 	}
 
@@ -120,7 +120,7 @@ func (pre *preRoundTracker) CanProveValue(value types.ProposalID) bool {
 // a set is said to be provable if all his values are provable.
 func (pre *preRoundTracker) CanProveSet(set *Set) bool {
 	// a set is provable iff all its Values are provable
-	for _, bid := range set.elements() {
+	for _, bid := range set.ToSlice() {
 		if !pre.CanProveValue(bid) {
 			return false
 		}
@@ -131,9 +131,9 @@ func (pre *preRoundTracker) CanProveSet(set *Set) bool {
 
 // FilterSet filters out non-provable values from the given set.
 func (pre *preRoundTracker) FilterSet(set *Set) {
-	for _, bid := range set.elements() {
-		if !pre.CanProveValue(bid) { // not enough witnesses
-			set.Remove(bid)
+	for _, v := range set.ToSlice() {
+		if !pre.CanProveValue(v) { // not enough witnesses
+			set.Remove(v)
 		}
 	}
 }

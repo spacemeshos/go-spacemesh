@@ -112,7 +112,7 @@ func (his *HareSuite) checkResult(t *testing.T) {
 	}
 
 	// check that the output has no intersection with the complement of the union of honest
-	for _, v := range his.outputs[0].elements() {
+	for _, v := range his.outputs[0].ToSlice() {
 		if union.Complement(u).Contains(v) {
 			t.Error("Validity 2 failed: unexpected value encountered: ", v)
 		}

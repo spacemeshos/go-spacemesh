@@ -198,7 +198,11 @@ func newConsensusProcess(
 	logger log.Log,
 ) *consensusProcess {
 	proc := &consensusProcess{
-		State:             State{preRound, preRound, s.Clone(), nil},
+		State: State{
+			round:          preRound,
+			committedRound: preRound,
+			value:          s.Clone(),
+		},
 		layer:             layer,
 		oracle:            oracle,
 		signing:           signing,
@@ -640,6 +644,7 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 
 	s := proc.proposalTracker.ProposedSet()
 	if s == nil {
+		// it's possible we received a late conflicting proposal
 		logger.Error("failed to get proposal set at begin notify round")
 		return
 	}
@@ -925,7 +930,7 @@ func (proc *consensusProcess) addToRound(value uint32) (new uint32) {
 
 // Returns the expected committee size for the given round assuming maxExpActives is the default size.
 func expectedCommitteeSize(round uint32, maxExpActive, expLeaders int) int {
-	if round%4 == proposalRound {
+	if round%RoundsPerIteration == proposalRound {
 		return expLeaders // expected number of leaders
 	}
 

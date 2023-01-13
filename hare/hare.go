@@ -222,9 +222,8 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 		consensusOkCnt.Inc()
 		h.WithContext(ctx).With().Info("hare terminated with success", layerID, log.Int("num_proposals", output.Set().Size()))
 		set := output.Set()
-		postNumProposals.Add(float64(set.len()))
-		pids = make([]types.ProposalID, 0, set.len())
-		pids = append(pids, set.elements()...)
+		postNumProposals.Add(float64(set.Size()))
+		pids = set.ToSlice()
 		select {
 		case h.blockGenCh <- LayerOutput{
 			Ctx:       ctx,
