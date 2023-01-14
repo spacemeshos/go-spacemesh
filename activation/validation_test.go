@@ -21,6 +21,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
+	postCfg.LabelsPerUnit = 1 << 15
 	meta := &types.PostMetadata{
 		BitsPerLabel:  postCfg.BitsPerLabel,
 		LabelsPerUnit: postCfg.LabelsPerUnit,
