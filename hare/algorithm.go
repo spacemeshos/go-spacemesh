@@ -163,7 +163,6 @@ type consensusProcess struct {
 	signing           Signer
 	nid               types.NodeID
 	publisher         pubsub.Publisher
-	isStarted         bool
 	inbox             chan *Msg
 	terminationReport chan TerminationOutput
 	malCh             chan types.MalfeasanceGossip
@@ -178,6 +177,7 @@ type consensusProcess struct {
 	mTracker          *msgsTracker    // tracks valid messages
 	eligibilityCount  uint16
 	clock             RoundClock
+	once              sync.Once
 }
 
 // newConsensusProcess creates a new consensus process instance.
@@ -198,7 +198,11 @@ func newConsensusProcess(
 	logger log.Log,
 ) *consensusProcess {
 	proc := &consensusProcess{
-		State:             State{preRound, preRound, s.Clone(), nil},
+		State: State{
+			round:          preRound,
+			committedRound: preRound,
+			value:          s.Clone(),
+		},
 		layer:             layer,
 		oracle:            oracle,
 		signing:           signing,
@@ -229,25 +233,19 @@ func iterationFromCounter(roundCounter uint32) uint32 {
 // It is assumed that the inbox is set before the call to Start.
 // It returns an error if Start has been called more than once or the inbox is nil.
 func (proc *consensusProcess) Start() error {
-	if proc.isStarted { // called twice on same instance
-		return fmt.Errorf("consensus process already started for layer %v", proc.layer)
-	}
-
-	{
+	var err error
+	proc.once.Do(func() {
 		proc.mu.RLock()
 		defer proc.mu.RUnlock()
 		if proc.inbox == nil { // no inbox
-			return fmt.Errorf("consensus process for layer %v is missing inbox", proc.layer)
+			err = fmt.Errorf("consensus process for layer %v is missing inbox", proc.layer)
 		}
-	}
-	proc.isStarted = true
-
-	proc.eg.Go(func() error {
-		proc.eventLoop()
-		return nil
+		proc.eg.Go(func() error {
+			proc.eventLoop()
+			return nil
+		})
 	})
-
-	return nil
+	return err
 }
 
 // ID returns the instance id.
@@ -260,6 +258,8 @@ func (proc *consensusProcess) SetInbox(inbox chan *Msg) {
 	if inbox == nil {
 		proc.Fatal("invalid argument for inbox")
 	}
+	proc.mu.Lock()
+	defer proc.mu.Unlock()
 	proc.inbox = inbox
 }
 
@@ -640,6 +640,7 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 
 	s := proc.proposalTracker.ProposedSet()
 	if s == nil {
+		// it's possible we received a late conflicting proposal
 		logger.Error("failed to get proposal set at begin notify round")
 		return
 	}
@@ -716,11 +717,7 @@ func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error
 		return nil, fmt.Errorf("init default builder: %w", err)
 	}
 	builder.SetRoleProof(proof)
-
-	proc.mu.RLock()
-	builder.SetEligibilityCount(proc.eligibilityCount)
-	proc.mu.RUnlock()
-
+	builder.SetEligibilityCount(proc.getEligibilityCount())
 	return builder, nil
 }
 
@@ -867,9 +864,7 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 		return false
 	}
 
-	proc.mu.RLock()
-	eligibilityCount := proc.eligibilityCount
-	proc.mu.RUnlock()
+	eligibilityCount := proc.getEligibilityCount()
 
 	// should participate
 	logger.With().Debug("should participate",
@@ -897,9 +892,7 @@ func (proc *consensusProcess) currentRole(ctx context.Context) role {
 		return passive
 	}
 
-	proc.mu.Lock()
-	proc.eligibilityCount = eligibilityCount
-	proc.mu.Unlock()
+	proc.setEligibilityCount(eligibilityCount)
 
 	if eligibilityCount > 0 { // eligible
 		if proc.currentRound() == proposalRound {
@@ -909,6 +902,18 @@ func (proc *consensusProcess) currentRole(ctx context.Context) role {
 	}
 
 	return passive
+}
+
+func (proc *consensusProcess) getEligibilityCount() uint16 {
+	proc.mu.RLock()
+	defer proc.mu.RUnlock()
+	return proc.eligibilityCount
+}
+
+func (proc *consensusProcess) setEligibilityCount(count uint16) {
+	proc.mu.Lock()
+	defer proc.mu.Unlock()
+	proc.eligibilityCount = count
 }
 
 func (proc *consensusProcess) getRound() uint32 {
@@ -925,7 +930,7 @@ func (proc *consensusProcess) addToRound(value uint32) (new uint32) {
 
 // Returns the expected committee size for the given round assuming maxExpActives is the default size.
 func expectedCommitteeSize(round uint32, maxExpActive, expLeaders int) int {
-	if round%4 == proposalRound {
+	if round%RoundsPerIteration == proposalRound {
 		return expLeaders // expected number of leaders
 	}
 

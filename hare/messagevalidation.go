@@ -450,8 +450,8 @@ func (v *syntaxContextValidator) validateSVPTypeA(ctx context.Context, m *Msg) b
 	for _, status := range m.InnerMsg.Svp.Messages {
 		statusSet := NewSet(status.InnerMsg.Values)
 		// build union
-		for _, bid := range statusSet.elements() {
-			unionSet.Add(bid) // assuming add is unique
+		for _, pid := range statusSet.ToSlice() {
+			unionSet.Add(pid) // assuming add is unique
 		}
 	}
 

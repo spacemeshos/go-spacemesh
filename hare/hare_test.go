@@ -132,6 +132,7 @@ func TestHare_New(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := logtest.New(t).WithName(t.Name())
+	cfg := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	h := New(sql.InMemory(), cfg, noopPubSub(t), signer, types.NodeID{}, make(chan LayerOutput, 1),
 		smocks.NewMockSyncStateProvider(ctrl), smocks.NewMockBeaconGetter(ctrl),
 		eligibility.New(logger), mocks.NewMocklayerPatrol(ctrl), mocks.NewMockstateQuerier(ctrl), newMockClock(), logger)
@@ -177,7 +178,7 @@ func TestHare_collectOutputGetResult_TerminateTooLate(t *testing.T) {
 	assert.Nil(t, res)
 
 	h.layerLock.Lock()
-	h.lastLayer = lyrID.Add(h.bufferSize + 1)
+	h.lastLayer = lyrID.Add(h.config.Hdist + 1)
 	h.layerLock.Unlock()
 
 	pids := []types.ProposalID{types.RandomProposalID(), types.RandomProposalID(), types.RandomProposalID()}
@@ -291,11 +292,11 @@ func TestHare_onTick(t *testing.T) {
 	cfg.N = 2
 	cfg.F = 1
 	cfg.RoundDuration = 1
+	cfg.Hdist = 1
 	clock := newMockClock()
 	h := createTestHare(t, sql.InMemory(), cfg, clock, noopPubSub(t), t.Name())
 
 	h.networkDelta = 0
-	h.bufferSize = 1
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
@@ -361,11 +362,11 @@ func TestHare_onTick_BeaconFromRefBallot(t *testing.T) {
 	cfg.N = 2
 	cfg.F = 1
 	cfg.RoundDuration = 1
+	cfg.Hdist = 1
 	clock := newMockClock()
 	h := createTestHare(t, sql.InMemory(), cfg, clock, noopPubSub(t), t.Name())
 
 	h.networkDelta = 0
-	h.bufferSize = 1
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
@@ -421,11 +422,11 @@ func TestHare_onTick_SomeBadBallots(t *testing.T) {
 	cfg.N = 2
 	cfg.F = 1
 	cfg.RoundDuration = 1
+	cfg.Hdist = 1
 	clock := newMockClock()
 	h := createTestHare(t, sql.InMemory(), cfg, clock, noopPubSub(t), t.Name())
 
 	h.networkDelta = 0
-	h.bufferSize = 1
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
@@ -478,11 +479,11 @@ func TestHare_onTick_NoGoodBallots(t *testing.T) {
 	cfg.N = 2
 	cfg.F = 1
 	cfg.RoundDuration = 1
+	cfg.Hdist = 1
 	clock := newMockClock()
 	h := createTestHare(t, sql.InMemory(), cfg, clock, noopPubSub(t), t.Name())
 
 	h.networkDelta = 0
-	h.bufferSize = 1
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
@@ -536,7 +537,8 @@ func TestHare_onTick_NoBeacon(t *testing.T) {
 	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
 	h.beacons = mockBeacons
 	mockBeacons.EXPECT().GetBeacon(lyr.GetEpoch()).Return(types.EmptyBeacon, errors.New("whatever")).Times(1)
-	require.NoError(t, h.broker.Start(context.Background()))
+	h.broker.Start(context.Background())
+	defer h.broker.Close()
 
 	started, err := h.onTick(context.Background(), lyr)
 	assert.NoError(t, err)
@@ -550,7 +552,8 @@ func TestHare_onTick_NotSynced(t *testing.T) {
 	h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyr).Return(true, nil).AnyTimes()
 	mockSyncS := smocks.NewMockSyncStateProvider(gomock.NewController(t))
 	h.broker.nodeSyncState = mockSyncS
-	require.NoError(t, h.broker.Start(context.Background()))
+	h.broker.Start(context.Background())
+	defer h.broker.Close()
 
 	mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
 	started, err := h.onTick(context.Background(), lyr)
@@ -567,7 +570,7 @@ func TestHare_onTick_NotSynced(t *testing.T) {
 func TestHare_outputBuffer(t *testing.T) {
 	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 	var lyr types.LayerID
-	for i := uint32(1); i <= h.bufferSize; i++ {
+	for i := uint32(1); i <= h.config.Hdist; i++ {
 		lyr = types.GetEffectiveGenesis().Add(i)
 		h.setLastLayer(lyr)
 		require.NoError(t, h.collectOutput(context.Background(), mockReport{lyr, NewEmptySet(0), true, false}))
@@ -576,7 +579,7 @@ func TestHare_outputBuffer(t *testing.T) {
 		require.EqualValues(t, i, len(h.outputs))
 	}
 
-	require.EqualValues(t, h.bufferSize, len(h.outputs))
+	require.EqualValues(t, h.config.Hdist, len(h.outputs))
 
 	// add another output
 	lyr = lyr.Add(1)
@@ -584,30 +587,30 @@ func TestHare_outputBuffer(t *testing.T) {
 	require.NoError(t, h.collectOutput(context.Background(), mockReport{lyr, NewEmptySet(0), true, false}))
 	_, ok := h.outputs[lyr]
 	require.True(t, ok)
-	require.EqualValues(t, h.bufferSize, len(h.outputs))
+	require.EqualValues(t, h.config.Hdist, len(h.outputs))
 
 	// make sure the oldest layer is no longer there
-	_, ok = h.outputs[lyr.Sub(h.bufferSize)]
+	_, ok = h.outputs[lyr.Sub(h.config.Hdist)]
 	assert.False(t, ok)
 }
 
 func TestHare_IsTooLate(t *testing.T) {
 	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 	var lyr types.LayerID
-	for i := uint32(1); i <= h.bufferSize*2; i++ {
+	for i := uint32(1); i <= h.config.Hdist*2; i++ {
 		lyr = types.GetEffectiveGenesis().Add(i)
 		h.setLastLayer(lyr)
 		_ = h.collectOutput(context.Background(), mockReport{lyr, NewEmptySet(0), true, false})
 		_, ok := h.outputs[lyr]
 		assert.True(t, ok)
-		if i < h.bufferSize {
+		if i < h.config.Hdist {
 			assert.EqualValues(t, i, len(h.outputs))
 		} else {
-			assert.EqualValues(t, h.bufferSize, len(h.outputs))
+			assert.EqualValues(t, h.config.Hdist, len(h.outputs))
 		}
 	}
 
-	for i := uint32(1); i <= h.bufferSize; i++ {
+	for i := uint32(1); i <= h.config.Hdist; i++ {
 		lyr = types.GetEffectiveGenesis().Add(i)
 		require.True(t, h.outOfBufferRange(types.GetEffectiveGenesis().Add(1)))
 	}
@@ -617,7 +620,7 @@ func TestHare_IsTooLate(t *testing.T) {
 func TestHare_oldestInBuffer(t *testing.T) {
 	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 	var lyr types.LayerID
-	for i := uint32(1); i <= h.bufferSize; i++ {
+	for i := uint32(1); i <= h.config.Hdist; i++ {
 		lyr = types.GetEffectiveGenesis().Add(i)
 		h.setLastLayer(lyr)
 		require.NoError(t, h.collectOutput(context.Background(), mockReport{lyr, NewEmptySet(0), true, false}))
@@ -633,7 +636,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 	require.NoError(t, h.collectOutput(context.Background(), mockReport{lyr, NewEmptySet(0), true, false}))
 	_, ok := h.outputs[lyr]
 	require.True(t, ok)
-	require.EqualValues(t, h.bufferSize, len(h.outputs))
+	require.EqualValues(t, h.config.Hdist, len(h.outputs))
 
 	require.Equal(t, types.GetEffectiveGenesis().Add(2), h.oldestResultInBuffer())
 
@@ -642,7 +645,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 	require.NoError(t, h.collectOutput(context.Background(), mockReport{lyr, NewEmptySet(0), true, false}))
 	_, ok = h.outputs[lyr]
 	require.True(t, ok)
-	require.EqualValues(t, h.bufferSize, len(h.outputs))
+	require.EqualValues(t, h.config.Hdist, len(h.outputs))
 
 	require.Equal(t, types.GetEffectiveGenesis().Add(3), h.oldestResultInBuffer())
 }
