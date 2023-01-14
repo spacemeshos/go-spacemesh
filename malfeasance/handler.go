@@ -7,11 +7,10 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
 
 var errMalformedData = errors.New("malformed data")
@@ -19,12 +18,12 @@ var errMalformedData = errors.New("malformed data")
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
 type Handler struct {
 	logger log.Log
-	db     *sql.Database
+	cdb    *datastore.CachedDB
 	self   p2p.Peer
 }
 
-func NewHandler(db *sql.Database, lg log.Log, self p2p.Peer) *Handler {
-	return &Handler{logger: lg, db: db, self: self}
+func NewHandler(cdb *datastore.CachedDB, lg log.Log, self p2p.Peer) *Handler {
+	return &Handler{logger: lg, cdb: cdb, self: self}
 }
 
 // HandleMalfeasanceProof is the gossip receiver for MalfeasanceProof.
@@ -42,11 +41,10 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, msg
 
 func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) error {
 	var (
-		p          types.MalfeasanceGossip
-		nodeID     types.NodeID
-		malicious  bool
-		proofBytes []byte
-		err        error
+		p         types.MalfeasanceGossip
+		nodeID    types.NodeID
+		malicious bool
+		err       error
 	)
 	if err = codec.Decode(data, &p); err != nil {
 		h.logger.WithContext(ctx).With().Error("malformed message", log.Err(err))
@@ -66,7 +64,7 @@ func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) e
 	updateMetrics(p.Proof)
 	if err == nil {
 		// TODO: pass on to hare if it's types.HareEquivocation
-		if malicious, err = identities.IsMalicious(h.db, nodeID); err != nil {
+		if malicious, err = h.cdb.IsMalicious(nodeID); err != nil {
 			return err
 		} else if malicious {
 			if peer == h.self {
@@ -76,10 +74,7 @@ func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) e
 			h.logger.WithContext(ctx).With().Debug("known malicious identity", nodeID)
 			return errors.New("known proof")
 		}
-		if proofBytes, err = codec.Encode(&p.MalfeasanceProof); err != nil {
-			h.logger.WithContext(ctx).With().Fatal("failed to encode MalfeasanceProof", log.Err(err))
-		}
-		if err = identities.SetMalicious(h.db, nodeID, proofBytes); err != nil {
+		if err = h.cdb.AddMalfeasanceProof(nodeID, &p.MalfeasanceProof, nil); err != nil {
 			h.logger.WithContext(ctx).With().Error("failed to save MalfeasanceProof", log.Err(err))
 		}
 	}

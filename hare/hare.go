@@ -12,12 +12,12 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -64,7 +64,7 @@ type LayerOutput struct {
 // Hare is the orchestrator that starts new consensus processes and collects their output.
 type Hare struct {
 	log.Log
-	db            *sql.Database
+	cdb           *datastore.CachedDB
 	config        config.Config
 	publisher     pubsub.Publisher
 	layerClock    LayerClock
@@ -99,7 +99,7 @@ type Hare struct {
 
 // New returns a new Hare struct.
 func New(
-	db *sql.Database,
+	cdb *datastore.CachedDB,
 	conf config.Config,
 	publisher pubsub.PublishSubsciber,
 	sign Signer,
@@ -114,7 +114,7 @@ func New(
 	logger log.Log,
 ) *Hare {
 	h := new(Hare)
-	h.db = db
+	h.cdb = cdb
 
 	h.Log = logger
 	h.config = conf
@@ -339,7 +339,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 // it has the same beacon value as the node's beacon value.
 // any error encountered will be ignored and an empty set is returned.
 func (h *Hare) getGoodProposal(lyrID types.LayerID, epochBeacon types.Beacon, logger log.Log) []types.ProposalID {
-	props, err := proposals.GetByLayer(h.db, lyrID)
+	props, err := proposals.GetByLayer(h.cdb, lyrID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
 			logger.With().Warning("no proposals found for hare, using empty set", log.Err(err))
@@ -359,7 +359,7 @@ func (h *Hare) getGoodProposal(lyrID types.LayerID, epochBeacon types.Beacon, lo
 		} else if p.RefBallot == types.EmptyBallotID {
 			logger.With().Error("proposal missing ref ballot", p.ID())
 			return []types.ProposalID{}
-		} else if refBallot, err := ballots.Get(h.db, p.RefBallot); err != nil {
+		} else if refBallot, err := ballots.Get(h.cdb, p.RefBallot); err != nil {
 			logger.With().Error("failed to get ref ballot", p.ID(), p.RefBallot, log.Err(err))
 			return []types.ProposalID{}
 		} else if refBallot.EpochData == nil {
@@ -415,7 +415,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 			// collect coinflip, regardless of success
 			logger.With().Debug("recording weak coin result for layer",
 				log.Bool("weak_coin", coin))
-			if err := layers.SetWeakCoin(h.db, layerID, coin); err != nil {
+			if err := layers.SetWeakCoin(h.cdb, layerID, coin); err != nil {
 				logger.With().Error("failed to set weak coin for layer", log.Err(err))
 			}
 			if err := h.collectOutput(ctx, out); err != nil {
@@ -457,18 +457,14 @@ func (h *Hare) malfeasanceLoop(ctx context.Context) {
 			}
 			nodeID := types.BytesToNodeID(gossip.Eligibility.PubKey)
 			logger := h.WithContext(ctx).WithFields(nodeID)
-			if malicious, err := identities.IsMalicious(h.db, nodeID); err != nil {
+			if malicious, err := h.cdb.IsMalicious(nodeID); err != nil {
 				logger.With().Error("failed to check identity", log.Err(err))
 				continue
 			} else if malicious {
 				logger.Debug("known malicious identity")
 				continue
 			}
-			proofBytes, err := codec.Encode(&gossip.MalfeasanceProof)
-			if err != nil {
-				logger.With().Fatal("failed to encode MalfeasanceProof", log.Err(err))
-			}
-			if err = identities.SetMalicious(h.db, nodeID, proofBytes); err != nil {
+			if err := h.cdb.AddMalfeasanceProof(nodeID, &gossip.MalfeasanceProof, nil); err != nil {
 				logger.With().Error("failed to save MalfeasanceProof", log.Err(err))
 				continue
 			}
