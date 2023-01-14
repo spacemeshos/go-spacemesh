@@ -26,6 +26,11 @@ import (
 
 // Test the consensus process as a whole
 
+type registrable interface {
+	Register(isHonest bool, id types.NodeID)
+	Unregister(isHonest bool, id types.NodeID)
+}
+
 type fullRolacle interface {
 	registrable
 	Rolacle
