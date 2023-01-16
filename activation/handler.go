@@ -149,7 +149,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 
 		h.log.WithContext(ctx).With().Info("vrf nonce stored",
 			log.Stringer("atx_id", atx.ID()),
-			log.FieldNamed("node_id", atx.NodeID()),
+			log.FieldNamed("vrf_node_id", atx.NodeID()),
 			log.Uint64("target_epoch", uint64(atx.TargetEpoch())),
 			log.Uint64("vrf_nonce", uint64(*atx.VRFNonce)),
 		)

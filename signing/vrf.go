@@ -158,7 +158,7 @@ func (v VRFVerifier) Verify(nodeID types.NodeID, epoch types.EpochID, msg, sig [
 	nonce, err := v.fetcher.NonceForNode(nodeID, epoch)
 	if err != nil {
 		v.log.With().Error("failed to find nonce for verification",
-			log.String("node_id", nodeID.String()),
+			log.String("vrf_node_id", nodeID.String()),
 			log.Uint64("epoch", uint64(epoch)),
 			log.Err(err),
 		)

@@ -140,7 +140,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		vrfSig := proof.Sig
 
 		beaconStr := beacon.ShortString()
-		if !v.vrfVerifier.Verify(owned.NodeID, owned.PublishEpoch(), message, vrfSig) {
+		if !v.vrfVerifier.Verify(owned.NodeID, owned.TargetEpoch(), message, vrfSig) {
 			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
 				errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
 		}
