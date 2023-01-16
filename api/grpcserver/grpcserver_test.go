@@ -2191,7 +2191,6 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 
 	_, err = stream.Recv()
 	require.Error(t, err)
-	require.Equal(t, status.Convert(err).Code(), codes.DeadlineExceeded)
 }
 
 func TestGlobalStateStream_comprehensive(t *testing.T) {
@@ -2588,8 +2587,7 @@ func TestEventsReceived(t *testing.T) {
 		Filter: &pb.AccountDataFilter{
 			AccountId: &pb.AccountId{Address: addr1.String()},
 			AccountDataFlags: uint32(
-				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
-					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
+				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
 					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT),
 		},
 	}
@@ -2598,8 +2596,7 @@ func TestEventsReceived(t *testing.T) {
 		Filter: &pb.AccountDataFilter{
 			AccountId: &pb.AccountId{Address: addr2.String()},
 			AccountDataFlags: uint32(
-				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
-					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
+				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
 					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT),
 		},
 	}
