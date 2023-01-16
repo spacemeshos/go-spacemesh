@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -296,14 +295,14 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	h.Lock()
 	defer h.Unlock()
 
-	malicious, err := identities.IsMalicious(h.cdb, atx.NodeID())
+	malicious, err := h.cdb.IsMalicious(atx.NodeID())
 	if err != nil {
 		return fmt.Errorf("store atx: %w", err)
 	}
 	var proof *types.MalfeasanceProof
-	h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
+	h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		if !malicious {
-			prev, err := atxs.GetByEpochAndNodeID(tx, atx.PublishEpoch(), atx.NodeID())
+			prev, err := atxs.GetByEpochAndNodeID(dbtx, atx.PublishEpoch(), atx.NodeID())
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
 				return err
 			}
@@ -322,9 +321,7 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 						Data: &atxProof,
 					},
 				}
-				if proofBytes, err := codec.Encode(proof); err != nil {
-					return err
-				} else if err = identities.SetMalicious(tx, atx.NodeID(), proofBytes); err != nil {
+				if err = h.cdb.AddMalfeasanceProof(atx.NodeID(), proof, dbtx); err != nil {
 					return err
 				}
 				h.log.With().Warning("smesher produced more than one atx in the same epoch",
@@ -333,7 +330,7 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				)
 			}
 		}
-		if err = atxs.Add(tx, atx, time.Now()); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		if err = atxs.Add(dbtx, atx, time.Now()); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
 		return nil
