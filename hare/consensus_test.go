@@ -157,7 +157,23 @@ func (test *ConsensusTest) Start() {
 	wg.Wait()
 }
 
-func createConsensusProcess(tb testing.TB, ctx context.Context, sig *signing.EdSigner, isHonest bool, cfg config.Config, oracle fullRolacle, network pubsub.PublishSubsciber, initialSet *Set, layer types.LayerID) (*consensusProcess, *Broker) {
+type testCP struct {
+	cp     *consensusProcess
+	broker *Broker
+	mch    chan *types.MalfeasanceGossip
+}
+
+func createConsensusProcess(
+	tb testing.TB,
+	ctx context.Context,
+	sig *signing.EdSigner,
+	isHonest bool,
+	cfg config.Config,
+	oracle fullRolacle,
+	network pubsub.PublishSubsciber,
+	initialSet *Set,
+	layer types.LayerID,
+) *testCP {
 	broker := buildBroker(tb, sig.PublicKey().ShortString())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
@@ -166,16 +182,29 @@ func createConsensusProcess(tb testing.TB, ctx context.Context, sig *signing.EdS
 	network.Register(pubsub.HareProtocol, broker.HandleMessage)
 	output := make(chan TerminationOutput, 1)
 	oracle.Register(isHonest, sig.NodeID())
-	proc := newConsensusProcess(ctx, cfg, layer, initialSet, oracle, broker.mockStateQ, sig,
-		sig.NodeID(), network, output, truer{},
-		newRoundClockFromCfg(logtest.New(tb), cfg),
-		make(chan types.MalfeasanceGossip, cfg.N),
-		logtest.New(tb).WithName(sig.PublicKey().ShortString()))
-	c, err := broker.Register(ctx, proc.ID())
+	c, err := broker.Register(ctx, layer)
 	require.NoError(tb, err)
-	proc.SetInbox(c)
-
-	return proc, broker.Broker
+	mch := make(chan *types.MalfeasanceGossip, cfg.N)
+	comm := communication{
+		inbox:  c,
+		mchOut: mch,
+		report: output,
+	}
+	proc := newConsensusProcess(
+		ctx,
+		cfg,
+		layer,
+		initialSet,
+		oracle,
+		broker.mockStateQ,
+		sig,
+		sig.NodeID(),
+		network,
+		comm,
+		truer{},
+		newRoundClockFromCfg(logtest.New(tb), cfg),
+		logtest.New(tb).WithName(sig.PublicKey().ShortString()))
+	return &testCP{cp: proc, broker: broker.Broker, mch: mch}
 }
 
 func TestConsensusFixedOracle(t *testing.T) {
@@ -189,7 +218,7 @@ func TestConsensusFixedOracle(t *testing.T) {
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
-	set1 := NewSetFromValues(value1)
+	set1 := NewSetFromValues(types.ProposalID{1})
 	test.fill(set1, 0, totalNodes-1)
 	test.honestSets = []*Set{set1}
 	oracle := eligibility.New(logtest.New(t))
@@ -199,9 +228,9 @@ func TestConsensusFixedOracle(t *testing.T) {
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		proc, broker := createConsensusProcess(t, ctx, sig, true, cfg, oracle, ps, test.initialSets[i], instanceID1)
-		test.procs = append(test.procs, proc)
-		test.brokers = append(test.brokers, broker)
+		tcp := createConsensusProcess(t, ctx, sig, true, cfg, oracle, ps, test.initialSets[i], instanceID1)
+		test.procs = append(test.procs, tcp.cp)
+		test.brokers = append(test.brokers, tcp.broker)
 		i++
 	}
 	test.Create(totalNodes, creationFunc)
@@ -223,7 +252,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
-	set1 := NewSetFromValues(value1)
+	set1 := NewSetFromValues(types.ProposalID{1})
 	test.fill(set1, 0, totalNodes-1)
 	test.honestSets = []*Set{set1}
 	oracle := eligibility.New(logtest.New(t))
@@ -233,9 +262,9 @@ func TestSingleValueForHonestSet(t *testing.T) {
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		proc, broker := createConsensusProcess(t, ctx, sig, true, cfg, oracle, ps, test.initialSets[i], instanceID1)
-		test.procs = append(test.procs, proc)
-		test.brokers = append(test.brokers, broker)
+		tcp := createConsensusProcess(t, ctx, sig, true, cfg, oracle, ps, test.initialSets[i], instanceID1)
+		test.procs = append(test.procs, tcp.cp)
+		test.brokers = append(test.brokers, tcp.broker)
 		i++
 	}
 	test.Create(totalNodes, creationFunc)
@@ -256,17 +285,17 @@ func TestAllDifferentSet(t *testing.T) {
 
 	test.initialSets = make([]*Set, totalNodes)
 
-	base := NewSetFromValues(value1, value2)
+	base := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2})
 	test.initialSets[0] = base
-	test.initialSets[1] = NewSetFromValues(value1, value2, value3)
-	test.initialSets[2] = NewSetFromValues(value1, value2, value4)
-	test.initialSets[3] = NewSetFromValues(value1, value2, value5)
-	test.initialSets[4] = NewSetFromValues(value1, value2, value6)
-	test.initialSets[5] = NewSetFromValues(value1, value2, value7)
-	test.initialSets[6] = NewSetFromValues(value1, value2, value8)
-	test.initialSets[7] = NewSetFromValues(value1, value2, value9)
-	test.initialSets[8] = NewSetFromValues(value1, value2, value10)
-	test.initialSets[9] = NewSetFromValues(value1, value2, value3, value4)
+	test.initialSets[1] = NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3})
+	test.initialSets[2] = NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{4})
+	test.initialSets[3] = NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{5})
+	test.initialSets[4] = NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{6})
+	test.initialSets[5] = NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{7})
+	test.initialSets[6] = NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{8})
+	test.initialSets[7] = NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{9})
+	test.initialSets[8] = NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{10})
+	test.initialSets[9] = NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}, types.ProposalID{4})
 	test.honestSets = []*Set{base}
 	oracle := eligibility.New(logtest.New(t))
 	i := 0
@@ -275,9 +304,9 @@ func TestAllDifferentSet(t *testing.T) {
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		proc, broker := createConsensusProcess(t, ctx, sig, true, cfg, oracle, ps, test.initialSets[i], instanceID1)
-		test.procs = append(test.procs, proc)
-		test.brokers = append(test.brokers, broker)
+		tcp := createConsensusProcess(t, ctx, sig, true, cfg, oracle, ps, test.initialSets[i], instanceID1)
+		test.procs = append(test.procs, tcp.cp)
+		test.brokers = append(test.brokers, tcp.broker)
 		i++
 	}
 	test.Create(cfg.N, creationFunc)
@@ -302,9 +331,9 @@ func TestSndDelayedDishonest(t *testing.T) {
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
-	honest1 := NewSetFromValues(value1, value2, value4, value5)
-	honest2 := NewSetFromValues(value1, value3, value4, value6)
-	dishonest := NewSetFromValues(value3, value5, value6, value7)
+	honest1 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{4}, types.ProposalID{5})
+	honest2 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{3}, types.ProposalID{4}, types.ProposalID{6})
+	dishonest := NewSetFromValues(types.ProposalID{3}, types.ProposalID{5}, types.ProposalID{6}, types.ProposalID{7})
 	test.fill(honest1, 0, 15)
 	test.fill(honest2, 16, totalNodes/2)
 	test.fill(dishonest, totalNodes/2+1, totalNodes-1)
@@ -316,9 +345,9 @@ func TestSndDelayedDishonest(t *testing.T) {
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		proc, broker := createConsensusProcess(t, ctx, sig, true, cfg, oracle, ps, test.initialSets[i], instanceID1)
-		test.brokers = append(test.brokers, broker)
-		test.procs = append(test.procs, proc)
+		tcp := createConsensusProcess(t, ctx, sig, true, cfg, oracle, ps, test.initialSets[i], instanceID1)
+		test.brokers = append(test.brokers, tcp.broker)
+		test.procs = append(test.procs, tcp.cp)
 		i++
 	}
 
@@ -331,11 +360,11 @@ func TestSndDelayedDishonest(t *testing.T) {
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		proc, broker := createConsensusProcess(t, ctx, sig, false, cfg, oracle,
+		tcp := createConsensusProcess(t, ctx, sig, false, cfg, oracle,
 			&delayedPubSub{ps: ps, sendDelay: 5 * time.Second},
 			test.initialSets[i], instanceID1)
-		test.dishonest = append(test.dishonest, proc)
-		test.brokers = append(test.brokers, broker)
+		test.dishonest = append(test.dishonest, tcp.cp)
+		test.brokers = append(test.brokers, tcp.broker)
 		i++
 	}
 	test.Create(totalNodes/2-1, dishonestFunc)
@@ -360,9 +389,9 @@ func TestRecvDelayedDishonest(t *testing.T) {
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
-	honest1 := NewSetFromValues(value1, value2, value4, value5)
-	honest2 := NewSetFromValues(value1, value3, value4, value6)
-	dishonest := NewSetFromValues(value3, value5, value6, value7)
+	honest1 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{4}, types.ProposalID{5})
+	honest2 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{3}, types.ProposalID{4}, types.ProposalID{6})
+	dishonest := NewSetFromValues(types.ProposalID{3}, types.ProposalID{5}, types.ProposalID{6}, types.ProposalID{7})
 	test.fill(honest1, 0, 15)
 	test.fill(honest2, 16, totalNodes/2)
 	test.fill(dishonest, totalNodes/2+1, totalNodes-1)
@@ -374,9 +403,9 @@ func TestRecvDelayedDishonest(t *testing.T) {
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		proc, broker := createConsensusProcess(t, ctx, sig, true, cfg, oracle, ps, test.initialSets[i], instanceID1)
-		test.procs = append(test.procs, proc)
-		test.brokers = append(test.brokers, broker)
+		tcp := createConsensusProcess(t, ctx, sig, true, cfg, oracle, ps, test.initialSets[i], instanceID1)
+		test.procs = append(test.procs, tcp.cp)
+		test.brokers = append(test.brokers, tcp.broker)
 		i++
 	}
 
@@ -389,11 +418,11 @@ func TestRecvDelayedDishonest(t *testing.T) {
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		proc, broker := createConsensusProcess(t, ctx, sig, false, cfg, oracle,
+		tcp := createConsensusProcess(t, ctx, sig, false, cfg, oracle,
 			&delayedPubSub{ps: ps, recvDelay: 5 * time.Second},
 			test.initialSets[i], instanceID1)
-		test.dishonest = append(test.dishonest, proc)
-		test.brokers = append(test.brokers, broker)
+		test.dishonest = append(test.dishonest, tcp.cp)
+		test.brokers = append(test.brokers, tcp.broker)
 		i++
 	}
 	test.Create(totalNodes/2-1, dishonestFunc)
@@ -455,21 +484,23 @@ func TestEquivocation(t *testing.T) {
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
-	set1 := NewSetFromValues(value1, value2)
+	set1 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2})
 	test.fill(set1, 0, totalNodes-1)
 	test.honestSets = []*Set{set1}
 	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	badGuy, err := signing.NewEdSigner()
 	require.NoError(t, err)
+	mchs := make([]chan *types.MalfeasanceGossip, 0, totalNodes)
 	dishonestFunc := func() {
 		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
 		require.NoError(t, err)
-		proc, broker := createConsensusProcess(t, ctx, badGuy, false, cfg, oracle,
+		tcp := createConsensusProcess(t, ctx, badGuy, false, cfg, oracle,
 			&equivocatePubSub{ps: ps, sig: badGuy},
 			test.initialSets[i], instanceID1)
-		test.dishonest = append(test.dishonest, proc)
-		test.brokers = append(test.brokers, broker)
+		test.dishonest = append(test.dishonest, tcp.cp)
+		test.brokers = append(test.brokers, tcp.broker)
+		mchs = append(mchs, tcp.mch)
 		i++
 	}
 	// create dishonest
@@ -480,9 +511,10 @@ func TestEquivocation(t *testing.T) {
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		proc, broker := createConsensusProcess(t, ctx, sig, true, cfg, oracle, ps, test.initialSets[i], instanceID1)
-		test.procs = append(test.procs, proc)
-		test.brokers = append(test.brokers, broker)
+		tcp := createConsensusProcess(t, ctx, sig, true, cfg, oracle, ps, test.initialSets[i], instanceID1)
+		test.procs = append(test.procs, tcp.cp)
+		test.brokers = append(test.brokers, tcp.broker)
+		mchs = append(mchs, tcp.mch)
 		i++
 	}
 	// create honest
@@ -492,9 +524,9 @@ func TestEquivocation(t *testing.T) {
 	test.Start()
 	test.WaitForTimedTermination(t, 40*time.Second)
 	// every node should detect a pre-round equivocator
-	for _, c := range append(test.procs, test.dishonest...) {
-		require.Len(t, c.malCh, 1)
-		gossip := <-c.malCh
+	for _, ch := range mchs {
+		require.Len(t, ch, 1)
+		gossip := <-ch
 		require.True(t, bytes.Equal(gossip.Eligibility.PubKey, badGuy.PublicKey().Bytes()))
 	}
 }

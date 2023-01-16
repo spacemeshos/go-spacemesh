@@ -140,7 +140,7 @@ func Test_consensusIterations(t *testing.T) {
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
-	set1 := NewSetFromValues(value1)
+	set1 := NewSetFromValues(types.ProposalID{1})
 	test.fill(set1, 0, totalNodes-1)
 	test.honestSets = []*Set{set1}
 	oracle := eligibility.New(logtest.New(t))
@@ -152,9 +152,9 @@ func Test_consensusIterations(t *testing.T) {
 		p2pm := &p2pManipulator{nd: ps, stalledLayer: instanceID1, err: errors.New("fake err")}
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		proc, broker := createConsensusProcess(t, ctx, sig, true, cfg, oracle, p2pm, test.initialSets[i], instanceID1)
-		test.procs = append(test.procs, proc)
-		test.brokers = append(test.brokers, broker)
+		tcp := createConsensusProcess(t, ctx, sig, true, cfg, oracle, p2pm, test.initialSets[i], instanceID1)
+		test.procs = append(test.procs, tcp.cp)
+		test.brokers = append(test.brokers, tcp.broker)
 		i++
 	}
 	test.Create(totalNodes, creationFunc)
@@ -188,8 +188,21 @@ func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *
 
 	mockRoracle := mocks.NewMockRolacle(ctrl)
 
-	hare := New(datastore.NewCachedDB(db, logtest.New(tb)), tcfg, p2p, signer, nodeID, make(chan LayerOutput, 100), mockSyncS, mockBeacons, mockRoracle, patrol,
-		mockStateQ, clock, logtest.New(tb).WithName(name+"_"+signer.PublicKey().ShortString()))
+	hare := New(
+		datastore.NewCachedDB(db, logtest.New(tb)),
+		tcfg,
+		p2p,
+		signer,
+		nodeID,
+		make(chan LayerOutput, 100),
+		make(<-chan *types.HareEligibilityGossip),
+		mockSyncS,
+		mockBeacons,
+		mockRoracle,
+		patrol,
+		mockStateQ,
+		clock,
+		logtest.New(tb).WithName(name+"_"+signer.PublicKey().ShortString()))
 	p2p.Register(pubsub.HareProtocol, hare.GetHareMsgHandler())
 
 	return &hareWithMocks{
@@ -376,7 +389,7 @@ func Test_multipleCPs(t *testing.T) {
 	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
 	test := newHareWrapper(totalCp)
 	totalNodes := 10
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
+	cfg := config.Config{N: totalNodes, F: totalNodes / 2, WakeupDelta: 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

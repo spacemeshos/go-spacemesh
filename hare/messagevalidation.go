@@ -29,8 +29,6 @@ func newEligibilityValidator(oracle Rolacle, maxExpActives, expLeaders int, logg
 
 // check eligibility of the provided message by the oracle.
 func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool, error) {
-	logger := ev.WithContext(ctx)
-
 	if m == nil {
 		return false, errors.New("nil message")
 	}
@@ -52,13 +50,7 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 	if err != nil {
 		return false, fmt.Errorf("validate eligibility: %w", err)
 	}
-	if !res {
-		logger.With().Warning("sender is not eligible to participate",
-			log.String("sender_id", pub.ShortString()))
-		return false, nil
-	}
-
-	return true, nil
+	return res, nil
 }
 
 // Validate the eligibility of the provided message.
@@ -73,7 +65,6 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 		return false
 	}
 
-	// verify role
 	if !res {
 		ev.WithContext(ctx).With().Warning("validate message failed: role is invalid",
 			log.String("sender_id", m.PubKey.ShortString()),
@@ -101,11 +92,30 @@ type syntaxContextValidator struct {
 	stateQuerier     stateQuerier
 	roleValidator    roleValidator
 	validMsgsTracker pubKeyGetter // used to check for public keys in the valid messages tracker
+	eTracker         *EligibilityTracker
 	log.Log
 }
 
-func newSyntaxContextValidator(sgr Signer, threshold int, validator func(m *Msg) bool, stateQuerier stateQuerier, ev roleValidator, validMsgsTracker pubKeyGetter, logger log.Log) *syntaxContextValidator {
-	return &syntaxContextValidator{sgr, threshold, validator, stateQuerier, ev, validMsgsTracker, logger}
+func newSyntaxContextValidator(
+	sgr Signer,
+	threshold int,
+	validator func(m *Msg) bool,
+	stateQuerier stateQuerier,
+	ev roleValidator,
+	validMsgsTracker pubKeyGetter,
+	et *EligibilityTracker,
+	logger log.Log,
+) *syntaxContextValidator {
+	return &syntaxContextValidator{
+		signing:          sgr,
+		threshold:        threshold,
+		statusValidator:  validator,
+		stateQuerier:     stateQuerier,
+		roleValidator:    ev,
+		validMsgsTracker: validMsgsTracker,
+		eTracker:         et,
+		Log:              logger,
+	}
 }
 
 // contextual validation errors.
@@ -279,17 +289,8 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 		return errNilAggMsgs
 	}
 
-	if aggMsg.Messages == nil { // must contain status Messages
+	if len(aggMsg.Messages) == 0 {
 		return errNilMsgsSlice
-	}
-
-	var count int
-	for _, m := range aggMsg.Messages {
-		count += int(m.Eligibility.Count)
-	}
-
-	if count < v.threshold { // must fit eligibility threshold
-		return fmt.Errorf("%w: expected %v, actual %v", errMsgsCountMismatch, v.threshold, len(aggMsg.Messages))
 	}
 
 	senders := make(map[string]struct{})
@@ -297,13 +298,18 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 		// check if exist in cache of valid messages
 		if pub := v.validMsgsTracker.PublicKey(&innerMsg); pub != nil {
 			// validate unique sender
-			if _, exist := senders[pub.String()]; exist { // pub already exist
+			if _, exist := senders[string(pub.Bytes())]; exist {
 				return errDupSender
 			}
-			senders[pub.String()] = struct{}{} // mark sender as exist
+			senders[string(pub.Bytes())] = struct{}{}
 
 			// passed validation, continue to next message
 			continue
+		}
+
+		// check if the message hash matches with the signed data
+		if innerMsg.MsgHash != types.BytesToHash(innerMsg.InnerMsg.HashBytes()) {
+			return fmt.Errorf("wrong hash")
 		}
 
 		// extract public key
@@ -312,12 +318,18 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 			return fmt.Errorf("new message: %w", err)
 		}
 
-		pub := iMsg.PubKey
 		// validate unique sender
-		if _, exist := senders[pub.String()]; exist { // pub already exist
+		if _, exist := senders[string(iMsg.PubKey.Bytes())]; exist { // pub already exist
 			return errDupSender
 		}
-		senders[pub.String()] = struct{}{} // mark sender as exist
+		senders[string(iMsg.PubKey.Bytes())] = struct{}{} // mark sender as exist
+
+		// validate with attached validators
+		for _, vFunc := range validators {
+			if !vFunc(iMsg) {
+				return errInnerFunc
+			}
+		}
 
 		if !v.SyntacticallyValidateMessage(ctx, iMsg) {
 			return errInnerSyntax
@@ -327,19 +339,35 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 		if !v.roleValidator.Validate(ctx, iMsg) {
 			return errInnerEligibility
 		}
-
-		// validate with attached validators
-		for _, vFunc := range validators {
-			if !vFunc(iMsg) {
-				return errInnerFunc
-			}
-		}
+		v.eTracker.Track(iMsg.PubKey.Bytes(), iMsg.Round, iMsg.Eligibility.Count, true)
 
 		// the message is valid, track it
 		v.validMsgsTracker.Track(iMsg)
 	}
 
-	return nil
+	var ci CountInfo
+	v.eTracker.ForEach(aggMsg.Messages[0].Round, func(node string, cr *Cred) {
+		// only counts the eligibility count from seen msgs
+		if _, ok := senders[node]; ok {
+			if cr.Honest {
+				ci.IncHonest(cr.Count)
+			} else {
+				ci.IncDishonest(cr.Count)
+			}
+		} else if !cr.Honest {
+			ci.IncKnownEquivocator(cr.Count)
+		}
+	})
+
+	if ci.Meet(v.threshold) {
+		if ci.numDishonest > 0 {
+			v.Log.With().Warning("counting votes from malicious identities in aggregated messages",
+				log.Object("eligibility_count", &ci))
+		}
+		return nil
+	}
+	return fmt.Errorf("%w: expected %v, actual dishonest %v honest %v",
+		errMsgsCountMismatch, v.threshold, ci.dhCount, ci.hCount)
 }
 
 func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool {
@@ -349,13 +377,13 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 		logger.With().Debug("svp validation duration",
 			log.String("duration", time.Since(startTime).String()))
 	}(time.Now())
-	proposalIter := iterationFromCounter(msg.Round)
+	proposalIter := inferIteration(msg.Round)
 	validateSameIteration := func(m *Msg) bool {
-		statusIter := iterationFromCounter(m.Round)
+		statusIter := inferIteration(m.Round)
 		if proposalIter != statusIter { // not same iteration
 			logger.With().Warning("proposal validation failed: not same iteration",
 				log.String("sender_id", m.PubKey.ShortString()),
-				types.LayerID(m.Layer),
+				m.Layer,
 				log.Uint32("expected", proposalIter),
 				log.Uint32("actual", statusIter))
 			return false
@@ -408,7 +436,6 @@ func (v *syntaxContextValidator) validateCertificate(ctx context.Context, cert *
 		return false
 	}
 
-	// loggererify agg msgs
 	if cert.AggMsgs == nil {
 		logger.Warning("certificate validation failed: AggMsgs is nil")
 		return false
@@ -421,6 +448,7 @@ func (v *syntaxContextValidator) validateCertificate(ctx context.Context, cert *
 			return false
 		}
 
+		// the values were removed to reduce data volume
 		commit.InnerMsg.Values = cert.Values
 	}
 
@@ -450,8 +478,8 @@ func (v *syntaxContextValidator) validateSVPTypeA(ctx context.Context, m *Msg) b
 	for _, status := range m.InnerMsg.Svp.Messages {
 		statusSet := NewSet(status.InnerMsg.Values)
 		// build union
-		for _, pid := range statusSet.ToSlice() {
-			unionSet.Add(pid) // assuming add is unique
+		for _, val := range statusSet.ToSlice() {
+			unionSet.Add(val) // assuming add is unique
 		}
 	}
 

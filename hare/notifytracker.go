@@ -13,18 +13,28 @@ import (
 // It also provides the number of notifications tracked for a given set.
 type notifyTracker struct {
 	logger       log.Log
-	malCh        chan types.MalfeasanceGossip
+	round        uint32
+	malCh        chan<- *types.MalfeasanceGossip
 	notifies     map[string]*types.HareProofMsg // tracks PubKey->Notification
 	tracker      *RefCountTracker               // tracks ref count to each seen set
-	certificates map[types.Hash32]struct{}      // tracks Set->certificate
+	eTracker     *EligibilityTracker
+	certificates map[types.Hash32]struct{} // tracks Set->certificate
 }
 
-func newNotifyTracker(logger log.Log, mch chan types.MalfeasanceGossip, expectedSize int) *notifyTracker {
+func newNotifyTracker(
+	logger log.Log,
+	round uint32,
+	mch chan<- *types.MalfeasanceGossip,
+	et *EligibilityTracker,
+	expectedSize int,
+) *notifyTracker {
 	return &notifyTracker{
 		logger:       logger,
+		round:        round,
 		malCh:        mch,
 		notifies:     make(map[string]*types.HareProofMsg, expectedSize),
-		tracker:      NewRefCountTracker(),
+		tracker:      NewRefCountTracker(round, et, expectedSize),
+		eTracker:     et,
 		certificates: make(map[types.Hash32]struct{}, expectedSize),
 	}
 }
@@ -32,20 +42,21 @@ func newNotifyTracker(logger log.Log, mch chan types.MalfeasanceGossip, expected
 // OnNotify tracks the provided notification message.
 // Returns true if the InnerMsg didn't affect the state, false otherwise.
 func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Msg) bool {
-	pub := msg.PubKey
-	eligibilityCount := uint32(msg.Eligibility.Count)
-	if prev, exist := nt.notifies[pub.String()]; exist { // already seenSenders
+	nodeID := types.BytesToNodeID(msg.PubKey.Bytes())
+	if prev, exist := nt.notifies[string(msg.PubKey.Bytes())]; exist { // already seenSenders
 		if prev.InnerMsg.Layer == msg.Layer &&
 			prev.InnerMsg.Round == msg.Round &&
 			prev.InnerMsg.MsgHash != msg.MsgHash {
-			nt.logger.WithContext(ctx).With().Warning("equivocation detected at notify round", types.BytesToNodeID(pub.Bytes()))
+			nt.logger.WithContext(ctx).With().Warning("equivocation detected at notify round",
+				log.Stringer("sender_id", nodeID))
+			nt.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			this := &types.HareProofMsg{
 				InnerMsg:  msg.HareMetadata,
 				Signature: msg.Signature,
 			}
 			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev, this, &msg.Eligibility, nt.malCh); err != nil {
 				nt.logger.WithContext(ctx).With().Warning("failed to report equivocation in notify round",
-					types.BytesToNodeID(pub.Bytes()),
+					log.Stringer("sender_id", nodeID),
 					log.Err(err))
 			}
 		}
@@ -53,7 +64,7 @@ func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Msg) bool {
 	}
 
 	// keep msg for pub
-	nt.notifies[pub.String()] = &types.HareProofMsg{
+	nt.notifies[string(msg.PubKey.Bytes())] = &types.HareProofMsg{
 		InnerMsg:  msg.HareMetadata,
 		Signature: msg.Signature,
 	}
@@ -61,14 +72,13 @@ func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Msg) bool {
 	// track that set
 	s := NewSet(msg.InnerMsg.Values)
 	nt.onCertificate(msg.InnerMsg.Cert.AggMsgs.Messages[0].Round, s)
-	nt.tracker.Track(s.ID(), eligibilityCount)
-
+	nt.tracker.Track(s.ID(), msg.PubKey.Bytes())
 	return false
 }
 
 // NotificationsCount returns the number of notifications tracked for the provided set.
-func (nt *notifyTracker) NotificationsCount(s *Set) int {
-	return int(nt.tracker.CountStatus(s.ID()))
+func (nt *notifyTracker) NotificationsCount(s *Set) *CountInfo {
+	return nt.tracker.CountStatus(s.ID())
 }
 
 // calculates a unique id for the provided k and set.

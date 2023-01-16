@@ -621,6 +621,7 @@ func (app *App) initServices(
 
 	hareCfg := app.Config.HARE
 	hareCfg.Hdist = app.Config.Tortoise.Hdist
+	malfeasanceRelayCh := make(chan *types.HareEligibilityGossip, hareCfg.N)
 	app.hare = hare.New(
 		app.cachedDB,
 		hareCfg,
@@ -628,6 +629,7 @@ func (app *App) initServices(
 		sgn,
 		nodeID,
 		hareOutputCh,
+		malfeasanceRelayCh,
 		newSyncer,
 		beaconProtocol,
 		hOracle,
@@ -685,7 +687,14 @@ func (app *App) initServices(
 			GracePeriod: app.Config.POET.GracePeriod,
 		}))
 
-	malfeasanceHandler := malfeasance.NewHandler(app.cachedDB, app.addLogger(Malfeasance, lg), app.host.ID())
+	malfeasanceHandler := malfeasance.NewHandler(
+		app.cachedDB,
+		app.addLogger(Malfeasance, lg),
+		app.host.ID(),
+		hareCfg.N,
+		hOracle,
+		malfeasanceRelayCh,
+	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
 		if newSyncer.ListenToGossip() {

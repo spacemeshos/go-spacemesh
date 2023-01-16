@@ -21,22 +21,24 @@ type preroundData struct {
 // It also provides the ability to filter set from unprovable values.
 type preRoundTracker struct {
 	logger    log.Log
-	malCh     chan types.MalfeasanceGossip
+	malCh     chan<- *types.MalfeasanceGossip
 	preRound  map[string]*preroundData // maps PubKey->Set of already tracked Values
 	tracker   *RefCountTracker         // keeps track of seen Values
-	threshold uint32                   // the threshold to prove a value
+	threshold int                      // the threshold to prove a value
 	bestVRF   uint32                   // the lowest VRF value seen in the round
 	coinflip  bool                     // the value of the weak coin (based on bestVRF)
+	eTracker  *EligibilityTracker
 }
 
-func newPreRoundTracker(logger log.Log, mch chan types.MalfeasanceGossip, threshold, expectedSize int) *preRoundTracker {
+func newPreRoundTracker(logger log.Log, mch chan<- *types.MalfeasanceGossip, et *EligibilityTracker, threshold, expectedSize int) *preRoundTracker {
 	return &preRoundTracker{
 		logger:    logger,
 		malCh:     mch,
 		preRound:  make(map[string]*preroundData, expectedSize),
-		tracker:   NewRefCountTracker(),
-		threshold: uint32(threshold),
+		tracker:   NewRefCountTracker(preRound, et, expectedSize),
+		threshold: threshold,
 		bestVRF:   math.MaxUint32,
+		eTracker:  et,
 	}
 }
 
@@ -44,13 +46,14 @@ func newPreRoundTracker(logger log.Log, mch chan types.MalfeasanceGossip, thresh
 func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	logger := pre.logger.WithContext(ctx)
 
-	pub := msg.PubKey
+	nodeID := types.BytesToNodeID(msg.PubKey.Bytes())
 
 	// check for winning VRF
 	sha := hash.Sum(msg.Eligibility.Proof)
 	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
 	logger.With().Debug("received preround message",
-		log.String("sender_id", pub.ShortString()),
+		nodeID,
+		log.Stringer("sender_id", nodeID),
 		log.Int("num_values", len(msg.InnerMsg.Values)),
 		log.String("vrf_value", fmt.Sprintf("%x", shaUint32)))
 	// TODO: make sure we don't need a mutex here
@@ -59,46 +62,46 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		// store lowest-order bit as coin toss value
 		pre.coinflip = sha[0]&byte(1) == byte(1)
 		pre.logger.With().Debug("got new best vrf value",
-			log.String("sender_id", pub.ShortString()),
+			log.Stringer("sender_id", nodeID),
 			log.String("vrf_value", fmt.Sprintf("%x", shaUint32)),
 			log.Bool("weak_coin", pre.coinflip))
 	}
 
-	eligibilityCount := uint32(msg.Eligibility.Count)
 	sToTrack := NewSet(msg.InnerMsg.Values) // assume track all Values
 	alreadyTracked := NewDefaultEmptySet()  // assume nothing tracked so far
 
-	if prev, exist := pre.preRound[pub.String()]; exist { // not first pre-round msg from this sender
+	if prev, exist := pre.preRound[string(msg.PubKey.Bytes())]; exist { // not first pre-round msg from this sender
 		if prev.InnerMsg.Layer == msg.Layer &&
 			prev.InnerMsg.Round == msg.Round &&
 			prev.InnerMsg.MsgHash != msg.MsgHash {
-			pre.logger.WithContext(ctx).With().Warning("equivocation detected at preround", types.BytesToNodeID(pub.Bytes()))
+			pre.logger.WithContext(ctx).With().Warning("equivocation detected at preround", nodeID)
+			pre.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			this := &types.HareProofMsg{
 				InnerMsg:  msg.HareMetadata,
 				Signature: msg.Signature,
 			}
 			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev.HareProofMsg, this, &msg.Eligibility, pre.malCh); err != nil {
 				pre.logger.WithContext(ctx).With().Warning("failed to report equivocation in preround",
-					types.BytesToNodeID(pub.Bytes()),
+					nodeID,
 					log.Err(err))
 				return
 			}
 		}
-		logger.With().Debug("duplicate preround msg sender", log.String("sender_id", pub.ShortString()))
+		logger.With().Debug("duplicate preround msg sender", log.String("sender_id", nodeID.ShortString()))
 		alreadyTracked = prev.Set         // update already tracked Values
 		sToTrack.Subtract(alreadyTracked) // subtract the already tracked Values
 	} else {
-		pre.preRound[pub.String()] = &preroundData{}
+		pre.preRound[string(msg.PubKey.Bytes())] = &preroundData{}
 	}
 
 	// record Values
 	for _, v := range sToTrack.ToSlice() {
-		pre.tracker.Track(v, eligibilityCount)
+		pre.tracker.Track(v, msg.PubKey.Bytes())
 	}
 
 	// update the union to include new Values
-	pre.preRound[pub.String()].Set = alreadyTracked.Union(sToTrack)
-	pre.preRound[pub.String()].HareProofMsg = &types.HareProofMsg{
+	pre.preRound[string(msg.PubKey.Bytes())].Set = alreadyTracked.Union(sToTrack)
+	pre.preRound[string(msg.PubKey.Bytes())].HareProofMsg = &types.HareProofMsg{
 		InnerMsg:  msg.HareMetadata,
 		Signature: msg.Signature,
 	}
@@ -109,11 +112,17 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 func (pre *preRoundTracker) CanProveValue(value types.ProposalID) bool {
 	// at least threshold occurrences of a given value
 	countStatus := pre.tracker.CountStatus(value)
+	if countStatus == nil {
+		pre.logger.Fatal("unexpected count")
+	}
+	if countStatus.numDishonest > 0 {
+		pre.logger.With().Warning("counting votes from malicious identities", value, log.Inline(countStatus))
+	}
 	pre.logger.With().Debug("preround tracker count",
 		value,
-		log.Uint32("count", countStatus),
-		log.Uint32("threshold", pre.threshold))
-	return countStatus >= pre.threshold
+		log.Inline(countStatus),
+		log.Int("threshold", pre.threshold))
+	return countStatus.Meet(pre.threshold)
 }
 
 // CanProveSet returns true if the give set is provable, false otherwise.
@@ -125,7 +134,6 @@ func (pre *preRoundTracker) CanProveSet(set *Set) bool {
 			return false
 		}
 	}
-
 	return true
 }
 
