@@ -8,30 +8,27 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-// LayerBuffer is the number of layer results we keep at a given time.
-const LayerBuffer = 20
-
-type consensusFactory func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput) Consensus
+type consensusFactory func(context.Context, config.Config, types.LayerID, *Set, Rolacle, Signer, pubsub.Publisher, RoundClock, chan TerminationOutput, chan types.MalfeasanceGossip) Consensus
 
 // Consensus represents an item that acts like a consensus process.
 type Consensus interface {
 	ID() types.LayerID
-	Close()
-	CloseChannel() chan struct{}
-	Start(ctx context.Context) error
+	Start() error
 	SetInbox(chan *Msg)
 }
 
@@ -66,7 +63,6 @@ type LayerOutput struct {
 
 // Hare is the orchestrator that starts new consensus processes and collects their output.
 type Hare struct {
-	util.Closer
 	log.Log
 	db            *sql.Database
 	config        config.Config
@@ -75,6 +71,7 @@ type Hare struct {
 	broker        *Broker
 	sign          Signer
 	blockGenCh    chan LayerOutput
+	malCh         chan types.MalfeasanceGossip
 	beacons       system.BeaconGetter
 	rolacle       Rolacle
 	patrol        layerPatrol
@@ -85,8 +82,6 @@ type Hare struct {
 	layerLock sync.RWMutex
 	lastLayer types.LayerID
 
-	bufferSize uint32
-
 	outputChan chan TerminationOutput
 	mu         sync.RWMutex
 	outputs    map[types.LayerID][]types.ProposalID
@@ -96,14 +91,16 @@ type Hare struct {
 	nid types.NodeID
 
 	totalCPs int32
-	wg       sync.WaitGroup
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	eg     errgroup.Group
 }
 
 // New returns a new Hare struct.
 func New(
 	db *sql.Database,
 	conf config.Config,
-	peer p2p.Peer,
 	publisher pubsub.PublishSubsciber,
 	sign Signer,
 	nid types.NodeID,
@@ -112,15 +109,12 @@ func New(
 	beacons system.BeaconGetter,
 	rolacle Rolacle,
 	patrol layerPatrol,
-	layersPerEpoch uint16,
 	stateQ stateQuerier,
 	layerClock LayerClock,
 	logger log.Log,
 ) *Hare {
 	h := new(Hare)
 	h.db = db
-
-	h.Closer = util.NewCloser()
 
 	h.Log = logger
 	h.config = conf
@@ -137,26 +131,25 @@ func New(
 		return NewSimpleRoundClock(layerTime, wakeupDelta, roundDuration)
 	}
 
-	ev := newEligibilityValidator(rolacle, layersPerEpoch, conf.N, conf.ExpectedLeaders, logger)
-	h.broker = newBroker(peer, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
+	ev := newEligibilityValidator(rolacle, conf.N, conf.ExpectedLeaders, logger)
+	h.broker = newBroker(ev, stateQ, syncState, conf.LimitConcurrent, logger)
 	h.sign = sign
 	h.blockGenCh = ch
+	h.malCh = make(chan types.MalfeasanceGossip, conf.N)
 
 	h.beacons = beacons
 	h.rolacle = rolacle
 	h.patrol = patrol
 
 	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
-	// todo: this should be loaded from global config
-	h.bufferSize = LayerBuffer // XXX: must be at least the size of `hdist`
-	h.outputChan = make(chan TerminationOutput, h.bufferSize)
-	h.outputs = make(map[types.LayerID][]types.ProposalID, h.bufferSize) // we keep results about LayerBuffer past layers
-	h.factory = func(conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput) Consensus {
-		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, clock, logger)
+	h.outputChan = make(chan TerminationOutput, h.config.Hdist)
+	h.outputs = make(map[types.LayerID][]types.ProposalID, h.config.Hdist) // we keep results about LayerBuffer past layers
+	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput, malCh chan types.MalfeasanceGossip) Consensus {
+		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, nid, p2p, terminationReport, ev, clock, malCh, logger)
 	}
 
 	h.nid = nid
-
+	h.ctx, h.cancel = context.WithCancel(context.Background())
 	return h
 }
 
@@ -188,10 +181,10 @@ func (h *Hare) setLastLayer(layerID types.LayerID) {
 // checks if the provided id is too late/old to be requested.
 func (h *Hare) outOfBufferRange(id types.LayerID) bool {
 	last := h.getLastLayer()
-	if !last.After(types.NewLayerID(h.bufferSize)) {
+	if !last.After(types.NewLayerID(h.config.Hdist)) {
 		return false
 	}
-	if id.Before(last.Sub(h.bufferSize)) { // bufferSize>=0
+	if id.Before(last.Sub(h.config.Hdist)) { // bufferSize>=0
 		return true
 	}
 	return false
@@ -222,9 +215,8 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 		consensusOkCnt.Inc()
 		h.WithContext(ctx).With().Info("hare terminated with success", layerID, log.Int("num_proposals", output.Set().Size()))
 		set := output.Set()
-		postNumProposals.Add(float64(set.len()))
-		pids = make([]types.ProposalID, 0, set.len())
-		pids = append(pids, set.elements()...)
+		postNumProposals.Add(float64(set.Size()))
+		pids = set.ToSlice()
 		select {
 		case h.blockGenCh <- LayerOutput{
 			Ctx:       ctx,
@@ -244,18 +236,27 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if uint32(len(h.outputs)) >= h.bufferSize {
+	if uint32(len(h.outputs)) >= h.config.Hdist {
 		delete(h.outputs, h.oldestResultInBuffer())
 	}
 	h.outputs[layerID] = pids
 	return nil
 }
 
+func (h *Hare) isClosed() bool {
+	select {
+	case <-h.ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
 // the logic that happens when a new layer arrives.
 // this function triggers the start of new consensus processes.
 func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	logger := h.WithContext(ctx).WithFields(id)
-	if h.IsClosed() {
+	if h.isClosed() {
 		logger.Info("hare exiting")
 		return false, nil
 	}
@@ -283,13 +284,14 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	}()
 
 	// call to start the calculation of active set size beforehand
-	go func() {
+	h.eg.Go(func() error {
 		// this is called only for its side effects, but at least print the error if it returns one
 		if isActive, err := h.rolacle.IsIdentityActiveOnConsensusView(ctx, h.nid, id); err != nil {
 			logger.With().Error("error checking if identity is active",
 				log.Bool("isActive", isActive), log.Err(err))
 		}
-	}()
+		return nil
+	})
 
 	logger.With().Debug("hare got tick, sleeping", log.String("delta", fmt.Sprint(h.networkDelta)))
 
@@ -297,7 +299,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	select {
 	case <-clock.AwaitWakeup():
 		break // keep going
-	case <-h.CloseChannel():
+	case <-h.ctx.Done():
 		return false, errors.New("closed while waiting for hare delta")
 	}
 
@@ -320,9 +322,9 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		logger.With().Error("could not register consensus process on broker", log.Err(err))
 		return false, fmt.Errorf("broker register: %w", err)
 	}
-	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.publisher, clock, h.outputChan)
+	cp := h.factory(h.ctx, h.config, instID, set, h.rolacle, h.sign, h.publisher, clock, h.outputChan, h.malCh)
 	cp.SetInbox(c)
-	if err = cp.Start(log.WithNewSessionID(ctx)); err != nil {
+	if err = cp.Start(); err != nil {
 		logger.With().Error("could not start consensus process", log.Err(err))
 		h.broker.Unregister(ctx, cp.ID())
 		return false, fmt.Errorf("start consensus: %w", err)
@@ -401,8 +403,6 @@ func (h *Hare) getResult(lid types.LayerID) ([]types.ProposalID, error) {
 
 // listens to outputs arriving from consensus processes.
 func (h *Hare) outputCollectionLoop(ctx context.Context) {
-	defer h.wg.Done()
-
 	h.WithContext(ctx).With().Info("starting collection loop")
 	for {
 		select {
@@ -424,7 +424,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 			h.broker.Unregister(ctx, out.ID())
 			logger.With().Debug("number of consensus processes (after unregister)",
 				log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
-		case <-h.CloseChannel():
+		case <-h.ctx.Done():
 			return
 		}
 	}
@@ -432,8 +432,6 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 
 // listens to new layers.
 func (h *Hare) tickLoop(ctx context.Context) {
-	defer h.wg.Done()
-
 	for layer := h.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
 		select {
 		case <-h.layerClock.AwaitLayer(layer):
@@ -442,7 +440,48 @@ func (h *Hare) tickLoop(ctx context.Context) {
 				continue
 			}
 			_, _ = h.onTick(ctx, layer)
-		case <-h.CloseChannel():
+		case <-h.ctx.Done():
+			return
+		}
+	}
+}
+
+// process MalfeasanceProof.
+func (h *Hare) malfeasanceLoop(ctx context.Context) {
+	h.WithContext(ctx).With().Info("starting malfeasance loop")
+	for {
+		select {
+		case gossip := <-h.malCh:
+			if gossip.Eligibility == nil {
+				h.WithContext(ctx).Fatal("missing hare eligibility")
+			}
+			nodeID := types.BytesToNodeID(gossip.Eligibility.PubKey)
+			logger := h.WithContext(ctx).WithFields(nodeID)
+			if malicious, err := identities.IsMalicious(h.db, nodeID); err != nil {
+				logger.With().Error("failed to check identity", log.Err(err))
+				continue
+			} else if malicious {
+				logger.Debug("known malicious identity")
+				continue
+			}
+			proofBytes, err := codec.Encode(&gossip.MalfeasanceProof)
+			if err != nil {
+				logger.With().Fatal("failed to encode MalfeasanceProof", log.Err(err))
+			}
+			if err = identities.SetMalicious(h.db, nodeID, proofBytes); err != nil {
+				logger.With().Error("failed to save MalfeasanceProof", log.Err(err))
+				continue
+			}
+			gossipBytes, err := codec.Encode(&gossip)
+			if err != nil {
+				logger.With().Fatal("failed to encode MalfeasanceGossip", log.Err(err))
+			}
+			if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, gossipBytes); err != nil {
+				logger.With().Error("failed to broadcast MalfeasanceProof")
+			}
+		case <-ctx.Done():
+			return
+		case <-h.ctx.Done():
 			return
 		}
 	}
@@ -450,26 +489,75 @@ func (h *Hare) tickLoop(ctx context.Context) {
 
 // Start starts listening for layers and outputs.
 func (h *Hare) Start(ctx context.Context) error {
+	{
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		if h.cancel != nil {
+			h.cancel()
+		}
+		h.ctx, h.cancel = context.WithCancel(ctx)
+		ctx = h.ctx
+	}
 	h.WithContext(ctx).With().Info("starting protocol", log.String("protocol", pubsub.HareProtocol))
 
 	// Create separate contexts for each subprocess. This allows us to better track the flow of messages.
 	ctxBroker := log.WithNewSessionID(ctx, log.String("protocol", pubsub.HareProtocol+"_broker"))
 	ctxTickLoop := log.WithNewSessionID(ctx, log.String("protocol", pubsub.HareProtocol+"_tickloop"))
 	ctxOutputLoop := log.WithNewSessionID(ctx, log.String("protocol", pubsub.HareProtocol+"_outputloop"))
+	ctxMalfLoop := log.WithNewSessionID(ctx, log.String("protocol", pubsub.HareProtocol+"_malfloop"))
 
-	if err := h.broker.Start(ctxBroker); err != nil {
-		return fmt.Errorf("start broker: %w", err)
-	}
+	h.broker.Start(ctxBroker)
 
-	h.wg.Add(2)
-	go h.tickLoop(ctxTickLoop)
-	go h.outputCollectionLoop(ctxOutputLoop)
+	h.eg.Go(func() error {
+		h.tickLoop(ctxTickLoop)
+		return nil
+	})
+	h.eg.Go(func() error {
+		h.outputCollectionLoop(ctxOutputLoop)
+		return nil
+	})
+	h.eg.Go(func() error {
+		h.malfeasanceLoop(ctxMalfLoop)
+		return nil
+	})
 
 	return nil
 }
 
 // Close sends a termination signal to hare goroutines and waits for their termination.
 func (h *Hare) Close() {
-	h.Closer.Close()
-	h.wg.Wait()
+	h.cancel()
+	_ = h.eg.Wait()
+}
+
+func reportEquivocation(
+	ctx context.Context,
+	pubKey []byte,
+	old, new *types.HareProofMsg,
+	eligibility *types.HareEligibility,
+	mch chan types.MalfeasanceGossip,
+) error {
+	gossip := types.MalfeasanceGossip{
+		MalfeasanceProof: types.MalfeasanceProof{
+			Layer: old.InnerMsg.Layer,
+			Proof: types.Proof{
+				Type: types.HareEquivocation,
+				Data: &types.HareProof{
+					Messages: [2]types.HareProofMsg{*old, *new},
+				},
+			},
+		},
+		Eligibility: &types.HareEligibilityGossip{
+			Layer:       old.InnerMsg.Layer,
+			Round:       old.InnerMsg.Round,
+			PubKey:      pubKey,
+			Eligibility: *eligibility,
+		},
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case mch <- gossip:
+	}
+	return nil
 }

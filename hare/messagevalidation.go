@@ -17,15 +17,14 @@ type messageValidator interface {
 }
 
 type eligibilityValidator struct {
-	oracle         Rolacle
-	layersPerEpoch uint16
-	maxExpActives  int // the maximal expected committee size
-	expLeaders     int // the expected number of leaders
+	oracle        Rolacle
+	maxExpActives int // the maximal expected committee size
+	expLeaders    int // the expected number of leaders
 	log.Log
 }
 
-func newEligibilityValidator(oracle Rolacle, layersPerEpoch uint16, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
-	return &eligibilityValidator{oracle, layersPerEpoch, maxExpActives, expLeaders, logger}
+func newEligibilityValidator(oracle Rolacle, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
+	return &eligibilityValidator{oracle, maxExpActives, expLeaders, logger}
 }
 
 // check eligibility of the provided message by the oracle.
@@ -33,17 +32,15 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 	logger := ev.WithContext(ctx)
 
 	if m == nil {
-		logger.Error("eligibility validator: called with nil")
-		return false, errors.New("fatal: nil message")
+		return false, errors.New("nil message")
 	}
 
 	if m.InnerMsg == nil {
-		logger.Error("eligibility validator: InnerMsg is nil")
-		return false, errors.New("fatal: nil inner message")
+		return false, errors.New("nil inner message")
 	}
 
 	pub := m.PubKey
-	layer := m.InnerMsg.InstanceID
+	layer := m.Layer
 	if layer.GetEpoch().IsGenesis() {
 		return true, nil // TODO: remove this lie after inception problem is addressed
 	}
@@ -51,15 +48,12 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 	nID := types.BytesToNodeID(pub.Bytes())
 
 	// validate role
-	res, err := ev.oracle.Validate(ctx, layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nID, m.InnerMsg.RoleProof, m.InnerMsg.EligibilityCount)
+	res, err := ev.oracle.Validate(ctx, layer, m.Round, expectedCommitteeSize(m.Round, ev.maxExpActives, ev.expLeaders), nID, m.Eligibility.Proof, m.Eligibility.Count)
 	if err != nil {
-		logger.With().Error("eligibility validator: could not retrieve eligibility result",
-			log.Err(err),
-			log.String("sender_id", pub.ShortString()))
 		return false, fmt.Errorf("validate eligibility: %w", err)
 	}
 	if !res {
-		logger.With().Warning("eligibility validator: sender is not eligible to participate",
+		logger.With().Warning("sender is not eligible to participate",
 			log.String("sender_id", pub.ShortString()))
 		return false, nil
 	}
@@ -71,10 +65,10 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 	res, err := ev.validateRole(ctx, m)
 	if err != nil {
-		ev.WithContext(ctx).With().Error("error occurred while validating role",
+		ev.WithContext(ctx).With().Error("failed to validate role",
 			log.Err(err),
 			log.String("sender_id", m.PubKey.ShortString()),
-			m.InnerMsg.InstanceID,
+			m.Layer,
 			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
@@ -83,7 +77,7 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 	if !res {
 		ev.WithContext(ctx).With().Warning("validate message failed: role is invalid",
 			log.String("sender_id", m.PubKey.ShortString()),
-			m.InnerMsg.InstanceID,
+			m.Layer,
 			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
@@ -105,14 +99,13 @@ type syntaxContextValidator struct {
 	threshold        int
 	statusValidator  func(m *Msg) bool // used to validate status Messages in SVP
 	stateQuerier     stateQuerier
-	layersPerEpoch   uint16
 	roleValidator    roleValidator
 	validMsgsTracker pubKeyGetter // used to check for public keys in the valid messages tracker
 	log.Log
 }
 
-func newSyntaxContextValidator(sgr Signer, threshold int, validator func(m *Msg) bool, stateQuerier stateQuerier, layersPerEpoch uint16, ev roleValidator, validMsgsTracker pubKeyGetter, logger log.Log) *syntaxContextValidator {
-	return &syntaxContextValidator{sgr, threshold, validator, stateQuerier, layersPerEpoch, ev, validMsgsTracker, logger}
+func newSyntaxContextValidator(sgr Signer, threshold int, validator func(m *Msg) bool, stateQuerier stateQuerier, ev roleValidator, validMsgsTracker pubKeyGetter, logger log.Log) *syntaxContextValidator {
+	return &syntaxContextValidator{sgr, threshold, validator, stateQuerier, ev, validMsgsTracker, logger}
 }
 
 // contextual validation errors.
@@ -135,10 +128,10 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 		return errNilInner
 	}
 
-	currentRound := currentK % 4
+	currentRound := currentK % RoundsPerIteration
 	// the message must match the current iteration unless it is a notify or pre-round message
-	currentIteration := currentK / 4
-	msgIteration := m.InnerMsg.K / 4
+	currentIteration := currentK / RoundsPerIteration
+	msgIteration := m.Round / RoundsPerIteration
 	sameIter := currentIteration == msgIteration
 
 	// first validate pre-round and notify
@@ -157,12 +150,12 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 		}
 
 		// old notify is accepted
-		if m.InnerMsg.K <= currentK {
+		if m.Round <= currentK {
 			return nil
 		}
 
 		// early notify detected
-		if m.InnerMsg.K == currentK+1 && currentRound == commitRound {
+		if m.Round == currentK+1 && currentRound == commitRound {
 			return errEarlyMsg
 		}
 
@@ -246,7 +239,7 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(ctx context.Contex
 		return false
 	}
 
-	claimedRound := m.InnerMsg.K % 4
+	claimedRound := m.Round % RoundsPerIteration
 	switch m.InnerMsg.Type {
 	case pre:
 		return true
@@ -259,7 +252,7 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(ctx context.Contex
 	case notify:
 		return v.validateCertificate(ctx, m.InnerMsg.Cert)
 	default:
-		logger.With().Error("unknown message type encountered during syntactic validation",
+		logger.With().Warning("unknown message type encountered during syntactic validation",
 			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
@@ -292,14 +285,11 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 
 	var count int
 	for _, m := range aggMsg.Messages {
-		count += int(m.InnerMsg.EligibilityCount)
+		count += int(m.Eligibility.Count)
 	}
 
 	if count < v.threshold { // must fit eligibility threshold
-		v.WithContext(ctx).With().Warning("aggregated validation failed: total eligibility of messages does not match",
-			log.Int("expected", v.threshold),
-			log.Int("actual", len(aggMsg.Messages)))
-		return errMsgsCountMismatch
+		return fmt.Errorf("%w: expected %v, actual %v", errMsgsCountMismatch, v.threshold, len(aggMsg.Messages))
 	}
 
 	senders := make(map[string]struct{})
@@ -359,13 +349,13 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 		logger.With().Debug("svp validation duration",
 			log.String("duration", time.Since(startTime).String()))
 	}(time.Now())
-	proposalIter := iterationFromCounter(msg.InnerMsg.K)
+	proposalIter := iterationFromCounter(msg.Round)
 	validateSameIteration := func(m *Msg) bool {
-		statusIter := iterationFromCounter(m.InnerMsg.K)
+		statusIter := iterationFromCounter(m.Round)
 		if proposalIter != statusIter { // not same iteration
 			logger.With().Warning("proposal validation failed: not same iteration",
 				log.String("sender_id", m.PubKey.ShortString()),
-				types.LayerID(m.InnerMsg.InstanceID),
+				types.LayerID(m.Layer),
 				log.Uint32("expected", proposalIter),
 				log.Uint32("actual", statusIter))
 			return false
@@ -373,29 +363,24 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 
 		return true
 	}
-	logger = logger.WithFields(
-		log.String("sender_id", msg.PubKey.ShortString()),
-		types.LayerID(msg.InnerMsg.InstanceID),
-	)
-
+	logger = logger.WithFields(log.String("sender_id", msg.PubKey.ShortString()), msg.Layer)
 	validators := []func(m *Msg) bool{validateStatusType, validateSameIteration, v.statusValidator}
 	if err := v.validateAggregatedMessage(ctx, msg.InnerMsg.Svp, validators); err != nil {
-		logger.With().Warning("proposal validation failed: failed to validate aggregated messages",
-			log.Err(err))
+		logger.With().Warning("invalid proposal", log.Err(err))
 		return false
 	}
 
-	maxKi := preRound
+	maxCommittedRound := preRound
 	var maxSet []types.ProposalID
 	for _, status := range msg.InnerMsg.Svp.Messages {
 		// track max
-		if status.InnerMsg.Ki > maxKi || maxKi == preRound {
-			maxKi = status.InnerMsg.Ki
+		if status.InnerMsg.CommittedRound > maxCommittedRound || maxCommittedRound == preRound {
+			maxCommittedRound = status.InnerMsg.CommittedRound
 			maxSet = status.InnerMsg.Values
 		}
 	}
 
-	if maxKi == preRound { // type A
+	if maxCommittedRound == preRound { // type A
 		if !v.validateSVPTypeA(ctx, msg) {
 			logger.Warning("proposal validation failed: type a validation failed")
 			return false
@@ -440,10 +425,10 @@ func (v *syntaxContextValidator) validateCertificate(ctx context.Context, cert *
 	}
 
 	// Note: no need to validate notify.Values=commits.Values because we refill the InnerMsg with notify.Values
-	validateSameK := func(m *Msg) bool { return m.InnerMsg.K == cert.AggMsgs.Messages[0].InnerMsg.K }
+	validateSameK := func(m *Msg) bool { return m.Round == cert.AggMsgs.Messages[0].Round }
 	validators := []func(m *Msg) bool{validateCommitType, validateSameK}
 	if err := v.validateAggregatedMessage(ctx, cert.AggMsgs, validators); err != nil {
-		logger.With().Warning("Certificate validation failed: aggregated messages validation failed", log.Err(err))
+		logger.With().Warning("invalid certificate", log.Err(err))
 		return false
 	}
 
@@ -451,11 +436,11 @@ func (v *syntaxContextValidator) validateCertificate(ctx context.Context, cert *
 }
 
 func validateCommitType(m *Msg) bool {
-	return MessageType(m.InnerMsg.Type) == commit
+	return m.InnerMsg.Type == commit
 }
 
 func validateStatusType(m *Msg) bool {
-	return MessageType(m.InnerMsg.Type) == status
+	return m.InnerMsg.Type == status
 }
 
 // validate SVP for type A (where all Ki=-1).
@@ -465,8 +450,8 @@ func (v *syntaxContextValidator) validateSVPTypeA(ctx context.Context, m *Msg) b
 	for _, status := range m.InnerMsg.Svp.Messages {
 		statusSet := NewSet(status.InnerMsg.Values)
 		// build union
-		for _, bid := range statusSet.elements() {
-			unionSet.Add(bid) // assuming add is unique
+		for _, pid := range statusSet.ToSlice() {
+			unionSet.Add(pid) // assuming add is unique
 		}
 	}
 

@@ -39,10 +39,7 @@ func (vatx *VerifiedActivationTx) MarshalLogObject(encoder log.ObjectEncoder) er
 	if vatx.InitialPost != nil {
 		encoder.AddString("nipost", vatx.InitialPost.String())
 	}
-	h, err := vatx.NIPostChallenge.Hash()
-	if err == nil && h != nil {
-		encoder.AddString("challenge", h.String())
-	}
+	encoder.AddString("challenge", vatx.NIPostChallenge.Hash().String())
 	encoder.AddString("id", vatx.id.String())
 	encoder.AddString("sender_id", vatx.nodeID.String())
 	encoder.AddString("prev_atx_id", vatx.PrevATXID.String())

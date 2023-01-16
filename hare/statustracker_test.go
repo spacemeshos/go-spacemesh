@@ -7,16 +7,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func buildStatusMsg(signing Signer, s *Set, ki uint32) *Msg {
 	builder := newMessageBuilder()
-	builder.SetType(status).SetInstanceID(instanceID1).SetRoundCounter(statusRound).SetKi(ki).SetValues(s)
+	builder.SetType(status).SetLayer(instanceID1).SetRoundCounter(statusRound).SetCommittedRound(ki).SetValues(s)
 	builder.SetEligibilityCount(1)
-	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
-
-	return builder.Build()
+	return builder.SetPubKey(signing.PublicKey()).Sign(signing).Build()
 }
 
 func BuildStatusMsg(signing Signer, s *Set) *Msg {
@@ -32,7 +32,8 @@ func TestStatusTracker_RecordStatus(t *testing.T) {
 	s.Add(value1)
 	s.Add(value2)
 
-	tracker := newStatusTracker(lowThresh10, lowThresh10)
+	mch := make(chan types.MalfeasanceGossip, lowThresh10)
+	tracker := newStatusTracker(logtest.New(t), mch, lowThresh10, lowThresh10)
 	assert.False(t, tracker.IsSVPReady())
 
 	for i := 0; i < lowThresh10; i++ {
@@ -44,6 +45,7 @@ func TestStatusTracker_RecordStatus(t *testing.T) {
 
 	tracker.AnalyzeStatuses(validate)
 	assert.True(t, tracker.IsSVPReady())
+	require.Empty(t, mch)
 }
 
 func TestStatusTracker_BuildUnionSet(t *testing.T) {
@@ -54,7 +56,8 @@ func TestStatusTracker_BuildUnionSet(t *testing.T) {
 	sig3, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	tracker := newStatusTracker(lowThresh10, lowThresh10)
+	mch := make(chan types.MalfeasanceGossip, lowThresh10)
+	tracker := newStatusTracker(logtest.New(t), mch, lowThresh10, lowThresh10)
 
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
@@ -66,18 +69,21 @@ func TestStatusTracker_BuildUnionSet(t *testing.T) {
 
 	g := tracker.buildUnionSet(defaultSetSize)
 	assert.True(t, s.Equals(g))
+	require.Empty(t, mch)
 }
 
 func TestStatusTracker_IsSVPReady(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	tracker := newStatusTracker(1, 1)
+	mch := make(chan types.MalfeasanceGossip, 1)
+	tracker := newStatusTracker(logtest.New(t), mch, 1, 1)
 	assert.False(t, tracker.IsSVPReady())
 	s := NewSetFromValues(value1)
 	tracker.RecordStatus(context.Background(), BuildStatusMsg(sig, s))
 	tracker.AnalyzeStatuses(validate)
 	assert.True(t, tracker.IsSVPReady())
+	require.Empty(t, mch)
 }
 
 func TestStatusTracker_BuildSVP(t *testing.T) {
@@ -86,13 +92,15 @@ func TestStatusTracker_BuildSVP(t *testing.T) {
 	sig2, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	tracker := newStatusTracker(2, 1)
+	mch := make(chan types.MalfeasanceGossip, 1)
+	tracker := newStatusTracker(logtest.New(t), mch, 2, 1)
 	s := NewSetFromValues(value1)
 	tracker.RecordStatus(context.Background(), BuildStatusMsg(sig1, s))
 	tracker.RecordStatus(context.Background(), BuildStatusMsg(sig2, s))
 	tracker.AnalyzeStatuses(validate)
 	svp := tracker.BuildSVP()
 	assert.Equal(t, 2, len(svp.Messages))
+	require.Empty(t, mch)
 }
 
 func TestStatusTracker_ProposalSetTypeA(t *testing.T) {
@@ -101,7 +109,8 @@ func TestStatusTracker_ProposalSetTypeA(t *testing.T) {
 	sig2, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	tracker := newStatusTracker(2, 1)
+	mch := make(chan types.MalfeasanceGossip, 1)
+	tracker := newStatusTracker(logtest.New(t), mch, 2, 1)
 	s1 := NewSetFromValues(value1)
 	s2 := NewSetFromValues(value1, value2)
 	tracker.RecordStatus(context.Background(), buildStatusMsg(sig1, s1, preRound))
@@ -109,6 +118,7 @@ func TestStatusTracker_ProposalSetTypeA(t *testing.T) {
 	proposedSet := tracker.ProposalSet(2)
 	assert.NotNil(t, proposedSet)
 	assert.True(t, proposedSet.Equals(s1.Union(s2)))
+	require.Empty(t, mch)
 }
 
 func TestStatusTracker_ProposalSetTypeB(t *testing.T) {
@@ -117,7 +127,8 @@ func TestStatusTracker_ProposalSetTypeB(t *testing.T) {
 	sig2, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	tracker := newStatusTracker(2, 1)
+	mch := make(chan types.MalfeasanceGossip, 1)
+	tracker := newStatusTracker(logtest.New(t), mch, 2, 1)
 	s1 := NewSetFromValues(value1, value3)
 	s2 := NewSetFromValues(value1, value2)
 	tracker.RecordStatus(context.Background(), buildStatusMsg(sig1, s1, 0))
@@ -126,6 +137,54 @@ func TestStatusTracker_ProposalSetTypeB(t *testing.T) {
 	proposedSet := tracker.ProposalSet(2)
 	assert.NotNil(t, proposedSet)
 	assert.True(t, proposedSet.Equals(s2))
+	require.Empty(t, mch)
+}
+
+func TestStatusTracker_Equivocate(t *testing.T) {
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	mch := make(chan types.MalfeasanceGossip, 1)
+	tracker := newStatusTracker(logtest.New(t), mch, 2, 1)
+	s1 := NewSetFromValues(value1, value3)
+	s2 := NewSetFromValues(value1, value2)
+	m1 := buildStatusMsg(sig, s1, 0)
+	m2 := buildStatusMsg(sig, s2, 0)
+	tracker.RecordStatus(context.Background(), m1)
+	tracker.RecordStatus(context.Background(), m2)
+	tracker.AnalyzeStatuses(validate)
+	proposedSet := tracker.ProposalSet(2)
+	assert.NotNil(t, proposedSet)
+	assert.True(t, proposedSet.Equals(s1), proposedSet)
+	require.Len(t, mch, 1)
+	expected := types.MalfeasanceGossip{
+		MalfeasanceProof: types.MalfeasanceProof{
+			Layer: m1.Layer,
+			Proof: types.Proof{
+				Type: types.HareEquivocation,
+				Data: &types.HareProof{
+					Messages: [2]types.HareProofMsg{
+						{
+							InnerMsg:  m1.HareMetadata,
+							Signature: m1.Signature,
+						},
+						{
+							InnerMsg:  m2.HareMetadata,
+							Signature: m2.Signature,
+						},
+					},
+				},
+			},
+		},
+		Eligibility: &types.HareEligibilityGossip{
+			Layer:       m2.Layer,
+			Round:       m2.Round,
+			PubKey:      m2.PubKey.Bytes(),
+			Eligibility: m2.Eligibility,
+		},
+	}
+	gossip := <-mch
+	require.Equal(t, expected, gossip)
 }
 
 func TestStatusTracker_AnalyzeStatuses(t *testing.T) {
@@ -136,7 +195,8 @@ func TestStatusTracker_AnalyzeStatuses(t *testing.T) {
 	sig3, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	tracker := newStatusTracker(2, 1)
+	mch := make(chan types.MalfeasanceGossip, 1)
+	tracker := newStatusTracker(logtest.New(t), mch, 2, 1)
 	s1 := NewSetFromValues(value1, value3)
 	s2 := NewSetFromValues(value1, value2)
 	tracker.RecordStatus(context.Background(), buildStatusMsg(sig1, s1, 2))
@@ -144,4 +204,5 @@ func TestStatusTracker_AnalyzeStatuses(t *testing.T) {
 	tracker.RecordStatus(context.Background(), buildStatusMsg(sig3, s2, 2))
 	tracker.AnalyzeStatuses(validate)
 	assert.Equal(t, 3, int(tracker.count))
+	require.Empty(t, mch)
 }

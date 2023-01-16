@@ -1,12 +1,15 @@
 package hare
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -23,7 +26,7 @@ func TestBuilder_TestBuild(t *testing.T) {
 	b := newMessageBuilder()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	msg := b.SetPubKey(signer.PublicKey()).SetInstanceID(instanceID1).Sign(signer).Build()
+	msg := b.SetPubKey(signer.PublicKey()).SetLayer(instanceID1).Sign(signer).Build()
 
 	m := marshallUnmarshall(t, &msg.Message)
 	assert.Equal(t, m, &msg.Message)
@@ -44,11 +47,39 @@ func TestMessageBuilder_SetCertificate(t *testing.T) {
 	require.NoError(t, err)
 
 	s := NewSetFromValues(value5)
-	tr := newCommitTracker(1, 1, s)
-	tr.OnCommit(BuildCommitMsg(signer, s))
+	tr := newCommitTracker(logtest.New(t), make(chan types.MalfeasanceGossip), 1, 1, s)
+	tr.OnCommit(context.Background(), BuildCommitMsg(signer, s))
 	cert := tr.BuildCertificate()
 	assert.NotNil(t, cert)
 	c := newMessageBuilder().SetCertificate(cert).Build().Message
 	cert2 := marshallUnmarshall(t, &c).InnerMsg.Cert
 	assert.Equal(t, cert.Values, cert2.Values)
+}
+
+func TestMessageFromBuffer(t *testing.T) {
+	b := newMessageBuilder()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	msg := b.SetPubKey(signer.PublicKey()).SetLayer(instanceID1).Sign(signer).Build().Message
+
+	buf, err := codec.Encode(&msg)
+	require.NoError(t, err)
+
+	got, err := MessageFromBuffer(buf)
+	require.NoError(t, err)
+	require.Equal(t, msg, got)
+}
+
+func TestMessageFromBuffer_BadMsgHash(t *testing.T) {
+	b := newMessageBuilder()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	msg := b.SetPubKey(signer.PublicKey()).SetLayer(instanceID1).Sign(signer).Build().Message
+	msg.MsgHash = types.RandomHash()
+
+	buf, err := codec.Encode(&msg)
+	require.NoError(t, err)
+
+	_, err = MessageFromBuffer(buf)
+	require.Error(t, err)
 }

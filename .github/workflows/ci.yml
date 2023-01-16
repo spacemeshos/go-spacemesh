@@ -20,6 +20,7 @@ env:
   CI_GCP_CREDENTIALS: ${{ secrets.CI_GCP_CREDENTIALS }}
   CI_GCP_PROJECT_ID: ${{ secrets.CI_GCP_PROJECT_ID }}
   CI_REGION_NAME: ${{ secrets.CI_REGION_NAME }}
+  USE_GKE_GCLOUD_AUTH_PLUGIN: True
 
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:
@@ -29,6 +30,11 @@ on:
     branches:
       - staging
       - trying
+
+concurrency:
+  group: ${{ github.base_ref == 'staging' && format('{0}-staging', github.workflow) || format('{0}-{1}', github.workflow, github.ref) }}
+  cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
+
 
 jobs:
   ## stage 0: check which files were changed
@@ -268,9 +274,6 @@ jobs:
       - filter-changes
       - dockerpush
     timeout-minutes: 90
-    concurrency:
-      group: ${{ github.base_ref == 'staging' && format('{0}-staging', github.workflow) || format('{0}-{1}', github.workflow, github.ref) }}
-      cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
     steps:
       - uses: actions/checkout@v3
 
@@ -289,6 +292,9 @@ jobs:
 
       - name: Configure gcloud
         uses: "google-github-actions/setup-gcloud@v1"
+        
+      - name: Configure gke authentication plugin
+        run: gcloud components install gke-gcloud-auth-plugin --quiet
 
       - name: Configure kubectl
         run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --region ${{ secrets.CI_REGION_NAME }} --project ${{ secrets.CI_GCP_PROJECT_ID }}
@@ -327,7 +333,7 @@ jobs:
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 50
           bootstrap: 10m
-          level: info
+          level: debug
           clusters: 4
         run: make -C systest run test_name=.
 
@@ -340,7 +346,7 @@ jobs:
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 30
           bootstrap: 10m
-          level: info
+          level: debug
           clusters: 4
         run: make -C systest run test_name=.
 

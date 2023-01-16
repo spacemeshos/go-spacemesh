@@ -1,7 +1,14 @@
 package hare
 
+import (
+	"context"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
+)
+
 type commitTrackerProvider interface {
-	OnCommit(msg *Msg)
+	OnCommit(context.Context, *Msg)
 	HasEnoughCommits() bool
 	BuildCertificate() *Certificate
 	CommitCount() int
@@ -9,25 +16,28 @@ type commitTrackerProvider interface {
 
 // commitTracker tracks commit messages and build the certificate according to the tracked messages.
 type commitTracker struct {
-	seenSenders      map[string]bool // tracks seen senders
-	commits          []Message       // tracks Set->Commits
-	proposedSet      *Set            // follows the set who has max number of commits
-	threshold        int             // the number of required commits
+	logger           log.Log
+	malCh            chan types.MalfeasanceGossip
+	seenSenders      map[string]*types.HareProofMsg // tracks seen senders
+	commits          []Message                      // tracks Set->Commits
+	proposedSet      *Set                           // follows the set who has max number of commits
+	threshold        int                            // the number of required commits
 	eligibilityCount int
 }
 
-func newCommitTracker(threshold, expectedSize int, proposedSet *Set) *commitTracker {
-	ct := &commitTracker{}
-	ct.seenSenders = make(map[string]bool, expectedSize)
-	ct.commits = make([]Message, 0, threshold)
-	ct.proposedSet = proposedSet
-	ct.threshold = threshold
-
-	return ct
+func newCommitTracker(logger log.Log, mch chan types.MalfeasanceGossip, threshold, expectedSize int, proposedSet *Set) *commitTracker {
+	return &commitTracker{
+		malCh:       mch,
+		logger:      logger,
+		seenSenders: make(map[string]*types.HareProofMsg, expectedSize),
+		commits:     make([]Message, 0, threshold),
+		proposedSet: proposedSet,
+		threshold:   threshold,
+	}
 }
 
 // OnCommit tracks the given commit message.
-func (ct *commitTracker) OnCommit(msg *Msg) {
+func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
 	if ct.proposedSet == nil { // no valid proposed set
 		return
 	}
@@ -37,11 +47,29 @@ func (ct *commitTracker) OnCommit(msg *Msg) {
 	}
 
 	pub := msg.PubKey
-	if ct.seenSenders[pub.String()] {
+	if prev, ok := ct.seenSenders[pub.String()]; ok {
+		if prev.InnerMsg.Layer == msg.Layer &&
+			prev.InnerMsg.Round == msg.Round &&
+			prev.InnerMsg.MsgHash != msg.MsgHash {
+			ct.logger.WithContext(ctx).With().Warning("equivocation detected at commit round", types.BytesToNodeID(pub.Bytes()))
+			this := &types.HareProofMsg{
+				InnerMsg:  msg.HareMetadata,
+				Signature: msg.Signature,
+			}
+			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev, this, &msg.Eligibility, ct.malCh); err != nil {
+				ct.logger.WithContext(ctx).With().Warning("failed to report equivocation in commit round",
+					types.BytesToNodeID(pub.Bytes()),
+					log.Err(err))
+				return
+			}
+		}
 		return
 	}
 
-	ct.seenSenders[pub.String()] = true
+	ct.seenSenders[pub.String()] = &types.HareProofMsg{
+		InnerMsg:  msg.HareMetadata,
+		Signature: msg.Signature,
+	}
 
 	s := NewSet(msg.InnerMsg.Values)
 	if !ct.proposedSet.Equals(s) { // ignore commit on different set
@@ -50,7 +78,7 @@ func (ct *commitTracker) OnCommit(msg *Msg) {
 
 	// add msg
 	ct.commits = append(ct.commits, msg.Message)
-	ct.eligibilityCount += int(msg.InnerMsg.EligibilityCount)
+	ct.eligibilityCount += int(msg.Eligibility.Count)
 }
 
 // HasEnoughCommits returns true if the tracker can build a certificate, false otherwise.

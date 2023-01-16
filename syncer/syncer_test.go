@@ -92,7 +92,7 @@ func newTestSyncer(ctx context.Context, t *testing.T, interval time.Duration) *t
 	ts.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
 	var err error
 	exec := mesh.NewExecutor(ts.cdb, ts.mVm, ts.mConState, lg)
-	ts.msh, err = mesh.NewMesh(ts.cdb, ts.mTortoise, exec, ts.mConState, lg)
+	ts.msh, err = mesh.NewMesh(ts.cdb, ts.mTicker, ts.mTortoise, exec, ts.mConState, lg)
 	require.NoError(t, err)
 
 	cfg := Config{

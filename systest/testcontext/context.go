@@ -309,7 +309,7 @@ func New(ctx context.Context, t *testing.T, opts ...Opt) *Context {
 		Image:             imageFlag.Get(p),
 		PoetImage:         poetImage.Get(p),
 		NodeSelector:      nodeSelector.Get(p),
-		Log:               zaptest.NewLogger(t, zaptest.Level(logLevel)).Sugar(),
+		Log:               zaptest.NewLogger(t, zaptest.Level(logLevel)).Sugar().Named(t.Name()),
 	}
 	tctx.Storage.Class = class
 	tctx.Storage.Size = size

@@ -209,7 +209,7 @@ func (l Log) Core() zapcore.Core {
 
 // WithName appends a name to a current name.
 func (l Log) WithName(prefix string) Log {
-	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix))
+	lgr := l.logger.Named(prefix)
 	var name string
 	if l.name == "" {
 		name = prefix
