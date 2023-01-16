@@ -1100,7 +1100,7 @@ func (app *App) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
 
-	if err = app.initServices(ctx,
+	err = app.initServices(ctx,
 		nodeID,
 		dbStorepath,
 		app.edSgn,
@@ -1108,7 +1108,9 @@ func (app *App) Start(ctx context.Context) error {
 		poetClients,
 		vrfSigner,
 		app.Config.LayersPerEpoch,
-		clock); err != nil {
+		clock,
+	)
+	if err != nil {
 		return fmt.Errorf("cannot start services: %w", err)
 	}
 

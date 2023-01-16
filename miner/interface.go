@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
+//go:generate mockgen -package=miner -destination=./mocks.go -source=./interface.go
 
 type proposalOracle interface {
 	GetProposalEligibility(types.LayerID, types.Beacon) (types.ATXID, []types.ATXID, []types.VotingEligibility, error)

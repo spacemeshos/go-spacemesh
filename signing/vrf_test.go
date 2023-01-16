@@ -3,7 +3,6 @@ package signing
 import (
 	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -11,11 +10,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/vrfnonce"
 )
 
 func Fuzz_VRFSignAndVerify(f *testing.F) {
-	f.Fuzz(func(t *testing.T, message []byte, nonce uint64) {
+	f.Fuzz(func(t *testing.T, message []byte, nonce uint64, epoch uint64) {
 		edSig, err := NewEdSigner()
 		require.NoError(t, err, "failed to create EdSigner")
 
@@ -24,13 +23,13 @@ func Fuzz_VRFSignAndVerify(f *testing.F) {
 		vrfSig, err := edSig.VRFSigner(WithNonceForNode(vrfNonce, edSig.NodeID()))
 		require.NoError(t, err, "failed to create VRF signer")
 
-		signature, err := vrfSig.Sign(message)
+		signature, err := vrfSig.Sign(message, types.EpochID(epoch))
 		require.NoError(t, err, "failed to sign message")
 
 		vrfVerify, err := NewVRFVerifier(WithNonceForNode(vrfNonce, edSig.NodeID()))
 		require.NoError(t, err, "failed to create VRF verifier")
 
-		ok := vrfVerify.Verify(edSig.NodeID(), message, signature)
+		ok := vrfVerify.Verify(edSig.NodeID(), types.EpochID(epoch), message, signature)
 		require.True(t, ok, "failed to verify VRF signature")
 	})
 }
@@ -48,34 +47,21 @@ func Test_VRFSignAndVerify(t *testing.T) {
 	require.NoError(t, err, "failed to create EdSigner")
 
 	nonce := types.VRFPostIndex(rand.Uint64())
-	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(1),
-				PrevATXID:  types.RandomATXID(),
-			},
-			NumUnits: 2,
-			VRFNonce: &nonce,
-		},
-	}
-	atx.Signature = signer.Sign(atx.SignedBytes())
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-
-	atxs.Add(db, vAtx, time.Now())
+	epoch := types.EpochID(1)
+	vrfnonce.Add(db, signer.NodeID(), epoch, nonce)
 
 	// Act & Assert
 	vrfSig, err := signer.VRFSigner(WithNonceFromDB(db))
 	require.NoError(t, err, "failed to create VRF signer")
 
 	message := []byte("hello world")
-	signature, err := vrfSig.Sign(message)
+	signature, err := vrfSig.Sign(message, epoch)
 	require.NoError(t, err, "failed to sign message")
 
 	vrfVerify, err := NewVRFVerifier(WithNonceFromDB(db))
 	require.NoError(t, err, "failed to create VRF verifier")
 
-	ok := vrfVerify.Verify(signer.NodeID(), message, signature)
+	ok := vrfVerify.Verify(signer.NodeID(), epoch, message, signature)
 	require.True(t, ok, "failed to verify VRF signature")
 }
 
@@ -116,13 +102,15 @@ func Test_VRFSigner_WithNonceForNode(t *testing.T) {
 	vrfVerify2, err := NewVRFVerifier(WithNonceForNode(2, signer.NodeID()))
 	require.NoError(t, err, "failed to create VRF verifier")
 
+	epoch := types.EpochID(1)
+
 	// Act & Assert
-	sig, err := vrfSig.Sign([]byte("hello world"))
+	sig, err := vrfSig.Sign([]byte("hello world"), epoch)
 	require.NoError(t, err, "failed to sign message")
 
-	ok := vrfVerify1.Verify(signer.NodeID(), []byte("hello world"), sig)
+	ok := vrfVerify1.Verify(signer.NodeID(), epoch, []byte("hello world"), sig)
 	require.True(t, ok, "failed to verify VRF signature")
 
-	ok = vrfVerify2.Verify(signer.NodeID(), []byte("hello world"), sig)
+	ok = vrfVerify2.Verify(signer.NodeID(), epoch, []byte("hello world"), sig)
 	require.False(t, ok, "VRF signature should not be verified")
 }

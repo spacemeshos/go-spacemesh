@@ -186,7 +186,7 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 	buf := wc.encodeProposal(message.Epoch, message.Round, message.Unit)
-	if !wc.verifier.Verify(types.BytesToNodeID(message.MinerPK), buf, message.Signature) {
+	if !wc.verifier.Verify(types.BytesToNodeID(message.MinerPK), message.Epoch, buf, message.Signature) {
 		return fmt.Errorf("signature is invalid signature %x", message.Signature)
 	}
 
@@ -209,7 +209,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 	var smallest []byte
 	for unit := uint64(0); unit < allowed; unit++ {
 		proposal := wc.encodeProposal(epoch, round, unit)
-		signature, err := wc.signer.Sign(proposal)
+		signature, err := wc.signer.Sign(proposal, epoch)
 		if err != nil {
 			wc.logger.With().Panic("failed to sign proposal", log.Err(err))
 		}

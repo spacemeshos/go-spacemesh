@@ -95,8 +95,8 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	minerID := edSgn.NodeID()
 	lg := logtest.New(tb).WithName(minerID.ShortString())
 
-	tpd.mSigner.EXPECT().Sign(gomock.Any()).AnyTimes().Return([]byte{}, nil)
-	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
+	tpd.mSigner.EXPECT().Sign(gomock.Any(), gomock.Any()).AnyTimes().Return([]byte{}, nil)
+	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
 
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
 	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, tpd.mSigner, tpd.mVerifier, tpd.cdb, tpd.mClock,
@@ -914,8 +914,8 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 	vrfSigner, err := edSgn.VRFSigner(signing.WithNonceForNode(1, edSgn.NodeID()))
 	r.NoError(err)
 
-	sign := func(hex string) []byte {
-		sig, _ := vrfSigner.Sign(util.Hex2Bytes(hex))
+	sign := func(hex string, epoch types.EpochID) []byte {
+		sig, _ := vrfSigner.Sign(util.Hex2Bytes(hex), epoch)
 		return sig
 	}
 
@@ -927,12 +927,12 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: sign("0404"),
+			result: sign("0404", 1),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: sign("0408"),
+			result: sign("0408", 2),
 		},
 	}
 

@@ -159,7 +159,7 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 		if err != nil {
 			logger.With().Panic("failed to serialize VRF msg", log.Err(err))
 		}
-		vrfSig, err := o.vrfSigner.Sign(message)
+		vrfSig, err := o.vrfSigner.Sign(message, epoch)
 		if err != nil {
 			logger.With().Error("failed to sign VRF msg", log.Err(err))
 			return nil, nil, fmt.Errorf("oracle failed to sign: %w", err)

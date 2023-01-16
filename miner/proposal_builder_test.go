@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -21,7 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 const (
@@ -32,12 +31,12 @@ const (
 
 type testBuilder struct {
 	*ProposalBuilder
-	mOracle   *mocks.MockproposalOracle
-	mTortoise *mocks.MockvotesEncoder
-	mCState   *mocks.MockconservativeState
+	mOracle   *MockproposalOracle
+	mTortoise *MockvotesEncoder
+	mCState   *MockconservativeState
 	mPubSub   *pubsubmocks.MockPublisher
-	mBeacon   *smocks.MockBeaconGetter
-	mSync     *smocks.MockSyncStateProvider
+	mBeacon   *mocks.MockBeaconGetter
+	mSync     *mocks.MockSyncStateProvider
 }
 
 func createBuilder(tb testing.TB) *testBuilder {
@@ -45,12 +44,12 @@ func createBuilder(tb testing.TB) *testBuilder {
 	nodeID, edSigner, vrfSigner := generateNodeIDAndSigner(tb)
 	ctrl := gomock.NewController(tb)
 	pb := &testBuilder{
-		mOracle:   mocks.NewMockproposalOracle(ctrl),
-		mTortoise: mocks.NewMockvotesEncoder(ctrl),
-		mCState:   mocks.NewMockconservativeState(ctrl),
+		mOracle:   NewMockproposalOracle(ctrl),
+		mTortoise: NewMockvotesEncoder(ctrl),
+		mCState:   NewMockconservativeState(ctrl),
 		mPubSub:   pubsubmocks.NewMockPublisher(ctrl),
-		mBeacon:   smocks.NewMockBeaconGetter(ctrl),
-		mSync:     smocks.NewMockSyncStateProvider(ctrl),
+		mBeacon:   mocks.NewMockBeaconGetter(ctrl),
+		mSync:     mocks.NewMockSyncStateProvider(ctrl),
 	}
 	lg := logtest.New(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)

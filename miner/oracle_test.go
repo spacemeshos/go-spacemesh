@@ -12,13 +12,12 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 const (
@@ -140,9 +139,9 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 	o := createTestOracle(t, layerSize, layersPerEpoch)
 
 	ctrl := gomock.NewController(t)
-	mbc := smocks.NewMockBeaconCollector(ctrl)
-	vrfVerifier := mocks.NewMockvrfVerifier(ctrl)
-	vrfVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+	mbc := mocks.NewMockBeaconCollector(ctrl)
+	vrfVerifier := proposals.NewMockvrfVerifier(ctrl)
+	vrfVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
 	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"), vrfVerifier)
 

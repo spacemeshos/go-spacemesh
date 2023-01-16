@@ -10,12 +10,12 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/vrfnonce"
 )
 
 // nonceFetcher is an abstraction for VRFSigner and VRFVerifier to fetch a nonce for a given node.
 type nonceFetcher interface {
-	NonceForNode(types.NodeID) (types.VRFPostIndex, error)
+	NonceForNode(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
 }
 
 // VRFSigner is a signer for VRF purposes.
@@ -27,8 +27,8 @@ type VRFSigner struct {
 }
 
 // Sign signs a message for VRF purposes.
-func (s VRFSigner) Sign(msg []byte) ([]byte, error) {
-	nonce, err := s.fetcher.NonceForNode(s.nodeID)
+func (s VRFSigner) Sign(msg []byte, epoch types.EpochID) ([]byte, error) {
+	nonce, err := s.fetcher.NonceForNode(s.nodeID, epoch)
 	if err != nil {
 		return nil, err
 	}
@@ -104,22 +104,14 @@ type dbFetcher struct {
 	*datastore.CachedDB
 }
 
-func (f dbFetcher) NonceForNode(nodeID types.NodeID) (types.VRFPostIndex, error) {
-	atxId, err := atxs.GetFirstIDByNodeID(f, nodeID)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get initial atx for smesher %s: %w", nodeID.String(), err)
-	}
-	atx, err := f.GetAtxHeader(atxId)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get initial atx for smesher %s: %w", nodeID.String(), err)
-	}
-	return *atx.VRFNonce, nil
+func (f dbFetcher) NonceForNode(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	return vrfnonce.Get(f, nodeID, epoch)
 }
 
 // mapFetcher is used as a source for nodeid -> nonce mappings when WithNonceForNode is used.
 type mapFetcher map[types.NodeID]types.VRFPostIndex
 
-func (m mapFetcher) NonceForNode(nodeID types.NodeID) (types.VRFPostIndex, error) {
+func (m mapFetcher) NonceForNode(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
 	nonce, ok := m[nodeID]
 	if !ok {
 		return 0, fmt.Errorf("no nonce for node %s", nodeID.String())
@@ -145,8 +137,8 @@ func NewVRFVerifier(opts ...VRFOptionFunc) (*VRFVerifier, error) {
 }
 
 // Verify that signature matches public key.
-func (v VRFVerifier) Verify(nodeID types.NodeID, msg, sig []byte) bool {
-	nonce, err := v.fetcher.NonceForNode(nodeID)
+func (v VRFVerifier) Verify(nodeID types.NodeID, epoch types.EpochID, msg, sig []byte) bool {
+	nonce, err := v.fetcher.NonceForNode(nodeID, epoch)
 	if err != nil {
 		return false
 	}

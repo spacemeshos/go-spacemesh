@@ -448,7 +448,7 @@ func Test_handleProposal_BadSignature(t *testing.T) {
 	require.NoError(t, err)
 
 	mVerifier := NewMockvrfVerifier(tpd.ctrl)
-	mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(false).Times(1)
+	mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false).Times(1)
 	tpd.vrfVerifier = mVerifier
 
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(epoch.FirstLayer()).Times(1)

@@ -388,18 +388,18 @@ func (mr *MockvrfSignerMockRecorder) PublicKey() *gomock.Call {
 }
 
 // Sign mocks base method.
-func (m *MockvrfSigner) Sign(msg []byte) ([]byte, error) {
+func (m *MockvrfSigner) Sign(msg []byte, epoch types.EpochID) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Sign", msg)
+	ret := m.ctrl.Call(m, "Sign", msg, epoch)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Sign indicates an expected call of Sign.
-func (mr *MockvrfSignerMockRecorder) Sign(msg interface{}) *gomock.Call {
+func (mr *MockvrfSignerMockRecorder) Sign(msg, epoch interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sign", reflect.TypeOf((*MockvrfSigner)(nil).Sign), msg)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sign", reflect.TypeOf((*MockvrfSigner)(nil).Sign), msg, epoch)
 }
 
 // MockvrfVerifier is a mock of vrfVerifier interface.
@@ -426,15 +426,15 @@ func (m *MockvrfVerifier) EXPECT() *MockvrfVerifierMockRecorder {
 }
 
 // Verify mocks base method.
-func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg, sig []byte) bool {
+func (m *MockvrfVerifier) Verify(nodeID types.NodeID, epoch types.EpochID, msg, sig []byte) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Verify", nodeID, msg, sig)
+	ret := m.ctrl.Call(m, "Verify", nodeID, epoch, msg, sig)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockvrfVerifierMockRecorder) Verify(nodeID, msg, sig interface{}) *gomock.Call {
+func (mr *MockvrfVerifierMockRecorder) Verify(nodeID, epoch, msg, sig interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), nodeID, msg, sig)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), nodeID, epoch, msg, sig)
 }

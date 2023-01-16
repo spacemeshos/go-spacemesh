@@ -22,8 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./oracle.go
-
 const (
 	// HarePreRound ...
 	HarePreRound uint32 = math.MaxUint32
@@ -53,15 +51,6 @@ var (
 	errEmptyActiveSet    = errors.New("empty active set")
 	errZeroTotalWeight   = errors.New("zero total weight")
 )
-
-type cache interface {
-	Add(key, value any) (evicted bool)
-	Get(key any) (value any, ok bool)
-}
-
-type vrfVerifier interface {
-	Verify(nodeID types.NodeID, msg, sig []byte) bool
-}
 
 // Oracle is the hare eligibility oracle.
 type Oracle struct {
@@ -244,7 +233,8 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		layer,
 		id,
 		log.Uint32("round", round),
-		log.Int("committee_size", committeeSize))
+		log.Int("committee_size", committeeSize),
+	)
 
 	if committeeSize < 1 {
 		logger.With().Error("committee size must be positive", log.Int("committee_size", committeeSize))
@@ -258,7 +248,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	}
 
 	// validate message
-	if !o.vrfVerifier.Verify(id, msg, vrfSig) {
+	if !o.vrfVerifier.Verify(id, layer.GetEpoch(), msg, vrfSig) {
 		logger.With().Info("eligibility: a node did not pass vrf signature verification",
 			id,
 			layer)
@@ -398,7 +388,7 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) (
 		return nil, err
 	}
 
-	return o.vrfSigner.Sign(msg)
+	return o.vrfSigner.Sign(msg, layer.GetEpoch())
 }
 
 // Returns a map of all active node IDs in the specified layer id.

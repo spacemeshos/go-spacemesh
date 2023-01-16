@@ -18,13 +18,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmock "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
-	"github.com/spacemeshos/go-spacemesh/proposals/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
-	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -39,12 +38,12 @@ func genGoldenATXID() types.ATXID {
 
 type mockSet struct {
 	mpub *pubsubmock.MockPublisher
-	mf   *smocks.MockFetcher
-	mbc  *smocks.MockBeaconCollector
-	mm   *mocks.MockmeshProvider
-	mv   *mocks.MockeligibilityValidator
-	md   *mocks.MockballotDecoder
-	mvrf *mocks.MockvrfVerifier
+	mf   *mocks.MockFetcher
+	mbc  *mocks.MockBeaconCollector
+	mm   *MockmeshProvider
+	mv   *MockeligibilityValidator
+	md   *MockballotDecoder
+	mvrf *MockvrfVerifier
 }
 
 func (ms *mockSet) decodeAnyBallots() *mockSet {
@@ -62,12 +61,12 @@ func fullMockSet(tb testing.TB) *mockSet {
 	ctrl := gomock.NewController(tb)
 	return &mockSet{
 		mpub: pubsubmock.NewMockPublisher(ctrl),
-		mf:   smocks.NewMockFetcher(ctrl),
-		mbc:  smocks.NewMockBeaconCollector(ctrl),
-		mm:   mocks.NewMockmeshProvider(ctrl),
-		mv:   mocks.NewMockeligibilityValidator(ctrl),
-		md:   mocks.NewMockballotDecoder(ctrl),
-		mvrf: mocks.NewMockvrfVerifier(ctrl),
+		mf:   mocks.NewMockFetcher(ctrl),
+		mbc:  mocks.NewMockBeaconCollector(ctrl),
+		mm:   NewMockmeshProvider(ctrl),
+		mv:   NewMockeligibilityValidator(ctrl),
+		md:   NewMockballotDecoder(ctrl),
+		mvrf: NewMockvrfVerifier(ctrl),
 	}
 }
 

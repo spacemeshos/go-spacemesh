@@ -973,7 +973,7 @@ func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 
 func buildSignedProposal(ctx context.Context, signer vrfSigner, epoch types.EpochID, logger log.Log) []byte {
 	p := buildProposal(epoch, logger)
-	signature, err := signer.Sign(p)
+	signature, err := signer.Sign(p, epoch)
 	if err != nil {
 		logger.With().Fatal("failed to sign proposal", log.Err(err))
 	}
@@ -985,8 +985,6 @@ func buildSignedProposal(ctx context.Context, signer vrfSigner, epoch types.Epoc
 
 	return signature
 }
-
-//go:generate scalegen -types BuildProposalMessage
 
 // ProposalVrfMessage is a message for buildProposal below.
 type ProposalVrfMessage struct {
