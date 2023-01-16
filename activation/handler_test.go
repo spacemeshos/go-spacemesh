@@ -24,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/vrfnonce"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -213,6 +214,23 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		validator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).Times(1)
 		validator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		require.NoError(t, err)
+	})
+
+	t.Run("valid atx with new VRF nonce", func(t *testing.T) {
+		challenge := newChallenge(1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), nil)
+		nonce := types.VRFPostIndex(999)
+		atx := newAtx(t, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
+		atx.NIPost = newNIPostWithChallenge(atx.NIPostChallenge.Hash(), poetRef)
+		atx.VRFNonce = &nonce
+		require.NoError(t, SignAndFinalizeAtx(sig, atx))
+
+		validator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).Times(1)
+		validator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.NoError(t, err)
@@ -494,14 +512,17 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	// Arrange
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+
 	ctrl := gomock.NewController(t)
 	validator := NewMocknipostValidator(ctrl)
 	receiver := NewMockatxReceiver(ctrl)
 	mclock := NewMocklayerClock(ctrl)
 	mpub := pubsubmocks.NewMockPublisher(ctrl)
+
 	goldenATXID := types.ATXID{2, 3, 4}
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
+
 	nid := sig.NodeID()
 	atxHdlr := NewHandler(cdb, mclock, mpub, nil, layersPerEpoch, testTickSize, goldenATXID, validator, receiver, lg)
 
@@ -530,6 +551,47 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	proof, err = identities.GetMalfeasanceProof(cdb, nid)
 	require.NoError(t, err)
 	require.Equal(t, got.MalfeasanceProof, *proof)
+}
+
+func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
+	// Arrange
+	lg := logtest.New(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+
+	ctrl := gomock.NewController(t)
+	validator := NewMocknipostValidator(ctrl)
+	receiver := NewMockatxReceiver(ctrl)
+	mclock := NewMocklayerClock(ctrl)
+	mpub := pubsubmocks.NewMockPublisher(ctrl)
+
+	goldenATXID := types.ATXID{2, 3, 4}
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	nid := sig.NodeID()
+	atxHdlr := NewHandler(cdb, mclock, mpub, nil, layersPerEpoch, testTickSize, goldenATXID, validator, receiver, lg)
+
+	coinbase := types.GenerateAddress([]byte("aaaa"))
+
+	// Act & Assert
+	atx1 := newActivationTx(t, sig, &nid, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.NewLayerID(layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
+	nonce1 := types.VRFPostIndex(123)
+	atx1.VRFNonce = &nonce1
+	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx1))
+
+	got, err := vrfnonce.Get(cdb, nid, atx1.TargetEpoch())
+	require.NoError(t, err)
+	require.Equal(t, nonce1, got)
+
+	// another atx for the same epoch is considered malicious
+	atx2 := newActivationTx(t, sig, &nid, 1, atx1.ID(), atx1.ID(), nil, types.NewLayerID(2*layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
+	nonce2 := types.VRFPostIndex(456)
+	atx2.VRFNonce = &nonce2
+	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx2))
+
+	got, err = vrfnonce.Get(cdb, nid, atx2.TargetEpoch())
+	require.NoError(t, err)
+	require.Equal(t, nonce2, got)
 }
 
 func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {

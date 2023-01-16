@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/vrfnonce"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -122,22 +123,30 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 	if existingATX != nil { // Already processed
 		return nil
 	}
-	epoch := atx.PublishEpoch()
 	h.log.WithContext(ctx).With().Info("processing atx",
-		atx.ID(),
-		epoch,
+		log.Stringer("atx_id", atx.ID()),
+		log.Stringer("publish_epoch", atx.PublishEpoch()),
 		log.FieldNamed("atx_node_id", atx.NodeID()),
-		atx.PubLayerID)
+		log.Stringer("atx_pubLayerID", atx.PubLayerID),
+	)
 	if err := h.ContextuallyValidateAtx(atx); err != nil {
 		h.log.WithContext(ctx).With().Warning("atx failed contextual validation",
-			atx.ID(),
+			log.Stringer("atx_id", atx.ID()),
 			log.FieldNamed("atx_node_id", atx.NodeID()),
-			log.Err(err))
+			log.Err(err),
+		)
 	} else {
 		h.log.WithContext(ctx).With().Info("atx is valid", atx.ID())
 	}
 	if err := h.StoreAtx(ctx, atx); err != nil {
 		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
+	}
+
+	if atx.VRFNonce != nil {
+		err := vrfnonce.Add(h.cdb, atx.NodeID(), atx.TargetEpoch(), *atx.VRFNonce)
+		if err != nil {
+			return fmt.Errorf("cannot store vrf nonce for atx %s: %w", atx.ShortString(), err)
+		}
 	}
 	return nil
 }
@@ -154,12 +163,24 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 //   - ATX LayerID is NIPostLayerTime or less after the PositioningATX LayerID.
 //   - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
+	var (
+		commitmentATX *types.ATXID
+		err           error
+	)
+
 	if atx.PrevATXID == *types.EmptyATXID {
 		if err := h.validateInitialAtx(ctx, atx); err != nil {
 			return nil, err
 		}
+		commitmentATX = atx.CommitmentATX
 	} else {
-		if err := h.validateNonInitialAtx(ctx, atx); err != nil {
+		commitmentATX, err = h.getCommitmentAtx(atx)
+		if err != nil {
+			return nil, fmt.Errorf("validation failed: commitment atx for %s not found: %w", atx.NodeID(), err)
+		}
+
+		err = h.validateNonInitialAtx(ctx, atx, *commitmentATX)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -176,11 +197,6 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 
 	expectedChallengeHash := atx.NIPostChallenge.Hash()
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
-
-	commitmentATX, err := h.getCommitmentAtx(atx)
-	if err != nil {
-		return nil, fmt.Errorf("validation failed: initial atx not found: %w", err)
-	}
 
 	leaves, err := h.nipostValidator.NIPost(atx.NodeID(), *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
 	if err != nil {
@@ -219,7 +235,7 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 	return nil
 }
 
-func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.ActivationTx) error {
+func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.ActivationTx, commitmentATX types.ATXID) error {
 	if err := h.nipostValidator.NIPostChallenge(&atx.NIPostChallenge, h.cdb, atx.NodeID()); err != nil {
 		return err
 	}
@@ -231,6 +247,13 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 
 	if atx.NumUnits > prevAtx.NumUnits {
 		return fmt.Errorf("num units %d is greater than previous atx num units %d", atx.NumUnits, prevAtx.NumUnits)
+	}
+
+	if atx.VRFNonce != nil {
+		err = h.nipostValidator.VRFNonce(atx.NodeID(), commitmentATX, atx.VRFNonce, atx.NIPost.PostMetadata, atx.NumUnits)
+		if err != nil {
+			return fmt.Errorf("invalid VRFNonce: %w", err)
+		}
 	}
 
 	if atx.InitialPost != nil {
