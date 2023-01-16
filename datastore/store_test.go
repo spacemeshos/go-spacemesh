@@ -10,15 +10,159 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
+
+func TestMalfeasanceProof_EmptyNodeID(t *testing.T) {
+	db := sql.InMemory()
+	cdb := datastore.NewCachedDB(db, logtest.New(t))
+	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
+
+	// empty node id
+	got, err := cdb.GetMalfeasanceProof(types.NodeID{})
+	require.Error(t, err)
+	require.Nil(t, got)
+
+	proof := &types.MalfeasanceProof{
+		Layer: types.NewLayerID(11),
+		Proof: types.Proof{
+			Type: types.MultipleBallots,
+			Data: &types.BallotProof{
+				Messages: [2]types.BallotProofMsg{
+					{},
+					{},
+				},
+			},
+		},
+	}
+	require.Error(t, cdb.AddMalfeasanceProof(types.NodeID{}, proof, nil))
+	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
+}
+
+func TestMalfeasanceProof_Honest(t *testing.T) {
+	db := sql.InMemory()
+	cdb := datastore.NewCachedDB(db, logtest.New(t))
+	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
+
+	nodeID1 := types.NodeID{1}
+	got, err := cdb.GetMalfeasanceProof(nodeID1)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, got)
+	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
+
+	// secretly save the proof to database
+	require.NoError(t, identities.SetMalicious(db, nodeID1, []byte("bad")))
+	bad, err := identities.IsMalicious(db, nodeID1)
+	require.NoError(t, err)
+	require.True(t, bad)
+	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
+
+	// but it will retrieve it from cache
+	got, err = cdb.GetMalfeasanceProof(nodeID1)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, got)
+	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
+	bad, err = cdb.IsMalicious(nodeID1)
+	require.NoError(t, err)
+	require.False(t, bad)
+
+	// asking will cause the answer cached for honest nodes
+	nodeID2 := types.NodeID{2}
+	bad, err = cdb.IsMalicious(nodeID2)
+	require.NoError(t, err)
+	require.False(t, bad)
+	require.Equal(t, 2, cdb.MalfeasanceCacheSize())
+
+	// secretly save the proof to database
+	require.NoError(t, identities.SetMalicious(db, nodeID2, []byte("bad")))
+	bad, err = identities.IsMalicious(db, nodeID2)
+	require.NoError(t, err)
+	require.True(t, bad)
+	require.Equal(t, 2, cdb.MalfeasanceCacheSize())
+
+	// but an add will update the cache
+	proof := &types.MalfeasanceProof{
+		Layer: types.NewLayerID(11),
+		Proof: types.Proof{
+			Type: types.MultipleBallots,
+			Data: &types.BallotProof{
+				Messages: [2]types.BallotProofMsg{
+					{},
+					{},
+				},
+			},
+		},
+	}
+	require.NoError(t, cdb.AddMalfeasanceProof(nodeID2, proof, nil))
+	bad, err = cdb.IsMalicious(nodeID2)
+	require.NoError(t, err)
+	require.True(t, bad)
+	require.Equal(t, 2, cdb.MalfeasanceCacheSize())
+}
+
+func TestMalfeasanceProof_Dishonest(t *testing.T) {
+	db := sql.InMemory()
+	cdb := datastore.NewCachedDB(db, logtest.New(t))
+	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
+
+	// a bad guy
+	proof := &types.MalfeasanceProof{
+		Layer: types.NewLayerID(11),
+		Proof: types.Proof{
+			Type: types.MultipleBallots,
+			Data: &types.BallotProof{
+				Messages: [2]types.BallotProofMsg{
+					{},
+					{},
+				},
+			},
+		},
+	}
+	require.Error(t, cdb.AddMalfeasanceProof(types.NodeID{}, proof, nil))
+
+	nodeID1 := types.NodeID{1}
+	require.NoError(t, cdb.AddMalfeasanceProof(nodeID1, proof, nil))
+	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
+
+	got, err := cdb.GetMalfeasanceProof(nodeID1)
+	require.NoError(t, err)
+	require.EqualValues(t, proof, got)
+
+	got, err = identities.GetMalfeasanceProof(db, nodeID1)
+	require.NoError(t, err)
+	require.EqualValues(t, proof, got)
+
+	nodeID2 := types.NodeID{2}
+	// secretly save the proof to database for a different id
+	encoded, err := codec.Encode(proof)
+	require.NoError(t, err)
+	require.NoError(t, identities.SetMalicious(db, nodeID2, encoded))
+	bad, err := identities.IsMalicious(db, nodeID2)
+	require.NoError(t, err)
+	require.True(t, bad)
+	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
+
+	// just asking for boolean will not cause it to cache
+	bad, err = cdb.IsMalicious(nodeID2)
+	require.NoError(t, err)
+	require.True(t, bad)
+	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
+
+	// but asking for real proof data will cause it to cache
+	got, err = cdb.GetMalfeasanceProof(nodeID2)
+	require.NoError(t, err)
+	require.EqualValues(t, proof, got)
+	require.Equal(t, 2, cdb.MalfeasanceCacheSize())
+}
 
 func TestBlobStore_GetATXBlob(t *testing.T) {
 	types.SetLayersPerEpoch(3)

@@ -1024,7 +1024,6 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	smApp.Config.SMESHING.Opts.DataDir, _ = os.MkdirTemp("", "sm-app-test-post-datadir")
 
 	smApp.host = host
-	smApp.edSgn = edSgn
 
 	vrfSigner, err := edSgn.VRFSigner(
 		signing.WithNonceForNode(1, edSgn.NodeID()),
@@ -1033,8 +1032,13 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 		return nil, err
 	}
 
-	err = smApp.initServices(context.Background(), edSgn.NodeID(), storePath, edSgn,
-		uint32(smApp.Config.LayerAvgSize), []activation.PoetProvingServiceClient{poetClient}, vrfSigner, smApp.Config.LayersPerEpoch, clock)
+	if err = smApp.setupDBs(context.Background(), lg, storePath); err != nil {
+		return nil, err
+	}
+
+	smApp.nodeID = edSgn.NodeID()
+	types.SetLayersPerEpoch(smApp.Config.LayersPerEpoch)
+	err = smApp.initServices(context.Background(), edSgn, []activation.PoetProvingServiceClient{poetClient}, vrfSigner, clock)
 	if err != nil {
 		return nil, err
 	}

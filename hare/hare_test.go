@@ -14,6 +14,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
@@ -133,7 +134,7 @@ func TestHare_New(t *testing.T) {
 
 	logger := logtest.New(t).WithName(t.Name())
 	cfg := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
-	h := New(sql.InMemory(), cfg, noopPubSub(t), signer, types.NodeID{}, make(chan LayerOutput, 1),
+	h := New(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), cfg, noopPubSub(t), signer, types.NodeID{}, make(chan LayerOutput, 1),
 		smocks.NewMockSyncStateProvider(ctrl), smocks.NewMockBeaconGetter(ctrl),
 		eligibility.New(logger), mocks.NewMocklayerPatrol(ctrl), mocks.NewMockstateQuerier(ctrl), newMockClock(), logger)
 	assert.NotNil(t, h)
@@ -281,7 +282,7 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 		}
 	}, time.Second, 100*time.Millisecond)
 	nodeID := types.BytesToNodeID(gossip.Eligibility.PubKey)
-	proof, err := identities.GetMalfeasanceProof(h.db, nodeID)
+	proof, err := identities.GetMalfeasanceProof(h.cdb, nodeID)
 	require.NoError(t, err)
 	require.NotNil(t, proof)
 	require.Equal(t, gossip.MalfeasanceProof, *proof)
@@ -316,8 +317,8 @@ func TestHare_onTick(t *testing.T) {
 		randomProposal(lyrID, beacon),
 	}
 	for _, p := range pList {
-		require.NoError(t, ballots.Add(h.db, &p.Ballot))
-		require.NoError(t, proposals.Add(h.db, p))
+		require.NoError(t, ballots.Add(h.cdb, &p.Ballot))
+		require.NoError(t, proposals.Add(h.cdb, p))
 	}
 
 	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
@@ -387,12 +388,12 @@ func TestHare_onTick_BeaconFromRefBallot(t *testing.T) {
 		randomProposal(lyrID, beacon),
 	}
 	refBallot := &randomProposal(lyrID.Sub(1), beacon).Ballot
-	require.NoError(t, ballots.Add(h.db, refBallot))
+	require.NoError(t, ballots.Add(h.cdb, refBallot))
 	pList[1].EpochData = nil
 	pList[1].RefBallot = refBallot.ID()
 	for _, p := range pList {
-		require.NoError(t, ballots.Add(h.db, &p.Ballot))
-		require.NoError(t, proposals.Add(h.db, p))
+		require.NoError(t, ballots.Add(h.cdb, &p.Ballot))
+		require.NoError(t, proposals.Add(h.cdb, p))
 	}
 
 	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
@@ -448,8 +449,8 @@ func TestHare_onTick_SomeBadBallots(t *testing.T) {
 		randomProposal(lyrID, epochBeacon),
 	}
 	for _, p := range pList {
-		require.NoError(t, ballots.Add(h.db, &p.Ballot))
-		require.NoError(t, proposals.Add(h.db, p))
+		require.NoError(t, ballots.Add(h.cdb, &p.Ballot))
+		require.NoError(t, proposals.Add(h.cdb, p))
 	}
 	goodProposals := []*types.Proposal{pList[0], pList[2]}
 
@@ -505,8 +506,8 @@ func TestHare_onTick_NoGoodBallots(t *testing.T) {
 		randomProposal(lyrID, beacon),
 	}
 	for _, p := range pList {
-		require.NoError(t, ballots.Add(h.db, &p.Ballot))
-		require.NoError(t, proposals.Add(h.db, p))
+		require.NoError(t, ballots.Add(h.cdb, &p.Ballot))
+		require.NoError(t, proposals.Add(h.cdb, p))
 	}
 
 	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
@@ -675,29 +676,29 @@ func TestHare_WeakCoin(t *testing.T) {
 		randomProposal(layerID, types.EmptyBeacon),
 	}
 	for _, p := range pList {
-		require.NoError(t, ballots.Add(h.db, &p.Ballot))
-		require.NoError(t, proposals.Add(h.db, p))
+		require.NoError(t, ballots.Add(h.cdb, &p.Ballot))
+		require.NoError(t, proposals.Add(h.cdb, p))
 	}
 	set := NewSetFromValues(types.ToProposalIDs(pList)...)
 
 	// complete + coin flip true
 	h.outputChan <- mockReport{layerID, set, true, true}
 	require.NoError(t, waitForMsg())
-	wc, err := layers.GetWeakCoin(h.db, layerID)
+	wc, err := layers.GetWeakCoin(h.cdb, layerID)
 	require.NoError(t, err)
 	require.True(t, wc)
 
 	// incomplete + coin flip true
 	h.outputChan <- mockReport{layerID, set, false, true}
 	require.Error(t, waitForMsg())
-	wc, err = layers.GetWeakCoin(h.db, layerID)
+	wc, err = layers.GetWeakCoin(h.cdb, layerID)
 	require.NoError(t, err)
 	require.True(t, wc)
 
 	// complete + coin flip false
 	h.outputChan <- mockReport{layerID, set, true, false}
 	require.NoError(t, waitForMsg())
-	wc, err = layers.GetWeakCoin(h.db, layerID)
+	wc, err = layers.GetWeakCoin(h.cdb, layerID)
 	require.NoError(t, err)
 	require.False(t, wc)
 
@@ -705,7 +706,7 @@ func TestHare_WeakCoin(t *testing.T) {
 	h.outputChan <- mockReport{layerID, set, false, true}
 	require.Error(t, waitForMsg())
 
-	wc, err = layers.GetWeakCoin(h.db, layerID)
+	wc, err = layers.GetWeakCoin(h.cdb, layerID)
 	require.NoError(t, err)
 	require.True(t, wc)
 }
