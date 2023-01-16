@@ -113,6 +113,15 @@ CREATE TABLE atxs
 CREATE INDEX atxs_by_smesher_by_epoch_desc ON atxs (smesher, epoch desc);
 CREATE INDEX atxs_by_epoch_by_pubkey ON atxs (epoch, smesher);
 
+CREATE TABLE vrf_nonces
+(
+    id    CHAR(32),
+    epoch INT NOT NULL,
+    nonce UNSIGNED LONG INT,
+    PRIMARY KEY (id, epoch)
+) WITHOUT ROWID;
+CREATE INDEX vrf_nonces_by_epoch_desc ON vrf_nonces (id, epoch desc);
+
 CREATE TABLE proposals
 (
     id         CHAR(20) PRIMARY KEY,
