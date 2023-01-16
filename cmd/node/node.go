@@ -96,6 +96,7 @@ const (
 	ConStateLogger         = "conState"
 	Executor               = "executor"
 	Malfeasance            = "malfeasance"
+	VRFLogger              = "vrf"
 	VRFVerifierLogger      = "vrfVerifier"
 )
 
@@ -1025,7 +1026,8 @@ func (app *App) Start(ctx context.Context) error {
 	logger.With().Info("starting spacemesh",
 		log.String("data-dir", app.Config.DataDir()),
 		log.String("post-dir", app.Config.SMESHING.Opts.DataDir),
-		log.String("hostname", hostname))
+		log.String("hostname", hostname),
+	)
 
 	if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 		return fmt.Errorf("data-dir %s not found or could not be created: %w", app.Config.DataDir(), err)
@@ -1103,7 +1105,10 @@ func (app *App) Start(ctx context.Context) error {
 		return err
 	}
 	// need db to initialize the vrf signer
-	vrfSigner, err := edSgn.VRFSigner(signing.WithNonceFromDB(app.cachedDB))
+	vrfSigner, err := edSgn.VRFSigner(
+		signing.WithNonceFromDB(app.cachedDB),
+		signing.WithLogger(app.addLogger(VRFLogger, lg)),
+	)
 	if err != nil {
 		return fmt.Errorf("could not create vrf signer: %w", err)
 	}

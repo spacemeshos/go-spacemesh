@@ -21,16 +21,21 @@ type nonceFetcher interface {
 
 // VRFSigner is a signer for VRF purposes.
 type VRFSigner struct {
-	privateKey []byte
-	fetcher    nonceFetcher
+	fetcher nonceFetcher
+	log     log.Log
 
-	nodeID types.NodeID
+	privateKey []byte
+	nodeID     types.NodeID
 }
 
 // Sign signs a message for VRF purposes.
 func (s VRFSigner) Sign(msg []byte, epoch types.EpochID) ([]byte, error) {
 	nonce, err := s.fetcher.NonceForNode(s.nodeID, epoch)
 	if err != nil {
+		s.log.With().Error("failed to find nonce for VRF signature",
+			log.Uint64("epoch", uint64(epoch)),
+			log.Err(err),
+		)
 		return nil, err
 	}
 

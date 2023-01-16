@@ -128,8 +128,9 @@ func (es *EdSigner) VRFSigner(opts ...VRFOptionFunc) (*VRFSigner, error) {
 	}
 
 	return &VRFSigner{
+		fetcher:    cfg.getFetcher(),
+		log:        cfg.log,
 		privateKey: es.priv,
 		nodeID:     es.NodeID(),
-		fetcher:    cfg.getFetcher(),
 	}, nil
 }

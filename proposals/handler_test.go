@@ -74,7 +74,7 @@ func createTestHandler(t *testing.T) *testHandler {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	ms := fullMockSet(t)
 	return &testHandler{
-		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md,
+		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf,
 			WithLogger(logtest.New(t)),
 			WithConfig(Config{
 				LayerSize:      layerAvgSize,
