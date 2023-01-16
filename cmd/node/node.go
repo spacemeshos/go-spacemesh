@@ -96,6 +96,7 @@ const (
 	ConStateLogger         = "conState"
 	Executor               = "executor"
 	Malfeasance            = "malfeasance"
+	VRFVerifierLogger      = "vrfVerifier"
 )
 
 func GetCommand() *cobra.Command {
@@ -515,7 +516,10 @@ func (app *App) initServices(
 
 	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
 
-	vrfVerifier, err := signing.NewVRFVerifier(signing.WithNonceFromDB(app.cachedDB))
+	vrfVerifier, err := signing.NewVRFVerifier(
+		signing.WithNonceFromDB(app.cachedDB),
+		signing.WithLogger(app.addLogger(VRFVerifierLogger, lg)),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to create vrf verifier: %w", err)
 	}
@@ -550,7 +554,7 @@ func (app *App) initServices(
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl,
+	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,
@@ -651,7 +655,8 @@ func (app *App) initServices(
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
-		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)))
+		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
+	)
 
 	postSetupMgr, err := activation.NewPostSetupManager(nodeID, app.Config.POST, app.addLogger(PostLogger, lg), app.cachedDB, goldenATXID)
 	if err != nil {

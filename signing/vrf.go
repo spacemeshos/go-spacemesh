@@ -10,6 +10,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql/vrfnonce"
 )
 
@@ -58,6 +59,8 @@ type VRFOptionFunc func(*vrfOption) error
 type vrfOption struct {
 	nonceMap map[types.NodeID]types.VRFPostIndex
 	db       *datastore.CachedDB
+
+	log log.Log
 }
 
 func (opt *vrfOption) validate() error {
@@ -96,7 +99,15 @@ func WithNonceFromDB(db *datastore.CachedDB) VRFOptionFunc {
 	}
 }
 
+func WithLogger(log log.Log) VRFOptionFunc {
+	return func(opts *vrfOption) error {
+		opts.log = log
+		return nil
+	}
+}
+
 type VRFVerifier struct {
+	log     log.Log
 	fetcher nonceFetcher
 }
 
@@ -133,6 +144,7 @@ func NewVRFVerifier(opts ...VRFOptionFunc) (*VRFVerifier, error) {
 
 	return &VRFVerifier{
 		fetcher: cfg.getFetcher(),
+		log:     cfg.log,
 	}, nil
 }
 
@@ -140,6 +152,11 @@ func NewVRFVerifier(opts ...VRFOptionFunc) (*VRFVerifier, error) {
 func (v VRFVerifier) Verify(nodeID types.NodeID, epoch types.EpochID, msg, sig []byte) bool {
 	nonce, err := v.fetcher.NonceForNode(nodeID, epoch)
 	if err != nil {
+		v.log.With().Error("failed to find nonce for verification",
+			log.String("node_id", nodeID.String()),
+			log.Uint64("epoch", uint64(epoch)),
+			log.Err(err),
+		)
 		return false
 	}
 
