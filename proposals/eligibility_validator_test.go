@@ -457,6 +457,7 @@ func TestCheckEligibility_AtxIdMismatch(t *testing.T) {
 	require.NoError(t, ballots.Add(tv.cdb, &refballot))
 
 	ballot := &types.Ballot{}
+	ballot.EligibilityProofs = []types.VotingEligibility{{}}
 	ballot.RefBallot = refballot.ID()
 	ballot.AtxID = types.ATXID{2}
 
@@ -478,6 +479,7 @@ func TestCheckEligibility_AtxNotIncluded(t *testing.T) {
 	require.NoError(t, atxs.Add(tv.cdb, atx2, time.Time{}))
 
 	ballot := &types.Ballot{}
+	ballot.EligibilityProofs = []types.VotingEligibility{{}}
 	ballot.SetID(types.BallotID{1})
 	ballot.AtxID = types.ATXID{3}
 	ballot.EpochData = &types.EpochData{
