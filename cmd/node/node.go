@@ -619,7 +619,6 @@ func (app *App) initServices(ctx context.Context,
 		MaxStaleDuration: time.Hour,
 	}
 	newSyncer := syncer.NewSyncer(cdb, clock, beaconProtocol, msh, fetcher, patrol, app.certifier,
-		syncer.WithContext(ctx),
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.addLogger(SyncLogger, lg)))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
@@ -835,7 +834,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerProposal))
 	}
 	if apiConf.StartNodeService {
-		nodeService := grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, app.atxBuilder)
+		nodeService := grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer, app.atxBuilder)
 		registerService(nodeService)
 	}
 	if apiConf.StartSmesherService {
