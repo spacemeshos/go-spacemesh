@@ -243,7 +243,7 @@ func NewActivationTx(
 // SetMetadata sets ATXMetadata.
 func (atx *ActivationTx) SetMetadata() {
 	atx.Target = atx.TargetEpoch()
-	atx.MsgHash = BytesToHash(atx.InnerBytes())
+	atx.MsgHash = BytesToHash(atx.HashInnerBytes())
 }
 
 // SignedBytes returns a signed data of the ActivationTx.
@@ -256,13 +256,14 @@ func (atx *ActivationTx) SignedBytes() []byte {
 	return data
 }
 
-// InnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
-func (atx *ActivationTx) InnerBytes() []byte {
-	data, err := codec.Encode(&atx.InnerActivationTx)
+// HashInnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
+func (atx *ActivationTx) HashInnerBytes() []byte {
+	hshr := hash.New()
+	_, err := codec.EncodeTo(hshr, &atx.InnerActivationTx)
 	if err != nil {
-		log.With().Fatal("failed to encode InnerActivationTx", log.Err(err))
+		log.Fatal("failed to encode InnerActivationTx for hashing")
 	}
-	return data
+	return hshr.Sum(nil)
 }
 
 // MarshalLogObject implements logging interface.
@@ -291,6 +292,11 @@ func (atx *ActivationTx) CalcAndSetID() error {
 	if atx.Signature == nil {
 		return fmt.Errorf("cannot calculate ATX ID: sig is nil")
 	}
+
+	if atx.MsgHash != BytesToHash(atx.HashInnerBytes()) {
+		return fmt.Errorf("bad message hash")
+	}
+
 	id := ATXID(CalcObjectHash32(atx))
 	atx.id = &id
 	return nil
@@ -301,6 +307,7 @@ func (atx *ActivationTx) CalcAndSetNodeID() error {
 	if atx.nodeID != nil {
 		return nil
 	}
+
 	nodeId, err := ExtractNodeIDFromSig(atx.SignedBytes(), atx.Signature)
 	if err != nil {
 		return fmt.Errorf("extract NodeID: %w", err)

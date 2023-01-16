@@ -71,6 +71,7 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 		ExpectedLeaders: leaders,
 		LimitIterations: limitIterations,
 		LimitConcurrent: maxLayers,
+		Hdist:           20,
 	}
 
 	mesh, err := mocknet.FullMeshLinked(nodes)

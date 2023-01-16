@@ -1,40 +1,62 @@
 package hare
 
 import (
+	"context"
 	"encoding/binary"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // notifyTracker tracks notify messages.
 // It also provides the number of notifications tracked for a given set.
 type notifyTracker struct {
-	notifies     map[string]struct{}       // tracks PubKey->Notification
-	tracker      *RefCountTracker          // tracks ref count to each seen set
-	certificates map[types.Hash32]struct{} // tracks Set->certificate
+	logger       log.Log
+	malCh        chan types.MalfeasanceGossip
+	notifies     map[string]*types.HareProofMsg // tracks PubKey->Notification
+	tracker      *RefCountTracker               // tracks ref count to each seen set
+	certificates map[types.Hash32]struct{}      // tracks Set->certificate
 }
 
-func newNotifyTracker(expectedSize int) *notifyTracker {
-	nt := &notifyTracker{}
-	nt.notifies = make(map[string]struct{}, expectedSize)
-	nt.tracker = NewRefCountTracker()
-	nt.certificates = make(map[types.Hash32]struct{}, expectedSize)
-
-	return nt
+func newNotifyTracker(logger log.Log, mch chan types.MalfeasanceGossip, expectedSize int) *notifyTracker {
+	return &notifyTracker{
+		logger:       logger,
+		malCh:        mch,
+		notifies:     make(map[string]*types.HareProofMsg, expectedSize),
+		tracker:      NewRefCountTracker(),
+		certificates: make(map[types.Hash32]struct{}, expectedSize),
+	}
 }
 
 // OnNotify tracks the provided notification message.
 // Returns true if the InnerMsg didn't affect the state, false otherwise.
-func (nt *notifyTracker) OnNotify(msg *Msg) bool {
+func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Msg) bool {
 	pub := msg.PubKey
 	eligibilityCount := uint32(msg.Eligibility.Count)
-	if _, exist := nt.notifies[pub.String()]; exist { // already seenSenders
+	if prev, exist := nt.notifies[pub.String()]; exist { // already seenSenders
+		if prev.InnerMsg.Layer == msg.Layer &&
+			prev.InnerMsg.Round == msg.Round &&
+			prev.InnerMsg.MsgHash != msg.MsgHash {
+			nt.logger.WithContext(ctx).With().Warning("equivocation detected at notify round", types.BytesToNodeID(pub.Bytes()))
+			this := &types.HareProofMsg{
+				InnerMsg:  msg.HareMetadata,
+				Signature: msg.Signature,
+			}
+			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev, this, &msg.Eligibility, nt.malCh); err != nil {
+				nt.logger.WithContext(ctx).With().Warning("failed to report equivocation in notify round",
+					types.BytesToNodeID(pub.Bytes()),
+					log.Err(err))
+			}
+		}
 		return true // ignored
 	}
 
 	// keep msg for pub
-	nt.notifies[pub.String()] = struct{}{}
+	nt.notifies[pub.String()] = &types.HareProofMsg{
+		InnerMsg:  msg.HareMetadata,
+		Signature: msg.Signature,
+	}
 
 	// track that set
 	s := NewSet(msg.InnerMsg.Values)

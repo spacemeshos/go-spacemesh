@@ -42,6 +42,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -94,6 +95,7 @@ const (
 	GRPCLogger             = "grpc"
 	ConStateLogger         = "conState"
 	Executor               = "executor"
+	Malfeasance            = "malfeasance"
 )
 
 func GetCommand() *cobra.Command {
@@ -297,6 +299,7 @@ type App struct {
 	postSetupMgr     *activation.PostSetupManager
 	atxBuilder       *activation.Builder
 	atxHandler       *activation.Handler
+	validator        *activation.Validator
 	edSgn            *signing.EdSigner
 	keyExtractor     *signing.PubKeyExtractor
 	beaconProtocol   *beacon.ProtocolDriver
@@ -485,6 +488,7 @@ func (app *App) initServices(ctx context.Context,
 	app.atxDB = *cdb
 	poetDb := activation.NewPoetDb(sqlDB, app.addLogger(PoetDbLogger, lg))
 	validator := activation.NewValidator(poetDb, app.Config.POST)
+	app.validator = validator
 
 	if err := os.MkdirAll(dbStorepath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbStorepath, err)
@@ -550,13 +554,13 @@ func (app *App) initServices(ctx context.Context,
 	)
 
 	executor := mesh.NewExecutor(sqlDB, state, app.conState, app.addLogger(Executor, lg))
-	msh, err := mesh.NewMesh(cdb, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
+	msh, err := mesh.NewMesh(cdb, clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
 	fetcherWrapped := &layerFetcher{}
-	atxHandler := activation.NewHandler(cdb, fetcherWrapped, layersPerEpoch, app.Config.TickSize, goldenATXID, validator, trtl, app.addLogger(ATXHandlerLogger, lg))
+	atxHandler := activation.NewHandler(cdb, clock, app.host, fetcherWrapped, layersPerEpoch, app.Config.TickSize, goldenATXID, validator, trtl, app.addLogger(ATXHandlerLogger, lg))
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
@@ -565,7 +569,7 @@ func (app *App) initServices(ctx context.Context,
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(cdb, fetcherWrapped, beaconProtocol, msh, trtl,
+	proposalListener := proposals.NewHandler(cdb, app.host, fetcherWrapped, beaconProtocol, msh, trtl,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,
@@ -633,9 +637,12 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		blocks.WithHareOutputChan(hareOutputCh),
 		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
+
+	hareCfg := app.Config.HARE
+	hareCfg.Hdist = app.Config.Tortoise.Hdist
 	app.hare = hare.New(
 		sqlDB,
-		app.Config.HARE,
+		hareCfg,
 		app.host,
 		sgn,
 		nodeID,
@@ -644,7 +651,6 @@ func (app *App) initServices(ctx context.Context,
 		beaconProtocol,
 		hOracle,
 		patrol,
-		uint16(app.Config.LayersPerEpoch),
 		hOracle,
 		clock,
 		app.addLogger(HareLogger, lg))
@@ -698,6 +704,8 @@ func (app *App) initServices(ctx context.Context,
 			GracePeriod: app.Config.POET.GracePeriod,
 		}))
 
+	malfeasanceHandler := malfeasance.NewHandler(sqlDB, app.addLogger(Malfeasance, lg), app.host.ID())
+
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
 		if newSyncer.ListenToGossip() {
 			return pubsub.ValidationAccept
@@ -724,6 +732,7 @@ func (app *App) initServices(ctx context.Context,
 	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
 	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()))
 	app.host.Register(pubsub.BlockCertify, pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage))
+	app.host.Register(pubsub.MalfeasanceProof, malfeasanceHandler.HandleMalfeasanceProof)
 
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener
@@ -816,7 +825,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewDebugService(app.conState, app.host))
 	}
 	if apiConf.StartGatewayService {
-		verifier := activation.NewChallengeVerifier(&app.atxDB, app.keyExtractor, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
+		verifier := activation.NewChallengeVerifier(&app.atxDB, app.keyExtractor, app.validator, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
 		registerService(grpcserver.NewGatewayService(verifier))
 	}
 	if apiConf.StartGlobalStateService {

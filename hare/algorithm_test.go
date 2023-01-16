@@ -22,8 +22,6 @@ import (
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
-var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000}
-
 func newRoundClockFromCfg(logger log.Log, cfg config.Config) *SimpleRoundClock {
 	return NewSimpleRoundClock(time.Now(),
 		time.Duration(cfg.WakeupDelta)*time.Second,
@@ -125,7 +123,7 @@ func (mct *mockCommitTracker) CommitCount() int {
 	return 0
 }
 
-func (mct *mockCommitTracker) OnCommit(*Msg) {
+func (mct *mockCommitTracker) OnCommit(context.Context, *Msg) {
 	mct.countOnCommit++
 }
 
@@ -150,6 +148,7 @@ type testBroker struct {
 }
 
 func buildBroker(tb testing.TB, testName string) *testBroker {
+	cfg := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	return buildBrokerWithLimit(tb, testName, cfg.LimitIterations)
 }
 
@@ -159,7 +158,7 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
 	return &testBroker{
 		Broker: newBroker(&mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
-			4, limit, logtest.New(tb).WithName(testName)),
+			limit, logtest.New(tb).WithName(testName)),
 		mockSyncS:  mockSyncS,
 		mockStateQ: mockStateQ,
 	}
@@ -182,7 +181,8 @@ func TestConsensusProcess_Start(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	require.NoError(t, broker.Start(context.Background()))
+	broker.Start(context.Background())
+	t.Cleanup(broker.Close)
 	proc := generateConsensusProcess(t)
 	inbox, err := broker.Register(context.Background(), proc.ID())
 	require.NoError(t, err)
@@ -190,14 +190,16 @@ func TestConsensusProcess_Start(t *testing.T) {
 	proc.value = NewSetFromValues(value1)
 	err = proc.Start()
 	require.NoError(t, err)
-	err = proc.Start()
-	require.Error(t, err, "instance already started")
+}
 
-	closeBrokerAndWait(t, broker.Broker)
+func TestConsensusProcess_StartWithoutInbox(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	err := proc.Start()
+	require.Error(t, err)
 }
 
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
-	c := cfg
+	c := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	c.LimitConcurrent = 1
 	c.RoundDuration = 1
 	p := generateConsensusProcessWithConfig(t, c)
@@ -217,8 +219,9 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	require.NoError(t, broker.Start(context.Background()))
-	c := cfg
+	broker.Start(context.Background())
+	t.Cleanup(broker.Close)
+	c := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	c.F = 2
 	proc := generateConsensusProcessWithConfig(t, c)
 	proc.publisher = net
@@ -252,7 +255,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	r.NoError(broker.Start(context.Background()))
+	broker.Start(context.Background())
 	proc := generateConsensusProcess(t)
 	proc.publisher = net
 	mo := mocks.NewMockRolacle(ctrl)
@@ -294,7 +297,7 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	require.NoError(t, broker.Start(context.Background()))
+	broker.Start(context.Background())
 	proc := generateConsensusProcess(t)
 	proc.inbox, _ = broker.Register(context.Background(), proc.ID())
 	proc.advanceToNextRound(context.Background())
@@ -305,6 +308,7 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 }
 
 func generateConsensusProcess(t *testing.T) *consensusProcess {
+	cfg := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	return generateConsensusProcessWithConfig(t, cfg)
 }
 
@@ -324,8 +328,9 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config) *conse
 	sq := mocks.NewMockstateQuerier(ctrl)
 	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	return newConsensusProcess(context.Background(), cfg, instanceID1, s, oracle, sq,
-		4, edSigner, types.BytesToNodeID(edPubkey.Bytes()),
+		edSigner, types.BytesToNodeID(edPubkey.Bytes()),
 		noopPubSub(tb), output, truer{}, newRoundClockFromCfg(logger, cfg),
+		make(chan types.MalfeasanceGossip),
 		logtest.New(tb).WithName(edPubkey.String()))
 }
 
@@ -486,7 +491,7 @@ func TestConsensusProcess_procCommit(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound(context.Background())
 	s := NewDefaultEmptySet()
-	proc.commitTracker = newCommitTracker(1, 1, s)
+	proc.commitTracker = newCommitTracker(logtest.New(t), make(chan types.MalfeasanceGossip), 1, 1, s)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildCommitMsg(signer, s)
@@ -498,7 +503,7 @@ func TestConsensusProcess_procCommit(t *testing.T) {
 
 func TestConsensusProcess_procNotify(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.notifyTracker = newNotifyTracker(proc.cfg.N)
+	proc.notifyTracker = newNotifyTracker(logtest.New(t), make(chan types.MalfeasanceGossip), proc.cfg.N)
 	proc.advanceToNextRound(context.Background())
 	s := NewSetFromValues(value1)
 	signer1, err := signing.NewEdSigner()
@@ -519,10 +524,11 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 
 func TestConsensusProcess_Termination(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.notifyTracker = newNotifyTracker(proc.cfg.N)
+	proc.notifyTracker = newNotifyTracker(logtest.New(t), make(chan types.MalfeasanceGossip), proc.cfg.N)
 	proc.advanceToNextRound(context.Background())
 	s := NewSetFromValues(value1)
 
+	cfg := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	for i := 0; i < cfg.F+1; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
@@ -632,7 +638,7 @@ func TestConsensusProcess_beginProposalRound(t *testing.T) {
 	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
 	proc.oracle = mo
 
-	statusTracker := newStatusTracker(1, 1)
+	statusTracker := newStatusTracker(logtest.New(t), make(chan types.MalfeasanceGossip), 1, 1)
 	s := NewSetFromValues(value1)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)

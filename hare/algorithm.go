@@ -163,9 +163,9 @@ type consensusProcess struct {
 	signing           Signer
 	nid               types.NodeID
 	publisher         pubsub.Publisher
-	isStarted         bool
 	inbox             chan *Msg
 	terminationReport chan TerminationOutput
+	malCh             chan types.MalfeasanceGossip
 	validator         messageValidator
 	preRoundTracker   *preRoundTracker
 	statusesTracker   *statusTracker
@@ -177,32 +177,48 @@ type consensusProcess struct {
 	mTracker          *msgsTracker    // tracks valid messages
 	eligibilityCount  uint16
 	clock             RoundClock
+	once              sync.Once
 }
 
 // newConsensusProcess creates a new consensus process instance.
-func newConsensusProcess(ctx context.Context, cfg config.Config, layer types.LayerID, s *Set, oracle Rolacle, stateQuerier stateQuerier,
-	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p pubsub.Publisher,
+func newConsensusProcess(
+	ctx context.Context,
+	cfg config.Config,
+	layer types.LayerID,
+	s *Set,
+	oracle Rolacle,
+	stateQuerier stateQuerier,
+	signing Signer,
+	nid types.NodeID,
+	p2p pubsub.Publisher,
 	terminationReport chan TerminationOutput,
-	ev roleValidator, clock RoundClock, logger log.Log,
+	ev roleValidator,
+	clock RoundClock,
+	mch chan types.MalfeasanceGossip,
+	logger log.Log,
 ) *consensusProcess {
-	msgsTracker := newMsgsTracker()
 	proc := &consensusProcess{
-		State:             State{preRound, preRound, s.Clone(), nil},
+		State: State{
+			round:          preRound,
+			committedRound: preRound,
+			value:          s.Clone(),
+		},
 		layer:             layer,
 		oracle:            oracle,
 		signing:           signing,
 		nid:               nid,
 		publisher:         p2p,
-		preRoundTracker:   newPreRoundTracker(cfg.F+1, cfg.N, logger),
+		preRoundTracker:   newPreRoundTracker(logger, mch, cfg.F+1, cfg.N),
 		cfg:               cfg,
 		terminationReport: terminationReport,
+		malCh:             mch,
 		pending:           make(map[string]*Msg, cfg.N),
 		Log:               logger,
-		mTracker:          msgsTracker,
+		mTracker:          newMsgsTracker(),
 		clock:             clock,
 	}
 	proc.ctx, proc.cancel = context.WithCancel(ctx)
-	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, ev, msgsTracker, logger)
+	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, ev, proc.mTracker, logger)
 
 	return proc
 }
@@ -217,25 +233,19 @@ func iterationFromCounter(roundCounter uint32) uint32 {
 // It is assumed that the inbox is set before the call to Start.
 // It returns an error if Start has been called more than once or the inbox is nil.
 func (proc *consensusProcess) Start() error {
-	if proc.isStarted { // called twice on same instance
-		return fmt.Errorf("consensus process already started for layer %v", proc.layer)
-	}
-
-	{
+	var err error
+	proc.once.Do(func() {
 		proc.mu.RLock()
 		defer proc.mu.RUnlock()
 		if proc.inbox == nil { // no inbox
-			return fmt.Errorf("consensus process for layer %v is missing inbox", proc.layer)
+			err = fmt.Errorf("consensus process for layer %v is missing inbox", proc.layer)
 		}
-	}
-	proc.isStarted = true
-
-	proc.eg.Go(func() error {
-		proc.eventLoop()
-		return nil
+		proc.eg.Go(func() error {
+			proc.eventLoop()
+			return nil
+		})
 	})
-
-	return nil
+	return err
 }
 
 // ID returns the instance id.
@@ -248,6 +258,8 @@ func (proc *consensusProcess) SetInbox(inbox chan *Msg) {
 	if inbox == nil {
 		proc.Fatal("invalid argument for inbox")
 	}
+	proc.mu.Lock()
+	defer proc.mu.Unlock()
 	proc.inbox = inbox
 }
 
@@ -535,8 +547,7 @@ func (proc *consensusProcess) advanceToNextRound(ctx context.Context) {
 }
 
 func (proc *consensusProcess) beginStatusRound(ctx context.Context) {
-	proc.statusesTracker = newStatusTracker(proc.cfg.F+1, proc.cfg.N)
-	proc.statusesTracker.Log = proc.Log
+	proc.statusesTracker = newStatusTracker(proc.Log, proc.malCh, proc.cfg.F+1, proc.cfg.N)
 
 	// check participation
 	if !proc.shouldParticipate(ctx) {
@@ -553,7 +564,7 @@ func (proc *consensusProcess) beginStatusRound(ctx context.Context) {
 }
 
 func (proc *consensusProcess) beginProposalRound(ctx context.Context) {
-	proc.proposalTracker = newProposalTracker(proc.Log)
+	proc.proposalTracker = newProposalTracker(proc.Log, proc.malCh)
 
 	// done with building proposal, reset statuses tracking
 	defer func() { proc.statusesTracker = nil }()
@@ -578,7 +589,7 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 	proposedSet := proc.proposalTracker.ProposedSet()
 
 	// proposedSet may be nil, in such case the tracker will ignore Messages
-	proc.commitTracker = newCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
+	proc.commitTracker = newCommitTracker(proc.Log, proc.malCh, proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
 
 	if proposedSet == nil {
 		return
@@ -601,7 +612,7 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 
 func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 	logger := proc.WithContext(ctx).WithFields(proc.layer)
-	proc.notifyTracker = newNotifyTracker(proc.cfg.N)
+	proc.notifyTracker = newNotifyTracker(proc.Log, proc.malCh, proc.cfg.N)
 
 	// release proposal & commit trackers
 	defer func() {
@@ -629,6 +640,7 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 
 	s := proc.proposalTracker.ProposedSet()
 	if s == nil {
+		// it's possible we received a late conflicting proposal
 		logger.Error("failed to get proposal set at begin notify round")
 		return
 	}
@@ -658,7 +670,11 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 // passes all pending messages to the inbox of the process so they will be handled.
 func (proc *consensusProcess) handlePending(pending map[string]*Msg) {
 	for _, m := range pending {
-		proc.inbox <- m
+		select {
+		case <-proc.ctx.Done():
+			return
+		case proc.inbox <- m:
+		}
 	}
 }
 
@@ -701,11 +717,7 @@ func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error
 		return nil, fmt.Errorf("init default builder: %w", err)
 	}
 	builder.SetRoleProof(proof)
-
-	proc.mu.RLock()
-	builder.SetEligibilityCount(proc.eligibilityCount)
-	proc.mu.RUnlock()
-
+	builder.SetEligibilityCount(proc.getEligibilityCount())
 	return builder, nil
 }
 
@@ -734,7 +746,7 @@ func (proc *consensusProcess) processProposalMsg(ctx context.Context, msg *Msg) 
 
 func (proc *consensusProcess) processCommitMsg(ctx context.Context, msg *Msg) {
 	proc.mTracker.Track(msg) // a commit msg passed for processing is assumed to be valid
-	proc.commitTracker.OnCommit(msg)
+	proc.commitTracker.OnCommit(ctx, msg)
 }
 
 func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
@@ -745,7 +757,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 
 	s := NewSet(msg.InnerMsg.Values)
 
-	if ignored := proc.notifyTracker.OnNotify(msg); ignored {
+	if ignored := proc.notifyTracker.OnNotify(ctx, msg); ignored {
 		proc.WithContext(ctx).With().Warning("ignoring notification",
 			log.String("sender_id", msg.PubKey.ShortString()))
 		return
@@ -794,10 +806,9 @@ func (proc *consensusProcess) statusValidator() func(m *Msg) bool {
 			if proc.preRoundTracker.CanProveSet(s) { // can prove s
 				return true
 			}
-		} else { // if CommittedRound (Ki) >= 0, we should have received a certificate for that set
-			if proc.notifyTracker.HasCertificate(m.InnerMsg.CommittedRound, s) { // can prove s
-				return true
-			}
+		} else if proc.notifyTracker.HasCertificate(m.InnerMsg.CommittedRound, s) { // can prove s
+			// if CommittedRound (Ki) >= 0, we should have received a certificate for that set
+			return true
 		}
 		return false
 	}
@@ -853,9 +864,7 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 		return false
 	}
 
-	proc.mu.RLock()
-	eligibilityCount := proc.eligibilityCount
-	proc.mu.RUnlock()
+	eligibilityCount := proc.getEligibilityCount()
 
 	// should participate
 	logger.With().Debug("should participate",
@@ -883,9 +892,7 @@ func (proc *consensusProcess) currentRole(ctx context.Context) role {
 		return passive
 	}
 
-	proc.mu.Lock()
-	proc.eligibilityCount = eligibilityCount
-	proc.mu.Unlock()
+	proc.setEligibilityCount(eligibilityCount)
 
 	if eligibilityCount > 0 { // eligible
 		if proc.currentRound() == proposalRound {
@@ -895,6 +902,18 @@ func (proc *consensusProcess) currentRole(ctx context.Context) role {
 	}
 
 	return passive
+}
+
+func (proc *consensusProcess) getEligibilityCount() uint16 {
+	proc.mu.RLock()
+	defer proc.mu.RUnlock()
+	return proc.eligibilityCount
+}
+
+func (proc *consensusProcess) setEligibilityCount(count uint16) {
+	proc.mu.Lock()
+	defer proc.mu.Unlock()
+	proc.eligibilityCount = count
 }
 
 func (proc *consensusProcess) getRound() uint32 {
@@ -911,7 +930,7 @@ func (proc *consensusProcess) addToRound(value uint32) (new uint32) {
 
 // Returns the expected committee size for the given round assuming maxExpActives is the default size.
 func expectedCommitteeSize(round uint32, maxExpActive, expLeaders int) int {
-	if round%4 == proposalRound {
+	if round%RoundsPerIteration == proposalRound {
 		return expLeaders // expected number of leaders
 	}
 

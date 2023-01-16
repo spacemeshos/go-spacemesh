@@ -33,7 +33,7 @@ func defaultValidator(tb testing.TB) *syntaxContextValidator {
 	require.NoError(tb, err)
 
 	return newSyntaxContextValidator(signer, lowThresh10, trueValidator,
-		sq, 10, truer{}, newPubGetter(), logtest.New(tb))
+		sq, truer{}, newPubGetter(), logtest.New(tb))
 }
 
 func TestMessageValidator_CommitStatus(t *testing.T) {
@@ -73,14 +73,14 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 }
 
 func TestEligibilityValidator_validateRole_NoMsg(t *testing.T) {
-	ev := newEligibilityValidator(nil, 4, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(nil, 1, 5, logtest.New(t))
 	res, err := ev.validateRole(context.Background(), nil)
 	assert.NotNil(t, err)
 	assert.False(t, res)
 }
 
 func TestEligibilityValidator_validateRole_NoInnerMsg(t *testing.T) {
-	ev := newEligibilityValidator(nil, 4, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(nil, 1, 5, logtest.New(t))
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
@@ -92,7 +92,7 @@ func TestEligibilityValidator_validateRole_NoInnerMsg(t *testing.T) {
 }
 
 func TestEligibilityValidator_validateRole_Genesis(t *testing.T) {
-	ev := newEligibilityValidator(nil, 4, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(nil, 1, 5, logtest.New(t))
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	builder := newMessageBuilder().
@@ -116,7 +116,7 @@ func TestEligibilityValidator_validateRole_Genesis(t *testing.T) {
 func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
-	ev := newEligibilityValidator(mo, 4, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(mo, 1, 5, logtest.New(t))
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -135,7 +135,7 @@ func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
-	ev := newEligibilityValidator(mo, 4, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(mo, 1, 5, logtest.New(t))
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -152,7 +152,7 @@ func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
 func TestEligibilityValidator_validateRole_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
-	ev := newEligibilityValidator(mo, 4, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(mo, 1, 5, logtest.New(t))
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -183,7 +183,7 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 	assert.True(t, validator.SyntacticallyValidateMessage(context.Background(), m))
 	m.InnerMsg.Values = nil
 	assert.True(t, validator.SyntacticallyValidateMessage(context.Background(), m))
-	m.InnerMsg.Values = NewDefaultEmptySet().ToSlice()
+	m.InnerMsg.Values = []types.ProposalID{}
 	assert.True(t, validator.SyntacticallyValidateMessage(context.Background(), m))
 }
 
@@ -365,7 +365,7 @@ func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	validator := newSyntaxContextValidator(signer, 1, validate, nil, 10, truer{}, newPubGetter(), logtest.New(t))
+	validator := newSyntaxContextValidator(signer, 1, validate, nil, truer{}, newPubGetter(), logtest.New(t))
 	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), nil)
 	assert.True(t, validator.SyntacticallyValidateMessage(context.Background(), m))
 	m = BuildPreRoundMsg(signer, NewSetFromValues(value1), nil)
@@ -396,8 +396,7 @@ func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 	m := buildProposalMsg(signer, NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	m.InnerMsg.Svp = buildSVP(preRound, s1)
-	s := NewSetFromValues(value1)
-	m.InnerMsg.Values = s.ToSlice()
+	m.InnerMsg.Values = NewSetFromValues(value1).ToSlice()
 	v := defaultValidator(t)
 	assert.False(t, v.validateSVPTypeB(context.Background(), m, NewSetFromValues(value5)))
 	assert.True(t, v.validateSVPTypeB(context.Background(), m, NewSetFromValues(value1)))
@@ -410,7 +409,7 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockStateQ := mocks.NewMockstateQuerier(ctrl)
 	mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-	validator := newSyntaxContextValidator(signer, 1, validate, mockStateQ, 10, truer{}, newPubGetter(), logtest.New(t))
+	validator := newSyntaxContextValidator(signer, 1, validate, mockStateQ, truer{}, newPubGetter(), logtest.New(t))
 	m := buildProposalMsg(signer, NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	m.InnerMsg.Svp = buildSVP(preRound, s1)

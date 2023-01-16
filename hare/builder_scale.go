@@ -8,60 +8,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-func (t *Metadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := t.Layer.EncodeScale(enc)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.Round))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.MsgHash[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *Metadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := t.Layer.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Round = uint32(field)
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.MsgHash[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
 func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := t.Metadata.EncodeScale(enc)
+		n, err := t.HareMetadata.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -93,7 +42,7 @@ func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := t.Metadata.DecodeScale(dec)
+		n, err := t.HareMetadata.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}

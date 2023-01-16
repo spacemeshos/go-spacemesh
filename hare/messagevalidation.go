@@ -17,15 +17,14 @@ type messageValidator interface {
 }
 
 type eligibilityValidator struct {
-	oracle         Rolacle
-	layersPerEpoch uint16
-	maxExpActives  int // the maximal expected committee size
-	expLeaders     int // the expected number of leaders
+	oracle        Rolacle
+	maxExpActives int // the maximal expected committee size
+	expLeaders    int // the expected number of leaders
 	log.Log
 }
 
-func newEligibilityValidator(oracle Rolacle, layersPerEpoch uint16, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
-	return &eligibilityValidator{oracle, layersPerEpoch, maxExpActives, expLeaders, logger}
+func newEligibilityValidator(oracle Rolacle, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
+	return &eligibilityValidator{oracle, maxExpActives, expLeaders, logger}
 }
 
 // check eligibility of the provided message by the oracle.
@@ -100,14 +99,13 @@ type syntaxContextValidator struct {
 	threshold        int
 	statusValidator  func(m *Msg) bool // used to validate status Messages in SVP
 	stateQuerier     stateQuerier
-	layersPerEpoch   uint16
 	roleValidator    roleValidator
 	validMsgsTracker pubKeyGetter // used to check for public keys in the valid messages tracker
 	log.Log
 }
 
-func newSyntaxContextValidator(sgr Signer, threshold int, validator func(m *Msg) bool, stateQuerier stateQuerier, layersPerEpoch uint16, ev roleValidator, validMsgsTracker pubKeyGetter, logger log.Log) *syntaxContextValidator {
-	return &syntaxContextValidator{sgr, threshold, validator, stateQuerier, layersPerEpoch, ev, validMsgsTracker, logger}
+func newSyntaxContextValidator(sgr Signer, threshold int, validator func(m *Msg) bool, stateQuerier stateQuerier, ev roleValidator, validMsgsTracker pubKeyGetter, logger log.Log) *syntaxContextValidator {
+	return &syntaxContextValidator{sgr, threshold, validator, stateQuerier, ev, validMsgsTracker, logger}
 }
 
 // contextual validation errors.
@@ -452,8 +450,8 @@ func (v *syntaxContextValidator) validateSVPTypeA(ctx context.Context, m *Msg) b
 	for _, status := range m.InnerMsg.Svp.Messages {
 		statusSet := NewSet(status.InnerMsg.Values)
 		// build union
-		for _, bid := range statusSet.elements() {
-			unionSet.Add(bid) // assuming add is unique
+		for _, pid := range statusSet.ToSlice() {
+			unionSet.Add(pid) // assuming add is unique
 		}
 	}
 
