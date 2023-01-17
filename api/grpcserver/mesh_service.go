@@ -21,9 +21,9 @@ type MeshService struct {
 	genTime          api.GenesisTimeAPI
 	layersPerEpoch   uint32
 	genesisID        types.Hash20
-	layerDurationSec int
-	layerAvgSize     int
-	txsPerProposal   int
+	layerDurationSec uint32
+	layerAvgSize     uint32
+	txsPerProposal   uint32
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -34,8 +34,8 @@ func (s MeshService) RegisterService(server *Server) {
 // NewMeshService creates a new service using config data.
 func NewMeshService(
 	msh api.MeshAPI, cstate api.ConservativeState, genTime api.GenesisTimeAPI,
-	layersPerEpoch uint32, genesisID types.Hash20, layerDurationSec int,
-	layerAvgSize int, txsPerProposal int,
+	layersPerEpoch uint32, genesisID types.Hash20, layerDurationSec uint32,
+	layerAvgSize uint32, txsPerProposal uint32,
 ) *MeshService {
 	return &MeshService{
 		mesh:             msh,
