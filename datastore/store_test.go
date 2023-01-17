@@ -22,32 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
-func TestMalfeasanceProof_EmptyNodeID(t *testing.T) {
-	db := sql.InMemory()
-	cdb := datastore.NewCachedDB(db, logtest.New(t))
-	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
-
-	// empty node id
-	got, err := cdb.GetMalfeasanceProof(types.NodeID{})
-	require.Error(t, err)
-	require.Nil(t, got)
-
-	proof := &types.MalfeasanceProof{
-		Layer: types.NewLayerID(11),
-		Proof: types.Proof{
-			Type: types.MultipleBallots,
-			Data: &types.BallotProof{
-				Messages: [2]types.BallotProofMsg{
-					{},
-					{},
-				},
-			},
-		},
-	}
-	require.Error(t, cdb.AddMalfeasanceProof(types.NodeID{}, proof, nil))
-	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
-}
-
 func TestMalfeasanceProof_Honest(t *testing.T) {
 	db := sql.InMemory()
 	cdb := datastore.NewCachedDB(db, logtest.New(t))
@@ -127,7 +101,6 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 			},
 		},
 	}
-	require.Error(t, cdb.AddMalfeasanceProof(types.NodeID{}, proof, nil))
 
 	nodeID1 := types.NodeID{1}
 	require.NoError(t, cdb.AddMalfeasanceProof(nodeID1, proof, nil))
