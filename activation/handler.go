@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/vrfnonce"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -141,19 +140,6 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
 
-	if atx.VRFNonce != nil {
-		err := vrfnonce.Add(h.cdb, atx.NodeID(), atx.TargetEpoch(), *atx.VRFNonce)
-		if err != nil {
-			return fmt.Errorf("cannot store vrf nonce for atx %s: %w", atx.ShortString(), err)
-		}
-
-		h.log.WithContext(ctx).With().Info("vrf nonce stored",
-			atx.ID(),
-			log.FieldNamed("vrf_node_id", atx.NodeID()),
-			log.FieldNamed("target_epoch", atx.TargetEpoch()),
-			*atx.VRFNonce,
-		)
-	}
 	return nil
 }
 

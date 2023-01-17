@@ -24,7 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
-	"github.com/spacemeshos/go-spacemesh/sql/vrfnonce"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -579,7 +578,7 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	atx1.VRFNonce = &nonce1
 	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx1))
 
-	got, err := vrfnonce.Get(cdb, nid, atx1.TargetEpoch())
+	got, err := atxs.VRFNonce(cdb, nid, atx1.TargetEpoch())
 	require.NoError(t, err)
 	require.Equal(t, nonce1, got)
 
@@ -589,7 +588,7 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	atx2.VRFNonce = &nonce2
 	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx2))
 
-	got, err = vrfnonce.Get(cdb, nid, atx2.TargetEpoch())
+	got, err = atxs.VRFNonce(cdb, nid, atx2.TargetEpoch())
 	require.NoError(t, err)
 	require.Equal(t, nonce2, got)
 }

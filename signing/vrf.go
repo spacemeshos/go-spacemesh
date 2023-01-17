@@ -11,7 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/sql/vrfnonce"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 // nonceFetcher is an abstraction for VRFSigner and VRFVerifier to fetch a nonce for a given node.
@@ -122,7 +122,7 @@ type dbFetcher struct {
 }
 
 func (f dbFetcher) NonceForNode(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	return vrfnonce.Get(f, nodeID, epoch)
+	return atxs.VRFNonce(f, nodeID, epoch)
 }
 
 // mapFetcher is used as a source for nodeid -> nonce mappings when WithNonceForNode is used.

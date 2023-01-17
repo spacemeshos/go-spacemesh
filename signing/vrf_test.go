@@ -3,6 +3,7 @@ package signing
 import (
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -10,7 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/vrfnonce"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 func Fuzz_VRFSignAndVerify(f *testing.F) {
@@ -48,7 +49,22 @@ func Test_VRFSignAndVerify(t *testing.T) {
 
 	nonce := types.VRFPostIndex(rand.Uint64())
 	epoch := types.EpochID(1)
-	vrfnonce.Add(db, signer.NodeID(), epoch, nonce)
+
+	atx := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: epoch.FirstLayer().Add(1),
+				PrevATXID:  types.RandomATXID(),
+			},
+			NumUnits: 2,
+			VRFNonce: &nonce,
+		},
+	}
+
+	atx.Signature = signer.Sign(atx.SignedBytes())
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err, "failed to verify ATX")
+	require.NoError(t, atxs.Add(db, vAtx, time.Now()))
 
 	// Act & Assert
 	vrfSig, err := signer.VRFSigner(WithNonceFromDB(db))
