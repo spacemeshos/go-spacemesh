@@ -565,9 +565,9 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	}
 
 	logger.With().Info("atx challenge is ready",
-		log.Stringer("current_epoch", b.currentEpoch()),
-		log.Stringer("publish_epoch", challenge.PublishEpoch()),
-		log.Stringer("target_epoch", challenge.TargetEpoch()),
+		log.FieldNamed("current_epoch", b.currentEpoch()),
+		log.FieldNamed("publish_epoch", challenge.PublishEpoch()),
+		log.FieldNamed("target_epoch", challenge.TargetEpoch()),
 	)
 
 	if b.pendingATX == nil {
