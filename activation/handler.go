@@ -123,14 +123,14 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 		return nil
 	}
 	h.log.WithContext(ctx).With().Info("processing atx",
-		log.Stringer("atx_id", atx.ID()),
-		log.Stringer("publish_epoch", atx.PublishEpoch()),
+		atx.ID(),
+		atx.PublishEpoch(),
 		log.FieldNamed("atx_node_id", atx.NodeID()),
-		log.Stringer("atx_pubLayerID", atx.PubLayerID),
+		atx.PubLayerID,
 	)
 	if err := h.ContextuallyValidateAtx(atx); err != nil {
 		h.log.WithContext(ctx).With().Warning("atx failed contextual validation",
-			log.Stringer("atx_id", atx.ID()),
+			atx.ID(),
 			log.FieldNamed("atx_node_id", atx.NodeID()),
 			log.Err(err),
 		)
@@ -148,10 +148,10 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 		}
 
 		h.log.WithContext(ctx).With().Info("vrf nonce stored",
-			log.Stringer("atx_id", atx.ID()),
+			atx.ID(),
 			log.FieldNamed("vrf_node_id", atx.NodeID()),
-			log.Uint64("target_epoch", uint64(atx.TargetEpoch())),
-			log.Uint64("vrf_nonce", uint64(*atx.VRFNonce)),
+			log.FieldNamed("target_epoch", atx.TargetEpoch()),
+			*atx.VRFNonce,
 		)
 	}
 	return nil
@@ -178,11 +178,11 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		if err := h.validateInitialAtx(ctx, atx); err != nil {
 			return nil, err
 		}
-		commitmentATX = atx.CommitmentATX
+		commitmentATX = atx.CommitmentATX // validateInitialAtx checks that commitmentATX is not nil and references an existing valid ATX
 	} else {
 		commitmentATX, err = h.getCommitmentAtx(atx)
 		if err != nil {
-			return nil, fmt.Errorf("validation failed: commitment atx for %s not found: %w", atx.NodeID(), err)
+			return nil, fmt.Errorf("commitment atx for %s not found: %w", atx.NodeID(), err)
 		}
 
 		err = h.validateNonInitialAtx(ctx, atx, *commitmentATX)

@@ -379,8 +379,8 @@ func (b *Builder) loop(ctx context.Context) {
 			}
 
 			b.log.WithContext(ctx).With().Error("error attempting to publish atx",
-				log.Stringer("current_layer", b.layerClock.GetCurrentLayer()),
-				log.Stringer("current_epoch", b.currentEpoch()),
+				b.layerClock.GetCurrentLayer(),
+				b.currentEpoch(),
 				log.Err(err),
 			)
 
@@ -659,7 +659,9 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 		poetChallenge.InitialPost = b.initialPost
 		poetChallenge.InitialPostMetadata = b.initialPostMeta
 	}
-	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(ctx, &poetChallenge, poetProofDeadline)
+	buildingNipostCtx, cancel := context.WithDeadline(ctx, nextPoetRoundStart)
+	defer cancel()
+	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(buildingNipostCtx, &poetChallenge, poetProofDeadline)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}

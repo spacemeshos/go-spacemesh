@@ -510,6 +510,9 @@ type NIPost struct {
 // grinding of identities for VRF eligibility.
 type VRFPostIndex uint64
 
+// Field returns a log field. Implements the LoggableField interface.
+func (v VRFPostIndex) Field() log.Field { return log.Uint64("vrf_nonce", uint64(v)) }
+
 func (v *VRFPostIndex) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeCompact64(enc, uint64(*v))

@@ -72,7 +72,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		return false, fmt.Errorf("%w: ref ballot %v", errMissingEpochData, refBallot.ID())
 	}
 	if refBallot.AtxID != ballot.AtxID {
-		return false, fmt.Errorf("balot (%v/%v) should be sharing atx with a reference ballot (%v/%v)", ballot.ID(), ballot.AtxID, refBallot.ID(), refBallot.AtxID)
+		return false, fmt.Errorf("ballot (%v/%v) should be sharing atx with a reference ballot (%v/%v)", ballot.ID(), ballot.AtxID, refBallot.ID(), refBallot.AtxID)
 	}
 
 	beacon := refBallot.EpochData.Beacon

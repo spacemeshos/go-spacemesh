@@ -33,7 +33,8 @@ func (s VRFSigner) Sign(msg []byte, epoch types.EpochID) ([]byte, error) {
 	nonce, err := s.fetcher.NonceForNode(s.nodeID, epoch)
 	if err != nil {
 		s.log.With().Error("failed to find nonce for VRF signature",
-			log.Uint64("epoch", uint64(epoch)),
+			log.FieldNamed("vrf_node_id", s.nodeID),
+			log.FieldNamed("target_epoch", epoch),
 			log.Err(err),
 		)
 		return nil, err
@@ -158,8 +159,8 @@ func (v VRFVerifier) Verify(nodeID types.NodeID, epoch types.EpochID, msg, sig [
 	nonce, err := v.fetcher.NonceForNode(nodeID, epoch)
 	if err != nil {
 		v.log.With().Error("failed to find nonce for verification",
-			log.String("vrf_node_id", nodeID.String()),
-			log.Uint64("epoch", uint64(epoch)),
+			log.FieldNamed("vrf_node_id", nodeID),
+			log.FieldNamed("target_epoch", epoch),
 			log.Err(err),
 		)
 		return false
