@@ -118,6 +118,7 @@ func newSyncerWithoutSyncTimer(t *testing.T) *testSyncer {
 
 func TestStartAndShutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	ts := newTestSyncer(ctx, t, time.Millisecond*5)
 
 	require.False(t, ts.syncer.IsSynced(ctx))
@@ -143,6 +144,7 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	current := types.NewLayerID(10)
 	ts.mTicker.advanceToLayer(current)
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	ts.syncer.Start(ctx)
 
 	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
