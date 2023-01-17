@@ -297,7 +297,7 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 
 	malicious, err := h.cdb.IsMalicious(atx.NodeID())
 	if err != nil {
-		return fmt.Errorf("store atx: %w", err)
+		return fmt.Errorf("checking if node is malicious: %w", err)
 	}
 	var proof *types.MalfeasanceProof
 	h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
@@ -322,7 +322,7 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 					},
 				}
 				if err = h.cdb.AddMalfeasanceProof(atx.NodeID(), proof, dbtx); err != nil {
-					return err
+					return fmt.Errorf("adding malfeasense proof: %w", err)
 				}
 				h.log.With().Warning("smesher produced more than one atx in the same epoch",
 					log.Stringer("smesher", atx.NodeID()),
