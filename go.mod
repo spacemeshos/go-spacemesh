@@ -5,7 +5,7 @@ go 1.19
 require (
 	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20220102081255-38c8b72a9924
-	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20221213145053-386291e73746
+	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20230111132633-70aad4c4cbe2
 	github.com/cosmos/btcutil v1.0.5
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/mock v1.6.0
@@ -17,7 +17,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.15.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/golang-lru v0.6.0
-	github.com/libp2p/go-libp2p v0.24.1
+	github.com/libp2p/go-libp2p v0.24.2
 	github.com/libp2p/go-libp2p-pubsub v0.8.2
 	github.com/libp2p/go-libp2p-testing v0.12.0
 	github.com/minio/sha256-simd v1.0.0
@@ -25,7 +25,7 @@ require (
 	github.com/multiformats/go-multiaddr v0.8.0
 	github.com/natefinch/atomic v1.0.1
 	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077
-	github.com/oasisprotocol/curve25519-voi v0.0.0-20221003100820-41fad3beba17
+	github.com/oasisprotocol/curve25519-voi v0.0.0-20230110094441-db37f07504ce
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/common v0.39.0
 	github.com/pyroscope-io/pyroscope v0.36.0
@@ -44,9 +44,9 @@ require (
 	github.com/stretchr/testify v1.8.1
 	go.uber.org/atomic v1.10.0
 	go.uber.org/zap v1.24.0
-	golang.org/x/exp v0.0.0-20221212164502-fae10dda9338
+	golang.org/x/exp v0.0.0-20230116083435-1de6713980de
 	golang.org/x/sync v0.1.0
-	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37
+	google.golang.org/genproto v0.0.0-20230113154510-dbe35b8444a5
 	google.golang.org/grpc v1.52.0
 	google.golang.org/protobuf v1.28.1
 	k8s.io/api v0.26.0

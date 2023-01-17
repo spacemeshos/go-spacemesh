@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -18,7 +19,8 @@ import (
 
 func TestHandler_handleProof_multipleATXs(t *testing.T) {
 	db := sql.InMemory()
-	h := malfeasance.NewHandler(db, logtest.New(t), "self")
+	lg := logtest.New(t)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self")
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.NewLayerID(11)
@@ -219,7 +221,8 @@ func TestHandler_handleProof_multipleATXs(t *testing.T) {
 
 func TestHandler_handleProof_multipleBallots(t *testing.T) {
 	db := sql.InMemory()
-	h := malfeasance.NewHandler(db, logtest.New(t), "self")
+	lg := logtest.New(t)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self")
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.NewLayerID(11)
@@ -419,7 +422,8 @@ func TestHandler_handleProof_multipleBallots(t *testing.T) {
 
 func TestHandler_handleProof_hareEquivocation(t *testing.T) {
 	db := sql.InMemory()
-	h := malfeasance.NewHandler(db, logtest.New(t), "self")
+	lg := logtest.New(t)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self")
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.NewLayerID(11)
