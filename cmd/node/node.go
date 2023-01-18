@@ -96,8 +96,6 @@ const (
 	ConStateLogger         = "conState"
 	Executor               = "executor"
 	Malfeasance            = "malfeasance"
-	VRFLogger              = "vrf"
-	VRFVerifierLogger      = "vrfVerifier"
 )
 
 func GetCommand() *cobra.Command {
