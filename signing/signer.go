@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	oasis "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -130,7 +131,7 @@ func (es *EdSigner) VRFSigner(opts ...VRFOptionFunc) (*VRFSigner, error) {
 	return &VRFSigner{
 		fetcher:    cfg.getFetcher(),
 		log:        cfg.log,
-		privateKey: es.priv,
+		privateKey: oasis.PrivateKey(es.priv),
 		nodeID:     es.NodeID(),
 	}, nil
 }

@@ -2,7 +2,7 @@ package weakcoin
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	signing "github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 //go:generate mockgen -package=weakcoin -destination=./mocks.go -source=./interface.go

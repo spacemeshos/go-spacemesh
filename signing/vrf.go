@@ -24,7 +24,7 @@ type VRFSigner struct {
 	fetcher nonceFetcher
 	log     log.Log
 
-	privateKey []byte
+	privateKey ed25519.PrivateKey
 	nodeID     types.NodeID
 }
 
@@ -42,7 +42,7 @@ func (s VRFSigner) Sign(msg []byte, epoch types.EpochID) ([]byte, error) {
 
 	buf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buf, uint64(nonce))
-	return ecvrf.Prove(ed25519.PrivateKey(s.privateKey), append(buf, msg...)), nil
+	return ecvrf.Prove(s.privateKey, append(buf, msg...)), nil
 }
 
 // NodeID of the signer.
