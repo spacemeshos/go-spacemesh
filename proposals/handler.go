@@ -96,7 +96,7 @@ func WithConfig(cfg Config) Opt {
 }
 
 // NewHandler creates new Handler.
-func NewHandler(cdb *datastore.CachedDB, p pubsub.Publisher, f system.Fetcher, bc system.BeaconCollector, m meshProvider, decoder ballotDecoder, opts ...Opt) *Handler {
+func NewHandler(cdb *datastore.CachedDB, p pubsub.Publisher, f system.Fetcher, bc system.BeaconCollector, m meshProvider, decoder ballotDecoder, verifier vrfVerifier, opts ...Opt) *Handler {
 	b := &Handler{
 		logger:    log.NewNop(),
 		cfg:       defaultConfig(),
@@ -110,7 +110,7 @@ func NewHandler(cdb *datastore.CachedDB, p pubsub.Publisher, f system.Fetcher, b
 		opt(b)
 	}
 	if b.validator == nil {
-		b.validator = NewEligibilityValidator(b.cfg.LayerSize, b.cfg.LayersPerEpoch, cdb, bc, m, b.logger)
+		b.validator = NewEligibilityValidator(b.cfg.LayerSize, b.cfg.LayersPerEpoch, cdb, bc, m, b.logger, verifier)
 	}
 	return b
 }

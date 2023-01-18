@@ -52,7 +52,7 @@ func defaultOracle(t testing.TB) *testOracle {
 	verifier := NewMockvrfVerifier(ctrl)
 
 	to := &testOracle{
-		Oracle:    New(mb, cdb, nil, verifier, defLayersPerEpoch, config.Config{ConfidenceParam: confidenceParam, EpochOffset: epochOffset}, lg),
+		Oracle:    New(mb, cdb, verifier, nil, defLayersPerEpoch, config.Config{ConfidenceParam: confidenceParam, EpochOffset: epochOffset}, lg),
 		mBeacon:   mb,
 		mVerifier: verifier,
 	}

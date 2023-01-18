@@ -77,7 +77,7 @@ func createTestValidator(tb testing.TB) *testValidator {
 	lg := logtest.New(tb)
 
 	return &testValidator{
-		Validator: NewEligibilityValidator(layerAvgSize, layersPerEpoch, datastore.NewCachedDB(sql.InMemory(), lg), ms.mbc, ms.mm, lg),
+		Validator: NewEligibilityValidator(layerAvgSize, layersPerEpoch, datastore.NewCachedDB(sql.InMemory(), lg), ms.mbc, ms.mm, lg, ms.mvrf),
 		mockSet:   ms,
 	}
 }
