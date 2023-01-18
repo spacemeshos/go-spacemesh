@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 
@@ -362,6 +363,8 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	require.Len(t, rb.EligibilityProofs, 2)
 	rb.EligibilityProofs[0], rb.EligibilityProofs[1] = rb.EligibilityProofs[1], rb.EligibilityProofs[0]
 
+	tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+
 	eligible, err := tv.CheckEligibility(context.Background(), rb)
 	require.ErrorIs(t, err, errInvalidProofsOrder)
 	require.False(t, eligible)
@@ -387,6 +390,7 @@ func TestCheckEligibility_BadVRFSignature(t *testing.T) {
 
 	b := blts[1]
 	b.EligibilityProofs[0].Sig = b.EligibilityProofs[0].Sig[1:]
+	tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), b.EligibilityProofs[0].Sig).Return(false)
 
 	eligible, err := tv.CheckEligibility(context.Background(), b)
 	require.ErrorIs(t, err, errIncorrectVRFSig)
@@ -407,6 +411,7 @@ func TestCheckEligibility_IncorrectLayerIndex(t *testing.T) {
 
 	b := blts[1]
 	b.EligibilityProofs[0].Sig = b.EligibilityProofs[0].Sig[1:]
+	tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), b.EligibilityProofs[0].Sig).Return(false)
 
 	eligible, err := tv.CheckEligibility(context.Background(), b)
 	require.ErrorIs(t, err, errIncorrectVRFSig)
@@ -437,6 +442,7 @@ func TestCheckEligibility(t *testing.T) {
 		require.NoError(t, err)
 		weightPer := fixed.DivUint64(hdr.GetWeight(), uint64(eligibleSlots))
 		tv.mbc.EXPECT().ReportBeaconFromBallot(epoch, b, beacon, weightPer).Times(1)
+		tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 		got, err := tv.CheckEligibility(context.Background(), b)
 		require.NoError(t, err)
 		require.True(t, got)
