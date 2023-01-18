@@ -27,9 +27,10 @@ const (
 
 type testOracle struct {
 	*Oracle
-	nodeID    types.NodeID
-	edSigner  *signing.EdSigner
-	vrfSigner *signing.VRFSigner
+	nodeID       types.NodeID
+	edSigner     *signing.EdSigner
+	vrfSigner    *signing.VRFSigner
+	nonceFetcher *MocknonceFetcher
 }
 
 func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *signing.VRFSigner) {
@@ -86,11 +87,16 @@ func createTestOracle(tb testing.TB, layerSize, layersPerEpoch uint32) *testOrac
 	lg := logtest.New(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	nodeID, edSigner, vrfSigner := generateNodeIDAndSigner(tb)
+
+	ctrl := gomock.NewController(tb)
+	mNonceFetcher := NewMocknonceFetcher(ctrl)
+
 	return &testOracle{
-		Oracle:    newMinerOracle(layerSize, layersPerEpoch, cdb, vrfSigner, nodeID, lg),
-		nodeID:    nodeID,
-		edSigner:  edSigner,
-		vrfSigner: vrfSigner,
+		Oracle:       newMinerOracle(layerSize, layersPerEpoch, cdb, vrfSigner, mNonceFetcher, nodeID, lg),
+		nodeID:       nodeID,
+		edSigner:     edSigner,
+		vrfSigner:    vrfSigner,
+		nonceFetcher: mNonceFetcher,
 	}
 }
 
@@ -136,8 +142,6 @@ func TestMinerOracle(t *testing.T) {
 }
 
 func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersPerEpoch uint32) {
-	// TODO(mafa): failing because there are no ATXS in the DB to fetch nonces from
-
 	o := createTestOracle(t, layerSize, layersPerEpoch)
 
 	ctrl := gomock.NewController(t)

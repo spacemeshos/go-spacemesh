@@ -22,3 +22,7 @@ type votesEncoder interface {
 	TallyVotes(context.Context, types.LayerID)
 	EncodeVotes(context.Context, ...tortoise.EncodeVotesOpts) (*types.Opinion, error)
 }
+
+type nonceFetcher interface {
+	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
+}

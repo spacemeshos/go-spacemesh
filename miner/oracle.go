@@ -34,20 +34,22 @@ type Oracle struct {
 	layersPerEpoch uint32
 	cdb            *datastore.CachedDB
 
-	vrfSigner *signing.VRFSigner
-	nodeID    types.NodeID
-	log       log.Log
+	vrfSigner    *signing.VRFSigner
+	nonceFetcher nonceFetcher
+	nodeID       types.NodeID
+	log          log.Log
 
 	mu    sync.Mutex
 	cache oracleCache
 }
 
-func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, nodeID types.NodeID, log log.Log) *Oracle {
+func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, nonceFetcher nonceFetcher, nodeID types.NodeID, log log.Log) *Oracle {
 	return &Oracle{
 		avgLayerSize:   layerSize,
 		layersPerEpoch: layersPerEpoch,
 		cdb:            cdb,
 		vrfSigner:      vrfSigner,
+		nonceFetcher:   nonceFetcher,
 		nodeID:         nodeID,
 		log:            log,
 	}
@@ -155,7 +157,7 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 
 	eligibilityProofs := map[types.LayerID][]types.VotingEligibility{}
 	for counter := uint32(0); counter < numEligibleSlots; counter++ {
-		nonce, err := atxs.VRFNonce(o.cdb, o.nodeID, epoch)
+		nonce, err := o.nonceFetcher.VRFNonce(o.nodeID, epoch)
 		if err != nil {
 			logger.With().Panic("failed to get VRF nonce", log.Err(err))
 		}

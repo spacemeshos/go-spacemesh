@@ -37,6 +37,7 @@ type testBuilder struct {
 	mPubSub   *pubsubmocks.MockPublisher
 	mBeacon   *mocks.MockBeaconGetter
 	mSync     *mocks.MockSyncStateProvider
+	mNonce    *MocknonceFetcher
 }
 
 func createBuilder(tb testing.TB) *testBuilder {
@@ -50,10 +51,11 @@ func createBuilder(tb testing.TB) *testBuilder {
 		mPubSub:   pubsubmocks.NewMockPublisher(ctrl),
 		mBeacon:   mocks.NewMockBeaconGetter(ctrl),
 		mSync:     mocks.NewMockSyncStateProvider(ctrl),
+		mNonce:    NewMocknonceFetcher(ctrl),
 	}
 	lg := logtest.New(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	pb.ProposalBuilder = NewProposalBuilder(context.TODO(), make(chan types.LayerID), edSigner, vrfSigner,
+	pb.ProposalBuilder = NewProposalBuilder(context.TODO(), make(chan types.LayerID), edSigner, vrfSigner, pb.mNonce,
 		cdb, pb.mPubSub, pb.mTortoise, pb.mBeacon, pb.mSync, pb.mCState,
 		WithLogger(lg),
 		WithLayerSize(20),

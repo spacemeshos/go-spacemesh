@@ -652,6 +652,7 @@ func (app *App) initServices(
 		clock.Subscribe(),
 		sgn,
 		vrfSigner,
+		nonceFetcherAdapter{app.cachedDB},
 		app.cachedDB,
 		app.host,
 		trtl,

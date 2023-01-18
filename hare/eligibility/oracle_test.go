@@ -12,6 +12,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-scale/tester"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -595,11 +596,12 @@ func TestBuildVRFMessage_Concurrency(t *testing.T) {
 		mCache.EXPECT().Get(key).Return(nil, false).Times(1)
 	}
 	mCache.EXPECT().Get(gomock.Any()).Return(types.RandomBytes(100), true).Times(total - expectAdd)
+	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).AnyTimes()
 	for i := 0; i < total; i++ {
 		wg.Add(1)
 		go func(x int) {
-			_, err := o.buildVRFMessage(context.Background(), o.vrfSigner.NodeID(), firstLayer, uint32(x%expectAdd))
-			require.NoError(t, err)
+			_, err := o.buildVRFMessage(context.Background(), types.RandomNodeID(), firstLayer, uint32(x%expectAdd))
+			assert.NoError(t, err)
 			wg.Done()
 		}(i)
 	}

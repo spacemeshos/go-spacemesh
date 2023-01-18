@@ -116,6 +116,7 @@ func NewProposalBuilder(
 	layerTimer timesync.LayerTimer,
 	signer *signing.EdSigner,
 	vrfSigner *signing.VRFSigner,
+	nonceFetcher nonceFetcher,
 	cdb *datastore.CachedDB,
 	publisher pubsub.Publisher,
 	trtl votesEncoder,
@@ -144,7 +145,7 @@ func NewProposalBuilder(
 	}
 
 	if pb.proposalOracle == nil {
-		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, cdb, vrfSigner, pb.cfg.minerID, pb.logger)
+		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, cdb, vrfSigner, nonceFetcher, pb.cfg.minerID, pb.logger)
 	}
 
 	return pb
