@@ -654,6 +654,7 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", 10, mv, ch)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
+	createIdentity(t, db, sig)
 	lid := types.NewLayerID(11)
 	round := uint32(11)
 	proofByte := types.RandomBytes(64)
