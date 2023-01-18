@@ -605,12 +605,14 @@ func TestNodeService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	syncer := SyncerMock{}
 	atxapi := &ActivationAPIMock{}
-	grpcService := NewNodeService(&networkMock, meshAPI, &genTime, &syncer, atxapi)
-	shutDown := launchServer(t, grpcService)
-	defer shutDown()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
+
+	grpcService := NewNodeService(ctx, &networkMock, meshAPI, &genTime, &syncer, atxapi)
+	shutDown := launchServer(t, grpcService)
+	defer shutDown()
+
 	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewNodeServiceClient(conn)
 
@@ -2393,13 +2395,15 @@ func checkGlobalStateDataGlobalState(t *testing.T, dataItem any) {
 func TestMultiService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	cfg.GrpcServerPort = 9192
-	svc1 := NewNodeService(&networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	svc1 := NewNodeService(ctx, &networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
 	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	conn := dialGrpc(ctx, t, cfg)
 
 	c1 := pb.NewNodeServiceClient(conn)
@@ -2447,7 +2451,7 @@ func TestJsonApi(t *testing.T) {
 	shutDown()
 
 	// enable services and try again
-	svc1 := NewNodeService(&networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
+	svc1 := NewNodeService(context.Background(), &networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
 	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true

@@ -206,7 +206,7 @@ func TestProcessLayers_Shutdown(t *testing.T) {
 	ts.mTicker.advanceToLayer(lastSynced.Add(1))
 
 	cancel()
-	require.ErrorIs(t, ts.syncer.processLayers(context.Background()), errShuttingDown)
+	require.ErrorIs(t, ts.syncer.processLayers(ctx), context.Canceled)
 	require.False(t, ts.syncer.stateSynced())
 }
 
