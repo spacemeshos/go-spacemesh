@@ -136,6 +136,8 @@ func TestMinerOracle(t *testing.T) {
 }
 
 func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersPerEpoch uint32) {
+	// TODO(mafa): failing because there are no ATXS in the DB to fetch nonces from
+
 	o := createTestOracle(t, layerSize, layersPerEpoch)
 
 	ctrl := gomock.NewController(t)

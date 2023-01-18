@@ -38,11 +38,13 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 	t.Helper()
 	activeset := types.ATXIDList{types.RandomATXID(), types.RandomATXID(), types.RandomATXID(), types.RandomATXID()}
 
+	nonce := types.VRFPostIndex(1)
 	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
 			PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 		},
 		NumUnits: testedATXUnit,
+		VRFNonce: &nonce,
 	}}
 	atx.SetID(&activeset[0])
 	atx.SetNodeID(&nid)

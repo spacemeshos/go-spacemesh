@@ -554,7 +554,7 @@ func (app *App) initServices(
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl,
+	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifierAdapter{},
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,

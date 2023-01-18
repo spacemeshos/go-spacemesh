@@ -440,6 +440,12 @@ func Test_VrfSignVerify(t *testing.T) {
 
 func Test_Proof_BeaconError(t *testing.T) {
 	o := defaultOracle(t)
+
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	o.vrfSigner, err = signer.VRFSigner()
+	require.NoError(t, err)
+
 	layer := types.NewLayerID(2)
 	errUnknown := errors.New("unknown")
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
