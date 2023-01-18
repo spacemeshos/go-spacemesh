@@ -190,7 +190,7 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 	}
 
 	currentEpochProposal := buildProposal(m.EpochID, nonce, logger)
-	if !signing.VRFVerify(m.NodeID, currentEpochProposal, m.VRFSignature) {
+	if !pd.vrfVerifier.Verify(m.NodeID, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
 		logger.Warning("[proposal] failed to verify VRF signature")
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to verify VRF signature (miner ID %v): %w", minerID, errVRFNotVerified)

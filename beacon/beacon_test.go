@@ -95,8 +95,8 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	minerID := edSgn.NodeID()
 	lg := logtest.New(tb).WithName(minerID.ShortString())
 
-	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
 	tpd.mSigner.EXPECT().Sign(gomock.Any()).AnyTimes().Return([]byte{})
+	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
 
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
 	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, tpd.mSigner, tpd.mVerifier, tpd.cdb, tpd.mClock,
@@ -866,7 +866,7 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 				require.NoError(t, err)
 				vrfSigner, err := signer.VRFSigner()
 				require.NoError(t, err)
-				proposal := buildSignedProposal(context.Background(), vrfSigner, 3, types.VRFPostIndex(2), logtest.New(t))
+				proposal := buildSignedProposal(context.Background(), vrfSigner, 3, types.VRFPostIndex(1), logtest.New(t))
 				if checker.IsProposalEligible(proposal) {
 					numEligible++
 				}
@@ -936,7 +936,7 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := buildSignedProposal(context.Background(), vrfSigner, tc.epoch, types.VRFPostIndex(2), logtest.New(t))
+			result := buildSignedProposal(context.Background(), vrfSigner, tc.epoch, types.VRFPostIndex(1), logtest.New(t))
 			r.Equal(string(tc.result), string(result))
 		})
 	}

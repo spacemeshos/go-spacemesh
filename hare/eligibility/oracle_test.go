@@ -34,7 +34,8 @@ const (
 
 type testOracle struct {
 	*Oracle
-	mBeacon *mocks.MockBeaconGetter
+	mBeacon   *mocks.MockBeaconGetter
+	mVerifier *MockvrfVerifier
 }
 
 func defaultOracle(t testing.TB) *testOracle {
@@ -48,10 +49,12 @@ func defaultOracle(t testing.TB) *testOracle {
 
 	ctrl := gomock.NewController(t)
 	mb := mocks.NewMockBeaconGetter(ctrl)
+	verifier := NewMockvrfVerifier(ctrl)
 
 	to := &testOracle{
-		Oracle:  New(mb, cdb, nil, defLayersPerEpoch, config.Config{ConfidenceParam: confidenceParam, EpochOffset: epochOffset}, lg),
-		mBeacon: mb,
+		Oracle:    New(mb, cdb, nil, verifier, defLayersPerEpoch, config.Config{ConfidenceParam: confidenceParam, EpochOffset: epochOffset}, lg),
+		mBeacon:   mb,
+		mVerifier: verifier,
 	}
 	return to
 }
@@ -135,6 +138,7 @@ func TestCalcEligibility_VerifyFailure(t *testing.T) {
 	nid := types.NodeID{1, 1}
 	layer := types.NewLayerID(50)
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
+	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(false).Times(1)
 
 	res, err := o.CalcEligibility(context.Background(), layer, 0, 1, nid, []byte{})
 	require.NoError(t, err)
@@ -154,6 +158,7 @@ func TestCalcEligibility_EmptyActiveSet(t *testing.T) {
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
+	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).Times(1)
 
 	numMiners := 5
 	activeSet := types.RandomActiveSet(numMiners)
@@ -182,6 +187,7 @@ func TestCalcEligibility_EligibleFromHareActiveSet(t *testing.T) {
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
+	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
 	// TODO(mafa): update signatures necessary?
 	sigs := map[string]uint16{
@@ -215,6 +221,7 @@ func TestCalcEligibility_EligibleFromTortoiseActiveSet(t *testing.T) {
 		"384460966938c87644987fe00c0f9d4f9a5e2dcd4bdc08392ed94203895ba325036725a22346e35aa707993babef716aa1b6b3dfc653a44cb23ac8f743cbbc3d": 1,
 		"15c5f565a75888970059b070bfaed1998a9d423ddac9f6af83da51db02149044ea6aeb86294341c7a950ac5de2855bbebc11cc28b02c08bc903e4cf41439717d": 1,
 	}
+	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
 	numMiners := 5
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
@@ -239,6 +246,7 @@ func TestCalcEligibility_WithSpaceUnits(t *testing.T) {
 	committeeSize := 800
 
 	o := defaultOracle(t)
+	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
 	layer := types.NewLayerID(50)
 	beacon := beaconWithValOne()
@@ -280,6 +288,7 @@ func Test_CalcEligibility_MainnetParams(t *testing.T) {
 	rng := rand.New(rand.NewSource(999))
 
 	o := defaultOracle(t)
+	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
 	layer := types.NewLayerID(50)
 	beacon := types.RandomBeacon()
@@ -351,6 +360,12 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 	}
 }
 
+type vrfVerifierAdapter struct{}
+
+func (vrfVerifierAdapter) Verify(nodeID types.NodeID, msg, sig []byte) bool {
+	return signing.VRFVerify(nodeID, msg, sig)
+}
+
 func Test_VrfSignVerify(t *testing.T) {
 	// eligibility of the proof depends on the identity
 	rng := rand.New(rand.NewSource(5))
@@ -408,6 +423,8 @@ func Test_VrfSignVerify(t *testing.T) {
 	vAtx2, err := atx2.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx2, time.Now()))
+
+	o.vrfVerifier = vrfVerifierAdapter{}
 
 	proof, err := o.Proof(context.Background(), layer, 1)
 	require.NoError(t, err)

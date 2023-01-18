@@ -460,6 +460,12 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
+type vrfVerifierAdapter struct{}
+
+func (vrfVerifierAdapter) Verify(nodeID types.NodeID, msg, sig []byte) bool {
+	return signing.VRFVerify(nodeID, msg, sig)
+}
+
 func (app *App) initServices(
 	ctx context.Context,
 	sgn *signing.EdSigner,
@@ -517,10 +523,11 @@ func (app *App) initServices(
 
 	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
 
-	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, app.cachedDB, clock,
+	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifierAdapter{}, app.cachedDB, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
-		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
+		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
+	)
 
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
@@ -562,7 +569,7 @@ func (app *App) initServices(
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
 
-	hOracle := eligibility.New(beaconProtocol, app.cachedDB, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+	hOracle := eligibility.New(beaconProtocol, app.cachedDB, vrfSigner, vrfVerifierAdapter{}, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
 	app.certifier = blocks.NewCertifier(app.db, hOracle, nodeID, sgn, app.host, clock, beaconProtocol, trtl,
