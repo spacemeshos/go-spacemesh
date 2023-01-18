@@ -102,8 +102,8 @@ func safeLayerRange(targetLayer types.LayerID, safetyParam, layersPerEpoch, epoc
 func New(
 	beacons system.BeaconGetter,
 	db *datastore.CachedDB,
-	vrfSigner *signing.VRFSigner,
 	vrfVerifier vrfVerifier,
+	vrfSigner *signing.VRFSigner,
 	layersPerEpoch uint32,
 	cfg config.Config,
 	logger log.Log,
@@ -121,8 +121,8 @@ func New(
 	return &Oracle{
 		beacons:        beacons,
 		cdb:            db,
-		vrfSigner:      vrfSigner,
 		vrfVerifier:    vrfVerifier,
+		vrfSigner:      vrfSigner,
 		layersPerEpoch: layersPerEpoch,
 		vrfMsgCache:    vmc,
 		activesCache:   ac,
