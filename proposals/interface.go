@@ -26,3 +26,7 @@ type ballotDecoder interface {
 type vrfVerifier interface {
 	Verify(types.NodeID, []byte, []byte) bool
 }
+
+type nonceFetcher interface {
+	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
+}

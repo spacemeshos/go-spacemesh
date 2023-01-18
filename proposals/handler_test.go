@@ -37,13 +37,14 @@ func genGoldenATXID() types.ATXID {
 }
 
 type mockSet struct {
-	mpub *pubsubmock.MockPublisher
-	mf   *mocks.MockFetcher
-	mbc  *mocks.MockBeaconCollector
-	mm   *MockmeshProvider
-	mv   *MockeligibilityValidator
-	md   *MockballotDecoder
-	mvrf *MockvrfVerifier
+	mpub   *pubsubmock.MockPublisher
+	mf     *mocks.MockFetcher
+	mbc    *mocks.MockBeaconCollector
+	mm     *MockmeshProvider
+	mv     *MockeligibilityValidator
+	md     *MockballotDecoder
+	mvrf   *MockvrfVerifier
+	mNonce *MocknonceFetcher
 }
 
 func (ms *mockSet) decodeAnyBallots() *mockSet {
@@ -60,13 +61,14 @@ type testHandler struct {
 func fullMockSet(tb testing.TB) *mockSet {
 	ctrl := gomock.NewController(tb)
 	return &mockSet{
-		mpub: pubsubmock.NewMockPublisher(ctrl),
-		mf:   mocks.NewMockFetcher(ctrl),
-		mbc:  mocks.NewMockBeaconCollector(ctrl),
-		mm:   NewMockmeshProvider(ctrl),
-		mv:   NewMockeligibilityValidator(ctrl),
-		md:   NewMockballotDecoder(ctrl),
-		mvrf: NewMockvrfVerifier(ctrl),
+		mpub:   pubsubmock.NewMockPublisher(ctrl),
+		mf:     mocks.NewMockFetcher(ctrl),
+		mbc:    mocks.NewMockBeaconCollector(ctrl),
+		mm:     NewMockmeshProvider(ctrl),
+		mv:     NewMockeligibilityValidator(ctrl),
+		md:     NewMockballotDecoder(ctrl),
+		mvrf:   NewMockvrfVerifier(ctrl),
+		mNonce: NewMocknonceFetcher(ctrl),
 	}
 }
 
@@ -74,7 +76,7 @@ func createTestHandler(t *testing.T) *testHandler {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	ms := fullMockSet(t)
 	return &testHandler{
-		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf,
+		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf, ms.mNonce,
 			WithLogger(logtest.New(t)),
 			WithConfig(Config{
 				LayerSize:      layerAvgSize,

@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -35,11 +34,12 @@ type Validator struct {
 	beacons        system.BeaconCollector
 	logger         log.Log
 	vrfVerifier    vrfVerifier
+	nonceFetcher   nonceFetcher
 }
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log, vrfVerifier vrfVerifier,
+	avgLayerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log, vrfVerifier vrfVerifier, nonceFetcher nonceFetcher,
 ) *Validator {
 	return &Validator{
 		avgLayerSize:   avgLayerSize,
@@ -49,6 +49,7 @@ func NewEligibilityValidator(
 		beacons:        bc,
 		logger:         lg,
 		vrfVerifier:    vrfVerifier,
+		nonceFetcher:   nonceFetcher,
 	}
 }
 
@@ -134,7 +135,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		}
 		last = counter
 
-		nonce, err := atxs.VRFNonce(v.cdb, owned.NodeID, epoch)
+		nonce, err := v.nonceFetcher.VRFNonce(owned.NodeID, epoch)
 		if err != nil {
 			return false, err
 		}

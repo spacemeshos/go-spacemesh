@@ -80,7 +80,7 @@ func createTestValidator(tb testing.TB) *testValidator {
 	lg := logtest.New(tb)
 
 	return &testValidator{
-		Validator: NewEligibilityValidator(layerAvgSize, layersPerEpoch, datastore.NewCachedDB(sql.InMemory(), lg), ms.mbc, ms.mm, lg, ms.mvrf),
+		Validator: NewEligibilityValidator(layerAvgSize, layersPerEpoch, datastore.NewCachedDB(sql.InMemory(), lg), ms.mbc, ms.mm, lg, ms.mvrf, ms.mNonce),
 		mockSet:   ms,
 	}
 }
@@ -366,6 +366,7 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	rb.EligibilityProofs[0], rb.EligibilityProofs[1] = rb.EligibilityProofs[1], rb.EligibilityProofs[0]
 
 	tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+	tv.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).AnyTimes()
 
 	eligible, err := tv.CheckEligibility(context.Background(), rb)
 	require.ErrorIs(t, err, errInvalidProofsOrder)

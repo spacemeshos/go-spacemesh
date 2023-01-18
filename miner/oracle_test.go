@@ -143,13 +143,14 @@ func TestMinerOracle(t *testing.T) {
 
 func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersPerEpoch uint32) {
 	o := createTestOracle(t, layerSize, layersPerEpoch)
+	o.nonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).AnyTimes()
 
 	ctrl := gomock.NewController(t)
 	mbc := mocks.NewMockBeaconCollector(ctrl)
 	vrfVerifier := proposals.NewMockvrfVerifier(ctrl)
 	vrfVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
-	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"), vrfVerifier)
+	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"), vrfVerifier, o.nonceFetcher)
 
 	startEpoch, numberOfEpochsToTest := uint32(2), uint32(2)
 	startLayer := layersPerEpoch * startEpoch
