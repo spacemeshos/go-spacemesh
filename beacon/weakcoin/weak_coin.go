@@ -12,6 +12,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	signing "github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 func defaultConfig() config {
@@ -41,6 +44,7 @@ type Message struct {
 	Round     types.RoundID
 	Unit      uint64
 	MinerPK   []byte
+	Nonce     types.VRFPostIndex
 	Signature []byte
 }
 
@@ -79,7 +83,6 @@ func WithNextRoundBufferSize(size int) OptionFunc {
 func New(
 	publisher pubsub.Publisher,
 	signer vrfSigner,
-	verifier vrfVerifier,
 	opts ...OptionFunc,
 ) *WeakCoin {
 	wc := &WeakCoin{
@@ -88,7 +91,6 @@ func New(
 		signer:    signer,
 		publisher: publisher,
 		coins:     make(map[types.RoundID]bool),
-		verifier:  verifier,
 	}
 	for _, opt := range opts {
 		opt(wc)
@@ -102,7 +104,6 @@ func New(
 type WeakCoin struct {
 	logger    log.Log
 	config    config
-	verifier  vrfVerifier
 	signer    vrfSigner
 	publisher pubsub.Publisher
 
@@ -185,8 +186,8 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 }
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
-	buf := wc.encodeProposal(message.Epoch, message.Round, message.Unit)
-	if !wc.verifier.Verify(types.BytesToNodeID(message.MinerPK), message.Epoch, buf, message.Signature) {
+	buf := wc.encodeProposal(message.Epoch, message.Nonce, message.Round, message.Unit)
+	if !signing.VRFVerify(types.BytesToNodeID(message.MinerPK), buf, message.Signature) {
 		return fmt.Errorf("signature is invalid signature %x", message.Signature)
 	}
 
@@ -208,11 +209,16 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 	var broadcast []byte
 	var smallest []byte
 	for unit := uint64(0); unit < allowed; unit++ {
-		proposal := wc.encodeProposal(epoch, round, unit)
-		signature, err := wc.signer.Sign(proposal, epoch)
+		// TODO (mafa): inject cdb and nodeID into weakcoin service
+		var cdb sql.Executor
+		var nodeId types.NodeID
+		nonce, err := atxs.VRFNonce(cdb, nodeId, epoch)
 		if err != nil {
-			wc.logger.With().Panic("failed to sign proposal", log.Err(err))
+			wc.logger.With().Panic("failed to get vrf nonce", log.Err(err))
 		}
+
+		proposal := wc.encodeProposal(epoch, nonce, round, unit)
+		signature := wc.signer.Sign(proposal)
 		if wc.aboveThreshold(signature) {
 			continue
 		}
@@ -222,6 +228,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 				Round:     round,
 				Unit:      unit,
 				MinerPK:   wc.signer.PublicKey().Bytes(),
+				Nonce:     nonce,
 				Signature: signature,
 			}
 			msg, err := codec.Encode(&message)
@@ -308,11 +315,16 @@ func (wc *WeakCoin) aboveThreshold(proposal []byte) bool {
 	return bytes.Compare(proposal, wc.config.Threshold) == 1
 }
 
-func (wc *WeakCoin) encodeProposal(epoch types.EpochID, round types.RoundID, unit uint64) []byte {
+func (wc *WeakCoin) encodeProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID, unit uint64) []byte {
 	var proposal bytes.Buffer
 	proposal.WriteString(wc.config.VRFPrefix)
 	if _, err := proposal.Write(epoch.ToBytes()); err != nil {
 		wc.logger.With().Panic("can't write epoch to a buffer", log.Err(err))
+	}
+	nonceBuf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(nonceBuf, uint64(nonce))
+	if _, err := proposal.Write(nonceBuf); err != nil {
+		wc.logger.With().Panic("can't write uint64 to a buffer", log.Err(err))
 	}
 	roundBuf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(roundBuf, uint64(round))

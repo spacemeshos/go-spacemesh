@@ -38,6 +38,13 @@ func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
+		n, err := scale.EncodeCompact64(enc, uint64(t.Nonce))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeByteSlice(enc, t.Signature)
 		if err != nil {
 			return total, err
@@ -79,6 +86,14 @@ func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.MinerPK = field
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Nonce = types.VRFPostIndex(field)
 	}
 	{
 		field, n, err := scale.DecodeByteSlice(dec)

@@ -43,7 +43,6 @@ type mockSet struct {
 	mm   *MockmeshProvider
 	mv   *MockeligibilityValidator
 	md   *MockballotDecoder
-	mvrf *MockvrfVerifier
 }
 
 func (ms *mockSet) decodeAnyBallots() *mockSet {
@@ -66,7 +65,6 @@ func fullMockSet(tb testing.TB) *mockSet {
 		mm:   NewMockmeshProvider(ctrl),
 		mv:   NewMockeligibilityValidator(ctrl),
 		md:   NewMockballotDecoder(ctrl),
-		mvrf: NewMockvrfVerifier(ctrl),
 	}
 }
 
@@ -74,7 +72,7 @@ func createTestHandler(t *testing.T) *testHandler {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	ms := fullMockSet(t)
 	return &testHandler{
-		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf,
+		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md,
 			WithLogger(logtest.New(t)),
 			WithConfig(Config{
 				LayerSize:      layerAvgSize,

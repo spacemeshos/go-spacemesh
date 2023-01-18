@@ -22,7 +22,3 @@ type ballotDecoder interface {
 	DecodeBallot(*types.Ballot) (*tortoise.DecodedBallot, error)
 	StoreBallot(*tortoise.DecodedBallot) error
 }
-
-type vrfVerifier interface {
-	Verify(types.NodeID, types.EpochID, []byte, []byte) bool
-}

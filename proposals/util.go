@@ -19,19 +19,21 @@ var (
 
 // VrfMessage is a verification message.
 type VrfMessage struct {
-	Type    types.EligibilityType
-	Beacon  types.Beacon
-	Epoch   types.EpochID
-	Counter uint32
+	Type     types.EligibilityType
+	Beacon   types.Beacon
+	Epoch    types.EpochID
+	VRFNonce types.VRFPostIndex
+	Counter  uint32
 }
 
 // SerializeVRFMessage serializes a message for generating/verifying a VRF signature.
-func SerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, counter uint32) ([]byte, error) {
+func SerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, nonce types.VRFPostIndex, counter uint32) ([]byte, error) {
 	m := VrfMessage{
-		Type:    types.EligibilityVoting,
-		Beacon:  beacon,
-		Epoch:   epoch,
-		Counter: counter,
+		Type:     types.EligibilityVoting,
+		Beacon:   beacon,
+		Epoch:    epoch,
+		VRFNonce: nonce,
+		Counter:  counter,
 	}
 	serialized, err := codec.Encode(&m)
 	if err != nil {

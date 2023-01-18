@@ -67,12 +67,11 @@ func newPublisher(tb testing.TB) pubsub.Publisher {
 
 type testProtocolDriver struct {
 	*ProtocolDriver
-	ctrl      *gomock.Controller
-	cdb       *datastore.CachedDB
-	mClock    *MocklayerClock
-	mSync     *smocks.MockSyncStateProvider
-	mSigner   *MockvrfSigner
-	mVerifier *MockvrfVerifier
+	ctrl    *gomock.Controller
+	cdb     *datastore.CachedDB
+	mClock  *MocklayerClock
+	mSync   *smocks.MockSyncStateProvider
+	mSigner *MockvrfSigner
 }
 
 func setUpProtocolDriver(tb testing.TB) *testProtocolDriver {
@@ -82,11 +81,10 @@ func setUpProtocolDriver(tb testing.TB) *testProtocolDriver {
 func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolDriver {
 	ctrl := gomock.NewController(tb)
 	tpd := &testProtocolDriver{
-		ctrl:      ctrl,
-		mClock:    NewMocklayerClock(ctrl),
-		mSync:     smocks.NewMockSyncStateProvider(ctrl),
-		mSigner:   NewMockvrfSigner(ctrl),
-		mVerifier: NewMockvrfVerifier(ctrl),
+		ctrl:    ctrl,
+		mClock:  NewMocklayerClock(ctrl),
+		mSync:   smocks.NewMockSyncStateProvider(ctrl),
+		mSigner: NewMockvrfSigner(ctrl),
 	}
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(tb, err)
@@ -95,11 +93,10 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	minerID := edSgn.NodeID()
 	lg := logtest.New(tb).WithName(minerID.ShortString())
 
-	tpd.mSigner.EXPECT().Sign(gomock.Any(), gomock.Any()).AnyTimes().Return([]byte{}, nil)
-	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
+	tpd.mSigner.EXPECT().Sign(gomock.Any()).AnyTimes().Return([]byte{})
 
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
-	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, tpd.mSigner, tpd.mVerifier, tpd.cdb, tpd.mClock,
+	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, tpd.mSigner, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withWeakCoin(coinValueMock(tb, true)),
@@ -864,7 +861,7 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 			for i := 0; i < tc.w; i++ {
 				signer, err := signing.NewEdSigner()
 				require.NoError(t, err)
-				vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+				vrfSigner, err := signer.VRFSigner()
 				require.NoError(t, err)
 				proposal := buildSignedProposal(context.Background(), vrfSigner, 3, logtest.New(t))
 				if checker.IsProposalEligible(proposal) {
@@ -911,13 +908,8 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 
 	edSgn, err := signing.NewEdSigner()
 	r.NoError(err)
-	vrfSigner, err := edSgn.VRFSigner(signing.WithNonceForNode(1, edSgn.NodeID()))
+	vrfSigner, err := edSgn.VRFSigner()
 	r.NoError(err)
-
-	sign := func(hex string, epoch types.EpochID) []byte {
-		sig, _ := vrfSigner.Sign(util.Hex2Bytes(hex), epoch)
-		return sig
-	}
 
 	tt := []struct {
 		name   string
@@ -927,12 +919,12 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: sign("0404", 1),
+			result: vrfSigner.Sign(util.Hex2Bytes("0404")),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: sign("0408", 2),
+			result: vrfSigner.Sign(util.Hex2Bytes("0408")),
 		},
 	}
 

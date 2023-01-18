@@ -517,15 +517,7 @@ func (app *App) initServices(
 
 	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
 
-	vrfVerifier, err := signing.NewVRFVerifier(
-		signing.WithNonceFromDB(app.cachedDB),
-		signing.WithLogger(app.addLogger(VRFVerifierLogger, lg)),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create vrf verifier: %w", err)
-	}
-
-	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifier, app.cachedDB, clock,
+	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, app.cachedDB, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
@@ -555,7 +547,7 @@ func (app *App) initServices(
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier,
+	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,
@@ -570,7 +562,7 @@ func (app *App) initServices(
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
 
-	hOracle := eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+	hOracle := eligibility.New(beaconProtocol, app.cachedDB, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
 	app.certifier = blocks.NewCertifier(app.db, hOracle, nodeID, sgn, app.host, clock, beaconProtocol, trtl,
@@ -1109,10 +1101,7 @@ func (app *App) Start(ctx context.Context) error {
 		return err
 	}
 	// need db to initialize the vrf signer
-	vrfSigner, err := edSgn.VRFSigner(
-		signing.WithNonceFromDB(app.cachedDB),
-		signing.WithLogger(app.addLogger(VRFLogger, lg)),
-	)
+	vrfSigner, err := edSgn.VRFSigner()
 	if err != nil {
 		return fmt.Errorf("could not create vrf signer: %w", err)
 	}

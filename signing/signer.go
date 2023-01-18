@@ -115,22 +115,8 @@ func (es *EdSigner) PrivateKey() PrivateKey {
 }
 
 // VRFSigner wraps same ed25519 key to provide ecvrf.
-func (es *EdSigner) VRFSigner(opts ...VRFOptionFunc) (*VRFSigner, error) {
-	cfg := &vrfOption{}
-
-	for _, opt := range opts {
-		if err := opt(cfg); err != nil {
-			return nil, err
-		}
-	}
-
-	if err := cfg.validate(); err != nil {
-		return nil, err
-	}
-
+func (es *EdSigner) VRFSigner() (*VRFSigner, error) {
 	return &VRFSigner{
-		fetcher:    cfg.getFetcher(),
-		log:        cfg.log,
 		privateKey: oasis.PrivateKey(es.priv),
 		nodeID:     es.NodeID(),
 	}, nil

@@ -58,7 +58,6 @@ type Oracle struct {
 	beacons        system.BeaconGetter
 	cdb            *datastore.CachedDB
 	vrfSigner      *signing.VRFSigner
-	vrfVerifier    vrfVerifier
 	layersPerEpoch uint32
 	vrfMsgCache    cache
 	activesCache   cache
@@ -102,7 +101,6 @@ func safeLayerRange(targetLayer types.LayerID, safetyParam, layersPerEpoch, epoc
 func New(
 	beacons system.BeaconGetter,
 	db *datastore.CachedDB,
-	vrfVerifier vrfVerifier,
 	vrfSigner *signing.VRFSigner,
 	layersPerEpoch uint32,
 	cfg config.Config,
@@ -121,7 +119,6 @@ func New(
 	return &Oracle{
 		beacons:        beacons,
 		cdb:            db,
-		vrfVerifier:    vrfVerifier,
 		vrfSigner:      vrfSigner,
 		layersPerEpoch: layersPerEpoch,
 		vrfMsgCache:    vmc,
@@ -138,6 +135,7 @@ type VrfMessage struct {
 	Type   types.EligibilityType
 	Beacon uint32
 	Round  uint32
+	Nonce  types.VRFPostIndex
 	Layer  types.LayerID
 }
 
@@ -164,7 +162,7 @@ func (o *Oracle) getBeaconValue(ctx context.Context, epochID types.EpochID) (uin
 }
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round).
-func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
+func (o *Oracle) buildVRFMessage(ctx context.Context, id types.NodeID, layer types.LayerID, round uint32) ([]byte, error) {
 	key := buildKey(layer, round)
 
 	o.lock.Lock()
@@ -181,8 +179,13 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 		return nil, fmt.Errorf("get beacon: %w", err)
 	}
 
+	nonce, err := atxs.VRFNonce(o.cdb, id, layer.GetEpoch())
+	if err != nil {
+		return nil, fmt.Errorf("get vrf nonce: %w", err)
+	}
+
 	// marshal message
-	msg := VrfMessage{Type: types.EligibilityHare, Beacon: v, Round: round, Layer: layer}
+	msg := VrfMessage{Type: types.EligibilityHare, Beacon: v, Round: round, Nonce: nonce, Layer: layer}
 	buf, err := codec.Encode(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Fatal("failed to encode", log.Err(err))
@@ -241,14 +244,14 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, errZeroCommitteeSize
 	}
 
-	msg, err := o.buildVRFMessage(ctx, layer, round)
+	msg, err := o.buildVRFMessage(ctx, id, layer, round)
 	if err != nil {
 		logger.With().Warning("could not get beacon value for epoch", log.Err(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
 	// validate message
-	if !o.vrfVerifier.Verify(id, layer.GetEpoch(), msg, vrfSig) {
+	if !signing.VRFVerify(id, msg, vrfSig) {
 		logger.With().Info("eligibility: a node did not pass vrf signature verification",
 			id,
 			layer,
@@ -384,12 +387,12 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 
 // Proof returns the role proof for the current Layer & Round.
 func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
-	msg, err := o.buildVRFMessage(ctx, layer, round)
+	msg, err := o.buildVRFMessage(ctx, o.vrfSigner.NodeID(), layer, round)
 	if err != nil {
 		return nil, err
 	}
 
-	return o.vrfSigner.Sign(msg, layer.GetEpoch())
+	return o.vrfSigner.Sign(msg), nil
 }
 
 // Returns a map of all active node IDs in the specified layer id.

@@ -31,6 +31,13 @@ func (t *VrfMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
+		n, err := scale.EncodeCompact64(enc, uint64(t.Nonce))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := t.Layer.EncodeScale(enc)
 		if err != nil {
 			return total, err
@@ -64,6 +71,14 @@ func (t *VrfMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.Round = uint32(field)
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Nonce = types.VRFPostIndex(field)
 	}
 	{
 		n, err := t.Layer.DecodeScale(dec)

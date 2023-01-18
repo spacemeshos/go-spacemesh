@@ -155,15 +155,16 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 
 	eligibilityProofs := map[types.LayerID][]types.VotingEligibility{}
 	for counter := uint32(0); counter < numEligibleSlots; counter++ {
-		message, err := proposals.SerializeVRFMessage(beacon, epoch, counter)
+		nonce, err := atxs.VRFNonce(o.cdb, o.nodeID, epoch)
+		if err != nil {
+			logger.With().Panic("failed to get VRF nonce", log.Err(err))
+		}
+
+		message, err := proposals.SerializeVRFMessage(beacon, epoch, nonce, counter)
 		if err != nil {
 			logger.With().Panic("failed to serialize VRF msg", log.Err(err))
 		}
-		vrfSig, err := o.vrfSigner.Sign(message, epoch)
-		if err != nil {
-			logger.With().Error("failed to sign VRF msg", log.Err(err))
-			return nil, nil, fmt.Errorf("oracle failed to sign: %w", err)
-		}
+		vrfSig := o.vrfSigner.Sign(message)
 		eligibleLayer := proposals.CalcEligibleLayer(epoch, o.layersPerEpoch, vrfSig)
 		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.VotingEligibility{
 			J:   counter,

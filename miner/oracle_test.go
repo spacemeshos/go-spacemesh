@@ -37,7 +37,7 @@ func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *s
 
 	edSigner, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	vrfSigner, err := edSigner.VRFSigner(signing.WithNonceForNode(1, edSigner.NodeID()))
+	vrfSigner, err := edSigner.VRFSigner()
 	require.NoError(tb, err)
 
 	edPubkey := edSigner.PublicKey()
@@ -140,10 +140,8 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 
 	ctrl := gomock.NewController(t)
 	mbc := mocks.NewMockBeaconCollector(ctrl)
-	vrfVerifier := proposals.NewMockvrfVerifier(ctrl)
-	vrfVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
-	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"), vrfVerifier)
+	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"))
 
 	startEpoch, numberOfEpochsToTest := uint32(2), uint32(2)
 	startLayer := layersPerEpoch * startEpoch

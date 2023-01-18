@@ -45,11 +45,7 @@ type pubKeyExtractor interface {
 }
 
 type vrfSigner interface {
-	Sign(msg []byte, epoch types.EpochID) ([]byte, error)
+	Sign(msg []byte) []byte
 	PublicKey() *signing.PublicKey
 	LittleEndian() bool
-}
-
-type vrfVerifier interface {
-	Verify(nodeID types.NodeID, epoch types.EpochID, msg, sig []byte) bool
 }
