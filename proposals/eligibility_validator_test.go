@@ -394,6 +394,7 @@ func TestCheckEligibility_BadVRFSignature(t *testing.T) {
 	b := blts[1]
 	b.EligibilityProofs[0].Sig = b.EligibilityProofs[0].Sig[1:]
 	tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), b.EligibilityProofs[0].Sig).Return(false)
+	tv.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).AnyTimes()
 
 	eligible, err := tv.CheckEligibility(context.Background(), b)
 	require.ErrorIs(t, err, errIncorrectVRFSig)
@@ -415,6 +416,7 @@ func TestCheckEligibility_IncorrectLayerIndex(t *testing.T) {
 	b := blts[1]
 	b.EligibilityProofs[0].Sig = b.EligibilityProofs[0].Sig[1:]
 	tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), b.EligibilityProofs[0].Sig).Return(false)
+	tv.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).AnyTimes()
 
 	eligible, err := tv.CheckEligibility(context.Background(), b)
 	require.ErrorIs(t, err, errIncorrectVRFSig)
@@ -446,6 +448,7 @@ func TestCheckEligibility(t *testing.T) {
 		weightPer := fixed.DivUint64(hdr.GetWeight(), uint64(eligibleSlots))
 		tv.mbc.EXPECT().ReportBeaconFromBallot(epoch, b, beacon, weightPer).Times(1)
 		tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+		tv.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).AnyTimes()
 		got, err := tv.CheckEligibility(context.Background(), b)
 		require.NoError(t, err)
 		require.True(t, got)
