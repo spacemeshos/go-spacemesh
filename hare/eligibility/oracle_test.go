@@ -64,7 +64,6 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 
-	// TODO(mafa): create and persist ATXs for miners
 	activeSet := types.RandomActiveSet(numMiners)
 	start, end := safeLayerRange(lid, confidenceParam, defLayersPerEpoch, epochOffset)
 	for lyr := start; !lyr.After(end); lyr = lyr.Add(1) {
