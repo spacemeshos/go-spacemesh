@@ -666,21 +666,28 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID)
 	}
 
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
-	proposedSignature := buildSignedProposal(ctx, pd.vrfSigner, epoch, pd.logger)
+	nonce, err := atxs.VRFNonce(pd.cdb, pd.nodeID, epoch)
+	if err != nil {
+		logger.With().Panic("failed to get VRF nonce", log.Err(err))
+	}
+	proposedSignature := buildSignedProposal(ctx, pd.vrfSigner, epoch, nonce, pd.logger)
 	if !pd.checkProposalEligibility(logger, epoch, proposedSignature) {
 		logger.With().Debug("own proposal doesn't pass threshold",
-			log.String("proposal", string(proposedSignature)))
+			log.String("proposal", string(proposedSignature)),
+		)
 		// proposal is not sent
 		return
 	}
 
 	logger.With().Debug("own proposal passes threshold",
-		log.String("proposal", string(proposedSignature)))
+		log.String("proposal", string(proposedSignature)),
+	)
 
 	// concat them into a single proposal message
 	m := ProposalMessage{
 		EpochID:      epoch,
 		NodeID:       pd.nodeID,
+		Nonce:        nonce,
 		VRFSignature: proposedSignature,
 	}
 
@@ -968,8 +975,8 @@ func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 	return threshold
 }
 
-func buildSignedProposal(ctx context.Context, signer vrfSigner, epoch types.EpochID, logger log.Log) []byte {
-	p := buildProposal(epoch, logger)
+func buildSignedProposal(ctx context.Context, signer vrfSigner, epoch types.EpochID, nonce types.VRFPostIndex, logger log.Log) []byte {
+	p := buildProposal(epoch, nonce, logger)
 	signature := signer.Sign(p)
 	logger.WithContext(ctx).With().Debug("calculated signature",
 		epoch,
@@ -983,12 +990,14 @@ func buildSignedProposal(ctx context.Context, signer vrfSigner, epoch types.Epoc
 // ProposalVrfMessage is a message for buildProposal below.
 type ProposalVrfMessage struct {
 	Type  types.EligibilityType
+	Nonce types.VRFPostIndex
 	Epoch uint32
 }
 
-func buildProposal(epoch types.EpochID, logger log.Log) []byte {
+func buildProposal(epoch types.EpochID, nonce types.VRFPostIndex, logger log.Log) []byte {
 	message := &ProposalVrfMessage{
 		Type:  types.EligibilityBeacon,
+		Nonce: nonce,
 		Epoch: uint32(epoch),
 	}
 

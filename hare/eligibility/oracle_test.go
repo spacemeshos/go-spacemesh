@@ -42,6 +42,10 @@ func defaultOracle(t testing.TB) *testOracle {
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 
+	// TODO(mafa): add initial ATX to DB for miner types.NodeID{1, 1}
+	// TODO(mafa): add initial ATX to DB for miner types.NodeID{30}
+	// TODO(mafa): add initial ATX to DB for miner types.BytesToNodeID([]byte("0"))
+
 	ctrl := gomock.NewController(t)
 	mb := mocks.NewMockBeaconGetter(ctrl)
 
@@ -57,6 +61,7 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 
+	// TODO(mafa): create and persist ATXs for miners
 	activeSet := types.RandomActiveSet(numMiners)
 	start, end := safeLayerRange(lid, confidenceParam, defLayersPerEpoch, epochOffset)
 	for lyr := start; !lyr.After(end); lyr = lyr.Add(1) {
@@ -152,6 +157,9 @@ func TestCalcEligibility_EmptyActiveSet(t *testing.T) {
 
 	numMiners := 5
 	activeSet := types.RandomActiveSet(numMiners)
+
+	// TODO(mafa): add one initial ATX to DB for every miner in active set
+
 	for _, atx := range activeSet {
 		b := types.RandomBallot()
 		b.AtxID = atx
@@ -175,6 +183,7 @@ func TestCalcEligibility_EligibleFromHareActiveSet(t *testing.T) {
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
 
+	// TODO(mafa): update signatures necessary?
 	sigs := map[string]uint16{
 		"0516a574aef37257d6811ea53ef55d4cbb0e14674900a0d5165bd6742513840d02442d979fdabc7059645d1e8f8a0f44d0db2aa90f23374dd74a3636d4ecdab7": 1,
 		"73929b4b69090bb6133e2f8cd73989b35228e7e6d8c6745e4100d9c5eb48ca2624ee2889e55124195a130f74ea56e53a73a1c4dee60baa13ad3b1c0ed4f80d9c": 0,
@@ -198,6 +207,7 @@ func TestCalcEligibility_EligibleFromTortoiseActiveSet(t *testing.T) {
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	require.Equal(t, start, end)
 
+	// TODO(mafa): update signatures necessary?
 	sigs := map[string]uint16{
 		"0516a574aef37257d6811ea53ef55d4cbb0e14674900a0d5165bd6742513840d02442d979fdabc7059645d1e8f8a0f44d0db2aa90f23374dd74a3636d4ecdab7": 1,
 		"73929b4b69090bb6133e2f8cd73989b35228e7e6d8c6745e4100d9c5eb48ca2624ee2889e55124195a130f74ea56e53a73a1c4dee60baa13ad3b1c0ed4f80d9c": 0,

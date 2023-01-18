@@ -14,6 +14,7 @@ import (
 type ProposalMessage struct {
 	EpochID      types.EpochID
 	NodeID       types.NodeID
+	Nonce        types.VRFPostIndex
 	VRFSignature []byte
 }
 

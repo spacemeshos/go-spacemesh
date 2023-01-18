@@ -76,10 +76,12 @@ func mockAlwaysFalseProposalChecker(t *testing.T, pd *ProtocolDriver, epoch type
 
 func createProposal(t *testing.T, signer signer, vrfSigner *signing.VRFSigner, epoch types.EpochID, corruptSignature bool) *ProposalMessage {
 	nodeID := signer.NodeID()
-	sig := buildSignedProposal(context.Background(), vrfSigner, epoch, logtest.New(t))
+	nonce := types.VRFPostIndex(rand.Uint64())
+	sig := buildSignedProposal(context.Background(), vrfSigner, epoch, nonce, logtest.New(t))
 	msg := &ProposalMessage{
 		NodeID:       nodeID,
 		EpochID:      epoch,
+		Nonce:        nonce,
 		VRFSignature: sig,
 	}
 	if corruptSignature {

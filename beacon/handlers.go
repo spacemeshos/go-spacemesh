@@ -112,7 +112,8 @@ func (pd *ProtocolDriver) classifyProposal(logger log.Log, m ProposalMessage, at
 		log.String("atx_timestamp", atxTimestamp.String()),
 		log.String("next_epoch_start", nextEpochStart.String()),
 		log.String("received_time", receivedTime.String()),
-		log.Duration("grace_period", pd.config.GracePeriodDuration))
+		log.Duration("grace_period", pd.config.GracePeriodDuration),
+	)
 
 	// Each smesher partitions the valid proposals received in the previous epoch into three sets:
 	// - Timely proposals: received up to δ after the end of the previous epoch.
@@ -182,7 +183,13 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to get ATX for epoch (miner ID %v): %w", minerID, err)
 	}
 
-	currentEpochProposal := buildProposal(m.EpochID, logger)
+	nonce, err := atxs.VRFNonce(pd.cdb, m.NodeID, m.EpochID)
+	if err != nil {
+		logger.With().Warning("[proposal] failed to get VRF nonce", log.Err(err))
+		return types.ATXID{}, fmt.Errorf("[proposal] failed to get VRF nonce (miner ID %v): %w", minerID, err)
+	}
+
+	currentEpochProposal := buildProposal(m.EpochID, nonce, logger)
 	if !signing.VRFVerify(m.NodeID, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
 		logger.Warning("[proposal] failed to verify VRF signature")

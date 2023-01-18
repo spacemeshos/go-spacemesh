@@ -36,7 +36,7 @@ func broadcastedMessage(tb testing.TB, msg weakcoin.Message) []byte {
 func staticSigner(tb testing.TB, ctrl *gomock.Controller, sig []byte) *weakcoin.MockvrfSigner {
 	tb.Helper()
 	signer := weakcoin.NewMockvrfSigner(ctrl)
-	signer.EXPECT().Sign(gomock.Any()).Return(sig, nil).AnyTimes()
+	signer.EXPECT().Sign(gomock.Any()).Return(sig).AnyTimes()
 	signer.EXPECT().PublicKey().Return(signing.NewPublicKey(sig)).AnyTimes()
 	signer.EXPECT().LittleEndian().Return(true).AnyTimes()
 	return signer

@@ -26,7 +26,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 const (
@@ -70,7 +70,7 @@ type testProtocolDriver struct {
 	ctrl    *gomock.Controller
 	cdb     *datastore.CachedDB
 	mClock  *MocklayerClock
-	mSync   *smocks.MockSyncStateProvider
+	mSync   *mocks.MockSyncStateProvider
 	mSigner *MockvrfSigner
 }
 
@@ -83,7 +83,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	tpd := &testProtocolDriver{
 		ctrl:    ctrl,
 		mClock:  NewMocklayerClock(ctrl),
-		mSync:   smocks.NewMockSyncStateProvider(ctrl),
+		mSync:   mocks.NewMockSyncStateProvider(ctrl),
 		mSigner: NewMockvrfSigner(ctrl),
 	}
 	edSgn, err := signing.NewEdSigner()
@@ -863,7 +863,7 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 				require.NoError(t, err)
 				vrfSigner, err := signer.VRFSigner()
 				require.NoError(t, err)
-				proposal := buildSignedProposal(context.Background(), vrfSigner, 3, logtest.New(t))
+				proposal := buildSignedProposal(context.Background(), vrfSigner, 3, types.VRFPostIndex(2), logtest.New(t))
 				if checker.IsProposalEligible(proposal) {
 					numEligible++
 				}
@@ -895,7 +895,7 @@ func TestBeacon_buildProposal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := buildProposal(tc.epoch, logtest.New(t))
+			result := buildProposal(tc.epoch, types.VRFPostIndex(1), logtest.New(t))
 			r.Equal(tc.result, string(result))
 		})
 	}
@@ -933,7 +933,7 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := buildSignedProposal(context.Background(), vrfSigner, tc.epoch, logtest.New(t))
+			result := buildSignedProposal(context.Background(), vrfSigner, tc.epoch, types.VRFPostIndex(2), logtest.New(t))
 			r.Equal(string(tc.result), string(result))
 		})
 	}
