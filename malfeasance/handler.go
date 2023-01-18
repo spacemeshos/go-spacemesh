@@ -70,11 +70,11 @@ func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) e
 	logger := h.logger.WithContext(ctx)
 	switch p.Proof.Type {
 	case types.HareEquivocation:
-		nodeID, err = validateHareEquivocation(logger, &p.MalfeasanceProof)
+		nodeID, err = validateHareEquivocation(logger, h.cdb, &p.MalfeasanceProof)
 	case types.MultipleATXs:
-		nodeID, err = validateMultipleATXs(logger, &p.MalfeasanceProof)
+		nodeID, err = validateMultipleATXs(logger, h.cdb, &p.MalfeasanceProof)
 	case types.MultipleBallots:
-		nodeID, err = validateMultipleBallots(logger, &p.MalfeasanceProof)
+		nodeID, err = validateMultipleBallots(logger, h.cdb, &p.MalfeasanceProof)
 	default:
 		return errors.New("unknown malfeasance type")
 	}
@@ -87,7 +87,7 @@ func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) e
 	if err == nil {
 		updateMetrics(p.Proof)
 		if malicious, err = h.cdb.IsMalicious(nodeID); err != nil {
-			return err
+			return fmt.Errorf("check known malicious: %w", err)
 		} else if malicious {
 			if peer == h.self {
 				// node saves malfeasance proof eagerly/atomically with the malicious data.
@@ -99,6 +99,8 @@ func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) e
 		if err = h.cdb.AddMalfeasanceProof(nodeID, &p.MalfeasanceProof, nil); err != nil {
 			h.logger.WithContext(ctx).With().Error("failed to save MalfeasanceProof", log.Err(err))
 		}
+	} else {
+		h.logger.WithContext(ctx).With().Debug("failed to validate MalfeasanceProof", log.Err(err))
 	}
 	return err
 }
@@ -112,6 +114,13 @@ func updateMetrics(tp types.Proof) {
 	case types.MultipleBallots:
 		numProofsBallot.Inc()
 	}
+}
+
+func checkIdentityExists(cdb *datastore.CachedDB, nodeID types.NodeID) error {
+	if _, err := cdb.GetPrevAtx(nodeID); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (h *Handler) validateHareEligibility(ctx context.Context, nodeID types.NodeID, gossip *types.MalfeasanceGossip) error {
@@ -146,7 +155,7 @@ func (h *Handler) validateHareEligibility(ctx context.Context, nodeID types.Node
 	return nil
 }
 
-func validateHareEquivocation(logger log.Log, proof *types.MalfeasanceProof) (types.NodeID, error) {
+func validateHareEquivocation(logger log.Log, cdb *datastore.CachedDB, proof *types.MalfeasanceProof) (types.NodeID, error) {
 	if proof.Proof.Type != types.HareEquivocation {
 		return types.NodeID{}, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.HareEquivocation, proof.Proof.Type)
 	}
@@ -163,6 +172,9 @@ func validateHareEquivocation(logger log.Log, proof *types.MalfeasanceProof) (ty
 		nid, err = types.ExtractNodeIDFromSig(msg.SignedBytes(), msg.Signature)
 		if err != nil {
 			return types.NodeID{}, err
+		}
+		if err = checkIdentityExists(cdb, nid); err != nil {
+			return types.NodeID{}, fmt.Errorf("identity in hare malfeasance doesn't exist: %v", nid)
 		}
 		if firstNid == types.EmptyNodeID {
 			firstNid = nid
@@ -188,7 +200,7 @@ func validateHareEquivocation(logger log.Log, proof *types.MalfeasanceProof) (ty
 	return types.NodeID{}, errors.New("invalid hare malfeasance proof")
 }
 
-func validateMultipleATXs(logger log.Log, proof *types.MalfeasanceProof) (types.NodeID, error) {
+func validateMultipleATXs(logger log.Log, cdb *datastore.CachedDB, proof *types.MalfeasanceProof) (types.NodeID, error) {
 	if proof.Proof.Type != types.MultipleATXs {
 		return types.NodeID{}, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.MultipleATXs, proof.Proof.Type)
 	}
@@ -205,6 +217,9 @@ func validateMultipleATXs(logger log.Log, proof *types.MalfeasanceProof) (types.
 		nid, err = types.ExtractNodeIDFromSig(msg.SignedBytes(), msg.Signature)
 		if err != nil {
 			return types.NodeID{}, err
+		}
+		if err = checkIdentityExists(cdb, nid); err != nil {
+			return types.NodeID{}, fmt.Errorf("identity in hare malfeasance doesn't exist: %v", nid)
 		}
 		if firstNid == types.EmptyNodeID {
 			firstNid = nid
@@ -227,7 +242,7 @@ func validateMultipleATXs(logger log.Log, proof *types.MalfeasanceProof) (types.
 	return types.NodeID{}, errors.New("invalid atx malfeasance proof")
 }
 
-func validateMultipleBallots(logger log.Log, proof *types.MalfeasanceProof) (types.NodeID, error) {
+func validateMultipleBallots(logger log.Log, cdb *datastore.CachedDB, proof *types.MalfeasanceProof) (types.NodeID, error) {
 	if proof.Proof.Type != types.MultipleBallots {
 		return types.NodeID{}, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.MultipleBallots, proof.Proof.Type)
 	}
@@ -244,6 +259,9 @@ func validateMultipleBallots(logger log.Log, proof *types.MalfeasanceProof) (typ
 		nid, err = types.ExtractNodeIDFromSig(msg.SignedBytes(), msg.Signature)
 		if err != nil {
 			return types.NodeID{}, err
+		}
+		if err = checkIdentityExists(cdb, nid); err != nil {
+			return types.NodeID{}, fmt.Errorf("identity in ballot malfeasance doesn't exist: %v", nid)
 		}
 		if firstNid == types.EmptyNodeID {
 			firstNid = nid

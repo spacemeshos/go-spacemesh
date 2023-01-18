@@ -3,11 +3,14 @@ package malfeasance_test
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -16,8 +19,28 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(3)
+
+	res := m.Run()
+	os.Exit(res)
+}
+
+func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
+	challenge := types.NIPostChallenge{
+		PubLayerID: types.NewLayerID(1),
+	}
+	nodeID := sig.NodeID()
+	atx := types.NewActivationTx(challenge, &nodeID, types.Address{}, nil, 1, nil, nil)
+	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(db, vAtx, time.Now()))
+}
 
 func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	db := sql.InMemory()
@@ -45,6 +68,30 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 			},
 		},
 	}
+
+	t.Run("unknown identity", func(t *testing.T) {
+		ap := atxProof
+		ap.Messages[0].Signature = sig.Sign(ap.Messages[0].SignedBytes())
+		ap.Messages[1].Signature = sig.Sign(ap.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				Proof: types.Proof{
+					Type: types.MultipleATXs,
+					Data: &ap,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+
+		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
+		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.Nil(t, malProof)
+	})
+
+	createIdentity(t, db, sig)
 
 	t.Run("same msg hash", func(t *testing.T) {
 		msgHash := types.RandomHash()
@@ -74,9 +121,8 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	t.Run("different epoch", func(t *testing.T) {
 		ap := atxProof
 		ap.Messages[0].InnerMsg.Target = ap.Messages[1].InnerMsg.Target + 1
-		for _, msg := range ap.Messages {
-			msg.Signature = sig.Sign(msg.SignedBytes())
-		}
+		ap.Messages[0].Signature = sig.Sign(ap.Messages[0].SignedBytes())
+		ap.Messages[1].Signature = sig.Sign(ap.Messages[1].SignedBytes())
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -215,6 +261,30 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 			},
 		},
 	}
+
+	t.Run("unknown identity", func(t *testing.T) {
+		bp := ballotProof
+		bp.Messages[0].Signature = sig.Sign(bp.Messages[0].SignedBytes())
+		bp.Messages[1].Signature = sig.Sign(bp.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				Proof: types.Proof{
+					Type: types.MultipleBallots,
+					Data: &bp,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+
+		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
+		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.Nil(t, malProof)
+	})
+
+	createIdentity(t, db, sig)
 
 	t.Run("same msg hash", func(t *testing.T) {
 		msgHash := types.RandomHash()
@@ -386,6 +456,30 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 			},
 		},
 	}
+
+	t.Run("unknown identity", func(t *testing.T) {
+		hp := hareProof
+		hp.Messages[0].Signature = sig.Sign(hp.Messages[0].SignedBytes())
+		hp.Messages[1].Signature = sig.Sign(hp.Messages[1].SignedBytes())
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				Proof: types.Proof{
+					Type: types.HareEquivocation,
+					Data: &hp,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+
+		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
+		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.Nil(t, malProof)
+	})
+
+	createIdentity(t, db, sig)
 
 	t.Run("same msg hash", func(t *testing.T) {
 		msgHash := types.RandomHash()
