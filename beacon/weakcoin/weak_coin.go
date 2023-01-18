@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 func defaultConfig() config {
@@ -85,17 +84,19 @@ func New(
 	nodeId types.NodeID,
 	signer vrfSigner,
 	verifier vrfVerifier,
+	nonceFetcher nonceFetcher,
 	opts ...OptionFunc,
 ) *WeakCoin {
 	wc := &WeakCoin{
-		logger:    log.NewNop(),
-		config:    defaultConfig(),
-		cdb:       cdb,
-		nodeId:    nodeId,
-		signer:    signer,
-		publisher: publisher,
-		coins:     make(map[types.RoundID]bool),
-		verifier:  verifier,
+		logger:       log.NewNop(),
+		config:       defaultConfig(),
+		cdb:          cdb,
+		nodeId:       nodeId,
+		signer:       signer,
+		nonceFetcher: nonceFetcher,
+		publisher:    publisher,
+		coins:        make(map[types.RoundID]bool),
+		verifier:     verifier,
 	}
 	for _, opt := range opts {
 		opt(wc)
@@ -107,13 +108,14 @@ func New(
 
 // WeakCoin implementation of the protocol.
 type WeakCoin struct {
-	logger    log.Log
-	config    config
-	cdb       *datastore.CachedDB
-	nodeId    types.NodeID
-	verifier  vrfVerifier
-	signer    vrfSigner
-	publisher pubsub.Publisher
+	logger       log.Log
+	config       config
+	cdb          *datastore.CachedDB
+	nodeId       types.NodeID
+	verifier     vrfVerifier
+	nonceFetcher nonceFetcher
+	signer       vrfSigner
+	publisher    pubsub.Publisher
 
 	mu                         sync.RWMutex
 	epochStarted, roundStarted bool
@@ -217,7 +219,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 	var broadcast []byte
 	var smallest []byte
 	for unit := uint64(0); unit < allowed; unit++ {
-		nonce, err := atxs.VRFNonce(wc.cdb, wc.nodeId, epoch)
+		nonce, err := wc.nonceFetcher.VRFNonce(wc.nodeId, epoch)
 		if err != nil {
 			wc.logger.With().Panic("failed to get vrf nonce", log.Err(err))
 		}

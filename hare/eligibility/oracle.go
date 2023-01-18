@@ -59,6 +59,7 @@ type Oracle struct {
 	cdb            *datastore.CachedDB
 	vrfSigner      *signing.VRFSigner
 	vrfVerifier    vrfVerifier
+	nonceFetcher   nonceFetcher
 	layersPerEpoch uint32
 	vrfMsgCache    cache
 	activesCache   cache
@@ -104,6 +105,7 @@ func New(
 	db *datastore.CachedDB,
 	vrfVerifier vrfVerifier,
 	vrfSigner *signing.VRFSigner,
+	nonceFetcher nonceFetcher,
 	layersPerEpoch uint32,
 	cfg config.Config,
 	logger log.Log,
@@ -123,6 +125,7 @@ func New(
 		cdb:            db,
 		vrfVerifier:    vrfVerifier,
 		vrfSigner:      vrfSigner,
+		nonceFetcher:   nonceFetcher,
 		layersPerEpoch: layersPerEpoch,
 		vrfMsgCache:    vmc,
 		activesCache:   ac,
@@ -182,7 +185,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, id types.NodeID, layer typ
 		return nil, fmt.Errorf("get beacon: %w", err)
 	}
 
-	nonce, err := atxs.VRFNonce(o.cdb, id, layer.GetEpoch())
+	nonce, err := o.nonceFetcher.VRFNonce(id, layer.GetEpoch())
 	if err != nil {
 		return nil, fmt.Errorf("get vrf nonce: %w", err)
 	}

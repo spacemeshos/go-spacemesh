@@ -12,3 +12,7 @@ type cache interface {
 type vrfVerifier interface {
 	Verify(nodeID types.NodeID, msg, sig []byte) bool
 }
+
+type nonceFetcher interface {
+	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
+}

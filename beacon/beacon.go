@@ -92,6 +92,7 @@ func New(
 	pubKeyExtractor pubKeyExtractor,
 	vrfSigner vrfSigner,
 	vrfVerifier vrfVerifier,
+	nonceFetcher nonceFetcher,
 	cdb *datastore.CachedDB,
 	clock layerClock,
 	opts ...Opt,
@@ -106,6 +107,7 @@ func New(
 		pubKeyExtractor: pubKeyExtractor,
 		vrfSigner:       vrfSigner,
 		vrfVerifier:     vrfVerifier,
+		nonceFetcher:    nonceFetcher,
 		cdb:             cdb,
 		clock:           clock,
 		beacons:         make(map[types.EpochID]types.Beacon),
@@ -119,7 +121,7 @@ func New(
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(pd.config.Theta)
 	if pd.weakCoin == nil {
-		pd.weakCoin = weakcoin.New(pd.publisher, cdb, nodeID, vrfSigner, vrfVerifier,
+		pd.weakCoin = weakcoin.New(pd.publisher, cdb, nodeID, vrfSigner, vrfVerifier, nonceFetcher,
 			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
 			weakcoin.WithMaxRound(pd.config.RoundsNumber),
 		)
@@ -146,6 +148,7 @@ type ProtocolDriver struct {
 	pubKeyExtractor pubKeyExtractor
 	vrfSigner       vrfSigner
 	vrfVerifier     vrfVerifier
+	nonceFetcher    nonceFetcher
 	weakCoin        coin
 	theta           *big.Float
 
@@ -669,7 +672,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID)
 	}
 
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
-	nonce, err := atxs.VRFNonce(pd.cdb, pd.nodeID, epoch)
+	nonce, err := pd.nonceFetcher.VRFNonce(pd.nodeID, epoch)
 	if err != nil {
 		logger.With().Panic("failed to get VRF nonce", log.Err(err))
 	}

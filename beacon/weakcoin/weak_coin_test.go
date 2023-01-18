@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-scale/tester"
@@ -20,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 func noopBroadcaster(tb testing.TB, ctrl *gomock.Controller) *mocks.MockPublisher {
@@ -37,36 +35,6 @@ func broadcastedMessage(tb testing.TB, msg weakcoin.Message) []byte {
 	return buf
 }
 
-func testDB(tb testing.TB) (types.NodeID, *datastore.CachedDB) {
-	tb.Helper()
-
-	layersPerEpoch := types.GetLayersPerEpoch()
-	types.SetLayersPerEpoch(100)
-	tb.Cleanup(func() { types.SetLayersPerEpoch(layersPerEpoch) })
-
-	id := types.RandomATXID()
-	nodeID := types.RandomNodeID()
-	nonce := types.VRFPostIndex(rand.Uint64())
-
-	atx := types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(101),
-			},
-			VRFNonce: &nonce,
-		},
-	}
-
-	atx.SetID(&id)
-	atx.SetNodeID(&nodeID)
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(tb, err)
-
-	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	atxs.Add(db, vAtx, time.Now())
-	return nodeID, db
-}
-
 func staticSigner(tb testing.TB, ctrl *gomock.Controller, sig []byte) *weakcoin.MockvrfSigner {
 	tb.Helper()
 	signer := weakcoin.NewMockvrfSigner(ctrl)
@@ -81,6 +49,13 @@ func sigVerifier(tb testing.TB, ctrl *gomock.Controller) *weakcoin.MockvrfVerifi
 	verifier := weakcoin.NewMockvrfVerifier(ctrl)
 	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 	return verifier
+}
+
+func nonceFetcher(tb testing.TB, ctrl *gomock.Controller) *weakcoin.MocknonceFetcher {
+	tb.Helper()
+	fetcher := weakcoin.NewMocknonceFetcher(ctrl)
+	fetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
+	return fetcher
 }
 
 func TestWeakCoin(t *testing.T) {
@@ -214,13 +189,13 @@ func TestWeakCoin(t *testing.T) {
 	for _, tc := range tcs {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			nodeID, db := testDB(t)
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
-				db,
-				nodeID,
+				datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+				types.RandomNodeID(),
 				staticSigner(t, ctrl, tc.local),
 				sigVerifier(t, ctrl),
+				nonceFetcher(t, ctrl),
 				weakcoin.WithThreshold([]byte{0xfe}),
 			)
 
@@ -239,13 +214,13 @@ func TestWeakCoin(t *testing.T) {
 	for _, tc := range tcs {
 		tc := tc
 		t.Run("BufferingStartEpoch/"+tc.desc, func(t *testing.T) {
-			nodeID, db := testDB(t)
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
-				db,
-				nodeID,
+				datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+				types.RandomNodeID(),
 				staticSigner(t, ctrl, tc.local),
 				sigVerifier(t, ctrl),
+				nonceFetcher(t, ctrl),
 				weakcoin.WithThreshold([]byte{0xfe}),
 			)
 
@@ -264,13 +239,13 @@ func TestWeakCoin(t *testing.T) {
 	for _, tc := range tcs {
 		tc := tc
 		t.Run("BufferingNextRound/"+tc.desc, func(t *testing.T) {
-			nodeID, db := testDB(t)
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
-				db,
-				nodeID,
+				datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+				types.RandomNodeID(),
 				staticSigner(t, ctrl, tc.local),
 				sigVerifier(t, ctrl),
+				nonceFetcher(t, ctrl),
 				weakcoin.WithThreshold([]byte{0xfe}),
 			)
 
@@ -292,13 +267,13 @@ func TestWeakCoin(t *testing.T) {
 	for _, tc := range tcs {
 		tc := tc
 		t.Run("BufferingNextEpochAfterCompletion/"+tc.desc, func(t *testing.T) {
-			nodeID, db := testDB(t)
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
-				db,
-				nodeID,
+				datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+				types.RandomNodeID(),
 				staticSigner(t, ctrl, tc.local),
 				sigVerifier(t, ctrl),
+				nonceFetcher(t, ctrl),
 				weakcoin.WithThreshold([]byte{0xfe}),
 			)
 
@@ -322,14 +297,14 @@ func TestWeakCoin(t *testing.T) {
 
 func TestWeakCoinGetPanic(t *testing.T) {
 	var (
-		ctrl       = gomock.NewController(t)
-		nodeID, db = testDB(t)
-		wc         = weakcoin.New(
+		ctrl = gomock.NewController(t)
+		wc   = weakcoin.New(
 			noopBroadcaster(t, ctrl),
-			db,
-			nodeID,
+			datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+			types.RandomNodeID(),
 			staticSigner(t, ctrl, []byte{1}),
 			sigVerifier(t, ctrl),
+			nonceFetcher(t, ctrl),
 		)
 		epoch types.EpochID = 10
 		round types.RoundID = 2
@@ -350,19 +325,19 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 		oneLSB  = []byte{0b0001}
 		zeroLSB = []byte{0b0000}
 
-		nodeID, db               = testDB(t)
-		epoch      types.EpochID = 10
-		round      types.RoundID = 2
-		nextRound                = round + 1
-		bufSize                  = 10
+		epoch     types.EpochID = 10
+		round     types.RoundID = 2
+		nextRound               = round + 1
+		bufSize                 = 10
 	)
 
 	wc := weakcoin.New(
 		noopBroadcaster(t, ctrl),
-		db,
-		nodeID,
+		datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		types.RandomNodeID(),
 		staticSigner(t, ctrl, oneLSB),
 		sigVerifier(t, ctrl),
+		nonceFetcher(t, ctrl),
 		weakcoin.WithNextRoundBufferSize(bufSize),
 	)
 
@@ -420,14 +395,21 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	require.NoError(t, err)
 
 	allowances := weakcoin.UnitAllowances{string(signer.PublicKey().Bytes()): 1}
-	nodeID, db := testDB(t)
-	instance := weakcoin.New(broadcaster, db, nodeID, vrfSig, vrfVerifierAdapter{}, weakcoin.WithThreshold([]byte{0xff}))
+	instance := weakcoin.New(
+		broadcaster,
+		datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		types.RandomNodeID(),
+		vrfSig,
+		vrfVerifierAdapter{},
+		nonceFetcher(t, ctrl),
+		weakcoin.WithThreshold([]byte{0xff}),
+	)
 	instance.StartEpoch(context.Background(), epoch, allowances)
 	require.NoError(t, instance.StartRound(context.Background(), round))
 
 	// TODO(mafa): figure out why sig is now different on every test run
 	require.Equal(t,
-		"c09754166a6c02a07e91bff6e2ed5c4d621646eb1019a78ed5f1e2ba7c29a3ca2edb8d3dabf7c6ab324f08877af46d9e6a5c604f9561e474d40fe0cd3f9da6069f6e9761d9b007ef3f1ecf943c968201",
+		"8ecb99fe6aa7e589f6190d3c039ba41419bbcc7a177076c1f4d930546a78f2b6529bd87fbaefbf2dbfe9d5d145d67b49af4f934f95657398e5a933e57a31ba8f9509b91b56f419007f064ba88b1ef90c",
 		hex.EncodeToString(sig),
 	)
 }
@@ -470,13 +452,13 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 	}
 
 	for i := range instances {
-		nodeID, db := testDB(t)
 		instances[i] = weakcoin.New(
 			broadcasters[i],
-			db,
-			nodeID,
+			datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+			types.RandomNodeID(),
 			vrfSigners[i],
 			vrfVerifierAdapter{},
+			nonceFetcher(t, ctrl),
 			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),
 		)
 	}

@@ -67,12 +67,13 @@ func newPublisher(tb testing.TB) pubsub.Publisher {
 
 type testProtocolDriver struct {
 	*ProtocolDriver
-	ctrl      *gomock.Controller
-	cdb       *datastore.CachedDB
-	mClock    *MocklayerClock
-	mSync     *mocks.MockSyncStateProvider
-	mSigner   *MockvrfSigner
-	mVerifier *MockvrfVerifier
+	ctrl          *gomock.Controller
+	cdb           *datastore.CachedDB
+	mClock        *MocklayerClock
+	mSync         *mocks.MockSyncStateProvider
+	mSigner       *MockvrfSigner
+	mVerifier     *MockvrfVerifier
+	mNonceFetcher *MocknonceFetcher
 }
 
 func setUpProtocolDriver(tb testing.TB) *testProtocolDriver {
@@ -82,11 +83,12 @@ func setUpProtocolDriver(tb testing.TB) *testProtocolDriver {
 func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolDriver {
 	ctrl := gomock.NewController(tb)
 	tpd := &testProtocolDriver{
-		ctrl:      ctrl,
-		mClock:    NewMocklayerClock(ctrl),
-		mSync:     mocks.NewMockSyncStateProvider(ctrl),
-		mSigner:   NewMockvrfSigner(ctrl),
-		mVerifier: NewMockvrfVerifier(ctrl),
+		ctrl:          ctrl,
+		mClock:        NewMocklayerClock(ctrl),
+		mSync:         mocks.NewMockSyncStateProvider(ctrl),
+		mSigner:       NewMockvrfSigner(ctrl),
+		mVerifier:     NewMockvrfVerifier(ctrl),
+		mNonceFetcher: NewMocknonceFetcher(ctrl),
 	}
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(tb, err)
@@ -97,9 +99,10 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 
 	tpd.mSigner.EXPECT().Sign(gomock.Any()).AnyTimes().Return([]byte{})
 	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
+	tpd.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).AnyTimes().Return(types.VRFPostIndex(0), nil)
 
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
-	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, tpd.mSigner, tpd.mVerifier, tpd.cdb, tpd.mClock,
+	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, tpd.mSigner, tpd.mVerifier, tpd.mNonceFetcher, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withWeakCoin(coinValueMock(tb, true)),

@@ -51,6 +51,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -464,6 +465,14 @@ func (vrfVerifierAdapter) Verify(nodeID types.NodeID, msg, sig []byte) bool {
 	return signing.VRFVerify(nodeID, msg, sig)
 }
 
+type nonceFetcherAdapter struct {
+	cdb *datastore.CachedDB
+}
+
+func (nfa nonceFetcherAdapter) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	return atxs.VRFNonce(nfa.cdb, nodeID, epoch)
+}
+
 func (app *App) initServices(
 	ctx context.Context,
 	sgn *signing.EdSigner,
@@ -521,7 +530,7 @@ func (app *App) initServices(
 
 	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
 
-	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifierAdapter{}, app.cachedDB, clock,
+	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifierAdapter{}, nonceFetcherAdapter{app.cachedDB}, app.cachedDB, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
@@ -567,7 +576,7 @@ func (app *App) initServices(
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
 
-	hOracle := eligibility.New(beaconProtocol, app.cachedDB, vrfVerifierAdapter{}, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+	hOracle := eligibility.New(beaconProtocol, app.cachedDB, vrfVerifierAdapter{}, vrfSigner, nonceFetcherAdapter{app.cachedDB}, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
 	app.certifier = blocks.NewCertifier(app.db, hOracle, nodeID, sgn, app.host, clock, beaconProtocol, trtl,
@@ -578,7 +587,8 @@ func (app *App) initServices(
 			WaitSigLayers:    app.Config.Tortoise.Zdist,
 			NumLayersToKeep:  app.Config.Tortoise.Zdist,
 		}),
-		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))
+		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
+	)
 
 	fetcher := fetch.NewFetch(app.cachedDB, msh, beaconProtocol, app.host,
 		fetch.WithContext(ctx),

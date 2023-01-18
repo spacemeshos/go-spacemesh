@@ -183,7 +183,7 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to get ATX for epoch (miner ID %v): %w", minerID, err)
 	}
 
-	nonce, err := atxs.VRFNonce(pd.cdb, m.NodeID, m.EpochID)
+	nonce, err := pd.nonceFetcher.VRFNonce(m.NodeID, m.EpochID)
 	if err != nil {
 		logger.With().Warning("[proposal] failed to get VRF nonce", log.Err(err))
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to get VRF nonce (miner ID %v): %w", minerID, err)
