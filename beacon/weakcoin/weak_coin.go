@@ -10,9 +10,9 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
@@ -81,6 +81,8 @@ func WithNextRoundBufferSize(size int) OptionFunc {
 // New creates an instance of weak coin protocol.
 func New(
 	publisher pubsub.Publisher,
+	cdb *datastore.CachedDB,
+	nodeId types.NodeID,
 	signer vrfSigner,
 	verifier vrfVerifier,
 	opts ...OptionFunc,
@@ -88,6 +90,8 @@ func New(
 	wc := &WeakCoin{
 		logger:    log.NewNop(),
 		config:    defaultConfig(),
+		cdb:       cdb,
+		nodeId:    nodeId,
 		signer:    signer,
 		publisher: publisher,
 		coins:     make(map[types.RoundID]bool),
@@ -105,6 +109,8 @@ func New(
 type WeakCoin struct {
 	logger    log.Log
 	config    config
+	cdb       *datastore.CachedDB
+	nodeId    types.NodeID
 	verifier  vrfVerifier
 	signer    vrfSigner
 	publisher pubsub.Publisher
@@ -211,10 +217,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 	var broadcast []byte
 	var smallest []byte
 	for unit := uint64(0); unit < allowed; unit++ {
-		// TODO (mafa): inject cdb and nodeID into weakcoin service
-		var cdb sql.Executor
-		var nodeId types.NodeID
-		nonce, err := atxs.VRFNonce(cdb, nodeId, epoch)
+		nonce, err := atxs.VRFNonce(wc.cdb, wc.nodeId, epoch)
 		if err != nil {
 			wc.logger.With().Panic("failed to get vrf nonce", log.Err(err))
 		}
