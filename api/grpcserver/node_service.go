@@ -25,6 +25,7 @@ import (
 // data such as node status, software version, errors, etc. It can also be used to start
 // the sync process, or to shut down the node.
 type NodeService struct {
+	appCtx      context.Context
 	mesh        api.MeshAPI
 	genTime     api.GenesisTimeAPI
 	peerCounter api.PeerCounter
@@ -39,9 +40,10 @@ func (s NodeService) RegisterService(server *Server) {
 
 // NewNodeService creates a new grpc service using config data.
 func NewNodeService(
-	peers api.PeerCounter, msh api.MeshAPI, genTime api.GenesisTimeAPI, syncer api.Syncer, atxapi api.ActivationAPI,
+	appCtx context.Context, peers api.PeerCounter, msh api.MeshAPI, genTime api.GenesisTimeAPI, syncer api.Syncer, atxapi api.ActivationAPI,
 ) *NodeService {
 	return &NodeService{
+		appCtx:      appCtx,
 		mesh:        msh,
 		genTime:     genTime,
 		peerCounter: peers,
@@ -108,9 +110,9 @@ func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 }
 
 // SyncStart requests that the node start syncing the mesh (if it isn't already syncing).
-func (s NodeService) SyncStart(ctx context.Context, _ *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
+func (s NodeService) SyncStart(context.Context, *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
 	log.Info("GRPC NodeService.SyncStart")
-	s.syncer.Start(ctx)
+	s.syncer.Start(s.appCtx)
 	return &pb.SyncStartResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
