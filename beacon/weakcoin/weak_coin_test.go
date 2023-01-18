@@ -42,6 +42,13 @@ func staticSigner(tb testing.TB, ctrl *gomock.Controller, sig []byte) *weakcoin.
 	return signer
 }
 
+func sigVerifier(tb testing.TB, ctrl *gomock.Controller) *weakcoin.MockvrfVerifier {
+	tb.Helper()
+	verifier := weakcoin.NewMockvrfVerifier(ctrl)
+	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+	return verifier
+}
+
 func TestWeakCoin(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -176,6 +183,7 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
+				sigVerifier(t, ctrl),
 				weakcoin.WithThreshold([]byte{0xfe}),
 			)
 
@@ -197,6 +205,7 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
+				sigVerifier(t, ctrl),
 				weakcoin.WithThreshold([]byte{0xfe}),
 			)
 
@@ -218,6 +227,7 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
+				sigVerifier(t, ctrl),
 				weakcoin.WithThreshold([]byte{0xfe}),
 			)
 
@@ -242,6 +252,7 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
+				sigVerifier(t, ctrl),
 				weakcoin.WithThreshold([]byte{0xfe}),
 			)
 
@@ -269,6 +280,7 @@ func TestWeakCoinGetPanic(t *testing.T) {
 		wc   = weakcoin.New(
 			noopBroadcaster(t, ctrl),
 			staticSigner(t, ctrl, []byte{1}),
+			sigVerifier(t, ctrl),
 		)
 		epoch types.EpochID = 10
 		round types.RoundID = 2
@@ -298,6 +310,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	wc := weakcoin.New(
 		noopBroadcaster(t, ctrl),
 		staticSigner(t, ctrl, oneLSB),
+		sigVerifier(t, ctrl),
 		weakcoin.WithNextRoundBufferSize(bufSize),
 	)
 
@@ -322,6 +335,12 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	require.NoError(t, wc.StartRound(context.Background(), nextRound))
 	wc.FinishRound(context.Background())
 	require.True(t, wc.Get(context.Background(), epoch, nextRound))
+}
+
+type vrfVerifierAdapter struct{}
+
+func (m vrfVerifierAdapter) Verify(nodeID types.NodeID, msg, sig []byte) bool {
+	return signing.VRFVerify(nodeID, msg, sig)
 }
 
 func TestWeakCoinEncodingRegression(t *testing.T) {
@@ -349,7 +368,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	require.NoError(t, err)
 
 	allowances := weakcoin.UnitAllowances{string(signer.PublicKey().Bytes()): 1}
-	instance := weakcoin.New(broadcaster, vrfSig, weakcoin.WithThreshold([]byte{0xff}))
+	instance := weakcoin.New(broadcaster, vrfSig, vrfVerifierAdapter{}, weakcoin.WithThreshold([]byte{0xff}))
 	instance.StartEpoch(context.Background(), epoch, allowances)
 	require.NoError(t, instance.StartRound(context.Background(), round))
 
@@ -400,6 +419,7 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 		instances[i] = weakcoin.New(
 			broadcasters[i],
 			vrfSigners[i],
+			vrfVerifierAdapter{},
 			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),
 		)
 	}

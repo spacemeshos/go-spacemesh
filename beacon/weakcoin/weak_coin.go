@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
@@ -83,6 +82,7 @@ func WithNextRoundBufferSize(size int) OptionFunc {
 func New(
 	publisher pubsub.Publisher,
 	signer vrfSigner,
+	verifier vrfVerifier,
 	opts ...OptionFunc,
 ) *WeakCoin {
 	wc := &WeakCoin{
@@ -91,6 +91,7 @@ func New(
 		signer:    signer,
 		publisher: publisher,
 		coins:     make(map[types.RoundID]bool),
+		verifier:  verifier,
 	}
 	for _, opt := range opts {
 		opt(wc)
@@ -104,6 +105,7 @@ func New(
 type WeakCoin struct {
 	logger    log.Log
 	config    config
+	verifier  vrfVerifier
 	signer    vrfSigner
 	publisher pubsub.Publisher
 
@@ -187,7 +189,7 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 	buf := wc.encodeProposal(message.Epoch, message.Nonce, message.Round, message.Unit)
-	if !signing.VRFVerify(types.BytesToNodeID(message.MinerPK), buf, message.Signature) {
+	if !wc.verifier.Verify(types.BytesToNodeID(message.MinerPK), buf, message.Signature) {
 		return fmt.Errorf("signature is invalid signature %x", message.Signature)
 	}
 

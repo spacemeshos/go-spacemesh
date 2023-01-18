@@ -91,6 +91,7 @@ func New(
 	edSigner signer,
 	pubKeyExtractor pubKeyExtractor,
 	vrfSigner vrfSigner,
+	vrfVerifier vrfVerifier,
 	cdb *datastore.CachedDB,
 	clock layerClock,
 	opts ...Opt,
@@ -104,6 +105,7 @@ func New(
 		edSigner:        edSigner,
 		pubKeyExtractor: pubKeyExtractor,
 		vrfSigner:       vrfSigner,
+		vrfVerifier:     vrfVerifier,
 		cdb:             cdb,
 		clock:           clock,
 		beacons:         make(map[types.EpochID]types.Beacon),
@@ -117,7 +119,7 @@ func New(
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(pd.config.Theta)
 	if pd.weakCoin == nil {
-		pd.weakCoin = weakcoin.New(pd.publisher, vrfSigner,
+		pd.weakCoin = weakcoin.New(pd.publisher, vrfSigner, vrfVerifier,
 			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
 			weakcoin.WithMaxRound(pd.config.RoundsNumber),
 		)
@@ -143,6 +145,7 @@ type ProtocolDriver struct {
 	edSigner        signer
 	pubKeyExtractor pubKeyExtractor
 	vrfSigner       vrfSigner
+	vrfVerifier     vrfVerifier
 	weakCoin        coin
 	theta           *big.Float
 

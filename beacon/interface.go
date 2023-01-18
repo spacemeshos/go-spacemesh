@@ -49,3 +49,7 @@ type vrfSigner interface {
 	PublicKey() *signing.PublicKey
 	LittleEndian() bool
 }
+
+type vrfVerifier interface {
+	Verify(nodeID types.NodeID, msg, sig []byte) bool
+}
