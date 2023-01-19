@@ -88,8 +88,8 @@ func withWeakCoin(wc coin) Opt {
 func New(
 	nodeID types.NodeID,
 	publisher pubsub.Publisher,
-	edSigner signer,
-	pubKeyExtractor pubKeyExtractor,
+	edSigner *signing.EdSigner,
+	pubKeyExtractor *signing.PubKeyExtractor,
 	vrfSigner vrfSigner,
 	vrfVerifier vrfVerifier,
 	nonceFetcher nonceFetcher,
@@ -144,8 +144,8 @@ type ProtocolDriver struct {
 	nodeID          types.NodeID
 	sync            system.SyncStateProvider
 	publisher       pubsub.Publisher
-	edSigner        signer
-	pubKeyExtractor pubKeyExtractor
+	edSigner        *signing.EdSigner
+	pubKeyExtractor *signing.PubKeyExtractor
 	vrfSigner       vrfSigner
 	vrfVerifier     vrfVerifier
 	nonceFetcher    nonceFetcher

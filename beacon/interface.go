@@ -34,16 +34,6 @@ type layerClock interface {
 	GetCurrentLayer() types.LayerID
 }
 
-type signer interface {
-	Sign(msg []byte) []byte
-	PublicKey() *signing.PublicKey
-	NodeID() types.NodeID
-}
-
-type pubKeyExtractor interface {
-	Extract([]byte, []byte) (*signing.PublicKey, error)
-}
-
 type vrfSigner interface {
 	Sign(msg []byte) []byte
 	NodeID() types.NodeID

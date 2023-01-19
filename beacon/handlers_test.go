@@ -31,7 +31,7 @@ func createProtocolDriver(tb testing.TB, epoch types.EpochID) *testProtocolDrive
 	return tpd
 }
 
-func createProtocolDriverWithFirstRoundVotes(t *testing.T, signer signer, epoch types.EpochID, round types.RoundID) (*testProtocolDriver, proposalList) {
+func createProtocolDriverWithFirstRoundVotes(t *testing.T, signer *signing.EdSigner, epoch types.EpochID, round types.RoundID) (*testProtocolDriver, proposalList) {
 	tpd := createProtocolDriver(t, epoch)
 	plist := proposalList{types.RandomBytes(types.BeaconSize), types.RandomBytes(types.BeaconSize), types.RandomBytes(types.BeaconSize)}
 	setOwnFirstRoundVotes(t, tpd.ProtocolDriver, epoch, plist)
@@ -74,7 +74,7 @@ func mockAlwaysFalseProposalChecker(t *testing.T, pd *ProtocolDriver, epoch type
 	pd.states[epoch].proposalChecker = mockChecker
 }
 
-func createProposal(t *testing.T, vrfSigner vrfSigner, epoch types.EpochID, corruptSignature bool) *ProposalMessage {
+func createProposal(t *testing.T, vrfSigner *signing.VRFSigner, epoch types.EpochID, corruptSignature bool) *ProposalMessage {
 	nonce := types.VRFPostIndex(rand.Uint64())
 	sig := buildSignedProposal(context.Background(), vrfSigner, epoch, nonce, logtest.New(t))
 	msg := &ProposalMessage{
@@ -117,7 +117,7 @@ func checkProposals(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, expec
 	}
 }
 
-func createFirstVote(t *testing.T, signer signer, epoch types.EpochID, valid, pValid [][]byte, corruptSignature bool) *FirstVotingMessage {
+func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID, valid, pValid [][]byte, corruptSignature bool) *FirstVotingMessage {
 	logger := logtest.New(t)
 	msg := &FirstVotingMessage{
 		FirstVotingMessageBody: FirstVotingMessageBody{
@@ -140,7 +140,7 @@ func createFirstVote(t *testing.T, signer signer, epoch types.EpochID, valid, pV
 	return msg
 }
 
-func checkVoted(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, signer signer, round types.RoundID, voted bool) {
+func checkVoted(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, signer *signing.EdSigner, round types.RoundID, voted bool) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 	require.NotNil(t, pd.states[epoch])
@@ -155,7 +155,7 @@ func checkFirstIncomingVotes(t *testing.T, pd *ProtocolDriver, epoch types.Epoch
 	require.EqualValues(t, expected, pd.states[epoch].firstRoundIncomingVotes)
 }
 
-func createFollowingVote(t *testing.T, signer signer, epoch types.EpochID, round types.RoundID, bitVector []byte, corruptSignature bool) *FollowingVotingMessage {
+func createFollowingVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID, round types.RoundID, bitVector []byte, corruptSignature bool) *FollowingVotingMessage {
 	msg := &FollowingVotingMessage{
 		FollowingVotingMessageBody: FollowingVotingMessageBody{
 			EpochID:        epoch,

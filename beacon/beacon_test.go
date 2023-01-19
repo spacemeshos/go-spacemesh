@@ -112,7 +112,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	return tpd
 }
 
-func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig signer, numUnits uint32) {
+func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint32) {
 	nodeID := sig.NodeID()
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
