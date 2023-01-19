@@ -564,7 +564,8 @@ func (app *App) initServices(
 			GoldenATXID:    goldenATXID,
 			MaxExceptions:  trtlCfg.MaxExceptions,
 			Hdist:          trtlCfg.Hdist,
-		}))
+		}),
+	)
 
 	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
@@ -1119,7 +1120,8 @@ func (app *App) Start(ctx context.Context) error {
 
 	app.log = app.addLogger(AppLogger, lg)
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-	err = app.initServices(ctx,
+	err = app.initServices(
+		ctx,
 		edSgn,
 		poetClients,
 		vrfSigner,
