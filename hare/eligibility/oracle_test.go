@@ -51,7 +51,9 @@ func defaultOracle(t testing.TB) *testOracle {
 	nonceFetcher := NewMocknonceFetcher(ctrl)
 
 	to := &testOracle{
-		Oracle:        New(mb, cdb, verifier, nil, nonceFetcher, defLayersPerEpoch, config.Config{ConfidenceParam: confidenceParam, EpochOffset: epochOffset}, lg),
+		Oracle: New(mb, cdb, verifier, nil, defLayersPerEpoch, config.Config{ConfidenceParam: confidenceParam, EpochOffset: epochOffset}, lg,
+			withNonceFetcher(nonceFetcher),
+		),
 		mBeacon:       mb,
 		mVerifier:     verifier,
 		mNonceFetcher: nonceFetcher,

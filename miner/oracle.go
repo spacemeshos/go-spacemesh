@@ -28,6 +28,22 @@ type oracleCache struct {
 	proofs    map[types.LayerID][]types.VotingEligibility
 }
 
+type nonceFetcherAdapter struct {
+	cdb *datastore.CachedDB
+}
+
+func (nfa nonceFetcherAdapter) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	return atxs.VRFNonce(nfa.cdb, nodeID, epoch)
+}
+
+type oracleOpt func(*Oracle)
+
+func withNonceFetcher(nf nonceFetcher) oracleOpt {
+	return func(o *Oracle) {
+		o.nonceFetcher = nf
+	}
+}
+
 // Oracle provides proposal eligibility proofs for the miner.
 type Oracle struct {
 	avgLayerSize   uint32
@@ -43,16 +59,23 @@ type Oracle struct {
 	cache oracleCache
 }
 
-func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, nonceFetcher nonceFetcher, nodeID types.NodeID, log log.Log) *Oracle {
-	return &Oracle{
+func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, nodeID types.NodeID, log log.Log, opts ...oracleOpt) *Oracle {
+	o := &Oracle{
 		avgLayerSize:   layerSize,
 		layersPerEpoch: layersPerEpoch,
 		cdb:            cdb,
 		vrfSigner:      vrfSigner,
-		nonceFetcher:   nonceFetcher,
 		nodeID:         nodeID,
 		log:            log,
 	}
+	for _, opt := range opts {
+		opt(o)
+	}
+
+	if o.nonceFetcher == nil {
+		o.nonceFetcher = nonceFetcherAdapter{cdb: cdb}
+	}
+	return o
 }
 
 // GetProposalEligibility returns the miner's ATXID and the active set for the layer's epoch, along with the list of eligibility

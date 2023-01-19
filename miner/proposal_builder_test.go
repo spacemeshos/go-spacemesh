@@ -55,14 +55,15 @@ func createBuilder(tb testing.TB) *testBuilder {
 	}
 	lg := logtest.New(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	pb.ProposalBuilder = NewProposalBuilder(context.TODO(), make(chan types.LayerID), edSigner, vrfSigner, pb.mNonce,
+	pb.ProposalBuilder = NewProposalBuilder(context.Background(), make(chan types.LayerID), edSigner, vrfSigner,
 		cdb, pb.mPubSub, pb.mTortoise, pb.mBeacon, pb.mSync, pb.mCState,
 		WithLogger(lg),
 		WithLayerSize(20),
 		WithLayerPerEpoch(3),
 		WithMinerID(nodeID),
 		WithHdist(3),
-		withOracle(pb.mOracle))
+		withOracle(pb.mOracle),
+	)
 	return pb
 }
 
@@ -107,9 +108,9 @@ func TestBuilder_StartAndClose(t *testing.T) {
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(false)
 
-	require.NoError(t, b.Start(context.TODO()))
+	require.NoError(t, b.Start(context.Background()))
 	// calling Start the second time should have no effect
-	require.NoError(t, b.Start(context.TODO()))
+	require.NoError(t, b.Start(context.Background()))
 
 	// causing it to build a block
 	b.layerTimer <- types.NewLayerID(layersPerEpoch * 3)
@@ -120,7 +121,7 @@ func TestBuilder_StartAndClose(t *testing.T) {
 func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b := createBuilder(t)
 
-	require.NoError(t, b.Start(context.TODO()))
+	require.NoError(t, b.Start(context.Background()))
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
@@ -167,7 +168,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 			return nil
 		})
 
-	require.NoError(t, b.handleLayer(context.TODO(), layerID))
+	require.NoError(t, b.handleLayer(context.Background(), layerID))
 
 	b.Close()
 }
@@ -175,7 +176,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	b := createBuilder(t)
 
-	require.NoError(t, b.Start(context.TODO()))
+	require.NoError(t, b.Start(context.Background()))
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
@@ -221,7 +222,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 			return nil
 		})
 
-	require.NoError(t, b.handleLayer(context.TODO(), layerID))
+	require.NoError(t, b.handleLayer(context.Background(), layerID))
 
 	b.Close()
 }
@@ -230,7 +231,7 @@ func TestBuilder_HandleLayer_Genesis(t *testing.T) {
 	b := createBuilder(t)
 
 	layerID := types.NewLayerID(layersPerEpoch)
-	require.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errGenesis)
+	require.ErrorIs(t, b.handleLayer(context.Background(), layerID), errGenesis)
 }
 
 func TestBuilder_HandleLayer_NotSynced(t *testing.T) {
@@ -239,7 +240,7 @@ func TestBuilder_HandleLayer_NotSynced(t *testing.T) {
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(false)
 
-	require.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errNotSynced)
+	require.ErrorIs(t, b.handleLayer(context.Background(), layerID), errNotSynced)
 }
 
 func TestBuilder_HandleLayer_NoBeacon(t *testing.T) {
@@ -249,7 +250,7 @@ func TestBuilder_HandleLayer_NoBeacon(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, errors.New("unknown"))
 
-	require.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errNoBeacon)
+	require.ErrorIs(t, b.handleLayer(context.Background(), layerID), errNoBeacon)
 }
 
 func TestBuilder_HandleLayer_EligibilityError(t *testing.T) {
@@ -262,7 +263,7 @@ func TestBuilder_HandleLayer_EligibilityError(t *testing.T) {
 	errUnknown := errors.New("unknown")
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(*types.EmptyATXID, nil, nil, errUnknown)
 
-	require.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errUnknown)
+	require.ErrorIs(t, b.handleLayer(context.Background(), layerID), errUnknown)
 }
 
 func TestBuilder_HandleLayer_NotEligible(t *testing.T) {
@@ -274,7 +275,7 @@ func TestBuilder_HandleLayer_NotEligible(t *testing.T) {
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), []types.VotingEligibility{}, nil)
 
-	require.NoError(t, b.handleLayer(context.TODO(), layerID))
+	require.NoError(t, b.handleLayer(context.Background(), layerID))
 }
 
 func TestBuilder_HandleLayer_BaseBlockError(t *testing.T) {
@@ -290,7 +291,7 @@ func TestBuilder_HandleLayer_BaseBlockError(t *testing.T) {
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(nil, errUnknown)
 
-	require.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errUnknown)
+	require.ErrorIs(t, b.handleLayer(context.Background(), layerID), errUnknown)
 }
 
 func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
@@ -320,7 +321,7 @@ func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 			return nil
 		})
 
-	require.NoError(t, b.handleLayer(context.TODO(), layerID))
+	require.NoError(t, b.handleLayer(context.Background(), layerID))
 	b.Close()
 }
 
@@ -353,14 +354,14 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 			return nil
 		})
 
-	require.NoError(t, b.handleLayer(context.TODO(), layerID))
+	require.NoError(t, b.handleLayer(context.Background(), layerID))
 	b.Close()
 }
 
 func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	b := createBuilder(t)
 
-	require.NoError(t, b.Start(context.TODO()))
+	require.NoError(t, b.Start(context.Background()))
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
@@ -378,13 +379,13 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), types.RandomHash()))
 
 	b.Close()
-	require.NoError(t, b.handleLayer(context.TODO(), layerID))
+	require.NoError(t, b.handleLayer(context.Background(), layerID))
 }
 
 func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b := createBuilder(t)
 
-	require.NoError(t, b.Start(context.TODO()))
+	require.NoError(t, b.Start(context.Background()))
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
@@ -403,14 +404,14 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).Return(errors.New("unknown"))
 
 	// publish error is ignored
-	require.NoError(t, b.handleLayer(context.TODO(), layerID))
+	require.NoError(t, b.handleLayer(context.Background(), layerID))
 	b.Close()
 }
 
 func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 	b := createBuilder(t)
 
-	require.NoError(t, b.Start(context.TODO()))
+	require.NoError(t, b.Start(context.Background()))
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
@@ -437,14 +438,14 @@ func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 			return errors.New("unknown")
 		})
 
-	require.NoError(t, b.handleLayer(context.TODO(), layerID))
+	require.NoError(t, b.handleLayer(context.Background(), layerID))
 	b.Close()
 }
 
 func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 	b := createBuilder(t)
 
-	require.NoError(t, b.Start(context.TODO()))
+	require.NoError(t, b.Start(context.Background()))
 
 	layerID := types.NewLayerID(layersPerEpoch * 5)
 	beacon := types.RandomBeacon()
@@ -471,14 +472,14 @@ func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 			return errors.New("unknown")
 		})
 
-	require.NoError(t, b.handleLayer(context.TODO(), layerID))
+	require.NoError(t, b.handleLayer(context.Background(), layerID))
 	b.Close()
 }
 
 func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 	b := createBuilder(t)
 
-	require.NoError(t, b.Start(context.TODO()))
+	require.NoError(t, b.Start(context.Background()))
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
@@ -505,7 +506,7 @@ func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 			return errors.New("unknown")
 		})
 
-	require.NoError(t, b.handleLayer(context.TODO(), layerID))
+	require.NoError(t, b.handleLayer(context.Background(), layerID))
 	b.Close()
 }
 
@@ -523,7 +524,7 @@ func TestBuilder_HandleLayer_Duplicate(t *testing.T) {
 	require.NoError(t, ballots.Add(b.cdb, &ballot))
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
-	require.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errDuplicateLayer)
+	require.ErrorIs(t, b.handleLayer(context.Background(), layerID), errDuplicateLayer)
 }
 
 func TestBuilder_UniqueBlockID(t *testing.T) {
@@ -539,12 +540,12 @@ func TestBuilder_UniqueBlockID(t *testing.T) {
 
 	builder1.mTortoise.EXPECT().LatestComplete().Return(layerID.Sub(1))
 	require.NoError(t, layers.SetHashes(builder1.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
-	b1, err := builder1.createProposal(context.TODO(), layerID, nil, atxID1, activeSet, beacon, nil, types.Opinion{})
+	b1, err := builder1.createProposal(context.Background(), layerID, nil, atxID1, activeSet, beacon, nil, types.Opinion{})
 	require.NoError(t, err)
 
 	builder2.mTortoise.EXPECT().LatestComplete().Return(layerID.Sub(1))
 	require.NoError(t, layers.SetHashes(builder2.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
-	b2, err := builder2.createProposal(context.TODO(), layerID, nil, atxID2, activeSet, beacon, nil, types.Opinion{})
+	b2, err := builder2.createProposal(context.Background(), layerID, nil, atxID2, activeSet, beacon, nil, types.Opinion{})
 	require.NoError(t, err)
 
 	require.NotEqual(t, b1.ID(), b2.ID())

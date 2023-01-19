@@ -102,10 +102,11 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	tpd.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).AnyTimes().Return(types.VRFPostIndex(0), nil)
 
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
-	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, tpd.mSigner, tpd.mVerifier, tpd.mNonceFetcher, tpd.cdb, tpd.mClock,
+	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, tpd.mSigner, tpd.mVerifier, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withWeakCoin(coinValueMock(tb, true)),
+		withNonceFetcher(tpd.mNonceFetcher),
 	)
 	tpd.ProtocolDriver.SetSyncState(tpd.mSync)
 	tpd.ProtocolDriver.setMetricsRegistry(prometheus.NewPedanticRegistry())

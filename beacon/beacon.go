@@ -54,6 +54,14 @@ type (
 	}
 )
 
+type nonceFetcherAdapter struct {
+	cdb *datastore.CachedDB
+}
+
+func (nfa nonceFetcherAdapter) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	return atxs.VRFNonce(nfa.cdb, nodeID, epoch)
+}
+
 // Opt for configuring beacon protocol.
 type Opt func(*ProtocolDriver)
 
@@ -84,6 +92,12 @@ func withWeakCoin(wc coin) Opt {
 	}
 }
 
+func withNonceFetcher(nf nonceFetcher) Opt {
+	return func(pd *ProtocolDriver) {
+		pd.nonceFetcher = nf
+	}
+}
+
 // New returns a new ProtocolDriver.
 func New(
 	nodeID types.NodeID,
@@ -92,7 +106,6 @@ func New(
 	pubKeyExtractor *signing.PubKeyExtractor,
 	vrfSigner vrfSigner,
 	vrfVerifier vrfVerifier,
-	nonceFetcher nonceFetcher,
 	cdb *datastore.CachedDB,
 	clock layerClock,
 	opts ...Opt,
@@ -107,7 +120,6 @@ func New(
 		pubKeyExtractor: pubKeyExtractor,
 		vrfSigner:       vrfSigner,
 		vrfVerifier:     vrfVerifier,
-		nonceFetcher:    nonceFetcher,
 		cdb:             cdb,
 		clock:           clock,
 		beacons:         make(map[types.EpochID]types.Beacon),
@@ -120,8 +132,12 @@ func New(
 
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(pd.config.Theta)
+	if pd.nonceFetcher == nil {
+		pd.nonceFetcher = nonceFetcherAdapter{cdb: cdb}
+	}
+
 	if pd.weakCoin == nil {
-		pd.weakCoin = weakcoin.New(pd.publisher, cdb, nodeID, vrfSigner, vrfVerifier, nonceFetcher,
+		pd.weakCoin = weakcoin.New(pd.publisher, cdb, nodeID, vrfSigner, vrfVerifier, pd.nonceFetcher,
 			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
 			weakcoin.WithMaxRound(pd.config.RoundsNumber),
 		)

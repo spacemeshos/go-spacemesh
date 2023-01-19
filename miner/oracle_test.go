@@ -92,7 +92,9 @@ func createTestOracle(tb testing.TB, layerSize, layersPerEpoch uint32) *testOrac
 	mNonceFetcher := NewMocknonceFetcher(ctrl)
 
 	return &testOracle{
-		Oracle:       newMinerOracle(layerSize, layersPerEpoch, cdb, vrfSigner, mNonceFetcher, nodeID, lg),
+		Oracle: newMinerOracle(layerSize, layersPerEpoch, cdb, vrfSigner, nodeID, lg,
+			withNonceFetcher(mNonceFetcher),
+		),
 		nodeID:       nodeID,
 		edSigner:     edSigner,
 		vrfSigner:    vrfSigner,
@@ -150,7 +152,9 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 	vrfVerifier := proposals.NewMockvrfVerifier(ctrl)
 	vrfVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
-	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"), vrfVerifier, o.nonceFetcher)
+	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"), vrfVerifier,
+		proposals.WithNonceFetcher(o.nonceFetcher),
+	)
 
 	startEpoch, numberOfEpochsToTest := uint32(2), uint32(2)
 	startLayer := layersPerEpoch * startEpoch

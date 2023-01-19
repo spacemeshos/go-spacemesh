@@ -99,16 +99,33 @@ func safeLayerRange(targetLayer types.LayerID, safetyParam, layersPerEpoch, epoc
 	return
 }
 
+type nonceFetcherAdapter struct {
+	cdb *datastore.CachedDB
+}
+
+func (nfa nonceFetcherAdapter) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	return atxs.VRFNonce(nfa.cdb, nodeID, epoch)
+}
+
+// Opt for configuring Validator.
+type Opt func(h *Oracle)
+
+func withNonceFetcher(nf nonceFetcher) Opt {
+	return func(h *Oracle) {
+		h.nonceFetcher = nf
+	}
+}
+
 // New returns a new eligibility oracle instance.
 func New(
 	beacons system.BeaconGetter,
 	db *datastore.CachedDB,
 	vrfVerifier vrfVerifier,
 	vrfSigner *signing.VRFSigner,
-	nonceFetcher nonceFetcher,
 	layersPerEpoch uint32,
 	cfg config.Config,
 	logger log.Log,
+	opts ...Opt,
 ) *Oracle {
 	vmc, err := lru.New(vrfMsgCacheSize)
 	if err != nil {
@@ -120,18 +137,26 @@ func New(
 		logger.With().Fatal("failed to create lru cache for active set", log.Err(err))
 	}
 
-	return &Oracle{
+	o := &Oracle{
 		beacons:        beacons,
 		cdb:            db,
 		vrfVerifier:    vrfVerifier,
 		vrfSigner:      vrfSigner,
-		nonceFetcher:   nonceFetcher,
 		layersPerEpoch: layersPerEpoch,
 		vrfMsgCache:    vmc,
 		activesCache:   ac,
 		cfg:            cfg,
 		Log:            logger,
 	}
+	for _, opt := range opts {
+		opt(o)
+	}
+
+	if o.nonceFetcher == nil {
+		o.nonceFetcher = nonceFetcherAdapter{cdb: db}
+	}
+
+	return o
 }
 
 //go:generate scalegen -types VrfMessage

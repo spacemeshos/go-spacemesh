@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -37,11 +38,28 @@ type Validator struct {
 	nonceFetcher   nonceFetcher
 }
 
+type nonceFetcherAdapter struct {
+	cdb *datastore.CachedDB
+}
+
+func (nfa nonceFetcherAdapter) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	return atxs.VRFNonce(nfa.cdb, nodeID, epoch)
+}
+
+// ValidatorOpt for configuring Validator.
+type ValidatorOpt func(h *Validator)
+
+func WithNonceFetcher(nf nonceFetcher) ValidatorOpt {
+	return func(h *Validator) {
+		h.nonceFetcher = nf
+	}
+}
+
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log, vrfVerifier vrfVerifier, nonceFetcher nonceFetcher,
+	avgLayerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
 ) *Validator {
-	return &Validator{
+	v := &Validator{
 		avgLayerSize:   avgLayerSize,
 		layersPerEpoch: layersPerEpoch,
 		cdb:            cdb,
@@ -49,8 +67,15 @@ func NewEligibilityValidator(
 		beacons:        bc,
 		logger:         lg,
 		vrfVerifier:    vrfVerifier,
-		nonceFetcher:   nonceFetcher,
 	}
+	for _, opt := range opts {
+		opt(v)
+	}
+
+	if v.nonceFetcher == nil {
+		v.nonceFetcher = nonceFetcherAdapter{cdb: cdb}
+	}
+	return v
 }
 
 // CheckEligibility checks that a ballot is eligible in the layer that it specifies.
