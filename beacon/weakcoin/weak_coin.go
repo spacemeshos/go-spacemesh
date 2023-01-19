@@ -10,7 +10,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
@@ -79,7 +78,6 @@ func WithNextRoundBufferSize(size int) OptionFunc {
 // New creates an instance of weak coin protocol.
 func New(
 	publisher pubsub.Publisher,
-	cdb *datastore.CachedDB,
 	nodeId types.NodeID,
 	signer vrfSigner,
 	verifier vrfVerifier,
@@ -89,7 +87,6 @@ func New(
 	wc := &WeakCoin{
 		logger:       log.NewNop(),
 		config:       defaultConfig(),
-		cdb:          cdb,
 		nodeId:       nodeId,
 		signer:       signer,
 		nonceFetcher: nonceFetcher,
@@ -109,7 +106,6 @@ func New(
 type WeakCoin struct {
 	logger       log.Log
 	config       config
-	cdb          *datastore.CachedDB
 	nodeId       types.NodeID
 	verifier     vrfVerifier
 	nonceFetcher nonceFetcher

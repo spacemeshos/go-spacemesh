@@ -14,11 +14,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func noopBroadcaster(tb testing.TB, ctrl *gomock.Controller) *mocks.MockPublisher {
@@ -191,7 +189,6 @@ func TestWeakCoin(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
-				datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
 				types.RandomNodeID(),
 				staticSigner(t, ctrl, tc.local),
 				sigVerifier(t, ctrl),
@@ -216,7 +213,6 @@ func TestWeakCoin(t *testing.T) {
 		t.Run("BufferingStartEpoch/"+tc.desc, func(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
-				datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
 				types.RandomNodeID(),
 				staticSigner(t, ctrl, tc.local),
 				sigVerifier(t, ctrl),
@@ -241,7 +237,6 @@ func TestWeakCoin(t *testing.T) {
 		t.Run("BufferingNextRound/"+tc.desc, func(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
-				datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
 				types.RandomNodeID(),
 				staticSigner(t, ctrl, tc.local),
 				sigVerifier(t, ctrl),
@@ -269,7 +264,6 @@ func TestWeakCoin(t *testing.T) {
 		t.Run("BufferingNextEpochAfterCompletion/"+tc.desc, func(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
-				datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
 				types.RandomNodeID(),
 				staticSigner(t, ctrl, tc.local),
 				sigVerifier(t, ctrl),
@@ -300,7 +294,6 @@ func TestWeakCoinGetPanic(t *testing.T) {
 		ctrl = gomock.NewController(t)
 		wc   = weakcoin.New(
 			noopBroadcaster(t, ctrl),
-			datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
 			types.RandomNodeID(),
 			staticSigner(t, ctrl, []byte{1}),
 			sigVerifier(t, ctrl),
@@ -333,7 +326,6 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 
 	wc := weakcoin.New(
 		noopBroadcaster(t, ctrl),
-		datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
 		types.RandomNodeID(),
 		staticSigner(t, ctrl, oneLSB),
 		sigVerifier(t, ctrl),
@@ -364,12 +356,6 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	require.True(t, wc.Get(context.Background(), epoch, nextRound))
 }
 
-type vrfVerifierAdapter struct{}
-
-func (m vrfVerifierAdapter) Verify(nodeID types.NodeID, msg, sig []byte) bool {
-	return signing.VRFVerify(nodeID, msg, sig)
-}
-
 func TestWeakCoinEncodingRegression(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -397,17 +383,15 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	allowances := weakcoin.UnitAllowances{string(signer.PublicKey().Bytes()): 1}
 	instance := weakcoin.New(
 		broadcaster,
-		datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
 		types.RandomNodeID(),
 		vrfSig,
-		vrfVerifierAdapter{},
+		signing.NewVRFVerifier(),
 		nonceFetcher(t, ctrl),
 		weakcoin.WithThreshold([]byte{0xff}),
 	)
 	instance.StartEpoch(context.Background(), epoch, allowances)
 	require.NoError(t, instance.StartRound(context.Background(), round))
 
-	// TODO(mafa): figure out why sig is now different on every test run
 	require.Equal(t,
 		"8ecb99fe6aa7e589f6190d3c039ba41419bbcc7a177076c1f4d930546a78f2b6529bd87fbaefbf2dbfe9d5d145d67b49af4f934f95657398e5a933e57a31ba8f9509b91b56f419007f064ba88b1ef90c",
 		hex.EncodeToString(sig),
@@ -454,10 +438,9 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 	for i := range instances {
 		instances[i] = weakcoin.New(
 			broadcasters[i],
-			datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
 			types.RandomNodeID(),
 			vrfSigners[i],
-			vrfVerifierAdapter{},
+			signing.NewVRFVerifier(),
 			nonceFetcher(t, ctrl),
 			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),
 		)

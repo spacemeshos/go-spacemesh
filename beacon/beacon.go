@@ -137,7 +137,7 @@ func New(
 	}
 
 	if pd.weakCoin == nil {
-		pd.weakCoin = weakcoin.New(pd.publisher, cdb, nodeID, vrfSigner, vrfVerifier, pd.nonceFetcher,
+		pd.weakCoin = weakcoin.New(pd.publisher, nodeID, vrfSigner, vrfVerifier, pd.nonceFetcher,
 			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
 			weakcoin.WithMaxRound(pd.config.RoundsNumber),
 		)
@@ -690,7 +690,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID)
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	nonce, err := pd.nonceFetcher.VRFNonce(pd.nodeID, epoch)
 	if err != nil {
-		logger.With().Panic("failed to get VRF nonce", log.Err(err))
+		logger.With().Fatal("failed to get VRF nonce", log.Err(err))
 	}
 	proposedSignature := buildSignedProposal(ctx, pd.vrfSigner, epoch, nonce, pd.logger)
 	if !pd.checkProposalEligibility(logger, epoch, proposedSignature) {

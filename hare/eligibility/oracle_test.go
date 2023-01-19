@@ -363,12 +363,6 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 	}
 }
 
-type vrfVerifierAdapter struct{}
-
-func (vrfVerifierAdapter) Verify(nodeID types.NodeID, msg, sig []byte) bool {
-	return signing.VRFVerify(nodeID, msg, sig)
-}
-
 func Test_VrfSignVerify(t *testing.T) {
 	// eligibility of the proof depends on the identity
 	rng := rand.New(rand.NewSource(5))
@@ -429,7 +423,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx2, time.Now()))
 
-	o.vrfVerifier = vrfVerifierAdapter{}
+	o.vrfVerifier = signing.NewVRFVerifier()
 
 	proof, err := o.Proof(context.Background(), layer, 1)
 	require.NoError(t, err)
