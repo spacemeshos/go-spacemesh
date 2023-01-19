@@ -74,18 +74,16 @@ func mockAlwaysFalseProposalChecker(t *testing.T, pd *ProtocolDriver, epoch type
 	pd.states[epoch].proposalChecker = mockChecker
 }
 
-func createProposal(t *testing.T, signer signer, vrfSigner *signing.VRFSigner, epoch types.EpochID, corruptSignature bool) *ProposalMessage {
-	nodeID := signer.NodeID()
+func createProposal(t *testing.T, vrfSigner vrfSigner, epoch types.EpochID, corruptSignature bool) *ProposalMessage {
 	nonce := types.VRFPostIndex(rand.Uint64())
 	sig := buildSignedProposal(context.Background(), vrfSigner, epoch, nonce, logtest.New(t))
 	msg := &ProposalMessage{
-		NodeID:       nodeID,
+		NodeID:       vrfSigner.NodeID(),
 		EpochID:      epoch,
-		Nonce:        nonce,
 		VRFSignature: sig,
 	}
 	if corruptSignature {
-		msg.VRFSignature = sig[1:]
+		msg.VRFSignature[0] ^= sig[0] // invert bits of first byte
 	}
 	return msg
 }
@@ -208,7 +206,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 	vrfSigner1, err := signer1.VRFSigner()
 	require.NoError(t, err)
 
-	msg1 := createProposal(t, signer1, vrfSigner1, epoch, false)
+	msg1 := createProposal(t, vrfSigner1, epoch, false)
 	msgBytes1, err := codec.Encode(msg1)
 	require.NoError(t, err)
 
@@ -225,7 +223,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 	vrfSigner2, err := signer2.VRFSigner()
 	require.NoError(t, err)
 
-	msg2 := createProposal(t, signer2, vrfSigner2, epoch, false)
+	msg2 := createProposal(t, vrfSigner2, epoch, false)
 	msgBytes2, err := codec.Encode(msg2)
 	require.NoError(t, err)
 
@@ -258,7 +256,7 @@ func Test_HandleProposal_Shutdown(t *testing.T) {
 	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, epoch, false)
+	msg := createProposal(t, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -280,7 +278,7 @@ func Test_HandleProposal_NotInProtocolStillWorks(t *testing.T) {
 	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, epoch, false)
+	msg := createProposal(t, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -331,7 +329,7 @@ func Test_handleProposal_EpochTooOld(t *testing.T) {
 	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, epoch-1, false)
+	msg := createProposal(t, vrfSigner, epoch-1, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -356,7 +354,7 @@ func Test_handleProposal_NextEpoch(t *testing.T) {
 	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, nextEpoch, false)
+	msg := createProposal(t, vrfSigner, nextEpoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -392,7 +390,7 @@ func Test_handleProposal_NextEpochTooEarly(t *testing.T) {
 	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, nextEpoch, false)
+	msg := createProposal(t, vrfSigner, nextEpoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -422,7 +420,7 @@ func Test_handleProposal_EpochTooFarAhead(t *testing.T) {
 	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, epoch+2, false)
+	msg := createProposal(t, vrfSigner, epoch+2, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -445,7 +443,7 @@ func Test_handleProposal_BadSignature(t *testing.T) {
 	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, epoch, true)
+	msg := createProposal(t, vrfSigner, epoch, true)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -474,7 +472,7 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg1 := createProposal(t, signer, vrfSigner, epoch, false)
+	msg1 := createProposal(t, vrfSigner, epoch, false)
 	msgBytes1, err := codec.Encode(msg1)
 	require.NoError(t, err)
 
@@ -492,7 +490,7 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 	checkProposals(t, tpd.ProtocolDriver, epoch, expectedProposals)
 
 	// the same vrf key will not cause double-proposal
-	msg2 := createProposal(t, signer, vrfSigner, epoch, false)
+	msg2 := createProposal(t, vrfSigner, epoch, false)
 	msgBytes2, err := codec.Encode(msg2)
 	require.NoError(t, err)
 
@@ -516,7 +514,7 @@ func Test_handleProposal_ProposalNotEligible(t *testing.T) {
 	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, epoch, false)
+	msg := createProposal(t, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -540,7 +538,7 @@ func Test_handleProposal_MinerMissingATX(t *testing.T) {
 	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, epoch, false)
+	msg := createProposal(t, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 

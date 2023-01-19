@@ -693,7 +693,6 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID)
 	m := ProposalMessage{
 		EpochID:      epoch,
 		NodeID:       pd.nodeID,
-		Nonce:        nonce,
 		VRFSignature: proposedSignature,
 	}
 

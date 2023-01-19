@@ -85,7 +85,8 @@ func createTestHandler(t *testing.T) *testHandler {
 				MaxExceptions:  3,
 				Hdist:          5,
 			}),
-			withValidator(ms.mv)),
+			withValidator(ms.mv),
+		),
 		mockSet: ms,
 	}
 }
