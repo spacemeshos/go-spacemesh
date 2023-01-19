@@ -237,12 +237,25 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 		return err
 	}
 
-	if atx.NumUnits > prevAtx.NumUnits {
-		return fmt.Errorf("num units %d is greater than previous atx num units %d", atx.NumUnits, prevAtx.NumUnits)
+	nonce := atx.VRFNonce
+	if atx.NumUnits > prevAtx.NumUnits && nonce == nil {
+		// PoST size was increased but no new VRF was provided.
+		// fetch current nonce from DB to check if still valid
+
+		h.log.With().Info("PoST size was increased but no new VRF was provided. Fetching current nonce from DB",
+			atx.ID(),
+			log.FieldNamed("atx_node_id", atx.NodeID()),
+		)
+
+		current, err := atxs.VRFNonce(h.cdb, atx.NodeID(), atx.TargetEpoch())
+		if err != nil {
+			return fmt.Errorf("failed to get current nonce: %w", err)
+		}
+		nonce = &current
 	}
 
-	if atx.VRFNonce != nil {
-		err = h.nipostValidator.VRFNonce(atx.NodeID(), commitmentATX, atx.VRFNonce, atx.NIPost.PostMetadata, atx.NumUnits)
+	if nonce != nil {
+		err = h.nipostValidator.VRFNonce(atx.NodeID(), commitmentATX, nonce, atx.NIPost.PostMetadata, atx.NumUnits)
 		if err != nil {
 			return fmt.Errorf("invalid VRFNonce: %w", err)
 		}
@@ -297,9 +310,11 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 
 	if err != nil && atx.PrevATXID != *types.EmptyATXID {
 		// no previous atx found but previous atx referenced
-		h.log.With().Error("could not fetch node last atx", atx.ID(),
+		h.log.With().Error("could not fetch node last atx",
+			atx.ID(),
 			log.FieldNamed("atx_node_id", atx.NodeID()),
-			log.Err(err))
+			log.Err(err),
+		)
 		return fmt.Errorf("could not fetch node last atx: %w", err)
 	}
 
