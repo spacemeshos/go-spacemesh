@@ -42,7 +42,6 @@ type Message struct {
 	Round     types.RoundID
 	Unit      uint64
 	MinerPK   []byte
-	Nonce     types.VRFPostIndex
 	Signature []byte
 }
 
@@ -196,7 +195,11 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 }
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
-	buf := wc.encodeProposal(message.Epoch, message.Nonce, message.Round, message.Unit)
+	nonce, err := wc.nonceFetcher.VRFNonce(wc.nodeId, message.Epoch)
+	if err != nil {
+		wc.logger.With().Panic("failed to get vrf nonce", log.Err(err))
+	}
+	buf := wc.encodeProposal(message.Epoch, nonce, message.Round, message.Unit)
 	if !wc.verifier.Verify(types.BytesToNodeID(message.MinerPK), buf, message.Signature) {
 		return fmt.Errorf("signature is invalid signature %x", message.Signature)
 	}
@@ -235,7 +238,6 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 				Round:     round,
 				Unit:      unit,
 				MinerPK:   wc.signer.PublicKey().Bytes(),
-				Nonce:     nonce,
 				Signature: signature,
 			}
 			msg, err := codec.Encode(&message)
