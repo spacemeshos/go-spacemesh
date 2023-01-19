@@ -566,7 +566,7 @@ func (app *App) initServices(
 	hOracle := eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
-	app.certifier = blocks.NewCertifier(app.cachedDB, hOracle, nodeID, sgn, app.host, clock, beaconProtocol, trtl,
+	app.certifier = blocks.NewCertifier(app.cachedDB, hOracle, nodeID, sgn, app.keyExtractor, app.host, clock, beaconProtocol, trtl,
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
@@ -624,6 +624,7 @@ func (app *App) initServices(
 		hareCfg,
 		app.host,
 		sgn,
+		app.keyExtractor,
 		nodeID,
 		hareOutputCh,
 		newSyncer,
@@ -690,6 +691,7 @@ func (app *App) initServices(
 		app.addLogger(Malfeasance, lg),
 		app.host.ID(),
 		app.hare,
+		app.keyExtractor,
 	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
