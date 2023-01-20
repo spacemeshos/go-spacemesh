@@ -60,17 +60,16 @@ type mockConsensusProcess struct {
 	set     *Set
 }
 
-func (mcp *mockConsensusProcess) Start() error {
+func (mcp *mockConsensusProcess) Start() {
 	close(mcp.started)
 	mcp.t <- mockReport{mcp.id, mcp.set, true, false}
-	return nil
 }
 
 func (mcp *mockConsensusProcess) ID() types.LayerID {
 	return mcp.id
 }
 
-func (mcp *mockConsensusProcess) SetInbox(chan *Msg) {
+func (mcp *mockConsensusProcess) SetInbox(chan any) {
 }
 
 var _ Consensus = (*mockConsensusProcess)(nil)
@@ -134,9 +133,19 @@ func TestHare_New(t *testing.T) {
 
 	logger := logtest.New(t).WithName(t.Name())
 	cfg := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
-	h := New(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), cfg, noopPubSub(t), signer, types.NodeID{}, make(chan LayerOutput, 1),
+	h := New(
+		datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		cfg,
+		noopPubSub(t),
+		signer,
+		types.NodeID{},
+		make(chan LayerOutput, 1),
 		smocks.NewMockSyncStateProvider(ctrl), smocks.NewMockBeaconGetter(ctrl),
-		eligibility.New(logger), mocks.NewMocklayerPatrol(ctrl), mocks.NewMockstateQuerier(ctrl), newMockClock(), logger)
+		eligibility.New(logger),
+		mocks.NewMocklayerPatrol(ctrl),
+		mocks.NewMockstateQuerier(ctrl),
+		newMockClock(),
+		logger)
 	assert.NotNil(t, h)
 }
 
@@ -262,7 +271,7 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 			},
 		},
 	}
-	h.malCh <- gossip
+	h.mchMalfeasance <- &gossip
 	data, err := codec.Encode(&gossip)
 	require.NoError(t, err)
 	done := make(chan struct{})
@@ -301,8 +310,8 @@ func TestHare_onTick(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput, _ chan types.MalfeasanceGossip) Consensus {
-		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan, startedChan)
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, comm.report, startedChan)
 		close(createdChan)
 		return nmcp
 	}
@@ -371,8 +380,8 @@ func TestHare_onTick_BeaconFromRefBallot(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput, _ chan types.MalfeasanceGossip) Consensus {
-		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan, startedChan)
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, comm.report, startedChan)
 		close(createdChan)
 		return nmcp
 	}
@@ -431,8 +440,8 @@ func TestHare_onTick_SomeBadBallots(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput, _ chan types.MalfeasanceGossip) Consensus {
-		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan, startedChan)
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, comm.report, startedChan)
 		close(createdChan)
 		return nmcp
 	}
@@ -488,8 +497,8 @@ func TestHare_onTick_NoGoodBallots(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput, _ chan types.MalfeasanceGossip) Consensus {
-		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan, startedChan)
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, comm.report, startedChan)
 		close(createdChan)
 		return nmcp
 	}

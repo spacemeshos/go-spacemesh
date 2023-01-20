@@ -11,25 +11,38 @@ type commitTrackerProvider interface {
 	OnCommit(context.Context, *Msg)
 	HasEnoughCommits() bool
 	BuildCertificate() *Certificate
-	CommitCount() int
+	CommitCount() *CountInfo
 }
 
 // commitTracker tracks commit messages and build the certificate according to the tracked messages.
 type commitTracker struct {
-	logger           log.Log
-	malCh            chan types.MalfeasanceGossip
-	seenSenders      map[string]*types.HareProofMsg // tracks seen senders
-	commits          []Message                      // tracks Set->Commits
-	proposedSet      *Set                           // follows the set who has max number of commits
-	threshold        int                            // the number of required commits
-	eligibilityCount int
+	logger      log.Log
+	round       uint32
+	malCh       chan<- *types.MalfeasanceGossip
+	seenSenders map[string]*types.HareProofMsg // tracks seen senders
+	committed   map[string]struct{}
+	commits     []Message // tracks Set->Commits
+	proposedSet *Set      // follows the set who has max number of commits
+	threshold   int       // the number of required commits
+	eTracker    *EligibilityTracker
+	finalTally  *CountInfo
 }
 
-func newCommitTracker(logger log.Log, mch chan types.MalfeasanceGossip, threshold, expectedSize int, proposedSet *Set) *commitTracker {
+func newCommitTracker(
+	logger log.Log,
+	round uint32,
+	mch chan<- *types.MalfeasanceGossip,
+	et *EligibilityTracker,
+	threshold, expectedSize int,
+	proposedSet *Set,
+) *commitTracker {
 	return &commitTracker{
-		malCh:       mch,
 		logger:      logger,
+		round:       round,
+		malCh:       mch,
+		eTracker:    et,
 		seenSenders: make(map[string]*types.HareProofMsg, expectedSize),
+		committed:   make(map[string]struct{}, expectedSize),
 		commits:     make([]Message, 0, threshold),
 		proposedSet: proposedSet,
 		threshold:   threshold,
@@ -46,27 +59,28 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
 		return
 	}
 
-	pub := msg.PubKey
-	if prev, ok := ct.seenSenders[pub.String()]; ok {
+	if prev, ok := ct.seenSenders[string(msg.PubKey.Bytes())]; ok {
 		if prev.InnerMsg.Layer == msg.Layer &&
 			prev.InnerMsg.Round == msg.Round &&
 			prev.InnerMsg.MsgHash != msg.MsgHash {
-			ct.logger.WithContext(ctx).With().Warning("equivocation detected at commit round", types.BytesToNodeID(pub.Bytes()))
+			nodeID := types.BytesToNodeID(msg.PubKey.Bytes())
+			ct.logger.WithContext(ctx).With().Warning("equivocation detected at commit round",
+				log.String("sender_id", nodeID.ShortString()))
+			ct.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			this := &types.HareProofMsg{
 				InnerMsg:  msg.HareMetadata,
 				Signature: msg.Signature,
 			}
 			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev, this, &msg.Eligibility, ct.malCh); err != nil {
 				ct.logger.WithContext(ctx).With().Warning("failed to report equivocation in commit round",
-					types.BytesToNodeID(pub.Bytes()),
+					log.String("sender_id", nodeID.ShortString()),
 					log.Err(err))
 				return
 			}
 		}
 		return
 	}
-
-	ct.seenSenders[pub.String()] = &types.HareProofMsg{
+	ct.seenSenders[string(msg.PubKey.Bytes())] = &types.HareProofMsg{
 		InnerMsg:  msg.HareMetadata,
 		Signature: msg.Signature,
 	}
@@ -78,7 +92,7 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
 
 	// add msg
 	ct.commits = append(ct.commits, msg.Message)
-	ct.eligibilityCount += int(msg.Eligibility.Count)
+	ct.committed[string(msg.PubKey.Bytes())] = struct{}{}
 }
 
 // HasEnoughCommits returns true if the tracker can build a certificate, false otherwise.
@@ -86,15 +100,45 @@ func (ct *commitTracker) HasEnoughCommits() bool {
 	if ct.proposedSet == nil {
 		return false
 	}
-	return ct.eligibilityCount >= ct.threshold
+	if ct.finalTally != nil {
+		return true
+	}
+	ci := ct.CommitCount()
+	enough := ci.Meet(ct.threshold)
+	if enough {
+		ct.finalTally = ci
+		if ci.numDishonest > 0 {
+			ct.logger.With().Warning("counting votes from malicious identities",
+				log.Object("eligibility_count", ci))
+		}
+	}
+	return enough
 }
 
-func (ct *commitTracker) CommitCount() int {
-	return ct.eligibilityCount
+// CommitCount tallies the eligibility count for the commit messages on the proposed set.
+// if it crosses the threshold, cache it.
+func (ct *commitTracker) CommitCount() *CountInfo {
+	if ct.finalTally != nil {
+		return ct.finalTally
+	}
+	var ci CountInfo
+	ct.eTracker.ForEach(ct.round, func(node string, cr *Cred) {
+		// only counts the eligibility count from the committed msgs
+		if _, ok := ct.committed[node]; ok {
+			if cr.Honest {
+				ci.IncHonest(cr.Count)
+			} else {
+				ci.IncDishonest(cr.Count)
+			}
+		} else if !cr.Honest {
+			ci.IncKnownEquivocator(cr.Count)
+		}
+	})
+	return &ci
 }
 
 // BuildCertificate returns a certificate if there are enough commits, nil otherwise
-// Returns the certificate if has enough commit Messages, nil otherwise.
+// Returns the certificate if it has enough commit Messages, nil otherwise.
 func (ct *commitTracker) BuildCertificate() *Certificate {
 	if !ct.HasEnoughCommits() {
 		return nil

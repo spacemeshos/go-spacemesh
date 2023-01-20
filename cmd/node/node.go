@@ -690,7 +690,12 @@ func (app *App) initServices(
 			GracePeriod: app.Config.POET.GracePeriod,
 		}))
 
-	malfeasanceHandler := malfeasance.NewHandler(app.cachedDB, app.addLogger(Malfeasance, lg), app.host.ID())
+	malfeasanceHandler := malfeasance.NewHandler(
+		app.cachedDB,
+		app.addLogger(Malfeasance, lg),
+		app.host.ID(),
+		app.hare,
+	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
 		if newSyncer.ListenToGossip() {
