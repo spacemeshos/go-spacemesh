@@ -379,8 +379,12 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 	s.setStateBeforeSync(ctx)
 	syncFunc := func() bool {
+		logger.With().Info("syncing malicious IDs")
+		if err := s.syncMalfeasance(ctx); err != nil {
+			return false
+		}
 		if !s.ListenToATXGossip() {
-			logger.With().Info("syncing atx before everything else", s.ticker.GetCurrentLayer())
+			logger.With().Info("syncing atx from genesis", s.ticker.GetCurrentLayer())
 			for epoch := s.getLastSyncedATXs() + 1; epoch <= s.ticker.GetCurrentLayer().GetEpoch(); epoch++ {
 				if err := s.fetchEpochATX(ctx, epoch); err != nil {
 					return false
@@ -493,6 +497,13 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 			s.setTargetSyncedLayer(ctx, current.Add(numGossipSyncLayers))
 		}
 	}
+}
+
+func (s *Syncer) syncMalfeasance(ctx context.Context) error {
+	if err := s.dataFetcher.PollMaliciousProofs(ctx); err != nil {
+		return fmt.Errorf("PollMaliciousProofs: %w", err)
+	}
+	return nil
 }
 
 func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...p2p.Peer) error {
