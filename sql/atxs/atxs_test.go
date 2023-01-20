@@ -332,21 +332,18 @@ func TestVRFNonce(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	epoch1 := types.EpochID(20)
 	nonce1 := types.VRFPostIndex(333)
-	atx1, err := newAtx(sig, epoch1.FirstLayer())
+	atx1, err := newAtx(sig, types.EpochID(20).FirstLayer())
 	require.NoError(t, err)
 	atx1.VRFNonce = &nonce1
 	require.NoError(t, atxs.Add(db, atx1, time.Now()))
 
-	epoch2 := types.EpochID(30)
-	atx2, err := newAtx(sig, epoch2.FirstLayer())
+	atx2, err := newAtx(sig, types.EpochID(30).FirstLayer())
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, atx2, time.Now()))
 
-	epoch3 := types.EpochID(50)
 	nonce3 := types.VRFPostIndex(777)
-	atx3, err := newAtx(sig, epoch3.FirstLayer())
+	atx3, err := newAtx(sig, types.EpochID(50).FirstLayer())
 	require.NoError(t, err)
 	atx3.VRFNonce = &nonce3
 	require.NoError(t, atxs.Add(db, atx3, time.Now()))
@@ -354,26 +351,26 @@ func TestVRFNonce(t *testing.T) {
 	// Act & Assert
 
 	// same epoch returns same nonce
-	got, err := atxs.VRFNonce(db, sig.NodeID(), epoch1)
+	got, err := atxs.VRFNonce(db, sig.NodeID(), atx1.TargetEpoch())
 	require.NoError(t, err)
 	require.Equal(t, nonce1, got)
 
-	got, err = atxs.VRFNonce(db, sig.NodeID(), epoch3)
+	got, err = atxs.VRFNonce(db, sig.NodeID(), atx3.TargetEpoch())
 	require.NoError(t, err)
 	require.Equal(t, nonce3, got)
 
 	// between epochs returns previous nonce
-	got, err = atxs.VRFNonce(db, sig.NodeID(), epoch2)
+	got, err = atxs.VRFNonce(db, sig.NodeID(), atx2.TargetEpoch())
 	require.NoError(t, err)
 	require.Equal(t, nonce1, got)
 
 	// later epoch returns newer nonce
-	got, err = atxs.VRFNonce(db, sig.NodeID(), epoch3+10)
+	got, err = atxs.VRFNonce(db, sig.NodeID(), atx3.TargetEpoch()+10)
 	require.NoError(t, err)
 	require.Equal(t, nonce3, got)
 
 	// before first epoch returns error
-	_, err = atxs.VRFNonce(db, sig.NodeID(), epoch1-10)
+	_, err = atxs.VRFNonce(db, sig.NodeID(), atx1.TargetEpoch()-10)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 

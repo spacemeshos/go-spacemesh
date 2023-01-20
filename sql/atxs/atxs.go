@@ -221,7 +221,7 @@ func VRFNonce(db sql.Executor, id types.NodeID, epoch types.EpochID) (nonce type
 
 	if rows, err := db.Exec(`
 		select nonce from atxs
-		where smesher = ?1 and epoch <= ?2 and nonce is not null
+		where smesher = ?1 and epoch < ?2 and nonce is not null
 		order by epoch desc
 		limit 1;`, enc, dec); err != nil {
 		return types.VRFPostIndex(0), fmt.Errorf("exec id %v, epoch %d: %w", id, epoch, err)
