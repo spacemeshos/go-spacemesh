@@ -167,7 +167,7 @@ func TestPostSetup(t *testing.T) {
 }
 
 func TestNIPostBuilderWithClients(t *testing.T) {
-	t.Skip("skipping test that is flaky, see https://github.com/spacemeshos/go-spacemesh/issues/2614")
+	t.Skip("skipping flaky test, see https://github.com/spacemeshos/go-spacemesh/issues/2614")
 
 	logtest.SetupGlobal(t)
 	r := require.New(t)
