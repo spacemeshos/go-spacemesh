@@ -215,6 +215,12 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, id types.NodeID, layer typ
 		return nil, fmt.Errorf("get vrf nonce: %w", err)
 	}
 
+	o.WithContext(ctx).With().Info("using nonce for identity",
+		log.FieldNamed("message_node_id", id),
+		layer.GetEpoch(),
+		log.Uint64("nonce", uint64(nonce)),
+	)
+
 	// marshal message
 	msg := VrfMessage{Type: types.EligibilityHare, Beacon: v, Round: round, Nonce: nonce, Layer: layer}
 	buf, err := codec.Encode(&msg)
