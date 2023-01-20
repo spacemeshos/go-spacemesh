@@ -185,10 +185,11 @@ func (o *Oracle) getBeaconValue(ctx context.Context, epochID types.EpochID) (uin
 	}
 
 	value := encodeBeacon(beacon)
-	o.WithContext(ctx).With().Debug("hare eligibility beacon value for epoch",
+	o.WithContext(ctx).With().Debug("eligibility: beacon value for epoch",
 		epochID,
 		beacon,
-		log.Uint32("beacon_val", value))
+		log.Uint32("beacon_val", value),
+	)
 	return value, nil
 }
 
@@ -271,7 +272,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 ) (n int, p, vrfFrac fixed.Fixed, done bool, err error) {
 	logger := o.WithContext(ctx).WithFields(
 		layer,
-		id,
+		log.FieldNamed("message_node_id", id),
 		log.Uint32("round", round),
 		log.Int("committee_size", committeeSize),
 	)
@@ -289,10 +290,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 
 	// validate message
 	if !o.vrfVerifier.Verify(id, msg, vrfSig) {
-		logger.With().Info("eligibility: a node did not pass vrf signature verification",
-			id,
-			layer,
-		)
+		logger.With().Info("eligibility: a node did not pass vrf signature verification")
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, nil
 	}
 
@@ -424,6 +422,11 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 
 // Proof returns the role proof for the current Layer & Round.
 func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
+	o.With().Debug("eligibility: calculating proof",
+		layer,
+		log.Uint32("round", round),
+	)
+
 	msg, err := o.buildVRFMessage(ctx, o.vrfSigner.NodeID(), layer, round)
 	if err != nil {
 		return nil, err
@@ -436,7 +439,8 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) (
 func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[types.NodeID]uint64, error) {
 	logger := o.WithContext(ctx).WithFields(
 		log.FieldNamed("target_layer", targetLayer),
-		log.FieldNamed("target_layer_epoch", targetLayer.GetEpoch()))
+		log.FieldNamed("target_layer_epoch", targetLayer.GetEpoch()),
+	)
 	logger.Debug("hare oracle getting active set")
 
 	// lock until any return
