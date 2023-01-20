@@ -295,3 +295,28 @@ func TestBlobStore_GetTXBlob(t *testing.T) {
 	_, err = bs.Get(datastore.BlockDB, tx.ID.Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
+
+func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
+	db := sql.InMemory()
+	bs := datastore.NewBlobStore(db)
+
+	proof := &types.MalfeasanceProof{
+		Layer: types.NewLayerID(11),
+		Proof: types.Proof{
+			Type: types.HareEquivocation,
+			Data: &types.HareProof{
+				Messages: [2]types.HareProofMsg{{}, {}},
+			},
+		},
+	}
+	encoded, err := codec.Encode(proof)
+	require.NoError(t, err)
+	nodeID := types.NodeID{1, 2, 3}
+
+	_, err = bs.Get(datastore.Malfeasance, nodeID.Bytes())
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.NoError(t, identities.SetMalicious(db, nodeID, encoded))
+	got, err := bs.Get(datastore.Malfeasance, nodeID.Bytes())
+	require.NoError(t, err)
+	require.Equal(t, encoded, got)
+}

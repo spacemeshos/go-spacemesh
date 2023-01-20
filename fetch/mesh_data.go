@@ -62,6 +62,16 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 	return eg.Wait().ErrorOrNil()
 }
 
+// GetMalfeasanceProofs gets malfeasance proofs for the specified NodeIDs and validates them.
+func (f *Fetch) GetMalfeasanceProofs(ctx context.Context, ids []types.NodeID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	f.logger.WithContext(ctx).With().Debug("requesting malfeasance proofs from peer", log.Int("num_proofs", len(ids)))
+	hashes := types.NodeIDsToHashes(ids)
+	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.malHandler.HandleSyncedMalfeasanceProof)
+}
+
 // GetBallots gets data for the specified BallotIDs and validates them.
 func (f *Fetch) GetBallots(ctx context.Context, ids []types.BallotID) error {
 	if len(ids) == 0 {

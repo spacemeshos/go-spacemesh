@@ -218,12 +218,13 @@ type Hint string
 
 // DB hints per DB.
 const (
-	BallotDB   Hint = "ballotDB"
-	BlockDB    Hint = "blocksDB"
-	ProposalDB Hint = "proposalDB"
-	ATXDB      Hint = "ATXDB"
-	TXDB       Hint = "TXDB"
-	POETDB     Hint = "POETDB"
+	BallotDB    Hint = "ballotDB"
+	BlockDB     Hint = "blocksDB"
+	ProposalDB  Hint = "proposalDB"
+	ATXDB       Hint = "ATXDB"
+	TXDB        Hint = "TXDB"
+	POETDB      Hint = "POETDB"
+	Malfeasance Hint = "malfeasance"
 )
 
 // NewBlobStore returns a BlobStore.
@@ -269,6 +270,8 @@ func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
 		return transactions.GetBlob(bs.DB, key)
 	case POETDB:
 		return poets.Get(bs.DB, key)
+	case Malfeasance:
+		return identities.GetMalfeasanceBlob(bs.DB, key)
 	}
 	return nil, fmt.Errorf("blob store not found %s", hint)
 }

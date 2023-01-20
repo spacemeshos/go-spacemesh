@@ -4,9 +4,12 @@ import (
 	"encoding/hex"
 
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
+
+//go:generate scalegen
 
 // BytesToNodeID is a helper to copy buffer into NodeID struct.
 func BytesToNodeID(buf []byte) (id NodeID) {
@@ -30,7 +33,7 @@ var ExtractNodeIDFromSig = func(msg, sig []byte) (NodeID, error) {
 type NodeID Hash32
 
 const (
-	// ATXIDSize in bytes.
+	// NodeIDSize in bytes.
 	NodeIDSize = Hash32Length
 )
 
@@ -55,3 +58,22 @@ func (id NodeID) Field() log.Field { return log.Stringer("node_id", id) }
 
 // EmptyNodeID is a canonical empty NodeID.
 var EmptyNodeID NodeID
+
+// EncodeScale implements scale codec interface.
+func (id *NodeID) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, id[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (id *NodeID) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, id[:])
+}
+
+// NodeIDsToHashes turns a list of NodeID into their Hash32 representation.
+func NodeIDsToHashes(ids []NodeID) []Hash32 {
+	hashes := make([]Hash32, 0, len(ids))
+	for _, id := range ids {
+		hashes = append(hashes, Hash32(id))
+	}
+	return hashes
+}

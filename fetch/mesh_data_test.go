@@ -186,6 +186,20 @@ func TestFetch_getHashes(t *testing.T) {
 	}
 }
 
+func TestFetch_GetMalfeasanceProofs(t *testing.T) {
+	nodeIDs := []types.NodeID{{1}, {2}, {3}}
+	f := createFetch(t)
+	f.mMalH.EXPECT().HandleSyncedMalfeasanceProof(gomock.Any(), gomock.Any()).Return(nil).Times(len(nodeIDs))
+
+	stop := make(chan struct{}, 1)
+	var eg errgroup.Group
+	startTestLoop(t, f.Fetch, &eg, stop)
+
+	require.NoError(t, f.GetMalfeasanceProofs(context.TODO(), nodeIDs))
+	close(stop)
+	require.NoError(t, eg.Wait())
+}
+
 func TestFetch_GetBlocks(t *testing.T) {
 	blks := []*types.Block{
 		genLayerBlock(types.NewLayerID(10), types.RandomTXSet(10)),
