@@ -140,7 +140,6 @@ func TestHare_New(t *testing.T) {
 		signer,
 		types.NodeID{},
 		make(chan LayerOutput, 1),
-		make(chan *types.HareEligibilityGossip, 100),
 		smocks.NewMockSyncStateProvider(ctrl), smocks.NewMockBeaconGetter(ctrl),
 		eligibility.New(logger),
 		mocks.NewMocklayerPatrol(ctrl),

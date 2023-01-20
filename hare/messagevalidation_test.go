@@ -93,47 +93,6 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 	})
 }
 
-func TestEligibilityValidator_validateRole_NoMsg(t *testing.T) {
-	ev := newEligibilityValidator(nil, 1, 5, logtest.New(t))
-	res, err := ev.validateRole(context.Background(), nil)
-	require.NotNil(t, err)
-	require.False(t, res)
-}
-
-func TestEligibilityValidator_validateRole_NoInnerMsg(t *testing.T) {
-	ev := newEligibilityValidator(nil, 1, 5, logtest.New(t))
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), nil)
-	m.InnerMsg = nil
-	res, err := ev.validateRole(context.Background(), m)
-	require.NotNil(t, err)
-	require.False(t, res)
-}
-
-func TestEligibilityValidator_validateRole_Genesis(t *testing.T) {
-	ev := newEligibilityValidator(nil, 1, 5, logtest.New(t))
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	builder := newMessageBuilder().
-		SetType(pre).
-		SetLayer(types.NewLayerID(1)).
-		SetRoundCounter(k).
-		SetCommittedRound(ki).
-		SetValues(NewDefaultEmptySet()).
-		SetPubKey(sig.PublicKey()).
-		SetEligibilityCount(1)
-	builder.Sign(sig)
-	m := builder.Build()
-
-	res, err := ev.validateRole(context.Background(), m)
-	require.NoError(t, err)
-	// TODO: remove comment after inceptions problem is addressed
-	// require.False(t, res)
-	require.True(t, res)
-}
-
 func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
@@ -147,9 +106,7 @@ func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 	myErr := errors.New("my error")
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, myErr).Times(1)
-	res, err := ev.validateRole(context.Background(), m)
-	require.NotNil(t, err)
-	require.ErrorIs(t, err, myErr)
+	res := ev.Validate(context.Background(), m)
 	require.False(t, res)
 }
 
@@ -165,8 +122,7 @@ func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
 	m.Layer = types.NewLayerID(111)
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil).Times(1)
-	res, err := ev.validateRole(context.Background(), m)
-	require.Nil(t, err)
+	res := ev.Validate(context.Background(), m)
 	require.False(t, res)
 }
 
@@ -182,8 +138,7 @@ func TestEligibilityValidator_validateRole_Success(t *testing.T) {
 	m.Layer = types.NewLayerID(111)
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
-	res, err := ev.validateRole(context.Background(), m)
-	require.Nil(t, err)
+	res := ev.Validate(context.Background(), m)
 	require.True(t, res)
 }
 

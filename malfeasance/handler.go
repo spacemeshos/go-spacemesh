@@ -17,29 +17,23 @@ var errMalformedData = errors.New("malformed data")
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
 type Handler struct {
-	logger        log.Log
-	cdb           *datastore.CachedDB
-	self          p2p.Peer
-	committeeSize int
-	validator     eligibilityValidator
-	relayCh       chan<- *types.HareEligibilityGossip
+	logger log.Log
+	cdb    *datastore.CachedDB
+	self   p2p.Peer
+	cp     consensusProtocol
 }
 
 func NewHandler(
 	cdb *datastore.CachedDB,
 	lg log.Log,
 	self p2p.Peer,
-	committeeSize int,
-	ev eligibilityValidator,
-	ch chan<- *types.HareEligibilityGossip,
+	cp consensusProtocol,
 ) *Handler {
 	return &Handler{
-		logger:        lg,
-		cdb:           cdb,
-		self:          self,
-		committeeSize: committeeSize,
-		validator:     ev,
-		relayCh:       ch,
+		logger: lg,
+		cdb:    cdb,
+		self:   self,
+		cp:     cp,
 	}
 }
 
@@ -135,23 +129,9 @@ func (h *Handler) validateHareEligibility(ctx context.Context, nodeID types.Node
 		logger.With().Warning("mismatch node id", log.Stringer("eligibility", eNodeID))
 		return fmt.Errorf("mismatch node id")
 	}
-	eligible, err := h.validator.Validate(ctx, emsg.Layer, emsg.Round, h.committeeSize, nodeID, emsg.Eligibility.Proof, emsg.Eligibility.Count)
-	if err != nil {
-		logger.With().Warning("failed to validate eligibility", emsg.Layer, log.Uint32("round", emsg.Round))
-		return fmt.Errorf("validate eligibility: %w", err)
-	}
-	if !eligible {
-		logger.With().Debug("identity not eligible", emsg.Layer, log.Uint32("round", emsg.Round))
-		return fmt.Errorf("identity not eligible %v", nodeID)
-	}
-
 	// any type of MalfeasanceProof can be accompanied by a hare eligibility
 	// forward the eligibility to hare for the running consensus processes.
-	select {
-	case <-ctx.Done():
-	case h.relayCh <- emsg:
-	}
-
+	h.cp.HandleEligibility(ctx, emsg)
 	return nil
 }
 

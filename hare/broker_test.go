@@ -2,6 +2,7 @@ package hare
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -312,6 +313,98 @@ func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 	em, ok := got.(*types.HareEligibilityGossip)
 	require.True(t, ok)
 	require.EqualValues(t, gossip.Eligibility, em)
+}
+
+func TestBroker_HandleEligibility(t *testing.T) {
+	ctx := context.Background()
+	broker := buildBroker(t, t.Name())
+	mev := &mockEligibilityValidator{valid: 0}
+	broker.roleValidator = mev
+	broker.Start(ctx)
+	t.Cleanup(broker.Close)
+
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	em := &types.HareEligibilityGossip{
+		Layer:  instanceID1,
+		Round:  preRound,
+		PubKey: signer.PublicKey().Bytes(),
+		Eligibility: types.HareEligibility{
+			Proof: []byte{1, 2, 3},
+			Count: 3,
+		},
+	}
+
+	t.Run("consensus not running", func(t *testing.T) {
+		require.False(t, broker.HandleEligibility(context.Background(), em))
+	})
+
+	var inbox chan any
+
+	t.Run("node not synced", func(t *testing.T) {
+		broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
+		inbox, err = broker.Register(context.Background(), instanceID1)
+		require.ErrorIs(t, err, errInstanceNotSynced)
+		require.Nil(t, inbox)
+	})
+
+	t.Run("beacon not synced", func(t *testing.T) {
+		broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
+		broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(false)
+		inbox, err = broker.Register(context.Background(), instanceID1)
+		require.ErrorIs(t, err, errInstanceNotSynced)
+		require.Nil(t, inbox)
+	})
+
+	t.Run("identity active check failed", func(t *testing.T) {
+		errUnknown := errors.New("blah")
+		broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
+		broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true)
+		inbox, err = broker.Register(context.Background(), instanceID1)
+		require.NoError(t, err)
+		require.NotNil(t, inbox)
+		broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, errUnknown)
+		require.False(t, broker.HandleEligibility(context.Background(), em))
+		require.Len(t, inbox, 0)
+	})
+
+	t.Run("identity not active", func(t *testing.T) {
+		broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
+		broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true)
+		inbox, err = broker.Register(context.Background(), instanceID1)
+		require.NoError(t, err)
+		require.NotNil(t, inbox)
+		broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
+		require.False(t, broker.HandleEligibility(context.Background(), em))
+		require.Len(t, inbox, 0)
+	})
+
+	t.Run("identity not eligible", func(t *testing.T) {
+		broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
+		broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true)
+		inbox, err = broker.Register(context.Background(), instanceID1)
+		require.NoError(t, err)
+		require.NotNil(t, inbox)
+		broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+		require.False(t, broker.HandleEligibility(context.Background(), em))
+		require.Len(t, inbox, 0)
+	})
+
+	t.Run("identity eligible", func(t *testing.T) {
+		broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
+		broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true)
+		inbox, err = broker.Register(context.Background(), instanceID1)
+		require.NoError(t, err)
+		require.NotNil(t, inbox)
+		broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+		atomic.StoreInt32(&mev.valid, 1)
+		require.True(t, broker.HandleEligibility(context.Background(), em))
+		require.Len(t, inbox, 1)
+		msg := <-inbox
+		got, ok := msg.(*types.HareEligibilityGossip)
+		require.True(t, ok)
+		require.EqualValues(t, em, got)
+	})
 }
 
 func TestBroker_Register(t *testing.T) {

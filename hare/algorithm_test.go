@@ -170,14 +170,14 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 }
 
 type mockEligibilityValidator struct {
-	valid        int32
-	validationFn func(context.Context, *Msg) bool
+	valid int32
 }
 
 func (mev *mockEligibilityValidator) Validate(ctx context.Context, msg *Msg) bool {
-	if mev.validationFn != nil {
-		return mev.validationFn(ctx, msg)
-	}
+	return atomic.LoadInt32(&mev.valid) != 0
+}
+
+func (mev *mockEligibilityValidator) ValidateEligibilityGossip(context.Context, *types.HareEligibilityGossip) bool {
 	return atomic.LoadInt32(&mev.valid) != 0
 }
 

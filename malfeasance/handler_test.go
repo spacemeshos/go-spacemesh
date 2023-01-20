@@ -2,7 +2,6 @@ package malfeasance_test
 
 import (
 	"context"
-	"errors"
 	"os"
 	"testing"
 	"time"
@@ -45,9 +44,8 @@ func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
 func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
-	mv := malfeasance.NewMockeligibilityValidator(gomock.NewController(t))
-	ch := make(chan *types.HareEligibilityGossip, 1)
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", 10, mv, ch)
+	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.NewLayerID(11)
@@ -238,9 +236,8 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
-	mv := malfeasance.NewMockeligibilityValidator(gomock.NewController(t))
-	ch := make(chan *types.HareEligibilityGossip, 1)
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", 10, mv, ch)
+	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.NewLayerID(11)
@@ -431,9 +428,8 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
-	mv := malfeasance.NewMockeligibilityValidator(gomock.NewController(t))
-	ch := make(chan *types.HareEligibilityGossip, 1)
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", 10, mv, ch)
+	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.NewLayerID(11)
@@ -649,9 +645,8 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
-	mv := malfeasance.NewMockeligibilityValidator(gomock.NewController(t))
-	ch := make(chan *types.HareEligibilityGossip, 1)
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", 10, mv, ch)
+	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -696,10 +691,9 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 		data, err := codec.Encode(gs)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-		require.Empty(t, ch)
 	})
 
-	t.Run("check eligibility failed", func(t *testing.T) {
+	t.Run("relay eligibility", func(t *testing.T) {
 		gs := gossip
 		gs.Eligibility = &types.HareEligibilityGossip{
 			Layer:  lid,
@@ -712,46 +706,11 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 		}
 		data, err := codec.Encode(gs)
 		require.NoError(t, err)
-		mv.EXPECT().Validate(gomock.Any(), lid, round, gomock.Any(), sig.NodeID(), proofByte, eCount).Return(false, errors.New("blah"))
-		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-		require.Empty(t, ch)
-	})
-
-	t.Run("not eligible", func(t *testing.T) {
-		gs := gossip
-		gs.Eligibility = &types.HareEligibilityGossip{
-			Layer:  lid,
-			Round:  round,
-			PubKey: sig.PublicKey().Bytes(),
-			Eligibility: types.HareEligibility{
-				Proof: proofByte,
-				Count: eCount,
-			},
-		}
-		data, err := codec.Encode(gs)
-		require.NoError(t, err)
-		mv.EXPECT().Validate(gomock.Any(), lid, round, gomock.Any(), sig.NodeID(), proofByte, eCount).Return(false, nil)
-		require.Equal(t, pubsub.ValidationIgnore, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-		require.Empty(t, ch)
-	})
-
-	t.Run("eligible", func(t *testing.T) {
-		gs := gossip
-		gs.Eligibility = &types.HareEligibilityGossip{
-			Layer:  lid,
-			Round:  round,
-			PubKey: sig.PublicKey().Bytes(),
-			Eligibility: types.HareEligibility{
-				Proof: proofByte,
-				Count: eCount,
-			},
-		}
-		data, err := codec.Encode(gs)
-		require.NoError(t, err)
-		mv.EXPECT().Validate(gomock.Any(), lid, round, gomock.Any(), sig.NodeID(), proofByte, eCount).Return(true, nil)
+		mcp.EXPECT().HandleEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, got *types.HareEligibilityGossip) {
+				require.NotNil(t, got)
+				require.EqualValues(t, gs.Eligibility, got)
+			})
 		require.Equal(t, pubsub.ValidationAccept, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-		require.Len(t, ch, 1)
-		got := <-ch
-		require.EqualValues(t, gs.Eligibility, got)
 	})
 }

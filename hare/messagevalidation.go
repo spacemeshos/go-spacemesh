@@ -27,35 +27,30 @@ func newEligibilityValidator(oracle Rolacle, maxExpActives, expLeaders int, logg
 	return &eligibilityValidator{oracle, maxExpActives, expLeaders, logger}
 }
 
-// check eligibility of the provided message by the oracle.
-func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool, error) {
-	if m == nil {
-		return false, errors.New("nil message")
-	}
+func (ev *eligibilityValidator) validateRole(ctx context.Context, nodeID types.NodeID, layer types.LayerID, round uint32, proof []byte, eligibilityCount uint16) (bool, error) {
+	return ev.oracle.Validate(ctx, layer, round, expectedCommitteeSize(round, ev.maxExpActives, ev.expLeaders), nodeID, proof, eligibilityCount)
+}
 
-	if m.InnerMsg == nil {
-		return false, errors.New("nil inner message")
-	}
-
-	pub := m.PubKey
-	layer := m.Layer
-	if layer.GetEpoch().IsGenesis() {
-		return true, nil // TODO: remove this lie after inception problem is addressed
-	}
-
-	nID := types.BytesToNodeID(pub.Bytes())
-
-	// validate role
-	res, err := ev.oracle.Validate(ctx, layer, m.Round, expectedCommitteeSize(m.Round, ev.maxExpActives, ev.expLeaders), nID, m.Eligibility.Proof, m.Eligibility.Count)
+func (ev *eligibilityValidator) ValidateEligibilityGossip(ctx context.Context, em *types.HareEligibilityGossip) bool {
+	res, err := ev.validateRole(ctx, types.BytesToNodeID(em.PubKey), em.Layer, em.Round, em.Eligibility.Proof, em.Eligibility.Count)
 	if err != nil {
-		return false, fmt.Errorf("validate eligibility: %w", err)
+		ev.WithContext(ctx).With().Error("failed to validate role",
+			em.Layer,
+			log.Uint32("round", em.Round),
+			log.String("sender_id", types.BytesToNodeID(em.PubKey).ShortString()))
+		return false
 	}
-	return res, nil
+	return res
 }
 
 // Validate the eligibility of the provided message.
 func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
-	res, err := ev.validateRole(ctx, m)
+	if m == nil || m.InnerMsg == nil {
+		ev.Log.Fatal("invalid Msg")
+	}
+
+	nodeID := types.BytesToNodeID(m.PubKey.Bytes())
+	res, err := ev.validateRole(ctx, nodeID, m.Layer, m.Round, m.Eligibility.Proof, m.Eligibility.Count)
 	if err != nil {
 		ev.WithContext(ctx).With().Error("failed to validate role",
 			log.Err(err),

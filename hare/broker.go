@@ -19,6 +19,7 @@ const inboxCapacity = 1024 // inbox size per instance
 
 type validator interface {
 	Validate(context.Context, *Msg) bool
+	ValidateEligibilityGossip(context.Context, *types.HareEligibilityGossip) bool
 }
 
 // Broker is the dispatcher of incoming Hare messages.
@@ -252,26 +253,65 @@ func (b *Broker) handleMaliciousHareMessage(
 		return b.handleEarlyMessage(logger, msg.Layer, nodeID, toRelay)
 	}
 
-	b.RelayEligibilityFromMalfeasanceGossip(ctx, toRelay)
-	return nil
-}
-
-func (b *Broker) RelayEligibilityFromMalfeasanceGossip(ctx context.Context, emsg *types.HareEligibilityGossip) {
-	if emsg == nil {
-		b.Log.WithContext(ctx).Fatal("invalid hare eligibility")
-	}
-	lid := emsg.Layer
-	out := b.getInbox(lid)
+	out := b.getInbox(msg.Layer)
 	if out == nil {
-		b.Log.WithContext(ctx).With().Debug("consensus not running for layer", lid)
+		b.Log.WithContext(ctx).With().Debug("consensus not running for layer", msg.Layer)
+		return nil
 	}
 	b.Log.WithContext(ctx).With().Debug("broker forwarding eligibility to consensus process",
 		log.Int("queue_size", len(out)))
 	select {
-	case out <- emsg:
+	case out <- toRelay:
 	case <-ctx.Done():
 	case <-b.ctx.Done():
 	}
+	return nil
+}
+
+func (b *Broker) HandleEligibility(ctx context.Context, em *types.HareEligibilityGossip) bool {
+	if em == nil {
+		b.Log.WithContext(ctx).Fatal("invalid hare eligibility")
+	}
+	lid := em.Layer
+	out := b.getInbox(lid)
+	if out == nil {
+		b.Log.WithContext(ctx).With().Debug("consensus not running for layer", lid)
+		return false
+	}
+
+	nodeID := types.BytesToNodeID(em.PubKey)
+	isActive, err := b.stateQuerier.IsIdentityActiveOnConsensusView(ctx, nodeID, em.Layer)
+	if err != nil {
+		b.Log.WithContext(ctx).With().Error("failed to check if identity is active",
+			em.Layer,
+			log.Uint32("round", em.Round),
+			log.String("sender_id", nodeID.ShortString()),
+			log.Err(err))
+		return false
+	}
+	if !isActive {
+		b.Log.WithContext(ctx).With().Debug("identity is not active",
+			em.Layer,
+			log.Uint32("round", em.Round),
+			log.String("sender_id", nodeID.ShortString()))
+		return false
+	}
+	if !b.roleValidator.ValidateEligibilityGossip(ctx, em) {
+		b.Log.WithContext(ctx).With().Debug("invalid gossip eligibility",
+			em.Layer,
+			log.Uint32("round", em.Round),
+			log.String("sender_id", nodeID.ShortString()))
+		return false
+	}
+	b.Log.WithContext(ctx).With().Debug("broker forwarding eligibility to consensus process",
+		log.Int("queue_size", len(out)))
+	select {
+	case out <- em:
+		return true
+	case <-ctx.Done():
+	case <-b.ctx.Done():
+	}
+	return false
 }
 
 func (b *Broker) getInbox(id types.LayerID) chan any {

@@ -195,7 +195,6 @@ func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *
 		signer,
 		nodeID,
 		make(chan LayerOutput, 100),
-		make(<-chan *types.HareEligibilityGossip),
 		mockSyncS,
 		mockBeacons,
 		mockRoracle,

@@ -12,40 +12,37 @@ import (
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// MockeligibilityValidator is a mock of eligibilityValidator interface.
-type MockeligibilityValidator struct {
+// MockconsensusProtocol is a mock of consensusProtocol interface.
+type MockconsensusProtocol struct {
 	ctrl     *gomock.Controller
-	recorder *MockeligibilityValidatorMockRecorder
+	recorder *MockconsensusProtocolMockRecorder
 }
 
-// MockeligibilityValidatorMockRecorder is the mock recorder for MockeligibilityValidator.
-type MockeligibilityValidatorMockRecorder struct {
-	mock *MockeligibilityValidator
+// MockconsensusProtocolMockRecorder is the mock recorder for MockconsensusProtocol.
+type MockconsensusProtocolMockRecorder struct {
+	mock *MockconsensusProtocol
 }
 
-// NewMockeligibilityValidator creates a new mock instance.
-func NewMockeligibilityValidator(ctrl *gomock.Controller) *MockeligibilityValidator {
-	mock := &MockeligibilityValidator{ctrl: ctrl}
-	mock.recorder = &MockeligibilityValidatorMockRecorder{mock}
+// NewMockconsensusProtocol creates a new mock instance.
+func NewMockconsensusProtocol(ctrl *gomock.Controller) *MockconsensusProtocol {
+	mock := &MockconsensusProtocol{ctrl: ctrl}
+	mock.recorder = &MockconsensusProtocolMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockeligibilityValidator) EXPECT() *MockeligibilityValidatorMockRecorder {
+func (m *MockconsensusProtocol) EXPECT() *MockconsensusProtocolMockRecorder {
 	return m.recorder
 }
 
-// Validate mocks base method.
-func (m *MockeligibilityValidator) Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, proof []byte, eligibilityCount uint16) (bool, error) {
+// HandleEligibility mocks base method.
+func (m *MockconsensusProtocol) HandleEligibility(arg0 context.Context, arg1 *types.HareEligibilityGossip) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Validate", ctx, layer, round, committeeSize, id, proof, eligibilityCount)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	m.ctrl.Call(m, "HandleEligibility", arg0, arg1)
 }
 
-// Validate indicates an expected call of Validate.
-func (mr *MockeligibilityValidatorMockRecorder) Validate(ctx, layer, round, committeeSize, id, proof, eligibilityCount interface{}) *gomock.Call {
+// HandleEligibility indicates an expected call of HandleEligibility.
+func (mr *MockconsensusProtocolMockRecorder) HandleEligibility(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MockeligibilityValidator)(nil).Validate), ctx, layer, round, committeeSize, id, proof, eligibilityCount)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleEligibility", reflect.TypeOf((*MockconsensusProtocol)(nil).HandleEligibility), arg0, arg1)
 }
