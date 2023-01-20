@@ -41,6 +41,7 @@ func getPoetProof(t *testing.T) types.PoetProofMessage {
 			shared.T,
 			prover.LowestMerkleMinMemoryLayer,
 		)
+		require.NoError(t, err)
 
 		err = verifier.Validate(
 			*merkleProof,
