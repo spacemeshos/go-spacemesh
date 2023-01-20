@@ -1001,6 +1001,7 @@ func buildSignedProposal(ctx context.Context, signer vrfSigner, epoch types.Epoc
 	signature := signer.Sign(p)
 	logger.WithContext(ctx).With().Debug("calculated signature",
 		epoch,
+		nonce,
 		log.String("proposal", hex.EncodeToString(p)),
 		log.String("signature", hex.EncodeToString(signature)),
 	)

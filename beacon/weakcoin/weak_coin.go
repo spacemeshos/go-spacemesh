@@ -220,7 +220,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 	for unit := uint64(0); unit < allowed; unit++ {
 		nonce, err := wc.nonceFetcher.VRFNonce(wc.nodeId, epoch)
 		if err != nil {
-			wc.logger.With().Panic("failed to get vrf nonce", log.Err(err))
+			wc.logger.With().Fatal("failed to get vrf nonce", log.Err(err))
 		}
 
 		proposal := wc.encodeProposal(epoch, nonce, round, unit)
@@ -238,7 +238,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 			}
 			msg, err := codec.Encode(&message)
 			if err != nil {
-				wc.logger.With().Panic("failed to serialize weak coin message", log.Err(err))
+				wc.logger.With().Fatal("failed to serialize weak coin message", log.Err(err))
 			}
 
 			broadcast = msg

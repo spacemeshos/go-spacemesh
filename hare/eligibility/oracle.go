@@ -185,7 +185,7 @@ func (o *Oracle) getBeaconValue(ctx context.Context, epochID types.EpochID) (uin
 	}
 
 	value := encodeBeacon(beacon)
-	o.WithContext(ctx).With().Debug("eligibility: beacon value for epoch",
+	o.WithContext(ctx).With().Info("eligibility: beacon value for epoch",
 		epochID,
 		beacon,
 		log.Uint32("beacon_val", value),
@@ -422,7 +422,7 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 
 // Proof returns the role proof for the current Layer & Round.
 func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
-	o.With().Debug("eligibility: calculating proof",
+	o.With().Info("eligibility: calculating proof",
 		layer,
 		log.Uint32("round", round),
 	)
