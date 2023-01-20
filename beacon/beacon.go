@@ -54,6 +54,22 @@ type (
 	}
 )
 
+type defaultFetcher struct {
+	cdb *datastore.CachedDB
+}
+
+func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	atxId, err := atxs.GetFirstIDByNodeID(f.cdb, nodeID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get initial atx for smesher %s: %w", nodeID.String(), err)
+	}
+	atx, err := f.cdb.GetAtxHeader(atxId)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get initial atx for smesher %s: %w", nodeID.String(), err)
+	}
+	return *atx.VRFNonce, nil
+}
+
 // Opt for configuring beacon protocol.
 type Opt func(*ProtocolDriver)
 
@@ -81,6 +97,12 @@ func WithConfig(cfg Config) Opt {
 func withWeakCoin(wc coin) Opt {
 	return func(pd *ProtocolDriver) {
 		pd.weakCoin = wc
+	}
+}
+
+func withNonceFetcher(nf nonceFetcher) Opt {
+	return func(pd *ProtocolDriver) {
+		pd.nonceFetcher = nf
 	}
 }
 
@@ -115,11 +137,14 @@ func New(
 	for _, opt := range opts {
 		opt(pd)
 	}
+	if pd.nonceFetcher == nil {
+		pd.nonceFetcher = defaultFetcher{cdb: cdb}
+	}
 
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(pd.config.Theta)
 	if pd.weakCoin == nil {
-		pd.weakCoin = weakcoin.New(pd.publisher, vrfSigner, vrfVerifier,
+		pd.weakCoin = weakcoin.New(pd.publisher, nodeID, vrfSigner, vrfVerifier, pd.nonceFetcher,
 			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
 			weakcoin.WithMaxRound(pd.config.RoundsNumber),
 		)
@@ -146,6 +171,7 @@ type ProtocolDriver struct {
 	pubKeyExtractor pubKeyExtractor
 	vrfSigner       vrfSigner
 	vrfVerifier     vrfVerifier
+	nonceFetcher    nonceFetcher
 	weakCoin        coin
 	theta           *big.Float
 
@@ -669,7 +695,11 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID)
 	}
 
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
-	proposedSignature := buildSignedProposal(ctx, pd.vrfSigner, epoch, pd.logger)
+	nonce, err := pd.nonceFetcher.VRFNonce(pd.nodeID, epoch)
+	if err != nil {
+		logger.With().Fatal("failed to get VRF nonce", log.Err(err))
+	}
+	proposedSignature := buildSignedProposal(ctx, pd.vrfSigner, epoch, nonce, pd.logger)
 	if !pd.checkProposalEligibility(logger, epoch, proposedSignature) {
 		logger.With().Debug("own proposal doesn't pass threshold",
 			log.String("proposal", string(proposedSignature)))
@@ -971,14 +1001,12 @@ func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 	return threshold
 }
 
-func buildSignedProposal(ctx context.Context, signer vrfSigner, epoch types.EpochID, logger log.Log) []byte {
-	p := buildProposal(epoch, logger)
-	signature, err := signer.Sign(p)
-	if err != nil {
-		logger.With().Fatal("failed to sign proposal", log.Err(err))
-	}
+func buildSignedProposal(ctx context.Context, signer vrfSigner, epoch types.EpochID, nonce types.VRFPostIndex, logger log.Log) []byte {
+	p := buildProposal(epoch, nonce, logger)
+	signature := signer.Sign(p)
 	logger.WithContext(ctx).With().Debug("calculated signature",
 		epoch,
+		nonce,
 		log.String("proposal", hex.EncodeToString(p)),
 		log.String("signature", hex.EncodeToString(signature)),
 	)
@@ -986,17 +1014,19 @@ func buildSignedProposal(ctx context.Context, signer vrfSigner, epoch types.Epoc
 	return signature
 }
 
-//go:generate scalegen -types BuildProposalMessage
+//go:generate scalegen -types ProposalVrfMessage
 
 // ProposalVrfMessage is a message for buildProposal below.
 type ProposalVrfMessage struct {
 	Type  types.EligibilityType
+	Nonce types.VRFPostIndex
 	Epoch uint32
 }
 
-func buildProposal(epoch types.EpochID, logger log.Log) []byte {
+func buildProposal(epoch types.EpochID, nonce types.VRFPostIndex, logger log.Log) []byte {
 	message := &ProposalVrfMessage{
 		Type:  types.EligibilityBeacon,
+		Nonce: nonce,
 		Epoch: uint32(epoch),
 	}
 

@@ -515,11 +515,7 @@ func (app *App) initServices(
 
 	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
 
-	vrfVerifier, err := signing.NewVRFVerifier(signing.WithNonceFromDB(app.cachedDB))
-	if err != nil {
-		return fmt.Errorf("failed to create vrf verifier: %w", err)
-	}
-
+	vrfVerifier := signing.NewVRFVerifier()
 	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifier, app.cachedDB, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
@@ -550,7 +546,7 @@ func (app *App) initServices(
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl,
+	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,
@@ -1102,7 +1098,7 @@ func (app *App) Start(ctx context.Context) error {
 		return err
 	}
 	// need db to initialize the vrf signer
-	vrfSigner, err := edSgn.VRFSigner(signing.WithNonceFromDB(app.cachedDB))
+	vrfSigner, err := edSgn.VRFSigner()
 	if err != nil {
 		return fmt.Errorf("could not create vrf signer: %w", err)
 	}
