@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -33,7 +32,7 @@ func defaultValidator(tb testing.TB) *syntaxContextValidator {
 	require.NoError(tb, err)
 
 	return newSyntaxContextValidator(signer, lowThresh10, trueValidator,
-		sq, truer{}, newPubGetter(), logtest.New(tb))
+		sq, truer{}, newPubGetter(), NewEligibilityTracker(lowThresh10), logtest.New(tb))
 }
 
 func TestMessageValidator_CommitStatus(t *testing.T) {
@@ -42,75 +41,56 @@ func TestMessageValidator_CommitStatus(t *testing.T) {
 	signer2, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	assert.True(t, validateCommitType(BuildCommitMsg(signer1, NewEmptySet(lowDefaultSize))))
-	assert.True(t, validateStatusType(BuildStatusMsg(signer2, NewEmptySet(lowDefaultSize))))
+	require.True(t, validateCommitType(BuildCommitMsg(signer1, NewEmptySet(lowDefaultSize))))
+	require.True(t, validateStatusType(BuildStatusMsg(signer2, NewEmptySet(lowDefaultSize))))
 }
 
 func TestMessageValidator_ValidateCertificate(t *testing.T) {
-	validator := defaultValidator(t)
-	assert.False(t, validator.validateCertificate(context.Background(), nil))
+	sv := defaultValidator(t)
+	require.False(t, sv.validateCertificate(context.Background(), nil))
 	cert := &Certificate{}
-	assert.False(t, validator.validateCertificate(context.Background(), cert))
+	require.False(t, sv.validateCertificate(context.Background(), cert))
 	cert.AggMsgs = &AggregatedMessages{}
-	assert.False(t, validator.validateCertificate(context.Background(), cert))
-	msgs := make([]Message, 0, validator.threshold)
+	require.False(t, sv.validateCertificate(context.Background(), cert))
+	msgs := make([]Message, 0, sv.threshold)
 	cert.AggMsgs.Messages = msgs
-	assert.False(t, validator.validateCertificate(context.Background(), cert))
+	require.False(t, sv.validateCertificate(context.Background(), cert))
 	msgs = append(msgs, Message{})
 	cert.AggMsgs.Messages = msgs
-	assert.False(t, validator.validateCertificate(context.Background(), cert))
-	cert.Values = NewSetFromValues(value1).ToSlice()
-	assert.False(t, validator.validateCertificate(context.Background(), cert))
+	require.False(t, sv.validateCertificate(context.Background(), cert))
+	valueSet := NewSetFromValues(types.ProposalID{1})
+	cert.Values = valueSet.ToSlice()
+	require.False(t, sv.validateCertificate(context.Background(), cert))
 
-	msgs = make([]Message, validator.threshold)
-	for i := 0; i < validator.threshold; i++ {
+	msgs = make([]Message, 0, sv.threshold)
+	for i := 0; i < sv.threshold; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		msgs[i] = BuildCommitMsg(signer, NewDefaultEmptySet()).Message
+		// wrong set value
+		m := BuildCommitMsg(signer, NewDefaultEmptySet()).Message
+		msgs = append(msgs, m)
 	}
 	cert.AggMsgs.Messages = msgs
-	assert.True(t, validator.validateCertificate(context.Background(), cert))
-}
+	require.False(t, sv.validateCertificate(context.Background(), cert))
 
-func TestEligibilityValidator_validateRole_NoMsg(t *testing.T) {
-	ev := newEligibilityValidator(nil, 1, 5, logtest.New(t))
-	res, err := ev.validateRole(context.Background(), nil)
-	assert.NotNil(t, err)
-	assert.False(t, res)
-}
+	msgs = make([]Message, 0, sv.threshold)
+	identities := make(map[string]struct{})
+	for i := 0; i < sv.threshold; i++ {
+		signer, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		m := BuildCommitMsg(signer, valueSet).Message
+		msgs = append(msgs, m)
+		identities[string(signer.PublicKey().Bytes())] = struct{}{}
+	}
+	cert.AggMsgs.Messages = msgs
+	require.True(t, sv.validateCertificate(context.Background(), cert))
 
-func TestEligibilityValidator_validateRole_NoInnerMsg(t *testing.T) {
-	ev := newEligibilityValidator(nil, 1, 5, logtest.New(t))
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), nil)
-	m.InnerMsg = nil
-	res, err := ev.validateRole(context.Background(), m)
-	assert.NotNil(t, err)
-	assert.False(t, res)
-}
-
-func TestEligibilityValidator_validateRole_Genesis(t *testing.T) {
-	ev := newEligibilityValidator(nil, 1, 5, logtest.New(t))
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	builder := newMessageBuilder().
-		SetType(pre).
-		SetLayer(types.NewLayerID(1)).
-		SetRoundCounter(k).
-		SetCommittedRound(ki).
-		SetValues(NewDefaultEmptySet()).
-		SetPubKey(sig.PublicKey()).
-		SetEligibilityCount(1)
-	builder.Sign(sig)
-	m := builder.Build()
-
-	res, err := ev.validateRole(context.Background(), m)
-	assert.NoError(t, err)
-	// TODO: remove comment after inceptions problem is addressed
-	// assert.False(t, res)
-	assert.True(t, res)
+	sv.eTracker.ForEach(commitRound, func(s string, cred *Cred) {
+		_, ok := identities[s]
+		require.True(t, ok)
+		require.True(t, cred.Honest)
+		require.EqualValues(t, 1, cred.Count)
+	})
 }
 
 func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
@@ -126,10 +106,8 @@ func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 	myErr := errors.New("my error")
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, myErr).Times(1)
-	res, err := ev.validateRole(context.Background(), m)
-	assert.NotNil(t, err)
-	assert.ErrorIs(t, err, myErr)
-	assert.False(t, res)
+	res := ev.Validate(context.Background(), m)
+	require.False(t, res)
 }
 
 func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
@@ -144,9 +122,8 @@ func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
 	m.Layer = types.NewLayerID(111)
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil).Times(1)
-	res, err := ev.validateRole(context.Background(), m)
-	assert.Nil(t, err)
-	assert.False(t, res)
+	res := ev.Validate(context.Background(), m)
+	require.False(t, res)
 }
 
 func TestEligibilityValidator_validateRole_Success(t *testing.T) {
@@ -161,30 +138,29 @@ func TestEligibilityValidator_validateRole_Success(t *testing.T) {
 	m.Layer = types.NewLayerID(111)
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
-	res, err := ev.validateRole(context.Background(), m)
-	assert.Nil(t, err)
-	assert.True(t, res)
+	res := ev.Validate(context.Background(), m)
+	require.True(t, res)
 }
 
 func TestMessageValidator_IsStructureValid(t *testing.T) {
-	validator := defaultValidator(t)
+	sv := defaultValidator(t)
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	assert.False(t, validator.SyntacticallyValidateMessage(context.Background(), nil))
+	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), nil))
 	m := &Msg{Message: Message{}, PubKey: nil}
-	assert.False(t, validator.SyntacticallyValidateMessage(context.Background(), m))
+	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), m))
 	m.PubKey = signer.PublicKey()
-	assert.False(t, validator.SyntacticallyValidateMessage(context.Background(), m))
+	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), m))
 
 	// empty set is allowed now
 	m.InnerMsg = &InnerMessage{}
-	assert.True(t, validator.SyntacticallyValidateMessage(context.Background(), m))
+	require.True(t, sv.SyntacticallyValidateMessage(context.Background(), m))
 	m.InnerMsg.Values = nil
-	assert.True(t, validator.SyntacticallyValidateMessage(context.Background(), m))
+	require.True(t, sv.SyntacticallyValidateMessage(context.Background(), m))
 	m.InnerMsg.Values = []types.ProposalID{}
-	assert.True(t, validator.SyntacticallyValidateMessage(context.Background(), m))
+	require.True(t, sv.SyntacticallyValidateMessage(context.Background(), m))
 }
 
 type mockValidator struct {
@@ -203,76 +179,86 @@ func initPg(tb testing.TB, validator *syntaxContextValidator) (*pubGetter, []Mes
 		var err error
 		signer, err = signing.NewEdSigner()
 		require.NoError(tb, err)
-		iMsg := BuildStatusMsg(signer, NewSetFromValues(value1))
+		iMsg := BuildStatusMsg(signer, NewSetFromValues(types.ProposalID{1}))
+		validator.eTracker.Track(iMsg.PubKey.Bytes(), iMsg.Round, iMsg.Eligibility.Count, true)
 		msgs[i] = iMsg.Message
 		pg.Track(iMsg)
 	}
-
 	return pg, msgs, signer
 }
 
 func TestMessageValidator_Aggregated(t *testing.T) {
 	r := require.New(t)
-	validator := defaultValidator(t)
-	r.Equal(errNilValidators, validator.validateAggregatedMessage(context.Background(), nil, nil))
+	sv := defaultValidator(t)
+	r.Equal(errNilValidators, sv.validateAggregatedMessage(context.Background(), nil, nil))
 	funcs := make([]func(m *Msg) bool, 0)
-	r.Equal(errNilAggMsgs, validator.validateAggregatedMessage(context.Background(), nil, funcs))
+	r.Equal(errNilAggMsgs, sv.validateAggregatedMessage(context.Background(), nil, funcs))
 
 	agg := &AggregatedMessages{}
-	r.Equal(errNilMsgsSlice, validator.validateAggregatedMessage(context.Background(), agg, funcs))
+	r.Equal(errNilMsgsSlice, sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
-	agg.Messages = makeMessages(validator.threshold - 1)
-	r.ErrorIs(validator.validateAggregatedMessage(context.Background(), agg, funcs), errMsgsCountMismatch)
+	pg, msgs, sgn := initPg(t, sv)
 
-	pg, msgs, sgn := initPg(t, validator)
+	sv.validMsgsTracker = pg
+	agg.Messages = msgs[:sv.threshold-1]
+	r.ErrorIs(sv.validateAggregatedMessage(context.Background(), agg, funcs), errMsgsCountMismatch)
 
-	validator.validMsgsTracker = pg
 	agg.Messages = msgs
-	r.Nil(validator.validateAggregatedMessage(context.Background(), agg, funcs))
+	r.NoError(sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
-	validator.validMsgsTracker = newPubGetter()
+	sv.validMsgsTracker = newPubGetter()
 	tmp := msgs[0].Signature
 	msgs[0].Signature = []byte{1}
-	r.Error(validator.validateAggregatedMessage(context.Background(), agg, funcs))
+	r.Error(sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
 	msgs[0].Signature = tmp
 	inner := msgs[0].InnerMsg.Values
 	msgs[0].InnerMsg.Values = inner
-	validator.roleValidator = &mockValidator{}
-	r.Equal(errInnerEligibility, validator.validateAggregatedMessage(context.Background(), agg, funcs))
+	sv.roleValidator = &mockValidator{}
+	r.Equal(errInnerEligibility, sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
-	validator.roleValidator = &mockValidator{true}
+	sv.roleValidator = &mockValidator{true}
 	funcs = make([]func(m *Msg) bool, 1)
 	funcs[0] = func(m *Msg) bool { return false }
-	r.Equal(errInnerFunc, validator.validateAggregatedMessage(context.Background(), agg, funcs))
+	r.Equal(errInnerFunc, sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
 	funcs[0] = func(m *Msg) bool { return true }
 	m0 := msgs[0]
-	msgs[0] = BuildStatusMsg(sgn, NewSetFromValues(value1)).Message
-	r.Equal(errDupSender, validator.validateAggregatedMessage(context.Background(), agg, funcs))
+	msgs[0] = BuildStatusMsg(sgn, NewSetFromValues(types.ProposalID{1})).Message
+	r.Equal(errDupSender, sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
-	validator.validMsgsTracker = pg
+	sv.validMsgsTracker = pg
 	msgs[0] = m0
 	msgs[len(msgs)-1] = m0
-	r.Equal(errDupSender, validator.validateAggregatedMessage(context.Background(), agg, funcs))
+	r.Equal(errDupSender, sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	msgs[0] = BuildStatusMsg(signer, NewSetFromValues(value1)).Message
+	msgs[0] = BuildStatusMsg(signer, NewSetFromValues(types.ProposalID{1})).Message
 	r.Nil(pg.PublicKey(&msgs[0]))
-	require.NoError(t, validator.validateAggregatedMessage(context.Background(), agg, funcs))
+	require.NoError(t, sv.validateAggregatedMessage(context.Background(), agg, funcs))
 	r.NotNil(pg.PublicKey(&msgs[0]))
 }
 
-func makeMessages(eligibilityCount int) []Message {
-	return []Message{
-		{
-			Eligibility: types.HareEligibility{
-				Count: uint16(eligibilityCount),
-			},
-		},
-	}
+func TestMessageValidator_Aggregated_WithEquivocation(t *testing.T) {
+	r := require.New(t)
+	sv := defaultValidator(t)
+	funcs := make([]func(m *Msg) bool, 0)
+
+	pg, msgs, _ := initPg(t, sv)
+
+	sv.validMsgsTracker = pg
+
+	agg := &AggregatedMessages{Messages: msgs[:sv.threshold-1]}
+	r.ErrorIs(sv.validateAggregatedMessage(context.Background(), agg, funcs), errMsgsCountMismatch)
+
+	// add an eligible known equivocator
+	ke, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	sv.eTracker.Track(ke.PublicKey().Bytes(), msgs[0].Round, 1, false)
+	r.NoError(sv.validateAggregatedMessage(context.Background(), agg, funcs))
 }
 
 func TestSyntaxContextValidator_PreRoundContext(t *testing.T) {
@@ -321,19 +307,19 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 	proc.advanceToNextRound(context.Background())
 	v := proc.validator
 	b, err := proc.initDefaultBuilder(proc.value)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	preround := b.SetType(pre).Sign(proc.signing).Build()
 	preround.PubKey = proc.signing.PublicKey()
-	assert.True(t, v.SyntacticallyValidateMessage(context.Background(), preround))
+	require.True(t, v.SyntacticallyValidateMessage(context.Background(), preround))
 	e := v.ContextuallyValidateMessage(context.Background(), preround, 0)
-	assert.Nil(t, e)
+	require.Nil(t, e)
 	b, err = proc.initDefaultBuilder(proc.value)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	status := b.SetType(status).Sign(proc.signing).Build()
 	status.PubKey = proc.signing.PublicKey()
 	e = v.ContextuallyValidateMessage(context.Background(), status, 0)
-	assert.Nil(t, e)
-	assert.True(t, v.SyntacticallyValidateMessage(context.Background(), status))
+	require.Nil(t, e)
+	require.True(t, v.SyntacticallyValidateMessage(context.Background(), status))
 }
 
 type pubGetter struct {
@@ -365,41 +351,43 @@ func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	validator := newSyntaxContextValidator(signer, 1, validate, nil, truer{}, newPubGetter(), logtest.New(t))
+	et := NewEligibilityTracker(100)
+	vfunc := func(m *Msg) bool { return true }
+	sv := newSyntaxContextValidator(signer, 1, vfunc, nil, truer{}, newPubGetter(), et, logtest.New(t))
 	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), nil)
-	assert.True(t, validator.SyntacticallyValidateMessage(context.Background(), m))
-	m = BuildPreRoundMsg(signer, NewSetFromValues(value1), nil)
-	assert.True(t, validator.SyntacticallyValidateMessage(context.Background(), m))
+	require.True(t, sv.SyntacticallyValidateMessage(context.Background(), m))
+	m = BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), nil)
+	require.True(t, sv.SyntacticallyValidateMessage(context.Background(), m))
 }
 
 func TestMessageValidator_validateSVPTypeA(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	m := buildProposalMsg(signer, NewSetFromValues(value1, value2, value3), []byte{})
-	s1 := NewSetFromValues(value1)
-	s2 := NewSetFromValues(value3)
-	s3 := NewSetFromValues(value1, value5)
-	s4 := NewSetFromValues(value1, value4)
+	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), []byte{})
+	s1 := NewSetFromValues(types.ProposalID{1})
+	s2 := NewSetFromValues(types.ProposalID{3})
+	s3 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{5})
+	s4 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{4})
 	v := defaultValidator(t)
 	m.InnerMsg.Svp = buildSVP(preRound, s1, s2, s3, s4)
-	assert.False(t, v.validateSVPTypeA(context.Background(), m))
-	s3 = NewSetFromValues(value2)
+	require.False(t, v.validateSVPTypeA(context.Background(), m))
+	s3 = NewSetFromValues(types.ProposalID{2})
 	m.InnerMsg.Svp = buildSVP(preRound, s1, s2, s3)
-	assert.True(t, v.validateSVPTypeA(context.Background(), m))
+	require.True(t, v.validateSVPTypeA(context.Background(), m))
 }
 
 func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	m := buildProposalMsg(signer, NewSetFromValues(value1, value2, value3), []byte{})
-	s1 := NewSetFromValues(value1)
+	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), []byte{})
+	s1 := NewSetFromValues(types.ProposalID{1})
 	m.InnerMsg.Svp = buildSVP(preRound, s1)
-	m.InnerMsg.Values = NewSetFromValues(value1).ToSlice()
+	m.InnerMsg.Values = NewSetFromValues(types.ProposalID{1}).ToSlice()
 	v := defaultValidator(t)
-	assert.False(t, v.validateSVPTypeB(context.Background(), m, NewSetFromValues(value5)))
-	assert.True(t, v.validateSVPTypeB(context.Background(), m, NewSetFromValues(value1)))
+	require.False(t, v.validateSVPTypeB(context.Background(), m, NewSetFromValues(types.ProposalID{5})))
+	require.True(t, v.validateSVPTypeB(context.Background(), m, NewSetFromValues(types.ProposalID{1})))
 }
 
 func TestMessageValidator_validateSVP(t *testing.T) {
@@ -409,24 +397,26 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockStateQ := mocks.NewMockstateQuerier(ctrl)
 	mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-	validator := newSyntaxContextValidator(signer, 1, validate, mockStateQ, truer{}, newPubGetter(), logtest.New(t))
-	m := buildProposalMsg(signer, NewSetFromValues(value1, value2, value3), []byte{})
-	s1 := NewSetFromValues(value1)
+	et := NewEligibilityTracker(100)
+	vfunc := func(m *Msg) bool { return true }
+	sv := newSyntaxContextValidator(signer, 1, vfunc, mockStateQ, truer{}, newPubGetter(), et, logtest.New(t))
+	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), []byte{})
+	s1 := NewSetFromValues(types.ProposalID{1})
 	m.InnerMsg.Svp = buildSVP(preRound, s1)
 	m.InnerMsg.Svp.Messages[0].InnerMsg.Type = commit
-	assert.False(t, validator.validateSVP(context.Background(), m))
+	require.False(t, sv.validateSVP(context.Background(), m))
 	m.InnerMsg.Svp = buildSVP(preRound, s1)
 	m.InnerMsg.Svp.Messages[0].Round = 4
-	assert.False(t, validator.validateSVP(context.Background(), m))
+	require.False(t, sv.validateSVP(context.Background(), m))
 	m.InnerMsg.Svp = buildSVP(preRound, s1)
-	assert.False(t, validator.validateSVP(context.Background(), m))
-	s2 := NewSetFromValues(value1, value2, value3)
+	require.False(t, sv.validateSVP(context.Background(), m))
+	s2 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3})
 	m.InnerMsg.Svp = buildSVP(preRound, s2)
-	assert.True(t, validator.validateSVP(context.Background(), m))
+	require.True(t, sv.validateSVP(context.Background(), m))
 	m.InnerMsg.Svp = buildSVP(0, s1)
-	assert.False(t, validator.validateSVP(context.Background(), m))
+	require.False(t, sv.validateSVP(context.Background(), m))
 	m.InnerMsg.Svp = buildSVP(0, s2)
-	assert.True(t, validator.validateSVP(context.Background(), m))
+	require.True(t, sv.validateSVP(context.Background(), m))
 }
 
 func buildSVP(ki uint32, S ...*Set) *AggregatedMessages {
