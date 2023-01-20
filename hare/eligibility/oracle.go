@@ -63,6 +63,10 @@ type vrfVerifier interface {
 	Verify(nodeID types.NodeID, msg, sig []byte) bool
 }
 
+type nonceFetcher interface {
+	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
+}
+
 // Oracle is the hare eligibility oracle.
 type Oracle struct {
 	lock           sync.Mutex
@@ -70,6 +74,7 @@ type Oracle struct {
 	cdb            *datastore.CachedDB
 	vrfSigner      *signing.VRFSigner
 	vrfVerifier    vrfVerifier
+	nonceFetcher   nonceFetcher
 	layersPerEpoch uint32
 	vrfMsgCache    cache
 	activesCache   cache
@@ -109,6 +114,31 @@ func safeLayerRange(targetLayer types.LayerID, safetyParam, layersPerEpoch, epoc
 	return
 }
 
+type defaultFetcher struct {
+	cdb *datastore.CachedDB
+}
+
+func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	atxId, err := atxs.GetFirstIDByNodeID(f.cdb, nodeID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get initial atx for smesher %s: %w", nodeID.String(), err)
+	}
+	atx, err := f.cdb.GetAtxHeader(atxId)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get initial atx for smesher %s: %w", nodeID.String(), err)
+	}
+	return *atx.VRFNonce, nil
+}
+
+// Opt for configuring Validator.
+type Opt func(h *Oracle)
+
+func withNonceFetcher(nf nonceFetcher) Opt {
+	return func(h *Oracle) {
+		h.nonceFetcher = nf
+	}
+}
+
 // New returns a new eligibility oracle instance.
 func New(
 	beacons system.BeaconGetter,
@@ -118,6 +148,7 @@ func New(
 	layersPerEpoch uint32,
 	cfg config.Config,
 	logger log.Log,
+	opts ...Opt,
 ) *Oracle {
 	vmc, err := lru.New(vrfMsgCacheSize)
 	if err != nil {
@@ -129,7 +160,7 @@ func New(
 		logger.With().Fatal("failed to create lru cache for active set", log.Err(err))
 	}
 
-	return &Oracle{
+	o := &Oracle{
 		beacons:        beacons,
 		cdb:            db,
 		vrfVerifier:    vrfVerifier,
@@ -140,6 +171,15 @@ func New(
 		cfg:            cfg,
 		Log:            logger,
 	}
+	for _, opt := range opts {
+		opt(o)
+	}
+
+	if o.nonceFetcher == nil {
+		o.nonceFetcher = defaultFetcher{cdb: db}
+	}
+
+	return o
 }
 
 //go:generate scalegen -types VrfMessage
@@ -149,6 +189,7 @@ type VrfMessage struct {
 	Type   types.EligibilityType
 	Beacon uint32
 	Round  uint32
+	Nonce  types.VRFPostIndex
 	Layer  types.LayerID
 }
 
@@ -175,7 +216,7 @@ func (o *Oracle) getBeaconValue(ctx context.Context, epochID types.EpochID) (uin
 }
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round).
-func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
+func (o *Oracle) buildVRFMessage(ctx context.Context, round uint32, nonce types.VRFPostIndex, layer types.LayerID) ([]byte, error) {
 	key := buildKey(layer, round)
 
 	o.lock.Lock()
@@ -193,7 +234,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	}
 
 	// marshal message
-	msg := VrfMessage{Type: types.EligibilityHare, Beacon: v, Round: round, Layer: layer}
+	msg := VrfMessage{Type: types.EligibilityHare, Beacon: v, Round: round, Nonce: nonce, Layer: layer}
 	buf, err := codec.Encode(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Fatal("failed to encode", log.Err(err))
@@ -251,7 +292,16 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, errZeroCommitteeSize
 	}
 
-	msg, err := o.buildVRFMessage(ctx, layer, round)
+	nonce, err := o.nonceFetcher.VRFNonce(id, layer.GetEpoch())
+	if err != nil {
+		logger.With().Warning("could not get nonce for node",
+			log.FieldNamed("message_node_id", id),
+			log.Err(err),
+		)
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
+	}
+
+	msg, err := o.buildVRFMessage(ctx, round, nonce, layer)
 	if err != nil {
 		logger.With().Warning("could not get beacon value for epoch", log.Err(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
@@ -393,12 +443,16 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 
 // Proof returns the role proof for the current Layer & Round.
 func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
-	msg, err := o.buildVRFMessage(ctx, layer, round)
+	nonce, err := o.nonceFetcher.VRFNonce(o.vrfSigner.NodeID(), layer.GetEpoch())
+	if err != nil {
+		return nil, err
+	}
+	msg, err := o.buildVRFMessage(ctx, round, nonce, layer)
 	if err != nil {
 		return nil, err
 	}
 
-	return o.vrfSigner.Sign(msg)
+	return o.vrfSigner.Sign(msg), nil
 }
 
 // Returns a map of all active node IDs in the specified layer id.
