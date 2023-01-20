@@ -26,6 +26,7 @@ const (
 	lyrOpnsProtocol  = "lp/1"
 	hashProtocol     = "hs/1"
 	meshHashProtocol = "mh/1"
+	malProtocol      = "ml/1"
 
 	cacheSize = 1000
 )
@@ -123,6 +124,13 @@ func WithLogger(log log.Log) Option {
 	}
 }
 
+// WithMalfeasanceHandler configures the malfeasance handler of the fetcher.
+func WithMalfeasanceHandler(h malfeasanceHandler) Option {
+	return func(f *Fetch) {
+		f.malHandler = h
+	}
+}
+
 // WithATXHandler configures the ATX handler of the fetcher.
 func WithATXHandler(h atxHandler) Option {
 	return func(f *Fetch) {
@@ -186,6 +194,7 @@ type Fetch struct {
 
 	servers         map[string]requester
 	poetHandler     poetHandler
+	malHandler      malfeasanceHandler
 	atxHandler      atxHandler
 	ballotHandler   ballotHandler
 	blockHandler    blockHandler
@@ -238,6 +247,7 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, 
 		f.servers[lyrOpnsProtocol] = server.New(host, lyrOpnsProtocol, h.handleLayerOpinionsReq, srvOpts...)
 		f.servers[hashProtocol] = server.New(host, hashProtocol, h.handleHashReq, srvOpts...)
 		f.servers[meshHashProtocol] = server.New(host, meshHashProtocol, h.handleMeshHashReq, srvOpts...)
+		f.servers[malProtocol] = server.New(host, malProtocol, h.handleMaliciousIDsReq, srvOpts...)
 	}
 	return f
 }

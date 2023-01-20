@@ -58,8 +58,9 @@ func (f *testFetch) testGetTxs(tids []types.TransactionID) error {
 }
 
 const (
-	numBallots = 10
-	numBlocks  = 3
+	numBallots   = 10
+	numBlocks    = 3
+	numMalicious = 11
 )
 
 func startTestLoop(t *testing.T, f *Fetch, eg *errgroup.Group, stop chan struct{}) {
@@ -80,6 +81,17 @@ func startTestLoop(t *testing.T, f *Fetch, eg *errgroup.Group, stop chan struct{
 			}
 		}
 	})
+}
+
+func generateMaliciousIDs(t *testing.T) []byte {
+	t.Helper()
+	var malicious MaliciousIDs
+	for i := 0; i < numMalicious; i++ {
+		malicious.NodeIDs = append(malicious.NodeIDs, types.RandomNodeID())
+	}
+	data, err := codec.Encode(&malicious)
+	require.NoError(t, err)
+	return data
 }
 
 func generateLayerContent(t *testing.T) []byte {
@@ -403,6 +415,68 @@ func TestGetPoetProof(t *testing.T) {
 	require.NoError(t, f.GetPoetProof(context.TODO(), h))
 	close(stop)
 	require.NoError(t, eg.Wait())
+}
+
+func TestFetch_GetMaliciousIDs(t *testing.T) {
+	peers := []p2p.Peer{"p0", "p1", "p3", "p4"}
+	errUnknown := errors.New("unknown")
+	tt := []struct {
+		name string
+		errs []error
+	}{
+		{
+			name: "all peers returns",
+			errs: []error{nil, nil, nil, nil},
+		},
+		{
+			name: "some peers errors",
+			errs: []error{nil, errUnknown, nil, errUnknown},
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, len(peers), len(tc.errs))
+			f := createFetch(t)
+			oks := make(chan struct{}, len(peers))
+			errs := make(chan struct{}, len(peers))
+			var wg sync.WaitGroup
+			wg.Add(len(peers))
+			okFunc := func([]byte, p2p.Peer) {
+				oks <- struct{}{}
+				wg.Done()
+			}
+			errFunc := func(error, p2p.Peer) {
+				errs <- struct{}{}
+				wg.Done()
+			}
+			var expOk, expErr int
+			for i, p := range peers {
+				if tc.errs[i] == nil {
+					expOk++
+				} else {
+					expErr++
+				}
+				idx := i
+				f.mMalS.EXPECT().Request(gomock.Any(), p, []byte{}, gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, _ p2p.Peer, _ []byte, okCB func([]byte), errCB func(error)) error {
+						if tc.errs[idx] == nil {
+							go okCB(generateMaliciousIDs(t))
+						} else {
+							go errCB(tc.errs[idx])
+						}
+						return nil
+					})
+			}
+			require.NoError(t, f.GetMaliciousIDs(context.TODO(), peers, okFunc, errFunc))
+			wg.Wait()
+			require.Len(t, oks, expOk)
+			require.Len(t, errs, expErr)
+		})
+	}
 }
 
 func TestFetch_GetLayerData(t *testing.T) {

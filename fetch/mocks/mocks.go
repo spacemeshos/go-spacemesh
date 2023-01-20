@@ -50,6 +50,43 @@ func (mr *MockrequesterMockRecorder) Request(arg0, arg1, arg2, arg3, arg4 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Request", reflect.TypeOf((*Mockrequester)(nil).Request), arg0, arg1, arg2, arg3, arg4)
 }
 
+// MockmalfeasanceHandler is a mock of malfeasanceHandler interface.
+type MockmalfeasanceHandler struct {
+	ctrl     *gomock.Controller
+	recorder *MockmalfeasanceHandlerMockRecorder
+}
+
+// MockmalfeasanceHandlerMockRecorder is the mock recorder for MockmalfeasanceHandler.
+type MockmalfeasanceHandlerMockRecorder struct {
+	mock *MockmalfeasanceHandler
+}
+
+// NewMockmalfeasanceHandler creates a new mock instance.
+func NewMockmalfeasanceHandler(ctrl *gomock.Controller) *MockmalfeasanceHandler {
+	mock := &MockmalfeasanceHandler{ctrl: ctrl}
+	mock.recorder = &MockmalfeasanceHandlerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmalfeasanceHandler) EXPECT() *MockmalfeasanceHandlerMockRecorder {
+	return m.recorder
+}
+
+// HandleSyncedMalfeasanceProof mocks base method.
+func (m *MockmalfeasanceHandler) HandleSyncedMalfeasanceProof(arg0 context.Context, arg1 []byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HandleSyncedMalfeasanceProof", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// HandleSyncedMalfeasanceProof indicates an expected call of HandleSyncedMalfeasanceProof.
+func (mr *MockmalfeasanceHandlerMockRecorder) HandleSyncedMalfeasanceProof(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncedMalfeasanceProof", reflect.TypeOf((*MockmalfeasanceHandler)(nil).HandleSyncedMalfeasanceProof), arg0, arg1)
+}
+
 // MockatxHandler is a mock of atxHandler interface.
 type MockatxHandler struct {
 	ctrl     *gomock.Controller
