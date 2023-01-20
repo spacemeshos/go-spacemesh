@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -34,13 +35,39 @@ type Validator struct {
 	beacons        system.BeaconCollector
 	logger         log.Log
 	vrfVerifier    vrfVerifier
+	nonceFetcher   nonceFetcher
+}
+
+type defaultFetcher struct {
+	cdb *datastore.CachedDB
+}
+
+func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	atxId, err := atxs.GetFirstIDByNodeID(f.cdb, nodeID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get initial atx for smesher %s: %w", nodeID.String(), err)
+	}
+	atx, err := f.cdb.GetAtxHeader(atxId)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get initial atx for smesher %s: %w", nodeID.String(), err)
+	}
+	return *atx.VRFNonce, nil
+}
+
+// ValidatorOpt for configuring Validator.
+type ValidatorOpt func(h *Validator)
+
+func WithNonceFetcher(nf nonceFetcher) ValidatorOpt {
+	return func(h *Validator) {
+		h.nonceFetcher = nf
+	}
 }
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log, vrfVerifier vrfVerifier,
+	avgLayerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
 ) *Validator {
-	return &Validator{
+	v := &Validator{
 		avgLayerSize:   avgLayerSize,
 		layersPerEpoch: layersPerEpoch,
 		cdb:            cdb,
@@ -49,6 +76,15 @@ func NewEligibilityValidator(
 		logger:         lg,
 		vrfVerifier:    vrfVerifier,
 	}
+	for _, opt := range opts {
+		opt(v)
+	}
+
+	if v.nonceFetcher == nil {
+		v.nonceFetcher = defaultFetcher{cdb: cdb}
+	}
+
+	return v
 }
 
 // CheckEligibility checks that a ballot is eligible in the layer that it specifies.
@@ -120,6 +156,10 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		isFirst = true
 	)
 
+	nonce, err := v.nonceFetcher.VRFNonce(owned.NodeID, epoch)
+	if err != nil {
+		return false, err
+	}
 	for _, proof := range ballot.EligibilityProofs {
 		counter := proof.J
 		if counter >= numEligibleSlots {
@@ -133,7 +173,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		}
 		last = counter
 
-		message, err := SerializeVRFMessage(beacon, epoch, counter)
+		message, err := SerializeVRFMessage(beacon, epoch, nonce, counter)
 		if err != nil {
 			return false, err
 		}

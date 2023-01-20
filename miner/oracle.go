@@ -28,22 +28,47 @@ type oracleCache struct {
 	proofs    map[types.LayerID][]types.VotingEligibility
 }
 
+type defaultFetcher struct {
+	cdb *datastore.CachedDB
+}
+
+func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	atxId, err := atxs.GetFirstIDByNodeID(f.cdb, nodeID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get initial atx for smesher %s: %w", nodeID.String(), err)
+	}
+	atx, err := f.cdb.GetAtxHeader(atxId)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get initial atx for smesher %s: %w", nodeID.String(), err)
+	}
+	return *atx.VRFNonce, nil
+}
+
+type oracleOpt func(*Oracle)
+
+func withNonceFetcher(nf nonceFetcher) oracleOpt {
+	return func(o *Oracle) {
+		o.nonceFetcher = nf
+	}
+}
+
 // Oracle provides proposal eligibility proofs for the miner.
 type Oracle struct {
 	avgLayerSize   uint32
 	layersPerEpoch uint32
 	cdb            *datastore.CachedDB
 
-	vrfSigner *signing.VRFSigner
-	nodeID    types.NodeID
-	log       log.Log
+	vrfSigner    *signing.VRFSigner
+	nonceFetcher nonceFetcher
+	nodeID       types.NodeID
+	log          log.Log
 
 	mu    sync.Mutex
 	cache oracleCache
 }
 
-func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, nodeID types.NodeID, log log.Log) *Oracle {
-	return &Oracle{
+func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, nodeID types.NodeID, log log.Log, opts ...oracleOpt) *Oracle {
+	o := &Oracle{
 		avgLayerSize:   layerSize,
 		layersPerEpoch: layersPerEpoch,
 		cdb:            cdb,
@@ -51,6 +76,13 @@ func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, v
 		nodeID:         nodeID,
 		log:            log,
 	}
+	for _, opt := range opts {
+		opt(o)
+	}
+	if o.nonceFetcher == nil {
+		o.nonceFetcher = defaultFetcher{cdb: cdb}
+	}
+	return o
 }
 
 // GetProposalEligibility returns the miner's ATXID and the active set for the layer's epoch, along with the list of eligibility
@@ -155,15 +187,15 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 
 	eligibilityProofs := map[types.LayerID][]types.VotingEligibility{}
 	for counter := uint32(0); counter < numEligibleSlots; counter++ {
-		message, err := proposals.SerializeVRFMessage(beacon, epoch, counter)
+		nonce, err := o.nonceFetcher.VRFNonce(o.nodeID, epoch)
 		if err != nil {
-			logger.With().Panic("failed to serialize VRF msg", log.Err(err))
+			logger.With().Fatal("failed to get VRF nonce", log.Err(err))
 		}
-		vrfSig, err := o.vrfSigner.Sign(message)
+		message, err := proposals.SerializeVRFMessage(beacon, epoch, nonce, counter)
 		if err != nil {
-			logger.With().Error("failed to sign VRF msg", log.Err(err))
-			return nil, nil, fmt.Errorf("oracle failed to sign: %w", err)
+			logger.With().Fatal("failed to serialize VRF msg", log.Err(err))
 		}
+		vrfSig := o.vrfSigner.Sign(message)
 		eligibleLayer := proposals.CalcEligibleLayer(epoch, o.layersPerEpoch, vrfSig)
 		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.VotingEligibility{
 			J:   counter,

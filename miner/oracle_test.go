@@ -12,8 +12,9 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility/mocks"
+	emocks "github.com/spacemeshos/go-spacemesh/hare/eligibility/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -28,9 +29,10 @@ const (
 
 type testOracle struct {
 	*Oracle
-	nodeID    types.NodeID
-	edSigner  *signing.EdSigner
-	vrfSigner *signing.VRFSigner
+	nodeID       types.NodeID
+	edSigner     *signing.EdSigner
+	vrfSigner    *signing.VRFSigner
+	nonceFetcher *mocks.MocknonceFetcher
 }
 
 func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *signing.VRFSigner) {
@@ -38,7 +40,7 @@ func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *s
 
 	edSigner, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	vrfSigner, err := edSigner.VRFSigner(signing.WithNonceForNode(1, edSigner.NodeID()))
+	vrfSigner, err := edSigner.VRFSigner()
 	require.NoError(tb, err)
 
 	edPubkey := edSigner.PublicKey()
@@ -87,11 +89,17 @@ func createTestOracle(tb testing.TB, layerSize, layersPerEpoch uint32) *testOrac
 	lg := logtest.New(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	nodeID, edSigner, vrfSigner := generateNodeIDAndSigner(tb)
+
+	ctrl := gomock.NewController(tb)
+	nonceFetcher := mocks.NewMocknonceFetcher(ctrl)
 	return &testOracle{
-		Oracle:    newMinerOracle(layerSize, layersPerEpoch, cdb, vrfSigner, nodeID, lg),
-		nodeID:    nodeID,
-		edSigner:  edSigner,
-		vrfSigner: vrfSigner,
+		Oracle: newMinerOracle(layerSize, layersPerEpoch, cdb, vrfSigner, nodeID, lg,
+			withNonceFetcher(nonceFetcher),
+		),
+		nodeID:       nodeID,
+		edSigner:     edSigner,
+		vrfSigner:    vrfSigner,
+		nonceFetcher: nonceFetcher,
 	}
 }
 
@@ -141,10 +149,13 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 
 	ctrl := gomock.NewController(t)
 	mbc := smocks.NewMockBeaconCollector(ctrl)
-	vrfVerifier := mocks.NewMockvrfVerifier(ctrl)
+	vrfVerifier := emocks.NewMockvrfVerifier(ctrl)
 	vrfVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+	o.nonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).AnyTimes()
 
-	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"), vrfVerifier)
+	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"), vrfVerifier,
+		proposals.WithNonceFetcher(o.nonceFetcher),
+	)
 
 	startEpoch, numberOfEpochsToTest := uint32(2), uint32(2)
 	startLayer := layersPerEpoch * startEpoch
