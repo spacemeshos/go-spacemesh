@@ -33,7 +33,7 @@ func TestBuilder_TestBuild(t *testing.T) {
 }
 
 func TestMessageBuilder_SetValues(t *testing.T) {
-	s := NewSetFromValues(value5)
+	s := NewSetFromValues(types.ProposalID{5})
 	msg := newMessageBuilder().SetValues(s).Build().Message
 
 	m := marshallUnmarshall(t, &msg)
@@ -46,9 +46,12 @@ func TestMessageBuilder_SetCertificate(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	s := NewSetFromValues(value5)
-	tr := newCommitTracker(logtest.New(t), make(chan types.MalfeasanceGossip), 1, 1, s)
-	tr.OnCommit(context.Background(), BuildCommitMsg(signer, s))
+	s := NewSetFromValues(types.ProposalID{5})
+	et := NewEligibilityTracker(1)
+	tr := newCommitTracker(logtest.New(t), commitRound, make(chan *types.MalfeasanceGossip), et, 1, 1, s)
+	m := BuildCommitMsg(signer, s)
+	et.Track(m.PubKey.Bytes(), m.Round, m.Eligibility.Count, true)
+	tr.OnCommit(context.Background(), m)
 	cert := tr.BuildCertificate()
 	assert.NotNil(t, cert)
 	c := newMessageBuilder().SetCertificate(cert).Build().Message
