@@ -51,7 +51,7 @@ func (db *CachedDB) MalfeasanceCacheSize() int {
 // IsMalicious returns true if the NodeID is malicious.
 func (db *CachedDB) IsMalicious(id types.NodeID) (bool, error) {
 	if id == types.EmptyNodeID {
-		return false, errors.New("cache db: get empty node id")
+		log.Fatal("invalid argument to IsMalicious")
 	}
 
 	db.mu.Lock()
@@ -77,7 +77,7 @@ func (db *CachedDB) IsMalicious(id types.NodeID) (bool, error) {
 // GetMalfeasanceProof gets the malfeasance proof associated with the NodeID.
 func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProof, error) {
 	if id == types.EmptyNodeID {
-		return nil, errors.New("cache db: get empty node id")
+		log.Fatal("invalid argument to GetMalfeasanceProof")
 	}
 
 	db.mu.Lock()
@@ -99,7 +99,7 @@ func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProo
 
 func (db *CachedDB) AddMalfeasanceProof(id types.NodeID, proof *types.MalfeasanceProof, dbtx *sql.Tx) error {
 	if id == types.EmptyNodeID {
-		return errors.New("cache db: add empty node id")
+		log.Fatal("invalid argument to AddMalfeasanceProof")
 	}
 
 	encoded, err := codec.Encode(proof)

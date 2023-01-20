@@ -83,8 +83,8 @@ type BaseConfig struct {
 	OracleServer        string `mapstructure:"oracle_server"`
 	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
 
-	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
-	LayerAvgSize     int    `mapstructure:"layer-average-size"`
+	LayerDurationSec uint32 `mapstructure:"layer-duration-sec"`
+	LayerAvgSize     uint32 `mapstructure:"layer-average-size"`
 	LayersPerEpoch   uint32 `mapstructure:"layers-per-epoch"`
 
 	PoETServers []string `mapstructure:"poet-server"`
