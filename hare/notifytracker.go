@@ -48,7 +48,7 @@ func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Msg) bool {
 			prev.InnerMsg.Round == msg.Round &&
 			prev.InnerMsg.MsgHash != msg.MsgHash {
 			nt.logger.WithContext(ctx).With().Warning("equivocation detected at notify round",
-				log.Stringer("sender_id", nodeID))
+				log.String("sender_id", nodeID.ShortString()))
 			nt.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			this := &types.HareProofMsg{
 				InnerMsg:  msg.HareMetadata,
@@ -56,7 +56,7 @@ func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Msg) bool {
 			}
 			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev, this, &msg.Eligibility, nt.malCh); err != nil {
 				nt.logger.WithContext(ctx).With().Warning("failed to report equivocation in notify round",
-					log.Stringer("sender_id", nodeID),
+					log.String("sender_id", nodeID.ShortString()),
 					log.Err(err))
 			}
 		}

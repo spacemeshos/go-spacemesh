@@ -42,7 +42,7 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 			prev.Round == msg.Round &&
 			prev.MsgHash != msg.MsgHash {
 			st.logger.WithContext(ctx).With().Warning("equivocation detected at status round",
-				log.Stringer("sender_id", nodeID))
+				log.String("sender_id", nodeID.ShortString()))
 			st.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			old := &types.HareProofMsg{
 				InnerMsg:  prev.HareMetadata,
@@ -54,13 +54,13 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 			}
 			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), old, this, &msg.Eligibility, st.malCh); err != nil {
 				st.logger.WithContext(ctx).With().Warning("failed to report equivocation in status round",
-					log.Stringer("sender_id", nodeID),
+					log.String("sender_id", nodeID.ShortString()),
 					log.Err(err))
 				return
 			}
 		}
 		st.logger.WithContext(ctx).With().Warning("duplicate status message detected",
-			log.Stringer("sender_id", nodeID))
+			log.String("sender_id", nodeID.ShortString()))
 		return
 	}
 

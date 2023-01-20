@@ -53,7 +53,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
 	logger.With().Debug("received preround message",
 		nodeID,
-		log.Stringer("sender_id", nodeID),
+		log.String("sender_id", nodeID.ShortString()),
 		log.Int("num_values", len(msg.InnerMsg.Values)),
 		log.String("vrf_value", fmt.Sprintf("%x", shaUint32)))
 	// TODO: make sure we don't need a mutex here
@@ -62,7 +62,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		// store lowest-order bit as coin toss value
 		pre.coinflip = sha[0]&byte(1) == byte(1)
 		pre.logger.With().Debug("got new best vrf value",
-			log.Stringer("sender_id", nodeID),
+			log.String("sender_id", nodeID.ShortString()),
 			log.String("vrf_value", fmt.Sprintf("%x", shaUint32)),
 			log.Bool("weak_coin", pre.coinflip))
 	}

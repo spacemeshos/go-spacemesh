@@ -176,6 +176,8 @@ func (ci *CountInfo) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddInt("num_honest", ci.numHonest)
 	encoder.AddInt("dishonest_count", ci.dhCount)
 	encoder.AddInt("num_dishonest", ci.numDishonest)
+	encoder.AddInt("num_ke", ci.numKE)
+	encoder.AddInt("ke_count", ci.keCount)
 	return nil
 }
 
@@ -448,7 +450,7 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	logger := proc.WithContext(ctx).WithFields(
 		log.String("msg_type", m.InnerMsg.Type.String()),
-		log.FieldNamed("sender_id", m.PubKey),
+		log.String("sender_id", m.PubKey.ShortString()),
 		log.Uint32("current_round", proc.getRound()),
 		log.Uint32("msg_round", m.Round),
 		proc.layer)

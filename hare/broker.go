@@ -198,7 +198,6 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		}
 		return fmt.Errorf("known malicious %v", nodeID.ShortString())
 	}
-	logger.With().Info("identity is not malicious", nodeID)
 
 	if isEarly {
 		return b.handleEarlyMessage(logger, msgLayer, nodeID, iMsg)
@@ -245,7 +244,7 @@ func (b *Broker) handleMaliciousHareMessage(
 	case <-b.ctx.Done():
 		return errClosed
 	case b.mchOut <- gossip:
-		// causes the node go gossip the malfeasance and eligibility proof
+		// causes the node to gossip the malfeasance and eligibility proof
 	}
 
 	toRelay := gossip.Eligibility
@@ -258,7 +257,7 @@ func (b *Broker) handleMaliciousHareMessage(
 		b.Log.WithContext(ctx).With().Debug("consensus not running for layer", msg.Layer)
 		return nil
 	}
-	b.Log.WithContext(ctx).With().Debug("broker forwarding eligibility to consensus process",
+	b.Log.WithContext(ctx).With().Debug("broker forwarding hare eligibility to consensus process",
 		log.Int("queue_size", len(out)))
 	select {
 	case out <- toRelay:
@@ -303,7 +302,7 @@ func (b *Broker) HandleEligibility(ctx context.Context, em *types.HareEligibilit
 			log.String("sender_id", nodeID.ShortString()))
 		return false
 	}
-	b.Log.WithContext(ctx).With().Debug("broker forwarding eligibility to consensus process",
+	b.Log.WithContext(ctx).With().Debug("broker forwarding gossip eligibility to consensus process",
 		log.Int("queue_size", len(out)))
 	select {
 	case out <- em:
@@ -337,7 +336,7 @@ func (b *Broker) handleEarlyMessage(logger log.Log, layer types.LayerID, nodeID 
 	if len(b.pending[layerNum]) == inboxCapacity {
 		logger.With().Warning("too many pending messages, ignoring message",
 			log.Int("inbox_capacity", inboxCapacity),
-			log.Stringer("sender_id", nodeID))
+			log.String("sender_id", nodeID.ShortString()))
 		return nil
 	}
 	b.pending[layerNum] = append(b.pending[layerNum], msg)

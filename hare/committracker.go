@@ -65,7 +65,7 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
 			prev.InnerMsg.MsgHash != msg.MsgHash {
 			nodeID := types.BytesToNodeID(msg.PubKey.Bytes())
 			ct.logger.WithContext(ctx).With().Warning("equivocation detected at commit round",
-				log.Stringer("sender_id", nodeID))
+				log.String("sender_id", nodeID.ShortString()))
 			ct.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			this := &types.HareProofMsg{
 				InnerMsg:  msg.HareMetadata,
@@ -73,7 +73,7 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
 			}
 			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev, this, &msg.Eligibility, ct.malCh); err != nil {
 				ct.logger.WithContext(ctx).With().Warning("failed to report equivocation in commit round",
-					log.Stringer("sender_id", nodeID),
+					log.String("sender_id", nodeID.ShortString()),
 					log.Err(err))
 				return
 			}
