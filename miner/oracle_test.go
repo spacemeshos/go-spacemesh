@@ -12,10 +12,10 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	emocks "github.com/spacemeshos/go-spacemesh/hare/eligibility/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals"
+	pmocks "github.com/spacemeshos/go-spacemesh/proposals/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -149,7 +149,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 
 	ctrl := gomock.NewController(t)
 	mbc := smocks.NewMockBeaconCollector(ctrl)
-	vrfVerifier := emocks.NewMockvrfVerifier(ctrl)
+	vrfVerifier := pmocks.NewMockvrfVerifier(ctrl)
 	vrfVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 	o.nonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).AnyTimes()
 
