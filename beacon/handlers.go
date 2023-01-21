@@ -182,7 +182,13 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to get ATX for epoch (miner ID %v): %w", minerID, err)
 	}
 
-	currentEpochProposal := buildProposal(m.EpochID, logger)
+	// TODO: do the atx and nonce lookup more efficiently. maybe put nonce in the atx header
+	nonce, err := atxs.GetNonce(pd.cdb, m.NodeID)
+	if err != nil {
+		return types.ATXID{}, fmt.Errorf("lookup nonce for node %v: %w", minerID, err)
+	}
+
+	currentEpochProposal := buildProposal(logger, m.EpochID, nonce)
 	if !pd.vrfVerifier.Verify(m.NodeID, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
 		logger.Warning("[proposal] failed to verify VRF signature")

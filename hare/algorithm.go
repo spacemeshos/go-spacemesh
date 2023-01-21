@@ -212,6 +212,7 @@ type consensusProcess struct {
 	oracle           Rolacle // the roles oracle provider
 	signing          Signer
 	nid              types.NodeID
+	nonce            types.VRFPostIndex
 	publisher        pubsub.Publisher
 	comm             communication
 	validator        messageValidator
@@ -239,6 +240,7 @@ func newConsensusProcess(
 	stateQuerier stateQuerier,
 	signing Signer,
 	nid types.NodeID,
+	nonce types.VRFPostIndex,
 	p2p pubsub.Publisher,
 	comm communication,
 	ev roleValidator,
@@ -775,7 +777,7 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error) {
 	builder := newMessageBuilder().SetLayer(proc.layer)
 	builder = builder.SetRoundCounter(proc.getRound()).SetCommittedRound(proc.committedRound).SetValues(s)
-	proof, err := proc.oracle.Proof(context.TODO(), proc.layer, proc.getRound())
+	proof, err := proc.oracle.Proof(context.TODO(), proc.nonce, proc.layer, proc.getRound())
 	if err != nil {
 		return nil, fmt.Errorf("init default builder: %w", err)
 	}
@@ -945,7 +947,7 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 // Returns the role matching the current round if eligible for this round, false otherwise.
 func (proc *consensusProcess) currentRole(ctx context.Context) role {
 	logger := proc.WithContext(ctx).WithFields(proc.layer)
-	proof, err := proc.oracle.Proof(ctx, proc.layer, proc.getRound())
+	proof, err := proc.oracle.Proof(ctx, proc.nonce, proc.layer, proc.getRound())
 	if err != nil {
 		logger.With().Error("failed to get eligibility proof from oracle", log.Err(err))
 		return passive

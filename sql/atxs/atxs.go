@@ -119,6 +119,27 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 	return id, err
 }
 
+func GetNonce(db sql.Executor, nodeID types.NodeID) (types.VRFPostIndex, error) {
+	var val int64
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+	}
+	dec := func(stmt *sql.Statement) bool {
+		val = stmt.ColumnInt64(0)
+		return true
+	}
+
+	if rows, err := db.Exec(`
+		select nonce from atxs
+		where smesher = ?1 and nonce is not null;`, enc, dec); err != nil {
+		return 0, fmt.Errorf("nonce nodeID %v: %w", nodeID, err)
+	} else if rows == 0 {
+		return 0, fmt.Errorf("nonce nodeID %s: %w", nodeID, sql.ErrNotFound)
+	}
+
+	return types.VRFPostIndex(val), nil
+}
+
 // GetIDByEpochAndNodeID gets an ATX ID for a given epoch and node ID.
 func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (id types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {
@@ -241,11 +262,16 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx, timestamp time.Time) 
 		stmt.BindInt64(6, timestamp.UnixNano())
 		stmt.BindInt64(7, int64(atx.BaseTickHeight()))
 		stmt.BindInt64(8, int64(atx.TickCount()))
+		if atx.VRFNonce == nil {
+			stmt.BindNull(9)
+		} else {
+			stmt.BindInt64(9, int64(*atx.VRFNonce))
+		}
 	}
 
 	_, err = db.Exec(`
-		insert into atxs (id, layer, epoch, smesher, atx, timestamp, base_tick_height, tick_count) 
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);`, enc, nil)
+		insert into atxs (id, layer, epoch, smesher, atx, timestamp, base_tick_height, tick_count, nonce) 
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}

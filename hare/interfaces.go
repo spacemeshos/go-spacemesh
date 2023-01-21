@@ -17,7 +17,7 @@ type layerPatrol interface {
 type Rolacle interface {
 	Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error)
 	CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, []byte) (uint16, error)
-	Proof(context.Context, types.LayerID, uint32) ([]byte, error)
+	Proof(context.Context, types.VRFPostIndex, types.LayerID, uint32) ([]byte, error)
 	IsIdentityActiveOnConsensusView(context.Context, types.NodeID, types.LayerID) (bool, error)
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -211,7 +212,12 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 		return errBeaconNotAvailable
 	}
 	// check if the node is eligible to certify the hare output
-	proof, err := c.oracle.Proof(ctx, lid, eligibility.CertifyRound)
+	nonce, err := atxs.GetNonce(c.db, c.nodeID)
+	if err != nil {
+		return fmt.Errorf("%w: own nonce not found", err)
+	}
+
+	proof, err := c.oracle.Proof(ctx, nonce, lid, eligibility.CertifyRound)
 	if err != nil {
 		logger.With().Error("failed to get eligibility proof to certify", log.Err(err))
 		return err

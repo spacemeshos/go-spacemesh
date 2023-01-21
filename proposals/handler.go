@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -358,7 +359,11 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.L
 	ballotDuration.WithLabelValues(votes).Observe(float64(time.Since(t3)))
 
 	t4 := time.Now()
-	if eligible, err := h.validator.CheckEligibility(ctx, b); err != nil || !eligible {
+	nonce, err := atxs.GetNonce(h.cdb, b.SmesherID())
+	if err != nil {
+		return nil, fmt.Errorf("find smesher nonce: %w", err)
+	}
+	if eligible, err := h.validator.CheckEligibility(ctx, b, nonce); err != nil || !eligible {
 		h.logger.WithContext(ctx).With().Warning("ballot eligibility check failed", log.Err(err))
 		return nil, errNotEligible
 	}

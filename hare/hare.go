@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,6 +30,7 @@ type consensusFactory func(
 	types.LayerID,
 	*Set, Rolacle,
 	Signer,
+	types.VRFPostIndex,
 	pubsub.Publisher,
 	communication,
 	RoundClock,
@@ -155,8 +157,8 @@ func New(
 	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
 	h.outputChan = make(chan TerminationOutput, h.config.Hdist)
 	h.outputs = make(map[types.LayerID][]types.ProposalID, h.config.Hdist) // we keep results about LayerBuffer past layers
-	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
-		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, nid, p2p, comm, ev, clock, logger)
+	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, nonce types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, nid, nonce, p2p, comm, ev, clock, logger)
 	}
 
 	h.nid = nid
@@ -342,7 +344,11 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		mchOut: h.mchMalfeasance,
 		report: h.outputChan,
 	}
-	cp := h.factory(h.ctx, h.config, instID, set, h.rolacle, h.sign, h.publisher, comm, clock)
+	nonce, err := atxs.GetNonce(h.cdb, h.nid)
+	if err != nil {
+		return false, fmt.Errorf("failed to find own nonce: %w", err)
+	}
+	cp := h.factory(h.ctx, h.config, instID, set, h.rolacle, h.sign, nonce, h.publisher, comm, clock)
 	cp.Start()
 	h.patrol.SetHareInCharge(instID)
 	logger.With().Debug("number of consensus processes (after register)",

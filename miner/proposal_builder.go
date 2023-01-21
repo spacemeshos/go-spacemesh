@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"sync"
 	"time"
 
@@ -324,7 +325,12 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		return errDuplicateLayer
 	}
 
-	atxID, activeSet, proofs, err := pb.proposalOracle.GetProposalEligibility(layerID, beacon)
+	nonce, err := atxs.GetNonce(pb.cdb, pb.signer.NodeID())
+	if err != nil {
+		return fmt.Errorf("find own nonce: %w", err)
+	}
+
+	atxID, activeSet, proofs, err := pb.proposalOracle.GetProposalEligibility(layerID, beacon, nonce)
 	if err != nil {
 		if errors.Is(err, errMinerHasNoATXInPreviousEpoch) {
 			logger.Info("miner has no ATX in previous epoch")

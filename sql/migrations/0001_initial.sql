@@ -106,6 +106,7 @@ CREATE TABLE atxs
     epoch            INT NOT NULL,
     base_tick_height UNSIGNED LONG INT,
     tick_count       UNSIGNED LONG INT,
+    nonce            UNSIGNED LONG INT,
     smesher          CHAR(32),
     atx              BLOB,
     timestamp        INT NOT NULL

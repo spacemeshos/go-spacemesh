@@ -10,7 +10,7 @@ import (
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type proposalOracle interface {
-	GetProposalEligibility(types.LayerID, types.Beacon) (types.ATXID, []types.ATXID, []types.VotingEligibility, error)
+	GetProposalEligibility(types.LayerID, types.Beacon, types.VRFPostIndex) (types.ATXID, []types.ATXID, []types.VotingEligibility, error)
 }
 
 type conservativeState interface {

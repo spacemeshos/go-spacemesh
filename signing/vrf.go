@@ -1,11 +1,9 @@
 package signing
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 
-	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519/extra/ecvrf"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -28,14 +26,7 @@ type VRFSigner struct {
 
 // Sign signs a message for VRF purposes.
 func (s VRFSigner) Sign(msg []byte) ([]byte, error) {
-	nonce, err := s.fetcher.NonceForNode(s.nodeID)
-	if err != nil {
-		return nil, err
-	}
-
-	buf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, uint64(nonce))
-	return ecvrf.Prove(ed25519.PrivateKey(s.privateKey), append(buf, msg...)), nil
+	return ecvrf.Prove(s.privateKey, msg), nil
 }
 
 // NodeID of the signer.
@@ -146,13 +137,6 @@ func NewVRFVerifier(opts ...VRFOptionFunc) (*VRFVerifier, error) {
 
 // Verify that signature matches public key.
 func (v VRFVerifier) Verify(nodeID types.NodeID, msg, sig []byte) bool {
-	nonce, err := v.fetcher.NonceForNode(nodeID)
-	if err != nil {
-		return false
-	}
-
-	buf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, uint64(nonce))
-	valid, _ := ecvrf.Verify(nodeID.Bytes(), sig, append(buf, msg...))
+	valid, _ := ecvrf.Verify(nodeID.Bytes(), sig, msg)
 	return valid
 }

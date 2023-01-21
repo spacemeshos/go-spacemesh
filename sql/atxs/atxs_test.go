@@ -361,6 +361,33 @@ func TestAdd(t *testing.T) {
 	require.Equal(t, atx, got)
 }
 
+func TestGetNonce(t *testing.T) {
+	db := sql.InMemory()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	nonce := types.VRFPostIndex(11)
+	atx := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: types.NewLayerID(11),
+				PrevATXID:  types.RandomATXID(),
+			},
+			VRFNonce: &nonce,
+			NumUnits: 2,
+		},
+	}
+
+	atx.Signature = sig.Sign(atx.SignedBytes())
+	vatx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(db, vatx, time.Now()))
+
+	got, err := atxs.GetNonce(db, sig.NodeID())
+	require.NoError(t, err)
+	require.EqualValues(t, *atx.VRFNonce, got)
+}
+
 func newAtx(sig *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActivationTx, error) {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{

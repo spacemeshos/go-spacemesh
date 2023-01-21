@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
 	"github.com/spacemeshos/fixed"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -52,7 +51,7 @@ func NewEligibilityValidator(
 }
 
 // CheckEligibility checks that a ballot is eligible in the layer that it specifies.
-func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) (bool, error) {
+func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, nonce types.VRFPostIndex) (bool, error) {
 	var (
 		atxWeight, totalWeight uint64
 		err                    error
@@ -133,7 +132,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		}
 		last = counter
 
-		message, err := SerializeVRFMessage(beacon, epoch, counter)
+		message, err := SerializeVRFMessage(beacon, epoch, nonce, counter)
 		if err != nil {
 			return false, err
 		}
