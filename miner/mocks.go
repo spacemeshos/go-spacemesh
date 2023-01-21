@@ -37,9 +37,9 @@ func (m *MockproposalOracle) EXPECT() *MockproposalOracleMockRecorder {
 }
 
 // GetProposalEligibility mocks base method.
-func (m *MockproposalOracle) GetProposalEligibility(arg0 types.LayerID, arg1 types.Beacon) (types.ATXID, []types.ATXID, []types.VotingEligibility, error) {
+func (m *MockproposalOracle) GetProposalEligibility(arg0 types.LayerID, arg1 types.Beacon, arg2 types.VRFPostIndex) (types.ATXID, []types.ATXID, []types.VotingEligibility, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProposalEligibility", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetProposalEligibility", arg0, arg1, arg2)
 	ret0, _ := ret[0].(types.ATXID)
 	ret1, _ := ret[1].([]types.ATXID)
 	ret2, _ := ret[2].([]types.VotingEligibility)
@@ -48,9 +48,9 @@ func (m *MockproposalOracle) GetProposalEligibility(arg0 types.LayerID, arg1 typ
 }
 
 // GetProposalEligibility indicates an expected call of GetProposalEligibility.
-func (mr *MockproposalOracleMockRecorder) GetProposalEligibility(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockproposalOracleMockRecorder) GetProposalEligibility(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposalEligibility", reflect.TypeOf((*MockproposalOracle)(nil).GetProposalEligibility), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposalEligibility", reflect.TypeOf((*MockproposalOracle)(nil).GetProposalEligibility), arg0, arg1, arg2)
 }
 
 // MockconservativeState is a mock of conservativeState interface.

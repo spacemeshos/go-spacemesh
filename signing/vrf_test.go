@@ -9,7 +9,7 @@ import (
 )
 
 func Fuzz_VRFSignAndVerify(f *testing.F) {
-	f.Fuzz(func(t *testing.T, message []byte, nonce uint64, epoch uint64) {
+	f.Fuzz(func(t *testing.T, message []byte) {
 		edSig, err := NewEdSigner()
 		require.NoError(t, err, "failed to create EdSigner")
 

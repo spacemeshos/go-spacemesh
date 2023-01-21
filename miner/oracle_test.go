@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/proposals"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -27,10 +28,9 @@ const (
 
 type testOracle struct {
 	*Oracle
-	nodeID       types.NodeID
-	edSigner     *signing.EdSigner
-	vrfSigner    *signing.VRFSigner
-	nonceFetcher *MocknonceFetcher
+	nodeID    types.NodeID
+	edSigner  *signing.EdSigner
+	vrfSigner *signing.VRFSigner
 }
 
 func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *signing.VRFSigner) {
@@ -88,16 +88,11 @@ func createTestOracle(tb testing.TB, layerSize, layersPerEpoch uint32) *testOrac
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	nodeID, edSigner, vrfSigner := generateNodeIDAndSigner(tb)
 
-	ctrl := gomock.NewController(tb)
-	mNonceFetcher := NewMocknonceFetcher(ctrl)
 	return &testOracle{
-		Oracle: newMinerOracle(layerSize, layersPerEpoch, cdb, vrfSigner, nodeID, lg,
-			withNonceFetcher(mNonceFetcher),
-		),
-		nodeID:       nodeID,
-		edSigner:     edSigner,
-		vrfSigner:    vrfSigner,
-		nonceFetcher: mNonceFetcher,
+		Oracle:    newMinerOracle(layerSize, layersPerEpoch, cdb, vrfSigner, nodeID, lg),
+		nodeID:    nodeID,
+		edSigner:  edSigner,
+		vrfSigner: vrfSigner,
 	}
 }
 
@@ -144,16 +139,17 @@ func TestMinerOracle(t *testing.T) {
 
 func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersPerEpoch uint32) {
 	o := createTestOracle(t, layerSize, layersPerEpoch)
-	o.nonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).AnyTimes()
 
 	ctrl := gomock.NewController(t)
 	mbc := mocks.NewMockBeaconCollector(ctrl)
 	vrfVerifier := proposals.NewMockvrfVerifier(ctrl)
 	vrfVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-	o.nonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).AnyTimes()
+
+	nonceFetcher := proposals.NewMocknonceFetcher(ctrl)
+	nonce := types.VRFPostIndex(rand.Uint64())
 
 	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"), vrfVerifier,
-		proposals.WithNonceFetcher(o.nonceFetcher),
+		proposals.WithNonceFetcher(nonceFetcher),
 	)
 
 	startEpoch, numberOfEpochsToTest := uint32(2), uint32(2)
@@ -164,12 +160,13 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 	for layer := types.NewLayerID(startLayer); layer.Before(endLayer); layer = layer.Add(1) {
 		info, ok := epochInfo[layer.GetEpoch()]
 		require.True(t, ok)
-		_, _, proofs, err := o.GetProposalEligibility(layer, info.beacon)
+		_, _, proofs, err := o.GetProposalEligibility(layer, info.beacon, nonce)
 		require.NoError(t, err)
 
 		for _, proof := range proofs {
 			b := genBallotWithEligibility(t, o.edSigner, layer, info.atxID, proof, info.activeSet, info.beacon)
 			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b, info.beacon, gomock.Any()).Times(1)
+			nonceFetcher.EXPECT().VRFNonce(b.SmesherID(), layer.GetEpoch()).Return(nonce, nil).Times(1)
 			eligible, err := validator.CheckEligibility(context.Background(), b)
 			require.NoError(t, err, "at layer %d, with layersPerEpoch %d", layer, layersPerEpoch)
 			assert.True(t, eligible, "should be eligible at layer %d, but isn't", layer)
@@ -194,7 +191,7 @@ func TestOracle_OwnATXNotFound(t *testing.T) {
 	layersPerEpoch := uint32(20)
 	o := createTestOracle(t, avgLayerSize, layersPerEpoch)
 	lid := types.NewLayerID(layersPerEpoch * 3)
-	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())
+	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
 	assert.ErrorIs(t, err, errMinerHasNoATXInPreviousEpoch)
 	assert.Equal(t, *types.EmptyATXID, atxID)
 	assert.Len(t, activeSet, 0)
@@ -220,7 +217,7 @@ func TestOracle_ZeroEpochWeight(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx, time.Now()))
 
-	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())
+	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
 	assert.ErrorIs(t, err, errZeroEpochWeight)
 	assert.Equal(t, *types.EmptyATXID, atxID)
 	assert.Len(t, activeSet, 0)

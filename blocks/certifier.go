@@ -10,6 +10,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -17,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -72,6 +74,20 @@ func WithCertifierLogger(logger log.Log) CertifierOpt {
 	}
 }
 
+func withNonceFetcher(nf nonceFetcher) CertifierOpt {
+	return func(c *Certifier) {
+		c.nonceFetcher = nf
+	}
+}
+
+type defaultFetcher struct {
+	cdb *datastore.CachedDB
+}
+
+func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	return atxs.VRFNonce(f.cdb, nodeID, epoch)
+}
+
 type certInfo struct {
 	registered, done bool
 	totalEligibility uint16
@@ -87,14 +103,15 @@ type Certifier struct {
 	ctx    context.Context
 	cancel func()
 
-	db         *sql.Database
-	oracle     hare.Rolacle
-	nodeID     types.NodeID
-	signer     *signing.EdSigner
-	publisher  pubsub.Publisher
-	layerClock layerClock
-	beacon     system.BeaconGetter
-	tortoise   system.Tortoise
+	db           *datastore.CachedDB
+	oracle       hare.Rolacle
+	nodeID       types.NodeID
+	signer       *signing.EdSigner
+	nonceFetcher nonceFetcher
+	publisher    pubsub.Publisher
+	layerClock   layerClock
+	beacon       system.BeaconGetter
+	tortoise     system.Tortoise
 
 	mu          sync.Mutex
 	certifyMsgs map[types.LayerID]map[types.BlockID]*certInfo
@@ -102,7 +119,7 @@ type Certifier struct {
 
 // NewCertifier creates new block certifier.
 func NewCertifier(
-	db *sql.Database, o hare.Rolacle, n types.NodeID, s *signing.EdSigner, p pubsub.Publisher, lc layerClock, b system.BeaconGetter, tortoise system.Tortoise,
+	db *datastore.CachedDB, o hare.Rolacle, n types.NodeID, s *signing.EdSigner, p pubsub.Publisher, lc layerClock, b system.BeaconGetter, tortoise system.Tortoise,
 	opts ...CertifierOpt,
 ) *Certifier {
 	c := &Certifier{
@@ -122,6 +139,10 @@ func NewCertifier(
 	for _, opt := range opts {
 		opt(c)
 	}
+	if c.nonceFetcher == nil {
+		c.nonceFetcher = defaultFetcher{cdb: db}
+	}
+
 	c.ctx, c.cancel = context.WithCancel(c.ctx)
 	return c
 }
@@ -210,8 +231,13 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 	if _, err := c.beacon.GetBeacon(lid.GetEpoch()); err != nil {
 		return errBeaconNotAvailable
 	}
+	nonce, err := c.nonceFetcher.VRFNonce(c.nodeID, lid.GetEpoch())
+	if err != nil {
+		return fmt.Errorf("failed to get own vrf nonce: %w", err)
+	}
+
 	// check if the node is eligible to certify the hare output
-	proof, err := c.oracle.Proof(ctx, lid, eligibility.CertifyRound)
+	proof, err := c.oracle.Proof(ctx, nonce, lid, eligibility.CertifyRound)
 	if err != nil {
 		logger.With().Error("failed to get eligibility proof to certify", log.Err(err))
 		return err

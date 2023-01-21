@@ -44,7 +44,7 @@ func createEpochState(tb testing.TB, pd *ProtocolDriver, epoch types.EpochID) {
 	tb.Helper()
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.states[epoch] = newState(pd.logger, pd.config, epochWeight, types.RandomActiveSet(1))
+	pd.states[epoch] = newState(pd.logger, pd.config, epochWeight, types.VRFPostIndex(rand.Uint64()), types.RandomActiveSet(1))
 }
 
 func setOwnFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, ownFirstRound proposalList) {
@@ -75,8 +75,7 @@ func mockAlwaysFalseProposalChecker(t *testing.T, pd *ProtocolDriver, epoch type
 }
 
 func createProposal(t *testing.T, vrfSigner *signing.VRFSigner, epoch types.EpochID, corruptSignature bool) *ProposalMessage {
-	nonce := types.VRFPostIndex(rand.Uint64())
-	sig := buildSignedProposal(context.Background(), vrfSigner, epoch, nonce, logtest.New(t))
+	sig := buildSignedProposal(context.Background(), logtest.New(t), vrfSigner, epoch, types.VRFPostIndex(rand.Uint64()))
 	msg := &ProposalMessage{
 		NodeID:       vrfSigner.NodeID(),
 		EpochID:      epoch,

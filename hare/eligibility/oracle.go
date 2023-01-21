@@ -164,9 +164,9 @@ func New(
 // VrfMessage is a verification message.
 type VrfMessage struct {
 	Type   types.EligibilityType
+	Nonce  types.VRFPostIndex
 	Beacon uint32
 	Round  uint32
-	Nonce  types.VRFPostIndex
 	Layer  types.LayerID
 }
 
@@ -194,7 +194,7 @@ func (o *Oracle) getBeaconValue(ctx context.Context, epochID types.EpochID) (uin
 }
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round).
-func (o *Oracle) buildVRFMessage(ctx context.Context, round uint32, nonce types.VRFPostIndex, layer types.LayerID) ([]byte, error) {
+func (o *Oracle) buildVRFMessage(ctx context.Context, nonce types.VRFPostIndex, layer types.LayerID, round uint32) ([]byte, error) {
 	key := buildKey(layer, round)
 
 	o.lock.Lock()
@@ -212,7 +212,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, round uint32, nonce types.
 	}
 
 	// marshal message
-	msg := VrfMessage{Type: types.EligibilityHare, Beacon: v, Round: round, Nonce: nonce, Layer: layer}
+	msg := VrfMessage{Type: types.EligibilityHare, Nonce: nonce, Beacon: v, Round: round, Layer: layer}
 	buf, err := codec.Encode(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Fatal("failed to encode", log.Err(err))
@@ -280,7 +280,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
-	msg, err := o.buildVRFMessage(ctx, round, nonce, layer)
+	msg, err := o.buildVRFMessage(ctx, nonce, layer, round)
 	if err != nil {
 		logger.With().Warning("could not get beacon value for epoch", log.Err(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
@@ -419,12 +419,8 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 }
 
 // Proof returns the role proof for the current Layer & Round.
-func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
-	nonce, err := o.nonceFetcher.VRFNonce(o.vrfSigner.NodeID(), layer.GetEpoch())
-	if err != nil {
-		return nil, err
-	}
-	msg, err := o.buildVRFMessage(ctx, round, nonce, layer)
+func (o *Oracle) Proof(ctx context.Context, nonce types.VRFPostIndex, layer types.LayerID, round uint32) ([]byte, error) {
+	msg, err := o.buildVRFMessage(ctx, nonce, layer, round)
 	if err != nil {
 		return nil, err
 	}

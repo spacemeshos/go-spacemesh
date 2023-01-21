@@ -566,7 +566,7 @@ func (app *App) initServices(
 	hOracle := eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
-	app.certifier = blocks.NewCertifier(app.db, hOracle, nodeID, sgn, app.host, clock, beaconProtocol, trtl,
+	app.certifier = blocks.NewCertifier(app.cachedDB, hOracle, nodeID, sgn, app.host, clock, beaconProtocol, trtl,
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
@@ -632,7 +632,8 @@ func (app *App) initServices(
 		patrol,
 		hOracle,
 		clock,
-		app.addLogger(HareLogger, lg))
+		app.addLogger(HareLogger, lg),
+	)
 
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,

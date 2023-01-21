@@ -148,7 +148,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		isFirst = true
 	)
 
-	nonce, err := v.nonceFetcher.VRFNonce(owned.NodeID, epoch)
+	nonce, err := v.nonceFetcher.VRFNonce(ballot.SmesherID(), epoch)
 	if err != nil {
 		return false, err
 	}

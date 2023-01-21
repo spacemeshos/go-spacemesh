@@ -39,6 +39,7 @@ func coinValueMock(tb testing.TB, value bool) coin {
 	coinMock.EXPECT().StartEpoch(
 		gomock.Any(),
 		gomock.AssignableToTypeOf(types.EpochID(0)),
+		gomock.AssignableToTypeOf(types.VRFPostIndex(0)),
 		gomock.AssignableToTypeOf(weakcoin.UnitAllowances{}),
 	).AnyTimes()
 	coinMock.EXPECT().FinishEpoch(gomock.Any(), gomock.AssignableToTypeOf(types.EpochID(0))).AnyTimes()
@@ -871,7 +872,7 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 				require.NoError(t, err)
 				vrfSigner, err := signer.VRFSigner()
 				require.NoError(t, err)
-				proposal := buildSignedProposal(context.Background(), vrfSigner, 3, types.VRFPostIndex(1), logtest.New(t))
+				proposal := buildSignedProposal(context.Background(), logtest.New(t), vrfSigner, 3, types.VRFPostIndex(1))
 				if checker.IsProposalEligible(proposal) {
 					numEligible++
 				}
@@ -901,7 +902,7 @@ func TestBeacon_buildProposal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := buildProposal(tc.epoch, types.VRFPostIndex(1), logtest.New(t))
+			result := buildProposal(logtest.New(t), tc.epoch, types.VRFPostIndex(1))
 			require.Equal(t, tc.result, string(result))
 		})
 	}
@@ -937,7 +938,7 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := buildSignedProposal(context.Background(), vrfSigner, tc.epoch, types.VRFPostIndex(1), logtest.New(t))
+			result := buildSignedProposal(context.Background(), logtest.New(t), vrfSigner, tc.epoch, types.VRFPostIndex(1))
 			require.Equal(t, string(tc.result), string(result))
 		})
 	}

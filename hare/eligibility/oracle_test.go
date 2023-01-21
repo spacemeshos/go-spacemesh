@@ -426,7 +426,7 @@ func Test_VrfSignVerify(t *testing.T) {
 
 	o.vrfVerifier = signing.NewVRFVerifier()
 
-	proof, err := o.Proof(context.Background(), layer, 1)
+	proof, err := o.Proof(context.Background(), types.VRFPostIndex(1), layer, 1)
 	require.NoError(t, err)
 
 	res, err := o.CalcEligibility(context.Background(), layer, 1, 10, nid, proof)
@@ -449,9 +449,8 @@ func Test_Proof_BeaconError(t *testing.T) {
 	layer := types.NewLayerID(2)
 	errUnknown := errors.New("unknown")
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
-	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
 
-	sig, err := o.Proof(context.Background(), layer, 3)
+	sig, err := o.Proof(context.Background(), types.VRFPostIndex(rand.Uint64()), layer, 3)
 	require.Nil(t, sig)
 	require.ErrorIs(t, err, errUnknown)
 }
@@ -460,7 +459,6 @@ func Test_Proof(t *testing.T) {
 	o := defaultOracle(t)
 	layer := types.NewLayerID(2)
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beaconWithValOne(), nil).Times(1)
-	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -468,7 +466,7 @@ func Test_Proof(t *testing.T) {
 	require.NoError(t, err)
 
 	o.vrfSigner = vrfSigner
-	sig, err := o.Proof(context.Background(), layer, 3)
+	sig, err := o.Proof(context.Background(), types.VRFPostIndex(rand.Uint64()), layer, 3)
 	require.Nil(t, err)
 	require.NotNil(t, sig)
 }
@@ -537,7 +535,7 @@ func TestBuildVRFMessage_BeaconError(t *testing.T) {
 	o := defaultOracle(t)
 	errUnknown := errors.New("unknown")
 	o.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, errUnknown).Times(1)
-	msg, err := o.buildVRFMessage(context.Background(), 1, types.VRFPostIndex(1), types.NewLayerID(1))
+	msg, err := o.buildVRFMessage(context.Background(), types.VRFPostIndex(1), types.NewLayerID(1), 1)
 	require.ErrorIs(t, err, errUnknown)
 	require.Nil(t, msg)
 }
@@ -548,7 +546,7 @@ func TestBuildVRFMessage(t *testing.T) {
 	secondLayer := firstLayer.Add(1)
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	m1, err := o.buildVRFMessage(context.Background(), 2, types.VRFPostIndex(2), firstLayer)
+	m1, err := o.buildVRFMessage(context.Background(), types.VRFPostIndex(2), firstLayer, 2)
 	require.NoError(t, err)
 	m2, ok := o.vrfMsgCache.Get(buildKey(firstLayer, 2))
 	require.True(t, ok)
@@ -556,19 +554,19 @@ func TestBuildVRFMessage(t *testing.T) {
 
 	// check not same for different round
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	m3, err := o.buildVRFMessage(context.Background(), 3, types.VRFPostIndex(3), firstLayer)
+	m3, err := o.buildVRFMessage(context.Background(), types.VRFPostIndex(3), firstLayer, 3)
 	require.NoError(t, err)
 	require.NotEqual(t, m1, m3)
 
 	// check not same for different layer
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	m4, err := o.buildVRFMessage(context.Background(), 2, types.VRFPostIndex(4), secondLayer)
+	m4, err := o.buildVRFMessage(context.Background(), types.VRFPostIndex(4), secondLayer, 2)
 	require.NoError(t, err)
 	require.NotEqual(t, m1, m4)
 
 	// even tho beacon value changed, we will get the same cached VRF message
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(types.RandomBeacon(), nil).Times(0)
-	m5, err := o.buildVRFMessage(context.Background(), 2, types.VRFPostIndex(5), firstLayer)
+	m5, err := o.buildVRFMessage(context.Background(), types.VRFPostIndex(5), firstLayer, 2)
 	require.NoError(t, err)
 	require.Equal(t, m1, m5) // check same result (from cache)
 }
@@ -593,7 +591,7 @@ func TestBuildVRFMessage_Concurrency(t *testing.T) {
 	for i := 0; i < total; i++ {
 		wg.Add(1)
 		go func(x int) {
-			_, err := o.buildVRFMessage(context.Background(), uint32(x%expectAdd), types.VRFPostIndex(1), firstLayer)
+			_, err := o.buildVRFMessage(context.Background(), types.VRFPostIndex(1), firstLayer, uint32(x%expectAdd))
 			assert.NoError(t, err)
 			wg.Done()
 		}(i)

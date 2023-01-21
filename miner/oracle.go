@@ -28,39 +28,22 @@ type oracleCache struct {
 	proofs    map[types.LayerID][]types.VotingEligibility
 }
 
-type defaultFetcher struct {
-	cdb *datastore.CachedDB
-}
-
-func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	return atxs.VRFNonce(f.cdb, nodeID, epoch)
-}
-
-type oracleOpt func(*Oracle)
-
-func withNonceFetcher(nf nonceFetcher) oracleOpt {
-	return func(o *Oracle) {
-		o.nonceFetcher = nf
-	}
-}
-
 // Oracle provides proposal eligibility proofs for the miner.
 type Oracle struct {
 	avgLayerSize   uint32
 	layersPerEpoch uint32
 	cdb            *datastore.CachedDB
 
-	vrfSigner    *signing.VRFSigner
-	nonceFetcher nonceFetcher
-	nodeID       types.NodeID
-	log          log.Log
+	vrfSigner *signing.VRFSigner
+	nodeID    types.NodeID
+	log       log.Log
 
 	mu    sync.Mutex
 	cache oracleCache
 }
 
-func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, nodeID types.NodeID, log log.Log, opts ...oracleOpt) *Oracle {
-	o := &Oracle{
+func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, nodeID types.NodeID, log log.Log) *Oracle {
+	return &Oracle{
 		avgLayerSize:   layerSize,
 		layersPerEpoch: layersPerEpoch,
 		cdb:            cdb,
@@ -68,18 +51,11 @@ func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, v
 		nodeID:         nodeID,
 		log:            log,
 	}
-	for _, opt := range opts {
-		opt(o)
-	}
-	if o.nonceFetcher == nil {
-		o.nonceFetcher = defaultFetcher{cdb: cdb}
-	}
-	return o
 }
 
 // GetProposalEligibility returns the miner's ATXID and the active set for the layer's epoch, along with the list of eligibility
 // proofs for that layer.
-func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) (types.ATXID, []types.ATXID, []types.VotingEligibility, error) {
+func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon, nonce types.VRFPostIndex) (types.ATXID, []types.ATXID, []types.VotingEligibility, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
@@ -110,7 +86,7 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) 
 		return *types.EmptyATXID, nil, nil, fmt.Errorf("failed to get valid atx for node for target epoch %d: %w", epoch, err)
 	}
 
-	newProofs, activeSet, err := o.calcEligibilityProofs(atx.GetWeight(), epoch, beacon)
+	newProofs, activeSet, err := o.calcEligibilityProofs(atx.GetWeight(), epoch, beacon, nonce)
 	if err != nil {
 		logger.With().Error("failed to calculate eligibility proofs", log.Err(err))
 		return *types.EmptyATXID, nil, nil, err
@@ -153,7 +129,7 @@ func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxH
 
 // calcEligibilityProofs calculates the eligibility proofs of proposals for the miner in the given epoch
 // and returns the proofs along with the epoch's active set.
-func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beacon types.Beacon) (map[types.LayerID][]types.VotingEligibility, []types.ATXID, error) {
+func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beacon types.Beacon, nonce types.VRFPostIndex) (map[types.LayerID][]types.VotingEligibility, []types.ATXID, error) {
 	logger := o.log.WithFields(epoch, beacon, log.Uint64("weight", weight))
 
 	// get the previous epoch's total weight
@@ -179,10 +155,6 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 
 	eligibilityProofs := map[types.LayerID][]types.VotingEligibility{}
 	for counter := uint32(0); counter < numEligibleSlots; counter++ {
-		nonce, err := o.nonceFetcher.VRFNonce(o.nodeID, epoch)
-		if err != nil {
-			logger.With().Fatal("failed to get VRF nonce", log.Err(err))
-		}
 		message, err := proposals.SerializeVRFMessage(beacon, epoch, nonce, counter)
 		if err != nil {
 			logger.With().Fatal("failed to serialize VRF msg", log.Err(err))

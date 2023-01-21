@@ -113,18 +113,18 @@ func (mr *MockRolacleMockRecorder) IsIdentityActiveOnConsensusView(arg0, arg1, a
 }
 
 // Proof mocks base method.
-func (m *MockRolacle) Proof(arg0 context.Context, arg1 types.LayerID, arg2 uint32) ([]byte, error) {
+func (m *MockRolacle) Proof(arg0 context.Context, arg1 types.VRFPostIndex, arg2 types.LayerID, arg3 uint32) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Proof", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Proof", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Proof indicates an expected call of Proof.
-func (mr *MockRolacleMockRecorder) Proof(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockRolacleMockRecorder) Proof(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MockRolacle)(nil).Proof), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MockRolacle)(nil).Proof), arg0, arg1, arg2, arg3)
 }
 
 // Validate mocks base method.
@@ -178,4 +178,42 @@ func (m *MockstateQuerier) IsIdentityActiveOnConsensusView(arg0 context.Context,
 func (mr *MockstateQuerierMockRecorder) IsIdentityActiveOnConsensusView(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsIdentityActiveOnConsensusView", reflect.TypeOf((*MockstateQuerier)(nil).IsIdentityActiveOnConsensusView), arg0, arg1, arg2)
+}
+
+// MocknonceFetcher is a mock of nonceFetcher interface.
+type MocknonceFetcher struct {
+	ctrl     *gomock.Controller
+	recorder *MocknonceFetcherMockRecorder
+}
+
+// MocknonceFetcherMockRecorder is the mock recorder for MocknonceFetcher.
+type MocknonceFetcherMockRecorder struct {
+	mock *MocknonceFetcher
+}
+
+// NewMocknonceFetcher creates a new mock instance.
+func NewMocknonceFetcher(ctrl *gomock.Controller) *MocknonceFetcher {
+	mock := &MocknonceFetcher{ctrl: ctrl}
+	mock.recorder = &MocknonceFetcherMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocknonceFetcher) EXPECT() *MocknonceFetcherMockRecorder {
+	return m.recorder
+}
+
+// VRFNonce mocks base method.
+func (m *MocknonceFetcher) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (types.VRFPostIndex, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VRFNonce", arg0, arg1)
+	ret0, _ := ret[0].(types.VRFPostIndex)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// VRFNonce indicates an expected call of VRFNonce.
+func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknonceFetcher)(nil).VRFNonce), arg0, arg1)
 }
