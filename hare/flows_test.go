@@ -458,7 +458,7 @@ func Test_multipleCPs(t *testing.T) {
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
 			test.clock.advanceLayer()
-			time.Sleep(350 * time.Millisecond)
+			time.Sleep(400 * time.Millisecond)
 		}
 	}()
 
