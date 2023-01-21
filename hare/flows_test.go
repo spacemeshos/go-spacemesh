@@ -392,6 +392,7 @@ func Test_multipleCPs(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
@@ -457,7 +458,7 @@ func Test_multipleCPs(t *testing.T) {
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
 			test.clock.advanceLayer()
-			time.Sleep(250 * time.Millisecond)
+			time.Sleep(350 * time.Millisecond)
 		}
 	}()
 
