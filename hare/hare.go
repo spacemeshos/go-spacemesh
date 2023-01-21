@@ -373,6 +373,10 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		report: h.outputChan,
 	}
 	nonce, err := h.nonceFetcher.VRFNonce(h.nid, h.lastLayer.GetEpoch())
+	if err != nil {
+		logger.With().Error("could not get vrf nonce", log.Err(err))
+		return false, fmt.Errorf("vrf nonce: %w", err)
+	}
 	cp := h.factory(h.ctx, h.config, instID, set, h.rolacle, h.sign, nonce, h.publisher, comm, clock)
 	cp.Start()
 	h.patrol.SetHareInCharge(instID)

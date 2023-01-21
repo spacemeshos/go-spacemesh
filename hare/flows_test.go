@@ -188,6 +188,9 @@ func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *
 
 	mockRoracle := mocks.NewMockRolacle(ctrl)
 
+	mNonceFetcher := mocks.NewMocknonceFetcher(ctrl)
+	mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
+
 	hare := New(
 		datastore.NewCachedDB(db, logtest.New(tb)),
 		tcfg,
@@ -201,7 +204,9 @@ func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *
 		patrol,
 		mockStateQ,
 		clock,
-		logtest.New(tb).WithName(name+"_"+signer.PublicKey().ShortString()))
+		logtest.New(tb).WithName(name+"_"+signer.PublicKey().ShortString()),
+		withNonceFetcher(mNonceFetcher),
+	)
 	p2p.Register(pubsub.HareProtocol, hare.GetHareMsgHandler())
 
 	return &hareWithMocks{
