@@ -884,8 +884,6 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 func TestBeacon_buildProposal(t *testing.T) {
 	t.Parallel()
 
-	r := require.New(t)
-
 	tt := []struct {
 		name   string
 		epoch  types.EpochID
@@ -894,7 +892,7 @@ func TestBeacon_buildProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  13110,
-			result: string(util.Hex2Bytes("04d9cc")),
+			result: string(util.Hex2Bytes("0404d9cc")),
 		},
 	}
 
@@ -904,7 +902,7 @@ func TestBeacon_buildProposal(t *testing.T) {
 			t.Parallel()
 
 			result := buildProposal(tc.epoch, types.VRFPostIndex(1), logtest.New(t))
-			r.Equal(tc.result, string(result))
+			require.Equal(t, tc.result, string(result))
 		})
 	}
 }
@@ -931,12 +929,12 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: sign("0404"),
+			result: sign("040404"),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: sign("0408"),
+			result: sign("040408"),
 		},
 	}
 
@@ -946,7 +944,7 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 			t.Parallel()
 
 			result := buildSignedProposal(context.Background(), vrfSigner, tc.epoch, types.VRFPostIndex(1), logtest.New(t))
-			r.Equal(string(tc.result), string(result))
+			require.Equal(t, string(tc.result), string(result))
 		})
 	}
 }
