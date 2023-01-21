@@ -54,12 +54,12 @@ type (
 	}
 )
 
-type nonceFetcherAdapter struct {
+type defaultFetcher struct {
 	cdb *datastore.CachedDB
 }
 
-func (nfa nonceFetcherAdapter) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	return atxs.VRFNonce(nfa.cdb, nodeID, epoch)
+func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	return atxs.VRFNonce(f.cdb, nodeID, epoch)
 }
 
 // Opt for configuring beacon protocol.
@@ -133,7 +133,7 @@ func New(
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(pd.config.Theta)
 	if pd.nonceFetcher == nil {
-		pd.nonceFetcher = nonceFetcherAdapter{cdb: cdb}
+		pd.nonceFetcher = defaultFetcher{cdb: cdb}
 	}
 
 	if pd.weakCoin == nil {

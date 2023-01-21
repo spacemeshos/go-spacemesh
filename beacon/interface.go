@@ -36,7 +36,6 @@ type layerClock interface {
 
 type vrfSigner interface {
 	Sign(msg []byte) []byte
-	NodeID() types.NodeID
 	PublicKey() *signing.PublicKey
 	LittleEndian() bool
 }

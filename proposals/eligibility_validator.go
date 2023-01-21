@@ -38,12 +38,12 @@ type Validator struct {
 	nonceFetcher   nonceFetcher
 }
 
-type nonceFetcherAdapter struct {
+type defaultFetcher struct {
 	cdb *datastore.CachedDB
 }
 
-func (nfa nonceFetcherAdapter) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	return atxs.VRFNonce(nfa.cdb, nodeID, epoch)
+func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	return atxs.VRFNonce(f.cdb, nodeID, epoch)
 }
 
 // ValidatorOpt for configuring Validator.
@@ -73,8 +73,9 @@ func NewEligibilityValidator(
 	}
 
 	if v.nonceFetcher == nil {
-		v.nonceFetcher = nonceFetcherAdapter{cdb: cdb}
+		v.nonceFetcher = defaultFetcher{cdb: cdb}
 	}
+
 	return v
 }
 
@@ -147,6 +148,10 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		isFirst = true
 	)
 
+	nonce, err := v.nonceFetcher.VRFNonce(owned.NodeID, epoch)
+	if err != nil {
+		return false, err
+	}
 	for _, proof := range ballot.EligibilityProofs {
 		counter := proof.J
 		if counter >= numEligibleSlots {
@@ -159,11 +164,6 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 			return false, fmt.Errorf("%w: %d <= %d", errInvalidProofsOrder, counter, last)
 		}
 		last = counter
-
-		nonce, err := v.nonceFetcher.VRFNonce(owned.NodeID, epoch)
-		if err != nil {
-			return false, err
-		}
 
 		message, err := SerializeVRFMessage(beacon, epoch, nonce, counter)
 		if err != nil {

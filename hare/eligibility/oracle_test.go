@@ -128,6 +128,7 @@ func TestCalcEligibility_BeaconFailure(t *testing.T) {
 	layer := types.NewLayerID(50)
 	errUnknown := errors.New("unknown")
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
+	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
 
 	res, err := o.CalcEligibility(context.Background(), layer, 0, 1, nid, []byte{})
 	require.ErrorIs(t, err, errUnknown)
@@ -189,7 +190,7 @@ func TestCalcEligibility_EligibleFromHareActiveSet(t *testing.T) {
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
 	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
+	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(5)
 
 	sigs := map[string]uint16{
 		"0516a574aef37257d6811ea53ef55d4cbb0e14674900a0d5165bd6742513840d02442d979fdabc7059645d1e8f8a0f44d0db2aa90f23374dd74a3636d4ecdab7": 1,
@@ -222,7 +223,7 @@ func TestCalcEligibility_EligibleFromTortoiseActiveSet(t *testing.T) {
 		"15c5f565a75888970059b070bfaed1998a9d423ddac9f6af83da51db02149044ea6aeb86294341c7a950ac5de2855bbebc11cc28b02c08bc903e4cf41439717d": 1,
 	}
 	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
+	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(5)
 
 	numMiners := 5
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
@@ -248,7 +249,7 @@ func TestCalcEligibility_WithSpaceUnits(t *testing.T) {
 
 	o := defaultOracle(t)
 	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
+	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).AnyTimes()
 
 	layer := types.NewLayerID(50)
 	beacon := beaconWithValOne()
@@ -291,7 +292,7 @@ func Test_CalcEligibility_MainnetParams(t *testing.T) {
 
 	o := defaultOracle(t)
 	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
+	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).AnyTimes()
 
 	layer := types.NewLayerID(50)
 	beacon := types.RandomBeacon()
@@ -381,7 +382,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
 
-	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
+	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).AnyTimes()
 
 	numMiners := 2
 	activeSet := types.RandomActiveSet(numMiners)
@@ -448,6 +449,7 @@ func Test_Proof_BeaconError(t *testing.T) {
 	layer := types.NewLayerID(2)
 	errUnknown := errors.New("unknown")
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
+	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
 
 	sig, err := o.Proof(context.Background(), layer, 3)
 	require.Nil(t, sig)
@@ -535,7 +537,7 @@ func TestBuildVRFMessage_BeaconError(t *testing.T) {
 	o := defaultOracle(t)
 	errUnknown := errors.New("unknown")
 	o.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, errUnknown).Times(1)
-	msg, err := o.buildVRFMessage(context.Background(), types.RandomNodeID(), types.NewLayerID(1), 1)
+	msg, err := o.buildVRFMessage(context.Background(), 1, types.VRFPostIndex(1), types.NewLayerID(1))
 	require.ErrorIs(t, err, errUnknown)
 	require.Nil(t, msg)
 }
@@ -546,8 +548,7 @@ func TestBuildVRFMessage(t *testing.T) {
 	secondLayer := firstLayer.Add(1)
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
-	m1, err := o.buildVRFMessage(context.Background(), types.RandomNodeID(), firstLayer, 2)
+	m1, err := o.buildVRFMessage(context.Background(), 2, types.VRFPostIndex(2), firstLayer)
 	require.NoError(t, err)
 	m2, ok := o.vrfMsgCache.Get(buildKey(firstLayer, 2))
 	require.True(t, ok)
@@ -555,22 +556,19 @@ func TestBuildVRFMessage(t *testing.T) {
 
 	// check not same for different round
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
-	m3, err := o.buildVRFMessage(context.Background(), types.RandomNodeID(), firstLayer, 3)
+	m3, err := o.buildVRFMessage(context.Background(), 3, types.VRFPostIndex(3), firstLayer)
 	require.NoError(t, err)
 	require.NotEqual(t, m1, m3)
 
 	// check not same for different layer
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
-	m4, err := o.buildVRFMessage(context.Background(), types.RandomNodeID(), secondLayer, 2)
+	m4, err := o.buildVRFMessage(context.Background(), 2, types.VRFPostIndex(4), secondLayer)
 	require.NoError(t, err)
 	require.NotEqual(t, m1, m4)
 
 	// even tho beacon value changed, we will get the same cached VRF message
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(types.RandomBeacon(), nil).Times(0)
-	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(0)
-	m5, err := o.buildVRFMessage(context.Background(), types.RandomNodeID(), firstLayer, 2)
+	m5, err := o.buildVRFMessage(context.Background(), 2, types.VRFPostIndex(5), firstLayer)
 	require.NoError(t, err)
 	require.Equal(t, m1, m5) // check same result (from cache)
 }
@@ -595,7 +593,7 @@ func TestBuildVRFMessage_Concurrency(t *testing.T) {
 	for i := 0; i < total; i++ {
 		wg.Add(1)
 		go func(x int) {
-			_, err := o.buildVRFMessage(context.Background(), types.RandomNodeID(), firstLayer, uint32(x%expectAdd))
+			_, err := o.buildVRFMessage(context.Background(), uint32(x%expectAdd), types.VRFPostIndex(1), firstLayer)
 			assert.NoError(t, err)
 			wg.Done()
 		}(i)

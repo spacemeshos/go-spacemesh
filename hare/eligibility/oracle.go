@@ -99,12 +99,12 @@ func safeLayerRange(targetLayer types.LayerID, safetyParam, layersPerEpoch, epoc
 	return
 }
 
-type nonceFetcherAdapter struct {
+type defaultFetcher struct {
 	cdb *datastore.CachedDB
 }
 
-func (nfa nonceFetcherAdapter) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	return atxs.VRFNonce(nfa.cdb, nodeID, epoch)
+func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	return atxs.VRFNonce(f.cdb, nodeID, epoch)
 }
 
 // Opt for configuring Validator.
@@ -153,7 +153,7 @@ func New(
 	}
 
 	if o.nonceFetcher == nil {
-		o.nonceFetcher = nonceFetcherAdapter{cdb: db}
+		o.nonceFetcher = defaultFetcher{cdb: db}
 	}
 
 	return o
@@ -194,7 +194,7 @@ func (o *Oracle) getBeaconValue(ctx context.Context, epochID types.EpochID) (uin
 }
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round).
-func (o *Oracle) buildVRFMessage(ctx context.Context, id types.NodeID, layer types.LayerID, round uint32) ([]byte, error) {
+func (o *Oracle) buildVRFMessage(ctx context.Context, round uint32, nonce types.VRFPostIndex, layer types.LayerID) ([]byte, error) {
 	key := buildKey(layer, round)
 
 	o.lock.Lock()
@@ -210,17 +210,6 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, id types.NodeID, layer typ
 	if err != nil {
 		return nil, fmt.Errorf("get beacon: %w", err)
 	}
-
-	nonce, err := o.nonceFetcher.VRFNonce(id, layer.GetEpoch())
-	if err != nil {
-		return nil, fmt.Errorf("get vrf nonce: %w", err)
-	}
-
-	o.WithContext(ctx).With().Info("using nonce for identity",
-		log.FieldNamed("message_node_id", id),
-		layer.GetEpoch(),
-		log.Uint64("nonce", uint64(nonce)),
-	)
 
 	// marshal message
 	msg := VrfMessage{Type: types.EligibilityHare, Beacon: v, Round: round, Nonce: nonce, Layer: layer}
@@ -282,7 +271,16 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, errZeroCommitteeSize
 	}
 
-	msg, err := o.buildVRFMessage(ctx, id, layer, round)
+	nonce, err := o.nonceFetcher.VRFNonce(id, layer.GetEpoch())
+	if err != nil {
+		logger.With().Warning("could not get nonce for node",
+			log.FieldNamed("message_node_id", id),
+			log.Err(err),
+		)
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
+	}
+
+	msg, err := o.buildVRFMessage(ctx, round, nonce, layer)
 	if err != nil {
 		logger.With().Warning("could not get beacon value for epoch", log.Err(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
@@ -422,12 +420,11 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 
 // Proof returns the role proof for the current Layer & Round.
 func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
-	o.With().Info("eligibility: calculating proof",
-		layer,
-		log.Uint32("round", round),
-	)
-
-	msg, err := o.buildVRFMessage(ctx, o.vrfSigner.NodeID(), layer, round)
+	nonce, err := o.nonceFetcher.VRFNonce(o.vrfSigner.NodeID(), layer.GetEpoch())
+	if err != nil {
+		return nil, err
+	}
+	msg, err := o.buildVRFMessage(ctx, round, nonce, layer)
 	if err != nil {
 		return nil, err
 	}

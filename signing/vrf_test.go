@@ -39,7 +39,9 @@ func Test_VRFSignAndVerify(t *testing.T) {
 
 	message := []byte("hello world")
 	signature := vrfSig.Sign(message)
-	ok := VRFVerify(signer.NodeID(), message, signature)
+
+	vrfVerify := NewVRFVerifier()
+	ok := vrfVerify.Verify(signer.NodeID(), message, signature)
 	require.True(t, ok, "failed to verify VRF signature")
 }
 

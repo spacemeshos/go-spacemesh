@@ -188,7 +188,6 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 		logger.With().Warning("[proposal] failed to get VRF nonce", log.Err(err))
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to get VRF nonce (miner ID %v): %w", minerID, err)
 	}
-
 	currentEpochProposal := buildProposal(m.EpochID, nonce, logger)
 	if !pd.vrfVerifier.Verify(m.NodeID, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry

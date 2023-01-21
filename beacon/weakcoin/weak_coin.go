@@ -78,7 +78,7 @@ func WithNextRoundBufferSize(size int) OptionFunc {
 // New creates an instance of weak coin protocol.
 func New(
 	publisher pubsub.Publisher,
-	nodeId types.NodeID,
+	nodeID types.NodeID,
 	signer vrfSigner,
 	verifier vrfVerifier,
 	nonceFetcher nonceFetcher,
@@ -87,7 +87,7 @@ func New(
 	wc := &WeakCoin{
 		logger:       log.NewNop(),
 		config:       defaultConfig(),
-		nodeId:       nodeId,
+		nodeID:       nodeID,
 		signer:       signer,
 		nonceFetcher: nonceFetcher,
 		publisher:    publisher,
@@ -106,10 +106,10 @@ func New(
 type WeakCoin struct {
 	logger       log.Log
 	config       config
-	nodeId       types.NodeID
+	nodeID       types.NodeID
 	verifier     vrfVerifier
-	nonceFetcher nonceFetcher
 	signer       vrfSigner
+	nonceFetcher nonceFetcher
 	publisher    pubsub.Publisher
 
 	mu                         sync.RWMutex
@@ -191,7 +191,7 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 }
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
-	nonce, err := wc.nonceFetcher.VRFNonce(wc.nodeId, message.Epoch)
+	nonce, err := wc.nonceFetcher.VRFNonce(wc.nodeID, message.Epoch)
 	if err != nil {
 		wc.logger.With().Panic("failed to get vrf nonce", log.Err(err))
 	}
@@ -218,11 +218,10 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 	var broadcast []byte
 	var smallest []byte
 	for unit := uint64(0); unit < allowed; unit++ {
-		nonce, err := wc.nonceFetcher.VRFNonce(wc.nodeId, epoch)
+		nonce, err := wc.nonceFetcher.VRFNonce(wc.nodeID, epoch)
 		if err != nil {
 			wc.logger.With().Fatal("failed to get vrf nonce", log.Err(err))
 		}
-
 		proposal := wc.encodeProposal(epoch, nonce, round, unit)
 		signature := wc.signer.Sign(proposal)
 		if wc.aboveThreshold(signature) {

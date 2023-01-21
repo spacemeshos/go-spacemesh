@@ -33,19 +33,19 @@ func (s VRFSigner) LittleEndian() bool {
 	return true
 }
 
-// VRFVerify verifies that a signature matches public key and message.
-func VRFVerify(nodeID types.NodeID, msg, sig []byte) bool {
-	valid, _ := ecvrf.Verify(nodeID.Bytes(), sig, msg)
-	return valid
-}
-
 type VRFVerifier func(types.NodeID, []byte, []byte) bool
+
+func NewVRFVerifier() VRFVerifier {
+	return VRFVerify
+}
 
 // Verify verifies that a signature matches public key and message.
 func (v VRFVerifier) Verify(nodeID types.NodeID, msg, sig []byte) bool {
 	return v(nodeID, msg, sig)
 }
 
-func NewVRFVerifier() VRFVerifier {
-	return VRFVerify
+// VRFVerify verifies that a signature matches public key and message.
+func VRFVerify(nodeID types.NodeID, msg, sig []byte) bool {
+	valid, _ := ecvrf.Verify(nodeID.Bytes(), sig, msg)
+	return valid
 }

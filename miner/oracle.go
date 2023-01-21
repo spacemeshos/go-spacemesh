@@ -28,12 +28,12 @@ type oracleCache struct {
 	proofs    map[types.LayerID][]types.VotingEligibility
 }
 
-type nonceFetcherAdapter struct {
+type defaultFetcher struct {
 	cdb *datastore.CachedDB
 }
 
-func (nfa nonceFetcherAdapter) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	return atxs.VRFNonce(nfa.cdb, nodeID, epoch)
+func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	return atxs.VRFNonce(f.cdb, nodeID, epoch)
 }
 
 type oracleOpt func(*Oracle)
@@ -71,9 +71,8 @@ func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, v
 	for _, opt := range opts {
 		opt(o)
 	}
-
 	if o.nonceFetcher == nil {
-		o.nonceFetcher = nonceFetcherAdapter{cdb: cdb}
+		o.nonceFetcher = defaultFetcher{cdb: cdb}
 	}
 	return o
 }
@@ -182,12 +181,11 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 	for counter := uint32(0); counter < numEligibleSlots; counter++ {
 		nonce, err := o.nonceFetcher.VRFNonce(o.nodeID, epoch)
 		if err != nil {
-			logger.With().Panic("failed to get VRF nonce", log.Err(err))
+			logger.With().Fatal("failed to get VRF nonce", log.Err(err))
 		}
-
 		message, err := proposals.SerializeVRFMessage(beacon, epoch, nonce, counter)
 		if err != nil {
-			logger.With().Panic("failed to serialize VRF msg", log.Err(err))
+			logger.With().Fatal("failed to serialize VRF msg", log.Err(err))
 		}
 		vrfSig := o.vrfSigner.Sign(message)
 		eligibleLayer := proposals.CalcEligibleLayer(epoch, o.layersPerEpoch, vrfSig)
