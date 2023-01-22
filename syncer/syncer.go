@@ -378,11 +378,10 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		log.Stringer("processed", s.mesh.ProcessedLayer()))
 
 	s.setStateBeforeSync(ctx)
+	// TODO
+	// https://github.com/spacemeshos/go-spacemesh/issues/3970
+	// https://github.com/spacemeshos/go-spacemesh/issues/3987
 	syncFunc := func() bool {
-		logger.With().Info("syncing malicious IDs")
-		if err := s.syncMalfeasance(ctx); err != nil {
-			return false
-		}
 		if !s.ListenToATXGossip() {
 			logger.With().Info("syncing atx from genesis", s.ticker.GetCurrentLayer())
 			for epoch := s.getLastSyncedATXs() + 1; epoch <= s.ticker.GetCurrentLayer().GetEpoch(); epoch++ {
@@ -391,6 +390,12 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 				}
 			}
 			logger.With().Info("atxs synced to epoch", s.getLastSyncedATXs())
+
+			logger.With().Info("syncing malicious IDs")
+			if err := s.syncMalfeasance(ctx); err != nil {
+				return false
+			}
+			logger.With().Info("malicious IDs synced")
 			s.setATXSynced()
 		}
 
