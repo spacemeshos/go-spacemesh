@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/fixed"
+	"github.com/spacemeshos/go-spacemesh/signing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -32,12 +33,11 @@ type Validator struct {
 	mesh           meshProvider
 	beacons        system.BeaconCollector
 	logger         log.Log
-	vrfVerifier    vrfVerifier
 }
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log, vrfVerifier vrfVerifier,
+	avgLayerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log,
 ) *Validator {
 	return &Validator{
 		avgLayerSize:   avgLayerSize,
@@ -46,7 +46,6 @@ func NewEligibilityValidator(
 		mesh:           m,
 		beacons:        bc,
 		logger:         lg,
-		vrfVerifier:    vrfVerifier,
 	}
 }
 
@@ -139,7 +138,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 		vrfSig := proof.Sig
 
 		beaconStr := beacon.ShortString()
-		if !v.vrfVerifier.Verify(owned.NodeID, message, vrfSig) {
+		if !signing.VRFVerify(owned.NodeID, message, vrfSig) {
 			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
 				errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
 		}

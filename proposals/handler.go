@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -111,12 +110,8 @@ func NewHandler(cdb *datastore.CachedDB, p pubsub.Publisher, f system.Fetcher, b
 	for _, opt := range opts {
 		opt(b)
 	}
-	verifier, err := signing.NewVRFVerifier(signing.WithNonceFromDB(cdb))
-	if err != nil {
-		panic(err)
-	}
 	if b.validator == nil {
-		b.validator = NewEligibilityValidator(b.cfg.LayerSize, b.cfg.LayersPerEpoch, cdb, bc, m, b.logger, verifier)
+		b.validator = NewEligibilityValidator(b.cfg.LayerSize, b.cfg.LayersPerEpoch, cdb, bc, m, b.logger)
 	}
 	return b
 }

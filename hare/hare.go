@@ -346,7 +346,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	}
 	nonce, err := atxs.GetNonce(h.cdb, h.nid)
 	if err != nil {
-		return false, fmt.Errorf("failed to find own nonce: %w", err)
+		return false, fmt.Errorf("find own nonce: %w", err)
 	}
 	cp := h.factory(h.ctx, h.config, instID, set, h.rolacle, h.sign, nonce, h.publisher, comm, clock)
 	cp.Start()

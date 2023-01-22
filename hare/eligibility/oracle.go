@@ -43,7 +43,6 @@ const (
 )
 
 const (
-	vrfMsgCacheSize  = 20         // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
 	activesCacheSize = 5          // we don't expect to handle more than two layers concurrently
 	maxSupportedN    = 1073741824 // higher values result in an overflow
 )
@@ -69,9 +68,7 @@ type Oracle struct {
 	beacons        system.BeaconGetter
 	cdb            *datastore.CachedDB
 	vrfSigner      *signing.VRFSigner
-	vrfVerifier    vrfVerifier
 	layersPerEpoch uint32
-	vrfMsgCache    cache
 	activesCache   cache
 	cfg            config.Config
 	log.Log
@@ -113,17 +110,11 @@ func safeLayerRange(targetLayer types.LayerID, safetyParam, layersPerEpoch, epoc
 func New(
 	beacons system.BeaconGetter,
 	db *datastore.CachedDB,
-	vrfVerifier vrfVerifier,
 	vrfSigner *signing.VRFSigner,
 	layersPerEpoch uint32,
 	cfg config.Config,
 	logger log.Log,
 ) *Oracle {
-	vmc, err := lru.New(vrfMsgCacheSize)
-	if err != nil {
-		logger.With().Fatal("failed to create lru cache for vrf msg", log.Err(err))
-	}
-
 	ac, err := lru.New(activesCacheSize)
 	if err != nil {
 		logger.With().Fatal("failed to create lru cache for active set", log.Err(err))
@@ -132,10 +123,8 @@ func New(
 	return &Oracle{
 		beacons:        beacons,
 		cdb:            db,
-		vrfVerifier:    vrfVerifier,
 		vrfSigner:      vrfSigner,
 		layersPerEpoch: layersPerEpoch,
-		vrfMsgCache:    vmc,
 		activesCache:   ac,
 		cfg:            cfg,
 		Log:            logger,
@@ -177,29 +166,15 @@ func (o *Oracle) getBeaconValue(ctx context.Context, epochID types.EpochID) (uin
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round).
 func (o *Oracle) buildVRFMessage(ctx context.Context, nonce types.VRFPostIndex, layer types.LayerID, round uint32) ([]byte, error) {
-	key := buildKey(layer, round)
-
-	o.lock.Lock()
-	defer o.lock.Unlock()
-
-	// check cache
-	if val, exist := o.vrfMsgCache.Get(key); exist {
-		return val.([]byte), nil
-	}
-
-	// get value from beacon
 	v, err := o.getBeaconValue(ctx, layer.GetEpoch())
 	if err != nil {
 		return nil, fmt.Errorf("get beacon: %w", err)
 	}
-
-	// marshal message
 	msg := VrfMessage{Type: types.EligibilityHare, Nonce: nonce, Beacon: v, Round: round, Layer: layer}
 	buf, err := codec.Encode(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Fatal("failed to encode", log.Err(err))
 	}
-	o.vrfMsgCache.Add(key, buf)
 	return buf, nil
 }
 
@@ -239,7 +214,7 @@ func calcVrfFrac(vrfSig []byte) fixed.Fixed {
 }
 
 func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int,
-	id types.NodeID, vrfSig []byte,
+	id types.NodeID, nonce types.VRFPostIndex, vrfSig []byte,
 ) (n int, p, vrfFrac fixed.Fixed, done bool, err error) {
 	logger := o.WithContext(ctx).WithFields(
 		layer,
@@ -252,20 +227,17 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, errZeroCommitteeSize
 	}
 
-	nonce, err := atxs.GetNonce(o.cdb, id)
-	if err != nil {
-		return 0, fixed.Fixed{}, fixed.Fixed{}, true, fmt.Errorf("%w: nonce not found for node %v", err, id)
-	}
 	msg, err := o.buildVRFMessage(ctx, nonce, layer, round)
 	if err != nil {
-		logger.With().Warning("could not get beacon value for epoch", log.Err(err))
+		logger.With().Warning("could not build vrf msg", log.Err(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
 	// validate message
-	if !o.vrfVerifier.Verify(id, msg, vrfSig) {
-		logger.With().Info("eligibility: a node did not pass vrf signature verification",
-			id,
+	if !signing.VRFVerify(id, msg, vrfSig) {
+		logger.With().Warning("eligibility: a node did not pass vrf signature verification",
+			log.String("sender_id", id.String()),
+			log.Uint64("vrf_nonce", uint64(nonce)),
 			layer)
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, nil
 	}
@@ -303,7 +275,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 
 	// calc p
 	if committeeSize > int(totalWeight) {
-		logger.With().Debug("committee size is greater than total weight",
+		logger.With().Warning("committee size is greater than total weight",
 			log.Int("committee_size", committeeSize),
 			log.Uint64("total_weight", totalWeight),
 		)
@@ -323,7 +295,17 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 // Validate validates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is the role
 // proof and assuming commSize as the expected committee size.
 func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
-	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, sig)
+	nonce, err := atxs.GetNonce(o.cdb, id)
+	if err != nil {
+		o.Log.WithContext(ctx).With().Warning("failed to find nonce for node",
+			log.String("sender_id", id.ShortString()),
+			log.Err(err))
+		return false, fmt.Errorf("%w: nonce not found for node %v", err, id)
+	}
+	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, nonce, sig)
+	if err != nil {
+		o.Log.WithContext(ctx).With().Warning("failed to prepare eligibility", log.String("sender_id", id.ShortString()), log.Err(err))
+	}
 	if done || err != nil {
 		return false, err
 	}
@@ -360,9 +342,9 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32
 // CalcEligibility calculates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is
 // the role proof and assuming commSize as the expected committee size.
 func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int,
-	id types.NodeID, vrfSig []byte,
+	id types.NodeID, nonce types.VRFPostIndex, vrfSig []byte,
 ) (uint16, error) {
-	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, vrfSig)
+	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, nonce, vrfSig)
 	if done {
 		return 0, err
 	}
@@ -402,7 +384,6 @@ func (o *Oracle) Proof(ctx context.Context, nonce types.VRFPostIndex, layer type
 	if err != nil {
 		return nil, err
 	}
-
 	return o.vrfSigner.Sign(msg)
 }
 

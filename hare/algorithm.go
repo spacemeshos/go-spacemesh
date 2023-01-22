@@ -257,6 +257,7 @@ func newConsensusProcess(
 		oracle:    oracle,
 		signing:   signing,
 		nid:       nid,
+		nonce:     nonce,
 		publisher: p2p,
 		cfg:       cfg,
 		comm:      comm,
@@ -316,6 +317,7 @@ func (proc *consensusProcess) eventLoop() {
 	logger := proc.WithContext(ctx).WithFields(proc.layer)
 	logger.With().Info("consensus process started",
 		log.String("current_set", proc.value.String()),
+		log.Uint64("vrf_nonce", uint64(proc.nonce)),
 		log.Int("set_size", proc.value.Size()))
 
 	// check participation and send message
@@ -956,7 +958,7 @@ func (proc *consensusProcess) currentRole(ctx context.Context) role {
 	k := proc.getRound()
 
 	eligibilityCount, err := proc.oracle.CalcEligibility(ctx, proc.layer,
-		k, expectedCommitteeSize(k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proof)
+		k, expectedCommitteeSize(k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proc.nonce, proof)
 	if err != nil {
 		logger.With().Error("failed to check eligibility", log.Err(err))
 		return passive
