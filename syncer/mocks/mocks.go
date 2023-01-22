@@ -669,3 +669,41 @@ func (mr *MockforkFinderMockRecorder) UpdateAgreement(arg0, arg1, arg2, arg3 int
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateAgreement", reflect.TypeOf((*MockforkFinder)(nil).UpdateAgreement), arg0, arg1, arg2, arg3)
 }
+
+// MockidProvider is a mock of idProvider interface.
+type MockidProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockidProviderMockRecorder
+}
+
+// MockidProviderMockRecorder is the mock recorder for MockidProvider.
+type MockidProviderMockRecorder struct {
+	mock *MockidProvider
+}
+
+// NewMockidProvider creates a new mock instance.
+func NewMockidProvider(ctrl *gomock.Controller) *MockidProvider {
+	mock := &MockidProvider{ctrl: ctrl}
+	mock.recorder = &MockidProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockidProvider) EXPECT() *MockidProviderMockRecorder {
+	return m.recorder
+}
+
+// IdentityExists mocks base method.
+func (m *MockidProvider) IdentityExists(id types.NodeID) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IdentityExists", id)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IdentityExists indicates an expected call of IdentityExists.
+func (mr *MockidProviderMockRecorder) IdentityExists(id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IdentityExists", reflect.TypeOf((*MockidProvider)(nil).IdentityExists), id)
+}

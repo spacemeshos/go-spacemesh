@@ -213,6 +213,18 @@ func (db *CachedDB) GetPrevAtx(nodeID types.NodeID) (*types.ActivationTxHeader, 
 	}
 }
 
+// IdentityExists returns true if this NodeID has published any ATX.
+func (db *CachedDB) IdentityExists(nodeID types.NodeID) (bool, error) {
+	_, err := atxs.GetLastIDByNodeID(db, nodeID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // Hint marks which DB should be queried for a certain provided hash.
 type Hint string
 

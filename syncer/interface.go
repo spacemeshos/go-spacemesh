@@ -62,3 +62,7 @@ type forkFinder interface {
 	FindFork(context.Context, p2p.Peer, types.LayerID, types.Hash32) (types.LayerID, error)
 	Purge(bool, ...p2p.Peer)
 }
+
+type idProvider interface {
+	IdentityExists(id types.NodeID) (bool, error)
+}

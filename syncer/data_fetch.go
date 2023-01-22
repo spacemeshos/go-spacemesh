@@ -57,14 +57,16 @@ type DataFetch struct {
 
 	logger log.Log
 	msh    meshProvider
+	ids    idProvider
 }
 
 // NewDataFetch creates a new DataFetch instance.
-func NewDataFetch(msh meshProvider, fetch fetcher, lg log.Log) *DataFetch {
+func NewDataFetch(msh meshProvider, fetch fetcher, ids idProvider, lg log.Log) *DataFetch {
 	return &DataFetch{
 		fetcher: fetch,
 		logger:  lg,
 		msh:     msh,
+		ids:     ids,
 	}
 }
 
@@ -101,7 +103,7 @@ func (d *DataFetch) PollMaliciousProofs(ctx context.Context) error {
 			req.peerResults[res.peer] = res
 			if res.err == nil {
 				success = true
-				fetchMalfeasanceProof(ctx, logger, d.fetcher, req, res.data)
+				fetchMalfeasanceProof(ctx, logger, d.ids, d.fetcher, req, res.data)
 			} else if candidateErr == nil {
 				candidateErr = res.err
 			}
@@ -246,10 +248,19 @@ func registerLayerHashes(fetcher fetcher, peer p2p.Peer, data *fetch.LayerData) 
 	fetcher.RegisterPeerHashes(peer, layerHashes)
 }
 
-func fetchMalfeasanceProof(ctx context.Context, logger log.Log, fetcher fetcher, req *maliciousIDRequest, data *fetch.MaliciousIDs) {
+func fetchMalfeasanceProof(ctx context.Context, logger log.Log, ids idProvider, fetcher fetcher, req *maliciousIDRequest, data *fetch.MaliciousIDs) {
 	var idsToFetch []types.NodeID
 	for _, nodeID := range data.NodeIDs {
 		if _, ok := req.response.ids[nodeID]; !ok {
+			// check if the NodeID exists
+			if exists, err := ids.IdentityExists(nodeID); err != nil {
+				logger.With().Error("failed to check identity", log.Err(err))
+				continue
+			} else if !exists {
+				logger.With().Warning("malicious identity does not exist",
+					log.String("identity", nodeID.String()))
+				continue
+			}
 			// not yet fetched
 			req.response.ids[nodeID] = struct{}{}
 			idsToFetch = append(idsToFetch, nodeID)

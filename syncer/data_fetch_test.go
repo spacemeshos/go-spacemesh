@@ -22,6 +22,7 @@ type testDataFetch struct {
 	*syncer.DataFetch
 	mMesh    *mocks.MockmeshProvider
 	mFetcher *mocks.Mockfetcher
+	mIDs     *mocks.MockidProvider
 }
 
 func newTestDataFetch(t *testing.T) *testDataFetch {
@@ -30,8 +31,9 @@ func newTestDataFetch(t *testing.T) *testDataFetch {
 	tl := &testDataFetch{
 		mMesh:    mocks.NewMockmeshProvider(ctrl),
 		mFetcher: mocks.NewMockfetcher(ctrl),
+		mIDs:     mocks.NewMockidProvider(ctrl),
 	}
-	tl.DataFetch = syncer.NewDataFetch(tl.mMesh, tl.mFetcher, lg)
+	tl.DataFetch = syncer.NewDataFetch(tl.mMesh, tl.mFetcher, tl.mIDs, lg)
 	return tl
 }
 
@@ -41,7 +43,7 @@ const (
 	numMalicious = 11
 )
 
-func generateMaliciousIDs(t *testing.T) []byte {
+func generateMaliciousIDs(t *testing.T) ([]types.NodeID, []byte) {
 	t.Helper()
 	var malicious fetch.MaliciousIDs
 	for i := 0; i < numMalicious; i++ {
@@ -49,7 +51,7 @@ func generateMaliciousIDs(t *testing.T) []byte {
 	}
 	data, err := codec.Encode(&malicious)
 	require.NoError(t, err)
-	return data
+	return malicious.NodeIDs, data
 }
 
 func generateLayerOpinions(t *testing.T) []byte {
@@ -104,13 +106,17 @@ func TestDataFetch_PollMaliciousIDs(t *testing.T) {
 	numPeers := 4
 	peers := GenPeers(numPeers)
 	errUnknown := errors.New("unknown")
-	newTestDataFetchWithMocks := func(*testing.T) *testDataFetch {
+	newTestDataFetchWithMocks := func(_ *testing.T, exits bool) *testDataFetch {
 		td := newTestDataFetch(t)
 		td.mFetcher.EXPECT().GetPeers().Return(peers)
 		td.mFetcher.EXPECT().GetMaliciousIDs(gomock.Any(), peers, gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ []p2p.Peer, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
 				for _, peer := range peers {
-					okCB(generateMaliciousIDs(t), peer)
+					ids, data := generateMaliciousIDs(t)
+					for _, id := range ids {
+						td.mIDs.EXPECT().IdentityExists(id).Return(exits, nil)
+					}
+					okCB(data, peer)
 				}
 				return nil
 			})
@@ -118,15 +124,20 @@ func TestDataFetch_PollMaliciousIDs(t *testing.T) {
 	}
 	t.Run("all peers have malfeasance proofs", func(t *testing.T) {
 		t.Parallel()
-		td := newTestDataFetchWithMocks(t)
+		td := newTestDataFetchWithMocks(t, true)
 		td.mFetcher.EXPECT().GetMalfeasanceProofs(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers)
 		require.NoError(t, td.PollMaliciousProofs(context.TODO()))
 	})
 	t.Run("proof failure ignored", func(t *testing.T) {
 		t.Parallel()
-		td := newTestDataFetchWithMocks(t)
+		td := newTestDataFetchWithMocks(t, true)
 		td.mFetcher.EXPECT().GetMalfeasanceProofs(gomock.Any(), gomock.Any()).Return(errUnknown)
 		td.mFetcher.EXPECT().GetMalfeasanceProofs(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers - 1)
+		require.NoError(t, td.PollMaliciousProofs(context.TODO()))
+	})
+	t.Run("ids do not exist", func(t *testing.T) {
+		t.Parallel()
+		td := newTestDataFetchWithMocks(t, false)
 		require.NoError(t, td.PollMaliciousProofs(context.TODO()))
 	})
 }

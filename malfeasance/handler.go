@@ -115,8 +115,12 @@ func updateMetrics(tp types.Proof) {
 }
 
 func checkIdentityExists(cdb *datastore.CachedDB, nodeID types.NodeID) error {
-	if _, err := cdb.GetPrevAtx(nodeID); err != nil {
+	exists, err := cdb.IdentityExists(nodeID)
+	if err != nil {
 		return err
+	}
+	if !exists {
+		return errors.New("identity does not exist")
 	}
 	return nil
 }
@@ -158,7 +162,7 @@ func validateHareEquivocation(logger log.Log, cdb *datastore.CachedDB, proof *ty
 			return types.NodeID{}, err
 		}
 		if err = checkIdentityExists(cdb, nid); err != nil {
-			return types.NodeID{}, fmt.Errorf("identity in hare malfeasance doesn't exist: %v", nid)
+			return types.NodeID{}, fmt.Errorf("check identity in hare malfeasance %v: %w", nid, err)
 		}
 		if firstNid == types.EmptyNodeID {
 			firstNid = nid
@@ -203,7 +207,7 @@ func validateMultipleATXs(logger log.Log, cdb *datastore.CachedDB, proof *types.
 			return types.NodeID{}, err
 		}
 		if err = checkIdentityExists(cdb, nid); err != nil {
-			return types.NodeID{}, fmt.Errorf("identity in hare malfeasance doesn't exist: %v", nid)
+			return types.NodeID{}, fmt.Errorf("check identity in atx malfeasance %v: %w", nid, err)
 		}
 		if firstNid == types.EmptyNodeID {
 			firstNid = nid
@@ -245,7 +249,7 @@ func validateMultipleBallots(logger log.Log, cdb *datastore.CachedDB, proof *typ
 			return types.NodeID{}, err
 		}
 		if err = checkIdentityExists(cdb, nid); err != nil {
-			return types.NodeID{}, fmt.Errorf("identity in ballot malfeasance doesn't exist: %v", nid)
+			return types.NodeID{}, fmt.Errorf("check identity in ballot malfeasance %v: %w", nid, err)
 		}
 		if firstNid == types.EmptyNodeID {
 			firstNid = nid

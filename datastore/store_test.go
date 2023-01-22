@@ -2,11 +2,13 @@ package datastore_test
 
 import (
 	"bytes"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -21,6 +23,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(3)
+
+	res := m.Run()
+	os.Exit(res)
+}
 
 func TestMalfeasanceProof_Honest(t *testing.T) {
 	db := sql.InMemory()
@@ -137,8 +146,36 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 	require.Equal(t, 2, cdb.MalfeasanceCacheSize())
 }
 
+func TestIdentityExists(t *testing.T) {
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	exists, err := cdb.IdentityExists(signer.NodeID())
+	require.NoError(t, err)
+	require.False(t, exists)
+
+	atx := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: types.NewLayerID(22),
+				Sequence:   11,
+			},
+			NumUnits: 11,
+		},
+	}
+	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+
+	exists, err = cdb.IdentityExists(signer.NodeID())
+	require.NoError(t, err)
+	require.True(t, exists)
+}
+
 func TestBlobStore_GetATXBlob(t *testing.T) {
-	types.SetLayersPerEpoch(3)
 	db := sql.InMemory()
 	bs := datastore.NewBlobStore(db)
 
