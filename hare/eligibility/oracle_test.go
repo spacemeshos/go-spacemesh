@@ -187,10 +187,9 @@ func TestCalcEligibility_EligibleFromHareActiveSet(t *testing.T) {
 	layer := types.NewLayerID(50)
 	beacon := beaconWithValOne()
 	createLayerData(t, o.cdb, layer, beacon, 5)
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
+
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
-	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
 	sigs := map[string]uint16{
 		"0516a574aef37257d6811ea53ef55d4cbb0e14674900a0d5165bd6742513840d02442d979fdabc7059645d1e8f8a0f44d0db2aa90f23374dd74a3636d4ecdab7": 1,
@@ -203,6 +202,8 @@ func TestCalcEligibility_EligibleFromHareActiveSet(t *testing.T) {
 		sig := util.Hex2Bytes(hex)
 		nid := types.BytesToNodeID([]byte("0"))
 		nonce := types.VRFPostIndex(1)
+		o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
+		o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).Times(1)
 		res, err := o.CalcEligibility(context.Background(), layer, 1, 10, nid, nonce, sig)
 		require.NoError(t, err, hex)
 		require.Equal(t, exp, res, hex)
