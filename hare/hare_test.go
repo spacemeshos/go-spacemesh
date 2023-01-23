@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -146,12 +145,12 @@ func TestHare_New(t *testing.T) {
 		mocks.NewMockstateQuerier(ctrl),
 		newMockClock(),
 		logger)
-	assert.NotNil(t, h)
+	require.NotNil(t, h)
 }
 
 func TestHare_Start(t *testing.T) {
 	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
-	assert.NoError(t, h.Start(context.Background()))
+	require.NoError(t, h.Start(context.Background()))
 	h.Close()
 }
 
@@ -160,8 +159,8 @@ func TestHare_collectOutputAndGetResult(t *testing.T) {
 
 	lyrID := types.NewLayerID(10)
 	res, err := h.getResult(lyrID)
-	assert.Equal(t, errNoResult, err)
-	assert.Nil(t, res)
+	require.Equal(t, errNoResult, err)
+	require.Nil(t, res)
 
 	pids := []types.ProposalID{types.RandomProposalID(), types.RandomProposalID(), types.RandomProposalID()}
 	set := NewSetFromValues(pids...)
@@ -171,12 +170,12 @@ func TestHare_collectOutputAndGetResult(t *testing.T) {
 	require.ElementsMatch(t, pids, lo.Proposals)
 
 	res, err = h.getResult(lyrID)
-	assert.NoError(t, err)
-	assert.ElementsMatch(t, pids, res)
+	require.NoError(t, err)
+	require.ElementsMatch(t, pids, res)
 
 	res, err = h.getResult(lyrID.Add(1))
-	assert.Equal(t, errNoResult, err)
-	assert.Empty(t, res)
+	require.Equal(t, errNoResult, err)
+	require.Empty(t, res)
 }
 
 func TestHare_collectOutputGetResult_TerminateTooLate(t *testing.T) {
@@ -184,8 +183,8 @@ func TestHare_collectOutputGetResult_TerminateTooLate(t *testing.T) {
 
 	lyrID := types.NewLayerID(10)
 	res, err := h.getResult(lyrID)
-	assert.Equal(t, errNoResult, err)
-	assert.Nil(t, res)
+	require.Equal(t, errNoResult, err)
+	require.Nil(t, res)
 
 	h.layerLock.Lock()
 	h.lastLayer = lyrID.Add(h.config.Hdist + 1)
@@ -194,14 +193,14 @@ func TestHare_collectOutputGetResult_TerminateTooLate(t *testing.T) {
 	pids := []types.ProposalID{types.RandomProposalID(), types.RandomProposalID(), types.RandomProposalID()}
 	set := NewSetFromValues(pids...)
 	err = h.collectOutput(context.Background(), mockReport{lyrID, set, true, false})
-	assert.Equal(t, ErrTooLate, err)
+	require.Equal(t, ErrTooLate, err)
 	lo := <-h.blockGenCh
 	require.Equal(t, lyrID, lo.Layer)
 	require.ElementsMatch(t, pids, lo.Proposals)
 
 	res, err = h.getResult(lyrID)
-	assert.Equal(t, err, errTooOld)
-	assert.Empty(t, res)
+	require.Equal(t, err, errTooOld)
+	require.Empty(t, res)
 }
 
 func TestHare_OutputCollectionLoop(t *testing.T) {
@@ -363,8 +362,8 @@ func TestHare_onTick(t *testing.T) {
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
 	res2, err := h.getResult(lyrID)
-	assert.Equal(t, errNoResult, err)
-	assert.Empty(t, res2)
+	require.Equal(t, errNoResult, err)
+	require.Empty(t, res2)
 }
 
 func TestHare_onTick_BeaconFromRefBallot(t *testing.T) {
@@ -551,8 +550,8 @@ func TestHare_onTick_NoBeacon(t *testing.T) {
 	defer h.broker.Close()
 
 	started, err := h.onTick(context.Background(), lyr)
-	assert.NoError(t, err)
-	assert.False(t, started)
+	require.NoError(t, err)
+	require.False(t, started)
 }
 
 func TestHare_onTick_NotSynced(t *testing.T) {
@@ -567,14 +566,14 @@ func TestHare_onTick_NotSynced(t *testing.T) {
 
 	mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
 	started, err := h.onTick(context.Background(), lyr)
-	assert.NoError(t, err)
-	assert.False(t, started)
+	require.NoError(t, err)
+	require.False(t, started)
 
 	mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
 	mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(false)
 	started, err = h.onTick(context.Background(), lyr)
-	assert.NoError(t, err)
-	assert.False(t, started)
+	require.NoError(t, err)
+	require.False(t, started)
 }
 
 func TestHare_outputBuffer(t *testing.T) {
@@ -601,7 +600,7 @@ func TestHare_outputBuffer(t *testing.T) {
 
 	// make sure the oldest layer is no longer there
 	_, ok = h.outputs[lyr.Sub(h.config.Hdist)]
-	assert.False(t, ok)
+	require.False(t, ok)
 }
 
 func TestHare_IsTooLate(t *testing.T) {
@@ -612,11 +611,11 @@ func TestHare_IsTooLate(t *testing.T) {
 		h.setLastLayer(lyr)
 		_ = h.collectOutput(context.Background(), mockReport{lyr, NewEmptySet(0), true, false})
 		_, ok := h.outputs[lyr]
-		assert.True(t, ok)
+		require.True(t, ok)
 		if i < h.config.Hdist {
-			assert.EqualValues(t, i, len(h.outputs))
+			require.EqualValues(t, i, len(h.outputs))
 		} else {
-			assert.EqualValues(t, h.config.Hdist, len(h.outputs))
+			require.EqualValues(t, h.config.Hdist, len(h.outputs))
 		}
 	}
 
@@ -624,7 +623,7 @@ func TestHare_IsTooLate(t *testing.T) {
 		lyr = types.GetEffectiveGenesis().Add(i)
 		require.True(t, h.outOfBufferRange(types.GetEffectiveGenesis().Add(1)))
 	}
-	assert.False(t, h.outOfBufferRange(lyr.Add(1)))
+	require.False(t, h.outOfBufferRange(lyr.Add(1)))
 }
 
 func TestHare_oldestInBuffer(t *testing.T) {
