@@ -132,7 +132,7 @@ func TestHare_New(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := logtest.New(t).WithName(t.Name())
-	cfg := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
+	cfg := config.Config{N: 10, F: 5, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	h := New(
 		datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
 		cfg,

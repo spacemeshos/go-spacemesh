@@ -3,6 +3,7 @@ package grpcserver
 import (
 	"context"
 	"fmt"
+	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"google.golang.org/grpc/codes"
@@ -16,14 +17,14 @@ import (
 
 // MeshService exposes mesh data such as accounts, blocks, and transactions.
 type MeshService struct {
-	mesh             api.MeshAPI // Mesh
-	conState         api.ConservativeState
-	genTime          api.GenesisTimeAPI
-	layersPerEpoch   uint32
-	genesisID        types.Hash20
-	layerDurationSec uint32
-	layerAvgSize     uint32
-	txsPerProposal   uint32
+	mesh           api.MeshAPI // Mesh
+	conState       api.ConservativeState
+	genTime        api.GenesisTimeAPI
+	layersPerEpoch uint32
+	genesisID      types.Hash20
+	layerDuration  time.Duration
+	layerAvgSize   uint32
+	txsPerProposal uint32
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -34,18 +35,18 @@ func (s MeshService) RegisterService(server *Server) {
 // NewMeshService creates a new service using config data.
 func NewMeshService(
 	msh api.MeshAPI, cstate api.ConservativeState, genTime api.GenesisTimeAPI,
-	layersPerEpoch uint32, genesisID types.Hash20, layerDurationSec uint32,
+	layersPerEpoch uint32, genesisID types.Hash20, layerDuration time.Duration,
 	layerAvgSize uint32, txsPerProposal uint32,
 ) *MeshService {
 	return &MeshService{
-		mesh:             msh,
-		conState:         cstate,
-		genTime:          genTime,
-		layersPerEpoch:   layersPerEpoch,
-		genesisID:        genesisID,
-		layerDurationSec: layerDurationSec,
-		layerAvgSize:     layerAvgSize,
-		txsPerProposal:   txsPerProposal,
+		mesh:           msh,
+		conState:       cstate,
+		genTime:        genTime,
+		layersPerEpoch: layersPerEpoch,
+		genesisID:      genesisID,
+		layerDuration:  layerDuration,
+		layerAvgSize:   layerAvgSize,
+		txsPerProposal: txsPerProposal,
 	}
 }
 
@@ -92,7 +93,7 @@ func (s MeshService) EpochNumLayers(context.Context, *pb.EpochNumLayersRequest) 
 func (s MeshService) LayerDuration(context.Context, *pb.LayerDurationRequest) (*pb.LayerDurationResponse, error) {
 	log.Info("GRPC MeshService.LayerDuration")
 	return &pb.LayerDurationResponse{Duration: &pb.SimpleInt{
-		Value: uint64(s.layerDurationSec),
+		Value: uint64(s.layerDuration.Seconds()),
 	}}, nil
 }
 
@@ -100,7 +101,7 @@ func (s MeshService) LayerDuration(context.Context, *pb.LayerDurationRequest) (*
 func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactionsPerSecondRequest) (*pb.MaxTransactionsPerSecondResponse, error) {
 	log.Info("GRPC MeshService.MaxTransactionsPerSecond")
 	return &pb.MaxTransactionsPerSecondResponse{MaxTxsPerSecond: &pb.SimpleInt{
-		Value: uint64(s.txsPerProposal * s.layerAvgSize / s.layerDurationSec),
+		Value: uint64(s.txsPerProposal * s.layerAvgSize / uint32(s.layerDuration.Seconds())),
 	}}, nil
 }
 

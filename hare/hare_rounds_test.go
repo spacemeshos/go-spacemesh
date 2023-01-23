@@ -66,8 +66,8 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 	cfg := config.Config{
 		N:               nodes,
 		F:               nodes/2 - 1,
-		WakeupDelta:     1,
-		RoundDuration:   1,
+		WakeupDelta:     time.Second,
+		RoundDuration:   time.Second,
 		ExpectedLeaders: leaders,
 		LimitIterations: limitIterations,
 		LimitConcurrent: maxLayers,

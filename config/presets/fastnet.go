@@ -42,7 +42,7 @@ func fastnet() config.Config {
 
 	conf.LayerAvgSize = 50
 	conf.SyncRequestTimeout = 1_000
-	conf.LayerDurationSec = 15
+	conf.LayerDuration = 15 * time.Second
 	conf.LayersPerEpoch = 4
 
 	conf.Tortoise.Hdist = 4

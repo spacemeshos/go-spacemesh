@@ -133,8 +133,8 @@ func New(
 	h.layerClock = layerClock
 	h.newRoundClock = func(layerID types.LayerID) RoundClock {
 		layerTime := layerClock.LayerToTime(layerID)
-		wakeupDelta := time.Duration(conf.WakeupDelta) * time.Second
-		roundDuration := time.Duration(h.config.RoundDuration) * time.Second
+		wakeupDelta := conf.WakeupDelta
+		roundDuration := h.config.RoundDuration
 		h.With().Debug("creating hare round clock", layerID,
 			log.String("layer_time", layerTime.String()),
 			log.Duration("wakeup_delta", wakeupDelta),
@@ -152,7 +152,7 @@ func New(
 	h.rolacle = rolacle
 	h.patrol = patrol
 
-	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
+	h.networkDelta = conf.WakeupDelta
 	h.outputChan = make(chan TerminationOutput, h.config.Hdist)
 	h.outputs = make(map[types.LayerID][]types.ProposalID, h.config.Hdist) // we keep results about LayerBuffer past layers
 	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
@@ -450,7 +450,7 @@ func (h *Hare) tickLoop(ctx context.Context) {
 	for layer := h.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
 		select {
 		case <-h.layerClock.AwaitLayer(layer):
-			if time.Since(h.layerClock.LayerToTime(layer)) > (time.Duration(h.config.WakeupDelta) * time.Second) {
+			if time.Since(h.layerClock.LayerToTime(layer)) > h.config.WakeupDelta {
 				h.With().Warning("missed hare window, skipping layer", layer)
 				continue
 			}

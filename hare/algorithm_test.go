@@ -25,10 +25,7 @@ import (
 )
 
 func newRoundClockFromCfg(logger log.Log, cfg config.Config) *SimpleRoundClock {
-	return NewSimpleRoundClock(time.Now(),
-		time.Duration(cfg.WakeupDelta)*time.Second,
-		time.Duration(cfg.RoundDuration)*time.Second,
-	)
+	return NewSimpleRoundClock(time.Now(), cfg.WakeupDelta, cfg.RoundDuration)
 }
 
 type mockMessageValidator struct {
@@ -182,10 +179,10 @@ func (mev *mockEligibilityValidator) ValidateEligibilityGossip(context.Context, 
 }
 
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
-	c := config.Config{N: 10, F: 5, RoundDuration: 1, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
+	c := config.Config{N: 10, F: 5, RoundDuration: time.Second, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
 	p := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
 	p.Start()
-	time.Sleep(time.Duration(6*p.cfg.RoundDuration) * time.Second)
+	time.Sleep(6 * p.cfg.RoundDuration)
 
 	assert.EqualValues(t, 1, p.getRound()/4)
 }
@@ -199,7 +196,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
-	c := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
+	c := config.Config{N: 10, F: 5, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	c.F = 2
 	proc := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
 	proc.publisher = net
@@ -283,7 +280,7 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 }
 
 func generateConsensusProcess(t *testing.T) *consensusProcess {
-	cfg := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
+	cfg := config.Config{N: 10, F: 5, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	return generateConsensusProcessWithConfig(t, cfg, make(chan any, 1000))
 }
 
