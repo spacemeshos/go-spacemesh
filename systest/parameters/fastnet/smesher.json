@@ -6,6 +6,8 @@
         "grace-period": "5s"
     },
     "logging": {
-        "trtl": "debug"
+        "nipostBuilder": "debug",
+        "poetDb": "debug",
+        "trtl": "info"
     }
 }
