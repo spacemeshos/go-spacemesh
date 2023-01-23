@@ -40,11 +40,11 @@ var (
 
 	smesherRequests = apiv1.ResourceList{
 		apiv1.ResourceCPU:    resource.MustParse("0.5"),
-		apiv1.ResourceMemory: resource.MustParse("1Gi"),
+		apiv1.ResourceMemory: resource.MustParse("2Gi"),
 	}
 	smesherLimits = apiv1.ResourceList{
 		apiv1.ResourceCPU:    resource.MustParse("4"),
-		apiv1.ResourceMemory: resource.MustParse("1Gi"),
+		apiv1.ResourceMemory: resource.MustParse("2Gi"),
 	}
 )
 
