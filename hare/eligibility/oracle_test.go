@@ -226,7 +226,7 @@ func TestCalcEligibility_EligibleFromTortoiseActiveSet(t *testing.T) {
 	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
 	numMiners := 5
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
+	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(numMiners)
 	// there is no cache for tortoise active set. so each signature will cause 2 calls to GetBeacon()
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(2 * numMiners)
 	activeSet := types.RandomActiveSet(numMiners)
@@ -254,7 +254,6 @@ func TestCalcEligibility_WithSpaceUnits(t *testing.T) {
 	layer := types.NewLayerID(50)
 	beacon := beaconWithValOne()
 	createLayerData(t, o.cdb, layer, beacon, numOfMiners)
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
 
@@ -265,7 +264,8 @@ func TestCalcEligibility_WithSpaceUnits(t *testing.T) {
 		r.NoError(err)
 
 		nonce := types.VRFPostIndex(rand.Uint64())
-
+		o.mNonceFetcher.EXPECT().VRFNonce(nodeID, layer.GetEpoch()).Return(nonce, nil).Times(1)
+		o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(2)
 		res, err := o.CalcEligibility(context.Background(), layer, 1, committeeSize, nodeID, nonce, sig)
 		r.NoError(err)
 
@@ -298,7 +298,6 @@ func Test_CalcEligibility_MainnetParams(t *testing.T) {
 	layer := types.NewLayerID(50)
 	beacon := types.RandomBeacon()
 	createLayerData(t, o.cdb, layer, beacon, numOfMiners)
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
 
@@ -309,7 +308,9 @@ func Test_CalcEligibility_MainnetParams(t *testing.T) {
 		r.NoError(err)
 		r.Equal(64, n)
 		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))
-		nonce := types.VRFPostIndex(rand.Uint64())
+		nonce := types.VRFPostIndex(rng.Uint64())
+		o.mNonceFetcher.EXPECT().VRFNonce(nodeID, layer.GetEpoch()).Return(nonce, nil).Times(1)
+		o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(2)
 
 		res, err := o.CalcEligibility(context.Background(), layer, 1, committeeSize, nodeID, nonce, sig)
 		r.NoError(err)
@@ -378,10 +379,12 @@ func Test_VrfSignVerify(t *testing.T) {
 	o.vrfSigner, err = signer.VRFSigner()
 	require.NoError(t, err)
 	nid := signer.NodeID()
+	nonce := types.VRFPostIndex(1)
 
 	layer := types.NewLayerID(50)
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beaconWithValOne(), nil).Times(1)
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
+	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beaconWithValOne(), nil).Times(int(end.Difference(start)))
+	o.mNonceFetcher.EXPECT().VRFNonce(nid, layer.GetEpoch()).Return(nonce, nil).Times(1)
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
 
@@ -426,7 +429,6 @@ func Test_VrfSignVerify(t *testing.T) {
 	require.NoError(t, atxs.Add(o.cdb, vAtx2, time.Now()))
 
 	o.vrfVerifier = signing.NewVRFVerifier()
-	nonce := types.VRFPostIndex(rand.Uint64())
 
 	proof, err := o.Proof(context.Background(), nonce, layer, 1)
 	require.NoError(t, err)
@@ -544,30 +546,31 @@ func TestBuildVRFMessage_BeaconError(t *testing.T) {
 
 func TestBuildVRFMessage(t *testing.T) {
 	o := defaultOracle(t)
+	nonce := types.VRFPostIndex(2)
 	firstLayer := types.NewLayerID(1)
 	secondLayer := firstLayer.Add(1)
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	m1, err := o.buildVRFMessage(context.Background(), types.VRFPostIndex(2), firstLayer, 2)
+	m1, err := o.buildVRFMessage(context.Background(), nonce, firstLayer, 2)
 	require.NoError(t, err)
 
 	// check not same for different round
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	m3, err := o.buildVRFMessage(context.Background(), types.VRFPostIndex(3), firstLayer, 3)
+	m3, err := o.buildVRFMessage(context.Background(), nonce, firstLayer, 3)
 	require.NoError(t, err)
 	require.NotEqual(t, m1, m3)
 
 	// check not same for different layer
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	m4, err := o.buildVRFMessage(context.Background(), types.VRFPostIndex(4), secondLayer, 2)
+	m4, err := o.buildVRFMessage(context.Background(), nonce, secondLayer, 2)
 	require.NoError(t, err)
 	require.NotEqual(t, m1, m4)
 
-	// even tho beacon value changed, we will get the same cached VRF message
-	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(types.RandomBeacon(), nil).Times(0)
-	m5, err := o.buildVRFMessage(context.Background(), types.VRFPostIndex(5), firstLayer, 2)
+	// check same call returns same result
+	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
+	m5, err := o.buildVRFMessage(context.Background(), nonce, firstLayer, 2)
 	require.NoError(t, err)
-	require.Equal(t, m1, m5) // check same result (from cache)
+	require.Equal(t, m1, m5) // check same result
 }
 
 func TestBuildVRFMessage_Concurrency(t *testing.T) {

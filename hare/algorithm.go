@@ -257,6 +257,7 @@ func newConsensusProcess(
 		oracle:    oracle,
 		signing:   signing,
 		nid:       nid,
+		nonce:     nonce,
 		publisher: p2p,
 		cfg:       cfg,
 		comm:      comm,
