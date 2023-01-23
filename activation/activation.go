@@ -635,10 +635,11 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	poetRoundStart := b.layerClock.LayerToTime((pubEpoch - 1).FirstLayer()).Add(b.poetCfg.PhaseShift)
 	nextPoetRoundStart := b.layerClock.LayerToTime(pubEpoch.FirstLayer()).Add(b.poetCfg.PhaseShift)
 	poetRoundEnd := nextPoetRoundStart.Add(-b.poetCfg.CycleGap)
-	poetProofDeadline := poetRoundEnd.Add(b.poetCfg.GracePeriod)
+	poetProofDeadline := nextPoetRoundStart.Add(-b.poetCfg.GracePeriod)
 
 	b.log.With().Info("building NIPost",
 		log.Time("poet round start", poetRoundStart),
+		log.Time("poet round end", poetRoundEnd),
 		log.Time("next poet round start", nextPoetRoundStart),
 		log.Time("poet proof deadline", poetProofDeadline),
 		log.FieldNamed("current epoch", b.currentEpoch()),

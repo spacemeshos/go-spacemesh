@@ -196,7 +196,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, poet PoetProvi
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoET service ID", source: err}
 	}
-	logger := nb.log.WithFields(log.String("poet_id", hex.EncodeToString(poetServiceID)))
+	logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(poetServiceID)))
 	logger.Debug("submitting challenge to poet proving service")
 
 	round, err := poet.Submit(ctx, challenge, signature)
@@ -279,7 +279,7 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 
 	var eg errgroup.Group
 	for _, r := range nb.state.PoetRequests {
-		logger := nb.log.WithFields(log.String("poet_id", hex.EncodeToString(r.PoetServiceID)), log.String("round", r.PoetRound.ID))
+		logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(r.PoetServiceID)), log.String("round", r.PoetRound.ID))
 		client := nb.getPoetClient(ctx, r.PoetServiceID)
 		if client == nil {
 			logger.Warning("Poet client not found")
