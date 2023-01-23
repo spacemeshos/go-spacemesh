@@ -184,7 +184,7 @@ func (fo *FixedRolacle) Validate(context.Context, types.LayerID, uint32, int, ty
 }
 
 // CalcEligibility returns 1 if the miner is eligible in given layer, and 0 otherwise.
-func (fo *FixedRolacle) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+func (fo *FixedRolacle) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, nonce types.VRFPostIndex, sig []byte) (uint16, error) {
 	eligible, err := fo.eligible(ctx, layer, round, committeeSize, id, sig)
 	if eligible {
 		return 1, nil

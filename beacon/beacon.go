@@ -476,7 +476,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 
 	nonce, err := pd.nonceFetcher.VRFNonce(pd.nodeID, epoch)
 	if err != nil {
-		logger.With().Error("failed to get own VRF nonce", log.Err(err))
+		logger.With().Error("get own VRF nonce", log.Err(err))
 		return nil, fmt.Errorf("get own VRF nonce: %w", err)
 	}
 	pd.states[epoch] = newState(logger, pd.config, epochWeight, nonce, atxids)
