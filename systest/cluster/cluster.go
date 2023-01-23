@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -177,7 +178,7 @@ func (c *Cluster) persistConfigs(ctx *testcontext.Context) error {
 	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
 		ctx,
 		corev1.ConfigMap(poetConfigMapName, ctx.Namespace).WithData(map[string]string{
-			attachedPoetConfig: poetConfig.Get(ctx.Parameters),
+			attachedPoetConfig: strings.Join(strings.Split(poetConfig.Get(ctx.Parameters), " "), "\n"),
 		}),
 		apimetav1.ApplyOptions{FieldManager: "test"},
 	)
