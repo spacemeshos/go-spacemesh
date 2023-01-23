@@ -2,7 +2,6 @@ package tests
 
 import (
 	"bytes"
-	"container/list"
 	"context"
 	"fmt"
 	"math/rand"
@@ -22,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
+	"github.com/spacemeshos/go-spacemesh/systest/validation"
 )
 
 func TestStepCreate(t *testing.T) {
@@ -392,49 +392,19 @@ func TestScheduleTransactions(t *testing.T) {
 	rn.wait()
 }
 
-func validateSynced(ctx *testcontext.Context, c *cluster.Cluster, period time.Duration, tolerate int) error {
-	results := make([]int, c.Total())
-	ticker := time.NewTicker(period)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			var eg errgroup.Group
-			for i := 0; i < c.Total(); i++ {
-				i := i
-				node := c.Client(i)
-				eg.Go(func() error {
-					if !isSynced(ctx, node) {
-						results[i]++
-					} else {
-						results[i] = 0
-					}
-					return nil
-				})
-			}
-			eg.Wait()
-			for i, rst := range results {
-				if rst != 0 {
-					ctx.Log.Debugw("node is not synced", "node", c.Client(i).Name)
-				}
-				if rst > tolerate {
-					return fmt.Errorf("node %s wasn't able to sync in %d periods",
-						c.Client(i).Name, rst,
-					)
-				}
-			}
-		}
-	}
-}
+func TestStepValidation(t *testing.T) {
+	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
+	c, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	require.NoError(t, err)
 
-func validateConsensus(ctx *testcontext.Context, c *cluster.Cluster, distance uint32) error {
-	type tuple struct {
-		consensus, state []byte
-	}
-	results := make([]list.List, c.Total())
-	// fail if any node is inconsistent with any other node at the specified distance
-	_ = results
-	return nil
+	eg, ctx := errgroup.WithContext(tctx)
+	eg.Go(func() error {
+		// tolerate around 2 hours out of sync
+		return validation.RunSyncValidation(ctx, tctx, c, 12*time.Minute, 10)
+	})
+	eg.Go(func() error {
+		// tolerate 50 layers without consensus
+		return validation.RunConsensusValidation(ctx, tctx, c, 50)
+	})
+	require.NoError(t, eg.Wait())
 }
