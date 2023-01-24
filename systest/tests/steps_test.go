@@ -399,12 +399,12 @@ func TestStepValidation(t *testing.T) {
 
 	eg, ctx := errgroup.WithContext(tctx)
 	eg.Go(func() error {
-		// tolerate around 2 hours out of sync
-		return validation.RunSyncValidation(ctx, tctx, c, 12*time.Minute, 10)
+		// ensure that node will be back to sync in 2 hours
+		return validation.RunSyncValidation(ctx, c, 12*time.Minute, 10)
 	})
 	eg.Go(func() error {
-		// tolerate 50 layers without consensus
-		return validation.RunConsensusValidation(ctx, tctx, c, 50)
+		// ensure that within 25 minutes that current-4 layer will be consistent across the cluster
+		return validation.RunConsensusValidation(ctx, c, 5*time.Minute, 5, 4)
 	})
 	require.NoError(t, eg.Wait())
 }

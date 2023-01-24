@@ -9,7 +9,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
-	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
 func isSynced(ctx context.Context, node *cluster.NodeClient) bool {
@@ -23,8 +22,8 @@ func isSynced(ctx context.Context, node *cluster.NodeClient) bool {
 	return resp.Status.IsSynced
 }
 
-func RunSyncValidation(ctx context.Context, tctx *testcontext.Context, c *cluster.Cluster, period time.Duration, tolerate int) error {
-	results := make([]int, c.Total())
+func RunSyncValidation(ctx context.Context, c *cluster.Cluster, period time.Duration, tolerate int) error {
+	failures := make([]int, c.Total())
 	ticker := time.NewTicker(period)
 	defer ticker.Stop()
 	for {
@@ -38,18 +37,15 @@ func RunSyncValidation(ctx context.Context, tctx *testcontext.Context, c *cluste
 				node := c.Client(i)
 				eg.Go(func() error {
 					if !isSynced(ctx, node) {
-						results[i]++
+						failures[i]++
 					} else {
-						results[i] = 0
+						failures[i] = 0
 					}
 					return nil
 				})
 			}
 			eg.Wait()
-			for i, rst := range results {
-				if rst != 0 {
-					tctx.Log.Debugw("node is not synced", "node", c.Client(i).Name)
-				}
+			for i, rst := range failures {
 				if rst > tolerate {
 					return fmt.Errorf("node %s wasn't able to sync in %d periods",
 						c.Client(i).Name, rst,
