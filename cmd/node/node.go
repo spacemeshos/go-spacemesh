@@ -566,7 +566,7 @@ func (app *App) initServices(
 	hOracle := eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
-	app.certifier = blocks.NewCertifier(app.cachedDB, hOracle, nodeID, sgn, app.host, clock, beaconProtocol, trtl,
+	app.certifier = blocks.NewCertifier(app.cachedDB, hOracle, nodeID, sgn, app.keyExtractor, app.host, clock, beaconProtocol, trtl,
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
@@ -624,6 +624,7 @@ func (app *App) initServices(
 		hareCfg,
 		app.host,
 		sgn,
+		app.keyExtractor,
 		nodeID,
 		hareOutputCh,
 		newSyncer,
@@ -658,7 +659,12 @@ func (app *App) initServices(
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, app.db, app.addLogger(NipostBuilderLogger, lg), sgn)
+	poetCfg := activation.PoetConfig{
+		PhaseShift:  app.Config.POET.PhaseShift,
+		CycleGap:    app.Config.POET.CycleGap,
+		GracePeriod: app.Config.POET.GracePeriod,
+	}
+	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, app.db, app.addLogger(NipostBuilderLogger, lg), sgn, poetCfg, clock)
 
 	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
@@ -679,17 +685,15 @@ func (app *App) initServices(
 	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, app.cachedDB, atxHandler, app.host, nipostBuilder,
 		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg),
 		activation.WithContext(ctx),
-		activation.WithPoetConfig(activation.PoetConfig{
-			PhaseShift:  app.Config.POET.PhaseShift,
-			CycleGap:    app.Config.POET.CycleGap,
-			GracePeriod: app.Config.POET.GracePeriod,
-		}))
+		activation.WithPoetConfig(poetCfg),
+	)
 
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
 		app.addLogger(Malfeasance, lg),
 		app.host.ID(),
 		app.hare,
+		app.keyExtractor,
 	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {

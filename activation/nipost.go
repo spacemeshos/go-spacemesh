@@ -61,6 +61,8 @@ type NIPostBuilder struct {
 	state             *types.NIPostBuilderState
 	log               log.Log
 	signer            signer
+	layerClock        layerClock
+	poetCfg           PoetConfig
 }
 
 type poetDbAPI interface {
@@ -77,6 +79,8 @@ func NewNIPostBuilder(
 	db *sql.Database,
 	log log.Log,
 	signer signer,
+	poetCfg PoetConfig,
+	layerClock layerClock,
 ) *NIPostBuilder {
 	return &NIPostBuilder{
 		minerID:           minerID.Bytes(),
@@ -87,6 +91,8 @@ func NewNIPostBuilder(
 		db:                db,
 		log:               log,
 		signer:            signer,
+		poetCfg:           poetCfg,
+		layerClock:        layerClock,
 	}
 }
 
@@ -103,7 +109,40 @@ func (nb *NIPostBuilder) UpdatePoETProvers(poetProvers []PoetProvingServiceClien
 // BuildNIPost uses the given challenge to build a NIPost.
 // The process can take considerable time, because it includes waiting for the poet service to
 // publish a proof - a process that takes about an epoch.
-func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error) {
+func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error) {
+	logger := nb.log.WithContext(ctx)
+	// Calculate deadline for waiting for poet proofs.
+	// Deadline must fit between:
+	// - the end of the current poet round
+	// - the start of the next one.
+	// It must also accommodate for PoST duration.
+	//
+	//                                 PoST
+	//         ┌─────────────────────┐  ┌┐┌─────────────────────┐
+	//         │     POET ROUND      │  │││   NEXT POET ROUND   │
+	// ┌────▲──┴──────────────────┬──┴─▲┴┴┴─────────────────▲┬──┴───► time
+	// │    │      EPOCH          │    │       EPOCH        ││
+	// └────┼─────────────────────┴────┼────────────────────┼┴──────
+	//      │                          │                    │
+	//  WE ARE HERE                DEADLINE FOR       ATX PUBLICATION
+	//                           WAITING FOR POET        DEADLINE
+	//                               PROOFS
+
+	pubEpoch := challenge.PublishEpoch()
+	poetRoundStart := nb.layerClock.LayerToTime((pubEpoch - 1).FirstLayer()).Add(nb.poetCfg.PhaseShift)
+	nextPoetRoundStart := nb.layerClock.LayerToTime(pubEpoch.FirstLayer()).Add(nb.poetCfg.PhaseShift)
+	poetRoundEnd := nextPoetRoundStart.Add(-nb.poetCfg.CycleGap)
+	poetProofDeadline := nextPoetRoundStart.Add(-nb.poetCfg.GracePeriod)
+
+	logger.With().Info("building NIPost",
+		log.Time("poet round start", poetRoundStart),
+		log.Time("poet round end", poetRoundEnd),
+		log.Time("next poet round start", nextPoetRoundStart),
+		log.Time("poet proof deadline", poetProofDeadline),
+		log.FieldNamed("publish epoch", pubEpoch),
+		log.FieldNamed("target epoch", challenge.TargetEpoch()),
+	)
+
 	challengeHash := challenge.Hash()
 	nb.load(challengeHash)
 
@@ -120,10 +159,9 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 			return nil, 0, err
 		}
 		signature := nb.signer.Sign(challenge)
-		poetRequests := nb.submitPoetChallenges(ctx, challenge, signature)
-		if ctx.Err() != nil {
-			return nil, 0, ctx.Err()
-		}
+		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
+		defer cancel()
+		poetRequests := nb.submitPoetChallenges(submitCtx, challenge, signature)
 
 		validPoetRequests := make([]types.PoetRequest, 0, len(poetRequests))
 		for _, req := range poetRequests {
