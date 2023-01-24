@@ -26,7 +26,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 const (
@@ -39,6 +39,7 @@ func coinValueMock(tb testing.TB, value bool) coin {
 	coinMock.EXPECT().StartEpoch(
 		gomock.Any(),
 		gomock.AssignableToTypeOf(types.EpochID(0)),
+		gomock.AssignableToTypeOf(types.VRFPostIndex(0)),
 		gomock.AssignableToTypeOf(weakcoin.UnitAllowances{}),
 	).AnyTimes()
 	coinMock.EXPECT().FinishEpoch(gomock.Any(), gomock.AssignableToTypeOf(types.EpochID(0))).AnyTimes()
@@ -67,12 +68,13 @@ func newPublisher(tb testing.TB) pubsub.Publisher {
 
 type testProtocolDriver struct {
 	*ProtocolDriver
-	ctrl      *gomock.Controller
-	cdb       *datastore.CachedDB
-	mClock    *MocklayerClock
-	mSync     *smocks.MockSyncStateProvider
-	mSigner   *MockvrfSigner
-	mVerifier *MockvrfVerifier
+	ctrl          *gomock.Controller
+	cdb           *datastore.CachedDB
+	mClock        *MocklayerClock
+	mSync         *mocks.MockSyncStateProvider
+	mSigner       *MockvrfSigner
+	mVerifier     *MockvrfVerifier
+	mNonceFetcher *MocknonceFetcher
 }
 
 func setUpProtocolDriver(tb testing.TB) *testProtocolDriver {
@@ -82,11 +84,12 @@ func setUpProtocolDriver(tb testing.TB) *testProtocolDriver {
 func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolDriver {
 	ctrl := gomock.NewController(tb)
 	tpd := &testProtocolDriver{
-		ctrl:      ctrl,
-		mClock:    NewMocklayerClock(ctrl),
-		mSync:     smocks.NewMockSyncStateProvider(ctrl),
-		mSigner:   NewMockvrfSigner(ctrl),
-		mVerifier: NewMockvrfVerifier(ctrl),
+		ctrl:          ctrl,
+		mClock:        NewMocklayerClock(ctrl),
+		mSync:         mocks.NewMockSyncStateProvider(ctrl),
+		mSigner:       NewMockvrfSigner(ctrl),
+		mVerifier:     NewMockvrfVerifier(ctrl),
+		mNonceFetcher: NewMocknonceFetcher(ctrl),
 	}
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(tb, err)
@@ -95,22 +98,25 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	minerID := edSgn.NodeID()
 	lg := logtest.New(tb).WithName(minerID.ShortString())
 
-	tpd.mSigner.EXPECT().Sign(gomock.Any()).AnyTimes().Return([]byte{}, nil)
+	tpd.mSigner.EXPECT().Sign(gomock.Any()).AnyTimes().Return([]byte{})
 	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
+	tpd.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).AnyTimes().Return(types.VRFPostIndex(1), nil)
 
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
 	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, tpd.mSigner, tpd.mVerifier, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withWeakCoin(coinValueMock(tb, true)),
+		withNonceFetcher(tpd.mNonceFetcher),
 	)
 	tpd.ProtocolDriver.SetSyncState(tpd.mSync)
 	tpd.ProtocolDriver.setMetricsRegistry(prometheus.NewPedanticRegistry())
 	return tpd
 }
 
-func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig signer, numUnits uint32) {
+func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint32) {
 	nodeID := sig.NodeID()
+	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PubLayerID: lid},
 		&nodeID,
@@ -118,7 +124,7 @@ func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig sig
 		nil,
 		numUnits,
 		nil,
-		nil,
+		&nonce,
 	)
 
 	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
@@ -864,9 +870,9 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 			for i := 0; i < tc.w; i++ {
 				signer, err := signing.NewEdSigner()
 				require.NoError(t, err)
-				vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+				vrfSigner, err := signer.VRFSigner()
 				require.NoError(t, err)
-				proposal := buildSignedProposal(context.Background(), vrfSigner, 3, logtest.New(t))
+				proposal := buildSignedProposal(context.Background(), logtest.New(t), vrfSigner, 3, types.VRFPostIndex(1))
 				if checker.IsProposalEligible(proposal) {
 					numEligible++
 				}
@@ -879,8 +885,6 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 func TestBeacon_buildProposal(t *testing.T) {
 	t.Parallel()
 
-	r := require.New(t)
-
 	tt := []struct {
 		name   string
 		epoch  types.EpochID
@@ -889,7 +893,7 @@ func TestBeacon_buildProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  13110,
-			result: string(util.Hex2Bytes("04d9cc")),
+			result: string(util.Hex2Bytes("0404d9cc")),
 		},
 	}
 
@@ -898,8 +902,8 @@ func TestBeacon_buildProposal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := buildProposal(tc.epoch, logtest.New(t))
-			r.Equal(tc.result, string(result))
+			result := buildProposal(logtest.New(t), tc.epoch, types.VRFPostIndex(1))
+			require.Equal(t, tc.result, string(result))
 		})
 	}
 }
@@ -907,17 +911,10 @@ func TestBeacon_buildProposal(t *testing.T) {
 func TestBeacon_getSignedProposal(t *testing.T) {
 	t.Parallel()
 
-	r := require.New(t)
-
 	edSgn, err := signing.NewEdSigner()
-	r.NoError(err)
-	vrfSigner, err := edSgn.VRFSigner(signing.WithNonceForNode(1, edSgn.NodeID()))
-	r.NoError(err)
-
-	sign := func(hex string) []byte {
-		sig, _ := vrfSigner.Sign(util.Hex2Bytes(hex))
-		return sig
-	}
+	require.NoError(t, err)
+	vrfSigner, err := edSgn.VRFSigner()
+	require.NoError(t, err)
 
 	tt := []struct {
 		name   string
@@ -927,12 +924,12 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: sign("0404"),
+			result: vrfSigner.Sign(util.Hex2Bytes("040404")),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: sign("0408"),
+			result: vrfSigner.Sign(util.Hex2Bytes("040408")),
 		},
 	}
 
@@ -941,8 +938,8 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := buildSignedProposal(context.Background(), vrfSigner, tc.epoch, logtest.New(t))
-			r.Equal(string(tc.result), string(result))
+			result := buildSignedProposal(context.Background(), logtest.New(t), vrfSigner, tc.epoch, types.VRFPostIndex(1))
+			require.Equal(t, string(tc.result), string(result))
 		})
 	}
 }
