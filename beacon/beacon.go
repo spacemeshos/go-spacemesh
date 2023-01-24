@@ -986,7 +986,7 @@ func buildSignedProposal(ctx context.Context, signer vrfSigner, epoch types.Epoc
 	return signature
 }
 
-//go:generate scalegen -types BuildProposalMessage
+//go:generate scalegen -types ProposalVrfMessage
 
 // ProposalVrfMessage is a message for buildProposal below.
 type ProposalVrfMessage struct {
