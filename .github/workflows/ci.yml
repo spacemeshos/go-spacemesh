@@ -202,3 +202,26 @@ jobs:
           report_paths: "**/unit-tests.xml"
           annotate_only: true
           fail_on_failure: ${{ matrix.allow-failure == 'false' }}
+
+  # print a single, clean status message to slack
+  ci-status:
+    # run regardless of status of previous jobs but skip if the required secret is not accessible
+    if: always()
+    needs:
+      - filter-changes
+      - quicktests
+      - lint
+      - build
+      - unittests
+    runs-on: ubuntu-latest
+    env:
+      # short-circuit success if no non-doc files were modified
+      # this is the easiest way to access success/failure state of previous jobs in this workflow
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.build.result == 'success' && needs.lint.result == 'success' && needs.unittests.result == 'success')) && 'success' || 'failure' }}
+    steps:
+      - name: Mark the job as succeeded
+        if: env.status == 'success'
+        run: exit 0
+      - name: Mark the job as failed
+        if: env.status != 'success'
+        run: exit 1
