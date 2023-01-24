@@ -211,6 +211,26 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	wg.Wait()
 }
 
+// test that proc.Stop() actually returns and cause the consensus process to be GC'ed.
+func TestConsensusProcess_StartAndStop(t *testing.T) {
+	c := config.Config{N: 10, F: 5, RoundDuration: 50 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1000, Hdist: 20}
+	proc := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
+	proc.publisher = &mockP2p{}
+
+	mo := mocks.NewMockRolacle(gomock.NewController(t))
+	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).AnyTimes()
+	mo.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	mo.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).AnyTimes()
+	proc.oracle = mo
+
+	proc.value = NewSetFromValues(types.ProposalID{1}, types.ProposalID{2})
+	proc.Start()
+	require.Eventually(t, func() bool {
+		proc.Stop()
+		return true
+	}, 500*time.Millisecond, 100*time.Millisecond)
+}
+
 func TestConsensusProcess_handleMessage(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
