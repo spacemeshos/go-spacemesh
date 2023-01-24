@@ -1025,9 +1025,7 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 
 	smApp.host = host
 
-	vrfSigner, err := edSgn.VRFSigner(
-		signing.WithNonceForNode(1, edSgn.NodeID()),
-	)
+	vrfSigner, err := edSgn.VRFSigner()
 	if err != nil {
 		return nil, err
 	}

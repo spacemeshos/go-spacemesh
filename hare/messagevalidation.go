@@ -37,7 +37,8 @@ func (ev *eligibilityValidator) ValidateEligibilityGossip(ctx context.Context, e
 		ev.WithContext(ctx).With().Error("failed to validate role",
 			em.Layer,
 			log.Uint32("round", em.Round),
-			log.String("sender_id", types.BytesToNodeID(em.PubKey).ShortString()))
+			log.String("sender_id", types.BytesToNodeID(em.PubKey).ShortString()),
+		)
 		return false
 	}
 	return res

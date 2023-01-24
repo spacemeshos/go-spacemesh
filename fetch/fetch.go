@@ -314,7 +314,8 @@ func (f *Fetch) receiveResponse(data []byte) {
 
 	f.logger.With().Debug("received batch response",
 		log.Stringer("batch_hash", response.ID),
-		log.Int("num_hashes", len(response.Responses)))
+		log.Int("num_hashes", len(response.Responses)),
+	)
 	f.mu.Lock()
 	batch, ok := f.batched[response.ID]
 	delete(f.batched, response.ID)
@@ -355,7 +356,8 @@ func (f *Fetch) receiveResponse(data []byte) {
 		f.logger.With().Warning("hash not found in response from peer",
 			log.String("hint", string(r.Hint)),
 			log.Stringer("hash", h),
-			log.Stringer("peer", batch.peer))
+			log.Stringer("peer", batch.peer),
+		)
 		f.failAfterRetry(r.Hash)
 	}
 }
