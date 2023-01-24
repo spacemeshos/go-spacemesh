@@ -684,7 +684,8 @@ func (app *App) initServices(
 	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, app.cachedDB, atxHandler, app.host, nipostBuilder,
 		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg),
 		activation.WithContext(ctx),
-		activation.WithPoetConfig(poetCfg))
+		activation.WithPoetConfig(poetCfg),
+	)
 
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
