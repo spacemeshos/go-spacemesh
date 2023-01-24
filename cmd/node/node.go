@@ -515,15 +515,12 @@ func (app *App) initServices(
 
 	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
 
-	vrfVerifier, err := signing.NewVRFVerifier(signing.WithNonceFromDB(app.cachedDB))
-	if err != nil {
-		return fmt.Errorf("failed to create vrf verifier: %w", err)
-	}
-
+	vrfVerifier := signing.NewVRFVerifier()
 	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifier, app.cachedDB, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
-		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
+		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
+	)
 
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
@@ -550,7 +547,7 @@ func (app *App) initServices(
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl,
+	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,
@@ -558,7 +555,8 @@ func (app *App) initServices(
 			GoldenATXID:    goldenATXID,
 			MaxExceptions:  trtlCfg.MaxExceptions,
 			Hdist:          trtlCfg.Hdist,
-		}))
+		}),
+	)
 
 	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
@@ -568,7 +566,7 @@ func (app *App) initServices(
 	hOracle := eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
-	app.certifier = blocks.NewCertifier(app.db, hOracle, nodeID, sgn, app.host, clock, beaconProtocol, trtl,
+	app.certifier = blocks.NewCertifier(app.cachedDB, hOracle, nodeID, sgn, app.host, clock, beaconProtocol, trtl,
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
@@ -576,7 +574,8 @@ func (app *App) initServices(
 			WaitSigLayers:    app.Config.Tortoise.Zdist,
 			NumLayersToKeep:  app.Config.Tortoise.Zdist,
 		}),
-		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))
+		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
+	)
 
 	fetcher := fetch.NewFetch(app.cachedDB, msh, beaconProtocol, app.host,
 		fetch.WithContext(ctx),
@@ -633,7 +632,8 @@ func (app *App) initServices(
 		patrol,
 		hOracle,
 		clock,
-		app.addLogger(HareLogger, lg))
+		app.addLogger(HareLogger, lg),
+	)
 
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
@@ -650,7 +650,8 @@ func (app *App) initServices(
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
-		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)))
+		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
+	)
 
 	postSetupMgr, err := activation.NewPostSetupManager(nodeID, app.Config.POST, app.addLogger(PostLogger, lg), app.cachedDB, goldenATXID)
 	if err != nil {
@@ -1025,7 +1026,8 @@ func (app *App) Start(ctx context.Context) error {
 	logger.With().Info("starting spacemesh",
 		log.String("data-dir", app.Config.DataDir()),
 		log.String("post-dir", app.Config.SMESHING.Opts.DataDir),
-		log.String("hostname", hostname))
+		log.String("hostname", hostname),
+	)
 
 	if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 		return fmt.Errorf("data-dir %s not found or could not be created: %w", app.Config.DataDir(), err)
@@ -1103,18 +1105,21 @@ func (app *App) Start(ctx context.Context) error {
 		return err
 	}
 	// need db to initialize the vrf signer
-	vrfSigner, err := edSgn.VRFSigner(signing.WithNonceFromDB(app.cachedDB))
+	vrfSigner, err := edSgn.VRFSigner()
 	if err != nil {
 		return fmt.Errorf("could not create vrf signer: %w", err)
 	}
 
 	app.log = app.addLogger(AppLogger, lg)
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-	if err = app.initServices(ctx,
+	err = app.initServices(
+		ctx,
 		edSgn,
 		poetClients,
 		vrfSigner,
-		clock); err != nil {
+		clock,
+	)
+	if err != nil {
 		return fmt.Errorf("cannot start services: %w", err)
 	}
 

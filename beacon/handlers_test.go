@@ -31,7 +31,7 @@ func createProtocolDriver(tb testing.TB, epoch types.EpochID) *testProtocolDrive
 	return tpd
 }
 
-func createProtocolDriverWithFirstRoundVotes(t *testing.T, signer signer, epoch types.EpochID, round types.RoundID) (*testProtocolDriver, proposalList) {
+func createProtocolDriverWithFirstRoundVotes(t *testing.T, signer *signing.EdSigner, epoch types.EpochID, round types.RoundID) (*testProtocolDriver, proposalList) {
 	tpd := createProtocolDriver(t, epoch)
 	plist := proposalList{types.RandomBytes(types.BeaconSize), types.RandomBytes(types.BeaconSize), types.RandomBytes(types.BeaconSize)}
 	setOwnFirstRoundVotes(t, tpd.ProtocolDriver, epoch, plist)
@@ -44,7 +44,7 @@ func createEpochState(tb testing.TB, pd *ProtocolDriver, epoch types.EpochID) {
 	tb.Helper()
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.states[epoch] = newState(pd.logger, pd.config, epochWeight, types.RandomActiveSet(1))
+	pd.states[epoch] = newState(pd.logger, pd.config, epochWeight, types.VRFPostIndex(rand.Uint64()), types.RandomActiveSet(1))
 }
 
 func setOwnFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, ownFirstRound proposalList) {
@@ -74,16 +74,15 @@ func mockAlwaysFalseProposalChecker(t *testing.T, pd *ProtocolDriver, epoch type
 	pd.states[epoch].proposalChecker = mockChecker
 }
 
-func createProposal(t *testing.T, signer signer, vrfSigner *signing.VRFSigner, epoch types.EpochID, corruptSignature bool) *ProposalMessage {
-	nodeID := signer.NodeID()
-	sig := buildSignedProposal(context.Background(), vrfSigner, epoch, logtest.New(t))
+func createProposal(t *testing.T, vrfSigner *signing.VRFSigner, epoch types.EpochID, corruptSignature bool) *ProposalMessage {
+	sig := buildSignedProposal(context.Background(), logtest.New(t), vrfSigner, epoch, types.VRFPostIndex(rand.Uint64()))
 	msg := &ProposalMessage{
-		NodeID:       nodeID,
+		NodeID:       vrfSigner.NodeID(),
 		EpochID:      epoch,
 		VRFSignature: sig,
 	}
 	if corruptSignature {
-		msg.VRFSignature = sig[1:]
+		msg.VRFSignature[0] ^= sig[0] // invert bits of first byte
 	}
 	return msg
 }
@@ -117,7 +116,7 @@ func checkProposals(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, expec
 	}
 }
 
-func createFirstVote(t *testing.T, signer signer, epoch types.EpochID, valid, pValid [][]byte, corruptSignature bool) *FirstVotingMessage {
+func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID, valid, pValid [][]byte, corruptSignature bool) *FirstVotingMessage {
 	logger := logtest.New(t)
 	msg := &FirstVotingMessage{
 		FirstVotingMessageBody: FirstVotingMessageBody{
@@ -140,7 +139,7 @@ func createFirstVote(t *testing.T, signer signer, epoch types.EpochID, valid, pV
 	return msg
 }
 
-func checkVoted(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, signer signer, round types.RoundID, voted bool) {
+func checkVoted(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, signer *signing.EdSigner, round types.RoundID, voted bool) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 	require.NotNil(t, pd.states[epoch])
@@ -155,7 +154,7 @@ func checkFirstIncomingVotes(t *testing.T, pd *ProtocolDriver, epoch types.Epoch
 	require.EqualValues(t, expected, pd.states[epoch].firstRoundIncomingVotes)
 }
 
-func createFollowingVote(t *testing.T, signer signer, epoch types.EpochID, round types.RoundID, bitVector []byte, corruptSignature bool) *FollowingVotingMessage {
+func createFollowingVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID, round types.RoundID, bitVector []byte, corruptSignature bool) *FollowingVotingMessage {
 	msg := &FollowingVotingMessage{
 		FollowingVotingMessageBody: FollowingVotingMessageBody{
 			EpochID:        epoch,
@@ -203,10 +202,10 @@ func Test_HandleProposal_Success(t *testing.T) {
 
 	signer1, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner1, err := signer1.VRFSigner(signing.WithNonceForNode(1, signer1.NodeID()))
+	vrfSigner1, err := signer1.VRFSigner()
 	require.NoError(t, err)
 
-	msg1 := createProposal(t, signer1, vrfSigner1, epoch, false)
+	msg1 := createProposal(t, vrfSigner1, epoch, false)
 	msgBytes1, err := codec.Encode(msg1)
 	require.NoError(t, err)
 
@@ -220,10 +219,10 @@ func Test_HandleProposal_Success(t *testing.T) {
 
 	signer2, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner2, err := signer2.VRFSigner(signing.WithNonceForNode(1, signer2.NodeID()))
+	vrfSigner2, err := signer2.VRFSigner()
 	require.NoError(t, err)
 
-	msg2 := createProposal(t, signer2, vrfSigner2, epoch, false)
+	msg2 := createProposal(t, vrfSigner2, epoch, false)
 	msgBytes2, err := codec.Encode(msg2)
 	require.NoError(t, err)
 
@@ -253,10 +252,10 @@ func Test_HandleProposal_Shutdown(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, epoch, false)
+	msg := createProposal(t, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -275,10 +274,10 @@ func Test_HandleProposal_NotInProtocolStillWorks(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, epoch, false)
+	msg := createProposal(t, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -307,7 +306,7 @@ func Test_handleProposal_Corrupted(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
 	msg := []byte("guaranteed to be  malformed")
@@ -326,10 +325,10 @@ func Test_handleProposal_EpochTooOld(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, epoch-1, false)
+	msg := createProposal(t, vrfSigner, epoch-1, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -351,10 +350,10 @@ func Test_handleProposal_NextEpoch(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, nextEpoch, false)
+	msg := createProposal(t, vrfSigner, nextEpoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -387,10 +386,10 @@ func Test_handleProposal_NextEpochTooEarly(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, nextEpoch, false)
+	msg := createProposal(t, vrfSigner, nextEpoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -417,10 +416,10 @@ func Test_handleProposal_EpochTooFarAhead(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, epoch+2, false)
+	msg := createProposal(t, vrfSigner, epoch+2, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -440,10 +439,10 @@ func Test_handleProposal_BadSignature(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, epoch, true)
+	msg := createProposal(t, vrfSigner, epoch, true)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -469,10 +468,10 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 	rng := rand.New(rand.NewSource(101))
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg1 := createProposal(t, signer, vrfSigner, epoch, false)
+	msg1 := createProposal(t, vrfSigner, epoch, false)
 	msgBytes1, err := codec.Encode(msg1)
 	require.NoError(t, err)
 
@@ -490,7 +489,7 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 	checkProposals(t, tpd.ProtocolDriver, epoch, expectedProposals)
 
 	// the same vrf key will not cause double-proposal
-	msg2 := createProposal(t, signer, vrfSigner, epoch, false)
+	msg2 := createProposal(t, vrfSigner, epoch, false)
 	msgBytes2, err := codec.Encode(msg2)
 	require.NoError(t, err)
 
@@ -511,10 +510,10 @@ func Test_handleProposal_ProposalNotEligible(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, epoch, false)
+	msg := createProposal(t, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -535,10 +534,10 @@ func Test_handleProposal_MinerMissingATX(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+	vrfSigner, err := signer.VRFSigner()
 	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, epoch, false)
+	msg := createProposal(t, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 

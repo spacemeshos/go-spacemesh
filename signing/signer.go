@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	oasis "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -114,22 +115,9 @@ func (es *EdSigner) PrivateKey() PrivateKey {
 }
 
 // VRFSigner wraps same ed25519 key to provide ecvrf.
-func (es *EdSigner) VRFSigner(opts ...VRFOptionFunc) (*VRFSigner, error) {
-	cfg := &vrfOption{}
-
-	for _, opt := range opts {
-		if err := opt(cfg); err != nil {
-			return nil, err
-		}
-	}
-
-	if err := cfg.validate(); err != nil {
-		return nil, err
-	}
-
+func (es *EdSigner) VRFSigner() (*VRFSigner, error) {
 	return &VRFSigner{
-		privateKey: es.priv,
+		privateKey: oasis.PrivateKey(es.priv),
 		nodeID:     es.NodeID(),
-		fetcher:    cfg.getFetcher(),
 	}, nil
 }

@@ -199,11 +199,13 @@ func createConsensusProcess(
 		broker.mockStateQ,
 		sig,
 		sig.NodeID(),
+		types.VRFPostIndex(1),
 		network,
 		comm,
 		truer{},
 		newRoundClockFromCfg(logtest.New(tb), cfg),
-		logtest.New(tb).WithName(sig.PublicKey().ShortString()))
+		logtest.New(tb).WithName(sig.PublicKey().ShortString()),
+	)
 	return &testCP{cp: proc, broker: broker.Broker, mch: mch}
 }
 
