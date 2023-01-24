@@ -298,7 +298,6 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 				return ctx.Err()
 			case <-time.After(waitTime):
 			}
-			logger.Debug("Getting poet proof")
 			proof, err := nb.getProofWithRetry(ctx, client, round, time.Second)
 			if err != nil {
 				logger.With().Warning("Failed to get proof from Poet", log.Err(err))
