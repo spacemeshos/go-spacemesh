@@ -279,6 +279,9 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if atx.CommitmentATX != nil {
 		encoder.AddString("commitment_atx_id", atx.CommitmentATX.String())
 	}
+	if atx.VRFNonce != nil {
+		encoder.AddUint64("vrf_nonce", uint64(*atx.VRFNonce))
+	}
 	encoder.AddString("coinbase", atx.Coinbase.String())
 	encoder.AddUint32("pub_layer_id", atx.PubLayerID.Value)
 	encoder.AddUint32("epoch", uint32(atx.PublishEpoch()))
@@ -509,6 +512,9 @@ type NIPost struct {
 // VRFPostIndex is the nonce generated using Pow during post initialization. It is used as a mitigation for
 // grinding of identities for VRF eligibility.
 type VRFPostIndex uint64
+
+// Field returns a log field. Implements the LoggableField interface.
+func (v VRFPostIndex) Field() log.Field { return log.Uint64("vrf_nonce", uint64(v)) }
 
 func (v *VRFPostIndex) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
