@@ -57,8 +57,11 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		atxWeight, totalWeight uint64
 		err                    error
 		refBallot              = ballot
-		epoch                  = ballot.LayerIndex.GetEpoch()
+		epoch                  = ballot.Layer.GetEpoch()
 	)
+	if len(ballot.EligibilityProofs) == 0 {
+		return false, fmt.Errorf("empty eligibility list is invalid (ballot %s)", ballot.ID())
+	}
 
 	if ballot.RefBallot != types.EmptyBallotID {
 		if refBallot, err = ballots.Get(v.cdb, ballot.RefBallot); err != nil {
@@ -67,6 +70,9 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	}
 	if refBallot.EpochData == nil {
 		return false, fmt.Errorf("%w: ref ballot %v", errMissingEpochData, refBallot.ID())
+	}
+	if refBallot.AtxID != ballot.AtxID {
+		return false, fmt.Errorf("balot (%v/%v) should be sharing atx with a reference ballot (%v/%v)", ballot.ID(), ballot.AtxID, refBallot.ID(), refBallot.AtxID)
 	}
 
 	beacon := refBallot.EpochData.Beacon
@@ -80,19 +86,29 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	}
 
 	// todo: optimize by using reference to active set size and cache active set size to not load all atxsIDs from db
+	var owned *types.ActivationTxHeader
 	for _, atxID := range activeSets {
 		atx, err := v.cdb.GetAtxHeader(atxID)
 		if err != nil {
 			return false, fmt.Errorf("get ATX header %v: %w", atxID, err)
 		}
 		totalWeight += atx.GetWeight()
+		if atxID == ballot.AtxID {
+			owned = atx
+		}
+	}
+	if owned == nil {
+		return false, fmt.Errorf("atx %v from ballot %v (refballot %v) is not included into the active set", ballot.AtxID, ballot.ID(), refBallot.ID())
+	}
+	if targetEpoch := owned.TargetEpoch(); targetEpoch != epoch {
+		return false, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
+			errTargetEpochMismatch, targetEpoch, epoch)
+	}
+	if pub := ballot.SmesherID(); !bytes.Equal(owned.NodeID.Bytes(), pub.Bytes()) {
+		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), owned.NodeID)
 	}
 
-	atx, err := v.getBallotATX(ctx, ballot)
-	if err != nil {
-		return false, fmt.Errorf("get ballot ATX header %v: %w", ballot.AtxID, err)
-	}
-	atxWeight = atx.GetWeight()
+	atxWeight = owned.GetWeight()
 
 	numEligibleSlots, err := GetNumEligibleSlots(atxWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
 	if err != nil {
@@ -124,21 +140,21 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		vrfSig := proof.Sig
 
 		beaconStr := beacon.ShortString()
-		if !v.vrfVerifier.Verify(atx.NodeID, message, vrfSig) {
+		if !v.vrfVerifier.Verify(owned.NodeID, message, vrfSig) {
 			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
 				errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
 		}
 
 		eligibleLayer := CalcEligibleLayer(epoch, v.layersPerEpoch, vrfSig)
-		if ballot.LayerIndex != eligibleLayer {
+		if ballot.Layer != eligibleLayer {
 			return false, fmt.Errorf("%w: ballot layer (%v), eligible layer (%v)",
-				errIncorrectLayerIndex, ballot.LayerIndex, eligibleLayer)
+				errIncorrectLayerIndex, ballot.Layer, eligibleLayer)
 		}
 	}
 
 	v.logger.WithContext(ctx).With().Debug("ballot eligibility verified",
 		ballot.ID(),
-		ballot.LayerIndex,
+		ballot.Layer,
 		epoch,
 		beacon,
 	)
@@ -146,24 +162,4 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	weightPer := fixed.DivUint64(atxWeight, uint64(numEligibleSlots))
 	v.beacons.ReportBeaconFromBallot(epoch, ballot, beacon, weightPer)
 	return true, nil
-}
-
-func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*types.ActivationTxHeader, error) {
-	if ballot.AtxID == *types.EmptyATXID {
-		v.logger.WithContext(ctx).Panic("empty ATXID in ballot")
-	}
-
-	epoch := ballot.LayerIndex.GetEpoch()
-	atx, err := v.cdb.GetAtxHeader(ballot.AtxID)
-	if err != nil {
-		return nil, fmt.Errorf("get ballot ATX %v epoch %v: %w", ballot.AtxID.ShortString(), epoch, err)
-	}
-	if targetEpoch := atx.TargetEpoch(); targetEpoch != epoch {
-		return nil, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
-			errTargetEpochMismatch, targetEpoch, epoch)
-	}
-	if pub := ballot.SmesherID(); !bytes.Equal(atx.NodeID.Bytes(), pub.Bytes()) {
-		return nil, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), atx.NodeID)
-	}
-	return atx, nil
 }

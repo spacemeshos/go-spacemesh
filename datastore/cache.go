@@ -7,34 +7,40 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// AtxCache holds an lru cache of ActivationTxHeader structs of recent atx used to calculate active set size
-// ideally this cache will hold the atxs created in latest epoch, on which most of active set size calculation will be
-// performed.
-type AtxCache struct {
-	*lru.Cache
-}
-
 // NewAtxCache creates a new cache for activation transaction headers.
-func NewAtxCache(size int) AtxCache {
-	cache, err := lru.New(size)
+func NewAtxCache(size int) *Cache[types.ATXID, types.ActivationTxHeader] {
+	return NewCache[types.ATXID, types.ActivationTxHeader](size)
+}
+
+// NewMalfeasanceCache creates a cache of MalfeasanceProof of recent malicious identities.
+func NewMalfeasanceCache(size int) *Cache[types.NodeID, types.MalfeasanceProof] {
+	return NewCache[types.NodeID, types.MalfeasanceProof](size)
+}
+
+// Cache holds a lru cache of recent T instances.
+type Cache[K, V any] struct {
+	lru *lru.Cache
+}
+
+func NewCache[K, V any](size int) *Cache[K, V] {
+	lruCache, err := lru.New(size)
 	if err != nil {
-		log.Panic("could not initialize cache ", err)
+		log.Fatal("could not initialize cache ", err)
 	}
-	return AtxCache{Cache: cache}
+	return &Cache[K, V]{lru: lruCache}
 }
 
-// Add adds an ActivationTxHeader to cache.
-func (bc *AtxCache) Add(id types.ATXID, atxHeader *types.ActivationTxHeader) {
-	bc.Cache.Add(id, atxHeader)
+// Add adds a key-value pair to cache.
+func (c *Cache[K, V]) Add(key K, val *V) {
+	c.lru.Add(key, val)
 }
 
-// Get gets the corresponding ActivationTxHeader for the given id, it also returns a boolean to indicate whether the item
-// was found in cache.
-func (bc AtxCache) Get(id types.ATXID) (*types.ActivationTxHeader, bool) {
-	item, found := bc.Cache.Get(id)
+// Get gets the corresponding value for the given key.
+// it also returns a boolean to indicate whether the item was found in cache.
+func (c *Cache[K, V]) Get(key K) (*V, bool) {
+	item, found := c.lru.Get(key)
 	if !found {
 		return nil, false
 	}
-	atxHeader := item.(*types.ActivationTxHeader)
-	return atxHeader, true
+	return item.(*V), true
 }

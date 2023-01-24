@@ -7,11 +7,11 @@ type msgsTracker struct {
 }
 
 func (mt *msgsTracker) Track(m *Msg) {
-	mt.sigToPub[string(m.Sig)] = m.PubKey
+	mt.sigToPub[string(m.Signature)] = m.PubKey
 }
 
 func (mt *msgsTracker) PublicKey(m *Message) *signing.PublicKey {
-	return mt.sigToPub[string(m.Sig)]
+	return mt.sigToPub[string(m.Signature)]
 }
 
 func newMsgsTracker() *msgsTracker {

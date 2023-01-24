@@ -66,7 +66,7 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 	for lyr := start; !lyr.After(end); lyr = lyr.Add(1) {
 		for _, atx := range activeSet {
 			b := types.RandomBallot()
-			b.LayerIndex = lyr
+			b.Layer = lyr
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
@@ -353,7 +353,7 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 
 func Test_VrfSignVerify(t *testing.T) {
 	// eligibility of the proof depends on the identity
-	rng := rand.New(rand.NewSource(2))
+	rng := rand.New(rand.NewSource(5))
 
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	require.NoError(t, err)
@@ -361,7 +361,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	o := defaultOracle(t)
 	o.vrfSigner, err = signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
 	require.NoError(t, err)
-	nid := types.BytesToNodeID(o.vrfSigner.PublicKey().Bytes())
+	nid := signer.NodeID()
 
 	layer := types.NewLayerID(50)
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beaconWithValOne(), nil).Times(1)
@@ -374,7 +374,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	for lyr := start; !lyr.After(end); lyr = lyr.Add(1) {
 		for _, atx := range activeSet {
 			b := types.RandomBallot()
-			b.LayerIndex = lyr
+			b.Layer = lyr
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
@@ -467,7 +467,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	activeSet := types.RandomActiveSet(numMiners)
 	for _, atx := range activeSet {
 		b := types.RandomBallot()
-		b.LayerIndex = start
+		b.Layer = start
 		b.AtxID = atx
 		b.RefBallot = types.EmptyBallotID
 		b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
@@ -650,7 +650,7 @@ func TestActives_HareActiveSetDifferentBeacon(t *testing.T) {
 	for lyr := start; !lyr.After(end); lyr = lyr.Add(1) {
 		for _, atx := range atxIDs {
 			b := types.RandomBallot()
-			b.LayerIndex = lyr
+			b.Layer = lyr
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			if atx == badBeaconATX {

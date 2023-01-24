@@ -78,6 +78,10 @@ func (r *RatNum) ToBigRat() *big.Rat {
 	)
 }
 
+func RatNumFromBigRat(r *big.Rat) RatNum {
+	return RatNum{Num: r.Num().Uint64(), Denom: r.Denom().Uint64()}
+}
+
 // AnyReward contains the reward information.
 type AnyReward struct {
 	Coinbase Address

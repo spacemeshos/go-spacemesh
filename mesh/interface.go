@@ -21,3 +21,7 @@ type vmState interface {
 	Revert(types.LayerID) error
 	Apply(vm.ApplyContext, []types.Transaction, []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error)
 }
+
+type layerClock interface {
+	GetCurrentLayer() types.LayerID
+}

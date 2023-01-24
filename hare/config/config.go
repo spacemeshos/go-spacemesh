@@ -9,6 +9,8 @@ type Config struct {
 	ExpectedLeaders int `mapstructure:"hare-exp-leaders"`        // the expected number of leaders
 	LimitIterations int `mapstructure:"hare-limit-iterations"`   // limit on number of iterations
 	LimitConcurrent int `mapstructure:"hare-limit-concurrent"`   // limit number of concurrent CPs
+
+	Hdist uint32
 }
 
 // DefaultConfig returns the default configuration for the hare.
@@ -21,5 +23,6 @@ func DefaultConfig() Config {
 		ExpectedLeaders: 5,
 		LimitIterations: 5,
 		LimitConcurrent: 5,
+		Hdist:           20,
 	}
 }

@@ -24,6 +24,7 @@ env:
   CI_GCP_CREDENTIALS: ${{ secrets.CI_GCP_CREDENTIALS }}
   CI_GCP_PROJECT_ID: ${{ secrets.CI_GCP_PROJECT_ID }}
   CI_REGION_NAME: ${{ secrets.CI_REGION_NAME }}
+  USE_GKE_GCLOUD_AUTH_PLUGIN: True
 
 jobs:
   dockerpush:
@@ -63,6 +64,9 @@ jobs:
       - name: Configure gcloud
         uses: "google-github-actions/setup-gcloud@v1"
 
+      - name: Configure gke authentication plugin
+        run: gcloud components install gke-gcloud-auth-plugin --quiet
+
       - name: Configure kubectl
         run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --region ${{ secrets.CI_REGION_NAME }} --project ${{ secrets.CI_GCP_PROJECT_ID }}
 
@@ -100,7 +104,7 @@ jobs:
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 50
           bootstrap: 10m
-          level: info
+          level: debug
           clusters: 4
         run: make -C systest run test_name=.
 
@@ -113,7 +117,7 @@ jobs:
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 30
           bootstrap: 10m
-          level: info
+          level: debug
           clusters: 4
         run: make -C systest run test_name=.
 

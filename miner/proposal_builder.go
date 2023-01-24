@@ -180,7 +180,7 @@ func (pb *ProposalBuilder) stopped() bool {
 func (pb *ProposalBuilder) createProposal(
 	ctx context.Context,
 	layerID types.LayerID,
-	proofs []types.VotingEligibilityProof,
+	proofs []types.VotingEligibility,
 	atxID types.ATXID,
 	activeSet []types.ATXID,
 	beacon types.Beacon,
@@ -194,10 +194,8 @@ func (pb *ProposalBuilder) createProposal(
 	}
 
 	ib := &types.InnerBallot{
-		AtxID:             atxID,
-		EligibilityProofs: proofs,
-		LayerIndex:        layerID,
-		OpinionHash:       opinion.Hash,
+		AtxID:       atxID,
+		OpinionHash: opinion.Hash,
 	}
 
 	epoch := layerID.GetEpoch()
@@ -224,8 +222,12 @@ func (pb *ProposalBuilder) createProposal(
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
-				InnerBallot: *ib,
-				Votes:       opinion.Votes,
+				BallotMetadata: types.BallotMetadata{
+					Layer: layerID,
+				},
+				InnerBallot:       *ib,
+				Votes:             opinion.Votes,
+				EligibilityProofs: proofs,
 			},
 			TxIDs:    txIDs,
 			MeshHash: pb.decideMeshHash(logger, layerID),

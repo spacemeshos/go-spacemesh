@@ -88,7 +88,7 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 	slots, err := GetNumEligibleSlots(uint64(testedATXUnit), totalWeight, layerAvgSize, layersPerEpoch)
 	require.NoError(tb, err)
 	require.Equal(tb, eligibleSlots, slots)
-	eligibilityProofs := map[types.LayerID][]types.VotingEligibilityProof{}
+	eligibilityProofs := map[types.LayerID][]types.VotingEligibility{}
 	order := make([]types.LayerID, 0, eligibleSlots)
 
 	vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
@@ -103,7 +103,7 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 		if _, exist := eligibilityProofs[eligibleLayer]; !exist {
 			order = append(order, eligibleLayer)
 		}
-		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.VotingEligibilityProof{
+		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.VotingEligibility{
 			J:   counter,
 			Sig: vrfSig,
 		})
@@ -115,7 +115,7 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 		isRef := len(blts) == 0
 		b := types.RandomBallot()
 		b.AtxID = activeSet[0]
-		b.LayerIndex = lyr
+		b.Layer = lyr
 		if isRef {
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{
@@ -219,14 +219,15 @@ func TestCheckEligibility_FailToGetBallotATXHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
+
 	blts := createBallots(t, signer, activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
-	require.NoError(t, ballots.Add(tv.cdb, rb))
-	b := blts[1]
-	b.AtxID = types.RandomATXID()
-	eligible, err := tv.CheckEligibility(context.Background(), b)
+	randomAtx := types.RandomATXID()
+	rb.EpochData.ActiveSet = append(rb.EpochData.ActiveSet, randomAtx)
+	rb.AtxID = randomAtx
+	eligible, err := tv.CheckEligibility(context.Background(), rb)
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.True(t, strings.Contains(err.Error(), "get ballot ATX header"))
+	require.ErrorContains(t, err, "get ATX header")
 	require.False(t, eligible)
 }
 
@@ -351,7 +352,7 @@ func TestCheckEligibility_BadCounter(t *testing.T) {
 func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	tv := createTestValidator(t)
 	signer, err := signing.NewEdSigner(
-		signing.WithKeyFromRand(rand.New(rand.NewSource(2222))),
+		signing.WithKeyFromRand(rand.New(rand.NewSource(1121))),
 	)
 	require.NoError(t, err)
 
@@ -368,7 +369,7 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	require.False(t, eligible)
 
 	rb.EligibilityProofs[0], rb.EligibilityProofs[1] = rb.EligibilityProofs[1], rb.EligibilityProofs[0]
-	rb.EligibilityProofs = append(rb.EligibilityProofs, types.VotingEligibilityProof{J: 2})
+	rb.EligibilityProofs = append(rb.EligibilityProofs, types.VotingEligibility{J: 2})
 	eligible, err = tv.CheckEligibility(context.Background(), rb)
 	require.ErrorIs(t, err, errInvalidProofsOrder)
 	require.False(t, eligible)
@@ -416,6 +417,13 @@ func TestCheckEligibility_IncorrectLayerIndex(t *testing.T) {
 	require.False(t, eligible)
 }
 
+func TestCheckEligibility_EmptyEligibilityList(t *testing.T) {
+	tv := createTestValidator(t)
+	eligibile, err := tv.CheckEligibility(context.Background(), &types.Ballot{})
+	require.ErrorContains(t, err, "empty eligibility list")
+	require.False(t, eligibile)
+}
+
 func TestCheckEligibility(t *testing.T) {
 	tv := createTestValidator(t)
 	signer, err := signing.NewEdSigner(
@@ -438,4 +446,49 @@ func TestCheckEligibility(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, got)
 	}
+}
+
+func TestCheckEligibility_AtxIdMismatch(t *testing.T) {
+	tv := createTestValidator(t)
+	refballot := types.Ballot{}
+	refballot.SetID(types.BallotID{1})
+	refballot.AtxID = types.ATXID{1}
+	refballot.EpochData = &types.EpochData{}
+	require.NoError(t, ballots.Add(tv.cdb, &refballot))
+
+	ballot := &types.Ballot{}
+	ballot.EligibilityProofs = []types.VotingEligibility{{}}
+	ballot.RefBallot = refballot.ID()
+	ballot.AtxID = types.ATXID{2}
+
+	eligibile, err := tv.CheckEligibility(context.Background(), ballot)
+	require.ErrorContains(t, err, "should be sharing atx")
+	require.False(t, eligibile)
+}
+
+func TestCheckEligibility_AtxNotIncluded(t *testing.T) {
+	tv := createTestValidator(t)
+
+	atx1 := &types.VerifiedActivationTx{ActivationTx: &types.ActivationTx{}}
+	atx1.SetID(&types.ATXID{1})
+	atx1.SetNodeID(&types.NodeID{})
+	atx2 := &types.VerifiedActivationTx{ActivationTx: &types.ActivationTx{}}
+	atx2.SetID(&types.ATXID{2})
+	atx2.SetNodeID(&types.NodeID{})
+	require.NoError(t, atxs.Add(tv.cdb, atx1, time.Time{}))
+	require.NoError(t, atxs.Add(tv.cdb, atx2, time.Time{}))
+
+	ballot := &types.Ballot{}
+	ballot.EligibilityProofs = []types.VotingEligibility{{}}
+	ballot.SetID(types.BallotID{1})
+	ballot.AtxID = types.ATXID{3}
+	ballot.EpochData = &types.EpochData{
+		ActiveSet: []types.ATXID{atx1.ID(), atx2.ID()},
+		Beacon:    types.Beacon{1},
+	}
+	require.NoError(t, ballots.Add(tv.cdb, ballot))
+
+	eligibile, err := tv.CheckEligibility(context.Background(), ballot)
+	require.ErrorContains(t, err, "is not included into the active set")
+	require.False(t, eligibile)
 }

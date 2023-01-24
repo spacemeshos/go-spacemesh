@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/poet/integration"
-	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api"
+	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api/v1"
 	"github.com/spacemeshos/poet/shared"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -149,7 +149,7 @@ func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) (types.PoetServiceID
 		return nil, err
 	}
 
-	id := types.PoetServiceID(resBody.ServicePubKey)
+	id := types.PoetServiceID(resBody.ServicePubkey)
 	c.poetServiceID = &id
 	return id, nil
 }

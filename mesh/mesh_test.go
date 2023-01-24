@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
@@ -35,6 +36,7 @@ const (
 type testMesh struct {
 	*Mesh
 	db           sql.Executor
+	mockClock    *mocks.MocklayerClock
 	mockVM       *mocks.MockvmState
 	mockState    *mocks.MockconservativeState
 	mockTortoise *smocks.MockTortoise
@@ -56,12 +58,13 @@ func createTestMesh(t *testing.T) *testMesh {
 	ctrl := gomock.NewController(t)
 	tm := &testMesh{
 		db:           db,
+		mockClock:    mocks.NewMocklayerClock(ctrl),
 		mockVM:       mocks.NewMockvmState(ctrl),
 		mockState:    mocks.NewMockconservativeState(ctrl),
 		mockTortoise: smocks.NewMockTortoise(ctrl),
 	}
 	exec := NewExecutor(db, tm.mockVM, tm.mockState, lg)
-	msh, err := NewMesh(db, tm.mockTortoise, exec, tm.mockState, lg)
+	msh, err := NewMesh(db, tm.mockClock, tm.mockTortoise, exec, tm.mockState, lg)
 	require.NoError(t, err)
 	gLid := types.GetEffectiveGenesis()
 	checkLastAppliedInDB(t, msh, gLid)
@@ -133,7 +136,7 @@ func createLayerBlocks(t *testing.T, db sql.Executor, mesh *Mesh, lyrID types.La
 
 func genLayerBallot(tb testing.TB, layerID types.LayerID) *types.Ballot {
 	b := types.RandomBallot()
-	b.LayerIndex = layerID
+	b.Layer = layerID
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	b.Signature = sig.Sign(b.SignedBytes())
@@ -147,7 +150,9 @@ func createLayerBallots(tb testing.TB, mesh *Mesh, lyrID types.LayerID) []*types
 	for i := 0; i < numBallots; i++ {
 		ballot := genLayerBallot(tb, lyrID)
 		blts = append(blts, ballot)
-		require.NoError(tb, mesh.AddBallot(context.Background(), ballot))
+		malProof, err := mesh.AddBallot(context.Background(), ballot)
+		require.NoError(tb, err)
+		require.Nil(tb, malProof)
 	}
 	return blts
 }
@@ -183,7 +188,7 @@ func TestMesh_FromGenesis(t *testing.T) {
 
 func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 	tm := createTestMesh(t)
-	msh, err := NewMesh(tm.cdb, tm.mockTortoise, tm.executor, tm.mockState, logtest.New(t))
+	msh, err := NewMesh(tm.cdb, tm.mockClock, tm.mockTortoise, tm.executor, tm.mockState, logtest.New(t))
 	require.NoError(t, err)
 	gLid := types.GetEffectiveGenesis()
 	checkProcessedInDB(t, msh, gLid)
@@ -199,7 +204,7 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 func TestMesh_WakeUp(t *testing.T) {
 	tm := createTestMesh(t)
 	latest := types.NewLayerID(11)
-	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, []byte{}, types.NodeID{}, types.InnerBallot{LayerIndex: latest})
+	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, []byte{}, types.NodeID{}, types.BallotMetadata{Layer: latest})
 	require.NoError(t, ballots.Add(tm.cdb, &b))
 	require.NoError(t, layers.SetProcessed(tm.cdb, latest))
 	latestState := latest.Sub(1)
@@ -208,7 +213,7 @@ func TestMesh_WakeUp(t *testing.T) {
 	tm.mockVM.EXPECT().Revert(latestState)
 	tm.mockState.EXPECT().RevertCache(latestState)
 	tm.mockVM.EXPECT().GetStateRoot()
-	msh, err := NewMesh(tm.cdb, tm.mockTortoise, tm.executor, tm.mockState, logtest.New(t))
+	msh, err := NewMesh(tm.cdb, tm.mockClock, tm.mockTortoise, tm.executor, tm.mockState, logtest.New(t))
 	require.NoError(t, err)
 	gotL := msh.LatestLayer()
 	require.Equal(t, latest, gotL)
@@ -763,17 +768,54 @@ func TestMesh_CallOnBlock(t *testing.T) {
 func TestMesh_MaliciousBallots(t *testing.T) {
 	tm := createTestMesh(t)
 	lid := types.NewLayerID(1)
-	pub := types.BytesToNodeID([]byte{1, 1, 1})
+	nodeID := types.BytesToNodeID([]byte{1, 1, 1})
 
 	blts := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{1}, nil, pub, types.InnerBallot{LayerIndex: lid}),
-		types.NewExistingBallot(types.BallotID{2}, nil, pub, types.InnerBallot{LayerIndex: lid}),
-		types.NewExistingBallot(types.BallotID{3}, nil, pub, types.InnerBallot{LayerIndex: lid}),
+		types.NewExistingBallot(types.BallotID{1}, []byte("signature 0"), nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{1}}),
+		types.NewExistingBallot(types.BallotID{2}, []byte("signature 1"), nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{2}}),
+		types.NewExistingBallot(types.BallotID{3}, []byte("signature 2"), nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{3}}),
 	}
-	require.NoError(t, tm.AddBallot(context.Background(), &blts[0]))
+	malProof, err := tm.AddBallot(context.Background(), &blts[0])
+	require.NoError(t, err)
+	require.Nil(t, malProof)
 	require.False(t, blts[0].IsMalicious())
-	for _, ballot := range blts[1:] {
-		require.NoError(t, tm.AddBallot(context.Background(), &ballot))
-		require.True(t, ballot.IsMalicious())
-	}
+	mal, err := identities.IsMalicious(tm.cdb, nodeID)
+	require.NoError(t, err)
+	require.False(t, mal)
+	saved, err := identities.GetMalfeasanceProof(tm.cdb, nodeID)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, saved)
+
+	// second one will create a MalfeasanceProof
+	tm.mockClock.EXPECT().GetCurrentLayer().Return(types.NewLayerID(11))
+	malProof, err = tm.AddBallot(context.Background(), &blts[1])
+	require.NoError(t, err)
+	require.NotNil(t, malProof)
+	require.True(t, blts[1].IsMalicious())
+	require.EqualValues(t, types.MultipleBallots, malProof.Proof.Type)
+	proof, ok := malProof.Proof.Data.(*types.BallotProof)
+	require.True(t, ok)
+	require.Equal(t, blts[0].BallotMetadata, proof.Messages[0].InnerMsg)
+	require.Equal(t, blts[0].Signature, proof.Messages[0].Signature)
+	require.Equal(t, blts[1].BallotMetadata, proof.Messages[1].InnerMsg)
+	require.Equal(t, blts[1].Signature, proof.Messages[1].Signature)
+	mal, err = identities.IsMalicious(tm.cdb, nodeID)
+	require.NoError(t, err)
+	require.True(t, mal)
+	saved, err = identities.GetMalfeasanceProof(tm.cdb, nodeID)
+	require.NoError(t, err)
+	require.EqualValues(t, malProof, saved)
+	expected := malProof
+
+	// third one will NOT generate another MalfeasanceProof
+	malProof, err = tm.AddBallot(context.Background(), &blts[2])
+	require.NoError(t, err)
+	require.Nil(t, malProof)
+	// but identity is still malicious
+	mal, err = identities.IsMalicious(tm.cdb, nodeID)
+	require.NoError(t, err)
+	require.True(t, mal)
+	saved, err = identities.GetMalfeasanceProof(tm.cdb, nodeID)
+	require.NoError(t, err)
+	require.EqualValues(t, expected, saved)
 }
