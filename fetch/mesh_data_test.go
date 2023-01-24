@@ -227,9 +227,11 @@ func genLayerProposal(tb testing.TB, layerID types.LayerID, txs []types.Transact
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
+				BallotMetadata: types.BallotMetadata{
+					Layer: layerID,
+				},
 				InnerBallot: types.InnerBallot{
-					AtxID:      types.RandomATXID(),
-					LayerIndex: layerID,
+					AtxID: types.RandomATXID(),
 					EpochData: &types.EpochData{
 						ActiveSet: types.RandomActiveSet(10),
 						Beacon:    types.RandomBeacon(),
@@ -249,7 +251,7 @@ func genLayerProposal(tb testing.TB, layerID types.LayerID, txs []types.Transact
 
 func genLayerBallot(tb testing.TB, layerID types.LayerID) *types.Ballot {
 	b := types.RandomBallot()
-	b.LayerIndex = layerID
+	b.Layer = layerID
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	b.Signature = signer.Sign(b.SignedBytes())
@@ -350,12 +352,11 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 	tb.Helper()
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
+	nodeID := sig.NodeID()
 	atxs := make([]*types.ActivationTx, 0, num)
 	for i := uint32(0); i < num; i++ {
-		atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{1, 2, 3}, &types.NIPost{}, i, nil, nil)
-		require.NoError(tb, activation.SignAtx(sig, atx))
-		require.NoError(tb, atx.CalcAndSetID())
-		require.NoError(tb, atx.CalcAndSetNodeID())
+		atx := types.NewActivationTx(types.NIPostChallenge{}, &nodeID, types.Address{1, 2, 3}, &types.NIPost{}, i, nil, nil)
+		require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
 		atxs = append(atxs, atx)
 	}
 	return atxs

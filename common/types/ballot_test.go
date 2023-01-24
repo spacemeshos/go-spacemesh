@@ -11,14 +11,19 @@ import (
 )
 
 func TestBallotIDUnaffectedByVotes(t *testing.T) {
+	meta := types.BallotMetadata{
+		Layer: types.NewLayerID(1),
+	}
 	inner := types.InnerBallot{
-		LayerIndex: types.NewLayerID(1),
+		AtxID: types.ATXID{1, 2, 3},
 	}
 	ballot1 := types.Ballot{
-		InnerBallot: inner,
+		BallotMetadata: meta,
+		InnerBallot:    inner,
 	}
 	ballot2 := types.Ballot{
-		InnerBallot: inner,
+		BallotMetadata: meta,
+		InnerBallot:    inner,
 	}
 	ballot1.Votes.Support = []types.Vote{{ID: types.BlockID{1}}}
 	ballot1.Votes.Support = []types.Vote{{ID: types.BlockID{2}}}
@@ -39,17 +44,7 @@ func TestBallot_IDSize(t *testing.T) {
 }
 
 func TestBallot_Initialize(t *testing.T) {
-	b := types.Ballot{
-		InnerBallot: types.InnerBallot{
-			AtxID:      types.RandomATXID(),
-			RefBallot:  types.RandomBallotID(),
-			LayerIndex: types.NewLayerID(10),
-		},
-		Votes: types.Votes{
-			Base:    types.RandomBallotID(),
-			Against: []types.Vote{{ID: types.RandomBlockID()}, {ID: types.RandomBlockID()}},
-		},
-	}
+	b := types.RandomBallot()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	b.Signature = signer.Sign(b.SignedBytes())
@@ -62,22 +57,22 @@ func TestBallot_Initialize(t *testing.T) {
 }
 
 func TestBallot_Initialize_BadSignature(t *testing.T) {
-	b := types.Ballot{
-		InnerBallot: types.InnerBallot{
-			AtxID:      types.RandomATXID(),
-			RefBallot:  types.RandomBallotID(),
-			LayerIndex: types.NewLayerID(10),
-		},
-		Votes: types.Votes{
-			Base:    types.RandomBallotID(),
-			Support: []types.Vote{{ID: types.RandomBlockID()}, {ID: types.RandomBlockID()}},
-		},
-	}
+	b := types.RandomBallot()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	b.Signature = signer.Sign(b.SignedBytes())[1:]
 	err = b.Initialize()
 	require.EqualError(t, err, "ballot extract key: ed25519: bad signature format")
+}
+
+func TestBallot_Initialize_BadMsgHash(t *testing.T) {
+	b := types.RandomBallot()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	b.Signature = signer.Sign(b.SignedBytes())
+	b.MsgHash = types.RandomHash()
+	err = b.Initialize()
+	require.EqualError(t, err, "bad message hash")
 }
 
 func FuzzBallotConsistency(f *testing.F) {
@@ -113,13 +108,13 @@ func FuzzEpochDataSafety(f *testing.F) {
 }
 
 func FuzzVotingEligibilityProofConsistency(f *testing.F) {
-	tester.FuzzConsistency[types.VotingEligibilityProof](f)
+	tester.FuzzConsistency[types.VotingEligibility](f)
 }
 
 func FuzzVotingEligibilityProofSafety(f *testing.F) {
-	tester.FuzzSafety[types.VotingEligibilityProof](f)
+	tester.FuzzSafety[types.VotingEligibility](f)
 }
 
 func TestBallotEncoding(t *testing.T) {
-	types.CheckLayerFirstEncoding(t, func(object types.Ballot) types.LayerID { return object.LayerIndex })
+	types.CheckLayerFirstEncoding(t, func(object types.Ballot) types.LayerID { return object.Layer })
 }

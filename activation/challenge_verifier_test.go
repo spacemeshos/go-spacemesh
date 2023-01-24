@@ -59,6 +59,11 @@ func createInitialChallenge(post types.Post, meta types.PostMetadata, numUnits u
 func Test_SignatureVerification(t *testing.T) {
 	t.Parallel()
 	req := require.New(t)
+
+	ctrl := gomock.NewController(t)
+	atxProvider := activation.NewMockatxProvider(ctrl)
+	validator := activation.NewMocknipostValidator(ctrl)
+
 	extractor, err := signing.NewPubKeyExtractor()
 	req.NoError(err)
 	challenge := types.PoetChallenge{
@@ -75,7 +80,7 @@ func Test_SignatureVerification(t *testing.T) {
 	challengeBytes, err := codec.Encode(&challenge)
 	req.NoError(err)
 
-	verifier := activation.NewChallengeVerifier(activation.NewMockatxProvider(gomock.NewController(t)), extractor, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
+	verifier := activation.NewChallengeVerifier(atxProvider, extractor, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 	_, err = verifier.Verify(context.Background(), challengeBytes, types.RandomBytes(32))
 	req.ErrorIs(err, activation.ErrSignatureInvalid)
 }
@@ -104,32 +109,49 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 	validPost, validPostMeta, err := mgr.GenerateProof(shared.ZeroChallenge)
 	req.NoError(err)
 
-	verifier := activation.NewChallengeVerifier(activation.NewMockatxProvider(gomock.NewController(t)), sigVerifier, postConfig, goldenATXID, layersPerEpoch)
-
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
 		challenge := createInitialChallenge(*validPost, *validPostMeta, postConfig.MinNumUnits)
 		challengeBytes, err := codec.Encode(&challenge)
 		req.NoError(err)
-		challengeHash, err := challenge.Hash()
-		req.NoError(err)
+		challengeHash := challenge.Hash()
 
+		ctrl := gomock.NewController(t)
+		atxProvider := activation.NewMockatxProvider(ctrl)
+		validator := activation.NewMocknipostValidator(ctrl)
+		validator.EXPECT().NumUnits(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PostMetadata(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, postConfig, goldenATXID, layersPerEpoch)
 		result, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.NoError(err)
-		req.Equal(*challengeHash, result.Hash)
+		req.Equal(challengeHash, result.Hash)
 		req.EqualValues(pubKey, result.NodeID.Bytes())
 	})
-	t.Run("Sequence != 0", func(t *testing.T) {
+
+	t.Run("invalid initial NIPostChallenge", func(t *testing.T) {
 		t.Parallel()
 		challenge := createInitialChallenge(*validPost, *validPostMeta, postConfig.MinNumUnits)
 		challenge.Sequence = 1
 		challengeBytes, err := codec.Encode(&challenge)
 		req.NoError(err)
 
+		ctrl := gomock.NewController(t)
+		atxProvider := activation.NewMockatxProvider(ctrl)
+		validator := activation.NewMocknipostValidator(ctrl)
+		validator.EXPECT().NumUnits(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid initial nipost challenge")).Times(1)
+
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, postConfig, goldenATXID, layersPerEpoch)
 		_, err = verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
-		req.ErrorContains(err, "no prevATX declared, but sequence number not zero")
+		req.ErrorContains(err, "invalid initial nipost challenge")
 	})
+
 	t.Run("InitialPost not provided", func(t *testing.T) {
 		t.Parallel()
 		challenge := createInitialChallenge(*validPost, *validPostMeta, postConfig.MinNumUnits)
@@ -137,33 +159,18 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 		challengeBytes, err := codec.Encode(&challenge)
 		req.NoError(err)
 
+		ctrl := gomock.NewController(t)
+		atxProvider := activation.NewMockatxProvider(ctrl)
+		validator := activation.NewMocknipostValidator(ctrl)
+		validator.EXPECT().NumUnits(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, postConfig, goldenATXID, layersPerEpoch)
 		_, err = verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
 		req.ErrorContains(err, "initial Post is not included")
 	})
-	t.Run("CommitmentATX not provided", func(t *testing.T) {
-		t.Parallel()
-		challenge := createInitialChallenge(*validPost, *validPostMeta, postConfig.MinNumUnits)
-		challenge.CommitmentATX = nil
-		challengeBytes, err := codec.Encode(&challenge)
-		req.NoError(err)
 
-		_, err = verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
-		req.ErrorIs(err, activation.ErrChallengeInvalid)
-		req.ErrorContains(err, "no prevATX declared, but commitmentATX is missing")
-	})
-	t.Run("InitialPostIndices not provided", func(t *testing.T) {
-		t.Parallel()
-
-		challenge := createInitialChallenge(*validPost, *validPostMeta, postConfig.MinNumUnits)
-		challenge.InitialPostIndices = nil
-		challengeBytes, err := codec.Encode(&challenge)
-		req.NoError(err)
-
-		_, err = verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
-		req.ErrorIs(err, activation.ErrChallengeInvalid)
-		req.ErrorContains(err, "initial Post indices is not included")
-	})
 	t.Run("invalid post proof", func(t *testing.T) {
 		t.Parallel()
 		invalidPost := *validPost
@@ -173,10 +180,22 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 		challengeBytes, err := codec.Encode(&challenge)
 		req.NoError(err)
 
+		ctrl := gomock.NewController(t)
+		atxProvider := activation.NewMockatxProvider(ctrl)
+		validator := activation.NewMocknipostValidator(ctrl)
+		validator.EXPECT().NumUnits(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PostMetadata(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid post")).Times(1)
+
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, postConfig, goldenATXID, layersPerEpoch)
 		_, err = verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
+		req.ErrorContains(err, "invalid post")
 	})
-	t.Run("invalid post metadata (NumUnits < MinNumUnits)", func(t *testing.T) {
+
+	t.Run("invalid num units", func(t *testing.T) {
 		t.Parallel()
 		invalidPost := *validPost
 		invalidPost.Nonce += 1
@@ -184,21 +203,18 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 		challengeBytes, err := codec.Encode(&challenge)
 		req.NoError(err)
 
-		_, err = verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
-		req.ErrorIs(err, activation.ErrChallengeInvalid)
-	})
-	t.Run("invalid post metadata (NumUnits > MaxNumUnits)", func(t *testing.T) {
-		t.Parallel()
-		invalidPost := *validPost
-		invalidPost.Nonce += 1
-		challenge := createInitialChallenge(invalidPost, *validPostMeta, postConfig.MaxNumUnits+1)
-		challengeBytes, err := codec.Encode(&challenge)
-		req.NoError(err)
+		ctrl := gomock.NewController(t)
+		atxProvider := activation.NewMockatxProvider(ctrl)
+		validator := activation.NewMocknipostValidator(ctrl)
+		validator.EXPECT().NumUnits(gomock.Any(), gomock.Any()).Return(errors.New("wrong num units")).Times(1)
 
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, postConfig, goldenATXID, layersPerEpoch)
 		_, err = verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
+		req.ErrorContains(err, "wrong num units")
 	})
-	t.Run("invalid post metadata (BitsPerLabel)", func(t *testing.T) {
+
+	t.Run("invalid post metadata", func(t *testing.T) {
 		t.Parallel()
 		invalidPostMeta := *validPostMeta
 		invalidPostMeta.BitsPerLabel += 1
@@ -206,42 +222,18 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 		challengeBytes, err := codec.Encode(&challenge)
 		req.NoError(err)
 
-		_, err = verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
-		req.ErrorIs(err, activation.ErrChallengeInvalid)
-	})
-	t.Run("invalid post metadata (LabelsPerUnit)", func(t *testing.T) {
-		t.Parallel()
-		invalidPostMeta := *validPostMeta
-		invalidPostMeta.LabelsPerUnit = 0
-		challenge := createInitialChallenge(*validPost, invalidPostMeta, postConfig.MinNumUnits)
-		challengeBytes, err := codec.Encode(&challenge)
-		req.NoError(err)
+		ctrl := gomock.NewController(t)
+		atxProvider := activation.NewMockatxProvider(ctrl)
+		validator := activation.NewMocknipostValidator(ctrl)
+		validator.EXPECT().NumUnits(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PostMetadata(gomock.Any(), gomock.Any()).Return(errors.New("wrong post metadata")).Times(1)
 
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, postConfig, goldenATXID, layersPerEpoch)
 		_, err = verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
-	})
-	t.Run("invalid post metadata (K1)", func(t *testing.T) {
-		t.Parallel()
-		invalidPostMeta := *validPostMeta
-		invalidPostMeta.K1 += 1
-		challenge := createInitialChallenge(*validPost, invalidPostMeta, postConfig.MinNumUnits)
-		challengeBytes, err := codec.Encode(&challenge)
-		req.NoError(err)
-
-		_, err = verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
-		req.ErrorIs(err, activation.ErrChallengeInvalid)
-	})
-	t.Run("invalid post metadata (K2)", func(t *testing.T) {
-		t.Parallel()
-		invalidPostMeta := *validPostMeta
-		invalidPostMeta.K2 -= 1
-		challenge := createInitialChallenge(*validPost, invalidPostMeta, postConfig.MinNumUnits)
-		challengeBytes, err := codec.Encode(&challenge)
-		req.NoError(err)
-
-		_, err = verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
-		req.ErrorIs(err, activation.ErrChallengeInvalid)
-		req.ErrorContains(err, "K2")
+		req.ErrorContains(err, "wrong post metadata")
 	})
 }
 
@@ -271,8 +263,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 	}
 	challengeBytes, err := codec.Encode(&challenge)
 	req.NoError(err)
-	challengeHash, err := challenge.Hash()
-	req.NoError(err)
+	challengeHash := challenge.Hash()
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
@@ -286,76 +277,65 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 				ID:     goldenATXID,
 				NodeID: nodeID,
 			}, nil)
-		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
+		validator := activation.NewMocknipostValidator(ctrl)
+		validator.EXPECT().NumUnits(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		result, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.NoError(err)
-		req.Equal(*challengeHash, result.Hash)
+		req.Equal(challengeHash, result.Hash)
 		req.EqualValues(pubKey, result.NodeID.Bytes())
 	})
-	t.Run("positioning ATX unavailable", func(t *testing.T) {
+
+	t.Run("positioning ATX validation fails with ErrAtxNotFound", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
 		atxProvider := activation.NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(nil, errAtxNotFound)
-		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
+
+		validator := activation.NewMocknipostValidator(ctrl)
+		validator.EXPECT().NumUnits(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&activation.ErrAtxNotFound{Id: challenge.PositioningATX}).Times(1)
+
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, &activation.VerifyError{})
-		req.ErrorIs(err, &activation.AtxNotFoundError{Id: challenge.PositioningATX})
+		req.ErrorIs(err, &activation.ErrAtxNotFound{Id: challenge.PositioningATX})
 	})
 
-	t.Run("NodeID doesn't match previous ATX NodeID", func(t *testing.T) {
+	t.Run("positioning ATX validation fails with other error", func(t *testing.T) {
+		t.Parallel()
+		ctrl := gomock.NewController(t)
+		atxProvider := activation.NewMockatxProvider(ctrl)
+		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
+
+		validator := activation.NewMocknipostValidator(ctrl)
+		validator.EXPECT().NumUnits(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("failed positioning ATX validation")).Times(1)
+
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
+		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
+		req.ErrorIs(err, activation.ErrChallengeInvalid)
+		req.ErrorContains(err, "failed positioning ATX validation")
+	})
+
+	t.Run("nipost challenge validation fail", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
 		atxProvider := activation.NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
-		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
+
+		validator := activation.NewMocknipostValidator(ctrl)
+		validator.EXPECT().NumUnits(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("failed nipost challenge validation")).Times(1)
+
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
-		req.ErrorContains(err, "previous atx belongs to different miner")
-	})
-	t.Run("previous ATX unavailable", func(t *testing.T) {
-		t.Parallel()
-		ctrl := gomock.NewController(t)
-		atxProvider := activation.NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
-		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).AnyTimes().Return(nil, errAtxNotFound)
-		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
-		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
-		req.ErrorIs(err, &activation.VerifyError{})
-		req.ErrorIs(err, &activation.AtxNotFoundError{Id: challenge.PrevATXID})
-	})
-	t.Run("publayerID is not after previousATX.publayerID ", func(t *testing.T) {
-		t.Parallel()
-		ctrl := gomock.NewController(t)
-		atxProvider := activation.NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
-		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).AnyTimes().Return(&types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				Sequence:   0,
-				PubLayerID: challenge.PubLayerID,
-			},
-			NodeID: nodeID,
-		}, nil)
-		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
-		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
-		req.ErrorIs(err, activation.ErrChallengeInvalid)
-		req.ErrorContains(err, "prevAtx epoch (1, layer 10) isn't older than current atx epoch (1, layer 10)")
-	})
-	t.Run("publayerID is not after positioningATX.publayerID", func(t *testing.T) {
-		t.Parallel()
-		ctrl := gomock.NewController(t)
-		atxProvider := activation.NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(&types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				Sequence:   0,
-				PubLayerID: challenge.PubLayerID,
-			},
-			NodeID: nodeID,
-		}, nil)
-		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
-		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
-		req.ErrorIs(err, activation.ErrChallengeInvalid)
-		req.ErrorContains(err, "positioning atx layer (10) must be before 10")
+		req.ErrorContains(err, "failed nipost challenge validation")
 	})
 }

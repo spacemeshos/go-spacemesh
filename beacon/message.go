@@ -3,7 +3,9 @@ package beacon
 import (
 	"encoding/json"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 //go:generate scalegen
@@ -17,9 +19,9 @@ type ProposalMessage struct {
 
 // String returns a string form of ProposalMessage.
 func (p ProposalMessage) String() string {
-	bytes, err := json.Marshal(p)
+	bytes, err := codec.Encode(&p)
 	if err != nil {
-		panic(err)
+		log.With().Fatal("failed to encode ProposalMessage", log.Err(err))
 	}
 
 	return string(bytes)

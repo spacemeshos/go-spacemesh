@@ -2,9 +2,11 @@ package hare
 
 import (
 	"bytes"
-	"fmt"
 	"sort"
+	"strings"
 	"sync"
+
+	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
@@ -52,10 +54,9 @@ func (mType MessageType) String() string {
 
 // Set represents a unique set of values.
 type Set struct {
-	valuesMu  sync.RWMutex
-	values    map[types.ProposalID]struct{}
-	id        types.Hash32
-	isIDValid bool
+	mu     sync.RWMutex
+	values map[types.ProposalID]struct{}
+	sid    types.Hash32
 }
 
 // NewDefaultEmptySet creates an empty set with the default size.
@@ -65,53 +66,37 @@ func NewDefaultEmptySet() *Set {
 
 // NewEmptySet creates an empty set with the provided size.
 func NewEmptySet(size int) *Set {
-	s := &Set{}
-	s.initWithSize(size)
-	s.id = types.Hash32{}
-	s.isIDValid = false
-
-	return s
+	return &Set{values: make(map[types.ProposalID]struct{}, size)}
 }
 
 // NewSetFromValues creates a set of the provided values.
 // Note: duplicated values are ignored.
 func NewSetFromValues(values ...types.ProposalID) *Set {
-	s := &Set{}
-	s.initWithSize(len(values))
+	s := &Set{values: make(map[types.ProposalID]struct{}, len(values))}
 	for _, v := range values {
-		s.Add(v)
+		s.values[v] = struct{}{}
 	}
-	s.id = types.Hash32{}
-	s.isIDValid = false
-
 	return s
 }
 
 // NewSet creates a set from the provided array of values.
 // Note: duplicated values are ignored.
 func NewSet(data []types.ProposalID) *Set {
-	s := &Set{}
-	s.isIDValid = false
-
-	s.initWithSize(len(data))
-
-	// SAFETY: It's safe not to lock here as `s` was just
-	// created and nobody else has access to it yet.
-	for _, bid := range data {
-		s.values[bid] = struct{}{}
+	s := &Set{values: make(map[types.ProposalID]struct{}, len(data))}
+	for _, v := range data {
+		s.values[v] = struct{}{}
 	}
-
 	return s
 }
 
 // Clone creates a copy of the set.
 func (s *Set) Clone() *Set {
-	s.valuesMu.RLock()
-	defer s.valuesMu.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	clone := NewEmptySet(len(s.values))
-	for bid := range s.values {
-		clone.Add(bid)
+	for v := range s.values {
+		clone.values[v] = struct{}{}
 	}
 
 	return clone
@@ -119,51 +104,55 @@ func (s *Set) Clone() *Set {
 
 // Contains returns true if the provided value is contained in the set, false otherwise.
 func (s *Set) Contains(id types.ProposalID) bool {
-	return s.contains(id)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	_, ok := s.values[id]
+	return ok
 }
 
 // Add a value to the set.
 // It has no effect if the value already exists in the set.
 func (s *Set) Add(id types.ProposalID) {
-	s.valuesMu.Lock()
-	defer s.valuesMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if _, exist := s.values[id]; exist {
 		return
 	}
 
-	s.isIDValid = false
+	s.sid = types.Hash32{}
 	s.values[id] = struct{}{}
 }
 
 // Remove a value from the set.
 // It has no effect if the value doesn't exist in the set.
 func (s *Set) Remove(id types.ProposalID) {
-	s.valuesMu.Lock()
-	defer s.valuesMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if _, exist := s.values[id]; !exist {
 		return
 	}
 
-	s.isIDValid = false
+	s.sid = types.Hash32{}
 	delete(s.values, id)
 }
 
 // Equals returns true if the provided set represents this set, false otherwise.
 func (s *Set) Equals(g *Set) bool {
-	s.valuesMu.RLock()
-	defer s.valuesMu.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	g.valuesMu.RLock()
-	defer g.valuesMu.RUnlock()
+	g.mu.RLock()
+	defer g.mu.RUnlock()
 
 	if len(s.values) != len(g.values) {
 		return false
 	}
 
-	for bid := range s.values {
-		if _, exist := g.values[bid]; !exist {
+	for v := range s.values {
+		if _, exist := g.values[v]; !exist {
 			return false
 		}
 	}
@@ -173,37 +162,24 @@ func (s *Set) Equals(g *Set) bool {
 
 // ToSlice returns the array representation of the set.
 func (s *Set) ToSlice() []types.ProposalID {
-	s.valuesMu.RLock()
-	defer s.valuesMu.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	// order keys
-	keys := make([]types.ProposalID, len(s.values))
-	i := 0
-	for k := range s.values {
-		keys[i] = k
-		i++
-	}
-	sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i].Bytes(), keys[j].Bytes()) == -1 })
-
-	l := make([]types.ProposalID, 0, len(s.values))
-	for i := range keys {
-		l = append(l, keys[i])
-	}
-	return l
+	return s.sortedLocked()
 }
 
-func (s *Set) updateID() {
-	s.valuesMu.RLock()
-	defer s.valuesMu.RUnlock()
+// ID returns the ObjectID of the set.
+func (s *Set) ID() types.Hash32 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.sid != (types.Hash32{}) {
+		return s.sid
+	}
 
 	// order keys
-	keys := make([]types.ProposalID, len(s.values))
-	i := 0
-	for k := range s.values {
-		keys[i] = k
-		i++
-	}
-	sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i].Bytes(), keys[j].Bytes()) == -1 })
+	keys := s.sortedLocked()
 
 	// calc
 	h := hash.New()
@@ -212,38 +188,37 @@ func (s *Set) updateID() {
 	}
 
 	// update
-	s.id = types.BytesToHash(h.Sum([]byte{}))
-	s.isIDValid = true
+	s.sid = types.BytesToHash(h.Sum([]byte{}))
+	return s.sid
 }
 
-// ID returns the ObjectID of the set.
-func (s *Set) ID() types.Hash32 {
-	if !s.isIDValid {
-		s.updateID()
-	}
+func (s *Set) sortedLocked() []types.ProposalID {
+	result := maps.Keys(s.values)
+	sort.Slice(result, func(i, j int) bool { return bytes.Compare(result[i].Bytes(), result[j].Bytes()) == -1 })
 
-	return s.id
+	return result
 }
 
 func (s *Set) String() string {
-	s.valuesMu.RLock()
-	defer s.valuesMu.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	// TODO: should improve
-	b := new(bytes.Buffer)
+	var sb strings.Builder
+	idx := len(s.values) - 1
 	for v := range s.values {
-		fmt.Fprintf(b, "%v,", v.String())
+		idx--
+		sb.WriteString(v.String())
+		if idx > 0 {
+			sb.WriteString(",")
+		}
 	}
-	if b.Len() >= 1 {
-		return b.String()[:b.Len()-1]
-	}
-	return b.String()
+	return sb.String()
 }
 
 // IsSubSetOf returns true if s is a subset of g, false otherwise.
 func (s *Set) IsSubSetOf(g *Set) bool {
-	s.valuesMu.RLock()
-	defer s.valuesMu.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	for v := range s.values {
 		if !g.Contains(v) {
@@ -256,8 +231,8 @@ func (s *Set) IsSubSetOf(g *Set) bool {
 
 // Intersection returns the intersection a new set which represents the intersection of s and g.
 func (s *Set) Intersection(g *Set) *Set {
-	s.valuesMu.RLock()
-	defer s.valuesMu.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	both := NewEmptySet(len(s.values))
 	for v := range s.values {
@@ -271,20 +246,20 @@ func (s *Set) Intersection(g *Set) *Set {
 
 // Union returns a new set which represents the union set of s and g.
 func (s *Set) Union(g *Set) *Set {
-	s.valuesMu.RLock()
-	defer s.valuesMu.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	g.valuesMu.RLock()
-	defer g.valuesMu.RUnlock()
+	g.mu.RLock()
+	defer g.mu.RUnlock()
 
 	union := NewEmptySet(len(s.values) + len(g.values))
 
 	for v := range s.values {
-		union.Add(v)
+		union.values[v] = struct{}{}
 	}
 
 	for v := range g.values {
-		union.Add(v)
+		union.values[v] = struct{}{}
 	}
 
 	return union
@@ -292,13 +267,13 @@ func (s *Set) Union(g *Set) *Set {
 
 // Complement returns a new set that represents the complement of s relatively to the world u.
 func (s *Set) Complement(u *Set) *Set {
-	s.valuesMu.RLock()
-	defer s.valuesMu.RUnlock()
+	u.mu.RLock()
+	defer u.mu.RUnlock()
 
 	comp := NewEmptySet(len(u.values))
 	for v := range u.values {
 		if !s.Contains(v) {
-			comp.Add(v)
+			comp.values[v] = struct{}{}
 		}
 	}
 
@@ -307,50 +282,18 @@ func (s *Set) Complement(u *Set) *Set {
 
 // Subtract g from s.
 func (s *Set) Subtract(g *Set) {
-	g.valuesMu.RLock()
-	defer g.valuesMu.RUnlock()
+	g.mu.RLock()
+	defer g.mu.RUnlock()
 
 	for v := range g.values {
 		s.Remove(v)
 	}
 }
 
-// Size returns the number of elements in the set.
+// Size returns the number of SortedElements in the set.
 func (s *Set) Size() int {
-	return s.len()
-}
-
-func (s *Set) initWithSize(size int) {
-	s.valuesMu.Lock()
-	defer s.valuesMu.Unlock()
-
-	s.values = make(map[types.ProposalID]struct{}, size)
-}
-
-func (s *Set) len() int {
-	s.valuesMu.RLock()
-	defer s.valuesMu.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	return len(s.values)
-}
-
-func (s *Set) contains(id types.ProposalID) bool {
-	s.valuesMu.RLock()
-	defer s.valuesMu.RUnlock()
-
-	_, ok := s.values[id]
-	return ok
-}
-
-func (s *Set) elements() []types.ProposalID {
-	s.valuesMu.RLock()
-	defer s.valuesMu.RUnlock()
-
-	result := make([]types.ProposalID, 0, len(s.values))
-
-	for id := range s.values {
-		result = append(result, id)
-	}
-
-	return result
 }

@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"math"
+	"math/rand"
 	"testing"
 
 	fuzz "github.com/google/gofuzz"
@@ -23,7 +24,7 @@ func CheckLayerFirstEncoding[T any, H scale.TypePtr[T]](t *testing.T, getLayerID
 		_, err := H(&object).EncodeScale(enc)
 		require.NoError(t, err)
 
-		var lid LayerID
+		lid := NewLayerID(rand.Uint32())
 		require.NoError(t, codec.Decode(buf.Bytes(), &lid))
 		require.Equal(t, getLayerID(object), lid)
 	})

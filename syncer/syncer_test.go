@@ -92,7 +92,7 @@ func newTestSyncer(ctx context.Context, t *testing.T, interval time.Duration) *t
 	ts.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
 	var err error
 	exec := mesh.NewExecutor(ts.cdb, ts.mVm, ts.mConState, lg)
-	ts.msh, err = mesh.NewMesh(ts.cdb, ts.mTortoise, exec, ts.mConState, lg)
+	ts.msh, err = mesh.NewMesh(ts.cdb, ts.mTicker, ts.mTortoise, exec, ts.mConState, lg)
 	require.NoError(t, err)
 
 	cfg := Config{
@@ -101,7 +101,6 @@ func newTestSyncer(ctx context.Context, t *testing.T, interval time.Duration) *t
 		HareDelayLayers:  5,
 	}
 	ts.syncer = NewSyncer(ts.cdb, mt, ts.mBeacon, ts.msh, nil, ts.mLyrPatrol, ts.mCertHdr,
-		WithContext(ctx),
 		WithConfig(cfg),
 		WithLogger(lg),
 		withDataFetcher(ts.mDataFetcher),
@@ -119,24 +118,24 @@ func newSyncerWithoutSyncTimer(t *testing.T) *testSyncer {
 
 func TestStartAndShutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	ts := newTestSyncer(ctx, t, time.Millisecond*5)
 
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(ctx))
 	require.False(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
 
 	// the node is synced when current layer is <= 1
-	ts.syncer.Start(context.Background())
+	ts.syncer.Start(ctx)
 
 	ts.mForkFinder.EXPECT().Purge(false).AnyTimes()
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), gomock.Any()).AnyTimes()
 	require.Eventually(t, func() bool {
-		return ts.syncer.ListenToATXGossip() && ts.syncer.ListenToGossip() && ts.syncer.IsSynced(context.Background())
+		return ts.syncer.ListenToATXGossip() && ts.syncer.ListenToGossip() && ts.syncer.IsSynced(ctx)
 	}, time.Second, 10*time.Millisecond)
 
 	cancel()
-	require.True(t, ts.syncer.isClosed())
-	require.False(t, ts.syncer.synchronize(context.Background()))
+	require.False(t, ts.syncer.synchronize(ctx))
 	ts.syncer.Close()
 }
 
@@ -144,7 +143,9 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
 	current := types.NewLayerID(10)
 	ts.mTicker.advanceToLayer(current)
-	ts.syncer.Start(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts.syncer.Start(ctx)
 
 	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	gLayer := types.GetEffectiveGenesis()
@@ -164,16 +165,17 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		require.True(t, ts.syncer.synchronize(context.Background()))
+		require.True(t, ts.syncer.synchronize(ctx))
 		wg.Done()
 	}()
 	<-started
-	require.False(t, ts.syncer.synchronize(context.Background()))
+	require.False(t, ts.syncer.synchronize(ctx))
 	// allow synchronize to finish
 	close(done)
 	wg.Wait()
 
 	require.Equal(t, uint64(1), ts.syncer.run)
+	cancel()
 	ts.syncer.Close()
 }
 

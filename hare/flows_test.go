@@ -13,12 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -29,7 +28,7 @@ import (
 
 type HareWrapper struct {
 	totalCP     uint32
-	termination util.Closer
+	termination chan struct{}
 	clock       *mockClock
 	hare        []*Hare
 	initialSets []*Set // all initial sets
@@ -40,7 +39,7 @@ func newHareWrapper(totalCp uint32) *HareWrapper {
 	hs := new(HareWrapper)
 	hs.clock = newMockClock()
 	hs.totalCP = totalCp
-	hs.termination = util.NewCloser()
+	hs.termination = make(chan struct{})
 	hs.outputs = make(map[types.LayerID][]*Set, 0)
 
 	return hs
@@ -76,7 +75,7 @@ func (his *HareWrapper) waitForTermination() {
 		}
 	}
 
-	his.termination.Close()
+	close(his.termination)
 }
 
 func (his *HareWrapper) WaitForTimedTermination(t *testing.T, timeout time.Duration) {
@@ -87,7 +86,7 @@ func (his *HareWrapper) WaitForTimedTermination(t *testing.T, timeout time.Durat
 	case <-timer:
 		t.Fatal("Timeout")
 		return
-	case <-his.termination.CloseChannel():
+	case <-his.termination:
 		for i := types.NewLayerID(1); !i.After(total); i = i.Add(1) {
 			his.checkResult(t, i)
 		}
@@ -117,7 +116,7 @@ func (m *p2pManipulator) Register(protocol string, handler pubsub.GossipHandler)
 
 func (m *p2pManipulator) Publish(ctx context.Context, protocol string, payload []byte) error {
 	msg, _ := MessageFromBuffer(payload)
-	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != preRound {
+	if msg.Layer == m.stalledLayer && msg.Round < 8 && msg.Round != preRound {
 		return m.err
 	}
 
@@ -133,7 +132,7 @@ func Test_consensusIterations(t *testing.T) {
 	test := newConsensusTest()
 
 	totalNodes := 15
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: 1, RoundDuration: 1, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: 1, RoundDuration: 1, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -141,7 +140,7 @@ func Test_consensusIterations(t *testing.T) {
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
-	set1 := NewSetFromValues(value1)
+	set1 := NewSetFromValues(types.ProposalID{1})
 	test.fill(set1, 0, totalNodes-1)
 	test.honestSets = []*Set{set1}
 	oracle := eligibility.New(logtest.New(t))
@@ -151,9 +150,11 @@ func Test_consensusIterations(t *testing.T) {
 		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
 		require.NoError(t, err)
 		p2pm := &p2pManipulator{nd: ps, stalledLayer: instanceID1, err: errors.New("fake err")}
-		proc, broker := createConsensusProcess(t, true, cfg, oracle, p2pm, test.initialSets[i], instanceID1, t.Name())
-		test.procs = append(test.procs, proc)
-		test.brokers = append(test.brokers, broker)
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		tcp := createConsensusProcess(t, ctx, sig, true, cfg, oracle, p2pm, test.initialSets[i], instanceID1)
+		test.procs = append(test.procs, tcp.cp)
+		test.brokers = append(test.brokers, tcp.broker)
 		i++
 	}
 	test.Create(totalNodes, creationFunc)
@@ -167,7 +168,7 @@ type hareWithMocks struct {
 	mockRoracle *mocks.MockRolacle
 }
 
-func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *mockClock, pid p2p.Peer, p2p pubsub.PublishSubsciber, name string) *hareWithMocks {
+func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *mockClock, p2p pubsub.PublishSubsciber, name string) *hareWithMocks {
 	tb.Helper()
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
@@ -187,8 +188,20 @@ func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *
 
 	mockRoracle := mocks.NewMockRolacle(ctrl)
 
-	hare := New(db, tcfg, pid, p2p, signer, nodeID, make(chan LayerOutput, 100), mockSyncS, mockBeacons, mockRoracle, patrol, 10,
-		mockStateQ, clock, logtest.New(tb).WithName(name+"_"+signer.PublicKey().ShortString()))
+	hare := New(
+		datastore.NewCachedDB(db, logtest.New(tb)),
+		tcfg,
+		p2p,
+		signer,
+		nodeID,
+		make(chan LayerOutput, 100),
+		mockSyncS,
+		mockBeacons,
+		mockRoracle,
+		patrol,
+		mockStateQ,
+		clock,
+		logtest.New(tb).WithName(name+"_"+signer.PublicKey().ShortString()))
 	p2p.Register(pubsub.HareProtocol, hare.GetHareMsgHandler())
 
 	return &hareWithMocks{
@@ -352,7 +365,7 @@ func extractInstanceID(payload []byte) (types.LayerID, uint16) {
 	if err != nil {
 		panic(err)
 	}
-	return m.InnerMsg.InstanceID, m.InnerMsg.EligibilityCount
+	return m.Layer, m.Eligibility.Count
 }
 
 func (c *SimRoundClock) NewRoundClock(layerID types.LayerID) RoundClock {
@@ -375,7 +388,7 @@ func Test_multipleCPs(t *testing.T) {
 	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
 	test := newHareWrapper(totalCp)
 	totalNodes := 10
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
+	cfg := config.Config{N: totalNodes, F: totalNodes / 2, WakeupDelta: 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -412,7 +425,7 @@ func Test_multipleCPs(t *testing.T) {
 		require.NoError(t, err)
 		src := NewSimRoundClock(ps, scMap)
 		pubsubs = append(pubsubs, ps)
-		h := createTestHare(t, dbs[i], cfg, test.clock, host.ID(), src, t.Name())
+		h := createTestHare(t, dbs[i], cfg, test.clock, src, t.Name())
 		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 100), nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
@@ -470,7 +483,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
 	test := newHareWrapper(totalCp)
 	totalNodes := 10
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: 1, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -508,7 +521,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		pubsubs = append(pubsubs, ps)
 		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		src := NewSimRoundClock(mp2p, scMap)
-		h := createTestHare(t, dbs[i], cfg, test.clock, host.ID(), src, t.Name())
+		h := createTestHare(t, dbs[i], cfg, test.clock, src, t.Name())
 		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 100), nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()

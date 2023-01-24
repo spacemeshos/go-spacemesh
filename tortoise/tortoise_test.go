@@ -773,7 +773,7 @@ func randomRefBallot(tb testing.TB, lyrID types.LayerID, beacon types.Beacon) *t
 	require.NoError(tb, err)
 
 	ballot := types.RandomBallot()
-	ballot.LayerIndex = lyrID
+	ballot.Layer = lyrID
 	ballot.EpochData = &types.EpochData{
 		Beacon: beacon,
 	}
@@ -794,7 +794,7 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 	logger := logtest.New(t)
 	// good beacon
 	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(1)
-	badBeacon, err := trtl.compareBeacons(logger, ballot.ID(), ballot.LayerIndex, epochBeacon)
+	badBeacon, err := trtl.compareBeacons(logger, ballot.ID(), ballot.Layer, epochBeacon)
 	assert.NoError(t, err)
 	assert.False(t, badBeacon)
 
@@ -802,7 +802,7 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 	beacon := types.RandomBeacon()
 	require.NotEqual(t, epochBeacon, beacon)
 	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(1)
-	badBeacon, err = trtl.compareBeacons(logger, ballot.ID(), ballot.LayerIndex, beacon)
+	badBeacon, err = trtl.compareBeacons(logger, ballot.ID(), ballot.Layer, beacon)
 	assert.NoError(t, err)
 	assert.True(t, badBeacon)
 }
@@ -818,19 +818,16 @@ func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
 
 	beacon, err := s.GetState(0).Beacons.GetBeacon(last.GetEpoch())
 	require.NoError(t, err)
+
 	s.GetState(0).Beacons.Delete(last.GetEpoch() - 1)
+	tortoise.TallyVotes(ctx, last)
+	_, err = tortoise.EncodeVotes(ctx)
+	require.Error(t, err)
 
-	blts, err := ballots.Layer(s.GetState(0).DB, last)
-	require.NoError(t, err)
-	for _, ballot := range blts {
-		tortoise.OnBallot(ballot)
-	}
 	s.GetState(0).Beacons.StoreBeacon(last.GetEpoch()-1, beacon)
-
 	tortoise.TallyVotes(ctx, last)
-	last = s.Next()
-	tortoise.TallyVotes(ctx, last)
-	require.Equal(t, last.Sub(1), tortoise.LatestComplete())
+	_, err = tortoise.EncodeVotes(ctx)
+	require.NoError(t, err)
 }
 
 func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
@@ -887,8 +884,10 @@ func TestDecodeVotes(t *testing.T) {
 		require.NoError(t, err)
 		ballot := types.NewExistingBallot(
 			types.BallotID{3, 3, 3}, nil, types.NodeID{},
-			ballots[0].InnerBallot,
+			ballots[0].BallotMetadata,
 		)
+		ballot.BallotMetadata = ballots[0].BallotMetadata
+		ballot.InnerBallot = ballots[0].InnerBallot
 		ballot.Votes.Support = []types.Vote{{ID: types.BlockID{2, 2, 2}}}
 		_, err = tortoise.DecodeBallot(&ballot)
 		require.ErrorContains(t, err, "not in state")
@@ -1024,7 +1023,7 @@ func ensureBaseAndExceptionsFromLayer(tb testing.TB, lid types.LayerID, votes *t
 
 	blts, err := ballots.Get(cdb, votes.Base)
 	require.NoError(tb, err)
-	require.Equal(tb, lid, blts.LayerIndex)
+	require.Equal(tb, lid, blts.Layer)
 
 	for _, vote := range votes.Support {
 		block, err := blocks.Get(cdb, vote.ID)
@@ -1137,7 +1136,7 @@ func TestBaseBallotPrioritization(t *testing.T) {
 			require.NoError(t, err)
 			ballot, err := ballots.Get(s.GetState(0).DB, votes.Base)
 			require.NoError(t, err)
-			require.Equal(t, tc.expected, ballot.LayerIndex)
+			require.Equal(t, tc.expected, ballot.Layer)
 		})
 	}
 }
@@ -1180,8 +1179,8 @@ func ensureBallotLayerWithin(tb testing.TB, cdb *datastore.CachedDB, ballotID ty
 
 	ballot, err := ballots.Get(cdb, ballotID)
 	require.NoError(tb, err)
-	require.True(tb, !ballot.LayerIndex.Before(from) && !ballot.LayerIndex.After(to),
-		"%s not in [%s,%s]", ballot.LayerIndex, from, to,
+	require.True(tb, !ballot.Layer.Before(from) && !ballot.Layer.After(to),
+		"%s not in [%s,%s]", ballot.Layer, from, to,
 	)
 }
 
@@ -1492,15 +1491,6 @@ func TestComputeBallotWeight(t *testing.T) {
 				{ActiveSet: []int{2, 3}, ATX: 2, ExpectedWeight: 20, Eligibilities: 1},
 			},
 		},
-		{
-			desc:           "AtxNotInActiveSet",
-			atxs:           []uint{50, 50, 50},
-			layerSize:      5,
-			layersPerEpoch: 2,
-			ballots: []testBallot{
-				{ActiveSet: []int{0, 2}, ATX: 1, ExpectedWeight: 0, Eligibilities: 1},
-			},
-		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
@@ -1540,14 +1530,16 @@ func TestComputeBallotWeight(t *testing.T) {
 			var currentJ int
 			for _, b := range tc.ballots {
 				ballot := &types.Ballot{
+					BallotMetadata: types.BallotMetadata{
+						Layer: lid,
+					},
 					InnerBallot: types.InnerBallot{
-						AtxID:      atxids[b.ATX],
-						LayerIndex: lid,
+						AtxID: atxids[b.ATX],
 					},
 				}
 				for j := 0; j < b.Eligibilities; j++ {
 					ballot.EligibilityProofs = append(ballot.EligibilityProofs,
-						types.VotingEligibilityProof{J: uint32(currentJ)})
+						types.VotingEligibility{J: uint32(currentJ)})
 					currentJ++
 				}
 				if b.ActiveSet != nil {
@@ -1893,7 +1885,7 @@ func TestMaliciousBallotsAreIgnored(t *testing.T) {
 	blts, err := ballots.Layer(s.GetState(0).DB, last)
 	require.NoError(t, err)
 	for _, ballot := range blts {
-		require.NoError(t, identities.SetMalicious(s.GetState(0).DB, ballot.SmesherID().Bytes()))
+		require.NoError(t, identities.SetMalicious(s.GetState(0).DB, ballot.SmesherID(), []byte("proof")))
 	}
 
 	tortoise.TallyVotes(ctx, s.Next())
@@ -2278,7 +2270,9 @@ func TestSwitchMode(t *testing.T) {
 		// feed ballots that vote against previously validated layer
 		// without the fix they would be ignored
 		for i := 1; i <= 16; i++ {
-			ballot := types.NewExistingBallot(types.BallotID{byte(i)}, nil, types.NodeID{}, template.InnerBallot)
+			ballot := types.NewExistingBallot(types.BallotID{byte(i)}, nil, types.NodeID{}, template.BallotMetadata)
+			ballot.InnerBallot = template.InnerBallot
+			ballot.EligibilityProofs = template.EligibilityProofs
 			tortoise.OnBallot(&ballot)
 		}
 		tortoise.TallyVotes(ctx, last)
@@ -2319,7 +2313,9 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		require.NotEmpty(t, rst)
 
 		id := types.BallotID{1}
-		ballot := types.NewExistingBallot(id, nil, types.NodeID{}, rst[0].InnerBallot)
+		ballot := types.NewExistingBallot(id, nil, types.NodeID{}, rst[0].BallotMetadata)
+		ballot.InnerBallot = rst[0].InnerBallot
+		ballot.EligibilityProofs = rst[0].EligibilityProofs
 		ballot.Votes.Base = types.EmptyBallotID
 		ballot.Votes.Support = nil
 		ballot.Votes.Against = nil
@@ -2543,7 +2539,9 @@ func TestCountOnBallot(t *testing.T) {
 	for i := 1; i <= size*2; i++ {
 		id := types.BallotID{}
 		binary.BigEndian.PutUint64(id[:], uint64(i))
-		ballot := types.NewExistingBallot(id, nil, types.NodeID{}, blts[0].InnerBallot)
+		ballot := types.NewExistingBallot(id, nil, types.NodeID{}, blts[0].BallotMetadata)
+		ballot.InnerBallot = blts[0].InnerBallot
+		ballot.EligibilityProofs = blts[0].EligibilityProofs
 		// unset support to be consistent with local opinion
 		ballot.Votes.Support = nil
 		tortoise.OnBallot(&ballot)
@@ -2743,7 +2741,7 @@ func TestEncodeVotes(t *testing.T) {
 
 		ballot.EpochData = &types.EpochData{ActiveSet: []types.ATXID{atxid}}
 		ballot.AtxID = atxid
-		ballot.LayerIndex = lid
+		ballot.Layer = lid
 		ballot.Votes.Support = []types.Vote{
 			{ID: block.ID(), LayerID: block.LayerIndex, Height: block.TickHeight},
 		}
@@ -2813,7 +2811,7 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 		require.NoError(t, err)
 		ballot, err := ballots.Get(s.GetState(0).DB, encoded.Base)
 		require.NoError(t, err)
-		require.NotEqual(t, last, ballot.LayerIndex)
+		require.NotEqual(t, last, ballot.Layer)
 	})
 	t.Run("decode", func(t *testing.T) {
 		ctx := context.Background()
@@ -2832,7 +2830,9 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 		tortoise.TallyVotes(ctx, last)
 		ballots, err := ballots.Layer(s.GetState(0).DB, last)
 		require.NoError(t, err)
-		ballot := types.NewExistingBallot(types.BallotID{1}, nil, types.NodeID{}, ballots[0].InnerBallot)
+		ballot := types.NewExistingBallot(types.BallotID{1}, nil, types.NodeID{}, ballots[0].BallotMetadata)
+		ballot.InnerBallot = ballots[0].InnerBallot
+		ballot.EligibilityProofs = ballots[0].EligibilityProofs
 		ballot.Votes.Base = ballots[1].ID()
 		_, err = tortoise.DecodeBallot(&ballot)
 		require.ErrorContains(t, err, "votes for ballot")
@@ -2879,12 +2879,14 @@ func BenchmarkOnBallot(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			id := types.BallotID{}
 			binary.BigEndian.PutUint64(id[:], uint64(i)+1)
-			ballot := types.NewExistingBallot(id, nil, types.NodeID{}, modified.InnerBallot)
+			ballot := types.NewExistingBallot(id, nil, types.NodeID{}, modified.BallotMetadata)
+			ballot.InnerBallot = modified.InnerBallot
+			ballot.EligibilityProofs = modified.EligibilityProofs
 			tortoise.OnBallot(&ballot)
 
 			b.StopTimer()
 			delete(tortoise.trtl.ballotRefs, ballot.ID())
-			tortoise.trtl.ballots[ballot.LayerIndex] = nil
+			tortoise.trtl.ballots[ballot.Layer] = nil
 			b.StartTimer()
 		}
 	}
