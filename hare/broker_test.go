@@ -523,7 +523,7 @@ func Test_newMsg(t *testing.T) {
 	sq := mocks.NewMockstateQuerier(ctrl)
 	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
 
-	_, e := newMsg(context.Background(), logtest.New(t), m, sq)
+	_, e := newMsg(context.Background(), logtest.New(t), signer.NodeID(), m, sq)
 	assert.NoError(t, e)
 }
 
