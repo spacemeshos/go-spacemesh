@@ -680,7 +680,8 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 		proc.getRound(),
 		proc.comm.mchOut,
 		proc.eTracker,
-		proc.cfg.N)
+		proc.cfg.N,
+	)
 
 	// release proposal & commit trackers
 	defer func() {
