@@ -16,8 +16,8 @@ type layerPatrol interface {
 // Rolacle is the roles oracle provider.
 type Rolacle interface {
 	Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error)
-	CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, []byte) (uint16, error)
-	Proof(context.Context, types.LayerID, uint32) ([]byte, error)
+	CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, types.VRFPostIndex, []byte) (uint16, error)
+	Proof(context.Context, types.VRFPostIndex, types.LayerID, uint32) ([]byte, error)
 	IsIdentityActiveOnConsensusView(context.Context, types.NodeID, types.LayerID) (bool, error)
 }
 
@@ -26,4 +26,8 @@ type Rolacle interface {
 // An error is set iff the identity could not be checked for activeness.
 type stateQuerier interface {
 	IsIdentityActiveOnConsensusView(context.Context, types.NodeID, types.LayerID) (bool, error)
+}
+
+type nonceFetcher interface {
+	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
 }

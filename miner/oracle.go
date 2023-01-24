@@ -55,7 +55,7 @@ func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, v
 
 // GetProposalEligibility returns the miner's ATXID and the active set for the layer's epoch, along with the list of eligibility
 // proofs for that layer.
-func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) (types.ATXID, []types.ATXID, []types.VotingEligibility, error) {
+func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon, nonce types.VRFPostIndex) (types.ATXID, []types.ATXID, []types.VotingEligibility, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
@@ -86,7 +86,7 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) 
 		return *types.EmptyATXID, nil, nil, fmt.Errorf("failed to get valid atx for node for target epoch %d: %w", epoch, err)
 	}
 
-	newProofs, activeSet, err := o.calcEligibilityProofs(atx.GetWeight(), epoch, beacon)
+	newProofs, activeSet, err := o.calcEligibilityProofs(atx.GetWeight(), epoch, beacon, nonce)
 	if err != nil {
 		logger.With().Error("failed to calculate eligibility proofs", log.Err(err))
 		return *types.EmptyATXID, nil, nil, err
@@ -129,7 +129,7 @@ func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxH
 
 // calcEligibilityProofs calculates the eligibility proofs of proposals for the miner in the given epoch
 // and returns the proofs along with the epoch's active set.
-func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beacon types.Beacon) (map[types.LayerID][]types.VotingEligibility, []types.ATXID, error) {
+func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beacon types.Beacon, nonce types.VRFPostIndex) (map[types.LayerID][]types.VotingEligibility, []types.ATXID, error) {
 	logger := o.log.WithFields(epoch, beacon, log.Uint64("weight", weight))
 
 	// get the previous epoch's total weight
@@ -155,15 +155,11 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 
 	eligibilityProofs := map[types.LayerID][]types.VotingEligibility{}
 	for counter := uint32(0); counter < numEligibleSlots; counter++ {
-		message, err := proposals.SerializeVRFMessage(beacon, epoch, counter)
+		message, err := proposals.SerializeVRFMessage(beacon, epoch, nonce, counter)
 		if err != nil {
-			logger.With().Panic("failed to serialize VRF msg", log.Err(err))
+			logger.With().Fatal("failed to serialize VRF msg", log.Err(err))
 		}
-		vrfSig, err := o.vrfSigner.Sign(message)
-		if err != nil {
-			logger.With().Error("failed to sign VRF msg", log.Err(err))
-			return nil, nil, fmt.Errorf("oracle failed to sign: %w", err)
-		}
+		vrfSig := o.vrfSigner.Sign(message)
 		eligibleLayer := proposals.CalcEligibleLayer(epoch, o.layersPerEpoch, vrfSig)
 		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.VotingEligibility{
 			J:   counter,

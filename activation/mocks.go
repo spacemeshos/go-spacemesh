@@ -184,20 +184,6 @@ func (mr *MocknipostValidatorMockRecorder) VRFNonce(nodeId, commitmentAtxId, vrf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknipostValidator)(nil).VRFNonce), nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits)
 }
 
-// ValidateVRFNonce mocks base method.
-func (m *MocknipostValidator) ValidateVRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateVRFNonce", nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// ValidateVRFNonce indicates an expected call of ValidateVRFNonce.
-func (mr *MocknipostValidatorMockRecorder) ValidateVRFNonce(nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateVRFNonce", reflect.TypeOf((*MocknipostValidator)(nil).ValidateVRFNonce), nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits)
-}
-
 // MocklayerClock is a mock of layerClock interface.
 type MocklayerClock struct {
 	ctrl     *gomock.Controller
