@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -132,6 +133,7 @@ func New(
 	conf config.Config,
 	publisher pubsub.PublishSubsciber,
 	sign Signer,
+	pke *signing.PubKeyExtractor,
 	nid types.NodeID,
 	ch chan LayerOutput,
 	syncState system.SyncStateProvider,
@@ -157,13 +159,14 @@ func New(
 		h.With().Debug("creating hare round clock", layerID,
 			log.String("layer_time", layerTime.String()),
 			log.Duration("wakeup_delta", wakeupDelta),
-			log.Duration("round_duration", roundDuration))
+			log.Duration("round_duration", roundDuration),
+		)
 		return NewSimpleRoundClock(layerTime, wakeupDelta, roundDuration)
 	}
 
 	ev := newEligibilityValidator(rolacle, conf.N, conf.ExpectedLeaders, logger)
 	h.mchMalfeasance = make(chan *types.MalfeasanceGossip, conf.N)
-	h.broker = newBroker(cdb, ev, stateQ, syncState, h.mchMalfeasance, conf.LimitConcurrent, logger)
+	h.broker = newBroker(cdb, pke, ev, stateQ, syncState, h.mchMalfeasance, conf.LimitConcurrent, logger)
 	h.sign = sign
 	h.blockGenCh = ch
 
@@ -176,7 +179,7 @@ func New(
 	h.outputs = make(map[types.LayerID][]types.ProposalID, h.config.Hdist) // we keep results about LayerBuffer past layers
 	h.cps = make(map[types.LayerID]Consensus, h.config.LimitConcurrent)
 	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, nonce types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
-		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, nid, nonce, p2p, comm, ev, clock, logger)
+		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, pke, nid, nonce, p2p, comm, ev, clock, logger)
 	}
 
 	h.nid = nid

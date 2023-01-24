@@ -157,8 +157,10 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
 	mch := make(chan *types.MalfeasanceGossip, 1)
+	pke, err := signing.NewPubKeyExtractor()
+	require.NoError(tb, err)
 	return &testBroker{
-		Broker: newBroker(cdb, &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
+		Broker: newBroker(cdb, pke, &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
 			mch, limit, logtest.New(tb).WithName(testName)),
 		cdb:        cdb,
 		mockSyncS:  mockSyncS,
@@ -301,6 +303,8 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config, inbox 
 	oracle := eligibility.New(logger)
 	edSigner, err := signing.NewEdSigner()
 	require.NoError(tb, err)
+	pke, err := signing.NewPubKeyExtractor()
+	require.NoError(tb, err)
 	edPubkey := edSigner.PublicKey()
 	nid := types.BytesToNodeID(edPubkey.Bytes())
 	oracle.Register(true, nid)
@@ -321,6 +325,7 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config, inbox 
 		oracle,
 		sq,
 		edSigner,
+		pke,
 		types.BytesToNodeID(edPubkey.Bytes()),
 		types.VRFPostIndex(rand.Uint64()),
 		noopPubSub(tb),

@@ -174,6 +174,9 @@ func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *
 	require.NoError(tb, err)
 	pub := signer.PublicKey()
 	nodeID := types.BytesToNodeID(pub.Bytes())
+	pke, err := signing.NewPubKeyExtractor()
+	require.NoError(tb, err)
+
 	ctrl := gomock.NewController(tb)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
@@ -196,6 +199,7 @@ func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *
 		tcfg,
 		p2p,
 		signer,
+		pke,
 		nodeID,
 		make(chan LayerOutput, 100),
 		mockSyncS,

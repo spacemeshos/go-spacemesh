@@ -182,6 +182,8 @@ func createConsensusProcess(
 	network.Register(pubsub.HareProtocol, broker.HandleMessage)
 	output := make(chan TerminationOutput, 1)
 	oracle.Register(isHonest, sig.NodeID())
+	pke, err := signing.NewPubKeyExtractor()
+	require.NoError(tb, err)
 	c, err := broker.Register(ctx, layer)
 	require.NoError(tb, err)
 	mch := make(chan *types.MalfeasanceGossip, cfg.N)
@@ -198,6 +200,7 @@ func createConsensusProcess(
 		oracle,
 		broker.mockStateQ,
 		sig,
+		pke,
 		sig.NodeID(),
 		types.VRFPostIndex(1),
 		network,
