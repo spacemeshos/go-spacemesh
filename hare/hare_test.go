@@ -64,6 +64,8 @@ func (mcp *mockConsensusProcess) Start() {
 	mcp.t <- mockReport{mcp.id, mcp.set, true, false}
 }
 
+func (mcp *mockConsensusProcess) Stop() {}
+
 func (mcp *mockConsensusProcess) ID() types.LayerID {
 	return mcp.id
 }
@@ -186,9 +188,7 @@ func TestHare_collectOutputGetResult_TerminateTooLate(t *testing.T) {
 	require.Equal(t, errNoResult, err)
 	require.Nil(t, res)
 
-	h.layerLock.Lock()
-	h.lastLayer = lyrID.Add(h.config.Hdist + 1)
-	h.layerLock.Unlock()
+	h.setLastLayer(lyrID.Add(h.config.Hdist + 1))
 
 	pids := []types.ProposalID{types.RandomProposalID(), types.RandomProposalID(), types.RandomProposalID()}
 	set := NewSetFromValues(pids...)

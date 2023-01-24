@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -38,6 +38,7 @@ type consensusFactory func(
 type Consensus interface {
 	ID() types.LayerID
 	Start()
+	Stop()
 }
 
 // TerminationOutput represents an output of a consensus process.
@@ -90,18 +91,15 @@ type Hare struct {
 
 	networkDelta time.Duration
 
-	layerLock sync.RWMutex
-	lastLayer types.LayerID
-
 	outputChan chan TerminationOutput
-	mu         sync.RWMutex
+	mu         sync.Mutex
+	lastLayer  types.LayerID
 	outputs    map[types.LayerID][]types.ProposalID
+	cps        map[types.LayerID]Consensus
 
 	factory consensusFactory
 
 	nid types.NodeID
-
-	totalCPs int32
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -155,6 +153,7 @@ func New(
 	h.networkDelta = conf.WakeupDelta
 	h.outputChan = make(chan TerminationOutput, h.config.Hdist)
 	h.outputs = make(map[types.LayerID][]types.ProposalID, h.config.Hdist) // we keep results about LayerBuffer past layers
+	h.cps = make(map[types.LayerID]Consensus, h.config.LimitConcurrent)
 	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
 		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, nid, p2p, comm, ev, clock, logger)
 	}
@@ -174,8 +173,8 @@ func (h *Hare) HandleEligibility(ctx context.Context, emsg *types.HareEligibilit
 }
 
 func (h *Hare) getLastLayer() types.LayerID {
-	h.layerLock.RLock()
-	defer h.layerLock.RUnlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return h.lastLayer
 }
 
@@ -184,8 +183,8 @@ func (h *Hare) setLastLayer(layerID types.LayerID) {
 		// layers starts from 0. nothing to do here.
 		return
 	}
-	h.layerLock.Lock()
-	defer h.layerLock.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if layerID.After(h.lastLayer) {
 		h.lastLayer = layerID
 	} else {
@@ -206,9 +205,15 @@ func (h *Hare) outOfBufferRange(id types.LayerID) bool {
 }
 
 func (h *Hare) oldestResultInBuffer() types.LayerID {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.oldestResultInBufferLocked()
+}
+
+func (h *Hare) oldestResultInBufferLocked() types.LayerID {
 	// buffer is usually quite small so its cheap to iterate.
 	// TODO: if it gets bigger change `outputs` to array.
-	lyr := h.getLastLayer()
+	lyr := types.NewLayerID(math.MaxUint32)
 	for k := range h.outputs {
 		if k.Before(lyr) {
 			lyr = k
@@ -252,7 +257,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if uint32(len(h.outputs)) >= h.config.Hdist {
-		delete(h.outputs, h.oldestResultInBuffer())
+		delete(h.outputs, h.oldestResultInBufferLocked())
 	}
 	h.outputs[layerID] = pids
 	return nil
@@ -269,22 +274,22 @@ func (h *Hare) isClosed() bool {
 
 // the logic that happens when a new layer arrives.
 // this function triggers the start of new consensus processes.
-func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
-	logger := h.WithContext(ctx).WithFields(id)
+func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
+	logger := h.WithContext(ctx).WithFields(lid)
 	if h.isClosed() {
 		logger.Info("hare exiting")
 		return false, nil
 	}
 
-	h.setLastLayer(id)
+	h.setLastLayer(lid)
 
-	if id.GetEpoch().IsGenesis() {
+	if lid.GetEpoch().IsGenesis() {
 		logger.Info("not starting hare: genesis")
 		return false, nil
 	}
 
 	var err error
-	beacon, err := h.beacons.GetBeacon(id.GetEpoch())
+	beacon, err := h.beacons.GetBeacon(lid.GetEpoch())
 	if err != nil {
 		logger.Info("not starting hare: beacon not retrieved")
 		return false, nil
@@ -294,14 +299,14 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		// it must not return without starting consensus process or mark result as fail
 		// except if it's genesis layer
 		if err != nil {
-			h.outputChan <- procReport{id, &Set{}, false, notCompleted}
+			h.outputChan <- procReport{lid, &Set{}, false, notCompleted}
 		}
 	}()
 
 	// call to start the calculation of active set size beforehand
 	h.eg.Go(func() error {
 		// this is called only for its side effects, but at least print the error if it returns one
-		if isActive, err := h.rolacle.IsIdentityActiveOnConsensusView(ctx, h.nid, id); err != nil {
+		if isActive, err := h.rolacle.IsIdentityActiveOnConsensusView(ctx, h.nid, lid); err != nil {
 			logger.With().Error("error checking if identity is active",
 				log.Bool("isActive", isActive), log.Err(err))
 		}
@@ -310,7 +315,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 
 	logger.With().Debug("hare got tick, sleeping", log.String("delta", fmt.Sprint(h.networkDelta)))
 
-	clock := h.newRoundClock(id)
+	clock := h.newRoundClock(lid)
 	select {
 	case <-clock.AwaitWakeup():
 		break // keep going
@@ -318,21 +323,18 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		return false, errors.New("closed while waiting for hare delta")
 	}
 
-	if !h.broker.Synced(ctx, id) {
+	if !h.broker.Synced(ctx, lid) {
 		// if not currently synced don't start consensus process
 		logger.Info("not starting hare: node not synced at this layer")
 		return false, nil
 	}
 
-	h.layerLock.RLock()
-	props := h.getGoodProposal(h.lastLayer, beacon, logger)
-	h.layerLock.RUnlock()
+	props := h.getGoodProposal(lid, beacon, logger)
 	logger.With().Info("starting hare", log.Int("num_proposals", len(props)))
 	preNumProposals.Add(float64(len(props)))
 	set := NewSet(props)
 
-	instID := id
-	ch, err := h.broker.Register(ctx, instID)
+	ch, err := h.broker.Register(ctx, lid)
 	if err != nil {
 		logger.With().Error("could not register consensus process on broker", log.Err(err))
 		return false, fmt.Errorf("broker register: %w", err)
@@ -342,12 +344,41 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		mchOut: h.mchMalfeasance,
 		report: h.outputChan,
 	}
-	cp := h.factory(h.ctx, h.config, instID, set, h.rolacle, h.sign, h.publisher, comm, clock)
+	cp := h.factory(h.ctx, h.config, lid, set, h.rolacle, h.sign, h.publisher, comm, clock)
 	cp.Start()
-	h.patrol.SetHareInCharge(instID)
-	logger.With().Debug("number of consensus processes (after register)",
-		log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
+	h.addCP(logger, cp)
+	h.patrol.SetHareInCharge(lid)
 	return true, nil
+}
+
+func (h *Hare) addCP(logger log.Log, cp Consensus) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.cps[cp.ID()] = cp
+	logger.With().Info("number of consensus processes (after register)",
+		log.Int("count", len(h.cps)))
+}
+
+func (h *Hare) getCP(lid types.LayerID) Consensus {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.cps[lid]
+}
+
+func (h *Hare) removeCP(logger log.Log, lid types.LayerID) {
+	cp := h.getCP(lid)
+	if cp == nil {
+		logger.With().Error("failed to find consensus process", lid)
+		return
+	}
+	// do not hold lock while waiting for consensus process to terminate
+	cp.Stop()
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.cps, cp.ID())
+	logger.With().Info("number of consensus processes (after deregister)",
+		log.Int("count", len(h.cps)))
 }
 
 // getGoodProposal finds the "good proposals" for the specified layer. a proposal is good if
@@ -406,8 +437,8 @@ func (h *Hare) getResult(lid types.LayerID) ([]types.ProposalID, error) {
 		return nil, errTooOld
 	}
 
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	props, ok := h.outputs[lid]
 	if !ok {
 		return nil, errNoResult
@@ -437,8 +468,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 				logger.With().Warning("error collecting output from hare", log.Err(err))
 			}
 			h.broker.Unregister(ctx, out.ID())
-			logger.With().Debug("number of consensus processes (after unregister)",
-				log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
+			h.removeCP(logger, out.ID())
 		case <-h.ctx.Done():
 			return
 		}
