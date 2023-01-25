@@ -273,9 +273,9 @@ func (m *MocknipostBuilder) EXPECT() *MocknipostBuilderMockRecorder {
 }
 
 // BuildNIPost mocks base method.
-func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error) {
+func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BuildNIPost", ctx, challenge, poetProofDeadline)
+	ret := m.ctrl.Call(m, "BuildNIPost", ctx, challenge)
 	ret0, _ := ret[0].(*types.NIPost)
 	ret1, _ := ret[1].(time.Duration)
 	ret2, _ := ret[2].(error)
@@ -283,9 +283,9 @@ func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.Po
 }
 
 // BuildNIPost indicates an expected call of BuildNIPost.
-func (mr *MocknipostBuilderMockRecorder) BuildNIPost(ctx, challenge, poetProofDeadline interface{}) *gomock.Call {
+func (mr *MocknipostBuilderMockRecorder) BuildNIPost(ctx, challenge interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildNIPost", reflect.TypeOf((*MocknipostBuilder)(nil).BuildNIPost), ctx, challenge, poetProofDeadline)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildNIPost", reflect.TypeOf((*MocknipostBuilder)(nil).BuildNIPost), ctx, challenge)
 }
 
 // UpdatePoETProvers mocks base method.

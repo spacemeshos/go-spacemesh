@@ -659,7 +659,12 @@ func (app *App) initServices(
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, app.db, app.addLogger(NipostBuilderLogger, lg), sgn)
+	poetCfg := activation.PoetConfig{
+		PhaseShift:  app.Config.POET.PhaseShift,
+		CycleGap:    app.Config.POET.CycleGap,
+		GracePeriod: app.Config.POET.GracePeriod,
+	}
+	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, app.db, app.addLogger(NipostBuilderLogger, lg), sgn, poetCfg, clock)
 
 	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
@@ -680,11 +685,8 @@ func (app *App) initServices(
 	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, app.cachedDB, atxHandler, app.host, nipostBuilder,
 		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg),
 		activation.WithContext(ctx),
-		activation.WithPoetConfig(activation.PoetConfig{
-			PhaseShift:  app.Config.POET.PhaseShift,
-			CycleGap:    app.Config.POET.CycleGap,
-			GracePeriod: app.Config.POET.GracePeriod,
-		}))
+		activation.WithPoetConfig(poetCfg),
+	)
 
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
