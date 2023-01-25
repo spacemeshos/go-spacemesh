@@ -205,21 +205,40 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	r.NoError(err)
 }
 
-func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipostChallenge types.PoetChallenge, poetDb poetDbAPI) *types.NIPost {
+func spawnMockGateway(tb testing.TB) string {
+	tb.Helper()
 	gtw := util.NewMockGrpcServer(tb)
 	pb.RegisterGatewayServiceServer(gtw.Server, &gatewayService{})
 	var eg errgroup.Group
 	eg.Go(gtw.Serve)
 	tb.Cleanup(func() { assert.NoError(tb, eg.Wait()) })
 	tb.Cleanup(gtw.Stop)
+	return gtw.Target()
+}
 
-	epoch := time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
-	defer cancel()
-	poetProver, err := NewHTTPPoetHarness(ctx, WithGateway(gtw.Target()), WithGenesis(time.Now()), WithEpochDuration(epoch))
-	r.NoError(err)
-	r.NotNil(poetProver)
-	tb.Cleanup(func() { assert.NoError(tb, poetProver.Teardown(true), "failed to tear down harness") })
+func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetClient {
+	tb.Helper()
+	poetProver, err := NewHTTPPoetHarness(context.Background(), tb.TempDir(), opts...)
+	require.NoError(tb, err)
+	require.NotNil(tb, poetProver)
+
+	var eg errgroup.Group
+	ctx, cancel := context.WithCancel(context.Background())
+	tb.Cleanup(func() {
+		cancel()
+		assert.NoError(tb, eg.Wait())
+	})
+	eg.Go(func() error {
+		return poetProver.Service.Start(ctx)
+	})
+	_, err = poetProver.HTTPPoetClient.PoetServiceID(context.Background())
+	require.NoError(tb, err)
+	return poetProver.HTTPPoetClient
+}
+
+func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipostChallenge types.PoetChallenge, poetDb poetDbAPI) *types.NIPost {
+	gtw := spawnMockGateway(tb)
+	poetProver := spawnPoet(tb, WithGateway(gtw), WithGenesis(time.Now()), WithEpochDuration(time.Second))
 
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
 	nodeID := types.NodeID{1}
@@ -264,7 +283,6 @@ func (*gatewayService) VerifyChallenge(_ context.Context, req *pb.VerifyChalleng
 }
 
 func TestNewNIPostBuilderNotInitialized(t *testing.T) {
-	t.Parallel()
 	if testing.Short() {
 		t.Skip()
 	}
@@ -284,22 +302,8 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 	r.NotNil(postProvider)
 
-	gtw := util.NewMockGrpcServer(t)
-	pb.RegisterGatewayServiceServer(gtw.Server, &gatewayService{})
-	var eg errgroup.Group
-	eg.Go(gtw.Serve)
-	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
-	t.Cleanup(gtw.Stop)
-
-	epoch := time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-	poetProver, err := NewHTTPPoetHarness(ctx, WithGateway(gtw.Target()), WithGenesis(time.Now()), WithEpochDuration(epoch))
-	r.NoError(err)
-	r.NotNil(poetProver)
-	t.Cleanup(func() {
-		assert.NoError(t, poetProver.Teardown(true), "failed to tear down harness")
-	})
+	gtw := spawnMockGateway(t)
+	poetProver := spawnPoet(t, WithGateway(gtw), WithGenesis(time.Now()), WithEpochDuration(time.Second))
 
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
 	poetDb.EXPECT().GetProof(gomock.Any()).Return(&types.PoetProof{Members: [][]byte{challengeHash.Bytes()}}, nil)
@@ -620,14 +624,11 @@ func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *typ
 }
 
 func TestNIPostBuilder_Close(t *testing.T) {
-	t.Parallel()
 	r := require.New(t)
 
 	postProvider := &postSetupProviderMock{}
-	poetProver := defaultPoetServiceMock(t, []byte("poet"))
-	poetProver.EXPECT().GetProof(gomock.Any(), "").AnyTimes().DoAndReturn(func(ctx context.Context, _ string) (*types.PoetProofMessage, error) {
-		return nil, ctx.Err()
-	})
+	gtw := spawnMockGateway(t)
+	poetProver := spawnPoet(t, WithGateway(gtw), WithGenesis(time.Now()), WithEpochDuration(time.Second))
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
 	challenge := types.PoetChallenge{NIPostChallenge: &types.NIPostChallenge{
 		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),

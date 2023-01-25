@@ -162,6 +162,9 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
 		defer cancel()
 		poetRequests := nb.submitPoetChallenges(submitCtx, challenge, signature)
+		if err := ctx.Err(); err != nil {
+			return nil, 0, fmt.Errorf("submitting challenges: %w", err)
+		}
 
 		validPoetRequests := make([]types.PoetRequest, 0, len(poetRequests))
 		for _, req := range poetRequests {
@@ -315,7 +318,7 @@ func (nb *NIPostBuilder) getProofWithRetry(ctx context.Context, client PoetProvi
 func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash32) (types.PoetProofRef, error) {
 	proofs := make(chan *types.PoetProofMessage, len(nb.state.PoetRequests))
 
-	eg, ctx := errgroup.WithContext(ctx)
+	var eg errgroup.Group
 	for _, r := range nb.state.PoetRequests {
 		logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(r.PoetServiceID)), log.String("round", r.PoetRound.ID))
 		client := nb.getPoetClient(ctx, r.PoetServiceID)

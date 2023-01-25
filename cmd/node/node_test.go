@@ -527,14 +527,9 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	poetHarness, err := activation.NewHTTPPoetHarness(ctx)
+	poetHarness, err := activation.NewHTTPPoetHarness(ctx, t.TempDir())
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		err := poetHarness.Teardown(true)
-		if assert.NoError(t, err, "failed to tear down harness") {
-			t.Log("harness torn down")
-		}
-	})
+
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	h, err := p2p.Upgrade(mesh.Hosts()[0], cfg.Genesis.GenesisID())
