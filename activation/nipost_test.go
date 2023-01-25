@@ -625,6 +625,9 @@ func TestNIPostBuilder_Close(t *testing.T) {
 
 	postProvider := &postSetupProviderMock{}
 	poetProver := defaultPoetServiceMock(t, []byte("poet"))
+	poetProver.EXPECT().GetProof(gomock.Any(), "").AnyTimes().DoAndReturn(func(ctx context.Context, _ string) (*types.PoetProofMessage, error) {
+		return nil, ctx.Err()
+	})
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
 	challenge := types.PoetChallenge{NIPostChallenge: &types.NIPostChallenge{
 		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),

@@ -315,7 +315,7 @@ func (nb *NIPostBuilder) getProofWithRetry(ctx context.Context, client PoetProvi
 func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash32) (types.PoetProofRef, error) {
 	proofs := make(chan *types.PoetProofMessage, len(nb.state.PoetRequests))
 
-	var eg errgroup.Group
+	eg, ctx := errgroup.WithContext(ctx)
 	for _, r := range nb.state.PoetRequests {
 		logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(r.PoetServiceID)), log.String("round", r.PoetRound.ID))
 		client := nb.getPoetClient(ctx, r.PoetServiceID)
@@ -332,12 +332,15 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 			logger.With().Info("Waiting till poet round end", log.Duration("wait time", waitTime))
 			select {
 			case <-ctx.Done():
-				logger.With().Info("Waiting interrupted", log.Err(ctx.Err()))
-				return ctx.Err()
+				return fmt.Errorf("waiting to query proof: %w", ctx.Err())
 			case <-time.After(waitTime):
 			}
+
 			proof, err := nb.getProofWithRetry(ctx, client, round, time.Second)
-			if err != nil {
+			switch {
+			case errors.Is(err, context.Canceled):
+				return fmt.Errorf("querying proof: %w", ctx.Err())
+			case err != nil:
 				logger.With().Warning("Failed to get proof from Poet", log.Err(err))
 				return nil
 			}
@@ -358,7 +361,7 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 		})
 	}
 	if err := eg.Wait(); err != nil {
-		return nil, fmt.Errorf("querying for proofs failed: %w", err)
+		return nil, fmt.Errorf("querying for proofs: %w", err)
 	}
 	close(proofs)
 
@@ -374,7 +377,7 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 	if bestProof != nil {
 		ref, err := bestProof.Ref()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get proof ref: %w", err)
+			return nil, err
 		}
 		nb.log.With().Info("Selected the best proof", log.Uint64("leafCount", bestProof.LeafCount), log.Binary("ref", ref))
 		return ref, nil
