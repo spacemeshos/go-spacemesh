@@ -35,8 +35,8 @@ require (
 	github.com/spacemeshos/ed25519 v0.1.1
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
 	github.com/spacemeshos/go-scale v1.1.3
-	github.com/spacemeshos/merkle-tree v0.1.0
-	github.com/spacemeshos/poet v0.4.2
+	github.com/spacemeshos/merkle-tree v0.2.0
+	github.com/spacemeshos/poet v0.5.0
 	github.com/spacemeshos/post v0.3.0
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
@@ -156,6 +156,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
 	github.com/spacemeshos/bitstream v0.1.0 // indirect
+	github.com/spacemeshos/sha256-simd v0.1.0 // indirect
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/afero v1.9.3 // indirect
@@ -169,7 +170,6 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.uber.org/dig v1.15.0 // indirect
 	go.uber.org/fx v1.18.2 // indirect
-	go.uber.org/goleak v1.2.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/crypto v0.3.0 // indirect
 	golang.org/x/mod v0.7.0 // indirect
