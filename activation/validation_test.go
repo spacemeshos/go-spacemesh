@@ -15,6 +15,7 @@ import (
 )
 
 func Test_Validation_VRFNonce(t *testing.T) {
+	t.Parallel()
 	r := require.New(t)
 
 	// Arrange
@@ -77,6 +78,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 }
 
 func Test_Validation_InitialNIPostChallenge(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	layers := types.GetLayersPerEpoch()
 	types.SetLayersPerEpoch(layersPerEpochBig)
@@ -211,6 +213,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 }
 
 func Test_Validation_NIPostChallenge(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	layers := types.GetLayersPerEpoch()
 	types.SetLayersPerEpoch(layersPerEpochBig)
@@ -384,6 +387,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 }
 
 func Test_Validation_PositioningAtx(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	layers := types.GetLayersPerEpoch()
 	types.SetLayersPerEpoch(layersPerEpochBig)
@@ -499,6 +503,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 }
 
 func Test_Validate_NumUnits(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	layers := types.GetLayersPerEpoch()
 	types.SetLayersPerEpoch(layersPerEpochBig)
@@ -533,6 +538,7 @@ func Test_Validate_NumUnits(t *testing.T) {
 }
 
 func Test_Validate_PostMetadata(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	layers := types.GetLayersPerEpoch()
 	types.SetLayersPerEpoch(layersPerEpochBig)
