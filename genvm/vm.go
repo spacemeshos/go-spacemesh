@@ -261,6 +261,15 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 		events.ReportAccountUpdate(account.Address)
 		return true
 	})
+	for _, reward := range rewardsResult {
+		events.ReportRewardReceived(events.Reward{
+			Layer:       reward.Layer,
+			Total:       reward.TotalReward,
+			LayerReward: reward.LayerReward,
+			Coinbase:    reward.Coinbase,
+		})
+	}
+
 	blockDurationPersist.Observe(float64(time.Since(t4)))
 	blockDuration.Observe(float64(time.Since(t1)))
 	transactionsPerBlock.Observe(float64(len(txs)))

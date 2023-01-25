@@ -73,7 +73,6 @@ func (s syncState) String() string {
 }
 
 var (
-	errShuttingDown       = errors.New("shutting down")
 	errHareInCharge       = errors.New("hare in charge of layer")
 	errATXsNotSynced      = errors.New("ATX not synced")
 	errBeaconNotAvailable = errors.New("beacon not available")
@@ -81,15 +80,6 @@ var (
 
 // Option is a type to configure a syncer.
 type Option func(*Syncer)
-
-// WithContext ...
-func WithContext(c context.Context) Option {
-	return func(s *Syncer) {
-		shutdownCtx, cancel := context.WithCancel(c)
-		s.shutdownCtx = shutdownCtx
-		s.cancelFunc = cancel
-	}
-}
 
 // WithConfig ...
 func WithConfig(c Config) Option {
@@ -145,9 +135,7 @@ type Syncer struct {
 	awaitATXSyncedCh []chan struct{}
 	muATXSyncedCh    sync.Mutex // protects the slice above from concurrent access
 
-	shutdownCtx context.Context
-	cancelFunc  context.CancelFunc
-	eg          errgroup.Group
+	eg errgroup.Group
 
 	// recording the run # since started. for logging/debugging only.
 	run uint64
@@ -200,7 +188,6 @@ func NewSyncer(
 func (s *Syncer) Close() {
 	s.syncTimer.Stop()
 	s.validateTimer.Stop()
-	s.cancelFunc()
 	s.logger.With().Info("waiting for syncer goroutines to finish")
 	err := s.eg.Wait()
 	s.logger.With().Info("all syncer goroutines finished", log.Err(err))
@@ -256,9 +243,9 @@ func (s *Syncer) Start(ctx context.Context) {
 			}
 			for {
 				select {
-				case <-s.shutdownCtx.Done():
+				case <-ctx.Done():
 					s.logger.WithContext(ctx).Info("stopping sync to shutdown")
-					return fmt.Errorf("shutdown context done: %w", s.shutdownCtx.Err())
+					return fmt.Errorf("shutdown context done: %w", ctx.Err())
 				case <-s.syncTimer.C:
 					s.logger.WithContext(ctx).Debug("synchronize on tick")
 					s.synchronize(ctx)
@@ -269,7 +256,7 @@ func (s *Syncer) Start(ctx context.Context) {
 		s.eg.Go(func() error {
 			for {
 				select {
-				case <-s.shutdownCtx.Done():
+				case <-ctx.Done():
 					return nil
 				case <-s.validateTimer.C:
 					_ = s.processLayers(ctx)
@@ -278,15 +265,6 @@ func (s *Syncer) Start(ctx context.Context) {
 			}
 		})
 	})
-}
-
-func (s *Syncer) isClosed() bool {
-	select {
-	case <-s.shutdownCtx.Done():
-		return true
-	default:
-		return false
-	}
 }
 
 func (s *Syncer) setATXSynced() {
@@ -371,9 +349,11 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	ctx = log.WithNewSessionID(ctx)
 	logger := s.logger.WithContext(ctx)
 
-	if s.isClosed() {
+	select {
+	case <-ctx.Done():
 		logger.Warning("attempting to sync while shutting down")
 		return false
+	default:
 	}
 
 	if s.ticker.GetCurrentLayer().Uint32() == 0 {
@@ -516,10 +496,6 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 }
 
 func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...p2p.Peer) error {
-	if s.isClosed() {
-		return errors.New("shutdown")
-	}
-
 	s.logger.WithContext(ctx).With().Info("polling layer data", layerID)
 	if err := s.dataFetcher.PollLayerData(ctx, layerID, peers...); err != nil {
 		return fmt.Errorf("PollLayerData: %w", err)

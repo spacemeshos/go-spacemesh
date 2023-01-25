@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/viper"
 
@@ -83,9 +84,9 @@ type BaseConfig struct {
 	OracleServer        string `mapstructure:"oracle_server"`
 	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
 
-	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
-	LayerAvgSize     int    `mapstructure:"layer-average-size"`
-	LayersPerEpoch   uint32 `mapstructure:"layers-per-epoch"`
+	LayerDuration  time.Duration `mapstructure:"layer-duration"`
+	LayerAvgSize   uint32        `mapstructure:"layer-average-size"`
+	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`
 
 	PoETServers []string `mapstructure:"poet-server"`
 
@@ -157,7 +158,7 @@ func defaultBaseConfig() BaseConfig {
 		ProfilerName:        "gp-spacemesh",
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldID: 0,
-		LayerDurationSec:    30,
+		LayerDuration:       30 * time.Second,
 		LayersPerEpoch:      3,
 		PoETServers:         []string{"127.0.0.1"},
 		SyncRequestTimeout:  2000,

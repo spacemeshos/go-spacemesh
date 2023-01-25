@@ -74,6 +74,10 @@ func ComputeWeightPerEligibility(
 			atxWeight = weight
 		}
 	}
+	if atxWeight == 0 {
+		return nil, fmt.Errorf("atx id %v is not found in the active set of the reference ballot %v with atxid %v", ballot.AtxID, refBallot.ID(), refBallot.AtxID)
+	}
+
 	expNumSlots, err := GetNumEligibleSlots(atxWeight, total, layerSize, layersPerEpoch)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute num eligibility for atx %s: %w", ballot.AtxID, err)

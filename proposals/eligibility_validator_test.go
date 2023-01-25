@@ -38,11 +38,13 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 	t.Helper()
 	activeset := types.ATXIDList{types.RandomATXID(), types.RandomATXID(), types.RandomATXID(), types.RandomATXID()}
 
+	nonce := types.VRFPostIndex(1)
 	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
 			PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 		},
 		NumUnits: testedATXUnit,
+		VRFNonce: &nonce,
 	}}
 	atx.SetID(&activeset[0])
 	atx.SetNodeID(&nid)
@@ -78,8 +80,10 @@ func createTestValidator(tb testing.TB) *testValidator {
 	lg := logtest.New(tb)
 
 	return &testValidator{
-		Validator: NewEligibilityValidator(layerAvgSize, layersPerEpoch, datastore.NewCachedDB(sql.InMemory(), lg), ms.mbc, ms.mm, lg, ms.mvrf),
-		mockSet:   ms,
+		Validator: NewEligibilityValidator(layerAvgSize, layersPerEpoch, datastore.NewCachedDB(sql.InMemory(), lg), ms.mbc, ms.mm, lg, ms.mvrf,
+			WithNonceFetcher(ms.mNonce),
+		),
+		mockSet: ms,
 	}
 }
 
@@ -91,14 +95,14 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 	eligibilityProofs := map[types.LayerID][]types.VotingEligibility{}
 	order := make([]types.LayerID, 0, eligibleSlots)
 
-	vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+	nonce := types.VRFPostIndex(1)
+	vrfSigner, err := signer.VRFSigner()
 	require.NoError(tb, err)
 
 	for counter := uint32(0); counter < eligibleSlots; counter++ {
-		message, err := SerializeVRFMessage(beacon, epoch, counter)
+		message, err := SerializeVRFMessage(beacon, epoch, nonce, counter)
 		require.NoError(tb, err)
-		vrfSig, err := vrfSigner.Sign(message)
-		require.NoError(tb, err)
+		vrfSig := vrfSigner.Sign(message)
 		eligibleLayer := CalcEligibleLayer(epoch, layersPerEpoch, vrfSig)
 		if _, exist := eligibilityProofs[eligibleLayer]; !exist {
 			order = append(order, eligibleLayer)
@@ -136,7 +140,7 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 func TestCheckEligibility_FailedToGetRefBallot(t *testing.T) {
 	tv := createTestValidator(t)
 	signer, err := signing.NewEdSigner(
-		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
+		signing.WithKeyFromRand(rand.New(rand.NewSource(1128))),
 	)
 	require.NoError(t, err)
 
@@ -219,14 +223,15 @@ func TestCheckEligibility_FailToGetBallotATXHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
+
 	blts := createBallots(t, signer, activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
-	require.NoError(t, ballots.Add(tv.cdb, rb))
-	b := blts[1]
-	b.AtxID = types.RandomATXID()
-	eligible, err := tv.CheckEligibility(context.Background(), b)
+	randomAtx := types.RandomATXID()
+	rb.EpochData.ActiveSet = append(rb.EpochData.ActiveSet, randomAtx)
+	rb.AtxID = randomAtx
+	eligible, err := tv.CheckEligibility(context.Background(), rb)
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.True(t, strings.Contains(err.Error(), "get ballot ATX header"))
+	require.ErrorContains(t, err, "get ATX header")
 	require.False(t, eligible)
 }
 
@@ -343,6 +348,8 @@ func TestCheckEligibility_BadCounter(t *testing.T) {
 	require.NoError(t, ballots.Add(tv.cdb, rb))
 	b := blts[1]
 	b.EligibilityProofs[0].J = b.EligibilityProofs[0].J + 100
+
+	tv.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
 	eligible, err := tv.CheckEligibility(context.Background(), b)
 	require.ErrorIs(t, err, errIncorrectCounter)
 	require.False(t, eligible)
@@ -351,7 +358,7 @@ func TestCheckEligibility_BadCounter(t *testing.T) {
 func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	tv := createTestValidator(t)
 	signer, err := signing.NewEdSigner(
-		signing.WithKeyFromRand(rand.New(rand.NewSource(1121))),
+		signing.WithKeyFromRand(rand.New(rand.NewSource(1128))),
 	)
 	require.NoError(t, err)
 
@@ -362,6 +369,7 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	rb.EligibilityProofs[0], rb.EligibilityProofs[1] = rb.EligibilityProofs[1], rb.EligibilityProofs[0]
 
 	tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+	tv.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
 
 	eligible, err := tv.CheckEligibility(context.Background(), rb)
 	require.ErrorIs(t, err, errInvalidProofsOrder)
@@ -369,6 +377,10 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 
 	rb.EligibilityProofs[0], rb.EligibilityProofs[1] = rb.EligibilityProofs[1], rb.EligibilityProofs[0]
 	rb.EligibilityProofs = append(rb.EligibilityProofs, types.VotingEligibility{J: 2})
+
+	tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+	tv.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
+
 	eligible, err = tv.CheckEligibility(context.Background(), rb)
 	require.ErrorIs(t, err, errInvalidProofsOrder)
 	require.False(t, eligible)
@@ -389,6 +401,7 @@ func TestCheckEligibility_BadVRFSignature(t *testing.T) {
 	b := blts[1]
 	b.EligibilityProofs[0].Sig = b.EligibilityProofs[0].Sig[1:]
 	tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), b.EligibilityProofs[0].Sig).Return(false)
+	tv.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
 
 	eligible, err := tv.CheckEligibility(context.Background(), b)
 	require.ErrorIs(t, err, errIncorrectVRFSig)
@@ -410,6 +423,7 @@ func TestCheckEligibility_IncorrectLayerIndex(t *testing.T) {
 	b := blts[1]
 	b.EligibilityProofs[0].Sig = b.EligibilityProofs[0].Sig[1:]
 	tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), b.EligibilityProofs[0].Sig).Return(false)
+	tv.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
 
 	eligible, err := tv.CheckEligibility(context.Background(), b)
 	require.ErrorIs(t, err, errIncorrectVRFSig)
@@ -441,8 +455,54 @@ func TestCheckEligibility(t *testing.T) {
 		weightPer := fixed.DivUint64(hdr.GetWeight(), uint64(eligibleSlots))
 		tv.mbc.EXPECT().ReportBeaconFromBallot(epoch, b, beacon, weightPer).Times(1)
 		tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+		tv.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
 		got, err := tv.CheckEligibility(context.Background(), b)
 		require.NoError(t, err)
 		require.True(t, got)
 	}
+}
+
+func TestCheckEligibility_AtxIdMismatch(t *testing.T) {
+	tv := createTestValidator(t)
+	refballot := types.Ballot{}
+	refballot.SetID(types.BallotID{1})
+	refballot.AtxID = types.ATXID{1}
+	refballot.EpochData = &types.EpochData{}
+	require.NoError(t, ballots.Add(tv.cdb, &refballot))
+
+	ballot := &types.Ballot{}
+	ballot.EligibilityProofs = []types.VotingEligibility{{}}
+	ballot.RefBallot = refballot.ID()
+	ballot.AtxID = types.ATXID{2}
+
+	eligibile, err := tv.CheckEligibility(context.Background(), ballot)
+	require.ErrorContains(t, err, "should be sharing atx")
+	require.False(t, eligibile)
+}
+
+func TestCheckEligibility_AtxNotIncluded(t *testing.T) {
+	tv := createTestValidator(t)
+
+	atx1 := &types.VerifiedActivationTx{ActivationTx: &types.ActivationTx{}}
+	atx1.SetID(&types.ATXID{1})
+	atx1.SetNodeID(&types.NodeID{})
+	atx2 := &types.VerifiedActivationTx{ActivationTx: &types.ActivationTx{}}
+	atx2.SetID(&types.ATXID{2})
+	atx2.SetNodeID(&types.NodeID{})
+	require.NoError(t, atxs.Add(tv.cdb, atx1, time.Time{}))
+	require.NoError(t, atxs.Add(tv.cdb, atx2, time.Time{}))
+
+	ballot := &types.Ballot{}
+	ballot.EligibilityProofs = []types.VotingEligibility{{}}
+	ballot.SetID(types.BallotID{1})
+	ballot.AtxID = types.ATXID{3}
+	ballot.EpochData = &types.EpochData{
+		ActiveSet: []types.ATXID{atx1.ID(), atx2.ID()},
+		Beacon:    types.Beacon{1},
+	}
+	require.NoError(t, ballots.Add(tv.cdb, ballot))
+
+	eligibile, err := tv.CheckEligibility(context.Background(), ballot)
+	require.ErrorContains(t, err, "is not included into the active set")
+	require.False(t, eligibile)
 }

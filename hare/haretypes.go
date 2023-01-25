@@ -205,7 +205,6 @@ func (s *Set) String() string {
 
 	var sb strings.Builder
 	idx := len(s.values) - 1
-	b := new(bytes.Buffer)
 	for v := range s.values {
 		idx--
 		sb.WriteString(v.String())
@@ -213,7 +212,7 @@ func (s *Set) String() string {
 			sb.WriteString(",")
 		}
 	}
-	return b.String()
+	return sb.String()
 }
 
 // IsSubSetOf returns true if s is a subset of g, false otherwise.

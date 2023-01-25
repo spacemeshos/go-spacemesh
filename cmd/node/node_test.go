@@ -557,7 +557,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 		// Speed things up a little
 		app.Config.SyncInterval = 1
-		app.Config.LayerDurationSec = 2
+		app.Config.LayerDuration = 2 * time.Second
 		app.Config.DataDirParent = path
 		app.Config.LOGGING = cfg.LOGGING
 
@@ -685,7 +685,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// syncer will cause the node to go out of sync (and not listen to gossip)
 		// since we are testing single-node transaction service, we don't need the syncer to run
 		app.Config.SyncInterval = 1000000
-		app.Config.LayerDurationSec = 2
+		app.Config.LayerDuration = 2 * time.Second
 
 		app.Config.Genesis = &config.GenesisConfig{
 			GenesisTime: time.Now().Add(20 * time.Second).Format(time.RFC3339),
@@ -989,7 +989,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.Tortoise.Hdist = 5
 	cfg.Tortoise.Zdist = 5
 
-	cfg.LayerDurationSec = 20
+	cfg.LayerDuration = 20 * time.Second
 	cfg.HareEligibility.ConfidenceParam = 4
 	cfg.HareEligibility.EpochOffset = 0
 	cfg.SyncRequestTimeout = 500
@@ -1024,17 +1024,19 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	smApp.Config.SMESHING.Opts.DataDir, _ = os.MkdirTemp("", "sm-app-test-post-datadir")
 
 	smApp.host = host
-	smApp.edSgn = edSgn
 
-	vrfSigner, err := edSgn.VRFSigner(
-		signing.WithNonceForNode(1, edSgn.NodeID()),
-	)
+	vrfSigner, err := edSgn.VRFSigner()
 	if err != nil {
 		return nil, err
 	}
 
-	err = smApp.initServices(context.Background(), edSgn.NodeID(), storePath, edSgn,
-		uint32(smApp.Config.LayerAvgSize), []activation.PoetProvingServiceClient{poetClient}, vrfSigner, smApp.Config.LayersPerEpoch, clock)
+	if err = smApp.setupDBs(context.Background(), lg, storePath); err != nil {
+		return nil, err
+	}
+
+	smApp.nodeID = edSgn.NodeID()
+	types.SetLayersPerEpoch(smApp.Config.LayersPerEpoch)
+	err = smApp.initServices(context.Background(), edSgn, []activation.PoetProvingServiceClient{poetClient}, vrfSigner, clock)
 	if err != nil {
 		return nil, err
 	}

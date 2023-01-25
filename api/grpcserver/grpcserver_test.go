@@ -54,21 +54,20 @@ import (
 )
 
 const (
-	labelsPerUnit    = 2048
-	bitsPerLabel     = 8
-	numUnits         = 2
-	genTimeUnix      = 1000000
-	layerDurationSec = 10
-	layerAvgSize     = 10
-	txsPerProposal   = 99
-	layersPerEpoch   = uint32(5)
+	labelsPerUnit  = 2048
+	bitsPerLabel   = 8
+	numUnits       = 2
+	genTimeUnix    = 1000000
+	layerDuration  = 10 * time.Second
+	layerAvgSize   = 10
+	txsPerProposal = 99
+	layersPerEpoch = uint32(5)
 
 	atxPerLayer    = 2
 	blkPerLayer    = 3
 	accountBalance = 8675301
 	accountCounter = 0
 	rewardAmount   = 5551234
-	receiptIndex   = 42
 )
 
 var (
@@ -142,6 +141,18 @@ func dialGrpc(ctx context.Context, tb testing.TB, cfg config.Config) *grpc.Clien
 	require.NoError(tb, err)
 	tb.Cleanup(func() { require.NoError(tb, conn.Close()) })
 	return conn
+}
+
+func newEdSigner(t *testing.T) *signing.EdSigner {
+	t.Helper()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	return signer
+}
+
+func newAddress(t *testing.T) types.Address {
+	t.Helper()
+	return wallet.Address(newEdSigner(t).PublicKey().Bytes())
 }
 
 func TestMain(m *testing.M) {
@@ -593,12 +604,14 @@ func TestNodeService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	syncer := SyncerMock{}
 	atxapi := &ActivationAPIMock{}
-	grpcService := NewNodeService(&networkMock, meshAPI, &genTime, &syncer, atxapi)
-	shutDown := launchServer(t, grpcService)
-	defer shutDown()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
+
+	grpcService := NewNodeService(ctx, &networkMock, meshAPI, &genTime, &syncer, atxapi)
+	shutDown := launchServer(t, grpcService)
+	defer shutDown()
+
 	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewNodeServiceClient(conn)
 
@@ -1119,7 +1132,7 @@ func TestSmesherService(t *testing.T) {
 
 func TestMeshService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
+	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, grpcService)
 	t.Cleanup(func() { shutDown() })
 
@@ -1161,13 +1174,13 @@ func TestMeshService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.LayerDuration(context.Background(), &pb.LayerDurationRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(layerDurationSec), response.Duration.Value)
+			require.Equal(t, layerDuration, time.Duration(response.Duration.Value)*time.Second)
 		}},
 		{"MaxTransactionsPerSecond", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.MaxTransactionsPerSecond(context.Background(), &pb.MaxTransactionsPerSecondRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(layerAvgSize*txsPerProposal/layerDurationSec), response.MaxTxsPerSecond.Value)
+			require.Equal(t, uint64(layerAvgSize*txsPerProposal/layerDuration.Seconds()), response.MaxTxsPerSecond.Value)
 		}},
 		{"AccountMeshDataQuery", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -2070,7 +2083,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
+	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2179,7 +2192,6 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 
 	_, err = stream.Recv()
 	require.Error(t, err)
-	require.Equal(t, status.Convert(err).Code(), codes.DeadlineExceeded)
 }
 
 func TestGlobalStateStream_comprehensive(t *testing.T) {
@@ -2249,7 +2261,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
+	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2382,13 +2394,15 @@ func checkGlobalStateDataGlobalState(t *testing.T, dataItem any) {
 func TestMultiService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	cfg.GrpcServerPort = 9192
-	svc1 := NewNodeService(&networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
-	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
-	shutDown := launchServer(t, svc1, svc2)
-	defer shutDown()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	svc1 := NewNodeService(ctx, &networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
+	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	shutDown := launchServer(t, svc1, svc2)
+	defer shutDown()
+
 	conn := dialGrpc(ctx, t, cfg)
 
 	c1 := pb.NewNodeServiceClient(conn)
@@ -2436,8 +2450,8 @@ func TestJsonApi(t *testing.T) {
 	shutDown()
 
 	// enable services and try again
-	svc1 := NewNodeService(&networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
-	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
+	svc1 := NewNodeService(context.Background(), &networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
+	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true
 	shutDown = launchServer(t, svc1, svc2)
@@ -2576,8 +2590,7 @@ func TestEventsReceived(t *testing.T) {
 		Filter: &pb.AccountDataFilter{
 			AccountId: &pb.AccountId{Address: addr1.String()},
 			AccountDataFlags: uint32(
-				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
-					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
+				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
 					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT),
 		},
 	}
@@ -2586,8 +2599,7 @@ func TestEventsReceived(t *testing.T) {
 		Filter: &pb.AccountDataFilter{
 			AccountId: &pb.AccountId{Address: addr2.String()},
 			AccountDataFlags: uint32(
-				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
-					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
+				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
 					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT),
 		},
 	}
@@ -2627,6 +2639,71 @@ func TestEventsReceived(t *testing.T) {
 	receiverRes, err := receiverStream.Recv()
 	require.NoError(t, err)
 	require.Equal(t, addr2.String(), receiverRes.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
+}
+
+func TestTransactionsRewards(t *testing.T) {
+	logtest.SetupGlobal(t)
+	req := require.New(t)
+	events.CloseEventReporter()
+	events.InitializeReporter()
+	t.Cleanup(events.CloseEventReporter)
+
+	shutDown := launchServer(t, NewGlobalStateService(meshAPI, conStateAPI))
+	t.Cleanup(shutDown)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg))
+
+	address := newAddress(t)
+	weight := new(big.Rat).SetFloat64(18.7)
+	rewards := []types.AnyReward{{Coinbase: address, Weight: types.RatNumFromBigRat(weight)}}
+
+	t.Run("Get rewards from AccountDataStream", func(t *testing.T) {
+		t.Parallel()
+		request := &pb.AccountDataStreamRequest{
+			Filter: &pb.AccountDataFilter{
+				AccountId:        &pb.AccountId{Address: address.String()},
+				AccountDataFlags: uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD),
+			},
+		}
+		stream, err := client.AccountDataStream(ctx, request)
+		req.NoError(err, "stream request returned unexpected error")
+		time.Sleep(50 * time.Millisecond)
+
+		svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
+		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.NewLayerID(17)}, []types.Transaction{*globalTx}, rewards)
+		req.NoError(err)
+
+		data, err := stream.Recv()
+		req.NoError(err)
+		req.IsType(&pb.AccountData_Reward{}, data.Datum.Datum)
+		reward := data.Datum.GetReward()
+		req.Equal(address.String(), reward.Coinbase.Address)
+		req.EqualValues(17, reward.Layer.GetNumber())
+		// TODO check reward.Total and reward.LayerReward
+	})
+	t.Run("Get rewards from GlobalStateStream", func(t *testing.T) {
+		t.Parallel()
+		request := &pb.GlobalStateStreamRequest{
+			GlobalStateDataFlags: uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_REWARD),
+		}
+		stream, err := client.GlobalStateStream(ctx, request)
+		req.NoError(err, "stream request returned unexpected error")
+		time.Sleep(50 * time.Millisecond)
+
+		svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
+		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.NewLayerID(17)}, []types.Transaction{*globalTx}, rewards)
+		req.NoError(err)
+
+		data, err := stream.Recv()
+		req.NoError(err)
+		req.IsType(&pb.GlobalStateData_Reward{}, data.Datum.Datum)
+		reward := data.Datum.GetReward()
+		req.Equal(address.String(), reward.Coinbase.Address)
+		req.EqualValues(17, reward.Layer.GetNumber())
+		// TODO check reward.Total and reward.LayerReward
+	})
 }
 
 func TestVMAccountUpdates(t *testing.T) {

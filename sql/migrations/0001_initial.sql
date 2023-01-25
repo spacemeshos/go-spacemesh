@@ -104,6 +104,7 @@ CREATE TABLE atxs
     id               CHAR(32) PRIMARY KEY,
     layer            INT NOT NULL,
     epoch            INT NOT NULL,
+    nonce            UNSIGNED LONG INT,
     base_tick_height UNSIGNED LONG INT,
     tick_count       UNSIGNED LONG INT,
     smesher          CHAR(32),

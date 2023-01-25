@@ -133,12 +133,12 @@ func deployPoetPod(ctx context.Context, tctx *testcontext.Context, id string, fl
 					WithResources(corev1.ResourceRequirements().WithRequests(
 						apiv1.ResourceList{
 							apiv1.ResourceCPU:    resource.MustParse("1"),
-							apiv1.ResourceMemory: resource.MustParse("16Gi"),
+							apiv1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 					).WithLimits(
 						apiv1.ResourceList{
 							apiv1.ResourceCPU:    resource.MustParse("2"),
-							apiv1.ResourceMemory: resource.MustParse("16Gi"),
+							apiv1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 					)),
 				),

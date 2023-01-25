@@ -12,11 +12,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	hmocks "github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmock "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -28,20 +30,23 @@ const defaultCnt = uint16(2)
 
 type testCertifier struct {
 	*Certifier
-	db        *sql.Database
-	nid       types.NodeID
-	mOracle   *hmocks.MockRolacle
-	mPub      *pubsubmock.MockPublisher
-	mClk      *mocks.MocklayerClock
-	mb        *smocks.MockBeaconGetter
-	mtortoise *smocks.MockTortoise
+	db            *datastore.CachedDB
+	nid           types.NodeID
+	mOracle       *hmocks.MockRolacle
+	mPub          *pubsubmock.MockPublisher
+	mClk          *mocks.MocklayerClock
+	mb            *smocks.MockBeaconGetter
+	mTortoise     *smocks.MockTortoise
+	mNonceFetcher *mocks.MocknonceFetcher
 }
 
 func newTestCertifier(t *testing.T) *testCertifier {
 	t.Helper()
 	types.SetLayersPerEpoch(3)
-	db := sql.InMemory()
+	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
 	nid := signer.NodeID()
 	ctrl := gomock.NewController(t)
@@ -50,20 +55,25 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	mc := mocks.NewMocklayerClock(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	mtortoise := smocks.NewMockTortoise(ctrl)
-	c := NewCertifier(db, mo, nid, signer, mp, mc, mb, mtortoise, WithCertifierLogger(logtest.New(t)))
+	mNonceFetcher := mocks.NewMocknonceFetcher(ctrl)
+	c := NewCertifier(db, mo, nid, signer, pke, mp, mc, mb, mtortoise,
+		WithCertifierLogger(logtest.New(t)),
+		withNonceFetcher(mNonceFetcher),
+	)
 	return &testCertifier{
-		Certifier: c,
-		db:        db,
-		nid:       nid,
-		mOracle:   mo,
-		mPub:      mp,
-		mClk:      mc,
-		mb:        mb,
-		mtortoise: mtortoise,
+		Certifier:     c,
+		db:            db,
+		nid:           nid,
+		mOracle:       mo,
+		mPub:          mp,
+		mClk:          mc,
+		mb:            mb,
+		mTortoise:     mtortoise,
+		mNonceFetcher: mNonceFetcher,
 	}
 }
 
-func generateBlock(t *testing.T, db *sql.Database) *types.Block {
+func generateBlock(t *testing.T, db *datastore.CachedDB) *types.Block {
 	t.Helper()
 	block := types.NewExistingBlock(
 		types.RandomBlockID(),
@@ -97,7 +107,7 @@ func genEncodedMsg(t *testing.T, lid types.LayerID, bid types.BlockID) (types.No
 	return nid, msg, data
 }
 
-func verifyCerts(t *testing.T, db *sql.Database, lid types.LayerID, expected map[types.BlockID]bool) {
+func verifyCerts(t *testing.T, db *datastore.CachedDB, lid types.LayerID, expected map[types.BlockID]bool) {
 	t.Helper()
 	var allValids []types.BlockID
 	certs, err := certificates.Get(db, lid)
@@ -160,7 +170,7 @@ func Test_HandleSyncedCertificate(t *testing.T) {
 		BlockID:    b.ID(),
 		Signatures: sigs,
 	}
-	tc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
+	tc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 	require.NoError(t, tc.HandleSyncedCertificate(context.TODO(), b.LayerIndex, cert))
 	verifyCerts(t, tc.db, b.LayerIndex, map[types.BlockID]bool{b.ID(): true})
 }
@@ -182,7 +192,7 @@ func Test_HandleSyncedCertificate_HareOutputTrumped(t *testing.T) {
 	}
 	ho := types.RandomBlockID()
 	require.NoError(t, certificates.SetHareOutput(tc.db, b.LayerIndex, ho))
-	tc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
+	tc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 	require.NoError(t, tc.HandleSyncedCertificate(context.TODO(), b.LayerIndex, cert))
 	verifyCerts(t, tc.db, b.LayerIndex, map[types.BlockID]bool{b.ID(): true, ho: false})
 }
@@ -241,9 +251,9 @@ func Test_HandleSyncedCertificate_MultipleCertificates(t *testing.T) {
 				Signatures: sigs,
 			}
 			if tc.err != nil {
-				tcc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, types.EmptyBlockID)
+				tcc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, types.EmptyBlockID)
 			} else {
-				tcc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
+				tcc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 			}
 			require.ErrorIs(t, tcc.HandleSyncedCertificate(context.TODO(), b.LayerIndex, cert), tc.err)
 			expected := map[types.BlockID]bool{}
@@ -375,7 +385,7 @@ func Test_HandleCertifyMessage_Certified(t *testing.T) {
 				tcc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tcc.cfg.CommitteeSize, gomock.Any(), gomock.Any(), defaultCnt).
 					Return(true, nil).MinTimes(cutoff).MaxTimes(numMsgs)
 			}
-			tcc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
+			tcc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 			var wg sync.WaitGroup
 			for i := 0; i < numMsgs; i++ {
 				nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
@@ -448,9 +458,9 @@ func Test_HandleCertifyMessage_MultipleCertificates(t *testing.T) {
 			tcc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil).AnyTimes()
 			require.NoError(t, tcc.RegisterForCert(context.TODO(), b.LayerIndex, b.ID()))
 			if tc.err != nil {
-				tcc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, types.EmptyBlockID)
+				tcc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, types.EmptyBlockID)
 			} else {
-				tcc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
+				tcc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 			}
 			for i := 0; i < numMsgs; i++ {
 				nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
@@ -586,8 +596,10 @@ func Test_CertifyIfEligible(t *testing.T) {
 	extractor, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
 
-	tc.mOracle.EXPECT().Proof(gomock.Any(), b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
-	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, proof).Return(defaultCnt, nil)
+	nonce := types.VRFPostIndex(rand.Uint64())
+	tc.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), b.LayerIndex.GetEpoch()).Return(nonce, nil)
+	tc.mOracle.EXPECT().Proof(gomock.Any(), nonce, b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
+	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, nonce, proof).Return(defaultCnt, nil)
 	tc.mPub.EXPECT().Publish(gomock.Any(), pubsub.BlockCertify, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
 			var msg types.CertifyMessage
@@ -610,8 +622,10 @@ func Test_CertifyIfEligible_NotEligible(t *testing.T) {
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 	proof := []byte("not a fraud")
-	tc.mOracle.EXPECT().Proof(gomock.Any(), b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
-	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, proof).Return(uint16(0), nil)
+	nonce := types.VRFPostIndex(rand.Uint64())
+	tc.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), b.LayerIndex.GetEpoch()).Return(nonce, nil)
+	tc.mOracle.EXPECT().Proof(gomock.Any(), nonce, b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
+	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, nonce, proof).Return(uint16(0), nil)
 	require.NoError(t, tc.CertifyIfEligible(context.TODO(), tc.logger, b.LayerIndex, b.ID()))
 }
 
@@ -621,8 +635,10 @@ func Test_CertifyIfEligible_EligibilityErr(t *testing.T) {
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 	errUnknown := errors.New("unknown")
 	proof := []byte("not a fraud")
-	tc.mOracle.EXPECT().Proof(gomock.Any(), b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
-	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, proof).Return(uint16(0), errUnknown)
+	nonce := types.VRFPostIndex(rand.Uint64())
+	tc.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), b.LayerIndex.GetEpoch()).Return(nonce, nil)
+	tc.mOracle.EXPECT().Proof(gomock.Any(), nonce, b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
+	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, nonce, proof).Return(uint16(0), errUnknown)
 	require.ErrorIs(t, tc.CertifyIfEligible(context.TODO(), tc.logger, b.LayerIndex, b.ID()), errUnknown)
 }
 
@@ -631,7 +647,9 @@ func Test_CertifyIfEligible_ProofErr(t *testing.T) {
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 	errUnknown := errors.New("unknown")
-	tc.mOracle.EXPECT().Proof(gomock.Any(), b.LayerIndex, eligibility.CertifyRound).Return(nil, errUnknown)
+	nonce := types.VRFPostIndex(rand.Uint64())
+	tc.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), b.LayerIndex.GetEpoch()).Return(nonce, nil)
+	tc.mOracle.EXPECT().Proof(gomock.Any(), nonce, b.LayerIndex, eligibility.CertifyRound).Return(nil, errUnknown)
 	require.ErrorIs(t, tc.CertifyIfEligible(context.TODO(), tc.logger, b.LayerIndex, b.ID()), errUnknown)
 }
 

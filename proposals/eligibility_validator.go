@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -34,13 +35,31 @@ type Validator struct {
 	beacons        system.BeaconCollector
 	logger         log.Log
 	vrfVerifier    vrfVerifier
+	nonceFetcher   nonceFetcher
+}
+
+type defaultFetcher struct {
+	cdb *datastore.CachedDB
+}
+
+func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	return atxs.VRFNonce(f.cdb, nodeID, epoch)
+}
+
+// ValidatorOpt for configuring Validator.
+type ValidatorOpt func(h *Validator)
+
+func WithNonceFetcher(nf nonceFetcher) ValidatorOpt {
+	return func(h *Validator) {
+		h.nonceFetcher = nf
+	}
 }
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log, vrfVerifier vrfVerifier,
+	avgLayerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
 ) *Validator {
-	return &Validator{
+	v := &Validator{
 		avgLayerSize:   avgLayerSize,
 		layersPerEpoch: layersPerEpoch,
 		cdb:            cdb,
@@ -49,6 +68,15 @@ func NewEligibilityValidator(
 		logger:         lg,
 		vrfVerifier:    vrfVerifier,
 	}
+	for _, opt := range opts {
+		opt(v)
+	}
+
+	if v.nonceFetcher == nil {
+		v.nonceFetcher = defaultFetcher{cdb: cdb}
+	}
+
+	return v
 }
 
 // CheckEligibility checks that a ballot is eligible in the layer that it specifies.
@@ -71,6 +99,9 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	if refBallot.EpochData == nil {
 		return false, fmt.Errorf("%w: ref ballot %v", errMissingEpochData, refBallot.ID())
 	}
+	if refBallot.AtxID != ballot.AtxID {
+		return false, fmt.Errorf("ballot (%v/%v) should be sharing atx with a reference ballot (%v/%v)", ballot.ID(), ballot.AtxID, refBallot.ID(), refBallot.AtxID)
+	}
 
 	beacon := refBallot.EpochData.Beacon
 	if beacon == types.EmptyBeacon {
@@ -83,19 +114,29 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	}
 
 	// todo: optimize by using reference to active set size and cache active set size to not load all atxsIDs from db
+	var owned *types.ActivationTxHeader
 	for _, atxID := range activeSets {
 		atx, err := v.cdb.GetAtxHeader(atxID)
 		if err != nil {
 			return false, fmt.Errorf("get ATX header %v: %w", atxID, err)
 		}
 		totalWeight += atx.GetWeight()
+		if atxID == ballot.AtxID {
+			owned = atx
+		}
+	}
+	if owned == nil {
+		return false, fmt.Errorf("atx %v from ballot %v (refballot %v) is not included into the active set", ballot.AtxID, ballot.ID(), refBallot.ID())
+	}
+	if targetEpoch := owned.TargetEpoch(); targetEpoch != epoch {
+		return false, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
+			errTargetEpochMismatch, targetEpoch, epoch)
+	}
+	if pub := ballot.SmesherID(); !bytes.Equal(owned.NodeID.Bytes(), pub.Bytes()) {
+		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), owned.NodeID)
 	}
 
-	atx, err := v.getBallotATX(ctx, ballot)
-	if err != nil {
-		return false, fmt.Errorf("get ballot ATX header %v: %w", ballot.AtxID, err)
-	}
-	atxWeight = atx.GetWeight()
+	atxWeight = owned.GetWeight()
 
 	numEligibleSlots, err := GetNumEligibleSlots(atxWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
 	if err != nil {
@@ -107,6 +148,10 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		isFirst = true
 	)
 
+	nonce, err := v.nonceFetcher.VRFNonce(ballot.SmesherID(), epoch)
+	if err != nil {
+		return false, err
+	}
 	for _, proof := range ballot.EligibilityProofs {
 		counter := proof.J
 		if counter >= numEligibleSlots {
@@ -120,14 +165,14 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		}
 		last = counter
 
-		message, err := SerializeVRFMessage(beacon, epoch, counter)
+		message, err := SerializeVRFMessage(beacon, epoch, nonce, counter)
 		if err != nil {
 			return false, err
 		}
 		vrfSig := proof.Sig
 
 		beaconStr := beacon.ShortString()
-		if !v.vrfVerifier.Verify(atx.NodeID, message, vrfSig) {
+		if !v.vrfVerifier.Verify(owned.NodeID, message, vrfSig) {
 			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
 				errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
 		}
@@ -149,24 +194,4 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	weightPer := fixed.DivUint64(atxWeight, uint64(numEligibleSlots))
 	v.beacons.ReportBeaconFromBallot(epoch, ballot, beacon, weightPer)
 	return true, nil
-}
-
-func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*types.ActivationTxHeader, error) {
-	if ballot.AtxID == *types.EmptyATXID {
-		v.logger.WithContext(ctx).Panic("empty ATXID in ballot")
-	}
-
-	epoch := ballot.Layer.GetEpoch()
-	atx, err := v.cdb.GetAtxHeader(ballot.AtxID)
-	if err != nil {
-		return nil, fmt.Errorf("get ballot ATX %v epoch %v: %w", ballot.AtxID.ShortString(), epoch, err)
-	}
-	if targetEpoch := atx.TargetEpoch(); targetEpoch != epoch {
-		return nil, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
-			errTargetEpochMismatch, targetEpoch, epoch)
-	}
-	if pub := ballot.SmesherID(); !bytes.Equal(atx.NodeID.Bytes(), pub.Bytes()) {
-		return nil, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), atx.NodeID)
-	}
-	return atx, nil
 }
