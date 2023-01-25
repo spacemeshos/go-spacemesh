@@ -56,7 +56,6 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		log.String("sender_id", nodeID.ShortString()),
 		log.Int("num_values", len(msg.InnerMsg.Values)),
 		log.Uint32("vrf_value", vrfHashVal))
-	// TODO: make sure we don't need a mutex here
 	if vrfHashVal < pre.bestVRF {
 		pre.bestVRF = vrfHashVal
 		// store lowest-order bit as coin toss value
