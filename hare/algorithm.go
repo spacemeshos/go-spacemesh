@@ -291,6 +291,9 @@ func (proc *consensusProcess) ID() types.LayerID {
 
 func (proc *consensusProcess) terminate() {
 	proc.cancel()
+}
+
+func (proc *consensusProcess) Stop() {
 	proc.eg.Wait()
 }
 
