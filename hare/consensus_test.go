@@ -182,6 +182,8 @@ func createConsensusProcess(
 	network.Register(pubsub.HareProtocol, broker.HandleMessage)
 	output := make(chan TerminationOutput, 1)
 	oracle.Register(isHonest, sig.NodeID())
+	pke, err := signing.NewPubKeyExtractor()
+	require.NoError(tb, err)
 	c, err := broker.Register(ctx, layer)
 	require.NoError(tb, err)
 	mch := make(chan *types.MalfeasanceGossip, cfg.N)
@@ -198,18 +200,21 @@ func createConsensusProcess(
 		oracle,
 		broker.mockStateQ,
 		sig,
+		pke,
 		sig.NodeID(),
+		types.VRFPostIndex(1),
 		network,
 		comm,
 		truer{},
 		newRoundClockFromCfg(logtest.New(tb), cfg),
-		logtest.New(tb).WithName(sig.PublicKey().ShortString()))
+		logtest.New(tb).WithName(sig.PublicKey().ShortString()),
+	)
 	return &testCP{cp: proc, broker: broker.Broker, mch: mch}
 }
 
 func TestConsensusFixedOracle(t *testing.T) {
 	test := newConsensusTest()
-	cfg := config.Config{N: 16, F: 8, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
+	cfg := config.Config{N: 16, F: 8, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 
 	totalNodes := 20
 	ctx, cancel := context.WithCancel(context.Background())
@@ -243,7 +248,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	test := newConsensusTest()
 
 	// Larger values may trigger race detector failures because of 8128 goroutines limit.
-	cfg := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
+	cfg := config.Config{N: 10, F: 5, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 	totalNodes := 10
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -276,7 +281,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 func TestAllDifferentSet(t *testing.T) {
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
+	cfg := config.Config{N: 10, F: 5, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 	totalNodes := 10
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -322,7 +327,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 16, F: 8, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
+	cfg := config.Config{N: 16, F: 8, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 	totalNodes := 20
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -380,7 +385,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 16, F: 8, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
+	cfg := config.Config{N: 16, F: 8, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 	totalNodes := 20
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -475,7 +480,7 @@ func TestEquivocation(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 16, F: 8, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
+	cfg := config.Config{N: 16, F: 8, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 	totalNodes := 20
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -542,7 +547,7 @@ func (eps *equivocatePubSub) Publish(ctx context.Context, protocol string, data 
 		return fmt.Errorf("decode published data: %w", err)
 	}
 	if msg.InnerMsg.Type == pre {
-		msg.InnerMsg.Values = msg.InnerMsg.Values[1:]
+		msg.InnerMsg.Values = []types.ProposalID{types.RandomProposalID()}
 		msg.Signature = eps.sig.Sign(msg.SignedBytes())
 		encoded, err := codec.Encode(&msg)
 		if err != nil {

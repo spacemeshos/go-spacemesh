@@ -296,6 +296,8 @@ func (b *Builder) generateProof(ctx context.Context) error {
 	return nil
 }
 
+// waitForFirstATX waits until the first ATX can be published. The return value indicates
+// if the function waited or not (for testing).
 func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 	currentLayer := b.layerClock.GetCurrentLayer()
 	currEpoch := currentLayer.GetEpoch()
@@ -343,8 +345,9 @@ func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 
 	waitTime := time.Until(expectedAtxArrivalTime)
 	timer := time.NewTimer(waitTime)
-	b.log.WithContext(ctx).With().Info("waiting for the first ATX", log.Duration("wait", waitTime))
 	defer timer.Stop()
+
+	b.log.WithContext(ctx).With().Info("waiting for the first ATX", log.Duration("wait", waitTime))
 	select {
 	case <-ctx.Done():
 		return false
@@ -362,13 +365,8 @@ func (b *Builder) receivePendingPoetClients() *[]PoetProvingServiceClient {
 
 // loop is the main loop that tries to create an atx per tick received from the global clock.
 func (b *Builder) loop(ctx context.Context) {
-	var poetRetryTimer *time.Timer
-	defer func() {
-		if poetRetryTimer != nil {
-			poetRetryTimer.Stop()
-		}
-	}()
-	defer b.log.Info("atx builder is stopped")
+	defer b.log.Info("atx builder stopped")
+
 	for {
 		if poetClients := b.receivePendingPoetClients(); poetClients != nil {
 			b.nipostBuilder.UpdatePoETProvers(*poetClients)
@@ -376,32 +374,30 @@ func (b *Builder) loop(ctx context.Context) {
 
 		ctx := log.WithNewSessionID(ctx)
 		if err := b.PublishActivationTx(ctx); err != nil {
-			b.log.WithContext(ctx).With().Error("error attempting to publish atx",
-				b.layerClock.GetCurrentLayer(),
-				b.currentEpoch(),
-				log.Err(err))
 			if errors.Is(err, context.Canceled) {
 				return
 			}
+
+			b.log.WithContext(ctx).With().Error("error attempting to publish atx",
+				b.layerClock.GetCurrentLayer(),
+				b.currentEpoch(),
+				log.Err(err),
+			)
+
 			switch {
 			case errors.Is(err, ErrATXChallengeExpired):
-				b.log.WithContext(ctx).Debug("Discarding challenge")
+				b.log.WithContext(ctx).Debug("discarding challenge")
 				b.discardChallenge()
 				// can be retried immediately with a new challenge
 			case errors.Is(err, ErrPoetServiceUnstable):
-				b.log.WithContext(ctx).Debug("Setting up poet retry timer")
-				if poetRetryTimer == nil {
-					poetRetryTimer = time.NewTimer(b.poetRetryInterval)
-				} else {
-					poetRetryTimer.Reset(b.poetRetryInterval)
-				}
+				b.log.WithContext(ctx).Debug("retrying after poet retry interval")
 				select {
 				case <-ctx.Done():
 					return
-				case <-poetRetryTimer.C:
+				case <-time.After(b.poetRetryInterval):
 				}
 			default:
-				b.log.WithContext(ctx).With().Warning("Unknown error", log.Err(err))
+				b.log.WithContext(ctx).With().Warning("unknown error", log.Err(err))
 				// other failures are related to in-process software. we may as well panic here
 				currentLayer := b.layerClock.GetCurrentLayer()
 				select {
@@ -420,13 +416,15 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		return nil, ctx.Err()
 	case <-b.syncer.RegisterForATXSynced():
 	}
-	challenge := &types.NIPostChallenge{}
+
 	atxID, pubLayerID, err := b.GetPositioningAtxInfo()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
 	}
-	challenge.PositioningATX = atxID
-	challenge.PubLayerID = pubLayerID.Add(b.layersPerEpoch)
+	challenge := &types.NIPostChallenge{
+		PositioningATX: atxID,
+		PubLayerID:     pubLayerID.Add(b.layersPerEpoch),
+	}
 	if prevAtx, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
 		commitmentAtx, err := b.getCommitmentAtx(ctx)
 		if err != nil {
@@ -461,6 +459,8 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 		client := b.poetClientInitializer(endpoint)
 		// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
 		// Maybe it should be provided during update.
+		ctx, cancel := context.WithTimeout(ctx, time.Second*10)
+		defer cancel()
 		sid, err := client.PoetServiceID(ctx)
 		if err != nil {
 			return &PoetSvcUnstableError{source: fmt.Errorf("failed to query Poet '%s' for ID (%w)", endpoint, err)}
@@ -566,10 +566,11 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		}
 	}
 
-	logger.With().Info("new atx challenge is ready",
-		log.Stringer("current_epoch", b.currentEpoch()),
-		log.Stringer("publish_epoch", challenge.PublishEpoch()),
-		log.Stringer("target_epoch", challenge.TargetEpoch()))
+	logger.With().Info("atx challenge is ready",
+		log.FieldNamed("current_epoch", b.currentEpoch()),
+		log.FieldNamed("publish_epoch", challenge.PublishEpoch()),
+		log.FieldNamed("target_epoch", challenge.TargetEpoch()),
+	)
 
 	if b.pendingATX == nil {
 		var err error
@@ -610,41 +611,9 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 }
 
 func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChallenge) (*types.ActivationTx, error) {
-	// Calculate deadline for waiting for poet proofs.
-	// Deadline must fit between:
-	// - the end of the current poet round + grace period
-	// - the start of the next one - grace period.
-	// It must also accommodate for PoST duration.
-	//
-	// We set the deadline to the earliest possible value so that
-	// the ATX we produce is available for the network ASAP.
-	// Details: https://community.spacemesh.io/t/redundant-poet-registration/310
-	//
-	//                                 PoST
-	//         ┌─────────────────────┐  ┌┐┌─────────────────────┐
-	//         │     POET ROUND      │  │││   NEXT POET ROUND   │
-	// ┌────▲──┴──────────────────┬──┴─▲┴┴┴─────────────────▲┬──┴───► time
-	// │    │      EPOCH          │    │       EPOCH        ││
-	// └────┼─────────────────────┴────┼────────────────────┼┴──────
-	//      │                          │                    │
-	//  WE ARE HERE                DEADLINE FOR       ATX PUBLICATION
-	//                           WAITING FOR POET        DEADLINE
-	//                               PROOFS
-	// NiPoST must be ready before start of the next poet round.
 	pubEpoch := challenge.PublishEpoch()
 	poetRoundStart := b.layerClock.LayerToTime((pubEpoch - 1).FirstLayer()).Add(b.poetCfg.PhaseShift)
 	nextPoetRoundStart := b.layerClock.LayerToTime(pubEpoch.FirstLayer()).Add(b.poetCfg.PhaseShift)
-	poetRoundEnd := nextPoetRoundStart.Add(-b.poetCfg.CycleGap)
-	poetProofDeadline := poetRoundEnd.Add(b.poetCfg.GracePeriod)
-
-	b.log.With().Info("building NIPost",
-		log.Time("poet round start", poetRoundStart),
-		log.Time("next poet round start", nextPoetRoundStart),
-		log.Time("poet proof deadline", poetProofDeadline),
-		log.FieldNamed("current epoch", b.currentEpoch()),
-		log.FieldNamed("publish epoch", pubEpoch),
-		log.FieldNamed("target epoch", challenge.TargetEpoch()),
-	)
 
 	now := time.Now()
 	if poetRoundStart.Before(now) {
@@ -660,9 +629,11 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 		poetChallenge.InitialPost = b.initialPost
 		poetChallenge.InitialPostMetadata = b.initialPostMeta
 	}
+
+	// NiPoST must be ready before start of the next poet round.
 	buildingNipostCtx, cancel := context.WithDeadline(ctx, nextPoetRoundStart)
 	defer cancel()
-	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(buildingNipostCtx, &poetChallenge, poetProofDeadline)
+	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(buildingNipostCtx, &poetChallenge)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}

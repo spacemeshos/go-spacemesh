@@ -11,16 +11,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 var errMalformedData = errors.New("malformed data")
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
 type Handler struct {
-	logger log.Log
-	cdb    *datastore.CachedDB
-	self   p2p.Peer
-	cp     consensusProtocol
+	logger          log.Log
+	cdb             *datastore.CachedDB
+	self            p2p.Peer
+	cp              consensusProtocol
+	pubKeyExtractor *signing.PubKeyExtractor
 }
 
 func NewHandler(
@@ -28,12 +30,14 @@ func NewHandler(
 	lg log.Log,
 	self p2p.Peer,
 	cp consensusProtocol,
+	pubKeyExtractor *signing.PubKeyExtractor,
 ) *Handler {
 	return &Handler{
-		logger: lg,
-		cdb:    cdb,
-		self:   self,
-		cp:     cp,
+		logger:          lg,
+		cdb:             cdb,
+		self:            self,
+		cp:              cp,
+		pubKeyExtractor: pubKeyExtractor,
 	}
 }
 
@@ -61,18 +65,18 @@ func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) e
 		malicious bool
 		err       error
 	)
+	logger := h.logger.WithContext(ctx)
 	if err = codec.Decode(data, &p); err != nil {
-		h.logger.WithContext(ctx).With().Error("malformed message", log.Err(err))
+		logger.With().Error("malformed message", log.Err(err))
 		return errMalformedData
 	}
-	logger := h.logger.WithContext(ctx)
 	switch p.Proof.Type {
 	case types.HareEquivocation:
-		nodeID, err = validateHareEquivocation(logger, h.cdb, &p.MalfeasanceProof)
+		nodeID, err = h.validateHareEquivocation(logger, &p.MalfeasanceProof)
 	case types.MultipleATXs:
-		nodeID, err = validateMultipleATXs(logger, h.cdb, &p.MalfeasanceProof)
+		nodeID, err = h.validateMultipleATXs(logger, &p.MalfeasanceProof)
 	case types.MultipleBallots:
-		nodeID, err = validateMultipleBallots(logger, h.cdb, &p.MalfeasanceProof)
+		nodeID, err = h.validateMultipleBallots(logger, &p.MalfeasanceProof)
 	default:
 		return errors.New("unknown malfeasance type")
 	}
@@ -143,7 +147,7 @@ func (h *Handler) validateHareEligibility(ctx context.Context, nodeID types.Node
 	return nil
 }
 
-func validateHareEquivocation(logger log.Log, cdb *datastore.CachedDB, proof *types.MalfeasanceProof) (types.NodeID, error) {
+func (h *Handler) validateHareEquivocation(logger log.Log, proof *types.MalfeasanceProof) (types.NodeID, error) {
 	if proof.Proof.Type != types.HareEquivocation {
 		return types.NodeID{}, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.HareEquivocation, proof.Proof.Type)
 	}
@@ -157,11 +161,11 @@ func validateHareEquivocation(logger log.Log, cdb *datastore.CachedDB, proof *ty
 		return types.NodeID{}, errors.New("wrong message type for hare equivocation")
 	}
 	for _, msg = range hp.Messages {
-		nid, err = types.ExtractNodeIDFromSig(msg.SignedBytes(), msg.Signature)
+		nid, err = h.pubKeyExtractor.ExtractNodeID(msg.SignedBytes(), msg.Signature)
 		if err != nil {
 			return types.NodeID{}, err
 		}
-		if err = checkIdentityExists(cdb, nid); err != nil {
+		if err = checkIdentityExists(h.cdb, nid); err != nil {
 			return types.NodeID{}, fmt.Errorf("check identity in hare malfeasance %v: %w", nid, err)
 		}
 		if firstNid == types.EmptyNodeID {
@@ -188,7 +192,7 @@ func validateHareEquivocation(logger log.Log, cdb *datastore.CachedDB, proof *ty
 	return types.NodeID{}, errors.New("invalid hare malfeasance proof")
 }
 
-func validateMultipleATXs(logger log.Log, cdb *datastore.CachedDB, proof *types.MalfeasanceProof) (types.NodeID, error) {
+func (h *Handler) validateMultipleATXs(logger log.Log, proof *types.MalfeasanceProof) (types.NodeID, error) {
 	if proof.Proof.Type != types.MultipleATXs {
 		return types.NodeID{}, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.MultipleATXs, proof.Proof.Type)
 	}
@@ -202,11 +206,11 @@ func validateMultipleATXs(logger log.Log, cdb *datastore.CachedDB, proof *types.
 		return types.NodeID{}, errors.New("wrong message type for multiple ATXs")
 	}
 	for _, msg = range ap.Messages {
-		nid, err = types.ExtractNodeIDFromSig(msg.SignedBytes(), msg.Signature)
+		nid, err = h.pubKeyExtractor.ExtractNodeID(msg.SignedBytes(), msg.Signature)
 		if err != nil {
 			return types.NodeID{}, err
 		}
-		if err = checkIdentityExists(cdb, nid); err != nil {
+		if err = checkIdentityExists(h.cdb, nid); err != nil {
 			return types.NodeID{}, fmt.Errorf("check identity in atx malfeasance %v: %w", nid, err)
 		}
 		if firstNid == types.EmptyNodeID {
@@ -230,7 +234,7 @@ func validateMultipleATXs(logger log.Log, cdb *datastore.CachedDB, proof *types.
 	return types.NodeID{}, errors.New("invalid atx malfeasance proof")
 }
 
-func validateMultipleBallots(logger log.Log, cdb *datastore.CachedDB, proof *types.MalfeasanceProof) (types.NodeID, error) {
+func (h *Handler) validateMultipleBallots(logger log.Log, proof *types.MalfeasanceProof) (types.NodeID, error) {
 	if proof.Proof.Type != types.MultipleBallots {
 		return types.NodeID{}, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.MultipleBallots, proof.Proof.Type)
 	}
@@ -244,11 +248,11 @@ func validateMultipleBallots(logger log.Log, cdb *datastore.CachedDB, proof *typ
 		return types.NodeID{}, errors.New("wrong message type for multi ballots")
 	}
 	for _, msg = range bp.Messages {
-		nid, err = types.ExtractNodeIDFromSig(msg.SignedBytes(), msg.Signature)
+		nid, err = h.pubKeyExtractor.ExtractNodeID(msg.SignedBytes(), msg.Signature)
 		if err != nil {
 			return types.NodeID{}, err
 		}
-		if err = checkIdentityExists(cdb, nid); err != nil {
+		if err = checkIdentityExists(h.cdb, nid); err != nil {
 			return types.NodeID{}, fmt.Errorf("check identity in ballot malfeasance %v: %w", nid, err)
 		}
 		if firstNid == types.EmptyNodeID {

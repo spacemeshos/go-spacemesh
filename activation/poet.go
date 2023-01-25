@@ -87,7 +87,6 @@ func NewHTTPPoetHarness(ctx context.Context, opts ...HTTPPoetOpt) (*HTTPPoetHarn
 // HTTPPoetClient implements PoetProvingServiceClient interface.
 type HTTPPoetClient struct {
 	baseURL       string
-	ctxFactory    func(ctx context.Context) (context.Context, context.CancelFunc)
 	poetServiceID *types.PoetServiceID
 }
 
@@ -97,12 +96,7 @@ func defaultPoetClientFunc(target string) PoetProvingServiceClient {
 
 // NewHTTPPoetClient returns new instance of HTTPPoetClient for the specified target.
 func NewHTTPPoetClient(target string) *HTTPPoetClient {
-	return &HTTPPoetClient{
-		baseURL: fmt.Sprintf("http://%s/v1", target),
-		ctxFactory: func(ctx context.Context) (context.Context, context.CancelFunc) {
-			return context.WithTimeout(ctx, 10*time.Second)
-		},
-	}
+	return &HTTPPoetClient{baseURL: fmt.Sprintf("http://%s/v1", target)}
 }
 
 // Start is an administrative endpoint of the proving service that tells it to start. This is mostly done in tests,
@@ -195,9 +189,6 @@ func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, 
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-
-	ctx, cancel := c.ctxFactory(ctx)
-	defer cancel()
 	req = req.WithContext(ctx)
 
 	res, err := http.DefaultClient.Do(req)

@@ -184,20 +184,6 @@ func (mr *MocknipostValidatorMockRecorder) VRFNonce(nodeId, commitmentAtxId, vrf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknipostValidator)(nil).VRFNonce), nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits)
 }
 
-// ValidateVRFNonce mocks base method.
-func (m *MocknipostValidator) ValidateVRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateVRFNonce", nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// ValidateVRFNonce indicates an expected call of ValidateVRFNonce.
-func (mr *MocknipostValidatorMockRecorder) ValidateVRFNonce(nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateVRFNonce", reflect.TypeOf((*MocknipostValidator)(nil).ValidateVRFNonce), nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits)
-}
-
 // MocklayerClock is a mock of layerClock interface.
 type MocklayerClock struct {
 	ctrl     *gomock.Controller
@@ -287,9 +273,9 @@ func (m *MocknipostBuilder) EXPECT() *MocknipostBuilderMockRecorder {
 }
 
 // BuildNIPost mocks base method.
-func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error) {
+func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BuildNIPost", ctx, challenge, poetProofDeadline)
+	ret := m.ctrl.Call(m, "BuildNIPost", ctx, challenge)
 	ret0, _ := ret[0].(*types.NIPost)
 	ret1, _ := ret[1].(time.Duration)
 	ret2, _ := ret[2].(error)
@@ -297,9 +283,9 @@ func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.Po
 }
 
 // BuildNIPost indicates an expected call of BuildNIPost.
-func (mr *MocknipostBuilderMockRecorder) BuildNIPost(ctx, challenge, poetProofDeadline interface{}) *gomock.Call {
+func (mr *MocknipostBuilderMockRecorder) BuildNIPost(ctx, challenge interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildNIPost", reflect.TypeOf((*MocknipostBuilder)(nil).BuildNIPost), ctx, challenge, poetProofDeadline)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildNIPost", reflect.TypeOf((*MocknipostBuilder)(nil).BuildNIPost), ctx, challenge)
 }
 
 // UpdatePoETProvers mocks base method.

@@ -362,14 +362,14 @@ func (app *App) Initialize() (err error) {
 	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
 	// hare's max time duration to run consensus for a layer
 	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration // pre-round + 4 rounds per iteration
-	maxHareLayerDurationSec := app.Config.HARE.WakeupDelta + maxHareRoundsPerLayer*app.Config.HARE.RoundDuration
-	if app.Config.LayerDurationSec*app.Config.Tortoise.Zdist <= uint32(maxHareLayerDurationSec) {
+	maxHareLayerDuration := app.Config.HARE.WakeupDelta + time.Duration(maxHareRoundsPerLayer)*app.Config.HARE.RoundDuration
+	if app.Config.LayerDuration*time.Duration(app.Config.Tortoise.Zdist) <= maxHareLayerDuration {
 		log.With().Error("incompatible params",
 			log.Uint32("tortoise_zdist", app.Config.Tortoise.Zdist),
-			log.Uint32("layer_duration", app.Config.LayerDurationSec),
-			log.Int("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
+			log.Duration("layer_duration", app.Config.LayerDuration),
+			log.Duration("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
 			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
-			log.Int("hare_round_duration", app.Config.HARE.RoundDuration))
+			log.Duration("hare_round_duration", app.Config.HARE.RoundDuration))
 
 		return errors.New("incompatible tortoise hare params")
 	}
@@ -515,15 +515,12 @@ func (app *App) initServices(
 
 	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
 
-	vrfVerifier, err := signing.NewVRFVerifier(signing.WithNonceFromDB(app.cachedDB))
-	if err != nil {
-		return fmt.Errorf("failed to create vrf verifier: %w", err)
-	}
-
+	vrfVerifier := signing.NewVRFVerifier()
 	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifier, app.cachedDB, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
-		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
+		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
+	)
 
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
@@ -550,7 +547,7 @@ func (app *App) initServices(
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl,
+	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,
@@ -558,7 +555,8 @@ func (app *App) initServices(
 			GoldenATXID:    goldenATXID,
 			MaxExceptions:  trtlCfg.MaxExceptions,
 			Hdist:          trtlCfg.Hdist,
-		}))
+		}),
+	)
 
 	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
@@ -568,7 +566,7 @@ func (app *App) initServices(
 	hOracle := eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
-	app.certifier = blocks.NewCertifier(app.db, hOracle, nodeID, sgn, app.host, clock, beaconProtocol, trtl,
+	app.certifier = blocks.NewCertifier(app.cachedDB, hOracle, nodeID, sgn, app.keyExtractor, app.host, clock, beaconProtocol, trtl,
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
@@ -576,7 +574,8 @@ func (app *App) initServices(
 			WaitSigLayers:    app.Config.Tortoise.Zdist,
 			NumLayersToKeep:  app.Config.Tortoise.Zdist,
 		}),
-		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))
+		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
+	)
 
 	fetcher := fetch.NewFetch(app.cachedDB, msh, beaconProtocol, app.host,
 		fetch.WithContext(ctx),
@@ -625,6 +624,7 @@ func (app *App) initServices(
 		hareCfg,
 		app.host,
 		sgn,
+		app.keyExtractor,
 		nodeID,
 		hareOutputCh,
 		newSyncer,
@@ -633,7 +633,8 @@ func (app *App) initServices(
 		patrol,
 		hOracle,
 		clock,
-		app.addLogger(HareLogger, lg))
+		app.addLogger(HareLogger, lg),
+	)
 
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
@@ -650,14 +651,20 @@ func (app *App) initServices(
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
-		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)))
+		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
+	)
 
 	postSetupMgr, err := activation.NewPostSetupManager(nodeID, app.Config.POST, app.addLogger(PostLogger, lg), app.cachedDB, goldenATXID)
 	if err != nil {
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, app.db, app.addLogger(NipostBuilderLogger, lg), sgn)
+	poetCfg := activation.PoetConfig{
+		PhaseShift:  app.Config.POET.PhaseShift,
+		CycleGap:    app.Config.POET.CycleGap,
+		GracePeriod: app.Config.POET.GracePeriod,
+	}
+	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, app.db, app.addLogger(NipostBuilderLogger, lg), sgn, poetCfg, clock)
 
 	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
@@ -678,17 +685,15 @@ func (app *App) initServices(
 	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, app.cachedDB, atxHandler, app.host, nipostBuilder,
 		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg),
 		activation.WithContext(ctx),
-		activation.WithPoetConfig(activation.PoetConfig{
-			PhaseShift:  app.Config.POET.PhaseShift,
-			CycleGap:    app.Config.POET.CycleGap,
-			GracePeriod: app.Config.POET.GracePeriod,
-		}))
+		activation.WithPoetConfig(poetCfg),
+	)
 
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
 		app.addLogger(Malfeasance, lg),
 		app.host.ID(),
 		app.hare,
+		app.keyExtractor,
 	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
@@ -777,7 +782,7 @@ func (app *App) startServices(ctx context.Context) error {
 
 func (app *App) startAPIServices(ctx context.Context) {
 	apiConf := &app.Config.API
-	layerDuration := app.Config.LayerDurationSec
+	layerDuration := app.Config.LayerDuration
 
 	// API SERVICES
 	// Since we have multiple GRPC services, we cannot automatically enable them if
@@ -1023,7 +1028,8 @@ func (app *App) Start(ctx context.Context) error {
 	logger.With().Info("starting spacemesh",
 		log.String("data-dir", app.Config.DataDir()),
 		log.String("post-dir", app.Config.SMESHING.Opts.DataDir),
-		log.String("hostname", hostname))
+		log.String("hostname", hostname),
+	)
 
 	if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 		return fmt.Errorf("data-dir %s not found or could not be created: %w", app.Config.DataDir(), err)
@@ -1079,8 +1085,7 @@ func (app *App) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.Genesis.GenesisTime, err)
 	}
-	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, lg.WithName("clock"))
+	clock := timesync.NewClock(timesync.RealClock{}, app.Config.LayerDuration, gTime, lg.WithName("clock"))
 
 	lg.Info("initializing p2p services")
 
@@ -1101,18 +1106,21 @@ func (app *App) Start(ctx context.Context) error {
 		return err
 	}
 	// need db to initialize the vrf signer
-	vrfSigner, err := edSgn.VRFSigner(signing.WithNonceFromDB(app.cachedDB))
+	vrfSigner, err := edSgn.VRFSigner()
 	if err != nil {
 		return fmt.Errorf("could not create vrf signer: %w", err)
 	}
 
 	app.log = app.addLogger(AppLogger, lg)
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-	if err = app.initServices(ctx,
+	err = app.initServices(
+		ctx,
 		edSgn,
 		poetClients,
 		vrfSigner,
-		clock); err != nil {
+		clock,
+	)
+	if err != nil {
 		return fmt.Errorf("cannot start services: %w", err)
 	}
 

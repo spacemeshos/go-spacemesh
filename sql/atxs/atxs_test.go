@@ -325,6 +325,55 @@ func TestGetIDsByEpoch(t *testing.T) {
 	require.EqualValues(t, []types.ATXID{atx4.ID()}, ids3)
 }
 
+func TestVRFNonce(t *testing.T) {
+	// Arrange
+	db := sql.InMemory()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	nonce1 := types.VRFPostIndex(333)
+	atx1, err := newAtx(sig, types.EpochID(20).FirstLayer())
+	require.NoError(t, err)
+	atx1.VRFNonce = &nonce1
+	require.NoError(t, atxs.Add(db, atx1, time.Now()))
+
+	atx2, err := newAtx(sig, types.EpochID(30).FirstLayer())
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(db, atx2, time.Now()))
+
+	nonce3 := types.VRFPostIndex(777)
+	atx3, err := newAtx(sig, types.EpochID(50).FirstLayer())
+	require.NoError(t, err)
+	atx3.VRFNonce = &nonce3
+	require.NoError(t, atxs.Add(db, atx3, time.Now()))
+
+	// Act & Assert
+
+	// same epoch returns same nonce
+	got, err := atxs.VRFNonce(db, sig.NodeID(), atx1.TargetEpoch())
+	require.NoError(t, err)
+	require.Equal(t, nonce1, got)
+
+	got, err = atxs.VRFNonce(db, sig.NodeID(), atx3.TargetEpoch())
+	require.NoError(t, err)
+	require.Equal(t, nonce3, got)
+
+	// between epochs returns previous nonce
+	got, err = atxs.VRFNonce(db, sig.NodeID(), atx2.TargetEpoch())
+	require.NoError(t, err)
+	require.Equal(t, nonce1, got)
+
+	// later epoch returns newer nonce
+	got, err = atxs.VRFNonce(db, sig.NodeID(), atx3.TargetEpoch()+10)
+	require.NoError(t, err)
+	require.Equal(t, nonce3, got)
+
+	// before first epoch returns error
+	_, err = atxs.VRFNonce(db, sig.NodeID(), atx1.TargetEpoch()-10)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+}
+
 func TestGetBlob(t *testing.T) {
 	db := sql.InMemory()
 

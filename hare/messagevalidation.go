@@ -37,7 +37,8 @@ func (ev *eligibilityValidator) ValidateEligibilityGossip(ctx context.Context, e
 		ev.WithContext(ctx).With().Error("failed to validate role",
 			em.Layer,
 			log.Uint32("round", em.Round),
-			log.String("sender_id", types.BytesToNodeID(em.PubKey).ShortString()))
+			log.String("sender_id", types.BytesToNodeID(em.PubKey).ShortString()),
+		)
 		return false
 	}
 	return res
@@ -82,6 +83,7 @@ type pubKeyGetter interface {
 
 type syntaxContextValidator struct {
 	signing          Signer
+	pubKeyExtractor  *signing.PubKeyExtractor
 	threshold        int
 	statusValidator  func(m *Msg) bool // used to validate status Messages in SVP
 	stateQuerier     stateQuerier
@@ -93,6 +95,7 @@ type syntaxContextValidator struct {
 
 func newSyntaxContextValidator(
 	sgr Signer,
+	pubKeyExtractor *signing.PubKeyExtractor,
 	threshold int,
 	validator func(m *Msg) bool,
 	stateQuerier stateQuerier,
@@ -103,6 +106,7 @@ func newSyntaxContextValidator(
 ) *syntaxContextValidator {
 	return &syntaxContextValidator{
 		signing:          sgr,
+		pubKeyExtractor:  pubKeyExtractor,
 		threshold:        threshold,
 		statusValidator:  validator,
 		stateQuerier:     stateQuerier,
@@ -308,16 +312,22 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 		}
 
 		// extract public key
-		iMsg, err := newMsg(ctx, v.Log, innerMsg, v.stateQuerier)
+		nodeId, err := v.pubKeyExtractor.ExtractNodeID(innerMsg.SignedBytes(), innerMsg.Signature)
+		if err != nil {
+			return fmt.Errorf("extract ed25519 pubkey: %w", err)
+		}
+		pub := signing.NewPublicKey(nodeId.Bytes())
+
+		// validate unique sender
+		if _, exist := senders[string(pub.Bytes())]; exist { // pub already exist
+			return errDupSender
+		}
+		senders[string(pub.Bytes())] = struct{}{} // mark sender as exist
+
+		iMsg, err := newMsg(ctx, v.Log, nodeId, innerMsg, v.stateQuerier)
 		if err != nil {
 			return fmt.Errorf("new message: %w", err)
 		}
-
-		// validate unique sender
-		if _, exist := senders[string(iMsg.PubKey.Bytes())]; exist { // pub already exist
-			return errDupSender
-		}
-		senders[string(iMsg.PubKey.Bytes())] = struct{}{} // mark sender as exist
 
 		// validate with attached validators
 		for _, vFunc := range validators {

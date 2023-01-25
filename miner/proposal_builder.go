@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -52,6 +53,7 @@ type ProposalBuilder struct {
 
 	publisher      pubsub.Publisher
 	signer         *signing.EdSigner
+	nonceFetcher   nonceFetcher
 	conState       conservativeState
 	tortoise       votesEncoder
 	proposalOracle proposalOracle
@@ -65,6 +67,14 @@ type config struct {
 	layersPerEpoch uint32
 	hdist          uint32
 	minerID        types.NodeID
+}
+
+type defaultFetcher struct {
+	cdb *datastore.CachedDB
+}
+
+func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	return atxs.VRFNonce(f.cdb, nodeID, epoch)
 }
 
 // Opt for configuring ProposalBuilder.
@@ -110,6 +120,12 @@ func withOracle(o proposalOracle) Opt {
 	}
 }
 
+func withNonceFetcher(nf nonceFetcher) Opt {
+	return func(pb *ProposalBuilder) {
+		pb.nonceFetcher = nf
+	}
+}
+
 // NewProposalBuilder creates a struct of block builder type.
 func NewProposalBuilder(
 	ctx context.Context,
@@ -145,6 +161,10 @@ func NewProposalBuilder(
 
 	if pb.proposalOracle == nil {
 		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, cdb, vrfSigner, pb.cfg.minerID, pb.logger)
+	}
+
+	if pb.nonceFetcher == nil {
+		pb.nonceFetcher = defaultFetcher{pb.cdb}
 	}
 
 	return pb
@@ -324,7 +344,12 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		return errDuplicateLayer
 	}
 
-	atxID, activeSet, proofs, err := pb.proposalOracle.GetProposalEligibility(layerID, beacon)
+	nonce, err := pb.nonceFetcher.VRFNonce(pb.signer.NodeID(), layerID.GetEpoch())
+	if err != nil {
+		logger.With().Error("failed to get VRF nonce", log.Err(err))
+		return err
+	}
+	atxID, activeSet, proofs, err := pb.proposalOracle.GetProposalEligibility(layerID, beacon, nonce)
 	if err != nil {
 		if errors.Is(err, errMinerHasNoATXInPreviousEpoch) {
 			logger.Info("miner has no ATX in previous epoch")
