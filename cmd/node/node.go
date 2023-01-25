@@ -362,14 +362,14 @@ func (app *App) Initialize() (err error) {
 	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
 	// hare's max time duration to run consensus for a layer
 	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration // pre-round + 4 rounds per iteration
-	maxHareLayerDurationSec := app.Config.HARE.WakeupDelta + maxHareRoundsPerLayer*app.Config.HARE.RoundDuration
-	if app.Config.LayerDurationSec*app.Config.Tortoise.Zdist <= uint32(maxHareLayerDurationSec) {
+	maxHareLayerDuration := app.Config.HARE.WakeupDelta + time.Duration(maxHareRoundsPerLayer)*app.Config.HARE.RoundDuration
+	if app.Config.LayerDuration*time.Duration(app.Config.Tortoise.Zdist) <= maxHareLayerDuration {
 		log.With().Error("incompatible params",
 			log.Uint32("tortoise_zdist", app.Config.Tortoise.Zdist),
-			log.Uint32("layer_duration", app.Config.LayerDurationSec),
-			log.Int("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
+			log.Duration("layer_duration", app.Config.LayerDuration),
+			log.Duration("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
 			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
-			log.Int("hare_round_duration", app.Config.HARE.RoundDuration))
+			log.Duration("hare_round_duration", app.Config.HARE.RoundDuration))
 
 		return errors.New("incompatible tortoise hare params")
 	}
@@ -783,7 +783,7 @@ func (app *App) startServices(ctx context.Context) error {
 
 func (app *App) startAPIServices(ctx context.Context) {
 	apiConf := &app.Config.API
-	layerDuration := app.Config.LayerDurationSec
+	layerDuration := app.Config.LayerDuration
 
 	// API SERVICES
 	// Since we have multiple GRPC services, we cannot automatically enable them if
@@ -1086,8 +1086,7 @@ func (app *App) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.Genesis.GenesisTime, err)
 	}
-	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, lg.WithName("clock"))
+	clock := timesync.NewClock(timesync.RealClock{}, app.Config.LayerDuration, gTime, lg.WithName("clock"))
 
 	lg.Info("initializing p2p services")
 
