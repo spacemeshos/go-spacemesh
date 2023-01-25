@@ -46,6 +46,8 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
+	pke, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
 	nid := signer.NodeID()
 	ctrl := gomock.NewController(t)
 	mo := hmocks.NewMockRolacle(ctrl)
@@ -54,7 +56,7 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	mtortoise := smocks.NewMockTortoise(ctrl)
 	mNonceFetcher := mocks.NewMocknonceFetcher(ctrl)
-	c := NewCertifier(db, mo, nid, signer, mp, mc, mb, mtortoise,
+	c := NewCertifier(db, mo, nid, signer, pke, mp, mc, mb, mtortoise,
 		WithCertifierLogger(logtest.New(t)),
 		withNonceFetcher(mNonceFetcher),
 	)

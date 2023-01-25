@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -26,18 +27,19 @@ type validator interface {
 // The broker validates that the sender is eligible and active and forwards the message to the corresponding outbox.
 type Broker struct {
 	log.Log
+	mu sync.RWMutex
 
-	cdb           *datastore.CachedDB
-	mu            sync.RWMutex
-	roleValidator validator                // provides eligibility validation
-	stateQuerier  stateQuerier             // provides activeness check
-	nodeSyncState system.SyncStateProvider // provider function to check if the node is currently synced
-	mchOut        chan<- *types.MalfeasanceGossip
-	outbox        map[uint32]chan any
-	pending       map[uint32][]any // the buffer of pending early messages for the next layer
-	latestLayer   types.LayerID    // the latest layer to attempt register (successfully or unsuccessfully)
-	minDeleted    types.LayerID
-	limit         int // max number of simultaneous consensus processes
+	cdb             *datastore.CachedDB
+	pubKeyExtractor *signing.PubKeyExtractor
+	roleValidator   validator                // provides eligibility validation
+	stateQuerier    stateQuerier             // provides activeness check
+	nodeSyncState   system.SyncStateProvider // provider function to check if the node is currently synced
+	mchOut          chan<- *types.MalfeasanceGossip
+	outbox          map[uint32]chan any
+	pending         map[uint32][]any // the buffer of pending early messages for the next layer
+	latestLayer     types.LayerID    // the latest layer to attempt register (successfully or unsuccessfully)
+	minDeleted      types.LayerID
+	limit           int // max number of simultaneous consensus processes
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -46,6 +48,7 @@ type Broker struct {
 
 func newBroker(
 	cdb *datastore.CachedDB,
+	pubKeyExtractor *signing.PubKeyExtractor,
 	roleValidator validator,
 	stateQuerier stateQuerier,
 	syncState system.SyncStateProvider,
@@ -54,17 +57,18 @@ func newBroker(
 	log log.Log,
 ) *Broker {
 	b := &Broker{
-		Log:           log,
-		cdb:           cdb,
-		roleValidator: roleValidator,
-		stateQuerier:  stateQuerier,
-		nodeSyncState: syncState,
-		mchOut:        mch,
-		outbox:        make(map[uint32]chan any),
-		pending:       make(map[uint32][]any),
-		latestLayer:   types.GetEffectiveGenesis(),
-		limit:         limit,
-		minDeleted:    types.GetEffectiveGenesis(),
+		Log:             log,
+		cdb:             cdb,
+		pubKeyExtractor: pubKeyExtractor,
+		roleValidator:   roleValidator,
+		stateQuerier:    stateQuerier,
+		nodeSyncState:   syncState,
+		mchOut:          mch,
+		outbox:          make(map[uint32]chan any),
+		pending:         make(map[uint32][]any),
+		latestLayer:     types.GetEffectiveGenesis(),
+		limit:           limit,
+		minDeleted:      types.GetEffectiveGenesis(),
 	}
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 	return b
@@ -168,8 +172,15 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		isEarly = true
 	}
 
+	nodeId, err := b.pubKeyExtractor.ExtractNodeID(hareMsg.SignedBytes(), hareMsg.Signature)
+	if err != nil {
+		logger.With().Error("failed to extract public key",
+			log.Err(err),
+			log.Int("sig_len", len(hareMsg.Signature)))
+		return fmt.Errorf("extract ed25519 pubkey: %w", err)
+	}
 	// create msg
-	iMsg, err := newMsg(ctx, b.Log, hareMsg, b.stateQuerier)
+	iMsg, err := newMsg(ctx, b.Log, nodeId, hareMsg, b.stateQuerier)
 	if err != nil {
 		logger.With().Warning("message validation failed: could not construct msg", log.Err(err))
 		return err
