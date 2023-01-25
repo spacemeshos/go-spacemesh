@@ -132,7 +132,7 @@ func Test_consensusIterations(t *testing.T) {
 	test := newConsensusTest()
 
 	totalNodes := 15
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: 1, RoundDuration: 1, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: time.Second, RoundDuration: time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -174,6 +174,9 @@ func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *
 	require.NoError(tb, err)
 	pub := signer.PublicKey()
 	nodeID := types.BytesToNodeID(pub.Bytes())
+	pke, err := signing.NewPubKeyExtractor()
+	require.NoError(tb, err)
+
 	ctrl := gomock.NewController(tb)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
@@ -196,6 +199,7 @@ func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *
 		tcfg,
 		p2p,
 		signer,
+		pke,
 		nodeID,
 		make(chan LayerOutput, 100),
 		mockSyncS,
@@ -393,7 +397,7 @@ func Test_multipleCPs(t *testing.T) {
 	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
 	test := newHareWrapper(totalCp)
 	totalNodes := 10
-	cfg := config.Config{N: totalNodes, F: totalNodes / 2, WakeupDelta: 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
+	cfg := config.Config{N: totalNodes, F: totalNodes / 2, WakeupDelta: time.Second, RoundDuration: 5 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -488,7 +492,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
 	test := newHareWrapper(totalCp)
 	totalNodes := 10
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: time.Second, RoundDuration: 5 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

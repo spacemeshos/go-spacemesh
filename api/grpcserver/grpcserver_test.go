@@ -54,21 +54,20 @@ import (
 )
 
 const (
-	labelsPerUnit    = 2048
-	bitsPerLabel     = 8
-	numUnits         = 2
-	genTimeUnix      = 1000000
-	layerDurationSec = 10
-	layerAvgSize     = 10
-	txsPerProposal   = 99
-	layersPerEpoch   = uint32(5)
+	labelsPerUnit  = 2048
+	bitsPerLabel   = 8
+	numUnits       = 2
+	genTimeUnix    = 1000000
+	layerDuration  = 10 * time.Second
+	layerAvgSize   = 10
+	txsPerProposal = 99
+	layersPerEpoch = uint32(5)
 
 	atxPerLayer    = 2
 	blkPerLayer    = 3
 	accountBalance = 8675301
 	accountCounter = 0
 	rewardAmount   = 5551234
-	receiptIndex   = 42
 )
 
 var (
@@ -1133,7 +1132,7 @@ func TestSmesherService(t *testing.T) {
 
 func TestMeshService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
+	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, grpcService)
 	t.Cleanup(func() { shutDown() })
 
@@ -1175,13 +1174,13 @@ func TestMeshService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.LayerDuration(context.Background(), &pb.LayerDurationRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(layerDurationSec), response.Duration.Value)
+			require.Equal(t, layerDuration, time.Duration(response.Duration.Value)*time.Second)
 		}},
 		{"MaxTransactionsPerSecond", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.MaxTransactionsPerSecond(context.Background(), &pb.MaxTransactionsPerSecondRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(layerAvgSize*txsPerProposal/layerDurationSec), response.MaxTxsPerSecond.Value)
+			require.Equal(t, uint64(layerAvgSize*txsPerProposal/layerDuration.Seconds()), response.MaxTxsPerSecond.Value)
 		}},
 		{"AccountMeshDataQuery", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -2084,7 +2083,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
+	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2262,7 +2261,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
+	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2400,7 +2399,7 @@ func TestMultiService(t *testing.T) {
 	defer cancel()
 
 	svc1 := NewNodeService(ctx, &networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
-	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
+	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
@@ -2452,7 +2451,7 @@ func TestJsonApi(t *testing.T) {
 
 	// enable services and try again
 	svc1 := NewNodeService(context.Background(), &networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
-	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
+	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true
 	shutDown = launchServer(t, svc1, svc2)
