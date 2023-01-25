@@ -18,15 +18,17 @@ type proposalTrackerProvider interface {
 // proposalTracker tracks proposal messages.
 type proposalTracker struct {
 	logger        log.Log
-	malCh         chan types.MalfeasanceGossip
-	proposal      *Msg // maps PubKey->Proposal
-	isConflicting bool // maps PubKey->ConflictStatus
+	malCh         chan<- *types.MalfeasanceGossip
+	proposal      *Msg
+	isConflicting bool
+	eTracker      *EligibilityTracker
 }
 
-func newProposalTracker(log log.Log, mch chan types.MalfeasanceGossip) *proposalTracker {
+func newProposalTracker(log log.Log, mch chan<- *types.MalfeasanceGossip, et *EligibilityTracker) *proposalTracker {
 	return &proposalTracker{
-		logger: log,
-		malCh:  mch,
+		logger:   log,
+		malCh:    mch,
+		eTracker: et,
 	}
 }
 
@@ -47,6 +49,7 @@ func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Msg) {
 				log.Stringer("id_malicious", types.BytesToNodeID(msg.PubKey.Bytes())),
 				log.Stringer("current_set", g),
 				log.Stringer("conflicting_set", s))
+			pt.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			pt.isConflicting = true
 			prev := &types.HareProofMsg{
 				InnerMsg:  pt.proposal.HareMetadata,
@@ -91,6 +94,7 @@ func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Msg) {
 				log.Stringer("id_malicious", types.BytesToNodeID(msg.PubKey.Bytes())),
 				log.Stringer("current_set", g),
 				log.Stringer("conflicting_set", s))
+			pt.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			pt.isConflicting = true
 			prev := &types.HareProofMsg{
 				InnerMsg:  pt.proposal.HareMetadata,
@@ -101,7 +105,7 @@ func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Msg) {
 				Signature: msg.Signature,
 			}
 			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev, this, &msg.Eligibility, pt.malCh); err != nil {
-				pt.logger.WithContext(ctx).With().Warning("failed to report equivocation in commit round",
+				pt.logger.WithContext(ctx).With().Warning("failed to report equivocation in proposal round",
 					types.BytesToNodeID(msg.Bytes()),
 					log.Err(err))
 			}

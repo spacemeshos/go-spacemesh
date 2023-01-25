@@ -7,9 +7,12 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -17,37 +20,55 @@ const inboxCapacity = 1024 // inbox size per instance
 
 type validator interface {
 	Validate(context.Context, *Msg) bool
+	ValidateEligibilityGossip(context.Context, *types.HareEligibilityGossip) bool
 }
 
 // Broker is the dispatcher of incoming Hare messages.
 // The broker validates that the sender is eligible and active and forwards the message to the corresponding outbox.
 type Broker struct {
 	log.Log
-	mu            sync.RWMutex
-	eValidator    validator                // provides eligibility validation
-	stateQuerier  stateQuerier             // provides activeness check
-	nodeSyncState system.SyncStateProvider // provider function to check if the node is currently synced
-	outbox        map[uint32]chan *Msg
-	pending       map[uint32][]*Msg // the buffer of pending early messages for the next layer
-	latestLayer   types.LayerID     // the latest layer to attempt register (successfully or unsuccessfully)
-	minDeleted    types.LayerID
-	limit         int // max number of simultaneous consensus processes
-	ctx           context.Context
-	cancel        context.CancelFunc
-	once          sync.Once
+	mu sync.RWMutex
+
+	cdb             *datastore.CachedDB
+	pubKeyExtractor *signing.PubKeyExtractor
+	roleValidator   validator                // provides eligibility validation
+	stateQuerier    stateQuerier             // provides activeness check
+	nodeSyncState   system.SyncStateProvider // provider function to check if the node is currently synced
+	mchOut          chan<- *types.MalfeasanceGossip
+	outbox          map[uint32]chan any
+	pending         map[uint32][]any // the buffer of pending early messages for the next layer
+	latestLayer     types.LayerID    // the latest layer to attempt register (successfully or unsuccessfully)
+	minDeleted      types.LayerID
+	limit           int // max number of simultaneous consensus processes
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	once   sync.Once
 }
 
-func newBroker(eValidator validator, stateQuerier stateQuerier, syncState system.SyncStateProvider, limit int, log log.Log) *Broker {
+func newBroker(
+	cdb *datastore.CachedDB,
+	pubKeyExtractor *signing.PubKeyExtractor,
+	roleValidator validator,
+	stateQuerier stateQuerier,
+	syncState system.SyncStateProvider,
+	mch chan<- *types.MalfeasanceGossip,
+	limit int,
+	log log.Log,
+) *Broker {
 	b := &Broker{
-		Log:           log,
-		eValidator:    eValidator,
-		stateQuerier:  stateQuerier,
-		nodeSyncState: syncState,
-		outbox:        make(map[uint32]chan *Msg),
-		pending:       make(map[uint32][]*Msg),
-		latestLayer:   types.GetEffectiveGenesis(),
-		limit:         limit,
-		minDeleted:    types.GetEffectiveGenesis(),
+		Log:             log,
+		cdb:             cdb,
+		pubKeyExtractor: pubKeyExtractor,
+		roleValidator:   roleValidator,
+		stateQuerier:    stateQuerier,
+		nodeSyncState:   syncState,
+		mchOut:          mch,
+		outbox:          make(map[uint32]chan any),
+		pending:         make(map[uint32][]any),
+		latestLayer:     types.GetEffectiveGenesis(),
+		limit:           limit,
+		minDeleted:      types.GetEffectiveGenesis(),
 	}
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 	return b
@@ -74,8 +95,7 @@ var (
 	errClosed            = errors.New("closed")
 )
 
-// validate the message is contextually valid and that the node is synced for processing the message.
-func (b *Broker) validate(ctx context.Context, m *Message) error {
+func (b *Broker) validateTiming(ctx context.Context, m *Message) error {
 	msgInstID := m.Layer
 	if b.getInbox(msgInstID) != nil {
 		b.Log.WithContext(ctx).With().Debug("instance exists", msgInstID)
@@ -140,7 +160,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	}
 
 	isEarly := false
-	if err = b.validate(ctx, &hareMsg); err != nil {
+	if err = b.validateTiming(ctx, &hareMsg); err != nil {
 		if !errors.Is(err, errEarlyMsg) {
 			// not early, validation failed
 			logger.With().Debug("broker received a message to a consensus process that is not registered",
@@ -152,15 +172,22 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		isEarly = true
 	}
 
+	nodeId, err := b.pubKeyExtractor.ExtractNodeID(hareMsg.SignedBytes(), hareMsg.Signature)
+	if err != nil {
+		logger.With().Error("failed to extract public key",
+			log.Err(err),
+			log.Int("sig_len", len(hareMsg.Signature)))
+		return fmt.Errorf("extract ed25519 pubkey: %w", err)
+	}
 	// create msg
-	iMsg, err := newMsg(ctx, b.Log, hareMsg, b.stateQuerier)
+	iMsg, err := newMsg(ctx, b.Log, nodeId, hareMsg, b.stateQuerier)
 	if err != nil {
 		logger.With().Warning("message validation failed: could not construct msg", log.Err(err))
 		return err
 	}
 
 	// validate msg
-	if !b.eValidator.Validate(ctx, iMsg) {
+	if !b.roleValidator.Validate(ctx, iMsg) {
 		logger.Warning("message validation failed: eligibility validator returned false")
 		return errors.New("not eligible")
 	}
@@ -168,8 +195,23 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	// validation passed, report
 	logger.With().Debug("broker reported hare message as valid")
 
+	nodeID := types.BytesToNodeID(iMsg.PubKey.Bytes())
+	if proof, err := b.cdb.GetMalfeasanceProof(nodeID); err != nil && !errors.Is(err, sql.ErrNotFound) {
+		logger.With().Error("failed to check malicious identity", log.Err(err))
+		return err
+	} else if proof != nil {
+		// when hare receives a hare gossip from a malicious identity,
+		// - gossip its malfeasance + eligibility proofs to the network
+		// - relay the eligibility proof to the consensus process
+		// - return error so the node don't relay messages from malicious parties
+		if err := b.handleMaliciousHareMessage(ctx, logger, nodeID, proof, iMsg, isEarly); err != nil {
+			return err
+		}
+		return fmt.Errorf("known malicious %v", nodeID.ShortString())
+	}
+
 	if isEarly {
-		return b.handleEarlyMessage(logger, iMsg)
+		return b.handleEarlyMessage(logger, msgLayer, nodeID, iMsg)
 	}
 
 	// has instance, just send
@@ -179,7 +221,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		return errTooOld
 	}
 	logger.With().Debug("broker forwarding message to outbox",
-		log.Int("outbox_queue_size", len(out)))
+		log.Int("queue_size", len(out)))
 	select {
 	case out <- iMsg:
 	case <-ctx.Done():
@@ -190,7 +232,99 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	return nil
 }
 
-func (b *Broker) getInbox(id types.LayerID) chan *Msg {
+func (b *Broker) handleMaliciousHareMessage(
+	ctx context.Context,
+	logger log.Log,
+	nodeID types.NodeID,
+	proof *types.MalfeasanceProof,
+	msg *Msg,
+	early bool,
+) error {
+	gossip := &types.MalfeasanceGossip{
+		MalfeasanceProof: *proof,
+		Eligibility: &types.HareEligibilityGossip{
+			Layer:       msg.Layer,
+			Round:       msg.Round,
+			PubKey:      msg.PubKey.Bytes(),
+			Eligibility: msg.Eligibility,
+		},
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-b.ctx.Done():
+		return errClosed
+	case b.mchOut <- gossip:
+		// causes the node to gossip the malfeasance and eligibility proof
+	}
+
+	toRelay := gossip.Eligibility
+	if early {
+		return b.handleEarlyMessage(logger, msg.Layer, nodeID, toRelay)
+	}
+
+	out := b.getInbox(msg.Layer)
+	if out == nil {
+		b.Log.WithContext(ctx).With().Debug("consensus not running for layer", msg.Layer)
+		return nil
+	}
+	b.Log.WithContext(ctx).With().Debug("broker forwarding hare eligibility to consensus process",
+		log.Int("queue_size", len(out)))
+	select {
+	case out <- toRelay:
+	case <-ctx.Done():
+	case <-b.ctx.Done():
+	}
+	return nil
+}
+
+func (b *Broker) HandleEligibility(ctx context.Context, em *types.HareEligibilityGossip) bool {
+	if em == nil {
+		b.Log.WithContext(ctx).Fatal("invalid hare eligibility")
+	}
+	lid := em.Layer
+	out := b.getInbox(lid)
+	if out == nil {
+		b.Log.WithContext(ctx).With().Debug("consensus not running for layer", lid)
+		return false
+	}
+
+	nodeID := types.BytesToNodeID(em.PubKey)
+	isActive, err := b.stateQuerier.IsIdentityActiveOnConsensusView(ctx, nodeID, em.Layer)
+	if err != nil {
+		b.Log.WithContext(ctx).With().Error("failed to check if identity is active",
+			em.Layer,
+			log.Uint32("round", em.Round),
+			log.String("sender_id", nodeID.ShortString()),
+			log.Err(err))
+		return false
+	}
+	if !isActive {
+		b.Log.WithContext(ctx).With().Debug("identity is not active",
+			em.Layer,
+			log.Uint32("round", em.Round),
+			log.String("sender_id", nodeID.ShortString()))
+		return false
+	}
+	if !b.roleValidator.ValidateEligibilityGossip(ctx, em) {
+		b.Log.WithContext(ctx).With().Debug("invalid gossip eligibility",
+			em.Layer,
+			log.Uint32("round", em.Round),
+			log.String("sender_id", nodeID.ShortString()))
+		return false
+	}
+	b.Log.WithContext(ctx).With().Debug("broker forwarding gossip eligibility to consensus process",
+		log.Int("queue_size", len(out)))
+	select {
+	case out <- em:
+		return true
+	case <-ctx.Done():
+	case <-b.ctx.Done():
+	}
+	return false
+}
+
+func (b *Broker) getInbox(id types.LayerID) chan any {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	out, exist := b.outbox[id.Uint32()]
@@ -200,21 +334,20 @@ func (b *Broker) getInbox(id types.LayerID) chan *Msg {
 	return out
 }
 
-func (b *Broker) handleEarlyMessage(logger log.Log, msg *Msg) error {
+func (b *Broker) handleEarlyMessage(logger log.Log, layer types.LayerID, nodeID types.NodeID, msg any) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	layerNum := msg.Layer.Uint32()
+	layerNum := layer.Uint32()
 	if _, exist := b.pending[layerNum]; !exist { // create buffer if first msg
-		b.pending[layerNum] = make([]*Msg, 0)
+		b.pending[layerNum] = make([]any, 0, inboxCapacity)
 	}
 
 	// we want to write all buffered messages to a chan with InboxCapacity len
 	// hence, we limit the buffer for pending messages
-	chCount := len(b.pending[layerNum])
-	if chCount == inboxCapacity {
+	if len(b.pending[layerNum]) == inboxCapacity {
 		logger.With().Warning("too many pending messages, ignoring message",
 			log.Int("inbox_capacity", inboxCapacity),
-			log.String("sender_id", msg.PubKey.ShortString()))
+			log.String("sender_id", nodeID.ShortString()))
 		return nil
 	}
 	b.pending[layerNum] = append(b.pending[layerNum], msg)
@@ -238,7 +371,7 @@ func (b *Broker) cleanOldLayers() {
 
 // Register a layer to receive messages
 // Note: the registering instance is assumed to be started and accepting messages.
-func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, error) {
+func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any, error) {
 	b.setLatestLayer(ctx, id)
 
 	// check to see if the node is still synced
@@ -248,7 +381,7 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, err
 	return b.createNewInbox(id), nil
 }
 
-func (b *Broker) createNewInbox(id types.LayerID) chan *Msg {
+func (b *Broker) createNewInbox(id types.LayerID) chan any {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -260,7 +393,7 @@ func (b *Broker) createNewInbox(id types.LayerID) chan *Msg {
 		b.minDeleted = instance
 		b.With().Info("unregistered layer due to maximum concurrent processes", instance)
 	}
-	outboxCh := make(chan *Msg, inboxCapacity)
+	outboxCh := make(chan any, inboxCapacity)
 	b.outbox[id.Uint32()] = outboxCh
 	for _, mOut := range b.pending[id.Uint32()] {
 		outboxCh <- mOut

@@ -1,37 +1,53 @@
 package hare
 
-import (
-	"bytes"
-	"fmt"
-)
+type item struct {
+	counts map[string]struct{}
+}
 
 // RefCountTracker tracks the number of references of any object id.
 type RefCountTracker struct {
-	table map[any]uint32
+	round        uint32
+	eTracker     *EligibilityTracker
+	expectedSize int
+	table        map[any]*item
 }
 
 // NewRefCountTracker creates a new reference count tracker.
-func NewRefCountTracker() *RefCountTracker {
-	return &RefCountTracker{table: make(map[any]uint32)}
+func NewRefCountTracker(round uint32, et *EligibilityTracker, expectedSize int) *RefCountTracker {
+	return &RefCountTracker{
+		round:        round,
+		eTracker:     et,
+		expectedSize: expectedSize,
+		table:        make(map[any]*item, inboxCapacity),
+	}
 }
 
 // CountStatus returns the number of references to the given id.
-func (tracker *RefCountTracker) CountStatus(id any) uint32 {
-	return tracker.table[id]
+func (rt *RefCountTracker) CountStatus(id any) *CountInfo {
+	if _, ok := rt.table[id]; !ok {
+		return &CountInfo{}
+	}
+
+	votes := rt.table[id].counts
+	var ci CountInfo
+	rt.eTracker.ForEach(rt.round, func(node string, cr *Cred) {
+		if _, ok := votes[node]; ok {
+			if cr.Honest {
+				ci.IncHonest(cr.Count)
+			} else {
+				ci.IncDishonest(cr.Count)
+			}
+		} else if !cr.Honest {
+			ci.IncKnownEquivocator(cr.Count)
+		}
+	})
+	return &ci
 }
 
 // Track increases the count for the given object id.
-func (tracker *RefCountTracker) Track(id any, count uint32) {
-	tracker.table[id] += count
-}
-
-func (tracker *RefCountTracker) String() string {
-	if len(tracker.table) == 0 {
-		return "(no tracked values)"
+func (rt *RefCountTracker) Track(id any, pubKey []byte) {
+	if _, ok := rt.table[id]; !ok {
+		rt.table[id] = &item{counts: make(map[string]struct{}, rt.expectedSize)}
 	}
-	b := new(bytes.Buffer)
-	for id, count := range tracker.table {
-		b.WriteString(fmt.Sprintf("%v: %d, ", id, count))
-	}
-	return b.String()[:b.Len()-2]
+	rt.table[id].counts[string(pubKey)] = struct{}{}
 }

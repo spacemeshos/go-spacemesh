@@ -10,6 +10,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -17,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -72,6 +74,20 @@ func WithCertifierLogger(logger log.Log) CertifierOpt {
 	}
 }
 
+func withNonceFetcher(nf nonceFetcher) CertifierOpt {
+	return func(c *Certifier) {
+		c.nonceFetcher = nf
+	}
+}
+
+type defaultFetcher struct {
+	cdb *datastore.CachedDB
+}
+
+func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	return atxs.VRFNonce(f.cdb, nodeID, epoch)
+}
+
 type certInfo struct {
 	registered, done bool
 	totalEligibility uint16
@@ -87,14 +103,16 @@ type Certifier struct {
 	ctx    context.Context
 	cancel func()
 
-	db         *sql.Database
-	oracle     hare.Rolacle
-	nodeID     types.NodeID
-	signer     *signing.EdSigner
-	publisher  pubsub.Publisher
-	layerClock layerClock
-	beacon     system.BeaconGetter
-	tortoise   system.Tortoise
+	db              *datastore.CachedDB
+	oracle          hare.Rolacle
+	nodeID          types.NodeID
+	signer          *signing.EdSigner
+	nonceFetcher    nonceFetcher
+	pubKeyExtractor *signing.PubKeyExtractor
+	publisher       pubsub.Publisher
+	layerClock      layerClock
+	beacon          system.BeaconGetter
+	tortoise        system.Tortoise
 
 	mu          sync.Mutex
 	certifyMsgs map[types.LayerID]map[types.BlockID]*certInfo
@@ -102,26 +120,39 @@ type Certifier struct {
 
 // NewCertifier creates new block certifier.
 func NewCertifier(
-	db *sql.Database, o hare.Rolacle, n types.NodeID, s *signing.EdSigner, p pubsub.Publisher, lc layerClock, b system.BeaconGetter, tortoise system.Tortoise,
+	db *datastore.CachedDB,
+	o hare.Rolacle,
+	n types.NodeID,
+	s *signing.EdSigner,
+	pke *signing.PubKeyExtractor,
+	p pubsub.Publisher,
+	lc layerClock,
+	b system.BeaconGetter,
+	tortoise system.Tortoise,
 	opts ...CertifierOpt,
 ) *Certifier {
 	c := &Certifier{
-		logger:      log.NewNop(),
-		cfg:         defaultCertConfig(),
-		ctx:         context.Background(),
-		db:          db,
-		oracle:      o,
-		nodeID:      n,
-		signer:      s,
-		publisher:   p,
-		layerClock:  lc,
-		beacon:      b,
-		tortoise:    tortoise,
-		certifyMsgs: make(map[types.LayerID]map[types.BlockID]*certInfo),
+		logger:          log.NewNop(),
+		cfg:             defaultCertConfig(),
+		ctx:             context.Background(),
+		db:              db,
+		oracle:          o,
+		nodeID:          n,
+		signer:          s,
+		pubKeyExtractor: pke,
+		publisher:       p,
+		layerClock:      lc,
+		beacon:          b,
+		tortoise:        tortoise,
+		certifyMsgs:     make(map[types.LayerID]map[types.BlockID]*certInfo),
 	}
 	for _, opt := range opts {
 		opt(c)
 	}
+	if c.nonceFetcher == nil {
+		c.nonceFetcher = defaultFetcher{cdb: db}
+	}
+
 	c.ctx, c.cancel = context.WithCancel(c.ctx)
 	return c
 }
@@ -210,14 +241,19 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 	if _, err := c.beacon.GetBeacon(lid.GetEpoch()); err != nil {
 		return errBeaconNotAvailable
 	}
+	nonce, err := c.nonceFetcher.VRFNonce(c.nodeID, lid.GetEpoch())
+	if err != nil {
+		return fmt.Errorf("failed to get own vrf nonce: %w", err)
+	}
+
 	// check if the node is eligible to certify the hare output
-	proof, err := c.oracle.Proof(ctx, lid, eligibility.CertifyRound)
+	proof, err := c.oracle.Proof(ctx, nonce, lid, eligibility.CertifyRound)
 	if err != nil {
 		logger.With().Error("failed to get eligibility proof to certify", log.Err(err))
 		return err
 	}
 
-	eligibilityCount, err := c.oracle.CalcEligibility(ctx, lid, eligibility.CertifyRound, c.cfg.CommitteeSize, c.nodeID, proof)
+	eligibilityCount, err := c.oracle.CalcEligibility(ctx, lid, eligibility.CertifyRound, c.cfg.CommitteeSize, c.nodeID, nonce, proof)
 	if err != nil {
 		logger.With().Error("failed to check eligibility to certify", log.Err(err))
 		return err
@@ -291,7 +327,7 @@ func (c *Certifier) HandleSyncedCertificate(ctx context.Context, lid types.Layer
 func (c *Certifier) validateCert(ctx context.Context, logger log.Log, cert *types.Certificate) error {
 	eligibilityCnt := uint16(0)
 	for _, msg := range cert.Signatures {
-		if err := validate(ctx, logger, c.oracle, c.cfg.CommitteeSize, msg); err != nil {
+		if err := c.validate(ctx, logger, msg); err != nil {
 			continue
 		}
 		eligibilityCnt += msg.EligibilityCnt
@@ -352,7 +388,7 @@ func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error 
 		return nil
 	}
 
-	if err := validate(ctx, logger, c.oracle, c.cfg.CommitteeSize, msg); err != nil {
+	if err := c.validate(ctx, logger, msg); err != nil {
 		return err
 	}
 
@@ -362,13 +398,13 @@ func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error 
 	return nil
 }
 
-func validate(ctx context.Context, logger log.Log, oracle hare.Rolacle, committeeSize int, msg types.CertifyMessage) error {
+func (c *Certifier) validate(ctx context.Context, logger log.Log, msg types.CertifyMessage) error {
 	// extract public key from signature
-	nodeId, err := types.ExtractNodeIDFromSig(msg.Bytes(), msg.Signature)
+	nodeId, err := c.pubKeyExtractor.ExtractNodeID(msg.Bytes(), msg.Signature)
 	if err != nil {
 		return fmt.Errorf("%w: cert msg extract key: %v", errMalformedData, err.Error())
 	}
-	valid, err := oracle.Validate(ctx, msg.LayerID, eligibility.CertifyRound, committeeSize, nodeId, msg.Proof, msg.EligibilityCnt)
+	valid, err := c.oracle.Validate(ctx, msg.LayerID, eligibility.CertifyRound, c.cfg.CommitteeSize, nodeId, msg.Proof, msg.EligibilityCnt)
 	if err != nil {
 		logger.With().Warning("failed to validate cert msg", log.Err(err))
 		return err
