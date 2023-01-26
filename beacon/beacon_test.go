@@ -269,7 +269,6 @@ func TestBeaconWithMetrics(t *testing.T) {
 	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 
 	gLayer := types.GetEffectiveGenesis()
-	tpd.mClock.EXPECT().Subscribe().Times(1)
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(gLayer).Times(1)
 	tpd.mClock.EXPECT().LayerToTime((gLayer.GetEpoch() + 1).FirstLayer()).Return(time.Now()).Times(1)
 	tpd.Start(context.Background())
@@ -348,7 +347,6 @@ func TestBeaconWithMetrics(t *testing.T) {
 		require.Equal(t, 2, numObservedWeight, layer)
 	}
 
-	tpd.mClock.EXPECT().Unsubscribe(gomock.Any()).Times(1)
 	tpd.Close()
 }
 

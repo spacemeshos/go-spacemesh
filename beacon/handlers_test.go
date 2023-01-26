@@ -247,7 +247,6 @@ func Test_HandleProposal_Shutdown(t *testing.T) {
 
 	const epoch = types.EpochID(10)
 	tpd := createProtocolDriver(t, epoch)
-	tpd.mClock.EXPECT().Unsubscribe(gomock.Any()).Times(1)
 	tpd.Close()
 
 	signer, err := signing.NewEdSigner()
@@ -581,7 +580,6 @@ func Test_HandleFirstVotes_Shutdown(t *testing.T) {
 
 	const epoch = types.EpochID(10)
 	tpd := createProtocolDriver(t, epoch)
-	tpd.mClock.EXPECT().Unsubscribe(gomock.Any()).Times(1)
 	tpd.Close()
 
 	validVotes := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
@@ -814,7 +812,6 @@ func Test_HandleFollowingVotes_Shutdown(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
-	tpd.mClock.EXPECT().Unsubscribe(gomock.Any())
 	tpd.Close()
 
 	// this msg will contain a bit vector that set bit 0 and 2

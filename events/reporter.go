@@ -301,28 +301,32 @@ func SubscribeRewards() Subscription {
 
 // SubscribeToLayers is used to track and report automatically every time a
 // new layer is reached.
-func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
+func SubscribeToLayers(ticker *timesync.Ticker) {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	if reporter != nil {
-		// This will block, so run in a goroutine
-		go func() {
-			for {
-				mu.RLock()
-				stopChan := reporter.stopChan
-				mu.RUnlock()
-
-				select {
-				case layer := <-newLayerCh:
-					log.With().Debug("reporter got new layer", layer)
-					ReportNodeStatusUpdate()
-				case <-stopChan:
-					return
-				}
-			}
-		}()
+	if reporter == nil {
+		return
 	}
+
+	// This will block, so run in a goroutine
+	go func() {
+		for {
+			mu.RLock()
+			stopChan := reporter.stopChan
+			mu.RUnlock()
+
+			next := ticker.GetCurrentLayer().Add(1)
+
+			select {
+			case <-ticker.AwaitLayer(next):
+				log.With().Debug("reporter got new layer", next)
+				ReportNodeStatusUpdate()
+			case <-stopChan:
+				return
+			}
+		}
+	}()
 }
 
 // The status of a layer

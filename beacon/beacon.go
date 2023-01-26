@@ -167,9 +167,8 @@ type ProtocolDriver struct {
 	weakCoin        coin
 	theta           *big.Float
 
-	clock       layerClock
-	layerTicker chan types.LayerID
-	cdb         *datastore.CachedDB
+	clock layerClock
+	cdb   *datastore.CachedDB
 
 	mu sync.RWMutex
 
@@ -223,7 +222,6 @@ func (pd *ProtocolDriver) Start(ctx context.Context) {
 			pd.logger.Panic("update sync state provider can't be nil")
 		}
 
-		pd.layerTicker = pd.clock.Subscribe()
 		pd.metricsCollector.Start(nil)
 
 		pd.setProposalTimeForNextEpoch()
@@ -237,7 +235,6 @@ func (pd *ProtocolDriver) Start(ctx context.Context) {
 // Close closes ProtocolDriver.
 func (pd *ProtocolDriver) Close() {
 	pd.logger.Info("closing beacon protocol")
-	pd.clock.Unsubscribe(pd.layerTicker)
 	pd.metricsCollector.Stop()
 	pd.cancel()
 	pd.logger.Info("waiting for beacon goroutines to finish")
@@ -534,20 +531,20 @@ func (pd *ProtocolDriver) listenLayers(ctx context.Context) {
 	pd.logger.With().Info("starting listening layers")
 
 	for {
+		layer := pd.clock.GetCurrentLayer().GetEpoch().FirstLayer().Add(types.GetLayersPerEpoch())
+
 		select {
 		case <-pd.ctx.Done():
 			return
-		case layer := <-pd.layerTicker:
+		case <-pd.clock.AwaitLayer(layer):
 			pd.logger.With().Debug("received tick", layer)
-			if layer.FirstInEpoch() {
-				epoch := layer.GetEpoch()
-				pd.setProposalTimeForNextEpoch()
-				pd.logger.With().Info("first layer in epoch", layer, epoch)
-				pd.eg.Go(func() error {
-					_ = pd.onNewEpoch(ctx, epoch)
-					return nil
-				})
-			}
+			epoch := layer.GetEpoch()
+			pd.setProposalTimeForNextEpoch()
+			pd.logger.With().Info("first layer in epoch", layer, epoch)
+			pd.eg.Go(func() error {
+				_ = pd.onNewEpoch(ctx, epoch)
+				return nil
+			})
 		}
 	}
 }

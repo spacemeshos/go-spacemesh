@@ -41,13 +41,13 @@ func NewClock(c Clock, tickInterval time.Duration, genesisTime time.Time, logger
 	gtime := genesisTime.Local()
 	logger.With().Info("converting genesis time to local time",
 		log.Time("genesis", genesisTime),
-		log.Time("local", gtime))
+		log.Time("local", gtime),
+	)
 	t := &TimeClock{
 		Ticker:       NewTicker(c, LayerConv{duration: tickInterval, genesis: gtime}, WithLog(logger)),
 		tickInterval: tickInterval,
 		genesis:      gtime,
 		stop:         make(chan struct{}),
-		once:         sync.Once{},
 		log:          logger,
 	}
 
@@ -61,9 +61,6 @@ func (t *TimeClock) startClock() error {
 	for {
 		currLayer := t.Ticker.TimeToLayer(t.clock.Now())
 		nextLayer := currLayer.Add(1)
-		if time.Until(t.Ticker.LayerToTime(currLayer)) > 0 {
-			nextLayer = currLayer
-		}
 		nextTickTime := t.Ticker.LayerToTime(nextLayer)
 		t.log.With().Info("global clock going to sleep before next layer",
 			log.Stringer("curr_layer", currLayer),
@@ -71,23 +68,15 @@ func (t *TimeClock) startClock() error {
 			log.Time("next_tick_time", nextTickTime),
 		)
 
-		for {
-			// `time.After` sometimes unblocks bit too soon. In this case - wait again.
-			// See https://github.com/spacemeshos/go-spacemesh/issues/3617.
-			if t.clock.Now().After(nextTickTime) || t.clock.Now().Equal(nextTickTime) {
-				break
-			}
-			select {
-			case <-time.After(nextTickTime.Sub(t.clock.Now())):
-			case <-t.stop:
-				t.log.Info("stopping global clock %p", t)
-				return nil
-			}
+		select {
+		case <-time.After(nextTickTime.Sub(t.clock.Now())):
+		case <-t.stop:
+			t.log.Info("stopping global clock %p", t)
+			return nil
 		}
-		if missed, err := t.Notify(); err != nil {
-			t.log.With().Warning("could not notify all subscribers",
-				log.Err(err),
-				log.Int("missed", missed))
+
+		if err := t.Notify(); err != nil {
+			t.log.With().Warning("could not notify all subscribers", log.Err(err))
 		}
 	}
 }

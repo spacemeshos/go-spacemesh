@@ -15,7 +15,6 @@ import (
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	pubsub "github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
-	timesync "github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 // Mockcoin is a mock of coin interface.
@@ -179,6 +178,20 @@ func (m *MocklayerClock) EXPECT() *MocklayerClockMockRecorder {
 	return m.recorder
 }
 
+// AwaitLayer mocks base method.
+func (m *MocklayerClock) AwaitLayer(layerID types.LayerID) chan struct{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AwaitLayer", layerID)
+	ret0, _ := ret[0].(chan struct{})
+	return ret0
+}
+
+// AwaitLayer indicates an expected call of AwaitLayer.
+func (mr *MocklayerClockMockRecorder) AwaitLayer(layerID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AwaitLayer", reflect.TypeOf((*MocklayerClock)(nil).AwaitLayer), layerID)
+}
+
 // GetCurrentLayer mocks base method.
 func (m *MocklayerClock) GetCurrentLayer() types.LayerID {
 	m.ctrl.T.Helper()
@@ -205,32 +218,6 @@ func (m *MocklayerClock) LayerToTime(arg0 types.LayerID) time.Time {
 func (mr *MocklayerClockMockRecorder) LayerToTime(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerToTime", reflect.TypeOf((*MocklayerClock)(nil).LayerToTime), arg0)
-}
-
-// Subscribe mocks base method.
-func (m *MocklayerClock) Subscribe() timesync.LayerTimer {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Subscribe")
-	ret0, _ := ret[0].(timesync.LayerTimer)
-	return ret0
-}
-
-// Subscribe indicates an expected call of Subscribe.
-func (mr *MocklayerClockMockRecorder) Subscribe() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Subscribe", reflect.TypeOf((*MocklayerClock)(nil).Subscribe))
-}
-
-// Unsubscribe mocks base method.
-func (m *MocklayerClock) Unsubscribe(arg0 timesync.LayerTimer) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Unsubscribe", arg0)
-}
-
-// Unsubscribe indicates an expected call of Unsubscribe.
-func (mr *MocklayerClockMockRecorder) Unsubscribe(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unsubscribe", reflect.TypeOf((*MocklayerClock)(nil).Unsubscribe), arg0)
 }
 
 // MockvrfSigner is a mock of vrfSigner interface.
