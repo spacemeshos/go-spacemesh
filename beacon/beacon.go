@@ -530,18 +530,22 @@ func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
 func (pd *ProtocolDriver) listenEpochs(ctx context.Context) {
 	pd.logger.With().Info("starting listening layers")
 
+	currentEpoch := pd.clock.GetCurrentLayer().GetEpoch()
+	layer := currentEpoch.Add(1).FirstLayer()
 	for {
-		currentEpoch := pd.clock.GetCurrentLayer().GetEpoch()
-		layer := currentEpoch.FirstLayer().Add(types.GetLayersPerEpoch())
-
 		select {
 		case <-pd.ctx.Done():
 			return
 		case <-pd.clock.AwaitLayer(layer):
-			pd.logger.With().Debug("received tick", layer)
-			epoch := layer.GetEpoch()
+			current := pd.clock.GetCurrentLayer()
+			if current.Before(layer) {
+				pd.logger.With().Info("time sync detected, realigning Beacon")
+				continue
+			}
+			layer = current.GetEpoch().Add(1).FirstLayer()
+			epoch := current.GetEpoch()
 			pd.setProposalTimeForNextEpoch()
-			pd.logger.With().Info("first layer in epoch", layer, epoch)
+			pd.logger.With().Info("processing epoch", current, epoch)
 			pd.eg.Go(func() error {
 				_ = pd.onNewEpoch(ctx, epoch)
 				return nil
