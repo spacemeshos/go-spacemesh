@@ -9,8 +9,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/spacemeshos/poet/integration"
+	"github.com/spacemeshos/poet/config"
 	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api/v1"
+	"github.com/spacemeshos/poet/server"
 	"github.com/spacemeshos/poet/shared"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -28,59 +29,53 @@ var (
 // targeted by an HTTP client, in order to exercise functionality.
 type HTTPPoetHarness struct {
 	*HTTPPoetClient
-	Stdout   io.Reader
-	Stderr   io.Reader
-	ErrChan  <-chan error
-	Teardown func(cleanup bool) error
-	h        *integration.Harness
+	Service *server.Server
 }
 
-type HTTPPoetOpt func(*integration.ServerConfig)
+type HTTPPoetOpt func(*config.Config)
 
 func WithGateway(endpoint string) HTTPPoetOpt {
-	return func(cfg *integration.ServerConfig) {
-		cfg.GatewayAddresses = []string{endpoint}
+	return func(cfg *config.Config) {
+		cfg.Service.GatewayAddresses = []string{endpoint}
 	}
 }
 
 func WithGenesis(genesis time.Time) HTTPPoetOpt {
-	return func(cfg *integration.ServerConfig) {
-		cfg.Genesis = genesis
+	return func(cfg *config.Config) {
+		cfg.Service.Genesis = genesis.Format(time.RFC3339)
 	}
 }
 
 func WithEpochDuration(epoch time.Duration) HTTPPoetOpt {
-	return func(cfg *integration.ServerConfig) {
-		cfg.EpochDuration = epoch
+	return func(cfg *config.Config) {
+		cfg.Service.EpochDuration = epoch
 	}
 }
 
 // NewHTTPPoetHarness returns a new instance of HTTPPoetHarness.
-func NewHTTPPoetHarness(ctx context.Context, opts ...HTTPPoetOpt) (*HTTPPoetHarness, error) {
-	cfg, err := integration.DefaultConfig()
-	if err != nil {
-		return nil, fmt.Errorf("default integration config: %w", err)
-	}
+func NewHTTPPoetHarness(ctx context.Context, poetdir string, opts ...HTTPPoetOpt) (*HTTPPoetHarness, error) {
+	cfg := config.DefaultConfig()
+	cfg.PoetDir = poetdir
 
-	cfg.Reset = true
-	cfg.Genesis = time.Now().Add(5 * time.Second)
-	cfg.EpochDuration = 4 * time.Second
 	for _, opt := range opts {
 		opt(cfg)
 	}
 
-	h, err := integration.NewHarness(ctx, cfg)
+	cfg, err := config.SetupConfig(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("new harness: %w", err)
+		return nil, err
 	}
 
+	poet, err := server.New(ctx, *cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: query for the REST address to allow dynamic port allocation.
+	// It needs changes in poet.
 	return &HTTPPoetHarness{
-		HTTPPoetClient: NewHTTPPoetClient(h.RESTListen()),
-		Teardown:       h.TearDown,
-		h:              h,
-		Stdout:         h.StdoutPipe(),
-		Stderr:         h.StderrPipe(),
-		ErrChan:        h.ProcessErrors(),
+		HTTPPoetClient: NewHTTPPoetClient(cfg.RawRESTListener),
+		Service:        poet,
 	}, nil
 }
 
