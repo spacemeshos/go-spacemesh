@@ -638,7 +638,7 @@ func (app *App) initServices(
 
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
-		clock.Subscribe(),
+		clock,
 		sgn,
 		vrfSigner,
 		app.cachedDB,
