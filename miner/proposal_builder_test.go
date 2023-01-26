@@ -125,11 +125,12 @@ func TestBuilder_StartAndClose(t *testing.T) {
 		return ch
 	})
 
+	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(false)
+
 	require.NoError(t, b.Start(context.Background()))
 	// calling Start the second time should have no effect
 	require.NoError(t, b.Start(context.Background()))
 
-	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(false)
 	time.Sleep(100 * time.Millisecond)
 
 	b.Close()
