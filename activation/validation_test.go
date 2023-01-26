@@ -615,3 +615,69 @@ func Test_Validate_PostMetadata(t *testing.T) {
 		require.EqualError(t, err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", postCfg.K2, postCfg.K2-1))
 	})
 }
+
+func TestValidator_Validate(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	challenge := types.PoetChallenge{NIPostChallenge: &types.NIPostChallenge{
+		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),
+	}}
+	challengeHash := challenge.Hash()
+	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
+	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().Return(&types.PoetProof{Members: [][]byte{challengeHash.Bytes()}}, nil)
+	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
+
+	postCfg := DefaultPostConfig()
+	nipost := buildNIPost(t, r, postCfg, challenge, poetDb)
+	numUnits := getPostSetupOpts(t).NumUnits
+	nodeID := types.NodeID{1}
+	goldenATXID := types.ATXID{2, 3, 4}
+
+	err := validateNIPost(nodeID, goldenATXID, nipost, challengeHash, poetDb, postCfg, numUnits)
+	r.NoError(err)
+
+	err = validateNIPost(nodeID, goldenATXID, nipost, types.BytesToHash([]byte("lerner")), poetDb, postCfg, numUnits)
+	r.Contains(err.Error(), "invalid `Challenge`")
+
+	newNIPost := *nipost
+	newNIPost.Post = &types.Post{}
+	err = validateNIPost(nodeID, goldenATXID, &newNIPost, challengeHash, poetDb, postCfg, numUnits)
+	r.Contains(err.Error(), "invalid Post")
+
+	newPostCfg := postCfg
+	newPostCfg.MinNumUnits = numUnits + 1
+	err = validateNIPost(nodeID, goldenATXID, nipost, challengeHash, poetDb, newPostCfg, numUnits)
+	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", newPostCfg.MinNumUnits, numUnits))
+
+	newPostCfg = postCfg
+	newPostCfg.MaxNumUnits = numUnits - 1
+	err = validateNIPost(nodeID, goldenATXID, nipost, challengeHash, poetDb, newPostCfg, numUnits)
+	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", newPostCfg.MaxNumUnits, numUnits))
+
+	newPostCfg = postCfg
+	newPostCfg.LabelsPerUnit = nipost.PostMetadata.LabelsPerUnit + 1
+	err = validateNIPost(nodeID, goldenATXID, nipost, challengeHash, poetDb, newPostCfg, numUnits)
+	r.EqualError(err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", newPostCfg.LabelsPerUnit, nipost.PostMetadata.LabelsPerUnit))
+
+	newPostCfg = postCfg
+	newPostCfg.BitsPerLabel = nipost.PostMetadata.BitsPerLabel + 1
+	err = validateNIPost(nodeID, goldenATXID, nipost, challengeHash, poetDb, newPostCfg, numUnits)
+	r.EqualError(err, fmt.Sprintf("invalid `BitsPerLabel`; expected: >=%d, given: %d", newPostCfg.BitsPerLabel, nipost.PostMetadata.BitsPerLabel))
+
+	newPostCfg = postCfg
+	newPostCfg.K1 = nipost.PostMetadata.K2 - 1
+	err = validateNIPost(nodeID, goldenATXID, nipost, challengeHash, poetDb, newPostCfg, numUnits)
+	r.EqualError(err, fmt.Sprintf("invalid `K1`; expected: <=%d, given: %d", newPostCfg.K1, nipost.PostMetadata.K1))
+
+	newPostCfg = postCfg
+	newPostCfg.K2 = nipost.PostMetadata.K2 + 1
+	err = validateNIPost(nodeID, goldenATXID, nipost, challengeHash, poetDb, newPostCfg, numUnits)
+	r.EqualError(err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", newPostCfg.K2, nipost.PostMetadata.K2))
+}
+
+func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint32) error {
+	v := &Validator{poetDb, postCfg}
+	_, err := v.NIPost(minerID, commitmentAtx, nipost, challenge, numUnits)
+	return err
+}
