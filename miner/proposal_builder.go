@@ -412,7 +412,7 @@ func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
 		case <-pb.clock.AwaitLayer(next):
 			current = pb.clock.GetCurrentLayer()
 			if current.Before(next) {
-				pb.logger.Info("proposal creation triggered early for layer %v, wait again", next)
+				pb.logger.Info("time sync detected, realigning ProposalBuilder")
 				continue
 			}
 			next = current.Add(1)
