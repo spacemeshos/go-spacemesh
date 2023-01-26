@@ -6,6 +6,7 @@ env:
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
   CLUSTER_ZONE: ${{ secrets.CLUSTER_ZONE }}
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   ES_USER: ${{ secrets.ES_USER }}
   ES_PASS: ${{ secrets.ES_PASS }}
   MAIN_ES_IP: ${{ secrets.MAIN_ES_IP }}
@@ -263,6 +264,12 @@ jobs:
       # this is the easiest way to access success/failure state of previous jobs in this workflow
       status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.build.result == 'success' && needs.lint.result == 'success' && needs.unittests.result == 'success')) && 'success' || 'failure' }}
     steps:
+      - uses: act10ns/slack@v2
+        name: Slack notification
+        # skip if the secret is not accessible
+        if: env.SLACK_WEBHOOK_URL
+        with:
+          status: ${{ env.status }}
       - name: Mark the job as succeeded
         if: env.status == 'success'
         run: exit 0

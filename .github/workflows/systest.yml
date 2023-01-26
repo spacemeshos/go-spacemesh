@@ -13,6 +13,7 @@ env:
   CLUSTER_ZONE: ${{ secrets.CLUSTER_ZONE }}
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   ES_USER: ${{ secrets.ES_USER }}
   ES_PASS: ${{ secrets.ES_PASS }}
   MAIN_ES_IP: ${{ secrets.MAIN_ES_IP }}
@@ -125,3 +126,9 @@ jobs:
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
         run: make -C systest clean
+
+      - uses: act10ns/slack@v2
+        if: always() && github.event_name == 'push' && env.SLACK_WEBHOOK_URL
+        name: Slack notification
+        with:
+          status: ${{ job.status }}
