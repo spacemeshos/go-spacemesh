@@ -1,4 +1,4 @@
-status = ["ci-status", "systest"]
+status = ["ci-status", "systest-status"]
 
 required_approvals = 1
 delete_merged_branches = true
