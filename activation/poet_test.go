@@ -3,10 +3,8 @@ package activation_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -42,20 +40,19 @@ func TestHTTPPoet(t *testing.T) {
 	pb.RegisterGatewayServiceServer(gtw.Server, &gatewayService{})
 	var eg errgroup.Group
 	eg.Go(gtw.Serve)
+
+	poetDir := t.TempDir()
 	t.Cleanup(func() { r.NoError(eg.Wait()) })
 	t.Cleanup(gtw.Stop)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c, err := activation.NewHTTPPoetHarness(ctx, activation.WithGateway(gtw.Target()))
+	c, err := activation.NewHTTPPoetHarness(ctx, poetDir, activation.WithGateway(gtw.Target()))
 	r.NoError(err)
 	r.NotNil(c)
 
-	t.Cleanup(func() {
-		err := c.Teardown(true)
-		if assert.NoError(t, err, "failed to tear down harness") {
-			t.Log("harness torn down")
-		}
+	eg.Go(func() error {
+		return c.Service.Start(ctx)
 	})
 
 	signer, err := signing.NewEdSigner()
