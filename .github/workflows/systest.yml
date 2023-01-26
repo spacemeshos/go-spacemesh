@@ -52,7 +52,7 @@ jobs:
 
   systest:
     runs-on: ubuntu-latest
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true'
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
       - filter-changes
       - dockerpush
