@@ -347,6 +347,75 @@ func TestMesh_ProcessLayerPerHareOutput(t *testing.T) {
 	}
 }
 
+func TestMesh_ProcessLayerPerHareOutput_certificateSynced(t *testing.T) {
+	tm := createTestMesh(t)
+	lid := types.GetEffectiveGenesis().Add(1)
+
+	require.Greater(t, numBlocks, 1)
+	blks := createLayerBlocks(t, tm.db, tm.Mesh, lid)
+	cert := &types.Certificate{
+		BlockID: blks[0].ID(),
+	}
+	require.NoError(t, certificates.Add(tm.cdb, lid, cert))
+
+	tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
+	tm.mockTortoise.EXPECT().Updates().Return(lid.Sub(1), nil)
+	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
+	tm.mockState.EXPECT().UpdateCache(gomock.Any(), lid, blks[0].ID(), gomock.Any(), gomock.Any())
+	tm.mockVM.EXPECT().GetStateRoot()
+	require.NoError(t, tm.ProcessLayerPerHareOutput(context.Background(), lid, blks[1].ID(), false))
+	hareOutput, err := certificates.GetHareOutput(tm.cdb, lid)
+	require.NoError(t, err)
+	require.Equal(t, blks[0].ID(), hareOutput)
+	require.Equal(t, lid, tm.ProcessedLayer())
+	checkLastAppliedInDB(t, tm.Mesh, lid)
+
+	certs, err := certificates.Get(tm.cdb, lid)
+	require.NoError(t, err)
+	require.Len(t, certs, 2)
+	require.True(t, certs[0].Valid)
+	require.Equal(t, certs[0].Block, blks[0].ID())
+	require.NotNil(t, certs[0].Cert)
+	require.False(t, certs[1].Valid)
+	require.Equal(t, certs[1].Block, blks[1].ID())
+	require.Nil(t, certs[1].Cert)
+}
+
+func TestMesh_ProcessLayerPerHareOutput_certificateSyncedButInvalid(t *testing.T) {
+	tm := createTestMesh(t)
+	lid := types.GetEffectiveGenesis().Add(1)
+
+	require.Greater(t, numBlocks, 1)
+	blks := createLayerBlocks(t, tm.db, tm.Mesh, lid)
+	cert := &types.Certificate{
+		BlockID: blks[0].ID(),
+	}
+	require.NoError(t, certificates.Add(tm.cdb, lid, cert))
+	require.NoError(t, certificates.SetInvalid(tm.cdb, lid, blks[0].ID()))
+
+	tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
+	tm.mockTortoise.EXPECT().Updates().Return(lid.Sub(1), nil)
+	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
+	tm.mockState.EXPECT().UpdateCache(gomock.Any(), lid, blks[1].ID(), gomock.Any(), gomock.Any())
+	tm.mockVM.EXPECT().GetStateRoot()
+	require.NoError(t, tm.ProcessLayerPerHareOutput(context.Background(), lid, blks[1].ID(), false))
+	hareOutput, err := certificates.GetHareOutput(tm.cdb, lid)
+	require.NoError(t, err)
+	require.Equal(t, blks[1].ID(), hareOutput)
+	require.Equal(t, lid, tm.ProcessedLayer())
+	checkLastAppliedInDB(t, tm.Mesh, lid)
+
+	certs, err := certificates.Get(tm.cdb, lid)
+	require.NoError(t, err)
+	require.Len(t, certs, 2)
+	require.False(t, certs[0].Valid)
+	require.Equal(t, certs[0].Block, blks[0].ID())
+	require.NotNil(t, certs[0].Cert)
+	require.True(t, certs[1].Valid)
+	require.Equal(t, certs[1].Block, blks[1].ID())
+	require.Nil(t, certs[1].Cert)
+}
+
 func TestMesh_ProcessLayerPerHareOutput_emptyOutput(t *testing.T) {
 	tm := createTestMesh(t)
 	gLyr := types.GetEffectiveGenesis()
