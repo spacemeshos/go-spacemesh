@@ -133,7 +133,7 @@ type Syncer struct {
 
 	// awaitATXSyncedCh is the list of subscribers' channels to notify when this node enters ATX synced state
 	awaitATXSyncedCh chan struct{}
-	muATXSyncedCh    sync.RWMutex // protects the slice above from concurrent access
+	muATXSyncedCh    sync.RWMutex // protects the channel above from concurrent access
 
 	eg errgroup.Group
 
@@ -195,16 +195,13 @@ func (s *Syncer) Close() {
 
 // RegisterForATXSynced returns a channel for notification when the node enters ATX synced state.
 func (s *Syncer) RegisterForATXSynced() chan struct{} {
+	if s.ListenToATXGossip() {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}
 	s.muATXSyncedCh.RLock()
 	defer s.muATXSyncedCh.RUnlock()
-
-	if s.ListenToATXGossip() {
-		select {
-		case <-s.awaitATXSyncedCh:
-		default:
-			close(s.awaitATXSyncedCh)
-		}
-	}
 	return s.awaitATXSyncedCh
 }
 
