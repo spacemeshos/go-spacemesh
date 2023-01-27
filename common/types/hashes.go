@@ -21,13 +21,13 @@ const (
 	hash12Length = 12
 )
 
-// Hash12 represents the first 12 bytes of sha256, mostly used for internal caches.
+// Hash12 represents the first 12 bytes of blake3 hash, mostly used for internal caches.
 type Hash12 [hash12Length]byte
 
-// Hash32 represents the 32-byte sha256 hash of arbitrary data.
+// Hash32 represents the 32-byte blake3 hash of arbitrary data.
 type Hash32 [Hash32Length]byte
 
-// Hash20 represents the 20-byte sha256 hash of arbitrary data.
+// Hash20 represents the 20-byte blake3 hash of arbitrary data.
 type Hash20 [hash20Length]byte
 
 // Field returns a log field. Implements the LoggableField interface.
@@ -106,7 +106,7 @@ func (h Hash20) ToHash32() (h32 Hash32) {
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash20) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
 
-// CalcHash12 returns the 12-byte prefix of the sha256 sum of the given byte slice.
+// CalcHash12 returns the 12-byte prefix of the blake3 sum of the given byte slice.
 func CalcHash12(data []byte) (h Hash12) {
 	h32 := hash.Sum(data)
 	copy(h[:], h32[:])
@@ -118,7 +118,7 @@ func (h *Hash20) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, h[:])
 }
 
-// CalcProposalsHash32 returns the 32-byte sha256 sum of the IDs, sorted in lexicographic order. The pre-image is
+// CalcProposalsHash32 returns the 32-byte blake3 sum of the IDs, sorted in lexicographic order. The pre-image is
 // prefixed with additionalBytes.
 func CalcProposalsHash32(view []ProposalID, additionalBytes []byte) Hash32 {
 	sortedView := make([]ProposalID, len(view))
@@ -127,7 +127,7 @@ func CalcProposalsHash32(view []ProposalID, additionalBytes []byte) Hash32 {
 	return CalcProposalHash32Presorted(sortedView, additionalBytes)
 }
 
-// CalcBlocksHash32 returns the 32-byte sha256 sum of the IDs, sorted in lexicographic order. The pre-image is
+// CalcBlocksHash32 returns the 32-byte blake3 sum of the IDs, sorted in lexicographic order. The pre-image is
 // prefixed with additionalBytes.
 func CalcBlocksHash32(view []BlockID, additionalBytes []byte) Hash32 {
 	sortedView := make([]BlockID, len(view))
@@ -136,7 +136,7 @@ func CalcBlocksHash32(view []BlockID, additionalBytes []byte) Hash32 {
 	return CalcBlockHash32Presorted(sortedView, additionalBytes)
 }
 
-// CalcProposalHash32Presorted returns the 32-byte sha256 sum of the IDs, in the order given. The pre-image is
+// CalcProposalHash32Presorted returns the 32-byte blake3 sum of the IDs, in the order given. The pre-image is
 // prefixed with additionalBytes.
 func CalcProposalHash32Presorted(sortedView []ProposalID, additionalBytes []byte) Hash32 {
 	hasher := hash.New()
@@ -149,7 +149,7 @@ func CalcProposalHash32Presorted(sortedView []ProposalID, additionalBytes []byte
 	return res
 }
 
-// CalcBlockHash32Presorted returns the 32-byte sha256 sum of the IDs, in the order given. The pre-image is
+// CalcBlockHash32Presorted returns the 32-byte blake3 sum of the IDs, in the order given. The pre-image is
 // prefixed with additionalBytes.
 func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash32 {
 	hash := hash.New()
@@ -162,19 +162,19 @@ func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash
 	return res
 }
 
-// CalcMessageHash12 returns the 12-byte sha256 sum of the given msg suffixed with protocol.
+// CalcMessageHash12 returns the 12-byte blake3 sum of the given msg suffixed with protocol.
 func CalcMessageHash12(msg []byte, protocol string) Hash12 {
 	return CalcHash12(append(msg, protocol...))
 }
 
 var hashT = reflect.TypeOf(Hash32{})
 
-// CalcHash32 returns the 32-byte sha256 sum of the given data.
+// CalcHash32 returns the 32-byte blake3 sum of the given data.
 func CalcHash32(data []byte) Hash32 {
 	return hash.Sum(data)
 }
 
-// CalcObjectHash32 returns the 32-byte sha256 sum of the scale serialization of the object.
+// CalcObjectHash32 returns the 32-byte blake3 sum of the scale serialization of the object.
 func CalcObjectHash32(obj scale.Encodable) Hash32 {
 	bytes, err := codec.Encode(obj)
 	if err != nil {

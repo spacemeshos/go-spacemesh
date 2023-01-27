@@ -1,6 +1,7 @@
-status = ["ci-stage2"]
+status = ["ci-status", "systest-status"]
 
 required_approvals = 1
 delete_merged_branches = true
+update_base_for_deletes = true
 use_squash_merge = true
-timeout_sec = 10800  # 3 hours
+timeout_sec = 10800            # 3 hours

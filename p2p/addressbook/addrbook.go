@@ -468,7 +468,7 @@ func doubleHash(buf []byte) []byte {
 
 func (a *AddrBook) getNewBucket(netAddr, srcAddr net.IP) int {
 	// bitcoind:
-	// doublesha256(key + sourcegroup + int64(doublesha256(key + group + sourcegroup))%bucket_per_source_group) % num_new_buckets
+	// doubleblake3(key + sourcegroup + int64(doubleblake3(key + group + sourcegroup))%bucket_per_source_group) % num_new_buckets
 
 	var data1 []byte
 	data1 = append(data1, a.key[:]...)
@@ -490,7 +490,7 @@ func (a *AddrBook) getNewBucket(netAddr, srcAddr net.IP) int {
 
 func (a *AddrBook) getTriedBucket(netAddr net.IP) int {
 	// bitcoind hashes this as:
-	// doublesha256(key + group + truncate_to_64bits(doublesha256(key)) % buckets_per_group) % num_buckets
+	// doubleblake3(key + group + truncate_to_64bits(doubleblake3(key)) % buckets_per_group) % num_buckets
 	var data1 []byte
 	data1 = append(data1, a.key[:]...)
 	data1 = append(data1, []byte(netAddr)...)

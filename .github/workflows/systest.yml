@@ -1,0 +1,167 @@
+name: System tests
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - staging
+      - trying
+env:
+  go-version: "1.19"
+  GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
+  PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
+  CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
+  CLUSTER_ZONE: ${{ secrets.CLUSTER_ZONE }}
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  ES_USER: ${{ secrets.ES_USER }}
+  ES_PASS: ${{ secrets.ES_PASS }}
+  MAIN_ES_IP: ${{ secrets.MAIN_ES_IP }}
+  TD_QUEUE_NAME: ${{ secrets.TD_QUEUE_NAME }}
+  TD_QUEUE_ZONE: ${{ secrets.TD_QUEUE_ZONE }}
+  DUMP_QUEUE_NAME: ${{ secrets.DUMP_QUEUE_NAME }}
+  DUMP_QUEUE_ZONE: ${{ secrets.DUMP_QUEUE_ZONE }}
+  CI_CLUSTER_NAME: ${{ secrets.CI_CLUSTER_NAME }}
+  CI_GCP_CREDENTIALS: ${{ secrets.CI_GCP_CREDENTIALS }}
+  CI_GCP_PROJECT_ID: ${{ secrets.CI_GCP_PROJECT_ID }}
+  CI_REGION_NAME: ${{ secrets.CI_REGION_NAME }}
+  USE_GKE_GCLOUD_AUTH_PLUGIN: True
+
+jobs:
+  filter-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      nondocchanges: ${{ steps.filter.outputs.nondoc }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            nondoc:
+              - '!**/*.md'
+  dockerpush:
+    # should take 2-3 mins
+    timeout-minutes: 7
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+      - name: push to docker hub
+        run: make dockerpush
+
+  systest:
+    runs-on: ubuntu-latest
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    needs:
+      - filter-changes
+      - dockerpush
+    timeout-minutes: 90
+    concurrency:
+      group: ${{ github.base_ref == 'staging' && format('{0}-staging', github.workflow) || format('{0}-{1}', github.workflow, github.ref) }}
+      cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup kubectl
+        id: install
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "v1.23.15"
+
+      - name: Setup gcloud authentication
+        id: "auth"
+        uses: "google-github-actions/auth@v1"
+        with:
+          # GCP_CREDENTIALS is minified JSON of service account
+          credentials_json: "${{ secrets.CI_GCP_CREDENTIALS }}"
+
+      - name: Configure gcloud
+        uses: "google-github-actions/setup-gcloud@v1"
+
+      - name: Configure gke authentication plugin
+        run: gcloud components install gke-gcloud-auth-plugin --quiet
+
+      - name: Configure kubectl
+        run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --region ${{ secrets.CI_REGION_NAME }} --project ${{ secrets.CI_GCP_PROJECT_ID }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push go-spacemesh build to docker hub
+        run: make dockerpush
+
+      - name: Get branch and commit hash
+        id: vars
+        shell: bash
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build tests docker image
+        run: make -C systest docker
+
+      - name: Push tests docker images
+        run: make -C systest push
+
+      - name: set up go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.go-version }}
+
+      - name: Run tests I
+        timeout-minutes: 55
+        env:
+          test_id: systest-${{ steps.vars.outputs.sha_short }}
+          label: sanity
+          storage: premium-rwo=10Gi
+          node_selector: cloud.google.com/gke-nodepool=gha
+          size: 50
+          bootstrap: 10m
+          level: info
+          clusters: 4
+        run: make -C systest run test_name=.
+
+      - name: Run tests II
+        timeout-minutes: 30
+        env:
+          test_id: systest-${{ steps.vars.outputs.sha_short }}
+          label: destructive
+          storage: premium-rwo=10Gi
+          node_selector: cloud.google.com/gke-nodepool=gha
+          size: 30
+          bootstrap: 10m
+          level: info
+          clusters: 4
+        run: make -C systest run test_name=.
+
+      - name: Delete pod
+        if: always()
+        env:
+          test_id: systest-${{ steps.vars.outputs.sha_short }}
+        run: make -C systest clean
+
+  systest-status:
+    if: always()
+    needs:
+      - filter-changes
+      - systest
+    runs-on: ubuntu-latest
+    env:
+      # short-circuit success if no non-doc files were modified
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || needs.systest.result == 'success') && 'success' || 'failure' }}
+    steps:
+      # print a single, clean status update to slack
+      - uses: act10ns/slack@v2
+        name: Slack notification
+        # skip if the secret is not accessible
+        if: env.SLACK_WEBHOOK_URL
+        with:
+          status: ${{ env.status }}
+      - name: Mark the job as succeeded
+        if: env.status == 'success'
+        run: exit 0
+      - name: Mark the job as failed
+        if: env.status != 'success'
+        run: exit 1

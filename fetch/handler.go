@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -34,6 +35,24 @@ func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider
 		msh:    m,
 		beacon: b,
 	}
+}
+
+// handleEpochInfoReq returns the ATXs published in the specified epoch.
+func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ []byte) ([]byte, error) {
+	nodes, err := identities.GetMalicious(h.cdb)
+	if err != nil {
+		h.logger.WithContext(ctx).With().Warning("failed to get malicious IDs", log.Err(err))
+		return nil, err
+	}
+	h.logger.WithContext(ctx).With().Debug("responded to malicious IDs request", log.Int("num_malicious", len(nodes)))
+	malicious := &MaliciousIDs{
+		NodeIDs: nodes,
+	}
+	data, err := codec.Encode(malicious)
+	if err != nil {
+		h.logger.With().Fatal("failed to encode malicious IDs", log.Err(err))
+	}
+	return data, nil
 }
 
 // handleEpochInfoReq returns the ATXs published in the specified epoch.
