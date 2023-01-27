@@ -24,6 +24,7 @@ type meshProvider interface {
 type fetchLogic interface {
 	fetcher
 
+	PollMaliciousProofs(ctx context.Context) error
 	PollLayerData(context.Context, types.LayerID, ...p2p.Peer) error
 	PollLayerOpinions(context.Context, types.LayerID) ([]*fetch.LayerOpinion, error)
 	GetEpochATXs(context.Context, types.EpochID) error
@@ -31,9 +32,11 @@ type fetchLogic interface {
 
 // fetcher is the interface to the low-level fetching.
 type fetcher interface {
+	GetMaliciousIDs(context.Context, []p2p.Peer, func([]byte, p2p.Peer), func(error, p2p.Peer)) error
 	GetLayerData(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error
 	GetLayerOpinions(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error
 
+	GetMalfeasanceProofs(context.Context, []types.NodeID) error
 	GetAtxs(context.Context, []types.ATXID) error
 	GetBallots(context.Context, []types.BallotID) error
 	GetBlocks(context.Context, []types.BlockID) error
@@ -58,4 +61,8 @@ type forkFinder interface {
 	UpdateAgreement(p2p.Peer, types.LayerID, types.Hash32, time.Time)
 	FindFork(context.Context, p2p.Peer, types.LayerID, types.Hash32) (types.LayerID, error)
 	Purge(bool, ...p2p.Peer)
+}
+
+type idProvider interface {
+	IdentityExists(id types.NodeID) (bool, error)
 }

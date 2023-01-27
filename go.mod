@@ -20,7 +20,6 @@ require (
 	github.com/libp2p/go-libp2p v0.24.2
 	github.com/libp2p/go-libp2p-pubsub v0.8.3
 	github.com/libp2p/go-libp2p-testing v0.12.0
-	github.com/minio/sha256-simd v1.0.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/multiformats/go-multiaddr v0.8.0
 	github.com/natefinch/atomic v1.0.1
@@ -42,6 +41,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.15.0
 	github.com/stretchr/testify v1.8.1
+	github.com/zeebo/blake3 v0.2.3
 	go.uber.org/atomic v1.10.0
 	go.uber.org/zap v1.24.0
 	golang.org/x/exp v0.0.0-20230118134722-a68e582fa157
@@ -128,6 +128,7 @@ require (
 	github.com/miekg/dns v1.1.50 // indirect
 	github.com/mikioh/tcpinfo v0.0.0-20190314235526-30a79bb1804b // indirect
 	github.com/mikioh/tcpopt v0.0.0-20190314235656-172688c1accc // indirect
+	github.com/minio/sha256-simd v1.0.0 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
