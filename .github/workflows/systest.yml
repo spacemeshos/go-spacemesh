@@ -143,7 +143,7 @@ jobs:
         run: make -C systest clean
 
   systest-status:
-    if: always() && github.event_name == 'push' && needs.ci-stage1.result == 'success'
+    if: always()
     needs:
       - filter-changes
       - systest
