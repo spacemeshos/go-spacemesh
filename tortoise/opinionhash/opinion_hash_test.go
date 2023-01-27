@@ -25,35 +25,35 @@ func TestOpinionHasher(t *testing.T) {
 			seq: []any{
 				support{id: types.BlockID{1}, height: 10},
 			},
-			expected: "0x32361d7c383f07915925828662cd482d9ded9773506e1de614be66b25b6aeb53",
+			expected: "0x9792d675f91bda454356c00761f0ee7e4fad33f075f5c02cfd11730f0199f3ed",
 		},
 		{
 			desc: "support height 100",
 			seq: []any{
 				support{id: types.BlockID{1}, height: 100},
 			},
-			expected: "0x0117c9973e8684cf1b9fc6a3d883fe0adce03027b0fef68b6b5b46af265b8775",
+			expected: "0xfdae510822088f67d47f8229d7971212973688d310c87144a154e8b51d787b4e",
 		},
 		{
 			desc: "multiple blocks",
 			seq: []any{
 				[]support{{id: types.BlockID{1}, height: 100}, {id: types.BlockID{2}, height: 100}},
 			},
-			expected: "0x5f7d9ac8209de9cd0558ff2bedeb522795603c4a66a3b0859a4256e4ad38426c",
+			expected: "0xc0d65bb2f64a870c3f067bbc6e06ded4437ec95616b7bc61ee52fd02fe9468d2",
 		},
 		{
 			desc: "single against",
 			seq: []any{
 				nil,
 			},
-			expected: "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			expected: "0xaf1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
 		},
 		{
 			desc: "abstain",
 			seq: []any{
 				abstain{},
 			},
-			expected: "0x6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+			expected: "0x2d3adedff11b61f14c886e35afa036736dcd87a74d27b5c1510225d0f592e213",
 		},
 		{
 			desc: "abstain abstain",
@@ -61,7 +61,7 @@ func TestOpinionHasher(t *testing.T) {
 				abstain{},
 				abstain{},
 			},
-			expected: "0x345e431cadda34d3862fb4a060f18ce7f4d70738b3d5560235a97a584a6bb15f",
+			expected: "0x58716d2accccc68182ffb06de20c77010061d694056defb23d2ad881d9367e16",
 		},
 		{
 			desc: "against against",
@@ -69,7 +69,7 @@ func TestOpinionHasher(t *testing.T) {
 				nil,
 				nil,
 			},
-			expected: "0x5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456",
+			expected: "0x82878ed8a480ee41775636820e05a934ca5c747223ca64306658ee5982e6c227",
 		},
 		{
 			desc: "support support",
@@ -77,7 +77,7 @@ func TestOpinionHasher(t *testing.T) {
 				support{id: types.BlockID{1}, height: 100},
 				support{id: types.BlockID{2}, height: 100},
 			},
-			expected: "0xdf06f149e6a3c33d28df7e91c4e96b95e8a60021caf782c96682917fff5d95c9",
+			expected: "0x88f75279f76898e958fba3409c60cee10967e04910bb97730e286531bbe7a757",
 		},
 		{
 			desc: "support against",
@@ -85,7 +85,7 @@ func TestOpinionHasher(t *testing.T) {
 				support{id: types.BlockID{1}, height: 100},
 				nil,
 			},
-			expected: "0xe59dafb9506937f3e0dc3fcdfd25731a14aefebad44d93f282eee3a2d45b6d55",
+			expected: "0xae4b107c6601034d18eb7b7817a330abe6ba8a82e58265ef503928050730cd14",
 		},
 	} {
 		tc := tc

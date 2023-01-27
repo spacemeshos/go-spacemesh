@@ -251,7 +251,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	proc.validator = mValidator
 	signer, err := signing.NewEdSigner()
 	r.NoError(err)
-	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), []byte{1})
+	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), []byte{2})
 	mValidator.syntaxValid = false
 	r.False(proc.preRoundTracker.coinflip, "default coinflip should be false")
 	proc.handleMessage(context.Background(), msg)
@@ -440,7 +440,7 @@ func TestConsensusProcess_procPre(t *testing.T) {
 	s := NewDefaultEmptySet()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, s, []byte{1})
+	m := BuildPreRoundMsg(signer, s, []byte{3})
 	require.False(t, proc.preRoundTracker.coinflip)
 	proc.processPreRoundMsg(context.Background(), m)
 	require.Len(t, proc.preRoundTracker.preRound, 1)

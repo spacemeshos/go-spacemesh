@@ -335,15 +335,15 @@ func TestPreRoundTracker_BestVRF(t *testing.T) {
 		coin    bool
 	}{
 		// order matters! lowest VRF value wins
-		// first is input bytes, second is output sha256 checksum as uint32 (lowest order four bytes),
+		// first is input bytes, second is output blake3 checksum as uint32 (lowest order four bytes),
 		// third is lowest val seen so far, fourth is lowest-order bit of lowest value
-		{[]byte{0}, 2617980014, 2617980014, false},
-		{[]byte{1}, 789771595, 789771595, true},
-		{[]byte{2}, 3384066523, 789771595, true},
-		{[]byte{3}, 149769992, 149769992, false},
-		{[]byte{4}, 1352412645, 149769992, false},
-		{[]byte{1, 0}, 206888007, 149769992, false},
-		{[]byte{1, 0, 0}, 131879163, 131879163, true},
+		{[]byte{0}, 3755883053, 3755883053, true},
+		{[]byte{1}, 527629384, 527629384, false},
+		{[]byte{2}, 3753776043, 527629384, false},
+		{[]byte{3}, 501801185, 501801185, true},
+		{[]byte{4}, 1956263948, 501801185, true},
+		{[]byte{1, 0}, 3379983208, 501801185, true},
+		{[]byte{1, 0, 0}, 2393599545, 501801185, true},
 	}
 
 	// check default coin value
@@ -354,9 +354,9 @@ func TestPreRoundTracker_BestVRF(t *testing.T) {
 	s1 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2})
 
 	for _, v := range values {
-		sha := hash.Sum(v.proof)
-		shaUint32 := binary.LittleEndian.Uint32(sha[:4])
-		r.Equal(v.val, shaUint32, "mismatch in hash output")
+		vrfHash := hash.Sum(v.proof)
+		vrfHashVal := binary.LittleEndian.Uint32(vrfHash[:4])
+		r.Equal(v.val, vrfHashVal, "mismatch in hash output")
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		prMsg := BuildPreRoundMsg(sig, s1, v.proof)
