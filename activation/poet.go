@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/spacemeshos/poet/config"
 	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api/v1"
 	"github.com/spacemeshos/poet/server"
@@ -52,6 +53,18 @@ func WithEpochDuration(epoch time.Duration) HTTPPoetOpt {
 	}
 }
 
+func WithPhaseShift(phase time.Duration) HTTPPoetOpt {
+	return func(cfg *config.Config) {
+		cfg.Service.PhaseShift = phase
+	}
+}
+
+func WithCycleGap(gap time.Duration) HTTPPoetOpt {
+	return func(cfg *config.Config) {
+		cfg.Service.CycleGap = gap
+	}
+}
+
 // NewHTTPPoetHarness returns a new instance of HTTPPoetHarness.
 func NewHTTPPoetHarness(ctx context.Context, poetdir string, opts ...HTTPPoetOpt) (*HTTPPoetHarness, error) {
 	cfg := config.DefaultConfig()
@@ -83,6 +96,7 @@ func NewHTTPPoetHarness(ctx context.Context, poetdir string, opts ...HTTPPoetOpt
 type HTTPPoetClient struct {
 	baseURL       string
 	poetServiceID *types.PoetServiceID
+	client        *retryablehttp.Client
 }
 
 func defaultPoetClientFunc(target string) PoetProvingServiceClient {
@@ -91,7 +105,29 @@ func defaultPoetClientFunc(target string) PoetProvingServiceClient {
 
 // NewHTTPPoetClient returns new instance of HTTPPoetClient for the specified target.
 func NewHTTPPoetClient(target string) *HTTPPoetClient {
-	return &HTTPPoetClient{baseURL: fmt.Sprintf("http://%s/v1", target)}
+	client := retryablehttp.NewClient()
+	client.RetryMax = 10
+	client.RetryWaitMin = time.Second
+	client.RetryWaitMax = time.Second * 2
+	client.Backoff = retryablehttp.LinearJitterBackoff
+
+	// Retry on 404 in addition to the default retry policy.
+	// Reasoning: The proof or round data might not be available YET.
+	client.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
+		if retry, err := retryablehttp.DefaultRetryPolicy(ctx, resp, err); retry || err != nil {
+			return retry, err
+		}
+
+		if resp.StatusCode == http.StatusNotFound {
+			return true, nil
+		}
+		return false, nil
+	}
+
+	return &HTTPPoetClient{
+		baseURL: fmt.Sprintf("http://%s/v1", target),
+		client:  client,
+	}
 }
 
 // Start is an administrative endpoint of the proving service that tells it to start. This is mostly done in tests,
@@ -99,7 +135,7 @@ func NewHTTPPoetClient(target string) *HTTPPoetClient {
 func (c *HTTPPoetClient) Start(ctx context.Context, gatewayAddresses []string) error {
 	reqBody := rpcapi.StartRequest{GatewayAddresses: gatewayAddresses}
 	if err := c.req(ctx, "POST", "/start", &reqBody, nil); err != nil {
-		return fmt.Errorf("request: %w", err)
+		return fmt.Errorf("starting poet: %w", err)
 	}
 
 	return nil
@@ -113,7 +149,7 @@ func (c *HTTPPoetClient) Submit(ctx context.Context, challenge []byte, signature
 	}
 	resBody := rpcapi.SubmitResponse{}
 	if err := c.req(ctx, "POST", "/submit", &request, &resBody); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("submitting challenge: %w", err)
 	}
 	roundEnd := time.Time{}
 	if resBody.RoundEnd != nil {
@@ -135,7 +171,7 @@ func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) (types.PoetServiceID
 	resBody := rpcapi.GetInfoResponse{}
 
 	if err := c.req(ctx, "GET", "/info", nil, &resBody); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting poet ID: %w", err)
 	}
 
 	id := types.PoetServiceID(resBody.ServicePubkey)
@@ -148,7 +184,7 @@ func (c *HTTPPoetClient) GetProof(ctx context.Context, roundID string) (*types.P
 	resBody := rpcapi.GetProofResponse{}
 
 	if err := c.req(ctx, "GET", fmt.Sprintf("/proofs/%s", roundID), nil, &resBody); err != nil {
-		return nil, fmt.Errorf("get proof: %w", err)
+		return nil, fmt.Errorf("getting proof: %w", err)
 	}
 
 	proof := types.PoetProofMessage{
@@ -174,27 +210,25 @@ func (c *HTTPPoetClient) GetProof(ctx context.Context, roundID string) (*types.P
 func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, reqBody proto.Message, resBody proto.Message) error {
 	jsonReqBody, err := protojson.Marshal(reqBody)
 	if err != nil {
-		return fmt.Errorf("request json marshal failure: %v", err)
+		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
 	url := fmt.Sprintf("%s%s", c.baseURL, endURL)
-	req, err := http.NewRequest(method, url, bytes.NewBuffer(jsonReqBody))
+	req, err := retryablehttp.NewRequestWithContext(ctx, method, url, bytes.NewBuffer(jsonReqBody))
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		return fmt.Errorf("creating HTTP request: %w", err)
 	}
-
 	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(ctx)
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := c.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("perform request: %w", err)
+		return fmt.Errorf("doing request: %w", err)
 	}
 	defer res.Body.Close()
 
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read response body (%w)", err)
+		return fmt.Errorf("reading response body (%w)", err)
 	}
 
 	log.GetLogger().WithContext(ctx).With().Debug("response from poet", log.String("status", res.Status), log.String("body", string(data)))
@@ -205,11 +239,13 @@ func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, 
 		return fmt.Errorf("%w: response status code: %s, body: %s", ErrNotFound, res.Status, string(data))
 	case http.StatusServiceUnavailable:
 		return fmt.Errorf("%w: response status code: %s, body: %s", ErrUnavailable, res.Status, string(data))
+	default:
+		return fmt.Errorf("unrecognized error: status code: %s, body: %s", res.Status, string(data))
 	}
 
 	if resBody != nil {
 		if err := protojson.Unmarshal(data, resBody); err != nil {
-			return fmt.Errorf("response json decode failure: %v", err)
+			return fmt.Errorf("decoding response body to proto: %w", err)
 		}
 	}
 
