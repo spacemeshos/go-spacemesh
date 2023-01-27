@@ -51,24 +51,26 @@ func testConfig() Config {
 
 type testGenerator struct {
 	*Generator
-	mockMesh  *mocks.MockmeshProvider
-	mockExec  *mocks.Mockexecutor
-	mockFetch *smocks.MockProposalFetcher
-	mockCert  *mocks.Mockcertifier
+	mockMesh   *mocks.MockmeshProvider
+	mockExec   *mocks.Mockexecutor
+	mockFetch  *smocks.MockProposalFetcher
+	mockCert   *mocks.Mockcertifier
+	mockPatrol *mocks.MocklayerPatrol
 }
 
 func createTestGenerator(t *testing.T) *testGenerator {
 	types.SetLayersPerEpoch(3)
 	ctrl := gomock.NewController(t)
 	tg := &testGenerator{
-		mockMesh:  mocks.NewMockmeshProvider(ctrl),
-		mockExec:  mocks.NewMockexecutor(ctrl),
-		mockFetch: smocks.NewMockProposalFetcher(ctrl),
-		mockCert:  mocks.NewMockcertifier(ctrl),
+		mockMesh:   mocks.NewMockmeshProvider(ctrl),
+		mockExec:   mocks.NewMockexecutor(ctrl),
+		mockFetch:  smocks.NewMockProposalFetcher(ctrl),
+		mockCert:   mocks.NewMockcertifier(ctrl),
+		mockPatrol: mocks.NewMocklayerPatrol(ctrl),
 	}
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	tg.Generator = NewGenerator(cdb, tg.mockExec, tg.mockMesh, tg.mockFetch, tg.mockCert,
+	tg.Generator = NewGenerator(cdb, tg.mockExec, tg.mockMesh, tg.mockFetch, tg.mockCert, tg.mockPatrol,
 		WithGeneratorLogger(lg),
 		WithHareOutputChan(make(chan hare.LayerOutput, 100)),
 		WithConfig(testConfig()))
@@ -248,6 +250,7 @@ func Test_SerialProcessing(t *testing.T) {
 				wg.Done()
 				return nil
 			})
+		tg.mockPatrol.EXPECT().CompleteHare(lid)
 	}
 
 	tg.hareCh <- hare.LayerOutput{
