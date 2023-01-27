@@ -14,7 +14,7 @@ import (
 
 //go:generate scalegen -types Transaction,Reward,RawTx
 
-// TransactionID is a 32-byte sha256 sum of the transaction, used as an identifier.
+// TransactionID is a 32-byte blake3 sum of the transaction, used as an identifier.
 type TransactionID Hash32
 
 const (

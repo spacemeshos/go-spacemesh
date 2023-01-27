@@ -20,7 +20,7 @@ const (
 
 //go:generate scalegen
 
-// ProposalID is a 20-byte sha256 sum of the serialized ballot used to identify a Proposal.
+// ProposalID is a 20-byte blake3 sum of the serialized ballot used to identify a Proposal.
 type ProposalID Hash20
 
 // EmptyProposalID is a canonical empty ProposalID.
