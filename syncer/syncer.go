@@ -170,7 +170,7 @@ func NewSyncer(
 	s.syncTimer = time.NewTicker(s.cfg.SyncInterval)
 	s.validateTimer = time.NewTicker(s.cfg.SyncInterval * 2)
 	if s.dataFetcher == nil {
-		s.dataFetcher = NewDataFetch(mesh, fetcher, s.logger)
+		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, s.logger)
 	}
 	if s.forkFinder == nil {
 		s.forkFinder = NewForkFinder(s.logger, cdb.Database, fetcher, s.cfg.MaxHashesInReq, s.cfg.MaxStaleDuration)
@@ -378,15 +378,24 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		log.Stringer("processed", s.mesh.ProcessedLayer()))
 
 	s.setStateBeforeSync(ctx)
+	// TODO
+	// https://github.com/spacemeshos/go-spacemesh/issues/3970
+	// https://github.com/spacemeshos/go-spacemesh/issues/3987
 	syncFunc := func() bool {
 		if !s.ListenToATXGossip() {
-			logger.With().Info("syncing atx before everything else", s.ticker.GetCurrentLayer())
+			logger.With().Info("syncing atx from genesis", s.ticker.GetCurrentLayer())
 			for epoch := s.getLastSyncedATXs() + 1; epoch <= s.ticker.GetCurrentLayer().GetEpoch(); epoch++ {
 				if err := s.fetchEpochATX(ctx, epoch); err != nil {
 					return false
 				}
 			}
 			logger.With().Info("atxs synced to epoch", s.getLastSyncedATXs())
+
+			logger.With().Info("syncing malicious proofs")
+			if err := s.syncMalfeasance(ctx); err != nil {
+				return false
+			}
+			logger.With().Info("malicious IDs synced")
 			s.setATXSynced()
 		}
 
@@ -493,6 +502,13 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 			s.setTargetSyncedLayer(ctx, current.Add(numGossipSyncLayers))
 		}
 	}
+}
+
+func (s *Syncer) syncMalfeasance(ctx context.Context) error {
+	if err := s.dataFetcher.PollMaliciousProofs(ctx); err != nil {
+		return fmt.Errorf("PollMaliciousProofs: %w", err)
+	}
+	return nil
 }
 
 func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...p2p.Peer) error {

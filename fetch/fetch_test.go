@@ -22,6 +22,7 @@ import (
 type testFetch struct {
 	*Fetch
 	mh      *mocks.Mockhost
+	mMalS   *mocks.Mockrequester
 	mAtxS   *mocks.Mockrequester
 	mLyrS   *mocks.Mockrequester
 	mOpnS   *mocks.Mockrequester
@@ -29,6 +30,7 @@ type testFetch struct {
 	mMHashS *mocks.Mockrequester
 
 	mMesh      *mocks.MockmeshProvider
+	mMalH      *mocks.MockmalfeasanceHandler
 	mAtxH      *mocks.MockatxHandler
 	mBallotH   *mocks.MockballotHandler
 	mBlocksH   *mocks.MockblockHandler
@@ -42,11 +44,13 @@ func createFetch(tb testing.TB) *testFetch {
 	ctrl := gomock.NewController(tb)
 	tf := &testFetch{
 		mh:         mocks.NewMockhost(ctrl),
+		mMalS:      mocks.NewMockrequester(ctrl),
 		mAtxS:      mocks.NewMockrequester(ctrl),
 		mLyrS:      mocks.NewMockrequester(ctrl),
 		mOpnS:      mocks.NewMockrequester(ctrl),
 		mHashS:     mocks.NewMockrequester(ctrl),
 		mMHashS:    mocks.NewMockrequester(ctrl),
+		mMalH:      mocks.NewMockmalfeasanceHandler(ctrl),
 		mAtxH:      mocks.NewMockatxHandler(ctrl),
 		mBallotH:   mocks.NewMockballotHandler(ctrl),
 		mBlocksH:   mocks.NewMockblockHandler(ctrl),
@@ -67,6 +71,7 @@ func createFetch(tb testing.TB) *testFetch {
 		WithContext(context.TODO()),
 		WithConfig(cfg),
 		WithLogger(lg),
+		WithMalfeasanceHandler(tf.mMalH),
 		WithATXHandler(tf.mAtxH),
 		WithBallotHandler(tf.mBallotH),
 		WithBlockHandler(tf.mBlocksH),
@@ -74,6 +79,7 @@ func createFetch(tb testing.TB) *testFetch {
 		WithTXHandler(tf.mTxH),
 		WithPoetHandler(tf.mPoetH),
 		withServers(map[string]requester{
+			malProtocol:      tf.mMalS,
 			atxProtocol:      tf.mAtxS,
 			lyrDataProtocol:  tf.mLyrS,
 			lyrOpnsProtocol:  tf.mOpnS,
