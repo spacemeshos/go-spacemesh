@@ -13,6 +13,41 @@ import (
 	log "github.com/spacemeshos/go-spacemesh/log"
 )
 
+// MocklayerPatrol is a mock of layerPatrol interface.
+type MocklayerPatrol struct {
+	ctrl     *gomock.Controller
+	recorder *MocklayerPatrolMockRecorder
+}
+
+// MocklayerPatrolMockRecorder is the mock recorder for MocklayerPatrol.
+type MocklayerPatrolMockRecorder struct {
+	mock *MocklayerPatrol
+}
+
+// NewMocklayerPatrol creates a new mock instance.
+func NewMocklayerPatrol(ctrl *gomock.Controller) *MocklayerPatrol {
+	mock := &MocklayerPatrol{ctrl: ctrl}
+	mock.recorder = &MocklayerPatrolMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocklayerPatrol) EXPECT() *MocklayerPatrolMockRecorder {
+	return m.recorder
+}
+
+// CompleteHare mocks base method.
+func (m *MocklayerPatrol) CompleteHare(arg0 types.LayerID) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CompleteHare", arg0)
+}
+
+// CompleteHare indicates an expected call of CompleteHare.
+func (mr *MocklayerPatrolMockRecorder) CompleteHare(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompleteHare", reflect.TypeOf((*MocklayerPatrol)(nil).CompleteHare), arg0)
+}
+
 // MockmeshProvider is a mock of meshProvider interface.
 type MockmeshProvider struct {
 	ctrl     *gomock.Controller

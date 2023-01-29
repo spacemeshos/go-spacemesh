@@ -605,7 +605,7 @@ func (app *App) initServices(
 	beaconProtocol.SetSyncState(newSyncer)
 
 	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
-	app.blockGen = blocks.NewGenerator(app.cachedDB, executor, msh, fetcherWrapped, app.certifier,
+	app.blockGen = blocks.NewGenerator(app.cachedDB, executor, msh, fetcherWrapped, app.certifier, patrol,
 		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
 			LayerSize:          layerSize,
