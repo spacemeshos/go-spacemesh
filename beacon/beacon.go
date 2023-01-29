@@ -386,7 +386,6 @@ func (pd *ProtocolDriver) GetBeacon(targetEpoch types.EpochID) (types.Beacon, er
 	}
 
 	if errors.Is(err, sql.ErrNotFound) {
-		pd.logger.With().Warning("beacon not available", targetEpoch)
 		return types.EmptyBeacon, errBeaconNotCalculated
 	}
 	pd.logger.With().Error("failed to get beacon from db", targetEpoch, log.Err(err))

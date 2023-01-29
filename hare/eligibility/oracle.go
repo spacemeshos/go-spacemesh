@@ -2,7 +2,6 @@ package eligibility
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -157,38 +156,19 @@ func New(
 type VrfMessage struct {
 	Type   types.EligibilityType
 	Nonce  types.VRFPostIndex
-	Beacon uint32
+	Beacon types.Beacon
 	Round  uint32
 	Layer  types.LayerID
 }
 
-func encodeBeacon(beacon types.Beacon) uint32 {
-	return binary.LittleEndian.Uint32(beacon.Bytes())
-}
-
-func (o *Oracle) getBeaconValue(ctx context.Context, epochID types.EpochID) (uint32, error) {
-	beacon, err := o.beacons.GetBeacon(epochID)
-	if err != nil {
-		return 0, fmt.Errorf("get beacon: %w", err)
-	}
-
-	value := encodeBeacon(beacon)
-	o.WithContext(ctx).With().Info("eligibility: beacon value for epoch",
-		epochID,
-		beacon,
-		log.Uint32("beacon_val", value),
-	)
-	return value, nil
-}
-
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round).
 func (o *Oracle) buildVRFMessage(ctx context.Context, nonce types.VRFPostIndex, layer types.LayerID, round uint32) ([]byte, error) {
-	v, err := o.getBeaconValue(ctx, layer.GetEpoch())
+	beacon, err := o.beacons.GetBeacon(layer.GetEpoch())
 	if err != nil {
 		return nil, fmt.Errorf("get beacon: %w", err)
 	}
 
-	msg := VrfMessage{Type: types.EligibilityHare, Nonce: nonce, Beacon: v, Round: round, Layer: layer}
+	msg := VrfMessage{Type: types.EligibilityHare, Nonce: nonce, Beacon: beacon, Round: round, Layer: layer}
 	buf, err := codec.Encode(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Fatal("failed to encode", log.Err(err))
@@ -234,7 +214,7 @@ func calcVrfFrac(vrfSig []byte) fixed.Fixed {
 func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, nonce types.VRFPostIndex, vrfSig []byte) (n int, p, vrfFrac fixed.Fixed, done bool, err error) {
 	logger := o.WithContext(ctx).WithFields(
 		layer,
-		log.FieldNamed("message_node_id", id),
+		log.Stringer("sender_id", id),
 		log.Uint32("round", round),
 		log.Int("committee_size", committeeSize),
 	)
@@ -253,7 +233,6 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	// validate message
 	if !o.vrfVerifier.Verify(id, msg, vrfSig) {
 		logger.With().Info("eligibility: a node did not pass vrf signature verification",
-			log.FieldNamed("sender_id", id),
 			log.FieldNamed("sender_vrf_nonce", nonce),
 		)
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, nil
