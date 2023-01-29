@@ -591,9 +591,14 @@ func (msh *Mesh) saveHareOutput(ctx context.Context, logger log.Log, lid types.L
 	}); err != nil {
 		return err
 	}
-	if len(certs) == 0 {
+	switch len(certs) {
+	case 0:
 		msh.trtl.OnHareOutput(lid, bid)
-	} else if len(certs) > 1 {
+	case 1:
+		logger.With().Info("already synced certificate",
+			log.Stringer("cert_block_id", certs[0].Block),
+			log.Bool("cert_valid", certs[0].Valid))
+	default: // more than 1 cert
 		logger.With().Warning("multiple valid certs found in network",
 			log.Object("certificates", log.ObjectMarshallerFunc(func(encoder zapcore.ObjectEncoder) error {
 				for _, cert := range certs {
@@ -602,10 +607,6 @@ func (msh *Mesh) saveHareOutput(ctx context.Context, logger log.Log, lid types.L
 				}
 				return nil
 			})))
-	} else {
-		logger.With().Info("already synced certificate",
-			log.Stringer("cert_block_id", certs[0].Block),
-			log.Bool("cert_valid", certs[0].Valid))
 	}
 	return nil
 }
