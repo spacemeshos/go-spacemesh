@@ -70,8 +70,8 @@ func (s *SyncValidation) OnData(id int, synced bool) error {
 	if !synced {
 		s.failures[id]++
 		if rst := s.failures[id]; rst > s.tolerate {
-			return fmt.Errorf("not synced in %d periods",
-				rst,
+			return fmt.Errorf("node %d not synced in %d periods",
+				id, rst,
 			)
 		}
 	} else {

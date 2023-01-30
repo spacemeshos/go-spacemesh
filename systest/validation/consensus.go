@@ -49,7 +49,7 @@ func getConsensusData(ctx context.Context, distance int, node *cluster.NodeClien
 }
 
 // failMinority should increment number of failures for groups smaller than the largest one
-// if there are several groups of the same largest size they all should be considered as failed
+// if there are several groups of the same size they all should be considered as failed
 func failMinority(failures []int, groups map[string][]int) {
 	var (
 		largest  []int
@@ -113,6 +113,8 @@ func (c *ConsensusValidation) Next() *ConsensusValidationIteration {
 }
 
 func (c *ConsensusValidation) Complete(iter *ConsensusValidationIteration) error {
+	prev := make([]int, len(c.failures))
+	copy(prev, c.failures)
 	for i, data := range iter.all {
 		if data == nil {
 			c.failures[i]++
@@ -120,14 +122,18 @@ func (c *ConsensusValidation) Complete(iter *ConsensusValidationIteration) error
 	}
 	if len(iter.consensus) > 1 {
 		failMinority(c.failures, iter.consensus)
+	} else if len(iter.state) > 1 {
+		failMinority(c.failures, iter.state)
 	}
-	if len(iter.state) > 1 {
-		failMinority(c.failures, iter.consensus)
+	for i, n := range c.failures {
+		if n == prev[i] {
+			c.failures[i] = 0
+		}
 	}
-	for _, rst := range c.failures {
+	for i, rst := range c.failures {
 		if rst > c.tolerate {
-			return fmt.Errorf("wasn't able to recover consensus consistency in %d periods",
-				rst,
+			return fmt.Errorf("node %d failed to reach consensus in %d period(s)",
+				i, rst,
 			)
 		}
 	}
