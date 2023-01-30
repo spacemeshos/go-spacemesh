@@ -87,8 +87,11 @@ func NewHTTPPoetHarness(ctx context.Context, poetdir string, opts ...HTTPPoetOpt
 	// TODO: query for the REST address to allow dynamic port allocation.
 	// It needs changes in poet.
 	return &HTTPPoetHarness{
-		HTTPPoetClient: NewHTTPPoetClient(cfg.RawRESTListener),
-		Service:        poet,
+		HTTPPoetClient: NewHTTPPoetClient(cfg.RawRESTListener, PoetConfig{
+			PhaseShift: cfg.Service.PhaseShift,
+			CycleGap:   cfg.Service.CycleGap,
+		}),
+		Service: poet,
 	}, nil
 }
 
@@ -99,16 +102,16 @@ type HTTPPoetClient struct {
 	client        *retryablehttp.Client
 }
 
-func defaultPoetClientFunc(target string) PoetProvingServiceClient {
-	return NewHTTPPoetClient(target)
+func defaultPoetClientFunc(target string, cfg PoetConfig) PoetProvingServiceClient {
+	return NewHTTPPoetClient(target, cfg)
 }
 
 // NewHTTPPoetClient returns new instance of HTTPPoetClient for the specified target.
-func NewHTTPPoetClient(target string) *HTTPPoetClient {
+func NewHTTPPoetClient(target string, cfg PoetConfig) *HTTPPoetClient {
 	client := retryablehttp.NewClient()
 	client.RetryMax = 10
-	client.RetryWaitMin = time.Second
-	client.RetryWaitMax = time.Second * 2
+	client.RetryWaitMin = cfg.CycleGap / 100
+	client.RetryWaitMax = cfg.CycleGap / 10
 	client.Backoff = retryablehttp.LinearJitterBackoff
 
 	// Retry on 404 in addition to the default retry policy.
