@@ -129,7 +129,7 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 			t.Parallel()
 
 			ts := newSyncerWithoutSyncTimer(t)
-			require.NoError(t, layers.SetHashes(ts.cdb, gLid, types.Hash32{}, prevHash))
+			require.NoError(t, layers.SetMeshHash(ts.cdb, gLid, prevHash))
 			ts.syncer.setATXSynced()
 			current := lid.Add(1)
 			ts.syncer.setLastSyncedLayer(current.Sub(1))

@@ -75,7 +75,7 @@ func createOpinions(t *testing.T, db *datastore.CachedDB, lid types.LayerID, gen
 		require.NoError(t, certificates.Add(db, lid, &types.Certificate{BlockID: certified}))
 	}
 	aggHash := types.RandomHash()
-	require.NoError(t, layers.SetHashes(db, lid.Sub(1), types.RandomHash(), aggHash))
+	require.NoError(t, layers.SetMeshHash(db, lid.Sub(1), aggHash))
 	return certified, aggHash
 }
 
@@ -210,7 +210,7 @@ func TestHandleMeshHashReq(t *testing.T) {
 			}
 			if !tc.hashMissing {
 				for lid := req.From; !lid.After(req.To); lid = lid.Add(1) {
-					require.NoError(t, layers.SetHashes(th.cdb, lid, types.RandomHash(), types.RandomHash()))
+					require.NoError(t, layers.SetMeshHash(th.cdb, lid, types.RandomHash()))
 				}
 			}
 			reqData, err := codec.Encode(req)

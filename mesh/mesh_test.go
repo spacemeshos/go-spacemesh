@@ -251,15 +251,9 @@ func TestMesh_LayerHashes(t *testing.T) {
 		tm.mockState.EXPECT().UpdateCache(gomock.Any(), i, blk.ID(), executed, ineffective).Return(nil)
 		tm.mockVM.EXPECT().GetStateRoot()
 
-		_, err = layers.GetHash(tm.cdb, i)
-		require.ErrorIs(t, err, sql.ErrNotFound)
 		_, err = layers.GetAggregatedHash(tm.cdb, i)
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.NoError(t, tm.ProcessLayer(context.Background(), thisLyr.Index()))
-		expectedHash := types.CalcBlocksHash32([]types.BlockID{blk.ID()}, nil)
-		h, err := layers.GetHash(tm.cdb, i)
-		require.NoError(t, err)
-		require.Equal(t, expectedHash, h)
 		hasher := opinionhash.New()
 		hasher.WritePrevious(prevAggHash)
 		hasher.WriteSupport(blk.ID(), blk.TickHeight)
@@ -537,11 +531,6 @@ func TestMesh_Revert(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, types.EmptyLayerHash, newHash)
 	require.NotEqual(t, oldHash, newHash)
-
-	// gPlus2 hash should contain all valid blocks
-	h, err := layers.GetHash(tm.cdb, gPlus2)
-	require.NoError(t, err)
-	require.Equal(t, types.CalcBlocksHash32(types.ToBlockIDs(sortBlocks(blocks2[1:])), nil), h)
 
 	// another new layer won't cause a revert
 	tm.mockTortoise.EXPECT().OnHareOutput(gPlus5, blocks5[0].ID())

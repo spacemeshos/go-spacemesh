@@ -179,11 +179,7 @@ func getLayer(db sql.Executor, lid types.LayerID) (*types.Layer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("layer blks: %w", err)
 	}
-	hash, err := layers.GetHash(db, lid)
-	if err != nil {
-		hash = types.CalcBlockHash32Presorted(types.ToBlockIDs(blks), nil)
-	}
-	return types.NewExistingLayer(lid, hash, blts, blks), nil
+	return types.NewExistingLayer(lid, blts, blks), nil
 }
 
 // ProcessedLayer returns the last processed layer ID.
@@ -379,7 +375,6 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 func persistLayerHashes(dbtx *sql.Tx, lid types.LayerID, valids []*types.Block) error {
 	sortBlocks(valids)
 	var (
-		hash   = types.CalcBlocksHash32(types.ToBlockIDs(valids), nil)
 		hasher = opinionhash.New()
 		err    error
 	)
@@ -393,7 +388,7 @@ func persistLayerHashes(dbtx *sql.Tx, lid types.LayerID, valids []*types.Block) 
 	for _, block := range valids {
 		hasher.WriteSupport(block.ID(), block.TickHeight)
 	}
-	if err = layers.SetHashes(dbtx, lid, hash, hasher.Hash()); err != nil {
+	if err = layers.SetMeshHash(dbtx, lid, hasher.Hash()); err != nil {
 		return fmt.Errorf("persist hashes %v: %w", lid, err)
 	}
 	return nil
