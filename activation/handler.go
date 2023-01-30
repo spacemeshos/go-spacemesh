@@ -239,10 +239,7 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 
 	nonce := atx.VRFNonce
 	if atx.NumUnits > prevAtx.NumUnits && nonce == nil {
-		// PoST size was increased but no new VRF was provided.
-		// fetch current nonce from DB to check if still valid
-
-		h.log.With().Info("PoST size was increased but no new VRF was provided. Fetching current nonce from DB",
+		h.log.With().Info("PoST size increased without new VRF Nonce, re-validating current nonce",
 			atx.ID(),
 			log.FieldNamed("atx_node_id", atx.NodeID()),
 		)
