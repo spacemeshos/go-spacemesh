@@ -982,12 +982,6 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 }
 
 func (app *App) startSyncer(ctx context.Context) {
-	app.log.With().Info("sync: waiting for p2p host to find outbound peers",
-		log.Int("outbound", app.Config.P2P.TargetOutbound))
-	_, err := app.host.WaitPeers(ctx, app.Config.P2P.TargetOutbound)
-	if err != nil {
-		return
-	}
 	app.log.Info("sync: waiting for tortoise to load state")
 	if err := app.tortoise.WaitReady(ctx); err != nil {
 		app.log.With().Error("sync: tortoise failed to load state", log.Err(err))
