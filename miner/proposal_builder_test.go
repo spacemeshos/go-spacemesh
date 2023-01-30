@@ -121,8 +121,7 @@ func TestBuilder_StartAndClose(t *testing.T) {
 
 	b.mClock.EXPECT().GetCurrentLayer().Return(current.Add(1))
 	b.mClock.EXPECT().AwaitLayer(current.Add(2)).DoAndReturn(func(types.LayerID) chan struct{} {
-		ch := make(chan struct{})
-		return ch
+		return make(chan struct{})
 	})
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(false)
@@ -131,8 +130,7 @@ func TestBuilder_StartAndClose(t *testing.T) {
 	// calling Start the second time should have no effect
 	require.NoError(t, b.Start(context.Background()))
 
-	time.Sleep(100 * time.Millisecond)
-
+	time.Sleep(10 * time.Millisecond)
 	b.Close()
 }
 
@@ -156,8 +154,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 
 	b.mClock.EXPECT().GetCurrentLayer().Return(layerID)
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
-		ch := make(chan struct{})
-		return ch
+		return make(chan struct{})
 	})
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
@@ -217,8 +214,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 
 	b.mClock.EXPECT().GetCurrentLayer().Return(layerID)
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
-		ch := make(chan struct{})
-		return ch
+		return make(chan struct{})
 	})
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
@@ -415,8 +411,7 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 
 	b.mClock.EXPECT().GetCurrentLayer().Return(layerID)
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
-		ch := make(chan struct{})
-		return ch
+		return make(chan struct{})
 	})
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
@@ -446,8 +441,7 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 
 	b.mClock.EXPECT().GetCurrentLayer().Return(layerID)
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
-		ch := make(chan struct{})
-		return ch
+		return make(chan struct{})
 	})
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
@@ -479,8 +473,7 @@ func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 
 	b.mClock.EXPECT().GetCurrentLayer().Return(layerID)
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
-		ch := make(chan struct{})
-		return ch
+		return make(chan struct{})
 	})
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
@@ -520,8 +513,7 @@ func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 
 	b.mClock.EXPECT().GetCurrentLayer().Return(layerID)
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
-		ch := make(chan struct{})
-		return ch
+		return make(chan struct{})
 	})
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
@@ -561,8 +553,7 @@ func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 
 	b.mClock.EXPECT().GetCurrentLayer().Return(layerID)
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
-		ch := make(chan struct{})
-		return ch
+		return make(chan struct{})
 	})
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
