@@ -605,7 +605,7 @@ func (app *App) initServices(
 	beaconProtocol.SetSyncState(newSyncer)
 
 	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
-	app.blockGen = blocks.NewGenerator(app.cachedDB, executor, msh, fetcherWrapped, app.certifier,
+	app.blockGen = blocks.NewGenerator(app.cachedDB, executor, msh, fetcherWrapped, app.certifier, patrol,
 		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
 			LayerSize:          layerSize,
@@ -702,6 +702,12 @@ func (app *App) initServices(
 		}
 		return pubsub.ValidationIgnore
 	}
+	atxSyncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
+		if newSyncer.ListenToATXGossip() {
+			return pubsub.ValidationAccept
+		}
+		return pubsub.ValidationIgnore
+	}
 
 	app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
 	app.host.Register(pubsub.BeaconProposalProtocol,
@@ -711,18 +717,11 @@ func (app *App) initServices(
 	app.host.Register(pubsub.BeaconFollowingVotesProtocol,
 		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
 	app.host.Register(pubsub.ProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
-	app.host.Register(pubsub.AtxProtocol, pubsub.ChainGossipHandler(
-		func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
-			if newSyncer.ListenToATXGossip() {
-				return pubsub.ValidationAccept
-			}
-			return pubsub.ValidationIgnore
-		},
-		atxHandler.HandleGossipAtx))
+	app.host.Register(pubsub.AtxProtocol, pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx))
 	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
 	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()))
 	app.host.Register(pubsub.BlockCertify, pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage))
-	app.host.Register(pubsub.MalfeasanceProof, malfeasanceHandler.HandleMalfeasanceProof)
+	app.host.Register(pubsub.MalfeasanceProof, pubsub.ChainGossipHandler(atxSyncHandler, malfeasanceHandler.HandleMalfeasanceProof))
 
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener

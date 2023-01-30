@@ -19,7 +19,7 @@ const (
 
 //go:generate scalegen
 
-// BallotID is a 20-byte sha256 sum of the serialized ballot used to identify a Ballot.
+// BallotID is a 20-byte blake3 sum of the serialized ballot used to identify a Ballot.
 type BallotID Hash20
 
 // EmptyBallotID is a canonical empty BallotID.

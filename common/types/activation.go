@@ -441,7 +441,7 @@ func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// Ref returns the reference to the PoET proof message. It's the sha256 sum of the entire proof message.
+// Ref returns the reference to the PoET proof message. It's the blake3 sum of the entire proof message.
 func (proofMessage *PoetProofMessage) Ref() (PoetProofRef, error) {
 	poetProofBytes, err := codec.Encode(&proofMessage.PoetProof)
 	if err != nil {

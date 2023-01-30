@@ -35,18 +35,6 @@ func (m *MocklayerPatrol) EXPECT() *MocklayerPatrolMockRecorder {
 	return m.recorder
 }
 
-// CompleteHare mocks base method.
-func (m *MocklayerPatrol) CompleteHare(arg0 types.LayerID) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "CompleteHare", arg0)
-}
-
-// CompleteHare indicates an expected call of CompleteHare.
-func (mr *MocklayerPatrolMockRecorder) CompleteHare(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompleteHare", reflect.TypeOf((*MocklayerPatrol)(nil).CompleteHare), arg0)
-}
-
 // SetHareInCharge mocks base method.
 func (m *MocklayerPatrol) SetHareInCharge(arg0 types.LayerID) {
 	m.ctrl.T.Helper()

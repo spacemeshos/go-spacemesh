@@ -14,6 +14,7 @@ const (
 	LayerIDSize = 4
 
 	// BootstrapBeacon is the hex value of the beacon used during genesis.
+	// TODO: make this a config.
 	BootstrapBeacon = "0x333c04dd151a2a6831c039cb9a651df29198be8a04e16ce861d4b6a34a11c954" // sha256("bootstrap")
 )
 
@@ -176,7 +177,7 @@ func (l *Layer) BallotIDs() []BallotID {
 	return ToBallotIDs(l.ballots)
 }
 
-// Hash returns the 32-byte sha256 sum of the block IDs in this layer, sorted in lexicographic order.
+// Hash returns the 32-byte blake3 sum of the block IDs in this layer, sorted in lexicographic order.
 func (l Layer) Hash() Hash32 {
 	return l.hash
 }
