@@ -40,22 +40,12 @@ jobs:
           filters: |
             nondoc:
               - '!**/*.md'
-  dockerpush:
-    # should take 2-3 mins
-    timeout-minutes: 7
-    runs-on: ubuntu-latest
-    steps:
-      - name: checkout
-        uses: actions/checkout@v3
-      - name: push to docker hub
-        run: make dockerpush
 
   systest:
     runs-on: ubuntu-latest
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
       - filter-changes
-      - dockerpush
     timeout-minutes: 90
     concurrency:
       group: ${{ github.base_ref == 'staging' && format('{0}-staging', github.workflow) || format('{0}-{1}', github.workflow, github.ref) }}
@@ -94,10 +84,12 @@ jobs:
       - name: Push go-spacemesh build to docker hub
         run: make dockerpush
 
-      - name: Get branch and commit hash
+      - name: Get commit hash and smesher image
         id: vars
         shell: bash
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "image_name=spacemeshos/$(make docker-image-name)" >> $GITHUB_OUTPUT
 
       - name: Build tests docker image
         run: make -C systest docker
@@ -114,6 +106,7 @@ jobs:
         timeout-minutes: 55
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
+          smesher_image: ${{ steps.vars.outputs.image_name }}
           label: sanity
           storage: premium-rwo=10Gi
           node_selector: cloud.google.com/gke-nodepool=gha

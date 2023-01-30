@@ -171,6 +171,11 @@ list-versions:
 	@git for-each-ref --sort=-creatordate --count=5 --format '%(creatordate:short): %(refname:short)' refs/tags
 .PHONY: list-versions
 
+
+docker-image-name:
+	@echo $(DOCKER_IMAGE)
+.PHONY: docker-image-name
+
 dockerbuild-go:
 	DOCKER_BUILDKIT=1 docker build -t $(DOCKER_IMAGE) .
 .PHONY: dockerbuild-go
