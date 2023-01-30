@@ -24,7 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -45,12 +44,12 @@ type ProposalBuilder struct {
 	cfg    config
 	cdb    *datastore.CachedDB
 
-	startOnce  sync.Once
-	ctx        context.Context
-	cancel     context.CancelFunc
-	eg         errgroup.Group
-	layerTimer chan types.LayerID
+	startOnce sync.Once
+	ctx       context.Context
+	cancel    context.CancelFunc
+	eg        errgroup.Group
 
+	clock          layerClock
 	publisher      pubsub.Publisher
 	signer         *signing.EdSigner
 	nonceFetcher   nonceFetcher
@@ -129,7 +128,7 @@ func withNonceFetcher(nf nonceFetcher) Opt {
 // NewProposalBuilder creates a struct of block builder type.
 func NewProposalBuilder(
 	ctx context.Context,
-	layerTimer timesync.LayerTimer,
+	clock layerClock,
 	signer *signing.EdSigner,
 	vrfSigner *signing.VRFSigner,
 	cdb *datastore.CachedDB,
@@ -146,7 +145,7 @@ func NewProposalBuilder(
 		ctx:            sctx,
 		cancel:         cancel,
 		signer:         signer,
-		layerTimer:     layerTimer,
+		clock:          clock,
 		cdb:            cdb,
 		publisher:      publisher,
 		tortoise:       trtl,
@@ -404,14 +403,21 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 }
 
 func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
+	current := pb.clock.GetCurrentLayer()
+	next := current.Add(1)
 	for {
 		select {
 		case <-pb.ctx.Done():
 			return
-
-		case layerID := <-pb.layerTimer:
+		case <-pb.clock.AwaitLayer(next):
+			current = pb.clock.GetCurrentLayer()
+			if current.Before(next) {
+				pb.logger.Info("time sync detected, realigning ProposalBuilder")
+				continue
+			}
+			next = current.Add(1)
 			lyrCtx := log.WithNewSessionID(ctx)
-			_ = pb.handleLayer(lyrCtx, layerID)
+			_ = pb.handleLayer(lyrCtx, current)
 		}
 	}
 }

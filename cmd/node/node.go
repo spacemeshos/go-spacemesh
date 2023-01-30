@@ -605,7 +605,7 @@ func (app *App) initServices(
 	beaconProtocol.SetSyncState(newSyncer)
 
 	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
-	app.blockGen = blocks.NewGenerator(app.cachedDB, executor, msh, fetcherWrapped, app.certifier,
+	app.blockGen = blocks.NewGenerator(app.cachedDB, executor, msh, fetcherWrapped, app.certifier, patrol,
 		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
 			LayerSize:          layerSize,
@@ -638,7 +638,7 @@ func (app *App) initServices(
 
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
-		clock.Subscribe(),
+		clock,
 		sgn,
 		vrfSigner,
 		app.cachedDB,
@@ -982,12 +982,6 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 }
 
 func (app *App) startSyncer(ctx context.Context) {
-	app.log.With().Info("sync: waiting for p2p host to find outbound peers",
-		log.Int("outbound", app.Config.P2P.TargetOutbound))
-	_, err := app.host.WaitPeers(ctx, app.Config.P2P.TargetOutbound)
-	if err != nil {
-		return
-	}
 	app.log.Info("sync: waiting for tortoise to load state")
 	if err := app.tortoise.WaitReady(ctx); err != nil {
 		app.log.With().Error("sync: tortoise failed to load state", log.Err(err))

@@ -2,6 +2,7 @@ package miner
 
 import (
 	"context"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
@@ -25,4 +26,10 @@ type votesEncoder interface {
 
 type nonceFetcher interface {
 	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
+}
+
+type layerClock interface {
+	AwaitLayer(layerID types.LayerID) chan struct{}
+	GetCurrentLayer() types.LayerID
+	LayerToTime(types.LayerID) time.Time
 }

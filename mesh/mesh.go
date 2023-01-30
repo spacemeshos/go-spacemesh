@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"go.uber.org/atomic"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -550,6 +551,66 @@ func (msh *Mesh) revertState(ctx context.Context, logger log.Log, revertTo types
 	return nil
 }
 
+func (msh *Mesh) saveHareOutput(ctx context.Context, logger log.Log, lid types.LayerID, bid types.BlockID) error {
+	logger.Info("saving hare output for layer")
+	var (
+		certs []certificates.CertValidity
+		err   error
+	)
+	if err = msh.cdb.WithTx(ctx, func(tx *sql.Tx) error {
+		// check if a certificate has been sync'ed.
+		// hare outputs are processed in layer order. i.e. when hare fails for a previous layer N,
+		// a later layer N+x has to wait for syncer to fetch block certificate for the mesh to make
+		// progress. therefore, by the time layer N+x is processed, syncer may already have sync'ed
+		// the certificate for this layer. in this case, hare output no longer matters.
+		certs, err = certificates.Get(tx, lid)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			return fmt.Errorf("mesh get cert %v: %w", lid, err)
+		}
+		saved := false
+		for _, c := range certs {
+			if c.Block == bid {
+				saved = true
+				break
+			} else if c.Valid {
+				err = certificates.SetHareOutputInvalid(tx, lid, bid)
+				if err != nil {
+					return fmt.Errorf("save invalid hare output %v/%v: %w", lid, bid, err)
+				}
+				saved = true
+				break
+			}
+		}
+		if !saved {
+			err = certificates.SetHareOutput(tx, lid, bid)
+			if err != nil {
+				return fmt.Errorf("save valid hare output %v/%v: %w", lid, bid, err)
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	switch len(certs) {
+	case 0:
+		msh.trtl.OnHareOutput(lid, bid)
+	case 1:
+		logger.With().Info("already synced certificate",
+			log.Stringer("cert_block_id", certs[0].Block),
+			log.Bool("cert_valid", certs[0].Valid))
+	default: // more than 1 cert
+		logger.With().Warning("multiple valid certs found in network",
+			log.Object("certificates", log.ObjectMarshallerFunc(func(encoder zapcore.ObjectEncoder) error {
+				for _, cert := range certs {
+					encoder.AddString("block_id", cert.Block.String())
+					encoder.AddBool("valid", cert.Valid)
+				}
+				return nil
+			})))
+	}
+	return nil
+}
+
 // ProcessLayerPerHareOutput receives hare output once it finishes running for a given layer.
 func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.LayerID, blockID types.BlockID, executed bool) error {
 	logger := msh.logger.WithContext(ctx).WithFields(layerID, blockID)
@@ -572,11 +633,10 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 		Status:  events.LayerStatusTypeApproved,
 	})
 
-	logger.Info("saving hare output for layer")
-	if err = certificates.SetHareOutput(msh.cdb, layerID, blockID); err != nil {
-		return fmt.Errorf("save hare output %v: %w", blockID, err)
+	if err = msh.saveHareOutput(ctx, logger, layerID, blockID); err != nil {
+		return err
 	}
-	msh.trtl.OnHareOutput(layerID, blockID)
+
 	if executed {
 		if err = msh.persistState(ctx, logger, layerID, block.ID(), []*types.Block{block}); err != nil {
 			return err

@@ -9,11 +9,20 @@ import (
 )
 
 func SetHareOutput(db sql.Executor, lid types.LayerID, bid types.BlockID) error {
-	if _, err := db.Exec(`insert into certificates (layer, block, valid) values (?1, ?2, 1)
+	return setHareOutput(db, lid, bid, true)
+}
+
+func SetHareOutputInvalid(db sql.Executor, lid types.LayerID, bid types.BlockID) error {
+	return setHareOutput(db, lid, bid, false)
+}
+
+func setHareOutput(db sql.Executor, lid types.LayerID, bid types.BlockID, valid bool) error {
+	if _, err := db.Exec(`insert into certificates (layer, block, valid) values (?1, ?2, ?3)
 		on conflict do nothing;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Value))
 			stmt.BindBytes(2, bid[:])
+			stmt.BindBool(3, valid)
 		}, nil); err != nil {
 		return fmt.Errorf("add wo cert %s: %w", lid, err)
 	}

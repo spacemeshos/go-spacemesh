@@ -132,8 +132,7 @@ type Syncer struct {
 	lastATXsSynced    atomic.Value
 
 	// awaitATXSyncedCh is the list of subscribers' channels to notify when this node enters ATX synced state
-	awaitATXSyncedCh []chan struct{}
-	muATXSyncedCh    sync.Mutex // protects the slice above from concurrent access
+	awaitATXSyncedCh chan struct{}
 
 	eg errgroup.Group
 
@@ -161,7 +160,7 @@ func NewSyncer(
 		mesh:             mesh,
 		certHandler:      ch,
 		patrol:           patrol,
-		awaitATXSyncedCh: make([]chan struct{}, 0),
+		awaitATXSyncedCh: make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -195,15 +194,7 @@ func (s *Syncer) Close() {
 
 // RegisterForATXSynced returns a channel for notification when the node enters ATX synced state.
 func (s *Syncer) RegisterForATXSynced() chan struct{} {
-	ch := make(chan struct{})
-	if s.ListenToATXGossip() {
-		close(ch)
-		return ch
-	}
-	s.muATXSyncedCh.Lock()
-	defer s.muATXSyncedCh.Unlock()
-	s.awaitATXSyncedCh = append(s.awaitATXSyncedCh, ch)
-	return ch
+	return s.awaitATXSyncedCh
 }
 
 // ListenToGossip returns true if the node is listening to gossip for blocks/TXs data.
@@ -269,13 +260,11 @@ func (s *Syncer) Start(ctx context.Context) {
 
 func (s *Syncer) setATXSynced() {
 	s.atxSyncState.Store(synced)
-
-	s.muATXSyncedCh.Lock()
-	defer s.muATXSyncedCh.Unlock()
-	for _, ch := range s.awaitATXSyncedCh {
-		close(ch)
+	select {
+	case <-s.awaitATXSyncedCh:
+	default:
+		close(s.awaitATXSyncedCh)
 	}
-	s.awaitATXSyncedCh = make([]chan struct{}, 0)
 }
 
 func (s *Syncer) getATXSyncState() syncState {
