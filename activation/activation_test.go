@@ -1115,7 +1115,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 func TestBuilder_UpdatePoets(t *testing.T) {
 	r := require.New(t)
 
-	tab := newTestBuilder(t, WithPoETClientInitializer(func(string) PoetProvingServiceClient {
+	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) PoetProvingServiceClient {
 		poet := NewMockPoetProvingServiceClient(gomock.NewController(t))
 		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return([]byte("poetid"), nil)
 		return poet
@@ -1135,7 +1135,7 @@ func TestBuilder_UpdatePoets(t *testing.T) {
 func TestBuilder_UpdatePoetsUnstable(t *testing.T) {
 	r := require.New(t)
 
-	tab := newTestBuilder(t, WithPoETClientInitializer(func(string) PoetProvingServiceClient {
+	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) PoetProvingServiceClient {
 		poet := NewMockPoetProvingServiceClient(gomock.NewController(t))
 		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return([]byte("poetid"), errors.New("ERROR"))
 		return poet
