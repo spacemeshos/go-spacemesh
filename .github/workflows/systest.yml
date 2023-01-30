@@ -120,6 +120,7 @@ jobs:
         timeout-minutes: 30
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
+          smesher_image: ${{ steps.vars.outputs.image_name }}
           label: destructive
           storage: premium-rwo=10Gi
           node_selector: cloud.google.com/gke-nodepool=gha
