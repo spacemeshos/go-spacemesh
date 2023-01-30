@@ -45,11 +45,10 @@ func getConsensusData(ctx context.Context, distance int, node *cluster.NodeClien
 	}
 	layer := ls.Layer[0]
 	return &ConsensusData{Consensus: layer.Hash, State: layer.RootStateHash}
-
 }
 
 // failMinority should increment number of failures for groups smaller than the largest one
-// if there are several groups of the same size they all should be considered as failed
+// if there are several groups of the same size they all should be considered as failed.
 func failMinority(failures []int, groups map[string][]int) {
 	var (
 		largest  []int
