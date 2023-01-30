@@ -67,53 +67,47 @@ func failMinority(failures []int, groups map[string][]int) {
 	}
 }
 
-func RunConsensusValidation(ctx context.Context, c *cluster.Cluster, period time.Duration, tolerate, distance int) error {
+func Consensus(c *cluster.Cluster, tolerate, distance int) Validation {
 	failures := make([]int, c.Total())
-	ticker := time.NewTicker(period)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			var (
-				eg      errgroup.Group
-				results = make([]*consensusData, c.Total())
-			)
-			for i := 0; i < c.Total(); i++ {
-				i := i
-				node := c.Client(i)
-				eg.Go(func() error {
-					results[i] = getConsensusData(ctx, distance, node)
-					return nil
-				})
+	return func(ctx context.Context) error {
+		var (
+			eg      errgroup.Group
+			results = make([]*consensusData, c.Total())
+		)
+		for i := 0; i < c.Total(); i++ {
+			i := i
+			node := c.Client(i)
+			eg.Go(func() error {
+				results[i] = getConsensusData(ctx, distance, node)
+				return nil
+			})
+		}
+		eg.Wait()
+		var (
+			consensus = map[string][]int{}
+			state     = map[string][]int{}
+		)
+		for i, data := range results {
+			if data == nil {
+				failures[i]++
+				continue
 			}
-			eg.Wait()
-			var (
-				consensus = map[string][]int{}
-				state     = map[string][]int{}
-			)
-			for i, data := range results {
-				if data == nil {
-					failures[i]++
-					continue
-				}
-				consensus[string(data.consensus)] = append(consensus[string(data.consensus)], i)
-				state[string(data.state)] = append(state[string(data.state)], i)
-			}
-			if len(consensus) > 1 {
-				failMinority(failures, consensus)
-			} else if len(state) > 1 {
-				failMinority(failures, state)
-			}
+			consensus[string(data.consensus)] = append(consensus[string(data.consensus)], i)
+			state[string(data.state)] = append(state[string(data.state)], i)
+		}
+		if len(consensus) > 1 {
+			failMinority(failures, consensus)
+		} else if len(state) > 1 {
+			failMinority(failures, state)
+		}
 
-			for i, rst := range failures {
-				if rst > tolerate {
-					return fmt.Errorf("node %s wasn't able to recover consensus consistency in %d periods",
-						c.Client(i).Name, rst,
-					)
-				}
+		for i, rst := range failures {
+			if rst > tolerate {
+				return fmt.Errorf("node %s wasn't able to recover consensus consistency in %d periods",
+					c.Client(i).Name, rst,
+				)
 			}
 		}
+		return nil
 	}
 }

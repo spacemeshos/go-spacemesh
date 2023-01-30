@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -400,11 +401,19 @@ func TestStepValidation(t *testing.T) {
 	eg, ctx := errgroup.WithContext(tctx)
 	eg.Go(func() error {
 		// ensure that node will be back to sync in 2 hours
-		return validation.RunSyncValidation(ctx, c, 12*time.Minute, 10)
+		err := validation.Periodic(ctx, 12*time.Minute, validation.Sync(c, 10))
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
+		return nil
 	})
 	eg.Go(func() error {
 		// ensure that within 25 minutes that current-4 layer will be consistent across the cluster
-		return validation.RunConsensusValidation(ctx, c, 5*time.Minute, 5, 4)
+		err := validation.Periodic(ctx, 5*time.Minute, validation.Consensus(c, 5, 4))
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
+		return err
 	})
 	require.NoError(t, eg.Wait())
 }

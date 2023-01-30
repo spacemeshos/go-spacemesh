@@ -11,6 +11,24 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 )
 
+// Periodic runs one validation immediately and runs it every once in a period.
+func Periodic(ctx context.Context, period time.Duration, f Validation) error {
+	if err := f(ctx); err != nil {
+		return err
+	}
+	ticker := time.NewTicker(period)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if err := f(ctx); err != nil {
+				return err
+			}
+		}
+	}
+}
+
 func isSynced(ctx context.Context, node *cluster.NodeClient) bool {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -22,36 +40,32 @@ func isSynced(ctx context.Context, node *cluster.NodeClient) bool {
 	return resp.Status.IsSynced
 }
 
-func RunSyncValidation(ctx context.Context, c *cluster.Cluster, period time.Duration, tolerate int) error {
+type Validation func(context.Context) error
+
+func Sync(c *cluster.Cluster, tolerate int) Validation {
 	failures := make([]int, c.Total())
-	ticker := time.NewTicker(period)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			var eg errgroup.Group
-			for i := 0; i < c.Total(); i++ {
-				i := i
-				node := c.Client(i)
-				eg.Go(func() error {
-					if !isSynced(ctx, node) {
-						failures[i]++
-					} else {
-						failures[i] = 0
-					}
-					return nil
-				})
-			}
-			eg.Wait()
-			for i, rst := range failures {
-				if rst > tolerate {
-					return fmt.Errorf("node %s wasn't able to sync in %d periods",
-						c.Client(i).Name, rst,
-					)
+	return func(ctx context.Context) error {
+		var eg errgroup.Group
+		for i := 0; i < c.Total(); i++ {
+			i := i
+			node := c.Client(i)
+			eg.Go(func() error {
+				if !isSynced(ctx, node) {
+					failures[i]++
+				} else {
+					failures[i] = 0
 				}
+				return nil
+			})
+		}
+		eg.Wait()
+		for i, rst := range failures {
+			if rst > tolerate {
+				return fmt.Errorf("node %s wasn't able to sync in %d periods",
+					c.Client(i).Name, rst,
+				)
 			}
 		}
+		return nil
 	}
 }
