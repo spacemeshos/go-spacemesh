@@ -61,6 +61,9 @@ func (t *TimeClock) startClock() error {
 	for {
 		currLayer := t.Ticker.TimeToLayer(t.clock.Now())
 		nextLayer := currLayer.Add(1)
+		if time.Until(t.Ticker.LayerToTime(currLayer)) > 0 {
+			nextLayer = currLayer
+		}
 		nextTickTime := t.Ticker.LayerToTime(nextLayer)
 		t.log.With().Info("global clock going to sleep before next layer",
 			log.Stringer("curr_layer", currLayer),
@@ -76,7 +79,7 @@ func (t *TimeClock) startClock() error {
 		}
 
 		if err := t.Notify(); err != nil {
-			t.log.With().Warning("could not notify all subscribers", log.Err(err))
+			t.log.With().Warning("error notifying clock subscribers", log.Err(err))
 		}
 	}
 }

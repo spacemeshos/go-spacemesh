@@ -63,10 +63,6 @@ var (
 	errMissedTickTime = errors.New("missed tick time by more than the allowed threshold")
 )
 
-// the limit on how late a layer notification can be
-// an attempt to notify later than sendTickThreshold from the expected tick time will result in a missed tick error.
-const sendTickThreshold = 500 * time.Millisecond
-
 // Notify notifies all the subscribers with the current layer.
 // if the tick time has passed by more than sendTickThreshold, notify is skipped and errMissedTickTime is returned.
 // if some subscribers were not listening, they are skipped and errMissedTicks/number of missed ticks is returned.
