@@ -406,14 +406,13 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 }
 
 func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
-	current := pb.clock.GetCurrentLayer()
-	next := current.Add(1)
+	next := pb.clock.GetCurrentLayer().Add(1)
 	for {
 		select {
 		case <-pb.ctx.Done():
 			return
 		case <-pb.clock.AwaitLayer(next):
-			current = pb.clock.GetCurrentLayer()
+			current := pb.clock.GetCurrentLayer()
 			if current.Before(next) {
 				pb.logger.Info("time sync detected, realigning ProposalBuilder")
 				continue
