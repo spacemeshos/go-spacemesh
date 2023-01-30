@@ -26,8 +26,10 @@ const (
 // CachedDB is simply a database injected with cache.
 type CachedDB struct {
 	*sql.Database
-	logger      log.Log
-	atxHdrCache *Cache[types.ATXID, types.ActivationTxHeader]
+	logger log.Log
+
+	atxHdrCache   *Cache[types.ATXID, types.ActivationTxHeader]
+	vrfNonceCache *Cache[string, types.VRFPostIndex]
 
 	// used to coordinate db update and cache
 	mu               sync.Mutex
@@ -41,6 +43,7 @@ func NewCachedDB(db *sql.Database, lg log.Log) *CachedDB {
 		logger:           lg,
 		atxHdrCache:      NewAtxCache(atxHdrCacheSize),
 		malfeasanceCache: NewMalfeasanceCache(malfeasanceCacheSize),
+		vrfNonceCache:    NewVRFNonceCache(atxHdrCacheSize),
 	}
 }
 
@@ -120,6 +123,23 @@ func (db *CachedDB) AddMalfeasanceProof(id types.NodeID, proof *types.Malfeasanc
 
 	db.malfeasanceCache.Add(id, proof)
 	return nil
+}
+
+// VRFNonce returns the VRF nonce of for the given node in the given epoch. This function is thread safe and will return an error if the
+// nonce is not found in the ATX DB.
+func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	key := fmt.Sprintf("%s-%s", id, epoch)
+	if nonce, ok := db.vrfNonceCache.Get(key); ok {
+		return *nonce, nil
+	}
+
+	nonce, err := atxs.VRFNonce(db, id, epoch)
+	if err != nil {
+		return types.VRFPostIndex(0), err
+	}
+
+	db.vrfNonceCache.Add(key, &nonce)
+	return nonce, nil
 }
 
 // GetAtxHeader returns the ATX header by the given ID. This function is thread safe and will return an error if the ID

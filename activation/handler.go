@@ -244,7 +244,7 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 			log.FieldNamed("atx_node_id", atx.NodeID()),
 		)
 
-		current, err := atxs.VRFNonce(h.cdb, atx.NodeID(), atx.TargetEpoch())
+		current, err := h.cdb.VRFNonce(atx.NodeID(), atx.TargetEpoch())
 		if err != nil {
 			return fmt.Errorf("failed to get current nonce: %w", err)
 		}
