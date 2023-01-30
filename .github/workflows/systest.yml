@@ -84,12 +84,10 @@ jobs:
       - name: Push go-spacemesh build to docker hub
         run: make dockerpush
 
-      - name: Get commit hash and smesher image
+      - name: Get commit hash
         id: vars
         shell: bash
-        run: |
-          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "image_name=spacemeshos/$(make docker-image-name)" >> $GITHUB_OUTPUT
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Build tests docker image
         run: make -C systest docker
@@ -106,7 +104,6 @@ jobs:
         timeout-minutes: 55
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
-          smesher_image: ${{ steps.vars.outputs.image_name }}
           label: sanity
           storage: premium-rwo=10Gi
           node_selector: cloud.google.com/gke-nodepool=gha
@@ -120,7 +117,6 @@ jobs:
         timeout-minutes: 30
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
-          smesher_image: ${{ steps.vars.outputs.image_name }}
           label: destructive
           storage: premium-rwo=10Gi
           node_selector: cloud.google.com/gke-nodepool=gha
