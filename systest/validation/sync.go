@@ -29,6 +29,8 @@ func Periodic(ctx context.Context, period time.Duration, f Validation) error {
 	}
 }
 
+type Validation func(context.Context) error
+
 func isSynced(ctx context.Context, node *cluster.NodeClient) bool {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -39,8 +41,6 @@ func isSynced(ctx context.Context, node *cluster.NodeClient) bool {
 	}
 	return resp.Status.IsSynced
 }
-
-type Validation func(context.Context) error
 
 func Sync(c *cluster.Cluster, tolerate int) Validation {
 	failures := make([]int, c.Total())
