@@ -32,11 +32,18 @@ func getConsensusData(ctx context.Context, distance int, node *cluster.NodeClien
 		// empty strings are always in consensus
 		return &consensusData{}
 	}
-	meshapi.LayersQuery(ctx, &pb.LayersQueryRequest{
+	ls, err := meshapi.LayersQuery(ctx, &pb.LayersQueryRequest{
 		StartLayer: &pb.LayerNumber{Number: uint32(target)},
 		EndLayer:   &pb.LayerNumber{Number: uint32(target)},
 	})
-	return nil
+	if err != nil {
+		return nil
+	}
+	if len(ls.Layer) != 1 {
+		return nil
+	}
+	layer := ls.Layer[0]
+	return &consensusData{consensus: layer.Hash, state: layer.RootStateHash}
 
 }
 
