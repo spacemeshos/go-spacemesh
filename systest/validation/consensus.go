@@ -3,6 +3,7 @@ package validation
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -11,11 +12,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 )
 
-type consensusData struct {
-	consensus, state []byte
+type ConsensusData struct {
+	Consensus, State []byte
 }
 
-func getConsensusData(ctx context.Context, distance int, node *cluster.NodeClient) *consensusData {
+func getConsensusData(ctx context.Context, distance int, node *cluster.NodeClient) *ConsensusData {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	meshapi := pb.NewMeshServiceClient(node)
@@ -30,7 +31,7 @@ func getConsensusData(ctx context.Context, distance int, node *cluster.NodeClien
 	target := int(lid.Layernum.Number) - distance
 	if target < 2*int(layers.Numlayers.Value) {
 		// empty strings are always in consensus
-		return &consensusData{}
+		return &ConsensusData{}
 	}
 	ls, err := meshapi.LayersQuery(ctx, &pb.LayersQueryRequest{
 		StartLayer: &pb.LayerNumber{Number: uint32(target)},
@@ -43,7 +44,7 @@ func getConsensusData(ctx context.Context, distance int, node *cluster.NodeClien
 		return nil
 	}
 	layer := ls.Layer[0]
-	return &consensusData{consensus: layer.Hash, state: layer.RootStateHash}
+	return &ConsensusData{Consensus: layer.Hash, State: layer.RootStateHash}
 
 }
 
@@ -75,46 +76,85 @@ func failMinority(failures []int, groups map[string][]int) {
 }
 
 func Consensus(c *cluster.Cluster, tolerate, distance int) Validation {
-	failures := make([]int, c.Total())
+	cv := NewConsensusValidation(c.Total(), tolerate)
 	return func(ctx context.Context) error {
 		var (
-			eg      errgroup.Group
-			results = make([]*consensusData, c.Total())
+			eg   errgroup.Group
+			iter = cv.Next()
 		)
 		for i := 0; i < c.Total(); i++ {
 			i := i
 			node := c.Client(i)
 			eg.Go(func() error {
-				results[i] = getConsensusData(ctx, distance, node)
+				iter.OnData(i, getConsensusData(ctx, distance, node))
 				return nil
 			})
 		}
 		eg.Wait()
-		var (
-			consensus = map[string][]int{}
-			state     = map[string][]int{}
-		)
-		for i, data := range results {
-			if data == nil {
-				failures[i]++
-				continue
-			}
-			consensus[string(data.consensus)] = append(consensus[string(data.consensus)], i)
-			state[string(data.state)] = append(state[string(data.state)], i)
-		}
-		if len(consensus) > 1 {
-			failMinority(failures, consensus)
-		} else if len(state) > 1 {
-			failMinority(failures, state)
-		}
-
-		for i, rst := range failures {
-			if rst > tolerate {
-				return fmt.Errorf("node %s wasn't able to recover consensus consistency in %d periods",
-					c.Client(i).Name, rst,
-				)
-			}
-		}
-		return nil
+		return cv.Complete(iter)
 	}
+}
+
+func NewConsensusValidation(size, tolerate int) *ConsensusValidation {
+	return &ConsensusValidation{failures: make([]int, size), tolerate: tolerate}
+}
+
+type ConsensusValidation struct {
+	failures []int
+	tolerate int
+}
+
+func (c *ConsensusValidation) Next() *ConsensusValidationIteration {
+	return &ConsensusValidationIteration{
+		all:       make([]*ConsensusData, len(c.failures)),
+		consensus: map[string][]int{},
+		state:     map[string][]int{},
+	}
+}
+
+func (c *ConsensusValidation) Complete(iter *ConsensusValidationIteration) error {
+	for i, data := range iter.all {
+		if data == nil {
+			c.failures[i]++
+		}
+	}
+	if len(iter.consensus) > 1 {
+		failMinority(c.failures, iter.consensus)
+	}
+	if len(iter.state) > 1 {
+		failMinority(c.failures, iter.consensus)
+	}
+	for _, rst := range c.failures {
+		if rst > c.tolerate {
+			return fmt.Errorf("wasn't able to recover consensus consistency in %d periods",
+				rst,
+			)
+		}
+	}
+	return nil
+}
+
+type ConsensusValidationIteration struct {
+	mu        sync.Mutex
+	all       []*ConsensusData
+	consensus map[string][]int
+	state     map[string][]int
+}
+
+func (iter *ConsensusValidationIteration) OnData(id int, data *ConsensusData) {
+	if data == nil {
+		return
+	}
+	iter.mu.Lock()
+	defer iter.mu.Unlock()
+
+	iter.all[id] = data
+	iter.consensus[string(data.Consensus)] = append(
+		iter.consensus[string(data.Consensus)],
+		id,
+	)
+	iter.state[string(data.State)] = append(
+		iter.state[string(data.State)],
+		id,
+	)
 }
