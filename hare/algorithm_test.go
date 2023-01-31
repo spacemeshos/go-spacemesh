@@ -181,22 +181,23 @@ func (mev *mockEligibilityValidator) ValidateEligibilityGossip(context.Context, 
 }
 
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
-	c := config.Config{N: 10, F: 5, RoundDuration: time.Second, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
+	c := config.Config{N: 10, F: 5, RoundDuration: 200 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
 	p := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
 	p.Start()
-	time.Sleep(6 * p.cfg.RoundDuration)
 
-	require.EqualValues(t, 1, p.getRound()/4)
+	require.Eventually(t, func() bool {
+		return p.getRound()/4 == 1
+	}, 2*time.Second, 200*time.Millisecond)
 }
 
 func TestConsensusProcess_PassiveParticipant(t *testing.T) {
-	c := config.Config{N: 10, F: 5, RoundDuration: time.Second, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
+	c := config.Config{N: 10, F: 5, RoundDuration: 200 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
 	p := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
 	p.nonce = nil
 	p.Start()
-	time.Sleep(6 * p.cfg.RoundDuration)
-
-	require.EqualValues(t, 1, p.getRound()/4)
+	require.Eventually(t, func() bool {
+		return p.getRound()/4 == uint32(1)
+	}, 2*time.Second, 200*time.Millisecond)
 }
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
