@@ -9,8 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen
-
 // BytesToNodeID is a helper to copy buffer into NodeID struct.
 func BytesToNodeID(buf []byte) (id NodeID) {
 	copy(id[:], buf)
