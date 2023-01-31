@@ -55,6 +55,7 @@ func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publish
 	}}
 	atx.SetID(&id)
 	atx.SetNodeID(&nodeID)
+	atx.SetEffectiveNumUnits(atx.NumUnits)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(tb, err)
 	require.NoError(tb, atxs.Add(cdb, vAtx, time.Now()))
@@ -193,32 +194,6 @@ func TestOracle_OwnATXNotFound(t *testing.T) {
 	lid := types.NewLayerID(layersPerEpoch * 3)
 	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
 	assert.ErrorIs(t, err, errMinerHasNoATXInPreviousEpoch)
-	assert.Equal(t, *types.EmptyATXID, atxID)
-	assert.Len(t, activeSet, 0)
-	assert.Len(t, proofs, 0)
-}
-
-func TestOracle_ZeroEpochWeight(t *testing.T) {
-	avgLayerSize := uint32(10)
-	layersPerEpoch := uint32(20)
-	o := createTestOracle(t, avgLayerSize, layersPerEpoch)
-	lid := types.NewLayerID(layersPerEpoch * 3)
-	atxID := types.RandomATXID()
-
-	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-		NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: (lid.GetEpoch() - 1).FirstLayer(),
-		},
-		NumUnits: 0,
-	}}
-	atx.SetID(&atxID)
-	atx.SetNodeID(&o.nodeID)
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(o.cdb, vAtx, time.Now()))
-
-	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
-	assert.ErrorIs(t, err, errZeroEpochWeight)
 	assert.Equal(t, *types.EmptyATXID, atxID)
 	assert.Len(t, activeSet, 0)
 	assert.Len(t, proofs, 0)

@@ -310,10 +310,11 @@ func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
 
 func getHeader(vatx *types.VerifiedActivationTx) *types.ActivationTxHeader {
 	return &types.ActivationTxHeader{
-		NIPostChallenge: vatx.NIPostChallenge,
-		Coinbase:        vatx.Coinbase,
-		NumUnits:        vatx.NumUnits,
-		VRFNonce:        vatx.VRFNonce,
+		NIPostChallenge:   vatx.NIPostChallenge,
+		Coinbase:          vatx.Coinbase,
+		NumUnits:          vatx.NumUnits,
+		EffectiveNumUnits: vatx.EffectiveNumUnits(),
+		VRFNonce:          vatx.VRFNonce,
 
 		ID:     vatx.ID(),
 		NodeID: vatx.NodeID(),

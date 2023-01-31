@@ -22,9 +22,13 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err 
 			return true
 		}
 		v.SetID(&id)
+
 		nodeID := types.NodeID{}
 		stmt.ColumnBytes(3, nodeID[:])
 		v.SetNodeID(&nodeID)
+
+		effectiveNumUnits := uint32(stmt.ColumnInt32(4))
+		v.SetEffectiveNumUnits(effectiveNumUnits)
 
 		baseTickHeight := uint64(stmt.ColumnInt64(1))
 		tickCount := uint64(stmt.ColumnInt64(2))
@@ -32,7 +36,7 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err 
 		return err == nil
 	}
 
-	if rows, err := db.Exec("select atx, base_tick_height, tick_count, smesher from atxs where id = ?1;", enc, dec); err != nil {
+	if rows, err := db.Exec("select atx, base_tick_height, tick_count, smesher, effective_num_units from atxs where id = ?1;", enc, dec); err != nil {
 		return nil, fmt.Errorf("exec id %v: %w", id, err)
 	} else if rows == 0 {
 		return nil, fmt.Errorf("exec id %v: %w", id, sql.ErrNotFound)
@@ -170,6 +174,7 @@ func GetByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.Node
 		}
 		v.SetID(&id)
 		v.SetNodeID(&nodeID)
+		v.SetEffectiveNumUnits(v.NumUnits)
 		baseTickHeight := uint64(stmt.ColumnInt64(2))
 		tickCount := uint64(stmt.ColumnInt64(3))
 		atx, err = v.Verify(baseTickHeight, tickCount)
@@ -260,19 +265,20 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx, timestamp time.Time) 
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PubLayerID.Uint32()))
 		stmt.BindInt64(3, int64(atx.PublishEpoch()))
+		stmt.BindInt64(4, int64(atx.EffectiveNumUnits()))
 		if atx.VRFNonce != nil {
-			stmt.BindInt64(4, int64(*atx.VRFNonce))
+			stmt.BindInt64(5, int64(*atx.VRFNonce))
 		}
-		stmt.BindBytes(5, atx.NodeID().Bytes())
-		stmt.BindBytes(6, buf)
-		stmt.BindInt64(7, timestamp.UnixNano())
-		stmt.BindInt64(8, int64(atx.BaseTickHeight()))
-		stmt.BindInt64(9, int64(atx.TickCount()))
+		stmt.BindBytes(6, atx.NodeID().Bytes())
+		stmt.BindBytes(7, buf)
+		stmt.BindInt64(8, timestamp.UnixNano())
+		stmt.BindInt64(9, int64(atx.BaseTickHeight()))
+		stmt.BindInt64(10, int64(atx.TickCount()))
 	}
 
 	_, err = db.Exec(`
-		insert into atxs (id, layer, epoch, nonce, smesher, atx, timestamp, base_tick_height, tick_count) 
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);`, enc, nil)
+		insert into atxs (id, layer, epoch, effective_num_units, nonce, smesher, atx, timestamp, base_tick_height, tick_count) 
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}

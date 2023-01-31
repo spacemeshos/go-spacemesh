@@ -183,6 +183,7 @@ func TestMain(m *testing.M) {
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
 	atx := types.NewActivationTx(challenge, &nodeID, addr1, nipost, numUnits, nil, nil)
+	atx.SetEffectiveNumUnits(numUnits)
 	if err := activation.SignAndFinalizeAtx(signer, atx); err != nil {
 		log.Println("failed to sign atx:", err)
 		os.Exit(1)
@@ -194,6 +195,7 @@ func TestMain(m *testing.M) {
 	}
 
 	atx2 := types.NewActivationTx(challenge, &nodeID, addr2, nipost, numUnits, nil, nil)
+	atx2.SetEffectiveNumUnits(numUnits)
 	if err := activation.SignAndFinalizeAtx(signer, atx2); err != nil {
 		log.Println("failed to sign atx:", err)
 		os.Exit(1)

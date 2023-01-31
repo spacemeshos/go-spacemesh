@@ -96,6 +96,7 @@ func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 		}}
 		atx.SetID(&id)
 		atx.SetNodeID(&nodeID)
+		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(tb, err)
 		require.NoError(tb, atxs.Add(cdb, vAtx, time.Now()))
@@ -413,6 +414,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	}}
 	atx1.SetID(&activeSet[0])
 	atx1.SetNodeID(&nid)
+	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	vAtx1, err := atx1.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx1, time.Now()))
@@ -425,6 +427,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	}}
 	atx2.SetID(&activeSet[1])
 	atx2.SetNodeID(&types.NodeID{1})
+	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	vAtx2, err := atx2.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx2, time.Now()))
@@ -510,6 +513,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	}}
 	atx1.SetID(&activeSet[0])
 	atx1.SetNodeID(&types.NodeID{1})
+	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	vAtx1, err := atx1.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx1, time.Now()))
@@ -522,6 +526,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	}}
 	atx2.SetID(&activeSet[1])
 	atx2.SetNodeID(&types.NodeID{2})
+	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	vAtx2, err := atx2.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx2, time.Now()))
@@ -782,6 +787,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 		}}
 		atx.SetID(&id)
 		atx.SetNodeID(&nodeID)
+		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(o.cdb, vAtx, time.Now()))
@@ -802,6 +808,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 		}}
 		atx.SetID(&id)
 		atx.SetNodeID(&nodeID)
+		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(o.cdb, vAtx, time.Now()))

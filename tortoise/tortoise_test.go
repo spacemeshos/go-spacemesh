@@ -435,13 +435,6 @@ func TestComputeExpectedWeight(t *testing.T) {
 			expect: 10,
 		},
 		{
-			desc:   "ExpectZeroEpoch",
-			target: genesis,
-			last:   genesis.Add(8),
-			totals: []uint64{10, 0},
-			expect: 10,
-		},
-		{
 			desc:   "MultipleIncompleteEpochs",
 			target: genesis.Add(2),
 			last:   genesis.Add(7),
@@ -481,6 +474,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 				id := types.RandomATXID()
 				atx.SetID(&id)
 				atx.SetNodeID(&types.NodeID{})
+				atx.SetEffectiveNumUnits(atx.NumUnits)
 				vAtx, err := atx.Verify(0, 1)
 				require.NoError(t, err)
 				require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
@@ -1521,6 +1515,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				atx.SetNodeID(&nodeID)
 				atxID := types.RandomATXID()
 				atx.SetID(&atxID)
+				atx.SetEffectiveNumUnits(atx.NumUnits)
 				vAtx, err := atx.Verify(0, 1)
 				require.NoError(t, err)
 				require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
@@ -2264,7 +2259,7 @@ func TestSwitchMode(t *testing.T) {
 		template.Votes.Support = nil
 
 		// add an atx to increase optimistic threshold in verifying tortoise to trigger a switch
-		header := &types.ActivationTxHeader{ID: types.ATXID{1}, NumUnits: 1, TickCount: 200}
+		header := &types.ActivationTxHeader{ID: types.ATXID{1}, EffectiveNumUnits: 1, TickCount: 200}
 		header.PubLayerID = types.EpochID(1).FirstLayer()
 		tortoise.OnAtx(header)
 		// feed ballots that vote against previously validated layer
@@ -2735,6 +2730,7 @@ func TestEncodeVotes(t *testing.T) {
 		atx.NumUnits = 10
 		atx.SetID(&atxid)
 		atx.SetNodeID(&types.NodeID{1})
+		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vatx, err := atx.Verify(1, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(cdb, vatx, time.Now()))

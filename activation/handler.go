@@ -224,6 +224,7 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 		return fmt.Errorf("invalid VRFNonce: %w", err)
 	}
 
+	atx.SetEffectiveNumUnits(atx.NumUnits)
 	return nil
 }
 
@@ -262,6 +263,11 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 		return fmt.Errorf("prevATX declared, but initial Post is included")
 	}
 
+	if prevAtx.NumUnits < atx.NumUnits {
+		atx.SetEffectiveNumUnits(prevAtx.NumUnits)
+	} else {
+		atx.SetEffectiveNumUnits(atx.NumUnits)
+	}
 	return nil
 }
 
