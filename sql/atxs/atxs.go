@@ -174,7 +174,7 @@ func GetByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.Node
 		}
 		v.SetID(&id)
 		v.SetNodeID(&nodeID)
-		v.SetEffectiveNumUnits(v.NumUnits)
+		v.SetEffectiveNumUnits(uint32(stmt.ColumnInt32(4)))
 		baseTickHeight := uint64(stmt.ColumnInt64(2))
 		tickCount := uint64(stmt.ColumnInt64(3))
 		atx, err = v.Verify(baseTickHeight, tickCount)
@@ -182,7 +182,7 @@ func GetByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.Node
 	}
 
 	if rows, err := db.Exec(`
-		select id, atx, base_tick_height, tick_count from atxs
+		select id, atx, base_tick_height, tick_count, effective_num_units from atxs
 		where epoch = ?1 and smesher = ?2
 		limit 1;`, enc, dec); err != nil {
 		return nil, fmt.Errorf("atx by epoch %v nodeID %v: %w", epoch, nodeID, err)
