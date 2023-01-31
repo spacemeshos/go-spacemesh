@@ -112,7 +112,7 @@ func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 }
 
 // PoETClientInitializer interfaces for creating PoetProvingServiceClient.
-type PoETClientInitializer func(string) PoetProvingServiceClient
+type PoETClientInitializer func(string, PoetConfig) PoetProvingServiceClient
 
 // WithPoETClientInitializer modifies initialization logic for PoET client. Used during client update.
 func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption {
@@ -456,7 +456,7 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 
 	clients := make([]PoetProvingServiceClient, 0, len(endpoints))
 	for _, endpoint := range endpoints {
-		client := b.poetClientInitializer(endpoint)
+		client := b.poetClientInitializer(endpoint, b.poetCfg)
 		// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
 		// Maybe it should be provided during update.
 		ctx, cancel := context.WithTimeout(ctx, time.Second*10)

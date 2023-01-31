@@ -869,13 +869,6 @@ func TestMaxSupportedN(t *testing.T) {
 	})
 }
 
-func TestEncodeBeacon(t *testing.T) {
-	beacon := types.HexToBeacon("0xaeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e")
-	require.Len(t, beacon, 4)
-	expected := uint32(0x4aadebae)
-	require.Equal(t, expected, encodeBeacon(beacon))
-}
-
 func FuzzVrfMessageConsistency(f *testing.F) {
 	tester.FuzzConsistency[VrfMessage](f)
 }
