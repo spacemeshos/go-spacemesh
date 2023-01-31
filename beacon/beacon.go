@@ -41,6 +41,7 @@ var (
 	errGenesis             = errors.New("genesis")
 	errNodeNotSynced       = errors.New("nodes not synced")
 	errProtocolRunning     = errors.New("last beacon protocol still running")
+	errNoProposals         = errors.New("no proposals")
 )
 
 type (
@@ -636,10 +637,14 @@ func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, 
 		logger.With().Warning("consensus phase failed", log.Err(err))
 		return
 	}
+	if len(lastRoundOwnVotes.support) == 0 {
+		logger.With().Warning("consensus phase failed", log.Err(errNoProposals))
+		return
+	}
 
 	// K rounds passed
 	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
-	beacon := calcBeacon(logger, lastRoundOwnVotes)
+	beacon := calcBeacon(logger, lastRoundOwnVotes.support)
 
 	if err := pd.setBeacon(targetEpoch, beacon); err != nil {
 		logger.With().Error("failed to set beacon", log.Err(err))
@@ -649,10 +654,10 @@ func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, 
 	logger.With().Info("beacon set for epoch", beacon)
 }
 
-func calcBeacon(logger log.Log, lastRoundVotes allVotes) types.Beacon {
+func calcBeacon(logger log.Log, set proposalSet) types.Beacon {
 	logger.Info("calculating beacon")
 
-	allHashes := lastRoundVotes.support.sort()
+	allHashes := set.sort()
 	allHashHexes := make([]string, len(allHashes))
 	for i, h := range allHashes {
 		allHashHexes[i] = hex.EncodeToString(h)
