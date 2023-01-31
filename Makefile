@@ -38,6 +38,8 @@ else
   DOCKER_IMAGE_REPO := go-spacemesh-dev
 endif
 
+DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
+
 # setting extra command line params for the CI tests pytest commands
 ifdef namespace
     EXTRA_PARAMS:=$(EXTRA_PARAMS) --namespace=$(namespace)
@@ -49,14 +51,6 @@ endif
 
 ifdef dump
     EXTRA_PARAMS:=$(EXTRA_PARAMS) --dump=$(dump)
-endif
-
-DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(BRANCH)
-
-# We use a docker image corresponding to the commithash for staging and trying, to be safe
-# filter here is used as a logical OR operation
-ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
-  DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
 endif
 
 all: install build
@@ -184,12 +178,6 @@ ifneq ($(DOCKER_USERNAME):$(DOCKER_PASSWORD),:)
 endif
 	docker tag $(DOCKER_IMAGE) $(DOCKER_HUB)/$(DOCKER_IMAGE)
 	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE)
-
-# for develop, we push an additional copy of the image using the commithash for archival
-ifeq ($(BRANCH),develop)
-	docker tag $(DOCKER_IMAGE) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(SHA)
-	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(SHA)
-endif
 .PHONY: dockerpush-only
 
 docker-local-push: docker-local-build dockerpush-only
