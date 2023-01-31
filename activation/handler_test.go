@@ -247,8 +247,10 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		validator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
-		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		vAtx, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.NoError(t, err)
+		require.Equal(t, uint32(90), vAtx.NumUnits)
+		require.Equal(t, uint32(90), vAtx.EffectiveNumUnits())
 	})
 
 	t.Run("atx with increasing num units, no new VRF, old valid", func(t *testing.T) {
@@ -262,8 +264,10 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 		validator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
-		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		vAtx, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.NoError(t, err)
+		require.Equal(t, uint32(110), vAtx.NumUnits)
+		require.Equal(t, uint32(100), vAtx.EffectiveNumUnits())
 	})
 
 	t.Run("atx with increasing num units, no new VRF, old invalid for new size", func(t *testing.T) {
