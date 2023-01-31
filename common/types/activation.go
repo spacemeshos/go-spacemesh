@@ -286,6 +286,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("pub_layer_id", atx.PubLayerID.Value)
 	encoder.AddUint32("epoch", uint32(atx.PublishEpoch()))
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
+	encoder.AddUint64("effective_num_units", uint64(atx.EffectiveNumUnits()))
 	encoder.AddUint64("sequence_number", atx.Sequence)
 	return nil
 }
