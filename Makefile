@@ -119,6 +119,14 @@ generate: get-libs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go generate ./...
 .PHONY: generate
 
+test-generate:
+	# Working directory must be clean, or this test would be destructive
+	@git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && git --no-pager diff && exit 1)
+	# We expect `go generate` not to change anything, the test should fail otherwise
+	@make generate
+	@git diff --name-only --diff-filter=AM --exit-code . || { echo "\nPlease rerun 'make generate' and commit changes.\n"; exit 1; }
+.PHONY: test-generate
+
 staticcheck: get-libs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" staticcheck ./...
 .PHONY: staticcheck
