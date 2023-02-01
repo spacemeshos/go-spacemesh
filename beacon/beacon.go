@@ -167,9 +167,8 @@ type ProtocolDriver struct {
 	weakCoin        coin
 	theta           *big.Float
 
-	clock       layerClock
-	layerTicker chan types.LayerID
-	cdb         *datastore.CachedDB
+	clock layerClock
+	cdb   *datastore.CachedDB
 
 	mu sync.RWMutex
 
@@ -223,12 +222,11 @@ func (pd *ProtocolDriver) Start(ctx context.Context) {
 			pd.logger.Panic("update sync state provider can't be nil")
 		}
 
-		pd.layerTicker = pd.clock.Subscribe()
 		pd.metricsCollector.Start(nil)
 
 		pd.setProposalTimeForNextEpoch()
 		pd.eg.Go(func() error {
-			pd.listenLayers(ctx)
+			pd.listenEpochs(ctx)
 			return nil
 		})
 	})
@@ -237,7 +235,6 @@ func (pd *ProtocolDriver) Start(ctx context.Context) {
 // Close closes ProtocolDriver.
 func (pd *ProtocolDriver) Close() {
 	pd.logger.Info("closing beacon protocol")
-	pd.clock.Unsubscribe(pd.layerTicker)
 	pd.metricsCollector.Stop()
 	pd.cancel()
 	pd.logger.Info("waiting for beacon goroutines to finish")
@@ -529,24 +526,33 @@ func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
 }
 
 // listens to new layers.
-func (pd *ProtocolDriver) listenLayers(ctx context.Context) {
+func (pd *ProtocolDriver) listenEpochs(ctx context.Context) {
 	pd.logger.With().Info("starting listening layers")
 
+	currentEpoch := pd.clock.GetCurrentLayer().GetEpoch()
+	layer := currentEpoch.Add(1).FirstLayer()
 	for {
 		select {
 		case <-pd.ctx.Done():
 			return
-		case layer := <-pd.layerTicker:
-			pd.logger.With().Debug("received tick", layer)
-			if layer.FirstInEpoch() {
-				epoch := layer.GetEpoch()
-				pd.setProposalTimeForNextEpoch()
-				pd.logger.With().Info("first layer in epoch", layer, epoch)
-				pd.eg.Go(func() error {
-					_ = pd.onNewEpoch(ctx, epoch)
-					return nil
-				})
+		case <-pd.clock.AwaitLayer(layer):
+			current := pd.clock.GetCurrentLayer()
+			if current.Before(layer) {
+				pd.logger.With().Info("time sync detected, realigning Beacon")
+				continue
 			}
+			if !current.FirstInEpoch() {
+				continue
+			}
+			epoch := current.GetEpoch()
+			layer = epoch.Add(1).FirstLayer()
+
+			pd.setProposalTimeForNextEpoch()
+			pd.logger.With().Info("processing epoch", current, epoch)
+			pd.eg.Go(func() error {
+				_ = pd.onNewEpoch(ctx, epoch)
+				return nil
+			})
 		}
 	}
 }
