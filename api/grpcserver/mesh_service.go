@@ -359,7 +359,6 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	return &pb.Layer{
 		Number:        &pb.LayerNumber{Number: layer.Index().Uint32()},
 		Status:        layerStatus,
-		Hash:          layer.Hash().Bytes(),
 		Blocks:        blocks,
 		Activations:   pbActivations,
 		RootStateHash: stateRoot.Bytes(),

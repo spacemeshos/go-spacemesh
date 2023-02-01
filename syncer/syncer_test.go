@@ -74,7 +74,7 @@ type testSyncer struct {
 	mForkFinder  *mocks.MockforkFinder
 }
 
-func newTestSyncer(ctx context.Context, t *testing.T, interval time.Duration) *testSyncer {
+func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 	lg := logtest.New(t)
 	mt := newMockLayerTicker()
 	ctrl := gomock.NewController(t)
@@ -109,8 +109,7 @@ func newTestSyncer(ctx context.Context, t *testing.T, interval time.Duration) *t
 }
 
 func newSyncerWithoutSyncTimer(t *testing.T) *testSyncer {
-	ctx := context.Background()
-	ts := newTestSyncer(ctx, t, never)
+	ts := newTestSyncer(t, never)
 	ts.syncer.syncTimer.Stop()
 	ts.syncer.validateTimer.Stop()
 	return ts
@@ -119,7 +118,7 @@ func newSyncerWithoutSyncTimer(t *testing.T) *testSyncer {
 func TestStartAndShutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ts := newTestSyncer(ctx, t, time.Millisecond*5)
+	ts := newTestSyncer(t, time.Millisecond*5)
 
 	require.False(t, ts.syncer.IsSynced(ctx))
 	require.False(t, ts.syncer.ListenToATXGossip())
@@ -553,7 +552,7 @@ func genTx(t testing.TB) types.Transaction {
 }
 
 func TestSyncMissingLayer(t *testing.T) {
-	ts := newTestSyncer(context.Background(), t, never)
+	ts := newTestSyncer(t, never)
 	genesis := types.GetEffectiveGenesis()
 	failed := genesis.Add(2)
 	last := genesis.Add(4)
@@ -582,7 +581,7 @@ func TestSyncMissingLayer(t *testing.T) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().Updates().Return(lid.Sub(1), nil)
+		ts.mTortoise.EXPECT().Updates().Return(nil)
 		if lid.Before(failed) {
 			ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 			ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
@@ -608,7 +607,7 @@ func TestSyncMissingLayer(t *testing.T) {
 	for lid := failed.Sub(1); lid.Before(last); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().Updates().Return(failed, nil)
+		ts.mTortoise.EXPECT().Updates().Return(nil)
 		if lid == failed {
 			ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), block.Rewards)
 			ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, block.ID(), nil, nil)
@@ -635,7 +634,7 @@ func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 
 	// simulate hare advancing the mesh forward
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lyr)
-	ts.mTortoise.EXPECT().Updates().Return(lyr.Sub(1), nil)
+	ts.mTortoise.EXPECT().Updates().Return(nil)
 	ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 	ts.mConState.EXPECT().UpdateCache(gomock.Any(), lyr, types.EmptyBlockID, nil, nil)
 	ts.mVm.EXPECT().GetStateRoot()

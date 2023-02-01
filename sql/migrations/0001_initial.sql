@@ -29,7 +29,6 @@ CREATE TABLE layers
     processed       SMALL INT,
     applied_block   VARCHAR,
     state_hash      CHAR(32),
-    hash            CHAR(32),
     aggregated_hash CHAR(32)
 ) WITHOUT ROWID;
 CREATE INDEX layers_by_processed ON layers (processed);

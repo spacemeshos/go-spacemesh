@@ -147,12 +147,12 @@ func (t *Tortoise) LatestComplete() types.LayerID {
 	return t.trtl.verified
 }
 
-func (t *Tortoise) Updates() (types.LayerID, []types.BlockContextualValidity) {
+func (t *Tortoise) Updates() map[types.LayerID]map[types.BlockID]bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	res := t.trtl.updated
 	t.trtl.updated = nil
-	return t.trtl.verified, res
+	return res
 }
 
 type encodeConf struct {

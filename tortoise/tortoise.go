@@ -31,7 +31,7 @@ type turtle struct {
 	cdb    *datastore.CachedDB
 
 	beacons system.BeaconGetter
-	updated []types.BlockContextualValidity
+	updated map[types.LayerID]map[types.BlockID]bool
 
 	*state
 
@@ -442,6 +442,9 @@ func (t *turtle) verifyLayers() {
 			success = t.full.verify(logger, target)
 		}
 		if !success {
+			logger.With().Info("verification terminated",
+				log.Stringer("old verified", t.verified),
+				log.Stringer("new verified", verified))
 			break
 		}
 		verified = target
@@ -468,13 +471,12 @@ func (t *turtle) verifyLayers() {
 				log.Stringer("emitted", block.emitted),
 			)
 			if t.updated == nil {
-				t.updated = []types.BlockContextualValidity{}
+				t.updated = map[types.LayerID]map[types.BlockID]bool{}
 			}
-			t.updated = append(t.updated, types.BlockContextualValidity{
-				ID:       block.id,
-				Layer:    target,
-				Validity: block.validity == support,
-			})
+			if _, ok := t.updated[target]; !ok {
+				t.updated[target] = map[types.BlockID]bool{}
+			}
+			t.updated[target][block.id] = block.validity == support
 			block.emitted = block.validity
 		}
 	}
@@ -516,7 +518,7 @@ func (t *turtle) loadContextualValidity(lid types.LayerID) error {
 	for _, block := range t.layer(lid).blocks {
 		valid, err := blocks.IsValid(t.cdb, block.id)
 		if err != nil {
-			if !errors.Is(err, sql.ErrNotFound) {
+			if !errors.Is(err, blocks.ErrValidityNotDecided) {
 				return err
 			}
 		} else if valid {

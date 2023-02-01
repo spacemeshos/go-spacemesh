@@ -203,9 +203,14 @@ func TestAbstainLateBlock(t *testing.T) {
 	last := s.Next(sim.WithNumBlocks(1), sim.WithoutHareOutput(), sim.WithVoteGenerator(abstainVoting))
 	tortoise.TallyVotes(ctx, last)
 
-	_, events := tortoise.Updates()
+	events := tortoise.Updates()
 	require.Len(t, events, 1)
-	require.Equal(t, events[0].Layer, last.Sub(2))
+	got, ok := events[last.Sub(2)]
+	require.True(t, ok)
+	require.Len(t, got, 1)
+	for _, v := range got {
+		require.True(t, v)
+	}
 
 	block := types.Block{}
 	block.LayerIndex = last.Sub(1)
@@ -214,7 +219,7 @@ func TestAbstainLateBlock(t *testing.T) {
 	tortoise.OnHareOutput(block.LayerIndex, block.ID())
 	tortoise.TallyVotes(ctx, last)
 
-	_, events = tortoise.Updates()
+	events = tortoise.Updates()
 	require.Empty(t, events)
 }
 
@@ -540,12 +545,14 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 }
 
 func processBlockUpdates(tb testing.TB, tt *Tortoise, db sql.Executor) {
-	_, updated := tt.Updates()
-	for _, u := range updated {
-		if u.Validity {
-			require.NoError(tb, blocks.SetValid(db, u.ID))
-		} else {
-			require.NoError(tb, blocks.SetInvalid(db, u.ID))
+	updated := tt.Updates()
+	for _, bids := range updated {
+		for bid, valid := range bids {
+			if valid {
+				require.NoError(tb, blocks.SetValid(db, bid))
+			} else {
+				require.NoError(tb, blocks.SetInvalid(db, bid))
+			}
 		}
 	}
 }
@@ -2252,10 +2259,16 @@ func TestSwitchMode(t *testing.T) {
 			last = s.Next(sim.WithNumBlocks(1))
 			tortoise.TallyVotes(ctx, last)
 		}
-		_, events := tortoise.Updates()
+		events := tortoise.Updates()
 		require.Len(t, events, int(cfg.Hdist))
-		require.Equal(t, events[0].Layer, nohare)
-		require.True(t, events[0].Validity)
+		for i := 0; i < int(cfg.Hdist); i++ {
+			got, ok := events[nohare.Add(uint32(i))]
+			require.True(t, ok)
+			require.Len(t, got, 1)
+			for _, v := range got {
+				require.True(t, v)
+			}
+		}
 
 		templates, err := ballots.Layer(s.GetState(0).DB, nohare.Add(1))
 		require.NoError(t, err)
@@ -2276,10 +2289,14 @@ func TestSwitchMode(t *testing.T) {
 			tortoise.OnBallot(&ballot)
 		}
 		tortoise.TallyVotes(ctx, last)
-		_, events = tortoise.Updates()
+		events = tortoise.Updates()
 		require.Len(t, events, 1)
-		require.Equal(t, events[0].Layer, nohare)
-		require.False(t, events[0].Validity)
+		got, ok := events[nohare]
+		require.True(t, ok)
+		require.Len(t, got, 1)
+		for _, v := range got {
+			require.False(t, v)
+		}
 	})
 }
 
@@ -2684,13 +2701,14 @@ func TestEncodeVotes(t *testing.T) {
 		)
 
 		lid := types.GetEffectiveGenesis().Add(1)
-		blocks := []*types.Block{
+		blks := []*types.Block{
 			{InnerBlock: types.InnerBlock{LayerIndex: lid, TickHeight: 100}},
 			{InnerBlock: types.InnerBlock{LayerIndex: lid, TickHeight: 10}},
 		}
-		for _, block := range blocks {
+		for _, block := range blks {
 			block.Initialize()
 			tortoise.OnBlock(block)
+			require.NoError(t, blocks.Add(cdb, block))
 		}
 
 		current := lid.Add(2)
@@ -2706,8 +2724,8 @@ func TestEncodeVotes(t *testing.T) {
 		hasher.Sum(rst[:0])
 
 		hasher.WritePrevious(rst)
-		hasher.WriteSupport(blocks[1].ID(), blocks[1].TickHeight) // note the order due to the height
-		hasher.WriteSupport(blocks[0].ID(), blocks[0].TickHeight)
+		hasher.WriteSupport(blks[1].ID(), blks[1].TickHeight) // note the order due to the height
+		hasher.WriteSupport(blks[0].ID(), blks[0].TickHeight)
 		hasher.Sum(rst[:0])
 		hasher.Reset()
 
