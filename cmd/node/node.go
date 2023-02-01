@@ -193,7 +193,8 @@ type TickProvider interface {
 	GetCurrentLayer() types.LayerID
 	StartNotifying()
 	GetGenesisTime() time.Time
-	timesync.LayerConverter
+	LayerToTime(types.LayerID) time.Time
+	TimeToLayer(time.Time) types.LayerID
 	Close()
 	AwaitLayer(types.LayerID) chan struct{}
 }
@@ -1133,7 +1134,7 @@ func (app *App) Start(ctx context.Context) error {
 
 	app.startAPIServices(ctx)
 
-	events.SubscribeToLayers(clock.Subscribe())
+	events.SubscribeToLayers(clock.Ticker)
 	logger.Info("app started")
 
 	// notify anyone who might be listening that the app has finished starting.
