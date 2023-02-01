@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -410,7 +411,7 @@ func TestAdd(t *testing.T) {
 	require.Equal(t, atx, got)
 }
 
-func newAtx(sig *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActivationTx, error) {
+func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActivationTx, error) {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -421,7 +422,8 @@ func newAtx(sig *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActiva
 		},
 	}
 
-	atx.Signature = sig.Sign(atx.SignedBytes())
+	activation.SignAndFinalizeAtx(signer, atx)
+	atx.SetEffectiveNumUnits(atx.NumUnits)
 	return atx.Verify(0, 1)
 }
 
@@ -466,13 +468,15 @@ func TestPositioningID(t *testing.T) {
 							PubLayerID: atx.epoch.FirstLayer(),
 						},
 						Coinbase: atx.coinbase,
+						NumUnits: 2,
 					},
 				}
 
 				sig, err := signing.NewEdSigner()
 				require.NoError(t, err)
-				full.Signature = sig.Sign(full.SignedBytes())
+				require.NoError(t, activation.SignAndFinalizeAtx(sig, full))
 
+				full.SetEffectiveNumUnits(full.NumUnits)
 				vAtx, err := full.Verify(atx.base, atx.count)
 				require.NoError(t, err)
 

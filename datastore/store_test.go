@@ -166,6 +166,7 @@ func TestIdentityExists(t *testing.T) {
 		},
 	}
 	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
+	atx.SetEffectiveNumUnits(atx.NumUnits)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
@@ -179,8 +180,6 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	db := sql.InMemory()
 	bs := datastore.NewBlobStore(db)
 
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -190,14 +189,15 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 			NumUnits: 11,
 		},
 	}
-	atx.Signature = signer.Sign(atx.SignedBytes())
-	require.NoError(t, atx.CalcAndSetID())
-	require.NoError(t, atx.CalcAndSetNodeID())
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
 
 	_, err = bs.Get(datastore.ATXDB, atx.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, vAtx, time.Now()))
 	got, err := bs.Get(datastore.ATXDB, atx.ID().Bytes())
 	require.NoError(t, err)
@@ -206,6 +206,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	require.NoError(t, codec.Decode(got, &gotA))
 	require.NoError(t, gotA.CalcAndSetID())
 	require.NoError(t, gotA.CalcAndSetNodeID())
+	gotA.SetEffectiveNumUnits(gotA.NumUnits)
 	require.Equal(t, *atx, gotA)
 
 	_, err = bs.Get(datastore.BallotDB, atx.ID().Bytes())

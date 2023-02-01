@@ -36,7 +36,7 @@ func newTestForkFinder(t *testing.T, maxHashes uint32) *testForkFinder {
 func newTestForkFinderWithDuration(t *testing.T, maxHashes uint32, d time.Duration, lg log.Log) *testForkFinder {
 	mf := mocks.NewMockfetcher(gomock.NewController(t))
 	db := sql.InMemory()
-	require.NoError(t, layers.SetHashes(db, types.GetEffectiveGenesis(), types.RandomHash(), types.RandomHash()))
+	require.NoError(t, layers.SetMeshHash(db, types.GetEffectiveGenesis(), types.RandomHash()))
 	return &testForkFinder{
 		ForkFinder: syncer.NewForkFinder(lg, db, mf, maxHashes, d),
 		db:         db,
@@ -92,9 +92,9 @@ func storeNodeHashes(t *testing.T, db *sql.Database, peerHashes []types.Hash32, 
 	for i, hash := range peerHashes {
 		lid := types.NewLayerID(uint32(i))
 		if lid.Before(diverge) {
-			require.NoError(t, layers.SetHashes(db, lid, types.Hash32{}, hash))
+			require.NoError(t, layers.SetMeshHash(db, lid, hash))
 		} else {
-			require.NoError(t, layers.SetHashes(db, lid, types.Hash32{}, types.RandomHash()))
+			require.NoError(t, layers.SetMeshHash(db, lid, types.RandomHash()))
 		}
 	}
 }
@@ -161,7 +161,7 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 		t.Parallel()
 
 		tf := newTestForkFinder(t, maxHashes)
-		require.NoError(t, layers.SetHashes(tf.db, lastAgreedLid, types.RandomHash(), lastAgreedHash))
+		require.NoError(t, layers.SetMeshHash(tf.db, lastAgreedLid, lastAgreedHash))
 		tf.UpdateAgreement(peer, lastAgreedLid, lastAgreedHash, time.Now())
 		tf.UpdateAgreement("shorty", types.NewLayerID(111), types.RandomHash(), time.Now())
 		require.Equal(t, tf.NumPeersCached(), 2)
@@ -183,7 +183,7 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 		t.Parallel()
 
 		tf := newTestForkFinder(t, maxHashes)
-		require.NoError(t, layers.SetHashes(tf.db, lastAgreedLid, types.RandomHash(), lastAgreedHash))
+		require.NoError(t, layers.SetMeshHash(tf.db, lastAgreedLid, lastAgreedHash))
 		tf.UpdateAgreement(peer, lastAgreedLid, lastAgreedHash, time.Now())
 		tf.UpdateAgreement("shorty", types.NewLayerID(111), types.RandomHash(), time.Now())
 		require.Equal(t, tf.NumPeersCached(), 2)
@@ -197,7 +197,7 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 				}
 				// changes the node's own hash for lastAgreedLid
 				for _, lid := range mh.Layers {
-					require.NoError(t, layers.SetHashes(tf.db, lid, types.RandomHash(), types.RandomHash()))
+					require.NoError(t, layers.SetMeshHash(tf.db, lid, types.RandomHash()))
 				}
 				return mh, nil
 			})

@@ -98,22 +98,16 @@ func TestStateHash(t *testing.T) {
 
 func TestSetHashes(t *testing.T) {
 	db := sql.InMemory()
-	_, err := GetHash(db, types.NewLayerID(11))
-	require.ErrorIs(t, err, sql.ErrNotFound)
-	_, err = GetAggregatedHash(db, types.NewLayerID(11))
+	_, err := GetAggregatedHash(db, types.NewLayerID(11))
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	layers := []uint32{9, 10, 8, 7}
-	hashes := []types.Hash32{{1}, {2}, {3}, {4}}
 	aggHashes := []types.Hash32{{5}, {6}, {7}, {8}}
 	for i := range layers {
-		require.NoError(t, SetHashes(db, types.NewLayerID(layers[i]), hashes[i], aggHashes[i]))
+		require.NoError(t, SetMeshHash(db, types.NewLayerID(layers[i]), aggHashes[i]))
 	}
 
 	for i, lid := range layers {
-		hash, err := GetHash(db, types.NewLayerID(lid))
-		require.NoError(t, err)
-		require.Equal(t, hashes[i], hash)
 		aggHash, err := GetAggregatedHash(db, types.NewLayerID(lid))
 		require.NoError(t, err)
 		require.Equal(t, aggHashes[i], aggHash)
@@ -122,16 +116,10 @@ func TestSetHashes(t *testing.T) {
 	require.NoError(t, UnsetAppliedFrom(db, types.NewLayerID(layers[0])))
 	for i, lid := range layers {
 		if i < 2 {
-			got, err := GetHash(db, types.NewLayerID(lid))
-			require.NoError(t, err)
-			require.Equal(t, types.EmptyLayerHash, got)
-			got, err = GetAggregatedHash(db, types.NewLayerID(lid))
+			got, err := GetAggregatedHash(db, types.NewLayerID(lid))
 			require.NoError(t, err)
 			require.Equal(t, types.EmptyLayerHash, got)
 		} else {
-			hash, err := GetHash(db, types.NewLayerID(lid))
-			require.NoError(t, err)
-			require.Equal(t, hashes[i], hash)
 			aggHash, err := GetAggregatedHash(db, types.NewLayerID(lid))
 			require.NoError(t, err)
 			require.Equal(t, aggHashes[i], aggHash)
@@ -162,11 +150,10 @@ func TestGetAggHashes(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Empty(t, got)
 
-	hashes := []types.Hash32{{1}, {2}, {3}}
 	aggHashes := []types.Hash32{{6}, {7}, {8}}
 	expected := []types.Hash32{{8}, {6}, {7}} // in layer order
 	for i, lid := range lids {
-		require.NoError(t, SetHashes(db, lid, hashes[i], aggHashes[i]))
+		require.NoError(t, SetMeshHash(db, lid, aggHashes[i]))
 	}
 
 	got, err = GetAggHashes(db, lids)

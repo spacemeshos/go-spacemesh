@@ -19,12 +19,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -45,12 +43,12 @@ type ProposalBuilder struct {
 	cfg    config
 	cdb    *datastore.CachedDB
 
-	startOnce  sync.Once
-	ctx        context.Context
-	cancel     context.CancelFunc
-	eg         errgroup.Group
-	layerTimer chan types.LayerID
+	startOnce sync.Once
+	ctx       context.Context
+	cancel    context.CancelFunc
+	eg        errgroup.Group
 
+	clock          layerClock
 	publisher      pubsub.Publisher
 	signer         *signing.EdSigner
 	nonceFetcher   nonceFetcher
@@ -74,7 +72,11 @@ type defaultFetcher struct {
 }
 
 func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	return atxs.VRFNonce(f.cdb, nodeID, epoch)
+	nonce, err := f.cdb.VRFNonce(nodeID, epoch)
+	if err != nil {
+		return types.VRFPostIndex(0), fmt.Errorf("get vrf nonce: %w", err)
+	}
+	return nonce, nil
 }
 
 // Opt for configuring ProposalBuilder.
@@ -129,7 +131,7 @@ func withNonceFetcher(nf nonceFetcher) Opt {
 // NewProposalBuilder creates a struct of block builder type.
 func NewProposalBuilder(
 	ctx context.Context,
-	layerTimer timesync.LayerTimer,
+	clock layerClock,
 	signer *signing.EdSigner,
 	vrfSigner *signing.VRFSigner,
 	cdb *datastore.CachedDB,
@@ -146,7 +148,7 @@ func NewProposalBuilder(
 		ctx:            sctx,
 		cancel:         cancel,
 		signer:         signer,
-		layerTimer:     layerTimer,
+		clock:          clock,
 		cdb:            cdb,
 		publisher:      publisher,
 		tortoise:       trtl,
@@ -404,14 +406,20 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 }
 
 func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
+	next := pb.clock.GetCurrentLayer().Add(1)
 	for {
 		select {
 		case <-pb.ctx.Done():
 			return
-
-		case layerID := <-pb.layerTimer:
+		case <-pb.clock.AwaitLayer(next):
+			current := pb.clock.GetCurrentLayer()
+			if current.Before(next) {
+				pb.logger.Info("time sync detected, realigning ProposalBuilder")
+				continue
+			}
+			next = current.Add(1)
 			lyrCtx := log.WithNewSessionID(ctx)
-			_ = pb.handleLayer(lyrCtx, layerID)
+			_ = pb.handleLayer(lyrCtx, current)
 		}
 	}
 }

@@ -193,7 +193,8 @@ type TickProvider interface {
 	GetCurrentLayer() types.LayerID
 	StartNotifying()
 	GetGenesisTime() time.Time
-	timesync.LayerConverter
+	LayerToTime(types.LayerID) time.Time
+	TimeToLayer(time.Time) types.LayerID
 	Close()
 	AwaitLayer(types.LayerID) chan struct{}
 }
@@ -638,7 +639,7 @@ func (app *App) initServices(
 
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
-		clock.Subscribe(),
+		clock,
 		sgn,
 		vrfSigner,
 		app.cachedDB,
@@ -982,12 +983,6 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 }
 
 func (app *App) startSyncer(ctx context.Context) {
-	app.log.With().Info("sync: waiting for p2p host to find outbound peers",
-		log.Int("outbound", app.Config.P2P.TargetOutbound))
-	_, err := app.host.WaitPeers(ctx, app.Config.P2P.TargetOutbound)
-	if err != nil {
-		return
-	}
 	app.log.Info("sync: waiting for tortoise to load state")
 	if err := app.tortoise.WaitReady(ctx); err != nil {
 		app.log.With().Error("sync: tortoise failed to load state", log.Err(err))
@@ -1071,7 +1066,7 @@ func (app *App) Start(ctx context.Context) error {
 
 	poetClients := make([]activation.PoetProvingServiceClient, 0, len(app.Config.PoETServers))
 	for _, address := range app.Config.PoETServers {
-		poetClients = append(poetClients, activation.NewHTTPPoetClient(address))
+		poetClients = append(poetClients, activation.NewHTTPPoetClient(address, app.Config.POET))
 	}
 
 	edPubkey := edSgn.PublicKey()
@@ -1139,7 +1134,7 @@ func (app *App) Start(ctx context.Context) error {
 
 	app.startAPIServices(ctx)
 
-	events.SubscribeToLayers(clock.Subscribe())
+	events.SubscribeToLayers(clock.Ticker)
 	logger.Info("app started")
 
 	// notify anyone who might be listening that the app has finished starting.

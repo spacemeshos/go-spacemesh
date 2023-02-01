@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 //go:generate mockgen -package=beacon -destination=./mocks.go -source=./interface.go
@@ -28,10 +27,9 @@ type eligibilityChecker interface {
 }
 
 type layerClock interface {
-	Subscribe() timesync.LayerTimer
-	Unsubscribe(timesync.LayerTimer)
 	LayerToTime(types.LayerID) time.Time
 	GetCurrentLayer() types.LayerID
+	AwaitLayer(types.LayerID) chan struct{}
 }
 
 type vrfSigner interface {

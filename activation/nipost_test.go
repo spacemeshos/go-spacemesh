@@ -184,8 +184,6 @@ func TestPostSetup(t *testing.T) {
 }
 
 func TestNIPostBuilderWithClients(t *testing.T) {
-	t.Skip("skipping flaky test, see https://github.com/spacemeshos/go-spacemesh/issues/2614")
-
 	logtest.SetupGlobal(t)
 	r := require.New(t)
 
@@ -195,7 +193,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	hash := challenge.Hash()
 
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
-	poetDb.EXPECT().GetProof(gomock.Any()).Times(2).Return(&types.PoetProof{Members: [][]byte{hash.Bytes()}}, nil)
+	poetDb.EXPECT().GetProof(gomock.Any()).Return(&types.PoetProof{Members: [][]byte{hash.Bytes()}}, nil)
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 
 	challengeHash := challenge.Hash()
@@ -237,9 +235,6 @@ func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetClient {
 }
 
 func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipostChallenge types.PoetChallenge, poetDb poetDbAPI) *types.NIPost {
-	gtw := spawnMockGateway(tb)
-	poetProver := spawnPoet(tb, WithGateway(gtw), WithGenesis(time.Now()), WithEpochDuration(time.Second))
-
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
 	nodeID := types.NodeID{1}
 	goldenATXID := types.ATXID{2, 3, 4}
@@ -250,10 +245,18 @@ func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipos
 	r.NoError(postProvider.StartSession(context.Background(), getPostSetupOpts(tb), goldenATXID))
 	mclock := defaultLayerClockMock(tb)
 
+	epoch := layersPerEpoch * layerDuration
+	poetCfg := PoetConfig{
+		PhaseShift: epoch / 5,
+		CycleGap:   epoch / 10,
+	}
+	gtw := spawnMockGateway(tb)
+	poetProver := spawnPoet(tb, WithGateway(gtw), WithGenesis(time.Now()), WithEpochDuration(epoch), WithPhaseShift(poetCfg.PhaseShift), WithCycleGap(poetCfg.CycleGap))
+
 	signer, err := signing.NewEdSigner()
 	r.NoError(err)
 	nb := NewNIPostBuilder(nodeID, postProvider, []PoetProvingServiceClient{poetProver},
-		poetDb, sql.InMemory(), logtest.New(tb), signer, PoetConfig{}, mclock)
+		poetDb, sql.InMemory(), logtest.New(tb), signer, poetCfg, mclock)
 
 	nipost, _, err := nb.BuildNIPost(context.Background(), &nipostChallenge)
 	r.NoError(err)

@@ -8,6 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -75,7 +76,7 @@ func createOpinions(t *testing.T, db *datastore.CachedDB, lid types.LayerID, gen
 		require.NoError(t, certificates.Add(db, lid, &types.Certificate{BlockID: certified}))
 	}
 	aggHash := types.RandomHash()
-	require.NoError(t, layers.SetHashes(db, lid.Sub(1), types.RandomHash(), aggHash))
+	require.NoError(t, layers.SetMeshHash(db, lid.Sub(1), aggHash))
 	return certified, aggHash
 }
 
@@ -210,7 +211,7 @@ func TestHandleMeshHashReq(t *testing.T) {
 			}
 			if !tc.hashMissing {
 				for lid := req.From; !lid.After(req.To); lid = lid.Add(1) {
-					require.NoError(t, layers.SetHashes(th.cdb, lid, types.RandomHash(), types.RandomHash()))
+					require.NoError(t, layers.SetMeshHash(th.cdb, lid, types.RandomHash()))
 				}
 			}
 			reqData, err := codec.Encode(req)
@@ -243,7 +244,8 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	atx.Signature = signer.Sign(atx.SignedBytes())
+	activation.SignAndFinalizeAtx(signer, atx)
+	atx.SetEffectiveNumUnits(atx.NumUnits)
 	vatx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	return vatx
