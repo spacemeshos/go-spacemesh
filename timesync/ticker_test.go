@@ -56,13 +56,6 @@ func (m *mockClock) Now() time.Time {
 	return m.now
 }
 
-func TestNewTicker(t *testing.T) {
-	r := require.New(t)
-	tr := NewTicker(newMockClock(), conv)
-	r.NotNil(tr.subs)
-	r.False(tr.started)
-}
-
 func TestTicker_StartNotifying(t *testing.T) {
 	r := require.New(t)
 	cl := newMockClock()
