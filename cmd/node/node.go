@@ -571,8 +571,8 @@ func (app *App) initServices(
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
 			CertifyThreshold: app.Config.HARE.F + 1,
-			WaitSigLayers:    app.Config.Tortoise.Zdist,
-			NumLayersToKeep:  app.Config.Tortoise.Zdist,
+			LayerBuffer:      app.Config.Tortoise.Zdist,
+			NumLayersToKeep:  app.Config.Tortoise.Zdist * 2,
 		}),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
 	)
