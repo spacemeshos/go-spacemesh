@@ -11,7 +11,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 // Subscription is a subscription to events.
@@ -301,7 +300,7 @@ func SubscribeRewards() Subscription {
 
 // SubscribeToLayers is used to track and report automatically every time a
 // new layer is reached.
-func SubscribeToLayers(ticker *timesync.Ticker) {
+func SubscribeToLayers(ticker LayerClock) {
 	mu.RLock()
 	defer mu.RUnlock()
 

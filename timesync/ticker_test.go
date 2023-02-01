@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-var conv = LayerConv{
+var conv = LayerConverter{
 	duration: 1 * time.Second,
 	genesis:  getTime(),
 }
@@ -124,7 +124,7 @@ func TestTicker_NotifyErrThreshold(t *testing.T) {
 	r := require.New(t)
 	c := newMockClock()
 	ld := 10000 * time.Millisecond
-	tr := NewTicker(c, LayerConv{
+	tr := NewTicker(c, LayerConverter{
 		duration: ld,
 		genesis:  c.Now().Add(-ld * 3).Add(sendTickThreshold),
 	})
@@ -136,7 +136,7 @@ func TestTicker_NotifyErrThreshold(t *testing.T) {
 func TestTicker_timeSinceLastTick(t *testing.T) {
 	r := require.New(t)
 	c := newMockClock()
-	tr := NewTicker(c, LayerConv{
+	tr := NewTicker(c, LayerConverter{
 		duration: 100 * time.Millisecond,
 		genesis:  c.Now().Add(-320 * time.Millisecond),
 	})
@@ -147,7 +147,7 @@ func TestTicker_AwaitLayer(t *testing.T) {
 	r := require.New(t)
 
 	tmr := newMockClock()
-	ticker := NewTicker(tmr, LayerConv{
+	ticker := NewTicker(tmr, LayerConverter{
 		duration: 10 * time.Millisecond,
 		genesis:  tmr.Now(),
 	})
@@ -192,7 +192,7 @@ func TestTicker_AwaitLayerOldSubs(t *testing.T) {
 	r := require.New(t)
 	c := &mockClock{now: time.Now()}
 	lDur := 50 * time.Millisecond
-	tr := NewTicker(c, LayerConv{
+	tr := NewTicker(c, LayerConverter{
 		duration: lDur,
 		genesis:  c.Now(),
 	})
