@@ -296,25 +296,6 @@ func membersContain(members [][]byte, challenge *types.Hash32) bool {
 	return false
 }
 
-func (nb *NIPostBuilder) getProofWithRetry(ctx context.Context, client PoetProvingServiceClient, roundID string, retryInterval time.Duration) (*types.PoetProofMessage, error) {
-	for {
-		proof, err := client.GetProof(ctx, roundID)
-		switch {
-		case err == nil:
-			return proof, nil
-		case errors.Is(err, ErrUnavailable) || errors.Is(err, ErrNotFound):
-			nb.log.With().Debug("Proof not found, retrying", log.Duration("interval", retryInterval))
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("retry was canceled: %w", ctx.Err())
-			case <-time.After(retryInterval):
-			}
-		default:
-			return nil, err
-		}
-	}
-}
-
 func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash32) (types.PoetProofRef, error) {
 	proofs := make(chan *types.PoetProofMessage, len(nb.state.PoetRequests))
 
@@ -339,7 +320,7 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 			case <-time.After(waitTime):
 			}
 
-			proof, err := nb.getProofWithRetry(ctx, client, round, time.Second)
+			proof, err := client.GetProof(ctx, round)
 			switch {
 			case errors.Is(err, context.Canceled):
 				return fmt.Errorf("querying proof: %w", ctx.Err())

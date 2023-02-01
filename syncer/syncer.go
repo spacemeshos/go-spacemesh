@@ -132,8 +132,7 @@ type Syncer struct {
 	lastATXsSynced    atomic.Value
 
 	// awaitATXSyncedCh is the list of subscribers' channels to notify when this node enters ATX synced state
-	awaitATXSyncedCh []chan struct{}
-	muATXSyncedCh    sync.Mutex // protects the slice above from concurrent access
+	awaitATXSyncedCh chan struct{}
 
 	eg errgroup.Group
 
@@ -161,7 +160,7 @@ func NewSyncer(
 		mesh:             mesh,
 		certHandler:      ch,
 		patrol:           patrol,
-		awaitATXSyncedCh: make([]chan struct{}, 0),
+		awaitATXSyncedCh: make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -170,7 +169,7 @@ func NewSyncer(
 	s.syncTimer = time.NewTicker(s.cfg.SyncInterval)
 	s.validateTimer = time.NewTicker(s.cfg.SyncInterval * 2)
 	if s.dataFetcher == nil {
-		s.dataFetcher = NewDataFetch(mesh, fetcher, s.logger)
+		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, s.logger)
 	}
 	if s.forkFinder == nil {
 		s.forkFinder = NewForkFinder(s.logger, cdb.Database, fetcher, s.cfg.MaxHashesInReq, s.cfg.MaxStaleDuration)
@@ -195,15 +194,7 @@ func (s *Syncer) Close() {
 
 // RegisterForATXSynced returns a channel for notification when the node enters ATX synced state.
 func (s *Syncer) RegisterForATXSynced() chan struct{} {
-	ch := make(chan struct{})
-	if s.ListenToATXGossip() {
-		close(ch)
-		return ch
-	}
-	s.muATXSyncedCh.Lock()
-	defer s.muATXSyncedCh.Unlock()
-	s.awaitATXSyncedCh = append(s.awaitATXSyncedCh, ch)
-	return ch
+	return s.awaitATXSyncedCh
 }
 
 // ListenToGossip returns true if the node is listening to gossip for blocks/TXs data.
@@ -269,13 +260,11 @@ func (s *Syncer) Start(ctx context.Context) {
 
 func (s *Syncer) setATXSynced() {
 	s.atxSyncState.Store(synced)
-
-	s.muATXSyncedCh.Lock()
-	defer s.muATXSyncedCh.Unlock()
-	for _, ch := range s.awaitATXSyncedCh {
-		close(ch)
+	select {
+	case <-s.awaitATXSyncedCh:
+	default:
+		close(s.awaitATXSyncedCh)
 	}
-	s.awaitATXSyncedCh = make([]chan struct{}, 0)
 }
 
 func (s *Syncer) getATXSyncState() syncState {
@@ -378,15 +367,24 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		log.Stringer("processed", s.mesh.ProcessedLayer()))
 
 	s.setStateBeforeSync(ctx)
+	// TODO
+	// https://github.com/spacemeshos/go-spacemesh/issues/3970
+	// https://github.com/spacemeshos/go-spacemesh/issues/3987
 	syncFunc := func() bool {
 		if !s.ListenToATXGossip() {
-			logger.With().Info("syncing atx before everything else", s.ticker.GetCurrentLayer())
+			logger.With().Info("syncing atx from genesis", s.ticker.GetCurrentLayer())
 			for epoch := s.getLastSyncedATXs() + 1; epoch <= s.ticker.GetCurrentLayer().GetEpoch(); epoch++ {
 				if err := s.fetchEpochATX(ctx, epoch); err != nil {
 					return false
 				}
 			}
 			logger.With().Info("atxs synced to epoch", s.getLastSyncedATXs())
+
+			logger.With().Info("syncing malicious proofs")
+			if err := s.syncMalfeasance(ctx); err != nil {
+				return false
+			}
+			logger.With().Info("malicious IDs synced")
 			s.setATXSynced()
 		}
 
@@ -493,6 +491,13 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 			s.setTargetSyncedLayer(ctx, current.Add(numGossipSyncLayers))
 		}
 	}
+}
+
+func (s *Syncer) syncMalfeasance(ctx context.Context) error {
+	if err := s.dataFetcher.PollMaliciousProofs(ctx); err != nil {
+		return fmt.Errorf("PollMaliciousProofs: %w", err)
+	}
+	return nil
 }
 
 func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...p2p.Peer) error {

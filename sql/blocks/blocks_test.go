@@ -72,6 +72,9 @@ func TestValidity(t *testing.T) {
 	require.True(t, valid)
 
 	_, err = IsValid(db, blocks[1].ID())
+	require.ErrorIs(t, err, ErrValidityNotDecided)
+
+	_, err = IsValid(db, types.RandomBlockID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	require.NoError(t, SetInvalid(db, blocks[0].ID()))

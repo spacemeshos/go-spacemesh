@@ -47,3 +47,21 @@ func TestMalicious(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, proof, got)
 }
+
+func Test_GetMalicious(t *testing.T) {
+	db := sql.InMemory()
+	got, err := GetMalicious(db)
+	require.NoError(t, err)
+	require.Nil(t, got)
+
+	const numBad = 11
+	bad := make([]types.NodeID, 0, numBad)
+	for i := 0; i < numBad; i++ {
+		nid := types.NodeID{byte(i + 1)}
+		bad = append(bad, nid)
+		require.NoError(t, SetMalicious(db, nid, types.RandomBytes(11)))
+	}
+	got, err = GetMalicious(db)
+	require.NoError(t, err)
+	require.Equal(t, bad, got)
+}

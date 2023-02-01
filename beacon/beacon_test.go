@@ -274,7 +274,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 	tpd.mClock.EXPECT().LayerToTime((gLayer.GetEpoch() + 1).FirstLayer()).Return(time.Now()).Times(1)
 	tpd.Start(context.Background())
 
-	epoch3Beacon := types.HexToBeacon("0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+	epoch3Beacon := types.HexToBeacon("0xaf1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262")
 	epoch := types.EpochID(3)
 	for i := types.EpochID(2); i < epoch; i++ {
 		lid := i.FirstLayer().Sub(1)
@@ -975,6 +975,6 @@ func TestBeacon_calcBeacon(t *testing.T) {
 		},
 	}
 	beacon := calcBeacon(logtest.New(t), votes)
-	expected := types.HexToBeacon("0x6d148de54cc5ac334cdf4537018209b0e9f5ea94c049417103065eac777ddb5c")
+	expected := types.HexToBeacon("0x98f88210")
 	require.EqualValues(t, expected, beacon)
 }

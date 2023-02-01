@@ -35,6 +35,7 @@ type Generator struct {
 	executor executor
 	fetcher  system.ProposalFetcher
 	cert     certifier
+	patrol   layerPatrol
 
 	hareCh      chan hare.LayerOutput
 	hareOutputs map[types.LayerID]hare.LayerOutput
@@ -92,7 +93,12 @@ func WithHareOutputChan(ch chan hare.LayerOutput) GeneratorOpt {
 
 // NewGenerator creates new block generator.
 func NewGenerator(
-	cdb *datastore.CachedDB, exec executor, m meshProvider, f system.ProposalFetcher, c certifier,
+	cdb *datastore.CachedDB,
+	exec executor,
+	m meshProvider,
+	f system.ProposalFetcher,
+	c certifier,
+	p layerPatrol,
 	opts ...GeneratorOpt,
 ) *Generator {
 	g := &Generator{
@@ -104,6 +110,7 @@ func NewGenerator(
 		executor:    exec,
 		fetcher:     f,
 		cert:        c,
+		patrol:      p,
 		hareOutputs: map[types.LayerID]hare.LayerOutput{},
 	}
 	for _, opt := range opts {
@@ -164,6 +171,7 @@ func (g *Generator) tryGenBlock() {
 			g.logger.WithContext(out.Ctx).With().Info("ready to process hare output", next)
 			_ = g.processHareOutput(out)
 			delete(g.hareOutputs, next)
+			g.patrol.CompleteHare(next)
 			next = next.Add(1)
 		}
 	}

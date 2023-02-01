@@ -52,6 +52,10 @@ type MeshHashes struct {
 	Hashes []types.Hash32
 }
 
+type MaliciousIDs struct {
+	NodeIDs []types.NodeID
+}
+
 type EpochData struct {
 	AtxIDs []types.ATXID
 }

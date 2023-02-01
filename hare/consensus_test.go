@@ -186,6 +186,7 @@ func createConsensusProcess(
 	require.NoError(tb, err)
 	c, err := broker.Register(ctx, layer)
 	require.NoError(tb, err)
+	nonce := types.VRFPostIndex(1)
 	mch := make(chan *types.MalfeasanceGossip, cfg.N)
 	comm := communication{
 		inbox:  c,
@@ -202,7 +203,7 @@ func createConsensusProcess(
 		sig,
 		pke,
 		sig.NodeID(),
-		types.VRFPostIndex(1),
+		&nonce,
 		network,
 		comm,
 		truer{},

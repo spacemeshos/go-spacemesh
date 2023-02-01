@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"go.uber.org/atomic"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -178,11 +179,7 @@ func getLayer(db sql.Executor, lid types.LayerID) (*types.Layer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("layer blks: %w", err)
 	}
-	hash, err := layers.GetHash(db, lid)
-	if err != nil {
-		hash = types.CalcBlockHash32Presorted(types.ToBlockIDs(blks), nil)
-	}
-	return types.NewExistingLayer(lid, hash, blts, blks), nil
+	return types.NewExistingLayer(lid, blts, blks), nil
 }
 
 // ProcessedLayer returns the last processed layer ID.
@@ -230,20 +227,24 @@ func (msh *Mesh) setProcessedLayer(logger log.Log, layerID types.LayerID) error 
 	return nil
 }
 
-func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, newVerified types.LayerID, updated []types.BlockContextualValidity) error {
+func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, updated map[types.LayerID]map[types.BlockID]bool) error {
 	if len(updated) == 0 && msh.validityUpdates == nil {
 		return nil
 	}
-	for _, bv := range updated {
-		if msh.validityUpdates == nil {
-			msh.validityUpdates = make(map[types.LayerID]map[types.BlockID]bool)
+	if msh.validityUpdates == nil {
+		msh.validityUpdates = updated
+	} else {
+		for lid, bvs := range updated {
+			if _, ok := msh.validityUpdates[lid]; !ok {
+				msh.validityUpdates[lid] = map[types.BlockID]bool{}
+			}
+			for bid, valid := range bvs {
+				msh.validityUpdates[lid][bid] = valid
+			}
 		}
-		if _, ok := msh.validityUpdates[bv.Layer]; !ok {
-			msh.validityUpdates[bv.Layer] = make(map[types.BlockID]bool)
-		}
-		msh.validityUpdates[bv.Layer][bv.ID] = bv.Validity
 	}
-	logger.With().Debug("processing validity update",
+
+	logger.With().Info("processing validity update",
 		log.Int("num_updates", len(msh.validityUpdates)),
 		log.Object("updates", log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
 			for lid, bvs := range msh.validityUpdates {
@@ -263,7 +264,7 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, new
 			continue
 		}
 		logger := logger.WithFields(lid)
-		valids, err := layerValidBlocks(logger, msh.cdb, lid, newVerified, bvs)
+		valids, err := layerValidBlocks(logger, msh.cdb, lid, bvs)
 		if err != nil {
 			return err
 		}
@@ -296,6 +297,10 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, new
 		msh.setLatestLayerInState(revertTo)
 	}
 
+	// only persist block validity *after* the state has been checked.
+	// if validity is persisted and the node restarts before the state is checked for revert,
+	// upon restarts, tortoise will use persisted validity, and there is no way for mesh
+	// to determine whether a state revert should be done.
 	if err := msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		for lid, updates := range msh.validityUpdates {
 			for bid, valid := range updates {
@@ -347,9 +352,8 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 		return err
 	}
 
-	newVerified, updated := msh.trtl.Updates()
-	logger = logger.WithFields(log.Stringer("verified", newVerified))
-	if err = msh.processValidityUpdates(ctx, logger, newVerified, updated); err != nil {
+	updated := msh.trtl.Updates()
+	if err = msh.processValidityUpdates(ctx, logger, updated); err != nil {
 		return err
 	}
 
@@ -361,7 +365,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	}
 
 	if !to.Before(from) {
-		if err = msh.pushLayersToState(ctx, logger, from, to, newVerified); err != nil {
+		if err = msh.pushLayersToState(ctx, logger, from, to); err != nil {
 			return err
 		}
 	}
@@ -371,7 +375,6 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 func persistLayerHashes(dbtx *sql.Tx, lid types.LayerID, valids []*types.Block) error {
 	sortBlocks(valids)
 	var (
-		hash   = types.CalcBlocksHash32(types.ToBlockIDs(valids), nil)
 		hasher = opinionhash.New()
 		err    error
 	)
@@ -385,14 +388,14 @@ func persistLayerHashes(dbtx *sql.Tx, lid types.LayerID, valids []*types.Block) 
 	for _, block := range valids {
 		hasher.WriteSupport(block.ID(), block.TickHeight)
 	}
-	if err = layers.SetHashes(dbtx, lid, hash, hasher.Hash()); err != nil {
+	if err = layers.SetMeshHash(dbtx, lid, hasher.Hash()); err != nil {
 		return fmt.Errorf("persist hashes %v: %w", lid, err)
 	}
 	return nil
 }
 
 // apply the state of a range of layers, including re-adding transactions from invalid blocks to the mempool.
-func (msh *Mesh) pushLayersToState(ctx context.Context, logger log.Log, from, to, latestVerified types.LayerID) error {
+func (msh *Mesh) pushLayersToState(ctx context.Context, logger log.Log, from, to types.LayerID) error {
 	logger = logger.WithFields(
 		log.Stringer("from", from),
 		log.Stringer("to", to))
@@ -410,7 +413,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, logger log.Log, from, to
 				log.Stringer("in_state", msh.LatestLayerInState()))
 			continue
 		}
-		if err := msh.pushLayer(ctx, logger, layerID, latestVerified); err != nil {
+		if err := msh.pushLayer(ctx, logger, layerID); err != nil {
 			msh.missingLayer.Store(layerID)
 			return err
 		}
@@ -430,65 +433,70 @@ func (msh *Mesh) getBlockToApply(validBlocks []*types.Block) *types.Block {
 	return sorted[0]
 }
 
-func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID, latestVerified types.LayerID, updates map[types.BlockID]bool) ([]*types.Block, error) {
+func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID types.LayerID, updates map[types.BlockID]bool) ([]*types.Block, error) {
 	lyrBlocks, err := blocks.Layer(cdb, layerID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get layer blocks %s: %w", layerID, err)
+		return nil, fmt.Errorf("get db layer blocks %s: %w", layerID, err)
 	}
 
-	var validBlocks []*types.Block
-	logger.With().Debug("getting layer valid blocks", log.Stringer("verified", latestVerified))
-	if layerID.After(latestVerified) {
-		// tortoise has not verified this layer yet, simply apply the block that hare certified
-		bid, err := certificates.GetHareOutput(cdb, layerID)
-		if err != nil {
-			return nil, fmt.Errorf("%w: get hare output %v", errMissingHareOutput, err.Error())
-		}
-		// hare output an empty layer, or the network have multiple valid certificates
-		if bid == types.EmptyBlockID {
-			return nil, nil
-		}
-		for _, b := range lyrBlocks {
-			if b.ID() == bid {
-				validBlocks = append(validBlocks, b)
-				break
-			}
-		}
-		return validBlocks, nil
+	if len(lyrBlocks) == 0 {
+		logger.Info("layer has no blocks")
+		return nil, nil
 	}
 
+	var valids, invalids []*types.Block
 	for _, b := range lyrBlocks {
-		var valid, found bool
-		if updates != nil {
-			if v, ok := updates[b.ID()]; ok {
-				valid = v
-				found = true
-			}
-		}
-		if !found {
-			valid, err = blocks.IsValid(cdb, b.ID())
-			if err != nil && !errors.Is(err, sql.ErrNotFound) {
-				return nil, fmt.Errorf("get block validity: %w", err)
-			}
-			if err == nil {
-				logger.With().Debug("using persisted validity", b.ID(), log.Bool("validity", valid))
+		if v, ok := updates[b.ID()]; ok {
+			if v {
+				valids = append(valids, b)
 			} else {
-				logger.With().Debug("block validity not determined", b.ID())
+				invalids = append(invalids, b)
 			}
-		}
-		if valid {
-			validBlocks = append(validBlocks, b)
+		} else if v, err = blocks.IsValid(cdb, b.ID()); err == nil {
+			if v {
+				valids = append(valids, b)
+			} else {
+				invalids = append(invalids, b)
+			}
+		} else if !errors.Is(err, blocks.ErrValidityNotDecided) {
+			return nil, fmt.Errorf("get block validity: %w", err)
 		}
 	}
-	return validBlocks, nil
+
+	if len(valids) > 0 {
+		return valids, nil
+	}
+
+	if len(invalids) > 0 {
+		logger.Info("layer blocks are all invalid")
+		return nil, nil
+	}
+
+	// tortoise has not verified this layer yet, simply apply the block that hare certified
+	bid, err := certificates.GetHareOutput(cdb, layerID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: get hare output %v", errMissingHareOutput, err.Error())
+	}
+	// hare output an empty layer, or the network have multiple valid certificates
+	if bid == types.EmptyBlockID {
+		return nil, nil
+	}
+	for _, b := range lyrBlocks {
+		if b.ID() == bid {
+			logger.With().Info("hare output as valid block", b.ID())
+			valids = append(valids, b)
+			break
+		}
+	}
+	return valids, nil
 }
 
-func (msh *Mesh) pushLayer(ctx context.Context, logger log.Log, lid, verified types.LayerID) error {
+func (msh *Mesh) pushLayer(ctx context.Context, logger log.Log, lid types.LayerID) error {
 	if latest := msh.LatestLayerInState(); lid != latest.Add(1) {
 		logger.With().Fatal("update state out-of-order", log.Stringer("latest", latest))
 	}
 
-	valids, err := layerValidBlocks(logger, msh.cdb, lid, verified, nil)
+	valids, err := layerValidBlocks(logger, msh.cdb, lid, map[types.BlockID]bool{})
 	if err != nil {
 		return err
 	}
@@ -550,6 +558,67 @@ func (msh *Mesh) revertState(ctx context.Context, logger log.Log, revertTo types
 	return nil
 }
 
+func (msh *Mesh) saveHareOutput(ctx context.Context, logger log.Log, lid types.LayerID, bid types.BlockID) error {
+	logger.Info("saving hare output for layer")
+	var (
+		certs []certificates.CertValidity
+		err   error
+	)
+	if err = msh.cdb.WithTx(ctx, func(tx *sql.Tx) error {
+		// check if a certificate has been generated or sync'ed.
+		// - node generated the certificate when it collected enough certify messages
+		// - hare outputs are processed in layer order. i.e. when hare fails for a previous layer N,
+		//   a later layer N+x has to wait for syncer to fetch block certificate in layer N for the mesh
+		//   to make progress. therefore, by the time layer N+x is processed, syncer may already have
+		//   sync'ed the certificate for this layer
+		certs, err = certificates.Get(tx, lid)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			return fmt.Errorf("mesh get cert %v: %w", lid, err)
+		}
+		saved := false
+		for _, c := range certs {
+			if c.Block == bid {
+				saved = true
+				break
+			} else if c.Valid {
+				err = certificates.SetHareOutputInvalid(tx, lid, bid)
+				if err != nil {
+					return fmt.Errorf("save invalid hare output %v/%v: %w", lid, bid, err)
+				}
+				saved = true
+				break
+			}
+		}
+		if !saved {
+			err = certificates.SetHareOutput(tx, lid, bid)
+			if err != nil {
+				return fmt.Errorf("save valid hare output %v/%v: %w", lid, bid, err)
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	switch len(certs) {
+	case 0:
+		msh.trtl.OnHareOutput(lid, bid)
+	case 1:
+		logger.With().Info("already synced certificate",
+			log.Stringer("cert_block_id", certs[0].Block),
+			log.Bool("cert_valid", certs[0].Valid))
+	default: // more than 1 cert
+		logger.With().Warning("multiple certs found in network",
+			log.Object("certificates", log.ObjectMarshallerFunc(func(encoder zapcore.ObjectEncoder) error {
+				for _, cert := range certs {
+					encoder.AddString("block_id", cert.Block.String())
+					encoder.AddBool("valid", cert.Valid)
+				}
+				return nil
+			})))
+	}
+	return nil
+}
+
 // ProcessLayerPerHareOutput receives hare output once it finishes running for a given layer.
 func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.LayerID, blockID types.BlockID, executed bool) error {
 	logger := msh.logger.WithContext(ctx).WithFields(layerID, blockID)
@@ -572,11 +641,10 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 		Status:  events.LayerStatusTypeApproved,
 	})
 
-	logger.Info("saving hare output for layer")
-	if err = certificates.SetHareOutput(msh.cdb, layerID, blockID); err != nil {
-		return fmt.Errorf("save hare output %v: %w", blockID, err)
+	if err = msh.saveHareOutput(ctx, logger, layerID, blockID); err != nil {
+		return err
 	}
-	msh.trtl.OnHareOutput(layerID, blockID)
+
 	if executed {
 		if err = msh.persistState(ctx, logger, layerID, block.ID(), []*types.Block{block}); err != nil {
 			return err
@@ -625,7 +693,7 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
 				return err
 			}
-			if prev != nil {
+			if prev != nil && prev.ID() != ballot.ID() {
 				var ballotProof types.BallotProof
 				for i, b := range []*types.Ballot{prev, ballot} {
 					ballotProof.Messages[i] = types.BallotProofMsg{
