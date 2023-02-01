@@ -36,6 +36,16 @@ func (l EpochID) FirstLayer() LayerID {
 	return NewLayerID(uint32(l)).Mul(GetLayersPerEpoch())
 }
 
+// Add Epochs to the EpochID. Panics on wraparound.
+func (l EpochID) Add(epochs uint32) EpochID {
+	nl := uint32(l) + epochs
+	if nl < uint32(l) {
+		panic("epoch_id wraparound")
+	}
+	l = EpochID(nl)
+	return l
+}
+
 // Field returns a log field. Implements the LoggableField interface.
 func (l EpochID) Field() log.Field { return log.Uint32("epoch_id", uint32(l)) }
 

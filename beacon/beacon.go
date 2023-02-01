@@ -226,7 +226,7 @@ func (pd *ProtocolDriver) Start(ctx context.Context) {
 
 		pd.setProposalTimeForNextEpoch()
 		pd.eg.Go(func() error {
-			pd.listenLayers(ctx)
+			pd.listenEpochs(ctx)
 			return nil
 		})
 	})
@@ -526,20 +526,29 @@ func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
 }
 
 // listens to new layers.
-func (pd *ProtocolDriver) listenLayers(ctx context.Context) {
+func (pd *ProtocolDriver) listenEpochs(ctx context.Context) {
 	pd.logger.With().Info("starting listening layers")
 
+	currentEpoch := pd.clock.GetCurrentLayer().GetEpoch()
+	layer := currentEpoch.Add(1).FirstLayer()
 	for {
-		layer := pd.clock.GetCurrentLayer().GetEpoch().FirstLayer().Add(types.GetLayersPerEpoch())
-
 		select {
 		case <-pd.ctx.Done():
 			return
 		case <-pd.clock.AwaitLayer(layer):
-			pd.logger.With().Debug("received tick", layer)
-			epoch := layer.GetEpoch()
+			current := pd.clock.GetCurrentLayer()
+			if current.Before(layer) {
+				pd.logger.With().Info("time sync detected, realigning Beacon")
+				continue
+			}
+			if !current.FirstInEpoch() {
+				continue
+			}
+			epoch := current.GetEpoch()
+			layer = epoch.Add(1).FirstLayer()
+
 			pd.setProposalTimeForNextEpoch()
-			pd.logger.With().Info("first layer in epoch", layer, epoch)
+			pd.logger.With().Info("processing epoch", current, epoch)
 			pd.eg.Go(func() error {
 				_ = pd.onNewEpoch(ctx, epoch)
 				return nil

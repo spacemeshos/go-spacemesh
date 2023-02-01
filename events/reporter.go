@@ -311,16 +311,21 @@ func SubscribeToLayers(ticker *timesync.Ticker) {
 
 	// This will block, so run in a goroutine
 	go func() {
+		next := ticker.GetCurrentLayer().Add(1)
 		for {
 			mu.RLock()
 			stopChan := reporter.stopChan
 			mu.RUnlock()
 
-			next := ticker.GetCurrentLayer().Add(1)
-
 			select {
 			case <-ticker.AwaitLayer(next):
-				log.With().Debug("reporter got new layer", next)
+				current := ticker.GetCurrentLayer()
+				if current.Before(next) {
+					log.Info("time sync detected, realigning ProposalBuilder")
+					continue
+				}
+				next = current.Add(1)
+				log.With().Debug("reporter got new layer", current)
 				ReportNodeStatusUpdate()
 			case <-stopChan:
 				return
