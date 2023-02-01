@@ -171,7 +171,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 		require.NoError(t, certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID))
 	}
 	meshHash := types.RandomHash()
-	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
+	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), meshHash))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
@@ -232,7 +232,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 		require.NoError(t, certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID))
 	}
 	meshHash := types.RandomHash()
-	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
+	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), meshHash))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
@@ -348,7 +348,7 @@ func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Opinion{Votes: types.Votes{Base: types.RandomBallotID()}}, nil)
 	b.mTortoise.EXPECT().LatestComplete().Return(types.GetEffectiveGenesis())
-	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), types.RandomHash()))
+	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var got types.Proposal
@@ -383,7 +383,7 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Opinion{Votes: types.Votes{Base: types.RandomBallotID()}}, nil)
 	b.mTortoise.EXPECT().LatestComplete().Return(types.GetEffectiveGenesis())
-	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), types.RandomHash()))
+	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var got types.Proposal
@@ -421,7 +421,7 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Opinion{Votes: types.Votes{Base: types.RandomBallotID()}}, nil)
 	b.mTortoise.EXPECT().LatestComplete().Return(types.GetEffectiveGenesis())
-	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), types.RandomHash()))
+	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 
 	b.Close()
 	require.NoError(t, b.handleLayer(context.Background(), layerID))
@@ -451,7 +451,7 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Opinion{Votes: types.Votes{Base: types.RandomBallotID()}}, nil)
 	b.mTortoise.EXPECT().LatestComplete().Return(types.GetEffectiveGenesis())
-	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), types.RandomHash()))
+	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).Return(errors.New("unknown"))
 
 	// publish error is ignored
@@ -608,12 +608,12 @@ func TestBuilder_UniqueBlockID(t *testing.T) {
 	meshHash := types.RandomHash()
 
 	builder1.mTortoise.EXPECT().LatestComplete().Return(layerID.Sub(1))
-	require.NoError(t, layers.SetHashes(builder1.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
+	require.NoError(t, layers.SetMeshHash(builder1.cdb, layerID.Sub(1), meshHash))
 	b1, err := builder1.createProposal(context.Background(), layerID, nil, atxID1, activeSet, beacon, nil, types.Opinion{})
 	require.NoError(t, err)
 
 	builder2.mTortoise.EXPECT().LatestComplete().Return(layerID.Sub(1))
-	require.NoError(t, layers.SetHashes(builder2.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
+	require.NoError(t, layers.SetMeshHash(builder2.cdb, layerID.Sub(1), meshHash))
 	b2, err := builder2.createProposal(context.Background(), layerID, nil, atxID2, activeSet, beacon, nil, types.Opinion{})
 	require.NoError(t, err)
 

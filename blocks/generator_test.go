@@ -308,7 +308,7 @@ func Test_processHareOutput(t *testing.T) {
 			if tc.optimistic {
 				meshHash = types.RandomHash()
 			}
-			require.NoError(t, layers.SetHashes(tg.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
+			require.NoError(t, layers.SetMeshHash(tg.cdb, layerID.Sub(1), meshHash))
 			// create multiple proposals with overlapping TXs
 			numProposals := 10
 			txIDs := createAndSaveTxs(t, numTXs, tg.cdb)
@@ -401,12 +401,12 @@ func Test_processHareOutput_corner_cases(t *testing.T) {
 
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids).Return(nil).AnyTimes()
 	t.Run("node mesh differ from consensus", func(t *testing.T) {
-		require.NoError(t, layers.SetHashes(tg.cdb, layerID.Sub(1), types.RandomHash(), types.RandomHash()))
+		require.NoError(t, layers.SetMeshHash(tg.cdb, layerID.Sub(1), types.RandomHash()))
 		require.ErrorIs(t, tg.processHareOutput(hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}), errNodeHasBadMeshHash)
 	})
 
 	t.Run("execute failed", func(t *testing.T) {
-		require.NoError(t, layers.SetHashes(tg.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
+		require.NoError(t, layers.SetMeshHash(tg.cdb, layerID.Sub(1), meshHash))
 		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, lid types.LayerID, tickHeight uint64, rewards []types.AnyReward, tids []types.TransactionID) (*types.Block, error) {
 				require.Len(t, tids, len(txIDs))
