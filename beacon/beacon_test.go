@@ -676,19 +676,19 @@ func TestBeacon_findMajorityBeacon(t *testing.T) {
 
 	beaconFromBallots := map[types.Beacon]*beaconWeight{
 		beacon1: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 2,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 2,
 		},
 		beacon2: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(3),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(3),
+			numEligibility: 1,
 		},
 		beacon3: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 1,
 		},
 	}
 	epoch := types.EpochID(3)
@@ -712,19 +712,19 @@ func TestBeacon_findMajorityBeacon_plurality(t *testing.T) {
 
 	beaconFromBallots := map[types.Beacon]*beaconWeight{
 		beacon1: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 2,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 2,
 		},
 		beacon2: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.DivUint64(11, 10),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.DivUint64(11, 10),
+			numEligibility: 1,
 		},
 		beacon3: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 1,
 		},
 	}
 	epoch := types.EpochID(3)
@@ -748,19 +748,19 @@ func TestBeacon_findMajorityBeacon_NotEnoughBallots(t *testing.T) {
 
 	beaconFromBallots := map[types.Beacon]*beaconWeight{
 		beacon1: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 2,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 2,
 		},
 		beacon2: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(3),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(3),
+			numEligibility: 1,
 		},
 		beacon3: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 1,
 		},
 	}
 	epoch := types.EpochID(3)

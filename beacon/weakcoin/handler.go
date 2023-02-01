@@ -2,6 +2,7 @@ package weakcoin
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -14,17 +15,12 @@ import (
 // HandleProposal defines method to handle Beacon Weak Coin Messages from gossip.
 func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
 	logger := wc.logger.WithContext(ctx)
-	logger.With().Debug("received weak coin message",
-		log.String("from", peer.String()),
-		log.Binary("data", msg),
-	)
+	logger.With().Debug("received weak coin message", log.Stringer("from", peer))
 
 	var message Message
 	if err := codec.Decode(msg, &message); err != nil {
-		logger.With().Warning("received invalid weak coin message",
-			log.Binary("message", msg),
-			log.Err(err))
-		return pubsub.ValidationIgnore
+		logger.With().Warning("received invalid weak coin message", log.Err(err))
+		return pubsub.ValidationReject
 	}
 
 	if err := wc.receiveMessage(ctx, message); err != nil {
@@ -35,8 +31,8 @@ func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byt
 }
 
 func (wc *WeakCoin) receiveMessage(ctx context.Context, message Message) error {
-	if wc.aboveThreshold(message.Signature) {
-		return fmt.Errorf("proposal %x is above threshold", message.Signature)
+	if wc.aboveThreshold(message.VrfSignature) {
+		return fmt.Errorf("proposal %x is above threshold", hex.EncodeToString(message.VrfSignature))
 	}
 
 	wc.mu.Lock()
