@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -28,13 +29,15 @@ type state struct {
 	hasVoted                  []map[string]struct{}
 	proposalPhaseFinishedTime time.Time
 	proposalChecker           eligibilityChecker
+	unitAllowance             weakcoin.UnitAllowances
 }
 
-func newState(logger log.Log, cfg Config, epochWeight uint64, nonce types.VRFPostIndex, atxids []types.ATXID) *state {
+func newState(logger log.Log, cfg Config, nonce types.VRFPostIndex, epochWeight uint64, atxids []types.ATXID, ua weakcoin.UnitAllowances) *state {
 	return &state{
 		logger:                  logger,
 		epochWeight:             epochWeight,
 		nonce:                   nonce,
+		unitAllowance:           ua,
 		atxs:                    atxids,
 		firstRoundIncomingVotes: make(map[string]proposalList),
 		votesMargin:             map[string]*big.Int{},

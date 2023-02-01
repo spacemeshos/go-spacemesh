@@ -464,11 +464,20 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		return s, nil
 	}
 
-	epochWeight, atxids, err := pd.cdb.GetEpochWeight(epoch)
-	if err != nil {
-		logger.With().Error("failed to get weight targeting epoch", log.Err(err))
-		return nil, fmt.Errorf("get epoch weight: %w", err)
+	var (
+		epochWeight uint64
+		atxids      []types.ATXID
+		miners      = map[string]uint64{}
+	)
+	if err := pd.cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
+		epochWeight += header.GetWeight()
+		atxids = append(atxids, header.ID)
+		miners[string(header.NodeID.Bytes())] += uint64(header.NumUnits)
+		return true
+	}); err != nil {
+		return nil, err
 	}
+
 	if epochWeight == 0 {
 		logger.With().Error("zero weight targeting epoch", log.Err(errZeroEpochWeight))
 		return nil, errZeroEpochWeight
@@ -479,7 +488,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		logger.With().Error("get own VRF nonce", log.Err(err))
 		return nil, fmt.Errorf("get own VRF nonce: %w", err)
 	}
-	pd.states[epoch] = newState(logger, pd.config, epochWeight, nonce, atxids)
+	pd.states[epoch] = newState(logger, pd.config, nonce, epochWeight, atxids, miners)
 	return pd.states[epoch], nil
 }
 
@@ -496,10 +505,10 @@ func (pd *ProtocolDriver) setProposalTimeForNextEpoch() {
 	pd.earliestProposalTime = t
 }
 
-func (pd *ProtocolDriver) setupEpoch(logger log.Log, epoch types.EpochID) ([]types.ATXID, types.VRFPostIndex, error) {
+func (pd *ProtocolDriver) setupEpoch(logger log.Log, epoch types.EpochID) (*state, error) {
 	s, err := pd.initEpochStateIfNotPresent(logger, epoch)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	pd.mu.Lock()
@@ -507,7 +516,7 @@ func (pd *ProtocolDriver) setupEpoch(logger log.Log, epoch types.EpochID) ([]typ
 	pd.roundInProgress = types.FirstRound
 	pd.earliestVoteTime = time.Time{}
 
-	return s.atxs, s.nonce, nil
+	return s, nil
 }
 
 func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
@@ -605,18 +614,18 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) e
 		return err
 	}
 
-	atxids, nonce, err := pd.setupEpoch(logger, epoch)
+	s, err := pd.setupEpoch(logger, epoch)
 	if err != nil {
 		logger.With().Error("epoch not setup correctly", log.Err(err))
 		return err
 	}
 
 	logger.With().Info("participating beacon protocol with ATX", atxID)
-	pd.runProtocol(ctx, epoch, nonce, atxids)
+	pd.runProtocol(ctx, epoch, s)
 	return nil
 }
 
-func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, nonce types.VRFPostIndex, atxs []types.ATXID) {
+func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, st *state) {
 	ctx = log.WithNewSessionID(ctx)
 	targetEpoch := epoch + 1
 	logger := pd.logger.WithContext(ctx).WithFields(epoch, log.Uint32("target_epoch", uint32(targetEpoch)))
@@ -624,10 +633,10 @@ func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, 
 	pd.setBeginProtocol(ctx)
 	defer pd.setEndProtocol(ctx)
 
-	pd.startWeakCoinEpoch(ctx, epoch, nonce, atxs)
+	pd.weakCoin.StartEpoch(ctx, epoch, st.nonce, st.unitAllowance)
 	defer pd.weakCoin.FinishEpoch(ctx, epoch)
 
-	if err := pd.runProposalPhase(ctx, epoch, nonce); err != nil {
+	if err := pd.runProposalPhase(ctx, epoch, st.nonce); err != nil {
 		logger.With().Warning("proposal phase failed", log.Err(err))
 		return
 	}
@@ -800,20 +809,6 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 
 	logger.Info("consensus phase finished")
 	return ownVotes, nil
-}
-
-func (pd *ProtocolDriver) startWeakCoinEpoch(ctx context.Context, epoch types.EpochID, nonce types.VRFPostIndex, atxs []types.ATXID) {
-	// we need to pass a map with spacetime unit allowances before any round is started
-	ua := weakcoin.UnitAllowances{}
-	for _, id := range atxs {
-		header, err := pd.cdb.GetAtxHeader(id)
-		if err != nil {
-			pd.logger.WithContext(ctx).With().Panic("unable to load atx header", log.Err(err))
-		}
-		ua[string(header.NodeID.Bytes())] += uint64(header.EffectiveNumUnits)
-	}
-
-	pd.weakCoin.StartEpoch(ctx, epoch, nonce, ua)
 }
 
 func (pd *ProtocolDriver) markProposalPhaseFinished(epoch types.EpochID, finishedAt time.Time) error {
