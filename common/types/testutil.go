@@ -54,6 +54,16 @@ func RandomATXID() ATXID {
 	return ATXID(CalcHash32(b))
 }
 
+// RandomNodeID generates a random NodeID for testing.
+func RandomNodeID() NodeID {
+	b := make([]byte, NodeIDSize)
+	_, err := rand.Read(b)
+	if err != nil {
+		return EmptyNodeID
+	}
+	return NodeID(CalcHash32(b))
+}
+
 // RandomBallotID generates a random BallotID for testing.
 func RandomBallotID() BallotID {
 	b := make([]byte, BallotIDSize)
@@ -92,10 +102,12 @@ func RandomTransactionID() TransactionID {
 // RandomBallot generates a Ballot with random content for testing.
 func RandomBallot() *Ballot {
 	return &Ballot{
+		BallotMetadata: BallotMetadata{
+			Layer: NewLayerID(10),
+		},
 		InnerBallot: InnerBallot{
-			AtxID:      RandomATXID(),
-			RefBallot:  RandomBallotID(),
-			LayerIndex: NewLayerID(10),
+			AtxID:     RandomATXID(),
+			RefBallot: RandomBallotID(),
 		},
 		Votes: Votes{
 			Base:    RandomBallotID(),

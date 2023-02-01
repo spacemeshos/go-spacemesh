@@ -14,6 +14,7 @@ const (
 	LayerIDSize = 4
 
 	// BootstrapBeacon is the hex value of the beacon used during genesis.
+	// TODO: make this a config.
 	BootstrapBeacon = "0x333c04dd151a2a6831c039cb9a651df29198be8a04e16ce861d4b6a34a11c954" // sha256("bootstrap")
 )
 
@@ -140,7 +141,6 @@ func (l LayerID) String() string {
 // Layer contains a list of proposals and their corresponding LayerID.
 type Layer struct {
 	index   LayerID
-	hash    Hash32
 	ballots []*Ballot
 	blocks  []*Block
 }
@@ -176,15 +176,10 @@ func (l *Layer) BallotIDs() []BallotID {
 	return ToBallotIDs(l.ballots)
 }
 
-// Hash returns the 32-byte sha256 sum of the block IDs in this layer, sorted in lexicographic order.
-func (l Layer) Hash() Hash32 {
-	return l.hash
-}
-
 // AddBallot adds a ballot to this layer. Panics if the ballot's index doesn't match the layer.
 func (l *Layer) AddBallot(b *Ballot) {
-	if b.LayerIndex != l.index {
-		log.Panic("add ballot with wrong layer number act %v exp %v", b.LayerIndex, l.index)
+	if b.Layer != l.index {
+		log.Panic("add ballot with wrong layer number act %v exp %v", b.Layer, l.index)
 	}
 	l.ballots = append(l.ballots, b)
 }
@@ -208,10 +203,9 @@ func (l *Layer) SetBlocks(blocks []*Block) {
 }
 
 // NewExistingLayer returns a new layer with the given list of blocks without validation.
-func NewExistingLayer(idx LayerID, hash Hash32, ballots []*Ballot, blocks []*Block) *Layer {
+func NewExistingLayer(idx LayerID, ballots []*Ballot, blocks []*Block) *Layer {
 	return &Layer{
 		index:   idx,
-		hash:    hash,
 		ballots: ballots,
 		blocks:  blocks,
 	}

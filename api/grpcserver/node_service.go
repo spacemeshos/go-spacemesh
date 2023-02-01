@@ -25,6 +25,7 @@ import (
 // data such as node status, software version, errors, etc. It can also be used to start
 // the sync process, or to shut down the node.
 type NodeService struct {
+	appCtx      context.Context
 	mesh        api.MeshAPI
 	genTime     api.GenesisTimeAPI
 	peerCounter api.PeerCounter
@@ -39,9 +40,10 @@ func (s NodeService) RegisterService(server *Server) {
 
 // NewNodeService creates a new grpc service using config data.
 func NewNodeService(
-	peers api.PeerCounter, msh api.MeshAPI, genTime api.GenesisTimeAPI, syncer api.Syncer, atxapi api.ActivationAPI,
+	appCtx context.Context, peers api.PeerCounter, msh api.MeshAPI, genTime api.GenesisTimeAPI, syncer api.Syncer, atxapi api.ActivationAPI,
 ) *NodeService {
 	return &NodeService{
+		appCtx:      appCtx,
 		mesh:        msh,
 		genTime:     genTime,
 		peerCounter: peers,
@@ -108,9 +110,9 @@ func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 }
 
 // SyncStart requests that the node start syncing the mesh (if it isn't already syncing).
-func (s NodeService) SyncStart(ctx context.Context, _ *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
+func (s NodeService) SyncStart(context.Context, *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
 	log.Info("GRPC NodeService.SyncStart")
-	s.syncer.Start(ctx)
+	s.syncer.Start(s.appCtx)
 	return &pb.SyncStartResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
@@ -144,12 +146,12 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 	log.Info("GRPC NodeService.StatusStream")
 
 	var (
-		statusCh      <-chan any
+		statusCh      <-chan events.Status
 		statusBufFull <-chan struct{}
 	)
 
 	if statusSubscription := events.SubscribeStatus(); statusSubscription != nil {
-		statusCh, statusBufFull = consumeEvents(stream.Context(), statusSubscription)
+		statusCh, statusBufFull = consumeEvents[events.Status](stream.Context(), statusSubscription)
 	}
 
 	for {
@@ -193,12 +195,12 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 	log.Info("GRPC NodeService.ErrorStream")
 
 	var (
-		errorsCh      <-chan any
+		errorsCh      <-chan events.NodeError
 		errorsBufFull <-chan struct{}
 	)
 
 	if errorsSubscription := events.SubscribeErrors(); errorsSubscription != nil {
-		errorsCh, errorsBufFull = consumeEvents(stream.Context(), errorsSubscription)
+		errorsCh, errorsBufFull = consumeEvents[events.NodeError](stream.Context(), errorsSubscription)
 	}
 	if err := stream.SendHeader(metadata.MD{}); err != nil {
 		return status.Errorf(codes.Unavailable, "can't send header")
@@ -209,13 +211,11 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 		case <-errorsBufFull:
 			log.Info("errors buffer is full, shutting down")
 			return status.Error(codes.Canceled, errErrorsBufferFull)
-		case nodeErrorEvent, ok := <-errorsCh:
+		case nodeError, ok := <-errorsCh:
 			if !ok {
 				log.Info("ErrorStream closed, shutting down")
 				return nil
 			}
-
-			nodeError := nodeErrorEvent.(events.NodeError)
 
 			resp := &pb.ErrorStreamResponse{Error: &pb.NodeError{
 				Level:      convertErrorLevel(nodeError.Level),

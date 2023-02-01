@@ -14,6 +14,7 @@ import (
 // not thread-safe. it relies on ProtocolDriver's thread-safety mechanism.
 type state struct {
 	logger      log.Log
+	nonce       types.VRFPostIndex
 	epochWeight uint64
 	atxs        []types.ATXID
 	// the original proposals as received, bucketed by validity.
@@ -29,10 +30,11 @@ type state struct {
 	proposalChecker           eligibilityChecker
 }
 
-func newState(logger log.Log, cfg Config, epochWeight uint64, atxids []types.ATXID) *state {
+func newState(logger log.Log, cfg Config, epochWeight uint64, nonce types.VRFPostIndex, atxids []types.ATXID) *state {
 	return &state{
 		logger:                  logger,
 		epochWeight:             epochWeight,
+		nonce:                   nonce,
 		atxs:                    atxids,
 		firstRoundIncomingVotes: make(map[string]proposalList),
 		votesMargin:             map[string]*big.Int{},
@@ -76,7 +78,7 @@ func (s *state) addVote(proposal string, vote uint, voteWeight *big.Int) {
 	if _, ok := s.votesMargin[proposal]; !ok {
 		// voteMargin is updated during the proposal phase.
 		// ignore votes on proposals not in the original proposals.
-		s.logger.Warning("ignoring vote for unknown proposal", log.Binary("proposal", []byte(proposal)))
+		s.logger.With().Warning("ignoring vote for unknown proposal", log.Binary("proposal", []byte(proposal)))
 		return
 	}
 	if vote == up {

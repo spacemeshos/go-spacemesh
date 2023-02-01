@@ -2,6 +2,7 @@ package atxs
 
 import (
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -141,6 +142,51 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 	return id, err
 }
 
+// GetByEpochAndNodeID gets any ATX by the specified NodeID in the given epoch.
+func GetByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (*types.VerifiedActivationTx, error) {
+	var (
+		atx *types.VerifiedActivationTx
+		err error
+	)
+	enc := func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(epoch))
+		stmt.BindBytes(2, nodeID.Bytes())
+	}
+	dec := func(stmt *sql.Statement) bool {
+		var (
+			v  types.ActivationTx
+			id types.ATXID
+			n  int
+		)
+		stmt.ColumnBytes(0, id[:])
+		if n, err = codec.DecodeFrom(stmt.ColumnReader(1), &v); err != nil {
+			if err != io.EOF {
+				err = fmt.Errorf("atx decode epoch %v nodeID %v: %w", epoch, nodeID, err)
+				return false
+			}
+		} else if n == 0 {
+			err = fmt.Errorf("atx data missing epoch %v nodeID %v", epoch, nodeID)
+			return false
+		}
+		v.SetID(&id)
+		v.SetNodeID(&nodeID)
+		baseTickHeight := uint64(stmt.ColumnInt64(2))
+		tickCount := uint64(stmt.ColumnInt64(3))
+		atx, err = v.Verify(baseTickHeight, tickCount)
+		return err == nil
+	}
+
+	if rows, err := db.Exec(`
+		select id, atx, base_tick_height, tick_count from atxs
+		where epoch = ?1 and smesher = ?2
+		limit 1;`, enc, dec); err != nil {
+		return nil, fmt.Errorf("atx by epoch %v nodeID %v: %w", epoch, nodeID, err)
+	} else if rows == 0 {
+		return nil, sql.ErrNotFound
+	}
+	return atx, err
+}
+
 // GetIDsByEpoch gets ATX IDs for a given epoch.
 func GetIDsByEpoch(db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {
@@ -160,6 +206,30 @@ func GetIDsByEpoch(db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err
 	}
 
 	return ids, nil
+}
+
+// VRFNonce gets the VRF nonce of a smesher for a given epoch.
+func VRFNonce(db sql.Executor, id types.NodeID, epoch types.EpochID) (nonce types.VRFPostIndex, err error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+		stmt.BindInt64(2, int64(epoch))
+	}
+	dec := func(stmt *sql.Statement) bool {
+		nonce = types.VRFPostIndex(stmt.ColumnInt64(0))
+		return true
+	}
+
+	if rows, err := db.Exec(`
+		select nonce from atxs
+		where smesher = ?1 and epoch < ?2 and nonce is not null
+		order by epoch desc
+		limit 1;`, enc, dec); err != nil {
+		return types.VRFPostIndex(0), fmt.Errorf("exec id %v, epoch %d: %w", id, epoch, err)
+	} else if rows == 0 {
+		return types.VRFPostIndex(0), fmt.Errorf("exec id %v, epoch %d: %w", id, epoch, sql.ErrNotFound)
+	}
+
+	return nonce, err
 }
 
 // GetBlob loads ATX as an encoded blob, ready to be sent over the wire.
@@ -190,32 +260,22 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx, timestamp time.Time) 
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PubLayerID.Uint32()))
 		stmt.BindInt64(3, int64(atx.PublishEpoch()))
-		stmt.BindBytes(4, atx.NodeID().Bytes())
-		stmt.BindBytes(5, buf)
-		stmt.BindInt64(6, timestamp.UnixNano())
-		stmt.BindInt64(7, int64(atx.BaseTickHeight()))
-		stmt.BindInt64(8, int64(atx.TickCount()))
+		if atx.VRFNonce != nil {
+			stmt.BindInt64(4, int64(*atx.VRFNonce))
+		}
+		stmt.BindBytes(5, atx.NodeID().Bytes())
+		stmt.BindBytes(6, buf)
+		stmt.BindInt64(7, timestamp.UnixNano())
+		stmt.BindInt64(8, int64(atx.BaseTickHeight()))
+		stmt.BindInt64(9, int64(atx.TickCount()))
 	}
 
 	_, err = db.Exec(`
-		insert into atxs (id, layer, epoch, smesher, atx, timestamp, base_tick_height, tick_count) 
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);`, enc, nil)
+		insert into atxs (id, layer, epoch, nonce, smesher, atx, timestamp, base_tick_height, tick_count) 
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
-	return nil
-}
-
-// DeleteATXsByNodeID deletes ATXs by node ID.
-func DeleteATXsByNodeID(db sql.Executor, nodeID types.NodeID) error {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.Bytes())
-	}
-
-	if _, err := db.Exec("delete from atxs where smesher = ?1;", enc, nil); err != nil {
-		return fmt.Errorf("exec %v: %w", nodeID, err)
-	}
-
 	return nil
 }
 

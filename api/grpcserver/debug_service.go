@@ -75,7 +75,7 @@ func (d DebugService) ProposalsStream(_ *emptypb.Empty, stream pb.DebugService_P
 	if sub == nil {
 		return status.Errorf(codes.FailedPrecondition, "event reporting is not enabled")
 	}
-	eventch, fullch := consumeEvents(stream.Context(), sub)
+	eventch, fullch := consumeEvents[events.EventProposal](stream.Context(), sub)
 	// send empty header after subscribing to the channel.
 	// this is optional but allows subscriber to wait until stream is fully initialized.
 	if err := stream.SendHeader(metadata.MD{}); err != nil {
@@ -88,8 +88,7 @@ func (d DebugService) ProposalsStream(_ *emptypb.Empty, stream pb.DebugService_P
 		case <-fullch:
 			return status.Errorf(codes.Canceled, "buffer is full")
 		case ev := <-eventch:
-			pev := ev.(events.EventProposal)
-			if err := stream.Send(castEventProposal(&pev)); err != nil {
+			if err := stream.Send(castEventProposal(&ev)); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
 		}
@@ -99,8 +98,8 @@ func (d DebugService) ProposalsStream(_ *emptypb.Empty, stream pb.DebugService_P
 func castEventProposal(ev *events.EventProposal) *pb.Proposal {
 	proposal := &pb.Proposal{
 		Id:      ev.Proposal.ID().Bytes(),
-		Epoch:   &pb.SimpleInt{Value: uint64(ev.Proposal.LayerIndex.GetEpoch())},
-		Layer:   convertLayerID(ev.Proposal.LayerIndex),
+		Epoch:   &pb.SimpleInt{Value: uint64(ev.Proposal.Layer.GetEpoch())},
+		Layer:   convertLayerID(ev.Proposal.Layer),
 		Smesher: &pb.SmesherId{Id: ev.Proposal.SmesherID().Bytes()},
 		Ballot:  ev.Proposal.Ballot.ID().Bytes(),
 	}

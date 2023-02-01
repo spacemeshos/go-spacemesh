@@ -35,18 +35,6 @@ func (m *MocklayerPatrol) EXPECT() *MocklayerPatrolMockRecorder {
 	return m.recorder
 }
 
-// CompleteHare mocks base method.
-func (m *MocklayerPatrol) CompleteHare(arg0 types.LayerID) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "CompleteHare", arg0)
-}
-
-// CompleteHare indicates an expected call of CompleteHare.
-func (mr *MocklayerPatrolMockRecorder) CompleteHare(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompleteHare", reflect.TypeOf((*MocklayerPatrol)(nil).CompleteHare), arg0)
-}
-
 // SetHareInCharge mocks base method.
 func (m *MocklayerPatrol) SetHareInCharge(arg0 types.LayerID) {
 	m.ctrl.T.Helper()
@@ -83,18 +71,18 @@ func (m *MockRolacle) EXPECT() *MockRolacleMockRecorder {
 }
 
 // CalcEligibility mocks base method.
-func (m *MockRolacle) CalcEligibility(arg0 context.Context, arg1 types.LayerID, arg2 uint32, arg3 int, arg4 types.NodeID, arg5 []byte) (uint16, error) {
+func (m *MockRolacle) CalcEligibility(arg0 context.Context, arg1 types.LayerID, arg2 uint32, arg3 int, arg4 types.NodeID, arg5 types.VRFPostIndex, arg6 []byte) (uint16, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CalcEligibility", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret := m.ctrl.Call(m, "CalcEligibility", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 	ret0, _ := ret[0].(uint16)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CalcEligibility indicates an expected call of CalcEligibility.
-func (mr *MockRolacleMockRecorder) CalcEligibility(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+func (mr *MockRolacleMockRecorder) CalcEligibility(arg0, arg1, arg2, arg3, arg4, arg5, arg6 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CalcEligibility", reflect.TypeOf((*MockRolacle)(nil).CalcEligibility), arg0, arg1, arg2, arg3, arg4, arg5)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CalcEligibility", reflect.TypeOf((*MockRolacle)(nil).CalcEligibility), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 }
 
 // IsIdentityActiveOnConsensusView mocks base method.
@@ -113,18 +101,18 @@ func (mr *MockRolacleMockRecorder) IsIdentityActiveOnConsensusView(arg0, arg1, a
 }
 
 // Proof mocks base method.
-func (m *MockRolacle) Proof(arg0 context.Context, arg1 types.LayerID, arg2 uint32) ([]byte, error) {
+func (m *MockRolacle) Proof(arg0 context.Context, arg1 types.VRFPostIndex, arg2 types.LayerID, arg3 uint32) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Proof", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Proof", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Proof indicates an expected call of Proof.
-func (mr *MockRolacleMockRecorder) Proof(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockRolacleMockRecorder) Proof(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MockRolacle)(nil).Proof), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MockRolacle)(nil).Proof), arg0, arg1, arg2, arg3)
 }
 
 // Validate mocks base method.
@@ -178,4 +166,42 @@ func (m *MockstateQuerier) IsIdentityActiveOnConsensusView(arg0 context.Context,
 func (mr *MockstateQuerierMockRecorder) IsIdentityActiveOnConsensusView(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsIdentityActiveOnConsensusView", reflect.TypeOf((*MockstateQuerier)(nil).IsIdentityActiveOnConsensusView), arg0, arg1, arg2)
+}
+
+// MocknonceFetcher is a mock of nonceFetcher interface.
+type MocknonceFetcher struct {
+	ctrl     *gomock.Controller
+	recorder *MocknonceFetcherMockRecorder
+}
+
+// MocknonceFetcherMockRecorder is the mock recorder for MocknonceFetcher.
+type MocknonceFetcherMockRecorder struct {
+	mock *MocknonceFetcher
+}
+
+// NewMocknonceFetcher creates a new mock instance.
+func NewMocknonceFetcher(ctrl *gomock.Controller) *MocknonceFetcher {
+	mock := &MocknonceFetcher{ctrl: ctrl}
+	mock.recorder = &MocknonceFetcherMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocknonceFetcher) EXPECT() *MocknonceFetcherMockRecorder {
+	return m.recorder
+}
+
+// VRFNonce mocks base method.
+func (m *MocknonceFetcher) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (types.VRFPostIndex, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VRFNonce", arg0, arg1)
+	ret0, _ := ret[0].(types.VRFPostIndex)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// VRFNonce indicates an expected call of VRFNonce.
+func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknonceFetcher)(nil).VRFNonce), arg0, arg1)
 }

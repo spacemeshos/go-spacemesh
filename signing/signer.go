@@ -3,13 +3,62 @@ package signing
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 
+	oasis "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
+
+type edSignerOption struct {
+	priv   PrivateKey
+	prefix []byte
+}
+
+// EdSignerOptionFunc modifies EdSigner.
+type EdSignerOptionFunc func(*edSignerOption) error
+
+// WithPrefix sets the prefix used by EdSigner. This usually is the Network ID.
+func WithPrefix(prefix []byte) EdSignerOptionFunc {
+	return func(opt *edSignerOption) error {
+		opt.prefix = prefix
+		return nil
+	}
+}
+
+// WithPrivateKey sets the private key used by EdSigner.
+func WithPrivateKey(priv PrivateKey) EdSignerOptionFunc {
+	return func(opt *edSignerOption) error {
+		if len(priv) != ed25519.PrivateKeySize {
+			return errors.New("could not create EdSigner from the provided key: too small")
+		}
+
+		keyPair := ed25519.NewKeyFromSeed(priv[:32])
+		if !bytes.Equal(keyPair[32:], priv.Public().(ed25519.PublicKey)) {
+			log.Error("Public key and private key do not match")
+			return errors.New("private and public do not match")
+		}
+
+		opt.priv = priv
+		return nil
+	}
+}
+
+// WithKeyFromRand sets the private key used by EdSigner using predictable randomness source.
+func WithKeyFromRand(rand io.Reader) EdSignerOptionFunc {
+	return func(opt *edSignerOption) error {
+		_, priv, err := ed25519.GenerateKey(rand)
+		if err != nil {
+			return fmt.Errorf("could not generate key pair: %w", err)
+		}
+
+		opt.priv = priv
+		return nil
+	}
+}
 
 // EdSigner represents an ED25519 signer.
 type EdSigner struct {
@@ -18,63 +67,36 @@ type EdSigner struct {
 	prefix []byte
 }
 
-// SignerOptionFunc modifies EdSigner.
-type SignerOptionFunc func(*EdSigner)
-
-// WithPrefix sets used by EdSigner.
-func WithPrefix(prefix []byte) SignerOptionFunc {
-	return func(signer *EdSigner) {
-		signer.prefix = prefix
-	}
-}
-
-// NewEdSignerFromKey builds a signer from a private key as byte buffer.
-func NewEdSignerFromKey(key PrivateKey, opts ...SignerOptionFunc) (*EdSigner, error) {
-	if len(key) != ed25519.PrivateKeySize {
-		log.Error("Could not create EdSigner from the provided buffer: buffer too small")
-		return nil, errors.New("buffer too small")
-	}
-
-	sgn := &EdSigner{priv: key}
-	keyPair := ed25519.NewKeyFromSeed(sgn.priv[:32])
-	if !bytes.Equal(keyPair[32:], sgn.priv.Public().(ed25519.PublicKey)) {
-		log.Error("Public key and private key do not match")
-		return nil, errors.New("private and public do not match")
-	}
-	for _, opt := range opts {
-		opt(sgn)
-	}
-	return sgn, nil
-}
-
-// NewEdSignerFromRand generate signer using predictable randomness source.
-func NewEdSignerFromRand(rand io.Reader) *EdSigner {
-	_, priv, err := ed25519.GenerateKey(rand)
-	if err != nil {
-		log.Panic("Could not generate key pair err=%v", err)
-	}
-	return &EdSigner{priv: priv}
-}
-
 // NewEdSigner returns an auto-generated ed signer.
-func NewEdSigner(opts ...SignerOptionFunc) *EdSigner {
-	_, priv, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		log.Panic("Could not generate key pair err=%v", err)
-	}
-	signer := &EdSigner{priv: priv}
+func NewEdSigner(opts ...EdSignerOptionFunc) (*EdSigner, error) {
+	cfg := &edSignerOption{}
+
 	for _, opt := range opts {
-		opt(signer)
+		if err := opt(cfg); err != nil {
+			return nil, err
+		}
 	}
-	return signer
+
+	if cfg.priv == nil {
+		_, priv, err := ed25519.GenerateKey(nil)
+		if err != nil {
+			return nil, fmt.Errorf("could not generate key pair: %w", err)
+		}
+		cfg.priv = priv
+	}
+	sig := &EdSigner{
+		priv:   cfg.priv,
+		prefix: cfg.prefix,
+	}
+	return sig, nil
 }
 
 // Sign signs the provided message.
 func (es *EdSigner) Sign(m []byte) []byte {
-	if es.prefix != nil {
-		m = append(es.prefix, m...)
-	}
-	return ed25519.Sign2(es.priv, m)
+	msg := make([]byte, len(m)+len(es.prefix))
+	copy(msg, es.prefix)
+	copy(msg[len(es.prefix):], m)
+	return ed25519.Sign2(es.priv, msg)
 }
 
 // NodeID returns the node ID of the signer.
@@ -92,15 +114,10 @@ func (es *EdSigner) PrivateKey() PrivateKey {
 	return es.priv
 }
 
-// LittleEndian indicates whether byte order in a signature is little-endian.
-func (es *EdSigner) LittleEndian() bool {
-	return true
-}
-
 // VRFSigner wraps same ed25519 key to provide ecvrf.
-func (es *EdSigner) VRFSigner() *VRFSigner {
+func (es *EdSigner) VRFSigner() (*VRFSigner, error) {
 	return &VRFSigner{
-		privateKey: es.priv,
+		privateKey: oasis.PrivateKey(es.priv),
 		nodeID:     es.NodeID(),
-	}
+	}, nil
 }

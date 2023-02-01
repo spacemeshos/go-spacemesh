@@ -8,7 +8,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 var (
@@ -42,29 +41,30 @@ type ChallengeVerifier interface {
 }
 
 type challengeVerifier struct {
-	atxDB             atxProvider
-	signatureVerifier signing.VerifyExtractor
-	cfg               PostConfig
-	goldenATXID       types.ATXID
-	layersPerEpoch    uint32
+	atxDB          atxProvider
+	keyExtractor   keyExtractor
+	validator      nipostValidator
+	cfg            PostConfig
+	goldenATXID    types.ATXID
+	layersPerEpoch uint32
 }
 
-func NewChallengeVerifier(cdb atxProvider, signatureVerifier signing.VerifyExtractor, cfg PostConfig, goldenATX types.ATXID, layersPerEpoch uint32) ChallengeVerifier {
+func NewChallengeVerifier(cdb atxProvider, signatureVerifier keyExtractor, validator nipostValidator, cfg PostConfig, goldenATX types.ATXID, layersPerEpoch uint32) *challengeVerifier {
 	return &challengeVerifier{
-		atxDB:             cdb,
-		signatureVerifier: signatureVerifier,
-		cfg:               cfg,
-		goldenATXID:       goldenATX,
-		layersPerEpoch:    layersPerEpoch,
+		atxDB:          cdb,
+		keyExtractor:   signatureVerifier,
+		validator:      validator,
+		cfg:            cfg,
+		goldenATXID:    goldenATX,
+		layersPerEpoch: layersPerEpoch,
 	}
 }
 
 func (v *challengeVerifier) Verify(ctx context.Context, challengeBytes, signature []byte) (*ChallengeVerificationResult, error) {
-	pubkey, err := v.signatureVerifier.Extract(challengeBytes, signature)
+	nodeID, err := v.keyExtractor.ExtractNodeID(challengeBytes, signature)
 	if err != nil {
 		return nil, ErrSignatureInvalid
 	}
-	nodeID := types.BytesToNodeID(pubkey.Bytes())
 
 	challenge := types.PoetChallenge{}
 	if err := codec.Decode(challengeBytes, &challenge); err != nil {
@@ -75,26 +75,22 @@ func (v *challengeVerifier) Verify(ctx context.Context, challengeBytes, signatur
 		return nil, err
 	}
 
-	hash, err := challenge.Hash()
-	if err != nil {
-		return nil, err
-	}
 	return &ChallengeVerificationResult{
-		Hash:   *hash,
+		Hash:   challenge.Hash(),
 		NodeID: nodeID,
 	}, nil
 }
 
 func (v *challengeVerifier) verifyChallenge(ctx context.Context, challenge *types.PoetChallenge, nodeID types.NodeID) error {
-	log.With().Info("verifying challenge", log.Object("challenge", challenge))
+	log.GetLogger().WithContext(ctx).With().Info("Verifying challenge", log.Object("challenge", challenge))
 
-	if err := validateNumUnits(&v.cfg, challenge.NumUnits); err != nil {
+	if err := v.validator.NumUnits(&v.cfg, challenge.NumUnits); err != nil {
 		return fmt.Errorf("%w: %v", ErrChallengeInvalid, err)
 	}
 
-	if err := validatePositioningAtx(&challenge.PositioningATX, v.atxDB, v.goldenATXID, challenge.PubLayerID, v.layersPerEpoch); err != nil {
+	if err := v.validator.PositioningAtx(&challenge.PositioningATX, v.atxDB, v.goldenATXID, challenge.PubLayerID, v.layersPerEpoch); err != nil {
 		switch err.(type) {
-		case *AtxNotFoundError:
+		case *ErrAtxNotFound:
 			return &VerifyError{source: err}
 		default:
 			return fmt.Errorf("%w: %v", ErrChallengeInvalid, err)
@@ -113,20 +109,20 @@ func (v *challengeVerifier) verifyInitialChallenge(ctx context.Context, challeng
 		return fmt.Errorf("%w: initial Post is not included", ErrChallengeInvalid)
 	}
 
-	if err := validateInitialNIPostChallenge(challenge.NIPostChallenge, v.atxDB, v.goldenATXID, challenge.InitialPost.Indices); err != nil {
+	if err := v.validator.InitialNIPostChallenge(challenge.NIPostChallenge, v.atxDB, v.goldenATXID, challenge.InitialPost.Indices); err != nil {
 		switch err.(type) {
-		case *AtxNotFoundError:
+		case *ErrAtxNotFound:
 			return &VerifyError{source: err}
 		default:
 			return fmt.Errorf("%w: %v", ErrChallengeInvalid, err)
 		}
 	}
 
-	if err := validatePostMetadata(&v.cfg, challenge.InitialPostMetadata); err != nil {
+	if err := v.validator.PostMetadata(&v.cfg, challenge.InitialPostMetadata); err != nil {
 		return fmt.Errorf("%w: invalid initial Post Metadata: %v", ErrChallengeInvalid, err)
 	}
 
-	if err := validatePost(nodeID, *challenge.CommitmentATX, challenge.InitialPost, challenge.InitialPostMetadata, challenge.NumUnits); err != nil {
+	if err := v.validator.Post(nodeID, *challenge.CommitmentATX, challenge.InitialPost, challenge.InitialPostMetadata, challenge.NumUnits); err != nil {
 		return fmt.Errorf("%w: invalid initial Post: %v", ErrChallengeInvalid, err)
 	}
 
@@ -134,9 +130,9 @@ func (v *challengeVerifier) verifyInitialChallenge(ctx context.Context, challeng
 }
 
 func (v *challengeVerifier) verifyNonInitialChallenge(ctx context.Context, challenge *types.PoetChallenge, nodeID types.NodeID) error {
-	if err := validateNonInitialNIPostChallenge(challenge.NIPostChallenge, v.atxDB, nodeID); err != nil {
+	if err := v.validator.NIPostChallenge(challenge.NIPostChallenge, v.atxDB, nodeID); err != nil {
 		switch err.(type) {
-		case *AtxNotFoundError:
+		case *ErrAtxNotFound:
 			return &VerifyError{source: err}
 		default:
 			return fmt.Errorf("%w: %v", ErrChallengeInvalid, err)

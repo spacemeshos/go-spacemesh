@@ -266,6 +266,43 @@ func (t *InnerActivationTx) DecodeScale(dec *scale.Decoder) (total int, err erro
 	return total, nil
 }
 
+func (t *ATXMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.Target))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.MsgHash[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *ATXMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Target = EpochID(field)
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.MsgHash[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
 func (t *ActivationTx) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := t.InnerActivationTx.EncodeScale(enc)
@@ -275,7 +312,14 @@ func (t *ActivationTx) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Sig)
+		n, err := t.ATXMetadata.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteSlice(enc, t.Signature)
 		if err != nil {
 			return total, err
 		}
@@ -293,12 +337,19 @@ func (t *ActivationTx) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
+		n, err := t.ATXMetadata.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		field, n, err := scale.DecodeByteSlice(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Sig = field
+		t.Signature = field
 	}
 	return total, nil
 }
@@ -431,7 +482,14 @@ func (t *PoetRound) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.ChallengeHash)
+		n, err := scale.EncodeByteArray(enc, t.ChallengeHash[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.End.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -450,12 +508,18 @@ func (t *PoetRound) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.ID = string(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		n, err := scale.DecodeByteArray(dec, t.ChallengeHash[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.ChallengeHash = field
+	}
+	{
+		n, err := t.End.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
 	}
 	return total, nil
 }

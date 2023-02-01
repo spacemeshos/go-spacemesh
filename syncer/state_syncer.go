@@ -52,8 +52,10 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 	// used to make sure we only resync from the same peer once during each run.
 	resyncPeers := make(map[p2p.Peer]struct{})
 	for lid := start; !lid.After(s.getLastSyncedLayer()); lid = lid.Add(1) {
-		if s.isClosed() {
-			return errShuttingDown
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
 		}
 
 		logger := s.logger.WithContext(ctx).WithFields(lid, lid.GetEpoch())
@@ -98,7 +100,8 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 	s.logger.WithContext(ctx).With().Info("end of state sync",
 		log.Bool("state_synced", s.stateSynced()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
-		log.Stringer("processed", s.mesh.ProcessedLayer()))
+		log.Stringer("processed", s.mesh.ProcessedLayer()),
+	)
 	return nil
 }
 
@@ -237,10 +240,10 @@ func (s *Syncer) ensureMeshAgreement(
 		logger := logger.WithFields(
 			log.Stringer("peer", peer),
 			log.Stringer("disagreed", prevLid),
-			log.Stringer("peer_hash", opn.PrevAggHash))
+			log.Stringer("peer_hash", opn.PrevAggHash),
+		)
 
-		logger.With().Warning("found mesh disagreement",
-			log.Stringer("node_prev_hash", prevHash))
+		logger.With().Warning("found mesh disagreement", log.Stringer("node_prev_hash", prevHash))
 
 		if !s.forkFinder.NeedResync(prevLid, opn.PrevAggHash) {
 			logger.Info("already resynced based on the same diverged hash")

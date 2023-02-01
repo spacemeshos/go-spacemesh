@@ -9,13 +9,17 @@ import (
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
-type meshProvider interface {
-	AddBlockWithTXs(context.Context, *types.Block) error
-	ProcessLayerPerHareOutput(context.Context, types.LayerID, types.BlockID) error
+type layerPatrol interface {
+	CompleteHare(types.LayerID)
 }
 
-type conservativeState interface {
-	SelectBlockTXs(types.LayerID, []*types.Proposal) ([]types.TransactionID, error)
+type meshProvider interface {
+	AddBlockWithTXs(context.Context, *types.Block) error
+	ProcessLayerPerHareOutput(context.Context, types.LayerID, types.BlockID, bool) error
+}
+
+type executor interface {
+	ExecuteOptimistic(context.Context, types.LayerID, uint64, []types.AnyReward, []types.TransactionID) (*types.Block, error)
 }
 
 type layerClock interface {
@@ -26,4 +30,8 @@ type layerClock interface {
 type certifier interface {
 	RegisterForCert(context.Context, types.LayerID, types.BlockID) error
 	CertifyIfEligible(context.Context, log.Log, types.LayerID, types.BlockID) error
+}
+
+type nonceFetcher interface {
+	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
 }

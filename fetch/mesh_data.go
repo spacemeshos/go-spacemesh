@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -59,6 +60,16 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 	}
 
 	return eg.Wait().ErrorOrNil()
+}
+
+// GetMalfeasanceProofs gets malfeasance proofs for the specified NodeIDs and validates them.
+func (f *Fetch) GetMalfeasanceProofs(ctx context.Context, ids []types.NodeID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	f.logger.WithContext(ctx).With().Debug("requesting malfeasance proofs from peer", log.Int("num_proofs", len(ids)))
+	hashes := types.NodeIDsToHashes(ids)
+	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.malHandler.HandleSyncedMalfeasanceProof)
 }
 
 // GetBallots gets data for the specified BallotIDs and validates them.
@@ -126,14 +137,27 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-pm.completed:
-		if pm.err != nil {
-			f.logger.WithContext(ctx).With().Warning("failed to get hash",
-				log.String("hint", string(datastore.POETDB)),
-				log.Stringer("hash", id),
-				log.Err(pm.err))
-		}
 	}
-	return pm.err
+	switch {
+	case pm.err == nil:
+		return nil
+	case errors.Is(pm.err, activation.ErrObjectExists):
+		// PoET proofs are concurrently stored in DB in two places:
+		// fetcher and nipost builder. Hence it might happen that
+		// a proof had been inserted into the DB while the fetcher
+		// was fetching.
+		return nil
+	default:
+		f.logger.WithContext(ctx).With().Warning("failed to get hash",
+			log.String("hint", string(datastore.POETDB)),
+			log.Stringer("hash", id),
+			log.Err(pm.err))
+		return pm.err
+	}
+}
+
+func (f *Fetch) GetMaliciousIDs(ctx context.Context, peers []p2p.Peer, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
+	return poll(ctx, f.servers[malProtocol], peers, []byte{}, okCB, errCB)
 }
 
 // GetLayerData get layer data from peers.

@@ -197,7 +197,7 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	if len(g.layers) == 0 {
 		genesis := types.NewLayer(types.GetEffectiveGenesis())
 		ballot := &types.Ballot{}
-		ballot.LayerIndex = genesis.Index()
+		ballot.Layer = genesis.Index()
 		genesis.AddBallot(ballot)
 		g.layers = append(g.layers, genesis)
 	}
@@ -209,27 +209,35 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	g.prevHeight = make([]uint64, miners)
 
 	for i := uint32(0); i < miners; i++ {
-		g.keys = append(g.keys, signing.NewEdSignerFromRand(g.rng))
+		sig, err := signing.NewEdSigner(signing.WithKeyFromRand(g.rng))
+		if err != nil {
+			panic(err)
+		}
+		g.keys = append(g.keys, sig)
 	}
 }
 
 func (g *Generator) generateAtxs() {
 	for i := range g.activations {
 		units := intInRange(g.rng, g.units)
-		sig := signing.NewEdSigner()
+		sig, err := signing.NewEdSigner()
+		if err != nil {
+			panic(err)
+		}
+		nodeID := sig.NodeID()
 		address := types.GenerateAddress(sig.PublicKey().Bytes())
 
 		nipost := types.NIPostChallenge{
 			PubLayerID: g.nextLayer.Sub(1),
 		}
-		atx := types.NewActivationTx(nipost, address, nil, units, nil, nil)
+		atx := types.NewActivationTx(nipost, &nodeID, address, nil, units, nil, nil)
 		var ticks uint64
 		if g.ticks != nil {
 			ticks = g.ticks[i]
 		} else {
 			ticks = uint64(intInRange(g.rng, g.ticksRange))
 		}
-		if err := activation.SignAtx(sig, atx); err != nil {
+		if err := activation.SignAndFinalizeAtx(sig, atx); err != nil {
 			panic(err)
 		}
 		vAtx, err := atx.Verify(g.prevHeight[i], ticks)

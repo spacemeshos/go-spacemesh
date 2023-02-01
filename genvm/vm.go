@@ -261,6 +261,15 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 		events.ReportAccountUpdate(account.Address)
 		return true
 	})
+	for _, reward := range rewardsResult {
+		events.ReportRewardReceived(events.Reward{
+			Layer:       reward.Layer,
+			Total:       reward.TotalReward,
+			LayerReward: reward.LayerReward,
+			Coinbase:    reward.Coinbase,
+		})
+	}
+
 	blockDurationPersist.Observe(float64(time.Since(t4)))
 	blockDuration.Observe(float64(time.Since(t1)))
 	transactionsPerBlock.Observe(float64(len(txs)))
@@ -268,7 +277,6 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 
 	v.logger.With().Info("applied layer",
 		lctx.Layer,
-		lctx.Block,
 		log.Int("count", len(txs)-len(skipped)),
 		log.Duration("duration", time.Since(t1)),
 		log.Stringer("state_hash", hash),
@@ -375,7 +383,6 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 
 		rst := types.TransactionWithResult{}
 		rst.Layer = lctx.Layer
-		rst.Block = lctx.Block
 
 		err = ctx.Consume(ctx.Header.MaxGas)
 		if err == nil {
@@ -575,5 +582,4 @@ func verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool {
 // ApplyContext has information on layer and block id.
 type ApplyContext struct {
 	Layer types.LayerID
-	Block types.BlockID
 }

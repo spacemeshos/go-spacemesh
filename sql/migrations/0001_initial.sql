@@ -18,8 +18,8 @@ CREATE INDEX ballots_by_layer_by_pubkey ON ballots (layer asc, pubkey);
 
 CREATE TABLE identities
 (
-    pubkey    VARCHAR PRIMARY KEY,
-    malicious bool
+    pubkey VARCHAR PRIMARY KEY,
+    proof  BLOB
 ) WITHOUT ROWID;
 
 CREATE TABLE layers
@@ -29,7 +29,6 @@ CREATE TABLE layers
     processed       SMALL INT,
     applied_block   VARCHAR,
     state_hash      CHAR(32),
-    hash            CHAR(32),
     aggregated_hash CHAR(32)
 ) WITHOUT ROWID;
 CREATE INDEX layers_by_processed ON layers (processed);
@@ -104,6 +103,7 @@ CREATE TABLE atxs
     id               CHAR(32) PRIMARY KEY,
     layer            INT NOT NULL,
     epoch            INT NOT NULL,
+    nonce            UNSIGNED LONG INT,
     base_tick_height UNSIGNED LONG INT,
     tick_count       UNSIGNED LONG INT,
     smesher          CHAR(32),

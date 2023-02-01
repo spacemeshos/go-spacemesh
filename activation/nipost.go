@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
@@ -28,7 +27,9 @@ type PoetProvingServiceClient interface {
 	Submit(ctx context.Context, challenge []byte, signature []byte) (*types.PoetRound, error)
 
 	// PoetServiceID returns the public key of the PoET proving service.
-	PoetServiceID(context.Context) ([]byte, error)
+	PoetServiceID(context.Context) (types.PoetServiceID, error)
+
+	GetProof(ctx context.Context, roundID string) (*types.PoetProofMessage, error)
 }
 
 func (nb *NIPostBuilder) load(challenge types.Hash32) {
@@ -59,13 +60,14 @@ type NIPostBuilder struct {
 	poetDB            poetDbAPI
 	state             *types.NIPostBuilderState
 	log               log.Log
-	signer            signing.Signer
+	signer            signer
+	layerClock        layerClock
+	poetCfg           PoetConfig
 }
 
 type poetDbAPI interface {
-	GetMembershipMap(proofRef types.PoetProofRef) (map[types.Hash32]bool, error)
 	GetProof(types.PoetProofRef) (*types.PoetProof, error)
-	GetProofRef(poetID []byte, roundID string) (types.PoetProofRef, error)
+	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
 
 // NewNIPostBuilder returns a NIPostBuilder.
@@ -76,7 +78,9 @@ func NewNIPostBuilder(
 	poetDB poetDbAPI,
 	db *sql.Database,
 	log log.Log,
-	signer signing.Signer,
+	signer signer,
+	poetCfg PoetConfig,
+	layerClock layerClock,
 ) *NIPostBuilder {
 	return &NIPostBuilder{
 		minerID:           minerID.Bytes(),
@@ -87,11 +91,13 @@ func NewNIPostBuilder(
 		db:                db,
 		log:               log,
 		signer:            signer,
+		poetCfg:           poetCfg,
+		layerClock:        layerClock,
 	}
 }
 
-// updatePoETProver updates poetProver reference. It should not be executed concurrently with BuildNIPoST.
-func (nb *NIPostBuilder) updatePoETProvers(poetProvers []PoetProvingServiceClient) {
+// UpdatePoETProvers updates poetProver reference. It should not be executed concurrently with BuildNIPoST.
+func (nb *NIPostBuilder) UpdatePoETProvers(poetProvers []PoetProvingServiceClient) {
 	// reset the state for safety to avoid accidental erroneous wait in Phase 1.
 	nb.state = &types.NIPostBuilderState{
 		NIPost: &types.NIPost{},
@@ -103,12 +109,42 @@ func (nb *NIPostBuilder) updatePoETProvers(poetProvers []PoetProvingServiceClien
 // BuildNIPost uses the given challenge to build a NIPost.
 // The process can take considerable time, because it includes waiting for the poet service to
 // publish a proof - a process that takes about an epoch.
-func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error) {
-	challengeHash, err := challenge.Hash()
-	if err != nil {
-		return nil, 0, err
-	}
-	nb.load(*challengeHash)
+func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error) {
+	logger := nb.log.WithContext(ctx)
+	// Calculate deadline for waiting for poet proofs.
+	// Deadline must fit between:
+	// - the end of the current poet round
+	// - the start of the next one.
+	// It must also accommodate for PoST duration.
+	//
+	//                                 PoST
+	//         ┌─────────────────────┐  ┌┐┌─────────────────────┐
+	//         │     POET ROUND      │  │││   NEXT POET ROUND   │
+	// ┌────▲──┴──────────────────┬──┴─▲┴┴┴─────────────────▲┬──┴───► time
+	// │    │      EPOCH          │    │       EPOCH        ││
+	// └────┼─────────────────────┴────┼────────────────────┼┴──────
+	//      │                          │                    │
+	//  WE ARE HERE                DEADLINE FOR       ATX PUBLICATION
+	//                           WAITING FOR POET        DEADLINE
+	//                               PROOFS
+
+	pubEpoch := challenge.PublishEpoch()
+	poetRoundStart := nb.layerClock.LayerToTime((pubEpoch - 1).FirstLayer()).Add(nb.poetCfg.PhaseShift)
+	nextPoetRoundStart := nb.layerClock.LayerToTime(pubEpoch.FirstLayer()).Add(nb.poetCfg.PhaseShift)
+	poetRoundEnd := nextPoetRoundStart.Add(-nb.poetCfg.CycleGap)
+	poetProofDeadline := nextPoetRoundStart.Add(-nb.poetCfg.GracePeriod)
+
+	logger.With().Info("building NIPost",
+		log.Time("poet round start", poetRoundStart),
+		log.Time("poet round end", poetRoundEnd),
+		log.Time("next poet round start", nextPoetRoundStart),
+		log.Time("poet proof deadline", poetProofDeadline),
+		log.FieldNamed("publish epoch", pubEpoch),
+		log.FieldNamed("target epoch", challenge.TargetEpoch()),
+	)
+
+	challengeHash := challenge.Hash()
+	nb.load(challengeHash)
 
 	if s := nb.postSetupProvider.Status(); s.State != PostSetupStateComplete {
 		return nil, 0, errors.New("post setup not complete")
@@ -123,17 +159,19 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 			return nil, 0, err
 		}
 		signature := nb.signer.Sign(challenge)
-		poetRequests := nb.submitPoetChallenges(ctx, challenge, signature)
-		if ctx.Err() != nil {
-			return nil, 0, ctx.Err()
+		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
+		defer cancel()
+		poetRequests := nb.submitPoetChallenges(submitCtx, challenge, signature)
+		if err := ctx.Err(); err != nil {
+			return nil, 0, fmt.Errorf("submitting challenges: %w", err)
 		}
 
 		validPoetRequests := make([]types.PoetRequest, 0, len(poetRequests))
 		for _, req := range poetRequests {
-			if !bytes.Equal(req.PoetRound.ChallengeHash, challengeHash[:]) {
+			if !bytes.Equal(req.PoetRound.ChallengeHash[:], challengeHash[:]) {
 				nb.log.With().Info(
 					"poet returned invalid challenge hash",
-					log.Binary("hash", req.PoetRound.ChallengeHash),
+					req.PoetRound.ChallengeHash,
 					log.String("poet_id", hex.EncodeToString(req.PoetServiceID)),
 				)
 			} else {
@@ -143,23 +181,22 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 		if len(validPoetRequests) == 0 {
 			return nil, 0, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET"}
 		}
-		nipost.Challenge = challengeHash
-		nb.state.Challenge = *challengeHash
+		nipost.Challenge = &challengeHash
+		nb.state.Challenge = challengeHash
 		nb.state.PoetRequests = validPoetRequests
 		nb.persist()
 	}
 
-	// Phase 1: receive proofs from PoET services
+	// Phase 1: query PoET services for proofs
 	if nb.state.PoetProofRef == nil {
-		select {
-		case <-time.After(time.Until(poetProofDeadline)):
-		case <-ctx.Done():
-			return nil, 0, ctx.Err()
+		getProofsCtx, cancel := context.WithDeadline(ctx, poetProofDeadline)
+		defer cancel()
+		poetProofRef, err := nb.getBestProof(getProofsCtx, &challengeHash)
+		if err != nil {
+			return nil, 0, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
-		poetProofRef := nb.getBestProof(ctx, challengeHash)
 		if poetProofRef == nil {
-			// Time is up - ATX challenge is expired.
-			return nil, 0, ErrPoetProofNotReceived
+			return nil, 0, &PoetSvcUnstableError{source: ErrPoetProofNotReceived}
 		}
 		nb.state.PoetProofRef = poetProofRef
 		nb.persist()
@@ -195,26 +232,20 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 }
 
 // Submit the challenge to a single PoET.
-func submitPoetChallenge(ctx context.Context, logger log.Log, poet PoetProvingServiceClient, challenge []byte, signature []byte) (*types.PoetRequest, error) {
+func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, poet PoetProvingServiceClient, challenge []byte, signature []byte) (*types.PoetRequest, error) {
 	poetServiceID, err := poet.PoetServiceID(ctx)
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoET service ID", source: err}
 	}
-
-	logger.With().Debug("submitting challenge to poet proving service",
-		log.String("poet_id", hex.EncodeToString(poetServiceID)))
+	logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(poetServiceID)))
+	logger.Debug("submitting challenge to poet proving service")
 
 	round, err := poet.Submit(ctx, challenge, signature)
 	if err != nil {
-		logger.With().Error("failed to submit challenge to poet proving service",
-			log.String("poet_id", hex.EncodeToString(poetServiceID)),
-			log.Err(err))
 		return nil, &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
 	}
 
-	logger.With().Info("challenge submitted to poet proving service",
-		log.String("poet_id", hex.EncodeToString(poetServiceID)),
-		log.String("round_id", round.ID))
+	logger.With().Info("challenge submitted to poet proving service", log.String("round", round.ID))
 
 	return &types.PoetRequest{
 		PoetRound:     round,
@@ -229,7 +260,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, challenge []b
 	for _, poetProver := range nb.poetProvers {
 		poet := poetProver
 		g.Go(func() error {
-			if poetRequest, err := submitPoetChallenge(ctx, nb.log, poet, challenge, signature); err == nil {
+			if poetRequest, err := nb.submitPoetChallenge(ctx, poet, challenge, signature); err == nil {
 				poetRequestsChannel <- *poetRequest
 			} else {
 				nb.log.With().Warning("failed to submit challenge to PoET", log.Err(err))
@@ -247,47 +278,94 @@ func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, challenge []b
 	return poetRequests
 }
 
-func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash32) types.PoetProofRef {
-	type poetProof struct {
-		ref       types.PoetProofRef
-		leafCount uint64
+func (nb *NIPostBuilder) getPoetClient(ctx context.Context, id types.PoetServiceID) PoetProvingServiceClient {
+	for _, client := range nb.poetProvers {
+		if clientId, err := client.PoetServiceID(ctx); err == nil && bytes.Equal(id, clientId) {
+			return client
+		}
 	}
-	var bestProof *poetProof
+	return nil
+}
 
-	for _, poetSubmission := range nb.state.PoetRequests {
-		ref, err := nb.poetDB.GetProofRef(poetSubmission.PoetServiceID, poetSubmission.PoetRound.ID)
-		if err != nil {
+func membersContain(members [][]byte, challenge *types.Hash32) bool {
+	for _, member := range members {
+		if bytes.Equal(member, challenge.Bytes()) {
+			return true
+		}
+	}
+	return false
+}
+
+func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash32) (types.PoetProofRef, error) {
+	proofs := make(chan *types.PoetProofMessage, len(nb.state.PoetRequests))
+
+	var eg errgroup.Group
+	for _, r := range nb.state.PoetRequests {
+		logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(r.PoetServiceID)), log.String("round", r.PoetRound.ID))
+		client := nb.getPoetClient(ctx, r.PoetServiceID)
+		if client == nil {
+			logger.Warning("Poet client not found")
 			continue
 		}
-		// We are interested only in proofs that we are members of
-		membership, err := nb.poetDB.GetMembershipMap(ref)
-		if err != nil {
-			nb.log.With().Panic("failed to fetch membership for poet proof", log.Binary("challenge", challenge[:]))
-		}
-		if !membership[*challenge] {
-			nb.log.With().Debug("poet proof membership doesn't contain the challenge", log.Binary("challenge", challenge[:]))
-			continue
-		}
-		proof, err := nb.poetDB.GetProof(ref)
-		if err != nil {
-			nb.log.Panic("Inconsistent state of poetDB. Received poetProofRef which doesn't exist in poetDB.")
-		}
-		nb.log.With().Info("Got a new PoET proof", log.Uint64("leafCount", proof.LeafCount), log.Binary("ref", ref))
-
-		if bestProof == nil || bestProof.leafCount < proof.LeafCount {
-			bestProof = &poetProof{
-				ref:       ref,
-				leafCount: proof.LeafCount,
+		round := r.PoetRound.ID
+		// Time to wait before quering for the proof
+		// The additional second is an optimization to be nicer to poet
+		// and don't accidentially ask it to soon and have to retry.
+		waitTime := time.Until(r.PoetRound.End.IntoTime()) + time.Second
+		eg.Go(func() error {
+			logger.With().Info("Waiting till poet round end", log.Duration("wait time", waitTime))
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("waiting to query proof: %w", ctx.Err())
+			case <-time.After(waitTime):
 			}
+
+			proof, err := client.GetProof(ctx, round)
+			switch {
+			case errors.Is(err, context.Canceled):
+				return fmt.Errorf("querying proof: %w", ctx.Err())
+			case err != nil:
+				logger.With().Warning("Failed to get proof from Poet", log.Err(err))
+				return nil
+			}
+
+			if err := nb.poetDB.ValidateAndStore(ctx, proof); err != nil && !errors.Is(err, ErrObjectExists) {
+				logger.With().Warning("Failed to validate and store proof", log.Err(err), log.Object("proof", proof))
+				return nil
+			}
+
+			// We are interested only in proofs that we are members of
+			if !membersContain(proof.Members, challenge) {
+				logger.With().Warning("poet proof membership doesn't contain the challenge", challenge)
+				return nil
+			}
+
+			proofs <- proof
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, fmt.Errorf("querying for proofs: %w", err)
+	}
+	close(proofs)
+
+	var bestProof *types.PoetProofMessage
+
+	for proof := range proofs {
+		nb.log.With().Info("Got a new PoET proof", log.Uint64("leafCount", proof.LeafCount))
+		if bestProof == nil || bestProof.LeafCount < proof.LeafCount {
+			bestProof = proof
 		}
 	}
 
 	if bestProof != nil {
-		nb.log.With().Debug("Selected the best PoET proof",
-			log.Uint64("leafCount", bestProof.leafCount),
-			log.Binary("ref", bestProof.ref))
-		return bestProof.ref
+		ref, err := bestProof.Ref()
+		if err != nil {
+			return nil, err
+		}
+		nb.log.With().Info("Selected the best proof", log.Uint64("leafCount", bestProof.LeafCount), log.Binary("ref", ref))
+		return ref, nil
 	}
 
-	return nil
+	return nil, ErrPoetProofNotReceived
 }

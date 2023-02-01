@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/spacemeshos/go-scale/tester"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -12,18 +11,24 @@ import (
 )
 
 func TestBallotIDUnaffectedByVotes(t *testing.T) {
+	meta := types.BallotMetadata{
+		Layer: types.NewLayerID(1),
+	}
 	inner := types.InnerBallot{
-		LayerIndex: types.NewLayerID(1),
+		AtxID: types.ATXID{1, 2, 3},
 	}
 	ballot1 := types.Ballot{
-		InnerBallot: inner,
+		BallotMetadata: meta,
+		InnerBallot:    inner,
 	}
 	ballot2 := types.Ballot{
-		InnerBallot: inner,
+		BallotMetadata: meta,
+		InnerBallot:    inner,
 	}
 	ballot1.Votes.Support = []types.Vote{{ID: types.BlockID{1}}}
 	ballot1.Votes.Support = []types.Vote{{ID: types.BlockID{2}}}
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	ballot1.Signature = signer.Sign(ballot1.SignedBytes())
 	ballot2.Signature = signer.Sign(ballot2.SignedBytes())
 	ballot1.Initialize()
@@ -35,46 +40,39 @@ func TestBallotIDUnaffectedByVotes(t *testing.T) {
 
 func TestBallot_IDSize(t *testing.T) {
 	var id types.BallotID
-	assert.Len(t, id.Bytes(), types.BallotIDSize)
+	require.Len(t, id.Bytes(), types.BallotIDSize)
 }
 
 func TestBallot_Initialize(t *testing.T) {
-	b := types.Ballot{
-		InnerBallot: types.InnerBallot{
-			AtxID:      types.RandomATXID(),
-			RefBallot:  types.RandomBallotID(),
-			LayerIndex: types.NewLayerID(10),
-		},
-		Votes: types.Votes{
-			Base:    types.RandomBallotID(),
-			Against: []types.Vote{{ID: types.RandomBlockID()}, {ID: types.RandomBlockID()}},
-		},
-	}
-	signer := signing.NewEdSigner()
+	b := types.RandomBallot()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	b.Signature = signer.Sign(b.SignedBytes())
-	assert.NoError(t, b.Initialize())
-	assert.NotEqual(t, types.EmptyBallotID, b.ID())
-	assert.Equal(t, signer.PublicKey().Bytes(), b.SmesherID().Bytes())
+	require.NoError(t, b.Initialize())
+	require.NotEqual(t, types.EmptyBallotID, b.ID())
+	require.Equal(t, signer.PublicKey().Bytes(), b.SmesherID().Bytes())
 
-	err := b.Initialize()
-	assert.EqualError(t, err, "ballot already initialized")
+	err = b.Initialize()
+	require.EqualError(t, err, "ballot already initialized")
 }
 
 func TestBallot_Initialize_BadSignature(t *testing.T) {
-	b := types.Ballot{
-		InnerBallot: types.InnerBallot{
-			AtxID:      types.RandomATXID(),
-			RefBallot:  types.RandomBallotID(),
-			LayerIndex: types.NewLayerID(10),
-		},
-		Votes: types.Votes{
-			Base:    types.RandomBallotID(),
-			Support: []types.Vote{{ID: types.RandomBlockID()}, {ID: types.RandomBlockID()}},
-		},
-	}
-	b.Signature = signing.NewEdSigner().Sign(b.SignedBytes())[1:]
-	err := b.Initialize()
-	assert.EqualError(t, err, "ballot extract key: ed25519: bad signature format")
+	b := types.RandomBallot()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	b.Signature = signer.Sign(b.SignedBytes())[1:]
+	err = b.Initialize()
+	require.EqualError(t, err, "ballot extract key: ed25519: bad signature format")
+}
+
+func TestBallot_Initialize_BadMsgHash(t *testing.T) {
+	b := types.RandomBallot()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	b.Signature = signer.Sign(b.SignedBytes())
+	b.MsgHash = types.RandomHash()
+	err = b.Initialize()
+	require.EqualError(t, err, "bad message hash")
 }
 
 func FuzzBallotConsistency(f *testing.F) {
@@ -110,13 +108,13 @@ func FuzzEpochDataSafety(f *testing.F) {
 }
 
 func FuzzVotingEligibilityProofConsistency(f *testing.F) {
-	tester.FuzzConsistency[types.VotingEligibilityProof](f)
+	tester.FuzzConsistency[types.VotingEligibility](f)
 }
 
 func FuzzVotingEligibilityProofSafety(f *testing.F) {
-	tester.FuzzSafety[types.VotingEligibilityProof](f)
+	tester.FuzzSafety[types.VotingEligibility](f)
 }
 
 func TestBallotEncoding(t *testing.T) {
-	types.CheckLayerFirstEncoding(t, func(object types.Ballot) types.LayerID { return object.LayerIndex })
+	types.CheckLayerFirstEncoding(t, func(object types.Ballot) types.LayerID { return object.Layer })
 }

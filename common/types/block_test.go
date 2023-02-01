@@ -28,7 +28,8 @@ func Test_CertifyMessage(t *testing.T) {
 			Proof:          []byte("not a fraud"),
 		},
 	}
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	msg.Signature = signer.Sign(msg.Bytes())
 	data, err := codec.Encode(&msg)
 	require.NoError(t, err)
@@ -36,7 +37,9 @@ func Test_CertifyMessage(t *testing.T) {
 	var decoded types.CertifyMessage
 	require.NoError(t, codec.Decode(data, &decoded))
 	require.Equal(t, msg, decoded)
-	nodeId, err := types.ExtractNodeIDFromSig(decoded.Bytes(), decoded.Signature)
+	pke, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
+	nodeId, err := pke.ExtractNodeID(decoded.Bytes(), decoded.Signature)
 	require.NoError(t, err)
 	require.Equal(t, signer.PublicKey().Bytes(), nodeId.Bytes())
 }

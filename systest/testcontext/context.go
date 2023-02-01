@@ -313,7 +313,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 		Image:             imageFlag.Get(p),
 		PoetImage:         poetImage.Get(p),
 		NodeSelector:      nodeSelector.Get(p),
-		Log:               newLogger(t, logLevel, zap.AddCaller()).Sugar(),
+		Log:               newLogger(t, logLevel, zap.AddCaller()).Sugar().Named(t.Name()),
 	}
 
 	cctx.Storage.Class = class

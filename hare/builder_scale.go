@@ -10,7 +10,14 @@ import (
 
 func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Sig)
+		n, err := t.HareMetadata.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteSlice(enc, t.Signature)
 		if err != nil {
 			return total, err
 		}
@@ -23,17 +30,31 @@ func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
+	{
+		n, err := t.Eligibility.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
 func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := t.HareMetadata.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		field, n, err := scale.DecodeByteSlice(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Sig = field
+		t.Signature = field
 	}
 	{
 		field, n, err := scale.DecodeOption[InnerMessage](dec)
@@ -42,6 +63,13 @@ func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.InnerMsg = field
+	}
+	{
+		n, err := t.Eligibility.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
 	}
 	return total, nil
 }
@@ -116,21 +144,7 @@ func (t *InnerMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := t.InstanceID.EncodeScale(enc)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.K))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.Ki))
+		n, err := scale.EncodeCompact32(enc, uint32(t.CommittedRound))
 		if err != nil {
 			return total, err
 		}
@@ -138,20 +152,6 @@ func (t *InnerMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	}
 	{
 		n, err := scale.EncodeStructSlice(enc, t.Values)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteSlice(enc, t.RoleProof)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact16(enc, uint16(t.EligibilityCount))
 		if err != nil {
 			return total, err
 		}
@@ -184,27 +184,12 @@ func (t *InnerMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Type = MessageType(field)
 	}
 	{
-		n, err := t.InstanceID.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.K = uint32(field)
-	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Ki = uint32(field)
+		t.CommittedRound = uint32(field)
 	}
 	{
 		field, n, err := scale.DecodeStructSlice[types.ProposalID](dec)
@@ -213,22 +198,6 @@ func (t *InnerMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.Values = field
-	}
-	{
-		field, n, err := scale.DecodeByteSlice(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.RoleProof = field
-	}
-	{
-		field, n, err := scale.DecodeCompact16(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.EligibilityCount = uint16(field)
 	}
 	{
 		field, n, err := scale.DecodeOption[AggregatedMessages](dec)

@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
-	"github.com/spacemeshos/go-spacemesh/txs/mocks"
 )
 
 func Test_HandleBlock(t *testing.T) {
@@ -58,10 +57,11 @@ func Test_HandleBlock(t *testing.T) {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			cstate := mocks.NewMockconservativeState(ctrl)
+			cstate := NewMockconservativeState(ctrl)
 			th := NewTxHandler(cstate, logtest.New(t))
 
-			signer := signing.NewEdSigner()
+			signer, err := signing.NewEdSigner()
+			require.NoError(t, err)
 			tx := newTx(t, 3, 10, tc.fee, signer)
 			cstate.EXPECT().HasTx(tx.ID).Return(tc.has, tc.hasErr).Times(1)
 			if tc.hasErr == nil && !tc.has {
@@ -75,7 +75,7 @@ func Test_HandleBlock(t *testing.T) {
 					cstate.EXPECT().AddToDB(&types.Transaction{RawTx: tx.RawTx}).Return(tc.addErr)
 				}
 			}
-			err := th.HandleBlockTransaction(context.TODO(), tx.Raw)
+			err = th.HandleBlockTransaction(context.Background(), tx.Raw)
 			if tc.failed {
 				require.Error(t, err)
 			} else {
@@ -87,10 +87,11 @@ func Test_HandleBlock(t *testing.T) {
 
 func gossipExpectations(t *testing.T, fee uint64, hasErr, parseErr, addErr error, has, verify, noheader bool) (*TxHandler, *types.Transaction) {
 	ctrl := gomock.NewController(t)
-	cstate := mocks.NewMockconservativeState(ctrl)
+	cstate := NewMockconservativeState(ctrl)
 	th := NewTxHandler(cstate, logtest.New(t))
 
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	tx := newTx(t, 3, 10, fee, signer)
 	var rst *types.MeshTransaction
 	if has {
@@ -186,7 +187,7 @@ func Test_HandleGossip(t *testing.T) {
 			)
 			require.Equal(t,
 				tc.expect,
-				th.HandleGossipTransaction(context.TODO(), "peer", tx.Raw),
+				th.HandleGossipTransaction(context.Background(), "peer", tx.Raw),
 			)
 		})
 	}
@@ -253,7 +254,7 @@ func Test_HandleProposal(t *testing.T) {
 				tc.hasErr, tc.parseErr, tc.addErr,
 				tc.has, tc.verify, tc.noheader,
 			)
-			err := th.HandleProposalTransaction(context.TODO(), tx.Raw)
+			err := th.HandleProposalTransaction(context.Background(), tx.Raw)
 			if tc.fail {
 				require.Error(t, err)
 			} else {

@@ -3,7 +3,6 @@ package weakcoin
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"math/big"
 	"sync"
@@ -12,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func defaultConfig() config {
@@ -34,7 +32,7 @@ type config struct {
 // UnitAllowances is a map from miner identifier to the number of units of spacetime.
 type UnitAllowances map[string]uint64
 
-//go:generate scalegen -types Message
+//go:generate scalegen -types Message,WeakCoinVrfMessage
 
 // Message defines weak coin message format.
 type Message struct {
@@ -43,6 +41,14 @@ type Message struct {
 	Unit      uint64
 	MinerPK   []byte
 	Signature []byte
+}
+
+type WeakCoinVrfMessage struct {
+	Prefix string
+	Epoch  types.EpochID
+	Nonce  types.VRFPostIndex
+	Round  types.RoundID
+	Unit   uint64
 }
 
 // OptionFunc for optional configuration adjustments.
@@ -76,26 +82,22 @@ func WithNextRoundBufferSize(size int) OptionFunc {
 	}
 }
 
-// WithVerifier changes the verifier of the weakcoin messages.
-func WithVerifier(v signing.Verifier) OptionFunc {
-	return func(wc *WeakCoin) {
-		wc.verifier = v
-	}
-}
-
 // New creates an instance of weak coin protocol.
 func New(
 	publisher pubsub.Publisher,
-	signer signing.Signer,
+	signer vrfSigner,
+	verifier vrfVerifier,
+	nonceFetcher nonceFetcher,
 	opts ...OptionFunc,
 ) *WeakCoin {
 	wc := &WeakCoin{
-		logger:    log.NewNop(),
-		config:    defaultConfig(),
-		signer:    signer,
-		publisher: publisher,
-		coins:     make(map[types.RoundID]bool),
-		verifier:  signing.VRFVerifier{},
+		logger:       log.NewNop(),
+		config:       defaultConfig(),
+		signer:       signer,
+		nonceFetcher: nonceFetcher,
+		publisher:    publisher,
+		coins:        make(map[types.RoundID]bool),
+		verifier:     verifier,
 	}
 	for _, opt := range opts {
 		opt(wc)
@@ -107,15 +109,17 @@ func New(
 
 // WeakCoin implementation of the protocol.
 type WeakCoin struct {
-	logger    log.Log
-	config    config
-	verifier  signing.Verifier
-	signer    signing.Signer
-	publisher pubsub.Publisher
+	logger       log.Log
+	config       config
+	verifier     vrfVerifier
+	signer       vrfSigner
+	nonceFetcher nonceFetcher
+	publisher    pubsub.Publisher
 
 	mu                         sync.RWMutex
 	epochStarted, roundStarted bool
 	epoch                      types.EpochID
+	nonce                      types.VRFPostIndex
 	round                      types.RoundID
 	smallestProposal           []byte
 	allowances                 UnitAllowances
@@ -143,11 +147,12 @@ func (wc *WeakCoin) Get(ctx context.Context, epoch types.EpochID, round types.Ro
 }
 
 // StartEpoch notifies that epoch is started and we can accept messages for this epoch.
-func (wc *WeakCoin) StartEpoch(ctx context.Context, epoch types.EpochID, allowances UnitAllowances) {
+func (wc *WeakCoin) StartEpoch(ctx context.Context, epoch types.EpochID, nonce types.VRFPostIndex, allowances UnitAllowances) {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
 	wc.epochStarted = true
 	wc.epoch = epoch
+	wc.nonce = nonce
 	wc.allowances = allowances
 	wc.logger.WithContext(ctx).With().Info("beacon weak coin started epoch", epoch)
 }
@@ -175,7 +180,6 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 	wc.roundStarted = true
 	wc.round = round
 	wc.smallestProposal = nil
-	epoch := wc.epoch
 	for i, msg := range wc.nextRoundBuffer {
 		if msg.Epoch != wc.epoch || msg.Round != wc.round {
 			continue
@@ -188,12 +192,18 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 	wc.nextRoundBuffer = wc.nextRoundBuffer[:0]
 	wc.mu.Unlock()
 
-	return wc.publishProposal(ctx, epoch, round)
+	return wc.publishProposal(ctx, wc.epoch, wc.nonce, wc.round)
 }
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
-	buf := wc.encodeProposal(message.Epoch, message.Round, message.Unit)
-	if !wc.verifier.Verify(signing.NewPublicKey(message.MinerPK), buf, message.Signature) {
+	nodeID := types.BytesToNodeID(message.MinerPK)
+	nonce, err := wc.nonceFetcher.VRFNonce(nodeID, message.Epoch)
+	if err != nil {
+		wc.logger.With().Error("failed to get vrf nonce", log.Err(err))
+		return fmt.Errorf("failed to get vrf nonce for node %s: %w", nodeID, err)
+	}
+	buf := wc.encodeProposal(message.Epoch, nonce, message.Round, message.Unit)
+	if !wc.verifier.Verify(types.BytesToNodeID(message.MinerPK), buf, message.Signature) {
 		return fmt.Errorf("signature is invalid signature %x", message.Signature)
 	}
 
@@ -206,7 +216,7 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 	return nil
 }
 
-func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([]byte, []byte) {
+func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) ([]byte, []byte) {
 	// TODO(dshulyak) double check that 10 means that 10 units are allowed
 	allowed, exists := wc.allowances[string(wc.signer.PublicKey().Bytes())]
 	if !exists {
@@ -215,7 +225,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 	var broadcast []byte
 	var smallest []byte
 	for unit := uint64(0); unit < allowed; unit++ {
-		proposal := wc.encodeProposal(epoch, round, unit)
+		proposal := wc.encodeProposal(epoch, nonce, round, unit)
 		signature := wc.signer.Sign(proposal)
 		if wc.aboveThreshold(signature) {
 			continue
@@ -230,7 +240,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 			}
 			msg, err := codec.Encode(&message)
 			if err != nil {
-				wc.logger.With().Panic("failed to serialize weak coin message", log.Err(err))
+				wc.logger.With().Fatal("failed to serialize weak coin message", log.Err(err))
 			}
 
 			broadcast = msg
@@ -240,9 +250,9 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 	return broadcast, smallest
 }
 
-func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
+func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) error {
 	wc.mu.Lock()
-	msg, smallest := wc.prepareProposal(epoch, round)
+	msg, smallest := wc.prepareProposal(epoch, nonce, round)
 	wc.mu.Unlock()
 
 	// nothing to send is valid if all proposals are exceeding threshold
@@ -312,21 +322,18 @@ func (wc *WeakCoin) aboveThreshold(proposal []byte) bool {
 	return bytes.Compare(proposal, wc.config.Threshold) == 1
 }
 
-func (wc *WeakCoin) encodeProposal(epoch types.EpochID, round types.RoundID, unit uint64) []byte {
-	proposal := bytes.Buffer{}
-	proposal.WriteString(wc.config.VRFPrefix)
-	if _, err := proposal.Write(epoch.ToBytes()); err != nil {
-		wc.logger.With().Panic("can't write epoch to a buffer", log.Err(err))
+func (wc *WeakCoin) encodeProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID, unit uint64) []byte {
+	message := &WeakCoinVrfMessage{
+		Prefix: wc.config.VRFPrefix,
+		Epoch:  epoch,
+		Nonce:  nonce,
+		Round:  round,
+		Unit:   unit,
 	}
-	roundBuf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(roundBuf, uint64(round))
-	if _, err := proposal.Write(roundBuf); err != nil {
-		wc.logger.With().Panic("can't write uint64 to a buffer", log.Err(err))
+
+	b, err := codec.Encode(message)
+	if err != nil {
+		wc.logger.With().Fatal("failed to encode weak coin vrf msg", log.Err(err))
 	}
-	buf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, unit)
-	if _, err := proposal.Write(buf); err != nil {
-		wc.logger.With().Panic("can't write uint64 to a buffer", log.Err(err))
-	}
-	return proposal.Bytes()
+	return b
 }
