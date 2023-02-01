@@ -54,7 +54,7 @@ func RandomATXID() ATXID {
 	return ATXID(CalcHash32(b))
 }
 
-// RandomATXID generates a random ATXID for testing.
+// RandomNodeID generates a random NodeID for testing.
 func RandomNodeID() NodeID {
 	b := make([]byte, NodeIDSize)
 	_, err := rand.Read(b)

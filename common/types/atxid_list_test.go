@@ -19,7 +19,7 @@ func TestATXIDList_Hash(t *testing.T) {
 		{
 			name:     "Case 1",
 			atxList:  ATXIDList{ATXID(CalcHash32([]byte("1")))},
-			expected: "0x9c2e4d8fe97d881430de4e754b4205b9c27ce96715231cffc4337340cb110280",
+			expected: "0x3c462dd7363d6e6fb7d5085679d2ee7de30f2d939722882be0816387983051f6",
 		},
 	}
 

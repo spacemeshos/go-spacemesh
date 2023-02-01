@@ -62,6 +62,16 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 	return eg.Wait().ErrorOrNil()
 }
 
+// GetMalfeasanceProofs gets malfeasance proofs for the specified NodeIDs and validates them.
+func (f *Fetch) GetMalfeasanceProofs(ctx context.Context, ids []types.NodeID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	f.logger.WithContext(ctx).With().Debug("requesting malfeasance proofs from peer", log.Int("num_proofs", len(ids)))
+	hashes := types.NodeIDsToHashes(ids)
+	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.malHandler.HandleSyncedMalfeasanceProof)
+}
+
 // GetBallots gets data for the specified BallotIDs and validates them.
 func (f *Fetch) GetBallots(ctx context.Context, ids []types.BallotID) error {
 	if len(ids) == 0 {
@@ -144,6 +154,10 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 			log.Err(pm.err))
 		return pm.err
 	}
+}
+
+func (f *Fetch) GetMaliciousIDs(ctx context.Context, peers []p2p.Peer, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
+	return poll(ctx, f.servers[malProtocol], peers, []byte{}, okCB, errCB)
 }
 
 // GetLayerData get layer data from peers.

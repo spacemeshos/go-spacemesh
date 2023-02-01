@@ -2,7 +2,6 @@ package identities
 
 import (
 	"fmt"
-	"io"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -37,32 +36,57 @@ func IsMalicious(db sql.Executor, nodeID types.NodeID) (bool, error) {
 	return rows > 0, nil
 }
 
+// GetMalfeasanceProof returns the malfeasance proof for the given identity.
 func GetMalfeasanceProof(db sql.Executor, nodeID types.NodeID) (*types.MalfeasanceProof, error) {
+	data, err := GetMalfeasanceBlob(db, nodeID.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	var proof types.MalfeasanceProof
+	if err = codec.Decode(data, &proof); err != nil {
+		return nil, err
+	}
+	return &proof, nil
+}
+
+// GetMalfeasanceBlob returns the malfeasance proof in raw bytes for the given identity.
+func GetMalfeasanceBlob(db sql.Executor, nodeID []byte) ([]byte, error) {
 	var (
-		proof types.MalfeasanceProof
+		proof []byte
 		err   error
-		n     int
 	)
 	rows, err := db.Exec("select proof from identities where pubkey = ?1;",
 		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, nodeID.Bytes())
+			stmt.BindBytes(1, nodeID)
 		}, func(stmt *sql.Statement) bool {
-			if n, err = codec.DecodeFrom(stmt.ColumnReader(0), &proof); err != nil {
-				if err != io.EOF {
-					err = fmt.Errorf("get proof nodeID %v: %w", nodeID, err)
-					return false
-				}
-			} else if n == 0 {
-				err = fmt.Errorf("proof data missing nodeID %v", nodeID)
-				return false
-			}
+			proof = make([]byte, stmt.ColumnLen(0))
+			stmt.ColumnBytes(0, proof[:])
 			return true
 		})
 	if err != nil {
-		return nil, fmt.Errorf("proof %v: %w", nodeID, err)
+		return nil, fmt.Errorf("proof blob %v: %w", nodeID, err)
 	}
 	if rows == 0 {
 		return nil, sql.ErrNotFound
 	}
-	return &proof, nil
+	return proof, nil
+}
+
+func GetMalicious(db sql.Executor) ([]types.NodeID, error) {
+	var (
+		result []types.NodeID
+		err    error
+	)
+	_, err = db.Exec("select pubkey from identities where proof is not null;",
+		nil,
+		func(stmt *sql.Statement) bool {
+			var nid types.NodeID
+			stmt.ColumnBytes(0, nid[:])
+			result = append(result, nid)
+			return true
+		})
+	if err != nil {
+		return nil, fmt.Errorf("get malicious identities: %w", err)
+	}
+	return result, nil
 }

@@ -49,21 +49,20 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	nodeID := types.BytesToNodeID(msg.PubKey.Bytes())
 
 	// check for winning VRF
-	sha := hash.Sum(msg.Eligibility.Proof)
-	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
+	vrfHash := hash.Sum(msg.Eligibility.Proof)
+	vrfHashVal := binary.LittleEndian.Uint32(vrfHash[:4])
 	logger.With().Debug("received preround message",
 		nodeID,
 		log.String("sender_id", nodeID.ShortString()),
 		log.Int("num_values", len(msg.InnerMsg.Values)),
-		log.String("vrf_value", fmt.Sprintf("%x", shaUint32)))
-	// TODO: make sure we don't need a mutex here
-	if shaUint32 < pre.bestVRF {
-		pre.bestVRF = shaUint32
+		log.Uint32("vrf_value", vrfHashVal))
+	if vrfHashVal < pre.bestVRF {
+		pre.bestVRF = vrfHashVal
 		// store lowest-order bit as coin toss value
-		pre.coinflip = sha[0]&byte(1) == byte(1)
+		pre.coinflip = vrfHash[0]&byte(1) == byte(1)
 		pre.logger.With().Debug("got new best vrf value",
 			log.String("sender_id", nodeID.ShortString()),
-			log.String("vrf_value", fmt.Sprintf("%x", shaUint32)),
+			log.String("vrf_value", fmt.Sprintf("%x", vrfHashVal)),
 			log.Bool("weak_coin", pre.coinflip))
 	}
 

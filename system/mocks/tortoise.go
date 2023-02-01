@@ -86,12 +86,11 @@ func (mr *MockTortoiseMockRecorder) TallyVotes(arg0, arg1 interface{}) *gomock.C
 }
 
 // Updates mocks base method.
-func (m *MockTortoise) Updates() (types.LayerID, []types.BlockContextualValidity) {
+func (m *MockTortoise) Updates() map[types.LayerID]map[types.BlockID]bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Updates")
-	ret0, _ := ret[0].(types.LayerID)
-	ret1, _ := ret[1].([]types.BlockContextualValidity)
-	return ret0, ret1
+	ret0, _ := ret[0].(map[types.LayerID]map[types.BlockID]bool)
+	return ret0
 }
 
 // Updates indicates an expected call of Updates.

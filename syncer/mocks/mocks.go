@@ -194,6 +194,34 @@ func (mr *MockfetchLogicMockRecorder) GetLayerOpinions(arg0, arg1, arg2, arg3, a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerOpinions", reflect.TypeOf((*MockfetchLogic)(nil).GetLayerOpinions), arg0, arg1, arg2, arg3, arg4)
 }
 
+// GetMalfeasanceProofs mocks base method.
+func (m *MockfetchLogic) GetMalfeasanceProofs(arg0 context.Context, arg1 []types.NodeID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMalfeasanceProofs", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetMalfeasanceProofs indicates an expected call of GetMalfeasanceProofs.
+func (mr *MockfetchLogicMockRecorder) GetMalfeasanceProofs(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProofs", reflect.TypeOf((*MockfetchLogic)(nil).GetMalfeasanceProofs), arg0, arg1)
+}
+
+// GetMaliciousIDs mocks base method.
+func (m *MockfetchLogic) GetMaliciousIDs(arg0 context.Context, arg1 []p2p.Peer, arg2 func([]byte, p2p.Peer), arg3 func(error, p2p.Peer)) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMaliciousIDs", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetMaliciousIDs indicates an expected call of GetMaliciousIDs.
+func (mr *MockfetchLogicMockRecorder) GetMaliciousIDs(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaliciousIDs", reflect.TypeOf((*MockfetchLogic)(nil).GetMaliciousIDs), arg0, arg1, arg2, arg3)
+}
+
 // GetPeers mocks base method.
 func (m *MockfetchLogic) GetPeers() []p2p.Peer {
 	m.ctrl.T.Helper()
@@ -270,6 +298,20 @@ func (m *MockfetchLogic) PollLayerOpinions(arg0 context.Context, arg1 types.Laye
 func (mr *MockfetchLogicMockRecorder) PollLayerOpinions(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollLayerOpinions", reflect.TypeOf((*MockfetchLogic)(nil).PollLayerOpinions), arg0, arg1)
+}
+
+// PollMaliciousProofs mocks base method.
+func (m *MockfetchLogic) PollMaliciousProofs(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PollMaliciousProofs", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PollMaliciousProofs indicates an expected call of PollMaliciousProofs.
+func (mr *MockfetchLogicMockRecorder) PollMaliciousProofs(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollMaliciousProofs", reflect.TypeOf((*MockfetchLogic)(nil).PollMaliciousProofs), ctx)
 }
 
 // RegisterPeerHashes mocks base method.
@@ -375,6 +417,34 @@ func (m *Mockfetcher) GetLayerOpinions(arg0 context.Context, arg1 []p2p.Peer, ar
 func (mr *MockfetcherMockRecorder) GetLayerOpinions(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerOpinions", reflect.TypeOf((*Mockfetcher)(nil).GetLayerOpinions), arg0, arg1, arg2, arg3, arg4)
+}
+
+// GetMalfeasanceProofs mocks base method.
+func (m *Mockfetcher) GetMalfeasanceProofs(arg0 context.Context, arg1 []types.NodeID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMalfeasanceProofs", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetMalfeasanceProofs indicates an expected call of GetMalfeasanceProofs.
+func (mr *MockfetcherMockRecorder) GetMalfeasanceProofs(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProofs", reflect.TypeOf((*Mockfetcher)(nil).GetMalfeasanceProofs), arg0, arg1)
+}
+
+// GetMaliciousIDs mocks base method.
+func (m *Mockfetcher) GetMaliciousIDs(arg0 context.Context, arg1 []p2p.Peer, arg2 func([]byte, p2p.Peer), arg3 func(error, p2p.Peer)) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMaliciousIDs", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetMaliciousIDs indicates an expected call of GetMaliciousIDs.
+func (mr *MockfetcherMockRecorder) GetMaliciousIDs(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaliciousIDs", reflect.TypeOf((*Mockfetcher)(nil).GetMaliciousIDs), arg0, arg1, arg2, arg3)
 }
 
 // GetPeers mocks base method.
@@ -598,4 +668,42 @@ func (m *MockforkFinder) UpdateAgreement(arg0 p2p.Peer, arg1 types.LayerID, arg2
 func (mr *MockforkFinderMockRecorder) UpdateAgreement(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateAgreement", reflect.TypeOf((*MockforkFinder)(nil).UpdateAgreement), arg0, arg1, arg2, arg3)
+}
+
+// MockidProvider is a mock of idProvider interface.
+type MockidProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockidProviderMockRecorder
+}
+
+// MockidProviderMockRecorder is the mock recorder for MockidProvider.
+type MockidProviderMockRecorder struct {
+	mock *MockidProvider
+}
+
+// NewMockidProvider creates a new mock instance.
+func NewMockidProvider(ctrl *gomock.Controller) *MockidProvider {
+	mock := &MockidProvider{ctrl: ctrl}
+	mock.recorder = &MockidProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockidProvider) EXPECT() *MockidProviderMockRecorder {
+	return m.recorder
+}
+
+// IdentityExists mocks base method.
+func (m *MockidProvider) IdentityExists(id types.NodeID) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IdentityExists", id)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IdentityExists indicates an expected call of IdentityExists.
+func (mr *MockidProviderMockRecorder) IdentityExists(id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IdentityExists", reflect.TypeOf((*MockidProvider)(nil).IdentityExists), id)
 }
