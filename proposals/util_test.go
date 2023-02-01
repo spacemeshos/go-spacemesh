@@ -44,6 +44,7 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 			atx.SetNodeID(&nodeID)
 			atx.NumUnits = testedATXUnit
 		}
+		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))

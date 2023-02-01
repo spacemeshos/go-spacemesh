@@ -202,9 +202,9 @@ type InnerActivationTx struct {
 	VRFNonce    *VRFPostIndex
 
 	// the following fields are kept private and from being serialized
-	id *ATXID // non-exported cache of the ATXID
-
-	nodeID *NodeID // the id of the Node that created the ATX (public key)
+	id                *ATXID  // non-exported cache of the ATXID
+	nodeID            *NodeID // the id of the Node that created the ATX (public key)
+	effectiveNumUnits uint32  // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
 }
 
 // ATXMetadata is the signed data of ActivationTx.
@@ -282,7 +282,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddString("nipost", atx.InitialPost.String())
 	}
 	encoder.AddString("challenge", atx.NIPostChallenge.Hash().String())
-	atx.id.Field().AddTo(encoder)
+	encoder.AddString("id", atx.id.String())
 	encoder.AddString("sender_id", atx.nodeID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
@@ -296,6 +296,9 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("pub_layer_id", atx.PubLayerID.Value)
 	encoder.AddUint32("epoch", uint32(atx.PublishEpoch()))
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
+	if atx.effectiveNumUnits != 0 {
+		encoder.AddUint64("effective_num_units", uint64(atx.effectiveNumUnits))
+	}
 	encoder.AddUint64("sequence_number", atx.Sequence)
 	return nil
 }
@@ -361,6 +364,13 @@ func (atx *ActivationTx) NodeID() NodeID {
 	return *atx.nodeID
 }
 
+func (atx *ActivationTx) EffectiveNumUnits() uint32 {
+	if atx.effectiveNumUnits == 0 {
+		panic("effectiveNumUnits field must be set")
+	}
+	return atx.effectiveNumUnits
+}
+
 // SetID sets the ATXID in this ATX's cache.
 func (atx *ActivationTx) SetID(id *ATXID) {
 	atx.id = id
@@ -369,6 +379,10 @@ func (atx *ActivationTx) SetID(id *ATXID) {
 // SetNodeID sets the Node ID in the ATX's cache.
 func (atx *ActivationTx) SetNodeID(nodeID *NodeID) {
 	atx.nodeID = nodeID
+}
+
+func (atx *ActivationTx) SetEffectiveNumUnits(numUnits uint32) {
+	atx.effectiveNumUnits = numUnits
 }
 
 // Verify an ATX for a given base TickHeight and TickCount.
@@ -382,6 +396,9 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 		if err := atx.CalcAndSetNodeID(); err != nil {
 			return nil, err
 		}
+	}
+	if atx.effectiveNumUnits == 0 {
+		return nil, fmt.Errorf("effective num units not set")
 	}
 	vAtx := &VerifiedActivationTx{
 		ActivationTx: atx,

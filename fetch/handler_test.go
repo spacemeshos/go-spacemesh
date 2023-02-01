@@ -8,6 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -243,7 +244,8 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	atx.Signature = signer.Sign(atx.SignedBytes())
+	activation.SignAndFinalizeAtx(signer, atx)
+	atx.SetEffectiveNumUnits(atx.NumUnits)
 	vatx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	return vatx

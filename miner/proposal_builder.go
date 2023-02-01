@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -73,7 +72,11 @@ type defaultFetcher struct {
 }
 
 func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	return atxs.VRFNonce(f.cdb, nodeID, epoch)
+	nonce, err := f.cdb.VRFNonce(nodeID, epoch)
+	if err != nil {
+		return types.VRFPostIndex(0), fmt.Errorf("get vrf nonce: %w", err)
+	}
+	return nonce, nil
 }
 
 // Opt for configuring ProposalBuilder.
@@ -403,14 +406,13 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 }
 
 func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
-	current := pb.clock.GetCurrentLayer()
-	next := current.Add(1)
+	next := pb.clock.GetCurrentLayer().Add(1)
 	for {
 		select {
 		case <-pb.ctx.Done():
 			return
 		case <-pb.clock.AwaitLayer(next):
-			current = pb.clock.GetCurrentLayer()
+			current := pb.clock.GetCurrentLayer()
 			if current.Before(next) {
 				pb.logger.Info("time sync detected, realigning ProposalBuilder")
 				continue

@@ -145,6 +145,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		if err := activation.SignAndFinalizeAtx(c.signer, atx); err != nil {
 			c.logger.With().Fatal("failed to sign atx", log.Err(err))
 		}
+		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(1, 2)
 		if err != nil {
 			c.logger.With().Fatal("failed to verify atx", log.Err(err))
