@@ -137,9 +137,13 @@ func TestBuilder_StartAndClose(t *testing.T) {
 func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b := createBuilder(t)
 
+	layerID := types.NewLayerID(layersPerEpoch * 3)
+	b.mClock.EXPECT().GetCurrentLayer().Return(layerID).AnyTimes()
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+		return make(chan struct{})
+	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	atxID := types.RandomATXID()
 	activeSet := genActiveSet(t)
@@ -152,10 +156,6 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	tx1 := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 	base := types.RandomBallotID()
 
-	b.mClock.EXPECT().GetCurrentLayer().Return(layerID)
-	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
-		return make(chan struct{})
-	})
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
@@ -198,9 +198,13 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	b := createBuilder(t)
 
+	layerID := types.NewLayerID(layersPerEpoch * 3)
+	b.mClock.EXPECT().GetCurrentLayer().Return(layerID).AnyTimes()
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+		return make(chan struct{})
+	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	atxID := types.RandomATXID()
 	activeSet := genActiveSet(t)
@@ -212,10 +216,6 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 	bb := types.RandomBallotID()
 
-	b.mClock.EXPECT().GetCurrentLayer().Return(layerID)
-	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
-		return make(chan struct{})
-	})
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
@@ -400,19 +400,19 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	b := createBuilder(t)
 
+	layerID := types.NewLayerID(layersPerEpoch * 3)
+	b.mClock.EXPECT().GetCurrentLayer().Return(layerID).AnyTimes()
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+		return make(chan struct{})
+	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	nonce := types.VRFPostIndex(rand.Uint64())
 	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 
-	b.mClock.EXPECT().GetCurrentLayer().Return(layerID)
-	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
-		return make(chan struct{})
-	})
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
@@ -430,19 +430,19 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b := createBuilder(t)
 
+	layerID := types.NewLayerID(layersPerEpoch * 3)
+	b.mClock.EXPECT().GetCurrentLayer().Return(layerID).AnyTimes()
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+		return make(chan struct{})
+	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	nonce := types.VRFPostIndex(rand.Uint64())
 	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 
-	b.mClock.EXPECT().GetCurrentLayer().Return(layerID)
-	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
-		return make(chan struct{})
-	})
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
@@ -462,19 +462,19 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 	b := createBuilder(t)
 
+	layerID := types.NewLayerID(layersPerEpoch * 3)
+	b.mClock.EXPECT().GetCurrentLayer().Return(layerID).AnyTimes()
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+		return make(chan struct{})
+	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	nonce := types.VRFPostIndex(rand.Uint64())
 	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 
-	b.mClock.EXPECT().GetCurrentLayer().Return(layerID)
-	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
-		return make(chan struct{})
-	})
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
@@ -502,19 +502,19 @@ func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 	b := createBuilder(t)
 
+	layerID := types.NewLayerID(layersPerEpoch * 5)
+	b.mClock.EXPECT().GetCurrentLayer().Return(layerID).AnyTimes()
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+		return make(chan struct{})
+	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
 
-	layerID := types.NewLayerID(layersPerEpoch * 5)
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	nonce := types.VRFPostIndex(rand.Uint64())
 	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 
-	b.mClock.EXPECT().GetCurrentLayer().Return(layerID)
-	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
-		return make(chan struct{})
-	})
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
@@ -542,19 +542,19 @@ func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 	b := createBuilder(t)
 
+	layerID := types.NewLayerID(layersPerEpoch * 3)
+	b.mClock.EXPECT().GetCurrentLayer().Return(layerID).AnyTimes()
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+		return make(chan struct{})
+	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	nonce := types.VRFPostIndex(rand.Uint64())
 	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), sig)
 
-	b.mClock.EXPECT().GetCurrentLayer().Return(layerID)
-	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
-		return make(chan struct{})
-	})
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
