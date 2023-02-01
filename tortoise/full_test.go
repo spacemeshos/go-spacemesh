@@ -336,6 +336,7 @@ func TestFullCountVotes(t *testing.T) {
 				atxid := types.ATXID{byte(i + 1)}
 				atx.SetID(&atxid)
 				atx.SetNodeID(&types.NodeID{1})
+				atx.SetEffectiveNumUnits(atx.NumUnits)
 				vAtx, err := atx.Verify(tc.activeset[i].BaseHeight, tc.activeset[i].TickCount)
 				require.NoError(t, err)
 				require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))

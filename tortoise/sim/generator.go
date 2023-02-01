@@ -240,6 +240,7 @@ func (g *Generator) generateAtxs() {
 		if err := activation.SignAndFinalizeAtx(sig, atx); err != nil {
 			panic(err)
 		}
+		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(g.prevHeight[i], ticks)
 		if err != nil {
 			panic(err)

@@ -137,6 +137,7 @@ func createModifiedATXs(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerI
 			nil,
 			nil,
 		)
+		atx.SetEffectiveNumUnits(numUnit)
 		require.NoError(tb, activation.SignAndFinalizeAtx(signer, atx))
 		vAtx, err := onAtx(atx)
 		require.NoError(tb, err)

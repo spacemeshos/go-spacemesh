@@ -127,6 +127,7 @@ func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *si
 		&nonce,
 	)
 
+	atx.SetEffectiveNumUnits(numUnits)
 	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(tb, err)

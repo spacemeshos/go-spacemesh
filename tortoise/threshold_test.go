@@ -160,11 +160,13 @@ func TestReferenceHeight(t *testing.T) {
 					NIPostChallenge: types.NIPostChallenge{
 						PubLayerID: (types.EpochID(tc.epoch) - 1).FirstLayer(),
 					},
+					NumUnits: 2,
 				}}
 				atx.SetID(&types.ATXID{byte(i + 1)})
 				sig, err := signing.NewEdSigner()
 				require.NoError(t, err)
 				require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
+				atx.SetEffectiveNumUnits(atx.NumUnits)
 				vAtx, err := atx.Verify(0, uint64(height))
 				require.NoError(t, err)
 				require.NoError(t, atxs.Add(cdb, vAtx, time.Time{}))

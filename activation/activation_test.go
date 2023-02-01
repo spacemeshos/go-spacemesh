@@ -54,6 +54,7 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID t
 
 func newAtx(t testing.TB, sig signer, nodeID *types.NodeID, challenge types.NIPostChallenge, nipost *types.NIPost, numUnits uint32, coinbase types.Address) *types.ActivationTx {
 	atx := types.NewActivationTx(challenge, nodeID, coinbase, nipost, numUnits, nil, nil)
+	atx.SetEffectiveNumUnits(numUnits)
 	require.NoError(t, SignAndFinalizeAtx(sig, atx))
 	return atx
 }
@@ -74,6 +75,7 @@ func newActivationTx(
 ) *types.VerifiedActivationTx {
 	challenge := newChallenge(sequence, prevATX, positioningATX, pubLayerID, cATX)
 	atx := newAtx(t, sig, nodeID, challenge, nipost, numUnits, coinbase)
+	atx.SetEffectiveNumUnits(numUnits)
 	vAtx, err := atx.Verify(startTick, numTicks)
 	require.NoError(t, err)
 	return vAtx
@@ -202,6 +204,7 @@ func publishAtx(
 			require.NoError(t, err)
 			built = gotAtx
 			require.NoError(t, built.CalcAndSetID())
+			built.SetEffectiveNumUnits(gotAtx.NumUnits)
 			vatx, err := built.Verify(0, 1)
 			require.NoError(t, err)
 			require.NoError(t, atxs.Add(tab.cdb, vatx, time.Now()))
@@ -223,12 +226,14 @@ func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID, sig signer, 
 	challenge := types.NIPostChallenge{
 		PubLayerID: epoch.FirstLayer(),
 	}
-	atx := types.NewActivationTx(challenge, nodeID, types.Address{}, nil, 1, nil, nil)
+	atx := types.NewActivationTx(challenge, nodeID, types.Address{}, nil, 2, nil, nil)
+	atx.SetEffectiveNumUnits(2)
 	return addAtx(t, db, sig, atx)
 }
 
 func addAtx(t *testing.T, db sql.Executor, sig signer, atx *types.ActivationTx) *types.VerifiedActivationTx {
 	require.NoError(t, SignAndFinalizeAtx(sig, atx))
+	atx.SetEffectiveNumUnits(atx.NumUnits)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, vAtx, time.Now()))
@@ -750,6 +755,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 		atx, err := types.BytesToAtx(msg)
 		r.NoError(err)
 
+		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		r.NoError(err)
 		r.Equal(tab.nodeID, vAtx.NodeID())
@@ -836,6 +842,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		atx, err := types.BytesToAtx(msg)
 		r.NoError(err)
 
+		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		r.NoError(err)
 		r.Equal(tab.nodeID, vAtx.NodeID())
