@@ -18,8 +18,8 @@ type SmeshingAPI = activation.SmeshingProvider
 
 // GenesisTimeAPI is an API to get genesis time and current layer of the system.
 type GenesisTimeAPI interface {
-	GetGenesisTime() time.Time
-	GetCurrentLayer() types.LayerID
+	GenesisTime() time.Time
+	CurrentLayer() types.LayerID
 }
 
 // LoggingAPI is an API to system loggers.

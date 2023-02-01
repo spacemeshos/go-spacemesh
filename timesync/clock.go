@@ -20,7 +20,7 @@ func (RealClock) Now() time.Time {
 
 // NodeClock is the struct holding a real clock.
 type NodeClock struct {
-	layerConv // layer conversions provider
+	LayerConverter // layer conversions provider
 
 	clock   clock // provides the time
 	genesis time.Time
@@ -47,12 +47,12 @@ func NewClock(c clock, layerDuration time.Duration, genesisTime time.Time, logge
 		log.Time("local", gtime),
 	)
 	t := &NodeClock{
-		layerConv:     LayerConverter{duration: layerDuration, genesis: gtime},
-		clock:         c,
-		layerChannels: make(map[types.LayerID]chan struct{}),
-		genesis:       gtime,
-		stop:          make(chan struct{}),
-		log:           logger,
+		LayerConverter: LayerConverter{duration: layerDuration, genesis: gtime},
+		clock:          c,
+		layerChannels:  make(map[types.LayerID]chan struct{}),
+		genesis:        gtime,
+		stop:           make(chan struct{}),
+		log:            logger,
 	}
 
 	t.eg.Go(t.startClock)
@@ -79,14 +79,12 @@ func (t *NodeClock) startClock() error {
 			return nil
 		}
 
-		if err := t.tick(); err != nil {
-			t.log.With().Warning("error notifying clock subscribers", log.Err(err))
-		}
+		t.tick()
 	}
 }
 
-// GetGenesisTime returns at which time this clock has started (used to calculate current tick).
-func (t *NodeClock) GetGenesisTime() time.Time {
+// GenesisTime returns at which time this clock has started (used to calculate current tick).
+func (t *NodeClock) GenesisTime() time.Time {
 	return t.genesis
 }
 
@@ -104,7 +102,7 @@ func (t *NodeClock) Close() {
 
 // tick processes the current tick. It iterates over all layers that have passed since the last tick and notifies
 // listeners that are awaiting these layers.
-func (t *NodeClock) tick() error {
+func (t *NodeClock) tick() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -119,11 +117,10 @@ func (t *NodeClock) tick() error {
 	}
 
 	t.lastTickedLayer = layer // update last ticked layer
-	return nil
 }
 
-// GetCurrentLayer gets the current layer.
-func (t *NodeClock) GetCurrentLayer() types.LayerID {
+// CurrentLayer gets the current layer.
+func (t *NodeClock) CurrentLayer() types.LayerID {
 	return t.TimeToLayer(t.clock.Now())
 }
 

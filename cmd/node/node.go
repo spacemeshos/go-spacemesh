@@ -190,9 +190,9 @@ type Service interface {
 type NodeClock interface {
 	LayerToTime(types.LayerID) time.Time
 	TimeToLayer(time.Time) types.LayerID
-	GetGenesisTime() time.Time
+	GenesisTime() time.Time
 
-	GetCurrentLayer() types.LayerID
+	CurrentLayer() types.LayerID
 	AwaitLayer(types.LayerID) chan struct{}
 
 	Close()

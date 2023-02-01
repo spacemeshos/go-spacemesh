@@ -299,7 +299,7 @@ func (b *Builder) generateProof(ctx context.Context) error {
 // waitForFirstATX waits until the first ATX can be published. The return value indicates
 // if the function waited or not (for testing).
 func (b *Builder) waitForFirstATX(ctx context.Context) bool {
-	currentLayer := b.layerClock.GetCurrentLayer()
+	currentLayer := b.layerClock.CurrentLayer()
 	currEpoch := currentLayer.GetEpoch()
 	if currEpoch == 0 { // genesis miner
 		return false
@@ -354,8 +354,8 @@ func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 	case <-timer.C:
 	}
 	b.log.WithContext(ctx).With().Info("ready to build first atx",
-		log.Stringer("current_layer", b.layerClock.GetCurrentLayer()),
-		log.Stringer("current_epoch", b.layerClock.GetCurrentLayer().GetEpoch()))
+		log.Stringer("current_layer", b.layerClock.CurrentLayer()),
+		log.Stringer("current_epoch", b.layerClock.CurrentLayer().GetEpoch()))
 	return true
 }
 
@@ -379,7 +379,7 @@ func (b *Builder) loop(ctx context.Context) {
 			}
 
 			b.log.WithContext(ctx).With().Error("error attempting to publish atx",
-				b.layerClock.GetCurrentLayer(),
+				b.layerClock.CurrentLayer(),
 				b.currentEpoch(),
 				log.Err(err),
 			)
@@ -399,7 +399,7 @@ func (b *Builder) loop(ctx context.Context) {
 			default:
 				b.log.WithContext(ctx).With().Warning("unknown error", log.Err(err))
 				// other failures are related to in-process software. we may as well panic here
-				currentLayer := b.layerClock.GetCurrentLayer()
+				currentLayer := b.layerClock.CurrentLayer()
 				select {
 				case <-ctx.Done():
 					return
@@ -642,7 +642,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	b.log.With().Info("awaiting atx publication epoch",
 		log.FieldNamed("pub_epoch", pubEpoch),
 		log.FieldNamed("pub_epoch_first_layer", pubEpoch.FirstLayer()),
-		log.FieldNamed("current_layer", b.layerClock.GetCurrentLayer()),
+		log.FieldNamed("current_layer", b.layerClock.CurrentLayer()),
 	)
 	select {
 	case <-ctx.Done():
@@ -693,7 +693,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 }
 
 func (b *Builder) currentEpoch() types.EpochID {
-	return b.layerClock.GetCurrentLayer().GetEpoch()
+	return b.layerClock.CurrentLayer().GetEpoch()
 }
 
 func (b *Builder) discardChallenge() {

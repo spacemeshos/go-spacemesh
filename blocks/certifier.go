@@ -186,7 +186,7 @@ func (c *Certifier) isShuttingDown() bool {
 }
 
 func (c *Certifier) run() error {
-	for layer := c.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
+	for layer := c.layerClock.CurrentLayer(); ; layer = layer.Add(1) {
 		select {
 		case <-c.layerClock.AwaitLayer(layer):
 			c.prune()
@@ -201,7 +201,7 @@ func (c *Certifier) prune() {
 	defer c.mu.Unlock()
 
 	cutoff := types.GetEffectiveGenesis()
-	current := c.layerClock.GetCurrentLayer()
+	current := c.layerClock.CurrentLayer()
 	if current.Uint32() > c.cfg.NumLayersToKeep {
 		cutoff = current.Sub(c.cfg.NumLayersToKeep)
 	}
@@ -355,7 +355,7 @@ func (c *Certifier) certified(lid types.LayerID, bid types.BlockID) bool {
 }
 
 func (c *Certifier) expected(lid types.LayerID) bool {
-	current := c.layerClock.GetCurrentLayer()
+	current := c.layerClock.CurrentLayer()
 	start := types.GetEffectiveGenesis()
 	if current.Uint32() > c.cfg.LayerBuffer+1 {
 		start = current.Sub(c.cfg.LayerBuffer + 1)

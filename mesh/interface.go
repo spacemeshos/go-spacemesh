@@ -23,5 +23,5 @@ type vmState interface {
 }
 
 type layerClock interface {
-	GetCurrentLayer() types.LayerID
+	CurrentLayer() types.LayerID
 }

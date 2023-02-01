@@ -806,7 +806,7 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.Nil(t, saved)
 
 	// second one will create a MalfeasanceProof
-	tm.mockClock.EXPECT().GetCurrentLayer().Return(types.NewLayerID(11))
+	tm.mockClock.EXPECT().CurrentLayer().Return(types.NewLayerID(11))
 	malProof, err = tm.AddBallot(context.Background(), &blts[1])
 	require.NoError(t, err)
 	require.NotNil(t, malProof)

@@ -281,7 +281,7 @@ func (m *MeshAPIMock) GetRewards(types.Address) (rewards []*types.Reward, err er
 }
 
 func (m *MeshAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
-	if tid.After(genTime.GetCurrentLayer()) {
+	if tid.After(genTime.CurrentLayer()) {
 		return nil, errors.New("requested layer later than current layer")
 	} else if tid.After(m.LatestLayer()) {
 		return nil, errors.New("haven't received that layer yet")
@@ -498,11 +498,11 @@ type GenesisTimeMock struct {
 	t time.Time
 }
 
-func (t GenesisTimeMock) GetCurrentLayer() types.LayerID {
+func (t GenesisTimeMock) CurrentLayer() types.LayerID {
 	return types.LayerID(layerCurrent)
 }
 
-func (t GenesisTimeMock) GetGenesisTime() time.Time {
+func (t GenesisTimeMock) GenesisTime() time.Time {
 	return t.t
 }
 
@@ -1150,7 +1150,7 @@ func TestMeshService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), response.Unixtime.Value)
+			require.Equal(t, uint64(genTime.GenesisTime().Unix()), response.Unixtime.Value)
 		}},
 		{"CurrentLayer", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -2417,7 +2417,7 @@ func TestMultiService(t *testing.T) {
 	require.Equal(t, message, res1.Msg.Value)
 	res2, err2 := c2.GenesisTime(ctx, &pb.GenesisTimeRequest{})
 	require.NoError(t, err2)
-	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), res2.Unixtime.Value)
+	require.Equal(t, uint64(genTime.GenesisTime().Unix()), res2.Unixtime.Value)
 
 	// Make sure that shutting down the grpc service shuts them both down
 	shutDown()
@@ -2471,7 +2471,7 @@ func TestJsonApi(t *testing.T) {
 	require.Equal(t, http.StatusOK, respStatus2)
 	var msg2 pb.GenesisTimeResponse
 	require.NoError(t, jsonpb.UnmarshalString(respBody2, &msg2))
-	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), msg2.Unixtime.Value)
+	require.Equal(t, uint64(genTime.GenesisTime().Unix()), msg2.Unixtime.Value)
 }
 
 func TestDebugService(t *testing.T) {

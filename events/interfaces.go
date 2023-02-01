@@ -6,5 +6,5 @@ import (
 
 type LayerClock interface {
 	AwaitLayer(layerID types.LayerID) chan struct{}
-	GetCurrentLayer() types.LayerID
+	CurrentLayer() types.LayerID
 }

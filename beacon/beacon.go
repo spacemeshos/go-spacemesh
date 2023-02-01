@@ -533,14 +533,14 @@ func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
 func (pd *ProtocolDriver) listenEpochs(ctx context.Context) {
 	pd.logger.With().Info("starting listening layers")
 
-	currentEpoch := pd.clock.GetCurrentLayer().GetEpoch()
+	currentEpoch := pd.clock.CurrentLayer().GetEpoch()
 	layer := currentEpoch.Add(1).FirstLayer()
 	for {
 		select {
 		case <-pd.ctx.Done():
 			return
 		case <-pd.clock.AwaitLayer(layer):
-			current := pd.clock.GetCurrentLayer()
+			current := pd.clock.CurrentLayer()
 			if current.Before(layer) {
 				pd.logger.With().Info("time sync detected, realigning Beacon")
 				continue
@@ -1058,7 +1058,7 @@ func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
-	epoch := pd.clock.GetCurrentLayer().GetEpoch()
+	epoch := pd.clock.CurrentLayer().GetEpoch()
 	var observed []*metrics.BeaconStats
 	if epochBeacons, ok := pd.ballotsBeacons[epoch]; ok {
 		for beacon, stats := range epochBeacons {
