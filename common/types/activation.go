@@ -272,7 +272,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddString("nipost", atx.InitialPost.String())
 	}
 	encoder.AddString("challenge", atx.NIPostChallenge.Hash().String())
-	atx.id.Field().AddTo(encoder)
+	encoder.AddString("id", atx.id.String())
 	encoder.AddString("sender_id", atx.nodeID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
@@ -286,7 +286,9 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("pub_layer_id", atx.PubLayerID.Value)
 	encoder.AddUint32("epoch", uint32(atx.PublishEpoch()))
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
-	encoder.AddUint64("effective_num_units", uint64(atx.EffectiveNumUnits()))
+	if atx.effectiveNumUnits != 0 {
+		encoder.AddUint64("effective_num_units", uint64(atx.effectiveNumUnits))
+	}
 	encoder.AddUint64("sequence_number", atx.Sequence)
 	return nil
 }

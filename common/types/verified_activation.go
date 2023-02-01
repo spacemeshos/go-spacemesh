@@ -44,11 +44,19 @@ func (vatx *VerifiedActivationTx) MarshalLogObject(encoder log.ObjectEncoder) er
 	encoder.AddString("sender_id", vatx.nodeID.String())
 	encoder.AddString("prev_atx_id", vatx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", vatx.PositioningATX.String())
+	if vatx.CommitmentATX != nil {
+		encoder.AddString("commitment_atx_id", vatx.CommitmentATX.String())
+	}
+	if vatx.VRFNonce != nil {
+		encoder.AddUint64("vrf_nonce", uint64(*vatx.VRFNonce))
+	}
 	encoder.AddString("coinbase", vatx.Coinbase.String())
 	encoder.AddUint32("pub_layer_id", vatx.PubLayerID.Value)
 	encoder.AddUint32("epoch", uint32(vatx.PublishEpoch()))
 	encoder.AddUint64("num_units", uint64(vatx.NumUnits))
-	encoder.AddUint64("effective_num_units", uint64(vatx.EffectiveNumUnits()))
+	if vatx.effectiveNumUnits != 0 {
+		encoder.AddUint64("effective_num_units", uint64(vatx.effectiveNumUnits))
+	}
 	encoder.AddUint64("sequence_number", vatx.Sequence)
 	encoder.AddUint64("base_tick_height", vatx.baseTickHeight)
 	encoder.AddUint64("tick_count", vatx.tickCount)
