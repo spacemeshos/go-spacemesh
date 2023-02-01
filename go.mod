@@ -16,6 +16,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.15.0
 	github.com/hashicorp/go-multierror v1.1.1
+	github.com/hashicorp/go-retryablehttp v0.7.2
 	github.com/hashicorp/golang-lru v0.6.0
 	github.com/libp2p/go-libp2p v0.24.2
 	github.com/libp2p/go-libp2p-pubsub v0.8.3
@@ -35,7 +36,7 @@ require (
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
 	github.com/spacemeshos/go-scale v1.1.3
 	github.com/spacemeshos/merkle-tree v0.2.0
-	github.com/spacemeshos/poet v0.5.0
+	github.com/spacemeshos/poet v0.6.0
 	github.com/spacemeshos/post v0.3.0
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
@@ -91,6 +92,7 @@ require (
 	github.com/google/pprof v0.0.0-20221203041831-ce31453925ec // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
+	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/huin/goupnp v1.0.3 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect

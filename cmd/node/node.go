@@ -1064,7 +1064,7 @@ func (app *App) Start(ctx context.Context) error {
 
 	poetClients := make([]activation.PoetProvingServiceClient, 0, len(app.Config.PoETServers))
 	for _, address := range app.Config.PoETServers {
-		poetClients = append(poetClients, activation.NewHTTPPoetClient(address))
+		poetClients = append(poetClients, activation.NewHTTPPoetClient(address, app.Config.POET))
 	}
 
 	edPubkey := edSgn.PublicKey()

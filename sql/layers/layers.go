@@ -8,11 +8,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-const (
-	hashField           = "hash"
-	aggregatedHashField = "aggregated_hash"
-)
-
 // SetWeakCoin for the layer.
 func SetWeakCoin(db sql.Executor, lid types.LayerID, weakcoin bool) error {
 	if _, err := db.Exec(`insert into layers (id, weak_coin) values (?1, ?2) 
@@ -67,7 +62,7 @@ func SetApplied(db sql.Executor, lid types.LayerID, applied types.BlockID) error
 
 // UnsetAppliedFrom updates the applied block to nil for layer >= `lid`.
 func UnsetAppliedFrom(db sql.Executor, lid types.LayerID) error {
-	if _, err := db.Exec("update layers set applied_block = null, state_hash = null, hash = null, aggregated_hash = null where id >= ?1;",
+	if _, err := db.Exec("update layers set applied_block = null, state_hash = null, aggregated_hash = null where id >= ?1;",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Value))
 		}, nil); err != nil {
@@ -186,23 +181,27 @@ func GetProcessed(db sql.Executor) (types.LayerID, error) {
 	return lid, nil
 }
 
-// SetHashes sets the layer hash and aggregated hash.
-func SetHashes(db sql.Executor, lid types.LayerID, hash, aggHash types.Hash32) error {
+// SetMeshHash sets the aggregated hash up to the specified layer.
+func SetMeshHash(db sql.Executor, lid types.LayerID, aggHash types.Hash32) error {
 	if _, err := db.Exec(
-		`insert into layers (id, hash, aggregated_hash) values (?1, ?2, ?3) 
-         on conflict(id) do update set hash=?2, aggregated_hash=?3;`,
+		`insert into layers (id, aggregated_hash) values (?1, ?2) 
+         on conflict(id) do update set aggregated_hash=?2;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Uint32()))
-			stmt.BindBytes(2, hash[:])
-			stmt.BindBytes(3, aggHash[:])
+			stmt.BindBytes(2, aggHash[:])
 		}, nil); err != nil {
 		return fmt.Errorf("set hashes %v: %w", lid, err)
 	}
 	return nil
 }
 
-func getHash(db sql.Executor, field string, lid types.LayerID) (rst types.Hash32, err error) {
-	if rows, err := db.Exec(fmt.Sprintf("select %s from layers where id = ?1", field),
+// GetAggregatedHash for layer.
+func GetAggregatedHash(db sql.Executor, lid types.LayerID) (types.Hash32, error) {
+	var (
+		rst types.Hash32
+		err error
+	)
+	if rows, err := db.Exec("select aggregated_hash from layers where id = ?1",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Uint32()))
 		},
@@ -210,21 +209,11 @@ func getHash(db sql.Executor, field string, lid types.LayerID) (rst types.Hash32
 			stmt.ColumnBytes(0, rst[:])
 			return true
 		}); err != nil {
-		return rst, fmt.Errorf("select %s for %s: %w", field, lid, err)
+		return rst, fmt.Errorf("get agg hash %s: %w", lid, err)
 	} else if rows == 0 {
 		return rst, fmt.Errorf("%w layer %s", sql.ErrNotFound, lid)
 	}
 	return rst, err
-}
-
-// GetHash for layer.
-func GetHash(db sql.Executor, lid types.LayerID) (types.Hash32, error) {
-	return getHash(db, hashField, lid)
-}
-
-// GetAggregatedHash for layer.
-func GetAggregatedHash(db sql.Executor, lid types.LayerID) (types.Hash32, error) {
-	return getHash(db, aggregatedHashField, lid)
 }
 
 func makeInClause(num int) string {

@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
@@ -13,6 +14,8 @@ const (
 	valid   = 1
 	invalid = -1
 )
+
+var ErrValidityNotDecided = errors.New("block validity undecided")
 
 func decodeBlock(reader io.Reader, id types.BlockID) (*types.Block, error) {
 	inner := types.InnerBlock{}
@@ -96,7 +99,7 @@ func IsValid(db sql.Executor, id types.BlockID) (rst bool, err error) {
 		stmt.BindBytes(1, id.Bytes())
 	}, func(stmt *sql.Statement) bool {
 		if stmt.ColumnInt(0) == 0 {
-			err = fmt.Errorf("%w block %s is undecided", sql.ErrNotFound, id)
+			err = fmt.Errorf("%w: %s", ErrValidityNotDecided, id)
 			return false
 		}
 		rst = stmt.ColumnInt(0) == valid
