@@ -96,6 +96,11 @@ func (st *statusTracker) AnalyzeStatusMessages(isValid func(m *Msg) bool) {
 	})
 	st.tally = &ci
 	st.analyzed = true
+	if st.tally.Meet(st.threshold) {
+		st.logger.With().Info("status round completed", log.Object("eligibility_count", st.tally))
+	} else {
+		st.logger.With().Warning("status round failed", log.Object("eligibility_count", st.tally))
+	}
 }
 
 // IsSVPReady returns true if there are enough statuses to build an SVP, false otherwise.
