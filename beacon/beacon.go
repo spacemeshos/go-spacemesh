@@ -466,24 +466,19 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 	}
 
 	var (
-		weight uint64
-		ids    []types.ATXID
-		miners = map[string]uint64{}
+		epochWeight uint64
+		atxids      []types.ATXID
+		miners      = map[string]uint64{}
 	)
 	if err := pd.cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
-		weight += header.GetWeight()
-		ids = append(ids, header.ID)
+		epochWeight += header.GetWeight()
+		atxids = append(atxids, header.ID)
 		miners[string(header.NodeID.Bytes())] += uint64(header.NumUnits)
 		return true
 	}); err != nil {
 		return nil, err
 	}
 
-	epochWeight, atxids, err := pd.cdb.GetEpochWeight(epoch)
-	if err != nil {
-		logger.With().Error("failed to get weight targeting epoch", log.Err(err))
-		return nil, fmt.Errorf("get epoch weight: %w", err)
-	}
 	if epochWeight == 0 {
 		logger.With().Error("zero weight targeting epoch", log.Err(errZeroEpochWeight))
 		return nil, errZeroEpochWeight
