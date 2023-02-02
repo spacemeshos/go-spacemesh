@@ -4,25 +4,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/benbjohnson/clock"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// RealClock is the struct wrapping a local time struct.
-type RealClock struct{}
-
-// Now returns the current local time.
-func (RealClock) Now() time.Time {
-	return time.Now()
-}
-
 // NodeClock is the struct holding a real clock.
 type NodeClock struct {
 	LayerConverter // layer conversions provider
 
-	clock   clock // provides the time
+	clock   clock.Clock // provides the time
 	genesis time.Time
 
 	mu              sync.Mutex    // protects the following fields
@@ -37,7 +30,7 @@ type NodeClock struct {
 }
 
 // NewClock return TimeClock struct that notifies tickInterval has passed.
-func NewClock(c clock, layerDuration time.Duration, genesisTime time.Time, logger log.Log) *NodeClock {
+func NewClock(c clock.Clock, layerDuration time.Duration, genesisTime time.Time, logger log.Log) *NodeClock {
 	if layerDuration == 0 {
 		logger.Panic("could not create new clock: bad configuration: tick interval is zero")
 	}
@@ -73,7 +66,7 @@ func (t *NodeClock) startClock() error {
 		)
 
 		select {
-		case <-time.After(nextTickTime.Sub(t.clock.Now())):
+		case <-t.clock.After(nextTickTime.Sub(t.clock.Now())):
 		case <-t.stop:
 			t.log.Info("stopping global clock %p", t)
 			return nil
