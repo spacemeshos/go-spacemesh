@@ -187,7 +187,7 @@ func Test_NodeClock_NonMonotonicTick_Forward(t *testing.T) {
 	select {
 	case <-ch:
 		// channel returned by AwaitLayer should be closed and we should be in the future layer 10
-		require.Equal(t, types.NewLayerID(15), clock.CurrentLayer())
+		require.Equal(t, types.NewLayerID(10), clock.CurrentLayer())
 	case <-time.After(10 * time.Millisecond):
 		require.Fail(t, "await layer not closed")
 	}
