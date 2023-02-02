@@ -520,7 +520,12 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	port := 1240
 	path := t.TempDir()
 
-	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), logtest.New(t))
+	clock, err := timesync.NewClock(
+		timesync.WithLayerDuration(1*time.Second),
+		timesync.WithGenesisTime(time.Now()),
+		timesync.WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
 	mesh, err := mocknet.WithNPeers(1)
 	require.NoError(t, err)
 	cfg := getTestDefaultConfig()

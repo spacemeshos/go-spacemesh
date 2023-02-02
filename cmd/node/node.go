@@ -1076,9 +1076,16 @@ func (app *App) Start(ctx context.Context) error {
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
 	if err != nil {
-		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.Genesis.GenesisTime, err)
+		return fmt.Errorf("cannot parse genesis time %s: %w", app.Config.Genesis.GenesisTime, err)
 	}
-	clock := timesync.NewClock(timesync.RealClock{}, app.Config.LayerDuration, gTime, lg.WithName("clock"))
+	clock, err := timesync.NewClock(
+		timesync.WithLayerDuration(app.Config.LayerDuration),
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(lg.WithName("clock")),
+	)
+	if err != nil {
+		return fmt.Errorf("cannot create clock: %w", err)
+	}
 
 	lg.Info("initializing p2p services")
 

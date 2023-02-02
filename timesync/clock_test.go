@@ -9,24 +9,56 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
+func Test_NodeClock_NewClock(t *testing.T) {
+	clock, err := NewClock(
+		WithGenesisTime(time.Now()),
+		WithLogger(logtest.New(t)),
+	)
+	require.ErrorContains(t, err, "tick interval is zero")
+	require.Nil(t, clock)
+
+	clock, err = NewClock(
+		WithLayerDuration(time.Second),
+		WithLogger(logtest.New(t)),
+	)
+	require.ErrorContains(t, err, "genesis time is zero")
+	require.Nil(t, clock)
+
+	clock, err = NewClock(
+		WithLayerDuration(time.Second),
+		WithGenesisTime(time.Now()),
+	)
+	require.ErrorContains(t, err, "logger is nil")
+	require.Nil(t, clock)
+}
+
 func Test_NodeClock_GenesisTime(t *testing.T) {
 	genesis := time.Now()
 
-	clock := NewClock(clock.New(), time.Second, genesis, logtest.New(t))
+	clock, err := NewClock(
+		WithLayerDuration(time.Second),
+		WithGenesisTime(genesis),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
 	require.NotNil(t, clock)
 
 	require.Equal(t, genesis.Local(), clock.GenesisTime())
 }
 
 func Test_NodeClock_Close(t *testing.T) {
-	clock := NewClock(clock.New(), time.Second, time.Now(), logtest.New(t))
+	clock, err := NewClock(
+		WithLayerDuration(time.Second),
+		WithGenesisTime(time.Now()),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
 	require.NotNil(t, clock)
 
 	var eg errgroup.Group
@@ -47,7 +79,12 @@ func Test_NodeClock_Close(t *testing.T) {
 }
 
 func Test_NodeClock_NoRaceOnTick(t *testing.T) {
-	clock := NewClock(clock.New(), time.Second, time.Now(), logtest.New(t))
+	clock, err := NewClock(
+		WithLayerDuration(time.Second),
+		WithGenesisTime(time.Now()),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
 	require.NotNil(t, clock)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -83,7 +120,12 @@ func Test_NodeClock_Await_BeforeGenesis(t *testing.T) {
 	genesis := time.Now().Add(100 * time.Millisecond)
 	layerDuration := 10 * time.Millisecond
 
-	clock := NewClock(clock.New(), layerDuration, genesis, logtest.New(t))
+	clock, err := NewClock(
+		WithLayerDuration(layerDuration),
+		WithGenesisTime(genesis),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
 	require.NotNil(t, clock)
 
 	select {
@@ -98,7 +140,12 @@ func Test_NodeClock_Await_PassedLayer(t *testing.T) {
 	genesis := time.Now().Add(-100 * time.Millisecond)
 	layerDuration := 10 * time.Millisecond
 
-	clock := NewClock(clock.New(), layerDuration, genesis, logtest.New(t))
+	clock, err := NewClock(
+		WithLayerDuration(layerDuration),
+		WithGenesisTime(genesis),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
 	require.NotNil(t, clock)
 
 	select {
@@ -115,7 +162,15 @@ func Test_NodeClock_NonMonotonicTick_Forward(t *testing.T) {
 
 	mClock := clock.NewMock()
 	mClock.Set(genesis.Add(5 * layerDuration))
-	clock := NewClock(mClock, layerDuration, genesis, logtest.New(t, zapcore.DebugLevel))
+
+	clock, err := NewClock(
+		withClock(mClock),
+		WithLayerDuration(layerDuration),
+		WithGenesisTime(genesis),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, clock)
 	ch := clock.AwaitLayer(types.NewLayerID(6))
 
 	select {
@@ -144,7 +199,16 @@ func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
 
 	mClock := clock.NewMock()
 	mClock.Set(genesis.Add(5 * layerDuration))
-	clock := NewClock(mClock, layerDuration, genesis, logtest.New(t, zapcore.DebugLevel))
+
+	clock, err := NewClock(
+		withClock(mClock),
+		WithLayerDuration(layerDuration),
+		WithGenesisTime(genesis),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, clock)
+
 	ch6 := clock.AwaitLayer(types.NewLayerID(6))
 	ch7 := clock.AwaitLayer(types.NewLayerID(7))
 
@@ -230,7 +294,14 @@ func Fuzz_NodeClock_CurrentLayer(f *testing.F) {
 
 		mClock := clock.NewMock()
 		mClock.Set(nowTime)
-		clock := NewClock(mClock, layerTime, genesisTime, logtest.New(t))
+
+		clock, err := NewClock(
+			withClock(mClock),
+			WithLayerDuration(layerTime),
+			WithGenesisTime(genesisTime),
+			WithLogger(logtest.New(t)),
+		)
+		require.NoError(t, err)
 		require.NotNil(t, clock)
 
 		expectedLayer := uint32(0)

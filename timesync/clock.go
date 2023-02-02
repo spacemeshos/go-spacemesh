@@ -30,26 +30,34 @@ type NodeClock struct {
 }
 
 // NewClock return TimeClock struct that notifies tickInterval has passed.
-func NewClock(c clock.Clock, layerDuration time.Duration, genesisTime time.Time, logger log.Log) *NodeClock {
-	if layerDuration == 0 {
-		logger.Panic("could not create new clock: bad configuration: tick interval is zero")
+func NewClock(opts ...OptionFunc) (*NodeClock, error) {
+	cfg := &option{
+		clock: clock.New(),
 	}
-	gtime := genesisTime.Local()
-	logger.With().Info("converting genesis time to local time",
-		log.Time("genesis", genesisTime),
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
+
+	gtime := cfg.genesisTime.Local()
+	cfg.log.With().Info("converting genesis time to local time",
+		log.Time("genesis", cfg.genesisTime),
 		log.Time("local", gtime),
 	)
 	t := &NodeClock{
-		LayerConverter: LayerConverter{duration: layerDuration, genesis: gtime},
-		clock:          c,
+		LayerConverter: LayerConverter{duration: cfg.layerDuration, genesis: gtime},
+		clock:          cfg.clock,
 		layerChannels:  make(map[types.LayerID]chan struct{}),
 		genesis:        gtime,
 		stop:           make(chan struct{}),
-		log:            logger,
+		log:            *cfg.log,
 	}
 
 	t.eg.Go(t.startClock)
-	return t
+	return t, nil
 }
 
 func (t *NodeClock) startClock() error {
