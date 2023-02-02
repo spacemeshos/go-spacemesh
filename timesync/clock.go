@@ -66,6 +66,9 @@ func (t *NodeClock) startClock() error {
 	for {
 		currLayer := t.TimeToLayer(t.clock.Now())
 		nextLayer := currLayer.Add(1)
+		if time.Until(t.LayerToTime(currLayer)) > 0 {
+			nextLayer = currLayer
+		}
 		nextTickTime := t.LayerToTime(nextLayer)
 		t.log.With().Info("global clock going to sleep before next layer",
 			log.Stringer("curr_layer", currLayer),
@@ -73,11 +76,18 @@ func (t *NodeClock) startClock() error {
 			log.Time("next_tick_time", nextTickTime),
 		)
 
-		select {
-		case <-t.clock.After(nextTickTime.Sub(t.clock.Now())):
-		case <-t.stop:
-			t.log.Info("stopping global clock %p", t)
-			return nil
+		for {
+			// `time.After` sometimes unblocks bit too soon. In this case - wait again.
+			// See https://github.com/spacemeshos/go-spacemesh/issues/3617.
+			if t.clock.Now().After(nextTickTime) || t.clock.Now().Equal(nextTickTime) {
+				break
+			}
+			select {
+			case <-t.clock.After(nextTickTime.Sub(t.clock.Now())):
+			case <-t.stop:
+				t.log.Info("stopping global clock %p", t)
+				return nil
+			}
 		}
 
 		t.tick()
