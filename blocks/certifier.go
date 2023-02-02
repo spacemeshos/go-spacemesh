@@ -22,13 +22,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-const numEarlyLayers = uint32(1)
-
 var (
 	errMultipleCerts      = errors.New("multiple valid certificates")
 	errInvalidCert        = errors.New("invalid certificate")
 	errInvalidCertMsg     = errors.New("invalid cert msg")
-	errUnexpectedMsg      = errors.New("unexpected lid/bid")
+	errUnexpectedMsg      = errors.New("unexpected lid")
 	errBeaconNotAvailable = errors.New("beacon not available")
 )
 
@@ -36,7 +34,7 @@ var (
 type CertConfig struct {
 	CommitteeSize    int
 	CertifyThreshold int
-	WaitSigLayers    uint32
+	LayerBuffer      uint32
 	NumLayersToKeep  uint32
 }
 
@@ -44,8 +42,8 @@ func defaultCertConfig() CertConfig {
 	return CertConfig{
 		CommitteeSize:    10,
 		CertifyThreshold: 6,
-		WaitSigLayers:    5,
-		NumLayersToKeep:  5,
+		LayerBuffer:      5,
+		NumLayersToKeep:  10,
 	}
 }
 
@@ -356,14 +354,14 @@ func (c *Certifier) certified(lid types.LayerID, bid types.BlockID) bool {
 	return false
 }
 
-func expectedLayer(clock layerClock, lid types.LayerID, waitLayers uint32) bool {
-	current := clock.GetCurrentLayer()
+func (c *Certifier) expected(lid types.LayerID) bool {
+	current := c.layerClock.GetCurrentLayer()
 	start := types.GetEffectiveGenesis()
-	if current.Uint32() > waitLayers+1 {
-		start = current.Sub(waitLayers + 1)
+	if current.Uint32() > c.cfg.LayerBuffer+1 {
+		start = current.Sub(c.cfg.LayerBuffer + 1)
 	}
 	// only accept early msgs within a range and with limited size to prevent DOS
-	return !lid.Before(start) && !lid.After(current.Add(numEarlyLayers))
+	return !lid.Before(start) && !lid.After(current.Add(c.cfg.LayerBuffer))
 }
 
 func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error {
@@ -381,8 +379,8 @@ func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error 
 		return errBeaconNotAvailable
 	}
 
-	if !expectedLayer(c.layerClock, lid, c.cfg.WaitSigLayers) {
-		logger.Debug("received message for unexpected layer")
+	if !c.expected(lid) {
+		logger.With().Debug("received message for unexpected layer", lid)
 		return errUnexpectedMsg
 	}
 

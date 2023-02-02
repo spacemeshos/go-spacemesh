@@ -294,6 +294,7 @@ func Test_HandleSyncedCertificate_NotEnoughEligibility(t *testing.T) {
 
 func Test_HandleCertifyMessage(t *testing.T) {
 	cfg := defaultCertConfig()
+	lid := types.NewLayerID(10)
 	tt := []struct {
 		name     string
 		diff     int
@@ -311,22 +312,22 @@ func Test_HandleCertifyMessage(t *testing.T) {
 		{
 			name:     "boundary - early",
 			expected: pubsub.ValidationAccept,
-			diff:     -1 * int(numEarlyLayers),
+			diff:     -1 * int(cfg.LayerBuffer),
 		},
 		{
 			name:     "boundary - late",
 			expected: pubsub.ValidationAccept,
-			diff:     int(cfg.WaitSigLayers + 1),
+			diff:     int(cfg.LayerBuffer + 1),
 		},
 		{
 			name:     "too early",
 			expected: pubsub.ValidationIgnore,
-			diff:     -1 * int(numEarlyLayers+1),
+			diff:     -1 * int(cfg.LayerBuffer+1),
 		},
 		{
 			name:     "too late",
 			expected: pubsub.ValidationIgnore,
-			diff:     int(cfg.WaitSigLayers + 2),
+			diff:     int(cfg.LayerBuffer + 2),
 		},
 	}
 
@@ -335,9 +336,10 @@ func Test_HandleCertifyMessage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			testCert := newTestCertifier(t)
 			b := generateBlock(t, testCert.db)
+			b.LayerIndex = lid
 			nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
 
-			current := b.LayerIndex
+			current := lid
 			if tc.diff > 0 {
 				current = current.Add(uint32(tc.diff))
 			} else {
