@@ -71,13 +71,8 @@ jobs:
 
           mkdir build_${{ runner.os }}
           unzip libgpu-setup-*.zip -d build_${{ runner.os }}
-
-          #Download latest smrepl release
-          wget https://github.com/spacemeshos/smrepl/releases/download/v0.1.32/${{ runner.os }}.zip
-          unzip ${{ runner.os }}.zip -d build_${{ runner.os }}
           
           rm -f build_${{ runner.os }}/api.h
-          rm -f ${{ runner.os }}.zip
           mv build_${{ runner.os }} $OUTNAME
 
           mv ./build/* $OUTNAME
@@ -121,8 +116,8 @@ jobs:
             ## Zip Files
             - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Windows.zip
             - macOS: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macOS.zip
-            - macOS: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macOS_ARM64.zip
+            - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macOS_ARM64.zip
             - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Linux.zip
-            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Linux_ARM64.zip
+            - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Linux_ARM64.zip
           draft: false
           prerelease: true
