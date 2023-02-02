@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/fixed"
@@ -99,7 +98,7 @@ func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(tb, err)
-		require.NoError(tb, atxs.Add(cdb, vAtx, time.Now()))
+		require.NoError(tb, atxs.Add(cdb, vAtx))
 	}
 }
 
@@ -417,7 +416,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	vAtx1, err := atx1.Verify(0, 1)
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(o.cdb, vAtx1, time.Now()))
+	require.NoError(t, atxs.Add(o.cdb, vAtx1))
 
 	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
@@ -430,7 +429,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	vAtx2, err := atx2.Verify(0, 1)
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(o.cdb, vAtx2, time.Now()))
+	require.NoError(t, atxs.Add(o.cdb, vAtx2))
 
 	o.vrfVerifier = signing.NewVRFVerifier()
 
@@ -516,7 +515,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	vAtx1, err := atx1.Verify(0, 1)
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(o.cdb, vAtx1, time.Now()))
+	require.NoError(t, atxs.Add(o.cdb, vAtx1))
 
 	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
@@ -529,7 +528,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	vAtx2, err := atx2.Verify(0, 1)
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(o.cdb, vAtx2, time.Now()))
+	require.NoError(t, atxs.Add(o.cdb, vAtx2))
 
 	for _, edID := range []types.NodeID{atx1.NodeID(), atx2.NodeID()} {
 		v, err := o.IsIdentityActiveOnConsensusView(context.Background(), edID, layer)
@@ -790,7 +789,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
-		require.NoError(t, atxs.Add(o.cdb, vAtx, time.Now()))
+		require.NoError(t, atxs.Add(o.cdb, vAtx))
 	}
 	oldActiveSet, err := o.actives(context.Background(), layer)
 	require.NoError(t, err)
@@ -811,7 +810,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
-		require.NoError(t, atxs.Add(o.cdb, vAtx, time.Now()))
+		require.NoError(t, atxs.Add(o.cdb, vAtx))
 	}
 	newActiveSet, err := o.actives(context.Background(), layer)
 	require.NoError(t, err)

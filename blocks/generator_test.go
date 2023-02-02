@@ -142,7 +142,7 @@ func createModifiedATXs(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerI
 		vAtx, err := onAtx(atx)
 		require.NoError(tb, err)
 
-		require.NoError(tb, atxs.Add(cdb, vAtx, time.Now()))
+		require.NoError(tb, atxs.Add(cdb, vAtx))
 		atxes = append(atxes, atx)
 	}
 	return signers, atxes

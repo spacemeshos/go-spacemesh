@@ -4,7 +4,6 @@ import (
 	"context"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -58,7 +57,7 @@ func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publish
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(tb, err)
-	require.NoError(tb, atxs.Add(cdb, vAtx, time.Now()))
+	require.NoError(tb, atxs.Add(cdb, vAtx))
 	return vAtx
 }
 

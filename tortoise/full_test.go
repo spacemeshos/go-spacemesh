@@ -3,7 +3,6 @@ package tortoise
 import (
 	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
@@ -339,7 +338,7 @@ func TestFullCountVotes(t *testing.T) {
 				atx.SetEffectiveNumUnits(atx.NumUnits)
 				vAtx, err := atx.Verify(tc.activeset[i].BaseHeight, tc.activeset[i].TickCount)
 				require.NoError(t, err)
-				require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+				require.NoError(t, atxs.Add(cdb, vAtx))
 				activeset = append(activeset, atxid)
 			}
 

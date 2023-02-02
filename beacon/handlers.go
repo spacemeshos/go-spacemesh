@@ -98,18 +98,12 @@ func (pd *ProtocolDriver) classifyProposal(logger log.Log, m ProposalMessage, at
 		return invalid, fmt.Errorf("[proposal] failed to get ATX header (miner ID %v, ATX ID %v): %w", minerID, atxID, err)
 	}
 
-	atxTimestamp, err := atxs.GetTimestamp(pd.cdb, atxID)
-	if err != nil {
-		logger.Error("[proposal] failed to get ATX timestamp", atxID, log.Err(err))
-		return invalid, fmt.Errorf("[proposal] failed to get ATX timestamp (miner ID %v, ATX ID %v): %w", minerID, atxID, err)
-	}
-
 	atxEpoch := atxHeader.PublishEpoch()
 	nextEpochStart := pd.clock.LayerToTime((atxEpoch + 1).FirstLayer())
 
 	logger = logger.WithFields(
 		log.String("message", m.String()),
-		log.String("atx_timestamp", atxTimestamp.String()),
+		log.Time("atx_timestamp", atxHeader.Received),
 		log.String("next_epoch_start", nextEpochStart.String()),
 		log.String("received_time", receivedTime.String()),
 		log.Duration("grace_period", pd.config.GracePeriodDuration),
@@ -124,7 +118,7 @@ func (pd *ProtocolDriver) classifyProposal(logger log.Log, m ProposalMessage, at
 	// it cannot be late for any honest user (and vice versa).
 
 	var (
-		atxDelay      = atxTimestamp.Sub(nextEpochStart)
+		atxDelay      = atxHeader.Received.Sub(nextEpochStart)
 		endTime       = pd.getProposalPhaseFinishedTime(m.EpochID)
 		proposalDelay time.Duration
 	)

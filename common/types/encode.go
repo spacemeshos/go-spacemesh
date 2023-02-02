@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -17,18 +18,8 @@ func BytesToAtx(b []byte) (*ActivationTx, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode: %w", err)
 	}
+	atx.SetReceived(time.Now())
 	return &atx, nil
-}
-
-// BytesToTransaction deserializes a Transaction.
-func BytesToTransaction(buf []byte) (*Transaction, error) {
-	b := Transaction{}
-	err := codec.Decode(buf, &b)
-	if err != nil {
-		return nil, fmt.Errorf("decode: %w", err)
-	}
-
-	return &b, nil
 }
 
 // BytesToLayerID return uint64 layer IO.

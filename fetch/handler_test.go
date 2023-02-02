@@ -3,7 +3,6 @@ package fetch
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -276,7 +275,7 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			if !tc.missingData {
 				for i := 0; i < 10; i++ {
 					vatx := newAtx(t, epoch)
-					require.NoError(t, atxs.Add(th.cdb, vatx, time.Now()))
+					require.NoError(t, atxs.Add(th.cdb, vatx))
 					expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
 				}
 			}

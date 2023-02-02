@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"math/rand"
-	"time"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -169,7 +168,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		if err != nil {
 			panic(err)
 		}
-		atxs.Add(c.cdb, vAtx, time.Now())
+		atxs.Add(c.cdb, vAtx)
 	case MessageBeacon:
 		c.beacons.StoreBeacon(ev.EpochID, ev.Beacon)
 	case MessageCoinflip:

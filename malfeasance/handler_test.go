@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -39,7 +38,7 @@ func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(db, vAtx, time.Now()))
+	require.NoError(t, atxs.Add(db, vAtx))
 }
 
 func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {

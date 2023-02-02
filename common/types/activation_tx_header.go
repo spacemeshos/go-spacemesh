@@ -1,5 +1,7 @@
 package types
 
+import "time"
+
 // ActivationTxHeader is the header of an activation transaction. It includes all fields from the NIPostChallenge, as
 // well as the coinbase address and total weight.
 type ActivationTxHeader struct {
@@ -27,6 +29,8 @@ type ActivationTxHeader struct {
 	// TickCount number of ticks performed by PoET; a tick represents a number of sequential
 	// hashes
 	TickCount uint64
+
+	Received time.Time
 }
 
 // GetWeight of the ATX. The total weight of the epoch is expected to fit in a uint64 and is

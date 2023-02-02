@@ -169,7 +169,7 @@ func TestIdentityExists(t *testing.T) {
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+	require.NoError(t, atxs.Add(cdb, vAtx))
 
 	exists, err = cdb.IdentityExists(signer.NodeID())
 	require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 
 	_, err = bs.Get(datastore.ATXDB, atx.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.NoError(t, atxs.Add(db, vAtx, time.Now()))
+	require.NoError(t, atxs.Add(db, vAtx))
 	got, err := bs.Get(datastore.ATXDB, atx.ID().Bytes())
 	require.NoError(t, err)
 

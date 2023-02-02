@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/spacemeshos/post/shared"
 
@@ -364,7 +363,7 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				)
 			}
 		}
-		if err = atxs.Add(dbtx, atx, time.Now()); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		if err = atxs.Add(dbtx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
 		return nil

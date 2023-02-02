@@ -2,7 +2,6 @@ package tortoise
 
 import (
 	"testing"
-	"time"
 
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
@@ -169,7 +168,7 @@ func TestReferenceHeight(t *testing.T) {
 				atx.SetEffectiveNumUnits(atx.NumUnits)
 				vAtx, err := atx.Verify(0, uint64(height))
 				require.NoError(t, err)
-				require.NoError(t, atxs.Add(cdb, vAtx, time.Time{}))
+				require.NoError(t, atxs.Add(cdb, vAtx))
 			}
 			_, height, err := extractAtxsData(cdb, types.EpochID(tc.epoch))
 			require.NoError(t, err)
