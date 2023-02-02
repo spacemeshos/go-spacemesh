@@ -82,12 +82,12 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 		return err
 	}
 
-	atx, err := pd.verifyProposalMessage(logger, m)
+	atxHeader, err := pd.verifyProposalMessage(logger, m)
 	if err != nil {
 		return err
 	}
 
-	cat, err := pd.classifyProposal(logger, m, atx, receivedTime)
+	cat, err := pd.classifyProposal(logger, m, atxHeader, receivedTime)
 	if err != nil {
 		return err
 	}
@@ -171,20 +171,15 @@ func (pd *ProtocolDriver) addProposal(m ProposalMessage, cat category) error {
 func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessage) (*types.ActivationTxHeader, error) {
 	minerID := m.NodeID.ShortString()
 
-	// TODO: allow getting ATXHeader by miner ID in one db read and cache it
-	atxID, err := atxs.GetIDByEpochAndNodeID(pd.cdb, m.EpochID-1, m.NodeID)
+	atxHeader, err := pd.cdb.GetEpochAtx(m.EpochID-1, m.NodeID)
 	if errors.Is(err, sql.ErrNotFound) {
 		logger.Warning("[proposal] miner has no ATX in previous epoch")
 		return nil, fmt.Errorf("[proposal] no ATX in previous epoch (miner ID %v): %w", minerID, errMinerATXNotFound)
-	} else if err != nil {
-		logger.With().Warning("[proposal] failed to find ATX for miner", log.Err(err))
-		return nil, fmt.Errorf("[proposal] get ATX for epoch (miner ID %v): %w", minerID, err)
 	}
 
-	atxHeader, err := pd.cdb.GetAtxHeader(atxID)
 	if err != nil {
-		logger.With().Warning("[proposal] failed to get ATX header", atxID, log.Err(err))
-		return nil, fmt.Errorf("[proposal] get ATX header (miner ID %v, ATX ID %v): %w", minerID, atxID.ShortString(), err)
+		logger.With().Warning("[proposal] failed to get ATX header", log.Err(err))
+		return nil, fmt.Errorf("[proposal] get ATX header (miner ID %v): %w", minerID, err)
 	}
 
 	nonce, err := pd.nonceFetcher.VRFNonce(m.NodeID, m.EpochID)
@@ -259,26 +254,17 @@ func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, m
 		return errUntimelyMessage
 	}
 
-	minerPK, atxID, err := pd.verifyFirstVotes(ctx, m)
+	minerPK, atxHeader, err := pd.verifyFirstVotes(ctx, m)
 	if err != nil {
 		return err
 	}
-
-	minerID := types.BytesToNodeID(minerPK.Bytes()).ShortString()
-	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound, log.String("miner_id", minerID))
-	atx, err := pd.cdb.GetAtxHeader(atxID)
-	if err != nil {
-		logger.With().Error("failed to get ATX header", atxID, log.Err(err))
-		return fmt.Errorf("[round %v] failed to get ATX header (miner ID %v, ATX ID %v): %w", types.FirstRound, minerID, atxID, err)
-	}
-
-	voteWeight := new(big.Int).SetUint64(atx.GetWeight())
+	voteWeight := new(big.Int).SetUint64(atxHeader.GetWeight())
 
 	logger.Debug("received first voting message, storing its votes")
 	return pd.storeFirstVotes(m, minerPK, voteWeight)
 }
 
-func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMessage) (*signing.PublicKey, types.ATXID, error) {
+func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMessage) (*signing.PublicKey, *types.ActivationTxHeader, error) {
 	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound)
 	messageBytes, err := codec.Encode(&m.FirstVotingMessageBody)
 	if err != nil {
@@ -287,7 +273,7 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 
 	minerPK, err := pd.pubKeyExtractor.Extract(messageBytes, m.Signature)
 	if err != nil {
-		return nil, types.ATXID{}, fmt.Errorf("[round %v] recover ID %x: %w", types.FirstRound, m.Signature, err)
+		return nil, nil, fmt.Errorf("[round %v] recover ID %x: %w", types.FirstRound, m.Signature, err)
 	}
 
 	nodeID := types.BytesToNodeID(minerPK.Bytes())
@@ -295,21 +281,21 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 	logger = logger.WithFields(log.String("miner_id", minerID))
 
 	if err = pd.registerVoted(logger, m.EpochID, minerPK, types.FirstRound); err != nil {
-		return nil, types.ATXID{}, fmt.Errorf("[round %v] register proposal (miner ID %v): %w", types.FirstRound, minerID, err)
+		return nil, nil, fmt.Errorf("[round %v] register proposal (miner ID %v): %w", types.FirstRound, minerID, err)
 	}
 
-	atxID, err := atxs.GetIDByEpochAndNodeID(pd.cdb, m.EpochID-1, nodeID)
+	atxHeader, err := pd.cdb.GetEpochAtx(m.EpochID-1, nodeID)
 	if errors.Is(err, sql.ErrNotFound) {
 		logger.Warning("miner has no ATX in the previous epoch")
-		return nil, types.ATXID{}, fmt.Errorf("[round %v] no ATX in previous epoch (miner ID %v): %w", types.FirstRound, minerID, errMinerATXNotFound)
+		return nil, nil, fmt.Errorf("[round %v] no ATX in previous epoch (miner ID %v): %w", types.FirstRound, minerID, errMinerATXNotFound)
 	}
 
 	if err != nil {
 		logger.With().Error("failed to get ATX", log.Err(err))
-		return nil, types.ATXID{}, fmt.Errorf("[round %v] get ATX for epoch (miner ID %v): %w", types.FirstRound, minerID, err)
+		return nil, nil, fmt.Errorf("[round %v] get ATX for epoch (miner ID %v): %w", types.FirstRound, minerID, err)
 	}
 
-	return minerPK, atxID, nil
+	return minerPK, atxHeader, nil
 }
 
 func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, minerPK *signing.PublicKey, voteWeight *big.Int) error {
@@ -388,21 +374,11 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 		return errUntimelyMessage
 	}
 
-	minerPK, atxID, err := pd.verifyFollowingVotes(ctx, m)
+	minerPK, atxHeader, err := pd.verifyFollowingVotes(ctx, m)
 	if err != nil {
 		return err
 	}
-
-	minerID := types.BytesToNodeID(minerPK.Bytes()).ShortString()
-	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, m.RoundID, log.String("miner_id", minerID))
-
-	atx, err := pd.cdb.GetAtxHeader(atxID)
-	if err != nil {
-		logger.With().Error("failed to get ATX header", atxID, log.Err(err))
-		return fmt.Errorf("[round %v] get ATX header (miner ID %v, ATX ID %v): %w", m.RoundID, minerID, atxID, err)
-	}
-
-	voteWeight := new(big.Int).SetUint64(atx.GetWeight())
+	voteWeight := new(big.Int).SetUint64(atxHeader.GetWeight())
 
 	logger.Debug("received following voting message, counting its votes")
 	if err = pd.storeFollowingVotes(m, minerPK, voteWeight); err != nil {
@@ -413,7 +389,7 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 	return nil
 }
 
-func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingVotingMessage) (*signing.PublicKey, types.ATXID, error) {
+func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingVotingMessage) (*signing.PublicKey, *types.ActivationTxHeader, error) {
 	round := m.RoundID
 	messageBytes, err := codec.Encode(&m.FollowingVotingMessageBody)
 	if err != nil {
@@ -422,7 +398,7 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 
 	minerPK, err := pd.pubKeyExtractor.Extract(messageBytes, m.Signature)
 	if err != nil {
-		return nil, types.ATXID{}, fmt.Errorf("[round %v] recover ID from signature %x: %w", round, m.Signature, err)
+		return nil, nil, fmt.Errorf("[round %v] recover ID from signature %x: %w", round, m.Signature, err)
 	}
 
 	nodeID := types.BytesToNodeID(minerPK.Bytes())
@@ -430,21 +406,21 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, round, log.String("miner_id", minerID))
 
 	if err := pd.registerVoted(logger, m.EpochID, minerPK, m.RoundID); err != nil {
-		return nil, types.ATXID{}, err
+		return nil, nil, err
 	}
 
-	atxID, err := atxs.GetIDByEpochAndNodeID(pd.cdb, m.EpochID-1, nodeID)
+	atxHeader, err := pd.cdb.GetEpochAtx(m.EpochID-1, nodeID)
 	if errors.Is(err, sql.ErrNotFound) {
 		logger.Warning("miner has no ATX in the previous epoch")
-		return nil, types.ATXID{}, fmt.Errorf("[round %v] no ATX in previous epoch (miner ID %v): %w", round, minerID, errMinerATXNotFound)
+		return nil, nil, fmt.Errorf("[round %v] no ATX in previous epoch (miner ID %v): %w", round, minerID, errMinerATXNotFound)
 	}
 
 	if err != nil {
 		logger.With().Error("failed to get ATX", log.Err(err))
-		return nil, types.ATXID{}, fmt.Errorf("[round %v] get ATX for epoch (miner ID %v): %w", round, minerID, err)
+		return nil, nil, fmt.Errorf("[round %v] get ATX for epoch (miner ID %v): %w", round, minerID, err)
 	}
 
-	return minerPK, atxID, nil
+	return minerPK, atxHeader, nil
 }
 
 func (pd *ProtocolDriver) storeFollowingVotes(m FollowingVotingMessage, minerPK *signing.PublicKey, voteWeight *big.Int) error {
