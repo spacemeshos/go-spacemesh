@@ -154,5 +154,10 @@ func (t *NodeClock) AwaitLayer(layerID types.LayerID) chan struct{} {
 		ch = make(chan struct{})
 		t.layerChannels[layerID] = ch
 	}
+
+	if t.lastTickedLayer.Before(layerID) {
+		t.lastTickedLayer = layerID.Sub(1)
+	}
+
 	return ch
 }
