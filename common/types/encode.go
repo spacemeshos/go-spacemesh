@@ -18,7 +18,7 @@ func BytesToAtx(b []byte) (*ActivationTx, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode: %w", err)
 	}
-	atx.SetReceived(time.Now())
+	atx.SetReceived(time.Now().Local())
 	return &atx, nil
 }
 

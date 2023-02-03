@@ -29,7 +29,7 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err 
 
 		effectiveNumUnits := uint32(stmt.ColumnInt32(4))
 		v.SetEffectiveNumUnits(effectiveNumUnits)
-		v.SetReceived(time.Unix(0, stmt.ColumnInt64(5)))
+		v.SetReceived(time.Unix(0, stmt.ColumnInt64(5)).Local())
 
 		baseTickHeight := uint64(stmt.ColumnInt64(1))
 		tickCount := uint64(stmt.ColumnInt64(2))
@@ -157,7 +157,7 @@ func GetByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.Node
 		v.SetID(&id)
 		v.SetNodeID(&nodeID)
 		v.SetEffectiveNumUnits(uint32(stmt.ColumnInt32(4)))
-		v.SetReceived(time.Unix(0, stmt.ColumnInt64(5)))
+		v.SetReceived(time.Unix(0, stmt.ColumnInt64(5)).Local())
 		baseTickHeight := uint64(stmt.ColumnInt64(2))
 		tickCount := uint64(stmt.ColumnInt64(3))
 		atx, err = v.Verify(baseTickHeight, tickCount)

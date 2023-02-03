@@ -24,12 +24,6 @@ func TestMain(m *testing.M) {
 	os.Exit(res)
 }
 
-func checkAtxEqual(t *testing.T, this, that *types.VerifiedActivationTx) {
-	require.Equal(t, this.Received().UnixNano(), that.Received().UnixNano())
-	that.SetReceived(this.Received())
-	require.Equal(t, this, that)
-}
-
 func TestGetATXByID(t *testing.T) {
 	db := sql.InMemory()
 
@@ -49,7 +43,7 @@ func TestGetATXByID(t *testing.T) {
 	for _, want := range atxList {
 		got, err := atxs.Get(db, want.ID())
 		require.NoError(t, err)
-		checkAtxEqual(t, want, got)
+		require.Equal(t, want, got)
 	}
 
 	_, err := atxs.Get(db, types.ATXID(types.CalcHash32([]byte("0"))))
@@ -157,7 +151,7 @@ func TestGetByEpochAndNodeID(t *testing.T) {
 
 	got, err := atxs.GetByEpochAndNodeID(db, types.EpochID(1), sig1.NodeID())
 	require.NoError(t, err)
-	checkAtxEqual(t, atx1, got)
+	require.Equal(t, atx1, got)
 
 	got, err = atxs.GetByEpochAndNodeID(db, types.EpochID(2), sig1.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
@@ -169,7 +163,7 @@ func TestGetByEpochAndNodeID(t *testing.T) {
 
 	got, err = atxs.GetByEpochAndNodeID(db, types.EpochID(2), sig2.NodeID())
 	require.NoError(t, err)
-	checkAtxEqual(t, atx2, got)
+	require.Equal(t, atx2, got)
 }
 
 func TestGetLastIDByNodeID(t *testing.T) {
@@ -391,7 +385,7 @@ func TestAdd(t *testing.T) {
 
 	got, err := atxs.Get(db, atx.ID())
 	require.NoError(t, err)
-	checkAtxEqual(t, atx, got)
+	require.Equal(t, atx, got)
 }
 
 func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActivationTx, error) {
@@ -407,7 +401,7 @@ func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedAct
 
 	activation.SignAndFinalizeAtx(signer, atx)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Now())
+	atx.SetReceived(time.Now().Local())
 	return atx.Verify(0, 1)
 }
 
