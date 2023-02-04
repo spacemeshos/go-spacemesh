@@ -84,11 +84,11 @@ func TestWeakCoin(t *testing.T) {
 			startedEpoch: epoch,
 			startedRound: round,
 			messages: []weakcoin.Message{{
-				Epoch:     epoch,
-				Round:     round,
-				Unit:      1,
-				MinerPK:   oneLSB,
-				Signature: oneLSB,
+				Epoch:        epoch,
+				Round:        round,
+				Unit:         1,
+				MinerPK:      oneLSB,
+				VrfSignature: oneLSB,
 			}},
 			coinflip: true,
 		},
@@ -106,11 +106,11 @@ func TestWeakCoin(t *testing.T) {
 			startedEpoch: epoch,
 			startedRound: round,
 			messages: []weakcoin.Message{{
-				Epoch:     epoch,
-				Round:     round,
-				Unit:      2,
-				MinerPK:   oneLSB,
-				Signature: oneLSB,
+				Epoch:        epoch,
+				Round:        round,
+				Unit:         2,
+				MinerPK:      oneLSB,
+				VrfSignature: oneLSB,
 			}},
 		},
 		{
@@ -120,11 +120,11 @@ func TestWeakCoin(t *testing.T) {
 			startedEpoch: epoch,
 			startedRound: round,
 			messages: []weakcoin.Message{{
-				Epoch:     epoch,
-				Round:     round,
-				Unit:      1,
-				MinerPK:   higherThreshold,
-				Signature: higherThreshold,
+				Epoch:        epoch,
+				Round:        round,
+				Unit:         1,
+				MinerPK:      higherThreshold,
+				VrfSignature: higherThreshold,
 			}},
 		},
 		{
@@ -134,11 +134,11 @@ func TestWeakCoin(t *testing.T) {
 			startedEpoch: epoch,
 			startedRound: round,
 			messages: []weakcoin.Message{{
-				Epoch:     epoch,
-				Round:     round,
-				Unit:      1,
-				MinerPK:   zeroLSB,
-				Signature: zeroLSB,
+				Epoch:        epoch,
+				Round:        round,
+				Unit:         1,
+				MinerPK:      zeroLSB,
+				VrfSignature: zeroLSB,
 			}},
 		},
 		{
@@ -148,11 +148,11 @@ func TestWeakCoin(t *testing.T) {
 			startedEpoch: epoch,
 			startedRound: round,
 			messages: []weakcoin.Message{{
-				Epoch:     epoch,
-				Round:     round,
-				Unit:      1,
-				MinerPK:   zeroLSB,
-				Signature: zeroLSB,
+				Epoch:        epoch,
+				Round:        round,
+				Unit:         1,
+				MinerPK:      zeroLSB,
+				VrfSignature: zeroLSB,
 			}},
 		},
 		{
@@ -162,11 +162,11 @@ func TestWeakCoin(t *testing.T) {
 			startedEpoch: epoch,
 			startedRound: round,
 			messages: []weakcoin.Message{{
-				Epoch:     epoch - 1,
-				Round:     round,
-				Unit:      1,
-				MinerPK:   zeroLSB,
-				Signature: oneLSB,
+				Epoch:        epoch - 1,
+				Round:        round,
+				Unit:         1,
+				MinerPK:      zeroLSB,
+				VrfSignature: oneLSB,
 			}},
 		},
 		{
@@ -176,11 +176,11 @@ func TestWeakCoin(t *testing.T) {
 			startedEpoch: epoch,
 			startedRound: round,
 			messages: []weakcoin.Message{{
-				Epoch:     epoch,
-				Round:     round - 1,
-				Unit:      1,
-				MinerPK:   zeroLSB,
-				Signature: oneLSB,
+				Epoch:        epoch,
+				Round:        round - 1,
+				Unit:         1,
+				MinerPK:      zeroLSB,
+				VrfSignature: oneLSB,
 			}},
 		},
 	}
@@ -331,18 +331,18 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	require.NoError(t, wc.StartRound(context.Background(), round))
 	for i := 0; i < bufSize; i++ {
 		wc.HandleProposal(context.Background(), "", broadcastedMessage(t, weakcoin.Message{
-			Epoch:     epoch,
-			Round:     nextRound,
-			Unit:      1,
-			MinerPK:   oneLSB,
-			Signature: oneLSB,
+			Epoch:        epoch,
+			Round:        nextRound,
+			Unit:         1,
+			MinerPK:      oneLSB,
+			VrfSignature: oneLSB,
 		}))
 	}
 	wc.HandleProposal(context.Background(), "", broadcastedMessage(t, weakcoin.Message{
-		Epoch:     epoch,
-		Round:     nextRound,
-		Unit:      1,
-		Signature: zeroLSB,
+		Epoch:        epoch,
+		Round:        nextRound,
+		Unit:         1,
+		VrfSignature: zeroLSB,
 	}))
 	wc.FinishRound(context.Background())
 	require.NoError(t, wc.StartRound(context.Background(), nextRound))
@@ -362,7 +362,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	broadcaster.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, data []byte) error {
 		var msg weakcoin.Message
 		require.NoError(t, codec.Decode(data, &msg))
-		sig = msg.Signature
+		sig = msg.VrfSignature
 		return nil
 	}).AnyTimes()
 
