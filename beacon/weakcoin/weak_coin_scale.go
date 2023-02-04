@@ -38,7 +38,7 @@ func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Signature)
+		n, err := scale.EncodeByteSlice(enc, t.VrfSignature)
 		if err != nil {
 			return total, err
 		}
@@ -86,12 +86,12 @@ func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		t.Signature = field
+		t.VrfSignature = field
 	}
 	return total, nil
 }
 
-func (t *WeakCoinVrfMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *VrfMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeString(enc, string(t.Prefix))
 		if err != nil {
@@ -130,7 +130,7 @@ func (t *WeakCoinVrfMessage) EncodeScale(enc *scale.Encoder) (total int, err err
 	return total, nil
 }
 
-func (t *WeakCoinVrfMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *VrfMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		field, n, err := scale.DecodeString(dec)
 		if err != nil {

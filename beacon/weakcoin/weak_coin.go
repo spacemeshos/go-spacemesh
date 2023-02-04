@@ -32,18 +32,18 @@ type config struct {
 // UnitAllowances is a map from miner identifier to the number of units of spacetime.
 type UnitAllowances map[string]uint64
 
-//go:generate scalegen -types Message,WeakCoinVrfMessage
+//go:generate scalegen -types Message,VrfMessage
 
 // Message defines weak coin message format.
 type Message struct {
-	Epoch     types.EpochID
-	Round     types.RoundID
-	Unit      uint64
-	MinerPK   []byte
-	Signature []byte
+	Epoch        types.EpochID
+	Round        types.RoundID
+	Unit         uint64
+	MinerPK      []byte
+	VrfSignature []byte
 }
 
-type WeakCoinVrfMessage struct {
+type VrfMessage struct {
 	Prefix string
 	Epoch  types.EpochID
 	Nonce  types.VRFPostIndex
@@ -203,8 +203,8 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 		return fmt.Errorf("failed to get vrf nonce for node %s: %w", nodeID, err)
 	}
 	buf := wc.encodeProposal(message.Epoch, nonce, message.Round, message.Unit)
-	if !wc.verifier.Verify(types.BytesToNodeID(message.MinerPK), buf, message.Signature) {
-		return fmt.Errorf("signature is invalid signature %x", message.Signature)
+	if !wc.verifier.Verify(types.BytesToNodeID(message.MinerPK), buf, message.VrfSignature) {
+		return fmt.Errorf("signature is invalid signature %x", message.VrfSignature)
 	}
 
 	allowed, exists := wc.allowances[string(message.MinerPK)]
@@ -212,7 +212,7 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d", message.MinerPK, message.Unit)
 	}
 
-	wc.updateSmallest(ctx, message.Signature)
+	wc.updateSmallest(ctx, message.VrfSignature)
 	return nil
 }
 
@@ -232,11 +232,11 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 		}
 		if smallest == nil || bytes.Compare(signature, smallest) == -1 {
 			message := Message{
-				Epoch:     epoch,
-				Round:     round,
-				Unit:      unit,
-				MinerPK:   wc.signer.PublicKey().Bytes(),
-				Signature: signature,
+				Epoch:        epoch,
+				Round:        round,
+				Unit:         unit,
+				MinerPK:      wc.signer.PublicKey().Bytes(),
+				VrfSignature: signature,
 			}
 			msg, err := codec.Encode(&message)
 			if err != nil {
@@ -323,7 +323,7 @@ func (wc *WeakCoin) aboveThreshold(proposal []byte) bool {
 }
 
 func (wc *WeakCoin) encodeProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID, unit uint64) []byte {
-	message := &WeakCoinVrfMessage{
+	message := &VrfMessage{
 		Prefix: wc.config.VRFPrefix,
 		Epoch:  epoch,
 		Nonce:  nonce,

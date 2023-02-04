@@ -215,6 +215,55 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	require.Len(t, beacons, 1)
 }
 
+func TestBeacon_NoProposals(t *testing.T) {
+	numNodes := 5
+	testNodes := make([]*testProtocolDriver, 0, numNodes)
+	publisher := pubsubmocks.NewMockPublisher(gomock.NewController(t))
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	atxPublishLid := types.NewLayerID(types.GetLayersPerEpoch()*2 - 1)
+	current := atxPublishLid.Add(1)
+	dbs := make([]*datastore.CachedDB, 0, numNodes)
+	cfg := NodeSimUnitTestConfig()
+	now := time.Now()
+	for i := 0; i < numNodes; i++ {
+		node := newTestDriver(t, cfg, publisher)
+		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+		node.mClock.EXPECT().GetCurrentLayer().Return(current).AnyTimes()
+		node.mClock.EXPECT().LayerToTime(current).Return(now).AnyTimes()
+		testNodes = append(testNodes, node)
+		dbs = append(dbs, node.cdb)
+
+		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
+		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
+		got, err := node.GetBeacon(types.EpochID(1))
+		require.NoError(t, err)
+		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
+		got, err = node.GetBeacon(types.EpochID(2))
+		require.NoError(t, err)
+		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
+	}
+	for _, node := range testNodes {
+		for _, db := range dbs {
+			createATX(t, db, atxPublishLid, node.edSigner, 1)
+		}
+	}
+	var wg sync.WaitGroup
+	for _, node := range testNodes {
+		wg.Add(1)
+		go func(testNode *testProtocolDriver) {
+			require.NoError(t, testNode.onNewEpoch(context.Background(), types.EpochID(2)))
+			wg.Done()
+		}(node)
+	}
+	wg.Wait()
+	for _, node := range testNodes {
+		got, err := node.GetBeacon(types.EpochID(3))
+		require.Error(t, err)
+		require.Equal(t, types.EmptyBeacon, got)
+	}
+}
+
 func TestBeaconNotSynced(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
@@ -339,12 +388,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 				}
 			}
 		}
-		if layer.OrdinalInEpoch() == 2 {
-			// there should be calculated beacon already by the last layer of the epoch
-			require.Equal(t, 1, numCalculated, layer)
-		} else {
-			require.LessOrEqual(t, numCalculated, 1, layer)
-		}
+		require.Equal(t, 0, numCalculated, layer)
 		require.Equal(t, 2, numObserved, layer)
 		require.Equal(t, 2, numObservedWeight, layer)
 	}
@@ -632,19 +676,19 @@ func TestBeacon_findMajorityBeacon(t *testing.T) {
 
 	beaconFromBallots := map[types.Beacon]*beaconWeight{
 		beacon1: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 2,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 2,
 		},
 		beacon2: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(3),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(3),
+			numEligibility: 1,
 		},
 		beacon3: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 1,
 		},
 	}
 	epoch := types.EpochID(3)
@@ -668,19 +712,19 @@ func TestBeacon_findMajorityBeacon_plurality(t *testing.T) {
 
 	beaconFromBallots := map[types.Beacon]*beaconWeight{
 		beacon1: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 2,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 2,
 		},
 		beacon2: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.DivUint64(11, 10),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.DivUint64(11, 10),
+			numEligibility: 1,
 		},
 		beacon3: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 1,
 		},
 	}
 	epoch := types.EpochID(3)
@@ -704,19 +748,19 @@ func TestBeacon_findMajorityBeacon_NotEnoughBallots(t *testing.T) {
 
 	beaconFromBallots := map[types.Beacon]*beaconWeight{
 		beacon1: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 2,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 2,
 		},
 		beacon2: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(3),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(3),
+			numEligibility: 1,
 		},
 		beacon3: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 1,
 		},
 	}
 	epoch := types.EpochID(3)
@@ -962,19 +1006,14 @@ func TestBeacon_signAndExtractED(t *testing.T) {
 }
 
 func TestBeacon_calcBeacon(t *testing.T) {
-	votes := allVotes{
-		support: proposalSet{
-			"0x1": {},
-			"0x2": {},
-			"0x4": {},
-			"0x5": {},
-		},
-		against: proposalSet{
-			"0x3": {},
-			"0x6": {},
-		},
+	set := proposalSet{
+		"0x1": {},
+		"0x2": {},
+		"0x4": {},
+		"0x5": {},
 	}
-	beacon := calcBeacon(logtest.New(t), votes)
+
+	beacon := calcBeacon(logtest.New(t), set)
 	expected := types.HexToBeacon("0x98f88210")
 	require.EqualValues(t, expected, beacon)
 }

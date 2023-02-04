@@ -10,6 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -44,7 +45,7 @@ func createEpochState(tb testing.TB, pd *ProtocolDriver, epoch types.EpochID) {
 	tb.Helper()
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.states[epoch] = newState(pd.logger, pd.config, epochWeight, types.VRFPostIndex(rand.Uint64()), types.RandomActiveSet(1))
+	pd.states[epoch] = newState(pd.logger, pd.config, types.VRFPostIndex(rand.Uint64()), epochWeight, types.RandomActiveSet(1), weakcoin.UnitAllowances{})
 }
 
 func setOwnFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, ownFirstRound proposalList) {

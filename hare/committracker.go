@@ -110,6 +110,8 @@ func (ct *commitTracker) HasEnoughCommits() bool {
 		if ci.numDishonest > 0 {
 			ct.logger.With().Warning("counting votes from malicious identities",
 				log.Object("eligibility_count", ci))
+		} else {
+			ct.logger.With().Info("commit round completed", log.Object("eligibility_count", ci))
 		}
 	}
 	return enough

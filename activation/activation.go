@@ -282,7 +282,7 @@ func (b *Builder) run(ctx context.Context) {
 
 func (b *Builder) generateProof(ctx context.Context) error {
 	// don't generate the commitment every time smeshing is starting, but once only.
-	if _, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
+	if _, err := b.cdb.GetLastAtx(b.nodeID); err != nil {
 		// Once initialized, run the execution phase with zero-challenge,
 		// to create the initial proof (the commitment).
 		startTime := time.Now()
@@ -304,7 +304,7 @@ func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 	if currEpoch == 0 { // genesis miner
 		return false
 	}
-	if prev, err := b.cdb.GetPrevAtx(b.nodeID); err == nil {
+	if prev, err := b.cdb.GetLastAtx(b.nodeID); err == nil {
 		if prev.PublishEpoch() == currEpoch {
 			// miner has published in the current epoch
 			return false
@@ -425,7 +425,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		PositioningATX: atxID,
 		PubLayerID:     pubLayerID.Add(b.layersPerEpoch),
 	}
-	if prevAtx, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
+	if prevAtx, err := b.cdb.GetLastAtx(b.nodeID); err != nil {
 		commitmentAtx, err := b.getCommitmentAtx(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get commitment ATX: %w", err)

@@ -176,6 +176,46 @@ func TestIdentityExists(t *testing.T) {
 	require.True(t, exists)
 }
 
+func TestStore_GetAtxByNodeID(t *testing.T) {
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+
+	atx3 := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: types.EpochID(3).FirstLayer(),
+				Sequence:   11,
+			},
+			NumUnits: 11,
+		},
+	}
+	atx4 := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: types.EpochID(4).FirstLayer(),
+				Sequence:   12,
+			},
+			NumUnits: 11,
+		},
+	}
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	for _, atx := range []*types.ActivationTx{atx3, atx4} {
+		require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
+		atx.SetEffectiveNumUnits(atx.NumUnits)
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+	}
+
+	got, err := cdb.GetEpochAtx(types.EpochID(3), signer.NodeID())
+	require.NoError(t, err)
+	require.Equal(t, atx3.ID(), got.ID)
+
+	got, err = cdb.GetLastAtx(signer.NodeID())
+	require.NoError(t, err)
+	require.Equal(t, atx4.ID(), got.ID)
+}
+
 func TestBlobStore_GetATXBlob(t *testing.T) {
 	db := sql.InMemory()
 	bs := datastore.NewBlobStore(db)
