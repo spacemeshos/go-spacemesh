@@ -859,6 +859,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 		log.String("current_set", proc.value.String()),
 		log.Uint32("current_round", proc.getRound()),
 		proc.layer,
+		log.Object("notify_count", notifyCount),
 		log.Int("set_size", proc.value.Size()))
 	proc.report(completed)
 	numIterations.Observe(float64(proc.getRound()))

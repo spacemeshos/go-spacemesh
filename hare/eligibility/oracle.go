@@ -515,7 +515,8 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 	}
 
 	if len(hareActiveSet) > 0 {
-		logger.With().Debug("successfully got hare active set for layer range",
+		logger.With().Info("successfully got hare active set for layer range",
+			log.Uint32("layer_range_epoch", uint32(safeLayerStart.GetEpoch())),
 			log.Int("count", len(hareActiveSet)))
 		o.activesCache.Add(safeLayerStart.GetEpoch(), hareActiveSet)
 		return hareActiveSet, nil
