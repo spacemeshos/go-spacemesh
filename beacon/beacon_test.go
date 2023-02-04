@@ -229,7 +229,7 @@ func TestBeacon_NoProposals(t *testing.T) {
 	for i := 0; i < numNodes; i++ {
 		node := newTestDriver(t, cfg, publisher)
 		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-		node.mClock.EXPECT().GetCurrentLayer().Return(current).AnyTimes()
+		node.mClock.EXPECT().CurrentLayer().Return(current).AnyTimes()
 		node.mClock.EXPECT().LayerToTime(current).Return(now).AnyTimes()
 		testNodes = append(testNodes, node)
 		dbs = append(dbs, node.cdb)
