@@ -221,16 +221,26 @@ func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types
 	return nil
 }
 
-// GetPrevAtx gets the last atx header of specified node Id, it returns error if no previous atx found or if no
-// AtxHeader struct in db.
-func (db *CachedDB) GetPrevAtx(nodeID types.NodeID) (*types.ActivationTxHeader, error) {
+// GetLastAtx gets the last atx header of specified node ID.
+func (db *CachedDB) GetLastAtx(nodeID types.NodeID) (*types.ActivationTxHeader, error) {
 	if atxid, err := atxs.GetLastIDByNodeID(db, nodeID); err != nil {
-		return nil, fmt.Errorf("no prev atx found: %v", err)
+		return nil, fmt.Errorf("no prev atx found: %w", err)
 	} else if atx, err := db.GetAtxHeader(atxid); err != nil {
 		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
 	} else {
 		return atx, nil
 	}
+}
+
+// GetEpochAtx gets the atx header of specified node ID in the specified epoch.
+func (db *CachedDB) GetEpochAtx(epoch types.EpochID, nodeID types.NodeID) (*types.ActivationTxHeader, error) {
+	vatx, err := atxs.GetByEpochAndNodeID(db, epoch, nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("no epoch atx found: %w", err)
+	}
+	hdr := getHeader(vatx)
+	db.atxHdrCache.Add(vatx.ID(), hdr)
+	return hdr, nil
 }
 
 // IdentityExists returns true if this NodeID has published any ATX.

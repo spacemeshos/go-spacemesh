@@ -1,11 +1,7 @@
 package beacon
 
 import (
-	"encoding/json"
-
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 //go:generate scalegen
@@ -15,16 +11,6 @@ type ProposalMessage struct {
 	EpochID      types.EpochID
 	NodeID       types.NodeID
 	VRFSignature []byte
-}
-
-// String returns a string form of ProposalMessage.
-func (p ProposalMessage) String() string {
-	bytes, err := codec.Encode(&p)
-	if err != nil {
-		log.With().Fatal("failed to encode ProposalMessage", log.Err(err))
-	}
-
-	return string(bytes)
 }
 
 // FirstVotingMessageBody is FirstVotingMessage without a signature.
@@ -40,16 +26,6 @@ type FirstVotingMessage struct {
 	Signature []byte
 }
 
-// String returns a string form of FirstVotingMessage.
-func (v FirstVotingMessage) String() string {
-	bytes, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-
-	return string(bytes)
-}
-
 // FollowingVotingMessageBody is FollowingVotingMessage without a signature.
 type FollowingVotingMessageBody struct {
 	EpochID        types.EpochID
@@ -61,14 +37,4 @@ type FollowingVotingMessageBody struct {
 type FollowingVotingMessage struct {
 	FollowingVotingMessageBody
 	Signature []byte
-}
-
-// String returns a string form of FollowingVotingMessage.
-func (v FollowingVotingMessage) String() string {
-	bytes, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-
-	return string(bytes)
 }
