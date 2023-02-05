@@ -204,7 +204,7 @@ func TestStore_GetAtxByNodeID(t *testing.T) {
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
-		require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+		require.NoError(t, atxs.Add(cdb, vAtx))
 	}
 
 	got, err := cdb.GetEpochAtx(types.EpochID(3), signer.NodeID())

@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 type category uint8
@@ -99,7 +98,7 @@ func (pd *ProtocolDriver) classifyProposal(logger log.Log, m ProposalMessage, at
 	nextEpochStart := pd.clock.LayerToTime((atxEpoch + 1).FirstLayer())
 
 	logger = logger.WithFields(
-    log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))),
+		log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))),
 		log.Time("atx_timestamp", atxHeader.Received),
 		log.Stringer("next_epoch_start", nextEpochStart),
 		log.Time("received_time", receivedTime),
