@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/fixed"
@@ -479,6 +480,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 				atx.SetID(&id)
 				atx.SetNodeID(&types.NodeID{})
 				atx.SetEffectiveNumUnits(atx.NumUnits)
+				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(0, 1)
 				require.NoError(t, err)
 				require.NoError(t, atxs.Add(cdb, vAtx))
@@ -1522,6 +1524,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				atxID := types.RandomATXID()
 				atx.SetID(&atxID)
 				atx.SetEffectiveNumUnits(atx.NumUnits)
+				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(0, 1)
 				require.NoError(t, err)
 				require.NoError(t, atxs.Add(cdb, vAtx))
@@ -2748,6 +2751,7 @@ func TestEncodeVotes(t *testing.T) {
 		atx.SetID(&atxid)
 		atx.SetNodeID(&types.NodeID{1})
 		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vatx, err := atx.Verify(1, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(cdb, vatx))

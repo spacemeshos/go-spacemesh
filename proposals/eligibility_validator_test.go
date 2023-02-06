@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/fixed"
@@ -47,6 +48,7 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 	atx.SetID(&activeset[0])
 	atx.SetNodeID(&nid)
 	atx.SetEffectiveNumUnits(testedATXUnit)
+	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(cdb, vAtx))
@@ -62,6 +64,7 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 		atx.SetID(&id)
 		atx.SetNodeID(&nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(cdb, vAtx))
@@ -256,6 +259,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 	nodeID := signer.NodeID()
 	atx.SetNodeID(&nodeID)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tv.cdb, vAtx))
@@ -270,6 +274,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 		atx.SetID(&id)
 		atx.SetNodeID(&types.NodeID{})
 		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(tv.cdb, vAtx))

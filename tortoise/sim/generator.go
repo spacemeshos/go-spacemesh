@@ -2,6 +2,7 @@ package sim
 
 import (
 	"math/rand"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -241,6 +242,7 @@ func (g *Generator) generateAtxs() {
 			panic(err)
 		}
 		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(g.prevHeight[i], ticks)
 		if err != nil {
 			panic(err)

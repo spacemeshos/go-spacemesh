@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/fixed"
@@ -96,6 +97,7 @@ func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 		atx.SetID(&id)
 		atx.SetNodeID(&nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(tb, err)
 		require.NoError(tb, atxs.Add(cdb, vAtx))
@@ -414,6 +416,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	atx1.SetID(&activeSet[0])
 	atx1.SetNodeID(&nid)
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
+	atx1.SetReceived(time.Now())
 	vAtx1, err := atx1.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx1))
@@ -427,6 +430,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	atx2.SetID(&activeSet[1])
 	atx2.SetNodeID(&types.NodeID{1})
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
+	atx2.SetReceived(time.Now())
 	vAtx2, err := atx2.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx2))
@@ -513,6 +517,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	atx1.SetID(&activeSet[0])
 	atx1.SetNodeID(&types.NodeID{1})
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
+	atx1.SetReceived(time.Now())
 	vAtx1, err := atx1.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx1))
@@ -526,6 +531,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	atx2.SetID(&activeSet[1])
 	atx2.SetNodeID(&types.NodeID{2})
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
+	atx2.SetReceived(time.Now())
 	vAtx2, err := atx2.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx2))
@@ -787,6 +793,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 		atx.SetID(&id)
 		atx.SetNodeID(&nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(o.cdb, vAtx))
@@ -808,6 +815,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 		atx.SetID(&id)
 		atx.SetNodeID(&nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(o.cdb, vAtx))

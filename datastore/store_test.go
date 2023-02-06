@@ -166,6 +166,7 @@ func TestIdentityExists(t *testing.T) {
 		},
 	}
 	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
+	atx.SetReceived(time.Now())
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
@@ -202,6 +203,7 @@ func TestStore_GetAtxByNodeID(t *testing.T) {
 	for _, atx := range []*types.ActivationTx{atx3, atx4} {
 		require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
 		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(cdb, vAtx))
@@ -233,6 +235,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
 	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 
@@ -247,6 +250,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	require.NoError(t, gotA.CalcAndSetID())
 	require.NoError(t, gotA.CalcAndSetNodeID())
 	gotA.SetEffectiveNumUnits(gotA.NumUnits)
+	gotA.SetReceived(atx.Received())
 	require.Equal(t, *atx, gotA)
 
 	_, err = bs.Get(datastore.BallotDB, atx.ID().Bytes())

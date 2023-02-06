@@ -455,6 +455,7 @@ func TestPositioningID(t *testing.T) {
 				require.NoError(t, activation.SignAndFinalizeAtx(sig, full))
 
 				full.SetEffectiveNumUnits(full.NumUnits)
+				full.SetReceived(time.Now())
 				vAtx, err := full.Verify(atx.base, atx.count)
 				require.NoError(t, err)
 

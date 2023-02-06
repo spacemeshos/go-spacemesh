@@ -3,6 +3,7 @@ package fetch
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -245,6 +246,7 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 	require.NoError(t, err)
 	activation.SignAndFinalizeAtx(signer, atx)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
 	vatx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	return vatx
