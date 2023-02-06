@@ -80,7 +80,8 @@ func (t *NodeClock) startClock() error {
 		select {
 		case <-ticker.C:
 		case <-t.stop:
-			t.log.Info("stopping global clock %p", t)
+			t.log.Info("stopping global clock")
+			ticker.Stop()
 			return nil
 		}
 
