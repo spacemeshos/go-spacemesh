@@ -5,6 +5,7 @@ go 1.19
 require (
 	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20220102081255-38c8b72a9924
+	github.com/benbjohnson/clock v1.3.0
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20230111132633-70aad4c4cbe2
 	github.com/cosmos/btcutil v1.0.5
 	github.com/gofrs/flock v0.8.1
@@ -60,7 +61,6 @@ require (
 	github.com/Microsoft/go-winio v0.5.1 // indirect
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect
 	github.com/aquasecurity/libbpfgo v0.3.0-libbpf-0.8.0 // indirect
-	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/containerd/cgroups v1.0.4 // indirect

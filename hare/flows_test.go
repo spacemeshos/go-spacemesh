@@ -257,7 +257,7 @@ func (m *mockClock) AwaitLayer(layer types.LayerID) chan struct{} {
 	return ch
 }
 
-func (m *mockClock) GetCurrentLayer() types.LayerID {
+func (m *mockClock) CurrentLayer() types.LayerID {
 	m.m.RLock()
 	defer m.m.RUnlock()
 

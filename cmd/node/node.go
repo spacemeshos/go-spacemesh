@@ -186,17 +186,16 @@ type Service interface {
 	Close()
 }
 
-// TickProvider is an interface to a global system clock that releases ticks on each layer.
-type TickProvider interface {
-	Subscribe() timesync.LayerTimer
-	Unsubscribe(timesync.LayerTimer)
-	GetCurrentLayer() types.LayerID
-	StartNotifying()
-	GetGenesisTime() time.Time
+// NodeClock is an interface to a global system clock that releases ticks on each layer.
+type NodeClock interface {
 	LayerToTime(types.LayerID) time.Time
 	TimeToLayer(time.Time) types.LayerID
-	Close()
+	GenesisTime() time.Time
+
+	CurrentLayer() types.LayerID
 	AwaitLayer(types.LayerID) chan struct{}
+
+	Close()
 }
 
 func loadConfig(c *cobra.Command) (*config.Config, error) {
@@ -293,7 +292,7 @@ type App struct {
 	proposalBuilder  *miner.ProposalBuilder
 	mesh             *mesh.Mesh
 	cachedDB         *datastore.CachedDB
-	clock            TickProvider
+	clock            NodeClock
 	hare             *hare.Hare
 	blockGen         *blocks.Generator
 	certifier        *blocks.Certifier
@@ -464,7 +463,7 @@ func (app *App) initServices(
 	sgn *signing.EdSigner,
 	poetClients []activation.PoetProvingServiceClient,
 	vrfSigner *signing.VRFSigner,
-	clock TickProvider,
+	clock NodeClock,
 ) error {
 	nodeID := sgn.NodeID()
 	layerSize := uint32(app.Config.LayerAvgSize)
@@ -774,7 +773,6 @@ func (app *App) startServices(ctx context.Context) error {
 		log.Info("smeshing not started, waiting to be triggered via smesher api")
 	}
 
-	app.clock.StartNotifying()
 	if app.ptimesync != nil {
 		app.ptimesync.Start()
 	}
@@ -1078,9 +1076,17 @@ func (app *App) Start(ctx context.Context) error {
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
 	if err != nil {
-		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.Genesis.GenesisTime, err)
+		return fmt.Errorf("cannot parse genesis time %s: %w", app.Config.Genesis.GenesisTime, err)
 	}
-	clock := timesync.NewClock(timesync.RealClock{}, app.Config.LayerDuration, gTime, lg.WithName("clock"))
+	clock, err := timesync.NewClock(
+		timesync.WithLayerDuration(app.Config.LayerDuration),
+		timesync.WithTickInterval(1*time.Second), // TODO (mafa): make cfg parameter
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(lg.WithName("clock")),
+	)
+	if err != nil {
+		return fmt.Errorf("cannot create clock: %w", err)
+	}
 
 	lg.Info("initializing p2p services")
 
@@ -1134,7 +1140,7 @@ func (app *App) Start(ctx context.Context) error {
 
 	app.startAPIServices(ctx)
 
-	events.SubscribeToLayers(clock.Ticker)
+	events.SubscribeToLayers(clock)
 	logger.Info("app started")
 
 	// notify anyone who might be listening that the app has finished starting.

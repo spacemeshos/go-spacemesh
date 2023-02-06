@@ -54,7 +54,7 @@ func (mlt *mockLayerTicker) advanceToLayer(layerID types.LayerID) {
 	mlt.current.Store(layerID)
 }
 
-func (mlt *mockLayerTicker) GetCurrentLayer() types.LayerID {
+func (mlt *mockLayerTicker) CurrentLayer() types.LayerID {
 	return mlt.current.Load().(types.LayerID)
 }
 

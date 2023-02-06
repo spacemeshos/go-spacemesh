@@ -4,106 +4,97 @@ import (
 	"sync"
 	"time"
 
+	"github.com/benbjohnson/clock"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// Clock defines the functionality needed from any clock type.
-type Clock interface {
-	Now() time.Time
-}
+// NodeClock is the struct holding a real clock.
+type NodeClock struct {
+	LayerConverter // layer conversions provider
 
-// RealClock is the struct wrapping a local time struct.
-type RealClock struct{}
-
-// Now returns the current local time.
-func (RealClock) Now() time.Time {
-	return time.Now()
-}
-
-// TimeClock is the struct holding a real clock.
-type TimeClock struct {
-	*Ticker
-	tickInterval time.Duration
+	clock        clock.Clock // provides the time
 	genesis      time.Time
-	stop         chan struct{}
-	once         sync.Once
-	log          log.Log
-	eg           errgroup.Group
+	tickInterval time.Duration
+
+	mu              sync.Mutex    // protects the following fields
+	lastTickedLayer types.LayerID // track last ticked layer
+	layerChannels   map[types.LayerID]chan struct{}
+
+	stop chan struct{}
+	once sync.Once
+
+	log log.Log
+	eg  errgroup.Group
 }
 
 // NewClock return TimeClock struct that notifies tickInterval has passed.
-func NewClock(c Clock, tickInterval time.Duration, genesisTime time.Time, logger log.Log) *TimeClock {
-	if tickInterval == 0 {
-		logger.Panic("could not create new clock: bad configuration: tick interval is zero")
+func NewClock(opts ...OptionFunc) (*NodeClock, error) {
+	cfg := &option{
+		clock: clock.New(),
 	}
-	gtime := genesisTime.Local()
-	logger.With().Info("converting genesis time to local time",
-		log.Time("genesis", genesisTime),
-		log.Time("local", gtime))
-	t := &TimeClock{
-		Ticker:       NewTicker(c, LayerConv{duration: tickInterval, genesis: gtime}, WithLog(logger)),
-		tickInterval: tickInterval,
-		genesis:      gtime,
-		stop:         make(chan struct{}),
-		once:         sync.Once{},
-		log:          logger,
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
+
+	gtime := cfg.genesisTime.Local()
+	cfg.log.With().Info("converting genesis time to local time",
+		log.Time("genesis", cfg.genesisTime),
+		log.Time("local", gtime),
+	)
+	t := &NodeClock{
+		LayerConverter: LayerConverter{duration: cfg.layerDuration, genesis: gtime},
+		clock:          cfg.clock,
+		tickInterval:   cfg.tickInterval,
+		layerChannels:  make(map[types.LayerID]chan struct{}),
+		genesis:        gtime,
+		stop:           make(chan struct{}),
+		log:            *cfg.log,
 	}
 
 	t.eg.Go(t.startClock)
-	return t
+	return t, nil
 }
 
-func (t *TimeClock) startClock() error {
-	t.log.Info("starting global clock now=%v genesis=%v %p", t.clock.Now(), t.genesis, t)
+func (t *NodeClock) startClock() error {
+	t.log.With().Info("starting global clock",
+		log.Time("now", t.clock.Now()),
+		log.Time("genesis", t.genesis),
+		log.Duration("layer_duration", t.duration),
+		log.Duration("tick_interval", t.tickInterval),
+	)
 
+	ticker := t.clock.Ticker(t.tickInterval)
 	for {
-		currLayer := t.Ticker.TimeToLayer(t.clock.Now())
-		nextLayer := currLayer.Add(1)
-		if time.Until(t.Ticker.LayerToTime(currLayer)) > 0 {
-			nextLayer = currLayer
-		}
-		nextTickTime := t.Ticker.LayerToTime(nextLayer)
-		t.log.With().Info("global clock going to sleep before next layer",
+		currLayer := t.TimeToLayer(t.clock.Now())
+		t.log.With().Debug("global clock going to sleep before next tick",
 			log.Stringer("curr_layer", currLayer),
-			log.Stringer("next_layer", nextLayer),
-			log.Time("next_tick_time", nextTickTime),
 		)
 
-		for {
-			// `time.After` sometimes unblocks bit too soon. In this case - wait again.
-			// See https://github.com/spacemeshos/go-spacemesh/issues/3617.
-			if t.clock.Now().After(nextTickTime) || t.clock.Now().Equal(nextTickTime) {
-				break
-			}
-			select {
-			case <-time.After(nextTickTime.Sub(t.clock.Now())):
-			case <-t.stop:
-				t.log.Info("stopping global clock %p", t)
-				return nil
-			}
+		select {
+		case <-ticker.C:
+		case <-t.stop:
+			t.log.Info("stopping global clock %p", t)
+			return nil
 		}
-		if missed, err := t.Notify(); err != nil {
-			t.log.With().Warning("could not notify all subscribers",
-				log.Err(err),
-				log.Int("missed", missed))
-		}
+
+		t.tick()
 	}
 }
 
-// GetGenesisTime returns at which time this clock has started (used to calculate current tick).
-func (t *TimeClock) GetGenesisTime() time.Time {
+// GenesisTime returns at which time this clock has started (used to calculate current tick).
+func (t *NodeClock) GenesisTime() time.Time {
 	return t.genesis
 }
 
-// GetInterval returns the time interval between clock ticks.
-func (t *TimeClock) GetInterval() time.Duration {
-	return t.tickInterval
-}
-
 // Close closes the clock ticker.
-func (t *TimeClock) Close() {
+func (t *NodeClock) Close() {
 	t.once.Do(func() {
 		t.log.Info("stopping clock")
 		close(t.stop)
@@ -112,4 +103,59 @@ func (t *TimeClock) Close() {
 		}
 		t.log.Info("clock stopped")
 	})
+}
+
+// tick processes the current tick. It iterates over all layers that have passed since the last tick and notifies
+// listeners that are awaiting these layers.
+func (t *NodeClock) tick() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.clock.Now().Before(t.genesis) {
+		return
+	}
+
+	layer := t.TimeToLayer(t.clock.Now())
+
+	// close await channel for prev layers
+	for l := t.lastTickedLayer; !l.After(layer); l = l.Add(1) {
+		if layerChan, found := t.layerChannels[l]; found {
+			close(layerChan)
+			delete(t.layerChannels, l)
+		}
+	}
+
+	t.lastTickedLayer = layer // update last ticked layer
+}
+
+// CurrentLayer gets the current layer.
+func (t *NodeClock) CurrentLayer() types.LayerID {
+	return t.TimeToLayer(t.clock.Now())
+}
+
+// AwaitLayer returns a channel that will be signaled when layer id layerID was ticked by the clock, or if this layer has passed
+// while sleeping. it does so by closing the returned channel.
+func (t *NodeClock) AwaitLayer(layerID types.LayerID) chan struct{} {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	layerTime := t.LayerToTime(layerID)
+	now := t.clock.Now()
+	if now.After(layerTime) || now.Equal(layerTime) { // passed the time of layerID
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}
+
+	ch := t.layerChannels[layerID]
+	if ch == nil {
+		ch = make(chan struct{})
+		t.layerChannels[layerID] = ch
+	}
+
+	if t.lastTickedLayer.Before(layerID) {
+		t.lastTickedLayer = layerID.Sub(1)
+	}
+
+	return ch
 }

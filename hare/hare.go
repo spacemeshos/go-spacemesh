@@ -63,7 +63,7 @@ type RoundClock interface {
 type LayerClock interface {
 	LayerToTime(id types.LayerID) time.Time
 	AwaitLayer(layerID types.LayerID) chan struct{}
-	GetCurrentLayer() types.LayerID
+	CurrentLayer() types.LayerID
 }
 
 // LayerOutput is the output of each hare consensus process.
@@ -514,7 +514,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 
 // listens to new layers.
 func (h *Hare) tickLoop(ctx context.Context) {
-	for layer := h.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
+	for layer := h.layerClock.CurrentLayer(); ; layer = layer.Add(1) {
 		select {
 		case <-h.layerClock.AwaitLayer(layer):
 			if time.Since(h.layerClock.LayerToTime(layer)) > h.config.WakeupDelta {

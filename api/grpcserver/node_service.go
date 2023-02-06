@@ -97,7 +97,7 @@ func (s NodeService) Status(ctx context.Context, _ *pb.StatusRequest) (*pb.Statu
 func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 	// We cannot get meaningful data from the mesh during the genesis epochs since there are no blocks in these
 	// epochs, so just return the current layer instead
-	curLayerObj := s.genTime.GetCurrentLayer()
+	curLayerObj := s.genTime.CurrentLayer()
 	curLayer = curLayerObj.Uint32()
 	if curLayerObj.GetEpoch().IsGenesis() {
 		latestLayer = s.mesh.LatestLayer().Uint32()

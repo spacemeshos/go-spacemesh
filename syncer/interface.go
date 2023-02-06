@@ -12,7 +12,7 @@ import (
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type layerTicker interface {
-	GetCurrentLayer() types.LayerID
+	CurrentLayer() types.LayerID
 }
 
 type meshProvider interface {

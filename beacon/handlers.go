@@ -470,7 +470,7 @@ func (pd *ProtocolDriver) addToVoteMargin(epoch types.EpochID, thisRoundVotes al
 func (pd *ProtocolDriver) currentEpoch() types.EpochID {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	return pd.clock.GetCurrentLayer().GetEpoch()
+	return pd.clock.CurrentLayer().GetEpoch()
 }
 
 func (pd *ProtocolDriver) currentRound() types.RoundID {
@@ -483,7 +483,7 @@ func (pd *ProtocolDriver) isProposalTimely(p *ProposalMessage, receivedTime time
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
-	currentEpoch := pd.clock.GetCurrentLayer().GetEpoch()
+	currentEpoch := pd.clock.CurrentLayer().GetEpoch()
 	switch p.EpochID {
 	case currentEpoch:
 		return true

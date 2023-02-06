@@ -28,7 +28,7 @@ type nipostValidator interface {
 
 type layerClock interface {
 	AwaitLayer(layerID types.LayerID) chan struct{}
-	GetCurrentLayer() types.LayerID
+	CurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
 }
 

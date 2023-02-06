@@ -177,7 +177,7 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	for i := 0; i < numNodes; i++ {
 		node := newTestDriver(t, cfg, publisher)
 		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-		node.mClock.EXPECT().GetCurrentLayer().Return(current).AnyTimes()
+		node.mClock.EXPECT().CurrentLayer().Return(current).AnyTimes()
 		node.mClock.EXPECT().LayerToTime(current).Return(now).AnyTimes()
 		testNodes = append(testNodes, node)
 		dbs = append(dbs, node.cdb)
@@ -229,7 +229,7 @@ func TestBeacon_NoProposals(t *testing.T) {
 	for i := 0; i < numNodes; i++ {
 		node := newTestDriver(t, cfg, publisher)
 		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-		node.mClock.EXPECT().GetCurrentLayer().Return(current).AnyTimes()
+		node.mClock.EXPECT().CurrentLayer().Return(current).AnyTimes()
 		node.mClock.EXPECT().LayerToTime(current).Return(now).AnyTimes()
 		testNodes = append(testNodes, node)
 		dbs = append(dbs, node.cdb)
@@ -319,7 +319,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 
 	gLayer := types.GetEffectiveGenesis()
-	tpd.mClock.EXPECT().GetCurrentLayer().Return(gLayer).Times(2)
+	tpd.mClock.EXPECT().CurrentLayer().Return(gLayer).Times(2)
 	tpd.mClock.EXPECT().AwaitLayer(gLayer.Add(1)).Return(nil).Times(1)
 	tpd.mClock.EXPECT().LayerToTime((gLayer.GetEpoch() + 1).FirstLayer()).Return(time.Now()).Times(1)
 	tpd.Start(context.Background())
@@ -335,7 +335,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 	for layer := gLayer.Add(1); layer.Before(finalLayer); layer = layer.Add(1) {
-		tpd.mClock.EXPECT().GetCurrentLayer().Return(layer).AnyTimes()
+		tpd.mClock.EXPECT().CurrentLayer().Return(layer).AnyTimes()
 		if layer.FirstInEpoch() {
 			require.NoError(t, tpd.onNewEpoch(context.Background(), layer.GetEpoch()))
 		}

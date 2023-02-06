@@ -561,7 +561,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 
 	// another atx for the same epoch is considered malicious
 	atx2 := newActivationTx(t, sig, &nid, 1, atx1.ID(), atx1.ID(), nil, types.NewLayerID(layersPerEpoch+1), 0, 100, coinbase, 100, &types.NIPost{})
-	mclock.EXPECT().GetCurrentLayer().Return(atx2.PubLayerID)
+	mclock.EXPECT().CurrentLayer().Return(atx2.PubLayerID)
 	var got types.MalfeasanceGossip
 	mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
