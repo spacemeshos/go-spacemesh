@@ -45,7 +45,7 @@ func createEpochState(tb testing.TB, pd *ProtocolDriver, epoch types.EpochID) {
 	tb.Helper()
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.states[epoch] = newState(pd.logger, pd.config, types.VRFPostIndex(rand.Uint64()), epochWeight, types.RandomActiveSet(1), weakcoin.UnitAllowances{})
+	pd.states[epoch] = newState(pd.logger, pd.config, nil, epochWeight, weakcoin.UnitAllowances{"nodeID": 111})
 }
 
 func setOwnFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, ownFirstRound proposalList) {
@@ -357,7 +357,6 @@ func Test_handleProposal_NextEpoch(t *testing.T) {
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
-	createATX(t, tpd.cdb, nextEpoch.FirstLayer().Sub(1), tpd.edSigner, 10)
 	setEarliestProposalTime(tpd.ProtocolDriver, time.Now().Add(-1*time.Second))
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
 	tpd.mClock.EXPECT().LayerToTime((nextEpoch).FirstLayer()).Return(time.Now()).Times(1)

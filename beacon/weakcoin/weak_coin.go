@@ -119,7 +119,6 @@ type WeakCoin struct {
 	mu                         sync.RWMutex
 	epochStarted, roundStarted bool
 	epoch                      types.EpochID
-	nonce                      types.VRFPostIndex
 	round                      types.RoundID
 	smallestProposal           []byte
 	allowances                 UnitAllowances
@@ -147,12 +146,11 @@ func (wc *WeakCoin) Get(ctx context.Context, epoch types.EpochID, round types.Ro
 }
 
 // StartEpoch notifies that epoch is started and we can accept messages for this epoch.
-func (wc *WeakCoin) StartEpoch(ctx context.Context, epoch types.EpochID, nonce types.VRFPostIndex, allowances UnitAllowances) {
+func (wc *WeakCoin) StartEpoch(ctx context.Context, epoch types.EpochID, allowances UnitAllowances) {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
 	wc.epochStarted = true
 	wc.epoch = epoch
-	wc.nonce = nonce
 	wc.allowances = allowances
 	wc.logger.WithContext(ctx).With().Info("beacon weak coin started epoch", epoch)
 }
@@ -173,7 +171,7 @@ func (wc *WeakCoin) FinishEpoch(ctx context.Context, epoch types.EpochID) {
 }
 
 // StartRound process any buffered messages for this round and broadcast our proposal.
-func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
+func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, nonce *types.VRFPostIndex) error {
 	wc.mu.Lock()
 	logger := wc.logger.WithContext(ctx).WithFields(wc.epoch, round)
 	logger.Info("started beacon weak coin round")
@@ -192,7 +190,10 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 	wc.nextRoundBuffer = wc.nextRoundBuffer[:0]
 	wc.mu.Unlock()
 
-	return wc.publishProposal(ctx, wc.epoch, wc.nonce, wc.round)
+	if nonce != nil {
+		return wc.publishProposal(ctx, wc.epoch, *nonce, wc.round)
+	}
+	return nil
 }
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {

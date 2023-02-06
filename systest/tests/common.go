@@ -37,7 +37,7 @@ func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.Sugar
 			if layer.Layer.Number.Number == stop {
 				return false, nil
 			}
-			if layer.Layer.Status != pb.Layer_LAYER_STATUS_APPLIED ||
+			if layer.Layer.Status != pb.Layer_LAYER_STATUS_APPROVED ||
 				layer.Layer.Number.Number < first {
 				return true, nil
 			}

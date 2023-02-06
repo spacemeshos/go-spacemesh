@@ -39,12 +39,14 @@ func coinValueMock(tb testing.TB, value bool) coin {
 	coinMock.EXPECT().StartEpoch(
 		gomock.Any(),
 		gomock.AssignableToTypeOf(types.EpochID(0)),
-		gomock.AssignableToTypeOf(types.VRFPostIndex(0)),
 		gomock.AssignableToTypeOf(weakcoin.UnitAllowances{}),
 	).AnyTimes()
 	coinMock.EXPECT().FinishEpoch(gomock.Any(), gomock.AssignableToTypeOf(types.EpochID(0))).AnyTimes()
-	coinMock.EXPECT().StartRound(gomock.Any(), gomock.AssignableToTypeOf(types.RoundID(0))).
-		AnyTimes().Return(nil)
+	nonce := types.VRFPostIndex(0)
+	coinMock.EXPECT().StartRound(gomock.Any(),
+		gomock.AssignableToTypeOf(types.RoundID(0)),
+		gomock.AssignableToTypeOf(&nonce),
+	).AnyTimes().Return(nil)
 	coinMock.EXPECT().FinishRound(gomock.Any()).AnyTimes()
 	coinMock.EXPECT().Get(
 		gomock.Any(),
@@ -192,7 +194,11 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 		require.NoError(t, err)
 		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
 	}
-	for _, node := range testNodes {
+	for i, node := range testNodes {
+		if i == 0 {
+			// make the first node non-smeshing node
+			continue
+		}
 		for _, db := range dbs {
 			createATX(t, db, atxPublishLid, node.edSigner, 1)
 		}
