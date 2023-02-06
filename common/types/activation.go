@@ -409,6 +409,9 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 	if atx.effectiveNumUnits == 0 {
 		return nil, fmt.Errorf("effective num units not set")
 	}
+	if atx.received == (time.Time{}) {
+		return nil, fmt.Errorf("received time not set")
+	}
 	vAtx := &VerifiedActivationTx{
 		ActivationTx: atx,
 

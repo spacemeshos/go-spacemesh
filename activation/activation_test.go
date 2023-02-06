@@ -55,6 +55,7 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID t
 func newAtx(t testing.TB, sig signer, nodeID *types.NodeID, challenge types.NIPostChallenge, nipost *types.NIPost, numUnits uint32, coinbase types.Address) *types.ActivationTx {
 	atx := types.NewActivationTx(challenge, nodeID, coinbase, nipost, numUnits, nil, nil)
 	atx.SetEffectiveNumUnits(numUnits)
+	atx.SetReceived(time.Now())
 	require.NoError(t, SignAndFinalizeAtx(sig, atx))
 	return atx
 }
@@ -76,6 +77,7 @@ func newActivationTx(
 	challenge := newChallenge(sequence, prevATX, positioningATX, pubLayerID, cATX)
 	atx := newAtx(t, sig, nodeID, challenge, nipost, numUnits, coinbase)
 	atx.SetEffectiveNumUnits(numUnits)
+	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(startTick, numTicks)
 	require.NoError(t, err)
 	return vAtx
@@ -234,6 +236,7 @@ func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID, sig signer, 
 func addAtx(t *testing.T, db sql.Executor, sig signer, atx *types.ActivationTx) *types.VerifiedActivationTx {
 	require.NoError(t, SignAndFinalizeAtx(sig, atx))
 	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, vAtx))
