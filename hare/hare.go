@@ -61,8 +61,8 @@ type RoundClock interface {
 // LayerClock provides a timer for the start of a given layer, as well as the current layer and allows converting a
 // layer number to a clock time.
 type LayerClock interface {
-	LayerToTime(id types.LayerID) time.Time
-	AwaitLayer(layerID types.LayerID) chan struct{}
+	LayerToTime(types.LayerID) time.Time
+	AwaitLayer(types.LayerID) chan struct{}
 	CurrentLayer() types.LayerID
 }
 
@@ -379,7 +379,7 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 	props := h.getGoodProposal(lid, beacon, logger)
 	preNumProposals.Add(float64(len(props)))
 	set := NewSet(props)
-	cp := h.factory(h.ctx, h.config, lid, set, h.rolacle, h.sign, nonce, h.publisher, comm, clock)
+	cp := h.factory(ctx, h.config, lid, set, h.rolacle, h.sign, nonce, h.publisher, comm, clock)
 
 	logger.With().Info("starting hare", log.Int("num_proposals", len(props)))
 	cp.Start()
@@ -415,6 +415,7 @@ func (h *Hare) removeCP(logger log.Log, lid types.LayerID) {
 	defer h.mu.Unlock()
 	delete(h.cps, cp.ID())
 	logger.With().Info("number of consensus processes (after deregister)",
+		cp.ID(),
 		log.Int("count", len(h.cps)))
 }
 
@@ -515,10 +516,11 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 // listens to new layers.
 func (h *Hare) tickLoop(ctx context.Context) {
 	for layer := h.layerClock.CurrentLayer(); ; layer = layer.Add(1) {
+		ctx := log.WithNewSessionID(ctx)
 		select {
 		case <-h.layerClock.AwaitLayer(layer):
 			if time.Since(h.layerClock.LayerToTime(layer)) > h.config.WakeupDelta {
-				h.With().Warning("missed hare window, skipping layer", layer)
+				h.WithContext(ctx).With().Warning("missed hare window, skipping layer", layer)
 				continue
 			}
 			_, _ = h.onTick(ctx, layer)

@@ -204,7 +204,7 @@ func (s *Set) String() string {
 	defer s.mu.RUnlock()
 
 	var sb strings.Builder
-	idx := len(s.values) - 1
+	idx := len(s.values)
 	for v := range s.values {
 		idx--
 		sb.WriteString(v.String())
