@@ -18,13 +18,15 @@ import (
 func Test_NodeClock_NewClock(t *testing.T) {
 	clock, err := NewClock(
 		WithGenesisTime(time.Now()),
+		WithTickInterval(time.Second),
 		WithLogger(logtest.New(t)),
 	)
-	require.ErrorContains(t, err, "tick interval is zero")
+	require.ErrorContains(t, err, "layer duration is zero")
 	require.Nil(t, clock)
 
 	clock, err = NewClock(
 		WithLayerDuration(time.Second),
+		WithTickInterval(time.Second),
 		WithLogger(logtest.New(t)),
 	)
 	require.ErrorContains(t, err, "genesis time is zero")
@@ -32,9 +34,27 @@ func Test_NodeClock_NewClock(t *testing.T) {
 
 	clock, err = NewClock(
 		WithLayerDuration(time.Second),
+		WithTickInterval(time.Second),
 		WithGenesisTime(time.Now()),
 	)
 	require.ErrorContains(t, err, "logger is nil")
+	require.Nil(t, clock)
+
+	clock, err = NewClock(
+		WithLayerDuration(time.Second),
+		WithGenesisTime(time.Now()),
+		WithLogger(logtest.New(t)),
+	)
+	require.ErrorContains(t, err, "tick interval is zero")
+	require.Nil(t, clock)
+
+	clock, err = NewClock(
+		WithLayerDuration(time.Second),
+		WithTickInterval(2*time.Second),
+		WithGenesisTime(time.Now()),
+		WithLogger(logtest.New(t)),
+	)
+	require.ErrorContains(t, err, "tick interval must be between 0 and layer duration")
 	require.Nil(t, clock)
 }
 
@@ -43,6 +63,7 @@ func Test_NodeClock_GenesisTime(t *testing.T) {
 
 	clock, err := NewClock(
 		WithLayerDuration(time.Second),
+		WithTickInterval(time.Second/10),
 		WithGenesisTime(genesis),
 		WithLogger(logtest.New(t)),
 	)
@@ -55,6 +76,7 @@ func Test_NodeClock_GenesisTime(t *testing.T) {
 func Test_NodeClock_Close(t *testing.T) {
 	clock, err := NewClock(
 		WithLayerDuration(time.Second),
+		WithTickInterval(time.Second/10),
 		WithGenesisTime(time.Now()),
 		WithLogger(logtest.New(t)),
 	)
@@ -81,6 +103,7 @@ func Test_NodeClock_Close(t *testing.T) {
 func Test_NodeClock_NoRaceOnTick(t *testing.T) {
 	clock, err := NewClock(
 		WithLayerDuration(time.Second),
+		WithTickInterval(time.Second/10),
 		WithGenesisTime(time.Now()),
 		WithLogger(logtest.New(t)),
 	)
@@ -118,10 +141,12 @@ func Test_NodeClock_NoRaceOnTick(t *testing.T) {
 
 func Test_NodeClock_Await_BeforeGenesis(t *testing.T) {
 	genesis := time.Now().Add(100 * time.Millisecond)
-	layerDuration := 10 * time.Millisecond
+	layerDuration := 100 * time.Millisecond
+	tickInterval := 10 * time.Millisecond
 
 	clock, err := NewClock(
 		WithLayerDuration(layerDuration),
+		WithTickInterval(tickInterval),
 		WithGenesisTime(genesis),
 		WithLogger(logtest.New(t)),
 	)
@@ -130,18 +155,20 @@ func Test_NodeClock_Await_BeforeGenesis(t *testing.T) {
 
 	select {
 	case <-clock.AwaitLayer(types.LayerID{}):
-		require.GreaterOrEqual(t, time.Now(), genesis)
+		require.WithinRange(t, time.Now(), genesis, genesis.Add(tickInterval))
 	case <-time.After(1 * time.Second):
 		require.Fail(t, "timeout")
 	}
 }
 
 func Test_NodeClock_Await_PassedLayer(t *testing.T) {
-	genesis := time.Now().Add(-100 * time.Millisecond)
-	layerDuration := 10 * time.Millisecond
+	genesis := time.Now().Add(-1 * time.Second)
+	layerDuration := 100 * time.Millisecond
+	tickInterval := 10 * time.Millisecond
 
 	clock, err := NewClock(
 		WithLayerDuration(layerDuration),
+		WithTickInterval(tickInterval),
 		WithGenesisTime(genesis),
 		WithLogger(logtest.New(t)),
 	)
@@ -150,7 +177,7 @@ func Test_NodeClock_Await_PassedLayer(t *testing.T) {
 
 	select {
 	case <-clock.AwaitLayer(types.NewLayerID(4)):
-		require.GreaterOrEqual(t, time.Now(), genesis.Add(4*layerDuration))
+		require.Greater(t, time.Now(), genesis.Add(4*layerDuration))
 	default:
 		require.Fail(t, "await layer closed early")
 	}
@@ -158,7 +185,8 @@ func Test_NodeClock_Await_PassedLayer(t *testing.T) {
 
 func Test_NodeClock_NonMonotonicTick_Forward(t *testing.T) {
 	genesis := time.Now()
-	layerDuration := 10 * time.Millisecond
+	layerDuration := 100 * time.Millisecond
+	tickInterval := 10 * time.Millisecond
 
 	mClock := clock.NewMock()
 	mClock.Set(genesis.Add(5 * layerDuration))
@@ -166,6 +194,7 @@ func Test_NodeClock_NonMonotonicTick_Forward(t *testing.T) {
 	clock, err := NewClock(
 		withClock(mClock),
 		WithLayerDuration(layerDuration),
+		WithTickInterval(tickInterval),
 		WithGenesisTime(genesis),
 		WithLogger(logtest.New(t)),
 	)
@@ -196,6 +225,7 @@ func Test_NodeClock_NonMonotonicTick_Forward(t *testing.T) {
 func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
 	genesis := time.Now()
 	layerDuration := 10 * time.Millisecond
+	tickInterval := 1 * time.Millisecond
 
 	mClock := clock.NewMock()
 	mClock.Set(genesis.Add(5 * layerDuration))
@@ -203,6 +233,7 @@ func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
 	clock, err := NewClock(
 		withClock(mClock),
 		WithLayerDuration(layerDuration),
+		WithTickInterval(tickInterval),
 		WithGenesisTime(genesis),
 		WithLogger(logtest.New(t)),
 	)
@@ -291,6 +322,7 @@ func Fuzz_NodeClock_CurrentLayer(f *testing.F) {
 		nowTime := time.Unix(int64(now), 0)
 
 		layerTime := time.Duration(layerSecs) * time.Second
+		tickInterval := layerTime / 10
 
 		mClock := clock.NewMock()
 		mClock.Set(nowTime)
@@ -298,6 +330,7 @@ func Fuzz_NodeClock_CurrentLayer(f *testing.F) {
 		clock, err := NewClock(
 			withClock(mClock),
 			WithLayerDuration(layerTime),
+			WithTickInterval(tickInterval),
 			WithGenesisTime(genesisTime),
 			WithLogger(logtest.New(t)),
 		)

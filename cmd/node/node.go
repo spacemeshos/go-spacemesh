@@ -1080,6 +1080,7 @@ func (app *App) Start(ctx context.Context) error {
 	}
 	clock, err := timesync.NewClock(
 		timesync.WithLayerDuration(app.Config.LayerDuration),
+		timesync.WithTickInterval(1*time.Second), // TODO (mafa): make cfg parameter
 		timesync.WithGenesisTime(gTime),
 		timesync.WithLogger(lg.WithName("clock")),
 	)

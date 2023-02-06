@@ -13,6 +13,7 @@ type option struct {
 	clock         clock.Clock
 	genesisTime   time.Time
 	layerDuration time.Duration
+	tickInterval  time.Duration
 
 	log *log.Log
 }
@@ -23,7 +24,15 @@ func (o *option) validate() error {
 	}
 
 	if o.layerDuration == 0 {
+		return fmt.Errorf("bad configuration: layer duration is zero")
+	}
+
+	if o.tickInterval == 0 {
 		return fmt.Errorf("bad configuration: tick interval is zero")
+	}
+
+	if o.tickInterval < 0 || o.tickInterval > o.layerDuration {
+		return fmt.Errorf("bad configuration: tick interval must be between 0 and layer duration")
 	}
 
 	if o.log == nil {
@@ -54,6 +63,13 @@ func WithGenesisTime(genesis time.Time) OptionFunc {
 func WithLayerDuration(d time.Duration) OptionFunc {
 	return func(opts *option) error {
 		opts.layerDuration = d
+		return nil
+	}
+}
+
+func WithTickInterval(d time.Duration) OptionFunc {
+	return func(opts *option) error {
+		opts.tickInterval = d
 		return nil
 	}
 }

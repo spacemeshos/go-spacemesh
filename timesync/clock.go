@@ -15,8 +15,9 @@ import (
 type NodeClock struct {
 	LayerConverter // layer conversions provider
 
-	clock   clock.Clock // provides the time
-	genesis time.Time
+	clock        clock.Clock // provides the time
+	genesis      time.Time
+	tickInterval time.Duration
 
 	mu              sync.Mutex    // protects the following fields
 	lastTickedLayer types.LayerID // track last ticked layer
@@ -50,6 +51,7 @@ func NewClock(opts ...OptionFunc) (*NodeClock, error) {
 	t := &NodeClock{
 		LayerConverter: LayerConverter{duration: cfg.layerDuration, genesis: gtime},
 		clock:          cfg.clock,
+		tickInterval:   cfg.tickInterval,
 		layerChannels:  make(map[types.LayerID]chan struct{}),
 		genesis:        gtime,
 		stop:           make(chan struct{}),
@@ -61,33 +63,25 @@ func NewClock(opts ...OptionFunc) (*NodeClock, error) {
 }
 
 func (t *NodeClock) startClock() error {
-	t.log.Info("starting global clock now=%v genesis=%v %p", t.clock.Now(), t.genesis, t)
+	t.log.With().Info("starting global clock",
+		log.Time("now", t.clock.Now()),
+		log.Time("genesis", t.genesis),
+		log.Duration("layer_duration", t.duration),
+		log.Duration("tick_interval", t.tickInterval),
+	)
 
+	ticker := t.clock.Ticker(t.tickInterval)
 	for {
 		currLayer := t.TimeToLayer(t.clock.Now())
-		nextLayer := currLayer.Add(1)
-		if time.Until(t.LayerToTime(currLayer)) > 0 {
-			nextLayer = currLayer
-		}
-		nextTickTime := t.LayerToTime(nextLayer)
-		t.log.With().Info("global clock going to sleep before next layer",
+		t.log.With().Debug("global clock going to sleep before next tick",
 			log.Stringer("curr_layer", currLayer),
-			log.Stringer("next_layer", nextLayer),
-			log.Time("next_tick_time", nextTickTime),
 		)
 
-		for {
-			// `time.After` sometimes unblocks bit too soon. In this case - wait again.
-			// See https://github.com/spacemeshos/go-spacemesh/issues/3617.
-			if t.clock.Now().After(nextTickTime) || t.clock.Now().Equal(nextTickTime) {
-				break
-			}
-			select {
-			case <-t.clock.After(nextTickTime.Sub(t.clock.Now())):
-			case <-t.stop:
-				t.log.Info("stopping global clock %p", t)
-				return nil
-			}
+		select {
+		case <-ticker.C:
+		case <-t.stop:
+			t.log.Info("stopping global clock %p", t)
+			return nil
 		}
 
 		t.tick()
@@ -116,6 +110,10 @@ func (t *NodeClock) Close() {
 func (t *NodeClock) tick() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	if t.clock.Now().Before(t.genesis) {
+		return
+	}
 
 	layer := t.TimeToLayer(t.clock.Now())
 
