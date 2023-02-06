@@ -84,6 +84,7 @@ type BaseConfig struct {
 	OracleServer        string `mapstructure:"oracle_server"`
 	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
 
+	TickInterval   time.Duration `mapstructure:"tick-interval"`
 	LayerDuration  time.Duration `mapstructure:"layer-duration"`
 	LayerAvgSize   uint32        `mapstructure:"layer-average-size"`
 	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`

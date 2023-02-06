@@ -26,8 +26,8 @@ func testnet() config.Config {
 	conf.HARE.N = 800
 	conf.HARE.ExpectedLeaders = 10
 	conf.HARE.LimitConcurrent = 5
-	conf.HARE.LimitIterations = 10
 	conf.HARE.F = 399
+	conf.HARE.LimitIterations = 10
 	conf.HARE.RoundDuration = 10 * time.Second
 	conf.HARE.WakeupDelta = 10 * time.Second
 
@@ -45,9 +45,10 @@ func testnet() config.Config {
 	}
 
 	conf.LayerAvgSize = 50
+	conf.SyncRequestTimeout = 60_000
+	conf.TickInterval = 5 * time.Second
 	conf.LayerDuration = 120 * time.Second
 	conf.LayersPerEpoch = 60
-	conf.SyncRequestTimeout = 60_000
 
 	conf.POST.BitsPerLabel = 8
 	conf.POST.K1 = 2000
@@ -65,11 +66,11 @@ func testnet() config.Config {
 	conf.Beacon.FirstVotingRoundDuration = 3 * time.Minute
 	conf.Beacon.GracePeriodDuration = 10 * time.Second
 	conf.Beacon.ProposalDuration = 30 * time.Second
+	conf.Beacon.VotingRoundDuration = 50 * time.Second
+	conf.Beacon.WeakCoinRoundDuration = 10 * time.Second
 	conf.Beacon.RoundsNumber = 6
 	conf.Beacon.BeaconSyncWeightUnits = 30
 	conf.Beacon.VotesLimit = 100
-	conf.Beacon.VotingRoundDuration = 50 * time.Second
-	conf.Beacon.WeakCoinRoundDuration = 10 * time.Second
 
 	return conf
 }

@@ -44,8 +44,10 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.Genesis.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
 	cmd.PersistentFlags().StringVar(&cfg.Genesis.ExtraData, "genesis-extra-data",
 		cfg.Genesis.ExtraData, "genesis extra-data will be committed to the genesis id")
+	cmd.PersistentFlags().DurationVar(&cfg.TickInterval, "tick-interval",
+		cfg.TickInterval, "The interval between ticks of the clock")
 	cmd.PersistentFlags().DurationVar(&cfg.LayerDuration, "layer-duration",
-		cfg.LayerDuration, "Duration between layers in seconds")
+		cfg.LayerDuration, "Duration between layers")
 	cmd.PersistentFlags().Uint32Var(&cfg.LayerAvgSize, "layer-average-size",
 		cfg.LayerAvgSize, "Layer Avg size")
 	cmd.PersistentFlags().BoolVar(&cfg.PprofHTTPServer, "pprof-server",
