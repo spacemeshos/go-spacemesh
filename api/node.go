@@ -55,6 +55,7 @@ type MeshAPI interface {
 	LatestLayer() types.LayerID
 	LatestLayerInState() types.LayerID
 	ProcessedLayer() types.LayerID
+	MeshHash(types.LayerID) (types.Hash32, error)
 }
 
 // NOTE that mockgen doesn't use source-mode to avoid generating mocks for all interfaces in this file.
