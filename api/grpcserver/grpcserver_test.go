@@ -300,6 +300,10 @@ func (m *MeshAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*
 	return atxs, nil
 }
 
+func (m *MeshAPIMock) MeshHash(types.LayerID) (types.Hash32, error) {
+	return types.RandomHash(), nil
+}
+
 type ConStateAPIMock struct {
 	returnTx     map[types.TransactionID]*types.Transaction
 	layerApplied map[types.TransactionID]*types.LayerID
@@ -1637,6 +1641,7 @@ func TestMeshService(t *testing.T) {
 
 						resLayerNine := res.Layer[9]
 						require.Equal(t, uint32(9), resLayerNine.Number.Number, "layer nine is ninth")
+						require.NotEmpty(t, resLayerNine.Hash)
 						require.Equal(t, pb.Layer_LAYER_STATUS_UNSPECIFIED, resLayerNine.Status, "later layer is unconfirmed")
 					},
 				},
@@ -2290,6 +2295,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	require.NoError(t, err, "got error from stream")
 	require.Equal(t, uint32(0), res.Layer.Number.Number)
 	require.Equal(t, events.LayerStatusTypeConfirmed, int(res.Layer.Status))
+	require.NotEmpty(t, res.Layer.Hash)
 	checkLayer(t, res.Layer)
 }
 
