@@ -134,6 +134,11 @@ func (msh *Mesh) LatestLayer() types.LayerID {
 	return msh.latestLayer.Load().(types.LayerID)
 }
 
+// MeshHash returns the aggregated mesh hash at the specified layer.
+func (msh *Mesh) MeshHash(lid types.LayerID) (types.Hash32, error) {
+	return layers.GetAggregatedHash(msh.cdb, lid)
+}
+
 // MissingLayer is a layer in (latestLayerInState, processLayer].
 // this layer is missing critical data (valid blocks or transactions)
 // and can't be applied to the state.
