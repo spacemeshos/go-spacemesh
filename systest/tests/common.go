@@ -28,12 +28,8 @@ const (
 	layersPerEpoch = 4
 )
 
-func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.SugaredLogger, cl *cluster.Cluster, first, stop uint32) {
-	var (
-		receiver = types.GenerateAddress([]byte{11, 1, 1})
-		amount   = 100
-		batch    = 10
-	)
+func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.SugaredLogger, cl *cluster.Cluster, first, stop uint32, batch, amount int) {
+	receiver := types.GenerateAddress([]byte{11, 1, 1})
 	for i := 0; i < cl.Accounts(); i++ {
 		i := i
 		client := cl.Client(i % cl.Total())
@@ -41,7 +37,7 @@ func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.Sugar
 			if layer.Layer.Number.Number == stop {
 				return false, nil
 			}
-			if layer.Layer.Status != pb.Layer_LAYER_STATUS_APPROVED ||
+			if layer.Layer.Status != pb.Layer_LAYER_STATUS_APPLIED ||
 				layer.Layer.Number.Number < first {
 				return true, nil
 			}

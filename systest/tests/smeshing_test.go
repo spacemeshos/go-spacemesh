@@ -93,7 +93,7 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 		}
 	}
 	requireEqualEligibilities(tctx, t, created)
-	requireEqualProposals(t, created, includedAll)
+	requireEqualProposals(t, created, includedAll, cl.Bootnodes())
 	for epoch := range beacons {
 		require.Len(t, beacons[epoch], 1, "epoch=%d", epoch)
 	}
@@ -101,7 +101,7 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	require.Len(t, beaconSet, len(beacons), "beacons=%v", beaconSet)
 }
 
-func requireEqualProposals(tb testing.TB, reference map[uint32][]*pb.Proposal, received []map[uint32][]*pb.Proposal) {
+func requireEqualProposals(tb testing.TB, reference map[uint32][]*pb.Proposal, received []map[uint32][]*pb.Proposal, numBootnodes int) {
 	tb.Helper()
 	for layer := range reference {
 		sort.Slice(reference[layer], func(i, j int) bool {
@@ -115,9 +115,14 @@ func requireEqualProposals(tb testing.TB, reference map[uint32][]*pb.Proposal, r
 			})
 		}
 		for layer, proposals := range reference {
-			require.Len(tb, included[layer], len(proposals), "client=%d layer=%d", i, layer)
-			for i := range proposals {
-				assert.Equal(tb, proposals[i].Id, included[layer][i].Id, "client=%d layer=%d", i, layer)
+			if i < numBootnodes && layer%layersPerEpoch == 0 {
+				// bootnodes don't mine and rely on beacon sync. they don't participate in hare in the first layer of each epoch
+				require.LessOrEqual(tb, len(included[layer]), len(proposals), "client=%d layer=%d", i, layer)
+			} else {
+				require.Len(tb, included[layer], len(proposals), "client=%d layer=%d", i, layer)
+				for j := range proposals {
+					assert.Equal(tb, proposals[j].Id, included[layer][j].Id, "client=%d layer=%d", i, layer)
+				}
 			}
 		}
 	}

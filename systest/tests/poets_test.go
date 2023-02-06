@@ -77,9 +77,7 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 			tctx.Log.Debug("Poet killer is done")
 			return false, nil
 		}
-		if layer.Layer.GetStatus() != pb.Layer_LAYER_STATUS_APPLIED {
-			return true, nil
-		}
+
 		// don't kill a poet if this is not ~middle of epoch
 		if ((layer.Layer.GetNumber().GetNumber() + layersPerEpoch/2) % layersPerEpoch) != 0 {
 			return true, nil
@@ -193,7 +191,7 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 	}
 
 	firstEpochWithEligibility := uint32(math.Max(2.0, float64(first/layersPerEpoch)))
-	epochsInTest := (last/layersPerEpoch - firstEpochWithEligibility + 1)
+	epochsInTest := last/layersPerEpoch - firstEpochWithEligibility + 1
 	for id, eligibleEpochs := range smeshers {
 		assert.EqualValues(t, epochsInTest, len(eligibleEpochs), fmt.Sprintf("smesher ID: %v, its epochs: %v", hex.EncodeToString([]byte(id)), eligibleEpochs))
 	}

@@ -56,7 +56,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	// start sending transactions
 	tctx.Log.Debug("sending transactions...")
 	eg2, ctx2 := errgroup.WithContext(tctx)
-	sendTransactions(ctx2, eg2, nil, cl, first, stop)
+	sendTransactions(ctx2, eg2, nil, cl, first, stop, 10, 100)
 
 	type stateUpdate struct {
 		layer  uint32
