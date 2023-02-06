@@ -59,11 +59,11 @@ var (
 		"requests and limits for poet container",
 		&apiv1.ResourceRequirements{
 			Requests: apiv1.ResourceList{
-				apiv1.ResourceCPU:    resource.MustParse("1"),
+				apiv1.ResourceCPU:    resource.MustParse("0.5"),
 				apiv1.ResourceMemory: resource.MustParse("1Gi"),
 			},
 			Limits: apiv1.ResourceList{
-				apiv1.ResourceCPU:    resource.MustParse("2"),
+				apiv1.ResourceCPU:    resource.MustParse("0.5"),
 				apiv1.ResourceMemory: resource.MustParse("1Gi"),
 			},
 		},
@@ -74,7 +74,7 @@ var (
 func toResources(value string) (*apiv1.ResourceRequirements, error) {
 	var rst apiv1.ResourceRequirements
 	if err := json.Unmarshal([]byte(value), &rst); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal %s into apiv1.ResourceRequirements: %w", value, err)
+		return nil, fmt.Errorf("unmarshaling %s into apiv1.ResourceRequirements: %w", value, err)
 	}
 	return &rst, nil
 }

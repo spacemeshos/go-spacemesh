@@ -44,7 +44,7 @@ push:
 
 .PHONY: template
 template:
-	@echo smesher=`cat $(smesher_config)` >> $(tmpfile)
+	@echo smesher=`cat $(smesher_config)` > $(tmpfile)
 	@echo poet=`cat $(poet_config)` >> $(tmpfile)
 	@echo cluster-size=$(size) >> $(tmpfile)
 	@echo bootstrap-duration=$(bootstrap) >> $(tmpfile)
