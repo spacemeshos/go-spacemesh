@@ -404,32 +404,25 @@ func (pd *ProtocolDriver) getBeacon(epoch types.EpochID) types.Beacon {
 }
 
 func (pd *ProtocolDriver) setBeacon(targetEpoch types.EpochID, beacon types.Beacon) error {
-	if err := pd.persistBeacon(targetEpoch, beacon); err != nil {
-		return err
+	if beacon == types.EmptyBeacon {
+		pd.logger.Fatal("invalid beacon")
 	}
+
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	if _, ok := pd.beacons[targetEpoch]; !ok {
-		pd.beacons[targetEpoch] = beacon
-	}
-	return nil
-}
 
-func (pd *ProtocolDriver) persistBeacon(epoch types.EpochID, beacon types.Beacon) error {
-	if err := beacons.Add(pd.cdb, epoch, beacon); err != nil {
-		if !errors.Is(err, sql.ErrObjectExists) {
-			pd.logger.With().Error("failed to persist beacon", epoch, beacon, log.Err(err))
-			return fmt.Errorf("persist beacon: %w", err)
-		}
-		// when syncing, multiple ballots come in concurrently and may cause beacon to be determined
-		// and persisted at the same time.
-		savedBeacon := pd.getBeacon(epoch)
-		if savedBeacon != beacon {
-			pd.logger.With().Error("trying to persist different beacon", epoch, beacon, log.String("saved_beacon", savedBeacon.ShortString()))
+	if savedBeacon, ok := pd.beacons[targetEpoch]; ok {
+		if beacon != savedBeacon {
 			return errDifferentBeacon
 		}
-		pd.logger.With().Debug("beacon already exists for epoch", epoch, beacon)
+		return nil
 	}
+
+	if err := beacons.Add(pd.cdb, targetEpoch, beacon); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		pd.logger.With().Error("failed to persist beacon", targetEpoch, beacon, log.Err(err))
+		return fmt.Errorf("persist beacon: %w", err)
+	}
+	pd.beacons[targetEpoch] = beacon
 	return nil
 }
 
@@ -463,6 +456,16 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 
 	if s, ok := pd.states[epoch]; ok {
 		return s, nil
+	}
+
+	// make sure this node has ATX in the last epoch and is eligible to participate in the beacon protocol
+	_, err := atxs.GetIDByEpochAndNodeID(pd.cdb, epoch-1, pd.nodeID)
+	if errors.Is(err, sql.ErrNotFound) {
+		pd.states[epoch] = nil
+		return nil, nil
+	} else if err != nil {
+		logger.With().Error("failed to get last epoch atx", log.Err(err))
+		return nil, fmt.Errorf("get last epoch atx: %w", err)
 	}
 
 	var (
@@ -508,8 +511,8 @@ func (pd *ProtocolDriver) setProposalTimeForNextEpoch() {
 
 func (pd *ProtocolDriver) setupEpoch(logger log.Log, epoch types.EpochID) (*state, error) {
 	s, err := pd.initEpochStateIfNotPresent(logger, epoch)
-	if err != nil {
-		return nil, err
+	if s == nil || err != nil {
+		return s, err
 	}
 
 	pd.mu.Lock()
@@ -608,20 +611,16 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) e
 		return errProtocolRunning
 	}
 
-	// make sure this node has ATX in the last epoch and is eligible to participate in the beacon protocol
-	atxID, err := atxs.GetIDByEpochAndNodeID(pd.cdb, epoch-1, pd.nodeID)
-	if err != nil {
-		logger.With().Info("not running beacon protocol: no own ATX in last epoch", log.Err(err))
-		return err
-	}
-
 	s, err := pd.setupEpoch(logger, epoch)
 	if err != nil {
 		logger.With().Error("failed to set up epoch", log.Err(err))
 		return err
 	}
-
-	logger.With().Info("participating beacon protocol with ATX", atxID)
+	if s == nil {
+		logger.With().Info("not eligible to run beacon protocol")
+		return nil
+	}
+	logger.With().Info("participating in beacon protocol")
 	pd.runProtocol(ctx, epoch, s)
 	return nil
 }

@@ -324,13 +324,6 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		return false, nil
 	}
 
-	var err error
-	beacon, err := h.beacons.GetBeacon(lid.GetEpoch())
-	if err != nil {
-		logger.Info("not starting hare: beacon not retrieved")
-		return false, nil
-	}
-
 	// call to start the calculation of active set size beforehand
 	h.eg.Go(func() error {
 		// this is called only for its side effects, but at least print the error if it returns one
@@ -354,6 +347,13 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 	if !h.broker.Synced(ctx, lid) {
 		// if not currently synced don't start consensus process
 		logger.Info("not starting hare: node not synced at this layer")
+		return false, nil
+	}
+
+	var err error
+	beacon, err := h.beacons.GetBeacon(lid.GetEpoch())
+	if err != nil {
+		logger.Info("not starting hare: beacon not retrieved")
 		return false, nil
 	}
 

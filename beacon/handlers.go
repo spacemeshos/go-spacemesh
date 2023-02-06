@@ -39,6 +39,10 @@ var (
 
 // HandleWeakCoinProposal handles weakcoin proposal from gossip.
 func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+	if pd.isClosed() || !pd.isInProtocol() {
+		return pubsub.ValidationIgnore
+	}
+
 	return pd.weakCoin.HandleProposal(ctx, peer, msg)
 }
 
@@ -77,8 +81,11 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, log.String("miner_id", m.NodeID.ShortString()))
 	logger.With().Debug("new beacon proposal", log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))))
 
-	if _, err := pd.initEpochStateIfNotPresent(logger, m.EpochID); err != nil {
+	if s, err := pd.initEpochStateIfNotPresent(logger, m.EpochID); err != nil {
 		return err
+	} else if s == nil {
+		logger.With().Debug("not participating in beacon protocol")
+		return errProtocolNotRunning
 	}
 
 	atxHeader, err := pd.verifyProposalMessage(logger, m)

@@ -305,7 +305,7 @@ func TestBeaconNoATXInPreviousEpoch(t *testing.T) {
 	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
 	lid := types.NewLayerID(types.GetLayersPerEpoch()*2 - 1)
 	createRandomATXs(t, tpd.cdb, lid, numATXs)
-	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(2)), sql.ErrNotFound)
+	require.NoError(t, tpd.onNewEpoch(context.Background(), types.EpochID(2)))
 
 	got, err := tpd.GetBeacon(types.EpochID(2))
 	require.NoError(t, err)
@@ -790,7 +790,7 @@ func TestBeacon_findMajorityBeacon_NoBeacon(t *testing.T) {
 	require.Equal(t, types.EmptyBeacon, got)
 }
 
-func TestBeacon_persistBeacon(t *testing.T) {
+func TestBeacon_setBeacon(t *testing.T) {
 	t.Parallel()
 
 	tpd := setUpProtocolDriver(t)
@@ -799,9 +799,9 @@ func TestBeacon_persistBeacon(t *testing.T) {
 	require.NoError(t, tpd.setBeacon(epoch, beacon))
 
 	// saving it again won't cause error
-	require.NoError(t, tpd.persistBeacon(epoch, beacon))
+	require.NoError(t, tpd.setBeacon(epoch, beacon))
 	// but saving a different one will
-	require.ErrorIs(t, tpd.persistBeacon(epoch, types.RandomBeacon()), errDifferentBeacon)
+	require.ErrorIs(t, tpd.setBeacon(epoch, types.RandomBeacon()), errDifferentBeacon)
 }
 
 func TestBeacon_atxThresholdFraction(t *testing.T) {

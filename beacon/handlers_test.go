@@ -357,6 +357,7 @@ func Test_handleProposal_NextEpoch(t *testing.T) {
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
+	createATX(t, tpd.cdb, nextEpoch.FirstLayer().Sub(1), tpd.edSigner, 10)
 	setEarliestProposalTime(tpd.ProtocolDriver, time.Now().Add(-1*time.Second))
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
 	tpd.mClock.EXPECT().LayerToTime((nextEpoch).FirstLayer()).Return(time.Now()).Times(1)

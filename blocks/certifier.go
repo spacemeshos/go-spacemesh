@@ -243,7 +243,10 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 		return errBeaconNotAvailable
 	}
 	nonce, err := c.nonceFetcher.VRFNonce(c.nodeID, lid.GetEpoch())
-	if err != nil {
+	if err != nil { // never submitted an atx, not eligible
+		if errors.Is(err, sql.ErrNotFound) {
+			return nil
+		}
 		return fmt.Errorf("failed to get own vrf nonce: %w", err)
 	}
 
