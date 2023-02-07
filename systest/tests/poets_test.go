@@ -77,7 +77,9 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 			tctx.Log.Debug("Poet killer is done")
 			return false, nil
 		}
-
+		if layer.Layer.GetStatus() != pb.Layer_LAYER_STATUS_APPLIED {
+			return true, nil
+		}
 		// don't kill a poet if this is not ~middle of epoch
 		if ((layer.Layer.GetNumber().GetNumber() + layersPerEpoch/2) % layersPerEpoch) != 0 {
 			return true, nil
