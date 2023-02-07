@@ -89,8 +89,9 @@ func TestAddNodes(t *testing.T) {
 			unique[proposal.Epoch.Value][prettyHex(proposal.Smesher.Id)] = struct{}{}
 		}
 	}
+	smeshers := cl.Total() - cl.Bootnodes()
 	for epoch := uint64(4); epoch <= epochBeforeJoin; epoch++ {
-		require.GreaterOrEqual(t, len(unique[epoch]), cl.Total()-addedLater, "epoch=%d", epoch)
+		require.GreaterOrEqual(t, len(unique[epoch]), smeshers-addedLater, "epoch=%d", epoch)
 	}
 	// condition is so that test waits until the first epoch where all smeshers participated.
 	// and if it finds such epoch, starting from that epoch all smeshers should consistently
@@ -98,11 +99,11 @@ func TestAddNodes(t *testing.T) {
 	// test should fail if such epoch wasn't found.
 	var joined uint64
 	for epoch := uint64(epochBeforeJoin) + 1; epoch <= lastEpoch; epoch++ {
-		if len(unique[epoch]) == cl.Total() {
+		if len(unique[epoch]) == smeshers {
 			joined = epoch
 		}
 		if joined != 0 && epoch >= joined {
-			require.Len(t, unique[epoch], cl.Total(), "epoch=%d", epoch)
+			require.Len(t, unique[epoch], smeshers, "epoch=%d", epoch)
 		}
 	}
 	require.NotEmpty(t, joined, "nodes weren't able to join the cluster")
