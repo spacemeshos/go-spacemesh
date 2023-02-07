@@ -506,10 +506,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx))
 
 	publishEpoch := posAtxLayer.GetEpoch() + 1
-	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(
-		func() types.LayerID {
-			return currLayer
-		}).AnyTimes()
+	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID { return currLayer }).AnyTimes()
 	tab.mhdlr.EXPECT().GetPosAtxID().Return(prevAtx.ID(), nil)
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
@@ -951,10 +948,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx))
 
 	publishEpoch := posAtxLayer.GetEpoch() + 1
-	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(
-		func() types.LayerID {
-			return currLayer
-		}).AnyTimes()
+	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID { return currLayer }).AnyTimes()
 	tab.mhdlr.EXPECT().GetPosAtxID().Return(prevAtx.ID(), nil)
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {

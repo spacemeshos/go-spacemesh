@@ -386,7 +386,7 @@ func (b *Builder) loop(ctx context.Context) {
 
 			switch {
 			case errors.Is(err, ErrATXChallengeExpired):
-				b.log.WithContext(ctx).Debug("discarding challenge")
+				b.log.WithContext(ctx).Debug("retrying with new challenge after waiting for a layer")
 				b.discardChallenge()
 				// give node some time to sync in case selecting the positioning ATX caused the challenge to expire
 				currentLayer := b.layerClock.CurrentLayer()
@@ -605,15 +605,8 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	case <-atxReceived:
 		logger.With().Info("received atx in db", atx.ID())
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
-		select {
-		case <-atxReceived:
-			logger.With().Info("received atx in db (in the last moment)", atx.ID())
-		case <-b.syncer.RegisterForATXSynced(): // ensure we've seen all ATXs before concluding that the ATX was lost
-			b.discardChallenge()
-			return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+		b.discardChallenge()
+		return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
 	case <-ctx.Done():
 		return ctx.Err()
 	}
