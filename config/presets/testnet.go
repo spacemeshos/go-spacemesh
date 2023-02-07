@@ -46,7 +46,6 @@ func testnet() config.Config {
 
 	conf.LayerAvgSize = 50
 	conf.SyncRequestTimeout = 60_000
-	conf.TickInterval = 5 * time.Second
 	conf.LayerDuration = 120 * time.Second
 	conf.LayersPerEpoch = 60
 

@@ -2,8 +2,7 @@
     "preset": "fastnet",
     "main": {
         "layers-per-epoch": 100,
-        "layer-duration": "18s",
-        "tick-interval": "1s"
+        "layer-duration": "18s"
     },
     "poet": {
         "phase-shift": "10m",

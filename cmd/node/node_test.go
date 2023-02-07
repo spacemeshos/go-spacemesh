@@ -559,7 +559,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 		// Speed things up a little
 		app.Config.SyncInterval = 1
-		app.Config.TickInterval = 100 * time.Millisecond
 		app.Config.LayerDuration = 2 * time.Second
 		app.Config.DataDirParent = path
 		app.Config.LOGGING = cfg.LOGGING
@@ -688,7 +687,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// syncer will cause the node to go out of sync (and not listen to gossip)
 		// since we are testing single-node transaction service, we don't need the syncer to run
 		app.Config.SyncInterval = 1000000
-		app.Config.TickInterval = 100 * time.Millisecond
 		app.Config.LayerDuration = 2 * time.Second
 
 		app.Config.Genesis = &config.GenesisConfig{
