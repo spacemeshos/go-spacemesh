@@ -34,7 +34,7 @@ func (s *Syncer) stateSynced() bool {
 
 func (s *Syncer) processLayers(ctx context.Context) error {
 	ctx = log.WithNewSessionID(ctx)
-	if !s.ticker.GetCurrentLayer().After(types.GetEffectiveGenesis()) {
+	if !s.ticker.CurrentLayer().After(types.GetEffectiveGenesis()) {
 		return nil
 	}
 	if !s.ListenToATXGossip() {
