@@ -246,6 +246,7 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 	require.NoError(t, err)
 	activation.SignAndFinalizeAtx(signer, atx)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
 	vatx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	return vatx
@@ -276,7 +277,7 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			if !tc.missingData {
 				for i := 0; i < 10; i++ {
 					vatx := newAtx(t, epoch)
-					require.NoError(t, atxs.Add(th.cdb, vatx, time.Now()))
+					require.NoError(t, atxs.Add(th.cdb, vatx))
 					expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
 				}
 			}

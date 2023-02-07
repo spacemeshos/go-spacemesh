@@ -167,9 +167,10 @@ func TestReferenceHeight(t *testing.T) {
 				require.NoError(t, err)
 				require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
 				atx.SetEffectiveNumUnits(atx.NumUnits)
+				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(0, uint64(height))
 				require.NoError(t, err)
-				require.NoError(t, atxs.Add(cdb, vAtx, time.Time{}))
+				require.NoError(t, atxs.Add(cdb, vAtx))
 			}
 			_, height, err := extractAtxsData(cdb, types.EpochID(tc.epoch))
 			require.NoError(t, err)

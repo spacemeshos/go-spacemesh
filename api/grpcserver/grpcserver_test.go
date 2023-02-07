@@ -184,6 +184,7 @@ func TestMain(m *testing.M) {
 
 	atx := types.NewActivationTx(challenge, &nodeID, addr1, nipost, numUnits, nil, nil)
 	atx.SetEffectiveNumUnits(numUnits)
+	atx.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx); err != nil {
 		log.Println("failed to sign atx:", err)
 		os.Exit(1)
@@ -196,6 +197,7 @@ func TestMain(m *testing.M) {
 
 	atx2 := types.NewActivationTx(challenge, &nodeID, addr2, nipost, numUnits, nil, nil)
 	atx2.SetEffectiveNumUnits(numUnits)
+	atx2.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx2); err != nil {
 		log.Println("failed to sign atx:", err)
 		os.Exit(1)

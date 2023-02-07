@@ -480,9 +480,10 @@ func TestComputeExpectedWeight(t *testing.T) {
 				atx.SetID(&id)
 				atx.SetNodeID(&types.NodeID{})
 				atx.SetEffectiveNumUnits(atx.NumUnits)
+				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(0, 1)
 				require.NoError(t, err)
-				require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+				require.NoError(t, atxs.Add(cdb, vAtx))
 			}
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
 				weight, _, err := extractAtxsData(cdb, lid.GetEpoch())
@@ -1523,9 +1524,10 @@ func TestComputeBallotWeight(t *testing.T) {
 				atxID := types.RandomATXID()
 				atx.SetID(&atxID)
 				atx.SetEffectiveNumUnits(atx.NumUnits)
+				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(0, 1)
 				require.NoError(t, err)
-				require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+				require.NoError(t, atxs.Add(cdb, vAtx))
 				atxids = append(atxids, atxID)
 			}
 
@@ -2749,9 +2751,10 @@ func TestEncodeVotes(t *testing.T) {
 		atx.SetID(&atxid)
 		atx.SetNodeID(&types.NodeID{1})
 		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vatx, err := atx.Verify(1, 1)
 		require.NoError(t, err)
-		require.NoError(t, atxs.Add(cdb, vatx, time.Now()))
+		require.NoError(t, atxs.Add(cdb, vatx))
 
 		ballot.EpochData = &types.EpochData{ActiveSet: []types.ATXID{atxid}}
 		ballot.AtxID = atxid

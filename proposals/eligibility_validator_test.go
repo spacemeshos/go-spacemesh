@@ -48,9 +48,10 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 	atx.SetID(&activeset[0])
 	atx.SetNodeID(&nid)
 	atx.SetEffectiveNumUnits(testedATXUnit)
+	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+	require.NoError(t, atxs.Add(cdb, vAtx))
 
 	for _, id := range activeset[1:] {
 		nodeID := types.RandomNodeID()
@@ -63,9 +64,10 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 		atx.SetID(&id)
 		atx.SetNodeID(&nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
-		require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+		require.NoError(t, atxs.Add(cdb, vAtx))
 	}
 	return activeset
 }
@@ -257,9 +259,10 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 	nodeID := signer.NodeID()
 	atx.SetNodeID(&nodeID)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(tv.cdb, vAtx, time.Now()))
+	require.NoError(t, atxs.Add(tv.cdb, vAtx))
 
 	for _, id := range rb.EpochData.ActiveSet[1:] {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
@@ -271,9 +274,10 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 		atx.SetID(&id)
 		atx.SetNodeID(&types.NodeID{})
 		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
-		require.NoError(t, atxs.Add(tv.cdb, vAtx, time.Now()))
+		require.NoError(t, atxs.Add(tv.cdb, vAtx))
 	}
 	eligible, err := tv.CheckEligibility(context.Background(), blts[1])
 	require.ErrorIs(t, err, errTargetEpochMismatch)
@@ -460,8 +464,8 @@ func TestCheckEligibility_AtxNotIncluded(t *testing.T) {
 	atx2.SetID(&types.ATXID{2})
 	atx2.SetNodeID(&types.NodeID{})
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
-	require.NoError(t, atxs.Add(tv.cdb, atx1, time.Time{}))
-	require.NoError(t, atxs.Add(tv.cdb, atx2, time.Time{}))
+	require.NoError(t, atxs.Add(tv.cdb, atx1))
+	require.NoError(t, atxs.Add(tv.cdb, atx2))
 
 	ballot := &types.Ballot{}
 	ballot.EligibilityProofs = []types.VotingEligibility{{}}

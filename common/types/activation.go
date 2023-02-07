@@ -202,9 +202,10 @@ type InnerActivationTx struct {
 	VRFNonce    *VRFPostIndex
 
 	// the following fields are kept private and from being serialized
-	id                *ATXID  // non-exported cache of the ATXID
-	nodeID            *NodeID // the id of the Node that created the ATX (public key)
-	effectiveNumUnits uint32  // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
+	id                *ATXID    // non-exported cache of the ATXID
+	nodeID            *NodeID   // the id of the Node that created the ATX (public key)
+	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
+	received          time.Time // time received by node, gossiped or synced
 }
 
 // ATXMetadata is the signed data of ActivationTx.
@@ -385,6 +386,14 @@ func (atx *ActivationTx) SetEffectiveNumUnits(numUnits uint32) {
 	atx.effectiveNumUnits = numUnits
 }
 
+func (atx *ActivationTx) SetReceived(received time.Time) {
+	atx.received = received
+}
+
+func (atx *ActivationTx) Received() time.Time {
+	return atx.received
+}
+
 // Verify an ATX for a given base TickHeight and TickCount.
 func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActivationTx, error) {
 	if atx.id == nil {
@@ -399,6 +408,9 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 	}
 	if atx.effectiveNumUnits == 0 {
 		return nil, fmt.Errorf("effective num units not set")
+	}
+	if atx.received.IsZero() {
+		return nil, fmt.Errorf("received time not set")
 	}
 	vAtx := &VerifiedActivationTx{
 		ActivationTx: atx,

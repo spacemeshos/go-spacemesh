@@ -138,11 +138,12 @@ func createModifiedATXs(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerI
 			nil,
 		)
 		atx.SetEffectiveNumUnits(numUnit)
+		atx.SetReceived(time.Now())
 		require.NoError(tb, activation.SignAndFinalizeAtx(signer, atx))
 		vAtx, err := onAtx(atx)
 		require.NoError(tb, err)
 
-		require.NoError(tb, atxs.Add(cdb, vAtx, time.Now()))
+		require.NoError(tb, atxs.Add(cdb, vAtx))
 		atxes = append(atxes, atx)
 	}
 	return signers, atxes
