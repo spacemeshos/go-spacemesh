@@ -388,7 +388,13 @@ func (b *Builder) loop(ctx context.Context) {
 			case errors.Is(err, ErrATXChallengeExpired):
 				b.log.WithContext(ctx).Debug("discarding challenge")
 				b.discardChallenge()
-				// can be retried immediately with a new challenge
+				// give node some time to sync in case selecting the positioning ATX caused the challenge to expire
+				currentLayer := b.layerClock.CurrentLayer()
+				select {
+				case <-ctx.Done():
+					return
+				case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
+				}
 			case errors.Is(err, ErrPoetServiceUnstable):
 				b.log.WithContext(ctx).Debug("retrying after poet retry interval")
 				select {
@@ -425,6 +431,11 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		PositioningATX: atxID,
 		PubLayerID:     pubLayerID.Add(b.layersPerEpoch),
 	}
+	if challenge.TargetEpoch() < b.currentEpoch() {
+		b.discardChallenge()
+		return nil, fmt.Errorf("%w: selected outdated positioning ATX", ErrATXChallengeExpired)
+	}
+
 	if prevAtx, err := b.cdb.GetLastAtx(b.nodeID); err != nil {
 		commitmentAtx, err := b.getCommitmentAtx(ctx)
 		if err != nil {
@@ -720,7 +731,7 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
 			b.log.With().Info("using golden atx as positioning atx", b.goldenATXID)
-			return b.goldenATXID, types.LayerID{}, nil
+			return b.goldenATXID, types.NewLayerID(0), nil
 		}
 		return types.ATXID{}, types.LayerID{}, fmt.Errorf("cannot find pos atx: %w", err)
 	}
