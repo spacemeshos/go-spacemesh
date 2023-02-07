@@ -118,14 +118,13 @@ func (t *NodeClock) tick() {
 	}
 
 	layer := t.TimeToLayer(t.clock.Now())
-	if layer.Before(t.lastTicked) {
+	switch {
+	case layer.Before(t.lastTicked):
 		t.log.With().Info("clock ticked back in time",
 			log.Stringer("layer", layer),
 			log.Stringer("last_ticked_layer", t.lastTicked),
 		)
-	}
-
-	if layer.Difference(t.lastTicked) > 1 {
+	case layer.Difference(t.lastTicked) > 1:
 		t.log.With().Warning("clock skipped layers",
 			log.Stringer("layer", layer),
 			log.Stringer("last_ticked_layer", t.lastTicked),
