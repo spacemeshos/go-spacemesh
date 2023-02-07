@@ -325,6 +325,7 @@ func getHeader(vatx *types.VerifiedActivationTx) *types.ActivationTxHeader {
 		NumUnits:          vatx.NumUnits,
 		EffectiveNumUnits: vatx.EffectiveNumUnits(),
 		VRFNonce:          vatx.VRFNonce,
+		Received:          vatx.Received(),
 
 		ID:     vatx.ID(),
 		NodeID: vatx.NodeID(),

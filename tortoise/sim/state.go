@@ -2,7 +2,6 @@ package sim
 
 import (
 	"errors"
-	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -38,7 +37,7 @@ func (s *State) OnBeacon(eid types.EpochID, beacon types.Beacon) {
 
 // OnActivationTx callback to store activation transaction.
 func (s *State) OnActivationTx(atx *types.VerifiedActivationTx) {
-	if err := atxs.Add(s.DB, atx, time.Now()); err != nil {
+	if err := atxs.Add(s.DB, atx); err != nil {
 		s.logger.With().Panic("failed to add atx", log.Err(err))
 	}
 }

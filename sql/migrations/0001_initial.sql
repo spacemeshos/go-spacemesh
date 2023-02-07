@@ -109,7 +109,7 @@ CREATE TABLE atxs
     tick_count          UNSIGNED LONG INT,
     smesher             CHAR(32),
     atx                 BLOB,
-    timestamp           INT NOT NULL
+    received            INT NOT NULL
 ) WITHOUT ROWID;
 CREATE INDEX atxs_by_smesher_by_epoch_desc ON atxs (smesher, epoch desc);
 CREATE INDEX atxs_by_epoch_by_pubkey ON atxs (epoch, smesher);

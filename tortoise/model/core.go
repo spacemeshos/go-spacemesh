@@ -146,6 +146,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			c.logger.With().Fatal("failed to sign atx", log.Err(err))
 		}
 		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(1, 2)
 		if err != nil {
 			c.logger.With().Fatal("failed to verify atx", log.Err(err))
@@ -169,7 +170,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		if err != nil {
 			panic(err)
 		}
-		atxs.Add(c.cdb, vAtx, time.Now())
+		atxs.Add(c.cdb, vAtx)
 	case MessageBeacon:
 		c.beacons.StoreBeacon(ev.EpochID, ev.Beacon)
 	case MessageCoinflip:

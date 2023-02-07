@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 type category uint8
@@ -94,21 +93,13 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 	return pd.addProposal(m, cat)
 }
 
-func (pd *ProtocolDriver) classifyProposal(logger log.Log, m ProposalMessage, atx *types.ActivationTxHeader, receivedTime time.Time) (category, error) {
-	minerID := m.NodeID.ShortString()
-	// TODO: include timestamp in ATX header
-	atxTimestamp, err := atxs.GetTimestamp(pd.cdb, atx.ID)
-	if err != nil {
-		logger.With().Warning("[proposal] failed to get ATX timestamp", atx.ID, log.Err(err))
-		return invalid, fmt.Errorf("[proposal] get ATX timestamp (miner ID %v, ATX ID %v): %w", minerID, atx.ID, err)
-	}
-
-	atxEpoch := atx.PublishEpoch()
+func (pd *ProtocolDriver) classifyProposal(logger log.Log, m ProposalMessage, atxHeader *types.ActivationTxHeader, receivedTime time.Time) (category, error) {
+	atxEpoch := atxHeader.PublishEpoch()
 	nextEpochStart := pd.clock.LayerToTime((atxEpoch + 1).FirstLayer())
 
 	logger = logger.WithFields(
-		log.String("proposal", hex.EncodeToString(m.VRFSignature)),
-		log.Time("atx_timestamp", atxTimestamp),
+		log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))),
+		log.Time("atx_timestamp", atxHeader.Received),
 		log.Stringer("next_epoch_start", nextEpochStart),
 		log.Time("received_time", receivedTime),
 		log.Duration("grace_period", pd.config.GracePeriodDuration),
@@ -123,7 +114,7 @@ func (pd *ProtocolDriver) classifyProposal(logger log.Log, m ProposalMessage, at
 	// it cannot be late for any honest user (and vice versa).
 
 	var (
-		atxDelay      = atxTimestamp.Sub(nextEpochStart)
+		atxDelay      = atxHeader.Received.Sub(nextEpochStart)
 		endTime       = pd.getProposalPhaseFinishedTime(m.EpochID)
 		proposalDelay time.Duration
 	)
