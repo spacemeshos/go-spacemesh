@@ -5,10 +5,12 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
 // NodeClock is the struct holding a real clock.
@@ -105,6 +107,14 @@ func (t *NodeClock) Close() {
 	})
 }
 
+var tickDistance = metrics.NewHistogramWithBuckets(
+	"tick_distance",
+	"clock",
+	"distance between layer ticks, if it is > 1 there are huge problems",
+	[]string{},
+	prometheus.ExponentialBuckets(1, 2, 10),
+).WithLabelValues()
+
 // tick processes the current tick. It iterates over all layers that have passed since the last tick and notifies
 // listeners that are awaiting these layers.
 func (t *NodeClock) tick() {
@@ -117,6 +127,16 @@ func (t *NodeClock) tick() {
 
 	layer := t.TimeToLayer(t.clock.Now())
 
+	d := layer.Difference(t.lastTickedLayer)
+	if d > 1 {
+		t.log.Warning("tick is too late",
+			log.Stringer("current", layer),
+			log.Stringer("last", t.lastTickedLayer),
+		)
+	}
+	if d != 0 {
+		tickDistance.Observe(float64(d))
+	}
 	// close await channel for prev layers
 	for l := t.lastTickedLayer; !l.After(layer); l = l.Add(1) {
 		if layerChan, found := t.layerChannels[l]; found {
