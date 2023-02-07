@@ -28,7 +28,7 @@ type eligibilityChecker interface {
 
 type layerClock interface {
 	LayerToTime(types.LayerID) time.Time
-	GetCurrentLayer() types.LayerID
+	CurrentLayer() types.LayerID
 	AwaitLayer(types.LayerID) chan struct{}
 }
 

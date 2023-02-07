@@ -38,18 +38,18 @@ func (m *MocklayerTicker) EXPECT() *MocklayerTickerMockRecorder {
 	return m.recorder
 }
 
-// GetCurrentLayer mocks base method.
-func (m *MocklayerTicker) GetCurrentLayer() types.LayerID {
+// CurrentLayer mocks base method.
+func (m *MocklayerTicker) CurrentLayer() types.LayerID {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCurrentLayer")
+	ret := m.ctrl.Call(m, "CurrentLayer")
 	ret0, _ := ret[0].(types.LayerID)
 	return ret0
 }
 
-// GetCurrentLayer indicates an expected call of GetCurrentLayer.
-func (mr *MocklayerTickerMockRecorder) GetCurrentLayer() *gomock.Call {
+// CurrentLayer indicates an expected call of CurrentLayer.
+func (mr *MocklayerTickerMockRecorder) CurrentLayer() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentLayer", reflect.TypeOf((*MocklayerTicker)(nil).GetCurrentLayer))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentLayer", reflect.TypeOf((*MocklayerTicker)(nil).CurrentLayer))
 }
 
 // MockmeshProvider is a mock of meshProvider interface.

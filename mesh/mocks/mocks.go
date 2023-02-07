@@ -183,16 +183,16 @@ func (m *MocklayerClock) EXPECT() *MocklayerClockMockRecorder {
 	return m.recorder
 }
 
-// GetCurrentLayer mocks base method.
-func (m *MocklayerClock) GetCurrentLayer() types.LayerID {
+// CurrentLayer mocks base method.
+func (m *MocklayerClock) CurrentLayer() types.LayerID {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCurrentLayer")
+	ret := m.ctrl.Call(m, "CurrentLayer")
 	ret0, _ := ret[0].(types.LayerID)
 	return ret0
 }
 
-// GetCurrentLayer indicates an expected call of GetCurrentLayer.
-func (mr *MocklayerClockMockRecorder) GetCurrentLayer() *gomock.Call {
+// CurrentLayer indicates an expected call of CurrentLayer.
+func (mr *MocklayerClockMockRecorder) CurrentLayer() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentLayer", reflect.TypeOf((*MocklayerClock)(nil).GetCurrentLayer))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentLayer", reflect.TypeOf((*MocklayerClock)(nil).CurrentLayer))
 }
