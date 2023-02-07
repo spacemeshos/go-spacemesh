@@ -19,9 +19,10 @@ type NodeClock struct {
 	genesis      time.Time
 	tickInterval time.Duration
 
-	mu                sync.Mutex    // protects the following fields
-	firstAwaitedLayer types.LayerID // track last ticked layer
-	layerChannels     map[types.LayerID]chan struct{}
+	mu            sync.Mutex    // protects the following fields
+	lastTicked    types.LayerID // track last ticked layer
+	minLayer      types.LayerID // track earliest layer that has a channel waiting for tick
+	layerChannels map[types.LayerID]chan struct{}
 
 	stop chan struct{}
 	once sync.Once
@@ -117,23 +118,30 @@ func (t *NodeClock) tick() {
 	}
 
 	layer := t.TimeToLayer(t.clock.Now())
-	if layer.Before(t.firstAwaitedLayer) {
+	if layer.Before(t.lastTicked) {
 		t.log.With().Info("clock ticked back in time",
 			log.Stringer("layer", layer),
-			log.Stringer("last_ticked_layer", t.firstAwaitedLayer),
+			log.Stringer("last_ticked_layer", t.lastTicked),
 		)
-		return
+	}
+
+	if layer.Difference(t.lastTicked) > 1 {
+		t.log.With().Warning("clock skipped layers",
+			log.Stringer("layer", layer),
+			log.Stringer("last_ticked_layer", t.lastTicked),
+		)
 	}
 
 	// close await channel for prev layers
-	for l := t.firstAwaitedLayer; !l.After(layer); l = l.Add(1) {
+	for l := t.minLayer; !l.After(layer); l = l.Add(1) {
 		if layerChan, found := t.layerChannels[l]; found {
 			close(layerChan)
 			delete(t.layerChannels, l)
 		}
 	}
 
-	t.firstAwaitedLayer = layer
+	t.lastTicked = layer
+	t.minLayer = layer.Add(1)
 }
 
 // CurrentLayer gets the current layer.
@@ -161,8 +169,8 @@ func (t *NodeClock) AwaitLayer(layerID types.LayerID) chan struct{} {
 		t.layerChannels[layerID] = ch
 	}
 
-	if t.firstAwaitedLayer.After(layerID) {
-		t.firstAwaitedLayer = layerID
+	if t.minLayer.After(layerID) {
+		t.minLayer = layerID
 	}
 
 	return ch
