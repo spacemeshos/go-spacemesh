@@ -183,6 +183,56 @@ func Test_NodeClock_Await_PassedLayer(t *testing.T) {
 	}
 }
 
+func Test_NodeClock_Await_WithClockMovingBackwards(t *testing.T) {
+	now := time.Now()
+	genesis := now.Add(-1 * time.Second)
+	layerDuration := 100 * time.Millisecond
+	tickInterval := 10 * time.Millisecond
+
+	mClock := clock.NewMock()
+	mClock.Set(now)
+
+	clock, err := NewClock(
+		withClock(mClock),
+		WithLayerDuration(layerDuration),
+		WithTickInterval(tickInterval),
+		WithGenesisTime(genesis),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, clock)
+
+	// make the clock tick
+	clock.tick()
+
+	select {
+	case <-clock.AwaitLayer(types.NewLayerID(10)):
+		require.Greater(t, time.Now(), genesis.Add(10*layerDuration))
+	default:
+		require.Fail(t, "awaited layer didn't signal")
+	}
+
+	// move the clock backwards by a layer
+	mClock.Set(now.Add(-2 * layerDuration))
+	ch := clock.AwaitLayer(types.NewLayerID(9))
+
+	select {
+	case <-ch:
+		require.Fail(t, "awaited layer shouldn't have signaled")
+	default:
+	}
+
+	// continue clock forward in time
+	mClock.Add(3 * layerDuration)
+
+	select {
+	case <-ch:
+		require.Greater(t, time.Now(), genesis.Add(9*layerDuration))
+	default:
+		require.Fail(t, "awaited layer didn't signal")
+	}
+}
+
 func Test_NodeClock_NonMonotonicTick_Forward(t *testing.T) {
 	genesis := time.Now()
 	layerDuration := 100 * time.Millisecond
