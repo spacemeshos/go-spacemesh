@@ -124,18 +124,20 @@ func (t *NodeClock) tick() {
 	if t.clock.Now().Before(t.genesis) {
 		return
 	}
-
 	layer := t.TimeToLayer(t.clock.Now())
 
-	d := layer.Difference(t.lastTickedLayer)
-	if d > 1 {
-		t.log.Warning("tick is too late",
-			log.Stringer("current", layer),
-			log.Stringer("last", t.lastTickedLayer),
-		)
-	}
-	if d != 0 {
-		tickDistance.Observe(float64(d))
+	// why it fails in tests?
+	if !layer.Before(t.lastTickedLayer) {
+		d := layer.Difference(t.lastTickedLayer)
+		if d > 1 {
+			t.log.Warning("tick is too late",
+				log.Stringer("current", layer),
+				log.Stringer("last", t.lastTickedLayer),
+			)
+		}
+		if d != 0 {
+			tickDistance.Observe(float64(d))
+		}
 	}
 	// close await channel for prev layers
 	for l := t.lastTickedLayer; !l.After(layer); l = l.Add(1) {
