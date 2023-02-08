@@ -520,28 +520,30 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	port := 1240
 	path := t.TempDir()
 
-	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), logtest.New(t))
+	clock, err := timesync.NewClock(
+		timesync.WithLayerDuration(1*time.Second),
+		timesync.WithTickInterval(1*time.Second/10),
+		timesync.WithGenesisTime(time.Now()),
+		timesync.WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
 	mesh, err := mocknet.WithNPeers(1)
 	require.NoError(t, err)
 	cfg := getTestDefaultConfig()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	poetHarness, err := activation.NewHTTPPoetHarness(ctx)
+	poetHarness, err := activation.NewHTTPPoetHarness(ctx, t.TempDir())
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		err := poetHarness.Teardown(true)
-		if assert.NoError(t, err, "failed to tear down harness") {
-			t.Log("harness torn down")
-		}
-	})
+
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	h, err := p2p.Upgrade(mesh.Hosts()[0], cfg.Genesis.GenesisID())
 	require.NoError(t, err)
 	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
 		path, eligibility.New(logtest.New(t)),
-		poetHarness.HTTPPoetClient, clock, h, edSgn)
+		poetHarness.HTTPPoetClient, clock, h, edSgn,
+	)
 	require.NoError(t, err)
 
 	appCtx, appCancel := context.WithCancel(context.Background())
@@ -1012,7 +1014,7 @@ func getTestDefaultConfig() *config.Config {
 // initSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
 func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle,
-	poetClient *activation.HTTPPoetClient, clock TickProvider, host *p2p.Host, edSgn *signing.EdSigner,
+	poetClient *activation.HTTPPoetClient, clock NodeClock, host *p2p.Host, edSgn *signing.EdSigner,
 ) (*App, error) {
 	smApp := New(WithLog(lg))
 	smApp.Config = &cfg

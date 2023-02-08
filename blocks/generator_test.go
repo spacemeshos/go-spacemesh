@@ -51,24 +51,26 @@ func testConfig() Config {
 
 type testGenerator struct {
 	*Generator
-	mockMesh  *mocks.MockmeshProvider
-	mockExec  *mocks.Mockexecutor
-	mockFetch *smocks.MockProposalFetcher
-	mockCert  *mocks.Mockcertifier
+	mockMesh   *mocks.MockmeshProvider
+	mockExec   *mocks.Mockexecutor
+	mockFetch  *smocks.MockProposalFetcher
+	mockCert   *mocks.Mockcertifier
+	mockPatrol *mocks.MocklayerPatrol
 }
 
 func createTestGenerator(t *testing.T) *testGenerator {
 	types.SetLayersPerEpoch(3)
 	ctrl := gomock.NewController(t)
 	tg := &testGenerator{
-		mockMesh:  mocks.NewMockmeshProvider(ctrl),
-		mockExec:  mocks.NewMockexecutor(ctrl),
-		mockFetch: smocks.NewMockProposalFetcher(ctrl),
-		mockCert:  mocks.NewMockcertifier(ctrl),
+		mockMesh:   mocks.NewMockmeshProvider(ctrl),
+		mockExec:   mocks.NewMockexecutor(ctrl),
+		mockFetch:  smocks.NewMockProposalFetcher(ctrl),
+		mockCert:   mocks.NewMockcertifier(ctrl),
+		mockPatrol: mocks.NewMocklayerPatrol(ctrl),
 	}
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	tg.Generator = NewGenerator(cdb, tg.mockExec, tg.mockMesh, tg.mockFetch, tg.mockCert,
+	tg.Generator = NewGenerator(cdb, tg.mockExec, tg.mockMesh, tg.mockFetch, tg.mockCert, tg.mockPatrol,
 		WithGeneratorLogger(lg),
 		WithHareOutputChan(make(chan hare.LayerOutput, 100)),
 		WithConfig(testConfig()))
@@ -135,11 +137,13 @@ func createModifiedATXs(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerI
 			nil,
 			nil,
 		)
+		atx.SetEffectiveNumUnits(numUnit)
+		atx.SetReceived(time.Now())
 		require.NoError(tb, activation.SignAndFinalizeAtx(signer, atx))
 		vAtx, err := onAtx(atx)
 		require.NoError(tb, err)
 
-		require.NoError(tb, atxs.Add(cdb, vAtx, time.Now()))
+		require.NoError(tb, atxs.Add(cdb, vAtx))
 		atxes = append(atxes, atx)
 	}
 	return signers, atxes
@@ -248,6 +252,7 @@ func Test_SerialProcessing(t *testing.T) {
 				wg.Done()
 				return nil
 			})
+		tg.mockPatrol.EXPECT().CompleteHare(lid)
 	}
 
 	tg.hareCh <- hare.LayerOutput{
@@ -304,7 +309,7 @@ func Test_processHareOutput(t *testing.T) {
 			if tc.optimistic {
 				meshHash = types.RandomHash()
 			}
-			require.NoError(t, layers.SetHashes(tg.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
+			require.NoError(t, layers.SetMeshHash(tg.cdb, layerID.Sub(1), meshHash))
 			// create multiple proposals with overlapping TXs
 			numProposals := 10
 			txIDs := createAndSaveTxs(t, numTXs, tg.cdb)
@@ -397,12 +402,12 @@ func Test_processHareOutput_corner_cases(t *testing.T) {
 
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids).Return(nil).AnyTimes()
 	t.Run("node mesh differ from consensus", func(t *testing.T) {
-		require.NoError(t, layers.SetHashes(tg.cdb, layerID.Sub(1), types.RandomHash(), types.RandomHash()))
+		require.NoError(t, layers.SetMeshHash(tg.cdb, layerID.Sub(1), types.RandomHash()))
 		require.ErrorIs(t, tg.processHareOutput(hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}), errNodeHasBadMeshHash)
 	})
 
 	t.Run("execute failed", func(t *testing.T) {
-		require.NoError(t, layers.SetHashes(tg.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
+		require.NoError(t, layers.SetMeshHash(tg.cdb, layerID.Sub(1), meshHash))
 		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, lid types.LayerID, tickHeight uint64, rewards []types.AnyReward, tids []types.TransactionID) (*types.Block, error) {
 				require.Len(t, tids, len(txIDs))

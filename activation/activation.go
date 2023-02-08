@@ -112,7 +112,7 @@ func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 }
 
 // PoETClientInitializer interfaces for creating PoetProvingServiceClient.
-type PoETClientInitializer func(string) PoetProvingServiceClient
+type PoETClientInitializer func(string, PoetConfig) PoetProvingServiceClient
 
 // WithPoETClientInitializer modifies initialization logic for PoET client. Used during client update.
 func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption {
@@ -282,7 +282,7 @@ func (b *Builder) run(ctx context.Context) {
 
 func (b *Builder) generateProof(ctx context.Context) error {
 	// don't generate the commitment every time smeshing is starting, but once only.
-	if _, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
+	if _, err := b.cdb.GetLastAtx(b.nodeID); err != nil {
 		// Once initialized, run the execution phase with zero-challenge,
 		// to create the initial proof (the commitment).
 		startTime := time.Now()
@@ -299,12 +299,12 @@ func (b *Builder) generateProof(ctx context.Context) error {
 // waitForFirstATX waits until the first ATX can be published. The return value indicates
 // if the function waited or not (for testing).
 func (b *Builder) waitForFirstATX(ctx context.Context) bool {
-	currentLayer := b.layerClock.GetCurrentLayer()
+	currentLayer := b.layerClock.CurrentLayer()
 	currEpoch := currentLayer.GetEpoch()
 	if currEpoch == 0 { // genesis miner
 		return false
 	}
-	if prev, err := b.cdb.GetPrevAtx(b.nodeID); err == nil {
+	if prev, err := b.cdb.GetLastAtx(b.nodeID); err == nil {
 		if prev.PublishEpoch() == currEpoch {
 			// miner has published in the current epoch
 			return false
@@ -354,8 +354,8 @@ func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 	case <-timer.C:
 	}
 	b.log.WithContext(ctx).With().Info("ready to build first atx",
-		log.Stringer("current_layer", b.layerClock.GetCurrentLayer()),
-		log.Stringer("current_epoch", b.layerClock.GetCurrentLayer().GetEpoch()))
+		log.Stringer("current_layer", b.layerClock.CurrentLayer()),
+		log.Stringer("current_epoch", b.layerClock.CurrentLayer().GetEpoch()))
 	return true
 }
 
@@ -379,7 +379,7 @@ func (b *Builder) loop(ctx context.Context) {
 			}
 
 			b.log.WithContext(ctx).With().Error("error attempting to publish atx",
-				b.layerClock.GetCurrentLayer(),
+				b.layerClock.CurrentLayer(),
 				b.currentEpoch(),
 				log.Err(err),
 			)
@@ -399,7 +399,7 @@ func (b *Builder) loop(ctx context.Context) {
 			default:
 				b.log.WithContext(ctx).With().Warning("unknown error", log.Err(err))
 				// other failures are related to in-process software. we may as well panic here
-				currentLayer := b.layerClock.GetCurrentLayer()
+				currentLayer := b.layerClock.CurrentLayer()
 				select {
 				case <-ctx.Done():
 					return
@@ -425,7 +425,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		PositioningATX: atxID,
 		PubLayerID:     pubLayerID.Add(b.layersPerEpoch),
 	}
-	if prevAtx, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
+	if prevAtx, err := b.cdb.GetLastAtx(b.nodeID); err != nil {
 		commitmentAtx, err := b.getCommitmentAtx(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get commitment ATX: %w", err)
@@ -456,7 +456,7 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 
 	clients := make([]PoetProvingServiceClient, 0, len(endpoints))
 	for _, endpoint := range endpoints {
-		client := b.poetClientInitializer(endpoint)
+		client := b.poetClientInitializer(endpoint, b.poetCfg)
 		// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
 		// Maybe it should be provided during update.
 		ctx, cancel := context.WithTimeout(ctx, time.Second*10)
@@ -642,7 +642,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	b.log.With().Info("awaiting atx publication epoch",
 		log.FieldNamed("pub_epoch", pubEpoch),
 		log.FieldNamed("pub_epoch_first_layer", pubEpoch.FirstLayer()),
-		log.FieldNamed("current_layer", b.layerClock.GetCurrentLayer()),
+		log.FieldNamed("current_layer", b.layerClock.CurrentLayer()),
 	)
 	select {
 	case <-ctx.Done():
@@ -693,7 +693,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 }
 
 func (b *Builder) currentEpoch() types.EpochID {
-	return b.layerClock.GetCurrentLayer().GetEpoch()
+	return b.layerClock.CurrentLayer().GetEpoch()
 }
 
 func (b *Builder) discardChallenge() {

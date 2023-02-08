@@ -13,6 +13,41 @@ import (
 	log "github.com/spacemeshos/go-spacemesh/log"
 )
 
+// MocklayerPatrol is a mock of layerPatrol interface.
+type MocklayerPatrol struct {
+	ctrl     *gomock.Controller
+	recorder *MocklayerPatrolMockRecorder
+}
+
+// MocklayerPatrolMockRecorder is the mock recorder for MocklayerPatrol.
+type MocklayerPatrolMockRecorder struct {
+	mock *MocklayerPatrol
+}
+
+// NewMocklayerPatrol creates a new mock instance.
+func NewMocklayerPatrol(ctrl *gomock.Controller) *MocklayerPatrol {
+	mock := &MocklayerPatrol{ctrl: ctrl}
+	mock.recorder = &MocklayerPatrolMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocklayerPatrol) EXPECT() *MocklayerPatrolMockRecorder {
+	return m.recorder
+}
+
+// CompleteHare mocks base method.
+func (m *MocklayerPatrol) CompleteHare(arg0 types.LayerID) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CompleteHare", arg0)
+}
+
+// CompleteHare indicates an expected call of CompleteHare.
+func (mr *MocklayerPatrolMockRecorder) CompleteHare(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompleteHare", reflect.TypeOf((*MocklayerPatrol)(nil).CompleteHare), arg0)
+}
+
 // MockmeshProvider is a mock of meshProvider interface.
 type MockmeshProvider struct {
 	ctrl     *gomock.Controller
@@ -139,18 +174,18 @@ func (mr *MocklayerClockMockRecorder) AwaitLayer(layerID interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AwaitLayer", reflect.TypeOf((*MocklayerClock)(nil).AwaitLayer), layerID)
 }
 
-// GetCurrentLayer mocks base method.
-func (m *MocklayerClock) GetCurrentLayer() types.LayerID {
+// CurrentLayer mocks base method.
+func (m *MocklayerClock) CurrentLayer() types.LayerID {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCurrentLayer")
+	ret := m.ctrl.Call(m, "CurrentLayer")
 	ret0, _ := ret[0].(types.LayerID)
 	return ret0
 }
 
-// GetCurrentLayer indicates an expected call of GetCurrentLayer.
-func (mr *MocklayerClockMockRecorder) GetCurrentLayer() *gomock.Call {
+// CurrentLayer indicates an expected call of CurrentLayer.
+func (mr *MocklayerClockMockRecorder) CurrentLayer() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentLayer", reflect.TypeOf((*MocklayerClock)(nil).GetCurrentLayer))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentLayer", reflect.TypeOf((*MocklayerClock)(nil).CurrentLayer))
 }
 
 // Mockcertifier is a mock of certifier interface.

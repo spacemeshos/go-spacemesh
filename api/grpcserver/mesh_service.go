@@ -54,7 +54,7 @@ func NewMeshService(
 func (s MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.GenesisTimeResponse, error) {
 	log.Info("GRPC MeshService.GenesisTime")
 	return &pb.GenesisTimeResponse{Unixtime: &pb.SimpleInt{
-		Value: uint64(s.genTime.GetGenesisTime().Unix()),
+		Value: uint64(s.genTime.GenesisTime().Unix()),
 	}}, nil
 }
 
@@ -62,14 +62,14 @@ func (s MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.G
 func (s MeshService) CurrentLayer(context.Context, *pb.CurrentLayerRequest) (*pb.CurrentLayerResponse, error) {
 	log.Info("GRPC MeshService.CurrentLayer")
 	return &pb.CurrentLayerResponse{Layernum: &pb.LayerNumber{
-		Number: uint32(s.genTime.GetCurrentLayer().Uint32()),
+		Number: uint32(s.genTime.CurrentLayer().Uint32()),
 	}}, nil
 }
 
 // CurrentEpoch returns the current epoch number.
 func (s MeshService) CurrentEpoch(context.Context, *pb.CurrentEpochRequest) (*pb.CurrentEpochResponse, error) {
 	log.Info("GRPC MeshService.CurrentEpoch")
-	curLayer := s.genTime.GetCurrentLayer()
+	curLayer := s.genTime.CurrentLayer()
 	return &pb.CurrentEpochResponse{Epochnum: &pb.SimpleInt{
 		Value: uint64(curLayer.GetEpoch()),
 	}}, nil
@@ -356,12 +356,19 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		log.With().Debug("no state root for layer",
 			layer, log.String("status", layerStatus.String()), log.Err(err))
 	}
+	hash, err := s.mesh.MeshHash(layerID)
+	if err != nil {
+		// This is expected. We can only retrieve state root for a layer that was applied to state,
+		// which only happens after it's approved/confirmed.
+		log.With().Debug("no mesh hash at layer",
+			layer, log.String("status", layerStatus.String()), log.Err(err))
+	}
 	return &pb.Layer{
 		Number:        &pb.LayerNumber{Number: layer.Index().Uint32()},
 		Status:        layerStatus,
-		Hash:          layer.Hash().Bytes(),
 		Blocks:        blocks,
 		Activations:   pbActivations,
+		Hash:          hash.Bytes(),
 		RootStateHash: stateRoot.Bytes(),
 	}, nil
 }

@@ -132,8 +132,7 @@ type Syncer struct {
 	lastATXsSynced    atomic.Value
 
 	// awaitATXSyncedCh is the list of subscribers' channels to notify when this node enters ATX synced state
-	awaitATXSyncedCh []chan struct{}
-	muATXSyncedCh    sync.Mutex // protects the slice above from concurrent access
+	awaitATXSyncedCh chan struct{}
 
 	eg errgroup.Group
 
@@ -161,7 +160,7 @@ func NewSyncer(
 		mesh:             mesh,
 		certHandler:      ch,
 		patrol:           patrol,
-		awaitATXSyncedCh: make([]chan struct{}, 0),
+		awaitATXSyncedCh: make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -170,7 +169,7 @@ func NewSyncer(
 	s.syncTimer = time.NewTicker(s.cfg.SyncInterval)
 	s.validateTimer = time.NewTicker(s.cfg.SyncInterval * 2)
 	if s.dataFetcher == nil {
-		s.dataFetcher = NewDataFetch(mesh, fetcher, s.logger)
+		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, s.logger)
 	}
 	if s.forkFinder == nil {
 		s.forkFinder = NewForkFinder(s.logger, cdb.Database, fetcher, s.cfg.MaxHashesInReq, s.cfg.MaxStaleDuration)
@@ -195,15 +194,7 @@ func (s *Syncer) Close() {
 
 // RegisterForATXSynced returns a channel for notification when the node enters ATX synced state.
 func (s *Syncer) RegisterForATXSynced() chan struct{} {
-	ch := make(chan struct{})
-	if s.ListenToATXGossip() {
-		close(ch)
-		return ch
-	}
-	s.muATXSyncedCh.Lock()
-	defer s.muATXSyncedCh.Unlock()
-	s.awaitATXSyncedCh = append(s.awaitATXSyncedCh, ch)
-	return ch
+	return s.awaitATXSyncedCh
 }
 
 // ListenToGossip returns true if the node is listening to gossip for blocks/TXs data.
@@ -221,7 +212,7 @@ func (s *Syncer) IsSynced(ctx context.Context) bool {
 	res := s.getSyncState() == synced
 	s.logger.WithContext(ctx).With().Debug("node sync state",
 		log.Bool("synced", res),
-		log.Stringer("current", s.ticker.GetCurrentLayer()),
+		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("latest", s.mesh.LatestLayer()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()))
 	return res
@@ -237,7 +228,7 @@ func (s *Syncer) Start(ctx context.Context) {
 	s.syncOnce.Do(func() {
 		s.logger.WithContext(ctx).Info("starting syncer loop")
 		s.eg.Go(func() error {
-			if s.ticker.GetCurrentLayer().Uint32() <= 1 {
+			if s.ticker.CurrentLayer().Uint32() <= 1 {
 				s.setATXSynced()
 				s.setSyncState(ctx, synced)
 			}
@@ -269,13 +260,11 @@ func (s *Syncer) Start(ctx context.Context) {
 
 func (s *Syncer) setATXSynced() {
 	s.atxSyncState.Store(synced)
-
-	s.muATXSyncedCh.Lock()
-	defer s.muATXSyncedCh.Unlock()
-	for _, ch := range s.awaitATXSyncedCh {
-		close(ch)
+	select {
+	case <-s.awaitATXSyncedCh:
+	default:
+		close(s.awaitATXSyncedCh)
 	}
-	s.awaitATXSyncedCh = make([]chan struct{}, 0)
 }
 
 func (s *Syncer) getATXSyncState() syncState {
@@ -292,7 +281,7 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 		s.logger.WithContext(ctx).With().Info("sync state change",
 			log.String("from_state", oldState.String()),
 			log.String("to_state", newState.String()),
-			log.Stringer("current", s.ticker.GetCurrentLayer()),
+			log.Stringer("current", s.ticker.CurrentLayer()),
 			log.Stringer("latest", s.mesh.LatestLayer()),
 			log.Stringer("processed", s.mesh.ProcessedLayer()))
 		events.ReportNodeStatusUpdate()
@@ -318,7 +307,7 @@ func (s *Syncer) setTargetSyncedLayer(ctx context.Context, layerID types.LayerID
 	s.logger.WithContext(ctx).With().Info("target synced layer changed",
 		log.Uint32("from_layer", oldSyncLayer.Uint32()),
 		log.Uint32("to_layer", layerID.Uint32()),
-		log.Stringer("current", s.ticker.GetCurrentLayer()),
+		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("latest", s.mesh.LatestLayer()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()))
 }
@@ -356,7 +345,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	default:
 	}
 
-	if s.ticker.GetCurrentLayer().Uint32() == 0 {
+	if s.ticker.CurrentLayer().Uint32() == 0 {
 		return false
 	}
 
@@ -372,25 +361,34 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	logger.With().Info(fmt.Sprintf("starting sync run #%v", s.run),
 		log.Stringer("sync_state", s.getSyncState()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
-		log.Stringer("current", s.ticker.GetCurrentLayer()),
+		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("latest", s.mesh.LatestLayer()),
 		log.Stringer("in_state", s.mesh.LatestLayerInState()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()))
 
 	s.setStateBeforeSync(ctx)
+	// TODO
+	// https://github.com/spacemeshos/go-spacemesh/issues/3970
+	// https://github.com/spacemeshos/go-spacemesh/issues/3987
 	syncFunc := func() bool {
 		if !s.ListenToATXGossip() {
-			logger.With().Info("syncing atx before everything else", s.ticker.GetCurrentLayer())
-			for epoch := s.getLastSyncedATXs() + 1; epoch <= s.ticker.GetCurrentLayer().GetEpoch(); epoch++ {
+			logger.With().Info("syncing atx from genesis", s.ticker.CurrentLayer())
+			for epoch := s.getLastSyncedATXs() + 1; epoch <= s.ticker.CurrentLayer().GetEpoch(); epoch++ {
 				if err := s.fetchEpochATX(ctx, epoch); err != nil {
 					return false
 				}
 			}
 			logger.With().Info("atxs synced to epoch", s.getLastSyncedATXs())
+
+			logger.With().Info("syncing malicious proofs")
+			if err := s.syncMalfeasance(ctx); err != nil {
+				return false
+			}
+			logger.With().Info("malicious IDs synced")
 			s.setATXSynced()
 		}
 
-		current := s.ticker.GetCurrentLayer()
+		current := s.ticker.CurrentLayer()
 		publishEpoch := current.GetEpoch() - 1
 		if current == current.GetEpoch().FirstLayer() && s.getLastSyncedATXs() < publishEpoch {
 			// sync ATX from last epoch
@@ -407,7 +405,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			}
 		}
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
-		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
+		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
 			if err := s.syncLayer(ctx, layerID); err != nil {
 				logger.With().Warning("failed to fetch layer", layerID, log.Err(err))
 				return false
@@ -415,7 +413,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			s.setLastSyncedLayer(layerID)
 		}
 		logger.With().Debug("data is synced",
-			log.Stringer("current", s.ticker.GetCurrentLayer()),
+			log.Stringer("current", s.ticker.CurrentLayer()),
 			log.Stringer("latest", s.mesh.LatestLayer()),
 			log.Stringer("last_synced", s.getLastSyncedLayer()))
 		return true
@@ -426,7 +424,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	logger.With().Info(fmt.Sprintf("finished sync run #%v", s.run),
 		log.Bool("success", success),
 		log.String("sync_state", s.getSyncState().String()),
-		log.Stringer("current", s.ticker.GetCurrentLayer()),
+		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("latest", s.mesh.LatestLayer()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()))
@@ -445,7 +443,7 @@ func isTooFarBehind(current, latest types.LayerID, logger log.Logger) bool {
 }
 
 func (s *Syncer) setStateBeforeSync(ctx context.Context) {
-	current := s.ticker.GetCurrentLayer()
+	current := s.ticker.CurrentLayer()
 	if current.Uint32() <= 1 {
 		s.setATXSynced()
 		s.setSyncState(ctx, synced)
@@ -458,13 +456,13 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 }
 
 func (s *Syncer) dataSynced() bool {
-	current := s.ticker.GetCurrentLayer()
+	current := s.ticker.CurrentLayer()
 	return current.Uint32() <= 1 || !s.getLastSyncedLayer().Before(current.Sub(1))
 }
 
 func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	currSyncState := s.getSyncState()
-	current := s.ticker.GetCurrentLayer()
+	current := s.ticker.CurrentLayer()
 
 	// for the gossipSync/notSynced states, we check if the mesh state is on target before we advance sync state.
 	// but for the synced state, we don't check the mesh state because gossip+hare+tortoise are in charge of
@@ -493,6 +491,13 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 			s.setTargetSyncedLayer(ctx, current.Add(numGossipSyncLayers))
 		}
 	}
+}
+
+func (s *Syncer) syncMalfeasance(ctx context.Context) error {
+	if err := s.dataFetcher.PollMaliciousProofs(ctx); err != nil {
+		return fmt.Errorf("PollMaliciousProofs: %w", err)
+	}
+	return nil
 }
 
 func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...p2p.Peer) error {

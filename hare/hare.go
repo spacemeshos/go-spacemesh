@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
@@ -29,9 +28,10 @@ type consensusFactory func(
 	context.Context,
 	config.Config,
 	types.LayerID,
-	*Set, Rolacle,
+	*Set,
+	Rolacle,
 	Signer,
-	types.VRFPostIndex,
+	*types.VRFPostIndex,
 	pubsub.Publisher,
 	communication,
 	RoundClock,
@@ -63,7 +63,7 @@ type RoundClock interface {
 type LayerClock interface {
 	LayerToTime(id types.LayerID) time.Time
 	AwaitLayer(layerID types.LayerID) chan struct{}
-	GetCurrentLayer() types.LayerID
+	CurrentLayer() types.LayerID
 }
 
 // LayerOutput is the output of each hare consensus process.
@@ -78,7 +78,11 @@ type defaultFetcher struct {
 }
 
 func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	return atxs.VRFNonce(f.cdb, nodeID, epoch)
+	nonce, err := f.cdb.VRFNonce(nodeID, epoch)
+	if err != nil {
+		return types.VRFPostIndex(0), fmt.Errorf("get vrf nonce: %w", err)
+	}
+	return nonce, nil
 }
 
 // Opt for configuring beacon protocol.
@@ -178,7 +182,7 @@ func New(
 	h.outputChan = make(chan TerminationOutput, h.config.Hdist)
 	h.outputs = make(map[types.LayerID][]types.ProposalID, h.config.Hdist) // we keep results about LayerBuffer past layers
 	h.cps = make(map[types.LayerID]Consensus, h.config.LimitConcurrent)
-	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, nonce types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, nonce *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
 		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, pke, nid, nonce, p2p, comm, ev, clock, logger)
 	}
 
@@ -261,7 +265,6 @@ var ErrTooLate = errors.New("consensus process finished too late")
 // records the provided output.
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
 	layerID := output.ID()
-	defer h.patrol.CompleteHare(layerID)
 
 	var pids []types.ProposalID
 	if output.Completed() {
@@ -328,14 +331,6 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		return false, nil
 	}
 
-	defer func() {
-		// it must not return without starting consensus process or mark result as fail
-		// except if it's genesis layer
-		if err != nil {
-			h.outputChan <- procReport{lid, &Set{}, false, notCompleted}
-		}
-	}()
-
 	// call to start the calculation of active set size beforehand
 	h.eg.Go(func() error {
 		// this is called only for its side effects, but at least print the error if it returns one
@@ -362,14 +357,18 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		return false, nil
 	}
 
-	props := h.getGoodProposal(lid, beacon, logger)
-	logger.With().Info("starting hare", log.Int("num_proposals", len(props)))
-	preNumProposals.Add(float64(len(props)))
-	set := NewSet(props)
+	var nonce *types.VRFPostIndex
+	nnc, err := h.nonceFetcher.VRFNonce(h.nid, h.lastLayer.GetEpoch())
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		logger.With().Error("failed to get vrf nonce", log.Err(err))
+		return false, fmt.Errorf("vrf nonce: %w", err)
+	} else if err == nil {
+		nonce = &nnc
+	}
 
 	ch, err := h.broker.Register(ctx, lid)
 	if err != nil {
-		logger.With().Error("could not register consensus process on broker", log.Err(err))
+		logger.With().Error("failed to register with broker", log.Err(err))
 		return false, fmt.Errorf("broker register: %w", err)
 	}
 	comm := communication{
@@ -377,12 +376,12 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		mchOut: h.mchMalfeasance,
 		report: h.outputChan,
 	}
-	nonce, err := h.nonceFetcher.VRFNonce(h.nid, h.lastLayer.GetEpoch())
-	if err != nil {
-		logger.With().Error("could not get vrf nonce", log.Err(err))
-		return false, fmt.Errorf("vrf nonce: %w", err)
-	}
+	props := h.getGoodProposal(lid, beacon, logger)
+	preNumProposals.Add(float64(len(props)))
+	set := NewSet(props)
 	cp := h.factory(h.ctx, h.config, lid, set, h.rolacle, h.sign, nonce, h.publisher, comm, clock)
+
+	logger.With().Info("starting hare", log.Int("num_proposals", len(props)))
 	cp.Start()
 	h.addCP(logger, cp)
 	h.patrol.SetHareInCharge(lid)
@@ -515,7 +514,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 
 // listens to new layers.
 func (h *Hare) tickLoop(ctx context.Context) {
-	for layer := h.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
+	for layer := h.layerClock.CurrentLayer(); ; layer = layer.Add(1) {
 		select {
 		case <-h.layerClock.AwaitLayer(layer):
 			if time.Since(h.layerClock.LayerToTime(layer)) > h.config.WakeupDelta {

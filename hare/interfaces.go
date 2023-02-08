@@ -10,7 +10,6 @@ import (
 
 type layerPatrol interface {
 	SetHareInCharge(types.LayerID)
-	CompleteHare(types.LayerID)
 }
 
 // Rolacle is the roles oracle provider.

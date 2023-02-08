@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/spacemeshos/post/shared"
 
@@ -224,6 +223,7 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 		return fmt.Errorf("invalid VRFNonce: %w", err)
 	}
 
+	atx.SetEffectiveNumUnits(atx.NumUnits)
 	return nil
 }
 
@@ -237,12 +237,22 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 		return err
 	}
 
-	if atx.NumUnits > prevAtx.NumUnits {
-		return fmt.Errorf("num units %d is greater than previous atx num units %d", atx.NumUnits, prevAtx.NumUnits)
+	nonce := atx.VRFNonce
+	if atx.NumUnits > prevAtx.NumUnits && nonce == nil {
+		h.log.With().Info("PoST size increased without new VRF Nonce, re-validating current nonce",
+			atx.ID(),
+			log.FieldNamed("atx_node_id", atx.NodeID()),
+		)
+
+		current, err := h.cdb.VRFNonce(atx.NodeID(), atx.TargetEpoch())
+		if err != nil {
+			return fmt.Errorf("failed to get current nonce: %w", err)
+		}
+		nonce = &current
 	}
 
-	if atx.VRFNonce != nil {
-		err = h.nipostValidator.VRFNonce(atx.NodeID(), commitmentATX, atx.VRFNonce, atx.NIPost.PostMetadata, atx.NumUnits)
+	if nonce != nil {
+		err = h.nipostValidator.VRFNonce(atx.NodeID(), commitmentATX, nonce, atx.NIPost.PostMetadata, atx.NumUnits)
 		if err != nil {
 			return fmt.Errorf("invalid VRFNonce: %w", err)
 		}
@@ -252,6 +262,11 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 		return fmt.Errorf("prevATX declared, but initial Post is included")
 	}
 
+	if prevAtx.NumUnits < atx.NumUnits {
+		atx.SetEffectiveNumUnits(prevAtx.NumUnits)
+	} else {
+		atx.SetEffectiveNumUnits(atx.NumUnits)
+	}
 	return nil
 }
 
@@ -297,9 +312,11 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 
 	if err != nil && atx.PrevATXID != *types.EmptyATXID {
 		// no previous atx found but previous atx referenced
-		h.log.With().Error("could not fetch node last atx", atx.ID(),
+		h.log.With().Error("could not fetch node last atx",
+			atx.ID(),
 			log.FieldNamed("atx_node_id", atx.NodeID()),
-			log.Err(err))
+			log.Err(err),
+		)
 		return fmt.Errorf("could not fetch node last atx: %w", err)
 	}
 
@@ -331,7 +348,7 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 					}
 				}
 				proof = &types.MalfeasanceProof{
-					Layer: h.clock.GetCurrentLayer(),
+					Layer: h.clock.CurrentLayer(),
 					Proof: types.Proof{
 						Type: types.MultipleATXs,
 						Data: &atxProof,
@@ -346,7 +363,7 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				)
 			}
 		}
-		if err = atxs.Add(dbtx, atx, time.Now()); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		if err = atxs.Add(dbtx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
 		return nil

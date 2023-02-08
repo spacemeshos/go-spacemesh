@@ -41,9 +41,14 @@ type opinionResponse struct {
 	opinions []*fetch.LayerOpinion
 }
 
+type maliciousIDResponse struct {
+	ids map[types.NodeID]struct{}
+}
+
 type (
-	dataRequest    request[fetch.LayerData, dataResponse]
-	opinionRequest request[fetch.LayerOpinion, opinionResponse]
+	dataRequest        request[fetch.LayerData, dataResponse]
+	opinionRequest     request[fetch.LayerOpinion, opinionResponse]
+	maliciousIDRequest request[fetch.MaliciousIDs, maliciousIDResponse]
 )
 
 // DataFetch contains the logic of fetching mesh data.
@@ -52,14 +57,68 @@ type DataFetch struct {
 
 	logger log.Log
 	msh    meshProvider
+	ids    idProvider
 }
 
 // NewDataFetch creates a new DataFetch instance.
-func NewDataFetch(msh meshProvider, fetch fetcher, lg log.Log) *DataFetch {
+func NewDataFetch(msh meshProvider, fetch fetcher, ids idProvider, lg log.Log) *DataFetch {
 	return &DataFetch{
 		fetcher: fetch,
 		logger:  lg,
 		msh:     msh,
+		ids:     ids,
+	}
+}
+
+// PollMaliciousProofs polls all peers for malicious NodeIDs.
+func (d *DataFetch) PollMaliciousProofs(ctx context.Context) error {
+	peers := d.fetcher.GetPeers()
+	logger := d.logger.WithContext(ctx)
+	req := &maliciousIDRequest{
+		peers: peers,
+		response: maliciousIDResponse{
+			ids: map[types.NodeID]struct{}{},
+		},
+		ch: make(chan peerResult[fetch.MaliciousIDs], len(peers)),
+	}
+	okFunc := func(data []byte, peer p2p.Peer) {
+		d.receiveMaliciousIDs(ctx, req, peer, data, nil)
+	}
+	errFunc := func(err error, peer p2p.Peer) {
+		d.receiveMaliciousIDs(ctx, req, peer, nil, err)
+	}
+	if err := d.fetcher.GetMaliciousIDs(ctx, peers, okFunc, errFunc); err != nil {
+		return err
+	}
+
+	req.peerResults = map[p2p.Peer]peerResult[fetch.MaliciousIDs]{}
+	var (
+		success      bool
+		candidateErr error
+	)
+	for {
+		select {
+		case res := <-req.ch:
+			logger.Debug("received malicious IDs")
+			req.peerResults[res.peer] = res
+			if res.err == nil {
+				success = true
+				fetchMalfeasanceProof(ctx, logger, d.ids, d.fetcher, req, res.data)
+			} else if candidateErr == nil {
+				candidateErr = res.err
+			}
+			if len(req.peerResults) < len(req.peers) {
+				break
+			}
+			// all peer responded
+			if success {
+				candidateErr = nil
+			}
+			return candidateErr
+		case <-ctx.Done():
+			logger.Warning("request timed out")
+			return errTimeout
+		}
 	}
 }
 
@@ -128,6 +187,27 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers 
 	}
 }
 
+func (d *DataFetch) receiveMaliciousIDs(ctx context.Context, req *maliciousIDRequest, peer p2p.Peer, data []byte, peerErr error) {
+	logger := d.logger.WithContext(ctx).WithFields(req.lid, log.Stringer("peer", peer))
+	logger.Debug("received layer data from peer")
+	var (
+		result = peerResult[fetch.MaliciousIDs]{peer: peer, err: peerErr}
+		malIDs fetch.MaliciousIDs
+	)
+	if peerErr != nil {
+		logger.With().Debug("received peer error for layer data", req.lid, log.Err(peerErr))
+	} else if result.err = codec.Decode(data, &malIDs); result.err != nil {
+		logger.With().Debug("error converting bytes to LayerData", log.Err(result.err))
+	} else {
+		result.data = &malIDs
+	}
+	select {
+	case req.ch <- result:
+	case <-ctx.Done():
+		logger.Warning("request timed out")
+	}
+}
+
 func (d *DataFetch) receiveData(ctx context.Context, req *dataRequest, peer p2p.Peer, data []byte, peerErr error) {
 	logger := d.logger.WithContext(ctx).WithFields(req.lid, log.Stringer("peer", peer))
 	logger.Debug("received layer data from peer")
@@ -166,6 +246,39 @@ func registerLayerHashes(fetcher fetcher, peer p2p.Peer, data *fetch.LayerData) 
 		return
 	}
 	fetcher.RegisterPeerHashes(peer, layerHashes)
+}
+
+func fetchMalfeasanceProof(ctx context.Context, logger log.Log, ids idProvider, fetcher fetcher, req *maliciousIDRequest, data *fetch.MaliciousIDs) {
+	var idsToFetch []types.NodeID
+	for _, nodeID := range data.NodeIDs {
+		if _, ok := req.response.ids[nodeID]; !ok {
+			// check if the NodeID exists
+			if exists, err := ids.IdentityExists(nodeID); err != nil {
+				logger.With().Error("failed to check identity", log.Err(err))
+				continue
+			} else if !exists {
+				logger.With().Warning("malicious identity does not exist",
+					log.String("identity", nodeID.String()))
+				continue
+			}
+			// not yet fetched
+			req.response.ids[nodeID] = struct{}{}
+			idsToFetch = append(idsToFetch, nodeID)
+		}
+	}
+	if len(idsToFetch) > 0 {
+		logger.With().Debug("fetching malfeasance proofs", log.Int("to_fetch", len(idsToFetch)))
+		if err := fetcher.GetMalfeasanceProofs(ctx, idsToFetch); err != nil {
+			logger.With().Warning("failed fetching malfeasance proofs",
+				log.Array("malicious_ids", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+					for _, nodeID := range idsToFetch {
+						encoder.AppendString(nodeID.ShortString())
+					}
+					return nil
+				})),
+				log.Err(err))
+		}
+	}
 }
 
 func fetchLayerData(ctx context.Context, logger log.Log, fetcher fetcher, req *dataRequest, data *fetch.LayerData) {

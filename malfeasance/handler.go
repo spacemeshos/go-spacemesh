@@ -54,6 +54,10 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, msg
 	}
 }
 
+func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, msg []byte) error {
+	return h.handleProof(ctx, "", msg)
+}
+
 func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) error {
 	var (
 		p         types.MalfeasanceGossip
@@ -115,8 +119,12 @@ func updateMetrics(tp types.Proof) {
 }
 
 func checkIdentityExists(cdb *datastore.CachedDB, nodeID types.NodeID) error {
-	if _, err := cdb.GetPrevAtx(nodeID); err != nil {
+	exists, err := cdb.IdentityExists(nodeID)
+	if err != nil {
 		return err
+	}
+	if !exists {
+		return errors.New("identity does not exist")
 	}
 	return nil
 }
@@ -158,7 +166,7 @@ func (h *Handler) validateHareEquivocation(logger log.Log, proof *types.Malfeasa
 			return types.NodeID{}, err
 		}
 		if err = checkIdentityExists(h.cdb, nid); err != nil {
-			return types.NodeID{}, fmt.Errorf("identity in hare malfeasance doesn't exist: %v", nid)
+			return types.NodeID{}, fmt.Errorf("check identity in hare malfeasance %v: %w", nid, err)
 		}
 		if firstNid == types.EmptyNodeID {
 			firstNid = nid
@@ -203,7 +211,7 @@ func (h *Handler) validateMultipleATXs(logger log.Log, proof *types.MalfeasanceP
 			return types.NodeID{}, err
 		}
 		if err = checkIdentityExists(h.cdb, nid); err != nil {
-			return types.NodeID{}, fmt.Errorf("identity in hare malfeasance doesn't exist: %v", nid)
+			return types.NodeID{}, fmt.Errorf("check identity in atx malfeasance %v: %w", nid, err)
 		}
 		if firstNid == types.EmptyNodeID {
 			firstNid = nid
@@ -245,7 +253,7 @@ func (h *Handler) validateMultipleBallots(logger log.Log, proof *types.Malfeasan
 			return types.NodeID{}, err
 		}
 		if err = checkIdentityExists(h.cdb, nid); err != nil {
-			return types.NodeID{}, fmt.Errorf("identity in ballot malfeasance doesn't exist: %v", nid)
+			return types.NodeID{}, fmt.Errorf("check identity in ballot malfeasance %v: %w", nid, err)
 		}
 		if firstNid == types.EmptyNodeID {
 			firstNid = nid

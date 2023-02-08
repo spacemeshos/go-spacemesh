@@ -44,9 +44,11 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 			atx.SetNodeID(&nodeID)
 			atx.NumUnits = testedATXUnit
 		}
+		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
-		require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+		require.NoError(t, atxs.Add(cdb, vAtx))
 	}
 	expectedWeight := big.NewRat(int64(testedATXUnit), int64(eligibleSlots))
 	for _, b := range blts {

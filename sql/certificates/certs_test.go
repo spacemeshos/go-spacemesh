@@ -71,7 +71,7 @@ func TestCertificates(t *testing.T) {
 	require.True(t, got[0].Valid)
 
 	bid2 := types.BlockID{2, 2, 2}
-	require.NoError(t, SetHareOutput(db, lid, bid2))
+	require.NoError(t, SetHareOutputInvalid(db, lid, bid2))
 	got, err = Get(db, lid)
 	require.NoError(t, err)
 	require.Len(t, got, 2)
@@ -80,7 +80,7 @@ func TestCertificates(t *testing.T) {
 	require.True(t, got[0].Valid)
 	require.Equal(t, bid2, got[1].Block)
 	require.Nil(t, got[1].Cert)
-	require.True(t, got[1].Valid)
+	require.False(t, got[1].Valid)
 }
 
 func TestHareOutput(t *testing.T) {

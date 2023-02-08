@@ -41,15 +41,16 @@ var (
 	errGenesis             = errors.New("genesis")
 	errNodeNotSynced       = errors.New("nodes not synced")
 	errProtocolRunning     = errors.New("last beacon protocol still running")
+	errNoProposals         = errors.New("no proposals")
 )
 
 type (
 	proposals    = struct{ valid, potentiallyValid proposalSet }
 	allVotes     = struct{ support, against proposalSet }
 	beaconWeight = struct {
-		ballots     map[types.BallotID]struct{}
-		totalWeight fixed.Fixed
-		weightUnits int
+		ballots        map[types.BallotID]struct{}
+		totalWeight    fixed.Fixed
+		numEligibility int
 	}
 )
 
@@ -58,7 +59,11 @@ type defaultFetcher struct {
 }
 
 func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	return atxs.VRFNonce(f.cdb, nodeID, epoch)
+	nonce, err := f.cdb.VRFNonce(nodeID, epoch)
+	if err != nil {
+		return types.VRFPostIndex(0), fmt.Errorf("get vrf nonce: %w", err)
+	}
+	return nonce, nil
 }
 
 // Opt for configuring beacon protocol.
@@ -167,9 +172,8 @@ type ProtocolDriver struct {
 	weakCoin        coin
 	theta           *big.Float
 
-	clock       layerClock
-	layerTicker chan types.LayerID
-	cdb         *datastore.CachedDB
+	clock layerClock
+	cdb   *datastore.CachedDB
 
 	mu sync.RWMutex
 
@@ -203,7 +207,7 @@ type ProtocolDriver struct {
 // SetSyncState updates sync state provider. Must be executed only once.
 func (pd *ProtocolDriver) SetSyncState(sync system.SyncStateProvider) {
 	if pd.sync != nil {
-		pd.logger.Panic("sync state provider can be updated only once")
+		pd.logger.Fatal("sync state provider can be updated only once")
 	}
 	pd.sync = sync
 }
@@ -220,15 +224,14 @@ func (pd *ProtocolDriver) Start(ctx context.Context) {
 	pd.startOnce.Do(func() {
 		pd.logger.With().Info("starting beacon protocol", log.String("config", fmt.Sprintf("%+v", pd.config)))
 		if pd.sync == nil {
-			pd.logger.Panic("update sync state provider can't be nil")
+			pd.logger.Fatal("update sync state provider can't be nil")
 		}
 
-		pd.layerTicker = pd.clock.Subscribe()
 		pd.metricsCollector.Start(nil)
 
 		pd.setProposalTimeForNextEpoch()
 		pd.eg.Go(func() error {
-			pd.listenLayers(ctx)
+			pd.listenEpochs(ctx)
 			return nil
 		})
 	})
@@ -237,7 +240,6 @@ func (pd *ProtocolDriver) Start(ctx context.Context) {
 // Close closes ProtocolDriver.
 func (pd *ProtocolDriver) Close() {
 	pd.logger.Info("closing beacon protocol")
-	pd.clock.Unsubscribe(pd.layerTicker)
 	pd.metricsCollector.Stop()
 	pd.cancel()
 	pd.logger.Info("waiting for beacon goroutines to finish")
@@ -280,24 +282,24 @@ func (pd *ProtocolDriver) recordBeacon(epochID types.EpochID, ballot *types.Ball
 	// using ballot weight here because we're sampling miners for the beacon value recorded
 	// in the ballots. we can't just take the entire ATX weight because otherwise, a "whale"
 	// ATX would dominate the voting.
-	ballotWeight := weightPer.Mul(fixed.New(len(ballot.EligibilityProofs)))
-	weightUnit := len(ballot.EligibilityProofs)
+	numEligibility := len(ballot.EligibilityProofs)
+	ballotWeight := weightPer.Mul(fixed.New(numEligibility))
 	if _, ok := pd.ballotsBeacons[epochID]; !ok {
 		pd.ballotsBeacons[epochID] = make(map[types.Beacon]*beaconWeight)
 	}
 	entry, ok := pd.ballotsBeacons[epochID][beacon]
 	if !ok {
 		pd.ballotsBeacons[epochID][beacon] = &beaconWeight{
-			ballots:     map[types.BallotID]struct{}{ballot.ID(): {}},
-			totalWeight: ballotWeight,
-			weightUnits: weightUnit,
+			ballots:        map[types.BallotID]struct{}{ballot.ID(): {}},
+			totalWeight:    ballotWeight,
+			numEligibility: numEligibility,
 		}
 		pd.logger.With().Debug("added beacon from ballot",
 			epochID,
 			ballot.ID(),
 			beacon,
 			log.Stringer("weight_per", weightPer),
-			log.Int("weight_units", weightUnit),
+			log.Int("num_eligibility", numEligibility),
 			log.Stringer("weight", ballotWeight))
 		return
 	}
@@ -310,13 +312,13 @@ func (pd *ProtocolDriver) recordBeacon(epochID types.EpochID, ballot *types.Ball
 
 	entry.ballots[ballot.ID()] = struct{}{}
 	entry.totalWeight = entry.totalWeight.Add(ballotWeight)
-	entry.weightUnits += weightUnit
+	entry.numEligibility += numEligibility
 	pd.logger.With().Debug("added beacon from ballot",
 		epochID,
 		ballot.ID(),
 		beacon,
 		log.Stringer("weight_per", weightPer),
-		log.Int("weight_units", weightUnit),
+		log.Int("num_eligibility", numEligibility),
 		log.Stringer("weight", ballotWeight))
 }
 
@@ -328,14 +330,14 @@ func (pd *ProtocolDriver) findMajorityBeacon(epoch types.EpochID) types.Beacon {
 		return types.EmptyBeacon
 	}
 	totalWeight := fixed.New64(0)
-	totalWeightUnits := 0
+	totalEligibility := 0
 	for _, bw := range epochBeacons {
-		totalWeightUnits += bw.weightUnits
+		totalEligibility += bw.numEligibility
 		totalWeight = totalWeight.Add(bw.totalWeight)
 	}
 
-	logger := pd.logger.WithFields(epoch, log.Int("total_weight_units", totalWeightUnits))
-	if totalWeightUnits < pd.config.BeaconSyncWeightUnits {
+	logger := pd.logger.WithFields(epoch, log.Int("total_weight_units", totalEligibility))
+	if totalEligibility < pd.config.BeaconSyncWeightUnits {
 		logger.Debug("not enough weight units to determine beacon")
 		return types.EmptyBeacon
 	}
@@ -347,7 +349,7 @@ func (pd *ProtocolDriver) findMajorityBeacon(epoch types.EpochID) types.Beacon {
 		if bw.totalWeight.GreaterThan(majorityWeight) {
 			logger.With().Info("beacon determined for epoch",
 				beacon,
-				log.Int("total_weight_unit", totalWeightUnits),
+				log.Int("total_weight_unit", totalEligibility),
 				log.Stringer("total_weight", totalWeight),
 				log.Stringer("beacon_weight", bw.totalWeight))
 			return beacon
@@ -359,7 +361,7 @@ func (pd *ProtocolDriver) findMajorityBeacon(epoch types.EpochID) types.Beacon {
 	}
 	logger.With().Warning("beacon determined for epoch by plurality, not majority",
 		bPlurality,
-		log.Int("total_weight_unit", totalWeightUnits),
+		log.Int("total_weight_unit", totalEligibility),
 		log.Stringer("total_weight", totalWeight),
 		log.Stringer("beacon_weight", maxWeight))
 	return bPlurality
@@ -386,7 +388,6 @@ func (pd *ProtocolDriver) GetBeacon(targetEpoch types.EpochID) (types.Beacon, er
 	}
 
 	if errors.Is(err, sql.ErrNotFound) {
-		pd.logger.With().Warning("beacon not available", targetEpoch)
 		return types.EmptyBeacon, errBeaconNotCalculated
 	}
 	pd.logger.With().Error("failed to get beacon from db", targetEpoch, log.Err(err))
@@ -427,7 +428,7 @@ func (pd *ProtocolDriver) persistBeacon(epoch types.EpochID, beacon types.Beacon
 			pd.logger.With().Error("trying to persist different beacon", epoch, beacon, log.String("saved_beacon", savedBeacon.ShortString()))
 			return errDifferentBeacon
 		}
-		pd.logger.With().Warning("beacon already exists for epoch", epoch, beacon)
+		pd.logger.With().Debug("beacon already exists for epoch", epoch, beacon)
 	}
 	return nil
 }
@@ -464,11 +465,20 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		return s, nil
 	}
 
-	epochWeight, atxids, err := pd.cdb.GetEpochWeight(epoch)
-	if err != nil {
-		logger.With().Error("failed to get weight targeting epoch", log.Err(err))
-		return nil, fmt.Errorf("get epoch weight: %w", err)
+	var (
+		epochWeight uint64
+		atxids      []types.ATXID
+		miners      = map[string]uint64{}
+	)
+	if err := pd.cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
+		epochWeight += header.GetWeight()
+		atxids = append(atxids, header.ID)
+		miners[string(header.NodeID.Bytes())] += uint64(header.NumUnits)
+		return true
+	}); err != nil {
+		return nil, err
 	}
+
 	if epochWeight == 0 {
 		logger.With().Error("zero weight targeting epoch", log.Err(errZeroEpochWeight))
 		return nil, errZeroEpochWeight
@@ -479,7 +489,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		logger.With().Error("get own VRF nonce", log.Err(err))
 		return nil, fmt.Errorf("get own VRF nonce: %w", err)
 	}
-	pd.states[epoch] = newState(logger, pd.config, epochWeight, nonce, atxids)
+	pd.states[epoch] = newState(logger, pd.config, nonce, epochWeight, atxids, miners)
 	return pd.states[epoch], nil
 }
 
@@ -496,10 +506,10 @@ func (pd *ProtocolDriver) setProposalTimeForNextEpoch() {
 	pd.earliestProposalTime = t
 }
 
-func (pd *ProtocolDriver) setupEpoch(logger log.Log, epoch types.EpochID) ([]types.ATXID, types.VRFPostIndex, error) {
+func (pd *ProtocolDriver) setupEpoch(logger log.Log, epoch types.EpochID) (*state, error) {
 	s, err := pd.initEpochStateIfNotPresent(logger, epoch)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	pd.mu.Lock()
@@ -507,7 +517,7 @@ func (pd *ProtocolDriver) setupEpoch(logger log.Log, epoch types.EpochID) ([]typ
 	pd.roundInProgress = types.FirstRound
 	pd.earliestVoteTime = time.Time{}
 
-	return s.atxs, s.nonce, nil
+	return s, nil
 }
 
 func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
@@ -530,24 +540,33 @@ func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
 }
 
 // listens to new layers.
-func (pd *ProtocolDriver) listenLayers(ctx context.Context) {
+func (pd *ProtocolDriver) listenEpochs(ctx context.Context) {
 	pd.logger.With().Info("starting listening layers")
 
+	currentEpoch := pd.clock.CurrentLayer().GetEpoch()
+	layer := currentEpoch.Add(1).FirstLayer()
 	for {
 		select {
 		case <-pd.ctx.Done():
 			return
-		case layer := <-pd.layerTicker:
-			pd.logger.With().Debug("received tick", layer)
-			if layer.FirstInEpoch() {
-				epoch := layer.GetEpoch()
-				pd.setProposalTimeForNextEpoch()
-				pd.logger.With().Info("first layer in epoch", layer, epoch)
-				pd.eg.Go(func() error {
-					_ = pd.onNewEpoch(ctx, epoch)
-					return nil
-				})
+		case <-pd.clock.AwaitLayer(layer):
+			current := pd.clock.CurrentLayer()
+			if current.Before(layer) {
+				pd.logger.With().Info("time sync detected, realigning Beacon")
+				continue
 			}
+			if !current.FirstInEpoch() {
+				continue
+			}
+			epoch := current.GetEpoch()
+			layer = epoch.Add(1).FirstLayer()
+
+			pd.setProposalTimeForNextEpoch()
+			pd.logger.With().Info("processing epoch", current, epoch)
+			pd.eg.Go(func() error {
+				_ = pd.onNewEpoch(ctx, epoch)
+				return nil
+			})
 		}
 	}
 }
@@ -596,18 +615,18 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) e
 		return err
 	}
 
-	atxids, nonce, err := pd.setupEpoch(logger, epoch)
+	s, err := pd.setupEpoch(logger, epoch)
 	if err != nil {
-		logger.With().Error("epoch not setup correctly", log.Err(err))
+		logger.With().Error("failed to set up epoch", log.Err(err))
 		return err
 	}
 
 	logger.With().Info("participating beacon protocol with ATX", atxID)
-	pd.runProtocol(ctx, epoch, nonce, atxids)
+	pd.runProtocol(ctx, epoch, s)
 	return nil
 }
 
-func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, nonce types.VRFPostIndex, atxs []types.ATXID) {
+func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, st *state) {
 	ctx = log.WithNewSessionID(ctx)
 	targetEpoch := epoch + 1
 	logger := pd.logger.WithContext(ctx).WithFields(epoch, log.Uint32("target_epoch", uint32(targetEpoch)))
@@ -615,10 +634,10 @@ func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, 
 	pd.setBeginProtocol(ctx)
 	defer pd.setEndProtocol(ctx)
 
-	pd.startWeakCoinEpoch(ctx, epoch, nonce, atxs)
+	pd.weakCoin.StartEpoch(ctx, epoch, st.nonce, st.unitAllowance)
 	defer pd.weakCoin.FinishEpoch(ctx, epoch)
 
-	if err := pd.runProposalPhase(ctx, epoch, nonce); err != nil {
+	if err := pd.runProposalPhase(ctx, epoch, st.nonce); err != nil {
 		logger.With().Warning("proposal phase failed", log.Err(err))
 		return
 	}
@@ -627,12 +646,16 @@ func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, 
 		logger.With().Warning("consensus phase failed", log.Err(err))
 		return
 	}
+	if len(lastRoundOwnVotes.support) == 0 {
+		logger.With().Warning("consensus phase failed", log.Err(errNoProposals))
+		return
+	}
 
 	// K rounds passed
 	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
-	beacon := calcBeacon(logger, lastRoundOwnVotes)
+	beacon := calcBeacon(logger, lastRoundOwnVotes.support)
 
-	if err := pd.setBeacon(targetEpoch, beacon); err != nil {
+	if err = pd.setBeacon(targetEpoch, beacon); err != nil {
 		logger.With().Error("failed to set beacon", log.Err(err))
 		return
 	}
@@ -640,21 +663,21 @@ func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, 
 	logger.With().Info("beacon set for epoch", beacon)
 }
 
-func calcBeacon(logger log.Log, lastRoundVotes allVotes) types.Beacon {
+func calcBeacon(logger log.Log, set proposalSet) types.Beacon {
 	logger.Info("calculating beacon")
 
-	allHashes := lastRoundVotes.support.sort()
-	allHashHexes := make([]string, len(allHashes))
-	for i, h := range allHashes {
-		allHashHexes[i] = hex.EncodeToString(h)
+	allProposals := set.sort()
+	allHexes := make([]string, len(allProposals))
+	for i, h := range allProposals {
+		allHexes[i] = hex.EncodeToString(h)
 	}
-	logger.With().Debug("calculating beacon from this hash list",
-		log.String("hashes", strings.Join(allHashHexes, ", ")))
+	logger.With().Debug("calculating beacon",
+		log.String("proposals", strings.Join(allHexes, ", ")))
 
 	// Beacon should appear to have the same entropy as the initial proposals, hence cropping it
 	// to the same size as the proposal
-	beacon := types.BytesToBeacon(allHashes.hash().Bytes())
-	logger.With().Info("calculated beacon", beacon, log.Int("num_hashes", len(allHashes)))
+	beacon := types.BytesToBeacon(allProposals.hash().Bytes())
+	logger.With().Info("calculated beacon", beacon, log.Int("num_hashes", len(allProposals)))
 
 	return beacon
 }
@@ -682,7 +705,7 @@ func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.Epoc
 		return err
 	}
 
-	logger.Debug("beacon proposal phase finished")
+	logger.Info("beacon proposal phase finished")
 	return nil
 }
 
@@ -692,33 +715,35 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 	}
 
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
-	proposedSignature := buildSignedProposal(ctx, pd.logger, pd.vrfSigner, epoch, nonce)
-	if !pd.checkProposalEligibility(logger, epoch, proposedSignature) {
+	vrfSig := buildSignedProposal(ctx, pd.logger, pd.vrfSigner, epoch, nonce)
+	proposal := hex.EncodeToString(cropData(vrfSig))
+
+	if !pd.proposalEligible(logger, epoch, vrfSig) {
 		logger.With().Debug("own proposal doesn't pass threshold",
-			log.String("proposal", string(proposedSignature)),
+			log.String("proposal", proposal),
 		)
 		// proposal is not sent
 		return
 	}
 
 	logger.With().Debug("own proposal passes threshold",
-		log.String("proposal", string(proposedSignature)),
+		log.String("proposal", proposal),
 	)
 
 	// concat them into a single proposal message
 	m := ProposalMessage{
 		EpochID:      epoch,
 		NodeID:       pd.nodeID,
-		VRFSignature: proposedSignature,
+		VRFSignature: vrfSig,
 	}
 
 	serialized, err := codec.Encode(&m)
 	if err != nil {
-		logger.With().Panic("failed to serialize message for gossip", log.Err(err))
+		logger.With().Fatal("failed to encode beacon proposal", log.Err(err))
 	}
 
 	pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, serialized)
-	logger.With().Info("beacon proposal sent", log.String("message", m.String()))
+	logger.With().Info("beacon proposal sent", log.String("proposal", proposal))
 }
 
 // runConsensusPhase runs K voting rounds and returns result from last weak coin round.
@@ -793,20 +818,6 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 	return ownVotes, nil
 }
 
-func (pd *ProtocolDriver) startWeakCoinEpoch(ctx context.Context, epoch types.EpochID, nonce types.VRFPostIndex, atxs []types.ATXID) {
-	// we need to pass a map with spacetime unit allowances before any round is started
-	ua := weakcoin.UnitAllowances{}
-	for _, id := range atxs {
-		header, err := pd.cdb.GetAtxHeader(id)
-		if err != nil {
-			pd.logger.WithContext(ctx).With().Panic("unable to load atx header", log.Err(err))
-		}
-		ua[string(header.NodeID.Bytes())] += uint64(header.NumUnits)
-	}
-
-	pd.weakCoin.StartEpoch(ctx, epoch, nonce, ua)
-}
-
 func (pd *ProtocolDriver) markProposalPhaseFinished(epoch types.EpochID, finishedAt time.Time) error {
 	pd.logger.With().Debug("proposal phase finished", epoch, log.Time("finished_at", finishedAt))
 	pd.mu.Lock()
@@ -851,7 +862,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 
 	encoded, err := codec.Encode(&mb)
 	if err != nil {
-		pd.logger.With().Panic("failed to serialize message for signing", log.Err(err))
+		pd.logger.With().Fatal("failed to serialize message for signing", log.Err(err))
 	}
 	sig := pd.edSigner.Sign(encoded)
 
@@ -860,14 +871,10 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		Signature:              sig,
 	}
 
-	pd.logger.WithContext(ctx).With().Debug("sending first round vote",
-		epoch,
-		types.FirstRound,
-		log.String("message", m.String()))
-
+	pd.logger.WithContext(ctx).With().Debug("sending first round vote", epoch, types.FirstRound)
 	serialized, err := codec.Encode(&m)
 	if err != nil {
-		pd.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
+		pd.logger.With().Fatal("failed to serialize message for gossip", log.Err(err))
 	}
 
 	pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, serialized)
@@ -898,7 +905,7 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 
 	encoded, err := codec.Encode(&mb)
 	if err != nil {
-		pd.logger.With().Panic("failed to serialize message for signing", log.Err(err))
+		pd.logger.With().Fatal("failed to serialize message for signing", log.Err(err))
 	}
 	sig := pd.edSigner.Sign(encoded)
 
@@ -907,14 +914,11 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 		Signature:                  sig,
 	}
 
-	pd.logger.WithContext(ctx).With().Debug("sending following round vote",
-		epoch,
-		round,
-		log.String("message", m.String()))
+	pd.logger.WithContext(ctx).With().Debug("sending following round vote", epoch, round)
 
 	serialized, err := codec.Encode(&m)
 	if err != nil {
-		pd.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
+		pd.logger.With().Fatal("failed to serialize message for gossip", log.Err(err))
 	}
 
 	pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, serialized)
@@ -998,15 +1002,13 @@ func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 
 func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, epoch types.EpochID, nonce types.VRFPostIndex) []byte {
 	p := buildProposal(logger, epoch, nonce)
-	signature := signer.Sign(p)
-	logger.WithContext(ctx).With().Debug("calculated signature",
+	vrfSig := signer.Sign(p)
+	logger.WithContext(ctx).With().Debug("calculated beacon proposal",
 		epoch,
 		nonce,
-		log.String("proposal", hex.EncodeToString(p)),
-		log.String("signature", hex.EncodeToString(signature)),
+		log.String("proposal", hex.EncodeToString(cropData(vrfSig))),
 	)
-
-	return signature
+	return vrfSig
 }
 
 //go:generate scalegen -types ProposalVrfMessage
@@ -1049,7 +1051,7 @@ func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
-	epoch := pd.clock.GetCurrentLayer().GetEpoch()
+	epoch := pd.clock.CurrentLayer().GetEpoch()
 	var observed []*metrics.BeaconStats
 	if epochBeacons, ok := pd.ballotsBeacons[epoch]; ok {
 		for beacon, stats := range epochBeacons {
@@ -1057,7 +1059,7 @@ func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 				Epoch:      epoch,
 				Beacon:     beacon.ShortString(),
 				Weight:     stats.totalWeight,
-				WeightUnit: stats.weightUnits,
+				WeightUnit: stats.numEligibility,
 			}
 			observed = append(observed, stat)
 		}

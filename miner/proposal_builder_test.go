@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -33,6 +34,7 @@ const (
 type testBuilder struct {
 	*ProposalBuilder
 	mOracle   *MockproposalOracle
+	mClock    *MocklayerClock
 	mTortoise *MockvotesEncoder
 	mCState   *MockconservativeState
 	mPubSub   *pubsubmocks.MockPublisher
@@ -47,6 +49,7 @@ func createBuilder(tb testing.TB) *testBuilder {
 	ctrl := gomock.NewController(tb)
 	pb := &testBuilder{
 		mOracle:   NewMockproposalOracle(ctrl),
+		mClock:    NewMocklayerClock(ctrl),
 		mTortoise: NewMockvotesEncoder(ctrl),
 		mCState:   NewMockconservativeState(ctrl),
 		mPubSub:   pubsubmocks.NewMockPublisher(ctrl),
@@ -56,7 +59,7 @@ func createBuilder(tb testing.TB) *testBuilder {
 	}
 	lg := logtest.New(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	pb.ProposalBuilder = NewProposalBuilder(context.Background(), make(chan types.LayerID), edSigner, vrfSigner,
+	pb.ProposalBuilder = NewProposalBuilder(context.Background(), pb.mClock, edSigner, vrfSigner,
 		cdb, pb.mPubSub, pb.mTortoise, pb.mBeacon, pb.mSync, pb.mCState,
 		WithLogger(lg),
 		WithLayerSize(20),
@@ -108,24 +111,39 @@ func genProofs(tb testing.TB, size int) []types.VotingEligibility {
 func TestBuilder_StartAndClose(t *testing.T) {
 	b := createBuilder(t)
 
+	current := types.NewLayerID(layersPerEpoch * 3)
+	b.mClock.EXPECT().CurrentLayer().Return(current)
+	b.mClock.EXPECT().AwaitLayer(current.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	})
+
+	b.mClock.EXPECT().CurrentLayer().Return(current.Add(1))
+	b.mClock.EXPECT().AwaitLayer(current.Add(2)).DoAndReturn(func(types.LayerID) chan struct{} {
+		return make(chan struct{})
+	})
+
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(false)
 
 	require.NoError(t, b.Start(context.Background()))
 	// calling Start the second time should have no effect
 	require.NoError(t, b.Start(context.Background()))
 
-	// causing it to build a block
-	b.layerTimer <- types.NewLayerID(layersPerEpoch * 3)
-
+	time.Sleep(10 * time.Millisecond)
 	b.Close()
 }
 
 func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b := createBuilder(t)
 
+	layerID := types.NewLayerID(layersPerEpoch * 3)
+	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+		return make(chan struct{})
+	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	atxID := types.RandomATXID()
 	activeSet := genActiveSet(t)
@@ -153,7 +171,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 		require.NoError(t, certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID))
 	}
 	meshHash := types.RandomHash()
-	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
+	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), meshHash))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
@@ -180,9 +198,13 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	b := createBuilder(t)
 
+	layerID := types.NewLayerID(layersPerEpoch * 3)
+	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+		return make(chan struct{})
+	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	atxID := types.RandomATXID()
 	activeSet := genActiveSet(t)
@@ -210,7 +232,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 		require.NoError(t, certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID))
 	}
 	meshHash := types.RandomHash()
-	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
+	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), meshHash))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
@@ -326,7 +348,7 @@ func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Opinion{Votes: types.Votes{Base: types.RandomBallotID()}}, nil)
 	b.mTortoise.EXPECT().LatestComplete().Return(types.GetEffectiveGenesis())
-	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), types.RandomHash()))
+	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var got types.Proposal
@@ -361,7 +383,7 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Opinion{Votes: types.Votes{Base: types.RandomBallotID()}}, nil)
 	b.mTortoise.EXPECT().LatestComplete().Return(types.GetEffectiveGenesis())
-	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), types.RandomHash()))
+	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var got types.Proposal
@@ -378,9 +400,13 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	b := createBuilder(t)
 
+	layerID := types.NewLayerID(layersPerEpoch * 3)
+	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+		return make(chan struct{})
+	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -395,7 +421,7 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Opinion{Votes: types.Votes{Base: types.RandomBallotID()}}, nil)
 	b.mTortoise.EXPECT().LatestComplete().Return(types.GetEffectiveGenesis())
-	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), types.RandomHash()))
+	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 
 	b.Close()
 	require.NoError(t, b.handleLayer(context.Background(), layerID))
@@ -404,9 +430,13 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b := createBuilder(t)
 
+	layerID := types.NewLayerID(layersPerEpoch * 3)
+	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+		return make(chan struct{})
+	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -421,7 +451,7 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Opinion{Votes: types.Votes{Base: types.RandomBallotID()}}, nil)
 	b.mTortoise.EXPECT().LatestComplete().Return(types.GetEffectiveGenesis())
-	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), types.RandomHash()))
+	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).Return(errors.New("unknown"))
 
 	// publish error is ignored
@@ -432,9 +462,13 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 	b := createBuilder(t)
 
+	layerID := types.NewLayerID(layersPerEpoch * 3)
+	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+		return make(chan struct{})
+	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -468,9 +502,13 @@ func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 	b := createBuilder(t)
 
+	layerID := types.NewLayerID(layersPerEpoch * 5)
+	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+		return make(chan struct{})
+	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
 
-	layerID := types.NewLayerID(layersPerEpoch * 5)
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -504,9 +542,13 @@ func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 	b := createBuilder(t)
 
+	layerID := types.NewLayerID(layersPerEpoch * 3)
+	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+		return make(chan struct{})
+	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -566,12 +608,12 @@ func TestBuilder_UniqueBlockID(t *testing.T) {
 	meshHash := types.RandomHash()
 
 	builder1.mTortoise.EXPECT().LatestComplete().Return(layerID.Sub(1))
-	require.NoError(t, layers.SetHashes(builder1.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
+	require.NoError(t, layers.SetMeshHash(builder1.cdb, layerID.Sub(1), meshHash))
 	b1, err := builder1.createProposal(context.Background(), layerID, nil, atxID1, activeSet, beacon, nil, types.Opinion{})
 	require.NoError(t, err)
 
 	builder2.mTortoise.EXPECT().LatestComplete().Return(layerID.Sub(1))
-	require.NoError(t, layers.SetHashes(builder2.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
+	require.NoError(t, layers.SetMeshHash(builder2.cdb, layerID.Sub(1), meshHash))
 	b2, err := builder2.createProposal(context.Background(), layerID, nil, atxID2, activeSet, beacon, nil, types.Opinion{})
 	require.NoError(t, err)
 

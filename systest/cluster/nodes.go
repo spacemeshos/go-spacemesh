@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -38,15 +39,45 @@ var (
 		fastnet.SmesherConfig,
 	)
 
-	smesherRequests = apiv1.ResourceList{
-		apiv1.ResourceCPU:    resource.MustParse("0.5"),
-		apiv1.ResourceMemory: resource.MustParse("1Gi"),
-	}
-	smesherLimits = apiv1.ResourceList{
-		apiv1.ResourceCPU:    resource.MustParse("4"),
-		apiv1.ResourceMemory: resource.MustParse("1Gi"),
-	}
+	smesherResources = parameters.NewParameter(
+		"smesher_resources",
+		"requests and limits for smesher container",
+		&apiv1.ResourceRequirements{
+			Requests: apiv1.ResourceList{
+				apiv1.ResourceCPU:    resource.MustParse("0.5"),
+				apiv1.ResourceMemory: resource.MustParse("1Gi"),
+			},
+			Limits: apiv1.ResourceList{
+				apiv1.ResourceCPU:    resource.MustParse("2"),
+				apiv1.ResourceMemory: resource.MustParse("1Gi"),
+			},
+		},
+		toResources,
+	)
+	poetResources = parameters.NewParameter(
+		"poet_resources",
+		"requests and limits for poet container",
+		&apiv1.ResourceRequirements{
+			Requests: apiv1.ResourceList{
+				apiv1.ResourceCPU:    resource.MustParse("0.5"),
+				apiv1.ResourceMemory: resource.MustParse("1Gi"),
+			},
+			Limits: apiv1.ResourceList{
+				apiv1.ResourceCPU:    resource.MustParse("0.5"),
+				apiv1.ResourceMemory: resource.MustParse("1Gi"),
+			},
+		},
+		toResources,
+	)
 )
+
+func toResources(value string) (*apiv1.ResourceRequirements, error) {
+	var rst apiv1.ResourceRequirements
+	if err := json.Unmarshal([]byte(value), &rst); err != nil {
+		return nil, fmt.Errorf("unmarshaling %s into apiv1.ResourceRequirements: %w", value, err)
+	}
+	return &rst, nil
+}
 
 const (
 	configDir = "/etc/config/"
@@ -129,17 +160,10 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 					WithVolumeMounts(
 						corev1.VolumeMount().WithName("config").WithMountPath(configDir),
 					).
-					WithResources(corev1.ResourceRequirements().WithRequests(
-						apiv1.ResourceList{
-							apiv1.ResourceCPU:    resource.MustParse("1"),
-							apiv1.ResourceMemory: resource.MustParse("1Gi"),
-						},
-					).WithLimits(
-						apiv1.ResourceList{
-							apiv1.ResourceCPU:    resource.MustParse("2"),
-							apiv1.ResourceMemory: resource.MustParse("1Gi"),
-						},
-					)),
+					WithResources(corev1.ResourceRequirements().
+						WithRequests(poetResources.Get(ctx.Parameters).Requests).
+						WithLimits(poetResources.Get(ctx.Parameters).Limits),
+					),
 				),
 		)
 
@@ -422,8 +446,8 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
 						).
 						WithResources(corev1.ResourceRequirements().
-							WithRequests(smesherRequests).
-							WithLimits(smesherLimits),
+							WithRequests(smesherResources.Get(ctx.Parameters).Requests).
+							WithLimits(smesherResources.Get(ctx.Parameters).Limits),
 						).
 						WithStartupProbe(
 							corev1.Probe().WithTCPSocket(

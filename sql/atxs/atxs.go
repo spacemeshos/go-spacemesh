@@ -22,9 +22,14 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err 
 			return true
 		}
 		v.SetID(&id)
+
 		nodeID := types.NodeID{}
 		stmt.ColumnBytes(3, nodeID[:])
 		v.SetNodeID(&nodeID)
+
+		effectiveNumUnits := uint32(stmt.ColumnInt32(4))
+		v.SetEffectiveNumUnits(effectiveNumUnits)
+		v.SetReceived(time.Unix(0, stmt.ColumnInt64(5)).Local())
 
 		baseTickHeight := uint64(stmt.ColumnInt64(1))
 		tickCount := uint64(stmt.ColumnInt64(2))
@@ -32,7 +37,7 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err 
 		return err == nil
 	}
 
-	if rows, err := db.Exec("select atx, base_tick_height, tick_count, smesher from atxs where id = ?1;", enc, dec); err != nil {
+	if rows, err := db.Exec("select atx, base_tick_height, tick_count, smesher, effective_num_units, received from atxs where id = ?1;", enc, dec); err != nil {
 		return nil, fmt.Errorf("exec id %v: %w", id, err)
 	} else if rows == 0 {
 		return nil, fmt.Errorf("exec id %v: %w", id, sql.ErrNotFound)
@@ -52,25 +57,6 @@ func Has(db sql.Executor, id types.ATXID) (bool, error) {
 		return false, fmt.Errorf("exec id %v: %w", id, err)
 	}
 	return rows > 0, nil
-}
-
-// GetTimestamp gets an ATX timestamp by a given ATX ID.
-func GetTimestamp(db sql.Executor, id types.ATXID) (timestamp time.Time, err error) {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, id.Bytes())
-	}
-	dec := func(stmt *sql.Statement) bool {
-		timestamp = time.Unix(0, stmt.ColumnInt64(0))
-		return true
-	}
-
-	if rows, err := db.Exec("select timestamp from atxs where id = ?1;", enc, dec); err != nil {
-		return time.Time{}, fmt.Errorf("exec id %v: %w", id, err)
-	} else if rows == 0 {
-		return time.Time{}, fmt.Errorf("exec id %s: %w", id, sql.ErrNotFound)
-	}
-
-	return timestamp, err
 }
 
 // GetFirstIDByNodeID gets the initial ATX ID for a given node ID.
@@ -109,7 +95,7 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 	if rows, err := db.Exec(`
 		select id from atxs 
 		where smesher = ?1
-		order by epoch desc, timestamp desc
+		order by epoch desc, received desc
 		limit 1;`, enc, dec); err != nil {
 		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
@@ -170,6 +156,8 @@ func GetByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.Node
 		}
 		v.SetID(&id)
 		v.SetNodeID(&nodeID)
+		v.SetEffectiveNumUnits(uint32(stmt.ColumnInt32(4)))
+		v.SetReceived(time.Unix(0, stmt.ColumnInt64(5)).Local())
 		baseTickHeight := uint64(stmt.ColumnInt64(2))
 		tickCount := uint64(stmt.ColumnInt64(3))
 		atx, err = v.Verify(baseTickHeight, tickCount)
@@ -177,7 +165,7 @@ func GetByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.Node
 	}
 
 	if rows, err := db.Exec(`
-		select id, atx, base_tick_height, tick_count from atxs
+		select id, atx, base_tick_height, tick_count, effective_num_units, received from atxs
 		where epoch = ?1 and smesher = ?2
 		limit 1;`, enc, dec); err != nil {
 		return nil, fmt.Errorf("atx by epoch %v nodeID %v: %w", epoch, nodeID, err)
@@ -250,7 +238,7 @@ func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
 }
 
 // Add adds an ATX for a given ATX ID.
-func Add(db sql.Executor, atx *types.VerifiedActivationTx, timestamp time.Time) error {
+func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 	buf, err := codec.Encode(atx.ActivationTx)
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
@@ -260,19 +248,20 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx, timestamp time.Time) 
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PubLayerID.Uint32()))
 		stmt.BindInt64(3, int64(atx.PublishEpoch()))
+		stmt.BindInt64(4, int64(atx.EffectiveNumUnits()))
 		if atx.VRFNonce != nil {
-			stmt.BindInt64(4, int64(*atx.VRFNonce))
+			stmt.BindInt64(5, int64(*atx.VRFNonce))
 		}
-		stmt.BindBytes(5, atx.NodeID().Bytes())
-		stmt.BindBytes(6, buf)
-		stmt.BindInt64(7, timestamp.UnixNano())
-		stmt.BindInt64(8, int64(atx.BaseTickHeight()))
-		stmt.BindInt64(9, int64(atx.TickCount()))
+		stmt.BindBytes(6, atx.NodeID().Bytes())
+		stmt.BindBytes(7, buf)
+		stmt.BindInt64(8, atx.Received().UnixNano())
+		stmt.BindInt64(9, int64(atx.BaseTickHeight()))
+		stmt.BindInt64(10, int64(atx.TickCount()))
 	}
 
 	_, err = db.Exec(`
-		insert into atxs (id, layer, epoch, nonce, smesher, atx, timestamp, base_tick_height, tick_count) 
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);`, enc, nil)
+		insert into atxs (id, layer, epoch, effective_num_units, nonce, smesher, atx, received, base_tick_height, tick_count) 
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}

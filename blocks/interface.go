@@ -9,6 +9,10 @@ import (
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
+type layerPatrol interface {
+	CompleteHare(types.LayerID)
+}
+
 type meshProvider interface {
 	AddBlockWithTXs(context.Context, *types.Block) error
 	ProcessLayerPerHareOutput(context.Context, types.LayerID, types.BlockID, bool) error
@@ -20,7 +24,7 @@ type executor interface {
 
 type layerClock interface {
 	AwaitLayer(layerID types.LayerID) chan struct{}
-	GetCurrentLayer() types.LayerID
+	CurrentLayer() types.LayerID
 }
 
 type certifier interface {

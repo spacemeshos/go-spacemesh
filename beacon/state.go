@@ -1,10 +1,12 @@
 package beacon
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -28,13 +30,15 @@ type state struct {
 	hasVoted                  []map[string]struct{}
 	proposalPhaseFinishedTime time.Time
 	proposalChecker           eligibilityChecker
+	unitAllowance             weakcoin.UnitAllowances
 }
 
-func newState(logger log.Log, cfg Config, epochWeight uint64, nonce types.VRFPostIndex, atxids []types.ATXID) *state {
+func newState(logger log.Log, cfg Config, nonce types.VRFPostIndex, epochWeight uint64, atxids []types.ATXID, ua weakcoin.UnitAllowances) *state {
 	return &state{
 		logger:                  logger,
 		epochWeight:             epochWeight,
 		nonce:                   nonce,
+		unitAllowance:           ua,
 		atxs:                    atxids,
 		firstRoundIncomingVotes: make(map[string]proposalList),
 		votesMargin:             map[string]*big.Int{},
@@ -48,18 +52,16 @@ func (s *state) addValidProposal(proposal []byte) {
 	if s.incomingProposals.valid == nil {
 		s.incomingProposals.valid = make(map[string]struct{})
 	}
-	p := string(proposal)
-	s.incomingProposals.valid[p] = struct{}{}
-	s.votesMargin[p] = new(big.Int)
+	s.incomingProposals.valid[string(proposal)] = struct{}{}
+	s.votesMargin[string(proposal)] = new(big.Int)
 }
 
 func (s *state) addPotentiallyValidProposal(proposal []byte) {
 	if s.incomingProposals.potentiallyValid == nil {
 		s.incomingProposals.potentiallyValid = make(map[string]struct{})
 	}
-	p := string(proposal)
-	s.incomingProposals.potentiallyValid[p] = struct{}{}
-	s.votesMargin[p] = new(big.Int)
+	s.incomingProposals.potentiallyValid[string(proposal)] = struct{}{}
+	s.votesMargin[string(proposal)] = new(big.Int)
 }
 
 func (s *state) setMinerFirstRoundVote(minerPK *signing.PublicKey, voteList [][]byte) {
@@ -69,7 +71,7 @@ func (s *state) setMinerFirstRoundVote(minerPK *signing.PublicKey, voteList [][]
 func (s *state) getMinerFirstRoundVote(minerPK *signing.PublicKey) (proposalList, error) {
 	p, ok := s.firstRoundIncomingVotes[string(minerPK.Bytes())]
 	if !ok {
-		return nil, fmt.Errorf("no first round votes for miner %v", minerPK.String())
+		return nil, fmt.Errorf("no first round votes for miner")
 	}
 	return p, nil
 }
@@ -78,7 +80,8 @@ func (s *state) addVote(proposal string, vote uint, voteWeight *big.Int) {
 	if _, ok := s.votesMargin[proposal]; !ok {
 		// voteMargin is updated during the proposal phase.
 		// ignore votes on proposals not in the original proposals.
-		s.logger.With().Warning("ignoring vote for unknown proposal", log.Binary("proposal", []byte(proposal)))
+		s.logger.With().Warning("ignoring vote for unknown proposal",
+			log.String("proposal", hex.EncodeToString([]byte(proposal))))
 		return
 	}
 	if vote == up {

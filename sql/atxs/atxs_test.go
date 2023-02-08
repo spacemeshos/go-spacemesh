@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -36,7 +37,7 @@ func TestGetATXByID(t *testing.T) {
 	}
 
 	for _, atx := range atxList {
-		require.NoError(t, atxs.Add(db, atx, time.Now()))
+		require.NoError(t, atxs.Add(db, atx))
 	}
 
 	for _, want := range atxList {
@@ -62,7 +63,7 @@ func TestHasID(t *testing.T) {
 	}
 
 	for _, atx := range atxList {
-		require.NoError(t, atxs.Add(db, atx, time.Now()))
+		require.NoError(t, atxs.Add(db, atx))
 	}
 
 	for _, atx := range atxList {
@@ -74,25 +75,6 @@ func TestHasID(t *testing.T) {
 	has, err := atxs.Has(db, types.ATXID(types.CalcHash32([]byte("0"))))
 	require.NoError(t, err)
 	require.False(t, has)
-}
-
-func TestGetTimestampByID(t *testing.T) {
-	db := sql.InMemory()
-
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	atx, err := newAtx(sig, types.NewLayerID(uint32(0)))
-	require.NoError(t, err)
-
-	ts := time.Now()
-	require.NoError(t, atxs.Add(db, atx, ts))
-
-	timestamp, err := atxs.GetTimestamp(db, atx.ID())
-	require.NoError(t, err)
-	require.EqualValues(t, ts.UnixNano(), timestamp.UnixNano())
-
-	_, err = atxs.GetTimestamp(db, types.ATXID(types.CalcHash32([]byte("0"))))
-	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
 func TestGetFirstIDByNodeID(t *testing.T) {
@@ -128,7 +110,7 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 	require.NoError(t, atx4.CalcAndSetID())
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
-		require.NoError(t, atxs.Add(db, atx, time.Now()))
+		require.NoError(t, atxs.Add(db, atx))
 	}
 
 	// Act & Assert
@@ -161,17 +143,15 @@ func TestGetByEpochAndNodeID(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, atx2.CalcAndSetID())
 
-	now := time.Now()
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2} {
-		require.NoError(t, atxs.Add(db, atx, now))
-		now = now.Add(time.Nanosecond)
+		require.NoError(t, atxs.Add(db, atx))
 	}
 
 	// Act & Assert
 
 	got, err := atxs.GetByEpochAndNodeID(db, types.EpochID(1), sig1.NodeID())
 	require.NoError(t, err)
-	require.EqualValues(t, atx1, got)
+	require.Equal(t, atx1, got)
 
 	got, err = atxs.GetByEpochAndNodeID(db, types.EpochID(2), sig1.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
@@ -183,7 +163,7 @@ func TestGetByEpochAndNodeID(t *testing.T) {
 
 	got, err = atxs.GetByEpochAndNodeID(db, types.EpochID(2), sig2.NodeID())
 	require.NoError(t, err)
-	require.EqualValues(t, atx2, got)
+	require.Equal(t, atx2, got)
 }
 
 func TestGetLastIDByNodeID(t *testing.T) {
@@ -218,10 +198,8 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	atx4.Signature = sig2.Sign(atx4.SignedBytes())
 	require.NoError(t, atx4.CalcAndSetID())
 
-	now := time.Now()
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
-		require.NoError(t, atxs.Add(db, atx, now))
-		now = now.Add(time.Nanosecond)
+		require.NoError(t, atxs.Add(db, atx))
 	}
 
 	// Act & Assert
@@ -260,7 +238,7 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
-		require.NoError(t, atxs.Add(db, atx, time.Now()))
+		require.NoError(t, atxs.Add(db, atx))
 	}
 
 	l1n1, err := atxs.GetIDByEpochAndNodeID(db, l1.GetEpoch(), sig1.NodeID())
@@ -308,7 +286,7 @@ func TestGetIDsByEpoch(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
-		require.NoError(t, atxs.Add(db, atx, time.Now()))
+		require.NoError(t, atxs.Add(db, atx))
 	}
 
 	ids1, err := atxs.GetIDsByEpoch(db, l1.GetEpoch())
@@ -336,17 +314,17 @@ func TestVRFNonce(t *testing.T) {
 	atx1, err := newAtx(sig, types.EpochID(20).FirstLayer())
 	require.NoError(t, err)
 	atx1.VRFNonce = &nonce1
-	require.NoError(t, atxs.Add(db, atx1, time.Now()))
+	require.NoError(t, atxs.Add(db, atx1))
 
 	atx2, err := newAtx(sig, types.EpochID(30).FirstLayer())
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(db, atx2, time.Now()))
+	require.NoError(t, atxs.Add(db, atx2))
 
 	nonce3 := types.VRFPostIndex(777)
 	atx3, err := newAtx(sig, types.EpochID(50).FirstLayer())
 	require.NoError(t, err)
 	atx3.VRFNonce = &nonce3
-	require.NoError(t, atxs.Add(db, atx3, time.Now()))
+	require.NoError(t, atxs.Add(db, atx3))
 
 	// Act & Assert
 
@@ -382,7 +360,7 @@ func TestGetBlob(t *testing.T) {
 	atx, err := newAtx(sig, types.NewLayerID(uint32(1)))
 	require.NoError(t, err)
 
-	require.NoError(t, atxs.Add(db, atx, time.Now()))
+	require.NoError(t, atxs.Add(db, atx))
 	buf, err := atxs.GetBlob(db, atx.ID().Bytes())
 	require.NoError(t, err)
 	encoded, err := codec.Encode(atx.ActivationTx)
@@ -402,15 +380,15 @@ func TestAdd(t *testing.T) {
 	atx, err := newAtx(sig, types.NewLayerID(uint32(1)))
 	require.NoError(t, err)
 
-	require.NoError(t, atxs.Add(db, atx, time.Now()))
-	require.ErrorIs(t, atxs.Add(db, atx, time.Now()), sql.ErrObjectExists)
+	require.NoError(t, atxs.Add(db, atx))
+	require.ErrorIs(t, atxs.Add(db, atx), sql.ErrObjectExists)
 
 	got, err := atxs.Get(db, atx.ID())
 	require.NoError(t, err)
 	require.Equal(t, atx, got)
 }
 
-func newAtx(sig *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActivationTx, error) {
+func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActivationTx, error) {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -421,7 +399,9 @@ func newAtx(sig *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActiva
 		},
 	}
 
-	atx.Signature = sig.Sign(atx.SignedBytes())
+	activation.SignAndFinalizeAtx(signer, atx)
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now().Local())
 	return atx.Verify(0, 1)
 }
 
@@ -466,17 +446,20 @@ func TestPositioningID(t *testing.T) {
 							PubLayerID: atx.epoch.FirstLayer(),
 						},
 						Coinbase: atx.coinbase,
+						NumUnits: 2,
 					},
 				}
 
 				sig, err := signing.NewEdSigner()
 				require.NoError(t, err)
-				full.Signature = sig.Sign(full.SignedBytes())
+				require.NoError(t, activation.SignAndFinalizeAtx(sig, full))
 
+				full.SetEffectiveNumUnits(full.NumUnits)
+				full.SetReceived(time.Now())
 				vAtx, err := full.Verify(atx.base, atx.count)
 				require.NoError(t, err)
 
-				require.NoError(t, atxs.Add(db, vAtx, time.Time{}))
+				require.NoError(t, atxs.Add(db, vAtx))
 				ids = append(ids, full.ID())
 			}
 			rst, err := atxs.GetAtxIDWithMaxHeight(db)

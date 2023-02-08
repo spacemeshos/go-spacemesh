@@ -261,6 +261,29 @@ func (t *MeshHashes) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	return total, nil
 }
 
+func (t *MaliciousIDs) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeStructSlice(enc, t.NodeIDs)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *MaliciousIDs) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeStructSlice[types.NodeID](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.NodeIDs = field
+	}
+	return total, nil
+}
+
 func (t *EpochData) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeStructSlice(enc, t.AtxIDs)

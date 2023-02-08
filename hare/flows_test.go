@@ -180,7 +180,6 @@ func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *
 	ctrl := gomock.NewController(tb)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
-	patrol.EXPECT().CompleteHare(gomock.Any()).AnyTimes()
 	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
 	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, nil).AnyTimes()
 	mockStateQ := mocks.NewMockstateQuerier(ctrl)
@@ -258,7 +257,7 @@ func (m *mockClock) AwaitLayer(layer types.LayerID) chan struct{} {
 	return ch
 }
 
-func (m *mockClock) GetCurrentLayer() types.LayerID {
+func (m *mockClock) CurrentLayer() types.LayerID {
 	m.m.RLock()
 	defer m.m.RUnlock()
 

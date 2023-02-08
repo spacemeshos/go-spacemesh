@@ -186,16 +186,16 @@ type Service interface {
 	Close()
 }
 
-// TickProvider is an interface to a global system clock that releases ticks on each layer.
-type TickProvider interface {
-	Subscribe() timesync.LayerTimer
-	Unsubscribe(timesync.LayerTimer)
-	GetCurrentLayer() types.LayerID
-	StartNotifying()
-	GetGenesisTime() time.Time
-	timesync.LayerConverter
-	Close()
+// NodeClock is an interface to a global system clock that releases ticks on each layer.
+type NodeClock interface {
+	LayerToTime(types.LayerID) time.Time
+	TimeToLayer(time.Time) types.LayerID
+	GenesisTime() time.Time
+
+	CurrentLayer() types.LayerID
 	AwaitLayer(types.LayerID) chan struct{}
+
+	Close()
 }
 
 func loadConfig(c *cobra.Command) (*config.Config, error) {
@@ -292,7 +292,7 @@ type App struct {
 	proposalBuilder  *miner.ProposalBuilder
 	mesh             *mesh.Mesh
 	cachedDB         *datastore.CachedDB
-	clock            TickProvider
+	clock            NodeClock
 	hare             *hare.Hare
 	blockGen         *blocks.Generator
 	certifier        *blocks.Certifier
@@ -463,7 +463,7 @@ func (app *App) initServices(
 	sgn *signing.EdSigner,
 	poetClients []activation.PoetProvingServiceClient,
 	vrfSigner *signing.VRFSigner,
-	clock TickProvider,
+	clock NodeClock,
 ) error {
 	nodeID := sgn.NodeID()
 	layerSize := uint32(app.Config.LayerAvgSize)
@@ -571,8 +571,8 @@ func (app *App) initServices(
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
 			CertifyThreshold: app.Config.HARE.F + 1,
-			WaitSigLayers:    app.Config.Tortoise.Zdist,
-			NumLayersToKeep:  app.Config.Tortoise.Zdist,
+			LayerBuffer:      app.Config.Tortoise.Zdist,
+			NumLayersToKeep:  app.Config.Tortoise.Zdist * 2,
 		}),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
 	)
@@ -605,7 +605,7 @@ func (app *App) initServices(
 	beaconProtocol.SetSyncState(newSyncer)
 
 	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
-	app.blockGen = blocks.NewGenerator(app.cachedDB, executor, msh, fetcherWrapped, app.certifier,
+	app.blockGen = blocks.NewGenerator(app.cachedDB, executor, msh, fetcherWrapped, app.certifier, patrol,
 		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
 			LayerSize:          layerSize,
@@ -638,7 +638,7 @@ func (app *App) initServices(
 
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
-		clock.Subscribe(),
+		clock,
 		sgn,
 		vrfSigner,
 		app.cachedDB,
@@ -702,6 +702,12 @@ func (app *App) initServices(
 		}
 		return pubsub.ValidationIgnore
 	}
+	atxSyncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
+		if newSyncer.ListenToATXGossip() {
+			return pubsub.ValidationAccept
+		}
+		return pubsub.ValidationIgnore
+	}
 
 	app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
 	app.host.Register(pubsub.BeaconProposalProtocol,
@@ -711,18 +717,11 @@ func (app *App) initServices(
 	app.host.Register(pubsub.BeaconFollowingVotesProtocol,
 		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
 	app.host.Register(pubsub.ProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
-	app.host.Register(pubsub.AtxProtocol, pubsub.ChainGossipHandler(
-		func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
-			if newSyncer.ListenToATXGossip() {
-				return pubsub.ValidationAccept
-			}
-			return pubsub.ValidationIgnore
-		},
-		atxHandler.HandleGossipAtx))
+	app.host.Register(pubsub.AtxProtocol, pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx))
 	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
 	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()))
 	app.host.Register(pubsub.BlockCertify, pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage))
-	app.host.Register(pubsub.MalfeasanceProof, malfeasanceHandler.HandleMalfeasanceProof)
+	app.host.Register(pubsub.MalfeasanceProof, pubsub.ChainGossipHandler(atxSyncHandler, malfeasanceHandler.HandleMalfeasanceProof))
 
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener
@@ -774,7 +773,6 @@ func (app *App) startServices(ctx context.Context) error {
 		log.Info("smeshing not started, waiting to be triggered via smesher api")
 	}
 
-	app.clock.StartNotifying()
 	if app.ptimesync != nil {
 		app.ptimesync.Start()
 	}
@@ -983,12 +981,6 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 }
 
 func (app *App) startSyncer(ctx context.Context) {
-	app.log.With().Info("sync: waiting for p2p host to find outbound peers",
-		log.Int("outbound", app.Config.P2P.TargetOutbound))
-	_, err := app.host.WaitPeers(ctx, app.Config.P2P.TargetOutbound)
-	if err != nil {
-		return
-	}
 	app.log.Info("sync: waiting for tortoise to load state")
 	if err := app.tortoise.WaitReady(ctx); err != nil {
 		app.log.With().Error("sync: tortoise failed to load state", log.Err(err))
@@ -1072,7 +1064,7 @@ func (app *App) Start(ctx context.Context) error {
 
 	poetClients := make([]activation.PoetProvingServiceClient, 0, len(app.Config.PoETServers))
 	for _, address := range app.Config.PoETServers {
-		poetClients = append(poetClients, activation.NewHTTPPoetClient(address))
+		poetClients = append(poetClients, activation.NewHTTPPoetClient(address, app.Config.POET))
 	}
 
 	edPubkey := edSgn.PublicKey()
@@ -1084,9 +1076,17 @@ func (app *App) Start(ctx context.Context) error {
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
 	if err != nil {
-		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.Genesis.GenesisTime, err)
+		return fmt.Errorf("cannot parse genesis time %s: %w", app.Config.Genesis.GenesisTime, err)
 	}
-	clock := timesync.NewClock(timesync.RealClock{}, app.Config.LayerDuration, gTime, lg.WithName("clock"))
+	clock, err := timesync.NewClock(
+		timesync.WithLayerDuration(app.Config.LayerDuration),
+		timesync.WithTickInterval(1*time.Second), // TODO (mafa): make cfg parameter
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(lg.WithName("clock")),
+	)
+	if err != nil {
+		return fmt.Errorf("cannot create clock: %w", err)
+	}
 
 	lg.Info("initializing p2p services")
 
@@ -1140,7 +1140,7 @@ func (app *App) Start(ctx context.Context) error {
 
 	app.startAPIServices(ctx)
 
-	events.SubscribeToLayers(clock.Subscribe())
+	events.SubscribeToLayers(clock)
 	logger.Info("app started")
 
 	// notify anyone who might be listening that the app has finished starting.
