@@ -34,12 +34,11 @@ func getPoetProof(t *testing.T) types.PoetProofMessage {
 
 		leaves, merkleProof, err := prover.GenerateProofWithoutPersistency(
 			context.Background(),
-			t.TempDir(),
+			prover.TreeConfig{Datadir: t.TempDir()},
 			poetHash.GenLabelHashFunc(challenge),
 			poetHash.GenMerkleHashFunc(challenge),
 			time.Now().Add(time.Millisecond*300),
 			shared.T,
-			prover.LowestMerkleMinMemoryLayer,
 		)
 		require.NoError(t, err)
 
