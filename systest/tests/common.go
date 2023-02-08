@@ -150,9 +150,11 @@ func watchLayers(ctx context.Context, eg *errgroup.Group,
 	})
 }
 
+type layerCollector func(*pb.LayerStreamResponse) (bool, error)
+
 func layersStream(ctx context.Context,
 	node *cluster.NodeClient,
-	collector func(*pb.LayerStreamResponse) (bool, error),
+	collector layerCollector,
 ) error {
 	meshapi := pb.NewMeshServiceClient(node)
 	layers, err := meshapi.LayerStream(ctx, &pb.LayerStreamRequest{})
