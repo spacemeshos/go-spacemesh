@@ -5,11 +5,21 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 )
+
+var tickDistance = metrics.NewHistogramWithBuckets(
+	"tick_distance",
+	"clock",
+	"distance between layer ticks",
+	[]string{},
+	prometheus.ExponentialBuckets(1, 2, 10),
+).WithLabelValues()
 
 // NodeClock is the struct holding a real clock.
 type NodeClock struct {
@@ -19,9 +29,10 @@ type NodeClock struct {
 	genesis      time.Time
 	tickInterval time.Duration
 
-	mu              sync.Mutex    // protects the following fields
-	lastTickedLayer types.LayerID // track last ticked layer
-	layerChannels   map[types.LayerID]chan struct{}
+	mu            sync.Mutex    // protects the following fields
+	lastTicked    types.LayerID // track last ticked layer
+	minLayer      types.LayerID // track earliest layer that has a channel waiting for tick
+	layerChannels map[types.LayerID]chan struct{}
 
 	stop chan struct{}
 	once sync.Once
@@ -80,7 +91,8 @@ func (t *NodeClock) startClock() error {
 		select {
 		case <-ticker.C:
 		case <-t.stop:
-			t.log.Info("stopping global clock %p", t)
+			t.log.Info("stopping global clock")
+			ticker.Stop()
 			return nil
 		}
 
@@ -116,16 +128,35 @@ func (t *NodeClock) tick() {
 	}
 
 	layer := t.TimeToLayer(t.clock.Now())
+	switch {
+	case layer.Before(t.lastTicked):
+		t.log.With().Info("clock ticked back in time",
+			log.Stringer("layer", layer),
+			log.Stringer("last_ticked_layer", t.lastTicked),
+		)
+		d := t.lastTicked.Difference(layer)
+		tickDistance.Observe(float64(-d))
+	case layer.Difference(t.lastTicked) > 1:
+		t.log.With().Warning("clock skipped layers",
+			log.Stringer("layer", layer),
+			log.Stringer("last_ticked_layer", t.lastTicked),
+		)
+		d := layer.Difference(t.lastTicked)
+		tickDistance.Observe(float64(d))
+	case layer == t.lastTicked:
+		tickDistance.Observe(0)
+	}
 
 	// close await channel for prev layers
-	for l := t.lastTickedLayer; !l.After(layer); l = l.Add(1) {
+	for l := t.minLayer; !l.After(layer); l = l.Add(1) {
 		if layerChan, found := t.layerChannels[l]; found {
 			close(layerChan)
 			delete(t.layerChannels, l)
 		}
 	}
 
-	t.lastTickedLayer = layer // update last ticked layer
+	t.lastTicked = layer
+	t.minLayer = layer.Add(1)
 }
 
 // CurrentLayer gets the current layer.
@@ -153,8 +184,8 @@ func (t *NodeClock) AwaitLayer(layerID types.LayerID) chan struct{} {
 		t.layerChannels[layerID] = ch
 	}
 
-	if t.lastTickedLayer.Before(layerID) {
-		t.lastTickedLayer = layerID.Sub(1)
+	if t.minLayer.After(layerID) {
+		t.minLayer = layerID
 	}
 
 	return ch

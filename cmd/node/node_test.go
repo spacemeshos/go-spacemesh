@@ -521,7 +521,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	clock, err := timesync.NewClock(
 		timesync.WithLayerDuration(1*time.Second),
-		timesync.WithTickInterval(1*time.Second/10),
+		timesync.WithTickInterval(100*time.Millisecond),
 		timesync.WithGenesisTime(time.Now()),
 		timesync.WithLogger(logtest.New(t)),
 	)

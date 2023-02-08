@@ -45,7 +45,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&cfg.Genesis.ExtraData, "genesis-extra-data",
 		cfg.Genesis.ExtraData, "genesis extra-data will be committed to the genesis id")
 	cmd.PersistentFlags().DurationVar(&cfg.LayerDuration, "layer-duration",
-		cfg.LayerDuration, "Duration between layers in seconds")
+		cfg.LayerDuration, "Duration between layers")
 	cmd.PersistentFlags().Uint32Var(&cfg.LayerAvgSize, "layer-average-size",
 		cfg.LayerAvgSize, "Layer Avg size")
 	cmd.PersistentFlags().BoolVar(&cfg.PprofHTTPServer, "pprof-server",
