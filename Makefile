@@ -1,10 +1,11 @@
+
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 include Makefile-gpu.Inc
 # TODO(nkryuchkov): uncomment when go-svm is imported
 #include Makefile-svm.Inc
 
 DOCKER_HUB ?= spacemeshos
-UNIT_TESTS ?= $(shell go list ./...  | grep -v systest)
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests)
 
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)

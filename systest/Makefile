@@ -1,5 +1,6 @@
 version_info ?= $(shell git rev-parse --short HEAD)
 date := $(shell date +'%s')
+tmpfile := $(shell mktemp /tmp/systest-XXX)
 
 test_name ?= TestSmeshing
 org ?= spacemeshos
@@ -41,22 +42,26 @@ docker:
 push:
 	docker push $(image_name)
 
+.PHONY: template
+template:
+	@echo smesher=`cat $(smesher_config)` > $(tmpfile)
+	@echo poet=`cat $(poet_config)` >> $(tmpfile)
+	@echo cluster-size=$(size) >> $(tmpfile)
+	@echo bootstrap-duration=$(bootstrap) >> $(tmpfile)
+	@echo namespace=$(namespace) >> $(tmpfile)
+	@echo storage=$(storage) >> $(tmpfile)
+	@echo node-selector=$(node_selector) >> $(tmpfile)
+	@echo image=$(smesher_image) >> $(tmpfile)
+	@echo poet-image=$(poet_image) >> $(tmpfile)
+	@echo poet-size=$(poet_size) >> $(tmpfile)
+	@echo keep=$(keep) >> $(tmpfile)
+	@echo testid=$(test_id) >> $(tmpfile)
+
 .PHONY: config
-config:
-	@kubectl create configmap $(configname) \
-		--from-file=smesher=$(smesher_config) --from-file=poet=$(poet_config) \
-		--from-literal=cluster-size=$(size) \
-		--from-literal=bootstrap-duration=$(bootstrap) \
-		--from-literal=namespace=$(namespace) \
-		--from-literal=storage=$(storage) \
-		--from-literal=node-selector=$(node_selector) \
-		--from-literal=image=$(smesher_image) \
-		--from-literal=poet-image=$(poet_image) \
-		--from-literal=poet-size=$(poet_size) \
-		--from-literal=keep=$(keep) \
-		--from-literal=testid=$(test_id) \
-		$(optional_properties)
+config: template
+	@kubectl create configmap $(configname) --from-env-file=$(tmpfile) $(optional_properties)
 	@kubectl label configmap $(configname) testid=$(test_id)
+	@rm $(tmpfile)
 
 .PHONY: gomplate
 gomplate:

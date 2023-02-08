@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -21,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
+	"github.com/spacemeshos/go-spacemesh/systest/validation"
 )
 
 func TestStepCreate(t *testing.T) {
@@ -389,4 +391,29 @@ func TestScheduleTransactions(t *testing.T) {
 		return t.Run("txs", TestStepTransactions)
 	})
 	rn.wait()
+}
+
+func TestStepValidation(t *testing.T) {
+	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
+	c, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	require.NoError(t, err)
+
+	eg, ctx := errgroup.WithContext(tctx)
+	eg.Go(func() error {
+		// ensure that node will be back to sync in 2 hours
+		err := validation.Periodic(ctx, 12*time.Minute, validation.Sync(c, 10))
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
+		return nil
+	})
+	eg.Go(func() error {
+		// ensure that within 25 minutes that current-4 layer will be consistent across the cluster
+		err := validation.Periodic(ctx, 5*time.Minute, validation.Consensus(c, 5, 4))
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
+		return err
+	})
+	require.NoError(t, eg.Wait())
 }
