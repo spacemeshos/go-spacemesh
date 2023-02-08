@@ -5,11 +5,21 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 )
+
+var tickDistance = metrics.NewHistogramWithBuckets(
+	"tick_distance",
+	"clock",
+	"distance between layer ticks",
+	[]string{},
+	prometheus.ExponentialBuckets(1, 2, 10),
+).WithLabelValues()
 
 // NodeClock is the struct holding a real clock.
 type NodeClock struct {
@@ -124,11 +134,17 @@ func (t *NodeClock) tick() {
 			log.Stringer("layer", layer),
 			log.Stringer("last_ticked_layer", t.lastTicked),
 		)
+		d := t.lastTicked.Difference(layer)
+		tickDistance.Observe(float64(-d))
 	case layer.Difference(t.lastTicked) > 1:
 		t.log.With().Warning("clock skipped layers",
 			log.Stringer("layer", layer),
 			log.Stringer("last_ticked_layer", t.lastTicked),
 		)
+		d := layer.Difference(t.lastTicked)
+		tickDistance.Observe(float64(d))
+	case layer == t.lastTicked:
+		tickDistance.Observe(0)
 	}
 
 	// close await channel for prev layers
