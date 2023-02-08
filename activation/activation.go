@@ -386,9 +386,15 @@ func (b *Builder) loop(ctx context.Context) {
 
 			switch {
 			case errors.Is(err, ErrATXChallengeExpired):
-				b.log.WithContext(ctx).Debug("discarding challenge")
+				b.log.WithContext(ctx).Debug("retrying with new challenge after waiting for a layer")
 				b.discardChallenge()
-				// can be retried immediately with a new challenge
+				// give node some time to sync in case selecting the positioning ATX caused the challenge to expire
+				currentLayer := b.layerClock.CurrentLayer()
+				select {
+				case <-ctx.Done():
+					return
+				case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
+				}
 			case errors.Is(err, ErrPoetServiceUnstable):
 				b.log.WithContext(ctx).Debug("retrying after poet retry interval")
 				select {
@@ -425,6 +431,11 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		PositioningATX: atxID,
 		PubLayerID:     pubLayerID.Add(b.layersPerEpoch),
 	}
+	if challenge.TargetEpoch() < b.currentEpoch() {
+		b.discardChallenge()
+		return nil, fmt.Errorf("%w: selected outdated positioning ATX", ErrATXChallengeExpired)
+	}
+
 	if prevAtx, err := b.cdb.GetLastAtx(b.nodeID); err != nil {
 		commitmentAtx, err := b.getCommitmentAtx(ctx)
 		if err != nil {
@@ -594,15 +605,8 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	case <-atxReceived:
 		logger.With().Info("received atx in db", atx.ID())
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
-		select {
-		case <-atxReceived:
-			logger.With().Info("received atx in db (in the last moment)", atx.ID())
-		case <-b.syncer.RegisterForATXSynced(): // ensure we've seen all ATXs before concluding that the ATX was lost
-			b.discardChallenge()
-			return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+		b.discardChallenge()
+		return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -720,7 +724,7 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
 			b.log.With().Info("using golden atx as positioning atx", b.goldenATXID)
-			return b.goldenATXID, types.LayerID{}, nil
+			return b.goldenATXID, types.NewLayerID(0), nil
 		}
 		return types.ATXID{}, types.LayerID{}, fmt.Errorf("cannot find pos atx: %w", err)
 	}
