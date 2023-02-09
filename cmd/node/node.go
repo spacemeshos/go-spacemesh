@@ -686,6 +686,7 @@ func (app *App) initServices(
 		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(poetCfg),
+		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
 	)
 
 	malfeasanceHandler := malfeasance.NewHandler(
