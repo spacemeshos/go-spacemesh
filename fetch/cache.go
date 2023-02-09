@@ -103,19 +103,3 @@ func (hpc *HashPeersCache) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash
 		hpc.Add(hash, peer)
 	}
 }
-
-// AddPeersFromHash adds peers from one hash to others.
-func (hpc *HashPeersCache) AddPeersFromHash(fromHash types.Hash32, toHashes []types.Hash32) {
-	hpc.mu.Lock()
-	defer hpc.mu.Unlock()
-
-	peers, exists := hpc.get(fromHash)
-	if !exists {
-		return
-	}
-	for peer := range peers {
-		for _, hash := range toHashes {
-			hpc.add(hash, peer)
-		}
-	}
-}

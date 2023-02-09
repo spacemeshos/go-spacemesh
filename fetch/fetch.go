@@ -631,11 +631,6 @@ func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 	f.hashToPeers.RegisterPeerHashes(peer, hashes)
 }
 
-// AddPeersFromHash adds peers from one hash to others.
-func (f *Fetch) AddPeersFromHash(fromHash types.Hash32, toHashes []types.Hash32) {
-	f.hashToPeers.AddPeersFromHash(fromHash, toHashes)
-}
-
 func (f *Fetch) GetPeers() []p2p.Peer {
 	return f.host.GetPeers()
 }
