@@ -14,32 +14,32 @@ type requester interface {
 }
 
 type malfeasanceHandler interface {
-	HandleSyncedMalfeasanceProof(context.Context, []byte) error
+	HandleSyncedMalfeasanceProof(context.Context, p2p.Peer, []byte) error
 }
 
 type atxHandler interface {
-	HandleAtxData(context.Context, []byte) error
+	HandleAtxData(context.Context, p2p.Peer, []byte) error
 }
 
 type blockHandler interface {
-	HandleSyncedBlock(context.Context, []byte) error
+	HandleSyncedBlock(context.Context, p2p.Peer, []byte) error
 }
 
 type ballotHandler interface {
-	HandleSyncedBallot(context.Context, []byte) error
+	HandleSyncedBallot(context.Context, p2p.Peer, []byte) error
 }
 
 type proposalHandler interface {
-	HandleSyncedProposal(context.Context, []byte) error
+	HandleSyncedProposal(context.Context, p2p.Peer, []byte) error
 }
 
 type txHandler interface {
-	HandleBlockTransaction(context.Context, []byte) error
-	HandleProposalTransaction(context.Context, []byte) error
+	HandleBlockTransaction(context.Context, p2p.Peer, []byte) error
+	HandleProposalTransaction(context.Context, p2p.Peer, []byte) error
 }
 
 type poetHandler interface {
-	ValidateAndStoreMsg(context.Context, []byte) error
+	ValidateAndStoreMsg(context.Context, p2p.Peer, []byte) error
 }
 
 type meshProvider interface {

@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -555,7 +556,7 @@ func TestConsistentHandling(t *testing.T) {
 			instances[1].mvm.EXPECT().Validation(txs[i].RawTx).Times(1).Return(failed)
 
 			require.Equal(t, pubsub.ValidationAccept, instances[0].handler().HandleGossipTransaction(context.Background(), "", txs[i].Raw))
-			require.NoError(t, instances[1].handler().HandleBlockTransaction(context.Background(), txs[i].Raw))
+			require.NoError(t, instances[1].handler().HandleBlockTransaction(context.Background(), p2p.NoPeer, txs[i].Raw))
 		}
 		block := types.NewExistingBlock(types.BlockID{byte(lid)},
 			types.InnerBlock{

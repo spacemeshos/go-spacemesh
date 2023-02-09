@@ -11,6 +11,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
@@ -75,7 +76,7 @@ func Test_HandleBlock(t *testing.T) {
 					cstate.EXPECT().AddToDB(&types.Transaction{RawTx: tx.RawTx}).Return(tc.addErr)
 				}
 			}
-			err = th.HandleBlockTransaction(context.Background(), tx.Raw)
+			err = th.HandleBlockTransaction(context.Background(), p2p.NoPeer, tx.Raw)
 			if tc.failed {
 				require.Error(t, err)
 			} else {
@@ -254,7 +255,7 @@ func Test_HandleProposal(t *testing.T) {
 				tc.hasErr, tc.parseErr, tc.addErr,
 				tc.has, tc.verify, tc.noheader,
 			)
-			err := th.HandleProposalTransaction(context.Background(), tx.Raw)
+			err := th.HandleProposalTransaction(context.Background(), p2p.NoPeer, tx.Raw)
 			if tc.fail {
 				require.Error(t, err)
 			} else {

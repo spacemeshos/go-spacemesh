@@ -354,7 +354,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 		rsp := resp
 		f.eg.Go(func() error {
 			// validation fetch data recursively. offload to another goroutine
-			f.hashValidationDone(rsp.Hash, req.validator(req.ctx, rsp.Data))
+			f.hashValidationDone(rsp.Hash, req.validator(req.ctx, batch.peer, rsp.Data))
 			return nil
 		})
 		delete(batchMap, resp.Hash)

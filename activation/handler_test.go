@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -865,7 +866,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 		buf, err := codec.Encode(atx)
 		require.NoError(t, err)
 
-		require.EqualError(t, atxHdlr.HandleAtxData(context.Background(), buf), fmt.Sprintf("nil nipst in gossip for atx %v", atx.ID()))
+		require.EqualError(t, atxHdlr.HandleAtxData(context.Background(), p2p.NoPeer, buf), fmt.Sprintf("nil nipst in gossip for atx %v", atx.ID()))
 	})
 
 	t.Run("known atx is ignored by handleAtxData", func(t *testing.T) {
@@ -874,7 +875,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 		buf, err := codec.Encode(atx)
 		require.NoError(t, err)
 
-		require.NoError(t, atxHdlr.HandleAtxData(context.Background(), buf))
+		require.NoError(t, atxHdlr.HandleAtxData(context.Background(), p2p.NoPeer, buf))
 		require.Equal(t, pubsub.ValidationIgnore, atxHdlr.HandleGossipAtx(context.Background(), "", buf))
 	})
 }
@@ -1029,14 +1030,17 @@ func TestHandler_AtxWeight(t *testing.T) {
 	buf, err := codec.Encode(atx1)
 	require.NoError(t, err)
 
-	mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any()).Times(1)
+	peer := p2p.Peer("buddy")
+	proofRef := atx1.GetPoetProofRef()
+	mfetch.EXPECT().RegisterPeerHashes(peer, []types.Hash32{proofRef})
+	mfetch.EXPECT().GetPoetProof(gomock.Any(), proofRef).Times(1)
 	mvalidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	mvalidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	mvalidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
 	mvalidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	mvalidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	receiver.EXPECT().OnAtx(gomock.Any()).Times(1)
-	require.NoError(t, handler.HandleAtxData(context.Background(), buf))
+	require.NoError(t, handler.HandleAtxData(context.Background(), peer, buf))
 
 	stored1, err := cdb.GetAtxHeader(atx1.ID())
 	require.NoError(t, err)
@@ -1066,13 +1070,18 @@ func TestHandler_AtxWeight(t *testing.T) {
 	buf, err = codec.Encode(atx2)
 	require.NoError(t, err)
 
-	mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any()).Times(1)
+	proofRef = atx2.GetPoetProofRef()
+	mfetch.EXPECT().RegisterPeerHashes(peer, gomock.Any()).Do(
+		func(_ p2p.Peer, got []types.Hash32) {
+			require.ElementsMatch(t, []types.Hash32{atx1.ID().Hash32(), proofRef}, got)
+		})
+	mfetch.EXPECT().GetPoetProof(gomock.Any(), proofRef).Times(1)
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).Times(1)
 	mvalidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
 	mvalidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	mvalidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	receiver.EXPECT().OnAtx(gomock.Any()).Times(1)
-	require.NoError(t, handler.HandleAtxData(context.Background(), buf))
+	require.NoError(t, handler.HandleAtxData(context.Background(), peer, buf))
 
 	stored2, err := cdb.GetAtxHeader(atx2.ID())
 	require.NoError(t, err)
