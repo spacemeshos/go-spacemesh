@@ -101,14 +101,14 @@ jobs:
           go-version: ${{ env.go-version }}
 
       - name: Run tests
-        timeout-minutes: 80
+        timeout-minutes: 85
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           label: sanity
           storage: premium-rwo=10Gi
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 50
-          bootstrap: 5m
+          bootstrap: 10m
           level: info
           clusters: 4
         run: make -C systest run test_name=.
