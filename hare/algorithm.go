@@ -259,8 +259,8 @@ func newConsensusProcess(
 		eTracker:  NewEligibilityTracker(cfg.N),
 		clock:     clock,
 	}
-	proc.preRoundTracker = newPreRoundTracker(logger.WithName(fmt.Sprintf("%v-%v", layer, pre)), comm.mchOut, proc.eTracker, cfg.F+1, cfg.N)
 	proc.ctx, proc.cancel = context.WithCancel(ctx)
+	proc.preRoundTracker = newPreRoundTracker(logger.WithContext(proc.ctx).WithFields(proc.layer), comm.mchOut, proc.eTracker, cfg.F+1, cfg.N)
 	proc.validator = newSyntaxContextValidator(signing, pubKeyExtractor, cfg.F+1, proc.statusValidator(), stateQuerier, ev, proc.mTracker, proc.eTracker, logger)
 
 	return proc
@@ -294,7 +294,7 @@ func (proc *consensusProcess) terminate() {
 }
 
 func (proc *consensusProcess) Stop() {
-	proc.eg.Wait()
+	_ = proc.eg.Wait()
 }
 
 func (proc *consensusProcess) terminating() bool {
@@ -362,7 +362,7 @@ PreRound:
 	if proc.value.Size() == 0 {
 		logger.Event().Warning("preround ended with empty set")
 	} else {
-		logger.With().Debug("preround ended",
+		logger.With().Info("preround ended",
 			log.Int("set_size", proc.value.Size()))
 	}
 	proc.advanceToNextRound(ctx) // K was initialized to -1, K should be 0
@@ -399,6 +399,7 @@ PreRound:
 					log.Uint32("current_round", round))
 				proc.report(notCompleted)
 				proc.terminate()
+				return
 			}
 			proc.onRoundBegin(ctx)
 			endOfRound = proc.clock.AwaitEndOfRound(round)
@@ -589,7 +590,7 @@ func (proc *consensusProcess) advanceToNextRound(ctx context.Context) {
 
 func (proc *consensusProcess) beginStatusRound(ctx context.Context) {
 	proc.statusesTracker = newStatusTracker(
-		proc.Log.WithName(fmt.Sprintf("%v-%v", proc.layer, status)),
+		proc.Log.WithContext(proc.ctx).WithFields(proc.layer),
 		proc.getRound(),
 		proc.comm.mchOut,
 		proc.eTracker,
@@ -612,7 +613,7 @@ func (proc *consensusProcess) beginStatusRound(ctx context.Context) {
 
 func (proc *consensusProcess) beginProposalRound(ctx context.Context) {
 	proc.proposalTracker = newProposalTracker(
-		proc.Log.WithName(fmt.Sprintf("%v-%v", proc.layer, proposal)),
+		proc.Log.WithContext(proc.ctx).WithFields(proc.layer),
 		proc.comm.mchOut,
 		proc.eTracker)
 
@@ -640,7 +641,7 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 
 	// proposedSet may be nil, in such case the tracker will ignore Messages
 	proc.commitTracker = newCommitTracker(
-		proc.Log.WithName(fmt.Sprintf("%v-%v", proc.layer, commit)),
+		proc.Log.WithContext(proc.ctx).WithFields(proc.layer),
 		proc.getRound(),
 		proc.comm.mchOut,
 		proc.eTracker,
@@ -670,7 +671,7 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 	logger := proc.WithContext(ctx).WithFields(proc.layer)
 	proc.notifyTracker = newNotifyTracker(
-		proc.Log.WithName(fmt.Sprintf("%v-%v", proc.layer, notify)),
+		proc.Log.WithContext(proc.ctx).WithFields(proc.layer),
 		proc.getRound(),
 		proc.comm.mchOut,
 		proc.eTracker,

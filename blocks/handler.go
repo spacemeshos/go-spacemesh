@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -54,7 +55,7 @@ func NewHandler(f system.Fetcher, db *sql.Database, m meshProvider, opts ...Opt)
 }
 
 // HandleSyncedBlock handles Block data from sync.
-func (h *Handler) HandleSyncedBlock(ctx context.Context, data []byte) error {
+func (h *Handler) HandleSyncedBlock(ctx context.Context, peer p2p.Peer, data []byte) error {
 	logger := h.logger.WithContext(ctx)
 
 	var b types.Block
@@ -79,7 +80,7 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, data []byte) error {
 	}
 	logger.With().Info("new block")
 
-	h.fetcher.AddPeersFromHash(b.ID().AsHash32(), types.TransactionIDsToHashes(b.TxIDs))
+	h.fetcher.RegisterPeerHashes(peer, types.TransactionIDsToHashes(b.TxIDs))
 	if err := h.checkTransactions(ctx, &b); err != nil {
 		logger.With().Warning("failed to fetch block TXs", log.Err(err))
 		return err

@@ -54,8 +54,8 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, msg
 	}
 }
 
-func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, msg []byte) error {
-	return h.handleProof(ctx, "", msg)
+func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, peer p2p.Peer, msg []byte) error {
+	return h.handleProof(ctx, peer, msg)
 }
 
 func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) error {

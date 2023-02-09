@@ -331,8 +331,6 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		return errNoBeacon
 	}
 
-	logger.With().Info("miner got beacon to build proposals", beacon)
-
 	started := time.Now()
 
 	count, err := ballots.CountByPubkeyLayer(pb.cdb, layerID, pb.signer.PublicKey().Bytes())
@@ -348,7 +346,12 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 
 	nonce, err := pb.nonceFetcher.VRFNonce(pb.signer.NodeID(), layerID.GetEpoch())
 	if err != nil {
-		logger.With().Error("failed to get VRF nonce", log.Err(err))
+		if errors.Is(err, sql.ErrNotFound) {
+			logger.With().Info("miner has no valid vrf nonce, not building proposal")
+			return nil
+		} else {
+			logger.With().Error("failed to get VRF nonce", log.Err(err))
+		}
 		return err
 	}
 	atxID, activeSet, proofs, err := pb.proposalOracle.GetProposalEligibility(layerID, beacon, nonce)

@@ -91,11 +91,11 @@ func createFetch(tb testing.TB) *testFetch {
 	return tf
 }
 
-func goodReceiver(context.Context, []byte) error {
+func goodReceiver(context.Context, p2p.Peer, []byte) error {
 	return nil
 }
 
-func badReceiver(context.Context, []byte) error {
+func badReceiver(context.Context, p2p.Peer, []byte) error {
 	return errors.New("bad receiver")
 }
 

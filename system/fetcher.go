@@ -54,5 +54,4 @@ type ProposalFetcher interface {
 // PeerTracker defines an interface to track peer hashes.
 type PeerTracker interface {
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)
-	AddPeersFromHash(types.Hash32, []types.Hash32)
 }

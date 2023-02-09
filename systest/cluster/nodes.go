@@ -390,7 +390,6 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 		"/bin/go-spacemesh",
 		"-c=" + configDir + attachedSmesherConfig,
 		"--pprof-server",
-		"--smeshing-start=true",
 		"--smeshing-opts-datadir=/data/post",
 		"-d=/data/state",
 		"--log-encoder=json",
@@ -602,4 +601,8 @@ func DurationFlag(flag string, d time.Duration) DeploymentFlag {
 // PoetRestListen socket pair with http api.
 func PoetRestListen(port int) DeploymentFlag {
 	return DeploymentFlag{Name: "--restlisten", Value: fmt.Sprintf("0.0.0.0:%d", port)}
+}
+
+func StartSmeshing(start bool) DeploymentFlag {
+	return DeploymentFlag{Name: "--smeshing-start", Value: fmt.Sprintf("%v", start)}
 }

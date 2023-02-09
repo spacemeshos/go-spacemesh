@@ -45,7 +45,7 @@ func createEpochState(tb testing.TB, pd *ProtocolDriver, epoch types.EpochID) {
 	tb.Helper()
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.states[epoch] = newState(pd.logger, pd.config, types.VRFPostIndex(rand.Uint64()), epochWeight, types.RandomActiveSet(1), weakcoin.UnitAllowances{})
+	pd.states[epoch] = newState(pd.logger, pd.config, nil, epochWeight, weakcoin.UnitAllowances{"nodeID": 111})
 }
 
 func setOwnFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, ownFirstRound proposalList) {

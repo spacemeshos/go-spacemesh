@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 )
@@ -55,7 +56,7 @@ func (db *PoetDb) ValidateAndStore(ctx context.Context, proofMessage *types.Poet
 }
 
 // ValidateAndStoreMsg validates and stores a new PoET proof.
-func (db *PoetDb) ValidateAndStoreMsg(ctx context.Context, data []byte) error {
+func (db *PoetDb) ValidateAndStoreMsg(ctx context.Context, _ p2p.Peer, data []byte) error {
 	var proofMessage types.PoetProofMessage
 	if err := codec.Decode(data, &proofMessage); err != nil {
 		return fmt.Errorf("parse message: %w", err)

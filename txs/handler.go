@@ -63,7 +63,7 @@ func (th *TxHandler) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, ms
 }
 
 // HandleProposalTransaction handles data received on the transactions synced as a part of proposal.
-func (th *TxHandler) HandleProposalTransaction(ctx context.Context, msg []byte) error {
+func (th *TxHandler) HandleProposalTransaction(ctx context.Context, _ p2p.Peer, msg []byte) error {
 	err := th.handleTransaction(ctx, msg)
 	defer updateMetrics(err, proposalTxCount)
 	if err == nil || errors.Is(err, errDuplicateTX) {
@@ -103,7 +103,7 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 }
 
 // HandleBlockTransaction handles transactions received as a reference to a block.
-func (th *TxHandler) HandleBlockTransaction(ctx context.Context, data []byte) error {
+func (th *TxHandler) HandleBlockTransaction(_ context.Context, _ p2p.Peer, data []byte) error {
 	raw := types.NewRawTx(data)
 	exists, err := th.state.HasTx(raw.ID)
 	if err != nil {

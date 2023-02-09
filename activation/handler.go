@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/post/shared"
+	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -197,7 +198,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	return atx.Verify(baseTickHeight, leaves/h.tickSize)
 }
 
-func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationTx) error {
+func (h *Handler) validateInitialAtx(_ context.Context, atx *types.ActivationTx) error {
 	if atx.InitialPost == nil {
 		return fmt.Errorf("no prevATX declared, but initial Post is not included")
 	}
@@ -239,7 +240,7 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 
 	nonce := atx.VRFNonce
 	if atx.NumUnits > prevAtx.NumUnits && nonce == nil {
-		h.log.With().Info("PoST size increased without new VRF Nonce, re-validating current nonce",
+		h.log.WithContext(ctx).With().Info("PoST size increased without new VRF Nonce, re-validating current nonce",
 			atx.ID(),
 			log.FieldNamed("atx_node_id", atx.NodeID()),
 		)
@@ -333,7 +334,7 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		return fmt.Errorf("checking if node is malicious: %w", err)
 	}
 	var proof *types.MalfeasanceProof
-	h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
+	if err = h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		if !malicious {
 			prev, err := atxs.GetByEpochAndNodeID(dbtx, atx.PublishEpoch(), atx.NodeID())
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
@@ -367,7 +368,9 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 			return fmt.Errorf("add atx to db: %w", err)
 		}
 		return nil
-	})
+	}); err != nil {
+		return fmt.Errorf("store atx: %w", err)
+	}
 
 	// notify subscribers
 	if ch, found := h.atxChannels[atx.ID()]; found {
@@ -415,8 +418,8 @@ func (h *Handler) GetPosAtxID() (types.ATXID, error) {
 }
 
 // HandleGossipAtx handles the atx gossip data channel.
-func (h *Handler) HandleGossipAtx(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
-	err := h.handleAtxData(ctx, msg)
+func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+	err := h.handleAtxData(ctx, peer, msg)
 	switch {
 	case err == nil:
 		return pubsub.ValidationAccept
@@ -431,15 +434,26 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, _ p2p.Peer, msg []byte) p
 }
 
 // HandleAtxData handles atxs received either by gossip or sync.
-func (h *Handler) HandleAtxData(ctx context.Context, data []byte) error {
-	err := h.handleAtxData(ctx, data)
+func (h *Handler) HandleAtxData(ctx context.Context, peer p2p.Peer, data []byte) error {
+	err := h.handleAtxData(ctx, peer, data)
 	if errors.Is(err, errKnownAtx) {
 		return nil
 	}
 	return err
 }
 
-func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
+func (h *Handler) registerHashes(atx *types.ActivationTx, peer p2p.Peer) {
+	hashes := map[types.Hash32]struct{}{}
+	for _, id := range []types.ATXID{atx.PositioningATX, atx.PrevATXID} {
+		if id != *types.EmptyATXID && id != h.goldenATXID {
+			hashes[id.Hash32()] = struct{}{}
+		}
+	}
+	hashes[atx.GetPoetProofRef()] = struct{}{}
+	h.fetcher.RegisterPeerHashes(peer, maps.Keys(hashes))
+}
+
+func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte) error {
 	atx, err := types.BytesToAtx(data)
 	if err != nil {
 		return errMalformedData
@@ -461,6 +475,7 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())
 	}
 
+	h.registerHashes(atx, peer)
 	if err := h.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
 		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
@@ -486,7 +501,7 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 	}
 	h.atxReceiver.OnAtx(header)
 	events.ReportNewActivation(vAtx)
-	logger.With().Info("got new atx", log.Inline(atx), log.Int("size", len(data)))
+	logger.With().Info("new atx", log.Inline(atx), log.Int("size", len(data)))
 	return nil
 }
 

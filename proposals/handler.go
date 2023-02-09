@@ -117,7 +117,7 @@ func NewHandler(cdb *datastore.CachedDB, p pubsub.Publisher, f system.Fetcher, b
 
 // HandleProposal is the gossip receiver for Proposal.
 func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
-	err := h.handleProposalData(ctx, msg, peer)
+	err := h.handleProposalData(ctx, peer, msg)
 	switch {
 	case err == nil:
 		return pubsub.ValidationAccept
@@ -132,7 +132,7 @@ func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte)
 }
 
 // HandleSyncedBallot handles Ballot data from sync.
-func (h *Handler) HandleSyncedBallot(ctx context.Context, data []byte) error {
+func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []byte) error {
 	logger := h.logger.WithContext(ctx)
 
 	var b types.Ballot
@@ -150,7 +150,7 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, data []byte) error {
 	ballotDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
 
 	t1 := time.Now()
-	h.fetcher.AddPeersFromHash(b.ID().AsHash32(), collectHashes(b))
+	h.fetcher.RegisterPeerHashes(peer, collectHashes(b))
 	ballotDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t1)))
 
 	logger = logger.WithFields(b.ID(), b.Layer)
@@ -184,15 +184,15 @@ func collectHashes(a any) []types.Hash32 {
 }
 
 // HandleSyncedProposal handles Proposal data from sync.
-func (h *Handler) HandleSyncedProposal(ctx context.Context, data []byte) error {
-	err := h.handleProposalData(ctx, data, p2p.NoPeer)
+func (h *Handler) HandleSyncedProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
+	err := h.handleProposalData(ctx, peer, data)
 	if errors.Is(err, errKnownProposal) {
 		return nil
 	}
 	return err
 }
 
-func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.Peer) error {
+func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []byte) error {
 	logger := h.logger.WithContext(ctx)
 
 	t0 := time.Now()

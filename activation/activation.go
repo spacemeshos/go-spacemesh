@@ -373,44 +373,54 @@ func (b *Builder) loop(ctx context.Context) {
 		}
 
 		ctx := log.WithNewSessionID(ctx)
-		if err := b.PublishActivationTx(ctx); err != nil {
-			if errors.Is(err, context.Canceled) {
+		err := b.PublishActivationTx(ctx)
+		if err == nil {
+			b.log.WithContext(ctx).With().Info("waiting for atx to propagate before building the next challenge",
+				log.Duration("wait", b.poetRetryInterval))
+			select {
+			case <-ctx.Done():
 				return
+			case <-time.After(b.poetRetryInterval):
 			}
+			continue
+		}
 
-			b.log.WithContext(ctx).With().Error("error attempting to publish atx",
-				b.layerClock.CurrentLayer(),
-				b.currentEpoch(),
-				log.Err(err),
-			)
+		if errors.Is(err, context.Canceled) {
+			return
+		}
 
-			switch {
-			case errors.Is(err, ErrATXChallengeExpired):
-				b.log.WithContext(ctx).Debug("retrying with new challenge after waiting for a layer")
-				b.discardChallenge()
-				// give node some time to sync in case selecting the positioning ATX caused the challenge to expire
-				currentLayer := b.layerClock.CurrentLayer()
-				select {
-				case <-ctx.Done():
-					return
-				case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
-				}
-			case errors.Is(err, ErrPoetServiceUnstable):
-				b.log.WithContext(ctx).Debug("retrying after poet retry interval")
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(b.poetRetryInterval):
-				}
-			default:
-				b.log.WithContext(ctx).With().Warning("unknown error", log.Err(err))
-				// other failures are related to in-process software. we may as well panic here
-				currentLayer := b.layerClock.CurrentLayer()
-				select {
-				case <-ctx.Done():
-					return
-				case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
-				}
+		b.log.WithContext(ctx).With().Error("error attempting to publish atx",
+			b.layerClock.CurrentLayer(),
+			b.currentEpoch(),
+			log.Err(err),
+		)
+
+		switch {
+		case errors.Is(err, ErrATXChallengeExpired):
+			b.log.WithContext(ctx).Debug("retrying with new challenge after waiting for a layer")
+			b.discardChallenge()
+			// give node some time to sync in case selecting the positioning ATX caused the challenge to expire
+			currentLayer := b.layerClock.CurrentLayer()
+			select {
+			case <-ctx.Done():
+				return
+			case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
+			}
+		case errors.Is(err, ErrPoetServiceUnstable):
+			b.log.WithContext(ctx).With().Warning("retrying after poet retry interval", log.Duration("interval", b.poetRetryInterval))
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(b.poetRetryInterval):
+			}
+		default:
+			b.log.WithContext(ctx).With().Warning("unknown error", log.Err(err))
+			// other failures are related to in-process software. we may as well panic here
+			currentLayer := b.layerClock.CurrentLayer()
+			select {
+			case <-ctx.Done():
+				return
+			case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
 			}
 		}
 	}
@@ -474,7 +484,7 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 		defer cancel()
 		sid, err := client.PoetServiceID(ctx)
 		if err != nil {
-			return &PoetSvcUnstableError{source: fmt.Errorf("failed to query Poet '%s' for ID (%w)", endpoint, err)}
+			return &PoetSvcUnstableError{source: fmt.Errorf("failed to query poet '%s' for ID (%w)", endpoint, err)}
 		}
 		b.log.WithContext(ctx).With().Debug("preparing to update poet service", log.String("poet_id", hex.EncodeToString(sid)))
 		clients = append(clients, client)

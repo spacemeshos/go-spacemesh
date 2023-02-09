@@ -124,31 +124,6 @@ func TestGetRandom(t *testing.T) {
 	})
 }
 
-func TestAddPeersFromHash(t *testing.T) {
-	t.Parallel()
-	t.Run("2Hash2Peers", func(t *testing.T) {
-		cache := NewHashPeersCache(10)
-		hash1 := types.RandomHash()
-		hash2 := types.RandomHash()
-		peer1 := p2p.Peer("test_peer_1")
-		peer2 := p2p.Peer("test_peer_2")
-		var wg sync.WaitGroup
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			cache.Add(hash1, peer1)
-		}()
-		go func() {
-			defer wg.Done()
-			cache.Add(hash1, peer2)
-		}()
-		wg.Wait()
-		cache.AddPeersFromHash(hash1, []types.Hash32{hash2})
-		hash2Peers, _ := getCachedEntry(cache, hash2)
-		require.Equal(t, 2, len(hash2Peers))
-	})
-}
-
 func TestRegisterPeerHashes(t *testing.T) {
 	t.Parallel()
 	t.Run("1Hash2Peers", func(t *testing.T) {
@@ -168,66 +143,28 @@ func TestRegisterPeerHashes(t *testing.T) {
 }
 
 func TestRace(t *testing.T) {
-	t.Parallel()
-	t.Run("AddAndGetRandom", func(t *testing.T) {
-		cache := NewHashPeersCache(10)
-		hash := types.RandomHash()
-		peer1 := p2p.Peer("test_peer_1")
-		peer2 := p2p.Peer("test_peer_2")
-		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-		var wg sync.WaitGroup
-		wg.Add(4)
-		go func() {
-			defer wg.Done()
-			cache.Add(hash, peer1)
-		}()
-		go func() {
-			defer wg.Done()
-			cache.GetRandom(hash, datastore.TXDB, rng)
-		}()
-		go func() {
-			defer wg.Done()
-			cache.Add(hash, peer2)
-		}()
-		go func() {
-			defer wg.Done()
-			cache.GetRandom(hash, datastore.TXDB, rng)
-		}()
-		wg.Wait()
-	})
-	t.Run("AddPeersFromHashAndGetRandom", func(t *testing.T) {
-		cache := NewHashPeersCache(10)
-		hash1 := types.RandomHash()
-		hash2 := types.RandomHash()
-		peer1 := p2p.Peer("test_peer_1")
-		peer2 := p2p.Peer("test_peer_2")
-		peer3 := p2p.Peer("test_peer_3")
-		peer4 := p2p.Peer("test_peer_4")
-		cache.Add(hash1, peer1)
-		cache.Add(hash1, peer2)
-		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-		var wg sync.WaitGroup
-		wg.Add(5)
-		go func() {
-			defer wg.Done()
-			cache.AddPeersFromHash(hash1, []types.Hash32{hash2})
-		}()
-		go func() {
-			defer wg.Done()
-			cache.GetRandom(hash1, datastore.TXDB, rng)
-		}()
-		go func() {
-			defer wg.Done()
-			cache.Add(hash2, peer3)
-		}()
-		go func() {
-			defer wg.Done()
-			cache.GetRandom(hash2, datastore.TXDB, rng)
-		}()
-		go func() {
-			defer wg.Done()
-			cache.Add(hash2, peer4)
-		}()
-		wg.Wait()
-	})
+	cache := NewHashPeersCache(10)
+	hash := types.RandomHash()
+	peer1 := p2p.Peer("test_peer_1")
+	peer2 := p2p.Peer("test_peer_2")
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	var wg sync.WaitGroup
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		cache.Add(hash, peer1)
+	}()
+	go func() {
+		defer wg.Done()
+		cache.GetRandom(hash, datastore.TXDB, rng)
+	}()
+	go func() {
+		defer wg.Done()
+		cache.Add(hash, peer2)
+	}()
+	go func() {
+		defer wg.Done()
+		cache.GetRandom(hash, datastore.TXDB, rng)
+	}()
+	wg.Wait()
 }

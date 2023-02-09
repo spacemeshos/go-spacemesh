@@ -14,8 +14,8 @@ import (
 //go:generate mockgen -package=beacon -destination=./mocks.go -source=./interface.go
 
 type coin interface {
-	StartEpoch(context.Context, types.EpochID, types.VRFPostIndex, weakcoin.UnitAllowances)
-	StartRound(context.Context, types.RoundID) error
+	StartEpoch(context.Context, types.EpochID, weakcoin.UnitAllowances)
+	StartRound(context.Context, types.RoundID, *types.VRFPostIndex) error
 	FinishRound(context.Context)
 	Get(context.Context, types.EpochID, types.RoundID) bool
 	FinishEpoch(context.Context, types.EpochID)

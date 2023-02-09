@@ -93,29 +93,29 @@ func (mr *MockcoinMockRecorder) HandleProposal(arg0, arg1, arg2 interface{}) *go
 }
 
 // StartEpoch mocks base method.
-func (m *Mockcoin) StartEpoch(arg0 context.Context, arg1 types.EpochID, arg2 types.VRFPostIndex, arg3 weakcoin.UnitAllowances) {
+func (m *Mockcoin) StartEpoch(arg0 context.Context, arg1 types.EpochID, arg2 weakcoin.UnitAllowances) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "StartEpoch", arg0, arg1, arg2, arg3)
+	m.ctrl.Call(m, "StartEpoch", arg0, arg1, arg2)
 }
 
 // StartEpoch indicates an expected call of StartEpoch.
-func (mr *MockcoinMockRecorder) StartEpoch(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockcoinMockRecorder) StartEpoch(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartEpoch", reflect.TypeOf((*Mockcoin)(nil).StartEpoch), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartEpoch", reflect.TypeOf((*Mockcoin)(nil).StartEpoch), arg0, arg1, arg2)
 }
 
 // StartRound mocks base method.
-func (m *Mockcoin) StartRound(arg0 context.Context, arg1 types.RoundID) error {
+func (m *Mockcoin) StartRound(arg0 context.Context, arg1 types.RoundID, arg2 *types.VRFPostIndex) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartRound", arg0, arg1)
+	ret := m.ctrl.Call(m, "StartRound", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // StartRound indicates an expected call of StartRound.
-func (mr *MockcoinMockRecorder) StartRound(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockcoinMockRecorder) StartRound(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartRound", reflect.TypeOf((*Mockcoin)(nil).StartRound), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartRound", reflect.TypeOf((*Mockcoin)(nil).StartRound), arg0, arg1, arg2)
 }
 
 // MockeligibilityChecker is a mock of eligibilityChecker interface.

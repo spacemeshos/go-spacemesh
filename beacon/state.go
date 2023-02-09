@@ -16,9 +16,8 @@ import (
 // not thread-safe. it relies on ProtocolDriver's thread-safety mechanism.
 type state struct {
 	logger      log.Log
-	nonce       types.VRFPostIndex
+	nonce       *types.VRFPostIndex
 	epochWeight uint64
-	atxs        []types.ATXID
 	// the original proposals as received, bucketed by validity.
 	incomingProposals proposals
 	// minerPublicKey -> list of proposal.
@@ -33,18 +32,17 @@ type state struct {
 	unitAllowance             weakcoin.UnitAllowances
 }
 
-func newState(logger log.Log, cfg Config, nonce types.VRFPostIndex, epochWeight uint64, atxids []types.ATXID, ua weakcoin.UnitAllowances) *state {
+func newState(logger log.Log, cfg Config, nonce *types.VRFPostIndex, epochWeight uint64, ua weakcoin.UnitAllowances) *state {
 	return &state{
 		logger:                  logger,
 		epochWeight:             epochWeight,
 		nonce:                   nonce,
 		unitAllowance:           ua,
-		atxs:                    atxids,
 		firstRoundIncomingVotes: make(map[string]proposalList),
 		votesMargin:             map[string]*big.Int{},
 		hasProposed:             make(map[string]struct{}),
 		hasVoted:                make([]map[string]struct{}, cfg.RoundsNumber),
-		proposalChecker:         createProposalChecker(logger, cfg, len(atxids)),
+		proposalChecker:         createProposalChecker(logger, cfg, len(ua)),
 	}
 }
 

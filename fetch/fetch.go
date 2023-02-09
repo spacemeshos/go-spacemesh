@@ -354,7 +354,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 		rsp := resp
 		f.eg.Go(func() error {
 			// validation fetch data recursively. offload to another goroutine
-			f.hashValidationDone(rsp.Hash, req.validator(req.ctx, rsp.Data))
+			f.hashValidationDone(rsp.Hash, req.validator(req.ctx, batch.peer, rsp.Data))
 			return nil
 		})
 		delete(batchMap, resp.Hash)
@@ -629,11 +629,6 @@ func (f *Fetch) getHash(ctx context.Context, hash types.Hash32, h datastore.Hint
 // RegisterPeerHashes registers provided peer for a list of hashes.
 func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 	f.hashToPeers.RegisterPeerHashes(peer, hashes)
-}
-
-// AddPeersFromHash adds peers from one hash to others.
-func (f *Fetch) AddPeersFromHash(fromHash types.Hash32, toHashes []types.Hash32) {
-	f.hashToPeers.AddPeersFromHash(fromHash, toHashes)
 }
 
 func (f *Fetch) GetPeers() []p2p.Peer {

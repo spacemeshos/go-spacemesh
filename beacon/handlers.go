@@ -39,6 +39,10 @@ var (
 
 // HandleWeakCoinProposal handles weakcoin proposal from gossip.
 func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+	if pd.isClosed() || !pd.isInProtocol() {
+		return pubsub.ValidationIgnore
+	}
+
 	return pd.weakCoin.HandleProposal(ctx, peer, msg)
 }
 

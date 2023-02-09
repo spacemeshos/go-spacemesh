@@ -39,12 +39,14 @@ func coinValueMock(tb testing.TB, value bool) coin {
 	coinMock.EXPECT().StartEpoch(
 		gomock.Any(),
 		gomock.AssignableToTypeOf(types.EpochID(0)),
-		gomock.AssignableToTypeOf(types.VRFPostIndex(0)),
 		gomock.AssignableToTypeOf(weakcoin.UnitAllowances{}),
 	).AnyTimes()
 	coinMock.EXPECT().FinishEpoch(gomock.Any(), gomock.AssignableToTypeOf(types.EpochID(0))).AnyTimes()
-	coinMock.EXPECT().StartRound(gomock.Any(), gomock.AssignableToTypeOf(types.RoundID(0))).
-		AnyTimes().Return(nil)
+	nonce := types.VRFPostIndex(0)
+	coinMock.EXPECT().StartRound(gomock.Any(),
+		gomock.AssignableToTypeOf(types.RoundID(0)),
+		gomock.AssignableToTypeOf(&nonce),
+	).AnyTimes().Return(nil)
 	coinMock.EXPECT().FinishRound(gomock.Any()).AnyTimes()
 	coinMock.EXPECT().Get(
 		gomock.Any(),
@@ -192,7 +194,11 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 		require.NoError(t, err)
 		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
 	}
-	for _, node := range testNodes {
+	for i, node := range testNodes {
+		if i == 0 {
+			// make the first node non-smeshing node
+			continue
+		}
 		for _, db := range dbs {
 			createATX(t, db, atxPublishLid, node.edSigner, 1)
 		}
@@ -305,7 +311,7 @@ func TestBeaconNoATXInPreviousEpoch(t *testing.T) {
 	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
 	lid := types.NewLayerID(types.GetLayersPerEpoch()*2 - 1)
 	createRandomATXs(t, tpd.cdb, lid, numATXs)
-	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(2)), sql.ErrNotFound)
+	require.NoError(t, tpd.onNewEpoch(context.Background(), types.EpochID(2)))
 
 	got, err := tpd.GetBeacon(types.EpochID(2))
 	require.NoError(t, err)
@@ -790,7 +796,7 @@ func TestBeacon_findMajorityBeacon_NoBeacon(t *testing.T) {
 	require.Equal(t, types.EmptyBeacon, got)
 }
 
-func TestBeacon_persistBeacon(t *testing.T) {
+func TestBeacon_setBeacon(t *testing.T) {
 	t.Parallel()
 
 	tpd := setUpProtocolDriver(t)
@@ -799,9 +805,9 @@ func TestBeacon_persistBeacon(t *testing.T) {
 	require.NoError(t, tpd.setBeacon(epoch, beacon))
 
 	// saving it again won't cause error
-	require.NoError(t, tpd.persistBeacon(epoch, beacon))
+	require.NoError(t, tpd.setBeacon(epoch, beacon))
 	// but saving a different one will
-	require.ErrorIs(t, tpd.persistBeacon(epoch, types.RandomBeacon()), errDifferentBeacon)
+	require.ErrorIs(t, tpd.setBeacon(epoch, types.RandomBeacon()), errDifferentBeacon)
 }
 
 func TestBeacon_atxThresholdFraction(t *testing.T) {
