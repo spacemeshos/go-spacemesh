@@ -1,6 +1,7 @@
 package vesting
 
 import (
+	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
 )
 
@@ -10,7 +11,7 @@ type Vesting struct {
 }
 
 // MaxSpend returns zero for drain vault or forwards to multisig template.
-func (v *Vesting) MaxSpend(method uint8, args any) (uint64, error) {
+func (v *Vesting) MaxSpend(method core.Method, args any) (uint64, error) {
 	if method == MethodDrainVault {
 		return 0, nil
 	}

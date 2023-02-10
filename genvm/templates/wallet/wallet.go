@@ -22,10 +22,8 @@ type Wallet struct {
 }
 
 // MaxSpend returns amount specified in the SpendArguments for Spend method.
-func (s *Wallet) MaxSpend(method uint8, args any) (uint64, error) {
+func (s *Wallet) MaxSpend(method core.Method, args any) (uint64, error) {
 	switch method {
-	case core.MethodSpawn:
-		return 0, nil
 	case core.MethodSpend:
 		return args.(*SpendArguments).Amount, nil
 	default:

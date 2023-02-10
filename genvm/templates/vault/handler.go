@@ -25,7 +25,7 @@ func Register(reg *registry.Registry) {
 type handler struct{}
 
 // Parse is noop on vault template.
-func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (core.ParseOutput, error) {
+func (h *handler) Parse(core.TxType, core.Method, *scale.Decoder) (core.ParseOutput, error) {
 	return core.ParseOutput{}, nil
 }
 
@@ -59,7 +59,7 @@ func (h *handler) Load(state []byte) (core.Template, error) {
 }
 
 // Exec supports only MethodSpend.
-func (h *handler) Exec(host core.Host, method uint8, args scale.Encodable) error {
+func (h *handler) Exec(host core.Host, txtype core.TxType, method core.Method, args scale.Encodable) error {
 	if method != core.MethodSpend {
 		return fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
@@ -68,7 +68,7 @@ func (h *handler) Exec(host core.Host, method uint8, args scale.Encodable) error
 }
 
 // Args ...
-func (h *handler) Args(method uint8) scale.Type {
+func (h *handler) Args(txtype core.TxType, method core.Method) scale.Type {
 	switch method {
 	case core.MethodSpawn:
 		return &SpawnArguments{}

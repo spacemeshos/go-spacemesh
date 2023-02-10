@@ -28,9 +28,27 @@ func encode(fields ...scale.Encodable) []byte {
 
 // SelfSpawn creates a self-spawn transaction.
 func SelfSpawn(pk signing.PrivateKey, nonce core.Nonce, opts ...sdk.Opt) []byte {
+	options := sdk.Defaults()
+	for _, opt := range opts {
+		opt(options)
+	}
+
 	args := wallet.SpawnArguments{}
 	copy(args.PublicKey[:], signing.Public(pk))
-	return Spawn(pk, wallet.TemplateAddress, &args, nonce, opts...)
+	template := wallet.TemplateAddress
+
+	payload := core.Payload{}
+	payload.Nonce = nonce
+	payload.GasPrice = options.GasPrice
+
+	public := &core.PublicKey{}
+	copy(public[:], signing.Public(pk))
+	// note that principal is computed from pk
+
+	tx := sdk.Encode(&sdk.TxVersion, &sdk.SelfSpawn, &template, &payload, sdk.LengthPrefixedStruct{Encodable: &args})
+	hh := hash.Sum(options.GenesisID[:], tx)
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
+	return append(tx, sig...)
 }
 
 // Spawn creates a spawn transaction.
@@ -49,7 +67,7 @@ func Spawn(pk signing.PrivateKey, template core.Address, args scale.Encodable, n
 	// note that principal is computed from pk
 	principal := core.ComputePrincipal(wallet.TemplateAddress, public)
 
-	tx := sdk.Encode(&sdk.TxVersion, &principal, &sdk.MethodSpawn, &template, &payload, sdk.LengthPrefixedStruct{Encodable: args})
+	tx := sdk.Encode(&sdk.TxVersion, &sdk.Spawn, &principal, &template, &payload, sdk.LengthPrefixedStruct{Encodable: args})
 	hh := hash.Sum(options.GenesisID[:], tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	return append(tx, sig...)
@@ -74,7 +92,7 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 	args.Destination = to
 	args.Amount = amount
 
-	tx := sdk.Encode(&sdk.TxVersion, &principal, &sdk.MethodSpend, &payload, sdk.LengthPrefixedStruct{Encodable: &args})
+	tx := sdk.Encode(&sdk.TxVersion, &sdk.LocalMethodCall, &principal, &sdk.MethodSpend, &payload, sdk.LengthPrefixedStruct{Encodable: &args})
 	hh := hash.Sum(options.GenesisID[:], tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	return append(tx, sig...)

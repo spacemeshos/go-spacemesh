@@ -18,10 +18,8 @@ type MultiSig struct {
 }
 
 // MaxSpend returns amount specified in the SpendArguments.
-func (ms *MultiSig) MaxSpend(method uint8, args any) (uint64, error) {
+func (ms *MultiSig) MaxSpend(method core.Method, args any) (uint64, error) {
 	switch method {
-	case core.MethodSpawn:
-		return 0, nil
 	case core.MethodSpend:
 		return args.(*SpendArguments).Amount, nil
 	default:

@@ -451,9 +451,14 @@ func (t *tester) rewards(all ...reward) []types.AnyReward {
 	return rst
 }
 
-func (t *tester) estimateSpawnGas(principal int) int {
+func (t *tester) estimateSelfSpawnGas(principal int) int {
 	return t.accounts[principal].spawnGas() +
 		len(t.accounts[principal].selfSpawn(0))*int(t.VM.cfg.StorageCostFactor)
+}
+
+func (t *tester) estimateSpawnGas(principal int) int {
+	return t.accounts[principal].spawnGas() +
+		len(t.accounts[principal].spawn(wallet.TemplateAddress, t.accounts[principal].spawnArgs(), 0))*int(t.VM.cfg.StorageCostFactor)
 }
 
 func (t *tester) estimateSpendGas(principal, to, amount int, nonce core.Nonce) int {
@@ -1251,7 +1256,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 			},
 		},
 		{
-			desc: "Spawn",
+			desc: "SpawnAnother",
 			layers: []layertc{
 				{
 					txs: []testTx{
@@ -1262,7 +1267,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						0: spawned{
 							template: template,
 							change: spent{
-								amount: 2 * ref.estimateSpawnGas(0),
+								amount: ref.estimateSelfSpawnGas(0) + ref.estimateSpawnGas(0),
 								change: nonce{increased: 2},
 							},
 						},
@@ -1556,10 +1561,10 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			tx:   tt.selfSpawn(1),
 			header: &core.Header{
 				Principal:       tt.accounts[1].getAddress(),
-				Method:          core.MethodSpawn,
+				TxType:          core.SelfSpawn,
 				TemplateAddress: template,
 				GasPrice:        1,
-				MaxGas:          uint64(tt.estimateSpawnGas(1)),
+				MaxGas:          uint64(tt.estimateSelfSpawnGas(1)),
 			},
 			verified: true,
 		},
@@ -1572,6 +1577,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			tx:   tt.spend(0, 1, 100),
 			header: &core.Header{
 				Principal:       tt.accounts[0].getAddress(),
+				TxType:          core.LocalMethodCall,
 				Method:          core.MethodSpend,
 				TemplateAddress: template,
 				GasPrice:        1,

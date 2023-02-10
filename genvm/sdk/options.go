@@ -44,3 +44,9 @@ var (
 	// MethodSpend ...
 	MethodSpend = scale.U8(core.MethodSpend)
 )
+
+var (
+	SelfSpawn       = scale.U8(core.SelfSpawn)
+	Spawn           = scale.U8(core.Spawn)
+	LocalMethodCall = scale.U8(core.LocalMethodCall)
+)

@@ -6,11 +6,21 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+type TxType = uint8
+
+const (
+	SelfSpawn TxType = iota
+	Spawn
+	LocalMethodCall
+)
+
+type Method = uint16
+
 const (
 	// MethodSpawn ...
-	MethodSpawn = 0
+	MethodSpawn Method = 0
 	// MethodSpend ...
-	MethodSpend = 16
+	MethodSpend Method = 16
 )
 
 type (
@@ -41,12 +51,11 @@ type (
 // Handler provides set of static templates method that are not directly attached to the state.
 type Handler interface {
 	// Parse header and arguments from the payload.
-	Parse(Host, uint8, *scale.Decoder) (ParseOutput, error)
+	Parse(TxType, Method, *scale.Decoder) (ParseOutput, error)
 	// Args returns method arguments for the method.
-	Args(uint8) scale.Type
-
+	Args(TxType, Method) scale.Type
 	// Exec dispatches execution request based on the method selector.
-	Exec(Host, uint8, scale.Encodable) error
+	Exec(Host, TxType, Method, scale.Encodable) error
 
 	// New instantiates Template from spawn arguments.
 	New(any) (Template, error)
@@ -62,7 +71,7 @@ type Template interface {
 	scale.Encodable
 	// MaxSpend decodes MaxSpend value for the transaction. Transaction will fail
 	// if it spends more than that.
-	MaxSpend(uint8, any) (uint64, error)
+	MaxSpend(Method, any) (uint64, error)
 	// Verify security of the transaction.
 	Verify(Host, []byte, *scale.Decoder) bool
 }
@@ -110,6 +119,6 @@ type Host interface {
 
 // Payload is a generic payload for all transactions.
 type Payload struct {
-	Nonce    Nonce
 	GasPrice uint64
+	Nonce    Nonce
 }

@@ -24,7 +24,7 @@ func TestMaxSpend(t *testing.T) {
 	wallet := Wallet{}
 	t.Run("Spawn", func(t *testing.T) {
 		max, err := wallet.MaxSpend(core.MethodSpawn, &SpawnArguments{})
-		require.NoError(t, err)
+		require.Error(t, err)
 		require.EqualValues(t, 0, max)
 	})
 	t.Run("Spend", func(t *testing.T) {

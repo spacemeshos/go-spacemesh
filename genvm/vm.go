@@ -386,7 +386,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 
 		err = ctx.Consume(ctx.Header.MaxGas)
 		if err == nil {
-			err = ctx.PrincipalHandler.Exec(ctx, ctx.Header.Method, args)
+			err = ctx.PrincipalHandler.Exec(ctx, ctx.Header.TxType, ctx.Header.Method, args)
 		}
 		if err != nil {
 			logger.With().Debug("transaction failed",
@@ -443,14 +443,14 @@ type Request struct {
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
 	start := time.Now()
-	header, ctx, args, err := parse(r.vm.logger, r.lid, r.vm.registry, r.cache, r.vm.cfg, r.raw.Raw, r.decoder)
+	ctx, err := parse(r.vm.logger, r.lid, r.vm.registry, r.cache, r.vm.cfg, r.raw.Raw, r.decoder)
 	if err != nil {
 		return nil, err
 	}
 	r.ctx = ctx
-	r.args = args
+	r.args = ctx.Args
 	transactionDurationParse.Observe(float64(time.Since(start)))
-	return header, nil
+	return &ctx.Header, nil
 }
 
 // Verify transaction. Will panic if called without Parse completing successfully.
@@ -464,119 +464,213 @@ func (r *Request) Verify() bool {
 	return rst
 }
 
-func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader core.AccountLoader, cfg Config, raw []byte, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
+func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader core.AccountLoader, cfg Config, raw []byte, decoder *scale.Decoder) (*core.Context, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %s", core.ErrMalformed, err.Error())
+		return nil, fmt.Errorf("%w: failed to decode version %s", core.ErrMalformed, err.Error())
 	}
 	if version != 0 {
-		return nil, nil, nil, fmt.Errorf("%w: unsupported version %d", core.ErrMalformed, version)
+		return nil, fmt.Errorf("%w: unsupported version %d", core.ErrMalformed, version)
 	}
-
-	var principal core.Address
-	if _, err := principal.DecodeScale(decoder); err != nil {
-		return nil, nil, nil, fmt.Errorf("%w failed to decode principal: %s", core.ErrMalformed, err)
-	}
-	method, _, err := scale.DecodeCompact8(decoder)
+	txtype, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: failed to decode method selector %s", core.ErrMalformed, err.Error())
+		return nil, fmt.Errorf("%w: failed to decode tx type %s", core.ErrMalformed, err.Error())
 	}
-	account, err := loader.Get(principal)
+	switch txtype {
+	case core.SelfSpawn:
+		return parseSelfSpawn(logger, lid, reg, loader, cfg, raw, decoder)
+	case core.Spawn:
+		return parseSpawn(logger, lid, reg, loader, cfg, raw, decoder)
+	case core.LocalMethodCall:
+		return parseLocalMethodCall(logger, lid, reg, loader, cfg, raw, decoder)
+	}
+	return nil, fmt.Errorf("%w: unknown tx type %d", core.ErrMalformed, txtype)
+
+}
+
+func parseSelfSpawn(logger log.Log, lid types.LayerID, reg *registry.Registry, loader core.AccountLoader, cfg Config, raw []byte, decoder *scale.Decoder) (*core.Context, error) {
+	templateAddress := core.Address{}
+	if _, err := templateAddress.DecodeScale(decoder); err != nil {
+		return nil, fmt.Errorf("%w failed to decode template address %s", core.ErrMalformed, err)
+	}
+	handler := reg.Get(templateAddress)
+	if handler == nil {
+		return nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, templateAddress)
+	}
+	output, err := handler.Parse(core.SelfSpawn, 0, decoder)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: failed load state for principal %s - %s", core.ErrInternal, principal, err)
-	}
-	logger.With().Debug("loaded account state", log.Inline(&account))
-
-	ctx := &core.Context{
-		GenesisID:        cfg.GenesisID,
-		Registry:         reg,
-		Loader:           loader,
-		PrincipalAccount: account,
-		LayerID:          lid,
-	}
-
-	if account.TemplateAddress != nil {
-		ctx.PrincipalHandler = reg.Get(*account.TemplateAddress)
-		if ctx.PrincipalHandler == nil {
-			return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *account.TemplateAddress)
-		}
-		ctx.PrincipalTemplate, err = ctx.PrincipalHandler.Load(account.State)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-	}
-
-	var (
-		templateAddress *core.Address
-		handler         core.Handler
-	)
-	if method == core.MethodSpawn {
-		// the transaction is either spawn or self-spawn
-		templateAddress = &core.Address{}
-		if _, err := templateAddress.DecodeScale(decoder); err != nil {
-			return nil, nil, nil, fmt.Errorf("%w failed to decode template address %s", core.ErrMalformed, err)
-		}
-		handler = reg.Get(*templateAddress)
-		if handler == nil {
-			return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *templateAddress)
-		}
-		if ctx.PrincipalHandler == nil {
-			// spawn is not possible if principal is not spawned
-			// so this must be self-spawn, but we can't tell before decoding arguments
-			ctx.PrincipalHandler = handler
-		}
-	} else {
-		// this is any other call transaction
-		if account.TemplateAddress == nil {
-			return nil, nil, nil, core.ErrNotSpawned
-		}
-		templateAddress = account.TemplateAddress
-		handler = ctx.PrincipalHandler
-	}
-	output, err := ctx.PrincipalHandler.Parse(ctx, method, decoder)
-	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	buf, _, err := scale.DecodeByteSlice(decoder)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
-	args := handler.Args(method)
+	args := handler.Args(core.SelfSpawn, 0)
 	if args == nil {
-		return nil, nil, nil, fmt.Errorf("%w: unknown method %s %d", core.ErrMalformed, *templateAddress, method)
+		return nil, fmt.Errorf("%w: unknown tx type %s %d", core.ErrMalformed, templateAddress, core.SelfSpawn)
 	}
 	if _, err := args.DecodeScale(scale.NewDecoder(bytes.NewReader(buf))); err != nil {
-		return nil, nil, nil, fmt.Errorf("%w failed to decode method arguments %s", core.ErrMalformed, err)
+		return nil, fmt.Errorf("%w failed to decode method arguments %s", core.ErrMalformed, err)
 	}
-	if method == core.MethodSpawn {
-		if core.ComputePrincipal(*templateAddress, args) == principal {
-			// this is a self spawn. if it fails validation - discard it immediately
-			ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(args)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-		} else if account.TemplateAddress == nil {
-			return nil, nil, nil, fmt.Errorf("%w: account can't spawn until it is spawned itself", core.ErrNotSpawned)
-		}
-	}
-
-	ctx.ParseOutput = output
-
-	ctx.Header.Principal = principal
-	ctx.Header.TemplateAddress = *templateAddress
-	ctx.Header.Method = method
-	ctx.Header.MaxGas = core.ComputeGasCost(output.BaseGas, output.FixedGas, raw, cfg.StorageCostFactor)
-	ctx.Header.GasPrice = output.GasPrice
-	ctx.Header.Nonce = output.Nonce
-
-	ctx.Args = args
-
-	maxspend, err := ctx.PrincipalTemplate.MaxSpend(ctx.Header.Method, args)
+	principal := core.ComputePrincipal(templateAddress, args)
+	account, err := loader.Get(principal)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, fmt.Errorf("%w: failed load state for principal %s - %s", core.ErrInternal, principal, err)
 	}
-	ctx.Header.MaxSpend = maxspend
-	return &ctx.Header, ctx, args, nil
+	template, err := handler.New(args)
+	if err != nil {
+		return nil, err
+	}
+	return &core.Context{
+		GenesisID:         cfg.GenesisID,
+		Registry:          reg,
+		Loader:            loader,
+		PrincipalAccount:  account,
+		LayerID:           lid,
+		Args:              args,
+		ParseOutput:       output,
+		PrincipalHandler:  handler,
+		PrincipalTemplate: template,
+		Header: types.TxHeader{
+			Principal:       principal,
+			TemplateAddress: templateAddress,
+			TxType:          core.SelfSpawn,
+			MaxGas:          core.ComputeGasCost(output.BaseGas, output.FixedGas, raw, cfg.StorageCostFactor),
+			GasPrice:        output.GasPrice,
+			Nonce:           output.Nonce,
+		},
+	}, nil
+}
+
+func parseSpawnedAccount(decoder *scale.Decoder, loader core.AccountLoader) (core.Account, error) {
+	principal := core.Address{}
+	if _, err := principal.DecodeScale(decoder); err != nil {
+		return core.Account{}, fmt.Errorf("%w failed to decode principal: %s", core.ErrMalformed, err)
+	}
+	account, err := loader.Get(principal)
+	if err != nil {
+		return account, fmt.Errorf("%w: failed load state for principal %s - %s", core.ErrInternal, principal, err)
+	}
+	if account.TemplateAddress == nil {
+		return account, fmt.Errorf("%w: account %s can't spawn until it is spawned itself", core.ErrNotSpawned, principal)
+	}
+	return account, nil
+}
+
+func parseSpawn(logger log.Log, lid types.LayerID, reg *registry.Registry, loader core.AccountLoader, cfg Config, raw []byte, decoder *scale.Decoder) (*core.Context, error) {
+	account, err := parseSpawnedAccount(decoder, loader)
+	if err != nil {
+		return nil, err
+	}
+	principalHandler := reg.Get(*account.TemplateAddress)
+	if principalHandler == nil {
+		return nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *account.TemplateAddress)
+	}
+	principalTemplate, err := principalHandler.Load(account.State)
+	if err != nil {
+		return nil, err
+	}
+	templateAddress := core.Address{}
+	if _, err := templateAddress.DecodeScale(decoder); err != nil {
+		return nil, fmt.Errorf("%w failed to decode template address %s", core.ErrMalformed, err)
+	}
+	output, err := principalHandler.Parse(core.Spawn, 0, decoder)
+	if err != nil {
+		return nil, err
+	}
+	handler := reg.Get(templateAddress)
+	if handler == nil {
+		return nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, templateAddress)
+	}
+	buf, _, err := scale.DecodeByteSlice(decoder)
+	if err != nil {
+		return nil, err
+	}
+	args := handler.Args(core.Spawn, 0)
+	if args == nil {
+		return nil, fmt.Errorf("%w: unknown tx type %s %d", core.ErrMalformed, templateAddress, core.Spawn)
+	}
+	if _, err := args.DecodeScale(scale.NewDecoder(bytes.NewReader(buf))); err != nil {
+		return nil, fmt.Errorf("%w failed to decode method arguments %s", core.ErrMalformed, err)
+	}
+	return &core.Context{
+		GenesisID:         cfg.GenesisID,
+		Registry:          reg,
+		Loader:            loader,
+		PrincipalAccount:  account,
+		LayerID:           lid,
+		Args:              args,
+		ParseOutput:       output,
+		PrincipalHandler:  principalHandler,
+		PrincipalTemplate: principalTemplate,
+		Header: types.TxHeader{
+			Principal:       account.Address,
+			TemplateAddress: templateAddress,
+			TxType:          core.Spawn,
+			MaxGas:          core.ComputeGasCost(output.BaseGas, output.FixedGas, raw, cfg.StorageCostFactor),
+			GasPrice:        output.GasPrice,
+			Nonce:           output.Nonce,
+		},
+	}, nil
+}
+
+func parseLocalMethodCall(logger log.Log, lid types.LayerID, reg *registry.Registry, loader core.AccountLoader, cfg Config, raw []byte, decoder *scale.Decoder) (*core.Context, error) {
+	account, err := parseSpawnedAccount(decoder, loader)
+	if err != nil {
+		return nil, err
+	}
+	principalHandler := reg.Get(*account.TemplateAddress)
+	if principalHandler == nil {
+		return nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *account.TemplateAddress)
+	}
+	principalTemplate, err := principalHandler.Load(account.State)
+	if err != nil {
+		return nil, err
+	}
+	method, _, err := scale.DecodeCompact16(decoder)
+	if err != nil {
+		return nil, fmt.Errorf("%w: can't decode method %s", core.ErrMalformed, err)
+	}
+	output, err := principalHandler.Parse(core.LocalMethodCall, method, decoder)
+	if err != nil {
+		return nil, err
+	}
+	buf, _, err := scale.DecodeByteSlice(decoder)
+	if err != nil {
+		return nil, err
+	}
+	args := principalHandler.Args(core.LocalMethodCall, method)
+	if args == nil {
+		return nil, fmt.Errorf("%w: unknown tx type %s %d", core.ErrMalformed, *account.TemplateAddress, core.LocalMethodCall)
+	}
+	if _, err := args.DecodeScale(scale.NewDecoder(bytes.NewReader(buf))); err != nil {
+		return nil, fmt.Errorf("%w failed to decode method arguments %s", core.ErrMalformed, err)
+	}
+	maxspend, err := principalTemplate.MaxSpend(method, args)
+	if err != nil {
+		return nil, err
+	}
+	return &core.Context{
+		GenesisID:         cfg.GenesisID,
+		Registry:          reg,
+		Loader:            loader,
+		PrincipalAccount:  account,
+		LayerID:           lid,
+		Args:              args,
+		ParseOutput:       output,
+		PrincipalHandler:  principalHandler,
+		PrincipalTemplate: principalTemplate,
+		Header: types.TxHeader{
+			Principal:       account.Address,
+			TemplateAddress: *account.TemplateAddress,
+			TxType:          core.LocalMethodCall,
+			Method:          method,
+			MaxGas:          core.ComputeGasCost(output.BaseGas, output.FixedGas, raw, cfg.StorageCostFactor),
+			MaxSpend:        maxspend,
+			GasPrice:        output.GasPrice,
+			Nonce:           output.Nonce,
+		},
+	}, nil
 }
 
 func verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool {

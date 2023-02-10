@@ -9,7 +9,8 @@ import "github.com/spacemeshos/go-spacemesh/log"
 type TxHeader struct {
 	Principal       Address
 	TemplateAddress Address
-	Method          uint8
+	TxType          uint8
+	Method          uint16
 	Nonce           Nonce
 	LayerLimits     LayerLimits
 	MaxGas          uint64
@@ -30,12 +31,13 @@ func (h *TxHeader) Spending() uint64 {
 // MarshalLogObject implements encoding for the tx header.
 func (h *TxHeader) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("principal", h.Principal.String())
-	encoder.AddUint64("nonce_counter", h.Nonce)
-	encoder.AddUint32("layer_min", h.LayerLimits.Min)
-	encoder.AddUint32("layer_max", h.LayerLimits.Max)
-	encoder.AddUint64("max_gas", h.MaxGas)
-	encoder.AddUint64("gas_price", h.GasPrice)
-	encoder.AddUint64("max_spend", h.MaxSpend)
+	encoder.AddUint64("nonce counter", h.Nonce)
+	encoder.AddUint32("layer min", h.LayerLimits.Min)
+	encoder.AddUint32("layer max", h.LayerLimits.Max)
+	encoder.AddUint64("max gas", h.MaxGas)
+	encoder.AddUint64("gas price", h.GasPrice)
+	encoder.AddUint64("max spend", h.MaxSpend)
+	encoder.AddUint8("tx type", h.TxType)
 	return nil
 }
 

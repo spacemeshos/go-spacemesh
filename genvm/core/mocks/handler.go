@@ -36,31 +36,31 @@ func (m *MockHandler) EXPECT() *MockHandlerMockRecorder {
 }
 
 // Args mocks base method.
-func (m *MockHandler) Args(arg0 byte) scale.Type {
+func (m *MockHandler) Args(arg0 byte, arg1 uint16) scale.Type {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Args", arg0)
+	ret := m.ctrl.Call(m, "Args", arg0, arg1)
 	ret0, _ := ret[0].(scale.Type)
 	return ret0
 }
 
 // Args indicates an expected call of Args.
-func (mr *MockHandlerMockRecorder) Args(arg0 interface{}) *gomock.Call {
+func (mr *MockHandlerMockRecorder) Args(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Args", reflect.TypeOf((*MockHandler)(nil).Args), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Args", reflect.TypeOf((*MockHandler)(nil).Args), arg0, arg1)
 }
 
 // Exec mocks base method.
-func (m *MockHandler) Exec(arg0 core.Host, arg1 byte, arg2 scale.Encodable) error {
+func (m *MockHandler) Exec(arg0 core.Host, arg1 byte, arg2 uint16, arg3 scale.Encodable) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Exec", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Exec", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Exec indicates an expected call of Exec.
-func (mr *MockHandlerMockRecorder) Exec(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockHandlerMockRecorder) Exec(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockHandler)(nil).Exec), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockHandler)(nil).Exec), arg0, arg1, arg2, arg3)
 }
 
 // Load mocks base method.
@@ -94,7 +94,7 @@ func (mr *MockHandlerMockRecorder) New(arg0 interface{}) *gomock.Call {
 }
 
 // Parse mocks base method.
-func (m *MockHandler) Parse(arg0 core.Host, arg1 byte, arg2 *scale.Decoder) (core.ParseOutput, error) {
+func (m *MockHandler) Parse(arg0 byte, arg1 uint16, arg2 *scale.Decoder) (core.ParseOutput, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Parse", arg0, arg1, arg2)
 	ret0, _ := ret[0].(core.ParseOutput)

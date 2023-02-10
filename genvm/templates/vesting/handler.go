@@ -73,7 +73,7 @@ type handler struct {
 }
 
 // Parse header and arguments.
-func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
+func (h *handler) Parse(txtype core.TxType, method core.Method, decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	if method == MethodDrainVault {
 		var p core.Payload
 		if _, err = p.DecodeScale(decoder); err != nil {
@@ -85,7 +85,7 @@ func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (o
 		output.FixedGas = h.drainVaultGas
 		return output, nil
 	}
-	return h.multisig.Parse(host, method, decoder)
+	return h.multisig.Parse(txtype, method, decoder)
 }
 
 // New instatiates vesting state, note that the state is the same as multisig.
@@ -108,20 +108,20 @@ func (h *handler) Load(state []byte) (core.Template, error) {
 }
 
 // Exec spawn or spend based on the method selector.
-func (h *handler) Exec(host core.Host, method uint8, args scale.Encodable) error {
+func (h *handler) Exec(host core.Host, txtype core.TxType, method core.Method, args scale.Encodable) error {
 	if method == MethodDrainVault {
 		drain := args.(*DrainVaultArguments)
 		return host.Relay(vault.TemplateAddress, drain.Vault, func(host core.Host) error {
-			return host.Handler().Exec(host, core.MethodSpend, &drain.SpendArguments)
+			return host.Handler().Exec(host, txtype, core.MethodSpend, &drain.SpendArguments)
 		})
 	}
-	return h.multisig.Exec(host, method, args)
+	return h.multisig.Exec(host, txtype, method, args)
 }
 
 // Args ...
-func (h *handler) Args(method uint8) scale.Type {
-	if method == MethodDrainVault {
+func (h *handler) Args(txtype core.TxType, method core.Method) scale.Type {
+	if txtype == core.LocalMethodCall && method == MethodDrainVault {
 		return &DrainVaultArguments{}
 	}
-	return h.multisig.Args(method)
+	return h.multisig.Args(txtype, method)
 }

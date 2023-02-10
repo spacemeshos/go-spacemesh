@@ -85,7 +85,7 @@ type handler struct {
 }
 
 // Parse header and arguments.
-func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
+func (h *handler) Parse(txtype core.TxType, method core.Method, decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	switch method {
 	case core.MethodSpawn:
 		output.FixedGas = h.totalGasSpawn
@@ -131,7 +131,7 @@ func (h *handler) Load(state []byte) (core.Template, error) {
 }
 
 // Exec spawn or spend based on the method selector.
-func (h *handler) Exec(host core.Host, method uint8, args scale.Encodable) error {
+func (h *handler) Exec(host core.Host, txtype core.TxType, method core.Method, args scale.Encodable) error {
 	switch method {
 	case core.MethodSpawn:
 		if err := host.Spawn(args); err != nil {
@@ -148,7 +148,7 @@ func (h *handler) Exec(host core.Host, method uint8, args scale.Encodable) error
 }
 
 // Args ...
-func (h *handler) Args(method uint8) scale.Type {
+func (h *handler) Args(txtype core.TxType, method core.Method) scale.Type {
 	switch method {
 	case core.MethodSpawn:
 		return &SpawnArguments{}
