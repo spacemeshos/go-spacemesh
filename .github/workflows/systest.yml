@@ -46,7 +46,7 @@ jobs:
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
       - filter-changes
-    timeout-minutes: 90
+    timeout-minutes: 70
     concurrency:
       group: ${{ github.base_ref == 'staging' && format('{0}-staging', github.workflow) || format('{0}-{1}', github.workflow, github.ref) }}
       cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
@@ -101,7 +101,7 @@ jobs:
           go-version: ${{ env.go-version }}
 
       - name: Run tests
-        timeout-minutes: 85
+        timeout-minutes: 60
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           label: sanity
