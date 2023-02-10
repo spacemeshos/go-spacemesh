@@ -38,9 +38,6 @@ func WithGenesisID(id types.Hash20) Opt {
 var (
 	// TxVersion is the only version supported at genesis.
 	TxVersion = scale.U8(0)
-
-	// MethodSpawn ...
-	MethodSpawn = scale.U8(core.MethodSpawn)
 	// MethodSpend ...
 	MethodSpend = scale.U8(core.MethodSpend)
 )

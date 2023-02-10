@@ -74,7 +74,7 @@ type handler struct {
 
 // Parse header and arguments.
 func (h *handler) Parse(txtype core.TxType, method core.Method, decoder *scale.Decoder) (output core.ParseOutput, err error) {
-	if method == MethodDrainVault {
+	if txtype == core.LocalMethodCall && method == MethodDrainVault {
 		var p core.Payload
 		if _, err = p.DecodeScale(decoder); err != nil {
 			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
@@ -109,7 +109,7 @@ func (h *handler) Load(state []byte) (core.Template, error) {
 
 // Exec spawn or spend based on the method selector.
 func (h *handler) Exec(host core.Host, txtype core.TxType, method core.Method, args scale.Encodable) error {
-	if method == MethodDrainVault {
+	if txtype == core.LocalMethodCall && method == MethodDrainVault {
 		drain := args.(*DrainVaultArguments)
 		return host.Relay(vault.TemplateAddress, drain.Vault, func(host core.Host) error {
 			return host.Handler().Exec(host, txtype, core.MethodSpend, &drain.SpendArguments)

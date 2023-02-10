@@ -23,7 +23,7 @@ func FuzzVerify(f *testing.F) {
 func TestMaxSpend(t *testing.T) {
 	wallet := Wallet{}
 	t.Run("Spawn", func(t *testing.T) {
-		max, err := wallet.MaxSpend(core.MethodSpawn, &SpawnArguments{})
+		max, err := wallet.MaxSpend(0, &SpawnArguments{})
 		require.Error(t, err)
 		require.EqualValues(t, 0, max)
 	})

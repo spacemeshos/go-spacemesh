@@ -1,8 +1,6 @@
 package wallet
 
 import (
-	"bytes"
-
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/go-scale"
 
@@ -13,18 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
-
-func encode(fields ...scale.Encodable) []byte {
-	buf := bytes.NewBuffer(nil)
-	encoder := scale.NewEncoder(buf)
-	for _, field := range fields {
-		_, err := field.EncodeScale(encoder)
-		if err != nil {
-			panic(err)
-		}
-	}
-	return buf.Bytes()
-}
 
 // SelfSpawn creates a self-spawn transaction.
 func SelfSpawn(pk signing.PrivateKey, nonce core.Nonce, opts ...sdk.Opt) []byte {

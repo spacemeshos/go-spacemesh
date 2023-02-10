@@ -754,7 +754,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 							template: template,
 							change: spent{amount: 100 +
 								defaultGasPrice*
-									(ref.estimateSpawnGas(0)+
+									(ref.estimateSelfSpawnGas(0)+
 										ref.estimateSpendGas(0, 10, 100, 1))},
 						},
 						10: earned{amount: 100},
@@ -774,7 +774,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					expected: map[int]change{
 						0: spawned{
 							template: template,
-							change:   spent{amount: defaultGasPrice * ref.estimateSpawnGas(0)},
+							change:   spent{amount: defaultGasPrice * ref.estimateSelfSpawnGas(0)},
 						},
 						10: same{},
 					},
@@ -826,7 +826,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 							ref.estimateSpendGas(0, 10, 10_000, 1)},
 						10: spawned{
 							template: template,
-							change: earned{amount: 10000 - 100 - defaultGasPrice*(ref.estimateSpawnGas(10)+
+							change: earned{amount: 10000 - 100 - defaultGasPrice*(ref.estimateSelfSpawnGas(10)+
 								ref.estimateSpendGas(10, 11, 100, 1))},
 						},
 						11: earned{amount: 100},
@@ -937,7 +937,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11)) - 1},
+						&spendTx{0, 11, uint64(ref.estimateSelfSpawnGas(11)) - 1},
 						&selfSpawnTx{11},
 					},
 					failed: map[int]error{2: core.ErrNoBalance},
@@ -955,7 +955,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(0) * defaultGasPrice)},
+						&spendTx{0, 11, uint64(ref.estimateSelfSpawnGas(0) * defaultGasPrice)},
 						&selfSpawnTx{11},
 						&spendTx{11, 12, 1},
 					},
@@ -988,11 +988,11 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&spendTx{0, 11, 100},
 						&spendTx{0, 12, 100},
 					},
-					gasLimit: uint64(ref.estimateSpawnGas(0) +
+					gasLimit: uint64(ref.estimateSelfSpawnGas(0) +
 						ref.estimateSpendGas(0, 10, 100, 1)),
 					ineffective: []int{2, 3},
 					expected: map[int]change{
-						0:  spent{amount: 100 + ref.estimateSpawnGas(0) + ref.estimateSpendGas(0, 10, 100, 1)},
+						0:  spent{amount: 100 + ref.estimateSelfSpawnGas(0) + ref.estimateSpendGas(0, 10, 100, 1)},
 						10: earned{amount: 100},
 						11: same{},
 						12: same{},
@@ -1006,18 +1006,18 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 10, uint64(ref.estimateSpawnGas(1)) - 1},
+						&spendTx{0, 10, uint64(ref.estimateSelfSpawnGas(1)) - 1},
 						&selfSpawnTx{10},
 						&spendTx{0, 11, 100},
 					},
-					gasLimit: uint64(ref.estimateSpawnGas(0) +
+					gasLimit: uint64(ref.estimateSelfSpawnGas(0) +
 						ref.estimateSpendGas(0, 10, 100, 1) +
-						ref.estimateSpawnGas(1)),
+						ref.estimateSelfSpawnGas(1)),
 					failed:      map[int]error{2: core.ErrNoBalance},
 					ineffective: []int{3},
 					expected: map[int]change{
-						0: spent{amount: ref.estimateSpawnGas(1) - 1 +
-							ref.estimateSpawnGas(0) +
+						0: spent{amount: ref.estimateSelfSpawnGas(1) - 1 +
+							ref.estimateSelfSpawnGas(0) +
 							ref.estimateSpendGas(0, 10, 100, 1)},
 						10: nonce{increased: 1},
 						11: same{},
@@ -1041,7 +1041,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					expected: map[int]change{
 						0: spawned{
 							template: template,
-							change:   spent{amount: 100 + defaultGasPrice*(ref.estimateSpawnGas(0)+ref.estimateSpendGas(0, 11, 100, 2))},
+							change:   spent{amount: 100 + defaultGasPrice*(ref.estimateSelfSpawnGas(0)+ref.estimateSpendGas(0, 11, 100, 2))},
 						},
 						10: same{},
 						11: earned{amount: 100},
@@ -1070,7 +1070,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					rewards: []reward{{address: 10, share: 1}},
 					expected: map[int]change{
-						10: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) + ref.estimateSpawnGas(0)},
+						10: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) + ref.estimateSelfSpawnGas(0)},
 					},
 				},
 				{
@@ -1100,8 +1100,8 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					rewards: []reward{{address: 10, share: 0.5}, {address: 11, share: 0.5}},
 					expected: map[int]change{
-						10: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSpawnGas(10)) / 2},
-						11: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSpawnGas(11)) / 2},
+						10: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSelfSpawnGas(10)) / 2},
+						11: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSelfSpawnGas(11)) / 2},
 					},
 				},
 			},
@@ -1151,7 +1151,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11) + ref.estimateSpendGas(11, 12, 1_000, 1))},
+						&spendTx{0, 11, uint64(ref.estimateSelfSpawnGas(11) + ref.estimateSpendGas(11, 12, 1_000, 1))},
 						&selfSpawnTx{11},
 						&spendTx{11, 12, 1_000},
 					},
@@ -1180,25 +1180,25 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11)) - 1},
+						&spendTx{0, 11, uint64(ref.estimateSelfSpawnGas(11)) - 1},
 						&selfSpawnTx{11},
 					},
 					failed: map[int]error{2: core.ErrNoBalance},
 					expected: map[int]change{
-						0: spent{amount: ref.estimateSpawnGas(11) - 1 +
-							ref.estimateSpawnGas(0) +
-							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, 1)},
+						0: spent{amount: ref.estimateSelfSpawnGas(11) - 1 +
+							ref.estimateSelfSpawnGas(0) +
+							ref.estimateSpendGas(0, 11, ref.estimateSelfSpawnGas(11)-1, 1)},
 						11: nonce{increased: 1},
 					},
 				},
 				{
 					txs: []testTx{
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11))},
+						&spendTx{0, 11, uint64(ref.estimateSelfSpawnGas(11))},
 						&selfSpawnTx{11},
 					},
 					expected: map[int]change{
-						0: spent{amount: ref.estimateSpawnGas(11) +
-							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11), 2)},
+						0: spent{amount: ref.estimateSelfSpawnGas(11) +
+							ref.estimateSpendGas(0, 11, ref.estimateSelfSpawnGas(11), 2)},
 						11: spawned{template: template, change: nonce{increased: 1}},
 					},
 				},
@@ -1218,7 +1218,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 							template: template,
 							change: nonce{
 								increased: 2,
-								change:    spent{amount: 2 * ref.estimateSpawnGas(0)},
+								change:    spent{amount: 2 * ref.estimateSelfSpawnGas(0)},
 							},
 						},
 					},
@@ -1232,24 +1232,24 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					txs: []testTx{
 						&selfSpawnTx{0},
 						// gas will be higher than fixed, but less than max gas
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11)) - 1},
+						&spendTx{0, 11, uint64(ref.estimateSelfSpawnGas(11)) - 1},
 						// it will cause this transaction to be failed
 						&selfSpawnTx{11},
 					},
-					gasLimit: uint64(ref.estimateSpawnGas(0) +
-						ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, 1) +
-						ref.estimateSpawnGas(11)),
+					gasLimit: uint64(ref.estimateSelfSpawnGas(0) +
+						ref.estimateSpendGas(0, 11, ref.estimateSelfSpawnGas(11)-1, 1) +
+						ref.estimateSelfSpawnGas(11)),
 					failed:  map[int]error{2: core.ErrNoBalance},
 					rewards: []reward{{address: 20, share: 1}},
 					expected: map[int]change{
-						0: spent{amount: ref.estimateSpawnGas(0) +
-							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, 1) +
-							ref.estimateSpawnGas(11) - 1},
+						0: spent{amount: ref.estimateSelfSpawnGas(0) +
+							ref.estimateSpendGas(0, 11, ref.estimateSelfSpawnGas(11)-1, 1) +
+							ref.estimateSelfSpawnGas(11) - 1},
 						11: nonce{increased: 1},
 						// fees from every transaction (including failed) + testBaseReward
-						20: earned{amount: ref.estimateSpawnGas(0) +
-							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, 1) +
-							ref.estimateSpawnGas(11) - 1 +
+						20: earned{amount: ref.estimateSelfSpawnGas(0) +
+							ref.estimateSpendGas(0, 11, ref.estimateSelfSpawnGas(11)-1, 1) +
+							ref.estimateSelfSpawnGas(11) - 1 +
 							int(rewards.TotalSubsidyAtLayer(0))},
 					},
 				},
@@ -1289,7 +1289,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						0: spawned{
 							template: template,
 							change: spent{
-								amount: ref.estimateSpawnGas(0),
+								amount: ref.estimateSelfSpawnGas(0),
 								change: nonce{increased: 1},
 							},
 						},
@@ -1329,7 +1329,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(2*ref.estimateSpawnGas(11) - 1)},
+						&spendTx{0, 11, uint64(ref.estimateSelfSpawnGas(11) + ref.estimateSpawnGas(11) - 1)},
 						&selfSpawnTx{11},
 						&spawnTx{11, 12},
 					},
@@ -1998,11 +1998,9 @@ func TestVaultValidation(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("self spawn", func(t *testing.T) {
-		principal := tt.accounts[2].getAddress()
 		tx := sdk.Encode(
 			&sdk.TxVersion,
-			&principal,
-			&sdk.MethodSpawn,
+			&sdk.SelfSpawn,
 			&vault.TemplateAddress,
 			sdk.LengthPrefixedStruct{Encodable: tt.accounts[2].spawnArgs()},
 		)
@@ -2016,8 +2014,8 @@ func TestVaultValidation(t *testing.T) {
 		principal := tt.accounts[1].getAddress()
 		tx := sdk.Encode(
 			&sdk.TxVersion,
+			&sdk.Spawn,
 			&principal,
-			&sdk.MethodSpawn,
 			&vault.TemplateAddress,
 			sdk.LengthPrefixedStruct{Encodable: tt.accounts[2].spawnArgs()},
 		)
@@ -2031,6 +2029,7 @@ func TestVaultValidation(t *testing.T) {
 		principal := tt.accounts[1].getAddress()
 		tx := sdk.Encode(
 			&sdk.TxVersion,
+			&sdk.LocalMethodCall,
 			&principal,
 			&sdk.MethodSpend,
 			sdk.LengthPrefixedStruct{Encodable: &vault.SpendArguments{}},

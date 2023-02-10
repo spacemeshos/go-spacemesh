@@ -485,7 +485,6 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 		return parseLocalMethodCall(logger, lid, reg, loader, cfg, raw, decoder)
 	}
 	return nil, fmt.Errorf("%w: unknown tx type %d", core.ErrMalformed, txtype)
-
 }
 
 func parseSelfSpawn(logger log.Log, lid types.LayerID, reg *registry.Registry, loader core.AccountLoader, cfg Config, raw []byte, decoder *scale.Decoder) (*core.Context, error) {

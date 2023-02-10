@@ -60,7 +60,7 @@ func (h *handler) Load(state []byte) (core.Template, error) {
 
 // Exec supports only MethodSpend.
 func (h *handler) Exec(host core.Host, txtype core.TxType, method core.Method, args scale.Encodable) error {
-	if method != core.MethodSpend {
+	if txtype == core.LocalMethodCall && method != core.MethodSpend {
 		return fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
 	spend := args.(*SpendArguments)
@@ -69,11 +69,13 @@ func (h *handler) Exec(host core.Host, txtype core.TxType, method core.Method, a
 
 // Args ...
 func (h *handler) Args(txtype core.TxType, method core.Method) scale.Type {
-	switch method {
-	case core.MethodSpawn:
+	switch txtype {
+	case core.SelfSpawn, core.Spawn:
 		return &SpawnArguments{}
-	case core.MethodSpend:
-		return &SpendArguments{}
+	case core.LocalMethodCall:
+		if method == core.MethodSpend {
+			return &SpendArguments{}
+		}
 	}
 	return nil
 }

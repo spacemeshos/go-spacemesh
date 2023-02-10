@@ -86,13 +86,17 @@ type handler struct {
 
 // Parse header and arguments.
 func (h *handler) Parse(txtype core.TxType, method core.Method, decoder *scale.Decoder) (output core.ParseOutput, err error) {
-	switch method {
-	case core.MethodSpawn:
+	switch txtype {
+	case core.SelfSpawn, core.Spawn:
 		output.FixedGas = h.totalGasSpawn
-	case core.MethodSpend:
-		output.FixedGas = h.totalGasSpend
+	case core.LocalMethodCall:
+		if method == core.MethodSpend {
+			output.FixedGas = h.totalGasSpend
+		} else {
+			return output, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
+		}
 	default:
-		return output, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
+		return output, fmt.Errorf("%w: unknown txtype %d", core.ErrMalformed, txtype)
 	}
 	var p core.Payload
 	if _, err = p.DecodeScale(decoder); err != nil {
@@ -132,28 +136,26 @@ func (h *handler) Load(state []byte) (core.Template, error) {
 
 // Exec spawn or spend based on the method selector.
 func (h *handler) Exec(host core.Host, txtype core.TxType, method core.Method, args scale.Encodable) error {
-	switch method {
-	case core.MethodSpawn:
-		if err := host.Spawn(args); err != nil {
-			return err
+	switch txtype {
+	case core.SelfSpawn, core.Spawn:
+		return host.Spawn(args)
+	case core.LocalMethodCall:
+		if method == core.MethodSpend {
+			return host.Template().(SpendTemplate).Spend(host, args.(*SpendArguments))
 		}
-	case core.MethodSpend:
-		if err := host.Template().(SpendTemplate).Spend(host, args.(*SpendArguments)); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
-	return nil
+	return fmt.Errorf("%w: unknown txtype/method %d/%d", core.ErrMalformed, txtype, method)
 }
 
 // Args ...
 func (h *handler) Args(txtype core.TxType, method core.Method) scale.Type {
-	switch method {
-	case core.MethodSpawn:
+	switch txtype {
+	case core.SelfSpawn, core.Spawn:
 		return &SpawnArguments{}
-	case core.MethodSpend:
-		return &SpendArguments{}
+	case core.LocalMethodCall:
+		if method == core.MethodSpend {
+			return &SpendArguments{}
+		}
 	}
 	return nil
 }

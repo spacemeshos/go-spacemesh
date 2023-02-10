@@ -16,12 +16,7 @@ const (
 
 type Method = uint16
 
-const (
-	// MethodSpawn ...
-	MethodSpawn Method = 0
-	// MethodSpend ...
-	MethodSpend Method = 16
-)
+const MethodSpend Method = 16
 
 type (
 	// PublicKey is an alias to Hash32.
