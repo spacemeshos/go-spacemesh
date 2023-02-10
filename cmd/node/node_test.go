@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -55,12 +56,6 @@ import (
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r := require.New(t)
-
-	defer func() {
-		// cleanup
-		err := os.RemoveAll("tmp")
-		r.NoError(err)
-	}()
 
 	tempdir := t.TempDir()
 
@@ -121,7 +116,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	app.log = app.addLogger(mylogger, myLog)
 	msg1 := "hi there"
 	app.log.Info(msg1)
-	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg1, mylogger), buf1.String())
+	r.Equal(fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg1, mylogger), buf1.String())
 	r.NoError(app.SetLogLevel(mylogger, "warn"))
 	r.Equal("warn", app.loggers[mylogger].String())
 	buf1.Reset()
@@ -134,7 +129,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	app.log.Info(msg2)
 	// This one should be printed
 	app.log.Warning(msg3)
-	r.Equal(fmt.Sprintf("WARN\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg3, mylogger), buf1.String())
+	r.Equal(fmt.Sprintf("WARN\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg3, mylogger), buf1.String())
 	r.Equal(fmt.Sprintf("INFO\t%s\n", msg1), buf2.String())
 	buf1.Reset()
 
@@ -143,7 +138,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	msg4 := "nihao"
 	app.log.Info(msg4)
 	r.Equal("info", app.loggers[mylogger].String())
-	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg4, mylogger), buf1.String())
+	r.Equal(fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg4, mylogger), buf1.String())
 
 	// test bad logger name
 	r.Error(app.SetLogLevel("anton3", "warn"))
@@ -165,7 +160,7 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	subLogger.Debug("should not get printed")
 	teststr := "should get printed"
 	subLogger.Info(teststr)
-	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, teststr, mylogger), buf.String())
+	r.Equal(fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, teststr, mylogger), buf.String())
 }
 
 func testArgs(ctx context.Context, root *cobra.Command, args ...string) (string, error) {
@@ -525,25 +520,30 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	port := 1240
 	path := t.TempDir()
 
-	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), logtest.New(t))
+	clock, err := timesync.NewClock(
+		timesync.WithLayerDuration(1*time.Second),
+		timesync.WithTickInterval(1*time.Second/10),
+		timesync.WithGenesisTime(time.Now()),
+		timesync.WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
 	mesh, err := mocknet.WithNPeers(1)
 	require.NoError(t, err)
 	cfg := getTestDefaultConfig()
 
-	poetHarness, err := activation.NewHTTPPoetHarness(false)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	poetHarness, err := activation.NewHTTPPoetHarness(ctx, t.TempDir())
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		err := poetHarness.Teardown(true)
-		if assert.NoError(t, err, "failed to tear down harness") {
-			t.Log("harness torn down")
-		}
-	})
-	edSgn := signing.NewEdSigner()
+
+	edSgn, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	h, err := p2p.Upgrade(mesh.Hosts()[0], cfg.Genesis.GenesisID())
 	require.NoError(t, err)
 	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
 		path, eligibility.New(logtest.New(t)),
-		poetHarness.HTTPPoetClient, clock, h, edSgn)
+		poetHarness.HTTPPoetClient, clock, h, edSgn,
+	)
 	require.NoError(t, err)
 
 	appCtx, appCancel := context.WithCancel(context.Background())
@@ -559,7 +559,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 		// Speed things up a little
 		app.Config.SyncInterval = 1
-		app.Config.LayerDurationSec = 2
+		app.Config.LayerDuration = 2 * time.Second
 		app.Config.DataDirParent = path
 		app.Config.LOGGING = cfg.LOGGING
 
@@ -569,20 +569,18 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		require.NoError(t, app.Start(appCtx))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
 	// If there's an error in the args, it will return immediately.
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		// This makes sure the test doesn't end until this goroutine closes
-		defer wg.Done()
+	var eg errgroup.Group
+	eg.Go(func() error {
 		str, err := testArgs(ctx, cmdWithRun(run), "--grpc-port", strconv.Itoa(port), "--grpc", "node", "--grpc-interface", "localhost")
 		assert.Empty(t, str)
 		assert.NoError(t, err)
-	}()
+		return nil
+	})
 
 	conn, err := grpc.DialContext(
 		ctx,
@@ -591,13 +589,10 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		grpc.WithBlock(),
 	)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, conn.Close()) })
+	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
 	c := pb.NewNodeServiceClient(conn)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	eg.Go(func() error {
 		streamStatus, err := c.StatusStream(ctx, &pb.StatusStreamRequest{})
 		require.NoError(t, err)
 
@@ -609,17 +604,17 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 			if err != nil {
 				code := status.Code(err)
 				if code == codes.Unavailable {
-					return
+					return nil
 				}
 				assert.NoError(t, err)
-				return
+				return nil
 			}
 			// Note that, for some reason, protobuf does not display fields
 			// that still have their default value, so the output here will
 			// only be partial.
 			logger.Debug("Got status message: %s", in.Status)
 		}
-	}()
+	})
 
 	streamErr, err := c.ErrorStream(ctx, &pb.ErrorStreamRequest{})
 	require.NoError(t, err)
@@ -627,16 +622,12 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	require.NoError(t, err)
 
 	// Report two errors and make sure they're both received
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	eg.Go(func() error {
 		errlog.Error("test123")
 		errlog.Error("test456")
-		assert.Panics(t, func() {
-			errlog.Panic("testPANIC")
-		})
-	}()
+		assert.Panics(t, func() { errlog.Panic("testPANIC") })
+		return nil
+	})
 
 	// We expect a specific series of errors in a specific order!
 	expected := []string{
@@ -656,7 +647,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	appCancel() // stop the app
 
 	// Wait for everything to stop cleanly before ending test
-	wg.Wait()
+	eg.Wait()
 }
 
 // E2E app test of the transaction service.
@@ -671,7 +662,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	cfg.DataDirParent = t.TempDir()
 	app.Config = &cfg
 
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	r.NoError(err)
 	address := wallet.Address(signer.PublicKey().Bytes())
 
 	appCtx, appCancel := context.WithCancel(context.Background())
@@ -695,7 +687,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// syncer will cause the node to go out of sync (and not listen to gossip)
 		// since we are testing single-node transaction service, we don't need the syncer to run
 		app.Config.SyncInterval = 1000000
-		app.Config.LayerDurationSec = 2
+		app.Config.LayerDuration = 2 * time.Second
 
 		app.Config.Genesis = &config.GenesisConfig{
 			GenesisTime: time.Now().Add(20 * time.Second).Format(time.RFC3339),
@@ -735,7 +727,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	t.Cleanup(func() { r.NoError(conn.Close()) })
 	c := pb.NewTransactionServiceClient(conn)
 
-	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(), types.Nonce{}, sdk.WithGenesisID(cfg.Genesis.GenesisID())))
+	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(), 0, sdk.WithGenesisID(cfg.Genesis.GenesisID())))
 
 	stream, err := c.TransactionsStateStream(ctx, &pb.TransactionsStateStreamRequest{
 		TransactionId:       []*pb.TransactionId{{Id: tx1.ID.Bytes()}},
@@ -985,7 +977,6 @@ func getTestDefaultConfig() *config.Config {
 	cfg.SMESHING = config.DefaultSmeshingConfig()
 	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
-	cfg.SMESHING.Opts.NumFiles = 1
 	cfg.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
@@ -1000,7 +991,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.Tortoise.Hdist = 5
 	cfg.Tortoise.Zdist = 5
 
-	cfg.LayerDurationSec = 20
+	cfg.LayerDuration = 20 * time.Second
 	cfg.HareEligibility.ConfidenceParam = 4
 	cfg.HareEligibility.EpochOffset = 0
 	cfg.SyncRequestTimeout = 500
@@ -1023,7 +1014,7 @@ func getTestDefaultConfig() *config.Config {
 // initSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
 func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle,
-	poetClient *activation.HTTPPoetClient, clock TickProvider, host *p2p.Host, edSgn *signing.EdSigner,
+	poetClient *activation.HTTPPoetClient, clock NodeClock, host *p2p.Host, edSgn *signing.EdSigner,
 ) (*App, error) {
 	smApp := New(WithLog(lg))
 	smApp.Config = &cfg
@@ -1035,15 +1026,19 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	smApp.Config.SMESHING.Opts.DataDir, _ = os.MkdirTemp("", "sm-app-test-post-datadir")
 
 	smApp.host = host
-	smApp.edSgn = edSgn
 
-	pub := edSgn.PublicKey()
-	vrfSigner := edSgn.VRFSigner()
+	vrfSigner, err := edSgn.VRFSigner()
+	if err != nil {
+		return nil, err
+	}
 
-	nodeID := types.BytesToNodeID(pub.Bytes())
+	if err = smApp.setupDBs(context.Background(), lg, storePath); err != nil {
+		return nil, err
+	}
 
-	err := smApp.initServices(context.Background(), nodeID, storePath, edSgn,
-		uint32(smApp.Config.LayerAvgSize), []activation.PoetProvingServiceClient{poetClient}, vrfSigner, smApp.Config.LayersPerEpoch, clock)
+	smApp.nodeID = edSgn.NodeID()
+	types.SetLayersPerEpoch(smApp.Config.LayersPerEpoch)
+	err = smApp.initServices(context.Background(), edSgn, []activation.PoetProvingServiceClient{poetClient}, vrfSigner, clock)
 	if err != nil {
 		return nil, err
 	}

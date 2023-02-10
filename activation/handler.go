@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/spacemeshos/post/shared"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -23,6 +23,7 @@ import (
 var (
 	errKnownAtx      = errors.New("known atx")
 	errMalformedData = errors.New("malformed data")
+	errMaliciousATX  = errors.New("malicious atx")
 )
 
 type atxChan struct {
@@ -35,6 +36,8 @@ type Handler struct {
 	sync.RWMutex
 
 	cdb             *datastore.CachedDB
+	clock           layerClock
+	publisher       pubsub.Publisher
 	layersPerEpoch  uint32
 	tickSize        uint64
 	goldenATXID     types.ATXID
@@ -47,9 +50,11 @@ type Handler struct {
 }
 
 // NewHandler returns a data handler for ATX.
-func NewHandler(cdb *datastore.CachedDB, fetcher system.Fetcher, layersPerEpoch uint32, tickSize uint64, goldenATXID types.ATXID, nipostValidator nipostValidator, atxReceiver atxReceiver, log log.Log) *Handler {
+func NewHandler(cdb *datastore.CachedDB, c layerClock, pub pubsub.Publisher, fetcher system.Fetcher, layersPerEpoch uint32, tickSize uint64, goldenATXID types.ATXID, nipostValidator nipostValidator, atxReceiver atxReceiver, log log.Log) *Handler {
 	return &Handler{
 		cdb:             cdb,
+		clock:           c,
+		publisher:       pub,
 		layersPerEpoch:  layersPerEpoch,
 		tickSize:        tickSize,
 		goldenATXID:     goldenATXID,
@@ -115,23 +120,25 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 	if existingATX != nil { // Already processed
 		return nil
 	}
-	epoch := atx.PublishEpoch()
 	h.log.WithContext(ctx).With().Info("processing atx",
 		atx.ID(),
-		epoch,
+		atx.PublishEpoch(),
 		log.FieldNamed("atx_node_id", atx.NodeID()),
-		atx.PubLayerID)
+		atx.PubLayerID,
+	)
 	if err := h.ContextuallyValidateAtx(atx); err != nil {
 		h.log.WithContext(ctx).With().Warning("atx failed contextual validation",
 			atx.ID(),
 			log.FieldNamed("atx_node_id", atx.NodeID()),
-			log.Err(err))
+			log.Err(err),
+		)
 	} else {
 		h.log.WithContext(ctx).With().Info("atx is valid", atx.ID())
 	}
 	if err := h.StoreAtx(ctx, atx); err != nil {
 		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
+
 	return nil
 }
 
@@ -147,17 +154,29 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 //   - ATX LayerID is NIPostLayerTime or less after the PositioningATX LayerID.
 //   - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
+	var (
+		commitmentATX *types.ATXID
+		err           error
+	)
+
 	if atx.PrevATXID == *types.EmptyATXID {
 		if err := h.validateInitialAtx(ctx, atx); err != nil {
 			return nil, err
 		}
+		commitmentATX = atx.CommitmentATX // validateInitialAtx checks that commitmentATX is not nil and references an existing valid ATX
 	} else {
-		if err := h.validateNonInitialAtx(ctx, atx); err != nil {
+		commitmentATX, err = h.getCommitmentAtx(atx)
+		if err != nil {
+			return nil, fmt.Errorf("commitment atx for %s not found: %w", atx.NodeID(), err)
+		}
+
+		err = h.validateNonInitialAtx(ctx, atx, *commitmentATX)
+		if err != nil {
 			return nil, err
 		}
 	}
 
-	if err := validatePositioningAtx(&atx.PositioningATX, h.cdb, h.goldenATXID, atx.PubLayerID, h.layersPerEpoch); err != nil {
+	if err := h.nipostValidator.PositioningAtx(&atx.PositioningATX, h.cdb, h.goldenATXID, atx.PubLayerID, h.layersPerEpoch); err != nil {
 		return nil, err
 	}
 
@@ -167,19 +186,10 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		baseTickHeight = posAtx.TickHeight()
 	}
 
-	expectedChallengeHash, err := atx.NIPostChallenge.Hash()
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute NIPost's expected challenge hash: %w", err)
-	}
-
+	expectedChallengeHash := atx.NIPostChallenge.Hash()
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	commitmentATX, err := h.getCommitmentAtx(atx)
-	if err != nil {
-		return nil, fmt.Errorf("validation failed: initial atx not found: %w", err)
-	}
-
-	leaves, err := h.nipostValidator.Validate(atx.NodeID(), *commitmentATX, atx.NIPost, *expectedChallengeHash, atx.NumUnits)
+	leaves, err := h.nipostValidator.NIPost(atx.NodeID(), *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
@@ -191,7 +201,8 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 	if atx.InitialPost == nil {
 		return fmt.Errorf("no prevATX declared, but initial Post is not included")
 	}
-	if err := validateInitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, h.goldenATXID, atx.InitialPost.Indices); err != nil {
+
+	if err := h.nipostValidator.InitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, h.goldenATXID, atx.InitialPost.Indices); err != nil {
 		return err
 	}
 
@@ -200,22 +211,62 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 	initialPostMetadata := *atx.NIPost.PostMetadata
 	initialPostMetadata.Challenge = shared.ZeroChallenge
 
-	if err := h.nipostValidator.ValidatePost(atx.NodeID(), *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
+	if err := h.nipostValidator.Post(atx.NodeID(), *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid initial Post: %w", err)
 	}
 
+	if atx.VRFNonce == nil {
+		return fmt.Errorf("no prevATX declared, but VRFNonce is missing")
+	}
+
+	if err := h.nipostValidator.VRFNonce(atx.NodeID(), *atx.CommitmentATX, atx.VRFNonce, &initialPostMetadata, atx.NumUnits); err != nil {
+		return fmt.Errorf("invalid VRFNonce: %w", err)
+	}
+
+	atx.SetEffectiveNumUnits(atx.NumUnits)
 	return nil
 }
 
-func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.ActivationTx) error {
-	if err := validateNonInitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, atx.NodeID()); err != nil {
+func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.ActivationTx, commitmentATX types.ATXID) error {
+	if err := h.nipostValidator.NIPostChallenge(&atx.NIPostChallenge, h.cdb, atx.NodeID()); err != nil {
 		return err
+	}
+
+	prevAtx, err := h.cdb.GetAtxHeader(atx.PrevATXID)
+	if err != nil {
+		return err
+	}
+
+	nonce := atx.VRFNonce
+	if atx.NumUnits > prevAtx.NumUnits && nonce == nil {
+		h.log.With().Info("PoST size increased without new VRF Nonce, re-validating current nonce",
+			atx.ID(),
+			log.FieldNamed("atx_node_id", atx.NodeID()),
+		)
+
+		current, err := h.cdb.VRFNonce(atx.NodeID(), atx.TargetEpoch())
+		if err != nil {
+			return fmt.Errorf("failed to get current nonce: %w", err)
+		}
+		nonce = &current
+	}
+
+	if nonce != nil {
+		err = h.nipostValidator.VRFNonce(atx.NodeID(), commitmentATX, nonce, atx.NIPost.PostMetadata, atx.NumUnits)
+		if err != nil {
+			return fmt.Errorf("invalid VRFNonce: %w", err)
+		}
 	}
 
 	if atx.InitialPost != nil {
 		return fmt.Errorf("prevATX declared, but initial Post is included")
 	}
 
+	if prevAtx.NumUnits < atx.NumUnits {
+		atx.SetEffectiveNumUnits(prevAtx.NumUnits)
+	} else {
+		atx.SetEffectiveNumUnits(atx.NumUnits)
+	}
 	return nil
 }
 
@@ -261,9 +312,11 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 
 	if err != nil && atx.PrevATXID != *types.EmptyATXID {
 		// no previous atx found but previous atx referenced
-		h.log.With().Error("could not fetch node last atx", atx.ID(),
+		h.log.With().Error("could not fetch node last atx",
+			atx.ID(),
 			log.FieldNamed("atx_node_id", atx.NodeID()),
-			log.Err(err))
+			log.Err(err),
+		)
 		return fmt.Errorf("could not fetch node last atx: %w", err)
 	}
 
@@ -275,12 +328,46 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	h.Lock()
 	defer h.Unlock()
 
-	if err := atxs.Add(h.cdb, atx, time.Now()); err != nil {
-		if errors.Is(err, sql.ErrObjectExists) {
-			return nil
-		}
-		return fmt.Errorf("add atx to db: %w", err)
+	malicious, err := h.cdb.IsMalicious(atx.NodeID())
+	if err != nil {
+		return fmt.Errorf("checking if node is malicious: %w", err)
 	}
+	var proof *types.MalfeasanceProof
+	h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
+		if !malicious {
+			prev, err := atxs.GetByEpochAndNodeID(dbtx, atx.PublishEpoch(), atx.NodeID())
+			if err != nil && !errors.Is(err, sql.ErrNotFound) {
+				return err
+			}
+			if prev != nil {
+				var atxProof types.AtxProof
+				for i, a := range []*types.VerifiedActivationTx{prev, atx} {
+					atxProof.Messages[i] = types.AtxProofMsg{
+						InnerMsg:  a.ATXMetadata,
+						Signature: a.Signature,
+					}
+				}
+				proof = &types.MalfeasanceProof{
+					Layer: h.clock.CurrentLayer(),
+					Proof: types.Proof{
+						Type: types.MultipleATXs,
+						Data: &atxProof,
+					},
+				}
+				if err = h.cdb.AddMalfeasanceProof(atx.NodeID(), proof, dbtx); err != nil {
+					return fmt.Errorf("adding malfeasense proof: %w", err)
+				}
+				h.log.With().Warning("smesher produced more than one atx in the same epoch",
+					log.Stringer("smesher", atx.NodeID()),
+					log.Inline(atx),
+				)
+			}
+		}
+		if err = atxs.Add(dbtx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+			return fmt.Errorf("add atx to db: %w", err)
+		}
+		return nil
+	})
 
 	// notify subscribers
 	if ch, found := h.atxChannels[atx.ID()]; found {
@@ -289,6 +376,23 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	}
 
 	h.log.WithContext(ctx).With().Info("finished storing atx in epoch", atx.ID(), atx.PublishEpoch())
+
+	// broadcast malfeasance proof last as the verification of the proof will take place
+	// in the same goroutine
+	if proof != nil {
+		gossip := types.MalfeasanceGossip{
+			MalfeasanceProof: *proof,
+		}
+		encodedProof, err := codec.Encode(&gossip)
+		if err != nil {
+			h.log.Fatal("failed to encode MalfeasanceGossip", log.Err(err))
+		}
+		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
+			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))
+			return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
+		}
+		return errMaliciousATX
+	}
 	return nil
 }
 
@@ -344,7 +448,7 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 		return fmt.Errorf("failed to derive ID from atx: %w", err)
 	}
 	if err := atx.CalcAndSetNodeID(); err != nil {
-		return fmt.Errorf("failed to derive Node ID from ATX with sig %v: %w", atx.Sig, err)
+		return fmt.Errorf("failed to derive Node ID from ATX with sig %v: %w", atx.Signature, err)
 	}
 	logger := h.log.WithContext(ctx).WithFields(atx.ID())
 	existing, _ := h.cdb.GetAtxHeader(atx.ID())

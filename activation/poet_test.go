@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -19,9 +18,15 @@ type gatewayService struct {
 	pb.UnimplementedGatewayServiceServer
 }
 
+func hash32FromBytes(b []byte) types.Hash32 {
+	hash := types.Hash32{}
+	hash.SetBytes(b)
+	return hash
+}
+
 func (*gatewayService) VerifyChallenge(ctx context.Context, req *pb.VerifyChallengeRequest) (*pb.VerifyChallengeResponse, error) {
 	return &pb.VerifyChallengeResponse{
-		Hash: []byte("hash"),
+		Hash: hash32FromBytes([]byte("hash")).Bytes(),
 	}, nil
 }
 
@@ -35,23 +40,26 @@ func TestHTTPPoet(t *testing.T) {
 	pb.RegisterGatewayServiceServer(gtw.Server, &gatewayService{})
 	var eg errgroup.Group
 	eg.Go(gtw.Serve)
+
+	poetDir := t.TempDir()
 	t.Cleanup(func() { r.NoError(eg.Wait()) })
 	t.Cleanup(gtw.Stop)
 
-	c, err := activation.NewHTTPPoetHarness(true, activation.WithGateway(gtw.Target()))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c, err := activation.NewHTTPPoetHarness(ctx, poetDir, activation.WithGateway(gtw.Target()))
 	r.NoError(err)
 	r.NotNil(c)
 
-	t.Cleanup(func() {
-		err := c.Teardown(true)
-		if assert.NoError(t, err, "failed to tear down harness") {
-			t.Log("harness torn down")
-		}
+	eg.Go(func() error {
+		return c.Service.Start(ctx)
 	})
 
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	ch := types.RandomHash()
-	poetRound, err := c.Submit(context.Background(), ch.Bytes(), signing.NewEdSigner().Sign(ch.Bytes()))
+	poetRound, err := c.Submit(context.Background(), ch.Bytes(), signer.Sign(ch.Bytes()))
 	r.NoError(err)
 	r.NotNil(poetRound)
-	r.Equal([]byte("hash"), poetRound.ChallengeHash)
+	r.Equal(hash32FromBytes([]byte("hash")), poetRound.ChallengeHash)
 }

@@ -109,12 +109,16 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 }
 
 func generateGenesisAccounts() map[string]uint64 {
-	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(Account1Private))
+	acc1Signer, err := signing.NewEdSigner(
+		signing.WithPrivateKey(util.FromHex(Account1Private)),
+	)
 	if err != nil {
 		panic("could not build ed signer")
 	}
 
-	acc2Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(Account2Private))
+	acc2Signer, err := signing.NewEdSigner(
+		signing.WithPrivateKey(util.FromHex(Account2Private)),
+	)
 	if err != nil {
 		panic("could not build ed signer")
 	}

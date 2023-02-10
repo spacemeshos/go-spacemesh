@@ -10,6 +10,13 @@ import (
 
 func (t *VrfMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
+		n, err := scale.EncodeCompact16(enc, uint16(t.Type))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeByteArray(enc, t.Beacon[:])
 		if err != nil {
 			return total, err
@@ -18,6 +25,13 @@ func (t *VrfMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	}
 	{
 		n, err := scale.EncodeCompact32(enc, uint32(t.Epoch))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact64(enc, uint64(t.Nonce))
 		if err != nil {
 			return total, err
 		}
@@ -35,6 +49,14 @@ func (t *VrfMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *VrfMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
+		field, n, err := scale.DecodeCompact16(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Type = types.EligibilityType(field)
+	}
+	{
 		n, err := scale.DecodeByteArray(dec, t.Beacon[:])
 		if err != nil {
 			return total, err
@@ -48,6 +70,14 @@ func (t *VrfMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.Epoch = types.EpochID(field)
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Nonce = types.VRFPostIndex(field)
 	}
 	{
 		field, n, err := scale.DecodeCompact32(dec)

@@ -35,7 +35,7 @@ func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
 			if header != nil {
 				stmt.BindBytes(3, header)
 				stmt.BindBytes(4, tx.Principal[:])
-				stmt.BindBytes(5, util.Uint64ToBytesBigEndian(tx.Nonce.Counter))
+				stmt.BindBytes(5, util.Uint64ToBytesBigEndian(tx.Nonce))
 			}
 			stmt.BindInt64(6, received.UnixNano())
 		}, nil); err != nil {
@@ -262,7 +262,7 @@ func AddressesWithPendingTransactions(db sql.Executor) ([]types.AddressNonce, er
 			stmt.ColumnBytes(1, buf[:])
 			rst = append(rst, types.AddressNonce{
 				Address: addr,
-				Nonce:   types.Nonce{Counter: binary.BigEndian.Uint64(buf[:])},
+				Nonce:   binary.BigEndian.Uint64(buf[:]),
 			})
 			return true
 		}); err != nil {

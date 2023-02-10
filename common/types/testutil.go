@@ -2,8 +2,6 @@ package types
 
 import (
 	"math/rand"
-
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // RandomBytes generates random data in bytes for testing.
@@ -56,6 +54,16 @@ func RandomATXID() ATXID {
 	return ATXID(CalcHash32(b))
 }
 
+// RandomNodeID generates a random NodeID for testing.
+func RandomNodeID() NodeID {
+	b := make([]byte, NodeIDSize)
+	_, err := rand.Read(b)
+	if err != nil {
+		return EmptyNodeID
+	}
+	return NodeID(CalcHash32(b))
+}
+
 // RandomBallotID generates a random BallotID for testing.
 func RandomBallotID() BallotID {
 	b := make([]byte, BallotIDSize)
@@ -94,60 +102,16 @@ func RandomTransactionID() TransactionID {
 // RandomBallot generates a Ballot with random content for testing.
 func RandomBallot() *Ballot {
 	return &Ballot{
+		BallotMetadata: BallotMetadata{
+			Layer: NewLayerID(10),
+		},
 		InnerBallot: InnerBallot{
-			AtxID:      RandomATXID(),
-			RefBallot:  RandomBallotID(),
-			LayerIndex: NewLayerID(10),
+			AtxID:     RandomATXID(),
+			RefBallot: RandomBallotID(),
 		},
 		Votes: Votes{
 			Base:    RandomBallotID(),
 			Support: []Vote{{ID: RandomBlockID()}, {ID: RandomBlockID()}},
 		},
 	}
-}
-
-// GenLayerBallot generates a Ballot with random content for testing.
-func GenLayerBallot(layerID LayerID) *Ballot {
-	b := RandomBallot()
-	b.LayerIndex = layerID
-	signer := signing.NewEdSigner()
-	b.Signature = signer.Sign(b.SignedBytes())
-	b.Initialize()
-	return b
-}
-
-// GenLayerBlock returns a Block in the given layer with the given data.
-func GenLayerBlock(layerID LayerID, txs []TransactionID) *Block {
-	b := &Block{
-		InnerBlock: InnerBlock{
-			LayerIndex: layerID,
-			TxIDs:      txs,
-		},
-	}
-	b.Initialize()
-	return b
-}
-
-// GenLayerProposal returns a Proposal in the given layer with the given data.
-func GenLayerProposal(layerID LayerID, txs []TransactionID) *Proposal {
-	p := &Proposal{
-		InnerProposal: InnerProposal{
-			Ballot: Ballot{
-				InnerBallot: InnerBallot{
-					AtxID:      RandomATXID(),
-					LayerIndex: layerID,
-					EpochData: &EpochData{
-						ActiveSet: RandomActiveSet(10),
-						Beacon:    RandomBeacon(),
-					},
-				},
-			},
-			TxIDs: txs,
-		},
-	}
-	signer := signing.NewEdSigner()
-	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(p.Bytes())
-	p.Initialize()
-	return p
 }

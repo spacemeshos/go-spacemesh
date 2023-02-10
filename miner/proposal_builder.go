@@ -23,7 +23,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -44,14 +43,15 @@ type ProposalBuilder struct {
 	cfg    config
 	cdb    *datastore.CachedDB
 
-	startOnce  sync.Once
-	ctx        context.Context
-	cancel     context.CancelFunc
-	eg         errgroup.Group
-	layerTimer chan types.LayerID
+	startOnce sync.Once
+	ctx       context.Context
+	cancel    context.CancelFunc
+	eg        errgroup.Group
 
+	clock          layerClock
 	publisher      pubsub.Publisher
 	signer         *signing.EdSigner
+	nonceFetcher   nonceFetcher
 	conState       conservativeState
 	tortoise       votesEncoder
 	proposalOracle proposalOracle
@@ -65,14 +65,18 @@ type config struct {
 	layersPerEpoch uint32
 	hdist          uint32
 	minerID        types.NodeID
-	txsPerProposal int
 }
 
-// defaultConfig for ProposalBuilder.
-func defaultConfig() config {
-	return config{
-		txsPerProposal: 100,
+type defaultFetcher struct {
+	cdb *datastore.CachedDB
+}
+
+func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	nonce, err := f.cdb.VRFNonce(nodeID, epoch)
+	if err != nil {
+		return types.VRFPostIndex(0), fmt.Errorf("get vrf nonce: %w", err)
 	}
+	return nonce, nil
 }
 
 // Opt for configuring ProposalBuilder.
@@ -99,13 +103,6 @@ func WithMinerID(id types.NodeID) Opt {
 	}
 }
 
-// WithTxsPerProposal defines the number of TXs in a Proposal.
-func WithTxsPerProposal(numTxs int) Opt {
-	return func(pb *ProposalBuilder) {
-		pb.cfg.txsPerProposal = numTxs
-	}
-}
-
 // WithLogger defines the logger.
 func WithLogger(logger log.Log) Opt {
 	return func(pb *ProposalBuilder) {
@@ -125,10 +122,16 @@ func withOracle(o proposalOracle) Opt {
 	}
 }
 
+func withNonceFetcher(nf nonceFetcher) Opt {
+	return func(pb *ProposalBuilder) {
+		pb.nonceFetcher = nf
+	}
+}
+
 // NewProposalBuilder creates a struct of block builder type.
 func NewProposalBuilder(
 	ctx context.Context,
-	layerTimer timesync.LayerTimer,
+	clock layerClock,
 	signer *signing.EdSigner,
 	vrfSigner *signing.VRFSigner,
 	cdb *datastore.CachedDB,
@@ -142,11 +145,10 @@ func NewProposalBuilder(
 	sctx, cancel := context.WithCancel(ctx)
 	pb := &ProposalBuilder{
 		logger:         log.NewNop(),
-		cfg:            defaultConfig(),
 		ctx:            sctx,
 		cancel:         cancel,
 		signer:         signer,
-		layerTimer:     layerTimer,
+		clock:          clock,
 		cdb:            cdb,
 		publisher:      publisher,
 		tortoise:       trtl,
@@ -161,6 +163,10 @@ func NewProposalBuilder(
 
 	if pb.proposalOracle == nil {
 		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, cdb, vrfSigner, pb.cfg.minerID, pb.logger)
+	}
+
+	if pb.nonceFetcher == nil {
+		pb.nonceFetcher = defaultFetcher{pb.cdb}
 	}
 
 	return pb
@@ -196,7 +202,7 @@ func (pb *ProposalBuilder) stopped() bool {
 func (pb *ProposalBuilder) createProposal(
 	ctx context.Context,
 	layerID types.LayerID,
-	proofs []types.VotingEligibilityProof,
+	proofs []types.VotingEligibility,
 	atxID types.ATXID,
 	activeSet []types.ATXID,
 	beacon types.Beacon,
@@ -210,10 +216,8 @@ func (pb *ProposalBuilder) createProposal(
 	}
 
 	ib := &types.InnerBallot{
-		AtxID:             atxID,
-		EligibilityProofs: proofs,
-		LayerIndex:        layerID,
-		OpinionHash:       opinion.Hash,
+		AtxID:       atxID,
+		OpinionHash: opinion.Hash,
 	}
 
 	epoch := layerID.GetEpoch()
@@ -240,8 +244,12 @@ func (pb *ProposalBuilder) createProposal(
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
-				InnerBallot: *ib,
-				Votes:       opinion.Votes,
+				BallotMetadata: types.BallotMetadata{
+					Layer: layerID,
+				},
+				InnerBallot:       *ib,
+				Votes:             opinion.Votes,
+				EligibilityProofs: proofs,
 			},
 			TxIDs:    txIDs,
 			MeshHash: pb.decideMeshHash(logger, layerID),
@@ -338,7 +346,12 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		return errDuplicateLayer
 	}
 
-	atxID, activeSet, proofs, err := pb.proposalOracle.GetProposalEligibility(layerID, beacon)
+	nonce, err := pb.nonceFetcher.VRFNonce(pb.signer.NodeID(), layerID.GetEpoch())
+	if err != nil {
+		logger.With().Error("failed to get VRF nonce", log.Err(err))
+		return err
+	}
+	atxID, activeSet, proofs, err := pb.proposalOracle.GetProposalEligibility(layerID, beacon, nonce)
 	if err != nil {
 		if errors.Is(err, errMinerHasNoATXInPreviousEpoch) {
 			logger.Info("miner has no ATX in previous epoch")
@@ -393,14 +406,20 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 }
 
 func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
+	next := pb.clock.CurrentLayer().Add(1)
 	for {
 		select {
 		case <-pb.ctx.Done():
 			return
-
-		case layerID := <-pb.layerTimer:
+		case <-pb.clock.AwaitLayer(next):
+			current := pb.clock.CurrentLayer()
+			if current.Before(next) {
+				pb.logger.Info("time sync detected, realigning ProposalBuilder")
+				continue
+			}
+			next = current.Add(1)
 			lyrCtx := log.WithNewSessionID(ctx)
-			_ = pb.handleLayer(lyrCtx, layerID)
+			_ = pb.handleLayer(lyrCtx, current)
 		}
 	}
 }

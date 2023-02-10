@@ -13,6 +13,10 @@ type requester interface {
 	Request(context.Context, p2p.Peer, []byte, func([]byte), func(error)) error
 }
 
+type malfeasanceHandler interface {
+	HandleSyncedMalfeasanceProof(context.Context, []byte) error
+}
+
 type atxHandler interface {
 	HandleAtxData(context.Context, []byte) error
 }

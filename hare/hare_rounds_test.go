@@ -43,7 +43,7 @@ func (w *TestHareWrapper) LayerTicker(interval time.Duration) {
 	for ; j.Before(last); j = j.Add(1) {
 		w.clock.advanceLayer()
 		select {
-		case <-w.termination.CloseChannel():
+		case <-w.termination:
 			return
 		case <-ticker.C:
 			// do nothing
@@ -66,11 +66,12 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 	cfg := config.Config{
 		N:               nodes,
 		F:               nodes/2 - 1,
-		WakeupDelta:     1,
-		RoundDuration:   1,
+		WakeupDelta:     time.Second,
+		RoundDuration:   time.Second,
 		ExpectedLeaders: leaders,
 		LimitIterations: limitIterations,
 		LimitConcurrent: maxLayers,
+		Hdist:           20,
 	}
 
 	mesh, err := mocknet.FullMeshLinked(nodes)
@@ -81,7 +82,7 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 	}
 	if createProposal {
 		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(types.GetEffectiveGenesis().Add(uint32(maxLayers))); lid = lid.Add(1) {
-			p := types.GenLayerProposal(lid, []types.TransactionID{})
+			p := genLayerProposal(lid, []types.TransactionID{})
 			for i := 0; i < nodes; i++ {
 				require.NoError(t, ballots.Add(dbs[i], &p.Ballot))
 				require.NoError(t, proposals.Add(dbs[i], p))
@@ -95,11 +96,11 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 		require.NoError(t, err)
 		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 
-		th := &testHare{createTestHare(t, dbs[i], cfg, w.clock, host.ID(), mp2p, t.Name()), i}
+		th := &testHare{createTestHare(t, dbs[i], cfg, w.clock, mp2p, t.Name()), i}
 		th.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-		th.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return([]byte{}, nil).AnyTimes()
-		th.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+		th.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return([]byte{}, nil).AnyTimes()
+		th.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, nonce types.VRFPostIndex, sig []byte) (uint16, error) {
 				return oracle(layer, round, committeeSize, id, sig, th)
 			}).AnyTimes()
 		th.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()

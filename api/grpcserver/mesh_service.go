@@ -3,6 +3,7 @@ package grpcserver
 import (
 	"context"
 	"fmt"
+	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"google.golang.org/grpc/codes"
@@ -16,14 +17,14 @@ import (
 
 // MeshService exposes mesh data such as accounts, blocks, and transactions.
 type MeshService struct {
-	mesh             api.MeshAPI // Mesh
-	conState         api.ConservativeState
-	genTime          api.GenesisTimeAPI
-	layersPerEpoch   uint32
-	genesisID        types.Hash20
-	layerDurationSec int
-	layerAvgSize     int
-	txsPerProposal   int
+	mesh           api.MeshAPI // Mesh
+	conState       api.ConservativeState
+	genTime        api.GenesisTimeAPI
+	layersPerEpoch uint32
+	genesisID      types.Hash20
+	layerDuration  time.Duration
+	layerAvgSize   uint32
+	txsPerProposal uint32
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -34,18 +35,18 @@ func (s MeshService) RegisterService(server *Server) {
 // NewMeshService creates a new service using config data.
 func NewMeshService(
 	msh api.MeshAPI, cstate api.ConservativeState, genTime api.GenesisTimeAPI,
-	layersPerEpoch uint32, genesisID types.Hash20, layerDurationSec int,
-	layerAvgSize int, txsPerProposal int,
+	layersPerEpoch uint32, genesisID types.Hash20, layerDuration time.Duration,
+	layerAvgSize uint32, txsPerProposal uint32,
 ) *MeshService {
 	return &MeshService{
-		mesh:             msh,
-		conState:         cstate,
-		genTime:          genTime,
-		layersPerEpoch:   layersPerEpoch,
-		genesisID:        genesisID,
-		layerDurationSec: layerDurationSec,
-		layerAvgSize:     layerAvgSize,
-		txsPerProposal:   txsPerProposal,
+		mesh:           msh,
+		conState:       cstate,
+		genTime:        genTime,
+		layersPerEpoch: layersPerEpoch,
+		genesisID:      genesisID,
+		layerDuration:  layerDuration,
+		layerAvgSize:   layerAvgSize,
+		txsPerProposal: txsPerProposal,
 	}
 }
 
@@ -53,7 +54,7 @@ func NewMeshService(
 func (s MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.GenesisTimeResponse, error) {
 	log.Info("GRPC MeshService.GenesisTime")
 	return &pb.GenesisTimeResponse{Unixtime: &pb.SimpleInt{
-		Value: uint64(s.genTime.GetGenesisTime().Unix()),
+		Value: uint64(s.genTime.GenesisTime().Unix()),
 	}}, nil
 }
 
@@ -61,14 +62,14 @@ func (s MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.G
 func (s MeshService) CurrentLayer(context.Context, *pb.CurrentLayerRequest) (*pb.CurrentLayerResponse, error) {
 	log.Info("GRPC MeshService.CurrentLayer")
 	return &pb.CurrentLayerResponse{Layernum: &pb.LayerNumber{
-		Number: uint32(s.genTime.GetCurrentLayer().Uint32()),
+		Number: uint32(s.genTime.CurrentLayer().Uint32()),
 	}}, nil
 }
 
 // CurrentEpoch returns the current epoch number.
 func (s MeshService) CurrentEpoch(context.Context, *pb.CurrentEpochRequest) (*pb.CurrentEpochResponse, error) {
 	log.Info("GRPC MeshService.CurrentEpoch")
-	curLayer := s.genTime.GetCurrentLayer()
+	curLayer := s.genTime.CurrentLayer()
 	return &pb.CurrentEpochResponse{Epochnum: &pb.SimpleInt{
 		Value: uint64(curLayer.GetEpoch()),
 	}}, nil
@@ -92,7 +93,7 @@ func (s MeshService) EpochNumLayers(context.Context, *pb.EpochNumLayersRequest) 
 func (s MeshService) LayerDuration(context.Context, *pb.LayerDurationRequest) (*pb.LayerDurationResponse, error) {
 	log.Info("GRPC MeshService.LayerDuration")
 	return &pb.LayerDurationResponse{Duration: &pb.SimpleInt{
-		Value: uint64(s.layerDurationSec),
+		Value: uint64(s.layerDuration.Seconds()),
 	}}, nil
 }
 
@@ -100,7 +101,7 @@ func (s MeshService) LayerDuration(context.Context, *pb.LayerDurationRequest) (*
 func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactionsPerSecondRequest) (*pb.MaxTransactionsPerSecondResponse, error) {
 	log.Info("GRPC MeshService.MaxTransactionsPerSecond")
 	return &pb.MaxTransactionsPerSecondResponse{MaxTxsPerSecond: &pb.SimpleInt{
-		Value: uint64(s.txsPerProposal * s.layerAvgSize / s.layerDurationSec),
+		Value: uint64(s.txsPerProposal * s.layerAvgSize / uint32(s.layerDuration.Seconds())),
 	}}, nil
 }
 
@@ -260,8 +261,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 		}
 		tx.Method = uint32(t.Method)
 		tx.Nonce = &pb.Nonce{
-			Counter:  t.Nonce.Counter,
-			Bitfield: uint32(t.Nonce.Bitfield),
+			Counter: t.Nonce,
 		}
 		tx.Limits = &pb.LayerLimits{
 			Min: t.LayerLimits.Min,
@@ -356,12 +356,19 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		log.With().Debug("no state root for layer",
 			layer, log.String("status", layerStatus.String()), log.Err(err))
 	}
+	hash, err := s.mesh.MeshHash(layerID)
+	if err != nil {
+		// This is expected. We can only retrieve state root for a layer that was applied to state,
+		// which only happens after it's approved/confirmed.
+		log.With().Debug("no mesh hash at layer",
+			layer, log.String("status", layerStatus.String()), log.Err(err))
+	}
 	return &pb.Layer{
 		Number:        &pb.LayerNumber{Number: layer.Index().Uint32()},
 		Status:        layerStatus,
-		Hash:          layer.Hash().Bytes(),
 		Blocks:        blocks,
 		Activations:   pbActivations,
+		Hash:          hash.Bytes(),
 		RootStateHash: stateRoot.Bytes(),
 	}, nil
 }
@@ -443,18 +450,19 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 
 	// Subscribe to the stream of transactions and activations
 	var (
-		txCh, activationsCh           <-chan any
+		txCh                          <-chan events.Transaction
+		activationsCh                 <-chan events.ActivationTx
 		txBufFull, activationsBufFull <-chan struct{}
 	)
 
 	if filterTx {
 		if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
-			txCh, txBufFull = consumeEvents(stream.Context(), txsSubscription)
+			txCh, txBufFull = consumeEvents[events.Transaction](stream.Context(), txsSubscription)
 		}
 	}
 	if filterActivations {
 		if activationsSubscription := events.SubscribeActivations(); activationsSubscription != nil {
-			activationsCh, activationsBufFull = consumeEvents(stream.Context(), activationsSubscription)
+			activationsCh, activationsBufFull = consumeEvents[events.ActivationTx](stream.Context(), activationsSubscription)
 		}
 	}
 
@@ -467,7 +475,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 			log.Info("activations buffer is full, shutting down")
 			return status.Error(codes.Canceled, errActivationsBufferFull)
 		case activationEvent := <-activationsCh:
-			activation := activationEvent.(events.ActivationTx).VerifiedActivationTx
+			activation := activationEvent.VerifiedActivationTx
 			// Apply address filter
 			if activation.Coinbase == addr {
 				resp := &pb.AccountMeshDataStreamResponse{
@@ -481,8 +489,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
-		case txEvent := <-txCh:
-			tx := txEvent.(events.Transaction)
+		case tx := <-txCh:
 			// Apply address filter
 			if tx.Valid && tx.Transaction.TxHeader != nil && tx.Transaction.Principal == addr {
 				resp := &pb.AccountMeshDataStreamResponse{
@@ -513,12 +520,12 @@ func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService
 	log.Info("GRPC MeshService.LayerStream")
 
 	var (
-		layerCh       <-chan any
+		layerCh       <-chan events.LayerUpdate
 		layersBufFull <-chan struct{}
 	)
 
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
-		layerCh, layersBufFull = consumeEvents(stream.Context(), layersSubscription)
+		layerCh, layersBufFull = consumeEvents[events.LayerUpdate](stream.Context(), layersSubscription)
 	}
 
 	for {
@@ -526,12 +533,11 @@ func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService
 		case <-layersBufFull:
 			log.Info("layer buffer is full, shutting down")
 			return status.Error(codes.Canceled, errAccountBufferFull)
-		case layerEvent, ok := <-layerCh:
+		case layer, ok := <-layerCh:
 			if !ok {
 				log.Info("LayerStream closed, shutting down")
 				return nil
 			}
-			layer := layerEvent.(events.LayerUpdate)
 			pbLayer, err := s.readLayer(stream.Context(), layer.LayerID, convertLayerStatus(layer.Status))
 			if err != nil {
 				return fmt.Errorf("read layer: %w", err)

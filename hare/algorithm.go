@@ -9,9 +9,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -67,29 +68,24 @@ func (cpo procReport) Completed() bool {
 }
 
 func (proc *consensusProcess) report(completed bool) {
-	proc.terminationReport <- procReport{proc.instanceID, proc.s, proc.preRoundTracker.coinflip, completed}
+	proc.comm.report <- procReport{proc.layer, proc.value, proc.preRoundTracker.coinflip, completed}
 }
 
 var _ TerminationOutput = (*procReport)(nil)
 
 // State holds the current state of the consensus process (aka the participant).
 type State struct {
-	k           uint32       // the round counter (k%4 is the round number); it should be first in struct for alignment because atomics are used
-	ki          uint32       // indicates when S was first committed upon
-	s           *Set         // the set of values
-	certificate *Certificate // the certificate
+	round          uint32       // the round counter (round%4 is the round number); it should be first in struct for alignment because atomics are used (K)
+	committedRound uint32       // indicates when value (S) was first committed upon (Ki)
+	value          *Set         // the set of values (S)
+	certificate    *Certificate // the certificate
 }
 
 // Msg is the wrapper of the protocol's message.
 // Messages are sent as type Message. Upon receiving, the public key is added to this wrapper (public key extraction).
 type Msg struct {
 	Message
-	PubKey    *signing.PublicKey
-	RequestID string
-}
-
-func (m *Msg) String() string {
-	return fmt.Sprintf("Pubkey: %v Message: %v", m.PubKey.ShortString(), m.Message.String())
+	PubKey *signing.PublicKey
 }
 
 // Bytes returns the message as bytes (without the public key).
@@ -97,7 +93,7 @@ func (m *Msg) String() string {
 func (m *Msg) Bytes() []byte {
 	buf, err := codec.Encode(&m.Message)
 	if err != nil {
-		log.Panic("could not marshal innermsg before send")
+		log.With().Fatal("failed to encode Message", log.Err(err))
 	}
 	return buf
 }
@@ -105,50 +101,90 @@ func (m *Msg) Bytes() []byte {
 // Upon receiving a protocol message, we try to build the full message.
 // The full message consists of the original message and the extracted public key.
 // An extracted public key is considered valid if it represents an active identity for a consensus view.
-func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQuerier) (*Msg, error) {
+func newMsg(ctx context.Context, logger log.Log, nodeId types.NodeID, hareMsg Message, querier stateQuerier) (*Msg, error) {
 	logger = logger.WithContext(ctx)
 
-	// extract pub key
-	pubKey, err := signing.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
-	if err != nil {
-		logger.With().Error("newmsg construction failed: could not extract public key",
-			log.Err(err),
-			log.Int("sig_len", len(hareMsg.Sig)))
-		return nil, fmt.Errorf("extract ed25519 pubkey: %w", err)
-	}
-
 	// query if identity is active
-	pub := signing.NewPublicKey(pubKey)
-	nid := types.BytesToNodeID(pub.Bytes())
-	res, err := querier.IsIdentityActiveOnConsensusView(ctx, nid, hareMsg.InnerMsg.InstanceID)
+	res, err := querier.IsIdentityActiveOnConsensusView(ctx, nodeId, hareMsg.Layer)
 	if err != nil {
-		logger.With().Error("error while checking if identity is active",
-			log.String("sender_id", pub.ShortString()),
+		logger.With().Error("failed to check if identity is active",
+			log.String("sender_id", nodeId.ShortString()),
 			log.Err(err),
-			hareMsg.InnerMsg.InstanceID,
+			hareMsg.Layer,
 			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
-		return nil, errors.New("is identity active query failed")
+		return nil, fmt.Errorf("check active identity: %w", err)
 	}
 
 	// check query result
 	if !res {
-		logger.With().Error("identity is not active",
-			log.String("sender_id", pub.ShortString()),
-			hareMsg.InnerMsg.InstanceID,
+		logger.With().Warning("identity is not active",
+			log.String("sender_id", nodeId.ShortString()),
+			hareMsg.Layer,
 			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
 	}
 
-	msg := &Msg{Message: hareMsg, PubKey: pub}
-
-	// add reqID from context
-	if reqID, ok := log.ExtractRequestID(ctx); ok {
-		msg.RequestID = reqID
-	} else {
-		logger.Warning("no requestID in context, cannot add to new hare message")
-	}
+	msg := &Msg{Message: hareMsg, PubKey: signing.NewPublicKey(nodeId.Bytes())}
 
 	return msg, nil
+}
+
+type CountInfo struct {
+	// number of nodes that are honest, dishonest and known equivocators.
+	// known equivocators are those the node only has eligibility proof but no hare message.
+	numHonest, numDishonest, numKE int
+	hCount, dhCount, keCount       int
+}
+
+func (ci *CountInfo) Add(other *CountInfo) *CountInfo {
+	return &CountInfo{
+		numHonest:    ci.numHonest + other.numHonest,
+		numDishonest: ci.numDishonest + other.numDishonest,
+		numKE:        ci.numKE + other.numKE,
+		hCount:       ci.hCount + other.hCount,
+		dhCount:      ci.dhCount + other.dhCount,
+		keCount:      ci.keCount + other.keCount,
+	}
+}
+
+func (ci *CountInfo) IncHonest(count uint16) {
+	ci.numHonest++
+	ci.hCount += int(count)
+}
+
+func (ci *CountInfo) IncDishonest(count uint16) {
+	ci.numDishonest++
+	ci.dhCount += int(count)
+}
+
+func (ci *CountInfo) IncKnownEquivocator(count uint16) {
+	ci.numKE++
+	ci.keCount += int(count)
+}
+
+func (ci *CountInfo) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddInt("honest_count", ci.hCount)
+	encoder.AddInt("num_honest", ci.numHonest)
+	encoder.AddInt("dishonest_count", ci.dhCount)
+	encoder.AddInt("num_dishonest", ci.numDishonest)
+	encoder.AddInt("num_ke", ci.numKE)
+	encoder.AddInt("ke_count", ci.keCount)
+	return nil
+}
+
+func (ci *CountInfo) Meet(threshold int) bool {
+	// at least one honest party with good message
+	return ci.hCount > 0 && ci.hCount+ci.keCount >= threshold
+}
+
+type communication struct {
+	// broker sends all gossip messages to inbox.
+	inbox chan any
+	// consensus process sends all malfeasance discovered during hare process
+	// to this mchOut
+	mchOut chan<- *types.MalfeasanceGossip
+	// if the consensus process terminates, output the result to report
+	report chan TerminationOutput
 }
 
 // consensusProcess is an entity (a single participant) in the Hare protocol.
@@ -158,129 +194,145 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQ
 type consensusProcess struct {
 	log.Log
 	State
-	util.Closer
-	mu                sync.RWMutex
-	instanceID        types.LayerID
-	oracle            Rolacle // the roles oracle provider
-	signing           Signer
-	nid               types.NodeID
-	publisher         pubsub.Publisher
-	isStarted         bool
-	inbox             chan *Msg
-	terminationReport chan TerminationOutput
-	validator         messageValidator
-	preRoundTracker   *preRoundTracker
-	statusesTracker   *statusTracker
-	proposalTracker   proposalTrackerProvider
-	commitTracker     commitTrackerProvider
-	notifyTracker     *notifyTracker
-	cfg               config.Config
-	pending           map[string]*Msg // buffer for early messages that are pending process
-	notifySent        bool            // flag to set in case a notification had already been sent by this instance
-	mTracker          *msgsTracker    // tracks valid messages
-	terminating       bool
-	eligibilityCount  uint16
-	clock             RoundClock
+
+	ctx              context.Context
+	cancel           context.CancelFunc
+	eg               errgroup.Group
+	mu               sync.RWMutex
+	layer            types.LayerID
+	oracle           Rolacle // the roles oracle provider
+	signing          Signer
+	nid              types.NodeID
+	nonce            *types.VRFPostIndex
+	publisher        pubsub.Publisher
+	comm             communication
+	validator        messageValidator
+	preRoundTracker  *preRoundTracker
+	statusesTracker  *statusTracker
+	proposalTracker  proposalTrackerProvider
+	commitTracker    commitTrackerProvider
+	notifyTracker    *notifyTracker
+	cfg              config.Config
+	pending          map[string]*Msg     // buffer for early messages that are pending process
+	mTracker         *msgsTracker        // tracks valid messages
+	eTracker         *EligibilityTracker // tracks eligible identities by rounds
+	eligibilityCount uint16
+	clock            RoundClock
+	once             sync.Once
 }
 
 // newConsensusProcess creates a new consensus process instance.
-func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, oracle Rolacle, stateQuerier stateQuerier,
-	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p pubsub.Publisher,
-	terminationReport chan TerminationOutput,
-	ev roleValidator, clock RoundClock, logger log.Log,
+func newConsensusProcess(
+	ctx context.Context,
+	cfg config.Config,
+	layer types.LayerID,
+	s *Set,
+	oracle Rolacle,
+	stateQuerier stateQuerier,
+	signing Signer,
+	pubKeyExtractor *signing.PubKeyExtractor,
+	nid types.NodeID,
+	nonce *types.VRFPostIndex,
+	p2p pubsub.Publisher,
+	comm communication,
+	ev roleValidator,
+	clock RoundClock,
+	logger log.Log,
 ) *consensusProcess {
-	msgsTracker := newMsgsTracker()
 	proc := &consensusProcess{
-		State:             State{preRound, preRound, s.Clone(), nil},
-		Closer:            util.NewCloser(),
-		instanceID:        instanceID,
-		oracle:            oracle,
-		signing:           signing,
-		nid:               nid,
-		publisher:         p2p,
-		preRoundTracker:   newPreRoundTracker(cfg.F+1, cfg.N, logger),
-		notifyTracker:     newNotifyTracker(cfg.N),
-		cfg:               cfg,
-		terminationReport: terminationReport,
-		pending:           make(map[string]*Msg, cfg.N),
-		Log:               logger,
-		mTracker:          msgsTracker,
-		clock:             clock,
+		State: State{
+			round:          preRound,
+			committedRound: preRound,
+			value:          s.Clone(),
+		},
+		layer:     layer,
+		oracle:    oracle,
+		signing:   signing,
+		nid:       nid,
+		nonce:     nonce,
+		publisher: p2p,
+		cfg:       cfg,
+		comm:      comm,
+		pending:   make(map[string]*Msg, cfg.N),
+		Log:       logger,
+		mTracker:  newMsgsTracker(),
+		eTracker:  NewEligibilityTracker(cfg.N),
+		clock:     clock,
 	}
-	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, ev, msgsTracker, logger)
+	proc.preRoundTracker = newPreRoundTracker(logger.WithName(fmt.Sprintf("%v-%v", layer, pre)), comm.mchOut, proc.eTracker, cfg.F+1, cfg.N)
+	proc.ctx, proc.cancel = context.WithCancel(ctx)
+	proc.validator = newSyntaxContextValidator(signing, pubKeyExtractor, cfg.F+1, proc.statusValidator(), stateQuerier, ev, proc.mTracker, proc.eTracker, logger)
 
 	return proc
 }
 
 // Returns the iteration number from a given round counter.
-func iterationFromCounter(roundCounter uint32) uint32 {
-	return roundCounter / 4
+func inferIteration(roundCounter uint32) uint32 {
+	return roundCounter / RoundsPerIteration
 }
 
 // Start the consensus process.
 // It starts the PreRound round and then iterates through the rounds until consensus is reached or the instance is canceled.
 // It is assumed that the inbox is set before the call to Start.
 // It returns an error if Start has been called more than once or the inbox is nil.
-func (proc *consensusProcess) Start(ctx context.Context) error {
-	logger := proc.WithContext(ctx)
-	if proc.isStarted { // called twice on same instance
-		logger.Error("consensusProcess has already been started")
-		return startInstanceError(errors.New("instance already started"))
-	}
-
-	if proc.inbox == nil { // no inbox
-		logger.Error("consensusProcess cannot be started with nil inbox")
-		return startInstanceError(errors.New("instance started with nil inbox"))
-	}
-
-	proc.isStarted = true
-
-	go proc.eventLoop(ctx)
-
-	return nil
+func (proc *consensusProcess) Start() {
+	proc.once.Do(func() {
+		proc.eg.Go(func() error {
+			proc.eventLoop()
+			return nil
+		})
+	})
 }
 
 // ID returns the instance id.
 func (proc *consensusProcess) ID() types.LayerID {
-	return proc.instanceID
+	return proc.layer
 }
 
-// SetInbox sets the inbox channel for incoming messages.
-func (proc *consensusProcess) SetInbox(inbox chan *Msg) {
-	if inbox == nil {
-		proc.Error("consensusProcess tried to SetInbox with nil")
-		return
-	}
+func (proc *consensusProcess) terminate() {
+	proc.cancel()
+}
 
-	proc.inbox = inbox
+func (proc *consensusProcess) Stop() {
+	proc.eg.Wait()
+}
+
+func (proc *consensusProcess) terminating() bool {
+	select {
+	case <-proc.ctx.Done():
+		return true
+	default:
+		return false
+	}
 }
 
 // runs the main loop of the protocol.
-func (proc *consensusProcess) eventLoop(ctx context.Context) {
-	logger := proc.WithContext(ctx)
+func (proc *consensusProcess) eventLoop() {
+	ctx := proc.ctx
+	logger := proc.WithContext(ctx).WithFields(proc.layer)
 	logger.With().Info("consensus process started",
-		proc.instanceID,
-		log.String("current_set", proc.s.String()),
-		log.Int("set_size", proc.s.Size()))
+		log.String("current_set", proc.value.String()),
+		log.Int("set_size", proc.value.Size()),
+	)
 
 	// check participation and send message
-	go func() {
+	proc.eg.Go(func() error {
 		// check participation
 		if proc.shouldParticipate(ctx) {
 			// set pre-round InnerMsg and send
-			builder, err := proc.initDefaultBuilder(proc.s)
+			builder, err := proc.initDefaultBuilder(proc.value)
 			if err != nil {
-				logger.With().Error("init default builder failed", log.Err(err))
-				return
+				logger.With().Error("failed to init msg builder", log.Err(err))
+				return nil
 			}
 			m := builder.SetType(pre).Sign(proc.signing).Build()
 			proc.sendMessage(ctx, m)
 		} else {
 			logger.With().Debug("should not participate",
-				log.Uint32("current_k", proc.getK()),
-				proc.instanceID)
+				log.Uint32("current_round", proc.getRound()))
 		}
-	}()
+		return nil
+	})
 
 	endOfRound := proc.clock.AwaitEndOfRound(preRound)
 
@@ -288,72 +340,80 @@ PreRound:
 	for {
 		select {
 		// listen to pre-round Messages
-		case msg := <-proc.inbox:
-			proc.handleMessage(ctx, msg)
+		case msg := <-proc.comm.inbox:
+			if hmsg, ok := msg.(*Msg); ok {
+				proc.handleMessage(ctx, hmsg)
+			} else if emsg, ok := msg.(*types.HareEligibilityGossip); ok {
+				proc.onMalfeasance(emsg)
+			} else {
+				proc.Log.Fatal("unexpected message type")
+			}
 		case <-endOfRound:
 			break PreRound
-		case <-proc.CloseChannel():
-			logger.With().Info("terminating during preround: received termination signal",
-				log.Uint32("current_k", proc.getK()),
-				proc.instanceID)
+		case <-proc.ctx.Done():
+			logger.With().Info("terminating: received signal during preround",
+				log.Uint32("current_round", proc.getRound()))
 			return
 		}
 	}
 	logger.With().Debug("preround ended, filtering preliminary set",
-		proc.instanceID,
-		log.Int("set_size", proc.s.Size()))
-	proc.preRoundTracker.FilterSet(proc.s)
-	if proc.s.Size() == 0 {
-		logger.Event().Warning("preround ended with empty set",
-			proc.instanceID)
+		log.Int("set_size", proc.value.Size()))
+	proc.preRoundTracker.FilterSet(proc.value)
+	if proc.value.Size() == 0 {
+		logger.Event().Warning("preround ended with empty set")
 	} else {
 		logger.With().Debug("preround ended",
-			log.Int("set_size", proc.s.Size()),
-			proc.instanceID)
+			log.Int("set_size", proc.value.Size()))
 	}
 	proc.advanceToNextRound(ctx) // K was initialized to -1, K should be 0
 
 	// start first iteration
 	proc.onRoundBegin(ctx)
-	endOfRound = proc.clock.AwaitEndOfRound(proc.getK())
+	endOfRound = proc.clock.AwaitEndOfRound(proc.getRound())
 
 	for {
 		select {
-		case msg := <-proc.inbox: // msg event
-			if proc.terminating {
-				proc.Close()
+		case msg := <-proc.comm.inbox: // msg event
+			if proc.terminating() {
 				return
 			}
-			proc.handleMessage(ctx, msg)
-
+			if hmsg, ok := msg.(*Msg); ok {
+				proc.handleMessage(ctx, hmsg)
+			} else if emsg, ok := msg.(*types.HareEligibilityGossip); ok {
+				proc.onMalfeasance(emsg)
+			} else {
+				proc.Log.Fatal("unexpected message type")
+			}
 		case <-endOfRound: // next round event
 			proc.onRoundEnd(ctx)
-			if proc.terminating {
-				proc.Close()
+			if proc.terminating() {
 				return
 			}
 			proc.advanceToNextRound(ctx)
 
 			// exit if we reached the limit on number of iterations
-			k := proc.getK()
-			if k >= uint32(proc.cfg.LimitIterations)*RoundsPerIteration {
+			round := proc.getRound()
+			if round >= uint32(proc.cfg.LimitIterations)*RoundsPerIteration {
 				logger.With().Warning("terminating: reached iterations limit",
 					log.Int("limit", proc.cfg.LimitIterations),
-					log.Uint32("current_k", k),
-					proc.instanceID)
+					log.Uint32("current_round", round))
 				proc.report(notCompleted)
-				proc.Close()
+				proc.terminate()
 			}
 			proc.onRoundBegin(ctx)
-			endOfRound = proc.clock.AwaitEndOfRound(k)
+			endOfRound = proc.clock.AwaitEndOfRound(round)
 
-		case <-proc.CloseChannel(): // close event
-			logger.With().Info("terminating: received termination signal",
-				log.Uint32("current_k", proc.getK()),
-				proc.instanceID)
+		case <-proc.ctx.Done(): // close event
+			logger.With().Info("terminating: received signal",
+				log.Uint32("current_round", proc.getRound()))
 			return
 		}
 	}
+}
+
+// handles eligibility proof from hare gossip handler and malfeasance proof gossip handler.
+func (proc *consensusProcess) onMalfeasance(msg *types.HareEligibilityGossip) {
+	proc.eTracker.Track(msg.PubKey, msg.Round, msg.Eligibility.Count, false)
 }
 
 // handles a message that has arrived early.
@@ -366,12 +426,12 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 	}
 
 	if m.Message.InnerMsg == nil {
-		logger.Error("onEarlyMessage called with nil message")
+		logger.Error("onEarlyMessage called with nil inner message")
 		return
 	}
 
-	if m.InnerMsg == nil {
-		logger.Error("onEarlyMessage called with nil inner message")
+	if m.PubKey == nil {
+		logger.Error("onEarlyMessage called with nil pub key")
 		return
 	}
 
@@ -389,24 +449,18 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	logger := proc.WithContext(ctx).WithFields(
 		log.String("msg_type", m.InnerMsg.Type.String()),
-		log.FieldNamed("sender_id", m.PubKey),
-		log.Uint32("current_k", proc.getK()),
-		log.Uint32("msg_k", m.InnerMsg.K),
-		proc.instanceID)
-
-	// Try to extract reqID from message and restore it to context
-	if m.RequestID == "" {
-		logger.Warning("no reqID found in hare message, cannot restore to context")
-	} else {
-		ctx = log.WithRequestID(ctx, m.RequestID)
-		logger = logger.WithContext(ctx)
-	}
+		log.String("sender_id", m.PubKey.ShortString()),
+		log.Uint32("current_round", proc.getRound()),
+		log.Uint32("msg_round", m.Round),
+		proc.layer)
 
 	// Note: instanceID is already verified by the broker
 	logger.Debug("consensus process received message")
+	// broker already validated the eligibility of this message
+	proc.eTracker.Track(m.PubKey.Bytes(), m.Round, m.Eligibility.Count, true)
 
 	// validate context
-	if err := proc.validator.ContextuallyValidateMessage(ctx, m, proc.getK()); err != nil {
+	if err := proc.validator.ContextuallyValidateMessage(ctx, m, proc.getRound()); err != nil {
 		// early message, keep for later
 		if errors.Is(err, errEarlyMsg) {
 			logger.With().Debug("early message detected, keeping", log.Err(err))
@@ -433,7 +487,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	}
 
 	// warn on late pre-round msgs
-	if m.InnerMsg.Type == pre && proc.getK() != preRound {
+	if m.InnerMsg.Type == pre && proc.getRound() != preRound {
 		logger.Warning("encountered late preround message")
 	}
 
@@ -444,6 +498,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 // process the message by its type.
 func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 	proc.WithContext(ctx).With().Debug("processing message",
+		proc.layer,
 		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.Int("num_values", len(m.InnerMsg.Values)))
 
@@ -460,6 +515,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 		proc.processNotifyMsg(ctx, m)
 	default:
 		proc.WithContext(ctx).With().Warning("unknown message type",
+			proc.layer,
 			log.String("msg_type", m.InnerMsg.Type.String()),
 			log.String("sender_id", m.PubKey.ShortString()))
 	}
@@ -476,17 +532,17 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 
 	// generate a new requestID for this message
 	ctx = log.WithNewRequestID(ctx,
-		proc.instanceID,
-		log.Uint32("msg_k", msg.InnerMsg.K),
+		proc.layer,
+		log.Uint32("msg_round", msg.Round),
 		log.String("msg_type", msg.InnerMsg.Type.String()),
-		log.Int("eligibility_count", int(msg.InnerMsg.EligibilityCount)),
-		log.String("current_set", proc.s.String()),
-		log.Uint32("current_k", proc.getK()),
+		log.Int("eligibility_count", int(msg.Eligibility.Count)),
+		log.String("current_set", proc.value.String()),
+		log.Uint32("current_round", proc.getRound()),
 	)
 	logger := proc.WithContext(ctx)
 
 	if err := proc.publisher.Publish(ctx, pubsub.HareProtocol, msg.Bytes()); err != nil {
-		logger.With().Error("could not broadcast round message", log.Err(err))
+		logger.With().Error("failed to broadcast round message", log.Err(err))
 		return false
 	}
 
@@ -497,8 +553,8 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 // logic of the end of a round by the round type.
 func (proc *consensusProcess) onRoundEnd(ctx context.Context) {
 	logger := proc.WithContext(ctx).WithFields(
-		log.Uint32("current_k", proc.getK()),
-		proc.instanceID)
+		log.Uint32("current_round", proc.getRound()),
+		proc.layer)
 	logger.Debug("end of round")
 
 	// reset trackers
@@ -512,36 +568,42 @@ func (proc *consensusProcess) onRoundEnd(ctx context.Context) {
 			sStr = s.String()
 		}
 		logger.Event().Debug("proposal round ended",
-			log.Int("set_size", proc.s.Size()),
+			log.Int("set_size", proc.value.Size()),
 			log.String("proposed_set", sStr),
 			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()))
 	case commitRound:
-		logger.With().Debug("commit round ended", log.Int("set_size", proc.s.Size()))
+		logger.With().Debug("commit round ended", log.Int("set_size", proc.value.Size()))
 	}
 }
 
 // advances the state to the next round.
 func (proc *consensusProcess) advanceToNextRound(ctx context.Context) {
-	k := proc.addToK(1)
-	if k >= 4 && k%4 == 0 {
+	newRound := proc.addToRound(1)
+	if newRound >= RoundsPerIteration && newRound%RoundsPerIteration == 0 {
 		proc.WithContext(ctx).Event().Warning("starting new iteration",
-			log.Uint32("current_k", k),
-			proc.instanceID)
+			log.Uint32("iteration", inferIteration(newRound)),
+			log.Uint32("current_round", newRound),
+			proc.layer)
 	}
 }
 
 func (proc *consensusProcess) beginStatusRound(ctx context.Context) {
-	proc.statusesTracker = newStatusTracker(proc.cfg.F+1, proc.cfg.N)
-	proc.statusesTracker.Log = proc.Log
+	proc.statusesTracker = newStatusTracker(
+		proc.Log.WithName(fmt.Sprintf("%v-%v", proc.layer, status)),
+		proc.getRound(),
+		proc.comm.mchOut,
+		proc.eTracker,
+		proc.cfg.F+1,
+		proc.cfg.N)
 
 	// check participation
 	if !proc.shouldParticipate(ctx) {
 		return
 	}
 
-	b, err := proc.initDefaultBuilder(proc.s)
+	b, err := proc.initDefaultBuilder(proc.value)
 	if err != nil {
-		proc.With().Error("init default builder failed", log.Err(err))
+		proc.WithContext(ctx).With().Error("failed to init msg builder", proc.layer, log.Err(err))
 		return
 	}
 	statusMsg := b.SetType(status).Sign(proc.signing).Build()
@@ -549,7 +611,10 @@ func (proc *consensusProcess) beginStatusRound(ctx context.Context) {
 }
 
 func (proc *consensusProcess) beginProposalRound(ctx context.Context) {
-	proc.proposalTracker = newProposalTracker(proc.Log)
+	proc.proposalTracker = newProposalTracker(
+		proc.Log.WithName(fmt.Sprintf("%v-%v", proc.layer, proposal)),
+		proc.comm.mchOut,
+		proc.eTracker)
 
 	// done with building proposal, reset statuses tracking
 	defer func() { proc.statusesTracker = nil }()
@@ -557,7 +622,7 @@ func (proc *consensusProcess) beginProposalRound(ctx context.Context) {
 	if proc.statusesTracker.IsSVPReady() && proc.shouldParticipate(ctx) {
 		builder, err := proc.initDefaultBuilder(proc.statusesTracker.ProposalSet(defaultSetSize))
 		if err != nil {
-			proc.With().Error("init default builder failed", log.Err(err))
+			proc.WithContext(ctx).With().Error("failed to init msg builder", proc.layer, log.Err(err))
 			return
 		}
 		svp := proc.statusesTracker.BuildSVP()
@@ -565,7 +630,7 @@ func (proc *consensusProcess) beginProposalRound(ctx context.Context) {
 			proposalMsg := builder.SetType(proposal).SetSVP(svp).Sign(proc.signing).Build()
 			proc.sendMessage(ctx, proposalMsg)
 		} else {
-			proc.Error("failed to build SVP (nil) after verifying SVP is ready")
+			proc.WithContext(ctx).With().Error("failed to build SVP", proc.layer)
 		}
 	}
 }
@@ -574,7 +639,14 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 	proposedSet := proc.proposalTracker.ProposedSet()
 
 	// proposedSet may be nil, in such case the tracker will ignore Messages
-	proc.commitTracker = newCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
+	proc.commitTracker = newCommitTracker(
+		proc.Log.WithName(fmt.Sprintf("%v-%v", proc.layer, commit)),
+		proc.getRound(),
+		proc.comm.mchOut,
+		proc.eTracker,
+		proc.cfg.F+1,
+		proc.cfg.N,
+		proposedSet)
 
 	if proposedSet == nil {
 		return
@@ -587,7 +659,7 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 
 	builder, err := proc.initDefaultBuilder(proposedSet)
 	if err != nil {
-		proc.WithContext(ctx).With().Error("init default builder failed", log.Err(err))
+		proc.WithContext(ctx).With().Error("failed to init msg builder", proc.layer, log.Err(err))
 		return
 	}
 	builder = builder.SetType(commit).Sign(proc.signing)
@@ -596,19 +668,20 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 }
 
 func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
-	logger := proc.WithContext(ctx).WithFields(proc.instanceID)
+	logger := proc.WithContext(ctx).WithFields(proc.layer)
+	proc.notifyTracker = newNotifyTracker(
+		proc.Log.WithName(fmt.Sprintf("%v-%v", proc.layer, notify)),
+		proc.getRound(),
+		proc.comm.mchOut,
+		proc.eTracker,
+		proc.cfg.N,
+	)
 
 	// release proposal & commit trackers
 	defer func() {
 		proc.commitTracker = nil
 		proc.proposalTracker = nil
 	}()
-
-	// send notify message only once
-	if proc.notifySent {
-		logger.Debug("begin notify round: notify already sent")
-		return
-	}
 
 	if proc.proposalTracker.IsConflicting() {
 		logger.Warning("begin notify round: proposal is conflicting")
@@ -618,24 +691,25 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 	if !proc.commitTracker.HasEnoughCommits() {
 		logger.With().Warning("begin notify round: not enough commits",
 			log.Int("expected", proc.cfg.F+1),
-			log.Int("actual", proc.commitTracker.CommitCount()))
+			log.Object("actual", proc.commitTracker.CommitCount()))
 		return
 	}
 
 	cert := proc.commitTracker.BuildCertificate()
 	if cert == nil {
-		logger.Error("begin notify round: BuildCertificate returned nil")
+		logger.Error("failed to build certificate at begin notify round")
 		return
 	}
 
 	s := proc.proposalTracker.ProposedSet()
 	if s == nil {
-		logger.Error("begin notify round: ProposedSet returned nil")
+		// it's possible we received a late conflicting proposal
+		logger.Error("failed to get proposal set at begin notify round")
 		return
 	}
 
 	// update set & matching certificate
-	proc.s = s
+	proc.value = s
 	proc.certificate = cert
 
 	// check participation
@@ -644,24 +718,26 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 	}
 
 	// build & send notify message
-	builder, err := proc.initDefaultBuilder(proc.s)
+	builder, err := proc.initDefaultBuilder(proc.value)
 	if err != nil {
-		logger.With().Error("init default builder failed", log.Err(err))
+		logger.With().Error("failed to init msg builder", proc.layer, log.Err(err))
 		return
 	}
 
 	builder = builder.SetType(notify).SetCertificate(proc.certificate).Sign(proc.signing)
 	notifyMsg := builder.Build()
 	logger.With().Debug("sending notify message", notifyMsg)
-	if proc.sendMessage(ctx, notifyMsg) { // on success, mark sent
-		proc.notifySent = true
-	}
+	proc.sendMessage(ctx, notifyMsg)
 }
 
 // passes all pending messages to the inbox of the process so they will be handled.
 func (proc *consensusProcess) handlePending(pending map[string]*Msg) {
 	for _, m := range pending {
-		proc.inbox <- m
+		select {
+		case <-proc.ctx.Done():
+			return
+		case proc.comm.inbox <- m:
+		}
 	}
 }
 
@@ -679,7 +755,7 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 	case notifyRound:
 		proc.beginNotifyRound(ctx)
 	default:
-		proc.Panic("current round out of bounds. Expected: 0-3, Found: %v", proc.currentRound())
+		proc.Fatal(fmt.Sprintf("current round out of bounds. Expected: 0-3, Found: %v", proc.currentRound()))
 	}
 
 	if len(proc.pending) == 0 { // no pending messages
@@ -689,24 +765,25 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 	// handle pending messages
 	pendingProcess := proc.pending
 	proc.pending = make(map[string]*Msg, proc.cfg.N)
-	go proc.handlePending(pendingProcess)
+	proc.eg.Go(func() error {
+		proc.handlePending(pendingProcess)
+		return nil
+	})
 }
 
 // init a new message builder with the current state (s, k, ki) for this instance.
 func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error) {
-	builder := newMessageBuilder().SetInstanceID(proc.instanceID)
-	builder = builder.SetRoundCounter(proc.getK()).SetKi(proc.ki).SetValues(s)
-	proof, err := proc.oracle.Proof(context.TODO(), proc.instanceID, proc.getK())
+	if proc.nonce == nil {
+		proc.Log.Fatal("initDefaultBuilder: missing vrf nonce")
+	}
+	builder := newMessageBuilder().SetLayer(proc.layer)
+	builder = builder.SetRoundCounter(proc.getRound()).SetCommittedRound(proc.committedRound).SetValues(s)
+	proof, err := proc.oracle.Proof(context.TODO(), *proc.nonce, proc.layer, proc.getRound())
 	if err != nil {
-		proc.With().Error("could not initialize default builder", log.Err(err))
-		return nil, fmt.Errorf("init default builder:: %w", err)
+		return nil, fmt.Errorf("init default builder: %w", err)
 	}
 	builder.SetRoleProof(proof)
-
-	proc.mu.RLock()
-	builder.SetEligibilityCount(proc.eligibilityCount)
-	proc.mu.RUnlock()
-
+	builder.SetEligibilityCount(proc.getEligibilityCount())
 	return builder, nil
 }
 
@@ -727,21 +804,26 @@ func (proc *consensusProcess) processProposalMsg(ctx context.Context, msg *Msg) 
 	} else if currRnd == commitRound { // late proposal
 		proc.proposalTracker.OnLateProposal(ctx, msg)
 	} else {
-		proc.WithContext(ctx).With().Error("received proposal message for processing in an invalid context",
-			log.Uint32("current_k", proc.getK()),
-			log.Uint32("msg_k", msg.InnerMsg.K))
+		proc.WithContext(ctx).With().Warning("received proposal message for processing in an invalid context",
+			log.Uint32("current_round", proc.getRound()),
+			log.Uint32("msg_round", msg.Round))
 	}
 }
 
 func (proc *consensusProcess) processCommitMsg(ctx context.Context, msg *Msg) {
 	proc.mTracker.Track(msg) // a commit msg passed for processing is assumed to be valid
-	proc.commitTracker.OnCommit(msg)
+	proc.commitTracker.OnCommit(ctx, msg)
 }
 
 func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
+	if proc.notifyTracker == nil {
+		proc.WithContext(ctx).Error("notify tracker is nil")
+		return
+	}
+
 	s := NewSet(msg.InnerMsg.Values)
 
-	if ignored := proc.notifyTracker.OnNotify(msg); ignored {
+	if ignored := proc.notifyTracker.OnNotify(ctx, msg); ignored {
 		proc.WithContext(ctx).With().Warning("ignoring notification",
 			log.String("sender_id", msg.PubKey.ShortString()))
 		return
@@ -749,51 +831,56 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 
 	if proc.currentRound() == notifyRound { // not necessary to update otherwise
 		// we assume that this expression was checked before
-		if msg.InnerMsg.Cert.AggMsgs.Messages[0].InnerMsg.K >= proc.ki { // update state iff K >= Ki
-			proc.s = s
+		if msg.InnerMsg.Cert.AggMsgs.Messages[0].Round >= proc.committedRound { // update state iff K >= Ki
+			proc.value = s
 			proc.certificate = msg.InnerMsg.Cert
-			proc.ki = msg.InnerMsg.Ki
+			proc.committedRound = msg.InnerMsg.CommittedRound
 		}
 	}
 
-	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
+	threshold := proc.cfg.F + 1
+	notifyCount := proc.notifyTracker.NotificationsCount(s)
+	if notifyCount == nil {
+		proc.WithContext(ctx).Fatal("unexpected count")
+	}
+	if !notifyCount.Meet(threshold) { // not enough
 		proc.WithContext(ctx).With().Debug("not enough notifications for termination",
-			log.String("current_set", proc.s.String()),
-			log.Uint32("current_k", proc.getK()),
-			proc.instanceID,
-			log.Int("expected", proc.cfg.F+1),
-			log.Int("actual", proc.notifyTracker.NotificationsCount(s)))
+			log.String("current_set", proc.value.String()),
+			log.Uint32("current_round", proc.getRound()),
+			proc.layer,
+			log.Int("expected", threshold),
+			log.Object("actual", notifyCount))
 		return
 	}
 
 	// enough notifications, should terminate
-	proc.s = s // update to the agreed set
+	proc.value = s // update to the agreed set
 	proc.WithContext(ctx).Event().Info("consensus process terminated",
-		log.String("current_set", proc.s.String()),
-		log.Uint32("current_k", proc.getK()),
-		proc.instanceID,
-		log.Int("set_size", proc.s.Size()))
+		log.String("current_set", proc.value.String()),
+		log.Uint32("current_round", proc.getRound()),
+		proc.layer,
+		log.Object("notify_count", notifyCount),
+		log.Int("set_size", proc.value.Size()))
 	proc.report(completed)
-	numIterations.Observe(float64(proc.getK()))
-	proc.terminating = true
+	numIterations.Observe(float64(proc.getRound()))
+	proc.terminate()
 }
 
 func (proc *consensusProcess) currentRound() uint32 {
-	return proc.getK() % 4
+	return proc.getRound() % RoundsPerIteration
 }
 
 // returns a function to validate status messages.
 func (proc *consensusProcess) statusValidator() func(m *Msg) bool {
 	validate := func(m *Msg) bool {
 		s := NewSet(m.InnerMsg.Values)
-		if m.InnerMsg.Ki == preRound { // no certificates, validate by pre-round msgs
+		if m.InnerMsg.CommittedRound == preRound { // no certificates, validate by pre-round msgs
 			if proc.preRoundTracker.CanProveSet(s) { // can prove s
 				return true
 			}
-		} else { // Ki>=0, we should have received a certificate for that set
-			if proc.notifyTracker.HasCertificate(m.InnerMsg.Ki, s) { // can prove s
-				return true
-			}
+		} else if proc.notifyTracker.HasCertificate(m.InnerMsg.CommittedRound, s) { // can prove s
+			// if CommittedRound (Ki) >= 0, we should have received a certificate for that set
+			return true
 		}
 		return false
 	}
@@ -813,13 +900,13 @@ func (proc *consensusProcess) endOfStatusRound() {
 		return false
 	}
 
-	// assumption: AnalyzeStatuses calls vtFunc for every recorded status message
+	// assumption: AnalyzeStatusMessages calls vtFunc for every recorded status message
 	before := time.Now()
-	proc.statusesTracker.AnalyzeStatuses(vtFunc)
+	proc.statusesTracker.AnalyzeStatusMessages(vtFunc)
 	proc.Event().Debug("status round ended",
 		log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
-		proc.instanceID,
-		log.Int("set_size", proc.s.Size()),
+		proc.layer,
+		log.Int("set_size", proc.value.Size()),
 		log.String("analyze_duration", time.Since(before).String()))
 }
 
@@ -827,14 +914,19 @@ func (proc *consensusProcess) endOfStatusRound() {
 // returns true if we should participate, false otherwise.
 func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 	logger := proc.WithContext(ctx).WithFields(
-		log.Uint32("current_k", proc.getK()),
-		proc.instanceID)
+		log.Uint32("current_round", proc.getRound()),
+		proc.layer)
+
+	if proc.nonce == nil {
+		logger.Debug("should not participate: identity missing vrf nonce")
+		return false
+	}
 
 	// query if identity is active
 	nid := types.BytesToNodeID(proc.signing.PublicKey().Bytes())
-	res, err := proc.oracle.IsIdentityActiveOnConsensusView(ctx, nid, proc.instanceID)
+	res, err := proc.oracle.IsIdentityActiveOnConsensusView(ctx, nid, proc.layer)
 	if err != nil {
-		logger.With().Error("should not participate: error checking our identity for activeness", log.Err(err))
+		logger.With().Error("failed to check own identity for activeness", log.Err(err))
 		return false
 	}
 
@@ -849,9 +941,7 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 		return false
 	}
 
-	proc.mu.RLock()
-	eligibilityCount := proc.eligibilityCount
-	proc.mu.RUnlock()
+	eligibilityCount := proc.getEligibilityCount()
 
 	// should participate
 	logger.With().Debug("should participate",
@@ -863,25 +953,26 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 
 // Returns the role matching the current round if eligible for this round, false otherwise.
 func (proc *consensusProcess) currentRole(ctx context.Context) role {
-	logger := proc.WithContext(ctx).WithFields(proc.instanceID)
-	proof, err := proc.oracle.Proof(ctx, proc.instanceID, proc.getK())
+	logger := proc.WithContext(ctx).WithFields(proc.layer)
+	if proc.nonce == nil {
+		logger.Fatal("currentRole: missing vrf nonce")
+	}
+	proof, err := proc.oracle.Proof(ctx, *proc.nonce, proc.layer, proc.getRound())
 	if err != nil {
-		logger.With().Error("could not retrieve eligibility proof from oracle", log.Err(err))
+		logger.With().Error("failed to get eligibility proof from oracle", log.Err(err))
 		return passive
 	}
 
-	k := proc.getK()
+	k := proc.getRound()
 
-	eligibilityCount, err := proc.oracle.CalcEligibility(ctx, proc.instanceID,
-		k, expectedCommitteeSize(k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proof)
+	size := expectedCommitteeSize(k, proc.cfg.N, proc.cfg.ExpectedLeaders)
+	eligibilityCount, err := proc.oracle.CalcEligibility(ctx, proc.layer, k, size, proc.nid, *proc.nonce, proof)
 	if err != nil {
 		logger.With().Error("failed to check eligibility", log.Err(err))
 		return passive
 	}
 
-	proc.mu.Lock()
-	proc.eligibilityCount = eligibilityCount
-	proc.mu.Unlock()
+	proc.setEligibilityCount(eligibilityCount)
 
 	if eligibilityCount > 0 { // eligible
 		if proc.currentRound() == proposalRound {
@@ -893,21 +984,33 @@ func (proc *consensusProcess) currentRole(ctx context.Context) role {
 	return passive
 }
 
-func (proc *consensusProcess) getK() uint32 {
-	return atomic.LoadUint32(&proc.k)
+func (proc *consensusProcess) getEligibilityCount() uint16 {
+	proc.mu.RLock()
+	defer proc.mu.RUnlock()
+	return proc.eligibilityCount
 }
 
-func (proc *consensusProcess) setK(value uint32) {
-	atomic.StoreUint32(&proc.k, value)
+func (proc *consensusProcess) setEligibilityCount(count uint16) {
+	proc.mu.Lock()
+	defer proc.mu.Unlock()
+	proc.eligibilityCount = count
 }
 
-func (proc *consensusProcess) addToK(value uint32) (new uint32) {
-	return atomic.AddUint32(&proc.k, value)
+func (proc *consensusProcess) getRound() uint32 {
+	return atomic.LoadUint32(&proc.round)
+}
+
+func (proc *consensusProcess) setRound(value uint32) {
+	atomic.StoreUint32(&proc.round, value)
+}
+
+func (proc *consensusProcess) addToRound(value uint32) (new uint32) {
+	return atomic.AddUint32(&proc.round, value)
 }
 
 // Returns the expected committee size for the given round assuming maxExpActives is the default size.
-func expectedCommitteeSize(k uint32, maxExpActive, expLeaders int) int {
-	if k%4 == proposalRound {
+func expectedCommitteeSize(round uint32, maxExpActive, expLeaders int) int {
+	if round%RoundsPerIteration == proposalRound {
 		return expLeaders // expected number of leaders
 	}
 

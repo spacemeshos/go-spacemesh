@@ -18,6 +18,6 @@ func TestGenesisID(t *testing.T) {
 	})
 	t.Run("stable", func(t *testing.T) {
 		cfg := GenesisConfig{ExtraData: "one", GenesisTime: "two"}
-		require.Equal(t, "0x91d338938929ec38e320ba558b6bd8538eae972d", cfg.GenesisID().Hex())
+		require.Equal(t, "0x374ea0818fe293007e99bc08185cac7a12aea8dd", cfg.GenesisID().Hex())
 	})
 }

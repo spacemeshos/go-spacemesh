@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -18,16 +18,14 @@ import (
 
 // CSConfig is the config for the conservative state/cache.
 type CSConfig struct {
-	BlockGasLimit      uint64
-	NumTXsPerProposal  int
-	OptFilterThreshold int
+	BlockGasLimit     uint64
+	NumTXsPerProposal int
 }
 
 func defaultCSConfig() CSConfig {
 	return CSConfig{
-		BlockGasLimit:      math.MaxUint64,
-		NumTXsPerProposal:  100,
-		OptFilterThreshold: 90,
+		BlockGasLimit:     math.MaxUint64,
+		NumTXsPerProposal: 100,
 	}
 }
 
@@ -56,7 +54,7 @@ type ConservativeState struct {
 	logger log.Log
 	cfg    CSConfig
 	db     *sql.Database
-	cache  *cache
+	cache  *Cache
 }
 
 // NewConservativeState returns a ConservativeState.
@@ -70,7 +68,7 @@ func NewConservativeState(state vmState, db *sql.Database, opts ...ConservativeS
 	for _, opt := range opts {
 		opt(cs)
 	}
-	cs.cache = newCache(cs.getState, cs.logger)
+	cs.cache = NewCache(cs.getState, cs.logger)
 	return cs
 }
 
@@ -83,39 +81,7 @@ func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
 	if err != nil {
 		cs.logger.With().Fatal("failed to get balance", log.Err(err))
 	}
-	return nonce.Counter, balance
-}
-
-// SelectBlockTXs combined the transactions in the proposals and put them in a stable order.
-// the steps are:
-//  0. do optimistic filtering if the proposals agree on the mesh hash and state root
-//     this mean the following transactions will be filtered out. transactions that
-//     - fail nonce check
-//     - fail balance check
-//     - are already applied in previous layer
-//     if the proposals don't agree on the mesh hash and state root, we keep all transactions
-//  1. put the output of step 0 in a stable order
-//  2. pick the transactions in step 1 until the gas limit runs out.
-func (cs *ConservativeState) SelectBlockTXs(lid types.LayerID, proposals []*types.Proposal) ([]types.TransactionID, error) {
-	myHash, err := cs.GetMeshHash(lid.Sub(1))
-	if err != nil {
-		cs.logger.With().Warning("failed to get mesh hash", lid, log.Err(err))
-		// if we don't have hash for that layer, other nodes probably don't either
-		myHash = types.EmptyLayerHash
-	}
-
-	md, err := checkStateConsensus(cs.logger, cs.cfg, lid, proposals, myHash, cs)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(md.mtxs) == 0 {
-		return nil, nil
-	}
-
-	logger := cs.logger.WithName("block").WithFields(lid)
-	blockSeed := types.CalcProposalsHash32(types.ToProposalIDs(proposals), nil).Bytes()
-	return getBlockTXs(logger, md, cs.getState, blockSeed, cs.cfg.BlockGasLimit)
+	return nonce, balance
 }
 
 // SelectProposalTXs picks a specific number of random txs for miner to pack in a proposal.
@@ -125,6 +91,19 @@ func (cs *ConservativeState) SelectProposalTXs(lid types.LayerID, numEligibility
 	predictedBlock, byAddrAndNonce := mi.PopAll()
 	numTXs := numEligibility * cs.cfg.NumTXsPerProposal
 	return getProposalTXs(logger.WithFields(lid), numTXs, predictedBlock, byAddrAndNonce)
+}
+
+func getProposalTXs(logger log.Log, numTXs int, predictedBlock []*NanoTX, byAddrAndNonce map[types.Address][]*NanoTX) []types.TransactionID {
+	if len(predictedBlock) <= numTXs {
+		result := make([]types.TransactionID, 0, len(predictedBlock))
+		for _, ntx := range predictedBlock {
+			result = append(result, ntx.ID)
+		}
+		return result
+	}
+	// randomly select transactions from the predicted block.
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	return ShuffleWithNonceOrder(logger, rng, numTXs, predictedBlock, byAddrAndNonce)
 }
 
 // Validation initializes validation request.
@@ -143,57 +122,24 @@ func (cs *ConservativeState) AddToCache(ctx context.Context, tx *types.Transacti
 	return nil
 }
 
-// RevertState reverts the VM state and database to the given layer.
-func (cs *ConservativeState) RevertState(revertTo types.LayerID) error {
-	err := cs.vmState.Revert(revertTo)
-	if err != nil {
-		return fmt.Errorf("vm revert %v: %w", revertTo, err)
-	}
-
+// RevertCache reverts the conservative cache to the given layer.
+func (cs *ConservativeState) RevertCache(revertTo types.LayerID) error {
 	return cs.cache.RevertToLayer(cs.db, revertTo)
 }
 
-// ApplyLayer applies the transactions specified by the ids to the state.
-func (cs *ConservativeState) ApplyLayer(ctx context.Context, lid types.LayerID, block *types.Block) error {
-	if block == nil {
-		return cs.applyEmptyLayer(ctx, lid)
-	}
-
-	logger := cs.logger.WithFields(block.LayerIndex, block.ID())
-	logger.Debug("applying layer to conservative state")
-
-	executable, err := cs.GetExecutableTxs(block.TxIDs)
-	if err != nil {
-		return err
-	}
-
-	ineffective, results, err := cs.vmState.Apply(
-		vm.ApplyContext{Layer: block.LayerIndex, Block: block.ID()},
-		executable,
-		block.Rewards,
-	)
-	if err != nil {
-		return fmt.Errorf("apply layer: %w", err)
-	}
-
-	logger.With().Debug("applying layer to cache",
-		log.Int("num_txs_skipped", len(ineffective)),
-		log.Int("num_txs_applied", len(results)),
-	)
+func (cs *ConservativeState) UpdateCache(
+	ctx context.Context,
+	lid types.LayerID,
+	bid types.BlockID,
+	results []types.TransactionWithResult,
+	ineffective []types.Transaction,
+) error {
 	t0 := time.Now()
-	if err = cs.cache.ApplyLayer(ctx, cs.db, block.LayerIndex, block.ID(), results, ineffective); err != nil {
+	if err := cs.cache.ApplyLayer(ctx, cs.db, lid, bid, results, ineffective); err != nil {
 		return err
 	}
 	cacheApplyDuration.Observe(float64(time.Since(t0)))
 	return nil
-}
-
-func (cs *ConservativeState) applyEmptyLayer(ctx context.Context, lid types.LayerID) error {
-	_, _, err := cs.vmState.Apply(vm.ApplyContext{Layer: lid}, nil, nil)
-	if err != nil {
-		return fmt.Errorf("apply empty layer: %w", err)
-	}
-	return cs.cache.ApplyLayer(ctx, cs.db, lid, types.EmptyBlockID, nil, nil)
 }
 
 // GetProjection returns the projected nonce and balance for an account, including
@@ -257,25 +203,6 @@ func (cs *ConservativeState) GetMeshTransactions(ids []types.TransactionID) ([]*
 		}
 	}
 	return mtxs, missing
-}
-
-// GetExecutableTxs retrieves a list of txs filtering transaction that were previously executed.
-func (cs *ConservativeState) GetExecutableTxs(ids []types.TransactionID) ([]types.Transaction, error) {
-	txs := make([]types.Transaction, 0, len(ids))
-	for _, tid := range ids {
-		mtx, err := transactions.Get(cs.db, tid)
-		if err != nil {
-			return nil, err
-		}
-		if mtx.State == types.APPLIED {
-			continue
-		}
-		if mtx.TxHeader == nil {
-			rawTxCount.WithLabelValues(rawFromDB).Inc()
-		}
-		txs = append(txs, mtx.Transaction)
-	}
-	return txs, nil
 }
 
 // GetTransactionsByAddress retrieves txs for a single address in between layers [from, to].

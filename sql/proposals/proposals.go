@@ -6,7 +6,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -16,7 +15,7 @@ func Get(db sql.Executor, id types.ProposalID) (proposal *types.Proposal, err er
 		select 
 			ballots.pubkey, 
 			ballots.ballot, 
-			identities.malicious, 
+			length(identities.proof),
 			proposals.id, 
 			proposals.ballot_id, 
 			proposals.tx_ids, 
@@ -53,34 +52,13 @@ func Has(db sql.Executor, id types.ProposalID) (bool, error) {
 	return rows > 0, nil
 }
 
-// GetIDsByLayer gets IDs for a given layer.
-func GetIDsByLayer(db sql.Executor, layer types.LayerID) (ids []types.ProposalID, err error) {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(layer.Uint32()))
-	}
-	dec := func(stmt *sql.Statement) bool {
-		var id types.ProposalID
-		stmt.ColumnBytes(0, id[:])
-		ids = append(ids, id)
-		return true
-	}
-
-	if rows, err := db.Exec("select id from proposals where layer = ?1;", enc, dec); err != nil {
-		return nil, fmt.Errorf("exec layer %v: %w", layer, err)
-	} else if rows == 0 {
-		return []types.ProposalID{}, sql.ErrNotFound
-	}
-
-	return ids, nil
-}
-
 // GetByLayer gets proposals by a given layer ID.
 func GetByLayer(db sql.Executor, layerID types.LayerID) (proposals []*types.Proposal, err error) {
 	if rows, err := db.Exec(`
 		select 
 			ballots.pubkey, 
 			ballots.ballot, 
-			identities.malicious, 
+			length(identities.proof),
 			proposals.id, 
 			proposals.ballot_id, 
 			proposals.tx_ids, 
@@ -142,7 +120,7 @@ func Add(db sql.Executor, proposal *types.Proposal) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, proposal.ID().Bytes())
 		stmt.BindBytes(2, proposal.Ballot.ID().Bytes())
-		stmt.BindInt64(3, int64(proposal.LayerIndex.Uint32()))
+		stmt.BindInt64(3, int64(proposal.Layer.Uint32()))
 		stmt.BindBytes(4, txIDsBytes)
 		stmt.BindBytes(5, proposal.MeshHash.Bytes())
 		stmt.BindBytes(6, proposal.Signature)
@@ -174,7 +152,7 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 		return nil, err
 	}
 	ballot.SetID(ballotID)
-	ballot.SetSmesherID(signing.NewPublicKey(pubKeyBytes))
+	ballot.SetSmesherID(types.BytesToNodeID(pubKeyBytes))
 	if stmt.ColumnInt(2) > 0 {
 		ballot.SetMalicious()
 	}

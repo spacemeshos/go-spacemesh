@@ -52,8 +52,6 @@ const (
 
 	// AtxProtocol is the protocol id for ATXs.
 	AtxProtocol = "ax1"
-	// PoetProofProtocol is the protocol id for PoetProof.
-	PoetProofProtocol = "pt1"
 	// ProposalProtocol is the protocol id for block proposals.
 	ProposalProtocol = "pp1"
 	// TxProtocol iis the protocol id for transactions.
@@ -73,6 +71,8 @@ const (
 	BeaconFirstVotesProtocol = "bf1"
 	// BeaconFollowingVotesProtocol is the protocol id for beacon following votes.
 	BeaconFollowingVotesProtocol = "bo1"
+
+	MalfeasanceProof = "mp1"
 )
 
 // DefaultConfig for PubSub.
@@ -192,9 +192,8 @@ func getOptions(cfg Config) []pubsub.Option {
 				RetainScore: 6 * time.Hour,
 
 				Topics: map[string]*pubsub.TopicScoreParams{
-					AtxProtocol:       defaultTopicParam(),
-					PoetProofProtocol: defaultTopicParam(),
-					ProposalProtocol:  defaultTopicParam(),
+					AtxProtocol:      defaultTopicParam(),
+					ProposalProtocol: defaultTopicParam(),
 				},
 				// TODO: add TopicScoreParams
 			},

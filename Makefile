@@ -38,6 +38,8 @@ else
   DOCKER_IMAGE_REPO := go-spacemesh-dev
 endif
 
+DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
+
 # setting extra command line params for the CI tests pytest commands
 ifdef namespace
     EXTRA_PARAMS:=$(EXTRA_PARAMS) --namespace=$(namespace)
@@ -51,14 +53,6 @@ ifdef dump
     EXTRA_PARAMS:=$(EXTRA_PARAMS) --dump=$(dump)
 endif
 
-DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(BRANCH)
-
-# We use a docker image corresponding to the commithash for staging and trying, to be safe
-# filter here is used as a logical OR operation
-ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
-  DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
-endif
-
 all: install build
 .PHONY: all
 
@@ -69,7 +63,7 @@ install:
 	go install github.com/spacemeshos/go-scale/scalegen@v1.1.1
 	go install github.com/golang/mock/mockgen
 	go install gotest.tools/gotestsum@v1.8.2
-	go install honnef.co/go/tools/cmd/staticcheck@latest
+	go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
 .PHONY: install
 
 build: go-spacemesh
@@ -118,6 +112,14 @@ test: get-libs
 generate: get-libs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go generate ./...
 .PHONY: generate
+
+test-generate:
+	# Working directory must be clean, or this test would be destructive
+	@git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && git --no-pager diff && exit 1)
+	# We expect `go generate` not to change anything, the test should fail otherwise
+	@make generate
+	@git diff --name-only --diff-filter=AM --exit-code . || { echo "\nPlease rerun 'make generate' and commit changes.\n"; exit 1; }
+.PHONY: test-generate
 
 staticcheck: get-libs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" staticcheck ./...
@@ -184,12 +186,6 @@ ifneq ($(DOCKER_USERNAME):$(DOCKER_PASSWORD),:)
 endif
 	docker tag $(DOCKER_IMAGE) $(DOCKER_HUB)/$(DOCKER_IMAGE)
 	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE)
-
-# for develop, we push an additional copy of the image using the commithash for archival
-ifeq ($(BRANCH),develop)
-	docker tag $(DOCKER_IMAGE) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(SHA)
-	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(SHA)
-endif
 .PHONY: dockerpush-only
 
 docker-local-push: docker-local-build dockerpush-only

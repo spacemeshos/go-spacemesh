@@ -158,9 +158,9 @@ func (v *VM) AccountExists(address core.Address) (bool, error) {
 func (v *VM) GetNonce(address core.Address) (core.Nonce, error) {
 	account, err := accounts.Latest(v.db, address)
 	if err != nil {
-		return core.Nonce{}, err
+		return 0, err
 	}
-	return core.Nonce{Counter: account.NextNonce}, nil
+	return account.NextNonce, nil
 }
 
 // GetBalance returns balance for an address.
@@ -261,6 +261,15 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 		events.ReportAccountUpdate(account.Address)
 		return true
 	})
+	for _, reward := range rewardsResult {
+		events.ReportRewardReceived(events.Reward{
+			Layer:       reward.Layer,
+			Total:       reward.TotalReward,
+			LayerReward: reward.LayerReward,
+			Coinbase:    reward.Coinbase,
+		})
+	}
+
 	blockDurationPersist.Observe(float64(time.Since(t4)))
 	blockDuration.Observe(float64(time.Since(t1)))
 	transactionsPerBlock.Observe(float64(len(txs)))
@@ -268,7 +277,6 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 
 	v.logger.With().Info("applied layer",
 		lctx.Layer,
-		lctx.Block,
 		log.Int("count", len(txs)-len(skipped)),
 		log.Duration("duration", time.Since(t1)),
 		log.Stringer("state_hash", hash),
@@ -313,6 +321,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		}
 		ctx := req.ctx
 		args := req.args
+
 		if header.GasPrice == 0 {
 			logger.With().Warning("ineffective transaction. zero gas price",
 				log.Object("header", header),
@@ -322,11 +331,11 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 			invalidTxCount.Inc()
 			continue
 		}
-		if ctx.PrincipalAccount.Balance < ctx.ParseOutput.FixedGas*ctx.ParseOutput.GasPrice {
-			logger.With().Warning("ineffective transaction. fixed gas not covered",
+		if intrinsic := core.ComputeIntrinsicGasCost(ctx.ParseOutput.BaseGas, tx.GetRaw().Raw, v.cfg.StorageCostFactor); ctx.PrincipalAccount.Balance < intrinsic {
+			logger.With().Warning("ineffective transaction. intrinstic gas not covered",
 				log.Object("header", header),
 				log.Object("account", &ctx.PrincipalAccount),
-				log.Uint64("fixed gas", ctx.ParseOutput.FixedGas),
+				log.Uint64("intrinsic gas", intrinsic),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
@@ -356,7 +365,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 			continue
 		}
 
-		if ctx.PrincipalAccount.NextNonce > ctx.Header.Nonce.Counter {
+		if ctx.PrincipalAccount.NextNonce > ctx.Header.Nonce {
 			logger.With().Warning("ineffective transaction. nonce too low",
 				log.Object("header", header),
 				log.Object("account", &ctx.PrincipalAccount),
@@ -374,7 +383,6 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 
 		rst := types.TransactionWithResult{}
 		rst.Layer = lctx.Layer
-		rst.Block = lctx.Block
 
 		err = ctx.Consume(ctx.Header.MaxGas)
 		if err == nil {
@@ -557,7 +565,7 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 	ctx.Header.Principal = principal
 	ctx.Header.TemplateAddress = *templateAddress
 	ctx.Header.Method = method
-	ctx.Header.MaxGas = core.ComputeGasCost(output.FixedGas, raw, cfg.StorageCostFactor)
+	ctx.Header.MaxGas = core.ComputeGasCost(output.BaseGas, output.FixedGas, raw, cfg.StorageCostFactor)
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce
 
@@ -578,5 +586,4 @@ func verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool {
 // ApplyContext has information on layer and block id.
 type ApplyContext struct {
 	Layer types.LayerID
-	Block types.BlockID
 }

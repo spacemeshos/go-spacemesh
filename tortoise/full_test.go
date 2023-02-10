@@ -85,7 +85,10 @@ func TestFullCountVotes(t *testing.T) {
 	}
 	const localHeight = 100
 	rng := rand.New(rand.NewSource(0))
-	signer := signing.NewEdSignerFromRand(rng)
+	signer, err := signing.NewEdSigner(
+		signing.WithKeyFromRand(rng),
+	)
+	require.NoError(t, err)
 
 	getDiff := func(layers [][]types.Block, choices [][2]int) []types.BlockID {
 		var rst []types.BlockID
@@ -333,9 +336,11 @@ func TestFullCountVotes(t *testing.T) {
 				atxid := types.ATXID{byte(i + 1)}
 				atx.SetID(&atxid)
 				atx.SetNodeID(&types.NodeID{1})
+				atx.SetEffectiveNumUnits(atx.NumUnits)
+				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(tc.activeset[i].BaseHeight, tc.activeset[i].TickCount)
 				require.NoError(t, err)
-				require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+				require.NoError(t, atxs.Add(cdb, vAtx))
 				activeset = append(activeset, atxid)
 			}
 
@@ -373,10 +378,10 @@ func TestFullCountVotes(t *testing.T) {
 				lid := genesis.Add(uint32(i) + 1)
 				for j, b := range layer {
 					ballot := &types.Ballot{}
-					ballot.EligibilityProofs = []types.VotingEligibilityProof{{J: uint32(j)}}
+					ballot.EligibilityProofs = []types.VotingEligibility{{J: uint32(j)}}
 					ballot.AtxID = activeset[b.ATX]
 					ballot.EpochData = &types.EpochData{ActiveSet: activeset}
-					ballot.LayerIndex = lid
+					ballot.Layer = lid
 					// don't vote on genesis for simplicity,
 					// since we don't care about block goodness in this test
 					if i > 0 {
@@ -391,6 +396,7 @@ func TestFullCountVotes(t *testing.T) {
 						}
 						ballot.Votes.Base = ballotsList[b.Base[0]][b.Base[1]].ID()
 					}
+					ballot.OpinionHash = types.RandomHash() // fake opinion, only to make sure each ballot has a unique ID
 					ballot.Signature = signer.Sign(ballot.SignedBytes())
 					require.NoError(t, ballot.Initialize())
 					layerBallots = append(layerBallots, ballot)

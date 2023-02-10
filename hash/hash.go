@@ -3,21 +3,16 @@ package hash
 import (
 	"hash"
 
-	"github.com/minio/sha256-simd"
-)
-
-const (
-	// Size is an alias to minio sha256.Size (32 bytes).
-	Size = sha256.Size
+	"github.com/zeebo/blake3"
 )
 
 // Hash is an alias to stdlib hash.Hash interface.
 type Hash = hash.Hash
 
-// New is an alias to minio sha256.New.
-var New = sha256.New
+// New is an alias to blake3.New.
+var New = blake3.New
 
-// Sum computes sha256.Sum256 from chunks with minio/sha256-simd.
+// Sum computes 256-bit hash from chunks with blake3.
 func Sum(chunks ...[]byte) (rst [32]byte) {
 	hh := New()
 	for _, chunk := range chunks {

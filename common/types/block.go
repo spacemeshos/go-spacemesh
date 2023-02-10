@@ -21,7 +21,7 @@ const (
 
 //go:generate scalegen -types Block,InnerBlock,RatNum,AnyReward,Certificate,CertifyMessage,CertifyContent
 
-// BlockID is a 20-byte sha256 sum of the serialized block used to identify a Block.
+// BlockID is a 20-byte blake3 sum of the serialized block used to identify a Block.
 type BlockID Hash20
 
 // EmptyBlockID is a canonical empty BlockID.
@@ -76,6 +76,10 @@ func (r *RatNum) ToBigRat() *big.Rat {
 		new(big.Int).SetUint64(r.Num),
 		new(big.Int).SetUint64(r.Denom),
 	)
+}
+
+func RatNumFromBigRat(r *big.Rat) RatNum {
+	return RatNum{Num: r.Num().Uint64(), Denom: r.Denom().Uint64()}
 }
 
 // AnyReward contains the reward information.

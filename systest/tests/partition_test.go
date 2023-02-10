@@ -23,6 +23,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 		first      = uint32(layersPerEpoch * 2)
 		startSplit = uint32(4*layersPerEpoch) - 1
 		rejoin     = startSplit + 2*layersPerEpoch
+		last       = rejoin + (wait-1)*layersPerEpoch
 		stop       = rejoin + wait*layersPerEpoch
 	)
 
@@ -113,7 +114,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 		}
 		latestStates[update.client][update.layer] = update.hash
 	}
-	for layer := uint32(layersPerEpoch * 2); layer <= stop; layer++ {
+	for layer := uint32(layersPerEpoch * 2); layer <= last; layer++ {
 		tctx.Log.Debugw("client states",
 			"layer", layer,
 			"num_states", len(hashes[layer]),
@@ -136,7 +137,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	for i := 1; i < cl.Total(); i++ {
 		clientState := latestStates[cl.Client(i).Name]
 		agree := true
-		for layer := uint32(layersPerEpoch * 2); layer <= stop; layer++ {
+		for layer := uint32(layersPerEpoch * 2); layer <= last; layer++ {
 			if clientState[layer] != refState[layer] {
 				tctx.Log.Errorw("client state differs from ref state",
 					"client", cl.Client(i).Name,
@@ -169,7 +170,8 @@ func TestPartition_30_70(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.Labels("destructive"))
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
-	testPartition(t, tctx, cl, 30, 2)
+	// TODO: re-assess the number of epoch required for healing.
+	testPartition(t, tctx, cl, 30, 4)
 }
 
 func TestPartition_50_50(t *testing.T) {
@@ -178,5 +180,6 @@ func TestPartition_50_50(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.Labels("destructive"))
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
-	testPartition(t, tctx, cl, 50, 3)
+	// TODO: re-assess the number of epoch required for healing.
+	testPartition(t, tctx, cl, 50, 5)
 }

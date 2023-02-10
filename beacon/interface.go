@@ -8,13 +8,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
+//go:generate mockgen -package=beacon -destination=./mocks.go -source=./interface.go
 
 type coin interface {
-	StartEpoch(context.Context, types.EpochID, weakcoin.UnitAllowances)
+	StartEpoch(context.Context, types.EpochID, types.VRFPostIndex, weakcoin.UnitAllowances)
 	StartRound(context.Context, types.RoundID) error
 	FinishRound(context.Context)
 	Get(context.Context, types.EpochID, types.RoundID) bool
@@ -27,8 +27,21 @@ type eligibilityChecker interface {
 }
 
 type layerClock interface {
-	Subscribe() timesync.LayerTimer
-	Unsubscribe(timesync.LayerTimer)
 	LayerToTime(types.LayerID) time.Time
-	GetCurrentLayer() types.LayerID
+	CurrentLayer() types.LayerID
+	AwaitLayer(types.LayerID) chan struct{}
+}
+
+type vrfSigner interface {
+	Sign(msg []byte) []byte
+	PublicKey() *signing.PublicKey
+	LittleEndian() bool
+}
+
+type vrfVerifier interface {
+	Verify(nodeID types.NodeID, msg, sig []byte) bool
+}
+
+type nonceFetcher interface {
+	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
 }

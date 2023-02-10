@@ -27,6 +27,10 @@ const (
 
 func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 	cdb := datastore.NewCachedDB(sql.InMemory(), logger)
+	sig, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+	if err != nil {
+		panic(err)
+	}
 	c := &core{
 		id:      id,
 		logger:  logger,
@@ -34,7 +38,7 @@ func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 		cdb:     cdb,
 		beacons: newBeaconStore(),
 		units:   units,
-		signer:  signing.NewEdSignerFromRand(rng),
+		signer:  sig,
 	}
 	cfg := tortoise.DefaultConfig()
 	cfg.LayerSize = layerSize
@@ -57,7 +61,7 @@ type core struct {
 
 	// generated on setup
 	units  uint32
-	signer signing.Signer
+	signer signer
 
 	// set in the first layer of each epoch
 	refBallot     *types.BallotID
@@ -90,12 +94,12 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			panic(err)
 		}
 		ballot := &types.Ballot{}
-		ballot.LayerIndex = ev.LayerID
+		ballot.Layer = ev.LayerID
 		ballot.Votes = votes.Votes
 		ballot.OpinionHash = votes.Hash
 		ballot.AtxID = c.atx
 		for i := uint32(0); i < c.eligibilities; i++ {
-			ballot.EligibilityProofs = append(ballot.EligibilityProofs, types.VotingEligibilityProof{J: i})
+			ballot.EligibilityProofs = append(ballot.EligibilityProofs, types.VotingEligibility{J: i})
 		}
 		if c.refBallot != nil {
 			ballot.RefBallot = *c.refBallot
@@ -136,13 +140,16 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			PubLayerID: ev.LayerID,
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
-		atx := types.NewActivationTx(nipost, addr, nil, c.units, nil)
-		if err := activation.SignAtx(c.signer, atx); err != nil {
-			panic(err)
+		nodeID := c.signer.NodeID()
+		atx := types.NewActivationTx(nipost, &nodeID, addr, nil, c.units, nil, nil)
+		if err := activation.SignAndFinalizeAtx(c.signer, atx); err != nil {
+			c.logger.With().Fatal("failed to sign atx", log.Err(err))
 		}
+		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(1, 2)
 		if err != nil {
-			panic(err)
+			c.logger.With().Fatal("failed to verify atx", log.Err(err))
 		}
 
 		c.refBallot = nil
@@ -163,7 +170,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		if err != nil {
 			panic(err)
 		}
-		atxs.Add(c.cdb, vAtx, time.Now())
+		atxs.Add(c.cdb, vAtx)
 	case MessageBeacon:
 		c.beacons.StoreBeacon(ev.EpochID, ev.Beacon)
 	case MessageCoinflip:

@@ -20,7 +20,7 @@ func getTime() time.Time {
 func TestLayerConv_LayerToTime(t *testing.T) {
 	r := require.New(t)
 	tm := getTime()
-	lc := LayerConv{5 * time.Second, tm}
+	lc := LayerConverter{5 * time.Second, tm}
 	r.Equal(tm.Add(10*time.Second), lc.LayerToTime(types.NewLayerID(2)))
 	r.Equal(lc.genesis, lc.LayerToTime(types.NewLayerID(0)))
 }
@@ -28,7 +28,7 @@ func TestLayerConv_LayerToTime(t *testing.T) {
 func TestLayerConv_TimeToLayer(t *testing.T) {
 	r := require.New(t)
 	tm := getTime()
-	lc := &LayerConv{5 * time.Second, tm}
+	lc := &LayerConverter{5 * time.Second, tm}
 	r.Equal(types.NewLayerID(1), lc.TimeToLayer(tm.Add(9*time.Second)))
 	r.Equal(types.NewLayerID(2), lc.TimeToLayer(tm.Add(10*time.Second)))
 	r.Equal(types.NewLayerID(2), lc.TimeToLayer(tm.Add(12*time.Second)))
@@ -40,7 +40,7 @@ func TestLayerConv_TimeToLayer(t *testing.T) {
 func TestTicker_pingPong(t *testing.T) {
 	r := require.New(t)
 	tm := getTime()
-	lc := LayerConv{5 * time.Second, tm}
+	lc := LayerConverter{5 * time.Second, tm}
 	ttl := lc.TimeToLayer(tm.Add(9 * time.Second))
 	r.Equal(types.NewLayerID(1), lc.TimeToLayer(lc.LayerToTime(ttl)))
 }

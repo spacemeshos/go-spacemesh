@@ -10,6 +10,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -21,13 +22,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-const numEarlyLayers = uint32(1)
-
 var (
 	errMultipleCerts      = errors.New("multiple valid certificates")
 	errInvalidCert        = errors.New("invalid certificate")
 	errInvalidCertMsg     = errors.New("invalid cert msg")
-	errUnexpectedMsg      = errors.New("unexpected lid/bid")
+	errUnexpectedMsg      = errors.New("unexpected lid")
 	errBeaconNotAvailable = errors.New("beacon not available")
 )
 
@@ -35,7 +34,7 @@ var (
 type CertConfig struct {
 	CommitteeSize    int
 	CertifyThreshold int
-	WaitSigLayers    uint32
+	LayerBuffer      uint32
 	NumLayersToKeep  uint32
 }
 
@@ -43,8 +42,8 @@ func defaultCertConfig() CertConfig {
 	return CertConfig{
 		CommitteeSize:    10,
 		CertifyThreshold: 6,
-		WaitSigLayers:    5,
-		NumLayersToKeep:  5,
+		LayerBuffer:      5,
+		NumLayersToKeep:  10,
 	}
 }
 
@@ -72,6 +71,24 @@ func WithCertifierLogger(logger log.Log) CertifierOpt {
 	}
 }
 
+func withNonceFetcher(nf nonceFetcher) CertifierOpt {
+	return func(c *Certifier) {
+		c.nonceFetcher = nf
+	}
+}
+
+type defaultFetcher struct {
+	cdb *datastore.CachedDB
+}
+
+func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	nonce, err := f.cdb.VRFNonce(nodeID, epoch)
+	if err != nil {
+		return types.VRFPostIndex(0), fmt.Errorf("get vrf nonce: %w", err)
+	}
+	return nonce, nil
+}
+
 type certInfo struct {
 	registered, done bool
 	totalEligibility uint16
@@ -87,14 +104,16 @@ type Certifier struct {
 	ctx    context.Context
 	cancel func()
 
-	db         *sql.Database
-	oracle     hare.Rolacle
-	nodeID     types.NodeID
-	signer     *signing.EdSigner
-	publisher  pubsub.Publisher
-	layerClock layerClock
-	beacon     system.BeaconGetter
-	tortoise   system.Tortoise
+	db              *datastore.CachedDB
+	oracle          hare.Rolacle
+	nodeID          types.NodeID
+	signer          *signing.EdSigner
+	nonceFetcher    nonceFetcher
+	pubKeyExtractor *signing.PubKeyExtractor
+	publisher       pubsub.Publisher
+	layerClock      layerClock
+	beacon          system.BeaconGetter
+	tortoise        system.Tortoise
 
 	mu          sync.Mutex
 	certifyMsgs map[types.LayerID]map[types.BlockID]*certInfo
@@ -102,26 +121,39 @@ type Certifier struct {
 
 // NewCertifier creates new block certifier.
 func NewCertifier(
-	db *sql.Database, o hare.Rolacle, n types.NodeID, s *signing.EdSigner, p pubsub.Publisher, lc layerClock, b system.BeaconGetter, tortoise system.Tortoise,
+	db *datastore.CachedDB,
+	o hare.Rolacle,
+	n types.NodeID,
+	s *signing.EdSigner,
+	pke *signing.PubKeyExtractor,
+	p pubsub.Publisher,
+	lc layerClock,
+	b system.BeaconGetter,
+	tortoise system.Tortoise,
 	opts ...CertifierOpt,
 ) *Certifier {
 	c := &Certifier{
-		logger:      log.NewNop(),
-		cfg:         defaultCertConfig(),
-		ctx:         context.Background(),
-		db:          db,
-		oracle:      o,
-		nodeID:      n,
-		signer:      s,
-		publisher:   p,
-		layerClock:  lc,
-		beacon:      b,
-		tortoise:    tortoise,
-		certifyMsgs: make(map[types.LayerID]map[types.BlockID]*certInfo),
+		logger:          log.NewNop(),
+		cfg:             defaultCertConfig(),
+		ctx:             context.Background(),
+		db:              db,
+		oracle:          o,
+		nodeID:          n,
+		signer:          s,
+		pubKeyExtractor: pke,
+		publisher:       p,
+		layerClock:      lc,
+		beacon:          b,
+		tortoise:        tortoise,
+		certifyMsgs:     make(map[types.LayerID]map[types.BlockID]*certInfo),
 	}
 	for _, opt := range opts {
 		opt(c)
 	}
+	if c.nonceFetcher == nil {
+		c.nonceFetcher = defaultFetcher{cdb: db}
+	}
+
 	c.ctx, c.cancel = context.WithCancel(c.ctx)
 	return c
 }
@@ -154,7 +186,7 @@ func (c *Certifier) isShuttingDown() bool {
 }
 
 func (c *Certifier) run() error {
-	for layer := c.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
+	for layer := c.layerClock.CurrentLayer(); ; layer = layer.Add(1) {
 		select {
 		case <-c.layerClock.AwaitLayer(layer):
 			c.prune()
@@ -169,7 +201,7 @@ func (c *Certifier) prune() {
 	defer c.mu.Unlock()
 
 	cutoff := types.GetEffectiveGenesis()
-	current := c.layerClock.GetCurrentLayer()
+	current := c.layerClock.CurrentLayer()
 	if current.Uint32() > c.cfg.NumLayersToKeep {
 		cutoff = current.Sub(c.cfg.NumLayersToKeep)
 	}
@@ -210,14 +242,19 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 	if _, err := c.beacon.GetBeacon(lid.GetEpoch()); err != nil {
 		return errBeaconNotAvailable
 	}
+	nonce, err := c.nonceFetcher.VRFNonce(c.nodeID, lid.GetEpoch())
+	if err != nil {
+		return fmt.Errorf("failed to get own vrf nonce: %w", err)
+	}
+
 	// check if the node is eligible to certify the hare output
-	proof, err := c.oracle.Proof(ctx, lid, eligibility.CertifyRound)
+	proof, err := c.oracle.Proof(ctx, nonce, lid, eligibility.CertifyRound)
 	if err != nil {
 		logger.With().Error("failed to get eligibility proof to certify", log.Err(err))
 		return err
 	}
 
-	eligibilityCount, err := c.oracle.CalcEligibility(ctx, lid, eligibility.CertifyRound, c.cfg.CommitteeSize, c.nodeID, proof)
+	eligibilityCount, err := c.oracle.CalcEligibility(ctx, lid, eligibility.CertifyRound, c.cfg.CommitteeSize, c.nodeID, nonce, proof)
 	if err != nil {
 		logger.With().Error("failed to check eligibility to certify", log.Err(err))
 		return err
@@ -291,7 +328,7 @@ func (c *Certifier) HandleSyncedCertificate(ctx context.Context, lid types.Layer
 func (c *Certifier) validateCert(ctx context.Context, logger log.Log, cert *types.Certificate) error {
 	eligibilityCnt := uint16(0)
 	for _, msg := range cert.Signatures {
-		if err := validate(ctx, logger, c.oracle, c.cfg.CommitteeSize, msg); err != nil {
+		if err := c.validate(ctx, logger, msg); err != nil {
 			continue
 		}
 		eligibilityCnt += msg.EligibilityCnt
@@ -317,14 +354,14 @@ func (c *Certifier) certified(lid types.LayerID, bid types.BlockID) bool {
 	return false
 }
 
-func expectedLayer(clock layerClock, lid types.LayerID, waitLayers uint32) bool {
-	current := clock.GetCurrentLayer()
+func (c *Certifier) expected(lid types.LayerID) bool {
+	current := c.layerClock.CurrentLayer()
 	start := types.GetEffectiveGenesis()
-	if current.Uint32() > waitLayers+1 {
-		start = current.Sub(waitLayers + 1)
+	if current.Uint32() > c.cfg.LayerBuffer+1 {
+		start = current.Sub(c.cfg.LayerBuffer + 1)
 	}
 	// only accept early msgs within a range and with limited size to prevent DOS
-	return !lid.Before(start) && !lid.After(current.Add(numEarlyLayers))
+	return !lid.Before(start) && !lid.After(current.Add(c.cfg.LayerBuffer))
 }
 
 func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error {
@@ -342,8 +379,8 @@ func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error 
 		return errBeaconNotAvailable
 	}
 
-	if !expectedLayer(c.layerClock, lid, c.cfg.WaitSigLayers) {
-		logger.Debug("received message for unexpected layer")
+	if !c.expected(lid) {
+		logger.With().Debug("received message for unexpected layer", lid)
 		return errUnexpectedMsg
 	}
 
@@ -352,7 +389,7 @@ func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error 
 		return nil
 	}
 
-	if err := validate(ctx, logger, c.oracle, c.cfg.CommitteeSize, msg); err != nil {
+	if err := c.validate(ctx, logger, msg); err != nil {
 		return err
 	}
 
@@ -362,20 +399,19 @@ func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error 
 	return nil
 }
 
-func validate(ctx context.Context, logger log.Log, oracle hare.Rolacle, committeeSize int, msg types.CertifyMessage) error {
+func (c *Certifier) validate(ctx context.Context, logger log.Log, msg types.CertifyMessage) error {
 	// extract public key from signature
-	pubkey, err := signing.ExtractPublicKey(msg.Bytes(), msg.Signature)
+	nodeId, err := c.pubKeyExtractor.ExtractNodeID(msg.Bytes(), msg.Signature)
 	if err != nil {
 		return fmt.Errorf("%w: cert msg extract key: %v", errMalformedData, err.Error())
 	}
-	nid := types.BytesToNodeID(pubkey)
-	valid, err := oracle.Validate(ctx, msg.LayerID, eligibility.CertifyRound, committeeSize, nid, msg.Proof, msg.EligibilityCnt)
+	valid, err := c.oracle.Validate(ctx, msg.LayerID, eligibility.CertifyRound, c.cfg.CommitteeSize, nodeId, msg.Proof, msg.EligibilityCnt)
 	if err != nil {
 		logger.With().Warning("failed to validate cert msg", log.Err(err))
 		return err
 	}
 	if !valid {
-		logger.With().Warning("oracle deemed cert msg invalid", log.Stringer("smesher", nid))
+		logger.With().Warning("oracle deemed cert msg invalid", log.Stringer("smesher", nodeId))
 		return errInvalidCertMsg
 	}
 	return nil

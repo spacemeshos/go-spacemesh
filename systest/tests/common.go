@@ -70,8 +70,21 @@ func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.Sugar
 				)
 			}
 			for j := 0; j < batch; j++ {
-				if err := submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), client); err != nil {
-					return false, fmt.Errorf("spend failed %s %w", client.Name, err)
+				// in case spawn isn't executed on this particular client
+				retries := 3
+				spendClient := client
+				for k := 0; k < retries; k++ {
+					err = submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), spendClient)
+					if err == nil {
+						break
+					}
+					if logger != nil {
+						logger.Warnw("failed to spend", "client", spendClient.Name, "err", err.Error())
+					}
+					spendClient = cl.Client((i + k + 1) % cl.Total())
+				}
+				if err != nil {
+					return false, fmt.Errorf("spend failed %s %w", spendClient.Name, err)
 				}
 			}
 			return true, nil
@@ -295,7 +308,7 @@ func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, cli
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	_, err := submitTransaction(ctx,
-		wallet.SelfSpawn(cluster.Private(account), types.Nonce{}, sdk.WithGenesisID(cluster.GenesisID())),
+		wallet.SelfSpawn(cluster.Private(account), 0, sdk.WithGenesisID(cluster.GenesisID())),
 		client)
 	return err
 }
@@ -306,7 +319,7 @@ func submitSpend(ctx context.Context, cluster *cluster.Cluster, account int, rec
 	_, err := submitTransaction(ctx,
 		wallet.Spend(
 			cluster.Private(account), receiver, amount,
-			types.Nonce{Counter: nonce},
+			nonce,
 			sdk.WithGenesisID(cluster.GenesisID()),
 		),
 		client)

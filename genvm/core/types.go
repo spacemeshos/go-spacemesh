@@ -10,7 +10,7 @@ const (
 	// MethodSpawn ...
 	MethodSpawn = 0
 	// MethodSpend ...
-	MethodSpend = 1
+	MethodSpend = 16
 )
 
 type (
@@ -83,6 +83,7 @@ type AccountUpdater interface {
 type ParseOutput struct {
 	Nonce    Nonce
 	GasPrice uint64
+	BaseGas  uint64
 	FixedGas uint64
 }
 

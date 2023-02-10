@@ -2,6 +2,7 @@ package proposals
 
 import (
 	"math/big"
+	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	putil "github.com/spacemeshos/go-spacemesh/proposals/util"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -19,9 +21,12 @@ import (
 
 func TestComputeWeightPerEligibility(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
-	signer := genSigner()
+	signer, err := signing.NewEdSigner(
+		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
+	)
+	require.NoError(t, err)
 	beacon := types.Beacon{1, 1, 1}
-	blts := createBallots(t, signer, signer.VRFSigner(), genActiveSet(), beacon)
+	blts := createBallots(t, signer, genActiveSet(), beacon)
 	rb := blts[0]
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	require.NoError(t, ballots.Add(cdb, rb))
@@ -35,13 +40,15 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 		atx.SetID(&id)
 		atx.SetNodeID(&types.NodeID{})
 		if id == rb.AtxID {
-			nodeID := types.BytesToNodeID(signer.PublicKey().Bytes())
+			nodeID := signer.NodeID()
 			atx.SetNodeID(&nodeID)
 			atx.NumUnits = testedATXUnit
 		}
+		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
-		require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+		require.NoError(t, atxs.Add(cdb, vAtx))
 	}
 	expectedWeight := big.NewRat(int64(testedATXUnit), int64(eligibleSlots))
 	for _, b := range blts {
@@ -54,9 +61,12 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 
 func TestComputeWeightPerEligibility_EmptyRefBallotID(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
-	signer := genSigner()
+	signer, err := signing.NewEdSigner(
+		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
+	)
+	require.NoError(t, err)
 	beacon := types.Beacon{1, 1, 1}
-	blts := createBallots(t, signer, signer.VRFSigner(), genActiveSet(), beacon)
+	blts := createBallots(t, signer, genActiveSet(), beacon)
 	require.GreaterOrEqual(t, 2, len(blts))
 	b := blts[1]
 	b.RefBallot = types.EmptyBallotID
@@ -68,9 +78,12 @@ func TestComputeWeightPerEligibility_EmptyRefBallotID(t *testing.T) {
 
 func TestComputeWeightPerEligibility_FailToGetRefBallot(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
-	signer := genSigner()
+	signer, err := signing.NewEdSigner(
+		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
+	)
+	require.NoError(t, err)
 	beacon := types.Beacon{1, 1, 1}
-	blts := createBallots(t, signer, signer.VRFSigner(), genActiveSet(), beacon)
+	blts := createBallots(t, signer, genActiveSet(), beacon)
 	require.GreaterOrEqual(t, 2, len(blts))
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	got, err := ComputeWeightPerEligibility(cdb, blts[1], layerAvgSize, layersPerEpoch)
@@ -81,9 +94,12 @@ func TestComputeWeightPerEligibility_FailToGetRefBallot(t *testing.T) {
 
 func TestComputeWeightPerEligibility_FailATX(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
-	signer := genSigner()
+	signer, err := signing.NewEdSigner(
+		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
+	)
+	require.NoError(t, err)
 	beacon := types.Beacon{1, 1, 1}
-	blts := createBallots(t, signer, signer.VRFSigner(), genActiveSet(), beacon)
+	blts := createBallots(t, signer, genActiveSet(), beacon)
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	got, err := ComputeWeightPerEligibility(cdb, blts[0], layerAvgSize, layersPerEpoch)
 	require.ErrorIs(t, err, sql.ErrNotFound)

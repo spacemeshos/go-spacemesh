@@ -7,10 +7,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
+//go:generate mockgen -package=proposals -destination=./mocks.go -source=./interface.go
 
 type meshProvider interface {
-	AddBallot(context.Context, *types.Ballot) error
+	AddBallot(context.Context, *types.Ballot) (*types.MalfeasanceProof, error)
 	AddTXsFromProposal(context.Context, types.LayerID, types.ProposalID, []types.TransactionID) error
 }
 
@@ -21,4 +21,12 @@ type eligibilityValidator interface {
 type ballotDecoder interface {
 	DecodeBallot(*types.Ballot) (*tortoise.DecodedBallot, error)
 	StoreBallot(*tortoise.DecodedBallot) error
+}
+
+type vrfVerifier interface {
+	Verify(types.NodeID, []byte, []byte) bool
+}
+
+type nonceFetcher interface {
+	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
 }

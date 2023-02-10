@@ -28,8 +28,8 @@ func testnet() config.Config {
 	conf.HARE.LimitConcurrent = 5
 	conf.HARE.LimitIterations = 10
 	conf.HARE.F = 399
-	conf.HARE.RoundDuration = 10
-	conf.HARE.WakeupDelta = 10
+	conf.HARE.RoundDuration = 10 * time.Second
+	conf.HARE.WakeupDelta = 10 * time.Second
 
 	conf.P2P.TargetOutbound = 10
 
@@ -45,7 +45,7 @@ func testnet() config.Config {
 	}
 
 	conf.LayerAvgSize = 50
-	conf.LayerDurationSec = 120
+	conf.LayerDuration = 120 * time.Second
 	conf.LayersPerEpoch = 60
 	conf.SyncRequestTimeout = 60_000
 
@@ -59,7 +59,6 @@ func testnet() config.Config {
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
 	conf.SMESHING.Opts.ComputeProviderID = 1
-	conf.SMESHING.Opts.NumFiles = 1
 	conf.SMESHING.Opts.NumUnits = 2
 	conf.SMESHING.Opts.Throttle = true
 
@@ -67,7 +66,7 @@ func testnet() config.Config {
 	conf.Beacon.GracePeriodDuration = 10 * time.Second
 	conf.Beacon.ProposalDuration = 30 * time.Second
 	conf.Beacon.RoundsNumber = 6
-	conf.Beacon.BeaconSyncNumBallots = 30
+	conf.Beacon.BeaconSyncWeightUnits = 30
 	conf.Beacon.VotesLimit = 100
 	conf.Beacon.VotingRoundDuration = 50 * time.Second
 	conf.Beacon.WeakCoinRoundDuration = 10 * time.Second

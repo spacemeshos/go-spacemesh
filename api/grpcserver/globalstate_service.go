@@ -60,7 +60,7 @@ func (s GlobalStateService) getAccount(addr types.Address) (acct *pb.Account, er
 	return &pb.Account{
 		AccountId: &pb.AccountId{Address: addr.String()},
 		StateCurrent: &pb.AccountState{
-			Counter: counterActual.Counter,
+			Counter: counterActual,
 			Balance: &pb.Amount{Value: balanceActual},
 		},
 		StateProjected: &pb.AccountState{
@@ -220,20 +220,20 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 
 	// Subscribe to the various streams
 	var (
-		accountCh      <-chan any
-		rewardsCh      <-chan any
+		accountCh      <-chan events.Account
+		rewardsCh      <-chan events.Reward
 		receiptsCh     <-chan any
 		accountBufFull <-chan struct{}
 		rewardsBufFull <-chan struct{}
 	)
 	if filterAccount {
 		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
-			accountCh, accountBufFull = consumeEvents(stream.Context(), accountSubscription)
+			accountCh, accountBufFull = consumeEvents[events.Account](stream.Context(), accountSubscription)
 		}
 	}
 	if filterReward {
 		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
-			rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription)
+			rewardsCh, rewardsBufFull = consumeEvents[events.Reward](stream.Context(), rewardsSubscription)
 		}
 	}
 	if err := stream.SendHeader(metadata.MD{}); err != nil {
@@ -249,9 +249,8 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			log.Info("rewards buffer is full, shutting down")
 			return status.Error(codes.Canceled, errRewardsBufferFull)
 		case updatedAccountEvent := <-accountCh:
-			updatedAccount := updatedAccountEvent.(events.Account).Address
 			// Apply address filter
-			if updatedAccount == addr {
+			if updatedAccountEvent.Address == addr {
 				// The Reporter service just sends us the account address. We are responsible
 				// for looking up the other required data here. Get the account balance and
 				// nonce.
@@ -268,8 +267,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 				}
 			}
 
-		case rewardEvent := <-rewardsCh:
-			reward := rewardEvent.(events.Reward)
+		case reward := <-rewardsCh:
 			// Apply address filter
 			if reward.Coinbase == addr {
 				resp := &pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Reward{
@@ -348,21 +346,21 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 
 	// Subscribe to the various streams
 	var (
-		accountCh      <-chan any
-		rewardsCh      <-chan any
-		layersCh       <-chan any
+		accountCh      <-chan events.Account
+		rewardsCh      <-chan events.Reward
+		layersCh       <-chan events.LayerUpdate
 		accountBufFull <-chan struct{}
 		rewardsBufFull <-chan struct{}
 		layersBufFull  <-chan struct{}
 	)
 	if filterAccount {
 		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
-			accountCh, accountBufFull = consumeEvents(stream.Context(), accountSubscription)
+			accountCh, accountBufFull = consumeEvents[events.Account](stream.Context(), accountSubscription)
 		}
 	}
 	if filterReward {
 		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
-			rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription)
+			rewardsCh, rewardsBufFull = consumeEvents[events.Reward](stream.Context(), rewardsSubscription)
 		}
 	}
 
@@ -370,7 +368,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		// Whenever new state is applied to the mesh, a new layer is reported.
 		// There is no separate reporting specifically for new state.
 		if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
-			layersCh, layersBufFull = consumeEvents(stream.Context(), layersSubscription)
+			layersCh, layersBufFull = consumeEvents[events.LayerUpdate](stream.Context(), layersSubscription)
 		}
 	}
 
@@ -385,12 +383,11 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		case <-layersBufFull:
 			log.Info("layers buffer is full, shutting down")
 			return status.Error(codes.Canceled, errLayerBufferFull)
-		case updatedAccountEvent := <-accountCh:
-			updatedAccount := updatedAccountEvent.(events.Account).Address
+		case updatedAccount := <-accountCh:
 			// The Reporter service just sends us the account address. We are responsible
 			// for looking up the other required data here. Get the account balance and
 			// nonce.
-			acct, err := s.getAccount(updatedAccount)
+			acct, err := s.getAccount(updatedAccount.Address)
 			if err != nil {
 				log.With().Error("unable to fetch projected account state", log.Err(err))
 				return status.Errorf(codes.Internal, "error fetching projected account data")
@@ -401,9 +398,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(resp); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
-		case rewardEvent := <-rewardsCh:
-			reward := rewardEvent.(events.Reward)
-
+		case reward := <-rewardsCh:
 			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Reward{
 				Reward: &pb.Reward{
 					Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
@@ -418,8 +413,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(resp); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
-		case layerEvent := <-layersCh:
-			layer := layerEvent.(events.LayerUpdate)
+		case layer := <-layersCh:
 			if layer.Status != events.LayerStatusTypeApplied {
 				continue
 			}

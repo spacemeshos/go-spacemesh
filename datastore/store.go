@@ -3,6 +3,7 @@ package datastore
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -11,29 +12,134 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
 const (
-	atxHdrCacheSize = 600
+	atxHdrCacheSize      = 600
+	malfeasanceCacheSize = 1000
 )
 
 // CachedDB is simply a database injected with cache.
 type CachedDB struct {
 	*sql.Database
-	logger      log.Log
-	atxHdrCache AtxCache
+	logger log.Log
+
+	atxHdrCache   *Cache[types.ATXID, types.ActivationTxHeader]
+	vrfNonceCache *Cache[string, types.VRFPostIndex]
+
+	// used to coordinate db update and cache
+	mu               sync.Mutex
+	malfeasanceCache *Cache[types.NodeID, types.MalfeasanceProof]
 }
 
 // NewCachedDB create an instance of a CachedDB.
 func NewCachedDB(db *sql.Database, lg log.Log) *CachedDB {
 	return &CachedDB{
-		Database:    db,
-		logger:      lg,
-		atxHdrCache: NewAtxCache(atxHdrCacheSize),
+		Database:         db,
+		logger:           lg,
+		atxHdrCache:      NewAtxCache(atxHdrCacheSize),
+		malfeasanceCache: NewMalfeasanceCache(malfeasanceCacheSize),
+		vrfNonceCache:    NewVRFNonceCache(atxHdrCacheSize),
 	}
+}
+
+func (db *CachedDB) MalfeasanceCacheSize() int {
+	return db.malfeasanceCache.lru.Len()
+}
+
+// IsMalicious returns true if the NodeID is malicious.
+func (db *CachedDB) IsMalicious(id types.NodeID) (bool, error) {
+	if id == types.EmptyNodeID {
+		log.Fatal("invalid argument to IsMalicious")
+	}
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if proof, ok := db.malfeasanceCache.Get(id); ok {
+		if proof == nil {
+			return false, nil
+		} else {
+			return true, nil
+		}
+	}
+
+	bad, err := identities.IsMalicious(db, id)
+	if err != nil {
+		return false, err
+	}
+	if !bad {
+		db.malfeasanceCache.Add(id, nil)
+	}
+	return bad, nil
+}
+
+// GetMalfeasanceProof gets the malfeasance proof associated with the NodeID.
+func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProof, error) {
+	if id == types.EmptyNodeID {
+		log.Fatal("invalid argument to GetMalfeasanceProof")
+	}
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if proof, ok := db.malfeasanceCache.Get(id); ok {
+		if proof == nil {
+			return nil, sql.ErrNotFound
+		}
+		return proof, nil
+	}
+
+	proof, err := identities.GetMalfeasanceProof(db.Database, id)
+	if err != nil && err != sql.ErrNotFound {
+		return nil, err
+	}
+	db.malfeasanceCache.Add(id, proof)
+	return proof, err
+}
+
+func (db *CachedDB) AddMalfeasanceProof(id types.NodeID, proof *types.MalfeasanceProof, dbtx *sql.Tx) error {
+	if id == types.EmptyNodeID {
+		log.Fatal("invalid argument to AddMalfeasanceProof")
+	}
+
+	encoded, err := codec.Encode(proof)
+	if err != nil {
+		db.logger.Fatal("failed to encode MalfeasanceProof")
+	}
+
+	var exec sql.Executor = db
+	if dbtx != nil {
+		exec = dbtx
+	}
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if err = identities.SetMalicious(exec, id, encoded); err != nil {
+		return err
+	}
+
+	db.malfeasanceCache.Add(id, proof)
+	return nil
+}
+
+// VRFNonce returns the VRF nonce of for the given node in the given epoch. This function is thread safe and will return an error if the
+// nonce is not found in the ATX DB.
+func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
+	key := fmt.Sprintf("%s-%s", id, epoch)
+	if nonce, ok := db.vrfNonceCache.Get(key); ok {
+		return *nonce, nil
+	}
+
+	nonce, err := atxs.VRFNonce(db, id, epoch)
+	if err != nil {
+		return types.VRFPostIndex(0), err
+	}
+
+	db.vrfNonceCache.Add(key, &nonce)
+	return nonce, nil
 }
 
 // GetAtxHeader returns the ATX header by the given ID. This function is thread safe and will return an error if the ID
@@ -115,11 +221,10 @@ func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types
 	return nil
 }
 
-// GetPrevAtx gets the last atx header of specified node Id, it returns error if no previous atx found or if no
-// AtxHeader struct in db.
-func (db *CachedDB) GetPrevAtx(nodeID types.NodeID) (*types.ActivationTxHeader, error) {
+// GetLastAtx gets the last atx header of specified node ID.
+func (db *CachedDB) GetLastAtx(nodeID types.NodeID) (*types.ActivationTxHeader, error) {
 	if atxid, err := atxs.GetLastIDByNodeID(db, nodeID); err != nil {
-		return nil, fmt.Errorf("no prev atx found: %v", err)
+		return nil, fmt.Errorf("no prev atx found: %w", err)
 	} else if atx, err := db.GetAtxHeader(atxid); err != nil {
 		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
 	} else {
@@ -127,17 +232,41 @@ func (db *CachedDB) GetPrevAtx(nodeID types.NodeID) (*types.ActivationTxHeader, 
 	}
 }
 
+// GetEpochAtx gets the atx header of specified node ID in the specified epoch.
+func (db *CachedDB) GetEpochAtx(epoch types.EpochID, nodeID types.NodeID) (*types.ActivationTxHeader, error) {
+	vatx, err := atxs.GetByEpochAndNodeID(db, epoch, nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("no epoch atx found: %w", err)
+	}
+	hdr := getHeader(vatx)
+	db.atxHdrCache.Add(vatx.ID(), hdr)
+	return hdr, nil
+}
+
+// IdentityExists returns true if this NodeID has published any ATX.
+func (db *CachedDB) IdentityExists(nodeID types.NodeID) (bool, error) {
+	_, err := atxs.GetLastIDByNodeID(db, nodeID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // Hint marks which DB should be queried for a certain provided hash.
 type Hint string
 
 // DB hints per DB.
 const (
-	BallotDB   Hint = "ballotDB"
-	BlockDB    Hint = "blocksDB"
-	ProposalDB Hint = "proposalDB"
-	ATXDB      Hint = "ATXDB"
-	TXDB       Hint = "TXDB"
-	POETDB     Hint = "POETDB"
+	BallotDB    Hint = "ballotDB"
+	BlockDB     Hint = "blocksDB"
+	ProposalDB  Hint = "proposalDB"
+	ATXDB       Hint = "ATXDB"
+	TXDB        Hint = "TXDB"
+	POETDB      Hint = "POETDB"
+	Malfeasance Hint = "malfeasance"
 )
 
 // NewBlobStore returns a BlobStore.
@@ -183,15 +312,20 @@ func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
 		return transactions.GetBlob(bs.DB, key)
 	case POETDB:
 		return poets.Get(bs.DB, key)
+	case Malfeasance:
+		return identities.GetMalfeasanceBlob(bs.DB, key)
 	}
 	return nil, fmt.Errorf("blob store not found %s", hint)
 }
 
 func getHeader(vatx *types.VerifiedActivationTx) *types.ActivationTxHeader {
 	return &types.ActivationTxHeader{
-		NIPostChallenge: vatx.NIPostChallenge,
-		Coinbase:        vatx.Coinbase,
-		NumUnits:        vatx.NumUnits,
+		NIPostChallenge:   vatx.NIPostChallenge,
+		Coinbase:          vatx.Coinbase,
+		NumUnits:          vatx.NumUnits,
+		EffectiveNumUnits: vatx.EffectiveNumUnits(),
+		VRFNonce:          vatx.VRFNonce,
+		Received:          vatx.Received(),
 
 		ID:     vatx.ID(),
 		NodeID: vatx.NodeID(),

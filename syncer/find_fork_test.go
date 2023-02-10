@@ -10,9 +10,11 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -28,22 +30,22 @@ type testForkFinder struct {
 }
 
 func newTestForkFinder(t *testing.T, maxHashes uint32) *testForkFinder {
-	return newTestForkFinderWithDuration(t, maxHashes, time.Hour)
+	return newTestForkFinderWithDuration(t, maxHashes, time.Hour, logtest.New(t))
 }
 
-func newTestForkFinderWithDuration(t *testing.T, maxHashes uint32, d time.Duration) *testForkFinder {
+func newTestForkFinderWithDuration(t *testing.T, maxHashes uint32, d time.Duration, lg log.Log) *testForkFinder {
 	mf := mocks.NewMockfetcher(gomock.NewController(t))
 	db := sql.InMemory()
-	require.NoError(t, layers.SetHashes(db, types.GetEffectiveGenesis(), types.RandomHash(), types.RandomHash()))
+	require.NoError(t, layers.SetMeshHash(db, types.GetEffectiveGenesis(), types.RandomHash()))
 	return &testForkFinder{
-		ForkFinder: syncer.NewForkFinder(logtest.New(t), db, mf, maxHashes, d),
+		ForkFinder: syncer.NewForkFinder(lg, db, mf, maxHashes, d),
 		db:         db,
 		mFetcher:   mf,
 	}
 }
 
 func TestResynced(t *testing.T) {
-	tf := newTestForkFinderWithDuration(t, 5, 0)
+	tf := newTestForkFinderWithDuration(t, 5, 0, logtest.New(t))
 	lid := types.NewLayerID(11)
 	hash := types.RandomHash()
 	require.True(t, tf.NeedResync(lid, hash))
@@ -90,9 +92,9 @@ func storeNodeHashes(t *testing.T, db *sql.Database, peerHashes []types.Hash32, 
 	for i, hash := range peerHashes {
 		lid := types.NewLayerID(uint32(i))
 		if lid.Before(diverge) {
-			require.NoError(t, layers.SetHashes(db, lid, types.Hash32{}, hash))
+			require.NoError(t, layers.SetMeshHash(db, lid, hash))
 		} else {
-			require.NoError(t, layers.SetHashes(db, lid, types.Hash32{}, types.RandomHash()))
+			require.NoError(t, layers.SetMeshHash(db, lid, types.RandomHash()))
 		}
 	}
 }
@@ -135,7 +137,7 @@ func TestForkFinder_FindFork_Permutation(t *testing.T) {
 	maxLid := types.NewLayerID(max)
 	for maxHashes := uint32(30); maxHashes >= 5; maxHashes -= 3 {
 		for lid := maxLid; lid.After(expected); lid = lid.Sub(1) {
-			tf := newTestForkFinder(t, maxHashes)
+			tf := newTestForkFinderWithDuration(t, maxHashes, time.Hour, logtest.New(t, zapcore.DebugLevel))
 			storeNodeHashes(t, tf.db, peerHashes, types.NewLayerID(diverge))
 			tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
 				func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
@@ -159,7 +161,7 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 		t.Parallel()
 
 		tf := newTestForkFinder(t, maxHashes)
-		require.NoError(t, layers.SetHashes(tf.db, lastAgreedLid, types.RandomHash(), lastAgreedHash))
+		require.NoError(t, layers.SetMeshHash(tf.db, lastAgreedLid, lastAgreedHash))
 		tf.UpdateAgreement(peer, lastAgreedLid, lastAgreedHash, time.Now())
 		tf.UpdateAgreement("shorty", types.NewLayerID(111), types.RandomHash(), time.Now())
 		require.Equal(t, tf.NumPeersCached(), 2)
@@ -181,7 +183,7 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 		t.Parallel()
 
 		tf := newTestForkFinder(t, maxHashes)
-		require.NoError(t, layers.SetHashes(tf.db, lastAgreedLid, types.RandomHash(), lastAgreedHash))
+		require.NoError(t, layers.SetMeshHash(tf.db, lastAgreedLid, lastAgreedHash))
 		tf.UpdateAgreement(peer, lastAgreedLid, lastAgreedHash, time.Now())
 		tf.UpdateAgreement("shorty", types.NewLayerID(111), types.RandomHash(), time.Now())
 		require.Equal(t, tf.NumPeersCached(), 2)
@@ -195,7 +197,7 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 				}
 				// changes the node's own hash for lastAgreedLid
 				for _, lid := range mh.Layers {
-					require.NoError(t, layers.SetHashes(tf.db, lid, types.RandomHash(), types.RandomHash()))
+					require.NoError(t, layers.SetMeshHash(tf.db, lid, types.RandomHash()))
 				}
 				return mh, nil
 			})

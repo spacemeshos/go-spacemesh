@@ -13,6 +13,41 @@ import (
 	log "github.com/spacemeshos/go-spacemesh/log"
 )
 
+// MocklayerPatrol is a mock of layerPatrol interface.
+type MocklayerPatrol struct {
+	ctrl     *gomock.Controller
+	recorder *MocklayerPatrolMockRecorder
+}
+
+// MocklayerPatrolMockRecorder is the mock recorder for MocklayerPatrol.
+type MocklayerPatrolMockRecorder struct {
+	mock *MocklayerPatrol
+}
+
+// NewMocklayerPatrol creates a new mock instance.
+func NewMocklayerPatrol(ctrl *gomock.Controller) *MocklayerPatrol {
+	mock := &MocklayerPatrol{ctrl: ctrl}
+	mock.recorder = &MocklayerPatrolMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocklayerPatrol) EXPECT() *MocklayerPatrolMockRecorder {
+	return m.recorder
+}
+
+// CompleteHare mocks base method.
+func (m *MocklayerPatrol) CompleteHare(arg0 types.LayerID) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CompleteHare", arg0)
+}
+
+// CompleteHare indicates an expected call of CompleteHare.
+func (mr *MocklayerPatrolMockRecorder) CompleteHare(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompleteHare", reflect.TypeOf((*MocklayerPatrol)(nil).CompleteHare), arg0)
+}
+
 // MockmeshProvider is a mock of meshProvider interface.
 type MockmeshProvider struct {
 	ctrl     *gomock.Controller
@@ -51,55 +86,55 @@ func (mr *MockmeshProviderMockRecorder) AddBlockWithTXs(arg0, arg1 interface{}) 
 }
 
 // ProcessLayerPerHareOutput mocks base method.
-func (m *MockmeshProvider) ProcessLayerPerHareOutput(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID) error {
+func (m *MockmeshProvider) ProcessLayerPerHareOutput(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID, arg3 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ProcessLayerPerHareOutput", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "ProcessLayerPerHareOutput", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ProcessLayerPerHareOutput indicates an expected call of ProcessLayerPerHareOutput.
-func (mr *MockmeshProviderMockRecorder) ProcessLayerPerHareOutput(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockmeshProviderMockRecorder) ProcessLayerPerHareOutput(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessLayerPerHareOutput", reflect.TypeOf((*MockmeshProvider)(nil).ProcessLayerPerHareOutput), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessLayerPerHareOutput", reflect.TypeOf((*MockmeshProvider)(nil).ProcessLayerPerHareOutput), arg0, arg1, arg2, arg3)
 }
 
-// MockconservativeState is a mock of conservativeState interface.
-type MockconservativeState struct {
+// Mockexecutor is a mock of executor interface.
+type Mockexecutor struct {
 	ctrl     *gomock.Controller
-	recorder *MockconservativeStateMockRecorder
+	recorder *MockexecutorMockRecorder
 }
 
-// MockconservativeStateMockRecorder is the mock recorder for MockconservativeState.
-type MockconservativeStateMockRecorder struct {
-	mock *MockconservativeState
+// MockexecutorMockRecorder is the mock recorder for Mockexecutor.
+type MockexecutorMockRecorder struct {
+	mock *Mockexecutor
 }
 
-// NewMockconservativeState creates a new mock instance.
-func NewMockconservativeState(ctrl *gomock.Controller) *MockconservativeState {
-	mock := &MockconservativeState{ctrl: ctrl}
-	mock.recorder = &MockconservativeStateMockRecorder{mock}
+// NewMockexecutor creates a new mock instance.
+func NewMockexecutor(ctrl *gomock.Controller) *Mockexecutor {
+	mock := &Mockexecutor{ctrl: ctrl}
+	mock.recorder = &MockexecutorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
+func (m *Mockexecutor) EXPECT() *MockexecutorMockRecorder {
 	return m.recorder
 }
 
-// SelectBlockTXs mocks base method.
-func (m *MockconservativeState) SelectBlockTXs(arg0 types.LayerID, arg1 []*types.Proposal) ([]types.TransactionID, error) {
+// ExecuteOptimistic mocks base method.
+func (m *Mockexecutor) ExecuteOptimistic(arg0 context.Context, arg1 types.LayerID, arg2 uint64, arg3 []types.AnyReward, arg4 []types.TransactionID) (*types.Block, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SelectBlockTXs", arg0, arg1)
-	ret0, _ := ret[0].([]types.TransactionID)
+	ret := m.ctrl.Call(m, "ExecuteOptimistic", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(*types.Block)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// SelectBlockTXs indicates an expected call of SelectBlockTXs.
-func (mr *MockconservativeStateMockRecorder) SelectBlockTXs(arg0, arg1 interface{}) *gomock.Call {
+// ExecuteOptimistic indicates an expected call of ExecuteOptimistic.
+func (mr *MockexecutorMockRecorder) ExecuteOptimistic(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectBlockTXs", reflect.TypeOf((*MockconservativeState)(nil).SelectBlockTXs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteOptimistic", reflect.TypeOf((*Mockexecutor)(nil).ExecuteOptimistic), arg0, arg1, arg2, arg3, arg4)
 }
 
 // MocklayerClock is a mock of layerClock interface.
@@ -139,18 +174,18 @@ func (mr *MocklayerClockMockRecorder) AwaitLayer(layerID interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AwaitLayer", reflect.TypeOf((*MocklayerClock)(nil).AwaitLayer), layerID)
 }
 
-// GetCurrentLayer mocks base method.
-func (m *MocklayerClock) GetCurrentLayer() types.LayerID {
+// CurrentLayer mocks base method.
+func (m *MocklayerClock) CurrentLayer() types.LayerID {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCurrentLayer")
+	ret := m.ctrl.Call(m, "CurrentLayer")
 	ret0, _ := ret[0].(types.LayerID)
 	return ret0
 }
 
-// GetCurrentLayer indicates an expected call of GetCurrentLayer.
-func (mr *MocklayerClockMockRecorder) GetCurrentLayer() *gomock.Call {
+// CurrentLayer indicates an expected call of CurrentLayer.
+func (mr *MocklayerClockMockRecorder) CurrentLayer() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentLayer", reflect.TypeOf((*MocklayerClock)(nil).GetCurrentLayer))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentLayer", reflect.TypeOf((*MocklayerClock)(nil).CurrentLayer))
 }
 
 // Mockcertifier is a mock of certifier interface.
@@ -202,4 +237,42 @@ func (m *Mockcertifier) RegisterForCert(arg0 context.Context, arg1 types.LayerID
 func (mr *MockcertifierMockRecorder) RegisterForCert(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterForCert", reflect.TypeOf((*Mockcertifier)(nil).RegisterForCert), arg0, arg1, arg2)
+}
+
+// MocknonceFetcher is a mock of nonceFetcher interface.
+type MocknonceFetcher struct {
+	ctrl     *gomock.Controller
+	recorder *MocknonceFetcherMockRecorder
+}
+
+// MocknonceFetcherMockRecorder is the mock recorder for MocknonceFetcher.
+type MocknonceFetcherMockRecorder struct {
+	mock *MocknonceFetcher
+}
+
+// NewMocknonceFetcher creates a new mock instance.
+func NewMocknonceFetcher(ctrl *gomock.Controller) *MocknonceFetcher {
+	mock := &MocknonceFetcher{ctrl: ctrl}
+	mock.recorder = &MocknonceFetcherMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocknonceFetcher) EXPECT() *MocknonceFetcherMockRecorder {
+	return m.recorder
+}
+
+// VRFNonce mocks base method.
+func (m *MocknonceFetcher) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (types.VRFPostIndex, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VRFNonce", arg0, arg1)
+	ret0, _ := ret[0].(types.VRFPostIndex)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// VRFNonce indicates an expected call of VRFNonce.
+func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknonceFetcher)(nil).VRFNonce), arg0, arg1)
 }

@@ -44,9 +44,9 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.Genesis.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
 	cmd.PersistentFlags().StringVar(&cfg.Genesis.ExtraData, "genesis-extra-data",
 		cfg.Genesis.ExtraData, "genesis extra-data will be committed to the genesis id")
-	cmd.PersistentFlags().IntVar(&cfg.LayerDurationSec, "layer-duration-sec",
-		cfg.LayerDurationSec, "Duration between layers in seconds")
-	cmd.PersistentFlags().IntVar(&cfg.LayerAvgSize, "layer-average-size",
+	cmd.PersistentFlags().DurationVar(&cfg.LayerDuration, "layer-duration",
+		cfg.LayerDuration, "Duration between layers in seconds")
+	cmd.PersistentFlags().Uint32Var(&cfg.LayerAvgSize, "layer-average-size",
 		cfg.LayerAvgSize, "Layer Avg size")
 	cmd.PersistentFlags().BoolVar(&cfg.PprofHTTPServer, "pprof-server",
 		cfg.PprofHTTPServer, "enable http pprof server")
@@ -87,6 +87,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.P2P.TargetOutbound, "target outbound connections")
 	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.Bootnodes, "bootnodes",
 		cfg.P2P.Bootnodes, "entrypoints into the network")
+	cmd.PersistentFlags().StringVar(&cfg.P2P.AdvertiseAddress, "advertise-address",
+		cfg.P2P.AdvertiseAddress, "libp2p address with identity (example: /dns4/bootnode.spacemesh.io/tcp/5003)")
 
 	/** ======================== TIME Flags ========================== **/
 
@@ -134,9 +136,9 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&cfg.HARE.F, "hare-max-adversaries",
 		cfg.HARE.F, "Max number of adversaries in the Hare committee")
 	// RoundDuration determines the duration of a round in the Hare protocol
-	cmd.PersistentFlags().IntVar(&cfg.HARE.RoundDuration, "hare-round-duration-sec",
+	cmd.PersistentFlags().DurationVar(&cfg.HARE.RoundDuration, "hare-round-duration",
 		cfg.HARE.RoundDuration, "Duration of round in the Hare protocol")
-	cmd.PersistentFlags().IntVar(&cfg.HARE.WakeupDelta, "hare-wakeup-delta",
+	cmd.PersistentFlags().DurationVar(&cfg.HARE.WakeupDelta, "hare-wakeup-delta",
 		cfg.HARE.WakeupDelta, "Wakeup delta after tick for hare protocol")
 	cmd.PersistentFlags().IntVar(&cfg.HARE.ExpectedLeaders, "hare-exp-leaders",
 		cfg.HARE.ExpectedLeaders, "The expected number of leaders in the hare protocol")
@@ -154,7 +156,7 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**======================== Beacon Flags ========================== **/
 
-	cmd.PersistentFlags().Uint64Var(&cfg.Beacon.Kappa, "beacon-kappa",
+	cmd.PersistentFlags().IntVar(&cfg.Beacon.Kappa, "beacon-kappa",
 		cfg.Beacon.Kappa, "Security parameter (for calculating ATX threshold)")
 	cmd.PersistentFlags().Var((*types.RatVar)(cfg.Beacon.Q), "beacon-q",
 		"Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.")
@@ -174,8 +176,8 @@ func AddCommands(cmd *cobra.Command) {
 		"Ratio of votes for reaching consensus")
 	cmd.PersistentFlags().Uint32Var(&cfg.Beacon.VotesLimit, "beacon-votes-limit",
 		cfg.Beacon.VotesLimit, "Maximum allowed number of votes to be sent")
-	cmd.PersistentFlags().Uint32Var(&cfg.Beacon.BeaconSyncNumBallots, "beacon-sync-num-blocks",
-		cfg.Beacon.BeaconSyncNumBallots, "Numbers of blocks to wait before determining beacon values from them.")
+	cmd.PersistentFlags().IntVar(&cfg.Beacon.BeaconSyncWeightUnits, "beacon-sync-weight-units",
+		cfg.Beacon.BeaconSyncWeightUnits, "Numbers of weight units to wait before determining beacon values from them.")
 
 	/**======================== Tortoise Flags ========================== **/
 	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.Hdist, "tortoise-hdist",
@@ -208,8 +210,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.SMESHING.Opts.DataDir, "")
 	cmd.PersistentFlags().Uint32Var(&cfg.SMESHING.Opts.NumUnits, "smeshing-opts-numunits",
 		cfg.SMESHING.Opts.NumUnits, "")
-	cmd.PersistentFlags().Uint32Var(&cfg.SMESHING.Opts.NumFiles, "smeshing-opts-numfiles",
-		cfg.SMESHING.Opts.NumFiles, "")
+	cmd.PersistentFlags().Uint64Var(&cfg.SMESHING.Opts.MaxFileSize, "smeshing-opts-maxfilesize",
+		cfg.SMESHING.Opts.MaxFileSize, "")
 	cmd.PersistentFlags().IntVar(&cfg.SMESHING.Opts.ComputeProviderID, "smeshing-opts-provider",
 		cfg.SMESHING.Opts.ComputeProviderID, "")
 	cmd.PersistentFlags().BoolVar(&cfg.SMESHING.Opts.Throttle, "smeshing-opts-throttle",
