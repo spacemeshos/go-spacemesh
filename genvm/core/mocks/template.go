@@ -51,7 +51,7 @@ func (mr *MockTemplateMockRecorder) EncodeScale(arg0 interface{}) *gomock.Call {
 }
 
 // MaxSpend mocks base method.
-func (m *MockTemplate) MaxSpend(arg0 byte, arg1 interface{}) (uint64, error) {
+func (m *MockTemplate) MaxSpend(arg0 uint16, arg1 interface{}) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MaxSpend", arg0, arg1)
 	ret0, _ := ret[0].(uint64)
