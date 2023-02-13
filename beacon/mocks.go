@@ -10,7 +10,6 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-	weakcoin "github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	pubsub "github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -65,11 +64,12 @@ func (mr *MockcoinMockRecorder) FinishRound(arg0 interface{}) *gomock.Call {
 }
 
 // Get mocks base method.
-func (m *Mockcoin) Get(arg0 context.Context, arg1 types.EpochID, arg2 types.RoundID) bool {
+func (m *Mockcoin) Get(arg0 context.Context, arg1 types.EpochID, arg2 types.RoundID) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Get indicates an expected call of Get.
@@ -93,15 +93,15 @@ func (mr *MockcoinMockRecorder) HandleProposal(arg0, arg1, arg2 interface{}) *go
 }
 
 // StartEpoch mocks base method.
-func (m *Mockcoin) StartEpoch(arg0 context.Context, arg1 types.EpochID, arg2 weakcoin.UnitAllowances) {
+func (m *Mockcoin) StartEpoch(arg0 context.Context, arg1 types.EpochID) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "StartEpoch", arg0, arg1, arg2)
+	m.ctrl.Call(m, "StartEpoch", arg0, arg1)
 }
 
 // StartEpoch indicates an expected call of StartEpoch.
-func (mr *MockcoinMockRecorder) StartEpoch(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockcoinMockRecorder) StartEpoch(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartEpoch", reflect.TypeOf((*Mockcoin)(nil).StartEpoch), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartEpoch", reflect.TypeOf((*Mockcoin)(nil).StartEpoch), arg0, arg1)
 }
 
 // StartRound mocks base method.
@@ -141,18 +141,32 @@ func (m *MockeligibilityChecker) EXPECT() *MockeligibilityCheckerMockRecorder {
 	return m.recorder
 }
 
-// IsProposalEligible mocks base method.
-func (m *MockeligibilityChecker) IsProposalEligible(arg0 []byte) bool {
+// PassStrictThreshold mocks base method.
+func (m *MockeligibilityChecker) PassStrictThreshold(arg0 []byte) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsProposalEligible", arg0)
+	ret := m.ctrl.Call(m, "PassStrictThreshold", arg0)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
-// IsProposalEligible indicates an expected call of IsProposalEligible.
-func (mr *MockeligibilityCheckerMockRecorder) IsProposalEligible(arg0 interface{}) *gomock.Call {
+// PassStrictThreshold indicates an expected call of PassStrictThreshold.
+func (mr *MockeligibilityCheckerMockRecorder) PassStrictThreshold(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsProposalEligible", reflect.TypeOf((*MockeligibilityChecker)(nil).IsProposalEligible), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PassStrictThreshold", reflect.TypeOf((*MockeligibilityChecker)(nil).PassStrictThreshold), arg0)
+}
+
+// PassThreshold mocks base method.
+func (m *MockeligibilityChecker) PassThreshold(arg0 []byte) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PassThreshold", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// PassThreshold indicates an expected call of PassThreshold.
+func (mr *MockeligibilityCheckerMockRecorder) PassThreshold(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PassThreshold", reflect.TypeOf((*MockeligibilityChecker)(nil).PassThreshold), arg0)
 }
 
 // MocklayerClock is a mock of layerClock interface.

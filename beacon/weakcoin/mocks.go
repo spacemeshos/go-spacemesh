@@ -151,3 +151,40 @@ func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 interface{}) *gomock
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknonceFetcher)(nil).VRFNonce), arg0, arg1)
 }
+
+// Mockallowance is a mock of allowance interface.
+type Mockallowance struct {
+	ctrl     *gomock.Controller
+	recorder *MockallowanceMockRecorder
+}
+
+// MockallowanceMockRecorder is the mock recorder for Mockallowance.
+type MockallowanceMockRecorder struct {
+	mock *Mockallowance
+}
+
+// NewMockallowance creates a new mock instance.
+func NewMockallowance(ctrl *gomock.Controller) *Mockallowance {
+	mock := &Mockallowance{ctrl: ctrl}
+	mock.recorder = &MockallowanceMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockallowance) EXPECT() *MockallowanceMockRecorder {
+	return m.recorder
+}
+
+// MinerAllowance mocks base method.
+func (m *Mockallowance) MinerAllowance(arg0 types.EpochID, arg1 []byte) uint32 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MinerAllowance", arg0, arg1)
+	ret0, _ := ret[0].(uint32)
+	return ret0
+}
+
+// MinerAllowance indicates an expected call of MinerAllowance.
+func (mr *MockallowanceMockRecorder) MinerAllowance(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MinerAllowance", reflect.TypeOf((*Mockallowance)(nil).MinerAllowance), arg0, arg1)
+}

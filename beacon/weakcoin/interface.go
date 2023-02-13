@@ -20,3 +20,7 @@ type vrfVerifier interface {
 type nonceFetcher interface {
 	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
 }
+
+type allowance interface {
+	MinerAllowance(types.EpochID, []byte) uint32
+}
