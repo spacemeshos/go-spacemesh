@@ -176,13 +176,13 @@ You specify these parameters by providing go-spacemesh with a json config file. 
 3. Stop go-spacemesh and start it with the following params:
 
     ```bash
-    ./go-spacemesh --listen [a_multiaddr] --config [configFileLocation] -d [nodeDataFilesPath] --coinbase [coinbase_account] --start-mining --post-datadir [dir_for_post_data]
+    ./go-spacemesh --listen [a_multiaddr] --config [configFileLocation] -d [nodeDataFilesPath] --smeshing-coinbase [coinbase_account] --smeshing-start --smeshing-opts-datadir [dir_for_post_data]
     ```
 
     **Example:**
 
     ```bash
-    ./go-spacemesh --listen /ip4/0.0.0.0/tcp/7513 --config ./tn1.json -d ./sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-datadir ./post_data
+    ./go-spacemesh --listen /ip4/0.0.0.0/tcp/7513 --config ./tn1.json -d ./sm_data --smeshing-coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --smeshing-start --smeshing-opts-datadir ./post_data
     ```
 
 4. Use the CLI wallet to check your coinbase account balance and to transact
