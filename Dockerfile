@@ -34,7 +34,7 @@ ENV NVIDIA_VISIBLE_DEVICES all
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,display
 LABEL com.nvidia.volumes.needed="nvidia_driver"
 
-FROM golang:1.19 as builder
+FROM golang:1.20 as builder
 RUN set -ex \
    && apt-get update --fix-missing \
    && apt-get install -qy --no-install-recommends \
