@@ -547,7 +547,7 @@ func (app *App) initServices(
 		app.Config.TickSize,
 		goldenATXID,
 		validator,
-		[]activation.AtxReceiver{trtl},
+		[]activation.AtxReceiver{trtl, beaconProtocol},
 		app.addLogger(ATXHandlerLogger, lg),
 	)
 
