@@ -121,6 +121,7 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 }
 
 func TestNodesUsingDifferentPoets(t *testing.T) {
+	t.Parallel()
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	if tctx.PoetSize < 2 {
 		t.Skip("Skipping test for using different poets - test configured with less then 2 poets")
