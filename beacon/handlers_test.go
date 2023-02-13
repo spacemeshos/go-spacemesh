@@ -179,6 +179,28 @@ func emptyVoteMargins(plist proposalList) map[string]*big.Int {
 	return vm
 }
 
+func Test_HandleProposal_InitEpoch(t *testing.T) {
+	const epoch = types.EpochID(10)
+	tpd := setUpProtocolDriver(t)
+	tpd.setBeginProtocol(context.Background())
+
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	vrfSigner, err := signer.VRFSigner()
+	require.NoError(t, err)
+	epochStart := time.Now()
+	createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10, epochStart.Add(-1*time.Minute))
+
+	msg := createProposal(t, vrfSigner, epoch, false)
+	msgBytes, err := codec.Encode(msg)
+	require.NoError(t, err)
+
+	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
+	res := tpd.HandleProposal(context.Background(), "peerID", msgBytes)
+	require.Equal(t, pubsub.ValidationAccept, res)
+}
+
 func Test_HandleProposal_Success(t *testing.T) {
 	if util.IsWindows() && util.IsCi() {
 		t.Skip("Skipping test in Windows on CI (https://github.com/spacemeshos/go-spacemesh/issues/3630)")

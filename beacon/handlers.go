@@ -79,12 +79,12 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, log.String("miner_id", m.NodeID.ShortString()))
 	logger.With().Debug("new beacon proposal", log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))))
 
-	mi, err := pd.minerAtxHdr(m.EpochID, m.NodeID.Bytes())
+	st, err := pd.initEpochStateIfNotPresent(logger, m.EpochID)
 	if err != nil {
 		return err
 	}
 
-	st, err := pd.initEpochStateIfNotPresent(logger, m.EpochID)
+	atx, err := pd.minerAtxHdr(m.EpochID, m.NodeID.Bytes())
 	if err != nil {
 		return err
 	}
@@ -93,7 +93,7 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 		return err
 	}
 
-	cat := pd.classifyProposal(logger, m, mi.Received, receivedTime, st.proposalChecker)
+	cat := pd.classifyProposal(logger, m, atx.Received, receivedTime, st.proposalChecker)
 	return pd.addProposal(m, cat)
 }
 

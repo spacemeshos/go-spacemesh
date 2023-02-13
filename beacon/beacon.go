@@ -856,7 +856,7 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 
 			pd.eg.Go(func() error {
 				if err := pd.weakCoin.StartRound(ctx, round, nonce); err != nil {
-					rLogger.With().Error("failed to start weak coin proposal", log.Err(err))
+					rLogger.With().Error("failed to start weak coin", log.Err(err))
 				}
 				return nil
 			})

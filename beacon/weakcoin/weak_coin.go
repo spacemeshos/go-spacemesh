@@ -282,7 +282,9 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, no
 		// another epoch/round was started concurrently
 		return nil
 	}
-	_ = wc.updateSmallest(ctx, smallest)
+	if err := wc.updateSmallest(ctx, smallest); err != nil && !errors.Is(err, errNotSmallest) {
+		return err
+	}
 	return nil
 }
 
