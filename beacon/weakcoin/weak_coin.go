@@ -15,7 +15,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
-var errNotGenerated = errors.New("weakcoin not generated")
+var (
+	errNotGenerated = errors.New("weakcoin not generated")
+	errNotSmallest  = errors.New("proposal not smallest")
+)
 
 func defaultConfig() config {
 	return config{
@@ -218,8 +221,7 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d (allowed %d)", message.MinerPK, message.Unit, allowance)
 	}
 
-	wc.updateSmallest(ctx, message.VrfSignature)
-	return nil
+	return wc.updateSmallest(ctx, message.VrfSignature)
 }
 
 func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) ([]byte, []byte) {
@@ -280,7 +282,7 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, no
 		// another epoch/round was started concurrently
 		return nil
 	}
-	wc.updateSmallest(ctx, smallest)
+	_ = wc.updateSmallest(ctx, smallest)
 	return nil
 }
 
@@ -311,7 +313,7 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 	wc.smallestProposal = nil
 }
 
-func (wc *WeakCoin) updateSmallest(ctx context.Context, proposal []byte) {
+func (wc *WeakCoin) updateSmallest(ctx context.Context, proposal []byte) error {
 	if len(proposal) > 0 && (bytes.Compare(proposal, wc.smallestProposal) == -1 || wc.smallestProposal == nil) {
 		wc.logger.WithContext(ctx).With().Debug("saving new proposal",
 			wc.epoch,
@@ -320,7 +322,9 @@ func (wc *WeakCoin) updateSmallest(ctx context.Context, proposal []byte) {
 			log.String("previous", hex.EncodeToString(wc.smallestProposal)),
 		)
 		wc.smallestProposal = proposal
+		return nil
 	}
+	return errNotSmallest
 }
 
 func (wc *WeakCoin) aboveThreshold(proposal []byte) bool {

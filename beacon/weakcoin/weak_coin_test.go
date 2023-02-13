@@ -73,6 +73,7 @@ func TestWeakCoin(t *testing.T) {
 		nodeSig          []byte
 		mining, expected bool
 		msg              []byte
+		result           pubsub.ValidationResult
 	}{
 		{
 			desc:     "node not mining",
@@ -86,6 +87,7 @@ func TestWeakCoin(t *testing.T) {
 				MinerPK:      zeroLSB,
 				VrfSignature: zeroLSB,
 			}),
+			result: pubsub.ValidationAccept,
 		},
 		{
 			desc:     "node mining",
@@ -99,6 +101,7 @@ func TestWeakCoin(t *testing.T) {
 				MinerPK:      zeroLSB,
 				VrfSignature: zeroLSB,
 			}),
+			result: pubsub.ValidationIgnore,
 		},
 		{
 			desc:     "node mining but exceed threshold",
@@ -112,6 +115,7 @@ func TestWeakCoin(t *testing.T) {
 				MinerPK:      zeroLSB,
 				VrfSignature: zeroLSB,
 			}),
+			result: pubsub.ValidationAccept,
 		},
 		{
 			desc:     "node only miner",
@@ -150,7 +154,7 @@ func TestWeakCoin(t *testing.T) {
 			}
 
 			if len(tc.msg) > 0 {
-				require.Equal(t, pubsub.ValidationAccept, wc.HandleProposal(context.Background(), "", tc.msg))
+				require.Equal(t, tc.result, wc.HandleProposal(context.Background(), "", tc.msg))
 			}
 			wc.FinishRound(context.Background())
 
