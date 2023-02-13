@@ -13,39 +13,39 @@ import (
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// MockatxReceiver is a mock of atxReceiver interface.
-type MockatxReceiver struct {
+// MockAtxReceiver is a mock of AtxReceiver interface.
+type MockAtxReceiver struct {
 	ctrl     *gomock.Controller
-	recorder *MockatxReceiverMockRecorder
+	recorder *MockAtxReceiverMockRecorder
 }
 
-// MockatxReceiverMockRecorder is the mock recorder for MockatxReceiver.
-type MockatxReceiverMockRecorder struct {
-	mock *MockatxReceiver
+// MockAtxReceiverMockRecorder is the mock recorder for MockAtxReceiver.
+type MockAtxReceiverMockRecorder struct {
+	mock *MockAtxReceiver
 }
 
-// NewMockatxReceiver creates a new mock instance.
-func NewMockatxReceiver(ctrl *gomock.Controller) *MockatxReceiver {
-	mock := &MockatxReceiver{ctrl: ctrl}
-	mock.recorder = &MockatxReceiverMockRecorder{mock}
+// NewMockAtxReceiver creates a new mock instance.
+func NewMockAtxReceiver(ctrl *gomock.Controller) *MockAtxReceiver {
+	mock := &MockAtxReceiver{ctrl: ctrl}
+	mock.recorder = &MockAtxReceiverMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockatxReceiver) EXPECT() *MockatxReceiverMockRecorder {
+func (m *MockAtxReceiver) EXPECT() *MockAtxReceiverMockRecorder {
 	return m.recorder
 }
 
 // OnAtx mocks base method.
-func (m *MockatxReceiver) OnAtx(arg0 *types.ActivationTxHeader) {
+func (m *MockAtxReceiver) OnAtx(arg0 *types.ActivationTxHeader) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "OnAtx", arg0)
 }
 
 // OnAtx indicates an expected call of OnAtx.
-func (mr *MockatxReceiverMockRecorder) OnAtx(arg0 interface{}) *gomock.Call {
+func (mr *MockAtxReceiverMockRecorder) OnAtx(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnAtx", reflect.TypeOf((*MockatxReceiver)(nil).OnAtx), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnAtx", reflect.TypeOf((*MockAtxReceiver)(nil).OnAtx), arg0)
 }
 
 // MocknipostValidator is a mock of nipostValidator interface.
