@@ -439,7 +439,10 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	case errors.Is(err, errKnownAtx):
 		return pubsub.ValidationIgnore
 	default:
-		h.log.WithContext(ctx).With().Warning("failed to process atx gossip", log.Err(err))
+		h.log.WithContext(ctx).With().Warning("failed to process atx gossip",
+			log.Stringer("sender", peer),
+			log.Err(err),
+		)
 		return pubsub.ValidationIgnore
 	}
 }

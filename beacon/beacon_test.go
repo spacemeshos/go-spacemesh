@@ -44,7 +44,7 @@ func coinValueMock(tb testing.TB, value bool) coin {
 	coinMock.EXPECT().StartRound(gomock.Any(),
 		gomock.AssignableToTypeOf(types.RoundID(0)),
 		gomock.AssignableToTypeOf(&nonce),
-	).AnyTimes().Return(nil)
+	).AnyTimes()
 	coinMock.EXPECT().FinishRound(gomock.Any()).AnyTimes()
 	coinMock.EXPECT().Get(
 		gomock.Any(),

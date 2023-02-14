@@ -105,11 +105,9 @@ func (mr *MockcoinMockRecorder) StartEpoch(arg0, arg1 interface{}) *gomock.Call 
 }
 
 // StartRound mocks base method.
-func (m *Mockcoin) StartRound(arg0 context.Context, arg1 types.RoundID, arg2 *types.VRFPostIndex) error {
+func (m *Mockcoin) StartRound(arg0 context.Context, arg1 types.RoundID, arg2 *types.VRFPostIndex) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartRound", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
+	m.ctrl.Call(m, "StartRound", arg0, arg1, arg2)
 }
 
 // StartRound indicates an expected call of StartRound.

@@ -128,15 +128,23 @@ func TestWeakCoin(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			miner := 0
 			if tc.mining {
-				miner++
+				// once for generating, once for pubsub validation
+				miner += 2
 			}
 			if len(tc.msg) > 0 {
 				miner++
 			}
 			mockAllowance := weakcoin.NewMockallowance(ctrl)
-			mockAllowance.EXPECT().MinerAllowance(epoch, gomock.Any()).Return(uint32(1)).Times(miner)
-			wc := weakcoin.New(
-				noopBroadcaster(t, ctrl),
+			mockAllowance.EXPECT().MinerAllowance(epoch, gomock.Any()).Return(uint32(1)).MaxTimes(miner)
+			var wc *weakcoin.WeakCoin
+			mockPublisher := mocks.NewMockPublisher(ctrl)
+			mockPublisher.EXPECT().Publish(gomock.Any(), pubsub.BeaconWeakCoinProtocol, gomock.Any()).DoAndReturn(
+				func(ctx context.Context, _ string, msg []byte) pubsub.ValidationResult {
+					return wc.HandleProposal(ctx, "", msg)
+				},
+			).AnyTimes()
+			wc = weakcoin.New(
+				mockPublisher,
 				staticSigner(t, ctrl, tc.nodeSig),
 				sigVerifier(t, ctrl),
 				nonceFetcher(t, ctrl),
@@ -148,9 +156,9 @@ func TestWeakCoin(t *testing.T) {
 			wc.StartEpoch(context.Background(), epoch)
 			nonce := types.VRFPostIndex(1)
 			if tc.mining {
-				require.NoError(t, wc.StartRound(context.Background(), round, &nonce))
+				wc.StartRound(context.Background(), round, &nonce)
 			} else {
-				require.NoError(t, wc.StartRound(context.Background(), round, nil))
+				wc.StartRound(context.Background(), round, nil)
 			}
 
 			if len(tc.msg) > 0 {
@@ -300,7 +308,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			)
 
 			wc.StartEpoch(context.Background(), tc.startedEpoch)
-			require.NoError(t, wc.StartRound(context.Background(), tc.startedRound, nil))
+			wc.StartRound(context.Background(), tc.startedRound, nil)
 
 			require.Equal(t, tc.expected, wc.HandleProposal(context.Background(), "", tc.msg))
 			wc.FinishRound(context.Background())
@@ -333,7 +341,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	)
 
 	wc.StartEpoch(context.Background(), epoch)
-	require.NoError(t, wc.StartRound(context.Background(), round, nil))
+	wc.StartRound(context.Background(), round, nil)
 	for i := 0; i < bufSize; i++ {
 		wc.HandleProposal(context.Background(), "", encoded(t, weakcoin.Message{
 			Epoch:        epoch,
@@ -350,7 +358,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 		VrfSignature: zeroLSB,
 	}))
 	wc.FinishRound(context.Background())
-	require.NoError(t, wc.StartRound(context.Background(), nextRound, nil))
+	wc.StartRound(context.Background(), nextRound, nil)
 	wc.FinishRound(context.Background())
 	flip, err := wc.Get(context.Background(), epoch, nextRound)
 	require.NoError(t, err)
@@ -399,7 +407,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	)
 	instance.StartEpoch(context.Background(), epoch)
 	nonce := types.VRFPostIndex(1)
-	require.NoError(t, instance.StartRound(context.Background(), round, &nonce))
+	instance.StartRound(context.Background(), round, &nonce)
 
 	require.Equal(t,
 		"95838858f8b318d070117421eda3f0d1db5ab97bc366082c17e771873be5ee963122773526fe0c71ba2188cae33cd3ef2212d0188fd07457727c3624b926bf28f2f9aa0ab85a207070688b47f7c6e10f",
@@ -425,9 +433,6 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 		broadcaster.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().
 			DoAndReturn(func(_ context.Context, _ string, data []byte) error {
 				for j := range instances {
-					if i == j {
-						continue
-					}
 					instances[j].HandleProposal(context.Background(), "", data)
 				}
 				return nil
@@ -464,9 +469,9 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 		for current := start; current <= end; current++ {
 			for i, instance := range instances {
 				if i == 0 {
-					require.NoError(t, instance.StartRound(context.Background(), current, nil))
+					instance.StartRound(context.Background(), current, nil)
 				} else {
-					require.NoError(t, instance.StartRound(context.Background(), current, &nonce))
+					instance.StartRound(context.Background(), current, &nonce)
 				}
 			}
 			for _, instance := range instances {

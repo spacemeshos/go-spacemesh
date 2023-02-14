@@ -3,6 +3,7 @@ package weakcoin
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -15,16 +16,22 @@ import (
 // HandleProposal defines method to handle Beacon Weak Coin Messages from gossip.
 func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
 	logger := wc.logger.WithContext(ctx)
-	logger.With().Debug("received weak coin message", log.Stringer("from", peer))
 
 	var message Message
 	if err := codec.Decode(msg, &message); err != nil {
-		logger.With().Warning("received invalid weak coin message", log.Err(err))
+		logger.With().Warning("malformed weak coin message", log.Err(err))
 		return pubsub.ValidationReject
 	}
 
 	if err := wc.receiveMessage(ctx, message); err != nil {
-		logger.With().Debug("received invalid proposal", message.Epoch, message.Round, log.Err(err))
+		if !errors.Is(err, errNotSmallest) {
+			logger.With().Debug("invalid proposal",
+				message.Epoch,
+				message.Round,
+				log.Stringer("peer", peer),
+				log.Err(err),
+			)
+		}
 		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept

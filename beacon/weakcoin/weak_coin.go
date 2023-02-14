@@ -126,7 +126,7 @@ type WeakCoin struct {
 	epochStarted, roundStarted bool
 	epoch                      types.EpochID
 	round                      types.RoundID
-	smallestProposal           []byte
+	smallest                   []byte
 	allowance                  allowance
 	// nextRoundBuffer is used to optimistically buffer messages from the next round.
 	nextRoundBuffer []Message
@@ -164,13 +164,16 @@ func (wc *WeakCoin) StartEpoch(ctx context.Context, epoch types.EpochID) {
 	wc.logger.WithContext(ctx).With().Info("beacon weak coin started epoch", epoch)
 }
 
-// FinishEpoch completes epoch. After it is called Get for this epoch will panic.
+// FinishEpoch completes epoch.
 func (wc *WeakCoin) FinishEpoch(ctx context.Context, epoch types.EpochID) {
 	logger := wc.logger.WithContext(ctx).WithFields(epoch)
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
 	if epoch != wc.epoch {
-		logger.Panic("attempted to finish beacon weak coin for the wrong epoch")
+		logger.With().Fatal("attempted to finish beacon weak coin for the wrong epoch",
+			epoch,
+			log.Stringer("weak_coin_epoch", wc.epoch),
+		)
 	}
 	wc.epochStarted = false
 	wc.coins = map[types.RoundID]bool{}
@@ -179,19 +182,19 @@ func (wc *WeakCoin) FinishEpoch(ctx context.Context, epoch types.EpochID) {
 }
 
 // StartRound process any buffered messages for this round and broadcast our proposal.
-func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, nonce *types.VRFPostIndex) error {
+func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, nonce *types.VRFPostIndex) {
 	wc.mu.Lock()
 	logger := wc.logger.WithContext(ctx).WithFields(wc.epoch, round)
 	logger.Info("started beacon weak coin round")
 	wc.roundStarted = true
 	wc.round = round
-	wc.smallestProposal = nil
+	wc.smallest = nil
 	for i, msg := range wc.nextRoundBuffer {
 		if msg.Epoch != wc.epoch || msg.Round != wc.round {
 			continue
 		}
-		if err := wc.updateProposal(ctx, msg); err != nil {
-			logger.With().Debug("received invalid proposal", log.Err(err))
+		if err := wc.updateProposal(ctx, msg); err != nil && !errors.Is(err, errNotSmallest) {
+			logger.With().Warning("invalid weakcoin proposal", log.Err(err))
 		}
 		wc.nextRoundBuffer[i] = Message{}
 	}
@@ -199,9 +202,8 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, nonce *
 	wc.mu.Unlock()
 
 	if nonce != nil {
-		return wc.publishProposal(ctx, wc.epoch, *nonce, wc.round)
+		wc.publishProposal(ctx, wc.epoch, *nonce, wc.round)
 	}
-	return nil
 }
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
@@ -254,38 +256,36 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 			smallest = signature
 		}
 	}
-	return broadcast, smallest
+
+	wc.mu.RLock()
+	defer wc.mu.RUnlock()
+	if wc.smallest == nil || bytes.Compare(smallest, wc.smallest) == -1 {
+		return broadcast, smallest
+	}
+	return nil, nil
 }
 
-func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) error {
-	wc.mu.Lock()
-	msg, smallest := wc.prepareProposal(epoch, nonce, round)
-	wc.mu.Unlock()
-
-	// nothing to send is valid if all proposals are exceeding threshold
+func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) {
+	msg, proposal := wc.prepareProposal(epoch, nonce, round)
 	if msg == nil {
-		return nil
+		return
 	}
 
 	if err := wc.publisher.Publish(ctx, pubsub.BeaconWeakCoinProtocol, msg); err != nil {
-		return fmt.Errorf("failed to broadcast weak coin message: %w", err)
+		wc.logger.With().Warning("failed to publish own weak coin proposal",
+			epoch,
+			round,
+			log.String("proposal", hex.EncodeToString(proposal)),
+			log.Err(err),
+		)
+		return
 	}
 
 	wc.logger.WithContext(ctx).With().Info("published proposal",
 		epoch,
 		round,
-		log.String("proposal", hex.EncodeToString(smallest)))
-
-	wc.mu.Lock()
-	defer wc.mu.Unlock()
-	if wc.epoch != epoch || wc.round != round {
-		// another epoch/round was started concurrently
-		return nil
-	}
-	if err := wc.updateSmallest(ctx, smallest); err != nil && !errors.Is(err, errNotSmallest) {
-		return err
-	}
-	return nil
+		log.String("proposal", hex.EncodeToString(proposal)),
+	)
 }
 
 // FinishRound computes coinflip based on proposals received in this round.
@@ -295,7 +295,7 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 	defer wc.mu.Unlock()
 	logger := wc.logger.WithContext(ctx).WithFields(wc.epoch, wc.round)
 	wc.roundStarted = false
-	if wc.smallestProposal == nil {
+	if wc.smallest == nil {
 		logger.Warning("completed round without valid proposals")
 		return
 	}
@@ -304,26 +304,26 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 	// For another signature algorithm this may change
 	lsbIndex := 0
 	if !wc.signer.LittleEndian() {
-		lsbIndex = len(wc.smallestProposal) - 1
+		lsbIndex = len(wc.smallest) - 1
 	}
-	coinflip := wc.smallestProposal[lsbIndex]&1 == 1
+	coinflip := wc.smallest[lsbIndex]&1 == 1
 
 	wc.coins[wc.round] = coinflip
 	logger.With().Info("completed round with beacon weak coin",
-		log.String("proposal", hex.EncodeToString(wc.smallestProposal)),
+		log.String("proposal", hex.EncodeToString(wc.smallest)),
 		log.Bool("beacon_weak_coin", coinflip))
-	wc.smallestProposal = nil
+	wc.smallest = nil
 }
 
 func (wc *WeakCoin) updateSmallest(ctx context.Context, proposal []byte) error {
-	if len(proposal) > 0 && (bytes.Compare(proposal, wc.smallestProposal) == -1 || wc.smallestProposal == nil) {
+	if len(proposal) > 0 && (bytes.Compare(proposal, wc.smallest) == -1 || wc.smallest == nil) {
 		wc.logger.WithContext(ctx).With().Debug("saving new proposal",
 			wc.epoch,
 			wc.round,
 			log.String("proposal", hex.EncodeToString(proposal)),
-			log.String("previous", hex.EncodeToString(wc.smallestProposal)),
+			log.String("previous", hex.EncodeToString(wc.smallest)),
 		)
-		wc.smallestProposal = proposal
+		wc.smallest = proposal
 		return nil
 	}
 	return errNotSmallest

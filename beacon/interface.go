@@ -14,7 +14,7 @@ import (
 
 type coin interface {
 	StartEpoch(context.Context, types.EpochID)
-	StartRound(context.Context, types.RoundID, *types.VRFPostIndex) error
+	StartRound(context.Context, types.RoundID, *types.VRFPostIndex)
 	FinishRound(context.Context)
 	Get(context.Context, types.EpochID, types.RoundID) (bool, error)
 	FinishEpoch(context.Context, types.EpochID)

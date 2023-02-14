@@ -142,15 +142,35 @@ func (pd *ProtocolDriver) classifyProposal(
 	case atxDelay <= 0 &&
 		proposalDelay <= 0 &&
 		checker.PassStrictThreshold(m.VRFSignature):
-		logger.Debug("received valid proposal: ATX delay %v, proposal delay %v", atxDelay, proposalDelay)
+		logger.With().Debug("valid beacon proposal",
+			log.Duration("atx delay", atxDelay),
+			log.Duration("proposal delay", proposalDelay),
+			log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))),
+		)
 		return valid
 	case atxDelay <= pd.config.GracePeriodDuration &&
 		proposalDelay <= pd.config.GracePeriodDuration &&
 		checker.PassThreshold(m.VRFSignature):
-		logger.Debug("received potentially proposal: ATX delay %v, proposal delay %v", atxDelay, proposalDelay)
+		logger.With().Debug("potentially valid beacon proposal",
+			log.Duration("atx delay", atxDelay),
+			log.Duration("proposal delay", proposalDelay),
+			log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))),
+		)
 		return potentiallyValid
 	default:
-		logger.Warning("received invalid proposal: ATX delay %v, proposal delay %v", atxDelay, proposalDelay)
+		if atxDelay > pd.config.GracePeriodDuration || proposalDelay > pd.config.GracePeriodDuration {
+			logger.With().Warning("invalid beacon proposal",
+				log.Duration("atx delay", atxDelay),
+				log.Duration("proposal delay", proposalDelay),
+				log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))),
+			)
+		} else {
+			logger.With().Debug("proposal did not pass thresholds",
+				log.Duration("atx delay", atxDelay),
+				log.Duration("proposal delay", proposalDelay),
+				log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))),
+			)
+		}
 	}
 	return invalid
 }
