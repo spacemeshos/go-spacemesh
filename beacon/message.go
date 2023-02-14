@@ -6,6 +6,13 @@ import (
 
 //go:generate scalegen
 
+// ProposalVrfMessage is a message for buildProposal below.
+type ProposalVrfMessage struct {
+	Type  types.EligibilityType
+	Nonce types.VRFPostIndex
+	Epoch uint32
+}
+
 // ProposalMessage is a message type which is used when sending proposals.
 type ProposalMessage struct {
 	EpochID      types.EpochID

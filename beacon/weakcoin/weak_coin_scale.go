@@ -24,7 +24,7 @@ func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact64(enc, uint64(t.Unit))
+		n, err := scale.EncodeCompact32(enc, uint32(t.Unit))
 		if err != nil {
 			return total, err
 		}
@@ -65,12 +65,12 @@ func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Round = types.RoundID(field)
 	}
 	{
-		field, n, err := scale.DecodeCompact64(dec)
+		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Unit = uint64(field)
+		t.Unit = uint32(field)
 	}
 	{
 		field, n, err := scale.DecodeByteSlice(dec)
@@ -121,7 +121,7 @@ func (t *VrfMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact64(enc, uint64(t.Unit))
+		n, err := scale.EncodeCompact32(enc, uint32(t.Unit))
 		if err != nil {
 			return total, err
 		}
@@ -164,12 +164,12 @@ func (t *VrfMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Round = types.RoundID(field)
 	}
 	{
-		field, n, err := scale.DecodeCompact64(dec)
+		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Unit = uint64(field)
+		t.Unit = uint32(field)
 	}
 	return total, nil
 }

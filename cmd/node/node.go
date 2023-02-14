@@ -538,7 +538,18 @@ func (app *App) initServices(
 	}
 
 	fetcherWrapped := &layerFetcher{}
-	atxHandler := activation.NewHandler(app.cachedDB, clock, app.host, fetcherWrapped, layersPerEpoch, app.Config.TickSize, goldenATXID, validator, trtl, app.addLogger(ATXHandlerLogger, lg))
+	atxHandler := activation.NewHandler(
+		app.cachedDB,
+		clock,
+		app.host,
+		fetcherWrapped,
+		layersPerEpoch,
+		app.Config.TickSize,
+		goldenATXID,
+		validator,
+		[]activation.AtxReceiver{trtl, beaconProtocol},
+		app.addLogger(ATXHandlerLogger, lg),
+	)
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 

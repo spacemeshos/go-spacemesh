@@ -43,7 +43,7 @@ type Handler struct {
 	tickSize        uint64
 	goldenATXID     types.ATXID
 	nipostValidator nipostValidator
-	atxReceiver     atxReceiver
+	atxReceivers    []AtxReceiver
 	log             log.Log
 	processAtxMutex sync.Mutex
 	atxChannels     map[types.ATXID]*atxChan
@@ -51,7 +51,18 @@ type Handler struct {
 }
 
 // NewHandler returns a data handler for ATX.
-func NewHandler(cdb *datastore.CachedDB, c layerClock, pub pubsub.Publisher, fetcher system.Fetcher, layersPerEpoch uint32, tickSize uint64, goldenATXID types.ATXID, nipostValidator nipostValidator, atxReceiver atxReceiver, log log.Log) *Handler {
+func NewHandler(
+	cdb *datastore.CachedDB,
+	c layerClock,
+	pub pubsub.Publisher,
+	fetcher system.Fetcher,
+	layersPerEpoch uint32,
+	tickSize uint64,
+	goldenATXID types.ATXID,
+	nipostValidator nipostValidator,
+	atxReceivers []AtxReceiver,
+	log log.Log,
+) *Handler {
 	return &Handler{
 		cdb:             cdb,
 		clock:           c,
@@ -60,7 +71,7 @@ func NewHandler(cdb *datastore.CachedDB, c layerClock, pub pubsub.Publisher, fet
 		tickSize:        tickSize,
 		goldenATXID:     goldenATXID,
 		nipostValidator: nipostValidator,
-		atxReceiver:     atxReceiver,
+		atxReceivers:    atxReceivers,
 		log:             log,
 		atxChannels:     make(map[types.ATXID]*atxChan),
 		fetcher:         fetcher,
@@ -428,7 +439,10 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	case errors.Is(err, errKnownAtx):
 		return pubsub.ValidationIgnore
 	default:
-		h.log.WithContext(ctx).With().Warning("failed to process atx gossip", log.Err(err))
+		h.log.WithContext(ctx).With().Warning("failed to process atx gossip",
+			log.Stringer("sender", peer),
+			log.Err(err),
+		)
 		return pubsub.ValidationIgnore
 	}
 }
@@ -499,7 +513,9 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 	if err != nil {
 		return fmt.Errorf("get header for processed atx %s: %w", vAtx.ID(), err)
 	}
-	h.atxReceiver.OnAtx(header)
+	for _, r := range h.atxReceivers {
+		r.OnAtx(header)
+	}
 	events.ReportNewActivation(vAtx)
 	logger.With().Info("new atx", log.Inline(atx), log.Int("size", len(data)))
 	return nil

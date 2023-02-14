@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -39,20 +38,19 @@ func coinValueMock(tb testing.TB, value bool) coin {
 	coinMock.EXPECT().StartEpoch(
 		gomock.Any(),
 		gomock.AssignableToTypeOf(types.EpochID(0)),
-		gomock.AssignableToTypeOf(weakcoin.UnitAllowances{}),
 	).AnyTimes()
 	coinMock.EXPECT().FinishEpoch(gomock.Any(), gomock.AssignableToTypeOf(types.EpochID(0))).AnyTimes()
 	nonce := types.VRFPostIndex(0)
 	coinMock.EXPECT().StartRound(gomock.Any(),
 		gomock.AssignableToTypeOf(types.RoundID(0)),
 		gomock.AssignableToTypeOf(&nonce),
-	).AnyTimes().Return(nil)
+	).AnyTimes()
 	coinMock.EXPECT().FinishRound(gomock.Any()).AnyTimes()
 	coinMock.EXPECT().Get(
 		gomock.Any(),
 		gomock.AssignableToTypeOf(types.EpochID(0)),
 		gomock.AssignableToTypeOf(types.RoundID(0)),
-	).AnyTimes().Return(value)
+	).AnyTimes().Return(value, nil)
 	return coinMock
 }
 
@@ -116,7 +114,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	return tpd
 }
 
-func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint32) {
+func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint32, received time.Time) types.ATXID {
 	nodeID := sig.NodeID()
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
@@ -130,18 +128,19 @@ func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *si
 	)
 
 	atx.SetEffectiveNumUnits(numUnits)
-	atx.SetReceived(time.Now().Add(-1 * time.Second))
+	atx.SetReceived(received)
 	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(tb, err)
 	require.NoError(tb, atxs.Add(db, vAtx))
+	return vAtx.ID()
 }
 
 func createRandomATXs(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, num int) {
 	for i := 0; i < num; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(tb, err)
-		createATX(tb, db, lid, sig, 1)
+		createATX(tb, db, lid, sig, 1, time.Now().Add(-1*time.Second))
 	}
 }
 
@@ -200,7 +199,7 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 			continue
 		}
 		for _, db := range dbs {
-			createATX(t, db, atxPublishLid, node.edSigner, 1)
+			createATX(t, db, atxPublishLid, node.edSigner, 1, time.Now().Add(-1*time.Second))
 		}
 	}
 	var wg sync.WaitGroup
@@ -252,7 +251,7 @@ func TestBeacon_NoProposals(t *testing.T) {
 	}
 	for _, node := range testNodes {
 		for _, db := range dbs {
-			createATX(t, db, atxPublishLid, node.edSigner, 1)
+			createATX(t, db, atxPublishLid, node.edSigner, 1, time.Now().Add(-1*time.Second))
 		}
 	}
 	var wg sync.WaitGroup
@@ -309,9 +308,8 @@ func TestBeaconNoATXInPreviousEpoch(t *testing.T) {
 	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
 	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
-	lid := types.NewLayerID(types.GetLayersPerEpoch()*2 - 1)
-	createRandomATXs(t, tpd.cdb, lid, numATXs)
-	require.NoError(t, tpd.onNewEpoch(context.Background(), types.EpochID(2)))
+	tpd.mClock.EXPECT().LayerToTime(types.EpochID(2).FirstLayer()).Return(time.Now())
+	require.ErrorIs(t, errZeroEpochWeight, tpd.onNewEpoch(context.Background(), types.EpochID(2)))
 
 	got, err := tpd.GetBeacon(types.EpochID(2))
 	require.NoError(t, err)
@@ -328,14 +326,14 @@ func TestBeaconWithMetrics(t *testing.T) {
 	gLayer := types.GetEffectiveGenesis()
 	tpd.mClock.EXPECT().CurrentLayer().Return(gLayer).Times(2)
 	tpd.mClock.EXPECT().AwaitLayer(gLayer.Add(1)).Return(nil).Times(1)
-	tpd.mClock.EXPECT().LayerToTime((gLayer.GetEpoch() + 1).FirstLayer()).Return(time.Now()).Times(1)
+	tpd.mClock.EXPECT().LayerToTime((gLayer.GetEpoch() + 1).FirstLayer()).Return(time.Now()).AnyTimes()
 	tpd.Start(context.Background())
 
 	epoch3Beacon := types.HexToBeacon("0xaf1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262")
 	epoch := types.EpochID(3)
 	for i := types.EpochID(2); i < epoch; i++ {
 		lid := i.FirstLayer().Sub(1)
-		createATX(t, tpd.cdb, lid, tpd.edSigner, 199)
+		createATX(t, tpd.cdb, lid, tpd.edSigner, 199, time.Now())
 		createRandomATXs(t, tpd.cdb, lid, numATXs-1)
 	}
 	finalLayer := types.NewLayerID(types.GetLayersPerEpoch() * uint32(epoch))
@@ -893,20 +891,23 @@ func TestBeacon_atxThreshold(t *testing.T) {
 func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 	cfg := Config{Kappa: 40, Q: big.NewRat(1, 3)}
 	tt := []struct {
-		name string
-		w    int
+		name            string
+		wEarly, wOntime int
 	}{
 		{
-			name: "100K atxs",
-			w:    100_000,
+			name:    "100K atxs",
+			wEarly:  90_000,
+			wOntime: 100_000,
 		},
 		{
-			name: "10K atxs",
-			w:    10_000,
+			name:    "10K atxs",
+			wEarly:  9_000,
+			wOntime: 10_000,
 		},
 		{
-			name: "30 atxs",
-			w:    30,
+			name:    "30 atxs",
+			wEarly:  27,
+			wOntime: 30,
 		},
 	}
 
@@ -916,19 +917,24 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 			t.Parallel()
 
 			logger := logtest.New(t).WithName("proposal checker")
-			checker := createProposalChecker(logger, cfg, tc.w)
-			numEligible := 0
-			for i := 0; i < tc.w; i++ {
+			checker := createProposalChecker(logger, cfg, tc.wEarly, tc.wOntime)
+			var numEligible, numEligibleStrict int
+			for i := 0; i < tc.wEarly; i++ {
 				signer, err := signing.NewEdSigner()
 				require.NoError(t, err)
 				vrfSigner, err := signer.VRFSigner()
 				require.NoError(t, err)
 				proposal := buildSignedProposal(context.Background(), logtest.New(t), vrfSigner, 3, types.VRFPostIndex(1))
-				if checker.IsProposalEligible(proposal) {
+				if checker.PassThreshold(proposal) {
 					numEligible++
+				}
+				if checker.PassStrictThreshold(proposal) {
+					numEligibleStrict++
 				}
 			}
 			require.NotZero(t, numEligible)
+			require.NotZero(t, numEligibleStrict)
+			require.LessOrEqual(t, numEligibleStrict, numEligible)
 		})
 	}
 }
