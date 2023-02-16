@@ -28,7 +28,7 @@ require (
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20230110094441-db37f07504ce
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/common v0.39.0
-	github.com/pyroscope-io/pyroscope v0.37.1
+	github.com/pyroscope-io/pyroscope v0.37.2
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/spacemeshos/api/release/go v1.5.6
 	github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d
@@ -45,7 +45,7 @@ require (
 	github.com/zeebo/blake3 v0.2.3
 	go.uber.org/atomic v1.10.0
 	go.uber.org/zap v1.24.0
-	golang.org/x/exp v0.0.0-20230206171751-46f607a40771
+	golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
 	golang.org/x/sync v0.1.0
 	google.golang.org/genproto v0.0.0-20230202175211-008b39050e57
 	google.golang.org/grpc v1.53.0
