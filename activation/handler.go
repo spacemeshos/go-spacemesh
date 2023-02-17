@@ -135,13 +135,13 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 	h.log.WithContext(ctx).With().Info("processing atx",
 		atx.ID(),
 		atx.PublishEpoch(),
-		log.FieldNamed("atx_node_id", atx.NodeID()),
+		log.FieldNamed("smesher", atx.NodeID()),
 		atx.PubLayerID,
 	)
 	if err := h.ContextuallyValidateAtx(atx); err != nil {
 		h.log.WithContext(ctx).With().Warning("atx failed contextual validation",
 			atx.ID(),
-			log.FieldNamed("atx_node_id", atx.NodeID()),
+			log.FieldNamed("smesher", atx.NodeID()),
 			log.Err(err),
 		)
 	} else {
@@ -253,7 +253,7 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 	if atx.NumUnits > prevAtx.NumUnits && nonce == nil {
 		h.log.WithContext(ctx).With().Info("PoST size increased without new VRF Nonce, re-validating current nonce",
 			atx.ID(),
-			log.FieldNamed("atx_node_id", atx.NodeID()),
+			log.FieldNamed("smesher", atx.NodeID()),
 		)
 
 		current, err := h.cdb.VRFNonce(atx.NodeID(), atx.TargetEpoch())
@@ -326,7 +326,7 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 		// no previous atx found but previous atx referenced
 		h.log.With().Error("could not fetch node last atx",
 			atx.ID(),
-			log.FieldNamed("atx_node_id", atx.NodeID()),
+			log.FieldNamed("smesher", atx.NodeID()),
 			log.Err(err),
 		)
 		return fmt.Errorf("could not fetch node last atx: %w", err)
