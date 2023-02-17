@@ -719,7 +719,8 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 				ballot.SetMalicious()
 				msh.logger.With().Warning("smesher produced more than one ballot in the same layer",
 					log.Stringer("smesher", ballot.SmesherID()),
-					log.Inline(ballot),
+					log.Object("prev", prev),
+					log.Object("curr", ballot),
 				)
 			}
 		}

@@ -64,6 +64,12 @@ type BallotMetadata struct {
 	MsgHash Hash32
 }
 
+func (m *BallotMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("layer", m.Layer.Value)
+	encoder.AddString("msgHash", m.MsgHash.String())
+	return nil
+}
+
 // InnerBallot contains all info about a smesher's votes on the mesh history. this structure is
 // serialized and signed to produce the signature in Ballot.
 type InnerBallot struct {

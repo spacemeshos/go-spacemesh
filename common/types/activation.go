@@ -215,6 +215,12 @@ type ATXMetadata struct {
 	MsgHash Hash32
 }
 
+func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("epoch", uint32(m.Target))
+	encoder.AddString("msgHash", m.MsgHash.String())
+	return nil
+}
+
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {

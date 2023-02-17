@@ -81,30 +81,46 @@ func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) e
 		return errors.New("unknown malfeasance type")
 	}
 
-	if err == nil && p.Eligibility != nil {
-		err = h.validateHareEligibility(ctx, nodeID, &p)
+	if err != nil {
+		h.logger.WithContext(ctx).With().Warning("failed to validate malfeasance proof",
+			log.Inline(&p),
+			log.Err(err),
+		)
+		return err
 	}
 
 	// msg is valid
-	if err == nil {
-		updateMetrics(p.Proof)
-		if malicious, err = h.cdb.IsMalicious(nodeID); err != nil {
-			return fmt.Errorf("check known malicious: %w", err)
-		} else if malicious {
-			if peer == h.self {
-				// node saves malfeasance proof eagerly/atomically with the malicious data.
-				return nil
-			}
-			logger.With().Debug("known malicious identity", nodeID)
-			return errors.New("known proof")
+	if p.Eligibility != nil {
+		if err = h.validateHareEligibility(ctx, logger, nodeID, &p); err != nil {
+			h.logger.WithContext(ctx).With().Warning("failed to validate hare eligibility",
+				log.Inline(&p),
+				log.Err(err),
+			)
+			return err
 		}
-		if err = h.cdb.AddMalfeasanceProof(nodeID, &p.MalfeasanceProof, nil); err != nil {
-			h.logger.WithContext(ctx).With().Error("failed to save MalfeasanceProof", log.Err(err))
-		}
-	} else {
-		h.logger.WithContext(ctx).With().Debug("failed to validate MalfeasanceProof", log.Err(err))
 	}
-	return err
+
+	if malicious, err = h.cdb.IsMalicious(nodeID); err != nil {
+		return fmt.Errorf("check known malicious: %w", err)
+	} else if malicious {
+		if peer == h.self {
+			// node saves malfeasance proof eagerly/atomically with the malicious data.
+			updateMetrics(p.Proof)
+			return nil
+		}
+		logger.With().Debug("known malicious identity", nodeID)
+		return errors.New("known proof")
+	}
+	if err = h.cdb.AddMalfeasanceProof(nodeID, &p.MalfeasanceProof, nil); err != nil {
+		h.logger.WithContext(ctx).With().Error("failed to save MalfeasanceProof",
+			log.Inline(&p),
+			log.Err(err),
+		)
+		return fmt.Errorf("add malfeasance proof: %w", err)
+	}
+	updateMetrics(p.Proof)
+	h.logger.WithContext(ctx).With().Info("new malfeasance proof", log.Inline(&p))
+	return nil
 }
 
 func updateMetrics(tp types.Proof) {
@@ -129,8 +145,7 @@ func checkIdentityExists(cdb *datastore.CachedDB, nodeID types.NodeID) error {
 	return nil
 }
 
-func (h *Handler) validateHareEligibility(ctx context.Context, nodeID types.NodeID, gossip *types.MalfeasanceGossip) error {
-	logger := h.logger.WithContext(ctx).WithFields(nodeID)
+func (h *Handler) validateHareEligibility(ctx context.Context, logger log.Log, nodeID types.NodeID, gossip *types.MalfeasanceGossip) error {
 	if gossip == nil || gossip.Eligibility == nil {
 		logger.Fatal("invalid input")
 	}
@@ -138,7 +153,6 @@ func (h *Handler) validateHareEligibility(ctx context.Context, nodeID types.Node
 	emsg := gossip.Eligibility
 	eNodeID := types.BytesToNodeID(emsg.PubKey)
 	if nodeID != eNodeID {
-		logger.With().Warning("mismatch node id", log.Stringer("eligibility", eNodeID))
 		return fmt.Errorf("mismatch node id")
 	}
 	// any type of MalfeasanceProof can be accompanied by a hare eligibility
