@@ -310,12 +310,6 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddInt("against", len(b.Votes.Against))
 	encoder.AddInt("abstain", len(b.Votes.Abstain))
 	encoder.AddString("atx_id", b.AtxID.String())
-	encoder.AddArray("eligibilities", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		for _, proof := range b.EligibilityProofs {
-			encoder.AppendObject(&proof)
-		}
-		return nil
-	}))
 	encoder.AddString("ref_ballot", b.RefBallot.String())
 	encoder.AddInt("active_set_size", activeSetSize)
 	encoder.AddString("beacon", beacon.ShortString())
