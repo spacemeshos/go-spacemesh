@@ -517,7 +517,7 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 		r.OnAtx(header)
 	}
 	events.ReportNewActivation(vAtx)
-	logger.With().Info("new atx", log.Inline(atx), log.Int("size", len(data)))
+	logger.With().Info("new atx", log.Inline(vAtx), log.Int("size", len(data)))
 	return nil
 }
 
