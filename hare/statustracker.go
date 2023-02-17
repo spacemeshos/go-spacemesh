@@ -41,8 +41,11 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 		if prev.Layer == msg.Layer &&
 			prev.Round == msg.Round &&
 			prev.MsgHash != msg.MsgHash {
-			st.logger.WithContext(ctx).With().Warning("equivocation detected at status round",
-				log.String("sender_id", nodeID.ShortString()))
+			st.logger.WithContext(ctx).With().Warning("equivocation detected in status round",
+				log.Stringer("smesher", nodeID),
+				log.Object("prev", prev),
+				log.Object("curr", &msg.HareMetadata),
+			)
 			st.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			old := &types.HareProofMsg{
 				InnerMsg:  prev.HareMetadata,
@@ -54,7 +57,7 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 			}
 			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), old, this, &msg.Eligibility, st.malCh); err != nil {
 				st.logger.WithContext(ctx).With().Warning("failed to report equivocation in status round",
-					log.String("sender_id", nodeID.ShortString()),
+					log.Stringer("smesher", nodeID),
 					log.Err(err))
 				return
 			}

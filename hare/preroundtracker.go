@@ -73,7 +73,11 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		if prev.InnerMsg.Layer == msg.Layer &&
 			prev.InnerMsg.Round == msg.Round &&
 			prev.InnerMsg.MsgHash != msg.MsgHash {
-			pre.logger.WithContext(ctx).With().Warning("equivocation detected at preround", nodeID)
+			pre.logger.WithContext(ctx).With().Warning("equivocation detected in preround",
+				log.Stringer("smesher", nodeID),
+				log.Object("prev", &prev.InnerMsg),
+				log.Object("curr", &msg.HareMetadata),
+			)
 			pre.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			this := &types.HareProofMsg{
 				InnerMsg:  msg.HareMetadata,

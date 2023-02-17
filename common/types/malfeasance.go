@@ -144,6 +144,13 @@ type HareMetadata struct {
 	MsgHash Hash32
 }
 
+func (hm *HareMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("layer", hm.Layer.Value)
+	encoder.AddUint32("round", hm.Round)
+	encoder.AddString("msgHash", hm.MsgHash.String())
+	return nil
+}
+
 type HareProofMsg struct {
 	InnerMsg  HareMetadata
 	Signature []byte

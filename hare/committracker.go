@@ -64,8 +64,11 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
 			prev.InnerMsg.Round == msg.Round &&
 			prev.InnerMsg.MsgHash != msg.MsgHash {
 			nodeID := types.BytesToNodeID(msg.PubKey.Bytes())
-			ct.logger.WithContext(ctx).With().Warning("equivocation detected at commit round",
-				log.String("sender_id", nodeID.ShortString()))
+			ct.logger.WithContext(ctx).With().Warning("equivocation detected in commit round",
+				log.Stringer("smesher", nodeID),
+				log.Object("prev", &prev.InnerMsg),
+				log.Object("curr", &msg.HareMetadata),
+			)
 			ct.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			this := &types.HareProofMsg{
 				InnerMsg:  msg.HareMetadata,
@@ -73,7 +76,7 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
 			}
 			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev, this, &msg.Eligibility, ct.malCh); err != nil {
 				ct.logger.WithContext(ctx).With().Warning("failed to report equivocation in commit round",
-					log.String("sender_id", nodeID.ShortString()),
+					log.Stringer("smesher", nodeID),
 					log.Err(err))
 				return
 			}
