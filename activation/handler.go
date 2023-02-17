@@ -34,8 +34,6 @@ type atxChan struct {
 
 // Handler processes the atxs received from all nodes and their validity status.
 type Handler struct {
-	sync.RWMutex
-
 	cdb             *datastore.CachedDB
 	clock           layerClock
 	publisher       pubsub.Publisher
@@ -45,7 +43,7 @@ type Handler struct {
 	nipostValidator nipostValidator
 	atxReceivers    []AtxReceiver
 	log             log.Log
-	processAtxMutex sync.Mutex
+	mu              sync.Mutex
 	atxChannels     map[types.ATXID]*atxChan
 	fetcher         system.Fetcher
 }
@@ -86,8 +84,8 @@ func init() {
 
 // AwaitAtx returns a channel that will receive notification when the specified atx with id is received via gossip.
 func (h *Handler) AwaitAtx(id types.ATXID) chan struct{} {
-	h.Lock()
-	defer h.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	if has, err := atxs.Has(h.cdb, id); err == nil && has {
 		return closedChan
@@ -107,8 +105,8 @@ func (h *Handler) AwaitAtx(id types.ATXID) chan struct{} {
 
 // UnsubscribeAtx un subscribes the waiting for a specific atx with atx id id to arrive via gossip.
 func (h *Handler) UnsubscribeAtx(id types.ATXID) {
-	h.Lock()
-	defer h.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	ch, found := h.atxChannels[id]
 	if !found {
@@ -125,8 +123,8 @@ func (h *Handler) UnsubscribeAtx(id types.ATXID) {
 //
 // ATXs received as input must be already syntactically valid. Only contextual validation is performed.
 func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationTx) error {
-	h.processAtxMutex.Lock()
-	defer h.processAtxMutex.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	existingATX, _ := h.cdb.GetAtxHeader(atx.ID())
 	if existingATX != nil { // Already processed
@@ -147,7 +145,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 	} else {
 		h.log.WithContext(ctx).With().Info("atx is valid", atx.ID())
 	}
-	if err := h.StoreAtx(ctx, atx); err != nil {
+	if err := h.storeAtx(ctx, atx); err != nil {
 		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
 
@@ -335,11 +333,8 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 	return err
 }
 
-// StoreAtx stores an ATX and notifies subscribers of the ATXID.
-func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx) error {
-	h.Lock()
-	defer h.Unlock()
-
+// storeAtx stores an ATX and notifies subscribers of the ATXID.
+func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx) error {
 	malicious, err := h.cdb.IsMalicious(atx.NodeID())
 	if err != nil {
 		return fmt.Errorf("checking if node is malicious: %w", err)
@@ -351,7 +346,8 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
 				return err
 			}
-			if prev != nil {
+			// do ID check to be absolutely sure.
+			if prev != nil && prev.ID() != atx.ID() {
 				var atxProof types.AtxProof
 				for i, a := range []*types.VerifiedActivationTx{prev, atx} {
 					atxProof.Messages[i] = types.AtxProofMsg{
@@ -371,7 +367,8 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				}
 				h.log.With().Warning("smesher produced more than one atx in the same epoch",
 					log.Stringer("smesher", atx.NodeID()),
-					log.Inline(atx),
+					log.Object("prev", prev),
+					log.Object("curr", atx),
 				)
 			}
 		}
