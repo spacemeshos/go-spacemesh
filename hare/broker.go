@@ -197,7 +197,10 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 
 	nodeID := types.BytesToNodeID(iMsg.PubKey.Bytes())
 	if proof, err := b.cdb.GetMalfeasanceProof(nodeID); err != nil && !errors.Is(err, sql.ErrNotFound) {
-		logger.With().Error("failed to check malicious identity", log.Err(err))
+		logger.With().Error("failed to check malicious identity",
+			log.Stringer("smesher", nodeID),
+			log.Err(err),
+		)
 		return err
 	} else if proof != nil {
 		// when hare receives a hare gossip from a malicious identity,
@@ -207,7 +210,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		if err := b.handleMaliciousHareMessage(ctx, logger, nodeID, proof, iMsg, isEarly); err != nil {
 			return err
 		}
-		return fmt.Errorf("known malicious %v", nodeID.ShortString())
+		return fmt.Errorf("known malicious %v", nodeID.String())
 	}
 
 	if isEarly {
@@ -295,7 +298,7 @@ func (b *Broker) HandleEligibility(ctx context.Context, em *types.HareEligibilit
 		b.Log.WithContext(ctx).With().Error("failed to check if identity is active",
 			em.Layer,
 			log.Uint32("round", em.Round),
-			log.String("sender_id", nodeID.ShortString()),
+			log.Stringer("smesher", nodeID),
 			log.Err(err))
 		return false
 	}
@@ -303,14 +306,14 @@ func (b *Broker) HandleEligibility(ctx context.Context, em *types.HareEligibilit
 		b.Log.WithContext(ctx).With().Debug("identity is not active",
 			em.Layer,
 			log.Uint32("round", em.Round),
-			log.String("sender_id", nodeID.ShortString()))
+			log.Stringer("smesher", nodeID))
 		return false
 	}
 	if !b.roleValidator.ValidateEligibilityGossip(ctx, em) {
 		b.Log.WithContext(ctx).With().Debug("invalid gossip eligibility",
 			em.Layer,
 			log.Uint32("round", em.Round),
-			log.String("sender_id", nodeID.ShortString()))
+			log.Stringer("smesher", nodeID))
 		return false
 	}
 	b.Log.WithContext(ctx).With().Debug("broker forwarding gossip eligibility to consensus process",
@@ -347,7 +350,7 @@ func (b *Broker) handleEarlyMessage(logger log.Log, layer types.LayerID, nodeID 
 	if len(b.pending[layerNum]) == inboxCapacity {
 		logger.With().Warning("too many pending messages, ignoring message",
 			log.Int("inbox_capacity", inboxCapacity),
-			log.String("sender_id", nodeID.ShortString()))
+			log.Stringer("smesher", nodeID))
 		return nil
 	}
 	b.pending[layerNum] = append(b.pending[layerNum], msg)

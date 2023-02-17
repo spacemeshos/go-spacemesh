@@ -63,7 +63,7 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 			}
 		}
 		st.logger.WithContext(ctx).With().Warning("duplicate status message detected",
-			log.String("sender_id", nodeID.ShortString()))
+			log.Stringer("smesher", nodeID))
 		return
 	}
 

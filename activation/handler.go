@@ -307,7 +307,7 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 
 	if err == nil && atx.PrevATXID == *types.EmptyATXID {
 		// no previous atx declared, but already seen at least one atx from node
-		return fmt.Errorf("no prevATX reported, but other atx with same nodeID (%v) found: %v", atx.NodeID().ShortString(), lastAtx.ShortString())
+		return fmt.Errorf("no prevATX reported, but other atx with same nodeID (%v) found: %v", atx.NodeID(), lastAtx.ShortString())
 	}
 
 	if err == nil && atx.PrevATXID != lastAtx {

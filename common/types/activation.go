@@ -290,7 +290,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	}
 	encoder.AddString("challenge", atx.NIPostChallenge.Hash().String())
 	encoder.AddString("id", atx.id.String())
-	encoder.AddString("sender_id", atx.nodeID.String())
+	encoder.AddString("smesher", atx.nodeID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
 	if atx.CommitmentATX != nil {
