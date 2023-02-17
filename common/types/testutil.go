@@ -1,7 +1,7 @@
 package types
 
 import (
-	"math/rand"
+	"crypto/rand"
 )
 
 // RandomBytes generates random data in bytes for testing.
