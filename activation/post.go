@@ -27,6 +27,8 @@ type PostConfig struct {
 	LabelsPerUnit uint64 `mapstructure:"post-labels-per-unit"`
 	K1            uint32 `mapstructure:"post-k1"`
 	K2            uint32 `mapstructure:"post-k2"`
+	B             uint32 `mapstructure:"post-b"`
+	N             uint32 `mapstructure:"post-n"`
 }
 
 // PostSetupOpts are the options used to initiate a Post setup data creation session,

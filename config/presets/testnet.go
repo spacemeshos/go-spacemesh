@@ -50,11 +50,12 @@ func testnet() config.Config {
 	conf.SyncRequestTimeout = 60_000
 
 	conf.POST.BitsPerLabel = 8
-	conf.POST.K1 = 2000
-	conf.POST.K2 = 1800
-	conf.POST.LabelsPerUnit = 1024
+	conf.POST.K1 = 280
+	conf.POST.K2 = 290
+	conf.POST.LabelsPerUnit = 1 << 14 // 16K
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
+	conf.POST.N = 20
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
