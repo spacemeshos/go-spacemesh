@@ -99,9 +99,11 @@ func (*Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *t
 		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
 		K1:              PostMetadata.K1,
 		K2:              PostMetadata.K2,
+		B:               PostMetadata.B,
+		N:               PostMetadata.N,
 	}
 
-	if err := verifying.Verify(p, m); err != nil {
+	if err := verifying.VerifyNew(p, m); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
 	}
 

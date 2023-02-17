@@ -289,13 +289,9 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *type
 	}
 	mgr.mu.Unlock()
 
-	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.lastOpts.DataDir, mgr.id.Bytes(), mgr.commitmentAtxId.Bytes())
-	if err != nil {
-		return nil, nil, fmt.Errorf("new prover: %w", err)
-	}
-
-	prover.SetLogger(mgr.logger)
-	proof, proofMetadata, err := prover.GenerateProof(challenge)
+	proof, proofMetadata, err := proving.Generate(context.TODO(), challenge, config.Config(mgr.cfg), mgr.logger,
+		proving.WithDataSource(config.Config(mgr.cfg), mgr.id.Bytes(), mgr.commitmentAtxId.Bytes(), mgr.lastOpts.DataDir),
+	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate proof: %w", err)
 	}
@@ -307,6 +303,8 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *type
 		LabelsPerUnit: proofMetadata.LabelsPerUnit,
 		K1:            proofMetadata.K1,
 		K2:            proofMetadata.K2,
+		B:             proofMetadata.B,
+		N:             proofMetadata.N,
 	}
 	return p, m, nil
 }
