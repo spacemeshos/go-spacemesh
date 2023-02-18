@@ -93,6 +93,7 @@ func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) e
 	if p.Eligibility != nil {
 		if err = h.validateHareEligibility(ctx, logger, nodeID, &p); err != nil {
 			h.logger.WithContext(ctx).With().Warning("failed to validate hare eligibility",
+				log.Stringer("smesher", nodeID),
 				log.Inline(&p),
 				log.Err(err),
 			)
@@ -108,18 +109,24 @@ func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) e
 			updateMetrics(p.Proof)
 			return nil
 		}
-		logger.With().Debug("known malicious identity", nodeID)
+		logger.With().Debug("known malicious identity",
+			log.Stringer("smesher", nodeID),
+		)
 		return errors.New("known proof")
 	}
 	if err = h.cdb.AddMalfeasanceProof(nodeID, &p.MalfeasanceProof, nil); err != nil {
 		h.logger.WithContext(ctx).With().Error("failed to save MalfeasanceProof",
+			log.Stringer("smesher", nodeID),
 			log.Inline(&p),
 			log.Err(err),
 		)
 		return fmt.Errorf("add malfeasance proof: %w", err)
 	}
 	updateMetrics(p.Proof)
-	h.logger.WithContext(ctx).With().Info("new malfeasance proof", log.Inline(&p))
+	h.logger.WithContext(ctx).With().Info("new malfeasance proof",
+		log.Stringer("smesher", nodeID),
+		log.Inline(&p),
+	)
 	return nil
 }
 
@@ -194,14 +201,11 @@ func (h *Handler) validateHareEquivocation(logger log.Log, proof *types.Malfeasa
 		}
 	}
 	logger.With().Warning("received invalid hare malfeasance proof",
-		log.Stringer("nodeID_1", firstNid),
-		log.Stringer("nodeID_2", nid),
-		log.Stringer("layer_1", firstMsg.InnerMsg.Layer),
-		log.Stringer("layer_2", msg.InnerMsg.Layer),
-		log.Uint32("round_1", firstMsg.InnerMsg.Round),
-		log.Uint32("round_2", msg.InnerMsg.Round),
-		log.Stringer("msg_hash_1", firstMsg.InnerMsg.MsgHash),
-		log.Stringer("msg_hash_2", msg.InnerMsg.MsgHash))
+		log.Stringer("smesher", firstNid),
+		log.Stringer("smesher", nid),
+		log.Object("first", &firstMsg.InnerMsg),
+		log.Object("second", &msg.InnerMsg),
+	)
 	numInvalidProofsHare.Inc()
 	return types.NodeID{}, errors.New("invalid hare malfeasance proof")
 }
@@ -238,12 +242,11 @@ func (h *Handler) validateMultipleATXs(logger log.Log, proof *types.MalfeasanceP
 		}
 	}
 	logger.With().Warning("received invalid atx malfeasance proof",
-		log.Stringer("nodeID_1", firstNid),
-		log.Stringer("nodeID_2", nid),
-		log.Stringer("epoch_1", firstMsg.InnerMsg.Target),
-		log.Stringer("epoch_2", msg.InnerMsg.Target),
-		log.Stringer("msg_hash_1", firstMsg.InnerMsg.MsgHash),
-		log.Stringer("msg_hash_2", msg.InnerMsg.MsgHash))
+		log.Stringer("smesher", firstNid),
+		log.Stringer("smesher", nid),
+		log.Object("first", &firstMsg.InnerMsg),
+		log.Object("second", &msg.InnerMsg),
+	)
 	numInvalidProofsATX.Inc()
 	return types.NodeID{}, errors.New("invalid atx malfeasance proof")
 }
@@ -280,12 +283,11 @@ func (h *Handler) validateMultipleBallots(logger log.Log, proof *types.Malfeasan
 		}
 	}
 	logger.With().Warning("received invalid ballot malfeasance proof",
-		log.Stringer("nodeID_1", firstNid),
-		log.Stringer("nodeID_2", nid),
-		log.Stringer("layer_1", firstMsg.InnerMsg.Layer),
-		log.Stringer("layer_2", msg.InnerMsg.Layer),
-		log.Stringer("msg_hash_1", firstMsg.InnerMsg.MsgHash),
-		log.Stringer("msg_hash_2", msg.InnerMsg.MsgHash))
+		log.Stringer("smesher", firstNid),
+		log.Stringer("smesher", nid),
+		log.Object("first", &firstMsg.InnerMsg),
+		log.Object("second", &msg.InnerMsg),
+	)
 	numInvalidProofsBallot.Inc()
 	return types.NodeID{}, errors.New("invalid ballot malfeasance proof")
 }

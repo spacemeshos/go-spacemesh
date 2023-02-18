@@ -62,10 +62,6 @@ go-env: get-gpu-setup
 	go env -w CGO_LDFLAGS="$(CGO_LDFLAGS)"
 .PHONY: go-env
 
-go-env-test: get-gpu-setup
-	go env -w CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"
-.PHONY: go-env-test
-
 print-ldflags: get-gpu-setup
 	@echo $(CGO_LDFLAGS)
 .PHONY: print-ldflags

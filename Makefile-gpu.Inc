@@ -73,6 +73,10 @@ $(BINDIR_GPU_SETUP_LIBS): $(PROJ_DIR)$(GPU_SETUP_ZIP)
 $(PROJ_DIR)$(GPU_SETUP_ZIP):
 	curl -L $(GPU_SETUP_URL_ZIP) -o $(PROJ_DIR)$(GPU_SETUP_ZIP)
 
+go-env-test: get-gpu-setup
+	go env -w CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"
+.PHONY: go-env-test
+
 get-gpu-setup: $(PROJ_DIR)$(GPU_SETUP_ZIP) $(BINDIR_GPU_SETUP_LIBS)
 .PHONY: get-gpu-setup
 
