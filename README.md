@@ -121,18 +121,21 @@ the `build/*target*` directory.
 
 ### Using `go build` and `go test` without `make`
 
-To build code without using `make` the `CGO_LDFLAGS` environment variable must be set
-appropriately. The required value can be obtained by running `make print-ldflags` or
-`make print-test-ldflags`.
+To build or test code without using `make` some golang environment variables
+must be set appropriately.
 
-This can be done in 3 ways:
+The environment variables can be printed by running either `make print-env` or
+`make print-test-env`.
 
-1. Setting the variable in the shell environment (e.g., in bash run `CGO_LDFLAGS=$(make print-ldflags)`).
-2. Prefixing the key and value to the `go` command (e.g., `CGO_LDFLAGS=$(make print-ldflags) go build`).
-3. Using `go env -w CGO_LDFLAGS=$(make print-ldflags)`, which persistently adds this value to Go's
-   environment for any future runs.
+They can be set in 3 ways:
 
-There's a handy shortcut for the 3rd method: `make go-env` or `make go-env-test`.
+_Note: we need to use eval to interpret the commands since there are spaces in
+the values of the variables so the shell can't correctly split them as
+arguments._
+
+1. Setting the variables on the same line as the `go` command (e.g., `eval $(make print-env) go build`). This affects the environment for that command invocation only.
+2. Exporting the variables in the shell's environment (e.g., `eval export $(make print-env)`). The variables will persist for the duration of that shell (and will be passed to subshells).
+3. Setting the variables in the go environment (e.g., `eval go env -w $(make print-env)`). Persistently adds these values to Go's environment for any future runs.
 
 ---
 
