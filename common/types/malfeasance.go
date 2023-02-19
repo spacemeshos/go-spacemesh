@@ -23,6 +23,40 @@ type MalfeasanceProof struct {
 	Proof Proof
 }
 
+func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("generated_layer", mp.Layer.Value)
+	switch mp.Proof.Type {
+	case MultipleATXs:
+		encoder.AddString("type", "multiple atxs")
+		p, ok := mp.Proof.Data.(*AtxProof)
+		if !ok {
+			encoder.AddString("msgs", "n/a")
+		} else {
+			encoder.AddObject("msgs", p)
+		}
+	case MultipleBallots:
+		encoder.AddString("type", "multiple ballots")
+		p, ok := mp.Proof.Data.(*BallotProof)
+		if !ok {
+			encoder.AddString("msgs", "n/a")
+		} else {
+			encoder.AddObject("msgs", p)
+		}
+	case HareEquivocation:
+		encoder.AddString("type", "hare equivocation")
+		p, ok := mp.Proof.Data.(*HareProof)
+		if !ok {
+			encoder.AddString("msgs", "n/a")
+		} else {
+			encoder.AddObject("msgs", p)
+		}
+	default:
+		encoder.AddString("type", "unknown")
+	}
+
+	return nil
+}
+
 type Proof struct {
 	// MultipleATXs | MultipleBallots | HareEquivocation
 	Type uint8
@@ -96,16 +130,42 @@ type MalfeasanceGossip struct {
 	Eligibility *HareEligibilityGossip // optional, only useful in live hare rounds
 }
 
+func (mg *MalfeasanceGossip) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddObject("proof", &mg.MalfeasanceProof)
+	if mg.Eligibility != nil {
+		encoder.AddObject("hare eligibility", mg.Eligibility)
+	}
+	return nil
+}
+
 type AtxProof struct {
 	Messages [2]AtxProofMsg
+}
+
+func (ap *AtxProof) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddObject("first", &ap.Messages[0].InnerMsg)
+	encoder.AddObject("second", &ap.Messages[1].InnerMsg)
+	return nil
 }
 
 type BallotProof struct {
 	Messages [2]BallotProofMsg
 }
 
+func (bp *BallotProof) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddObject("first", &bp.Messages[0].InnerMsg)
+	encoder.AddObject("second", &bp.Messages[1].InnerMsg)
+	return nil
+}
+
 type HareProof struct {
 	Messages [2]HareProofMsg
+}
+
+func (hp *HareProof) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddObject("first", &hp.Messages[0].InnerMsg)
+	encoder.AddObject("second", &hp.Messages[1].InnerMsg)
+	return nil
 }
 
 type AtxProofMsg struct {
@@ -142,6 +202,13 @@ type HareMetadata struct {
 	Round uint32
 	// hash of hare.Message.InnerMessage
 	MsgHash Hash32
+}
+
+func (hm *HareMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("layer", hm.Layer.Value)
+	encoder.AddUint32("round", hm.Round)
+	encoder.AddString("msgHash", hm.MsgHash.String())
+	return nil
 }
 
 type HareProofMsg struct {

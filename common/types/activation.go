@@ -215,6 +215,12 @@ type ATXMetadata struct {
 	MsgHash Hash32
 }
 
+func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("epoch", uint32(m.Target))
+	encoder.AddString("msgHash", m.MsgHash.String())
+	return nil
+}
+
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
@@ -284,7 +290,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	}
 	encoder.AddString("challenge", atx.NIPostChallenge.Hash().String())
 	encoder.AddString("id", atx.id.String())
-	encoder.AddString("sender_id", atx.nodeID.String())
+	encoder.AddString("smesher", atx.nodeID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
 	if atx.CommitmentATX != nil {

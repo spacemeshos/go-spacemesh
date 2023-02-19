@@ -111,7 +111,7 @@ func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxH
 	if err != nil {
 		o.log.With().Warning("failed to find ATX ID for node",
 			log.Named("publish_epoch", publishEpoch),
-			log.Named("atx_node_id", o.nodeID),
+			log.Named("smesher", o.nodeID),
 			log.Err(err))
 		return nil, fmt.Errorf("get ATX ID: %w", err)
 	}
@@ -120,7 +120,7 @@ func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxH
 	if err != nil {
 		o.log.With().Error("failed to get ATX header",
 			log.Named("publish_epoch", publishEpoch),
-			log.Named("atx_node_id", o.nodeID),
+			log.Named("smesher", o.nodeID),
 			log.Err(err))
 		return nil, fmt.Errorf("get ATX header: %w", err)
 	}

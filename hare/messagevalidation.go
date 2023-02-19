@@ -37,7 +37,7 @@ func (ev *eligibilityValidator) ValidateEligibilityGossip(ctx context.Context, e
 		ev.WithContext(ctx).With().Error("failed to validate role",
 			em.Layer,
 			log.Uint32("round", em.Round),
-			log.String("sender_id", types.BytesToNodeID(em.PubKey).ShortString()),
+			log.Stringer("smesher", types.BytesToNodeID(em.PubKey)),
 		)
 		return false
 	}
@@ -55,7 +55,7 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 	if err != nil {
 		ev.WithContext(ctx).With().Error("failed to validate role",
 			log.Err(err),
-			log.String("sender_id", m.PubKey.ShortString()),
+			log.Stringer("smesher", types.BytesToNodeID(m.PubKey.Bytes())),
 			m.Layer,
 			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
@@ -63,7 +63,7 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 
 	if !res {
 		ev.WithContext(ctx).With().Warning("validate message failed: role is invalid",
-			log.String("sender_id", m.PubKey.ShortString()),
+			log.Stringer("smesher", types.BytesToNodeID(m.PubKey.Bytes())),
 			m.Layer,
 			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
@@ -244,7 +244,7 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(ctx context.Contex
 
 	if m.InnerMsg == nil {
 		logger.With().Warning("syntax validation failed: inner message is nil",
-			log.String("sender_id", m.PubKey.ShortString()))
+			log.Stringer("smesher", types.BytesToNodeID(m.PubKey.Bytes())))
 		return false
 	}
 
@@ -387,7 +387,7 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 		statusIter := inferIteration(m.Round)
 		if proposalIter != statusIter { // not same iteration
 			logger.With().Warning("proposal validation failed: not same iteration",
-				log.String("sender_id", m.PubKey.ShortString()),
+				log.Stringer("smesher", types.BytesToNodeID(m.PubKey.Bytes())),
 				m.Layer,
 				log.Uint32("expected", proposalIter),
 				log.Uint32("actual", statusIter))
@@ -396,7 +396,7 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 
 		return true
 	}
-	logger = logger.WithFields(log.String("sender_id", msg.PubKey.ShortString()), msg.Layer)
+	logger = logger.WithFields(log.Stringer("smesher", types.BytesToNodeID(msg.PubKey.Bytes())), msg.Layer)
 	validators := []func(m *Msg) bool{validateStatusType, validateSameIteration, v.statusValidator}
 	if err := v.validateAggregatedMessage(ctx, msg.InnerMsg.Svp, validators); err != nil {
 		logger.With().Warning("invalid proposal", log.Err(err))
