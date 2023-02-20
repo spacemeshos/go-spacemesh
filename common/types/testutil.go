@@ -1,7 +1,7 @@
 package types
 
 import (
-	"math/rand"
+	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 // RandomBytes generates random data in bytes for testing.

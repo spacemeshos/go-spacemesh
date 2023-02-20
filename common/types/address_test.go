@@ -1,13 +1,12 @@
 package types_test
 
 import (
-	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 func init() {
@@ -101,7 +100,11 @@ func TestAddress_SetBytes(t *testing.T) {
 func TestAddress_GenerateAddress(t *testing.T) {
 	t.Parallel()
 	t.Run("generate from public key", func(t *testing.T) {
-		srcAddr := types.GenerateAddress(RandomBytes(32))
+		bytes := make([]byte, 32)
+		_, err := rand.Read(bytes)
+		require.NoError(t, err)
+
+		srcAddr := types.GenerateAddress(bytes)
 		newAddr, err := types.StringToAddress(srcAddr.String())
 		require.NoError(t, err)
 		checkAddressesEqual(t, srcAddr, newAddr)
@@ -116,7 +119,10 @@ func TestAddress_GenerateAddress(t *testing.T) {
 
 func TestAddress_ReservedBytesOnTop(t *testing.T) {
 	for i := 0; i < 100; i++ {
-		addr := types.GenerateAddress(RandomBytes(i))
+		bytes := make([]byte, i)
+		_, err := rand.Read(bytes)
+		require.NoError(t, err)
+		addr := types.GenerateAddress(bytes)
 		for j := 0; j < types.AddressReservedSpace; j++ {
 			require.Zero(t, addr.Bytes()[j])
 		}
@@ -127,15 +133,4 @@ func checkAddressesEqual(t *testing.T, addrA, addrB types.Address) {
 	require.Equal(t, addrA.Bytes(), addrB.Bytes())
 	require.Equal(t, addrA.String(), addrB.String())
 	require.Equal(t, addrA.IsEmpty(), addrB.IsEmpty())
-}
-
-// RandomBytes generates random data in bytes for testing.
-func RandomBytes(size int) []byte {
-	rand.Seed(time.Now().UnixNano())
-	b := make([]byte, size)
-	_, err := rand.Read(b)
-	if err != nil {
-		return nil
-	}
-	return b
 }
