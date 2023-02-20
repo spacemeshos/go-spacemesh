@@ -12,11 +12,14 @@ const (
 	SelfSpawn TxType = iota
 	Spawn
 	LocalMethodCall
+	ForeignMethodCall
 )
 
 type Method = uint16
 
 const MethodSpend Method = 16
+
+const VaultFixedGas = 77
 
 type (
 	// PublicKey is an alias to Hash32.
@@ -69,6 +72,8 @@ type Template interface {
 	MaxSpend(Method, any) (uint64, error)
 	// Verify security of the transaction.
 	Verify(Host, []byte, *scale.Decoder) bool
+	// Authorize foreign call.
+	Authorize(Host) bool
 }
 
 // AccountLoader is an interface for loading accounts.
@@ -101,7 +106,7 @@ type Host interface {
 	Consume(uint64) error
 	Spawn(scale.Encodable) error
 	Transfer(Address, uint64) error
-	Relay(expectedTemplate, address Address, call func(Host) error) error
+	Relay(*ForeignArgs) error
 
 	Principal() Address
 	Handler() Handler
@@ -110,10 +115,16 @@ type Host interface {
 	GetGenesisID() Hash20
 }
 
-//go:generate scalegen -types Payload
+//go:generate scalegen -types Payload,ForeignArgs,SpendArgs
 
 // Payload is a generic payload for all transactions.
 type Payload struct {
 	GasPrice uint64
 	Nonce    Nonce
+}
+
+type ForeignArgs struct {
+	Target Address
+	Method Method
+	Args   []byte
 }

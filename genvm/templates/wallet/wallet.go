@@ -1,8 +1,6 @@
 package wallet
 
 import (
-	"fmt"
-
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/go-scale"
 
@@ -23,12 +21,10 @@ type Wallet struct {
 
 // MaxSpend returns amount specified in the SpendArguments for Spend method.
 func (s *Wallet) MaxSpend(method core.Method, args any) (uint64, error) {
-	switch method {
-	case core.MethodSpend:
+	if method == core.MethodSpend {
 		return args.(*SpendArguments).Amount, nil
-	default:
-		return 0, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
+	return 0, nil
 }
 
 // Verify that transaction is signed by the owner of the PublicKey using ed25519.
@@ -45,4 +41,8 @@ func (s *Wallet) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool {
 // Spend transfers an amount to the address specified in SpendArguments.
 func (s *Wallet) Spend(host core.Host, args *SpendArguments) error {
 	return host.Transfer(args.Destination, args.Amount)
+}
+
+func (s *Wallet) Authorize(core.Host) bool {
+	return false
 }

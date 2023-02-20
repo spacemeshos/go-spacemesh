@@ -95,6 +95,8 @@ func (h *handler) Parse(txtype core.TxType, method core.Method, decoder *scale.D
 		} else {
 			return output, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 		}
+	case core.ForeignMethodCall:
+		output.FixedGas = core.VaultFixedGas
 	default:
 		return output, fmt.Errorf("%w: unknown txtype %d", core.ErrMalformed, txtype)
 	}
@@ -139,6 +141,8 @@ func (h *handler) Exec(host core.Host, txtype core.TxType, method core.Method, a
 	switch txtype {
 	case core.SelfSpawn, core.Spawn:
 		return host.Spawn(args)
+	case core.ForeignMethodCall:
+		return host.Relay(args.(*core.ForeignArgs))
 	case core.LocalMethodCall:
 		if method == core.MethodSpend {
 			return host.Template().(SpendTemplate).Spend(host, args.(*SpendArguments))

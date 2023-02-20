@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -69,7 +68,6 @@ func New(db *sql.Database, opts ...Opt) *VM {
 	}
 	wallet.Register(vm.registry)
 	multisig.Register(vm.registry)
-	vesting.Register(vm.registry)
 	vault.Register(vm.registry)
 	for _, opt := range opts {
 		opt(vm)
@@ -483,6 +481,8 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 		return parseSpawn(logger, lid, reg, loader, cfg, raw, decoder)
 	case core.LocalMethodCall:
 		return parseLocalMethodCall(logger, lid, reg, loader, cfg, raw, decoder)
+	case core.ForeignMethodCall:
+		return parseForeignMethodCall(logger, lid, reg, loader, cfg, raw, decoder)
 	}
 	return nil, fmt.Errorf("%w: unknown tx type %d", core.ErrMalformed, txtype)
 }
@@ -613,16 +613,24 @@ func parseSpawn(logger log.Log, lid types.LayerID, reg *registry.Registry, loade
 	}, nil
 }
 
-func parseLocalMethodCall(logger log.Log, lid types.LayerID, reg *registry.Registry, loader core.AccountLoader, cfg Config, raw []byte, decoder *scale.Decoder) (*core.Context, error) {
+func getAccountsHandles(decoder *scale.Decoder, loader core.AccountLoader, reg *registry.Registry) (types.Account, core.Handler, core.Template, error) {
 	account, err := parseSpawnedAccount(decoder, loader)
 	if err != nil {
-		return nil, err
+		return types.Account{}, nil, nil, err
 	}
-	principalHandler := reg.Get(*account.TemplateAddress)
-	if principalHandler == nil {
-		return nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *account.TemplateAddress)
+	handler := reg.Get(*account.TemplateAddress)
+	if handler == nil {
+		return types.Account{}, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *account.TemplateAddress)
 	}
-	principalTemplate, err := principalHandler.Load(account.State)
+	template, err := handler.Load(account.State)
+	if err != nil {
+		return types.Account{}, nil, nil, err
+	}
+	return account, handler, template, nil
+}
+
+func parseLocalMethodCall(logger log.Log, lid types.LayerID, reg *registry.Registry, loader core.AccountLoader, cfg Config, raw []byte, decoder *scale.Decoder) (*core.Context, error) {
+	account, principalHandler, principalTemplate, err := getAccountsHandles(decoder, loader, reg)
 	if err != nil {
 		return nil, err
 	}
@@ -664,6 +672,59 @@ func parseLocalMethodCall(logger log.Log, lid types.LayerID, reg *registry.Regis
 			TemplateAddress: *account.TemplateAddress,
 			TxType:          core.LocalMethodCall,
 			Method:          method,
+			MaxGas:          core.ComputeGasCost(output.BaseGas, output.FixedGas, raw, cfg.StorageCostFactor),
+			MaxSpend:        maxspend,
+			GasPrice:        output.GasPrice,
+			Nonce:           output.Nonce,
+		},
+	}, nil
+}
+
+func parseForeignMethodCall(logger log.Log, lid types.LayerID, reg *registry.Registry, loader core.AccountLoader, cfg Config, raw []byte, decoder *scale.Decoder) (*core.Context, error) {
+	principalAccount, principalHandler, principalTemplate, err := getAccountsHandles(decoder, loader, reg)
+	if err != nil {
+		return nil, err
+	}
+	var target core.Address
+	if _, err := scale.DecodeByteArray(decoder, target[:]); err != nil {
+		return nil, err
+	}
+	method, _, err := scale.DecodeCompact16(decoder)
+	if err != nil {
+		return nil, fmt.Errorf("%w: can't decode method %s", core.ErrMalformed, err)
+	}
+	output, err := principalHandler.Parse(core.ForeignMethodCall, 0, decoder)
+	if err != nil {
+		return nil, err
+	}
+	buf, _, err := scale.DecodeByteSlice(decoder)
+	if err != nil {
+		return nil, err
+	}
+	args := &core.ForeignArgs{
+		Target: target,
+		Method: method,
+		Args:   buf,
+	}
+	// this interface is also messed up now
+	maxspend, err := principalTemplate.MaxSpend(0, args)
+	if err != nil {
+		return nil, err
+	}
+	return &core.Context{
+		GenesisID:         cfg.GenesisID,
+		Registry:          reg,
+		Loader:            loader,
+		PrincipalAccount:  principalAccount,
+		LayerID:           lid,
+		Args:              args,
+		ParseOutput:       output,
+		PrincipalHandler:  principalHandler,
+		PrincipalTemplate: principalTemplate,
+		Header: types.TxHeader{
+			Principal:       principalAccount.Address,
+			TemplateAddress: *principalAccount.TemplateAddress,
+			TxType:          core.ForeignMethodCall,
 			MaxGas:          core.ComputeGasCost(output.BaseGas, output.FixedGas, raw, cfg.StorageCostFactor),
 			MaxSpend:        maxspend,
 			GasPrice:        output.GasPrice,

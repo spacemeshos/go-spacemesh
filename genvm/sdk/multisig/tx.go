@@ -141,3 +141,25 @@ func Spend(ref uint8, pk ed25519.PrivateKey, principal, to types.Address, amount
 	aggregator.Add(part)
 	return aggregator
 }
+
+// Foreign call to the target account.
+func Foreign(ref uint8, pk ed25519.PrivateKey, principal, target types.Address, method core.Method, args scale.Encodable, nonce types.Nonce, opts ...sdk.Opt) *Aggregator {
+	options := sdk.Defaults()
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	payload := core.Payload{}
+	payload.GasPrice = options.GasPrice
+	payload.Nonce = nonce
+
+	emethod := scale.U8(method)
+	tx := encode(&sdk.TxVersion, &sdk.ForeignMethodCall, &principal, &target, &emethod, &payload, sdk.LengthPrefixedStruct{Encodable: args})
+	hh := hash.Sum(options.GenesisID[:], tx)
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
+	aggregator := &Aggregator{unsigned: tx, parts: map[uint8]multisig.Part{}}
+	part := multisig.Part{Ref: ref}
+	copy(part.Sig[:], sig)
+	aggregator.Add(part)
+	return aggregator
+}

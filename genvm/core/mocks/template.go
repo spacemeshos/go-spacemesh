@@ -35,6 +35,20 @@ func (m *MockTemplate) EXPECT() *MockTemplateMockRecorder {
 	return m.recorder
 }
 
+// Authorize mocks base method.
+func (m *MockTemplate) Authorize(arg0 core.Host) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Authorize", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Authorize indicates an expected call of Authorize.
+func (mr *MockTemplateMockRecorder) Authorize(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Authorize", reflect.TypeOf((*MockTemplate)(nil).Authorize), arg0)
+}
+
 // EncodeScale mocks base method.
 func (m *MockTemplate) EncodeScale(arg0 *scale.Encoder) (int, error) {
 	m.ctrl.T.Helper()

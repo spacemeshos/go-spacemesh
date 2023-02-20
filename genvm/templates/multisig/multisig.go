@@ -1,8 +1,6 @@
 package multisig
 
 import (
-	"fmt"
-
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/go-scale"
 
@@ -19,12 +17,10 @@ type MultiSig struct {
 
 // MaxSpend returns amount specified in the SpendArguments.
 func (ms *MultiSig) MaxSpend(method core.Method, args any) (uint64, error) {
-	switch method {
-	case core.MethodSpend:
+	if method == core.MethodSpend {
 		return args.(*SpendArguments).Amount, nil
-	default:
-		return 0, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
+	return 0, nil
 }
 
 // Verify that transaction is signed has k valid signatures.
@@ -54,4 +50,8 @@ func (ms *MultiSig) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool 
 // Spend transfers an amount to the address specified in SpendArguments.
 func (ms *MultiSig) Spend(host core.Host, args *SpendArguments) error {
 	return host.Transfer(args.Destination, args.Amount)
+}
+
+func (ms *MultiSig) Authorize(core.Host) bool {
+	return false
 }

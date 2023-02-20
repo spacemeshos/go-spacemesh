@@ -83,3 +83,25 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	return append(tx, sig...)
 }
+
+// Foreign call to the target account.
+func Foreign(pk signing.PrivateKey, target types.Address, method core.Method, args scale.Encodable, nonce types.Nonce, opts ...sdk.Opt) []byte {
+	options := sdk.Defaults()
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	spawnargs := wallet.SpawnArguments{}
+	copy(spawnargs.PublicKey[:], signing.Public(pk))
+	principal := core.ComputePrincipal(wallet.TemplateAddress, &spawnargs)
+
+	payload := core.Payload{}
+	payload.GasPrice = options.GasPrice
+	payload.Nonce = nonce
+
+	emethod := scale.U8(method)
+	tx := sdk.Encode(&sdk.TxVersion, &sdk.LocalMethodCall, &principal, &target, &emethod, &payload, sdk.LengthPrefixedStruct{Encodable: args})
+	hh := hash.Sum(options.GenesisID[:], tx)
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
+	return append(tx, sig...)
+}

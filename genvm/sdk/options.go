@@ -43,7 +43,8 @@ var (
 )
 
 var (
-	SelfSpawn       = scale.U8(core.SelfSpawn)
-	Spawn           = scale.U8(core.Spawn)
-	LocalMethodCall = scale.U8(core.LocalMethodCall)
+	SelfSpawn         = scale.U8(core.SelfSpawn)
+	Spawn             = scale.U8(core.Spawn)
+	LocalMethodCall   = scale.U8(core.LocalMethodCall)
+	ForeignMethodCall = scale.U8(core.ForeignMethodCall)
 )

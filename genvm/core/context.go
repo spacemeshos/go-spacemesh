@@ -121,24 +121,28 @@ func (c *Context) transfer(from *Account, to Address, amount, max uint64) error 
 }
 
 // Relay call to the remote account.
-func (c *Context) Relay(remoteTemplate, address Address, call func(Host) error) error {
-	account, err := c.load(address)
+func (c *Context) Relay(args *ForeignArgs) error {
+	account, err := c.load(args.Target)
 	if err != nil {
 		return err
 	}
 	if account.TemplateAddress == nil {
 		return ErrNotSpawned
 	}
-	if *account.TemplateAddress != remoteTemplate {
-		return fmt.Errorf("%w: %s != %s", ErrTemplateMismatch, remoteTemplate.String(), account.TemplateAddress.String())
-	}
-	handler := c.Registry.Get(remoteTemplate)
+	handler := c.Registry.Get(*account.TemplateAddress)
 	if handler == nil {
 		panic("template of the spawned account should exist in the registry")
 	}
 	template, err := handler.Load(account.State)
 	if err != nil {
 		return err
+	}
+	localArgs := handler.Args(LocalMethodCall, args.Method)
+	if localArgs == nil {
+		return fmt.Errorf("%w: unknown method call %v", ErrMalformed, args.Method)
+	}
+	if _, err := localArgs.DecodeScale(scale.NewDecoder(bytes.NewReader(args.Args))); err != nil {
+		return fmt.Errorf("%w failed to decode method arguments %s", ErrMalformed, err)
 	}
 
 	remote := &RemoteContext{
@@ -147,7 +151,10 @@ func (c *Context) Relay(remoteTemplate, address Address, call func(Host) error) 
 		handler:  handler,
 		template: template,
 	}
-	if err := call(remote); err != nil {
+	if !template.Authorize(remote) {
+		return ErrAuth
+	}
+	if err := handler.Exec(remote, LocalMethodCall, args.Method, localArgs); err != nil {
 		return err
 	}
 	// ideally such changes would be serialized once for the whole block execution

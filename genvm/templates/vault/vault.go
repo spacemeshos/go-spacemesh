@@ -16,6 +16,8 @@ var (
 	ErrAmountNotAvailable = errors.New("vault: amount not available")
 )
 
+const FixedGasSpend = core.VaultFixedGas
+
 //go:generate scalegen
 
 type Vault struct {
@@ -69,4 +71,8 @@ func (v *Vault) MaxSpend(core.Method, any) (uint64, error) {
 // Verify always returns false.
 func (v *Vault) Verify(core.Host, []byte, *scale.Decoder) bool {
 	return false
+}
+
+func (v *Vault) Authorize(host core.Host) bool {
+	return host.Principal() == v.Owner
 }

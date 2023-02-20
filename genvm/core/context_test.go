@@ -122,87 +122,73 @@ func TestApply(t *testing.T) {
 	})
 }
 
+type empty struct{}
+
+func (e *empty) EncodeScale(*scale.Encoder) (int, error) {
+	return 0, nil
+}
+
+func (e *empty) DecodeScale(*scale.Decoder) (int, error) {
+	return 0, nil
+}
+
 func TestRelay(t *testing.T) {
 	var (
-		principal = core.Address{'p', 'r', 'i'}
-		template  = core.Address{'t', 'e', 'm'}
-		remote    = core.Address{'r', 'e', 'm'}
+		template = core.Address{'t', 'e', 'm'}
+		remote   = core.Address{'r', 'e', 'm'}
 	)
 	t.Run("not spawned", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{sql.InMemory()})
 		ctx := core.Context{Loader: cache}
-		call := func(remote core.Host) error {
-			require.Fail(t, "not expected to be called")
-			return nil
+		args := &core.ForeignArgs{
+			Target: remote,
 		}
-		require.ErrorIs(t, ctx.Relay(template, remote, call), core.ErrNotSpawned)
+		require.ErrorIs(t, ctx.Relay(args), core.ErrNotSpawned)
 	})
-	t.Run("mismatched template", func(t *testing.T) {
+	t.Run("no method", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{sql.InMemory()})
 		require.NoError(t, cache.Update(core.Account{
 			Address:         remote,
-			TemplateAddress: &core.Address{'m', 'i', 's'},
+			TemplateAddress: &template,
 		}))
-		ctx := core.Context{Loader: cache}
-		call := func(remote core.Host) error {
-			require.Fail(t, "not expected to be called")
-			return nil
+
+		args := &core.ForeignArgs{
+			Target: remote,
+			Method: 10,
 		}
-		require.ErrorIs(t, ctx.Relay(template, remote, call), core.ErrTemplateMismatch)
+
+		reg := registry.New()
+		ctx := core.Context{Loader: cache, Registry: reg}
+		ctrl := gomock.NewController(t)
+		handler := mocks.NewMockHandler(ctrl)
+		reg.Register(template, handler)
+		handler.EXPECT().Load(gomock.Any()).Return(mocks.NewMockTemplate(ctrl), nil).AnyTimes()
+		handler.EXPECT().Args(gomock.Any(), args.Method).Return(nil)
+
+		require.ErrorContains(t, ctx.Relay(args), "unknown method")
 	})
-	t.Run("relayed transfer", func(t *testing.T) {
-		for _, receiver1 := range []core.Address{{'a', 'n', 'y'}, principal} {
-			t.Run(string(receiver1[:3]), func(t *testing.T) {
-				ctrl := gomock.NewController(t)
+	t.Run("failed auth", func(t *testing.T) {
+		cache := core.NewStagedCache(core.DBLoader{sql.InMemory()})
+		require.NoError(t, cache.Update(core.Account{
+			Address:         remote,
+			TemplateAddress: &template,
+		}))
 
-				encoded := []byte("test")
-
-				handler := mocks.NewMockHandler(ctrl)
-				tpl := mocks.NewMockTemplate(ctrl)
-				tpl.EXPECT().EncodeScale(gomock.Any()).DoAndReturn(func(enc *scale.Encoder) (int, error) {
-					return scale.EncodeByteArray(enc, encoded)
-				}).AnyTimes()
-				handler.EXPECT().Load(gomock.Any()).Return(tpl, nil).AnyTimes()
-				reg := registry.New()
-				reg.Register(template, handler)
-
-				cache := core.NewStagedCache(core.DBLoader{sql.InMemory()})
-				receiver2 := core.Address{'f'}
-				const (
-					total   = 1000
-					amount1 = 100
-					amount2 = total - amount1/2
-				)
-				require.NoError(t, cache.Update(core.Account{
-					Address:         remote,
-					TemplateAddress: &template,
-					Balance:         total,
-				}))
-				ctx := core.Context{Loader: cache, Registry: reg}
-				ctx.PrincipalAccount.Address = principal
-				require.NoError(t, ctx.Relay(template, remote, func(remote core.Host) error {
-					return remote.Transfer(receiver1, amount1)
-				}))
-				require.ErrorIs(t, ctx.Relay(template, remote, func(remote core.Host) error {
-					return remote.Transfer(receiver2, amount2)
-				}), core.ErrNoBalance)
-				require.NoError(t, ctx.Apply(cache))
-
-				rec1state, err := cache.Get(receiver1)
-				require.NoError(t, err)
-				require.Equal(t, amount1, int(rec1state.Balance))
-				require.NotEqual(t, encoded, rec1state.State)
-
-				rec2state, err := cache.Get(receiver2)
-				require.NoError(t, err)
-				require.Equal(t, 0, int(rec2state.Balance))
-				require.NotEqual(t, encoded, rec2state.State)
-
-				remoteState, err := cache.Get(remote)
-				require.NoError(t, err)
-				require.Equal(t, total-amount1, int(remoteState.Balance))
-				require.Equal(t, encoded, remoteState.State)
-			})
+		args := &core.ForeignArgs{
+			Target: remote,
+			Method: 10,
 		}
+
+		reg := registry.New()
+		ctx := core.Context{Loader: cache, Registry: reg}
+		ctrl := gomock.NewController(t)
+		handler := mocks.NewMockHandler(ctrl)
+		reg.Register(template, handler)
+		tpl := mocks.NewMockTemplate(ctrl)
+		handler.EXPECT().Load(gomock.Any()).Return(tpl, nil).AnyTimes()
+		handler.EXPECT().Args(gomock.Any(), args.Method).Return(&empty{})
+		tpl.EXPECT().Authorize(gomock.Any()).Return(false)
+
+		require.ErrorIs(t, ctx.Relay(args), core.ErrAuth)
 	})
 }

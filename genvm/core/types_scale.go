@@ -44,3 +44,55 @@ func (t *Payload) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	}
 	return total, nil
 }
+
+func (t *ForeignArgs) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeByteArray(enc, t.Target[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact16(enc, uint16(t.Method))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteSlice(enc, t.Args)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *ForeignArgs) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := scale.DecodeByteArray(dec, t.Target[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeCompact16(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Method = uint16(field)
+	}
+	{
+		field, n, err := scale.DecodeByteSlice(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Args = field
+	}
+	return total, nil
+}
