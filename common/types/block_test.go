@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -137,8 +138,11 @@ func TestToBlockIDs(t *testing.T) {
 
 func TestRewardCodec(t *testing.T) {
 	weight := big.NewRat(1234, 7)
+	bytes := make([]byte, types.AddressLength)
+	_, err := rand.Read(bytes)
+	require.NoError(t, err)
 	r := &types.AnyReward{
-		Coinbase: types.GenerateAddress(RandomBytes(types.AddressLength)),
+		Coinbase: types.GenerateAddress(bytes),
 		Weight:   types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
 	}
 
