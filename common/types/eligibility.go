@@ -23,6 +23,15 @@ type HareEligibilityGossip struct {
 	Eligibility HareEligibility
 }
 
+func (hg *HareEligibilityGossip) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("layer", hg.Layer.Value)
+	encoder.AddUint32("round", hg.Round)
+	encoder.AddString("smesher", BytesToNodeID(hg.PubKey).String())
+	encoder.AddUint16("count", hg.Eligibility.Count)
+	encoder.AddString("proof", hex.EncodeToString(hg.Eligibility.Proof))
+	return nil
+}
+
 // HareEligibility includes the required values that, along with the smesher's VRF public key,
 // allow non-interactive eligibility validation for hare round participation.
 type HareEligibility struct {

@@ -76,7 +76,7 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 		return errUntimelyMessage
 	}
 
-	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, log.String("miner_id", m.NodeID.ShortString()))
+	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, log.Stringer("smesher", m.NodeID))
 	logger.With().Debug("new beacon proposal", log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))))
 
 	st, err := pd.initEpochStateIfNotPresent(logger, m.EpochID)
@@ -200,7 +200,7 @@ func (pd *ProtocolDriver) addProposal(m ProposalMessage, cat category) error {
 }
 
 func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessage) error {
-	minerID := m.NodeID.ShortString()
+	minerID := m.NodeID.String()
 
 	nonce, err := pd.nonceFetcher.VRFNonce(m.NodeID, m.EpochID)
 	if err != nil {
@@ -291,8 +291,8 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 	}
 
 	nodeID := types.BytesToNodeID(minerPK.Bytes())
-	minerID := nodeID.ShortString()
-	logger = logger.WithFields(log.String("miner_id", minerID))
+	minerID := nodeID.String()
+	logger = logger.WithFields(log.Stringer("smesher", nodeID))
 
 	if err = pd.registerVoted(logger, m.EpochID, minerPK, types.FirstRound); err != nil {
 		return nil, fmt.Errorf("[round %v] register proposal (miner ID %v): %w", types.FirstRound, minerID, err)
@@ -409,8 +409,7 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 	}
 
 	nodeID := types.BytesToNodeID(minerPK.Bytes())
-	minerID := nodeID.ShortString()
-	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, round, log.String("miner_id", minerID))
+	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, round, log.Stringer("smesher", nodeID))
 
 	if err := pd.registerVoted(logger, m.EpochID, minerPK, m.RoundID); err != nil {
 		return nil, err

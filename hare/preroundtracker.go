@@ -53,7 +53,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	vrfHashVal := binary.LittleEndian.Uint32(vrfHash[:4])
 	logger.With().Debug("received preround message",
 		nodeID,
-		log.String("sender_id", nodeID.ShortString()),
+		log.Stringer("smesher", nodeID),
 		log.Int("num_values", len(msg.InnerMsg.Values)),
 		log.Uint32("vrf_value", vrfHashVal))
 	if vrfHashVal < pre.bestVRF {
@@ -61,7 +61,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		// store lowest-order bit as coin toss value
 		pre.coinflip = vrfHash[0]&byte(1) == byte(1)
 		pre.logger.With().Debug("got new best vrf value",
-			log.String("sender_id", nodeID.ShortString()),
+			log.Stringer("smesher", nodeID),
 			log.String("vrf_value", fmt.Sprintf("%x", vrfHashVal)),
 			log.Bool("weak_coin", pre.coinflip))
 	}
@@ -73,7 +73,11 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		if prev.InnerMsg.Layer == msg.Layer &&
 			prev.InnerMsg.Round == msg.Round &&
 			prev.InnerMsg.MsgHash != msg.MsgHash {
-			pre.logger.WithContext(ctx).With().Warning("equivocation detected at preround", nodeID)
+			pre.logger.WithContext(ctx).With().Warning("equivocation detected in preround",
+				log.Stringer("smesher", nodeID),
+				log.Object("prev", &prev.InnerMsg),
+				log.Object("curr", &msg.HareMetadata),
+			)
 			pre.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			this := &types.HareProofMsg{
 				InnerMsg:  msg.HareMetadata,
@@ -81,12 +85,12 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 			}
 			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev.HareProofMsg, this, &msg.Eligibility, pre.malCh); err != nil {
 				pre.logger.WithContext(ctx).With().Warning("failed to report equivocation in preround",
-					nodeID,
+					log.Stringer("smesher", nodeID),
 					log.Err(err))
 				return
 			}
 		}
-		logger.With().Debug("duplicate preround msg sender", log.String("sender_id", nodeID.ShortString()))
+		logger.With().Debug("duplicate preround msg sender", log.Stringer("smesher", nodeID))
 		alreadyTracked = prev.Set         // update already tracked Values
 		sToTrack.Subtract(alreadyTracked) // subtract the already tracked Values
 	} else {

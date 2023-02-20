@@ -218,7 +218,7 @@ func calcVrfFrac(vrfSig []byte) fixed.Fixed {
 func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, nonce types.VRFPostIndex, vrfSig []byte) (n int, p, vrfFrac fixed.Fixed, done bool, err error) {
 	logger := o.WithContext(ctx).WithFields(
 		layer,
-		log.Stringer("sender_id", id),
+		log.Stringer("smesher", id),
 		log.Uint32("round", round),
 		log.Int("committee_size", committeeSize),
 	)
@@ -298,7 +298,7 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32
 	nonce, err := o.nonceFetcher.VRFNonce(id, layer.GetEpoch())
 	if err != nil {
 		o.Log.WithContext(ctx).With().Warning("failed to find nonce for node",
-			log.String("sender_id", id.ShortString()),
+			log.Stringer("smesher", id),
 			log.Err(err),
 		)
 		return false, fmt.Errorf("nonce not found for node %s: %w", id, err)

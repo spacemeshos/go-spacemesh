@@ -108,7 +108,7 @@ func newMsg(ctx context.Context, logger log.Log, nodeId types.NodeID, hareMsg Me
 	res, err := querier.IsIdentityActiveOnConsensusView(ctx, nodeId, hareMsg.Layer)
 	if err != nil {
 		logger.With().Error("failed to check if identity is active",
-			log.String("sender_id", nodeId.ShortString()),
+			log.Stringer("smesher", nodeId),
 			log.Err(err),
 			hareMsg.Layer,
 			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
@@ -118,7 +118,7 @@ func newMsg(ctx context.Context, logger log.Log, nodeId types.NodeID, hareMsg Me
 	// check query result
 	if !res {
 		logger.With().Warning("identity is not active",
-			log.String("sender_id", nodeId.ShortString()),
+			log.Stringer("smesher", nodeId),
 			hareMsg.Layer,
 			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
@@ -439,7 +439,8 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 	pub := m.PubKey
 	if _, exist := proc.pending[pub.String()]; exist { // ignore, already received
 		logger.With().Warning("already received message from sender",
-			log.String("sender_id", pub.ShortString()))
+			log.Stringer("smesher", types.BytesToNodeID(m.PubKey.Bytes())),
+		)
 		return
 	}
 
@@ -450,7 +451,7 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	logger := proc.WithContext(ctx).WithFields(
 		log.String("msg_type", m.InnerMsg.Type.String()),
-		log.String("sender_id", m.PubKey.ShortString()),
+		log.Stringer("smesher", types.BytesToNodeID(m.PubKey.Bytes())),
 		log.Uint32("current_round", proc.getRound()),
 		log.Uint32("msg_round", m.Round),
 		proc.layer)
@@ -518,7 +519,8 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 		proc.WithContext(ctx).With().Warning("unknown message type",
 			proc.layer,
 			log.String("msg_type", m.InnerMsg.Type.String()),
-			log.String("sender_id", m.PubKey.ShortString()))
+			log.Stringer("smesher", types.BytesToNodeID(m.PubKey.Bytes())),
+		)
 	}
 }
 
@@ -826,7 +828,8 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 
 	if ignored := proc.notifyTracker.OnNotify(ctx, msg); ignored {
 		proc.WithContext(ctx).With().Warning("ignoring notification",
-			log.String("sender_id", msg.PubKey.ShortString()))
+			log.Stringer("smesher", types.BytesToNodeID(msg.PubKey.Bytes())),
+		)
 		return
 	}
 

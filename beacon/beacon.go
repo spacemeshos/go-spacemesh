@@ -268,7 +268,7 @@ func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTxHeader) {
 	}
 	if id, ok := s.minerAtxs[string(atx.NodeID.Bytes())]; ok && id != atx.ID {
 		pd.logger.With().Warning("ignoring malicious atx",
-			log.Stringer("miner_id", atx.NodeID),
+			log.Stringer("smesher", atx.NodeID),
 			log.Stringer("previous_atx", id),
 			log.Stringer("new_atx", atx.ID),
 		)
@@ -290,7 +290,7 @@ func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, minerPK []byte) (*typ
 	if !ok {
 		pd.logger.With().Debug("miner does not have atx in previous epoch",
 			epoch-1,
-			log.Stringer("miner_id", types.BytesToNodeID(minerPK)))
+			log.Stringer("smesher", types.BytesToNodeID(minerPK)))
 		return nil, errMinerNotActive
 	}
 	return pd.cdb.GetAtxHeader(id)
@@ -526,7 +526,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		} else {
 			pd.logger.With().Warning("ignoring malicious atx from miner",
 				header.ID,
-				log.Stringer("miner_id", header.NodeID))
+				log.Stringer("smesher", header.NodeID))
 		}
 		if header.NodeID == pd.nodeID {
 			active = true

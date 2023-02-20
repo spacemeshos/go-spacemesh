@@ -272,7 +272,7 @@ func fetchMalfeasanceProof(ctx context.Context, logger log.Log, ids idProvider, 
 			logger.With().Warning("failed fetching malfeasance proofs",
 				log.Array("malicious_ids", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 					for _, nodeID := range idsToFetch {
-						encoder.AppendString(nodeID.ShortString())
+						encoder.AppendString(nodeID.String())
 					}
 					return nil
 				})),
