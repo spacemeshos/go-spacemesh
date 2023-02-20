@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+func init() {
+	// initialize global pseudo random generator
+	rand.Seed(time.Now().Unix())
+}
+
 /*
  * Top-level convenience functions
  */

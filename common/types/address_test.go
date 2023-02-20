@@ -1,8 +1,9 @@
 package types_test
 
 import (
-	"crypto/rand"
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -130,6 +131,7 @@ func checkAddressesEqual(t *testing.T, addrA, addrB types.Address) {
 
 // RandomBytes generates random data in bytes for testing.
 func RandomBytes(size int) []byte {
+	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, size)
 	_, err := rand.Read(b)
 	if err != nil {

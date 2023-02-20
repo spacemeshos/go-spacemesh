@@ -370,6 +370,7 @@ func (a *AddrBook) BootstrapAddressCache() (addresses []*AddrInfo) {
 	anchorPeers := make([]*knownAddress, len(a.lastAnchorPeers))
 	copy(anchorPeers, a.lastAnchorPeers)
 
+	rand.Seed(int64(randomUint32(16384)))
 	rand.Shuffle(len(anchorPeers), func(i, j int) {
 		anchorPeers[i], anchorPeers[j] = anchorPeers[j], anchorPeers[i]
 	})
@@ -623,4 +624,15 @@ func (a *AddrBook) reset() {
 	for i := range a.addrTried {
 		a.addrTried[i] = make(map[peer.ID]*knownAddress)
 	}
+}
+
+func randomUint32(max uint32) uint32 {
+	b := make([]byte, 4)
+	_, err := crand.Read(b)
+	if err != nil {
+		log.Panic("Failed to get entropy from system: ", err)
+	}
+
+	data := binary.BigEndian.Uint32(b)
+	return data % max
 }
