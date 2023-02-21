@@ -286,7 +286,7 @@ func (b *Builder) generateProof(ctx context.Context) error {
 		// Once initialized, run the execution phase with zero-challenge,
 		// to create the initial proof (the commitment).
 		startTime := time.Now()
-		b.initialPost, b.initialPostMeta, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
+		b.initialPost, b.initialPostMeta, err = b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge)
 		if err != nil {
 			return fmt.Errorf("post execution: %w", err)
 		}

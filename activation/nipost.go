@@ -208,7 +208,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 		nb.log.With().Info("starting post execution",
 			log.Binary("challenge", nb.state.PoetProofRef))
 		startTime := time.Now()
-		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(nb.state.PoetProofRef)
+		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(ctx, nb.state.PoetProofRef)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to execute Post: %v", err)
 		}

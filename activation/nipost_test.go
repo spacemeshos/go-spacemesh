@@ -61,7 +61,7 @@ func (p *postSetupProviderMock) Reset() error {
 	return nil
 }
 
-func (p *postSetupProviderMock) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (p *postSetupProviderMock) GenerateProof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
 	p.called++
 	if p.setError {
 		return nil, nil, fmt.Errorf("error")

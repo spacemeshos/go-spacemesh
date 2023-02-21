@@ -280,7 +280,7 @@ func (mgr *PostSetupManager) Reset() error {
 }
 
 // GenerateProof generates a new Post.
-func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
 	mgr.mu.Lock()
 
 	if mgr.state != PostSetupStateComplete {
@@ -289,7 +289,7 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *type
 	}
 	mgr.mu.Unlock()
 
-	proof, proofMetadata, err := proving.Generate(context.TODO(), challenge, config.Config(mgr.cfg), mgr.logger,
+	proof, proofMetadata, err := proving.Generate(ctx, challenge, config.Config(mgr.cfg), mgr.logger,
 		proving.WithDataSource(config.Config(mgr.cfg), mgr.id.Bytes(), mgr.commitmentAtxId.Bytes(), mgr.lastOpts.DataDir),
 	)
 	if err != nil {
