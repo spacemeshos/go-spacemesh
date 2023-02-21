@@ -48,7 +48,7 @@ jobs:
       - filter-changes
     timeout-minutes: 70
     concurrency:
-      group: ${{ github.base_ref == 'staging' && 'smci-staging' || format('smci-{1}', github.ref) }}
+      group: ${{ github.base_ref == 'staging' && 'smci-staging' || format('smci-{0}', github.ref) }}
       cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
     steps:
       - uses: actions/checkout@v3

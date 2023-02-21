@@ -25,7 +25,7 @@ on:
       - trying
 
 concurrency:
-  group: ${{ github.base_ref == 'staging' && 'smci-staging' || format('smci-{1}', github.ref) }}
+  group: ${{ github.base_ref == 'staging' && 'smci-staging' || format('smci-{0}', github.ref) }}
   cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
 
 jobs:
