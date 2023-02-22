@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
@@ -88,9 +87,9 @@ func contains(proof *types.PoetProof, member []byte) bool {
 // Post validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
 // validation failed.
 func (*Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
-	p := (*proving.Proof)(PoST)
+	p := (*shared.Proof)(PoST)
 
-	m := &proving.ProofMetadata{
+	m := &shared.ProofMetadata{
 		NodeId:          nodeId.Bytes(),
 		CommitmentAtxId: commitmentAtxId.Bytes(),
 		NumUnits:        numUnits,
@@ -103,7 +102,7 @@ func (*Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *t
 		N:               PostMetadata.N,
 	}
 
-	if err := verifying.VerifyNew(p, m); err != nil {
+	if err := verifying.Verify(p, m); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
 	}
 
