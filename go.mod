@@ -34,7 +34,7 @@ require (
 	github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d
 	github.com/spacemeshos/ed25519 v0.1.1
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
-	github.com/spacemeshos/go-scale v1.1.3
+	github.com/spacemeshos/go-scale v1.1.4
 	github.com/spacemeshos/merkle-tree v0.2.1
 	github.com/spacemeshos/poet v0.6.1
 	github.com/spacemeshos/post v0.3.0
@@ -175,7 +175,7 @@ require (
 	go.uber.org/fx v1.18.2 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/crypto v0.3.0 // indirect
-	golang.org/x/mod v0.7.0 // indirect
+	golang.org/x/mod v0.8.0 // indirect
 	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/oauth2 v0.4.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
