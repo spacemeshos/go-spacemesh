@@ -15,7 +15,7 @@ require (
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.15.0
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.15.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-retryablehttp v0.7.2
 	github.com/hashicorp/golang-lru v0.6.0
@@ -47,7 +47,7 @@ require (
 	go.uber.org/zap v1.24.0
 	golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
 	golang.org/x/sync v0.1.0
-	google.golang.org/genproto v0.0.0-20230216225411-c8e22ba71e44
+	google.golang.org/genproto v0.0.0-20230221151758-ace64dc21148
 	google.golang.org/grpc v1.53.0
 	google.golang.org/protobuf v1.28.1
 	k8s.io/api v0.26.1
@@ -84,6 +84,7 @@ require (
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
@@ -177,7 +178,7 @@ require (
 	golang.org/x/crypto v0.3.0 // indirect
 	golang.org/x/mod v0.8.0 // indirect
 	golang.org/x/net v0.7.0 // indirect
-	golang.org/x/oauth2 v0.4.0 // indirect
+	golang.org/x/oauth2 v0.5.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/term v0.5.0 // indirect
 	golang.org/x/text v0.7.0 // indirect
