@@ -3,6 +3,7 @@ package book
 import (
 	"container/list"
 	"math/rand"
+	"strings"
 	"time"
 )
 
@@ -35,8 +36,8 @@ func classify(addr *addressInfo) class {
 		// stable entries can be shared with other, but are more likely t
 		// degrade into unknown
 		if addr.success == 10 {
-			return stable
-		} else if addr.failures == 4 {
+			return good
+		} else if addr.failures == 2 {
 			return unknown
 		}
 	case good:
@@ -52,12 +53,15 @@ func classify(addr *addressInfo) class {
 type bucket int
 
 const (
-	public = iota
+	local = iota
 	private
-	local
+	public
 )
 
 func bucketize(raw Address) bucket {
+	if strings.Contains(string(raw), "0.0.0.0") {
+		return local
+	}
 	return public
 }
 
@@ -80,6 +84,13 @@ type Opt func(*Book)
 func WithLimit(limit int) Opt {
 	return func(b *Book) {
 		b.limit = limit
+	}
+}
+
+// WithRand overwrites default seed for determinism in tests.
+func WithRand(seed int64) Opt {
+	return func(b *Book) {
+		b.rng = rand.New(rand.NewSource(seed))
 	}
 }
 
@@ -113,7 +124,7 @@ func (b *Book) Add(src, id ID, raw Address) {
 		if source == nil {
 			return
 		}
-		if bucket != source.bucket {
+		if source.bucket > bucket {
 			return
 		}
 	}
@@ -129,10 +140,10 @@ func (b *Book) Add(src, id ID, raw Address) {
 		}
 		b.queue.PushBack(addr)
 		b.known[id] = addr
-	}
-	if addr.Raw != raw {
+	} else if addr.Raw != raw {
 		addr.Raw = raw
 		addr.Class = unknown
+		addr.bucket = bucket
 		addr.success = 0
 		addr.failures = 0
 	}
@@ -175,6 +186,10 @@ func (b *Book) Update(id ID, event Event) {
 			addr.success = 0
 		}
 		c := classify(addr)
+		if addr.Class != c {
+			addr.failures = 0
+			addr.success = 0
+		}
 		if addr.Class == unknown && c > unknown {
 			b.shareable = append(b.shareable, addr)
 		} else if addr.Class == unknown && c < unknown {
@@ -212,10 +227,11 @@ func (b *Book) iterShareable(src ID, bucket bucket) iterator {
 				copy(b.shareable[i:], b.shareable[i+1:])
 				b.shareable[len(b.shareable)-1] = nil
 				b.shareable = b.shareable[:len(b.shareable)-1]
-			}
-			i++
-			if rst.bucket == bucket && rst.id != src {
-				return rst.Raw
+			} else {
+				i++
+				if rst.bucket == bucket && rst.id != src {
+					return rst.Raw
+				}
 			}
 		}
 	}
@@ -240,6 +256,9 @@ func take(n int, next iterator) []Address {
 	rst := make([]Address, 0, n)
 	for addr := next(); addr != ""; addr = next() {
 		rst = append(rst, addr)
+		if len(rst) == cap(rst) {
+			return rst
+		}
 	}
 	return rst
 }
