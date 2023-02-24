@@ -28,6 +28,9 @@ type validator interface {
 type Broker struct {
 	log.Log
 	mu sync.RWMutex
+	// This mutext is used to allow validateTiming to veiw updates to the inbox
+	// and the latest layer atomically.
+	validateTimingMu sync.RWMutex
 
 	cdb             *datastore.CachedDB
 	pubKeyExtractor *signing.PubKeyExtractor
@@ -96,6 +99,11 @@ var (
 )
 
 func (b *Broker) validateTiming(ctx context.Context, m *Message) error {
+	// This mutex is to ensure that we see updates to the latest layer and the
+	// inbox as atomic.
+	b.validateTimingMu.RLock()
+	defer b.validateTimingMu.RUnlock()
+
 	msgInstID := m.Layer
 	if b.getInbox(msgInstID) != nil {
 		b.Log.WithContext(ctx).With().Debug("instance exists", msgInstID)
@@ -374,7 +382,14 @@ func (b *Broker) cleanOldLayers() {
 
 // Register a layer to receive messages
 // Note: the registering instance is assumed to be started and accepting messages.
-func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any, error) {
+func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any,
+	error,
+) {
+	// This mutex is also used by validate timing to ensure that it sees
+	// updates to the latest layer and the inbox as atomic.
+	b.validateTimingMu.Lock()
+	defer b.validateTimingMu.Unlock()
+
 	b.setLatestLayer(ctx, id)
 
 	// check to see if the node is still synced
@@ -387,7 +402,6 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any, erro
 func (b *Broker) createNewInbox(id types.LayerID) chan any {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-
 	if len(b.outbox) >= b.limit {
 		// unregister the earliest layer to make space for the new layer
 		// cannot call unregister here because unregister blocks and this would cause a deadlock
@@ -438,7 +452,6 @@ func (b *Broker) getLatestLayer() types.LayerID {
 func (b *Broker) setLatestLayer(ctx context.Context, layer types.LayerID) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-
 	if !layer.After(b.latestLayer) { // should expect to update only newer layers
 		b.WithContext(ctx).With().Error("tried to update a previous layer",
 			log.Stringer("this_layer", layer),
