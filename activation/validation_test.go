@@ -666,7 +666,7 @@ func TestValidator_Validate(t *testing.T) {
 	r.EqualError(err, fmt.Sprintf("invalid `BitsPerLabel`; expected: >=%d, given: %d", newPostCfg.BitsPerLabel, nipost.PostMetadata.BitsPerLabel))
 
 	newPostCfg = postCfg
-	newPostCfg.K1 = nipost.PostMetadata.K2 - 1
+	newPostCfg.K1 = nipost.PostMetadata.K1 - 1
 	err = validateNIPost(nodeID, goldenATXID, nipost, challengeHash, poetDb, newPostCfg, numUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `K1`; expected: <=%d, given: %d", newPostCfg.K1, nipost.PostMetadata.K1))
 

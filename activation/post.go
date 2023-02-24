@@ -27,6 +27,8 @@ type PostConfig struct {
 	LabelsPerUnit uint64 `mapstructure:"post-labels-per-unit"`
 	K1            uint32 `mapstructure:"post-k1"`
 	K2            uint32 `mapstructure:"post-k2"`
+	B             uint32 `mapstructure:"post-b"`
+	N             uint32 `mapstructure:"post-n"`
 }
 
 // PostSetupOpts are the options used to initiate a Post setup data creation session,
@@ -278,7 +280,7 @@ func (mgr *PostSetupManager) Reset() error {
 }
 
 // GenerateProof generates a new Post.
-func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
 	mgr.mu.Lock()
 
 	if mgr.state != PostSetupStateComplete {
@@ -287,13 +289,9 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *type
 	}
 	mgr.mu.Unlock()
 
-	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.lastOpts.DataDir, mgr.id.Bytes(), mgr.commitmentAtxId.Bytes())
-	if err != nil {
-		return nil, nil, fmt.Errorf("new prover: %w", err)
-	}
-
-	prover.SetLogger(mgr.logger)
-	proof, proofMetadata, err := prover.GenerateProof(challenge)
+	proof, proofMetadata, err := proving.Generate(ctx, challenge, config.Config(mgr.cfg), mgr.logger,
+		proving.WithDataSource(config.Config(mgr.cfg), mgr.id.Bytes(), mgr.commitmentAtxId.Bytes(), mgr.lastOpts.DataDir),
+	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate proof: %w", err)
 	}
@@ -305,6 +303,8 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *type
 		LabelsPerUnit: proofMetadata.LabelsPerUnit,
 		K1:            proofMetadata.K1,
 		K2:            proofMetadata.K2,
+		B:             proofMetadata.B,
+		N:             proofMetadata.N,
 	}
 	return p, m, nil
 }

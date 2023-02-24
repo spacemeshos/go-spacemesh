@@ -655,8 +655,11 @@ type PostMetadata struct {
 	Challenge     []byte
 	BitsPerLabel  uint8
 	LabelsPerUnit uint64
-	K1            uint32
-	K2            uint32
+
+	K1 uint32
+	K2 uint32
+	B  uint32
+	N  uint32
 }
 
 func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -668,6 +671,8 @@ func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint64("LabelsPerUnit", m.LabelsPerUnit)
 	encoder.AddUint32("K1", m.K1)
 	encoder.AddUint32("K2", m.K2)
+	encoder.AddUint32("B", m.B)
+	encoder.AddUint32("N", m.N)
 	return nil
 }
 

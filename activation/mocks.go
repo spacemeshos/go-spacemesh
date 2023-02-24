@@ -581,9 +581,9 @@ func (mr *MockpostSetupProviderMockRecorder) Config() *gomock.Call {
 }
 
 // GenerateProof mocks base method.
-func (m *MockpostSetupProvider) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (m *MockpostSetupProvider) GenerateProof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateProof", challenge)
+	ret := m.ctrl.Call(m, "GenerateProof", ctx, challenge)
 	ret0, _ := ret[0].(*types.Post)
 	ret1, _ := ret[1].(*types.PostMetadata)
 	ret2, _ := ret[2].(error)
@@ -591,9 +591,9 @@ func (m *MockpostSetupProvider) GenerateProof(challenge []byte) (*types.Post, *t
 }
 
 // GenerateProof indicates an expected call of GenerateProof.
-func (mr *MockpostSetupProviderMockRecorder) GenerateProof(challenge interface{}) *gomock.Call {
+func (mr *MockpostSetupProviderMockRecorder) GenerateProof(ctx, challenge interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateProof", reflect.TypeOf((*MockpostSetupProvider)(nil).GenerateProof), challenge)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateProof", reflect.TypeOf((*MockpostSetupProvider)(nil).GenerateProof), ctx, challenge)
 }
 
 // LastOpts mocks base method.
