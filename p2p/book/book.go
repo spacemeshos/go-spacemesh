@@ -1,8 +1,15 @@
 package book
 
 import (
+	"bufio"
 	"container/list"
+	"encoding/json"
+	"fmt"
+	"hash/crc64"
+	"io"
 	"math/rand"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -16,14 +23,15 @@ type class uint32
 
 const (
 	deleted class = iota
-	unknown
+	stale
+	learned
 	stable
 	good
 )
 
 func classify(addr *addressInfo) class {
 	switch addr.Class {
-	case unknown:
+	case learned:
 		// unknown entries should be deleted after being unavailable for some time
 		// or as a replacement for new unknown entries
 		// upgraded to stable after couple of succesful tries
@@ -38,13 +46,13 @@ func classify(addr *addressInfo) class {
 		if addr.success == 10 {
 			return good
 		} else if addr.failures == 2 {
-			return unknown
+			return stale
 		}
 	case good:
 		// good entries are "good" and should not degrade into unkown after
 		// couple of failures
 		if addr.failures == 10 {
-			return unknown
+			return stale
 		}
 	}
 	return addr.Class
@@ -67,11 +75,11 @@ func bucketize(raw Address) bucket {
 
 type addressInfo struct {
 	// exported values will be persisted
+	ID        ID
 	Raw       Address
 	Class     class
 	Connected bool
 
-	id        ID
 	bucket    bucket
 	protected bool
 	failures  int
@@ -134,15 +142,16 @@ func (b *Book) Add(src, id ID, raw Address) {
 		}
 		addr = &addressInfo{
 			Raw:    raw,
-			Class:  unknown,
-			id:     id,
+			Class:  stale,
+			ID:     id,
 			bucket: bucket,
 		}
+		b.shareable = append(b.shareable, addr)
 		b.queue.PushBack(addr)
 		b.known[id] = addr
 	} else if addr.Raw != raw {
 		addr.Raw = raw
-		addr.Class = unknown
+		addr.Class = learned
 		addr.bucket = bucket
 		addr.success = 0
 		addr.failures = 0
@@ -159,43 +168,45 @@ const (
 	Fail
 )
 
-func (b *Book) Update(id ID, event Event) {
+func (b *Book) Update(id ID, events ...Event) {
 	addr := b.known[id]
 	if addr == nil {
 		return
 	}
-	switch event {
-	case Protect:
-		addr.protected = true
-		addr.Class = good
-		b.shareable = append(b.shareable, addr)
-	case Connected:
-		addr.Connected = true
-	case Disconnected:
-		addr.Connected = false
-	case Success, Fail:
-		b.queue.PushBack(addr)
-		if addr.protected {
-			return
-		}
-		if event == Success {
-			addr.success++
-			addr.failures = 0
-		} else if event == Fail {
-			addr.failures++
-			addr.success = 0
-		}
-		c := classify(addr)
-		if addr.Class != c {
-			addr.failures = 0
-			addr.success = 0
-		}
-		if addr.Class == unknown && c > unknown {
+	for _, event := range events {
+		switch event {
+		case Protect:
+			addr.protected = true
+			addr.Class = good
 			b.shareable = append(b.shareable, addr)
-		} else if addr.Class == unknown && c < unknown {
-			delete(b.known, id)
+		case Connected:
+			addr.Connected = true
+		case Disconnected:
+			addr.Connected = false
+		case Success, Fail:
+			b.queue.PushBack(addr)
+			if addr.protected {
+				continue
+			}
+			if event == Success {
+				addr.success++
+				addr.failures = 0
+			} else if event == Fail {
+				addr.failures++
+				addr.success = 0
+			}
+			c := classify(addr)
+			if addr.Class != c {
+				addr.failures = 0
+				addr.success = 0
+			}
+			if addr.Class == stale && c > stale {
+				b.shareable = append(b.shareable, addr)
+			} else if addr.Class == stale && c < stale {
+				delete(b.known, id)
+			}
+			addr.Class = c
 		}
-		addr.Class = c
 	}
 
 }
@@ -212,6 +223,33 @@ func (b *Book) TakeShareable(src ID, n int) []Address {
 	return take(n, b.iterShareable(src, addr.bucket))
 }
 
+func (b *Book) Persist(w io.Writer) error {
+	return persist(b.known, w)
+}
+
+func (b *Book) Recover(r io.Reader) error {
+	if err := recover(b.known, r); err != nil {
+		return err
+	}
+	queue := []*addressInfo{}
+	for _, addr := range b.known {
+		queue = append(queue, addr)
+		if addr.Class >= learned {
+			b.shareable = append(b.shareable, addr)
+		}
+	}
+	sort.Slice(queue, func(i, j int) bool {
+		if queue[i].Connected && !queue[j].Connected {
+			return true
+		}
+		return queue[i].Class < queue[j].Class
+	})
+	for _, addr := range queue {
+		b.queue.PushBack(addr)
+	}
+	return nil
+}
+
 func (b *Book) iterShareable(src ID, bucket bucket) iterator {
 	b.rng.Shuffle(len(b.shareable), func(i, j int) {
 		b.shareable[i], b.shareable[j] = b.shareable[j], b.shareable[i]
@@ -223,13 +261,13 @@ func (b *Book) iterShareable(src ID, bucket bucket) iterator {
 				return ""
 			}
 			rst := b.shareable[i]
-			if rst.Class <= unknown {
+			if rst.Class <= stale {
 				copy(b.shareable[i:], b.shareable[i+1:])
 				b.shareable[len(b.shareable)-1] = nil
 				b.shareable = b.shareable[:len(b.shareable)-1]
 			} else {
 				i++
-				if rst.bucket == bucket && rst.id != src {
+				if rst.bucket == bucket && rst.ID != src {
 					return rst.Raw
 				}
 			}
@@ -252,6 +290,8 @@ func (b *Book) drainQueue() iterator {
 	}
 }
 
+type iterator func() Address
+
 func take(n int, next iterator) []Address {
 	rst := make([]Address, 0, n)
 	for addr := next(); addr != ""; addr = next() {
@@ -263,4 +303,45 @@ func take(n int, next iterator) []Address {
 	return rst
 }
 
-type iterator func() Address
+func persist(known map[ID]*addressInfo, w io.Writer) error {
+	checksum := crc64.New(crc64.MakeTable(crc64.ISO))
+	encoder := json.NewEncoder(io.MultiWriter(w, checksum))
+	for _, addr := range known {
+		if err := encoder.Encode(addr); err != nil {
+			return fmt.Errorf("json encoder failure for obj (%v): %w", addr, err)
+		}
+		if _, err := fmt.Fprint(w, '\n'); err != nil {
+			return fmt.Errorf("new line: %w", err)
+		}
+	}
+	if _, err := fmt.Fprintf(w, "%s", strconv.FormatUint(checksum.Sum64(), 10)); err != nil {
+		return fmt.Errorf("write checksum: %v", err)
+	}
+	return nil
+}
+
+func recover(known map[ID]*addressInfo, r io.Reader) error {
+	checksum := crc64.New(crc64.MakeTable(crc64.ISO))
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		if !scanner.Scan() {
+			stored, err := strconv.ParseUint(scanner.Text(), 10, 64)
+			if err != nil {
+				return fmt.Errorf("parse uint %s: %w", scanner.Text(), err)
+			}
+			if stored != checksum.Sum64() {
+				return fmt.Errorf("stored checksum %d doesn't match computed %d", stored, checksum.Sum64())
+			}
+		}
+		addr := &addressInfo{}
+		if err := json.Unmarshal(scanner.Bytes(), addr); err != nil {
+			return fmt.Errorf("unsmarshal %s: %w", scanner.Text(), err)
+		}
+		_, err := checksum.Write(scanner.Bytes())
+		if err != nil {
+			return fmt.Errorf("checksum write %s: %w", scanner.Text(), err)
+		}
+		known[addr.ID] = addr
+	}
+	return nil
+}
