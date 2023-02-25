@@ -1,6 +1,7 @@
 package book_test
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,17 +12,23 @@ import (
 const testLimit = 4
 
 func newTestState(tb testing.TB) *testState {
+	opts := []book.Opt{
+		book.WithLimit(testLimit), book.WithRand(0),
+	}
 	return &testState{
 		TB:    tb,
-		book:  book.New(book.WithLimit(testLimit), book.WithRand(0)),
+		opts:  opts,
+		book:  book.New(opts...),
 		state: map[book.ID]book.Address{},
 	}
 }
 
 type testState struct {
 	testing.TB
-	book  *book.Book
-	state map[book.ID]book.Address
+	opts      []book.Opt
+	book      *book.Book
+	state     map[book.ID]book.Address
+	persisted []byte
 }
 
 type step func(ts *testState)
@@ -82,6 +89,23 @@ func repeat(n int, steps ...step) step {
 				step(ts)
 			}
 		}
+	}
+}
+
+func persist(expect string) step {
+	return func(ts *testState) {
+		w := bytes.NewBuffer(nil)
+		require.NoError(ts, ts.book.Persist(w))
+		require.Equal(ts, expect, w.String())
+		ts.persisted = w.Bytes()
+	}
+}
+
+func recover() step {
+	return func(ts *testState) {
+		b := book.New(ts.opts...)
+		require.NoError(ts, b.Recover(bytes.NewReader(ts.persisted)))
+		ts.book = b
 	}
 }
 
@@ -252,6 +276,19 @@ func TestBook(t *testing.T) {
 			update("1", book.Fail),
 			update("2", book.Success),
 			share("2", 1),
+		}},
+		{"persist nothing", []step{
+			persist("0"),
+		}},
+		{"recover addresses", []step{
+			add("1", "/0.0.0.0/1111"),
+			add("2", "/0.0.0.0/2222"),
+			repeat(2,
+				persist(`{"id":"1","raw":"/0.0.0.0/1111","class":2,"connected":false}
+{"id":"2","raw":"/0.0.0.0/2222","class":2,"connected":false}
+3943741974471739996`),
+				recover(),
+			),
 		}},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {

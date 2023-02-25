@@ -75,10 +75,10 @@ func bucketize(raw Address) bucket {
 
 type addressInfo struct {
 	// exported values will be persisted
-	ID        ID
-	Raw       Address
-	Class     class
-	Connected bool
+	ID        ID      `json:"id"`
+	Raw       Address `json:"raw"`
+	Class     class   `json:"class"`
+	Connected bool    `json:"connected"`
 
 	bucket    bucket
 	protected bool
@@ -142,7 +142,7 @@ func (b *Book) Add(src, id ID, raw Address) {
 		}
 		addr = &addressInfo{
 			Raw:    raw,
-			Class:  stale,
+			Class:  learned,
 			ID:     id,
 			bucket: bucket,
 		}
@@ -177,8 +177,11 @@ func (b *Book) Update(id ID, events ...Event) {
 		switch event {
 		case Protect:
 			addr.protected = true
+			prev := addr.Class
 			addr.Class = good
-			b.shareable = append(b.shareable, addr)
+			if prev == stale {
+				b.shareable = append(b.shareable, addr)
+			}
 		case Connected:
 			addr.Connected = true
 		case Disconnected:
@@ -306,12 +309,17 @@ func take(n int, next iterator) []Address {
 func persist(known map[ID]*addressInfo, w io.Writer) error {
 	checksum := crc64.New(crc64.MakeTable(crc64.ISO))
 	encoder := json.NewEncoder(io.MultiWriter(w, checksum))
-	for _, addr := range known {
+	sorted := make([]ID, 0, len(known))
+	for addr := range known {
+		sorted = append(sorted, addr)
+	}
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i] < sorted[j]
+	})
+	for _, id := range sorted {
+		addr := known[id]
 		if err := encoder.Encode(addr); err != nil {
 			return fmt.Errorf("json encoder failure for obj (%v): %w", addr, err)
-		}
-		if _, err := fmt.Fprint(w, '\n'); err != nil {
-			return fmt.Errorf("new line: %w", err)
 		}
 	}
 	if _, err := fmt.Fprintf(w, "%s", strconv.FormatUint(checksum.Sum64(), 10)); err != nil {
@@ -324,7 +332,10 @@ func recover(known map[ID]*addressInfo, r io.Reader) error {
 	checksum := crc64.New(crc64.MakeTable(crc64.ISO))
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		if !scanner.Scan() {
+		if len(scanner.Bytes()) == 0 {
+			return fmt.Errorf("corrupted data: empty lines are not expected")
+		}
+		if scanner.Bytes()[0] != '{' {
 			stored, err := strconv.ParseUint(scanner.Text(), 10, 64)
 			if err != nil {
 				return fmt.Errorf("parse uint %s: %w", scanner.Text(), err)
@@ -332,15 +343,14 @@ func recover(known map[ID]*addressInfo, r io.Reader) error {
 			if stored != checksum.Sum64() {
 				return fmt.Errorf("stored checksum %d doesn't match computed %d", stored, checksum.Sum64())
 			}
+			return nil
 		}
 		addr := &addressInfo{}
 		if err := json.Unmarshal(scanner.Bytes(), addr); err != nil {
 			return fmt.Errorf("unsmarshal %s: %w", scanner.Text(), err)
 		}
-		_, err := checksum.Write(scanner.Bytes())
-		if err != nil {
-			return fmt.Errorf("checksum write %s: %w", scanner.Text(), err)
-		}
+		checksum.Write(scanner.Bytes())
+		checksum.Write([]byte{'\n'})
 		known[addr.ID] = addr
 	}
 	return nil
