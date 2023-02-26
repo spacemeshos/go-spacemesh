@@ -30,14 +30,14 @@ type testFetch struct {
 	mMHashS *mocks.Mockrequester
 
 	mMesh      *mocks.MockmeshProvider
-	mMalH      *mocks.MockmalfeasanceHandler
-	mAtxH      *mocks.MockatxHandler
-	mBallotH   *mocks.MockballotHandler
-	mBlocksH   *mocks.MockblockHandler
-	mProposalH *mocks.MockproposalHandler
+	mMalH      *mocks.MockMalfeasanceValidator
+	mAtxH      *mocks.MockAtxValidator
+	mBallotH   *mocks.MockBallotValidator
+	mBlocksH   *mocks.MockBlockValidator
+	mProposalH *mocks.MockProposalValidator
 	method     int
-	mTxH       *mocks.MocktxHandler
-	mPoetH     *mocks.MockpoetHandler
+	mTxH       *mocks.MockTxValidator
+	mPoetH     *mocks.MockPoetValidator
 }
 
 func createFetch(tb testing.TB) *testFetch {
@@ -50,13 +50,13 @@ func createFetch(tb testing.TB) *testFetch {
 		mOpnS:      mocks.NewMockrequester(ctrl),
 		mHashS:     mocks.NewMockrequester(ctrl),
 		mMHashS:    mocks.NewMockrequester(ctrl),
-		mMalH:      mocks.NewMockmalfeasanceHandler(ctrl),
-		mAtxH:      mocks.NewMockatxHandler(ctrl),
-		mBallotH:   mocks.NewMockballotHandler(ctrl),
-		mBlocksH:   mocks.NewMockblockHandler(ctrl),
-		mProposalH: mocks.NewMockproposalHandler(ctrl),
-		mTxH:       mocks.NewMocktxHandler(ctrl),
-		mPoetH:     mocks.NewMockpoetHandler(ctrl),
+		mMalH:      mocks.NewMockMalfeasanceValidator(ctrl),
+		mAtxH:      mocks.NewMockAtxValidator(ctrl),
+		mBallotH:   mocks.NewMockBallotValidator(ctrl),
+		mBlocksH:   mocks.NewMockBlockValidator(ctrl),
+		mProposalH: mocks.NewMockProposalValidator(ctrl),
+		mTxH:       mocks.NewMockTxValidator(ctrl),
+		mPoetH:     mocks.NewMockPoetValidator(ctrl),
 	}
 	cfg := Config{
 		time.Millisecond * time.Duration(2000), // make sure we never hit the batch timeout
@@ -71,13 +71,6 @@ func createFetch(tb testing.TB) *testFetch {
 		WithContext(context.TODO()),
 		WithConfig(cfg),
 		WithLogger(lg),
-		WithMalfeasanceHandler(tf.mMalH),
-		WithATXHandler(tf.mAtxH),
-		WithBallotHandler(tf.mBallotH),
-		WithBlockHandler(tf.mBlocksH),
-		WithProposalHandler(tf.mProposalH),
-		WithTXHandler(tf.mTxH),
-		WithPoetHandler(tf.mPoetH),
 		withServers(map[string]requester{
 			malProtocol:      tf.mMalS,
 			atxProtocol:      tf.mAtxS,
@@ -87,7 +80,7 @@ func createFetch(tb testing.TB) *testFetch {
 			meshHashProtocol: tf.mMHashS,
 		}),
 		withHost(tf.mh))
-
+	tf.Fetch.SetValidators(tf.mAtxH, tf.mPoetH, tf.mBallotH, tf.mBlocksH, tf.mProposalH, tf.mTxH, tf.mMalH)
 	return tf
 }
 
@@ -99,10 +92,23 @@ func badReceiver(context.Context, p2p.Peer, []byte) error {
 	return errors.New("bad receiver")
 }
 
+func TestFetch_Start(t *testing.T) {
+	lg := logtest.New(t)
+	f := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, nil,
+		WithContext(context.TODO()),
+		WithConfig(DefaultConfig()),
+		WithLogger(lg),
+		withServers(map[string]requester{
+			malProtocol: nil,
+		}),
+	)
+	require.ErrorIs(t, f.Start(), errValidatorsNotSet)
+}
+
 func TestFetch_GetHash(t *testing.T) {
 	f := createFetch(t)
 	f.mh.EXPECT().Close()
-	f.Start()
+	require.NoError(t, f.Start())
 	defer f.Stop()
 	h1 := types.RandomHash()
 	hint := datastore.POETDB
@@ -212,7 +218,7 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 func TestFetch_GetHash_StartStopSanity(t *testing.T) {
 	f := createFetch(t)
 	f.mh.EXPECT().Close()
-	f.Start()
+	require.NoError(t, f.Start())
 	f.Stop()
 }
 
@@ -253,7 +259,7 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 
 	f.mh.EXPECT().Close()
 	defer f.Stop()
-	f.Start()
+	require.NoError(t, f.Start())
 	p1, err := f.getHash(context.TODO(), h1, hint, goodReceiver)
 	require.NoError(t, err)
 	p2, err := f.getHash(context.TODO(), h2, hint, goodReceiver)

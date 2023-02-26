@@ -592,12 +592,6 @@ func (app *App) initServices(
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(app.addLogger(Fetcher, lg)),
-		fetch.WithATXHandler(atxHandler),
-		fetch.WithBallotHandler(proposalListener),
-		fetch.WithBlockHandler(blockHandler),
-		fetch.WithProposalHandler(proposalListener),
-		fetch.WithTXHandler(txHandler),
-		fetch.WithPoetHandler(poetDb),
 	)
 	fetcherWrapped.Fetcher = fetcher
 
@@ -707,6 +701,7 @@ func (app *App) initServices(
 		app.hare,
 		app.keyExtractor,
 	)
+	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, txHandler, malfeasanceHandler)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
 		if newSyncer.ListenToGossip() {
@@ -760,7 +755,9 @@ func (app *App) initServices(
 }
 
 func (app *App) startServices(ctx context.Context) error {
-	app.fetcher.Start()
+	if err := app.fetcher.Start(); err != nil {
+		return fmt.Errorf("failed to start fetcher: %w", err)
+	}
 	go app.startSyncer(ctx)
 	app.beaconProtocol.Start(ctx)
 
