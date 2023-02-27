@@ -1087,7 +1087,7 @@ func buildProposal(logger log.Log, epoch types.EpochID, nonce types.VRFPostIndex
 	message := &ProposalVrfMessage{
 		Type:  types.EligibilityBeacon,
 		Nonce: nonce,
-		Epoch: uint32(epoch),
+		Epoch: epoch,
 	}
 
 	b, err := codec.Encode(message)

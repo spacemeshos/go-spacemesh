@@ -10,7 +10,7 @@ import (
 type ProposalVrfMessage struct {
 	Type  types.EligibilityType
 	Nonce types.VRFPostIndex
-	Epoch uint32
+	Epoch types.EpochID
 }
 
 // ProposalMessage is a message type which is used when sending proposals.
