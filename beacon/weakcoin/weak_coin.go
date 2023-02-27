@@ -23,7 +23,6 @@ var (
 func defaultConfig() config {
 	return config{
 		Threshold:           new(big.Int).Lsh(big.NewInt(1), 255).Bytes(), // equal to 2^255
-		VRFPrefix:           "WeakCoin",                                   // Prefix defines weak coin proposal prefix.
 		NextRoundBufferSize: 10000,                                        // ~1mb given the size of Message is ~100b
 		MaxRound:            300,
 	}
@@ -31,7 +30,6 @@ func defaultConfig() config {
 
 type config struct {
 	Threshold           []byte
-	VRFPrefix           string
 	NextRoundBufferSize int
 	MaxRound            types.RoundID
 }
@@ -48,11 +46,11 @@ type Message struct {
 }
 
 type VrfMessage struct {
-	Prefix string
-	Epoch  types.EpochID
-	Nonce  types.VRFPostIndex
-	Round  types.RoundID
-	Unit   uint32
+	Type  types.EligibilityType
+	Nonce types.VRFPostIndex
+	Epoch types.EpochID
+	Round types.RoundID
+	Unit  uint32
 }
 
 // OptionFunc for optional configuration adjustments.
@@ -335,11 +333,11 @@ func (wc *WeakCoin) aboveThreshold(proposal []byte) bool {
 
 func (wc *WeakCoin) encodeProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID, unit uint32) []byte {
 	message := &VrfMessage{
-		Prefix: wc.config.VRFPrefix,
-		Epoch:  epoch,
-		Nonce:  nonce,
-		Round:  round,
-		Unit:   unit,
+		Type:  types.EligibilityBeaconWC,
+		Nonce: nonce,
+		Epoch: epoch,
+		Round: round,
+		Unit:  unit,
 	}
 
 	b, err := codec.Encode(message)
