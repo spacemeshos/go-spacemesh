@@ -365,7 +365,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				if err = h.cdb.AddMalfeasanceProof(atx.NodeID(), proof, dbtx); err != nil {
 					return fmt.Errorf("adding malfeasense proof: %w", err)
 				}
-				h.log.With().Warning("smesher produced more than one atx in the same epoch",
+				h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
 					log.Stringer("smesher", atx.NodeID()),
 					log.Object("prev", prev),
 					log.Object("curr", atx),
