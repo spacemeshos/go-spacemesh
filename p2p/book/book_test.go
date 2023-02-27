@@ -2,6 +2,7 @@ package book_test
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -96,7 +97,7 @@ func persist(expect string) step {
 	return func(ts *testState) {
 		w := bytes.NewBuffer(nil)
 		require.NoError(ts, ts.book.Persist(w))
-		require.Equal(ts, expect, w.String())
+		require.Equal(ts, strings.TrimSpace(expect), w.String())
 		ts.persisted = w.Bytes()
 	}
 }
@@ -170,12 +171,12 @@ func TestBook(t *testing.T) {
 		{"unknown is not shared", []step{
 			add("1", "/0.0.0.0/6666"),
 			add("2", "/0.0.0.0/7777"),
+			repeat(2, update("1", book.Fail)),
 			share("2", 3),
 		}},
-		{"unknown is deleted after min failres", []step{
+		{"learned is deleted after min failres", []step{
 			add("1", "/0.0.0.0/6666"),
-			repeat(
-				2,
+			repeat(3,
 				drain(1, "1"),
 				update("1", book.Fail),
 			),
@@ -199,18 +200,21 @@ func TestBook(t *testing.T) {
 			add("5", "/0.0.0.0/5555"),
 			drain(5, "1", "2", "3", "4"),
 		}},
-		{"updated address is not shared", []step{
+		{"updated address preserves its state", []step{
 			add("1", "/0.0.0.0/1111"),
 			add("2", "/0.0.0.0/2222"),
 			repeat(
 				2,
 				drain(2, "1", "2"),
 				update("1", book.Success),
-				update("2", book.Success),
+				update("2", book.Fail),
 			),
 			share("2", 1, "1"),
+			share("1", 1),
 			add("1", "/0.0.0.0/1112"),
-			share("2", 1),
+			add("2", "/0.0.0.0/2221"),
+			share("2", 1, "1"),
+			share("1", 1),
 		}},
 		{"update for nil address is noop", []step{
 			update("1", book.Protect),
@@ -218,7 +222,15 @@ func TestBook(t *testing.T) {
 		{"connect disconnect", []step{
 			add("1", "/0.0.0.0/1112"),
 			update("1", book.Connected),
+			persist(`
+{"id":"1","raw":"/0.0.0.0/1112","class":2,"connected":true}
+5513782461252030321
+`),
 			update("1", book.Disconnected),
+			persist(`
+{"id":"1","raw":"/0.0.0.0/1112","class":2,"connected":false}
+2434620548433738927
+`),
 		}},
 		{"take shareable from nil source", []step{
 			add("1", "/0.0.0.0/1111"),
@@ -284,9 +296,11 @@ func TestBook(t *testing.T) {
 			add("1", "/0.0.0.0/1111"),
 			add("2", "/0.0.0.0/2222"),
 			repeat(2,
-				persist(`{"id":"1","raw":"/0.0.0.0/1111","class":2,"connected":false}
+				persist(`
+{"id":"1","raw":"/0.0.0.0/1111","class":2,"connected":false}
 {"id":"2","raw":"/0.0.0.0/2222","class":2,"connected":false}
-3943741974471739996`),
+3943741974471739996
+`),
 				recover(),
 			),
 		}},

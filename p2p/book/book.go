@@ -31,14 +31,20 @@ const (
 
 func classify(addr *addressInfo) class {
 	switch addr.Class {
-	case learned:
-		// unknown entries should be deleted after being unavailable for some time
+	case stale:
+		// stale entries should be deleted after being unavailable for some time
 		// or as a replacement for new unknown entries
 		// upgraded to stable after couple of succesful tries
 		if addr.success == 2 {
 			return stable
 		} else if addr.failures == 2 {
 			return deleted
+		}
+	case learned:
+		if addr.success == 2 {
+			return stable
+		} else if addr.failures == 1 {
+			return stale
 		}
 	case stable:
 		// stable entries can be shared with other, but are more likely t
@@ -80,6 +86,7 @@ type addressInfo struct {
 	Class     class   `json:"class"`
 	Connected bool    `json:"connected"`
 
+	shareable bool // true if item is in shareable array
 	bucket    bucket
 	protected bool
 	failures  int
@@ -128,33 +135,27 @@ func (b *Book) Add(src, id ID, raw Address) {
 	addr := b.known[id]
 	bucket := bucketize(raw)
 	if src != SELF {
-		source := b.known[src]
-		if source == nil {
-			return
-		}
-		if source.bucket > bucket {
+		if source := b.known[src]; source == nil || source.bucket > bucket {
 			return
 		}
 	}
-	if addr == nil {
-		if len(b.known) == b.limit {
-			return
-		}
+	if addr == nil && len(b.known) == b.limit {
+		// future improvement is to find any stale and replace it with learned
+		return
+	} else if addr == nil {
 		addr = &addressInfo{
-			Raw:    raw,
-			Class:  learned,
-			ID:     id,
-			bucket: bucket,
+			Raw:       raw,
+			Class:     learned,
+			ID:        id,
+			bucket:    bucket,
+			shareable: true,
 		}
 		b.shareable = append(b.shareable, addr)
 		b.queue.PushBack(addr)
 		b.known[id] = addr
 	} else if addr.Raw != raw {
 		addr.Raw = raw
-		addr.Class = learned
 		addr.bucket = bucket
-		addr.success = 0
-		addr.failures = 0
 	}
 }
 
@@ -177,9 +178,9 @@ func (b *Book) Update(id ID, events ...Event) {
 		switch event {
 		case Protect:
 			addr.protected = true
-			prev := addr.Class
 			addr.Class = good
-			if prev == stale {
+			if !addr.shareable {
+				addr.shareable = true
 				b.shareable = append(b.shareable, addr)
 			}
 		case Connected:
@@ -203,7 +204,8 @@ func (b *Book) Update(id ID, events ...Event) {
 				addr.failures = 0
 				addr.success = 0
 			}
-			if addr.Class == stale && c > stale {
+			if addr.Class == stale && c > stale && !addr.shareable {
+				addr.shareable = true
 				b.shareable = append(b.shareable, addr)
 			} else if addr.Class == stale && c < stale {
 				delete(b.known, id)
@@ -211,7 +213,6 @@ func (b *Book) Update(id ID, events ...Event) {
 			addr.Class = c
 		}
 	}
-
 }
 
 func (b *Book) DrainQueue(n int) []Address {
@@ -239,6 +240,7 @@ func (b *Book) Recover(r io.Reader) error {
 		queue = append(queue, addr)
 		if addr.Class >= learned {
 			b.shareable = append(b.shareable, addr)
+			addr.shareable = true
 		}
 	}
 	sort.Slice(queue, func(i, j int) bool {
@@ -268,6 +270,7 @@ func (b *Book) iterShareable(src ID, bucket bucket) iterator {
 				copy(b.shareable[i:], b.shareable[i+1:])
 				b.shareable[len(b.shareable)-1] = nil
 				b.shareable = b.shareable[:len(b.shareable)-1]
+				rst.shareable = false
 			} else {
 				i++
 				if rst.bucket == bucket && rst.ID != src {
