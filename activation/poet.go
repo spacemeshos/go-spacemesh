@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
@@ -126,11 +125,6 @@ func NewHTTPPoetClient(target string, cfg PoetConfig) *HTTPPoetClient {
 			return true, nil
 		}
 		return false, nil
-	}
-
-	// if no prefix given assuming http://
-	if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
-		target = fmt.Sprintf("http://%s/v1", target)
 	}
 
 	return &HTTPPoetClient{

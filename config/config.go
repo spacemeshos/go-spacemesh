@@ -160,7 +160,7 @@ func defaultBaseConfig() BaseConfig {
 		OracleServerWorldID: 0,
 		LayerDuration:       30 * time.Second,
 		LayersPerEpoch:      3,
-		PoETServers:         []string{"127.0.0.1"},
+		PoETServers:         []string{"http://127.0.0.1/v1"},
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,
 		TxsPerProposal:      100,
