@@ -10,14 +10,16 @@ import (
 	"math/rand"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
+
+	ma "github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 )
 
 const SELF ID = "SELF"
 
 type ID string
-type Address string
+type Address = ma.Multiaddr
 
 type class uint32
 
@@ -26,15 +28,11 @@ const (
 	stale
 	learned
 	stable
-	good
 )
 
 func classify(addr *addressInfo) class {
 	switch addr.Class {
 	case stale:
-		// stale entries should be deleted after being unavailable for some time
-		// or as a replacement for new unknown entries
-		// upgraded to stable after couple of succesful tries
 		if addr.success == 2 {
 			return stable
 		} else if addr.failures == 2 {
@@ -47,17 +45,7 @@ func classify(addr *addressInfo) class {
 			return stale
 		}
 	case stable:
-		// stable entries can be shared with other, but are more likely t
-		// degrade into unknown
-		if addr.success == 10 {
-			return good
-		} else if addr.failures == 2 {
-			return stale
-		}
-	case good:
-		// good entries are "good" and should not degrade into unkown after
-		// couple of failures
-		if addr.failures == 10 {
+		if addr.failures == 2 {
 			return stale
 		}
 	}
@@ -67,30 +55,48 @@ func classify(addr *addressInfo) class {
 type bucket int
 
 const (
-	local = iota
-	private
+	private = iota
 	public
 )
 
 func bucketize(raw Address) bucket {
-	if strings.Contains(string(raw), "0.0.0.0") {
-		return local
+	if manet.IsPublicAddr(raw) {
+		return public
 	}
-	return public
+	return private
 }
 
 type addressInfo struct {
 	// exported values will be persisted
-	ID        ID      `json:"id"`
-	Raw       Address `json:"raw"`
-	Class     class   `json:"class"`
-	Connected bool    `json:"connected"`
+	ID        ID          `json:"id"`
+	Raw       jsonAddress `json:"raw"`
+	Class     class       `json:"class"`
+	Connected bool        `json:"connected"`
 
 	shareable bool // true if item is in shareable array
 	bucket    bucket
 	protected bool
 	failures  int
 	success   int
+}
+
+type jsonAddress struct {
+	Address
+}
+
+func (u *jsonAddress) UnmarshalJSON(data []byte) error {
+	// i didn't manage to find a way to use UnmarshalJSON method on the
+	// private multiaddr type
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	addr, err := ma.NewMultiaddr(s)
+	if err != nil {
+		return err
+	}
+	u.Address = addr
+	return nil
 }
 
 type Opt func(*Book)
@@ -135,7 +141,7 @@ func (b *Book) Add(src, id ID, raw Address) {
 	addr := b.known[id]
 	bucket := bucketize(raw)
 	if src != SELF {
-		if source := b.known[src]; source == nil || source.bucket > bucket {
+		if source := b.known[src]; source == nil || source.bucket != bucket {
 			return
 		}
 	}
@@ -144,7 +150,7 @@ func (b *Book) Add(src, id ID, raw Address) {
 		return
 	} else if addr == nil {
 		addr = &addressInfo{
-			Raw:       raw,
+			Raw:       jsonAddress{raw},
 			Class:     learned,
 			ID:        id,
 			bucket:    bucket,
@@ -153,8 +159,8 @@ func (b *Book) Add(src, id ID, raw Address) {
 		b.shareable = append(b.shareable, addr)
 		b.queue.PushBack(addr)
 		b.known[id] = addr
-	} else if addr.Raw != raw {
-		addr.Raw = raw
+	} else if addr.Raw.Address != raw {
+		addr.Raw.Address = raw
 		addr.bucket = bucket
 	}
 }
@@ -178,7 +184,7 @@ func (b *Book) Update(id ID, events ...Event) {
 		switch event {
 		case Protect:
 			addr.protected = true
-			addr.Class = good
+			addr.Class = stable
 			if !addr.shareable {
 				addr.shareable = true
 				b.shareable = append(b.shareable, addr)
@@ -237,12 +243,14 @@ func (b *Book) Recover(r io.Reader) error {
 	}
 	queue := []*addressInfo{}
 	for _, addr := range b.known {
+		addr.bucket = bucketize(addr.Raw.Address)
 		queue = append(queue, addr)
 		if addr.Class >= learned {
 			b.shareable = append(b.shareable, addr)
 			addr.shareable = true
 		}
 	}
+	// prioritize establishing connections with previously connected addresses
 	sort.Slice(queue, func(i, j int) bool {
 		if queue[i].Connected && !queue[j].Connected {
 			return true
@@ -263,7 +271,7 @@ func (b *Book) iterShareable(src ID, bucket bucket) iterator {
 	return func() Address {
 		for {
 			if i == len(b.shareable) {
-				return ""
+				return nil
 			}
 			rst := b.shareable[i]
 			if rst.Class <= stale {
@@ -274,7 +282,7 @@ func (b *Book) iterShareable(src ID, bucket bucket) iterator {
 			} else {
 				i++
 				if rst.bucket == bucket && rst.ID != src {
-					return rst.Raw
+					return rst.Raw.Address
 				}
 			}
 		}
@@ -285,13 +293,13 @@ func (b *Book) drainQueue() iterator {
 	return func() Address {
 		for {
 			if b.queue.Len() == 0 {
-				return ""
+				return nil
 			}
 			rst := b.queue.Remove(b.queue.Front())
 			if rst.(*addressInfo).Class == deleted {
 				continue
 			}
-			return rst.(*addressInfo).Raw
+			return rst.(*addressInfo).Raw.Address
 		}
 	}
 }
@@ -300,7 +308,7 @@ type iterator func() Address
 
 func take(n int, next iterator) []Address {
 	rst := make([]Address, 0, n)
-	for addr := next(); addr != ""; addr = next() {
+	for addr := next(); addr != nil; addr = next() {
 		rst = append(rst, addr)
 		if len(rst) == cap(rst) {
 			return rst
@@ -334,27 +342,29 @@ func persist(known map[ID]*addressInfo, w io.Writer) error {
 func recover(known map[ID]*addressInfo, r io.Reader) error {
 	checksum := crc64.New(crc64.MakeTable(crc64.ISO))
 	scanner := bufio.NewScanner(r)
+	stored := uint64(0)
 	for scanner.Scan() {
 		if len(scanner.Bytes()) == 0 {
 			return fmt.Errorf("corrupted data: empty lines are not expected")
 		}
 		if scanner.Bytes()[0] != '{' {
-			stored, err := strconv.ParseUint(scanner.Text(), 10, 64)
+			var err error
+			stored, err = strconv.ParseUint(scanner.Text(), 10, 64)
 			if err != nil {
 				return fmt.Errorf("parse uint %s: %w", scanner.Text(), err)
 			}
-			if stored != checksum.Sum64() {
-				return fmt.Errorf("stored checksum %d doesn't match computed %d", stored, checksum.Sum64())
-			}
-			return nil
+			break
 		}
 		addr := &addressInfo{}
 		if err := json.Unmarshal(scanner.Bytes(), addr); err != nil {
-			return fmt.Errorf("unsmarshal %s: %w", scanner.Text(), err)
+			return fmt.Errorf("unmarshal %s: %w", scanner.Text(), err)
 		}
 		checksum.Write(scanner.Bytes())
 		checksum.Write([]byte{'\n'})
 		known[addr.ID] = addr
+	}
+	if stored != checksum.Sum64() {
+		return fmt.Errorf("stored checksum %d doesn't match computed %d", stored, checksum.Sum64())
 	}
 	return nil
 }

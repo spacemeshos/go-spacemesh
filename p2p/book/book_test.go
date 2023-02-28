@@ -2,9 +2,11 @@ package book_test
 
 import (
 	"bytes"
+	"io"
 	"strings"
 	"testing"
 
+	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/p2p/book"
@@ -34,14 +36,16 @@ type testState struct {
 
 type step func(ts *testState)
 
-func add(id book.ID, addr book.Address) step {
+func add(id book.ID, addr string) step {
 	return addFrom(book.SELF, id, addr)
 }
 
-func addFrom(src, id book.ID, addr book.Address) step {
+func addFrom(src, id book.ID, addr string) step {
 	return func(ts *testState) {
-		ts.state[id] = addr
-		ts.book.Add(src, id, addr)
+		maddr, err := ma.NewMultiaddr(addr)
+		require.NoError(ts, err)
+		ts.state[id] = maddr
+		ts.book.Add(src, id, maddr)
 	}
 }
 
@@ -54,26 +58,22 @@ func update(id book.ID, event book.Event) step {
 func drain(n int, ids ...book.ID) step {
 	return func(ts *testState) {
 		rst := ts.book.DrainQueue(n)
-		expect := []book.Address{}
-		for _, id := range ids {
+		for i, id := range ids {
 			addr := ts.state[id]
 			require.NotEmpty(ts, addr, "id=%s", id)
-			expect = append(expect, addr)
+			require.Equal(ts, addr.String(), rst[i].String(), "i=%d", i)
 		}
-		require.Equal(ts, expect, rst, "drain queue")
 	}
 }
 
 func share(src book.ID, n int, ids ...book.ID) step {
 	return func(ts *testState) {
 		rst := ts.book.TakeShareable(src, n)
-		expect := []book.Address{}
-		for _, id := range ids {
+		for i, id := range ids {
 			addr := ts.state[id]
 			require.NotEmpty(ts, addr, "id=%s", id)
-			expect = append(expect, addr)
+			require.Equal(ts, addr.String(), rst[i].String())
 		}
-		require.Equal(ts, expect, rst, "share")
 	}
 }
 
@@ -102,11 +102,29 @@ func persist(expect string) step {
 	}
 }
 
+type unexpectedEof struct{}
+
+func (unexpectedEof) Write([]byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
+}
+
+func faultyPersist(message string) step {
+	return func(ts *testState) {
+		require.ErrorContains(ts, ts.book.Persist(unexpectedEof{}), message)
+	}
+}
+
 func recover() step {
 	return func(ts *testState) {
 		b := book.New(ts.opts...)
 		require.NoError(ts, b.Recover(bytes.NewReader(ts.persisted)))
 		ts.book = b
+	}
+}
+
+func faultyRecover(content, message string) step {
+	return func(ts *testState) {
+		require.ErrorContains(ts, ts.book.Recover(bytes.NewReader([]byte(strings.TrimSpace(content)))), message)
 	}
 }
 
@@ -116,9 +134,9 @@ func TestBook(t *testing.T) {
 		steps []step
 	}{
 		{"sanity", []step{
-			add("1", "/0.0.0.0/7777"),
-			add("2", "/0.0.0.0/8888"),
-			add("3", "/0.0.0.0/9999"),
+			add("1", "/ip4/0.0.0.0/tcp/7777"),
+			add("2", "/ip4/0.0.0.0/tcp/8888"),
+			add("3", "/ip4/0.0.0.0/tcp/9999"),
 			drain(3, "1", "2", "3"),
 			update("1", book.Success),
 			update("2", book.Fail),
@@ -128,10 +146,10 @@ func TestBook(t *testing.T) {
 			share("3", 3, "1"),
 		}},
 		{"share is random", []step{
-			add("1", "/0.0.0.0/6666"),
-			add("2", "/0.0.0.0/7777"),
-			add("3", "/0.0.0.0/8888"),
-			add("4", "/0.0.0.0/9999"),
+			add("1", "/ip4/0.0.0.0/tcp/6666"),
+			add("2", "/ip4/0.0.0.0/tcp/7777"),
+			add("3", "/ip4/0.0.0.0/tcp/8888"),
+			add("4", "/ip4/0.0.0.0/tcp/9999"),
 			repeat(
 				2,
 				drain(4, "1", "2", "3", "4"),
@@ -144,9 +162,9 @@ func TestBook(t *testing.T) {
 			share("3", 2, "1", "4"),
 		}},
 		{"share skips source id", []step{
-			add("1", "/0.0.0.0/6666"),
-			add("2", "/0.0.0.0/7777"),
-			add("3", "/0.0.0.0/8888"),
+			add("1", "/ip4/0.0.0.0/tcp/6666"),
+			add("2", "/ip4/0.0.0.0/tcp/7777"),
+			add("3", "/ip4/0.0.0.0/tcp/8888"),
 			repeat(
 				2,
 				drain(4, "1", "2", "3"),
@@ -157,8 +175,8 @@ func TestBook(t *testing.T) {
 			share("3", 3, "2", "1"),
 		}},
 		{"protected is shareable", []step{
-			add("1", "/0.0.0.0/6666"),
-			add("2", "/0.0.0.0/7777"),
+			add("1", "/ip4/0.0.0.0/tcp/6666"),
+			add("2", "/ip4/0.0.0.0/tcp/7777"),
 			update("1", book.Protect),
 			share("2", 3, "1"),
 			repeat(10,
@@ -168,41 +186,87 @@ func TestBook(t *testing.T) {
 			),
 			share("2", 3, "1"),
 		}},
+		{"share protected even if it got stale", []step{
+			add("1", "/ip4/0.0.0.0/tcp/6666"),
+			drain(1, "1"),
+			update("1", book.Fail),
+			add("2", "/ip4/0.0.0.0/tcp/7777"),
+			share("2", 1),
+			update("1", book.Protect),
+			share("2", 1, "1"),
+		}},
 		{"unknown is not shared", []step{
-			add("1", "/0.0.0.0/6666"),
-			add("2", "/0.0.0.0/7777"),
+			add("1", "/ip4/0.0.0.0/tcp/6666"),
+			add("2", "/ip4/0.0.0.0/tcp/7777"),
 			repeat(2, update("1", book.Fail)),
 			share("2", 3),
 		}},
 		{"learned is deleted after min failres", []step{
-			add("1", "/0.0.0.0/6666"),
+			add("1", "/ip4/0.0.0.0/tcp/6666"),
 			repeat(3,
 				drain(1, "1"),
 				update("1", book.Fail),
 			),
 			drain(1),
 		}},
+		{"stale can get back to stable", []step{
+			add("1", "/ip4/0.0.0.0/tcp/6666"),
+			add("2", "/ip4/0.0.0.0/tcp/7777"),
+			repeat(1,
+				drain(1, "1"),
+				update("1", book.Fail),
+			),
+			share("2", 1),
+			repeat(2,
+				drain(2, "2", "1"),
+				update("2", book.Success),
+				update("1", book.Success),
+			),
+			share("2", 1, "1"),
+		}},
 		{"not added from unknown source", []step{
-			addFrom("xx", "1", "/0.0.0.0/6666"),
+			addFrom("xx", "1", "/ip4/0.0.0.0/tcp/6666"),
 			drain(1),
 		}},
 		{"added from known source", []step{
-			add("xx", "/0.0.0.0/1111"),
+			add("xx", "/ip4/0.0.0.0/tcp/1111"),
 			drain(1, "xx"),
-			addFrom("xx", "1", "/0.0.0.0/6666"),
+			addFrom("xx", "1", "/ip4/0.0.0.0/tcp/6666"),
 			drain(1, "1"),
 		}},
+		{"public and private are not shared with each other", []step{
+			add("pub", "/ip4/8.8.8.8/tcp/1111"),
+			add("private", "/ip4/192.168.0.1/tcp/1111"),
+			share("pub", 1),
+			share("private", 1),
+		}},
+		{"private is not added from a public source", []step{
+			add("pub", "/ip4/8.8.8.8/tcp/1111"),
+			addFrom("pub", "private", "/ip4/192.168.0.1/tcp/1111"),
+			persist(`
+{"id":"pub","raw":"/ip4/8.8.8.8/tcp/1111","class":2,"connected":false}
+949218308665536579
+`),
+		}},
+		{"public is not added from a private source", []step{
+			add("private", "/ip4/192.168.0.1/tcp/1111"),
+			addFrom("private", "pub", "/ip4/8.8.8.8/tcp/1111"),
+			persist(`
+{"id":"private","raw":"/ip4/192.168.0.1/tcp/1111","class":2,"connected":false}
+11883410850220296542
+`),
+		}},
 		{"not added after limit is reached", []step{
-			add("1", "/0.0.0.0/1111"),
-			add("2", "/0.0.0.0/2222"),
-			add("3", "/0.0.0.0/3333"),
-			add("4", "/0.0.0.0/4444"),
-			add("5", "/0.0.0.0/5555"),
+			add("1", "/ip4/0.0.0.0/tcp/1111"),
+			add("2", "/ip4/0.0.0.0/tcp/2222"),
+			add("3", "/ip4/0.0.0.0/tcp/3333"),
+			add("4", "/ip4/0.0.0.0/tcp/4444"),
+			add("5", "/ip4/0.0.0.0/tcp/5555"),
 			drain(5, "1", "2", "3", "4"),
 		}},
 		{"updated address preserves its state", []step{
-			add("1", "/0.0.0.0/1111"),
-			add("2", "/0.0.0.0/2222"),
+			add("1", "/ip4/0.0.0.0/tcp/1111"),
+			add("2", "/ip4/0.0.0.0/tcp/2222"),
 			repeat(
 				2,
 				drain(2, "1", "2"),
@@ -211,8 +275,8 @@ func TestBook(t *testing.T) {
 			),
 			share("2", 1, "1"),
 			share("1", 1),
-			add("1", "/0.0.0.0/1112"),
-			add("2", "/0.0.0.0/2221"),
+			add("1", "/ip4/0.0.0.0/tcp/1112"),
+			add("2", "/ip4/0.0.0.0/tcp/2221"),
 			share("2", 1, "1"),
 			share("1", 1),
 		}},
@@ -220,21 +284,21 @@ func TestBook(t *testing.T) {
 			update("1", book.Protect),
 		}},
 		{"connect disconnect", []step{
-			add("1", "/0.0.0.0/1112"),
+			add("1", "/ip4/0.0.0.0/tcp/1112"),
 			update("1", book.Connected),
 			persist(`
-{"id":"1","raw":"/0.0.0.0/1112","class":2,"connected":true}
-5513782461252030321
+{"id":"1","raw":"/ip4/0.0.0.0/tcp/1112","class":2,"connected":true}
+6601807895792160526
 `),
 			update("1", book.Disconnected),
 			persist(`
-{"id":"1","raw":"/0.0.0.0/1112","class":2,"connected":false}
-2434620548433738927
+{"id":"1","raw":"/ip4/0.0.0.0/tcp/1112","class":2,"connected":false}
+7588170424014456815
 `),
 		}},
 		{"take shareable from nil source", []step{
-			add("1", "/0.0.0.0/1111"),
-			add("2", "/0.0.0.0/2222"),
+			add("1", "/ip4/0.0.0.0/tcp/1111"),
+			add("2", "/ip4/0.0.0.0/tcp/2222"),
 			repeat(
 				2,
 				drain(2, "1", "2"),
@@ -246,13 +310,13 @@ func TestBook(t *testing.T) {
 			shareExpectNil("3", 2),
 		}},
 		{"deleted from stable", []step{
-			add("1", "/0.0.0.0/1111"),
+			add("1", "/ip4/0.0.0.0/tcp/1111"),
 			repeat(
 				2,
 				drain(2, "1"),
 				update("1", book.Success),
 			),
-			add("2", "/0.0.0.0/2222"),
+			add("2", "/ip4/0.0.0.0/tcp/2222"),
 			share("2", 1, "1"),
 			repeat(
 				2,
@@ -269,40 +333,62 @@ func TestBook(t *testing.T) {
 			),
 			drain(2, "2"),
 		}},
-		{"downgrade from good to unknown takes time", []step{
-			add("1", "/0.0.0.0/1111"),
-			add("2", "/0.0.0.0/2222"),
-			repeat(14,
-				drain(2, "1", "2"),
-				update("1", book.Success),
-				update("2", book.Success),
-			),
-			share("2", 1, "1"),
-			repeat(9,
-				drain(2, "1", "2"),
-				update("1", book.Fail),
-				update("2", book.Success),
-			),
-			share("2", 1, "1"),
-			drain(2, "1", "2"),
-			update("1", book.Fail),
-			update("2", book.Success),
-			share("2", 1),
-		}},
 		{"persist nothing", []step{
 			persist("0"),
 		}},
 		{"recover addresses", []step{
-			add("1", "/0.0.0.0/1111"),
-			add("2", "/0.0.0.0/2222"),
+			add("1", "/ip4/0.0.0.0/tcp/1111"),
+			add("2", "/ip4/0.0.0.0/tcp/2222"),
 			repeat(2,
 				persist(`
-{"id":"1","raw":"/0.0.0.0/1111","class":2,"connected":false}
-{"id":"2","raw":"/0.0.0.0/2222","class":2,"connected":false}
-3943741974471739996
+{"id":"1","raw":"/ip4/0.0.0.0/tcp/1111","class":2,"connected":false}
+{"id":"2","raw":"/ip4/0.0.0.0/tcp/2222","class":2,"connected":false}
+8805148713257375839
 `),
 				recover(),
 			),
+		}},
+		{"sort on recovery", []step{
+			add("1", "/ip4/0.0.0.0/tcp/1111"),
+			add("2", "/ip4/0.0.0.0/tcp/2222"),
+			update("2", book.Connected),
+			persist(
+				`
+{"id":"1","raw":"/ip4/0.0.0.0/tcp/1111","class":2,"connected":false}
+{"id":"2","raw":"/ip4/0.0.0.0/tcp/2222","class":2,"connected":true}
+516371166648090384
+`),
+			recover(),
+			drain(2, "2", "1"),
+		}},
+		{"persist error on checksum", []step{
+			faultyPersist("write checksum"),
+		}},
+		{"persist json encoder", []step{
+			add("1", "/ip4/0.0.0.0/tcp/1111"),
+			faultyPersist("json encoder"),
+		}},
+		{"recovery fails", []step{
+			faultyRecover(`
+{"id":"1","raw":"","class":2,"connected":false`,
+				"unmarshal"),
+			faultyRecover(`
+{"id":"1","raw":10,"class":2,"connected":false}`,
+				"addressInfo.raw"),
+			faultyRecover(`
+{"id":"1","raw": "/invalid-addr/111","class":2,"connected":false}`,
+				"unknown protocol invalid-addr"),
+			faultyRecover(`
+{"id":"1","raw":"/ip4/0.0.0.0/tcp/1111","class":2,"connected":false}
+
+{"id":"2","raw":"/ip4/0.0.0.0/tcp/2222","class":2,"connected":false}
+`,
+				"empty lines are not expected"),
+			faultyRecover(`xyz`, "parse uint xyz"),
+			faultyRecover(`
+{"id":"1","raw":"/ip4/0.0.0.0/tcp/1111","class":2,"connected":false}
+{"id":"2","raw":"/ip4/0.0.0.0/tcp/2222","class":2,"connected":false}
+111`, "stored checksum 111"),
 		}},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
