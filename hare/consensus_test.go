@@ -175,8 +175,8 @@ func createConsensusProcess(
 	layer types.LayerID,
 ) *testCP {
 	broker := buildBroker(tb, sig.PublicKey().ShortString())
-	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
+	// broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	// broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(ctx)
 	network.Register(pubsub.HareProtocol, broker.HandleMessage)

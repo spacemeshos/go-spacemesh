@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const inboxCapacity = 1024 // inbox size per instance
@@ -34,9 +33,8 @@ type Broker struct {
 
 	cdb             *datastore.CachedDB
 	pubKeyExtractor *signing.PubKeyExtractor
-	roleValidator   validator                // provides eligibility validation
-	stateQuerier    stateQuerier             // provides activeness check
-	nodeSyncState   system.SyncStateProvider // provider function to check if the node is currently synced
+	roleValidator   validator    // provides eligibility validation
+	stateQuerier    stateQuerier // provides activeness check
 	mchOut          chan<- *types.MalfeasanceGossip
 	outbox          map[uint32]chan any
 	pending         map[uint32][]any // the buffer of pending early messages for the next layer
@@ -54,7 +52,6 @@ func newBroker(
 	pubKeyExtractor *signing.PubKeyExtractor,
 	roleValidator validator,
 	stateQuerier stateQuerier,
-	syncState system.SyncStateProvider,
 	mch chan<- *types.MalfeasanceGossip,
 	limit int,
 	log log.Log,
@@ -65,7 +62,6 @@ func newBroker(
 		pubKeyExtractor: pubKeyExtractor,
 		roleValidator:   roleValidator,
 		stateQuerier:    stateQuerier,
-		nodeSyncState:   syncState,
 		mchOut:          mch,
 		outbox:          make(map[uint32]chan any),
 		pending:         make(map[uint32][]any),
@@ -90,12 +86,10 @@ func (b *Broker) Start(ctx context.Context) {
 }
 
 var (
-	errUnregistered      = errors.New("layer is unregistered")
-	errNotSynced         = errors.New("layer is not synced")
-	errFutureMsg         = errors.New("future message")
-	errRegistration      = errors.New("failed during registration")
-	errInstanceNotSynced = errors.New("instance not synchronized")
-	errClosed            = errors.New("closed")
+	errUnregistered = errors.New("layer is unregistered")
+	errFutureMsg    = errors.New("future message")
+	errRegistration = errors.New("failed during registration")
+	errClosed       = errors.New("closed")
 )
 
 func (b *Broker) validateTiming(ctx context.Context, m *Message) error {
@@ -163,9 +157,6 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	logger.Debug("broker received hare message")
 
 	msgLayer := hareMsg.Layer
-	if !b.Synced(ctx, msgLayer) {
-		return errNotSynced
-	}
 
 	isEarly := false
 	if err = b.validateTiming(ctx, &hareMsg); err != nil {
@@ -392,10 +383,6 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any,
 
 	b.setLatestLayer(ctx, id)
 
-	// check to see if the node is still synced
-	if !b.Synced(ctx, id) {
-		return nil, errInstanceNotSynced
-	}
 	return b.createNewInbox(id), nil
 }
 
@@ -430,11 +417,6 @@ func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 	b.cleanupInstance(id)
 	b.cleanOldLayers()
 	b.WithContext(ctx).With().Debug("hare broker unregistered layer", id)
-}
-
-// Synced returns true if the given layer is synced, false otherwise.
-func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
-	return b.nodeSyncState.IsSynced(ctx) && b.nodeSyncState.IsBeaconSynced(id.GetEpoch())
 }
 
 // Close closes broker.
