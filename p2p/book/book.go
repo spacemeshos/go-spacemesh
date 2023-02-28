@@ -19,6 +19,7 @@ import (
 const SELF ID = "SELF"
 
 type ID string
+
 type Address = ma.Multiaddr
 
 type class uint32
