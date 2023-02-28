@@ -502,13 +502,19 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	mesh, err := mocknet.FullMeshLinked(totalNodes)
+	defer func() {
+		err := mesh.Close()
+		require.NoError(t, err)
+	}()
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
 
 	dbs := make([]*sql.Database, 0, totalNodes)
 	for i := 0; i < totalNodes; i++ {
-		dbs = append(dbs, sql.InMemory())
+		db := sql.InMemory()
+		defer db.Close()
+		dbs = append(dbs, db)
 	}
 	pList := make(map[types.LayerID][]types.ProposalID)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
