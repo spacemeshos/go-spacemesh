@@ -188,7 +188,6 @@ func ToBlockIDs(blocks []*Block) []BlockID {
 // BlockContextualValidity represents the contextual validity of a block.
 type BlockContextualValidity struct {
 	ID       BlockID
-	Layer    LayerID
 	Validity bool
 }
 
