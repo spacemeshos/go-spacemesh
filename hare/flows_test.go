@@ -84,8 +84,7 @@ func (his *HareWrapper) WaitForTimedTermination(t *testing.T, timeout time.Durat
 	total := types.NewLayerID(his.totalCP)
 	select {
 	case <-timer:
-		t.Fatal("Timeout")
-		return
+		panic("timeout")
 	case <-his.termination:
 		for i := types.NewLayerID(1); !i.After(total); i = i.Add(1) {
 			his.checkResult(t, i)
