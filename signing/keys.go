@@ -1,8 +1,9 @@
 package signing
 
 import (
-	"crypto/ed25519"
 	"encoding/hex"
+
+	"github.com/spacemeshos/ed25519-recovery"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
