@@ -11,25 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// ValidateRewards syntactically validates rewards.
-func ValidateRewards(rewards []types.AnyReward) error {
-	if len(rewards) == 0 {
-		return fmt.Errorf("empty rewards")
-	}
-	unique := map[core.Address]struct{}{}
-	for _, reward := range rewards {
-		if reward.Weight.Num == 0 || reward.Weight.Denom == 0 {
-			return fmt.Errorf("reward with invalid (zeroed) weight (%d/%d) included into the block for %v", reward.Weight.Num, reward.Weight.Denom, reward.Coinbase)
-		}
-		if _, exists := unique[reward.Coinbase]; exists {
-			return fmt.Errorf("multiple rewards for the same coinbase %v", reward.Coinbase)
-		}
-		unique[reward.Coinbase] = struct{}{}
-	}
-	return nil
-}
-
-func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, fees uint64, blockRewards []types.AnyReward) ([]types.Reward, error) {
+func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, fees uint64, blockRewards []types.CoinbaseReward) ([]types.Reward, error) {
 	var (
 		layersAfterEffectiveGenesis = lctx.Layer.Difference(types.GetEffectiveGenesis())
 		subsidy                     = rewards.TotalSubsidyAtLayer(layersAfterEffectiveGenesis)

@@ -82,8 +82,14 @@ func RatNumFromBigRat(r *big.Rat) RatNum {
 	return RatNum{Num: r.Num().Uint64(), Denom: r.Denom().Uint64()}
 }
 
-// AnyReward contains the reward information.
+// AnyReward contains the reward information by ATXID.
 type AnyReward struct {
+	AtxID  ATXID
+	Weight RatNum
+}
+
+// CoinbaseReward contains the reward information by coinbase, used as an interface to VM.
+type CoinbaseReward struct {
 	Coinbase Address
 	Weight   RatNum
 }

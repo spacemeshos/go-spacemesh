@@ -138,8 +138,8 @@ func TestToBlockIDs(t *testing.T) {
 func TestRewardCodec(t *testing.T) {
 	weight := big.NewRat(1234, 7)
 	r := &types.AnyReward{
-		Coinbase: types.GenerateAddress(RandomBytes(types.AddressLength)),
-		Weight:   types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
+		AtxID:  types.RandomATXID(),
+		Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
 	}
 
 	data, err := codec.Encode(r)

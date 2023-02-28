@@ -2,7 +2,6 @@ package mesh
 
 import (
 	"context"
-	"math/big"
 	"testing"
 	"time"
 
@@ -105,17 +104,10 @@ func CreateAndSaveTxs(t testing.TB, db sql.Executor, numOfTxs int) []types.Trans
 func createBlock(t testing.TB, db sql.Executor, mesh *Mesh, layerID types.LayerID, nodeID types.NodeID) *types.Block {
 	t.Helper()
 	txIDs := CreateAndSaveTxs(t, db, numTXs)
-	weight := new(big.Rat).SetFloat64(312.13)
 	b := &types.Block{
 		InnerBlock: types.InnerBlock{
 			LayerIndex: layerID,
-			Rewards: []types.AnyReward{
-				{
-					Coinbase: types.GenerateAddress(nodeID[:]),
-					Weight:   types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
-				},
-			},
-			TxIDs: txIDs,
+			TxIDs:      txIDs,
 		},
 	}
 	b.Initialize()
@@ -247,7 +239,7 @@ func TestMesh_LayerHashes(t *testing.T) {
 		blk := lyrBlocks[i]
 		var ineffective []types.Transaction
 		var executed []types.TransactionWithResult
-		tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), blk.Rewards).Return(ineffective, executed, nil)
+		tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(ineffective, executed, nil)
 		tm.mockState.EXPECT().UpdateCache(gomock.Any(), i, blk.ID(), executed, ineffective).Return(nil)
 		tm.mockVM.EXPECT().GetStateRoot()
 
@@ -326,7 +318,7 @@ func TestMesh_ProcessLayerPerHareOutput(t *testing.T) {
 				if !tc.executed {
 					var ineffective []types.Transaction
 					var executed []types.TransactionWithResult
-					tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), toApply.Rewards).Return(ineffective, executed, nil)
+					tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(ineffective, executed, nil)
 					tm.mockState.EXPECT().UpdateCache(gomock.Any(), i, toApply.ID(), executed, ineffective)
 					tm.mockVM.EXPECT().GetStateRoot()
 				}
@@ -518,7 +510,7 @@ func TestMesh_Revert(t *testing.T) {
 		applied := layerBlocks[i]
 		var ineffective []types.Transaction
 		var executed []types.TransactionWithResult
-		tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), applied.Rewards).Return(ineffective, executed, nil)
+		tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(ineffective, executed, nil)
 		tm.mockState.EXPECT().UpdateCache(gomock.Any(), i, applied.ID(), executed, ineffective)
 		tm.mockVM.EXPECT().GetStateRoot()
 	}
@@ -579,7 +571,7 @@ func TestMesh_pushLayersToState_verified(t *testing.T) {
 	}
 	var ineffective []types.Transaction
 	var executed []types.TransactionWithResult
-	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), toApply.Rewards).Return(ineffective, executed, nil)
+	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(ineffective, executed, nil)
 	tm.mockState.EXPECT().UpdateCache(gomock.Any(), layerID, toApply.ID(), executed, ineffective)
 	tm.mockVM.EXPECT().GetStateRoot()
 	require.NoError(t, tm.pushLayersToState(context.Background(), tm.logger, layerID, layerID))
@@ -621,7 +613,7 @@ func TestMesh_ValidityOrder(t *testing.T) {
 				saveContextualValidity(t, tm.cdb, block.ID(), true)
 			}
 
-			tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), tc.blocks[tc.expected].Rewards).Return(nil, nil, nil)
+			tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil, nil)
 			tm.mockState.EXPECT().UpdateCache(gomock.Any(), lid, tc.blocks[tc.expected].ID(), nil, nil)
 			tm.mockVM.EXPECT().GetStateRoot()
 			require.NoError(t, tm.pushLayersToState(context.Background(), tm.logger, lid, lid))
@@ -645,7 +637,7 @@ func TestMesh_pushLayersToState_notVerified(t *testing.T) {
 
 	var ineffective []types.Transaction
 	var executed []types.TransactionWithResult
-	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), hareOutput.Rewards).Return(ineffective, executed, nil)
+	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(ineffective, executed, nil)
 	tm.mockState.EXPECT().UpdateCache(gomock.Any(), layerID, hareOutput.ID(), executed, ineffective)
 	tm.mockVM.EXPECT().GetStateRoot()
 	require.NoError(t, tm.pushLayersToState(context.Background(), tm.logger, layerID, layerID))
@@ -735,7 +727,7 @@ func TestMesh_ReverifyFailed(t *testing.T) {
 	saveContextualValidity(t, tm.cdb, block2.ID(), true)
 
 	last = last.Add(1)
-	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), block2.Rewards).Return(nil, nil, nil)
+	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil, nil)
 	tm.mockState.EXPECT().UpdateCache(gomock.Any(), last.Sub(1), block2.ID(), nil, nil)
 	tm.mockVM.EXPECT().Apply(gomock.Any(), nil, nil).Return(nil, nil, nil)
 	tm.mockState.EXPECT().UpdateCache(gomock.Any(), last, types.EmptyBlockID, nil, nil)
