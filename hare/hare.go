@@ -573,7 +573,7 @@ func (h *Hare) malfeasanceLoop(ctx context.Context) {
 
 // Start starts listening for layers and outputs.
 func (h *Hare) Start(ctx context.Context) error {
-	{
+	func() {
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		if h.cancel != nil {
@@ -581,7 +581,7 @@ func (h *Hare) Start(ctx context.Context) error {
 		}
 		h.ctx, h.cancel = context.WithCancel(ctx)
 		ctx = h.ctx
-	}
+	}()
 	h.WithContext(ctx).With().Info("starting protocol", log.String("protocol", pubsub.HareProtocol))
 
 	// Create separate contexts for each subprocess. This allows us to better track the flow of messages.
