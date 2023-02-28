@@ -3,7 +3,7 @@ package signing
 import (
 	"testing"
 
-	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/ed25519-recovery"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -27,7 +27,7 @@ func TestEdSigner_Sign(t *testing.T) {
 	rand.Read(m)
 	sig := ed.Sign(m)
 
-	ok := ed25519.Verify2(ed25519.PublicKey(ed.PublicKey().Bytes()), m, sig)
+	ok := ed25519.Verify(ed25519.PublicKey(ed.PublicKey().Bytes()), m, sig)
 	require.Truef(t, ok, "failed to verify message %x with sig %x", m, sig)
 }
 

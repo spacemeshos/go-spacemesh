@@ -1,14 +1,13 @@
 package signing
 
 import (
+	"crypto/ed25519"
 	"encoding/hex"
-
-	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// PrivateKey is an alias to spacemeshos/ed25519.PrivateKey.
+// PrivateKey is an alias to ed25519.PrivateKey.
 type PrivateKey = ed25519.PrivateKey
 
 // PrivateKeySize size of the private key in bytes.

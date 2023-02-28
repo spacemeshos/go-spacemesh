@@ -1,7 +1,7 @@
 package signing
 
 import (
-	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/ed25519-recovery"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
