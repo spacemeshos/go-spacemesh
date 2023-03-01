@@ -15,7 +15,7 @@ require (
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.15.1
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.15.2
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-retryablehttp v0.7.2
 	github.com/hashicorp/golang-lru v0.6.0
@@ -84,7 +84,6 @@ require (
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect

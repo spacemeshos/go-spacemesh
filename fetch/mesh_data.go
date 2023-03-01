@@ -48,14 +48,10 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 				return ctx.Err()
 			case <-p.completed:
 				if p.err != nil {
-					f.logger.WithContext(ctx).With().Warning("failed to get hash",
-						log.String("hint", string(hint)),
-						log.Stringer("hash", h),
-						log.Err(p.err))
-					return p.err
+					return fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h, p.err)
 				}
+				return nil
 			}
-			return nil
 		})
 	}
 
