@@ -41,33 +41,17 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 			continue
 		}
 
-		h := hash
 		eg.Go(func() error {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-p.completed:
-				if p.err != nil {
-					// do not log err here, as it can be a multierror underneath
-					f.logger.WithContext(ctx).With().Warning("failed to get hash",
-						log.String("hint", string(hint)),
-						log.Stringer("hash", h),
-					)
-					return p.err
-				}
 			}
-			return nil
+			return p.err
 		})
 	}
 
-	err := eg.Wait().ErrorOrNil()
-	if err != nil {
-		// due to the recursive nature of data fetching in go-spacemesh, we want to minimize the log volume
-		f.logger.WithContext(ctx).With().Debug("failed to get hashes",
-			log.String("hint", string(hint)),
-			log.Err(err))
-	}
-	return err
+	return eg.Wait().ErrorOrNil()
 }
 
 // GetMalfeasanceProofs gets malfeasance proofs for the specified NodeIDs and validates them.
