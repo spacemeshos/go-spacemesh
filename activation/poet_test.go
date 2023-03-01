@@ -34,6 +34,7 @@ func TestHTTPPoet(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	t.Parallel()
 	r := require.New(t)
 
 	gtw := util.NewMockGrpcServer(t)
