@@ -49,9 +49,9 @@ func addFrom(src, id book.ID, addr string) step {
 	}
 }
 
-func update(id book.ID, event book.Event) step {
+func update(id book.ID, events ...book.Event) step {
 	return func(ts *testState) {
-		ts.book.Update(id, event)
+		ts.book.Update(id, events...)
 	}
 }
 
@@ -99,6 +99,12 @@ func persist(expect string) step {
 		require.NoError(ts, ts.book.Persist(w))
 		require.Equal(ts, strings.TrimSpace(expect), w.String())
 		ts.persisted = w.Bytes()
+	}
+}
+
+func stats(s book.Stats) step {
+	return func(ts *testState) {
+		require.Equal(ts, s, ts.book.Stats())
 	}
 }
 
@@ -395,6 +401,17 @@ func TestBook(t *testing.T) {
 {"id":"1","raw":"/ip4/0.0.0.0/tcp/1111","class":2,"connected":false}
 {"id":"2","raw":"/ip4/0.0.0.0/tcp/2222","class":2,"connected":false}
 111`, "stored checksum 111"),
+		}},
+		{"stats", []step{
+			add("1", "/ip4/0.0.0.0/tcp/1111"),
+			stats(book.Stats{Total: 1, Private: 1, Learned: 1}),
+			add("2", "/ip4/8.8.8.8/tcp/1111"),
+			stats(book.Stats{Total: 2, Public: 1, Private: 1, Learned: 2}),
+			update("1", book.Fail),
+			update("2", book.Connected, book.Success),
+			stats(book.Stats{Total: 2, Public: 1, Private: 1, Connected: 1, Learned: 1, Stale: 1}),
+			update("2", book.Success),
+			stats(book.Stats{Total: 2, Public: 1, Private: 1, Connected: 1, Stable: 1, Stale: 1}),
 		}},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {

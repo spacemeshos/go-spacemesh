@@ -290,6 +290,41 @@ func (b *Book) Recover(r io.Reader) error {
 	return nil
 }
 
+type Stats struct {
+	Total     int
+	Connected int
+	Public    int
+	Private   int
+	Stale     int
+	Learned   int
+	Stable    int
+}
+
+func (b *Book) Stats() Stats {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	stats := Stats{Total: len(b.known)}
+	for _, addr := range b.known {
+		if addr.Connected {
+			stats.Connected++
+		}
+		if addr.bucket == public {
+			stats.Public++
+		} else {
+			stats.Private++
+		}
+		switch addr.Class {
+		case stale:
+			stats.Stale++
+		case learned:
+			stats.Learned++
+		case stable:
+			stats.Stable++
+		}
+	}
+	return stats
+}
+
 func (b *Book) iterShareable(src ID, bucket bucket) iterator {
 	b.rng.Shuffle(len(b.shareable), func(i, j int) {
 		b.shareable[i], b.shareable[j] = b.shareable[j], b.shareable[i]
