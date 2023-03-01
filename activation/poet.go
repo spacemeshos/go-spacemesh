@@ -10,9 +10,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/spacemeshos/poet/config"
 	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api/v1"
-	"github.com/spacemeshos/poet/server"
 	"github.com/spacemeshos/poet/shared"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -25,86 +23,6 @@ var (
 	ErrNotFound    = errors.New("not found")
 	ErrUnavailable = errors.New("unavailable")
 )
-
-// HTTPPoetHarness utilizes a local self-contained poet server instance
-// targeted by an HTTP client, in order to exercise functionality.
-type HTTPPoetHarness struct {
-	*HTTPPoetClient
-	Service *server.Server
-}
-
-type HTTPPoetOpt func(*config.Config)
-
-func WithGateway(endpoint string) HTTPPoetOpt {
-	return func(cfg *config.Config) {
-		cfg.Service.GatewayAddresses = []string{endpoint}
-	}
-}
-
-func WithGenesis(genesis time.Time) HTTPPoetOpt {
-	return func(cfg *config.Config) {
-		cfg.Service.Genesis = genesis.Format(time.RFC3339)
-	}
-}
-
-func WithEpochDuration(epoch time.Duration) HTTPPoetOpt {
-	return func(cfg *config.Config) {
-		cfg.Service.EpochDuration = epoch
-	}
-}
-
-func WithPhaseShift(phase time.Duration) HTTPPoetOpt {
-	return func(cfg *config.Config) {
-		cfg.Service.PhaseShift = phase
-	}
-}
-
-func WithCycleGap(gap time.Duration) HTTPPoetOpt {
-	return func(cfg *config.Config) {
-		cfg.Service.CycleGap = gap
-	}
-}
-
-// NewHTTPPoetHarness returns a new instance of HTTPPoetHarness.
-func NewHTTPPoetHarness(ctx context.Context, poetdir string, opts ...HTTPPoetOpt) (*HTTPPoetHarness, error) {
-	cfg := config.DefaultConfig()
-	cfg.PoetDir = poetdir
-
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
-	cfg, err := config.SetupConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	poet, err := server.New(ctx, *cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	// NewHTTPPoetClient takes an URL as connection string. Server speaks HTTP.
-	url := &url.URL{
-		Scheme: "http",
-		Host:   poet.GrpcRestProxyAddr().String(),
-	}
-
-	client, err := NewHTTPPoetClient(url.String(), PoetConfig{
-		PhaseShift: cfg.Service.PhaseShift,
-		CycleGap:   cfg.Service.CycleGap,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: query for the REST address to allow dynamic port allocation.
-	// It needs changes in poet.
-	return &HTTPPoetHarness{
-		HTTPPoetClient: client,
-		Service:        poet,
-	}, nil
-}
 
 // HTTPPoetClient implements PoetProvingServiceClient interface.
 type HTTPPoetClient struct {

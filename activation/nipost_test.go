@@ -216,7 +216,7 @@ func spawnMockGateway(tb testing.TB) string {
 
 func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetClient {
 	tb.Helper()
-	poetProver, err := NewHTTPPoetHarness(context.Background(), tb.TempDir(), opts...)
+	poetProver, err := NewHTTPPoetTestHarness(context.Background(), tb.TempDir(), opts...)
 	require.NoError(tb, err)
 	require.NotNil(tb, poetProver)
 
