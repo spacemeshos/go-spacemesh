@@ -61,15 +61,6 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		return ctx.Err()
 	})
 
-	bootnodes := make([]*peer.AddrInfo, 0, len(config.Bootnodes))
-	for _, raw := range config.Bootnodes {
-		info, err := peer.AddrInfoFromString(raw)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse bootstrap node: %w", err)
-		}
-		bootnodes = append(bootnodes, info)
-	}
-
 	var advertise ma.Multiaddr
 	if len(config.AdvertiseAddress) > 0 {
 		var err error
@@ -89,12 +80,17 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 			return nil, fmt.Errorf("create tcp multiaddr %w", err)
 		}
 	}
-	for _, addr := range bootnodes {
-		if len(addr.Addrs) == 0 {
-			return nil, fmt.Errorf("malformed bootnodes configuration")
+	for _, addr := range config.Bootnodes {
+		maddr, err := ma.NewMultiaddr(addr)
+		if err != nil {
+			return nil, err
 		}
-		d.book.Add(book.SELF, addr.ID.String(), addr.Addrs[0])
-		d.book.Update(addr.ID.String(), book.Protect)
+		_, id := peer.SplitAddr(maddr)
+		if id == "" {
+			return nil, fmt.Errorf("invalid multiaddr: missing p2p part %v", id)
+		}
+		d.book.Add(book.SELF, id.String(), maddr)
+		d.book.Update(id.String(), book.Protect)
 	}
 	protocol := newPeerExchange(h, d.book, advertise, logger, config.PeerExchange)
 	d.crawl = newCrawler(h, d.book, protocol, logger)
@@ -134,7 +130,7 @@ func (d *Discovery) Stop() {
 
 // Bootstrap runs a refresh and tries to get a minimum number of nodes in the addrBook.
 func (d *Discovery) Bootstrap(ctx context.Context) error {
-	return d.crawl.Crawl(ctx, 10*time.Second)
+	return d.crawl.Crawl(ctx, time.Second)
 }
 
 // AdvertisedAddress returns advertised address.

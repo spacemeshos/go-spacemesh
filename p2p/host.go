@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
@@ -75,14 +74,6 @@ func New(_ context.Context, logger log.Log, cfg Config, genesisID types.Hash20, 
 	cm, err := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, connmgr.WithGracePeriod(cfg.GracePeersShutdown))
 	if err != nil {
 		return nil, fmt.Errorf("p2p create conn mgr: %w", err)
-	}
-	// TODO(dshulyak) remove this part
-	for _, p := range cfg.Bootnodes {
-		addr, err := peer.AddrInfoFromString(p)
-		if err != nil {
-			return nil, fmt.Errorf("can't create peer addr from %s: %w", p, err)
-		}
-		cm.Protect(addr.ID, peerexchange.BootNodeTag)
 	}
 	streamer := *yamux.DefaultTransport
 	ps, err := pstoremem.NewPeerstore()

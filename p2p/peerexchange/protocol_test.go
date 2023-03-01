@@ -51,40 +51,6 @@ func contains[T any](array []T, object T) bool {
 	return false
 }
 
-// func TestDiscovery_LearnAddress(t *testing.T) {
-// 	n := 4
-
-// 	info, err := peer.AddrInfoFromString(dnsNode)
-// 	require.NoError(t, err)
-
-// 	logger := logtest.New(t)
-// 	mesh, err := mocknet.FullMeshConnected(n)
-// 	require.NoError(t, err)
-// 	protocols := []*peerExchange{}
-
-// 	for _, h := range mesh.Hosts() {
-// 		peer := buildPeer(t, logger, h, DefaultPeerExchangeConfig())
-// 		peer.book.Add(book.SELF, info.ID.String(), info.Addrs[0])
-// 		protocols = append(protocols, peer)
-// 	}
-// 	for _, proto := range protocols {
-// 		for _, proto2 := range protocols {
-// 			if proto.h.ID() == proto2.h.ID() {
-// 				continue
-// 			}
-// 			_, err := proto.Request(context.TODO(), proto2.h.ID())
-// 			require.NoError(t, err)
-// 			best, err := bestNetAddress(proto.h)
-// 			require.NoError(t, err)
-// 			found := proto2.book.Lookup(proto.h.ID())
-// 			require.Equal(t, best, found)
-
-// 			require.True(t, checkDNSAddress(proto.book.GetAddresses(), dnsNode))
-// 			require.True(t, checkDNSAddress(proto2.book.GetAddresses(), dnsNode))
-// 		}
-// 	}
-// }
-
 func TestDiscovery_AdvertiseDNS(t *testing.T) {
 	logger := logtest.New(t)
 	mesh, err := mocknet.FullMeshConnected(2)
@@ -119,9 +85,11 @@ func TestDiscovery_FilteringAddresses(t *testing.T) {
 	peerA := buildPeer(t, logger, mesh.Hosts()[0], config)
 	peerB := buildPeer(t, logger, mesh.Hosts()[1], config)
 
-	info, err := peer.AddrInfoFromString(dnsNode)
+	maddr, err := ma.NewMultiaddr(dnsNode)
 	require.NoError(t, err)
-	peerB.book.Add(book.SELF, info.ID.String(), info.Addrs[0])
+	_, id := peer.SplitAddr(maddr)
+	require.NotEmpty(t, id)
+	peerB.book.Add(book.SELF, id.String(), maddr)
 
 	// Check if never attempted address is eventually returned
 	// The returned addresses are randomly picked so try in a
@@ -129,15 +97,15 @@ func TestDiscovery_FilteringAddresses(t *testing.T) {
 	require.Eventually(t, func() bool {
 		addresses, err := peerA.Request(context.TODO(), peerB.h.ID())
 		require.NoError(t, err)
-		return contains(addresses, info)
+		return contains(addresses, dnsNode)
 	}, time.Second, time.Nanosecond)
 
-	peerB.book.Update(info.ID.String(), book.Fail)
+	peerB.book.Update(id.String(), book.Fail)
 
 	// Check if stale address is "never" returned
 	for i := 1; i <= 10; i++ {
 		addresses, err := peerA.Request(context.TODO(), peerB.h.ID())
 		require.NoError(t, err)
-		assert.NotContains(t, addresses, info)
+		assert.NotContains(t, addresses, dnsNode)
 	}
 }

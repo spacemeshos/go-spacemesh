@@ -4,17 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange/mocks"
@@ -23,9 +22,8 @@ import (
 func TestDiscovery_CrawlMesh(t *testing.T) {
 	var (
 		instances = []*Discovery{}
-		bootnode  *peer.AddrInfo
+		bootnode  ma.Multiaddr
 		n         = 20
-		rounds    = 5
 	)
 	mesh, err := mocknet.FullMeshLinked(n)
 	require.NoError(t, err)
@@ -34,12 +32,11 @@ func TestDiscovery_CrawlMesh(t *testing.T) {
 		logger := logtest.New(t).Named(h.ID().Pretty())
 		cfg := Config{}
 
-		best, err := bestNetAddress(h)
-		fmt.Println(best)
-		require.NoError(t, err)
 		if bootnode == nil {
-			bootnode, err = peer.AddrInfoFromP2pAddr(best)
+			require.NotEmpty(t, h.Addrs())
+			p2p, err := ma.NewComponent("p2p", h.ID().String())
 			require.NoError(t, err)
+			bootnode = h.Addrs()[0].Encapsulate(p2p)
 		}
 		cfg.Bootnodes = append(cfg.Bootnodes, bootnode.String())
 		instance, err := New(logger, h, cfg)
@@ -50,33 +47,29 @@ func TestDiscovery_CrawlMesh(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	var wg sync.WaitGroup
+	var eg errgroup.Group
 	for _, instance := range instances {
-		wg.Add(1)
-		go func(instance *Discovery) {
-			defer wg.Done()
-			for i := 0; i < rounds; i++ {
-				if err := instance.Bootstrap(ctx); errors.Is(err, context.Canceled) {
-					return
-				}
-				time.Sleep(10 * time.Millisecond)
+		instance := instance
+		eg.Go(func() error {
+			err := instance.Bootstrap(ctx)
+			if errors.Is(err, context.Canceled) {
+				return nil
 			}
-		}(instance)
+			return err
+		})
 	}
-	wait := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(wait)
-	}()
-	select {
-	case <-time.After(5 * time.Second):
-		require.FailNow(t, "bootstrap failed to finish on time")
-	case <-wait:
-	}
-	for _, h := range mesh.Hosts() {
-		require.True(t, len(h.Network().Conns()) > 1,
-			"expected connections with more then just bootnode")
-	}
+
+	require.NotEmpty(t, mesh.Hosts())
+	require.Eventually(t, func() bool {
+		for _, h := range mesh.Hosts() {
+			if len(h.Network().Conns()) <= 1 {
+				return false
+			}
+		}
+		return true
+	}, 3*time.Second, 200*time.Millisecond)
+	cancel()
+	require.NoError(t, eg.Wait())
 }
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./discovery_test.go

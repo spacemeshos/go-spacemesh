@@ -98,9 +98,9 @@ func (p *peerExchange) handler(stream network.Stream) {
 	}
 	p.book.Add(book.SELF, stream.Conn().RemotePeer().String(), addr.Encapsulate(id))
 
-	shared := p.book.TakeShareable(stream.Conn().RemotePeer().String(), 10)
-	response := make([]string, 0, len(shared))
-	for _, addr := range shared {
+	share := p.book.TakeShareable(stream.Conn().RemotePeer().String(), 10)
+	response := make([]string, 0, len(share))
+	for _, addr := range share {
 		response = append(response, addr.String())
 	}
 	// todo: limit results to message size
@@ -131,7 +131,7 @@ func (p *peerExchange) AdvertisedAddress() ma.Multiaddr {
 }
 
 // Request addresses from a remote node, it will block and return the results returned from the node.
-func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*peer.AddrInfo, error) {
+func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]string, error) {
 	logger := p.logger.WithContext(ctx).WithFields(
 		log.String("type", "getaddresses"),
 		log.String("to", pid.String())).With()
@@ -154,17 +154,5 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*peer.AddrIn
 	if err != nil {
 		return nil, fmt.Errorf("failed to read addresses in response: %w", err)
 	}
-
-	infos := make([]*peer.AddrInfo, 0, len(addrs))
-	for _, raw := range addrs {
-		info, err := peer.AddrInfoFromString(raw)
-		if err != nil {
-			return nil, fmt.Errorf("failed parsing: %w", err)
-		}
-		if info.ID == p.h.ID() {
-			return nil, fmt.Errorf("peer shouldn't reply with address for our id")
-		}
-		infos = append(infos, info)
-	}
-	return infos, nil
+	return addrs, nil
 }

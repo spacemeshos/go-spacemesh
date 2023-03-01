@@ -65,6 +65,7 @@ type Host struct {
 	bootstrap *bootstrap.Bootstrap
 }
 
+// TODO(dshulyak) IsBootnode should be a configuration option
 func isBootnode(h host.Host, bootnodes []string) (bool, error) {
 	for _, raw := range bootnodes {
 		info, err := peer.AddrInfoFromString(raw)

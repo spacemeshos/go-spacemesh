@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 )
@@ -21,8 +20,6 @@ import (
 const SELF ID = "SELF"
 
 type ID = string
-
-type AddrInfo = peer.AddrInfo
 
 type Address = ma.Multiaddr
 
