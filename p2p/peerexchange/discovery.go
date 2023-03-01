@@ -1,11 +1,14 @@
 package peerexchange
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"math"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -15,16 +18,14 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/host/eventbus"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
+	"github.com/natefinch/atomic"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/book"
 )
 
-const (
-	// BootNodeTag is the tag used to identify boot nodes in connectionManager.
-	BootNodeTag = "bootnode"
-)
+const peersFile = "peers.txt"
 
 // Config for Discovery.
 type Config struct {
@@ -57,10 +58,6 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		cancel: cancel,
 		book:   book.New(),
 	}
-	d.eg.Go(func() error {
-		return ctx.Err()
-	})
-
 	var advertise ma.Multiaddr
 	if len(config.AdvertiseAddress) > 0 {
 		var err error
@@ -98,6 +95,37 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to subscribe to eventbus: %w", err)
 	}
+	if len(config.DataDir) != 0 {
+		fpath := filepath.Join(config.DataDir, peersFile)
+		f, err := os.Open(fpath)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("can't recover from file %v: %w", fpath, err)
+		}
+		defer f.Close()
+		if err == nil {
+			if err := d.book.Recover(f); err != nil {
+				return nil, err
+			}
+		}
+		d.eg.Go(func() error {
+			ticker := time.NewTicker(30 * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-ticker.C:
+					buf := bytes.NewBuffer(nil)
+					if err := d.book.Persist(buf); err != nil {
+						return err
+					}
+					if err := atomic.WriteFile(fpath, buf); err != nil {
+						return err
+					}
+				}
+			}
+		})
+	}
 	if len(config.AdvertiseAddress) == 0 {
 		d.eg.Go(func() error {
 			defer sub.Close()
@@ -128,7 +156,7 @@ func (d *Discovery) Stop() {
 	d.eg.Wait()
 }
 
-// Bootstrap runs a refresh and tries to get a minimum number of nodes in the addrBook.
+// Bootstrap runs a crawl.
 func (d *Discovery) Bootstrap(ctx context.Context) error {
 	return d.crawl.Crawl(ctx, time.Second)
 }
