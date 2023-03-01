@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
+	"github.com/spacemeshos/go-spacemesh/p2p/book"
 )
 
 const (
@@ -41,13 +42,13 @@ type peerExchange struct {
 	advertise atomic.Pointer[ma.Multiaddr]
 
 	h      host.Host
-	book   *addressbook.AddrBook
+	book   *book.Book
 	logger log.Log
 	config PeerExchangeConfig
 }
 
 // newPeerExchange is a constructor for a protocol protocol provider.
-func newPeerExchange(h host.Host, rt *addressbook.AddrBook, advertise ma.Multiaddr, log log.Log, config PeerExchangeConfig) *peerExchange {
+func newPeerExchange(h host.Host, rt *book.Book, advertise ma.Multiaddr, log log.Log, config PeerExchangeConfig) *peerExchange {
 	pe := &peerExchange{
 		h:      h,
 		book:   rt,
@@ -96,26 +97,12 @@ func (p *peerExchange) handler(stream network.Stream) {
 		logger.Error("failed to create p2p component", log.Err(err))
 		return
 	}
-	addr = addr.Encapsulate(id)
-	info, err := addressbook.ParseAddrInfo(addr.String())
-	if err != nil {
-		logger.Debug("failed to parse address", log.Stringer("address", addr), log.Err(err))
-		return
-	}
-	p.book.AddAddress(info, info)
+	p.book.Add(book.SELF, stream.Conn().RemotePeer(), addr.Encapsulate(id))
 
-	results := p.book.GetKnownAddressesCache()
-	response := make([]string, 0, len(results))
-	now := time.Now()
-	for _, addr := range results {
-		if addr.Addr.ID == stream.Conn().RemotePeer() {
-			continue
-		}
-		// Filter out addresses that have not been connected for a while
-		// but optimistically keep addresses we have not tried yet.
-		if addr.LastAttempt.IsZero() || now.Sub(addr.LastSuccess) < p.config.stalePeerTimeout {
-			response = append(response, addr.Addr.RawAddr)
-		}
+	shared := p.book.TakeShareable(stream.Conn().RemotePeer(), 10)
+	response := make([]string, 0, len(shared))
+	for _, addr := range shared {
+		response = append(response, addr.String())
 	}
 	// todo: limit results to message size
 	_ = stream.SetDeadline(time.Now().Add(messageTimeout))

@@ -10,15 +10,19 @@ import (
 	"math/rand"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 )
 
 const SELF ID = "SELF"
 
-type ID string
+type ID = peer.ID
+
+type AddrInfo = peer.AddrInfo
 
 type Address = ma.Multiaddr
 
@@ -131,6 +135,7 @@ func New(opts ...Opt) *Book {
 }
 
 type Book struct {
+	mu        sync.Mutex
 	limit     int
 	known     map[ID]*addressInfo
 	queue     *list.List
@@ -139,6 +144,8 @@ type Book struct {
 }
 
 func (b *Book) Add(src, id ID, raw Address) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	addr := b.known[id]
 	bucket := bucketize(raw)
 	if src != SELF {
@@ -177,6 +184,8 @@ const (
 )
 
 func (b *Book) Update(id ID, events ...Event) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	addr := b.known[id]
 	if addr == nil {
 		return
@@ -223,10 +232,14 @@ func (b *Book) Update(id ID, events ...Event) {
 }
 
 func (b *Book) DrainQueue(n int) []Address {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	return take(n, b.drainQueue())
 }
 
 func (b *Book) TakeShareable(src ID, n int) []Address {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	addr := b.known[src]
 	if addr == nil {
 		return nil
@@ -235,10 +248,14 @@ func (b *Book) TakeShareable(src ID, n int) []Address {
 }
 
 func (b *Book) Persist(w io.Writer) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	return persist(b.known, w)
 }
 
 func (b *Book) Recover(r io.Reader) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if err := recover(b.known, r); err != nil {
 		return err
 	}

@@ -2,6 +2,9 @@ package peerexchange
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -9,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
+	"github.com/spacemeshos/go-spacemesh/p2p/book"
 )
 
 const maxConcurrentRequests = 3
@@ -24,128 +28,65 @@ type crawler struct {
 	logger log.Log
 	host   host.Host
 
-	book *addressbook.AddrBook
-	disc *peerExchange
+	book2 *book.Book
+	disc  *peerExchange
 }
 
-func newCrawler(h host.Host, book *addressbook.AddrBook, disc *peerExchange, logger log.Log) *crawler {
+func newCrawler(h host.Host, book *book.Book, disc *peerExchange, logger log.Log) *crawler {
 	return &crawler{
 		logger: logger,
 		host:   h,
-		book:   book,
 		disc:   disc,
 	}
 }
 
-// Bootstrap crawls the network until context is canceled or all reachable peers are crawled.
-func (r *crawler) Bootstrap(ctx context.Context) error {
-	seen := map[peer.ID]struct{}{r.host.ID(): {}}
-	servers := r.book.BootstrapAddressCache()
-	for _, srv := range servers {
-		seen[srv.ID] = struct{}{}
-	}
-
-	r.logger.With().Debug("starting crawl", log.Int("servers", len(servers)))
+// Crawl crawls the network until context is canceled.
+func (r *crawler) Crawl(ctx context.Context, period time.Duration) error {
+	const concurrent = 5
+	eg, gctx := errgroup.WithContext(ctx)
 	for {
-		if len(servers) == 0 {
-			r.logger.Debug("crawl finished; no more servers to query")
-			return nil
+		addrs := r.book2.DrainQueue(concurrent)
+		if len(addrs) == 0 {
+			return errors.New("can't connect to the network without addresses")
 		}
-		result, err := r.query(ctx, servers)
-		if err != nil {
-			r.logger.Debug("crawl finished by timeout")
-			return err
-		}
-		var round []*addressbook.AddrInfo
-		for _, addr := range result {
-			if _, exist := seen[addr.ID]; !exist {
-				seen[addr.ID] = struct{}{}
-				round = append(round, addr)
+		for _, addr := range addrs {
+			src, err := peer.AddrInfoFromP2pAddr(addr)
+			if err != nil {
+				return fmt.Errorf("can't parse %v: %w", addr, err)
 			}
-		}
-		servers = round
-	}
-}
-
-func (r *crawler) query(ctx context.Context, servers []*addressbook.AddrInfo) ([]*addressbook.AddrInfo, error) {
-	var (
-		out        []*addressbook.AddrInfo
-		seen       = map[peer.ID]struct{}{}
-		reschan    = make(chan queryResult)
-		pending, i int
-		eg, gctx   = errgroup.WithContext(ctx)
-	)
-	defer eg.Wait()
-	for {
-		for ; i < len(servers) && pending < maxConcurrentRequests; i++ {
-			addr := servers[i]
-			if addr.ID == r.host.ID() {
-				continue
-			}
-			pending++
-
 			eg.Go(func() error {
-				ainfo, err := peer.AddrInfoFromP2pAddr(addr.Addr())
-				if err == nil {
-					// TODO(dshulyak) skip request if connection is inbound
-					err = r.host.Connect(ctx, *ainfo)
-					if err != nil {
-						r.logger.With().Warning("failed to connect to peer", log.Stringer("peer", ainfo.ID), log.Err(err))
-					}
+				err = r.host.Connect(gctx, *src)
+				if err != nil {
+					r.logger.With().Debug("failed to connect to peer", log.Stringer("peer", src.ID), log.Err(err))
+					return nil
 				}
-				var res []*addressbook.AddrInfo
-				if err == nil {
-					res, err = r.disc.Request(gctx, addr.ID)
-					if err != nil {
-						r.logger.With().Warning("failed request from peer", log.Stringer("peer", ainfo.ID), log.Err(err))
-					}
+				res, err := r.disc.Request(gctx, src.ID)
+				if err != nil {
+					r.logger.With().Warning("failed request from peer", log.Stringer("peer", src.ID), log.Err(err))
 				}
-				select {
-				case reschan <- queryResult{Src: addr, Result: res, Err: err}:
-				case <-gctx.Done():
-					return gctx.Err()
+				if err != nil {
+					r.book2.Update(src.ID, book.Fail, book.Disconnected)
+					r.host.Peerstore().ClearAddrs(src.ID)
+					r.logger.With().Debug("peer failed to respond to protocol queries",
+						log.String("peer", src.ID.String()),
+						log.Err(err))
+				} else {
+					r.book2.Update(src.ID, book.Success, book.Connected)
+					for _, a := range res {
+						// TODO(dshulyak) will be correct to call after EventHandshakeComplete is received
+						r.book2.Add(src.ID, a.ID, a.Addr())
+					}
 				}
 				return nil
 			})
 		}
-		if pending == 0 {
-			return out, nil
+		if err := eg.Wait(); err != nil {
+			return err
 		}
-
 		select {
-		case cr := <-reschan:
-			r.book.Attempt(cr.Src.ID)
-			pending--
-			if cr.Err != nil {
-				// TODO(dshulyak) also remove peer from persistent addrbook on validation error
-				r.host.Peerstore().ClearAddrs(cr.Src.ID)
-				// the address may actually be outdate, since we don't actively update address book
-				r.logger.With().Debug("peer failed to respond to protocol queries",
-					log.String("peer", cr.Src.ID.String()),
-					log.Err(cr.Err))
-				continue
-			}
-			// TODO(dshulyak) will be correct to call after EventHandshakeComplete is received
-			r.book.Good(cr.Src.ID)
-			r.book.Connected(cr.Src.ID)
-			for _, a := range cr.Result {
-				if _, ok := seen[a.ID]; ok {
-					continue
-				}
-				seen[a.ID] = struct{}{}
-				if removedAt, ok := r.book.WasRecentlyRemoved(a.ID); ok {
-					r.logger.With().Debug(
-						"Skipped adding an address for a recently removed peer",
-						log.Stringer("peer", a.ID),
-						log.Time("removedAt", *removedAt),
-					)
-				} else {
-					out = append(out, a)
-					r.book.AddAddress(a, cr.Src)
-				}
-			}
+		case <-time.After(period):
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return ctx.Err()
 		}
 	}
 }

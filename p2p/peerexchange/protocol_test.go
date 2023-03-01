@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
+	"github.com/spacemeshos/go-spacemesh/p2p/book"
 )
 
 func routablePort(h host.Host) (uint16, error) {
@@ -38,8 +39,7 @@ func buildPeer(tb testing.TB, l log.Log, h host.Host, config PeerExchangeConfig)
 
 func buildPeerWithAddress(tb testing.TB, l log.Log, h host.Host, addr ma.Multiaddr, config PeerExchangeConfig) *peerExchange {
 	tb.Helper()
-	book := addressbook.NewAddrBook(addressbook.DefaultAddressBookConfigWithDataDir(""), l)
-	return newPeerExchange(h, book, addr, l, config)
+	return newPeerExchange(h, book.New(), addr, l, config)
 }
 
 func contains[T any](array []T, object T) bool {

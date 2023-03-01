@@ -18,6 +18,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
+	"github.com/spacemeshos/go-spacemesh/p2p/book"
 )
 
 const (
@@ -27,14 +28,10 @@ const (
 
 // Config for Discovery.
 type Config struct {
-	Bootnodes            []string
-	DataDir              string
-	AdvertiseAddress     string             // Address to advertise to a peers.
-	CheckInterval        time.Duration      // Interval to check for dead|alive peers in the book.
-	CheckTimeout         time.Duration      // Timeout to connect while node check for dead|alive peers in the book.
-	CheckPeersNumber     int                // Number of peers to check for dead|alive peers in the book.
-	CheckPeersUsedBefore time.Duration      // Time to wait before checking for dead|alive peers in the book.
-	PeerExchange         PeerExchangeConfig // Configuration for Peer Exchange protocol
+	Bootnodes        []string
+	DataDir          string
+	AdvertiseAddress string             // Address to advertise to a peers.
+	PeerExchange     PeerExchangeConfig // Configuration for Peer Exchange protocol
 }
 
 // Discovery is struct that holds the protocol components, the protocol definition, the addr book data structure and more.
@@ -46,7 +43,7 @@ type Discovery struct {
 	cancel context.CancelFunc
 	eg     errgroup.Group
 
-	book  *addressbook.AddrBook
+	book  *book.Book
 	crawl *crawler
 }
 
@@ -58,13 +55,9 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		logger: logger,
 		host:   h,
 		cancel: cancel,
-		book: addressbook.NewAddrBook(
-			addressbook.DefaultAddressBookConfigWithDataDir(config.DataDir),
-			logger,
-		),
+		book:   book.New(),
 	}
 	d.eg.Go(func() error {
-		d.book.Persist(ctx)
 		return ctx.Err()
 	})
 
@@ -96,12 +89,10 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 			return nil, fmt.Errorf("create tcp multiaddr %w", err)
 		}
 	}
-	best, err := bestHostAddress(h)
-	if err != nil {
-		return nil, err
+	for _, addr := range bootnodes {
+		d.book.Add(book.SELF, addr.ID, addr.Addr())
+		d.book.Update(addr.ID, book.Protect)
 	}
-	d.book.AddAddresses(bootnodes, best)
-
 	protocol := newPeerExchange(h, d.book, advertise, logger, config.PeerExchange)
 	d.crawl = newCrawler(h, d.book, protocol, logger)
 	sub, err := h.EventBus().Subscribe(new(event.EvtLocalAddressesUpdated), eventbus.BufSize(4))
@@ -129,10 +120,6 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 			}
 		})
 	}
-	d.eg.Go(func() error {
-		d.CheckBook(ctx)
-		return ctx.Err()
-	})
 	return d, nil
 }
 
@@ -144,7 +131,7 @@ func (d *Discovery) Stop() {
 
 // Bootstrap runs a refresh and tries to get a minimum number of nodes in the addrBook.
 func (d *Discovery) Bootstrap(ctx context.Context) error {
-	return d.crawl.Bootstrap(ctx)
+	return d.crawl.Crawl(ctx, 10*time.Second)
 }
 
 // AdvertisedAddress returns advertised address.
