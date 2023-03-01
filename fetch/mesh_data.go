@@ -41,13 +41,17 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 			continue
 		}
 
+		h := hash
 		eg.Go(func() error {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-p.completed:
+				if p.err != nil {
+					return fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h, p.err)
+				}
+				return nil
 			}
-			return p.err
 		})
 	}
 
