@@ -1073,7 +1073,11 @@ func (app *App) Start(ctx context.Context) error {
 
 	poetClients := make([]activation.PoetProvingServiceClient, 0, len(app.Config.PoETServers))
 	for _, address := range app.Config.PoETServers {
-		poetClients = append(poetClients, activation.NewHTTPPoetClient(address, app.Config.POET))
+		client, err := activation.NewHTTPPoetClient(address, app.Config.POET)
+		if err != nil {
+			return fmt.Errorf("cannot create poet client: %w", err)
+		}
+		poetClients = append(poetClients, client)
 	}
 
 	edPubkey := edSgn.PublicKey()
