@@ -20,7 +20,7 @@ import (
 
 const SELF ID = "SELF"
 
-type ID = peer.ID
+type ID = string
 
 type AddrInfo = peer.AddrInfo
 
@@ -64,8 +64,20 @@ const (
 	public
 )
 
+func isDns(raw Address) bool {
+	for _, protocol := range raw.Protocols() {
+		if protocol.Code == ma.P_DNS ||
+			protocol.Code == ma.P_DNS4 ||
+			protocol.Code == ma.P_DNS6 ||
+			protocol.Code == ma.P_DNSADDR {
+			return true
+		}
+	}
+	return false
+}
+
 func bucketize(raw Address) bucket {
-	if manet.IsPublicAddr(raw) {
+	if manet.IsPublicAddr(raw) || isDns(raw) {
 		return public
 	}
 	return private

@@ -11,17 +11,8 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 	"github.com/spacemeshos/go-spacemesh/p2p/book"
 )
-
-const maxConcurrentRequests = 3
-
-type queryResult struct {
-	Src    *addressbook.AddrInfo
-	Result []*addressbook.AddrInfo
-	Err    error
-}
 
 // crawler is used to crawl reachable peers and query them for addresses.
 type crawler struct {
@@ -62,19 +53,21 @@ func (r *crawler) Crawl(ctx context.Context, period time.Duration) error {
 				}
 				res, err := r.disc.Request(gctx, src.ID)
 				if err != nil {
-					r.logger.With().Warning("failed request from peer", log.Stringer("peer", src.ID), log.Err(err))
-				}
-				if err != nil {
-					r.book2.Update(src.ID, book.Fail, book.Disconnected)
+					r.book2.Update(src.ID.String(), book.Fail, book.Disconnected)
 					r.host.Peerstore().ClearAddrs(src.ID)
 					r.logger.With().Debug("peer failed to respond to protocol queries",
 						log.String("peer", src.ID.String()),
 						log.Err(err))
 				} else {
-					r.book2.Update(src.ID, book.Success, book.Connected)
+					r.book2.Update(src.ID.String(), book.Success, book.Connected)
 					for _, a := range res {
+						if a.ID == r.host.ID() {
+							continue
+						}
 						// TODO(dshulyak) will be correct to call after EventHandshakeComplete is received
-						r.book2.Add(src.ID, a.ID, a.Addr())
+						for _, addr := range a.Addrs {
+							r.book2.Add(src.ID.String(), a.ID.String(), addr)
+						}
 					}
 				}
 				return nil

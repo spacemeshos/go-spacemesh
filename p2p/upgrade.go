@@ -5,10 +5,10 @@ import (
 	"fmt"
 
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
@@ -67,7 +67,7 @@ type Host struct {
 
 func isBootnode(h host.Host, bootnodes []string) (bool, error) {
 	for _, raw := range bootnodes {
-		info, err := addressbook.ParseAddrInfo(raw)
+		info, err := peer.AddrInfoFromString(raw)
 		if err != nil {
 			return false, fmt.Errorf("failed to parse bootstrap node: %w", err)
 		}
@@ -107,14 +107,10 @@ func Upgrade(h host.Host, genesisID types.Hash20, opts ...Opt) (*Host, error) {
 		bootstrap.WithNodeReporter(fh.nodeReporter),
 	)
 	if fh.discovery, err = peerexchange.New(fh.logger, h, peerexchange.Config{
-		DataDir:              cfg.DataDir,
-		Bootnodes:            cfg.Bootnodes,
-		CheckPeersNumber:     cfg.CheckPeersNumber,
-		CheckTimeout:         cfg.CheckTimeout,
-		CheckInterval:        cfg.CheckInterval,
-		CheckPeersUsedBefore: cfg.CheckPeersUsedBefore,
-		AdvertiseAddress:     cfg.AdvertiseAddress,
-		PeerExchange:         cfg.peerExchange,
+		DataDir:          cfg.DataDir,
+		Bootnodes:        cfg.Bootnodes,
+		AdvertiseAddress: cfg.AdvertiseAddress,
+		PeerExchange:     cfg.peerExchange,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
 	}

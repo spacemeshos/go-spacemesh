@@ -11,13 +11,13 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/host/eventbus"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 	"github.com/spacemeshos/go-spacemesh/p2p/book"
 )
 
@@ -61,9 +61,9 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		return ctx.Err()
 	})
 
-	bootnodes := make([]*addressbook.AddrInfo, 0, len(config.Bootnodes))
+	bootnodes := make([]*peer.AddrInfo, 0, len(config.Bootnodes))
 	for _, raw := range config.Bootnodes {
-		info, err := addressbook.ParseAddrInfo(raw)
+		info, err := peer.AddrInfoFromString(raw)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse bootstrap node: %w", err)
 		}
@@ -90,8 +90,11 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		}
 	}
 	for _, addr := range bootnodes {
-		d.book.Add(book.SELF, addr.ID, addr.Addr())
-		d.book.Update(addr.ID, book.Protect)
+		if len(addr.Addrs) == 0 {
+			return nil, fmt.Errorf("malformed bootnodes configuration")
+		}
+		d.book.Add(book.SELF, addr.ID.String(), addr.Addrs[0])
+		d.book.Update(addr.ID.String(), book.Protect)
 	}
 	protocol := newPeerExchange(h, d.book, advertise, logger, config.PeerExchange)
 	d.crawl = newCrawler(h, d.book, protocol, logger)
@@ -141,29 +144,6 @@ func (d *Discovery) AdvertisedAddress() ma.Multiaddr {
 
 var errNotFound = errors.New("not found")
 
-// bestHostAddress returns routable address if exists, otherwise it returns first available address.
-func bestHostAddress(h host.Host) (*addressbook.AddrInfo, error) {
-	best, err := bestNetAddress(h)
-	if err == nil {
-		ip, err := manet.ToIP(best)
-		if err != nil {
-			return nil, fmt.Errorf("failed to recover ip from host address %v: %w", best, err)
-		}
-		full := ma.Join(best, ma.StringCast("/p2p/"+h.ID().String()))
-		addr := &addressbook.AddrInfo{
-			IP:      ip,
-			ID:      h.ID(),
-			RawAddr: full.String(),
-		}
-		addr.SetAddr(full)
-		return addr, nil
-	}
-	return &addressbook.AddrInfo{
-		IP: net.IP{127, 0, 0, 1},
-		ID: h.ID(),
-	}, nil
-}
-
 func portFromHost(logger log.Log, h host.Host) uint16 {
 	addr, err := bestNetAddress(h)
 	if err != nil {
@@ -193,11 +173,7 @@ func bestNetAddress(h host.Host) (ma.Multiaddr, error) {
 
 func routableNetAddress(h host.Host) (ma.Multiaddr, error) {
 	for _, addr := range h.Addrs() {
-		ip, err := manet.ToIP(addr)
-		if err != nil {
-			return nil, fmt.Errorf("failed to recover ip from host address %v: %w", addr, err)
-		}
-		if addressbook.IsRoutable(ip) {
+		if manet.IsPublicAddr(addr) {
 			return addr, nil
 		}
 	}

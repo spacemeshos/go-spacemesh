@@ -234,6 +234,12 @@ func TestBook(t *testing.T) {
 			addFrom("xx", "1", "/ip4/0.0.0.0/tcp/6666"),
 			drain(1, "1"),
 		}},
+		{"dns is public", []step{
+			add("1", "/dns4/fqdn/tcp/1111"),
+			add("2", "/ip4/8.8.8.8/tcp/1111"),
+			share("1", 1, "2"),
+			share("2", 1, "1"),
+		}},
 		{"public and private are not shared with each other", []step{
 			add("pub", "/ip4/8.8.8.8/tcp/1111"),
 			add("private", "/ip4/192.168.0.1/tcp/1111"),

@@ -15,7 +15,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 	"github.com/spacemeshos/go-spacemesh/p2p/book"
 )
 
@@ -97,9 +96,9 @@ func (p *peerExchange) handler(stream network.Stream) {
 		logger.Error("failed to create p2p component", log.Err(err))
 		return
 	}
-	p.book.Add(book.SELF, stream.Conn().RemotePeer(), addr.Encapsulate(id))
+	p.book.Add(book.SELF, stream.Conn().RemotePeer().String(), addr.Encapsulate(id))
 
-	shared := p.book.TakeShareable(stream.Conn().RemotePeer(), 10)
+	shared := p.book.TakeShareable(stream.Conn().RemotePeer().String(), 10)
 	response := make([]string, 0, len(shared))
 	for _, addr := range shared {
 		response = append(response, addr.String())
@@ -132,7 +131,7 @@ func (p *peerExchange) AdvertisedAddress() ma.Multiaddr {
 }
 
 // Request addresses from a remote node, it will block and return the results returned from the node.
-func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addressbook.AddrInfo, error) {
+func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*peer.AddrInfo, error) {
 	logger := p.logger.WithContext(ctx).WithFields(
 		log.String("type", "getaddresses"),
 		log.String("to", pid.String())).With()
@@ -156,9 +155,9 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addressbook
 		return nil, fmt.Errorf("failed to read addresses in response: %w", err)
 	}
 
-	infos := make([]*addressbook.AddrInfo, 0, len(addrs))
+	infos := make([]*peer.AddrInfo, 0, len(addrs))
 	for _, raw := range addrs {
-		info, err := addressbook.ParseAddrInfo(raw)
+		info, err := peer.AddrInfoFromString(raw)
 		if err != nil {
 			return nil, fmt.Errorf("failed parsing: %w", err)
 		}

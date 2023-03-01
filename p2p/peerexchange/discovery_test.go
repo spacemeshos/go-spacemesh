@@ -11,19 +11,19 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange/mocks"
 )
 
 func TestDiscovery_CrawlMesh(t *testing.T) {
 	var (
 		instances = []*Discovery{}
-		bootnode  *addressbook.AddrInfo
+		bootnode  *peer.AddrInfo
 		n         = 20
 		rounds    = 5
 	)
@@ -34,12 +34,14 @@ func TestDiscovery_CrawlMesh(t *testing.T) {
 		logger := logtest.New(t).Named(h.ID().Pretty())
 		cfg := Config{}
 
-		best, err := bestHostAddress(h)
+		best, err := bestNetAddress(h)
+		fmt.Println(best)
 		require.NoError(t, err)
 		if bootnode == nil {
-			bootnode = best
+			bootnode, err = peer.AddrInfoFromP2pAddr(best)
+			require.NoError(t, err)
 		}
-		cfg.Bootnodes = append(cfg.Bootnodes, bootnode.RawAddr)
+		cfg.Bootnodes = append(cfg.Bootnodes, bootnode.String())
 		instance, err := New(logger, h, cfg)
 		require.NoError(t, err)
 		t.Cleanup(instance.Stop)
