@@ -479,7 +479,7 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 	for _, endpoint := range endpoints {
 		client, err := b.poetClientInitializer(endpoint, b.poetCfg)
 		if err != nil {
-			return &PoetSvcUnstableError{source: fmt.Errorf("failed to initialize poet client for '%s': %w", endpoint, err)}
+			return &PoetSvcUnstableError{source: fmt.Errorf("initial poet client '%s': %w", endpoint, err)}
 		}
 		// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
 		// Maybe it should be provided during update.

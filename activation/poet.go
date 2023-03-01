@@ -136,8 +136,8 @@ func withCustomHttpClient(client *http.Client) PoetClientOpts {
 	}
 }
 
-// NewHTTPPoetClient returns new instance of HTTPPoetClient connecting to the specified address.
-func NewHTTPPoetClient(address string, cfg PoetConfig, opts ...PoetClientOpts) (*HTTPPoetClient, error) {
+// NewHTTPPoetClient returns new instance of HTTPPoetClient connecting to the specified url.
+func NewHTTPPoetClient(baseUrl string, cfg PoetConfig, opts ...PoetClientOpts) (*HTTPPoetClient, error) {
 	client := &retryablehttp.Client{
 		RetryMax:     10,
 		RetryWaitMin: cfg.CycleGap / 100,
@@ -146,7 +146,7 @@ func NewHTTPPoetClient(address string, cfg PoetConfig, opts ...PoetClientOpts) (
 		CheckRetry:   checkRetry,
 	}
 
-	baseURL, err := url.Parse(address)
+	baseURL, err := url.Parse(baseUrl)
 	if err != nil {
 		return nil, fmt.Errorf("parsing address: %w", err)
 	}
