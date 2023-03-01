@@ -84,7 +84,13 @@ func NewHTTPPoetHarness(ctx context.Context, poetdir string, opts ...HTTPPoetOpt
 		return nil, err
 	}
 
-	client, err := NewHTTPPoetClient(cfg.RawRESTListener, PoetConfig{
+	// NewHTTPPoetClient takes an URL as connection string. Server speaks HTTP.
+	url := &url.URL{
+		Scheme: "http",
+		Host:   poet.GrpcRestProxyAddr().String(),
+	}
+
+	client, err := NewHTTPPoetClient(url.String(), PoetConfig{
 		PhaseShift: cfg.Service.PhaseShift,
 		CycleGap:   cfg.Service.CycleGap,
 	})
