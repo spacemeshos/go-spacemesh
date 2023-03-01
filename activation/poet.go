@@ -111,25 +111,33 @@ func defaultPoetClientFunc(address string, cfg PoetConfig) (PoetProvingServiceCl
 	return NewHTTPPoetClient(address, cfg)
 }
 
+func checkRetry(ctx context.Context, resp *http.Response, err error) (bool, error) {
+	if retry, err := retryablehttp.DefaultRetryPolicy(ctx, resp, err); retry || err != nil {
+		return retry, err
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return true, nil
+	}
+	return false, nil
+}
+
+type PoetClientOpts func(*HTTPPoetClient)
+
+func withCustomHttpClient(client *http.Client) PoetClientOpts {
+	return func(c *HTTPPoetClient) {
+		c.client.HTTPClient = client
+	}
+}
+
 // NewHTTPPoetClient returns new instance of HTTPPoetClient connecting to the specified address.
-func NewHTTPPoetClient(address string, cfg PoetConfig) (*HTTPPoetClient, error) {
-	client := retryablehttp.NewClient()
-	client.RetryMax = 10
-	client.RetryWaitMin = cfg.CycleGap / 100
-	client.RetryWaitMax = cfg.CycleGap / 10
-	client.Backoff = retryablehttp.LinearJitterBackoff
-
-	// Retry on 404 in addition to the default retry policy.
-	// Reasoning: The proof or round data might not be available YET.
-	client.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
-		if retry, err := retryablehttp.DefaultRetryPolicy(ctx, resp, err); retry || err != nil {
-			return retry, err
-		}
-
-		if resp.StatusCode == http.StatusNotFound {
-			return true, nil
-		}
-		return false, nil
+func NewHTTPPoetClient(address string, cfg PoetConfig, opts ...PoetClientOpts) (*HTTPPoetClient, error) {
+	client := &retryablehttp.Client{
+		RetryMax:     10,
+		RetryWaitMin: cfg.CycleGap / 100,
+		RetryWaitMax: cfg.CycleGap / 10,
+		Backoff:      retryablehttp.LinearJitterBackoff,
+		CheckRetry:   checkRetry,
 	}
 
 	baseURL, err := url.Parse(address)
@@ -140,17 +148,22 @@ func NewHTTPPoetClient(address string, cfg PoetConfig) (*HTTPPoetClient, error) 
 		baseURL.Scheme = "http"
 	}
 
-	return &HTTPPoetClient{
+	poetClient := &HTTPPoetClient{
 		baseURL: baseURL,
 		client:  client,
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(poetClient)
+	}
+
+	return poetClient, nil
 }
 
 // Start is an administrative endpoint of the proving service that tells it to start. This is mostly done in tests,
 // since it requires administrative permissions to the proving service.
 func (c *HTTPPoetClient) Start(ctx context.Context, gatewayAddresses []string) error {
 	reqBody := rpcapi.StartRequest{GatewayAddresses: gatewayAddresses}
-	if err := c.req(ctx, "POST", "/v1/start", &reqBody, nil); err != nil {
+	if err := c.req(ctx, http.MethodPost, "/v1/start", &reqBody, nil); err != nil {
 		return fmt.Errorf("starting poet: %w", err)
 	}
 
@@ -164,7 +177,7 @@ func (c *HTTPPoetClient) Submit(ctx context.Context, challenge []byte, signature
 		Signature: signature,
 	}
 	resBody := rpcapi.SubmitResponse{}
-	if err := c.req(ctx, "POST", "/v1/submit", &request, &resBody); err != nil {
+	if err := c.req(ctx, http.MethodPost, "/v1/submit", &request, &resBody); err != nil {
 		return nil, fmt.Errorf("submitting challenge: %w", err)
 	}
 	roundEnd := time.Time{}
@@ -186,7 +199,7 @@ func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) (types.PoetServiceID
 	}
 	resBody := rpcapi.GetInfoResponse{}
 
-	if err := c.req(ctx, "GET", "/v1/info", nil, &resBody); err != nil {
+	if err := c.req(ctx, http.MethodGet, "/v1/info", nil, &resBody); err != nil {
 		return nil, fmt.Errorf("getting poet ID: %w", err)
 	}
 
@@ -197,7 +210,7 @@ func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) (types.PoetServiceID
 // Proof implements PoetProvingServiceClient.
 func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, error) {
 	resBody := rpcapi.GetProofResponse{}
-	if err := c.req(ctx, "GET", fmt.Sprintf("/v1/proofs/%s", roundID), nil, &resBody); err != nil {
+	if err := c.req(ctx, http.MethodGet, fmt.Sprintf("/v1/proofs/%s", roundID), nil, &resBody); err != nil {
 		return nil, fmt.Errorf("getting proof: %w", err)
 	}
 
