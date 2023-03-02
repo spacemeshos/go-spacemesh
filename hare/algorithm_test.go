@@ -13,14 +13,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -142,7 +140,7 @@ func buildMessage(msg Message) *Msg {
 
 type testBroker struct {
 	*Broker
-	cdb        *datastore.CachedDB
+	mockMesh   *mocks.Mockmesh
 	mockStateQ *mocks.MockstateQuerier
 	mockSyncS  *smocks.MockSyncStateProvider
 }
@@ -155,14 +153,14 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 	ctrl := gomock.NewController(tb)
 	mockStateQ := mocks.NewMockstateQuerier(ctrl)
 	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
+	mockMesh := mocks.NewMockmesh(ctrl)
 	mch := make(chan *types.MalfeasanceGossip, 1)
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(tb, err)
 	return &testBroker{
-		Broker: newBroker(cdb, pke, &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
+		Broker: newBroker(mockMesh, pke, &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
 			mch, limit, logtest.New(tb).WithName(testName)),
-		cdb:        cdb,
+		mockMesh:   mockMesh,
 		mockSyncS:  mockSyncS,
 		mockStateQ: mockStateQ,
 	}

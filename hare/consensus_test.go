@@ -3,6 +3,7 @@ package hare
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -178,6 +179,7 @@ func createConsensusProcess(
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	broker.mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
 	broker.Start(ctx)
 	network.Register(pubsub.HareProtocol, broker.HandleMessage)
 	output := make(chan TerminationOutput, 1)
@@ -211,6 +213,42 @@ func createConsensusProcess(
 		logtest.New(tb).WithName(sig.PublicKey().ShortString()),
 	)
 	return &testCP{cp: proc, broker: broker.Broker, mch: mch}
+}
+
+// Test - runs a single CP for more than one iteration.
+func TestConsensus_MultipleIterations(t *testing.T) {
+	test := newConsensusTest()
+
+	totalNodes := 15
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: time.Second, RoundDuration: time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
+	require.NoError(t, err)
+
+	test.initialSets = make([]*Set, totalNodes)
+	set1 := NewSetFromValues(types.ProposalID{1})
+	test.fill(set1, 0, totalNodes-1)
+	test.honestSets = []*Set{set1}
+	oracle := eligibility.New(logtest.New(t))
+	i := 0
+	creationFunc := func() {
+		host := mesh.Hosts()[i]
+		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
+		require.NoError(t, err)
+		p2pm := &p2pManipulator{nd: ps, stalledLayer: instanceID1, err: errors.New("fake err")}
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		tcp := createConsensusProcess(t, ctx, sig, true, cfg, oracle, p2pm, test.initialSets[i], instanceID1)
+		test.procs = append(test.procs, tcp.cp)
+		test.brokers = append(test.brokers, tcp.broker)
+		i++
+	}
+	test.Create(totalNodes, creationFunc)
+	require.NoError(t, mesh.ConnectAllButSelf())
+	test.Start()
+	test.WaitForTimedTermination(t, 40*time.Second)
 }
 
 func TestConsensusFixedOracle(t *testing.T) {

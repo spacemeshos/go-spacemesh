@@ -27,6 +27,12 @@ type stateQuerier interface {
 	IsIdentityActiveOnConsensusView(context.Context, types.NodeID, types.LayerID) (bool, error)
 }
 
-type nonceFetcher interface {
+type mesh interface {
 	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
+	Proposals(types.LayerID) ([]*types.Proposal, error)
+	Ballot(types.BallotID) (*types.Ballot, error)
+	SetWeakCoin(types.LayerID, bool) error
+	IsMalicious(types.NodeID) (bool, error)
+	AddMalfeasanceProof(types.NodeID, *types.MalfeasanceProof) error
+	GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error)
 }
