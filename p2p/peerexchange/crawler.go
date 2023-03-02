@@ -44,6 +44,9 @@ func (r *crawler) Crawl(ctx context.Context, concurrent int) error {
 		if err != nil {
 			return fmt.Errorf("can't parse %v: %w", addr, err)
 		}
+		if src.ID == r.host.ID() {
+			continue
+		}
 		eg.Go(func() error {
 			peers, err := getPeers(ctx, r.host, r.disc, src)
 			if err != nil {
@@ -85,6 +88,9 @@ func getPeers(ctx context.Context, h host.Host, disc *peerExchange, peer *peer.A
 		maddr, id, err := parseIdMaddr(raw)
 		if err != nil {
 			return nil, err
+		}
+		if id == h.ID() {
+			return nil, fmt.Errorf("malformed reply: included our own id: %s", h.ID())
 		}
 		rst = append(rst, maddrIdTuple{id, maddr})
 	}
