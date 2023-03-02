@@ -531,7 +531,7 @@ func (app *App) initServices(
 		tortoise.WithConfig(trtlCfg),
 	)
 
-	executor := mesh.NewExecutor(app.db, state, app.conState, app.addLogger(Executor, lg))
+	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(Executor, lg))
 	msh, err := mesh.NewMesh(app.cachedDB, clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)

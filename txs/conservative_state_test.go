@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"math"
-	"math/big"
 	"math/rand"
 	"testing"
 	"time"
@@ -427,15 +426,10 @@ func TestUpdateCache_UpdateHeader(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, got.TxHeader)
 
-	coinbase := types.GenerateAddress(types.RandomBytes(types.AddressLength))
-	weight := new(big.Rat).SetFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
 			LayerIndex: lid,
-			Rewards: []types.AnyReward{
-				{Coinbase: coinbase, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}},
-			},
-			TxIDs: []types.TransactionID{tx.ID},
+			TxIDs:      []types.TransactionID{tx.ID},
 		})
 	executed := []types.TransactionWithResult{
 		{
@@ -459,15 +453,10 @@ func TestUpdateCache(t *testing.T) {
 	tcs := createConservativeState(t)
 	lid := types.NewLayerID(1)
 	ids, txs := addBatch(t, tcs, numTXs)
-	coinbase := types.GenerateAddress(types.RandomBytes(types.AddressLength))
-	weight := new(big.Rat).SetFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
 			LayerIndex: lid,
-			Rewards: []types.AnyReward{
-				{Coinbase: coinbase, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}},
-			},
-			TxIDs: ids,
+			TxIDs:      ids,
 		})
 	executed := make([]types.TransactionWithResult, 0, numTXs)
 	for _, tx := range txs {

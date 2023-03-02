@@ -121,3 +121,93 @@ func max(i, j int) int {
 	}
 	return j
 }
+
+func TestValidateRewards(t *testing.T) {
+	for _, tc := range []struct {
+		desc    string
+		rewards []types.AnyReward
+		err     bool
+	}{
+		{
+			desc: "sanity",
+			rewards: []types.AnyReward{
+				{
+					AtxID:  types.ATXID{1},
+					Weight: types.RatNum{Num: 1, Denom: 3},
+				},
+				{
+					AtxID:  types.ATXID{2},
+					Weight: types.RatNum{Num: 1, Denom: 3},
+				},
+				{
+					AtxID:  types.ATXID{3},
+					Weight: types.RatNum{Num: 1, Denom: 3},
+				},
+			},
+		},
+		{
+			desc:    "empty",
+			rewards: []types.AnyReward{},
+			err:     true,
+		},
+		{
+			desc: "nil",
+			err:  true,
+		},
+		{
+			desc: "zero num",
+			rewards: []types.AnyReward{
+				{
+					AtxID:  types.ATXID{1},
+					Weight: types.RatNum{Num: 1, Denom: 3},
+				},
+				{
+					AtxID:  types.ATXID{3},
+					Weight: types.RatNum{Num: 0, Denom: 3},
+				},
+			},
+			err: true,
+		},
+		{
+			desc: "zero denom",
+			rewards: []types.AnyReward{
+				{
+					AtxID:  types.ATXID{1},
+					Weight: types.RatNum{Num: 1, Denom: 3},
+				},
+				{
+					AtxID:  types.ATXID{3},
+					Weight: types.RatNum{Num: 1, Denom: 0},
+				},
+			},
+			err: true,
+		},
+		{
+			desc: "multiple per coinbase",
+			rewards: []types.AnyReward{
+				{
+					AtxID:  types.ATXID{1},
+					Weight: types.RatNum{Num: 1, Denom: 3},
+				},
+				{
+					AtxID:  types.ATXID{3},
+					Weight: types.RatNum{Num: 1, Denom: 3},
+				},
+				{
+					AtxID:  types.ATXID{1},
+					Weight: types.RatNum{Num: 1, Denom: 3},
+				},
+			},
+			err: true,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			err := ValidateRewards(tc.rewards)
+			if tc.err {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
