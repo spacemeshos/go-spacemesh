@@ -23,8 +23,7 @@ const (
 	protocolName = "/peerexchange/v1.0.0"
 	// messageTimeout is the timeout for the whole stream lifetime.
 	messageTimeout = 10 * time.Second
-
-	sharedPeers = 10
+	sharedPeers    = 10
 )
 
 type peerExchange struct {

@@ -23,7 +23,7 @@ type crawler struct {
 	disc *peerExchange
 }
 
-func newCrawler(h host.Host, book *book.Book, disc *peerExchange, logger log.Log) *crawler {
+func newCrawler(logger log.Log, h host.Host, book *book.Book, disc *peerExchange) *crawler {
 	return &crawler{
 		logger: logger,
 		host:   h,

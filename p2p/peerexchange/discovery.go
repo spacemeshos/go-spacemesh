@@ -47,6 +47,8 @@ type Discovery struct {
 
 	book  *book.Book
 	crawl *crawler
+
+	collector *collector
 }
 
 // New creates a Discovery instance.
@@ -59,6 +61,7 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		cancel: cancel,
 		book:   book.New(),
 	}
+	d.collector = newCollector(d.book)
 	var advertise ma.Multiaddr
 	if len(config.AdvertiseAddress) > 0 {
 		var err error
@@ -87,7 +90,7 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		d.book.Update(id.String(), book.Protect)
 	}
 	protocol := newPeerExchange(h, d.book, advertise, logger)
-	d.crawl = newCrawler(h, d.book, protocol, logger)
+	d.crawl = newCrawler(logger, h, d.book, protocol)
 	if len(config.DataDir) != 0 {
 		if err := d.recovery(ctx); err != nil {
 			return nil, err
@@ -164,6 +167,7 @@ func (d *Discovery) watchPortChanges(ctx context.Context, protocol *peerExchange
 
 // Stop stops the discovery service.
 func (d *Discovery) Stop() {
+	d.collector.Stop()
 	d.cancel()
 	d.eg.Wait()
 }
