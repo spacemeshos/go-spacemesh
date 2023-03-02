@@ -32,7 +32,8 @@ func newCrawler(logger log.Log, h host.Host, book *book.Book, disc *peerExchange
 	}
 }
 
-// Crawl crawls the network until context is canceled.
+// Crawl connects to number of peers, limit by concurrent parameter, and learns
+// new peers from it.
 func (r *crawler) Crawl(ctx context.Context, concurrent int) error {
 	addrs := r.book.DrainQueue(concurrent)
 	if len(addrs) == 0 {
