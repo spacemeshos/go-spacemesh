@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -35,6 +36,8 @@ func newCrawler(logger log.Log, h host.Host, book *book.Book, disc *peerExchange
 // Crawl connects to number of peers, limit by concurrent parameter, and learns
 // new peers from it.
 func (r *crawler) Crawl(ctx context.Context, concurrent int) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	addrs := r.book.DrainQueue(concurrent)
 	if len(addrs) == 0 {
 		return errors.New("can't connect to the network without addresses")
