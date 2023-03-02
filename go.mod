@@ -21,7 +21,6 @@ require (
 	github.com/hashicorp/golang-lru v0.6.0
 	github.com/libp2p/go-libp2p v0.24.2
 	github.com/libp2p/go-libp2p-pubsub v0.8.3
-	github.com/libp2p/go-libp2p-testing v0.12.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/multiformats/go-multiaddr v0.8.0
 	github.com/natefinch/atomic v1.0.1
