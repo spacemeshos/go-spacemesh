@@ -116,7 +116,7 @@ func (m *MockvmState) EXPECT() *MockvmStateMockRecorder {
 }
 
 // Apply mocks base method.
-func (m *MockvmState) Apply(arg0 vm.ApplyContext, arg1 []types.Transaction, arg2 []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+func (m *MockvmState) Apply(arg0 vm.ApplyContext, arg1 []types.Transaction, arg2 []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Apply", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]types.Transaction)

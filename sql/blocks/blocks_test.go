@@ -181,7 +181,6 @@ func TestContextualValidity(t *testing.T) {
 
 	for i, validity := range validities {
 		require.Equal(t, blocks[i].ID(), validity.ID)
-		require.Equal(t, lid, validity.Layer)
 		require.False(t, validity.Validity)
 		require.NoError(t, SetValid(db, validity.ID))
 	}

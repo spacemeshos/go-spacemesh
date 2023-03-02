@@ -609,7 +609,7 @@ func TestSyncMissingLayer(t *testing.T) {
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(nil)
 		if lid == failed {
-			ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), block.Rewards)
+			ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
 			ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, block.ID(), nil, nil)
 			ts.mVm.EXPECT().GetStateRoot()
 		} else if lid.After(failed) {
