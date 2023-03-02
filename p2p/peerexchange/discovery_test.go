@@ -1,8 +1,6 @@
 package peerexchange
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -13,7 +11,6 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange/mocks"
@@ -21,16 +18,15 @@ import (
 
 func TestDiscovery_CrawlMesh(t *testing.T) {
 	var (
-		instances = []*Discovery{}
-		bootnode  ma.Multiaddr
-		n         = 20
+		bootnode ma.Multiaddr
+		n        = 20
 	)
 	mesh, err := mocknet.FullMeshLinked(n)
 	require.NoError(t, err)
 
 	for _, h := range mesh.Hosts() {
 		logger := logtest.New(t).Named(h.ID().Pretty())
-		cfg := Config{}
+		cfg := Config{FastCrawl: time.Second, SlowCrawl: 10 * time.Second, MinPeers: 2}
 
 		if bootnode == nil {
 			require.NotEmpty(t, h.Addrs())
@@ -42,21 +38,6 @@ func TestDiscovery_CrawlMesh(t *testing.T) {
 		instance, err := New(logger, h, cfg)
 		require.NoError(t, err)
 		t.Cleanup(instance.Stop)
-		instances = append(instances, instance)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	var eg errgroup.Group
-	for _, instance := range instances {
-		instance := instance
-		eg.Go(func() error {
-			err := instance.Bootstrap(ctx)
-			if errors.Is(err, context.Canceled) {
-				return nil
-			}
-			return err
-		})
 	}
 
 	require.NotEmpty(t, mesh.Hosts())
@@ -68,8 +49,6 @@ func TestDiscovery_CrawlMesh(t *testing.T) {
 		}
 		return true
 	}, 3*time.Second, 200*time.Millisecond)
-	cancel()
-	require.NoError(t, eg.Wait())
 }
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./discovery_test.go

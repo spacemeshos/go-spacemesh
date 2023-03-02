@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -34,58 +33,60 @@ func newCrawler(h host.Host, book *book.Book, disc *peerExchange, logger log.Log
 }
 
 // Crawl crawls the network until context is canceled.
-func (r *crawler) Crawl(ctx context.Context, period time.Duration) error {
-	const concurrent = 5
-	var eg errgroup.Group
-	for {
-		addrs := r.book.DrainQueue(concurrent)
-		if len(addrs) == 0 {
-			return errors.New("can't connect to the network without addresses")
-		}
-		for _, addr := range addrs {
-			src, err := peer.AddrInfoFromP2pAddr(addr)
-			if err != nil {
-				return fmt.Errorf("can't parse %v: %w", addr, err)
-			}
-			eg.Go(func() error {
-				err = r.host.Connect(ctx, *src)
-				if err != nil {
-					r.book.Update(src.ID.String(), book.Fail, book.Disconnected)
-					r.logger.With().Debug("failed to connect to peer", log.Stringer("peer", src.ID), log.Err(err))
-					return nil
-				}
-				res, err := r.disc.Request(ctx, src.ID)
-				if err != nil {
-					r.book.Update(src.ID.String(), book.Fail, book.Disconnected)
-					r.host.Peerstore().ClearAddrs(src.ID)
-					r.logger.With().Debug("peer failed to respond to protocol queries",
-						log.String("peer", src.ID.String()),
-						log.Err(err))
-				} else {
-					// TODO(dshulyak) will be correct to call after EventHandshakeComplete is received
-					r.book.Update(src.ID.String(), book.Success, book.Connected)
-					for _, a := range res {
-						maddr, err := ma.NewMultiaddr(a)
-						if err != nil {
-							return nil
-						}
-						_, id := peer.SplitAddr(maddr)
-						if id == "" {
-							return nil
-						}
-						r.book.Add(src.ID.String(), id.String(), maddr)
-					}
-				}
-				return ctx.Err()
-			})
-		}
-		if err := eg.Wait(); err != nil {
-			return err
-		}
-		select {
-		case <-time.After(period):
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+func (r *crawler) Crawl(ctx context.Context, concurrent int) error {
+	addrs := r.book.DrainQueue(concurrent)
+	if len(addrs) == 0 {
+		return errors.New("can't connect to the network without addresses")
 	}
+	var eg errgroup.Group
+	for _, addr := range addrs {
+		src, err := peer.AddrInfoFromP2pAddr(addr)
+		if err != nil {
+			return fmt.Errorf("can't parse %v: %w", addr, err)
+		}
+		eg.Go(func() error {
+			peers, err := getPeers(ctx, r.host, r.disc, src)
+			if err != nil {
+				r.logger.With().Debug("failed to get more peers",
+					log.Stringer("peer", src),
+					log.Err(err),
+				)
+				r.book.Update(src.ID.String(), book.Fail, book.Disconnected)
+				r.host.Peerstore().ClearAddrs(src.ID)
+				r.host.Network().ClosePeer(src.ID)
+			} else {
+				r.book.Update(src.ID.String(), book.Success, book.Connected)
+				for _, addr := range peers {
+					r.book.Add(src.ID.String(), addr.ID.String(), addr.Addr)
+				}
+			}
+			return nil
+		})
+	}
+	return eg.Wait()
+}
+
+type maddrIdTuple struct {
+	ID   peer.ID
+	Addr ma.Multiaddr
+}
+
+func getPeers(ctx context.Context, h host.Host, disc *peerExchange, peer *peer.AddrInfo) ([]maddrIdTuple, error) {
+	err := h.Connect(ctx, *peer)
+	if err != nil {
+		return nil, err
+	}
+	res, err := disc.Request(ctx, peer.ID)
+	if err != nil {
+		return nil, err
+	}
+	rst := make([]maddrIdTuple, 0, len(res))
+	for _, raw := range res {
+		maddr, id, err := parseIdMaddr(raw)
+		if err != nil {
+			return nil, err
+		}
+		rst = append(rst, maddrIdTuple{id, maddr})
+	}
+	return rst, nil
 }

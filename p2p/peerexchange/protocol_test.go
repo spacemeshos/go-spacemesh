@@ -28,18 +28,18 @@ func routablePort(h host.Host) (uint16, error) {
 
 const dnsNode = "/dns4/bootnode.spacemesh.io/tcp/5003/p2p/12D3KooWGQrF3pHrR1W7P6nh8gypYxtFS93SnmvtN6qpyeSo7T2u"
 
-func buildPeer(tb testing.TB, l log.Log, h host.Host, config PeerExchangeConfig) *peerExchange {
+func buildPeer(tb testing.TB, l log.Log, h host.Host) *peerExchange {
 	tb.Helper()
 	port, err := routablePort(h)
 	require.NoError(tb, err)
 	addr, err := ma.NewComponent("tcp", strconv.Itoa(int(port)))
 	require.NoError(tb, err)
-	return buildPeerWithAddress(tb, l, h, addr, config)
+	return buildPeerWithAddress(tb, l, h, addr)
 }
 
-func buildPeerWithAddress(tb testing.TB, l log.Log, h host.Host, addr ma.Multiaddr, config PeerExchangeConfig) *peerExchange {
+func buildPeerWithAddress(tb testing.TB, l log.Log, h host.Host, addr ma.Multiaddr) *peerExchange {
 	tb.Helper()
-	return newPeerExchange(h, book.New(), addr, l, config)
+	return newPeerExchange(h, book.New(), addr, l)
 }
 
 func contains[T any](array []T, object T) bool {
@@ -58,8 +58,8 @@ func TestDiscovery_AdvertiseDNS(t *testing.T) {
 
 	addr := ma.StringCast("/dns4/bootnode.spacemesh.io/tcp/5003")
 
-	sender := buildPeerWithAddress(t, logger, mesh.Hosts()[0], addr, DefaultPeerExchangeConfig())
-	receiver := buildPeer(t, logger, mesh.Hosts()[1], DefaultPeerExchangeConfig())
+	sender := buildPeerWithAddress(t, logger, mesh.Hosts()[0], addr)
+	receiver := buildPeer(t, logger, mesh.Hosts()[1])
 
 	_, err = sender.Request(context.Background(), receiver.h.ID())
 	require.NoError(t, err)
@@ -78,12 +78,8 @@ func TestDiscovery_FilteringAddresses(t *testing.T) {
 	mesh, err := mocknet.FullMeshConnected(2)
 	require.NoError(t, err)
 
-	config := PeerExchangeConfig{
-		stalePeerTimeout: 10 * time.Millisecond,
-	}
-
-	peerA := buildPeer(t, logger, mesh.Hosts()[0], config)
-	peerB := buildPeer(t, logger, mesh.Hosts()[1], config)
+	peerA := buildPeer(t, logger, mesh.Hosts()[0])
+	peerB := buildPeer(t, logger, mesh.Hosts()[1])
 
 	maddr, err := ma.NewMultiaddr(dnsNode)
 	require.NoError(t, err)

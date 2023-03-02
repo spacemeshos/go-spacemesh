@@ -15,25 +15,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
-	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
 )
 
 // DefaultConfig config.
 func DefaultConfig() Config {
 	return Config{
-		Listen:               "/ip4/0.0.0.0/tcp/7513",
-		Flood:                true,
-		TargetOutbound:       5,
-		LowPeers:             40,
-		HighPeers:            100,
-		GracePeersShutdown:   30 * time.Second,
-		BootstrapTimeout:     10 * time.Second,
-		MaxMessageSize:       2 << 20,
-		CheckInterval:        3 * time.Minute,
-		CheckTimeout:         30 * time.Second,
-		CheckPeersNumber:     10,
-		CheckPeersUsedBefore: 30 * time.Minute,
-		peerExchange:         peerexchange.DefaultPeerExchangeConfig(),
+		Listen:             "/ip4/0.0.0.0/tcp/7513",
+		Flood:              true,
+		MinPeers:           6,
+		LowPeers:           40,
+		HighPeers:          100,
+		GracePeersShutdown: 30 * time.Second,
+		MaxMessageSize:     2 << 20,
 	}
 }
 
@@ -42,25 +35,16 @@ type Config struct {
 	DataDir            string
 	LogLevel           log.Level
 	GracePeersShutdown time.Duration
-	BootstrapTimeout   time.Duration
 	MaxMessageSize     int
 
 	DisableNatPort   bool     `mapstructure:"disable-natport"`
 	Flood            bool     `mapstructure:"flood"`
 	Listen           string   `mapstructure:"listen"`
 	Bootnodes        []string `mapstructure:"bootnodes"`
-	TargetOutbound   int      `mapstructure:"target-outbound"`
+	MinPeers         int      `mapstructure:"min-peers"`
 	LowPeers         int      `mapstructure:"low-peers"`
 	HighPeers        int      `mapstructure:"high-peers"`
 	AdvertiseAddress string   `mapstructure:"advertise-address"`
-
-	// Discovery book check section.
-	CheckInterval        time.Duration
-	CheckTimeout         time.Duration
-	CheckPeersNumber     int
-	CheckPeersUsedBefore time.Duration
-
-	peerExchange peerexchange.PeerExchangeConfig `mapstructure:"peer-exchange"`
 }
 
 // New initializes libp2p host configured for spacemesh.

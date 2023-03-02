@@ -554,9 +554,9 @@ func PoetEndpoint(endpoint string) DeploymentFlag {
 	return DeploymentFlag{Name: "--poet-server", Value: endpoint}
 }
 
-// TargetOutbound flag.
-func TargetOutbound(target int) DeploymentFlag {
-	return DeploymentFlag{Name: "--target-outbound", Value: strconv.Itoa(target)}
+// MinPeers flag.
+func MinPeers(target int) DeploymentFlag {
+	return DeploymentFlag{Name: "--min-peers", Value: strconv.Itoa(target)}
 }
 
 func Gateway(address string) DeploymentFlag {

@@ -293,11 +293,13 @@ func (b *Book) Recover(r io.Reader) error {
 type Stats struct {
 	Total     int
 	Connected int
-	Public    int
-	Private   int
-	Stale     int
-	Learned   int
-	Stable    int
+
+	Public  int
+	Private int
+
+	Stale   int
+	Learned int
+	Stable  int
 }
 
 func (b *Book) Stats() Stats {

@@ -29,10 +29,11 @@ const peersFile = "peers.txt"
 
 // Config for Discovery.
 type Config struct {
-	Bootnodes        []string
-	DataDir          string
-	AdvertiseAddress string             // Address to advertise to a peers.
-	PeerExchange     PeerExchangeConfig // Configuration for Peer Exchange protocol
+	Bootnodes            []string
+	DataDir              string
+	AdvertiseAddress     string // Address to advertise to a peers.
+	MinPeers             int
+	FastCrawl, SlowCrawl time.Duration
 }
 
 // Discovery is struct that holds the protocol components, the protocol definition, the addr book data structure and more.
@@ -78,76 +79,87 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		}
 	}
 	for _, addr := range config.Bootnodes {
-		maddr, err := ma.NewMultiaddr(addr)
+		maddr, id, err := parseIdMaddr(addr)
 		if err != nil {
 			return nil, err
-		}
-		_, id := peer.SplitAddr(maddr)
-		if id == "" {
-			return nil, fmt.Errorf("invalid multiaddr: missing p2p part %v", id)
 		}
 		d.book.Add(book.SELF, id.String(), maddr)
 		d.book.Update(id.String(), book.Protect)
 	}
-	protocol := newPeerExchange(h, d.book, advertise, logger, config.PeerExchange)
+	protocol := newPeerExchange(h, d.book, advertise, logger)
 	d.crawl = newCrawler(h, d.book, protocol, logger)
-	sub, err := h.EventBus().Subscribe(new(event.EvtLocalAddressesUpdated), eventbus.BufSize(4))
-	if err != nil {
-		return nil, fmt.Errorf("failed to subscribe to eventbus: %w", err)
-	}
 	if len(config.DataDir) != 0 {
-		fpath := filepath.Join(config.DataDir, peersFile)
-		f, err := os.Open(fpath)
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("can't recover from file %v: %w", fpath, err)
+		if err := d.recovery(ctx); err != nil {
+			return nil, err
 		}
-		defer f.Close()
-		if err == nil {
-			if err := d.book.Recover(f); err != nil {
-				return nil, err
-			}
-		}
-		d.eg.Go(func() error {
-			ticker := time.NewTicker(30 * time.Minute)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return nil
-				case <-ticker.C:
-					buf := bytes.NewBuffer(nil)
-					if err := d.book.Persist(buf); err != nil {
-						return err
-					}
-					if err := atomic.WriteFile(fpath, buf); err != nil {
-						return err
-					}
-				}
-			}
-		})
 	}
 	if len(config.AdvertiseAddress) == 0 {
-		d.eg.Go(func() error {
-			defer sub.Close()
-			for {
-				select {
-				case <-sub.Out():
-					port := portFromHost(logger, h)
-					if port != 0 {
-						advertise, err := ma.NewComponent("tcp", strconv.Itoa(int(portFromHost(logger, h))))
-						if err != nil {
-							logger.With().Error("failed to create tcp multiaddr", log.Err(err))
-						} else {
-							protocol.UpdateAdvertisedAddress(advertise)
-						}
-					}
-				case <-ctx.Done():
-					return ctx.Err()
+		if err := d.watchPortChanges(ctx, protocol); err != nil {
+			return nil, err
+		}
+	}
+	d.scanPeers(ctx)
+	return d, nil
+}
+
+func (d *Discovery) recovery(ctx context.Context) error {
+	fpath := filepath.Join(d.cfg.DataDir, peersFile)
+	f, err := os.Open(fpath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("can't recover from file %v: %w", fpath, err)
+	}
+	defer f.Close()
+	if err == nil {
+		if err := d.book.Recover(f); err != nil {
+			return err
+		}
+	}
+	d.eg.Go(func() error {
+		ticker := time.NewTicker(30 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-ticker.C:
+				buf := bytes.NewBuffer(nil)
+				if err := d.book.Persist(buf); err != nil {
+					return err
+				}
+				if err := atomic.WriteFile(fpath, buf); err != nil {
+					return err
 				}
 			}
-		})
+		}
+	})
+	return nil
+}
+
+func (d *Discovery) watchPortChanges(ctx context.Context, protocol *peerExchange) error {
+	sub, err := d.host.EventBus().Subscribe(new(event.EvtLocalAddressesUpdated), eventbus.BufSize(4))
+	if err != nil {
+		return fmt.Errorf("failed to subscribe to eventbus: %w", err)
 	}
-	return d, nil
+	d.eg.Go(func() error {
+		defer sub.Close()
+		for {
+			select {
+			case <-sub.Out():
+				port := portFromHost(d.logger, d.host)
+				if port != 0 {
+					advertise, err := ma.NewComponent("tcp", strconv.Itoa(int(portFromHost(d.logger, d.host))))
+					if err != nil {
+						d.logger.With().Error("failed to create tcp multiaddr", log.Err(err))
+					} else {
+						protocol.UpdateAdvertisedAddress(advertise)
+					}
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
+	return nil
 }
 
 // Stop stops the discovery service.
@@ -156,9 +168,32 @@ func (d *Discovery) Stop() {
 	d.eg.Wait()
 }
 
-// Bootstrap runs a crawl.
-func (d *Discovery) Bootstrap(ctx context.Context) error {
-	return d.crawl.Crawl(ctx, time.Second)
+// scanPeers scans the network for new connections and peers.
+func (d *Discovery) scanPeers(ctx context.Context) {
+	period := d.cfg.FastCrawl
+	concurrent := 5
+	d.eg.Go(func() error {
+		for {
+			if err := d.crawl.Crawl(ctx, concurrent); err != nil {
+				if errors.Is(err, context.Canceled) {
+					return nil
+				}
+				return err
+			}
+			if len(d.host.Network().Peers()) >= d.cfg.MinPeers {
+				period = d.cfg.SlowCrawl
+				concurrent = 1
+			} else {
+				period = d.cfg.FastCrawl
+				concurrent = 5
+			}
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(period):
+			}
+		}
+	})
 }
 
 // AdvertisedAddress returns advertised address.
@@ -221,4 +256,16 @@ func portFromAddress(addr ma.Multiaddr) (uint16, error) {
 		return 0, fmt.Errorf("port %d cant fit into uint16 %d", port, math.MaxUint16)
 	}
 	return uint16(port), nil
+}
+
+func parseIdMaddr(raw string) (ma.Multiaddr, peer.ID, error) {
+	maddr, err := ma.NewMultiaddr(raw)
+	if err != nil {
+		return nil, "", err
+	}
+	_, id := peer.SplitAddr(maddr)
+	if id == "" {
+		return nil, "", fmt.Errorf("invalid multiaddr: missing p2p part %v", id)
+	}
+	return maddr, id, err
 }

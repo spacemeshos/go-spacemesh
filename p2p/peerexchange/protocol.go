@@ -11,6 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
+	"github.com/spacemeshos/go-scale"
 	"go.uber.org/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -22,20 +23,9 @@ const (
 	protocolName = "/peerexchange/v1.0.0"
 	// messageTimeout is the timeout for the whole stream lifetime.
 	messageTimeout = 10 * time.Second
+
+	sharedPeers = 10
 )
-
-// Peer Exchange protocol configuration.
-type PeerExchangeConfig struct {
-	// Peers that have not been successfully connected to for
-	// this time are considered stale and not shared with other peers
-	stalePeerTimeout time.Duration `mapstructure:"stale-peer-timeout"`
-}
-
-func DefaultPeerExchangeConfig() PeerExchangeConfig {
-	return PeerExchangeConfig{
-		stalePeerTimeout: time.Minute * 30,
-	}
-}
 
 type peerExchange struct {
 	advertise atomic.Pointer[ma.Multiaddr]
@@ -43,16 +33,14 @@ type peerExchange struct {
 	h      host.Host
 	book   *book.Book
 	logger log.Log
-	config PeerExchangeConfig
 }
 
 // newPeerExchange is a constructor for a protocol protocol provider.
-func newPeerExchange(h host.Host, rt *book.Book, advertise ma.Multiaddr, log log.Log, config PeerExchangeConfig) *peerExchange {
+func newPeerExchange(h host.Host, rt *book.Book, advertise ma.Multiaddr, log log.Log) *peerExchange {
 	pe := &peerExchange{
 		h:      h,
 		book:   rt,
 		logger: log,
-		config: config,
 	}
 	pe.UpdateAdvertisedAddress(advertise)
 	h.SetStreamHandler(protocolName, pe.handler)
@@ -98,7 +86,7 @@ func (p *peerExchange) handler(stream network.Stream) {
 	}
 	p.book.Add(book.SELF, stream.Conn().RemotePeer().String(), addr.Encapsulate(id))
 
-	share := p.book.TakeShareable(stream.Conn().RemotePeer().String(), 10)
+	share := p.book.TakeShareable(stream.Conn().RemotePeer().String(), sharedPeers)
 	response := make([]string, 0, len(share))
 	for _, addr := range share {
 		response = append(response, addr.String())
@@ -150,7 +138,8 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]string, erro
 		return nil, fmt.Errorf("failed to send GetAddress request: %w", err)
 	}
 
-	addrs, _, err := codec.DecodeStringSlice(bufio.NewReader(stream))
+	dec := scale.NewDecoder(bufio.NewReader(stream))
+	addrs, _, err := scale.DecodeStringSliceWithLimit(dec, sharedPeers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read addresses in response: %w", err)
 	}

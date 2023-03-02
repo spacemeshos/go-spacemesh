@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -65,7 +66,7 @@ type Host struct {
 	bootstrap *bootstrap.Bootstrap
 }
 
-// TODO(dshulyak) IsBootnode should be a configuration option
+// TODO(dshulyak) IsBootnode should be a configuration option.
 func isBootnode(h host.Host, bootnodes []string) (bool, error) {
 	for _, raw := range bootnodes {
 		info, err := peer.AddrInfoFromString(raw)
@@ -111,14 +112,13 @@ func Upgrade(h host.Host, genesisID types.Hash20, opts ...Opt) (*Host, error) {
 		DataDir:          cfg.DataDir,
 		Bootnodes:        cfg.Bootnodes,
 		AdvertiseAddress: cfg.AdvertiseAddress,
-		PeerExchange:     cfg.peerExchange,
+		MinPeers:         cfg.MinPeers,
+		SlowCrawl:        10 * time.Minute,
+		FastCrawl:        10 * time.Second,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
 	}
-	if fh.bootstrap, err = bootstrap.NewBootstrap(fh.logger, bootstrap.Config{
-		TargetOutbound: cfg.TargetOutbound,
-		Timeout:        cfg.BootstrapTimeout,
-	}, fh, fh.discovery); err != nil {
+	if fh.bootstrap, err = bootstrap.NewBootstrap(fh.logger, fh); err != nil {
 		return nil, fmt.Errorf("failed to initiliaze bootstrap: %w", err)
 	}
 	fh.hs = handshake.New(fh, genesisID, handshake.WithLog(fh.logger))

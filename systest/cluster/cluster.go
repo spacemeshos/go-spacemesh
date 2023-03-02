@@ -103,7 +103,7 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	genesis := GenesisTime(time.Now().Add(cctx.BootstrapDuration))
 	cluster.addFlag(genesis)
 	cluster.addFlag(GenesisExtraData(defaultExtraData))
-	cluster.addFlag(TargetOutbound(defaultTargetOutbound(cctx.ClusterSize)))
+	cluster.addFlag(MinPeers(minPeers(cctx.ClusterSize)))
 
 	cluster.addPoetFlag(genesis)
 	cluster.addPoetFlag(PoetRestListen(poetPort))
@@ -598,7 +598,7 @@ func extractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]stri
 	return rst, nil
 }
 
-func defaultTargetOutbound(size int) int {
+func minPeers(size int) int {
 	if size < 10 {
 		return 3
 	}
