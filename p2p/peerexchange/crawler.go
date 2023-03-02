@@ -54,6 +54,9 @@ func (r *crawler) Crawl(ctx context.Context, concurrent int) error {
 		eg.Go(func() error {
 			peers, err := getPeers(ctx, r.host, r.disc, src)
 			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					return nil
+				}
 				r.logger.With().Debug("failed to get more peers",
 					log.Stringer("peer", src),
 					log.Err(err),
