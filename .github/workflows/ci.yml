@@ -17,6 +17,8 @@ env:
 
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:
+  # Allow manually triggering this workflow
+  workflow_dispatch:
   # run for all pull requests and pushes to certain branches
   pull_request:
   push:

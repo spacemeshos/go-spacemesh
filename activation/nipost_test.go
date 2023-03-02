@@ -184,6 +184,7 @@ func TestPostSetup(t *testing.T) {
 }
 
 func TestNIPostBuilderWithClients(t *testing.T) {
+	t.Parallel()
 	logtest.SetupGlobal(t)
 	r := require.New(t)
 
@@ -289,6 +290,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	t.Parallel()
 
 	r := require.New(t)
 
@@ -558,6 +560,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 }
 
 func TestNIPostBuilder_Close(t *testing.T) {
+	t.Parallel()
 	r := require.New(t)
 
 	postProvider := &postSetupProviderMock{}

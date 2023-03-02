@@ -52,6 +52,8 @@ func WithCycleGap(gap time.Duration) HTTPPoetOpt {
 func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, opts ...HTTPPoetOpt) (*HTTPPoetTestHarness, error) {
 	cfg := config.DefaultConfig()
 	cfg.PoetDir = poetdir
+	cfg.RawRESTListener = "localhost:0"
+	cfg.RawRPCListener = "localhost:0"
 
 	for _, opt := range opts {
 		opt(cfg)
