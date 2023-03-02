@@ -436,11 +436,11 @@ type reward struct {
 	share   float64
 }
 
-func (t *tester) rewards(all ...reward) []types.AnyReward {
-	var rst []types.AnyReward
+func (t *tester) rewards(all ...reward) []types.CoinbaseReward {
+	var rst []types.CoinbaseReward
 	for _, rew := range all {
 		rat := new(big.Rat).SetFloat64(rew.share)
-		rst = append(rst, types.AnyReward{
+		rst = append(rst, types.CoinbaseReward{
 			Coinbase: t.accounts[rew.address].getAddress(),
 			Weight: types.RatNum{
 				Num:   rat.Num().Uint64(),

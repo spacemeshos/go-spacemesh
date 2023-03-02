@@ -1,15 +1,17 @@
 package mesh
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
@@ -22,17 +24,17 @@ var (
 
 type Executor struct {
 	logger log.Log
-	db     sql.Executor
+	cdb    *datastore.CachedDB
 	vm     vmState
 	cs     conservativeState
 
 	mu sync.Mutex
 }
 
-func NewExecutor(db sql.Executor, vm vmState, cs conservativeState, lg log.Log) *Executor {
+func NewExecutor(cdb *datastore.CachedDB, vm vmState, cs conservativeState, lg log.Log) *Executor {
 	return &Executor{
 		logger: lg,
-		db:     db,
+		cdb:    cdb,
 		vm:     vm,
 		cs:     cs,
 	}
@@ -78,7 +80,11 @@ func (e *Executor) ExecuteOptimistic(
 	if err != nil {
 		return nil, err
 	}
-	ineffective, executed, err := e.vm.Apply(vm.ApplyContext{Layer: lid}, executable, rewards)
+	crewards, err := e.convertRewards(rewards)
+	if err != nil {
+		return nil, err
+	}
+	ineffective, executed, err := e.vm.Apply(vm.ApplyContext{Layer: lid}, executable, crewards)
 	if err != nil {
 		return nil, fmt.Errorf("apply txs optimistically: %w", err)
 	}
@@ -122,7 +128,11 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 	if err != nil {
 		return err
 	}
-	ineffective, executed, err := e.vm.Apply(vm.ApplyContext{Layer: block.LayerIndex}, executable, block.Rewards)
+	rewards, err := e.convertRewards(block.Rewards)
+	if err != nil {
+		return err
+	}
+	ineffective, executed, err := e.vm.Apply(vm.ApplyContext{Layer: block.LayerIndex}, executable, rewards)
 	if err != nil {
 		return fmt.Errorf("apply block: %w", err)
 	}
@@ -136,6 +146,24 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 	}
 	logger.Event().Info("executed block", block.ID(), log.Stringer("state_hash", state))
 	return nil
+}
+
+func (e *Executor) convertRewards(rewards []types.AnyReward) ([]types.CoinbaseReward, error) {
+	res := make([]types.CoinbaseReward, 0, len(rewards))
+	for _, r := range rewards {
+		atx, err := e.cdb.GetAtxHeader(r.AtxID)
+		if err != nil {
+			return nil, fmt.Errorf("exec convert rewards: %w", err)
+		}
+		res = append(res, types.CoinbaseReward{
+			Coinbase: atx.Coinbase,
+			Weight:   r.Weight,
+		})
+	}
+	sort.Slice(res, func(i, j int) bool {
+		return bytes.Compare(res[i].Coinbase.Bytes(), res[j].Coinbase.Bytes()) < 0
+	})
+	return res, nil
 }
 
 func (e *Executor) executeEmpty(ctx context.Context, lid types.LayerID) error {
@@ -155,7 +183,7 @@ func (e *Executor) executeEmpty(ctx context.Context, lid types.LayerID) error {
 }
 
 func (e *Executor) checkOrder(lid types.LayerID) error {
-	inState, err := layers.GetLastApplied(e.db)
+	inState, err := layers.GetLastApplied(e.cdb)
 	if err != nil {
 		return fmt.Errorf("executor get last applied: %w", err)
 	}
@@ -178,7 +206,7 @@ func updateResults(bid types.BlockID, executed []types.TransactionWithResult) {
 func (e *Executor) getExecutableTxs(ids []types.TransactionID) ([]types.Transaction, error) {
 	etxs := make([]types.Transaction, 0, len(ids))
 	for _, tid := range ids {
-		mtx, err := transactions.Get(e.db, tid)
+		mtx, err := transactions.Get(e.cdb, tid)
 		if err != nil {
 			return nil, fmt.Errorf("executor get tx: %w", err)
 		}
