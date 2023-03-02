@@ -69,6 +69,8 @@ func WithCycleGap(gap time.Duration) HTTPPoetOpt {
 func NewHTTPPoetHarness(ctx context.Context, poetdir string, opts ...HTTPPoetOpt) (*HTTPPoetHarness, error) {
 	cfg := config.DefaultConfig()
 	cfg.PoetDir = poetdir
+	cfg.RawRESTListener = "localhost:0"
+	cfg.RawRPCListener = "localhost:0"
 
 	for _, opt := range opts {
 		opt(cfg)
@@ -84,10 +86,8 @@ func NewHTTPPoetHarness(ctx context.Context, poetdir string, opts ...HTTPPoetOpt
 		return nil, err
 	}
 
-	// TODO: query for the REST address to allow dynamic port allocation.
-	// It needs changes in poet.
 	return &HTTPPoetHarness{
-		HTTPPoetClient: NewHTTPPoetClient(cfg.RawRESTListener, PoetConfig{
+		HTTPPoetClient: NewHTTPPoetClient(poet.GrpcRestProxyAddr().String(), PoetConfig{
 			PhaseShift: cfg.Service.PhaseShift,
 			CycleGap:   cfg.Service.CycleGap,
 		}),
