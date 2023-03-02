@@ -326,6 +326,10 @@ func TestHare_onTick(t *testing.T) {
 		randomProposal(lyrID, beacon),
 		randomProposal(lyrID, beacon),
 	}
+	for _, p := range pList {
+		mockMesh.EXPECT().Header(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil)
+	}
+	mockMesh.EXPECT().EpochAtx(h.nodeID, lyrID.GetEpoch()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil)
 	mockMesh.EXPECT().VRFNonce(h.nodeID, lyrID.GetEpoch()).Return(types.VRFPostIndex(1), nil)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
 	mockMesh.EXPECT().SetWeakCoin(lyrID, gomock.Any())
@@ -363,6 +367,60 @@ func TestHare_onTick(t *testing.T) {
 	res2, err := h.getResult(lyrID)
 	require.Equal(t, errNoResult, err)
 	require.Empty(t, res2)
+}
+
+func TestHare_onTick_notMining(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.N = 2
+	cfg.F = 1
+	cfg.RoundDuration = 1
+	cfg.Hdist = 1
+	clock := newMockClock()
+	mockMesh := newMockMesh(t)
+	h := createTestHare(t, mockMesh, cfg, clock, noopPubSub(t), t.Name())
+
+	h.networkDelta = 0
+	createdChan := make(chan struct{}, 1)
+	startedChan := make(chan struct{}, 1)
+	var nmcp *mockConsensusProcess
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, comm.report, startedChan)
+		close(createdChan)
+		return nmcp
+	}
+
+	require.NoError(t, h.Start(context.Background()))
+
+	lyrID := types.GetEffectiveGenesis().Add(1)
+	beacon := types.RandomBeacon()
+	pList := []*types.Proposal{
+		randomProposal(lyrID, beacon),
+		randomProposal(lyrID, beacon),
+		randomProposal(lyrID, beacon),
+	}
+	mockMesh.EXPECT().EpochAtx(h.nodeID, lyrID.GetEpoch()).Return(nil, sql.ErrNotFound)
+	mockMesh.EXPECT().VRFNonce(h.nodeID, lyrID.GetEpoch()).Return(types.VRFPostIndex(1), nil)
+	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
+	mockMesh.EXPECT().SetWeakCoin(lyrID, gomock.Any())
+
+	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
+	h.beacons = mockBeacons
+	h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyrID).Return(false, nil).Times(1)
+	mockBeacons.EXPECT().GetBeacon(lyrID.GetEpoch()).Return(beacon, nil).Times(1)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		clock.advanceLayer()
+		<-createdChan
+		<-startedChan
+		wg.Done()
+	}()
+
+	wg.Wait()
+	out := <-h.blockGenCh
+	require.Equal(t, lyrID, out.Layer)
+	require.ElementsMatch(t, types.ToProposalIDs(pList), out.Proposals)
 }
 
 func TestHare_onTick_NoBeacon(t *testing.T) {
@@ -406,31 +464,43 @@ func TestHare_onTick_NotSynced(t *testing.T) {
 func TestHare_goodProposal(t *testing.T) {
 	beacon := types.RandomBeacon()
 	nodeBeacon := types.RandomBeacon()
+	nodeBaseHeight := uint64(11)
 	tt := []struct {
-		name      string
-		beacons   [3]types.Beacon
-		refBallot []int
-		expected  []int
+		name        string
+		beacons     [3]types.Beacon
+		baseHeights [3]uint64
+		refBallot   []int
+		expected    []int
 	}{
 		{
-			name:     "all good",
-			beacons:  [3]types.Beacon{nodeBeacon, nodeBeacon, nodeBeacon},
-			expected: []int{0, 1, 2},
+			name:        "all good",
+			beacons:     [3]types.Beacon{nodeBeacon, nodeBeacon, nodeBeacon},
+			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
+			expected:    []int{0, 1, 2},
 		},
 		{
-			name:      "get beacon from ref ballot",
-			beacons:   [3]types.Beacon{nodeBeacon, nodeBeacon, nodeBeacon},
-			refBallot: []int{1},
-			expected:  []int{0, 1, 2},
+			name:        "tick height too high",
+			beacons:     [3]types.Beacon{nodeBeacon, nodeBeacon, nodeBeacon},
+			baseHeights: [3]uint64{nodeBaseHeight + 1, nodeBaseHeight, nodeBaseHeight},
+			expected:    []int{1, 2},
 		},
 		{
-			name:     "some bad beacon",
-			beacons:  [3]types.Beacon{nodeBeacon, beacon, nodeBeacon},
-			expected: []int{0, 2},
+			name:        "get beacon from ref ballot",
+			beacons:     [3]types.Beacon{nodeBeacon, nodeBeacon, nodeBeacon},
+			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
+			refBallot:   []int{1},
+			expected:    []int{0, 1, 2},
 		},
 		{
-			name:    "all bad beacon",
-			beacons: [3]types.Beacon{beacon, beacon, beacon},
+			name:        "some bad beacon",
+			beacons:     [3]types.Beacon{nodeBeacon, beacon, nodeBeacon},
+			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
+			expected:    []int{0, 2},
+		},
+		{
+			name:        "all bad beacon",
+			beacons:     [3]types.Beacon{beacon, beacon, beacon},
+			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
 		},
 	}
 
@@ -446,6 +516,11 @@ func TestHare_goodProposal(t *testing.T) {
 				randomProposal(lyrID, tc.beacons[1]),
 				randomProposal(lyrID, tc.beacons[2]),
 			}
+			for i, p := range pList {
+				mockMesh.EXPECT().Header(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: tc.baseHeights[i], TickCount: 1}, nil)
+			}
+			nodeID := types.NodeID{1, 2, 3}
+			mockMesh.EXPECT().EpochAtx(nodeID, lyrID.GetEpoch()).Return(&types.ActivationTxHeader{BaseTickHeight: nodeBaseHeight, TickCount: 1}, nil)
 			mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
 			if len(tc.refBallot) > 0 {
 				for _, i := range tc.refBallot {
@@ -460,7 +535,7 @@ func TestHare_goodProposal(t *testing.T) {
 			for _, i := range tc.expected {
 				expected = append(expected, pList[i].ID())
 			}
-			got := goodProposals(logtest.New(t), mockMesh, lyrID, nodeBeacon)
+			got := goodProposals(logtest.New(t), mockMesh, nodeID, lyrID, nodeBeacon)
 			require.ElementsMatch(t, expected, got)
 		})
 	}

@@ -56,7 +56,7 @@ func (his *HareWrapper) waitForTermination() {
 			break
 		}
 
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 
 	for _, p := range his.hare {
@@ -221,7 +221,6 @@ func (m *mockClock) CurrentLayer() types.LayerID {
 }
 
 func (m *mockClock) advanceLayer() {
-	time.Sleep(time.Millisecond)
 	m.m.Lock()
 	defer m.m.Unlock()
 
@@ -233,116 +232,6 @@ func (m *mockClock) advanceLayer() {
 	m.currentLayer = m.currentLayer.Add(1)
 }
 
-type SharedRoundClock struct {
-	currentRound     uint32
-	rounds           map[uint32]chan struct{}
-	minCount         int
-	processingDelay  time.Duration
-	sentMessages     uint16
-	advanceScheduled bool
-	m                sync.Mutex
-}
-
-func NewSharedClock(minCount int, totalCP uint32, processingDelay time.Duration) map[types.LayerID]*SharedRoundClock {
-	m := make(map[types.LayerID]*SharedRoundClock)
-	for i := types.GetEffectiveGenesis().Add(1); !i.After(types.GetEffectiveGenesis().Add(totalCP)); i = i.Add(1) {
-		m[i] = &SharedRoundClock{
-			currentRound:    preRound,
-			rounds:          make(map[uint32]chan struct{}),
-			minCount:        minCount,
-			processingDelay: processingDelay,
-			sentMessages:    0,
-		}
-	}
-	return m
-}
-
-func (c *SharedRoundClock) AwaitWakeup() <-chan struct{} {
-	ch := make(chan struct{})
-	close(ch)
-	return ch
-}
-
-func (c *SharedRoundClock) AwaitEndOfRound(round uint32) <-chan struct{} {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	ch, ok := c.rounds[round]
-	if !ok {
-		ch = make(chan struct{})
-		c.rounds[round] = ch
-	}
-	return ch
-}
-
-func (c *SharedRoundClock) IncMessages(cnt uint16) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.sentMessages += cnt
-	if int(c.sentMessages) >= c.minCount && !c.advanceScheduled {
-		time.AfterFunc(c.processingDelay, func() {
-			c.m.Lock()
-			defer c.m.Unlock()
-
-			c.sentMessages = 0
-			c.advanceScheduled = false
-			c.advanceRound()
-		})
-		c.advanceScheduled = true
-	}
-}
-
-func (c *SharedRoundClock) advanceRound() {
-	c.currentRound++
-	if prevRound, ok := c.rounds[c.currentRound-1]; ok {
-		close(prevRound)
-	}
-}
-
-type SimRoundClock struct {
-	clocks map[types.LayerID]*SharedRoundClock
-	m      sync.Mutex
-	s      pubsub.PublishSubsciber
-}
-
-func (c *SimRoundClock) Register(protocol string, handler pubsub.GossipHandler) {
-	c.s.Register(protocol, handler)
-}
-
-func (c *SimRoundClock) Publish(ctx context.Context, protocol string, payload []byte) error {
-	instanceID, cnt := extractInstanceID(payload)
-
-	c.m.Lock()
-	clock := c.clocks[instanceID]
-	clock.IncMessages(cnt)
-	c.m.Unlock()
-
-	if err := c.s.Publish(ctx, protocol, payload); err != nil {
-		return fmt.Errorf("failed to broadcast: %w", err)
-	}
-	return nil
-}
-
-func extractInstanceID(payload []byte) (types.LayerID, uint16) {
-	m, err := MessageFromBuffer(payload)
-	if err != nil {
-		panic(err)
-	}
-	return m.Layer, m.Eligibility.Count
-}
-
-func (c *SimRoundClock) NewRoundClock(layerID types.LayerID) RoundClock {
-	return c.clocks[layerID]
-}
-
-func NewSimRoundClock(s pubsub.PublishSubsciber, clocks map[types.LayerID]*SharedRoundClock) *SimRoundClock {
-	return &SimRoundClock{
-		clocks: clocks,
-		s:      s,
-	}
-}
-
 // Test - run multiple CPs simultaneously.
 func Test_multipleCPs(t *testing.T) {
 	logtest.SetupGlobal(t)
@@ -352,7 +241,8 @@ func Test_multipleCPs(t *testing.T) {
 	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
 	test := newHareWrapper(totalCp)
 	totalNodes := 10
-	cfg := config.Config{N: totalNodes, F: totalNodes / 2, WakeupDelta: time.Second, RoundDuration: 5 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
+	networkDelay := time.Second
+	cfg := config.Config{N: totalNodes, F: totalNodes / 2, WakeupDelta: networkDelay, RoundDuration: networkDelay, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -361,34 +251,42 @@ func Test_multipleCPs(t *testing.T) {
 
 	test.initialSets = make([]*Set, totalNodes)
 
-	mockMesh := mocks.NewMockmesh(gomock.NewController(t))
 	pList := make(map[types.LayerID][]*types.Proposal)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
-		for i := uint64(0); i < 200; i++ {
+		for i := uint64(0); i < 20; i++ {
 			p := genLayerProposal(j, []types.TransactionID{})
 			p.EpochData = &types.EpochData{
 				Beacon: types.EmptyBeacon,
 			}
 			pList[j] = append(pList[j], p)
-			mockMesh.EXPECT().Ballot(p.Ballot.ID()).Return(&p.Ballot, nil).AnyTimes()
 		}
-		mockMesh.EXPECT().Proposals(j).Return(pList[j], nil).AnyTimes()
 	}
-	mockMesh.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
-	mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
-	mockMesh.EXPECT().SetWeakCoin(gomock.Any(), gomock.Any()).AnyTimes()
+	meshes := make([]*mocks.Mockmesh, 0, totalNodes)
+	for i := 0; i < totalNodes; i++ {
+		mockMesh := newMockMesh(t)
+		mockMesh.EXPECT().EpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
+		mockMesh.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
+		mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
+		mockMesh.EXPECT().SetWeakCoin(gomock.Any(), gomock.Any()).AnyTimes()
+		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(finalLyr); lid = lid.Add(1) {
+			mockMesh.EXPECT().Proposals(lid).Return(pList[lid], nil)
+			for _, p := range pList[lid] {
+				mockMesh.EXPECT().Header(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
+				mockMesh.EXPECT().Ballot(p.Ballot.ID()).Return(&p.Ballot, nil).AnyTimes()
+			}
+		}
+		meshes = append(meshes, mockMesh)
+	}
 
 	var pubsubs []*pubsub.PubSub
-	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
 	outputs := make([]map[types.LayerID]LayerOutput, totalNodes)
 	var outputsWaitGroup sync.WaitGroup
 	for i := 0; i < totalNodes; i++ {
 		host := mesh.Hosts()[i]
 		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
 		require.NoError(t, err)
-		src := NewSimRoundClock(ps, scMap)
 		pubsubs = append(pubsubs, ps)
-		h := createTestHare(t, mockMesh, cfg, test.clock, src, t.Name())
+		h := createTestHare(t, meshes[i], cfg, test.clock, ps, t.Name())
 		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 100), nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
@@ -403,7 +301,6 @@ func Test_multipleCPs(t *testing.T) {
 				outputs[idx][out.Layer] = out
 			}
 		}(i)
-		h.newRoundClock = src.NewRoundClock
 		test.hare = append(test.hare, h.Hare)
 		e := h.Start(context.TODO())
 		r.NoError(e)
@@ -417,10 +314,11 @@ func Test_multipleCPs(t *testing.T) {
 		}
 		return true
 	}, 5*time.Second, 10*time.Millisecond)
+	layerDuration := 3 * time.Second
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
 			test.clock.advanceLayer()
-			time.Sleep(250 * time.Millisecond)
+			time.Sleep(layerDuration)
 		}
 	}()
 
@@ -435,6 +333,9 @@ func Test_multipleCPs(t *testing.T) {
 			require.ElementsMatch(t, types.ToProposalIDs(pList[lid]), out[lid].Proposals)
 		}
 	}
+	for _, h := range test.hare {
+		h.Close()
+	}
 }
 
 // Test - run multiple CPs where one of them runs more than one iteration.
@@ -446,7 +347,8 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
 	test := newHareWrapper(totalCp)
 	totalNodes := 10
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: time.Second, RoundDuration: 5 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
+	networkDelay := time.Second
+	cfg := config.Config{N: totalNodes, F: totalNodes / 2, WakeupDelta: networkDelay, RoundDuration: networkDelay, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -455,25 +357,35 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 
 	test.initialSets = make([]*Set, totalNodes)
 
-	mockMesh := mocks.NewMockmesh(gomock.NewController(t))
 	pList := make(map[types.LayerID][]*types.Proposal)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
-		for i := uint64(0); i < 200; i++ {
+		for i := uint64(0); i < 20; i++ {
 			p := genLayerProposal(j, []types.TransactionID{})
 			p.EpochData = &types.EpochData{
 				Beacon: types.EmptyBeacon,
 			}
 			pList[j] = append(pList[j], p)
-			mockMesh.EXPECT().Ballot(p.Ballot.ID()).Return(&p.Ballot, nil).AnyTimes()
 		}
-		mockMesh.EXPECT().Proposals(j).Return(pList[j], nil).AnyTimes()
 	}
-	mockMesh.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
-	mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
-	mockMesh.EXPECT().SetWeakCoin(gomock.Any(), gomock.Any()).AnyTimes()
+
+	meshes := make([]*mocks.Mockmesh, 0, totalNodes)
+	for i := 0; i < totalNodes; i++ {
+		mockMesh := newMockMesh(t)
+		mockMesh.EXPECT().EpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
+		mockMesh.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
+		mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
+		mockMesh.EXPECT().SetWeakCoin(gomock.Any(), gomock.Any()).AnyTimes()
+		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(finalLyr); lid = lid.Add(1) {
+			mockMesh.EXPECT().Proposals(lid).Return(pList[lid], nil)
+			for _, p := range pList[lid] {
+				mockMesh.EXPECT().Header(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
+				mockMesh.EXPECT().Ballot(p.Ballot.ID()).Return(&p.Ballot, nil).AnyTimes()
+			}
+		}
+		meshes = append(meshes, mockMesh)
+	}
 
 	var pubsubs []*pubsub.PubSub
-	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
 	outputs := make([]map[types.LayerID]LayerOutput, totalNodes)
 	var outputsWaitGroup sync.WaitGroup
 	for i := 0; i < totalNodes; i++ {
@@ -481,9 +393,8 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
 		require.NoError(t, err)
 		pubsubs = append(pubsubs, ps)
-		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
-		src := NewSimRoundClock(mp2p, scMap)
-		h := createTestHare(t, mockMesh, cfg, test.clock, src, t.Name())
+		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.GetEffectiveGenesis().Add(1), err: errors.New("fake err")}
+		h := createTestHare(t, meshes[i], cfg, test.clock, mp2p, t.Name())
 		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 100), nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
@@ -498,7 +409,6 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 				outputs[idx][out.Layer] = out
 			}
 		}(i)
-		h.newRoundClock = src.NewRoundClock
 		test.hare = append(test.hare, h.Hare)
 		e := h.Start(context.TODO())
 		r.NoError(e)
@@ -529,5 +439,8 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 			require.NotNil(t, out[lid])
 			require.ElementsMatch(t, types.ToProposalIDs(pList[lid]), out[lid].Proposals)
 		}
+	}
+	for _, h := range test.hare {
+		h.Close()
 	}
 }

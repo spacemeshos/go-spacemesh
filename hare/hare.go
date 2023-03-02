@@ -85,6 +85,18 @@ func (m defaultMesh) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.V
 	return nonce, nil
 }
 
+func (m defaultMesh) EpochAtx(nodeID types.NodeID, epoch types.EpochID) (*types.ActivationTxHeader, error) {
+	atx, err := m.cdb.GetEpochAtx(epoch, nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("get epoch atx: %w", err)
+	}
+	return atx, nil
+}
+
+func (m defaultMesh) Header(id types.ATXID) (*types.ActivationTxHeader, error) {
+	return m.cdb.GetAtxHeader(id)
+}
+
 func (m defaultMesh) Proposals(lid types.LayerID) ([]*types.Proposal, error) {
 	return proposals.GetByLayer(m.cdb, lid)
 }
@@ -113,8 +125,8 @@ func (m defaultMesh) GetMalfeasanceProof(nodeID types.NodeID) (*types.Malfeasanc
 type Opt func(*Hare)
 
 func withMesh(m mesh) Opt {
-	return func(pd *Hare) {
-		pd.msh = m
+	return func(h *Hare) {
+		h.msh = m
 	}
 }
 
@@ -398,7 +410,7 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		mchOut: h.mchMalfeasance,
 		report: h.outputChan,
 	}
-	props := goodProposals(logger, h.msh, lid, beacon)
+	props := goodProposals(logger, h.msh, h.nodeID, lid, beacon)
 	preNumProposals.Add(float64(len(props)))
 	set := NewSet(props)
 	cp := h.factory(ctx, h.config, lid, set, h.rolacle, h.sign, nonce, h.publisher, comm, clock)
@@ -437,15 +449,14 @@ func (h *Hare) removeCP(logger log.Log, lid types.LayerID) {
 	defer h.mu.Unlock()
 	delete(h.cps, cp.ID())
 	logger.With().Info("number of consensus processes (after deregister)",
-		cp.ID(),
 		log.Int("count", len(h.cps)))
 }
 
 // goodProposals finds the "good proposals" for the specified layer. a proposal is good if
 // it has the same beacon value as the node's beacon value.
 // any error encountered will be ignored and an empty set is returned.
-func goodProposals(logger log.Log, msh mesh, lyrID types.LayerID, epochBeacon types.Beacon) []types.ProposalID {
-	props, err := msh.Proposals(lyrID)
+func goodProposals(logger log.Log, msh mesh, nodeID types.NodeID, lid types.LayerID, epochBeacon types.Beacon) []types.ProposalID {
+	props, err := msh.Proposals(lid)
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
 			logger.With().Warning("no proposals found for hare, using empty set", log.Err(err))
@@ -456,10 +467,37 @@ func goodProposals(logger log.Log, msh mesh, lyrID types.LayerID, epochBeacon ty
 	}
 
 	var (
-		beacon types.Beacon
-		result []types.ProposalID
+		beacon        types.Beacon
+		result        []types.ProposalID
+		ownHdr        *types.ActivationTxHeader
+		ownTickHeight = uint64(math.MaxUint64)
 	)
+	// a non-smesher will not filter out any proposals, as it doesn't have voting power
+	// and only observes the consensus process.
+	ownHdr, err = msh.EpochAtx(nodeID, lid.GetEpoch())
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		logger.With().Error("failed to get own atx", log.Err(err))
+		return []types.ProposalID{}
+	}
+	if ownHdr != nil {
+		ownTickHeight = ownHdr.TickHeight()
+	}
 	for _, p := range props {
+		if ownHdr != nil {
+			hdr, err := msh.Header(p.AtxID)
+			if err != nil {
+				logger.With().Error("failed to get atx", p.AtxID, log.Err(err))
+				return []types.ProposalID{}
+			}
+			if hdr.BaseTickHeight >= ownTickHeight {
+				// does not vote for future proposal
+				logger.With().Warning("proposal base tick height too high. skipping",
+					log.Uint64("proposal_height", hdr.BaseTickHeight),
+					log.Uint64("own_height", ownTickHeight),
+				)
+				continue
+			}
+		}
 		if p.EpochData != nil {
 			beacon = p.EpochData.Beacon
 		} else if p.RefBallot == types.EmptyBallotID {

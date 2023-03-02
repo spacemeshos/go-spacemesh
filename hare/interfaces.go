@@ -29,6 +29,8 @@ type stateQuerier interface {
 
 type mesh interface {
 	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
+	EpochAtx(types.NodeID, types.EpochID) (*types.ActivationTxHeader, error)
+	Header(types.ATXID) (*types.ActivationTxHeader, error)
 	Proposals(types.LayerID) ([]*types.Proposal, error)
 	Ballot(types.BallotID) (*types.Ballot, error)
 	SetWeakCoin(types.LayerID, bool) error

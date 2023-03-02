@@ -220,6 +220,21 @@ func (mr *MockmeshMockRecorder) Ballot(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ballot", reflect.TypeOf((*Mockmesh)(nil).Ballot), arg0)
 }
 
+// EpochAtx mocks base method.
+func (m *Mockmesh) EpochAtx(arg0 types.NodeID, arg1 types.EpochID) (*types.ActivationTxHeader, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EpochAtx", arg0, arg1)
+	ret0, _ := ret[0].(*types.ActivationTxHeader)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// EpochAtx indicates an expected call of EpochAtx.
+func (mr *MockmeshMockRecorder) EpochAtx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EpochAtx", reflect.TypeOf((*Mockmesh)(nil).EpochAtx), arg0, arg1)
+}
+
 // GetMalfeasanceProof mocks base method.
 func (m *Mockmesh) GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error) {
 	m.ctrl.T.Helper()
@@ -233,6 +248,21 @@ func (m *Mockmesh) GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceP
 func (mr *MockmeshMockRecorder) GetMalfeasanceProof(nodeID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProof", reflect.TypeOf((*Mockmesh)(nil).GetMalfeasanceProof), nodeID)
+}
+
+// Header mocks base method.
+func (m *Mockmesh) Header(arg0 types.ATXID) (*types.ActivationTxHeader, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Header", arg0)
+	ret0, _ := ret[0].(*types.ActivationTxHeader)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Header indicates an expected call of Header.
+func (mr *MockmeshMockRecorder) Header(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Header", reflect.TypeOf((*Mockmesh)(nil).Header), arg0)
 }
 
 // IsMalicious mocks base method.
