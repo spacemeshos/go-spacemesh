@@ -1167,7 +1167,7 @@ func TestBuilder_UpdatePoets(t *testing.T) {
 
 	r.Nil(tab.Builder.receivePendingPoetClients())
 
-	err := tab.Builder.UpdatePoETServers(context.Background(), []string{"poet0", "poet1"})
+	err := tab.Builder.UpdatePoETServers(context.Background(), []string{"http://poet0", "http://poet1"})
 	r.NoError(err)
 
 	clients := tab.Builder.receivePendingPoetClients()
@@ -1185,7 +1185,7 @@ func TestBuilder_UpdatePoetsUnstable(t *testing.T) {
 		return poet, nil
 	}))
 
-	err := tab.Builder.UpdatePoETServers(context.Background(), []string{"poet0", "poet1"})
+	err := tab.Builder.UpdatePoETServers(context.Background(), []string{"http://poet0", "http://poet1"})
 	r.ErrorIs(err, ErrPoetServiceUnstable)
 	r.Nil(tab.receivePendingPoetClients())
 }
