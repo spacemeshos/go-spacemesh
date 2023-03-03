@@ -275,6 +275,7 @@ func Test_multipleCPs(t *testing.T) {
 				mockMesh.EXPECT().Ballot(p.Ballot.ID()).Return(&p.Ballot, nil).AnyTimes()
 			}
 		}
+		mockMesh.EXPECT().Proposals(gomock.Any()).Return([]*types.Proposal{}, nil).AnyTimes()
 		meshes = append(meshes, mockMesh)
 	}
 
@@ -382,6 +383,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 				mockMesh.EXPECT().Ballot(p.Ballot.ID()).Return(&p.Ballot, nil).AnyTimes()
 			}
 		}
+		mockMesh.EXPECT().Proposals(gomock.Any()).Return([]*types.Proposal{}, nil).AnyTimes()
 		meshes = append(meshes, mockMesh)
 	}
 
