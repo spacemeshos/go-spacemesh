@@ -532,7 +532,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	poetHarness, err := activation.NewHTTPPoetHarness(ctx, t.TempDir())
+	poetHarness, err := activation.NewHTTPPoetTestHarness(ctx, t.TempDir())
 	require.NoError(t, err)
 
 	edSgn, err := signing.NewEdSigner()

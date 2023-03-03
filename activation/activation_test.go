@@ -1159,15 +1159,15 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 func TestBuilder_UpdatePoets(t *testing.T) {
 	r := require.New(t)
 
-	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) PoetProvingServiceClient {
+	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (PoetProvingServiceClient, error) {
 		poet := NewMockPoetProvingServiceClient(gomock.NewController(t))
 		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return([]byte("poetid"), nil)
-		return poet
+		return poet, nil
 	}))
 
 	r.Nil(tab.Builder.receivePendingPoetClients())
 
-	err := tab.Builder.UpdatePoETServers(context.Background(), []string{"poet0", "poet1"})
+	err := tab.Builder.UpdatePoETServers(context.Background(), []string{"http://poet0", "http://poet1"})
 	r.NoError(err)
 
 	clients := tab.Builder.receivePendingPoetClients()
@@ -1179,13 +1179,13 @@ func TestBuilder_UpdatePoets(t *testing.T) {
 func TestBuilder_UpdatePoetsUnstable(t *testing.T) {
 	r := require.New(t)
 
-	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) PoetProvingServiceClient {
+	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (PoetProvingServiceClient, error) {
 		poet := NewMockPoetProvingServiceClient(gomock.NewController(t))
 		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return([]byte("poetid"), errors.New("ERROR"))
-		return poet
+		return poet, nil
 	}))
 
-	err := tab.Builder.UpdatePoETServers(context.Background(), []string{"poet0", "poet1"})
+	err := tab.Builder.UpdatePoETServers(context.Background(), []string{"http://poet0", "http://poet1"})
 	r.ErrorIs(err, ErrPoetServiceUnstable)
 	r.Nil(tab.receivePendingPoetClients())
 }
