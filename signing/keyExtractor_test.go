@@ -8,10 +8,10 @@ import (
 
 func TestPubKeyExtractor_WithPrefix(t *testing.T) {
 	t.Run("same prefix", func(t *testing.T) {
-		signer, err := NewEdSigner(WithPrefix([]byte("one")))
+		signer, err := NewEdSigner(WithPrefix([]byte("one")), WithDomain(Ballot))
 		require.NoError(t, err)
 
-		extractor, err := NewPubKeyExtractor(WithExtractorPrefix([]byte("one")))
+		extractor, err := NewPubKeyExtractor(WithExtractorPrefix([]byte("one")), WithExtractorDomain(Ballot))
 		require.NoError(t, err)
 		msg := []byte("test")
 		sig := signer.Sign(msg)
@@ -42,14 +42,32 @@ func TestPubKeyExtractor_WithPrefix(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, nodeId, signer.NodeID())
 	})
+
+	t.Run("domain mismatch", func(t *testing.T) {
+		signer, err := NewEdSigner(WithPrefix([]byte("one")), WithDomain(Ballot))
+		require.NoError(t, err)
+
+		extractor, err := NewPubKeyExtractor(WithExtractorPrefix([]byte("one")), WithExtractorDomain(Atx))
+		require.NoError(t, err)
+		msg := []byte("test")
+		sig := signer.Sign(msg)
+
+		pub, err := extractor.Extract(msg, sig)
+		require.NoError(t, err)
+		require.NotEqual(t, pub.Bytes(), signer.PublicKey().Bytes())
+
+		nodeId, err := extractor.ExtractNodeID(msg, sig)
+		require.NoError(t, err)
+		require.NotEqual(t, nodeId, signer.NodeID())
+	})
 }
 
 func Fuzz_PubKeyExtractor(f *testing.F) {
 	f.Fuzz(func(t *testing.T, msg []byte, prefix []byte) {
-		signer, err := NewEdSigner(WithPrefix(prefix))
+		signer, err := NewEdSigner(WithPrefix(prefix), WithDomain(Ballot))
 		require.NoError(t, err)
 
-		extractor, err := NewPubKeyExtractor(WithExtractorPrefix(prefix))
+		extractor, err := NewPubKeyExtractor(WithExtractorPrefix(prefix), WithExtractorDomain(Ballot))
 		require.NoError(t, err)
 
 		sig := signer.Sign(msg)
@@ -62,10 +80,10 @@ func Fuzz_PubKeyExtractor(f *testing.F) {
 
 func Fuzz_PubKeyExtractorNodeID(f *testing.F) {
 	f.Fuzz(func(t *testing.T, msg []byte, prefix []byte) {
-		signer, err := NewEdSigner(WithPrefix(prefix))
+		signer, err := NewEdSigner(WithPrefix(prefix), WithDomain(Ballot))
 		require.NoError(t, err)
 
-		extractor, err := NewPubKeyExtractor(WithExtractorPrefix(prefix))
+		extractor, err := NewPubKeyExtractor(WithExtractorPrefix(prefix), WithExtractorDomain(Ballot))
 		require.NoError(t, err)
 
 		sig := signer.Sign(msg)

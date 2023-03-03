@@ -27,7 +27,7 @@ func TestEdSigner_Sign(t *testing.T) {
 	rand.Read(m)
 	sig := ed.Sign(m)
 
-	ok := ed25519.Verify(ed25519.PublicKey(ed.PublicKey().Bytes()), m, sig)
+	ok := ed25519.Verify(ed.PublicKey().Bytes(), m, sig)
 	require.Truef(t, ok, "failed to verify message %x with sig %x", m, sig)
 }
 
@@ -35,7 +35,7 @@ func TestEdSigner_ValidKeyEncoding(t *testing.T) {
 	ed, err := NewEdSigner()
 	require.NoError(t, err)
 
-	require.Equal(t, []byte(ed.priv[32:]), []byte(ed.PublicKey().Bytes()))
+	require.Equal(t, []byte(ed.priv[32:]), ed.PublicKey().Bytes())
 }
 
 func TestEdSigner_WithPrivateKey(t *testing.T) {

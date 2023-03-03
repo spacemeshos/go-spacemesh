@@ -13,9 +13,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+type Domain byte
+
+const (
+	Default Domain = iota
+	Atx
+	Beacon
+	Ballot
+	Hare
+)
+
 type edSignerOption struct {
 	priv   PrivateKey
 	prefix []byte
+	domain Domain
 }
 
 // EdSignerOptionFunc modifies EdSigner.
@@ -25,6 +36,14 @@ type EdSignerOptionFunc func(*edSignerOption) error
 func WithPrefix(prefix []byte) EdSignerOptionFunc {
 	return func(opt *edSignerOption) error {
 		opt.prefix = prefix
+		return nil
+	}
+}
+
+// WithDomain sets the domain of this signer.
+func WithDomain(d Domain) EdSignerOptionFunc {
+	return func(opt *edSignerOption) error {
+		opt.domain = d
 		return nil
 	}
 }
@@ -84,9 +103,17 @@ func NewEdSigner(opts ...EdSignerOptionFunc) (*EdSigner, error) {
 		}
 		cfg.priv = priv
 	}
+
+	prefix := cfg.prefix
+	if cfg.domain != Default {
+		prefix = make([]byte, len(cfg.prefix)+1)
+		copy(prefix, cfg.prefix)
+		prefix[len(cfg.prefix)] = byte(cfg.domain)
+	}
+
 	sig := &EdSigner{
 		priv:   cfg.priv,
-		prefix: cfg.prefix,
+		prefix: prefix,
 	}
 	return sig, nil
 }

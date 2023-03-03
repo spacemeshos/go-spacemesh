@@ -8,6 +8,7 @@ import (
 
 type edExtractorOption struct {
 	prefix []byte
+	domain Domain
 }
 
 // ExtractorOptionFunc to modify verifier.
@@ -17,6 +18,14 @@ type ExtractorOptionFunc func(*edExtractorOption) error
 func WithExtractorPrefix(prefix []byte) ExtractorOptionFunc {
 	return func(opts *edExtractorOption) error {
 		opts.prefix = prefix
+		return nil
+	}
+}
+
+// WithExtractorDomain sets the domain of this key extractor.
+func WithExtractorDomain(d Domain) ExtractorOptionFunc {
+	return func(opts *edExtractorOption) error {
+		opts.domain = d
 		return nil
 	}
 }
@@ -34,8 +43,14 @@ func NewPubKeyExtractor(opts ...ExtractorOptionFunc) (*PubKeyExtractor, error) {
 			return nil, err
 		}
 	}
+	prefix := cfg.prefix
+	if cfg.domain != Default {
+		prefix = make([]byte, len(cfg.prefix)+1)
+		copy(prefix, cfg.prefix)
+		prefix[len(cfg.prefix)] = byte(cfg.domain)
+	}
 	extractor := &PubKeyExtractor{
-		prefix: cfg.prefix,
+		prefix: prefix,
 	}
 	return extractor, nil
 }
