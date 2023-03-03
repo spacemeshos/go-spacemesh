@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interfaces.go
@@ -29,12 +30,12 @@ type stateQuerier interface {
 
 type mesh interface {
 	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
-	EpochAtx(types.NodeID, types.EpochID) (*types.ActivationTxHeader, error)
-	Header(types.ATXID) (*types.ActivationTxHeader, error)
+	GetEpochAtx(types.EpochID, types.NodeID) (*types.ActivationTxHeader, error)
+	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 	Proposals(types.LayerID) ([]*types.Proposal, error)
 	Ballot(types.BallotID) (*types.Ballot, error)
 	SetWeakCoin(types.LayerID, bool) error
 	IsMalicious(types.NodeID) (bool, error)
-	AddMalfeasanceProof(types.NodeID, *types.MalfeasanceProof) error
+	AddMalfeasanceProof(types.NodeID, *types.MalfeasanceProof, *sql.Tx) error
 	GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error)
 }

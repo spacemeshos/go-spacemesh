@@ -74,51 +74,19 @@ type LayerOutput struct {
 }
 
 type defaultMesh struct {
-	cdb *datastore.CachedDB
-}
-
-func (m defaultMesh) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	nonce, err := m.cdb.VRFNonce(nodeID, epoch)
-	if err != nil {
-		return types.VRFPostIndex(0), fmt.Errorf("get vrf nonce: %w", err)
-	}
-	return nonce, nil
-}
-
-func (m defaultMesh) EpochAtx(nodeID types.NodeID, epoch types.EpochID) (*types.ActivationTxHeader, error) {
-	atx, err := m.cdb.GetEpochAtx(epoch, nodeID)
-	if err != nil {
-		return nil, fmt.Errorf("get epoch atx: %w", err)
-	}
-	return atx, nil
-}
-
-func (m defaultMesh) Header(id types.ATXID) (*types.ActivationTxHeader, error) {
-	return m.cdb.GetAtxHeader(id)
+	*datastore.CachedDB
 }
 
 func (m defaultMesh) Proposals(lid types.LayerID) ([]*types.Proposal, error) {
-	return proposals.GetByLayer(m.cdb, lid)
+	return proposals.GetByLayer(m, lid)
 }
 
 func (m defaultMesh) Ballot(bid types.BallotID) (*types.Ballot, error) {
-	return ballots.Get(m.cdb, bid)
+	return ballots.Get(m, bid)
 }
 
 func (m defaultMesh) SetWeakCoin(lid types.LayerID, wc bool) error {
-	return layers.SetWeakCoin(m.cdb, lid, wc)
-}
-
-func (m defaultMesh) IsMalicious(nodeID types.NodeID) (bool, error) {
-	return m.cdb.IsMalicious(nodeID)
-}
-
-func (m defaultMesh) AddMalfeasanceProof(nodeID types.NodeID, proof *types.MalfeasanceProof) error {
-	return m.cdb.AddMalfeasanceProof(nodeID, proof, nil)
-}
-
-func (m defaultMesh) GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error) {
-	return m.cdb.GetMalfeasanceProof(nodeID)
+	return layers.SetWeakCoin(m, lid, wc)
 }
 
 // Opt for configuring beacon protocol.
@@ -227,7 +195,7 @@ func New(
 	}
 
 	if h.msh == nil {
-		h.msh = defaultMesh{cdb: cdb}
+		h.msh = defaultMesh{CachedDB: cdb}
 	}
 	h.broker = newBroker(h.msh, pke, ev, stateQ, syncState, h.mchMalfeasance, conf.LimitConcurrent, logger)
 
@@ -474,7 +442,7 @@ func goodProposals(logger log.Log, msh mesh, nodeID types.NodeID, lid types.Laye
 	)
 	// a non-smesher will not filter out any proposals, as it doesn't have voting power
 	// and only observes the consensus process.
-	ownHdr, err = msh.EpochAtx(nodeID, lid.GetEpoch())
+	ownHdr, err = msh.GetEpochAtx(lid.GetEpoch(), nodeID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		logger.With().Error("failed to get own atx", log.Err(err))
 		return []types.ProposalID{}
@@ -484,7 +452,7 @@ func goodProposals(logger log.Log, msh mesh, nodeID types.NodeID, lid types.Laye
 	}
 	for _, p := range props {
 		if ownHdr != nil {
-			hdr, err := msh.Header(p.AtxID)
+			hdr, err := msh.GetAtxHeader(p.AtxID)
 			if err != nil {
 				logger.With().Error("failed to get atx", p.AtxID, log.Err(err))
 				return []types.ProposalID{}
@@ -612,7 +580,7 @@ func (h *Hare) malfeasanceLoop(ctx context.Context) {
 				logger.Debug("known malicious identity")
 				continue
 			}
-			if err := h.msh.AddMalfeasanceProof(nodeID, &gossip.MalfeasanceProof); err != nil {
+			if err := h.msh.AddMalfeasanceProof(nodeID, &gossip.MalfeasanceProof, nil); err != nil {
 				logger.With().Error("failed to save MalfeasanceProof", log.Err(err))
 				continue
 			}

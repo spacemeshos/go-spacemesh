@@ -279,7 +279,7 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 	require.NoError(t, err)
 	done := make(chan struct{})
 	mockMesh.EXPECT().IsMalicious(types.BytesToNodeID(gossip.Eligibility.PubKey)).Return(false, nil)
-	mockMesh.EXPECT().AddMalfeasanceProof(types.BytesToNodeID(gossip.Eligibility.PubKey), &gossip.MalfeasanceProof).Return(nil)
+	mockMesh.EXPECT().AddMalfeasanceProof(types.BytesToNodeID(gossip.Eligibility.PubKey), &gossip.MalfeasanceProof, nil).Return(nil)
 	mpubsub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, data).DoAndReturn(
 		func(_ context.Context, _ string, _ []byte) error {
 			close(done)
@@ -326,9 +326,9 @@ func TestHare_onTick(t *testing.T) {
 		randomProposal(lyrID, beacon),
 	}
 	for _, p := range pList {
-		mockMesh.EXPECT().Header(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil)
+		mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil)
 	}
-	mockMesh.EXPECT().EpochAtx(h.nodeID, lyrID.GetEpoch()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil)
+	mockMesh.EXPECT().GetEpochAtx(h.nodeID, lyrID.GetEpoch()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil)
 	mockMesh.EXPECT().VRFNonce(h.nodeID, lyrID.GetEpoch()).Return(types.VRFPostIndex(1), nil)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
 	mockMesh.EXPECT().SetWeakCoin(lyrID, gomock.Any())
@@ -396,7 +396,7 @@ func TestHare_onTick_notMining(t *testing.T) {
 		randomProposal(lyrID, beacon),
 		randomProposal(lyrID, beacon),
 	}
-	mockMesh.EXPECT().EpochAtx(h.nodeID, lyrID.GetEpoch()).Return(nil, sql.ErrNotFound)
+	mockMesh.EXPECT().GetEpochAtx(h.nodeID, lyrID.GetEpoch()).Return(nil, sql.ErrNotFound)
 	mockMesh.EXPECT().VRFNonce(h.nodeID, lyrID.GetEpoch()).Return(types.VRFPostIndex(1), nil)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
 	mockMesh.EXPECT().SetWeakCoin(lyrID, gomock.Any())
@@ -515,10 +515,10 @@ func TestHare_goodProposal(t *testing.T) {
 				randomProposal(lyrID, tc.beacons[2]),
 			}
 			for i, p := range pList {
-				mockMesh.EXPECT().Header(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: tc.baseHeights[i], TickCount: 1}, nil)
+				mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: tc.baseHeights[i], TickCount: 1}, nil)
 			}
 			nodeID := types.NodeID{1, 2, 3}
-			mockMesh.EXPECT().EpochAtx(nodeID, lyrID.GetEpoch()).Return(&types.ActivationTxHeader{BaseTickHeight: nodeBaseHeight, TickCount: 1}, nil)
+			mockMesh.EXPECT().GetEpochAtx(nodeID, lyrID.GetEpoch()).Return(&types.ActivationTxHeader{BaseTickHeight: nodeBaseHeight, TickCount: 1}, nil)
 			mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
 			if len(tc.refBallot) > 0 {
 				for _, i := range tc.refBallot {

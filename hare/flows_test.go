@@ -264,14 +264,14 @@ func Test_multipleCPs(t *testing.T) {
 	meshes := make([]*mocks.Mockmesh, 0, totalNodes)
 	for i := 0; i < totalNodes; i++ {
 		mockMesh := newMockMesh(t)
-		mockMesh.EXPECT().EpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
+		mockMesh.EXPECT().GetEpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
 		mockMesh.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
 		mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
 		mockMesh.EXPECT().SetWeakCoin(gomock.Any(), gomock.Any()).AnyTimes()
 		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(finalLyr); lid = lid.Add(1) {
 			mockMesh.EXPECT().Proposals(lid).Return(pList[lid], nil)
 			for _, p := range pList[lid] {
-				mockMesh.EXPECT().Header(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
+				mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
 				mockMesh.EXPECT().Ballot(p.Ballot.ID()).Return(&p.Ballot, nil).AnyTimes()
 			}
 		}
@@ -371,14 +371,14 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	meshes := make([]*mocks.Mockmesh, 0, totalNodes)
 	for i := 0; i < totalNodes; i++ {
 		mockMesh := newMockMesh(t)
-		mockMesh.EXPECT().EpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
+		mockMesh.EXPECT().GetEpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
 		mockMesh.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
 		mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
 		mockMesh.EXPECT().SetWeakCoin(gomock.Any(), gomock.Any()).AnyTimes()
 		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(finalLyr); lid = lid.Add(1) {
 			mockMesh.EXPECT().Proposals(lid).Return(pList[lid], nil)
 			for _, p := range pList[lid] {
-				mockMesh.EXPECT().Header(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
+				mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
 				mockMesh.EXPECT().Ballot(p.Ballot.ID()).Return(&p.Ballot, nil).AnyTimes()
 			}
 		}
