@@ -56,7 +56,7 @@ func (his *HareWrapper) waitForTermination() {
 			break
 		}
 
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(300 * time.Millisecond)
 	}
 
 	for _, p := range his.hare {
@@ -314,7 +314,7 @@ func Test_multipleCPs(t *testing.T) {
 		}
 		return true
 	}, 5*time.Second, 10*time.Millisecond)
-	layerDuration := 3 * time.Second
+	layerDuration := 250 * time.Millisecond
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
 			test.clock.advanceLayer()
@@ -422,10 +422,11 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		}
 		return true
 	}, 5*time.Second, 10*time.Millisecond)
+	layerDuration := 250 * time.Millisecond
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
 			test.clock.advanceLayer()
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(layerDuration)
 		}
 	}()
 
