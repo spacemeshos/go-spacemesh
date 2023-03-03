@@ -343,6 +343,7 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config, inbox 
 		truer{},
 		newRoundClockFromCfg(logger, cfg),
 		logger.WithName(edPubkey.String()),
+		time.Now(),
 	)
 }
 

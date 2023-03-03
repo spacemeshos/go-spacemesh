@@ -16,6 +16,24 @@ import (
 // MessageType is a message type.
 type MessageType byte
 
+// round assumes that the message type is valid, it will panic otherwise.
+func (m MessageType) round() (round uint32) {
+	switch m {
+	case status:
+		return statusRound
+	case proposal:
+		return proposalRound
+	case commit:
+		return commitRound
+	case notify:
+		return notifyRound
+	case pre:
+		return preRound
+	default:
+		panic("message type should have been validated before calling this")
+	}
+}
+
 // declare all known message types.
 const (
 	status   MessageType = 0

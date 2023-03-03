@@ -39,13 +39,18 @@ func (c *SimpleRoundClock) AwaitWakeup() <-chan struct{} {
 // (e.g. by storing the resulting channel and reusing it).
 func (c *SimpleRoundClock) AwaitEndOfRound(round uint32) <-chan struct{} {
 	ch := make(chan struct{})
+	time.AfterFunc(time.Until(c.RoundEnd(round)), func() {
+		close(ch)
+	})
+	return ch
+}
+
+// RoundEnd returns the time at which round ends, passing round-1 will return
+// the time at which round starts.
+func (c *SimpleRoundClock) RoundEnd(round uint32) time.Time {
 	// The pre-round (which has a value of MaxUInt32) ends one RoundDuration after the WakeupDelta. Rounds, in general, are
 	// zero-based. By adding 2 to the round number and multiplying by the RoundDuration we get the correct number of
 	// RoundDurations to wait.
 	duration := c.WakeupDelta + (c.RoundDuration * time.Duration(round+2))
-	time.AfterFunc(time.Until(c.LayerTime.Add(duration)), func() {
-		close(ch)
-	})
-
-	return ch
+	return c.LayerTime.Add(duration)
 }
