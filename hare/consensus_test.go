@@ -220,7 +220,7 @@ func TestConsensus_MultipleIterations(t *testing.T) {
 	test := newConsensusTest()
 
 	totalNodes := 15
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: time.Second, RoundDuration: time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
+	cfg := config.Config{N: totalNodes, WakeupDelta: time.Second, RoundDuration: time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -253,7 +253,7 @@ func TestConsensus_MultipleIterations(t *testing.T) {
 
 func TestConsensusFixedOracle(t *testing.T) {
 	test := newConsensusTest()
-	cfg := config.Config{N: 16, F: 8, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
+	cfg := config.Config{N: 16, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 
 	totalNodes := 20
 	ctx, cancel := context.WithCancel(context.Background())
@@ -287,7 +287,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	test := newConsensusTest()
 
 	// Larger values may trigger race detector failures because of 8128 goroutines limit.
-	cfg := config.Config{N: 10, F: 5, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
+	cfg := config.Config{N: 10, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 	totalNodes := 10
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -320,7 +320,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 func TestAllDifferentSet(t *testing.T) {
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 10, F: 5, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
+	cfg := config.Config{N: 10, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 	totalNodes := 10
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -366,7 +366,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 16, F: 8, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
+	cfg := config.Config{N: 16, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 	totalNodes := 20
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -424,7 +424,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 16, F: 8, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
+	cfg := config.Config{N: 16, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 	totalNodes := 20
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -519,7 +519,7 @@ func TestEquivocation(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 16, F: 8, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
+	cfg := config.Config{N: 16, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 	totalNodes := 20
 
 	ctx, cancel := context.WithCancel(context.Background())

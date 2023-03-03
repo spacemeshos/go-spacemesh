@@ -63,7 +63,6 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 	w := newTestHareWrapper(maxLayers)
 	cfg := config.Config{
 		N:               nodes,
-		F:               nodes/2 - 1,
 		WakeupDelta:     time.Second,
 		RoundDuration:   time.Second,
 		ExpectedLeaders: leaders,

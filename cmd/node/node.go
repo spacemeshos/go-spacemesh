@@ -359,6 +359,10 @@ func (app *App) Initialize() (err error) {
 		}
 	}
 
+	if app.Config.HARE.N%2 != 0 {
+		return errors.New("hare params.N must be an even number")
+	}
+
 	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
 	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
 	// hare's max time duration to run consensus for a layer
@@ -582,7 +586,7 @@ func (app *App) initServices(
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
-			CertifyThreshold: app.Config.HARE.F + 1,
+			CertifyThreshold: app.Config.HARE.N/2 + 1,
 			LayerBuffer:      app.Config.Tortoise.Zdist,
 			NumLayersToKeep:  app.Config.Tortoise.Zdist * 2,
 		}),

@@ -179,7 +179,7 @@ func (mev *mockEligibilityValidator) ValidateEligibilityGossip(context.Context, 
 }
 
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
-	c := config.Config{N: 10, F: 5, RoundDuration: 200 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
+	c := config.Config{N: 10, RoundDuration: 200 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
 	p := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
 	p.Start()
 
@@ -189,7 +189,7 @@ func TestConsensusProcess_TerminationLimit(t *testing.T) {
 }
 
 func TestConsensusProcess_PassiveParticipant(t *testing.T) {
-	c := config.Config{N: 10, F: 5, RoundDuration: 200 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
+	c := config.Config{N: 10, RoundDuration: 200 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
 	p := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
 	p.nonce = nil
 	p.Start()
@@ -200,7 +200,7 @@ func TestConsensusProcess_PassiveParticipant(t *testing.T) {
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
 	net := &mockP2p{}
-	c := config.Config{N: 10, F: 5, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
+	c := config.Config{N: 10, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	proc := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
 	proc.publisher = net
 
@@ -225,7 +225,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 
 // test that proc.Stop() actually returns and cause the consensus process to be GC'ed.
 func TestConsensusProcess_StartAndStop(t *testing.T) {
-	c := config.Config{N: 10, F: 5, RoundDuration: 50 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1000, Hdist: 20}
+	c := config.Config{N: 10, RoundDuration: 50 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1000, Hdist: 20}
 	proc := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
 	proc.publisher = &mockP2p{}
 
@@ -302,7 +302,7 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 }
 
 func generateConsensusProcess(t *testing.T) *consensusProcess {
-	cfg := config.Config{N: 10, F: 5, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
+	cfg := config.Config{N: 10, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	return generateConsensusProcessWithConfig(t, cfg, make(chan any, 1000))
 }
 
@@ -531,7 +531,7 @@ func TestConsensusProcess_Termination(t *testing.T) {
 	proc.advanceToNextRound(context.Background())
 	s := NewSetFromValues(types.ProposalID{1})
 
-	for i := 0; i < proc.cfg.F+1; i++ {
+	for i := 0; i < proc.cfg.N/2+1; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		m := BuildNotifyMsg(signer, s)

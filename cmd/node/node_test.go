@@ -981,8 +981,7 @@ func getTestDefaultConfig() *config.Config {
 	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
 	cfg.HARE.RoundDuration = 2
 	cfg.HARE.WakeupDelta = 1
-	cfg.HARE.N = 5
-	cfg.HARE.F = 2
+	cfg.HARE.N = 6
 	cfg.HARE.ExpectedLeaders = 5
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3

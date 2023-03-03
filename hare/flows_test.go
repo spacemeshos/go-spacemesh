@@ -242,7 +242,7 @@ func Test_multipleCPs(t *testing.T) {
 	test := newHareWrapper(totalCp)
 	totalNodes := 10
 	networkDelay := time.Second
-	cfg := config.Config{N: totalNodes, F: totalNodes / 2, WakeupDelta: networkDelay, RoundDuration: networkDelay, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
+	cfg := config.Config{N: totalNodes, WakeupDelta: networkDelay, RoundDuration: networkDelay, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -348,7 +348,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	test := newHareWrapper(totalCp)
 	totalNodes := 10
 	networkDelay := time.Second
-	cfg := config.Config{N: totalNodes, F: totalNodes / 2, WakeupDelta: networkDelay, RoundDuration: networkDelay, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
+	cfg := config.Config{N: totalNodes, WakeupDelta: networkDelay, RoundDuration: networkDelay, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

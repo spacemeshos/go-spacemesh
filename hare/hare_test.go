@@ -137,7 +137,7 @@ func TestHare_New(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := logtest.New(t).WithName(t.Name())
-	cfg := config.Config{N: 10, F: 5, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
+	cfg := config.Config{N: 10, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	h := New(
 		datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
 		cfg,
@@ -300,7 +300,6 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 func TestHare_onTick(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.N = 2
-	cfg.F = 1
 	cfg.RoundDuration = 1
 	cfg.Hdist = 1
 	clock := newMockClock()
@@ -372,7 +371,6 @@ func TestHare_onTick(t *testing.T) {
 func TestHare_onTick_notMining(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.N = 2
-	cfg.F = 1
 	cfg.RoundDuration = 1
 	cfg.Hdist = 1
 	clock := newMockClock()
