@@ -328,7 +328,7 @@ func TestHare_onTick(t *testing.T) {
 	for _, p := range pList {
 		mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil)
 	}
-	mockMesh.EXPECT().GetEpochAtx(h.nodeID, lyrID.GetEpoch()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil)
+	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch(), h.nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil)
 	mockMesh.EXPECT().VRFNonce(h.nodeID, lyrID.GetEpoch()).Return(types.VRFPostIndex(1), nil)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
 	mockMesh.EXPECT().SetWeakCoin(lyrID, gomock.Any())
@@ -396,7 +396,7 @@ func TestHare_onTick_notMining(t *testing.T) {
 		randomProposal(lyrID, beacon),
 		randomProposal(lyrID, beacon),
 	}
-	mockMesh.EXPECT().GetEpochAtx(h.nodeID, lyrID.GetEpoch()).Return(nil, sql.ErrNotFound)
+	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch(), h.nodeID).Return(nil, sql.ErrNotFound)
 	mockMesh.EXPECT().VRFNonce(h.nodeID, lyrID.GetEpoch()).Return(types.VRFPostIndex(1), nil)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
 	mockMesh.EXPECT().SetWeakCoin(lyrID, gomock.Any())
@@ -518,7 +518,7 @@ func TestHare_goodProposal(t *testing.T) {
 				mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: tc.baseHeights[i], TickCount: 1}, nil)
 			}
 			nodeID := types.NodeID{1, 2, 3}
-			mockMesh.EXPECT().GetEpochAtx(nodeID, lyrID.GetEpoch()).Return(&types.ActivationTxHeader{BaseTickHeight: nodeBaseHeight, TickCount: 1}, nil)
+			mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch(), nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: nodeBaseHeight, TickCount: 1}, nil)
 			mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
 			if len(tc.refBallot) > 0 {
 				for _, i := range tc.refBallot {
