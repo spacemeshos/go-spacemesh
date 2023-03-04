@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -76,6 +75,10 @@ type core struct {
 // Generate atx at the end of each epoch.
 // Generate block at the start of every layer.
 func (c *core) OnMessage(m Messenger, event Message) {
+	extract, err := signing.NewPubKeyExtractor()
+	if err != nil {
+		panic(err)
+	}
 	switch ev := event.(type) {
 	case MessageLayerStart:
 		// TODO(dshulyak) produce ballot according to eligibilities
@@ -119,8 +122,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 				Beacon:    beacon,
 			}
 		}
-		ballot.Signature = c.signer.Sign(ballot.SignedBytes())
-		ballot.Initialize()
+		types.TestOnlySignAndInitBallot(ballot, c.signer)
 		if c.refBallot == nil {
 			id := ballot.ID()
 			c.refBallot = &id
@@ -142,12 +144,12 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
 		nodeID := c.signer.NodeID()
 		atx := types.NewActivationTx(nipost, &nodeID, addr, nil, c.units, nil, nil)
-		if err := activation.SignAndFinalizeAtx(c.signer, atx); err != nil {
+		if err := types.SignAndFinalizeAtx(c.signer, atx); err != nil {
 			c.logger.With().Fatal("failed to sign atx", log.Err(err))
 		}
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		vAtx, err := atx.Verify(1, 2)
+		vAtx, err := atx.Verify(1, 2, nil)
 		if err != nil {
 			c.logger.With().Fatal("failed to verify atx", log.Err(err))
 		}
@@ -166,7 +168,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 	case MessageBallot:
 		ballots.Add(c.cdb, ev.Ballot)
 	case MessageAtx:
-		vAtx, err := ev.Atx.Verify(1, 2)
+		vAtx, err := ev.Atx.Verify(1, 2, extract)
 		if err != nil {
 			panic(err)
 		}

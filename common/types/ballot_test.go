@@ -3,12 +3,23 @@ package types_test
 import (
 	"testing"
 
+	"github.com/spacemeshos/ed25519-recovery"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
+
+type TestKeyExtractor struct{}
+
+func (e TestKeyExtractor) ExtractNodeID(msg, sig []byte) (types.NodeID, error) {
+	pub, err := ed25519.ExtractPublicKey(msg, sig)
+	if err != nil {
+		return types.EmptyNodeID, err
+	}
+	return types.BytesToNodeID(pub), nil
+}
 
 func TestBallotIDUnaffectedByVotes(t *testing.T) {
 	meta := types.BallotMetadata{
@@ -31,8 +42,8 @@ func TestBallotIDUnaffectedByVotes(t *testing.T) {
 	require.NoError(t, err)
 	ballot1.Signature = signer.Sign(ballot1.SignedBytes())
 	ballot2.Signature = signer.Sign(ballot2.SignedBytes())
-	ballot1.Initialize()
-	ballot2.Initialize()
+	ballot1.Initialize(&TestKeyExtractor{})
+	ballot2.Initialize(&TestKeyExtractor{})
 
 	require.NotEmpty(t, ballot1.ID())
 	require.Equal(t, ballot1.ID(), ballot2.ID())
@@ -48,11 +59,11 @@ func TestBallot_Initialize(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	b.Signature = signer.Sign(b.SignedBytes())
-	require.NoError(t, b.Initialize())
+	require.NoError(t, b.Initialize(&TestKeyExtractor{}))
 	require.NotEqual(t, types.EmptyBallotID, b.ID())
 	require.Equal(t, signer.PublicKey().Bytes(), b.SmesherID().Bytes())
 
-	err = b.Initialize()
+	err = b.Initialize(&TestKeyExtractor{})
 	require.EqualError(t, err, "ballot already initialized")
 }
 
@@ -61,7 +72,7 @@ func TestBallot_Initialize_BadSignature(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	b.Signature = signer.Sign(b.SignedBytes())[1:]
-	err = b.Initialize()
+	err = b.Initialize(&TestKeyExtractor{})
 	require.EqualError(t, err, "ballot extract key: ed25519: bad signature format")
 }
 
@@ -71,7 +82,7 @@ func TestBallot_Initialize_BadMsgHash(t *testing.T) {
 	require.NoError(t, err)
 	b.Signature = signer.Sign(b.SignedBytes())
 	b.MsgHash = types.RandomHash()
-	err = b.Initialize()
+	err = b.Initialize(&TestKeyExtractor{})
 	require.EqualError(t, err, "bad message hash")
 }
 

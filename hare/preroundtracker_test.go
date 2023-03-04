@@ -21,31 +21,6 @@ const (
 	lowDefaultSize = 100
 )
 
-func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.Proposal {
-	p := &types.Proposal{
-		InnerProposal: types.InnerProposal{
-			Ballot: types.Ballot{
-				BallotMetadata: types.BallotMetadata{
-					Layer: layerID,
-				},
-				InnerBallot: types.InnerBallot{
-					AtxID: types.RandomATXID(),
-					EpochData: &types.EpochData{
-						ActiveSet: types.RandomActiveSet(10),
-						Beacon:    types.RandomBeacon(),
-					},
-				},
-			},
-			TxIDs: txs,
-		},
-	}
-	signer, _ := signing.NewEdSigner()
-	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(p.Bytes())
-	p.Initialize()
-	return p
-}
-
 func BuildPreRoundMsg(signing Signer, s *Set, roleProof []byte) *Msg {
 	builder := newMessageBuilder()
 	builder.SetType(pre).SetLayer(instanceID1).SetRoundCounter(preRound).SetCommittedRound(ki).SetValues(s).SetRoleProof(roleProof)

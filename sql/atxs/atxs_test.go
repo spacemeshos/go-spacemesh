@@ -3,11 +3,9 @@ package atxs_test
 import (
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -398,11 +396,7 @@ func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedAct
 			NumUnits: 2,
 		},
 	}
-
-	activation.SignAndFinalizeAtx(signer, atx)
-	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Now().Local())
-	return atx.Verify(0, 1)
+	return types.TestOnlySignAndVerifyAtx(atx, signer, 0, 1)
 }
 
 func TestPositioningID(t *testing.T) {
@@ -452,11 +446,7 @@ func TestPositioningID(t *testing.T) {
 
 				sig, err := signing.NewEdSigner()
 				require.NoError(t, err)
-				require.NoError(t, activation.SignAndFinalizeAtx(sig, full))
-
-				full.SetEffectiveNumUnits(full.NumUnits)
-				full.SetReceived(time.Now())
-				vAtx, err := full.Verify(atx.base, atx.count)
+				vAtx, err := types.TestOnlySignAndVerifyAtx(full, sig, atx.base, atx.count)
 				require.NoError(t, err)
 
 				require.NoError(t, atxs.Add(db, vAtx))

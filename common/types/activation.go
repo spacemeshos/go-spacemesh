@@ -718,3 +718,9 @@ func ATXIDsToHashes(ids []ATXID) []Hash32 {
 	}
 	return hashes
 }
+
+// SignAndFinalizeAtx signs the atx with specified signer and calculates the ID of the ATX.
+func SignAndFinalizeAtx(signer signer, atx *ActivationTx) error {
+	atx.Signature = signer.Sign(atx.SignedBytes())
+	return atx.CalcAndSetID()
+}

@@ -172,8 +172,6 @@ func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *
 	tb.Helper()
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	pub := signer.PublicKey()
-	nodeID := types.BytesToNodeID(pub.Bytes())
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(tb, err)
 
@@ -199,7 +197,6 @@ func createTestHare(tb testing.TB, db *sql.Database, tcfg config.Config, clock *
 		p2p,
 		signer,
 		pke,
-		nodeID,
 		make(chan LayerOutput, 100),
 		mockSyncS,
 		mockBeacons,
@@ -412,10 +409,7 @@ func Test_multipleCPs(t *testing.T) {
 	pList := make(map[types.LayerID][]types.ProposalID)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
 		for i := uint64(0); i < 200; i++ {
-			p := genLayerProposal(j, []types.TransactionID{})
-			p.EpochData = &types.EpochData{
-				Beacon: types.EmptyBeacon,
-			}
+			p := genLayerProposal(t, j, types.EmptyBeacon, []types.TransactionID{})
 			for x := 0; x < totalNodes; x++ {
 				require.NoError(t, ballots.Add(dbs[x], &p.Ballot))
 				require.NoError(t, proposals.Add(dbs[x], p))
@@ -507,10 +501,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	pList := make(map[types.LayerID][]types.ProposalID)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
 		for i := uint64(0); i < 200; i++ {
-			p := genLayerProposal(j, []types.TransactionID{})
-			p.EpochData = &types.EpochData{
-				Beacon: types.EmptyBeacon,
-			}
+			p := genLayerProposal(t, j, types.EmptyBeacon, []types.TransactionID{})
 			pList[j] = append(pList[j], p.ID())
 			for x := 0; x < totalNodes; x++ {
 				require.NoError(t, ballots.Add(dbs[x], &p.Ballot))

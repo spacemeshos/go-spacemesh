@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -269,9 +268,7 @@ func genLayerProposal(tb testing.TB, layerID types.LayerID, txs []types.Transact
 	}
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(p.Bytes())
-	p.Initialize()
+	require.NoError(tb, types.SignAndFinalizeProposal(signer, p))
 	return p
 }
 
@@ -280,8 +277,7 @@ func genLayerBallot(tb testing.TB, layerID types.LayerID) *types.Ballot {
 	b.Layer = layerID
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	b.Signature = signer.Sign(b.SignedBytes())
-	b.Initialize()
+	require.NoError(tb, types.TestOnlySignAndInitBallot(b, signer))
 	return b
 }
 
@@ -382,7 +378,7 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 	atxs := make([]*types.ActivationTx, 0, num)
 	for i := uint32(0); i < num; i++ {
 		atx := types.NewActivationTx(types.NIPostChallenge{}, &nodeID, types.Address{1, 2, 3}, &types.NIPost{}, i, nil, nil)
-		require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
+		require.NoError(tb, types.SignAndFinalizeAtx(sig, atx))
 		atxs = append(atxs, atx)
 	}
 	return atxs

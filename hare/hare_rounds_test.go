@@ -82,7 +82,7 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 	}
 	if createProposal {
 		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(types.GetEffectiveGenesis().Add(uint32(maxLayers))); lid = lid.Add(1) {
-			p := genLayerProposal(lid, []types.TransactionID{})
+			p := genLayerProposal(t, lid, types.RandomBeacon(), []types.TransactionID{})
 			for i := 0; i < nodes; i++ {
 				require.NoError(t, ballots.Add(dbs[i], &p.Ballot))
 				require.NoError(t, proposals.Add(dbs[i], p))

@@ -4,7 +4,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -115,7 +114,8 @@ type Generator struct {
 	ticks       []uint64
 	prevHeight  []uint64
 
-	keys []*signing.EdSigner
+	keys      []*signing.EdSigner
+	extractor *signing.PubKeyExtractor
 }
 
 // SetupOpt configures setup.
@@ -216,6 +216,11 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 		}
 		g.keys = append(g.keys, sig)
 	}
+	var err error
+	g.extractor, err = signing.NewPubKeyExtractor()
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (g *Generator) generateAtxs() {
@@ -225,6 +230,7 @@ func (g *Generator) generateAtxs() {
 		if err != nil {
 			panic(err)
 		}
+
 		nodeID := sig.NodeID()
 		address := types.GenerateAddress(sig.PublicKey().Bytes())
 
@@ -238,12 +244,12 @@ func (g *Generator) generateAtxs() {
 		} else {
 			ticks = uint64(intInRange(g.rng, g.ticksRange))
 		}
-		if err := activation.SignAndFinalizeAtx(sig, atx); err != nil {
+		if err := types.SignAndFinalizeAtx(sig, atx); err != nil {
 			panic(err)
 		}
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		vAtx, err := atx.Verify(g.prevHeight[i], ticks)
+		vAtx, err := atx.Verify(g.prevHeight[i], ticks, g.extractor)
 		if err != nil {
 			panic(err)
 		}

@@ -387,18 +387,32 @@ func (m *Mocksigner) EXPECT() *MocksignerMockRecorder {
 	return m.recorder
 }
 
+// NodeID mocks base method.
+func (m *Mocksigner) NodeID() types.NodeID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NodeID")
+	ret0, _ := ret[0].(types.NodeID)
+	return ret0
+}
+
+// NodeID indicates an expected call of NodeID.
+func (mr *MocksignerMockRecorder) NodeID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NodeID", reflect.TypeOf((*Mocksigner)(nil).NodeID))
+}
+
 // Sign mocks base method.
-func (m_2 *Mocksigner) Sign(m []byte) []byte {
-	m_2.ctrl.T.Helper()
-	ret := m_2.ctrl.Call(m_2, "Sign", m)
+func (m *Mocksigner) Sign(arg0 []byte) []byte {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Sign", arg0)
 	ret0, _ := ret[0].([]byte)
 	return ret0
 }
 
 // Sign indicates an expected call of Sign.
-func (mr *MocksignerMockRecorder) Sign(m interface{}) *gomock.Call {
+func (mr *MocksignerMockRecorder) Sign(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sign", reflect.TypeOf((*Mocksigner)(nil).Sign), m)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sign", reflect.TypeOf((*Mocksigner)(nil).Sign), arg0)
 }
 
 // MockkeyExtractor is a mock of keyExtractor interface.

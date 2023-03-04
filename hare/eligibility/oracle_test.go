@@ -65,6 +65,8 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 	tb.Helper()
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
+	extract, err := signing.NewPubKeyExtractor()
+	require.NoError(tb, err)
 
 	activeSet := types.RandomActiveSet(numMiners)
 	start, end := safeLayerRange(lid, confidenceParam, defLayersPerEpoch, epochOffset)
@@ -76,7 +78,7 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
 			b.Signature = signer.Sign(b.SignedBytes())
-			require.NoError(tb, b.Initialize())
+			require.NoError(tb, b.Initialize(extract))
 			require.NoError(tb, ballots.Add(cdb, b))
 		}
 	}
@@ -98,7 +100,7 @@ func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 		atx.SetNodeID(&nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		vAtx, err := atx.Verify(0, 1)
+		vAtx, err := atx.Verify(0, 1, nil)
 		require.NoError(tb, err)
 		require.NoError(tb, atxs.Add(cdb, vAtx))
 	}
@@ -161,6 +163,8 @@ func TestCalcEligibility_EmptyActiveSet(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
+	extract, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
 
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
@@ -176,7 +180,7 @@ func TestCalcEligibility_EmptyActiveSet(t *testing.T) {
 		b.RefBallot = types.EmptyBallotID
 		b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
 		b.Signature = signer.Sign(b.SignedBytes())
-		require.NoError(t, b.Initialize())
+		require.NoError(t, b.Initialize(extract))
 		require.NoError(t, ballots.Add(o.cdb, b))
 	}
 	res, err := o.CalcEligibility(context.Background(), layer, 1, 1, nid, nonce, []byte{})
@@ -377,6 +381,8 @@ func Test_VrfSignVerify(t *testing.T) {
 
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	require.NoError(t, err)
+	extract, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
 
 	o := defaultOracle(t)
 	o.vrfSigner, err = signer.VRFSigner()
@@ -401,7 +407,7 @@ func Test_VrfSignVerify(t *testing.T) {
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
 			b.Signature = signer.Sign(b.SignedBytes())
-			require.NoError(t, b.Initialize())
+			require.NoError(t, b.Initialize(extract))
 			require.NoError(t, ballots.Add(o.cdb, b))
 		}
 	}
@@ -417,7 +423,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	atx1.SetNodeID(&nid)
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	atx1.SetReceived(time.Now())
-	vAtx1, err := atx1.Verify(0, 1)
+	vAtx1, err := atx1.Verify(0, 1, extract)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx1))
 
@@ -431,7 +437,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	atx2.SetNodeID(&types.NodeID{1})
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	atx2.SetReceived(time.Now())
-	vAtx2, err := atx2.Verify(0, 1)
+	vAtx2, err := atx2.Verify(0, 1, extract)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx2))
 
@@ -490,6 +496,8 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
+	extract, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
 
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
@@ -503,7 +511,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 		b.RefBallot = types.EmptyBallotID
 		b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
 		b.Signature = signer.Sign(b.SignedBytes())
-		require.NoError(t, b.Initialize())
+		require.NoError(t, b.Initialize(extract))
 		require.NoError(t, ballots.Add(o.cdb, b))
 	}
 	prevEpoch := layer.GetEpoch() - 1
@@ -518,7 +526,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	atx1.SetNodeID(&types.NodeID{1})
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	atx1.SetReceived(time.Now())
-	vAtx1, err := atx1.Verify(0, 1)
+	vAtx1, err := atx1.Verify(0, 1, extract)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx1))
 
@@ -532,7 +540,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	atx2.SetNodeID(&types.NodeID{2})
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	atx2.SetReceived(time.Now())
-	vAtx2, err := atx2.Verify(0, 1)
+	vAtx2, err := atx2.Verify(0, 1, extract)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx2))
 
@@ -665,6 +673,8 @@ func TestActives_HareActiveSetDifferentBeacon(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
+	extract, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
 
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
@@ -684,7 +694,7 @@ func TestActives_HareActiveSetDifferentBeacon(t *testing.T) {
 				b.EpochData = &types.EpochData{ActiveSet: atxIDs, Beacon: beacon}
 			}
 			b.Signature = signer.Sign(b.SignedBytes())
-			require.NoError(t, b.Initialize())
+			require.NoError(t, b.Initialize(extract))
 			require.NoError(t, ballots.Add(o.cdb, b))
 		}
 	}
@@ -703,6 +713,8 @@ func TestActives_HareActiveSetMultipleLayers(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
+	extract, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
 
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
@@ -720,7 +732,7 @@ func TestActives_HareActiveSetMultipleLayers(t *testing.T) {
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: atxIDs}
 			b.Signature = signer.Sign(b.SignedBytes())
-			require.NoError(t, b.Initialize())
+			require.NoError(t, b.Initialize(extract))
 			require.NoError(t, ballots.Add(o.cdb, b))
 		}
 	}
@@ -794,7 +806,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 		atx.SetNodeID(&nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		vAtx, err := atx.Verify(0, 1)
+		vAtx, err := atx.Verify(0, 1, nil)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(o.cdb, vAtx))
 	}
@@ -816,7 +828,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 		atx.SetNodeID(&nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		vAtx, err := atx.Verify(0, 1)
+		vAtx, err := atx.Verify(0, 1, nil)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(o.cdb, vAtx))
 	}

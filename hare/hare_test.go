@@ -98,17 +98,18 @@ func noopPubSub(tb testing.TB) pubsub.PublishSubsciber {
 	return publisher
 }
 
-func randomProposal(lyrID types.LayerID, beacon types.Beacon) *types.Proposal {
-	p := genLayerProposal(lyrID, nil)
-	p.Ballot.RefBallot = types.EmptyBallotID
-	p.Ballot.EpochData = &types.EpochData{
-		Beacon: beacon,
+func genLayerProposal(t *testing.T, layerID types.LayerID, beacon types.Beacon, txs []types.TransactionID) *types.Proposal {
+	ib := &types.InnerBallot{
+		AtxID: types.RandomATXID(),
+		EpochData: &types.EpochData{
+			ActiveSet: types.RandomActiveSet(10),
+			Beacon:    beacon,
+		},
 	}
-	signer, _ := signing.NewEdSigner()
-	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(p.Bytes())
-	p.TxIDs = []types.TransactionID{}
-	p.Initialize()
+	p := types.NewProposal(types.RandomNodeID(), layerID, ib, types.Votes{}, nil, txs, types.RandomHash())
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	require.NoError(t, types.SignAndFinalizeProposal(signer, p))
 	return p
 }
 
@@ -143,7 +144,6 @@ func TestHare_New(t *testing.T) {
 		noopPubSub(t),
 		signer,
 		pke,
-		signer.NodeID(),
 		make(chan LayerOutput, 1),
 		smocks.NewMockSyncStateProvider(ctrl), smocks.NewMockBeaconGetter(ctrl),
 		eligibility.New(logger),
@@ -326,9 +326,9 @@ func TestHare_onTick(t *testing.T) {
 	lyrID := types.GetEffectiveGenesis().Add(1)
 	beacon := types.RandomBeacon()
 	pList := []*types.Proposal{
-		randomProposal(lyrID, beacon),
-		randomProposal(lyrID, beacon),
-		randomProposal(lyrID, beacon),
+		genLayerProposal(t, lyrID, beacon, nil),
+		genLayerProposal(t, lyrID, beacon, nil),
+		genLayerProposal(t, lyrID, beacon, nil),
 	}
 	for _, p := range pList {
 		require.NoError(t, ballots.Add(h.cdb, &p.Ballot))
@@ -397,11 +397,11 @@ func TestHare_onTick_BeaconFromRefBallot(t *testing.T) {
 	lyrID := types.GetEffectiveGenesis().Add(1)
 	beacon := types.RandomBeacon()
 	pList := []*types.Proposal{
-		randomProposal(lyrID, beacon),
-		randomProposal(lyrID, beacon),
-		randomProposal(lyrID, beacon),
+		genLayerProposal(t, lyrID, beacon, nil),
+		genLayerProposal(t, lyrID, beacon, nil),
+		genLayerProposal(t, lyrID, beacon, nil),
 	}
-	refBallot := &randomProposal(lyrID.Sub(1), beacon).Ballot
+	refBallot := &genLayerProposal(t, lyrID, beacon, nil).Ballot
 	require.NoError(t, ballots.Add(h.cdb, refBallot))
 	pList[1].EpochData = nil
 	pList[1].RefBallot = refBallot.ID()
@@ -458,9 +458,9 @@ func TestHare_onTick_SomeBadBallots(t *testing.T) {
 	beacon := types.RandomBeacon()
 	epochBeacon := types.RandomBeacon()
 	pList := []*types.Proposal{
-		randomProposal(lyrID, epochBeacon),
-		randomProposal(lyrID, beacon),
-		randomProposal(lyrID, epochBeacon),
+		genLayerProposal(t, lyrID, epochBeacon, nil),
+		genLayerProposal(t, lyrID, beacon, nil),
+		genLayerProposal(t, lyrID, epochBeacon, nil),
 	}
 	for _, p := range pList {
 		require.NoError(t, ballots.Add(h.cdb, &p.Ballot))
@@ -515,9 +515,9 @@ func TestHare_onTick_NoGoodBallots(t *testing.T) {
 	beacon := types.RandomBeacon()
 	epochBeacon := types.RandomBeacon()
 	pList := []*types.Proposal{
-		randomProposal(lyrID, beacon),
-		randomProposal(lyrID, beacon),
-		randomProposal(lyrID, beacon),
+		genLayerProposal(t, lyrID, beacon, nil),
+		genLayerProposal(t, lyrID, beacon, nil),
+		genLayerProposal(t, lyrID, beacon, nil),
 	}
 	for _, p := range pList {
 		require.NoError(t, ballots.Add(h.cdb, &p.Ballot))
@@ -686,9 +686,9 @@ func TestHare_WeakCoin(t *testing.T) {
 	}
 
 	pList := []*types.Proposal{
-		randomProposal(layerID, types.EmptyBeacon),
-		randomProposal(layerID, types.EmptyBeacon),
-		randomProposal(layerID, types.EmptyBeacon),
+		genLayerProposal(t, layerID, types.EmptyBeacon, nil),
+		genLayerProposal(t, layerID, types.EmptyBeacon, nil),
+		genLayerProposal(t, layerID, types.EmptyBeacon, nil),
 	}
 	for _, p := range pList {
 		require.NoError(t, ballots.Add(h.cdb, &p.Ballot))

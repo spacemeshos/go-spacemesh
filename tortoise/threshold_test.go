@@ -2,12 +2,10 @@ package tortoise
 
 import (
 	"testing"
-	"time"
 
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -162,14 +160,11 @@ func TestReferenceHeight(t *testing.T) {
 					},
 					NumUnits: 2,
 				}}
-				atx.SetID(&types.ATXID{byte(i + 1)})
 				sig, err := signing.NewEdSigner()
 				require.NoError(t, err)
-				require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
-				atx.SetEffectiveNumUnits(atx.NumUnits)
-				atx.SetReceived(time.Now())
-				vAtx, err := atx.Verify(0, uint64(height))
+				vAtx, err := types.TestOnlySignAndVerifyAtx(atx, sig, 0, uint64(height))
 				require.NoError(t, err)
+				atx.SetID(&types.ATXID{byte(i + 1)})
 				require.NoError(t, atxs.Add(cdb, vAtx))
 			}
 			_, height, err := extractAtxsData(cdb, types.EpochID(tc.epoch))

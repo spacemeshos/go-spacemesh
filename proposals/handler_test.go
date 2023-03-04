@@ -74,9 +74,11 @@ func fullMockSet(tb testing.TB) *mockSet {
 
 func createTestHandler(t *testing.T) *testHandler {
 	types.SetLayersPerEpoch(layersPerEpoch)
+	extract, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
 	ms := fullMockSet(t)
 	return &testHandler{
-		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf,
+		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, extract, ms.mvrf,
 			WithLogger(logtest.New(t)),
 			WithConfig(Config{
 				LayerSize:      layerAvgSize,
@@ -149,13 +151,10 @@ func withTransactions(ids ...types.TransactionID) createProposalOpt {
 
 func createProposal(t *testing.T, opts ...any) *types.Proposal {
 	t.Helper()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	b := types.RandomBallot()
-	p := &types.Proposal{
-		InnerProposal: types.InnerProposal{
-			Ballot: *b,
-			TxIDs:  []types.TransactionID{types.RandomTransactionID(), types.RandomTransactionID()},
-		},
-	}
+	p := types.NewProposal(signer.NodeID(), b.Layer, &b.InnerBallot, b.Votes, b.EligibilityProofs, types.RandomTXSet(2), types.RandomHash())
 	for _, opt := range opts {
 		switch unwrap := opt.(type) {
 		case createBallotOpt:
@@ -164,11 +163,7 @@ func createProposal(t *testing.T, opts ...any) *types.Proposal {
 			unwrap(p)
 		}
 	}
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(p.Bytes())
-	require.NoError(t, p.Initialize())
+	require.NoError(t, types.SignAndFinalizeProposal(signer, p))
 	return p
 }
 
@@ -192,8 +187,7 @@ func signAndInit(tb testing.TB, b *types.Ballot) *types.Ballot {
 	tb.Helper()
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	b.Signature = sig.Sign(b.SignedBytes())
-	require.NoError(tb, b.Initialize())
+	require.NoError(tb, types.TestOnlySignAndInitBallot(b, sig))
 	return b
 }
 

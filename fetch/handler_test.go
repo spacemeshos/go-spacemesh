@@ -3,12 +3,10 @@ package fetch
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -56,8 +54,7 @@ func createLayer(tb testing.TB, db *datastore.CachedDB, lid types.LayerID) ([]ty
 
 		b := types.RandomBallot()
 		b.Layer = lid
-		b.Signature = signer.Sign(b.SignedBytes())
-		require.NoError(tb, b.Initialize())
+		types.TestOnlySignAndInitBallot(b, signer)
 		require.NoError(tb, ballots.Add(db, b))
 		blts = append(blts, b.ID())
 
@@ -244,10 +241,7 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	activation.SignAndFinalizeAtx(signer, atx)
-	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Now())
-	vatx, err := atx.Verify(0, 1)
+	vatx, err := types.TestOnlySignAndVerifyAtx(atx, signer, 0, 1)
 	require.NoError(t, err)
 	return vatx
 }

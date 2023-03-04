@@ -42,7 +42,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
-	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
@@ -64,19 +63,20 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	app.log = logtest.New(t)
 
 	// Create new identity.
-	signer1, err := app.LoadOrCreateEdSigner()
+	err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
 	infos, err := os.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 1)
+	pubKey := app.atxSign.PublicKey()
 
 	// Load existing identity.
-	signer2, err := app.LoadOrCreateEdSigner()
+	err = app.LoadOrCreateEdSigner()
 	r.NoError(err)
 	infos, err = os.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 1)
-	r.Equal(signer1.PublicKey(), signer2.PublicKey())
+	r.Equal(pubKey, app.atxSign.PublicKey())
 
 	// Invalidate the identity by changing its file name.
 	filename := filepath.Join(tempdir, infos[0].Name())
@@ -84,12 +84,12 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r.NoError(err)
 
 	// Create new identity.
-	signer3, err := app.LoadOrCreateEdSigner()
+	err = app.LoadOrCreateEdSigner()
 	r.NoError(err)
 	infos, err = os.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 2)
-	r.NotEqual(signer1.PublicKey(), signer3.PublicKey())
+	r.NotEqual(pubKey, app.atxSign.PublicKey())
 }
 
 func newLogger(buf *bytes.Buffer) log.Log {
@@ -535,13 +535,15 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	poetHarness, err := activation.NewHTTPPoetTestHarness(ctx, t.TempDir())
 	require.NoError(t, err)
 
-	edSgn, err := signing.NewEdSigner()
-	require.NoError(t, err)
 	h, err := p2p.Upgrade(mesh.Hosts()[0], cfg.Genesis.GenesisID())
 	require.NoError(t, err)
-	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
-		path, eligibility.New(logtest.New(t)),
-		poetHarness.HTTPPoetClient, clock, h, edSgn,
+	app, err := initSingleInstance(
+		logger, *cfg,
+		cfg.Genesis.GenesisTime,
+		path,
+		poetHarness.HTTPPoetClient,
+		clock,
+		h,
 	)
 	require.NoError(t, err)
 
@@ -1012,32 +1014,35 @@ func getTestDefaultConfig() *config.Config {
 
 // initSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle,
-	poetClient *activation.HTTPPoetClient, clock NodeClock, host *p2p.Host, edSgn *signing.EdSigner,
+func initSingleInstance(
+	lg log.Log,
+	cfg config.Config,
+	genesisTime string,
+	storePath string,
+	poetClient *activation.HTTPPoetClient,
+	clock NodeClock,
+	host *p2p.Host,
 ) (*App, error) {
 	smApp := New(WithLog(lg))
 	smApp.Config = &cfg
 	smApp.Config.Genesis.GenesisTime = genesisTime
 
 	coinbaseAddressBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(coinbaseAddressBytes, uint32(i+1))
+	binary.LittleEndian.PutUint32(coinbaseAddressBytes, uint32(1))
 	smApp.Config.SMESHING.CoinbaseAccount = types.GenerateAddress(coinbaseAddressBytes).String()
 	smApp.Config.SMESHING.Opts.DataDir, _ = os.MkdirTemp("", "sm-app-test-post-datadir")
 
 	smApp.host = host
 
-	vrfSigner, err := edSgn.VRFSigner()
-	if err != nil {
+	if err := smApp.setupDBs(context.Background(), lg, storePath); err != nil {
 		return nil, err
 	}
 
-	if err = smApp.setupDBs(context.Background(), lg, storePath); err != nil {
+	if err := smApp.LoadOrCreateEdSigner(); err != nil {
 		return nil, err
 	}
-
-	smApp.nodeID = edSgn.NodeID()
 	types.SetLayersPerEpoch(smApp.Config.LayersPerEpoch)
-	err = smApp.initServices(context.Background(), edSgn, []activation.PoetProvingServiceClient{poetClient}, vrfSigner, clock)
+	err := smApp.initServices(context.Background(), []activation.PoetProvingServiceClient{poetClient}, clock)
 	if err != nil {
 		return nil, err
 	}

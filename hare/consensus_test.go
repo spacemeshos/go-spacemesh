@@ -202,7 +202,6 @@ func createConsensusProcess(
 		broker.mockStateQ,
 		sig,
 		pke,
-		sig.NodeID(),
 		&nonce,
 		network,
 		comm,

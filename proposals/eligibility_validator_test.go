@@ -49,7 +49,7 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 	atx.SetNodeID(&nid)
 	atx.SetEffectiveNumUnits(testedATXUnit)
 	atx.SetReceived(time.Now())
-	vAtx, err := atx.Verify(0, 1)
+	vAtx, err := atx.Verify(0, 1, nil)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(cdb, vAtx))
 
@@ -65,7 +65,7 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 		atx.SetNodeID(&nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		vAtx, err := atx.Verify(0, 1)
+		vAtx, err := atx.Verify(0, 1, nil)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(cdb, vAtx))
 	}
@@ -133,8 +133,7 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 			b.RefBallot = blts[0].ID()
 		}
 		b.EligibilityProofs = proofs
-		b.Signature = signer.Sign(b.SignedBytes())
-		require.NoError(tb, b.Initialize())
+		require.NoError(tb, types.TestOnlySignAndInitBallot(b, signer))
 		blts = append(blts, b)
 	}
 	return blts
@@ -260,7 +259,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 	atx.SetNodeID(&nodeID)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
-	vAtx, err := atx.Verify(0, 1)
+	vAtx, err := atx.Verify(0, 1, nil)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tv.cdb, vAtx))
 
@@ -275,7 +274,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 		atx.SetNodeID(&types.NodeID{})
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		vAtx, err := atx.Verify(0, 1)
+		vAtx, err := atx.Verify(0, 1, nil)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(tv.cdb, vAtx))
 	}

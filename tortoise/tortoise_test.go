@@ -481,7 +481,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 				atx.SetNodeID(&types.NodeID{})
 				atx.SetEffectiveNumUnits(atx.NumUnits)
 				atx.SetReceived(time.Now())
-				vAtx, err := atx.Verify(0, 1)
+				vAtx, err := atx.Verify(0, 1, nil)
 				require.NoError(t, err)
 				require.NoError(t, atxs.Add(cdb, vAtx))
 			}
@@ -779,8 +779,7 @@ func randomRefBallot(tb testing.TB, lyrID types.LayerID, beacon types.Beacon) *t
 	ballot.EpochData = &types.EpochData{
 		Beacon: beacon,
 	}
-	ballot.Signature = signer.Sign(ballot.SignedBytes())
-	require.NoError(tb, ballot.Initialize())
+	require.NoError(tb, types.TestOnlySignAndInitBallot(ballot, signer))
 	return ballot
 }
 
@@ -1525,7 +1524,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				atx.SetID(&atxID)
 				atx.SetEffectiveNumUnits(atx.NumUnits)
 				atx.SetReceived(time.Now())
-				vAtx, err := atx.Verify(0, 1)
+				vAtx, err := atx.Verify(0, 1, nil)
 				require.NoError(t, err)
 				require.NoError(t, atxs.Add(cdb, vAtx))
 				atxids = append(atxids, atxID)
@@ -1557,8 +1556,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				sig, err := signing.NewEdSigner()
 				require.NoError(t, err)
 
-				ballot.Signature = sig.Sign(ballot.SignedBytes())
-				require.NoError(t, ballot.Initialize())
+				require.NoError(t, types.TestOnlySignAndInitBallot(ballot, sig))
 				blts = append(blts, ballot)
 
 				trtl.OnBallot(ballot)
@@ -1814,8 +1812,10 @@ func TestLateBaseBallot(t *testing.T) {
 	var base types.Ballot
 	require.NoError(t, codec.Decode(buf, &base))
 	base.EligibilityProofs[0].J++
-	base.Initialize()
+	extract, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
 	tortoise.OnBallot(&base)
+	base.Initialize(extract)
 
 	for _, last = range sim.GenLayers(s,
 		sim.WithSequence(1, sim.WithVoteGenerator(voteWithBaseBallot(base.ID()))),
@@ -2752,7 +2752,7 @@ func TestEncodeVotes(t *testing.T) {
 		atx.SetNodeID(&types.NodeID{1})
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		vatx, err := atx.Verify(1, 1)
+		vatx, err := atx.Verify(1, 1, nil)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(cdb, vatx))
 

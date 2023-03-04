@@ -44,7 +44,8 @@ type atxHandler interface {
 }
 
 type signer interface {
-	Sign(m []byte) []byte
+	Sign([]byte) []byte
+	NodeID() types.NodeID
 }
 
 type keyExtractor interface {

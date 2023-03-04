@@ -31,7 +31,6 @@ const defaultCnt = uint16(2)
 type testCertifier struct {
 	*Certifier
 	db            *datastore.CachedDB
-	nid           types.NodeID
 	mOracle       *hmocks.MockRolacle
 	mPub          *pubsubmock.MockPublisher
 	mClk          *mocks.MocklayerClock
@@ -48,7 +47,6 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	require.NoError(t, err)
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
-	nid := signer.NodeID()
 	ctrl := gomock.NewController(t)
 	mo := hmocks.NewMockRolacle(ctrl)
 	mp := pubsubmock.NewMockPublisher(ctrl)
@@ -56,14 +54,13 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	mtortoise := smocks.NewMockTortoise(ctrl)
 	mNonceFetcher := mocks.NewMocknonceFetcher(ctrl)
-	c := NewCertifier(db, mo, nid, signer, pke, mp, mc, mb, mtortoise,
+	c := NewCertifier(db, mo, signer, pke, mp, mc, mb, mtortoise,
 		WithCertifierLogger(logtest.New(t)),
 		withNonceFetcher(mNonceFetcher),
 	)
 	return &testCertifier{
 		Certifier:     c,
 		db:            db,
-		nid:           nid,
 		mOracle:       mo,
 		mPub:          mp,
 		mClk:          mc,

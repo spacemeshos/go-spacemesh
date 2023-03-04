@@ -188,7 +188,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 			EligibilityProofs: proofs,
 		}
 		ballot.Signature = signer.Sign(ballot.SignedBytes())
-		if err = ballot.Initialize(); err != nil {
+		if err = ballot.Initialize(g.extractor); err != nil {
 			g.logger.With().Panic("failed to init ballot", log.Err(err))
 		}
 		for _, state := range g.states {

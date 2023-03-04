@@ -338,7 +338,6 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config, inbox 
 		sq,
 		edSigner,
 		pke,
-		types.BytesToNodeID(edPubkey.Bytes()),
 		&nonce,
 		noopPubSub(tb),
 		comm,

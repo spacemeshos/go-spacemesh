@@ -703,7 +703,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 		initialPost,
 		nonce,
 	)
-	if err = SignAndFinalizeAtx(b.signer, atx); err != nil {
+	if err = types.SignAndFinalizeAtx(b.signer, atx); err != nil {
 		return nil, fmt.Errorf("sign atx: %w", err)
 	}
 	return atx, nil
@@ -746,10 +746,4 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 		return types.ATXID{}, types.LayerID{}, fmt.Errorf("inconsistent state: failed to get atx header: %w", err)
 	}
 	return id, atx.PubLayerID, nil
-}
-
-// SignAndFinalizeAtx signs the atx with specified signer and calculates the ID of the ATX.
-func SignAndFinalizeAtx(signer signer, atx *types.ActivationTx) error {
-	atx.Signature = signer.Sign(atx.SignedBytes())
-	return atx.CalcAndSetID()
 }

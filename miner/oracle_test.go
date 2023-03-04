@@ -28,12 +28,11 @@ const (
 
 type testOracle struct {
 	*Oracle
-	nodeID    types.NodeID
 	edSigner  *signing.EdSigner
 	vrfSigner *signing.VRFSigner
 }
 
-func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *signing.VRFSigner) {
+func generateSigners(tb testing.TB) (*signing.EdSigner, *signing.VRFSigner) {
 	tb.Helper()
 
 	edSigner, err := signing.NewEdSigner()
@@ -41,9 +40,7 @@ func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *s
 	vrfSigner, err := edSigner.VRFSigner()
 	require.NoError(tb, err)
 
-	edPubkey := edSigner.PublicKey()
-	nodeID := types.BytesToNodeID(edPubkey.Bytes())
-	return nodeID, edSigner, vrfSigner
+	return edSigner, vrfSigner
 }
 
 func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publishLayer types.LayerID, nodeID types.NodeID) *types.VerifiedActivationTx {
@@ -57,7 +54,7 @@ func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publish
 	atx.SetNodeID(&nodeID)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
-	vAtx, err := atx.Verify(0, 1)
+	vAtx, err := atx.Verify(0, 1, nil)
 	require.NoError(tb, err)
 	require.NoError(tb, atxs.Add(cdb, vAtx))
 	return vAtx
@@ -78,8 +75,7 @@ func genBallotWithEligibility(tb testing.TB, signer *signing.EdSigner, lid types
 		},
 		EligibilityProofs: []types.VotingEligibility{proof},
 	}
-	ballot.Signature = signer.Sign(ballot.SignedBytes())
-	require.NoError(tb, ballot.Initialize())
+	require.NoError(tb, types.TestOnlySignAndInitBallot(ballot, signer))
 	return ballot
 }
 
@@ -88,11 +84,10 @@ func createTestOracle(tb testing.TB, layerSize, layersPerEpoch uint32) *testOrac
 
 	lg := logtest.New(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	nodeID, edSigner, vrfSigner := generateNodeIDAndSigner(tb)
+	edSigner, vrfSigner := generateSigners(tb)
 
 	return &testOracle{
-		Oracle:    newMinerOracle(layerSize, layersPerEpoch, cdb, vrfSigner, nodeID, lg),
-		nodeID:    nodeID,
+		Oracle:    newMinerOracle(layerSize, layersPerEpoch, cdb, vrfSigner, lg),
 		edSigner:  edSigner,
 		vrfSigner: vrfSigner,
 	}
@@ -158,7 +153,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 	startLayer := layersPerEpoch * startEpoch
 	endLayer := types.NewLayerID(numberOfEpochsToTest * layersPerEpoch).Add(startLayer)
 	counterValuesSeen := map[uint32]int{}
-	epochInfo := genATXForTargetEpochs(t, o.cdb, types.EpochID(startEpoch), types.EpochID(startEpoch+numberOfEpochsToTest), o.nodeID, layersPerEpoch)
+	epochInfo := genATXForTargetEpochs(t, o.cdb, types.EpochID(startEpoch), types.EpochID(startEpoch+numberOfEpochsToTest), o.edSigner.NodeID(), layersPerEpoch)
 	for layer := types.NewLayerID(startLayer); layer.Before(endLayer); layer = layer.Add(1) {
 		info, ok := epochInfo[layer.GetEpoch()]
 		require.True(t, ok)

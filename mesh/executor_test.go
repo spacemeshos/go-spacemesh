@@ -7,12 +7,10 @@ import (
 	"os"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
@@ -77,11 +75,7 @@ func createATX(t testing.TB, db sql.Executor, cb types.Address) types.ATXID {
 		nil,
 		&nonce,
 	)
-
-	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Now())
-	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
-	vAtx, err := atx.Verify(0, 1)
+	vAtx, err := types.TestOnlySignAndVerifyAtx(atx, sig, 0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, vAtx))
 	return vAtx.ID()

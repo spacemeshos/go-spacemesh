@@ -46,7 +46,7 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 		}
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		vAtx, err := atx.Verify(0, 1)
+		vAtx, err := atx.Verify(0, 1, nil)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(cdb, vAtx))
 	}

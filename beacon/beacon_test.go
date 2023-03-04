@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -103,7 +102,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	tpd.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).AnyTimes().Return(types.VRFPostIndex(1), nil)
 
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
-	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, tpd.mSigner, tpd.mVerifier, tpd.cdb, tpd.mClock,
+	tpd.ProtocolDriver = New(p, edSgn, extractor, tpd.mSigner, tpd.mVerifier, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withWeakCoin(coinValueMock(tb, true)),
@@ -126,11 +125,7 @@ func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *si
 		nil,
 		&nonce,
 	)
-
-	atx.SetEffectiveNumUnits(numUnits)
-	atx.SetReceived(received)
-	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
-	vAtx, err := atx.Verify(0, 1)
+	vAtx, err := types.TestOnlySignAndVerifyAtxTimed(atx, sig, 0, 1, received)
 	require.NoError(tb, err)
 	require.NoError(tb, atxs.Add(db, vAtx))
 	return vAtx.ID()

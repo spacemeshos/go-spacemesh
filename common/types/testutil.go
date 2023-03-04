@@ -2,6 +2,7 @@ package types
 
 import (
 	"math/rand"
+	"time"
 )
 
 // RandomBytes generates random data in bytes for testing.
@@ -114,4 +115,24 @@ func RandomBallot() *Ballot {
 			Support: []Vote{{ID: RandomBlockID()}, {ID: RandomBlockID()}},
 		},
 	}
+}
+
+func TestOnlySignAndVerifyAtx(atx *ActivationTx, s signer, baseTicks, ticks uint64) (*VerifiedActivationTx, error) {
+	return TestOnlySignAndVerifyAtxTimed(atx, s, baseTicks, ticks, time.Now().Local())
+}
+
+func TestOnlySignAndVerifyAtxTimed(atx *ActivationTx, s signer, baseTicks, ticks uint64, received time.Time) (*VerifiedActivationTx, error) {
+	atx.Signature = s.Sign(atx.SignedBytes())
+	atx.CalcAndSetID()
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(received)
+	nodeID := s.NodeID()
+	atx.nodeID = &nodeID
+	return atx.Verify(baseTicks, ticks, nil)
+}
+
+func TestOnlySignAndInitBallot(b *Ballot, s signer) error {
+	b.Signature = s.Sign(b.SignedBytes())
+	b.smesherID = s.NodeID()
+	return b.CalcAndSetID()
 }

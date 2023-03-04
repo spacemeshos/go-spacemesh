@@ -114,9 +114,13 @@ var (
 func genLayerBallot(layerID types.LayerID) *types.Ballot {
 	b := types.RandomBallot()
 	b.Layer = layerID
-	signer, _ := signing.NewEdSigner()
-	b.Signature = signer.Sign(b.SignedBytes())
-	b.Initialize()
+	signer, err := signing.NewEdSigner()
+	if err != nil {
+		panic(err)
+	}
+	if err = types.TestOnlySignAndInitBallot(b, signer); err != nil {
+		panic(err)
+	}
 	return b
 }
 
@@ -183,26 +187,14 @@ func TestMain(m *testing.M) {
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
 	atx := types.NewActivationTx(challenge, &nodeID, addr1, nipost, numUnits, nil, nil)
-	atx.SetEffectiveNumUnits(numUnits)
-	atx.SetReceived(time.Now())
-	if err := activation.SignAndFinalizeAtx(signer, atx); err != nil {
-		log.Println("failed to sign atx:", err)
-		os.Exit(1)
-	}
-	globalAtx, err = atx.Verify(0, 1)
+	globalAtx, err = types.TestOnlySignAndVerifyAtx(atx, signer, 0, 1)
 	if err != nil {
 		log.Println("failed to verify atx:", err)
 		os.Exit(1)
 	}
 
 	atx2 := types.NewActivationTx(challenge, &nodeID, addr2, nipost, numUnits, nil, nil)
-	atx2.SetEffectiveNumUnits(numUnits)
-	atx2.SetReceived(time.Now())
-	if err := activation.SignAndFinalizeAtx(signer, atx2); err != nil {
-		log.Println("failed to sign atx:", err)
-		os.Exit(1)
-	}
-	globalAtx2, err = atx2.Verify(0, 1)
+	globalAtx2, err = types.TestOnlySignAndVerifyAtx(atx2, signer, 0, 1)
 	if err != nil {
 		log.Println("failed to verify atx:", err)
 		os.Exit(1)

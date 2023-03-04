@@ -131,8 +131,7 @@ func genLayerBallot(tb testing.TB, layerID types.LayerID) *types.Ballot {
 	b.Layer = layerID
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	b.Signature = sig.Sign(b.SignedBytes())
-	require.NoError(tb, b.Initialize())
+	types.TestOnlySignAndInitBallot(b, sig)
 	return b
 }
 

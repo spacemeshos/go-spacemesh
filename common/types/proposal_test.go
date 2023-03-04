@@ -26,10 +26,11 @@ func TestProposal_Initialize(t *testing.T) {
 	require.NoError(t, err)
 	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(p.Bytes())
-	require.NoError(t, p.Initialize())
+
+	require.NoError(t, p.Initialize(&TestKeyExtractor{}))
 	require.NotEqual(t, types.EmptyProposalID, p.ID())
 
-	err = p.Initialize()
+	err = p.Initialize(&TestKeyExtractor{})
 	require.EqualError(t, err, "proposal already initialized")
 }
 
@@ -44,7 +45,7 @@ func TestProposal_Initialize_BadSignature(t *testing.T) {
 	require.NoError(t, err)
 	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(p.Bytes())[1:]
-	err = p.Initialize()
+	err = p.Initialize(&TestKeyExtractor{})
 	require.EqualError(t, err, "proposal extract nodeId: ed25519: bad signature format")
 }
 
@@ -61,7 +62,7 @@ func TestProposal_Initialize_InconsistentBallot(t *testing.T) {
 	require.NoError(t, err)
 	p.Ballot.Signature = signer1.Sign(p.Ballot.SignedBytes())
 	p.Signature = signer2.Sign(p.Bytes())
-	err = p.Initialize()
+	err = p.Initialize(&TestKeyExtractor{})
 	require.ErrorContains(t, err, "inconsistent smesher in proposal")
 }
 
