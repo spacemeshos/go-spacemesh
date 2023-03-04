@@ -103,7 +103,6 @@ func withNonceFetcher(nf nonceFetcher) Opt {
 
 // New returns a new ProtocolDriver.
 func New(
-	nodeID types.NodeID,
 	publisher pubsub.Publisher,
 	edSigner *signing.EdSigner,
 	pubKeyExtractor *signing.PubKeyExtractor,
@@ -117,7 +116,7 @@ func New(
 		ctx:             context.Background(),
 		logger:          log.NewNop(),
 		config:          DefaultConfig(),
-		nodeID:          nodeID,
+		nodeID:          edSigner.NodeID(),
 		publisher:       publisher,
 		edSigner:        edSigner,
 		pubKeyExtractor: pubKeyExtractor,

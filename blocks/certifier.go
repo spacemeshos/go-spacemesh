@@ -123,7 +123,6 @@ type Certifier struct {
 func NewCertifier(
 	db *datastore.CachedDB,
 	o hare.Rolacle,
-	n types.NodeID,
 	s *signing.EdSigner,
 	pke *signing.PubKeyExtractor,
 	p pubsub.Publisher,
@@ -138,7 +137,7 @@ func NewCertifier(
 		ctx:             context.Background(),
 		db:              db,
 		oracle:          o,
-		nodeID:          n,
+		nodeID:          s.NodeID(),
 		signer:          s,
 		pubKeyExtractor: pke,
 		publisher:       p,

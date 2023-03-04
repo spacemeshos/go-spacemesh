@@ -64,7 +64,6 @@ type config struct {
 	layerSize      uint32
 	layersPerEpoch uint32
 	hdist          uint32
-	minerID        types.NodeID
 }
 
 type defaultFetcher struct {
@@ -93,13 +92,6 @@ func WithLayerSize(size uint32) Opt {
 func WithLayerPerEpoch(layers uint32) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.cfg.layersPerEpoch = layers
-	}
-}
-
-// WithMinerID defines the miner's NodeID.
-func WithMinerID(id types.NodeID) Opt {
-	return func(pb *ProposalBuilder) {
-		pb.cfg.minerID = id
 	}
 }
 
@@ -162,7 +154,7 @@ func NewProposalBuilder(
 	}
 
 	if pb.proposalOracle == nil {
-		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, cdb, vrfSigner, pb.cfg.minerID, pb.logger)
+		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, cdb, vrfSigner, pb.logger)
 	}
 
 	if pb.nonceFetcher == nil {
@@ -241,24 +233,9 @@ func (pb *ProposalBuilder) createProposal(
 		ib.RefBallot = refBallot
 	}
 
-	p := &types.Proposal{
-		InnerProposal: types.InnerProposal{
-			Ballot: types.Ballot{
-				BallotMetadata: types.BallotMetadata{
-					Layer: layerID,
-				},
-				InnerBallot:       *ib,
-				Votes:             opinion.Votes,
-				EligibilityProofs: proofs,
-			},
-			TxIDs:    txIDs,
-			MeshHash: pb.decideMeshHash(logger, layerID),
-		},
-	}
-	p.Ballot.Signature = pb.signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = pb.signer.Sign(p.Bytes())
-	if err := p.Initialize(); err != nil {
-		logger.Panic("proposal failed to initialize", log.Err(err))
+	p := types.NewProposal(pb.signer.NodeID(), layerID, ib, opinion.Votes, proofs, txIDs, pb.decideMeshHash(logger, layerID))
+	if err := types.SignAndFinalizeProposal(pb.signer, p); err != nil {
+		logger.Fatal("failed to finalize proposal", log.Err(err))
 	}
 	logger.Event().Info("proposal created", p.ID(), log.Int("num_txs", len(p.TxIDs)))
 	return p, nil

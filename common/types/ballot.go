@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
@@ -204,7 +205,11 @@ type EpochData struct {
 
 // Initialize calculates and sets the Ballot's cached ballotID and smesherID.
 // this should be called once all the other fields of the Ballot are set.
-func (b *Ballot) Initialize() error {
+func (b *Ballot) Initialize(extractor keyExtractor) error {
+	if extractor == nil {
+		return errors.New("missing key extractor")
+	}
+
 	if b.ID() != EmptyBallotID {
 		return fmt.Errorf("ballot already initialized")
 	}
@@ -216,6 +221,22 @@ func (b *Ballot) Initialize() error {
 		return fmt.Errorf("bad message hash")
 	}
 
+	if err := b.CalcAndSetID(); err != nil {
+		return err
+	}
+
+	nodeId, err := extractor.ExtractNodeID(b.SignedBytes(), b.Signature)
+	if err != nil {
+		return fmt.Errorf("ballot extract key: %w", err)
+	}
+	b.smesherID = nodeId
+	return nil
+}
+
+// CalcAndSetID calculates and sets the cached id field.
+// ballot ID can be same if its enclosed votes are different, as long as
+// the OpinionHash is the same.
+func (b *Ballot) CalcAndSetID() error {
 	hasher := hash.New()
 	_, err := codec.EncodeTo(hasher, &b.InnerBallot)
 	if err != nil {
@@ -226,13 +247,6 @@ func (b *Ballot) Initialize() error {
 		return fmt.Errorf("failed to encode byte slice")
 	}
 	b.ballotID = BallotID(BytesToHash(hasher.Sum(nil)).ToHash20())
-
-	data := b.SignedBytes()
-	nodeId, err := ExtractNodeIDFromSig(data, b.Signature)
-	if err != nil {
-		return fmt.Errorf("ballot extract key: %w", err)
-	}
-	b.smesherID = nodeId
 	return nil
 }
 

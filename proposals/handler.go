@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -48,6 +49,7 @@ type Handler struct {
 	cfg    Config
 
 	cdb       *datastore.CachedDB
+	extractor *signing.PubKeyExtractor
 	publisher pubsub.Publisher
 	fetcher   system.Fetcher
 	mesh      meshProvider
@@ -96,11 +98,22 @@ func WithConfig(cfg Config) Opt {
 }
 
 // NewHandler creates new Handler.
-func NewHandler(cdb *datastore.CachedDB, p pubsub.Publisher, f system.Fetcher, bc system.BeaconCollector, m meshProvider, decoder ballotDecoder, verifier vrfVerifier, opts ...Opt) *Handler {
+func NewHandler(
+	cdb *datastore.CachedDB,
+	p pubsub.Publisher,
+	f system.Fetcher,
+	bc system.BeaconCollector,
+	m meshProvider,
+	decoder ballotDecoder,
+	extract *signing.PubKeyExtractor,
+	verifier vrfVerifier,
+	opts ...Opt,
+) *Handler {
 	b := &Handler{
 		logger:    log.NewNop(),
 		cfg:       defaultConfig(),
 		cdb:       cdb,
+		extractor: extract,
 		publisher: p,
 		fetcher:   f,
 		mesh:      m,
@@ -143,7 +156,7 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []
 	}
 
 	// set the ballot and smesher ID when received
-	if err := b.Initialize(); err != nil {
+	if err := b.Initialize(h.extractor); err != nil {
 		logger.With().Error("failed to initialize ballot", log.Err(err))
 		return errInitialize
 	}
@@ -203,7 +216,7 @@ func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []
 	}
 
 	// set the proposal ID when received
-	if err := p.Initialize(); err != nil {
+	if err := p.Initialize(h.extractor); err != nil {
 		logger.With().Warning("failed to initialize proposal", log.Err(err))
 		return errInitialize
 	}

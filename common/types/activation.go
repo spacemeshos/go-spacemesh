@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -310,7 +311,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
+// CalcAndSetID calculates and sets the cached id field. This field must be set before calling the ID() method.
 func (atx *ActivationTx) CalcAndSetID() error {
 	if atx.Signature == nil {
 		return fmt.Errorf("cannot calculate ATX ID: sig is nil")
@@ -326,12 +327,12 @@ func (atx *ActivationTx) CalcAndSetID() error {
 }
 
 // CalcAndSetNodeID calculates and sets the cached Node ID field. This field must be set before calling the NodeID() method.
-func (atx *ActivationTx) CalcAndSetNodeID() error {
+func (atx *ActivationTx) CalcAndSetNodeID(extractor keyExtractor) error {
 	if atx.nodeID != nil {
 		return nil
 	}
 
-	nodeId, err := ExtractNodeIDFromSig(atx.SignedBytes(), atx.Signature)
+	nodeId, err := extractor.ExtractNodeID(atx.SignedBytes(), atx.Signature)
 	if err != nil {
 		return fmt.Errorf("extract NodeID: %w", err)
 	}
@@ -401,14 +402,17 @@ func (atx *ActivationTx) Received() time.Time {
 }
 
 // Verify an ATX for a given base TickHeight and TickCount.
-func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActivationTx, error) {
+func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64, extractor keyExtractor) (*VerifiedActivationTx, error) {
 	if atx.id == nil {
 		if err := atx.CalcAndSetID(); err != nil {
 			return nil, err
 		}
 	}
 	if atx.nodeID == nil {
-		if err := atx.CalcAndSetNodeID(); err != nil {
+		if extractor == nil {
+			return nil, errors.New("missing key extractor")
+		}
+		if err := atx.CalcAndSetNodeID(extractor); err != nil {
 			return nil, err
 		}
 	}

@@ -33,7 +33,7 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err 
 
 		baseTickHeight := uint64(stmt.ColumnInt64(1))
 		tickCount := uint64(stmt.ColumnInt64(2))
-		atx, err = v.Verify(baseTickHeight, tickCount)
+		atx, err = v.Verify(baseTickHeight, tickCount, nil)
 		return err == nil
 	}
 
@@ -160,7 +160,7 @@ func GetByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.Node
 		v.SetReceived(time.Unix(0, stmt.ColumnInt64(5)).Local())
 		baseTickHeight := uint64(stmt.ColumnInt64(2))
 		tickCount := uint64(stmt.ColumnInt64(3))
-		atx, err = v.Verify(baseTickHeight, tickCount)
+		atx, err = v.Verify(baseTickHeight, tickCount, nil)
 		return err == nil
 	}
 

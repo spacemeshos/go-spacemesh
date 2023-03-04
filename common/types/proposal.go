@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -66,17 +67,21 @@ type InnerProposal struct {
 
 // Initialize calculates and sets the Proposal's cached proposalID.
 // this should be called once all the other fields of the Proposal are set.
-func (p *Proposal) Initialize() error {
+func (p *Proposal) Initialize(extractor keyExtractor) error {
+	if extractor == nil {
+		return errors.New("missing key extractor")
+	}
+
 	if p.ID() != EmptyProposalID {
 		return fmt.Errorf("proposal already initialized")
 	}
 
-	if err := p.Ballot.Initialize(); err != nil {
+	if err := p.Ballot.Initialize(extractor); err != nil {
 		return err
 	}
 
 	// check proposal signature consistent with ballot's
-	nodeId, err := ExtractNodeIDFromSig(p.Bytes(), p.Signature)
+	nodeId, err := extractor.ExtractNodeID(p.Bytes(), p.Signature)
 	if err != nil {
 		return fmt.Errorf("proposal extract nodeId: %w", err)
 	}
@@ -84,7 +89,20 @@ func (p *Proposal) Initialize() error {
 		return fmt.Errorf("inconsistent smesher in proposal %v and ballot %v", nodeId.ShortString(), p.Ballot.SmesherID().ShortString())
 	}
 
+	p.setID()
+	return nil
+}
+
+func (p *Proposal) setID() {
 	p.proposalID = ProposalID(CalcObjectHash32(p).ToHash20())
+}
+
+// CalcAndSetID calculates and sets the cached id field.
+func (p *Proposal) CalcAndSetID() error {
+	if err := p.Ballot.CalcAndSetID(); err != nil {
+		return err
+	}
+	p.setID()
 	return nil
 }
 
@@ -174,4 +192,36 @@ func ProposalIDsToHashes(ids []ProposalID) []Hash32 {
 		hashes = append(hashes, id.AsHash32())
 	}
 	return hashes
+}
+
+func NewProposal(
+	nodeID NodeID,
+	lid LayerID,
+	ib *InnerBallot,
+	votes Votes,
+	proofs []VotingEligibility,
+	txIDs []TransactionID,
+	mshHash Hash32,
+) *Proposal {
+	return &Proposal{
+		InnerProposal: InnerProposal{
+			Ballot: Ballot{
+				BallotMetadata: BallotMetadata{
+					Layer: lid,
+				},
+				InnerBallot:       *ib,
+				Votes:             votes,
+				EligibilityProofs: proofs,
+				smesherID:         nodeID,
+			},
+			TxIDs:    txIDs,
+			MeshHash: mshHash,
+		},
+	}
+}
+
+func SignAndFinalizeProposal(s signer, p *Proposal) error {
+	p.Ballot.Signature = s.Sign(p.Ballot.SignedBytes())
+	p.Signature = s.Sign(p.Bytes())
+	return p.CalcAndSetID()
 }

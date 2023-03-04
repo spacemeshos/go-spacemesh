@@ -35,20 +35,18 @@ type Oracle struct {
 	cdb            *datastore.CachedDB
 
 	vrfSigner *signing.VRFSigner
-	nodeID    types.NodeID
 	log       log.Log
 
 	mu    sync.Mutex
 	cache oracleCache
 }
 
-func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, nodeID types.NodeID, log log.Log) *Oracle {
+func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, log log.Log) *Oracle {
 	return &Oracle{
 		avgLayerSize:   layerSize,
 		layersPerEpoch: layersPerEpoch,
 		cdb:            cdb,
 		vrfSigner:      vrfSigner,
-		nodeID:         nodeID,
 		log:            log,
 	}
 }
@@ -107,11 +105,11 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon, 
 
 func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxHeader, error) {
 	publishEpoch := targetEpoch - 1
-	atxID, err := atxs.GetIDByEpochAndNodeID(o.cdb, publishEpoch, o.nodeID)
+	atxID, err := atxs.GetIDByEpochAndNodeID(o.cdb, publishEpoch, o.vrfSigner.NodeID())
 	if err != nil {
 		o.log.With().Warning("failed to find ATX ID for node",
 			log.Named("publish_epoch", publishEpoch),
-			log.Named("smesher", o.nodeID),
+			log.Named("smesher", o.vrfSigner.NodeID()),
 			log.Err(err))
 		return nil, fmt.Errorf("get ATX ID: %w", err)
 	}
@@ -120,7 +118,7 @@ func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxH
 	if err != nil {
 		o.log.With().Error("failed to get ATX header",
 			log.Named("publish_epoch", publishEpoch),
-			log.Named("smesher", o.nodeID),
+			log.Named("smesher", o.vrfSigner.NodeID()),
 			log.Err(err))
 		return nil, fmt.Errorf("get ATX header: %w", err)
 	}

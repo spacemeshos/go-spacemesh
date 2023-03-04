@@ -138,7 +138,6 @@ func New(
 	publisher pubsub.PublishSubsciber,
 	sign Signer,
 	pke *signing.PubKeyExtractor,
-	nid types.NodeID,
 	ch chan LayerOutput,
 	syncState system.SyncStateProvider,
 	beacons system.BeaconGetter,
@@ -172,6 +171,7 @@ func New(
 	h.mchMalfeasance = make(chan *types.MalfeasanceGossip, conf.N)
 	h.broker = newBroker(cdb, pke, ev, stateQ, syncState, h.mchMalfeasance, conf.LimitConcurrent, logger)
 	h.sign = sign
+	h.nid = types.BytesToNodeID(sign.PublicKey().Bytes())
 	h.blockGenCh = ch
 
 	h.beacons = beacons
@@ -183,10 +183,9 @@ func New(
 	h.outputs = make(map[types.LayerID][]types.ProposalID, h.config.Hdist) // we keep results about LayerBuffer past layers
 	h.cps = make(map[types.LayerID]Consensus, h.config.LimitConcurrent)
 	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, nonce *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
-		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, pke, nid, nonce, p2p, comm, ev, clock, logger)
+		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, pke, nonce, p2p, comm, ev, clock, logger)
 	}
 
-	h.nid = nid
 	h.ctx, h.cancel = context.WithCancel(context.Background())
 
 	for _, opt := range opts {

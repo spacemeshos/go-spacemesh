@@ -280,6 +280,10 @@ func New(opts ...Option) *App {
 // App is the cli app singleton.
 type App struct {
 	*cobra.Command
+
+	atxSign, beaconSign, ballotSign, hareSign             *signing.EdSigner
+	atxExtract, beaconExtract, ballotExtract, hareExtract *signing.PubKeyExtractor
+
 	fileLock         *flock.Flock
 	nodeID           types.NodeID
 	Config           *config.Config
@@ -300,7 +304,6 @@ type App struct {
 	atxBuilder       *activation.Builder
 	atxHandler       *activation.Handler
 	validator        *activation.Validator
-	keyExtractor     *signing.PubKeyExtractor
 	beaconProtocol   *beacon.ProtocolDriver
 	log              log.Log
 	svm              *vm.VM
@@ -460,15 +463,12 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 
 func (app *App) initServices(
 	ctx context.Context,
-	sgn *signing.EdSigner,
 	poetClients []activation.PoetProvingServiceClient,
-	vrfSigner *signing.VRFSigner,
 	clock NodeClock,
 ) error {
-	nodeID := sgn.NodeID()
-	layerSize := uint32(app.Config.LayerAvgSize)
+	layerSize := app.Config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
-	lg := app.log.Named(nodeID.ShortString()).WithFields(nodeID)
+	lg := app.log.Named(app.nodeID.ShortString()).WithFields(app.nodeID)
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
 	validator := activation.NewValidator(poetDb, app.Config.POST)
@@ -505,18 +505,12 @@ func (app *App) initServices(
 		return errors.New("invalid golden atx id")
 	}
 
-	var err error
-	app.keyExtractor, err = signing.NewPubKeyExtractor(
-		signing.WithExtractorPrefix(app.Config.Genesis.GenesisID().Bytes()),
-	)
+	vrfSigner, err := app.atxSign.VRFSigner()
 	if err != nil {
-		return fmt.Errorf("failed to create key extractor: %w", err)
+		return fmt.Errorf("could not create vrf signer: %w", err)
 	}
-
-	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
-
 	vrfVerifier := signing.NewVRFVerifier()
-	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifier, app.cachedDB, clock,
+	beaconProtocol := beacon.New(app.host, app.beaconSign, app.beaconExtract, vrfSigner, vrfVerifier, app.cachedDB, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
@@ -540,6 +534,7 @@ func (app *App) initServices(
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
 		app.cachedDB,
+		app.atxExtract,
 		clock,
 		app.host,
 		fetcherWrapped,
@@ -558,7 +553,15 @@ func (app *App) initServices(
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier,
+	proposalListener := proposals.NewHandler(
+		app.cachedDB,
+		app.host,
+		fetcherWrapped,
+		beaconProtocol,
+		msh,
+		trtl,
+		app.ballotExtract,
+		vrfVerifier,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,
@@ -577,7 +580,15 @@ func (app *App) initServices(
 	hOracle := eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
-	app.certifier = blocks.NewCertifier(app.cachedDB, hOracle, nodeID, sgn, app.keyExtractor, app.host, clock, beaconProtocol, trtl,
+	app.certifier = blocks.NewCertifier(
+		app.cachedDB,
+		hOracle,
+		app.hareSign,
+		app.hareExtract,
+		app.host,
+		clock,
+		beaconProtocol,
+		trtl,
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
@@ -628,9 +639,8 @@ func (app *App) initServices(
 		app.cachedDB,
 		hareCfg,
 		app.host,
-		sgn,
-		app.keyExtractor,
-		nodeID,
+		app.hareSign,
+		app.hareExtract,
 		hareOutputCh,
 		newSyncer,
 		beaconProtocol,
@@ -644,7 +654,7 @@ func (app *App) initServices(
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
 		clock,
-		sgn,
+		app.ballotSign,
 		vrfSigner,
 		app.cachedDB,
 		app.host,
@@ -652,14 +662,13 @@ func (app *App) initServices(
 		beaconProtocol,
 		newSyncer,
 		app.conState,
-		miner.WithMinerID(nodeID),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
 
-	postSetupMgr, err := activation.NewPostSetupManager(nodeID, app.Config.POST, app.addLogger(PostLogger, lg), app.cachedDB, goldenATXID)
+	postSetupMgr, err := activation.NewPostSetupManager(app.nodeID, app.Config.POST, app.addLogger(PostLogger, lg), app.cachedDB, goldenATXID)
 	if err != nil {
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
@@ -669,7 +678,7 @@ func (app *App) initServices(
 		CycleGap:    app.Config.POET.CycleGap,
 		GracePeriod: app.Config.POET.GracePeriod,
 	}
-	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, app.db, app.addLogger(NipostBuilderLogger, lg), sgn, poetCfg, clock)
+	nipostBuilder := activation.NewNIPostBuilder(app.nodeID, postSetupMgr, poetClients, poetDb, app.db, app.addLogger(NipostBuilderLogger, lg), app.atxSign, poetCfg, clock)
 
 	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
@@ -687,19 +696,34 @@ func (app *App) initServices(
 		GoldenATXID:     goldenATXID,
 		LayersPerEpoch:  layersPerEpoch,
 	}
-	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, app.cachedDB, atxHandler, app.host, nipostBuilder,
-		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg),
+	atxBuilder := activation.NewBuilder(
+		builderConfig,
+		app.nodeID,
+		app.atxSign,
+		app.cachedDB,
+		atxHandler,
+		app.host,
+		nipostBuilder,
+		postSetupMgr,
+		clock,
+		newSyncer,
+		app.addLogger("atxBuilder", lg),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(poetCfg),
 		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
 	)
 
+	keyExtractors := map[byte]*signing.PubKeyExtractor{
+		types.MultipleATXs:     app.atxExtract,
+		types.MultipleBallots:  app.ballotExtract,
+		types.HareEquivocation: app.hareExtract,
+	}
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
 		app.addLogger(Malfeasance, lg),
 		app.host.ID(),
 		app.hare,
-		app.keyExtractor,
+		keyExtractors,
 	)
 	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, txHandler, malfeasanceHandler)
 
@@ -822,7 +846,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewDebugService(app.conState, app.host))
 	}
 	if apiConf.StartGatewayService {
-		verifier := activation.NewChallengeVerifier(app.cachedDB, app.keyExtractor, app.validator, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
+		verifier := activation.NewChallengeVerifier(app.cachedDB, app.atxExtract, app.validator, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
 		registerService(grpcserver.NewGatewayService(verifier))
 	}
 	if apiConf.StartGlobalStateService {
@@ -946,47 +970,74 @@ func (app *App) stopServices(ctx context.Context) {
 	events.CloseEventReporter()
 }
 
+func createSignerExtractor(key []byte, genesisID types.Hash20, domain signing.Domain) (*signing.EdSigner, *signing.PubKeyExtractor, error) {
+	signer, err := signing.NewEdSigner(
+		signing.WithPrivateKey(key),
+		signing.WithPrefix(genesisID.Bytes()),
+		signing.WithDomain(domain),
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	extractor, err := signing.NewPubKeyExtractor(
+		signing.WithExtractorPrefix(genesisID.Bytes()),
+		signing.WithExtractorDomain(domain),
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	return signer, extractor, nil
+}
+
 // LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists.
-func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
+func (app *App) LoadOrCreateEdSigner() error {
 	filename := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
 	log.Info("Looking for identity file at `%v`", filename)
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("failed to read identity file: %w", err)
+			return fmt.Errorf("failed to read identity file: %w", err)
 		}
 
 		log.Info("Identity file not found. Creating new identity...")
 
-		edSgn, err := signing.NewEdSigner(
-			signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
-		)
+		edSgn, err := signing.NewEdSigner()
 		if err != nil {
-			return nil, fmt.Errorf("failed to create identity: %w", err)
+			return fmt.Errorf("failed to create identity: %w", err)
 		}
 		if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
-			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
+			return fmt.Errorf("failed to create directory for identity file: %w", err)
 		}
-		err = os.WriteFile(filename, edSgn.PrivateKey(), 0o600)
+		data = edSgn.PrivateKey()
+		err = os.WriteFile(filename, data, 0o600)
 		if err != nil {
-			return nil, fmt.Errorf("failed to write identity file: %w", err)
+			return fmt.Errorf("failed to write identity file: %w", err)
 		}
 
 		log.With().Info("created new identity", edSgn.PublicKey())
-		return edSgn, nil
 	}
-	edSgn, err := signing.NewEdSigner(
-		signing.WithPrivateKey(data),
-		signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
-	)
+	genesisID := app.Config.Genesis.GenesisID()
+	app.atxSign, app.atxExtract, err = createSignerExtractor(data, genesisID, signing.Atx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
+		return fmt.Errorf("create atx signer/extractor: %w", err)
 	}
+	app.beaconSign, app.beaconExtract, err = createSignerExtractor(data, genesisID, signing.Beacon)
+	if err != nil {
+		return fmt.Errorf("create beacon signer/extractor: %w", err)
+	}
+	app.ballotSign, app.ballotExtract, err = createSignerExtractor(data, genesisID, signing.Ballot)
+	if err != nil {
+		return fmt.Errorf("create ballot signer/extractor: %w", err)
+	}
+	app.hareSign, app.hareExtract, err = createSignerExtractor(data, genesisID, signing.Hare)
+	if err != nil {
+		return fmt.Errorf("create ballot signer/extractor: %w", err)
+	}
+	app.nodeID = app.atxSign.NodeID()
+	log.Info("Loaded existing identity; public key: %v", app.atxSign.PublicKey())
 
-	log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
-
-	return edSgn, nil
+	return nil
 }
 
 func (app *App) startSyncer(ctx context.Context) {
@@ -1066,8 +1117,7 @@ func (app *App) Start(ctx context.Context) error {
 
 	/* Create or load miner identity */
 
-	edSgn, err := app.LoadOrCreateEdSigner()
-	if err != nil {
+	if err = app.LoadOrCreateEdSigner(); err != nil {
 		return fmt.Errorf("could not retrieve identity: %w", err)
 	}
 
@@ -1079,9 +1129,6 @@ func (app *App) Start(ctx context.Context) error {
 		}
 		poetClients = append(poetClients, client)
 	}
-
-	edPubkey := edSgn.PublicKey()
-	app.nodeID = types.BytesToNodeID(edPubkey.Bytes())
 
 	lg := logger.Named(app.nodeID.ShortString()).WithFields(app.nodeID)
 
@@ -1119,22 +1166,10 @@ func (app *App) Start(ctx context.Context) error {
 	if err = app.setupDBs(ctx, lg, dbStorepath); err != nil {
 		return err
 	}
-	// need db to initialize the vrf signer
-	vrfSigner, err := edSgn.VRFSigner()
-	if err != nil {
-		return fmt.Errorf("could not create vrf signer: %w", err)
-	}
 
 	app.log = app.addLogger(AppLogger, lg)
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-	err = app.initServices(
-		ctx,
-		edSgn,
-		poetClients,
-		vrfSigner,
-		clock,
-	)
-	if err != nil {
+	if err = app.initServices(ctx, poetClients, clock); err != nil {
 		return fmt.Errorf("cannot start services: %w", err)
 	}
 

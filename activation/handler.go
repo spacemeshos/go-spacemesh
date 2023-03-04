@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -46,11 +47,13 @@ type Handler struct {
 	mu              sync.Mutex
 	atxChannels     map[types.ATXID]*atxChan
 	fetcher         system.Fetcher
+	extractor       *signing.PubKeyExtractor
 }
 
 // NewHandler returns a data handler for ATX.
 func NewHandler(
 	cdb *datastore.CachedDB,
+	extract *signing.PubKeyExtractor,
 	c layerClock,
 	pub pubsub.Publisher,
 	fetcher system.Fetcher,
@@ -73,6 +76,7 @@ func NewHandler(
 		log:             log,
 		atxChannels:     make(map[types.ATXID]*atxChan),
 		fetcher:         fetcher,
+		extractor:       extract,
 	}
 }
 
@@ -204,7 +208,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
 
-	return atx.Verify(baseTickHeight, leaves/h.tickSize)
+	return atx.Verify(baseTickHeight, leaves/h.tickSize, h.extractor)
 }
 
 func (h *Handler) validateInitialAtx(_ context.Context, atx *types.ActivationTx) error {
@@ -472,7 +476,7 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 	if err := atx.CalcAndSetID(); err != nil {
 		return fmt.Errorf("failed to derive ID from atx: %w", err)
 	}
-	if err := atx.CalcAndSetNodeID(); err != nil {
+	if err := atx.CalcAndSetNodeID(h.extractor); err != nil {
 		return fmt.Errorf("failed to derive Node ID from ATX with sig %v: %w", atx.Signature, err)
 	}
 	logger := h.log.WithContext(ctx).WithFields(atx.ID())

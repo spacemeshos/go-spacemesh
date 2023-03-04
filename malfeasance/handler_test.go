@@ -5,11 +5,11 @@ import (
 	"os"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -35,10 +35,10 @@ func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
 	}
 	nodeID := sig.NodeID()
 	atx := types.NewActivationTx(challenge, &nodeID, types.Address{}, nil, 1, nil, nil)
-	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
+	require.NoError(t, types.SignAndFinalizeAtx(sig, atx))
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
-	vAtx, err := atx.Verify(0, 1)
+	vAtx, err := atx.Verify(0, 1, nil)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, vAtx))
 }
@@ -49,8 +49,12 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
-
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
+	extractors := map[byte]*signing.PubKeyExtractor{
+		types.MultipleATXs:     pke,
+		types.MultipleBallots:  pke,
+		types.HareEquivocation: pke,
+	}
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, extractors)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.NewLayerID(11)
@@ -244,8 +248,12 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
-
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
+	extractors := map[byte]*signing.PubKeyExtractor{
+		types.MultipleATXs:     pke,
+		types.MultipleBallots:  pke,
+		types.HareEquivocation: pke,
+	}
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, extractors)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.NewLayerID(11)
@@ -439,8 +447,12 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
-
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
+	extractors := map[byte]*signing.PubKeyExtractor{
+		types.MultipleATXs:     pke,
+		types.MultipleBallots:  pke,
+		types.HareEquivocation: pke,
+	}
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, extractors)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.NewLayerID(11)
@@ -659,8 +671,12 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
-
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
+	extractors := map[byte]*signing.PubKeyExtractor{
+		types.MultipleATXs:     pke,
+		types.MultipleBallots:  pke,
+		types.HareEquivocation: pke,
+	}
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, extractors)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -727,4 +743,65 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 			})
 		require.Equal(t, pubsub.ValidationAccept, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 	})
+}
+
+func TestHandler_CrossDomain(t *testing.T) {
+	db := sql.InMemory()
+	lg := logtest.New(t)
+	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	ae, err := signing.NewPubKeyExtractor(signing.WithExtractorDomain(signing.Atx))
+	require.NoError(t, err)
+	be, err := signing.NewPubKeyExtractor(signing.WithExtractorDomain(signing.Ballot))
+	require.NoError(t, err)
+	he, err := signing.NewPubKeyExtractor(signing.WithExtractorDomain(signing.Hare))
+	require.NoError(t, err)
+	extractors := map[byte]*signing.PubKeyExtractor{
+		types.MultipleATXs:     ae,
+		types.MultipleBallots:  be,
+		types.HareEquivocation: he,
+	}
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, extractors)
+
+	asig, err := signing.NewEdSigner(signing.WithDomain(signing.Atx))
+	require.NoError(t, err)
+	bsig, err := signing.NewEdSigner(signing.WithDomain(signing.Ballot))
+	require.NoError(t, err)
+	createIdentity(t, db, asig)
+
+	target := 10
+	m1 := types.BallotMetadata{
+		Layer:   types.NewLayerID(uint32(target)),
+		MsgHash: types.Hash32{1, 1, 1},
+	}
+	m2 := types.ATXMetadata{
+		Target:  types.EpochID(target),
+		MsgHash: types.Hash32{2, 2, 2},
+	}
+	m1buf, err := codec.Encode(&m1)
+	require.NoError(t, err)
+	m2buf, err := codec.Encode(&m2)
+	require.NoError(t, err)
+
+	msg, err := codec.Encode(&types.MalfeasanceGossip{
+		MalfeasanceProof: types.MalfeasanceProof{
+			Proof: types.Proof{
+				Type: types.MultipleBallots,
+				Data: &types.BallotProof{
+					Messages: [2]types.BallotProofMsg{
+						{InnerMsg: m1, Signature: bsig.Sign(m1buf)},
+						{InnerMsg: *(*types.BallotMetadata)(unsafe.Pointer(&m2)), Signature: asig.Sign(m2buf)},
+					},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t,
+		pubsub.ValidationIgnore,
+		h.HandleMalfeasanceProof(context.Background(), "", msg),
+	)
+
+	malicious, err := identities.IsMalicious(db, asig.NodeID())
+	require.NoError(t, err)
+	require.False(t, malicious)
 }
