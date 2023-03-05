@@ -153,6 +153,14 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	}
 
 	logger.Debug("broker received hare message")
+	pubKeyBytes := 32
+	if hareMsg.InnerMsg.Svp != nil {
+		pubKeyBytes += 32 * len(hareMsg.InnerMsg.Svp.Messages)
+	}
+	if hareMsg.InnerMsg.Cert != nil && hareMsg.InnerMsg.Cert.AggMsgs != nil {
+		pubKeyBytes += 32 * len(hareMsg.InnerMsg.Cert.AggMsgs.Messages)
+	}
+	totalPubKeyIn.WithLabelValues().Add(float64(pubKeyBytes))
 
 	msgLayer := hareMsg.Layer
 	if !b.Synced(ctx, msgLayer) {

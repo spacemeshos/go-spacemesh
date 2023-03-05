@@ -549,6 +549,15 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 		return false
 	}
 
+	pubKeyBytes := 32
+	if msg.InnerMsg.Svp != nil {
+		pubKeyBytes += 32 * len(msg.InnerMsg.Svp.Messages)
+	}
+	if msg.InnerMsg.Cert != nil && msg.InnerMsg.Cert.AggMsgs != nil {
+		pubKeyBytes += 32 * len(msg.InnerMsg.Cert.AggMsgs.Messages)
+	}
+	totalPubKeyOut.WithLabelValues().Add(float64(pubKeyBytes))
+
 	logger.Debug("should participate: message sent")
 	return true
 }

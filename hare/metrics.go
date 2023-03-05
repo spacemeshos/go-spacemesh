@@ -15,6 +15,9 @@ const (
 )
 
 var (
+	totalPubKeyIn  = metrics.NewCounter("total_pubkey_send", namespace, "Total pubkey bytes sent", nil)
+	totalPubKeyOut = metrics.NewCounter("total_pubkey_recv", namespace, "Total pubkey bytes received", nil)
+
 	preNumProposals = metrics.NewCounter(
 		"in_proposals",
 		namespace,
