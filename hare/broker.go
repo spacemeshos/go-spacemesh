@@ -70,7 +70,6 @@ func newBroker(
 		limit:           limit,
 		minDeleted:      types.GetEffectiveGenesis(),
 	}
-	b.ctx, b.cancel = context.WithCancel(context.Background())
 	return b
 }
 
@@ -79,9 +78,6 @@ func (b *Broker) Start(ctx context.Context) {
 	b.once.Do(func() {
 		b.mu.Lock()
 		defer b.mu.Unlock()
-		if b.cancel != nil {
-			b.cancel()
-		}
 		b.ctx, b.cancel = context.WithCancel(ctx)
 	})
 }
