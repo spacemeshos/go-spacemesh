@@ -118,6 +118,8 @@ func (b *Broker) validateTiming(ctx context.Context, m *Message) error {
 
 // HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
 func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	select {
 	case <-ctx.Done():
 		return pubsub.ValidationIgnore
@@ -278,6 +280,8 @@ func (b *Broker) handleMaliciousHareMessage(
 }
 
 func (b *Broker) HandleEligibility(ctx context.Context, em *types.HareEligibilityGossip) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if em == nil {
 		b.Log.WithContext(ctx).Fatal("invalid hare eligibility")
 	}
@@ -324,8 +328,6 @@ func (b *Broker) HandleEligibility(ctx context.Context, em *types.HareEligibilit
 }
 
 func (b *Broker) getInbox(id types.LayerID) chan any {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
 	out, exist := b.outbox[id.Uint32()]
 	if !exist {
 		return nil
@@ -334,8 +336,6 @@ func (b *Broker) getInbox(id types.LayerID) chan any {
 }
 
 func (b *Broker) handleEarlyMessage(logger log.Log, layer types.LayerID, nodeID types.NodeID, msg any) error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
 	layerNum := layer.Uint32()
 	if _, exist := b.pending[layerNum]; !exist { // create buffer if first msg
 		b.pending[layerNum] = make([]any, 0, inboxCapacity)
@@ -354,9 +354,6 @@ func (b *Broker) handleEarlyMessage(logger log.Log, layer types.LayerID, nodeID 
 }
 
 func (b *Broker) cleanOldLayers() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
 	for i := b.minDeleted.Add(1); i.Before(b.latestLayer); i = i.Add(1) {
 		_, exist := b.outbox[i.Uint32()]
 
@@ -370,16 +367,17 @@ func (b *Broker) cleanOldLayers() {
 
 // Register a layer to receive messages
 // Note: the registering instance is assumed to be started and accepting messages.
-func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any, error) {
+func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any,
+	error,
+) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.setLatestLayer(ctx, id)
 
 	return b.createNewInbox(id), nil
 }
 
 func (b *Broker) createNewInbox(id types.LayerID) chan any {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
 	if len(b.outbox) >= b.limit {
 		// unregister the earliest layer to make space for the new layer
 		// cannot call unregister here because unregister blocks and this would cause a deadlock
@@ -398,13 +396,13 @@ func (b *Broker) createNewInbox(id types.LayerID) chan any {
 }
 
 func (b *Broker) cleanupInstance(id types.LayerID) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
 	delete(b.outbox, id.Uint32())
 }
 
 // Unregister a layer from receiving messages.
 func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.cleanupInstance(id)
 	b.cleanOldLayers()
 	b.WithContext(ctx).With().Debug("hare broker unregistered layer", id)
@@ -412,20 +410,16 @@ func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 
 // Close closes broker.
 func (b *Broker) Close() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.cancel()
 }
 
 func (b *Broker) getLatestLayer() types.LayerID {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-
 	return b.latestLayer
 }
 
 func (b *Broker) setLatestLayer(ctx context.Context, layer types.LayerID) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
 	if !layer.After(b.latestLayer) { // should expect to update only newer layers
 		b.WithContext(ctx).With().Error("tried to update a previous layer",
 			log.Stringer("this_layer", layer),
