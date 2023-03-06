@@ -3,6 +3,7 @@ package hare
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -716,4 +717,79 @@ func TestBroker_Flow(t *testing.T) {
 
 	b.Unregister(context.Background(), instanceID1)
 	r.Equal(instanceID2, b.minDeleted)
+}
+
+// Shows that the limit is not enforced when we start registering at some layer greater than genesis.
+// And that we can get up to the starting layer numbers instances.
+func TestBroker_Limit1(t *testing.T) {
+	broker := buildBrokerWithLimit(t, t.Name(), 1)
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.Start(context.Background())
+	t.Cleanup(broker.Close)
+
+	var i uint32
+	for i = 1; i < 25; i++ {
+		_, err := broker.Register(context.Background(), instanceID0.Add(i))
+		require.NoError(t, err)
+	}
+
+	broker.Unregister(context.Background(), instanceID0.Add(12))
+
+	for i = 25; i < 26; i++ {
+		_, err := broker.Register(context.Background(), instanceID0.Add(i))
+		require.NoError(t, err)
+	}
+
+	for i = 50; i < 100; i++ {
+		_, err := broker.Register(context.Background(), instanceID0.Add(i))
+		require.NoError(t, err)
+	}
+	broker.mu.RLock()
+	assert.Equal(t, 1, len(broker.outbox))
+	broker.mu.RUnlock()
+}
+
+// Shows that if later layers finish before earlier layers then the limit gets
+// increased by the size of the gap, over time this could lead to very large
+// limits. This is because on unregister the minDeleted is not updated beyond
+// exisiting layers, meaning it starts to 'lag'.
+func TestBroker_Limit2(t *testing.T) {
+	broker := buildBrokerWithLimit(t, t.Name(), 10)
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.Start(context.Background())
+	t.Cleanup(broker.Close)
+
+	var i uint32
+	for i = 1; i <= 10; i++ {
+		_, err := broker.Register(context.Background(), instanceID0.Add(i))
+		require.NoError(t, err)
+	}
+
+	broker.mu.RLock()
+	assert.Equal(t, 10, len(broker.outbox))
+	broker.mu.RUnlock()
+
+	println(broker.minDeleted.Value)
+	for i = 3; i <= 7; i++ {
+		broker.Unregister(context.Background(), instanceID0.Add(i))
+	}
+	println(broker.minDeleted.Value)
+
+	// _, err := broker.Register(context.Background(), instanceID0.Add(11))
+	// require.NoError(t, err)
+
+	println("loop")
+	for i = 11; i <= 25; i++ {
+		println(broker.minDeleted.Value)
+		_, err := broker.Register(context.Background(), instanceID0.Add(i))
+		require.NoError(t, err)
+	}
+
+	broker.mu.RLock()
+	assert.Equal(t, 10, len(broker.outbox))
+	assert.NotNil(t, broker.outbox[instanceID0.Add(1).Value])
+	fmt.Printf("outbox %+v\n", broker.outbox)
+	broker.mu.RUnlock()
 }
