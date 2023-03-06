@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
