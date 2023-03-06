@@ -2040,6 +2040,7 @@ func TestVaultValidation(t *testing.T) {
 func FuzzParse(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		tt := newTester(t).addSingleSig(1).applyGenesis()
+		t.Cleanup(func() { tt.db.Close() })
 		req := tt.Validation(types.NewRawTx(data))
 		req.Parse()
 	})
