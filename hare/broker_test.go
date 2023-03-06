@@ -389,25 +389,37 @@ func TestBroker_HandleEligibility(t *testing.T) {
 
 func TestBroker_Register(t *testing.T) {
 	broker := buildBroker(t, t.Name())
-	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	broker.Start(context.Background())
+	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	// broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	// broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	broker.Start(ctx)
 	t.Cleanup(broker.Close)
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
+
+	// Registering for a new layer with no early messages should result in a 0
+	// length channel.
+	out, err := broker.Register(ctx, instanceID1)
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(out))
+
+	// Send an early message
 	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), nil)
+	msg.Layer = instanceID2
+	buf := &bytes.Buffer{}
+	_, err = msg.EncodeScale(scale.NewEncoder(buf))
+	require.NoError(t, err)
+	err = broker.handleMessage(ctx, buf.Bytes())
+	require.NoError(t, err)
 
-	broker.mu.Lock()
-	broker.pending[instanceID1.Uint32()] = []any{msg, msg}
-	broker.mu.Unlock()
-
-	broker.Register(context.Background(), instanceID1)
-
-	broker.mu.RLock()
-	assert.Equal(t, 2, len(broker.outbox[instanceID1.Uint32()]))
-	assert.Equal(t, 0, len(broker.pending[instanceID1.Uint32()]))
-	broker.mu.RUnlock()
+	// Registering for a with a messages should result in a 1
+	// length channel.
+	out, err = broker.Register(ctx, instanceID2)
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(out))
 }
 
 func TestBroker_Register2(t *testing.T) {
@@ -559,6 +571,8 @@ func Test_validate(t *testing.T) {
 	b := buildBroker(t, t.Name())
 
 	b.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
@@ -601,7 +615,6 @@ func Test_validate(t *testing.T) {
 	r.NoError(err)
 	err = b.handleMessage(ctx, buf.Bytes())
 	r.Error(err)
-
 }
 
 // func TestBroker_clean(t *testing.T) {
