@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -37,8 +38,7 @@ type Broker struct {
 	mchOut          chan<- *types.MalfeasanceGossip
 	outbox          map[uint32]chan any
 	latestLayer     types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
-	minDeleted      types.LayerID
-	limit           int // max number of simultaneous consensus processes
+	limit           int           // max number of simultaneous consensus processes
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -66,7 +66,6 @@ func newBroker(
 		outbox:          make(map[uint32]chan any),
 		latestLayer:     types.GetEffectiveGenesis(),
 		limit:           limit,
-		minDeleted:      types.GetEffectiveGenesis(),
 	}
 	return b
 }
@@ -277,18 +276,6 @@ func (b *Broker) HandleEligibility(ctx context.Context, em *types.HareEligibilit
 	return false
 }
 
-func (b *Broker) cleanOldLayers() {
-	for i := b.minDeleted.Add(1); i.Before(b.latestLayer); i = i.Add(1) {
-		_, exist := b.outbox[i.Uint32()]
-
-		if !exist { // unregistered
-			b.minDeleted = b.minDeleted.Add(1)
-		} else { // encountered first still running layer
-			break
-		}
-	}
-}
-
 // Register a layer to receive messages
 // Note: the registering instance is assumed to be started and accepting messages.
 func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any,
@@ -302,15 +289,35 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any,
 			log.Stringer("prev_layer", b.latestLayer))
 	}
 
-	b.latestLayer = id
-
 	// We check here since early messages could have already constructed this map entry
 	outboxCh, exist := b.outbox[id.Uint32()]
 	if !exist {
 		outboxCh = make(chan any, inboxCapacity)
 		b.outbox[id.Uint32()] = outboxCh
 	}
+
+	oversize := len(b.outbox) - b.limit
+	if oversize >= 0 {
+		// Remove earliest layers to make space for this layer
+		k := sortedKeys(b.outbox)
+		for i := 0; i < oversize; i++ {
+			delete(b.outbox, k[i])
+			b.With().Info("unregistered layer due to maximum concurrent processes limit", types.NewLayerID(k[i]))
+		}
+	}
+
+	b.latestLayer = id
+
 	return outboxCh, nil
+}
+
+func sortedKeys(m map[uint32]chan any) []uint32 {
+	keys := make([]uint32, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	return keys
 }
 
 // Unregister a layer from receiving messages.
@@ -318,7 +325,6 @@ func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	delete(b.outbox, id.Uint32())
-	b.cleanOldLayers()
 	b.WithContext(ctx).With().Debug("hare broker unregistered layer", id)
 }
 
