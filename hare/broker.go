@@ -91,12 +91,14 @@ var (
 
 func (b *Broker) validateTiming(ctx context.Context, m *Message) error {
 	msgInstID := m.Layer
-	if b.getInbox(msgInstID) != nil {
+
+	_, exist := b.outbox[msgInstID.Uint32()]
+	if exist {
 		b.Log.WithContext(ctx).With().Debug("instance exists", msgInstID)
 		return nil
 	}
 
-	latestLayer := b.getLatestLayer()
+	latestLayer := b.latestLayer
 
 	if msgInstID.Before(latestLayer) {
 		return fmt.Errorf("%w: msg %v, latest %v", errUnregistered, msgInstID.Uint32(), latestLayer)
@@ -135,7 +137,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubs
 
 func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	h := types.CalcMessageHash12(msg, pubsub.HareProtocol)
-	logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.getLatestLayer()), h)
+	logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.latestLayer), h)
 	hareMsg, err := MessageFromBuffer(msg)
 	if err != nil {
 		logger.With().Error("failed to build message", h, log.Err(err))
@@ -216,8 +218,8 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	}
 
 	// has instance, just send
-	out := b.getInbox(msgLayer)
-	if out == nil {
+	out, exist := b.outbox[msgLayer.Uint32()]
+	if !exist {
 		logger.With().Debug("missing broker instance for layer", msgLayer)
 		return errTooOld
 	}
@@ -264,8 +266,8 @@ func (b *Broker) handleMaliciousHareMessage(
 		return b.handleEarlyMessage(logger, msg.Layer, nodeID, toRelay)
 	}
 
-	out := b.getInbox(msg.Layer)
-	if out == nil {
+	out, exist := b.outbox[msg.Layer.Uint32()]
+	if !exist {
 		b.Log.WithContext(ctx).With().Debug("consensus not running for layer", msg.Layer)
 		return nil
 	}
@@ -286,8 +288,8 @@ func (b *Broker) HandleEligibility(ctx context.Context, em *types.HareEligibilit
 		b.Log.WithContext(ctx).Fatal("invalid hare eligibility")
 	}
 	lid := em.Layer
-	out := b.getInbox(lid)
-	if out == nil {
+	out, exist := b.outbox[lid.Uint32()]
+	if !exist {
 		b.Log.WithContext(ctx).With().Debug("consensus not running for layer", lid)
 		return false
 	}
@@ -327,14 +329,6 @@ func (b *Broker) HandleEligibility(ctx context.Context, em *types.HareEligibilit
 	return false
 }
 
-func (b *Broker) getInbox(id types.LayerID) chan any {
-	out, exist := b.outbox[id.Uint32()]
-	if !exist {
-		return nil
-	}
-	return out
-}
-
 func (b *Broker) handleEarlyMessage(logger log.Log, layer types.LayerID, nodeID types.NodeID, msg any) error {
 	layerNum := layer.Uint32()
 	if _, exist := b.pending[layerNum]; !exist { // create buffer if first msg
@@ -372,12 +366,14 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any,
 ) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.setLatestLayer(ctx, id)
+	if !id.After(b.latestLayer) { // should expect to update only newer layers
+		b.WithContext(ctx).With().Error("tried to update a previous layer",
+			log.Stringer("this_layer", id),
+			log.Stringer("prev_layer", b.latestLayer))
+	}
 
-	return b.createNewInbox(id), nil
-}
+	b.latestLayer = id
 
-func (b *Broker) createNewInbox(id types.LayerID) chan any {
 	if len(b.outbox) >= b.limit {
 		// unregister the earliest layer to make space for the new layer
 		// cannot call unregister here because unregister blocks and this would cause a deadlock
@@ -392,18 +388,14 @@ func (b *Broker) createNewInbox(id types.LayerID) chan any {
 		outboxCh <- mOut
 	}
 	delete(b.pending, id.Uint32())
-	return outboxCh
-}
-
-func (b *Broker) cleanupInstance(id types.LayerID) {
-	delete(b.outbox, id.Uint32())
+	return outboxCh, nil
 }
 
 // Unregister a layer from receiving messages.
 func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.cleanupInstance(id)
+	delete(b.outbox, id.Uint32())
 	b.cleanOldLayers()
 	b.WithContext(ctx).With().Debug("hare broker unregistered layer", id)
 }
@@ -413,19 +405,4 @@ func (b *Broker) Close() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.cancel()
-}
-
-func (b *Broker) getLatestLayer() types.LayerID {
-	return b.latestLayer
-}
-
-func (b *Broker) setLatestLayer(ctx context.Context, layer types.LayerID) {
-	if !layer.After(b.latestLayer) { // should expect to update only newer layers
-		b.WithContext(ctx).With().Error("tried to update a previous layer",
-			log.Stringer("this_layer", layer),
-			log.Stringer("prev_layer", b.latestLayer))
-		return
-	}
-
-	b.latestLayer = layer
 }

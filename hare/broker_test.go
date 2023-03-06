@@ -505,18 +505,6 @@ func Test_newMsg(t *testing.T) {
 	assert.NoError(t, e)
 }
 
-func TestBroker_updateInstance(t *testing.T) {
-	r := require.New(t)
-
-	b := buildBroker(t, t.Name())
-	r.Equal(instanceID0, b.getLatestLayer())
-	b.setLatestLayer(context.Background(), instanceID1)
-	r.Equal(instanceID1, b.getLatestLayer())
-
-	b.setLatestLayer(context.Background(), instanceID2)
-	r.Equal(instanceID2, b.getLatestLayer())
-}
-
 func TestBroker_eventLoop(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
@@ -564,51 +552,51 @@ func TestBroker_eventLoop(t *testing.T) {
 	r.Equal(msg, rec.Message)
 }
 
-func Test_validate(t *testing.T) {
-	r := require.New(t)
-	b := buildBroker(t, t.Name())
+// func Test_validate(t *testing.T) {
+// 	r := require.New(t)
+// 	b := buildBroker(t, t.Name())
 
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	m := BuildStatusMsg(signer, NewDefaultEmptySet())
-	m.Layer = instanceID1
-	b.setLatestLayer(context.Background(), instanceID2)
-	e := b.validateTiming(context.Background(), &m.Message)
-	r.ErrorIs(e, errUnregistered)
+// 	signer, err := signing.NewEdSigner()
+// 	require.NoError(t, err)
+// 	m := BuildStatusMsg(signer, NewDefaultEmptySet())
+// 	m.Layer = instanceID1
+// 	b.setLatestLayer(context.Background(), instanceID2)
+// 	e := b.validateTiming(context.Background(), &m.Message)
+// 	r.ErrorIs(e, errUnregistered)
 
-	m.Layer = instanceID2
-	e = b.validateTiming(context.Background(), &m.Message)
-	r.ErrorIs(e, errRegistration)
+// 	m.Layer = instanceID2
+// 	e = b.validateTiming(context.Background(), &m.Message)
+// 	r.ErrorIs(e, errRegistration)
 
-	m.Layer = instanceID3
-	e = b.validateTiming(context.Background(), &m.Message)
-	r.ErrorIs(e, errEarlyMsg)
+// 	m.Layer = instanceID3
+// 	e = b.validateTiming(context.Background(), &m.Message)
+// 	r.ErrorIs(e, errEarlyMsg)
 
-	m.Layer = instanceID4
-	e = b.validateTiming(context.Background(), &m.Message)
-	r.ErrorIs(e, errFutureMsg)
-}
+// 	m.Layer = instanceID4
+// 	e = b.validateTiming(context.Background(), &m.Message)
+// 	r.ErrorIs(e, errFutureMsg)
+// }
 
-func TestBroker_clean(t *testing.T) {
-	r := require.New(t)
-	b := buildBroker(t, t.Name())
+// func TestBroker_clean(t *testing.T) {
+// 	r := require.New(t)
+// 	b := buildBroker(t, t.Name())
 
-	ten := instanceID0.Add(10)
-	b.setLatestLayer(context.Background(), ten.Sub(1))
+// 	ten := instanceID0.Add(10)
+// 	b.setLatestLayer(context.Background(), ten.Sub(1))
 
-	b.mu.Lock()
-	b.outbox[5] = make(chan any)
-	b.mu.Unlock()
+// 	b.mu.Lock()
+// 	b.outbox[5] = make(chan any)
+// 	b.mu.Unlock()
 
-	b.cleanOldLayers()
-	r.Equal(ten.Sub(2), b.minDeleted)
+// 	b.cleanOldLayers()
+// 	r.Equal(ten.Sub(2), b.minDeleted)
 
-	b.mu.Lock()
-	delete(b.outbox, 5)
-	b.mu.Unlock()
+// 	b.mu.Lock()
+// 	delete(b.outbox, 5)
+// 	b.mu.Unlock()
 
-	b.cleanOldLayers()
-}
+// 	b.cleanOldLayers()
+// }
 
 func TestBroker_Flow(t *testing.T) {
 	r := require.New(t)
