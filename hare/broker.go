@@ -82,41 +82,7 @@ func (b *Broker) Start(ctx context.Context) {
 	})
 }
 
-var (
-	errUnregistered = errors.New("layer is unregistered")
-	errFutureMsg    = errors.New("future message")
-	errRegistration = errors.New("failed during registration")
-	errClosed       = errors.New("closed")
-)
-
-func (b *Broker) validateTiming(ctx context.Context, m *Message) error {
-	msgInstID := m.Layer
-
-	_, exist := b.outbox[msgInstID.Uint32()]
-	if exist {
-		b.Log.WithContext(ctx).With().Debug("instance exists", msgInstID)
-		return nil
-	}
-
-	latestLayer := b.latestLayer
-
-	if msgInstID.Before(latestLayer) {
-		return fmt.Errorf("%w: msg %v, latest %v", errUnregistered, msgInstID.Uint32(), latestLayer)
-	}
-
-	// current layer
-	if msgInstID == latestLayer {
-		return fmt.Errorf("%w: latest %v", errRegistration, latestLayer)
-	}
-
-	// early msg
-	if msgInstID == latestLayer.Add(1) {
-		return fmt.Errorf("%w: latest %v", errEarlyMsg, latestLayer)
-	}
-
-	// future msg
-	return fmt.Errorf("%w: msg %v, latest %v", errFutureMsg, msgInstID, latestLayer)
-}
+var errClosed = errors.New("closed")
 
 // HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
 func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
@@ -160,14 +126,14 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		return err
 	}
 	isEarly := false
-	if err = b.validateTiming(ctx, &hareMsg); err != nil {
-		if !errors.Is(err, errEarlyMsg) {
-			// not early, validation failed
-			logger.With().Debug("broker received a message to a consensus process that is not registered",
-				log.Err(err))
-			return err
-		}
 
+	out, exist := b.outbox[msgLayer.Uint32()]
+	if !exist {
+		logger.Debug("broker received a message to a consensus process that is not registered, latestLayer: %v, messageLayer: %v, messageType: %v", hareMsg.InnerMsg.Type)
+		if msgLayer != b.latestLayer.Add(1) {
+			// This error is never inspected except to determine if it is not nil.
+			return errors.New("")
+		}
 		logger.With().Debug("early message detected", log.Err(err))
 		isEarly = true
 	}
@@ -217,12 +183,6 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		return b.handleEarlyMessage(logger, msgLayer, nodeID, iMsg)
 	}
 
-	// has instance, just send
-	out, exist := b.outbox[msgLayer.Uint32()]
-	if !exist {
-		logger.With().Debug("missing broker instance for layer", msgLayer)
-		return errTooOld
-	}
 	logger.With().Debug("broker forwarding message to outbox",
 		log.Int("queue_size", len(out)))
 	select {

@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
@@ -552,30 +554,55 @@ func TestBroker_eventLoop(t *testing.T) {
 	r.Equal(msg, rec.Message)
 }
 
-// func Test_validate(t *testing.T) {
-// 	r := require.New(t)
-// 	b := buildBroker(t, t.Name())
+func Test_validate(t *testing.T) {
+	r := require.New(t)
+	b := buildBroker(t, t.Name())
 
-// 	signer, err := signing.NewEdSigner()
-// 	require.NoError(t, err)
-// 	m := BuildStatusMsg(signer, NewDefaultEmptySet())
-// 	m.Layer = instanceID1
-// 	b.setLatestLayer(context.Background(), instanceID2)
-// 	e := b.validateTiming(context.Background(), &m.Message)
-// 	r.ErrorIs(e, errUnregistered)
+	b.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 
-// 	m.Layer = instanceID2
-// 	e = b.validateTiming(context.Background(), &m.Message)
-// 	r.ErrorIs(e, errRegistration)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	b.Start(ctx)
 
-// 	m.Layer = instanceID3
-// 	e = b.validateTiming(context.Background(), &m.Message)
-// 	r.ErrorIs(e, errEarlyMsg)
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	mGood := BuildStatusMsg(signer, NewDefaultEmptySet())
+	mGood.Layer = instanceID2
+	mLate := BuildStatusMsg(signer, NewDefaultEmptySet())
+	mLate.Layer = instanceID1
+	mEarly := BuildStatusMsg(signer, NewDefaultEmptySet())
+	mEarly.Layer = instanceID3
+	mFuture := BuildStatusMsg(signer, NewDefaultEmptySet())
+	mFuture.Layer = instanceID4
 
-// 	m.Layer = instanceID4
-// 	e = b.validateTiming(context.Background(), &m.Message)
-// 	r.ErrorIs(e, errFutureMsg)
-// }
+	_, err = b.Register(ctx, mGood.Layer)
+	r.NoError(err)
+
+	buf := &bytes.Buffer{}
+	_, err = mGood.EncodeScale(scale.NewEncoder(buf))
+	r.NoError(err)
+	err = b.handleMessage(ctx, buf.Bytes())
+	r.NoError(err)
+
+	buf.Reset()
+	_, err = mEarly.EncodeScale(scale.NewEncoder(buf))
+	r.NoError(err)
+	err = b.handleMessage(ctx, buf.Bytes())
+	r.NoError(err)
+
+	buf.Reset()
+	_, err = mLate.EncodeScale(scale.NewEncoder(buf))
+	r.NoError(err)
+	err = b.handleMessage(ctx, buf.Bytes())
+	r.Error(err)
+
+	buf.Reset()
+	_, err = mFuture.EncodeScale(scale.NewEncoder(buf))
+	r.NoError(err)
+	err = b.handleMessage(ctx, buf.Bytes())
+	r.Error(err)
+
+}
 
 // func TestBroker_clean(t *testing.T) {
 // 	r := require.New(t)
