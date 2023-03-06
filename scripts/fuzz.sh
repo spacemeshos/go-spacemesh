@@ -10,12 +10,12 @@ files=$(grep -r --include='**_test.go' --files-with-matches 'func Fuzz' .)
 
 for file in ${files}
 do
-	funcs=$(grep -oP 'func \K(Fuzz\w*)' $file)
-	for func in ${funcs}
-	do
-		parentDir=$(dirname $file)
+    funcs=$(grep -oP 'func \K(Fuzz\w*)' $file)
+    for func in ${funcs}
+    do
+        parentDir=$(dirname $file)
         command="go test $parentDir -run=$func -fuzz=$func -fuzztime=${fuzzTime}"
-		echo $command
+        echo $command
         eval $command
-	done
+    done
 done
