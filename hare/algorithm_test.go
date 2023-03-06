@@ -21,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 func newRoundClockFromCfg(logger log.Log, cfg config.Config) *SimpleRoundClock {
@@ -144,7 +143,6 @@ type testBroker struct {
 	*Broker
 	cdb        *datastore.CachedDB
 	mockStateQ *mocks.MockstateQuerier
-	mockSyncS  *smocks.MockSyncStateProvider
 }
 
 func buildBroker(tb testing.TB, testName string) *testBroker {
@@ -154,16 +152,14 @@ func buildBroker(tb testing.TB, testName string) *testBroker {
 func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker {
 	ctrl := gomock.NewController(tb)
 	mockStateQ := mocks.NewMockstateQuerier(ctrl)
-	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
 	mch := make(chan *types.MalfeasanceGossip, 1)
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(tb, err)
 	return &testBroker{
-		Broker: newBroker(cdb, pke, &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
+		Broker: newBroker(cdb, pke, &mockEligibilityValidator{valid: 1}, mockStateQ,
 			mch, limit, logtest.New(tb).WithName(testName)),
 		cdb:        cdb,
-		mockSyncS:  mockSyncS,
 		mockStateQ: mockStateQ,
 	}
 }
@@ -251,8 +247,6 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	r := require.New(t)
 	net := &mockP2p{}
 	broker := buildBroker(t, t.Name())
-	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.Start(context.Background())
 	proc := generateConsensusProcess(t)
 	proc.publisher = net
@@ -292,8 +286,6 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 
 func TestConsensusProcess_nextRound(t *testing.T) {
 	broker := buildBroker(t, t.Name())
-	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.Start(context.Background())
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound(context.Background())
