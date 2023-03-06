@@ -19,7 +19,7 @@ type Message struct {
 	Signature   []byte
 	InnerMsg    *InnerMessage
 	Eligibility types.HareEligibility
-	PublicKey   []byte
+	PublicKey   [32]byte
 }
 
 // MessageFromBuffer builds an Hare message from the provided bytes buffer.
@@ -133,7 +133,7 @@ func (mb *messageBuilder) SetCertificate(certificate *Certificate) *messageBuild
 // Sign calls the provided signer to calculate the signature and then set it accordingly.
 func (mb *messageBuilder) Sign(signing Signer) *messageBuilder {
 	mb.msg.Signature = signing.Sign(mb.msg.SignedBytes())
-	mb.msg.PublicKey = signing.PublicKey().PublicKey
+	copy(mb.msg.PublicKey[:], signing.PublicKey().PublicKey)
 	return mb
 }
 

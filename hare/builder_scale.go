@@ -38,7 +38,7 @@ func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.PublicKey)
+		n, err := scale.EncodeByteArray(enc, t.PublicKey[:])
 		if err != nil {
 			return total, err
 		}
@@ -79,12 +79,11 @@ func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		n, err := scale.DecodeByteArray(dec, t.PublicKey[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.PublicKey = field
 	}
 	return total, nil
 }
