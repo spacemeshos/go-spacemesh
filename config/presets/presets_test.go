@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/post/initialization"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCanGeneratePOST(t *testing.T) {
@@ -24,7 +24,6 @@ func TestCanGeneratePOST(t *testing.T) {
 		opts := params.SMESHING.Opts
 		opts.DataDir = t.TempDir()
 		opts.MaxFileSize = 4096
-		opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 		mgr, err := activation.NewPostSetupManager(types.NodeID{}, params.POST, logtest.New(t), cdb, goldenATXID)
 		req.NoError(err)
