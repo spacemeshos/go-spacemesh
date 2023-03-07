@@ -39,5 +39,4 @@ func TestCanGeneratePOST(t *testing.T) {
 	t.Run("testnet", func(t *testing.T) {
 		runTest(t, testnet())
 	})
-
 }
