@@ -83,8 +83,8 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&cfg.P2P.HighPeers, "high-peers",
 		cfg.P2P.HighPeers,
 		"high watermark for the number of connections; once reached, connections are pruned until low watermark remains")
-	cmd.PersistentFlags().IntVar(&cfg.P2P.TargetOutbound, "target-outbound",
-		cfg.P2P.TargetOutbound, "target outbound connections")
+	cmd.PersistentFlags().IntVar(&cfg.P2P.MinPeers, "min-peers",
+		cfg.P2P.MinPeers, "actively search for peers until you get this much")
 	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.Bootnodes, "bootnodes",
 		cfg.P2P.Bootnodes, "entrypoints into the network")
 	cmd.PersistentFlags().StringVar(&cfg.P2P.AdvertiseAddress, "advertise-address",
