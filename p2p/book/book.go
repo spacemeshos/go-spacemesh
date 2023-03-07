@@ -281,10 +281,13 @@ func (b *Book) Recover(r io.Reader) error {
 	}
 	// prioritize establishing connections with previously connected addresses
 	sort.Slice(queue, func(i, j int) bool {
-		if queue[i].Connected && !queue[j].Connected {
-			return true
+		if queue[i].Connected != queue[j].Connected {
+			return queue[i].Connected
+		} else if queue[i].Class != queue[j].Class {
+			return queue[i].Class > queue[j].Class
+		} else {
+			return queue[i].ID < queue[j].ID
 		}
-		return queue[i].Class < queue[j].Class
 	})
 	for _, addr := range queue {
 		b.queue.PushBack(addr)

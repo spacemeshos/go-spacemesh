@@ -363,15 +363,21 @@ func TestBook(t *testing.T) {
 		{"sort on recovery", []step{
 			add("1", "/ip4/0.0.0.0/tcp/1111"),
 			add("2", "/ip4/0.0.0.0/tcp/2222"),
+			add("3", "/ip4/0.0.0.0/tcp/3333"),
+			add("4", "/ip4/0.0.0.0/tcp/4444"),
 			update("2", book.Connected),
+			update("3", book.Fail),
+			update("4", book.Fail),
 			persist(
 				`
 {"id":"1","raw":"/ip4/0.0.0.0/tcp/1111","class":2,"connected":false}
 {"id":"2","raw":"/ip4/0.0.0.0/tcp/2222","class":2,"connected":true}
-516371166648090384
+{"id":"3","raw":"/ip4/0.0.0.0/tcp/3333","class":1,"connected":false}
+{"id":"4","raw":"/ip4/0.0.0.0/tcp/4444","class":1,"connected":false}
+2330804601436921791
 `),
 			recover(),
-			drain(2, "2", "1"),
+			drain(4, "2", "1", "3", "4"),
 		}},
 		{"persist error on checksum", []step{
 			faultyPersist("write checksum"),
