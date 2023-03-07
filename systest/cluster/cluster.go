@@ -599,10 +599,14 @@ func extractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]stri
 }
 
 func minPeers(size int) int {
-	if size < 10 {
-		return 3
+	if size < 100 {
+		return int(float64(size) * 0.6)
 	}
-	return int(0.3 * float64(size))
+	other := size / 3
+	if other > 100 {
+		return 100
+	}
+	return other
 }
 
 func persistFlags(ctx *testcontext.Context, name string, config map[string]DeploymentFlag) error {
