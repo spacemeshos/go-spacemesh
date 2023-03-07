@@ -54,11 +54,11 @@ func fastnet() config.Config {
 	conf.POST.BitsPerLabel = 8
 	conf.POST.K1 = 12
 	conf.POST.K2 = 4
-	conf.POST.LabelsPerUnit = 32 // bytes
+	conf.POST.LabelsPerUnit = 128 // bytes
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
 	conf.POST.N = 32
-	conf.POST.B = 2
+	conf.POST.B = 16
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
