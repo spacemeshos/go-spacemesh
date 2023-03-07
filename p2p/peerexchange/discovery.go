@@ -27,6 +27,8 @@ import (
 
 const peersFile = "peers.txt"
 
+const peerPollPeriod = 500 * time.Millisecond
+
 // Config for Discovery.
 type Config struct {
 	Bootnodes            []string
@@ -177,12 +179,12 @@ func (d *Discovery) scanPeers(ctx context.Context) {
 	period := d.cfg.FastCrawl
 	concurrent := 5
 	d.eg.Go(func() error {
+		var prev time.Time
 		for {
-			if err := d.crawl.Crawl(ctx, concurrent); err != nil {
-				if errors.Is(err, context.Canceled) {
-					return nil
-				}
-				return err
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(peerPollPeriod):
 			}
 			if len(d.host.Network().Peers()) >= d.cfg.MinPeers {
 				period = d.cfg.SlowCrawl
@@ -191,11 +193,17 @@ func (d *Discovery) scanPeers(ctx context.Context) {
 				period = d.cfg.FastCrawl
 				concurrent = 5
 			}
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(period):
+			if time.Since(prev) < period {
+				continue
 			}
+			prev = time.Now()
+			if err := d.crawl.Crawl(ctx, concurrent); err != nil {
+				if errors.Is(err, context.Canceled) {
+					return nil
+				}
+				return err
+			}
+
 		}
 	})
 }
