@@ -52,11 +52,11 @@ func testnet() config.Config {
 	conf.POST.BitsPerLabel = 8
 	conf.POST.K1 = 200
 	conf.POST.K2 = 212
-	conf.POST.LabelsPerUnit = 1 << 10 // 1K
+	conf.POST.LabelsPerUnit = 2048
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
 	conf.POST.N = 32
-	conf.POST.B = 4
+	conf.POST.B = 16
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
