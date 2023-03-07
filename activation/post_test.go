@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/spacemeshos/post/initialization"
+	"github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -118,14 +120,32 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.NoError(err)
 
 	// Attempt to generate proof.
-	_, _, err = mgr.GenerateProof(ch)
+	_, _, err = mgr.GenerateProof(context.Background(), ch)
 	req.EqualError(err, errNotComplete.Error())
 
 	// Create data.
 	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Generate proof.
-	_, _, err = mgr.GenerateProof(ch)
+	p, m, err := mgr.GenerateProof(context.Background(), ch)
+	req.NoError(err)
+
+	// Verify the proof
+	err = verifying.Verify(&shared.Proof{
+		Nonce:   p.Nonce,
+		Indices: p.Indices,
+	}, &shared.ProofMetadata{
+		NodeId:          id.Bytes(),
+		CommitmentAtxId: goldenATXID.Bytes(),
+		Challenge:       ch,
+		NumUnits:        opts.NumUnits,
+		BitsPerLabel:    m.BitsPerLabel,
+		LabelsPerUnit:   m.LabelsPerUnit,
+		K1:              m.K1,
+		K2:              m.K2,
+		B:               m.B,
+		N:               m.N,
+	})
 	req.NoError(err)
 
 	// Re-instantiate `PostSetupManager`.
@@ -133,7 +153,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.NoError(err)
 
 	// Attempt to generate proof.
-	_, _, err = mgr.GenerateProof(ch)
+	_, _, err = mgr.GenerateProof(context.Background(), ch)
 	req.ErrorIs(err, errNotComplete)
 }
 

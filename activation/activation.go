@@ -112,7 +112,7 @@ func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 }
 
 // PoETClientInitializer interfaces for creating PoetProvingServiceClient.
-type PoETClientInitializer func(string, PoetConfig) PoetProvingServiceClient
+type PoETClientInitializer func(string, PoetConfig) (PoetProvingServiceClient, error)
 
 // WithPoETClientInitializer modifies initialization logic for PoET client. Used during client update.
 func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption {
@@ -286,7 +286,7 @@ func (b *Builder) generateProof(ctx context.Context) error {
 		// Once initialized, run the execution phase with zero-challenge,
 		// to create the initial proof (the commitment).
 		startTime := time.Now()
-		b.initialPost, b.initialPostMeta, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
+		b.initialPost, b.initialPostMeta, err = b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge)
 		if err != nil {
 			return fmt.Errorf("post execution: %w", err)
 		}
@@ -477,14 +477,17 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 
 	clients := make([]PoetProvingServiceClient, 0, len(endpoints))
 	for _, endpoint := range endpoints {
-		client := b.poetClientInitializer(endpoint, b.poetCfg)
+		client, err := b.poetClientInitializer(endpoint, b.poetCfg)
+		if err != nil {
+			return &PoetSvcUnstableError{source: fmt.Errorf("initial poet client '%s': %w", endpoint, err)}
+		}
 		// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
 		// Maybe it should be provided during update.
 		ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 		defer cancel()
 		sid, err := client.PoetServiceID(ctx)
 		if err != nil {
-			return &PoetSvcUnstableError{source: fmt.Errorf("failed to query poet '%s' for ID (%w)", endpoint, err)}
+			return &PoetSvcUnstableError{source: fmt.Errorf("failed to query poet '%s' for ID: %w", endpoint, err)}
 		}
 		b.log.WithContext(ctx).With().Debug("preparing to update poet service", log.String("poet_id", hex.EncodeToString(sid)))
 		clients = append(clients, client)

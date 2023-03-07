@@ -295,7 +295,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	postSetupOpts := PostSetupOpts{}
 
 	tab.mpost.EXPECT().StartSession(gomock.Any(), postSetupOpts, gomock.Any())
-	tab.mpost.EXPECT().GenerateProof(gomock.Any())
+	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any())
 	ch := make(chan struct{})
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch)
 	require.NoError(t, tab.StartSmeshing(coinbase, postSetupOpts))
@@ -312,7 +312,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	getBuilder := func(t *testing.T) *Builder {
 		tab := newTestBuilder(t)
 		tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-		tab.mpost.EXPECT().GenerateProof(gomock.Any()).AnyTimes()
+		tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes()
 		tab.mpost.EXPECT().Reset().AnyTimes()
 		ch := make(chan struct{})
 		close(ch)
@@ -359,7 +359,7 @@ func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
 func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	tab := newTestBuilder(t)
 	tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	tab.mpost.EXPECT().GenerateProof(gomock.Any()).Return(nil, nil, nil).AnyTimes()
+	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).Return(nil, nil, nil).AnyTimes()
 	ch := make(chan struct{})
 	close(ch)
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch).AnyTimes()
@@ -1134,7 +1134,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.mpost.EXPECT().GenerateProof(gomock.Any())
+	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any())
 	require.NoError(t, tab.generateProof(context.Background()))
 
 	posAtxLayer := (postGenesisEpoch + 1).FirstLayer()
@@ -1159,15 +1159,15 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 func TestBuilder_UpdatePoets(t *testing.T) {
 	r := require.New(t)
 
-	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) PoetProvingServiceClient {
+	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (PoetProvingServiceClient, error) {
 		poet := NewMockPoetProvingServiceClient(gomock.NewController(t))
 		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return([]byte("poetid"), nil)
-		return poet
+		return poet, nil
 	}))
 
 	r.Nil(tab.Builder.receivePendingPoetClients())
 
-	err := tab.Builder.UpdatePoETServers(context.Background(), []string{"poet0", "poet1"})
+	err := tab.Builder.UpdatePoETServers(context.Background(), []string{"http://poet0", "http://poet1"})
 	r.NoError(err)
 
 	clients := tab.Builder.receivePendingPoetClients()
@@ -1179,13 +1179,13 @@ func TestBuilder_UpdatePoets(t *testing.T) {
 func TestBuilder_UpdatePoetsUnstable(t *testing.T) {
 	r := require.New(t)
 
-	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) PoetProvingServiceClient {
+	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (PoetProvingServiceClient, error) {
 		poet := NewMockPoetProvingServiceClient(gomock.NewController(t))
 		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return([]byte("poetid"), errors.New("ERROR"))
-		return poet
+		return poet, nil
 	}))
 
-	err := tab.Builder.UpdatePoETServers(context.Background(), []string{"poet0", "poet1"})
+	err := tab.Builder.UpdatePoETServers(context.Background(), []string{"http://poet0", "http://poet1"})
 	r.ErrorIs(err, ErrPoetServiceUnstable)
 	r.Nil(tab.receivePendingPoetClients())
 }

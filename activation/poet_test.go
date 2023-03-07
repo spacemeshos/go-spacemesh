@@ -34,6 +34,7 @@ func TestHTTPPoet(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	t.Parallel()
 	r := require.New(t)
 
 	gtw := util.NewMockGrpcServer(t)
@@ -47,7 +48,7 @@ func TestHTTPPoet(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c, err := activation.NewHTTPPoetHarness(ctx, poetDir, activation.WithGateway(gtw.Target()))
+	c, err := activation.NewHTTPPoetTestHarness(ctx, poetDir, activation.WithGateway(gtw.Target()))
 	r.NoError(err)
 	r.NotNil(c)
 

@@ -66,7 +66,7 @@ type postSetupProvider interface {
 	Benchmark(p PostSetupComputeProvider) (int, error)
 	StartSession(context context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error
 	Reset() error
-	GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error)
+	GenerateProof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error)
 	VRFNonce() (*types.VRFPostIndex, error)
 	LastOpts() *PostSetupOpts
 	Config() PostConfig

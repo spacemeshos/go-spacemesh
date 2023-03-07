@@ -1,5 +1,6 @@
 name: System tests
 on:
+  # Allow manually triggering this workflow
   workflow_dispatch:
   push:
     branches:

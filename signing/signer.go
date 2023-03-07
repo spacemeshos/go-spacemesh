@@ -7,7 +7,7 @@ import (
 	"io"
 
 	oasis "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
-	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/ed25519-recovery"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -96,7 +96,7 @@ func (es *EdSigner) Sign(m []byte) []byte {
 	msg := make([]byte, len(m)+len(es.prefix))
 	copy(msg, es.prefix)
 	copy(msg[len(es.prefix):], m)
-	return ed25519.Sign2(es.priv, msg)
+	return ed25519.Sign(es.priv, msg)
 }
 
 // NodeID returns the node ID of the signer.

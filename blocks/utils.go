@@ -27,6 +27,7 @@ var (
 	errNodeHasBadMeshHash   = errors.New("node has different mesh hash from majority")
 	errProposalTxMissing    = errors.New("proposal tx not found")
 	errProposalTxHdrMissing = errors.New("proposal tx missing header")
+	errDuplicateATX         = errors.New("multiple proposals with same ATX")
 )
 
 type meshState struct {
@@ -60,7 +61,7 @@ func getProposalMetadata(
 		meshHashes = make(map[types.Hash32]*meshState)
 		err        error
 	)
-	md.tickHeight, md.rewards, err = extractCoinbasesAndHeight(logger, cdb, cfg, proposals)
+	md.tickHeight, md.rewards, err = rewardInfoAndHeight(logger, cdb, cfg, proposals)
 	if err != nil {
 		return nil, err
 	}
@@ -189,9 +190,9 @@ func toUint64Slice(b []byte) []uint64 {
 	return s
 }
 
-func extractCoinbasesAndHeight(logger log.Log, cdb *datastore.CachedDB, cfg Config, props []*types.Proposal) (uint64, []types.AnyReward, error) {
-	weights := make(map[types.Address]*big.Rat)
-	coinbases := make([]types.Address, 0, len(props))
+func rewardInfoAndHeight(logger log.Log, cdb *datastore.CachedDB, cfg Config, props []*types.Proposal) (uint64, []types.AnyReward, error) {
+	weights := make(map[types.ATXID]*big.Rat)
+	atxids := make([]types.ATXID, 0, len(props))
 	max := uint64(0)
 	for _, p := range props {
 		if p.AtxID == *types.EmptyATXID {
@@ -200,12 +201,12 @@ func extractCoinbasesAndHeight(logger log.Log, cdb *datastore.CachedDB, cfg Conf
 			return 0, nil, errInvalidATXID
 		}
 		atx, err := cdb.GetAtxHeader(p.AtxID)
-		if atx.BaseTickHeight > max {
-			max = atx.BaseTickHeight
-		}
 		if err != nil {
 			logger.With().Warning("proposal ATX not found", p.ID(), p.AtxID, log.Err(err))
 			return 0, nil, fmt.Errorf("block gen get ATX: %w", err)
+		}
+		if atx.BaseTickHeight > max {
+			max = atx.BaseTickHeight
 		}
 		ballot := &p.Ballot
 		weightPer, err := proposals.ComputeWeightPerEligibility(cdb, ballot, cfg.LayerSize, cfg.LayersPerEpoch)
@@ -215,33 +216,34 @@ func extractCoinbasesAndHeight(logger log.Log, cdb *datastore.CachedDB, cfg Conf
 		}
 		logger.With().Debug("weight per eligibility", p.ID(), log.Stringer("weight_per", weightPer))
 		actual := weightPer.Mul(weightPer, new(big.Rat).SetUint64(uint64(len(ballot.EligibilityProofs))))
-		if weight, ok := weights[atx.Coinbase]; !ok {
-			weights[atx.Coinbase] = actual
-			coinbases = append(coinbases, atx.Coinbase)
+		if _, ok := weights[atx.ID]; !ok {
+			weights[atx.ID] = actual
+			atxids = append(atxids, atx.ID)
 		} else {
-			weights[atx.Coinbase].Add(weight, actual)
+			logger.With().Error("multiple proposals with the same ATX", atx.ID, p.ID())
+			return 0, nil, fmt.Errorf("%w: atx %v proposal %v", errDuplicateATX, atx.ID, p.ID())
 		}
 		events.ReportProposal(events.ProposalIncluded, p)
 	}
 	// make sure we output coinbase in a stable order.
-	sort.Slice(coinbases, func(i, j int) bool {
-		return bytes.Compare(coinbases[i].Bytes(), coinbases[j].Bytes()) < 0
+	sort.Slice(atxids, func(i, j int) bool {
+		return bytes.Compare(atxids[i].Bytes(), atxids[j].Bytes()) < 0
 	})
 	rewards := make([]types.AnyReward, 0, len(weights))
-	for _, coinbase := range coinbases {
-		weight, ok := weights[coinbase]
+	for _, id := range atxids {
+		weight, ok := weights[id]
 		if !ok {
-			logger.With().Fatal("coinbase missing", coinbase)
+			logger.With().Fatal("atx missing", id)
 		}
 		rewards = append(rewards, types.AnyReward{
-			Coinbase: coinbase,
+			AtxID: id,
 			Weight: types.RatNum{
 				Num:   weight.Num().Uint64(),
 				Denom: weight.Denom().Uint64(),
 			},
 		})
-		logger.With().Debug("adding coinbase weight",
-			log.Stringer("coinbase", coinbase),
+		logger.With().Debug("adding atx weight",
+			log.Stringer("atx", id),
 			log.Stringer("weight", weight))
 	}
 	return max, rewards, nil

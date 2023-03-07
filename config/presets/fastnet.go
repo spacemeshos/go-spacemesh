@@ -34,7 +34,7 @@ func fastnet() config.Config {
 	conf.HARE.RoundDuration = 2 * time.Second
 	conf.HARE.WakeupDelta = 3 * time.Second
 
-	conf.P2P.TargetOutbound = 10
+	conf.P2P.MinPeers = 10
 
 	conf.Genesis = &config.GenesisConfig{
 		ExtraData: "fastnet",
@@ -52,11 +52,13 @@ func fastnet() config.Config {
 	conf.HareEligibility.EpochOffset = 0
 
 	conf.POST.BitsPerLabel = 8
-	conf.POST.K1 = 2000
+	conf.POST.K1 = 12
 	conf.POST.K2 = 4
-	conf.POST.LabelsPerUnit = 32
+	conf.POST.LabelsPerUnit = 128 // bytes
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
+	conf.POST.N = 32
+	conf.POST.B = 16
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false

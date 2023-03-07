@@ -531,7 +531,7 @@ func (app *App) initServices(
 		tortoise.WithConfig(trtlCfg),
 	)
 
-	executor := mesh.NewExecutor(app.db, state, app.conState, app.addLogger(Executor, lg))
+	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(Executor, lg))
 	msh, err := mesh.NewMesh(app.cachedDB, clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
@@ -592,12 +592,6 @@ func (app *App) initServices(
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(app.addLogger(Fetcher, lg)),
-		fetch.WithATXHandler(atxHandler),
-		fetch.WithBallotHandler(proposalListener),
-		fetch.WithBlockHandler(blockHandler),
-		fetch.WithProposalHandler(proposalListener),
-		fetch.WithTXHandler(txHandler),
-		fetch.WithPoetHandler(poetDb),
 	)
 	fetcherWrapped.Fetcher = fetcher
 
@@ -707,6 +701,7 @@ func (app *App) initServices(
 		app.hare,
 		app.keyExtractor,
 	)
+	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, txHandler, malfeasanceHandler)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
 		if newSyncer.ListenToGossip() {
@@ -760,7 +755,9 @@ func (app *App) initServices(
 }
 
 func (app *App) startServices(ctx context.Context) error {
-	app.fetcher.Start()
+	if err := app.fetcher.Start(); err != nil {
+		return fmt.Errorf("failed to start fetcher: %w", err)
+	}
 	go app.startSyncer(ctx)
 	app.beaconProtocol.Start(ctx)
 
@@ -1076,7 +1073,11 @@ func (app *App) Start(ctx context.Context) error {
 
 	poetClients := make([]activation.PoetProvingServiceClient, 0, len(app.Config.PoETServers))
 	for _, address := range app.Config.PoETServers {
-		poetClients = append(poetClients, activation.NewHTTPPoetClient(address, app.Config.POET))
+		client, err := activation.NewHTTPPoetClient(address, app.Config.POET)
+		if err != nil {
+			return fmt.Errorf("cannot create poet client: %w", err)
+		}
+		poetClients = append(poetClients, client)
 	}
 
 	edPubkey := edSgn.PublicKey()

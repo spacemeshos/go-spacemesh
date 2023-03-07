@@ -1,25 +1,39 @@
 package mesh_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"os"
+	"sort"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(4)
+	res := m.Run()
+	os.Exit(res)
+}
+
 type testExecutor struct {
 	exec *mesh.Executor
-	db   sql.Executor
+	db   *sql.Database
 	mcs  *mocks.MockconservativeState
 	mvm  *mocks.MockvmState
 }
@@ -31,7 +45,8 @@ func newTestExecutor(t *testing.T) *testExecutor {
 		mvm: mocks.NewMockvmState(ctrl),
 		mcs: mocks.NewMockconservativeState(ctrl),
 	}
-	te.exec = mesh.NewExecutor(te.db, te.mvm, te.mcs, logtest.New(t))
+	lg := logtest.New(t)
+	te.exec = mesh.NewExecutor(datastore.NewCachedDB(te.db, lg), te.mvm, te.mcs, lg)
 	return te
 }
 
@@ -46,6 +61,30 @@ func makeResults(lid types.LayerID, txs ...types.Transaction) []types.Transactio
 		})
 	}
 	return results
+}
+
+func createATX(t testing.TB, db sql.Executor, cb types.Address) types.ATXID {
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	nodeID := sig.NodeID()
+	nonce := types.VRFPostIndex(1)
+	atx := types.NewActivationTx(
+		types.NIPostChallenge{PubLayerID: types.NewLayerID(11)},
+		&nodeID,
+		cb,
+		nil,
+		11,
+		nil,
+		&nonce,
+	)
+
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
+	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(db, vAtx))
+	return vAtx.ID()
 }
 
 func TestExecutor_Execute(t *testing.T) {
@@ -83,11 +122,7 @@ func TestExecutor_Execute(t *testing.T) {
 		LayerIndex: lid,
 	})
 	t.Run("empty block", func(t *testing.T) {
-		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, gomock.Any(), block.Rewards).DoAndReturn(
-			func(_ vm.ApplyContext, got []types.Transaction, _ []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
-				require.Empty(t, got)
-				return nil, nil, nil
-			})
+		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, []types.Transaction{}, []types.CoinbaseReward{})
 		te.mcs.EXPECT().UpdateCache(gomock.Any(), lid, block.ID(), nil, nil)
 		te.mvm.EXPECT().GetStateRoot()
 		require.NoError(t, te.exec.Execute(context.Background(), block.LayerIndex, block))
@@ -95,14 +130,40 @@ func TestExecutor_Execute(t *testing.T) {
 	})
 
 	lid = lid.Add(1)
+	cbs := []types.Address{{1, 2, 3}, {2, 3, 4}}
+	rewards := []types.AnyReward{
+		{
+			AtxID:  createATX(t, te.db, cbs[0]),
+			Weight: types.RatNum{Num: 1, Denom: 3},
+		},
+		{
+			AtxID:  createATX(t, te.db, cbs[1]),
+			Weight: types.RatNum{Num: 2, Denom: 3},
+		},
+	}
+	expRewards := []types.CoinbaseReward{
+		{
+			Coinbase: cbs[0],
+			Weight:   rewards[0].Weight,
+		},
+		{
+			Coinbase: cbs[1],
+			Weight:   rewards[1].Weight,
+		},
+	}
+	sort.Slice(expRewards, func(i, j int) bool {
+		return bytes.Compare(expRewards[i].Coinbase.Bytes(), expRewards[j].Coinbase.Bytes()) < 0
+	})
+
 	block = types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{
 		LayerIndex: lid,
 		TxIDs:      mesh.CreateAndSaveTxs(t, te.db, 10),
+		Rewards:    rewards,
 	})
 	errInconceivable := errors.New("inconceivable")
 	t.Run("vm failure", func(t *testing.T) {
-		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: block.LayerIndex}, gomock.Any(), block.Rewards).DoAndReturn(
-			func(_ vm.ApplyContext, got []types.Transaction, _ []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: block.LayerIndex}, gomock.Any(), expRewards).DoAndReturn(
+			func(_ vm.ApplyContext, got []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 				tids := make([]types.TransactionID, 0, len(got))
 				for _, tx := range got {
 					tids = append(tids, tx.ID)
@@ -116,8 +177,8 @@ func TestExecutor_Execute(t *testing.T) {
 	var executed []types.TransactionWithResult
 	var ineffective []types.Transaction
 	t.Run("conservative cache failure", func(t *testing.T) {
-		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: block.LayerIndex}, gomock.Any(), block.Rewards).DoAndReturn(
-			func(_ vm.ApplyContext, got []types.Transaction, _ []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: block.LayerIndex}, gomock.Any(), expRewards).DoAndReturn(
+			func(_ vm.ApplyContext, got []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 				tids := make([]types.TransactionID, 0, len(got))
 				for _, tx := range got {
 					tids = append(tids, tx.ID)
@@ -138,8 +199,8 @@ func TestExecutor_Execute(t *testing.T) {
 	})
 
 	t.Run("applied block", func(t *testing.T) {
-		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: block.LayerIndex}, gomock.Any(), block.Rewards).DoAndReturn(
-			func(_ vm.ApplyContext, got []types.Transaction, _ []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: block.LayerIndex}, gomock.Any(), expRewards).DoAndReturn(
+			func(_ vm.ApplyContext, got []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 				tids := make([]types.TransactionID, 0, len(got))
 				for _, tx := range got {
 					tids = append(tids, tx.ID)
@@ -166,14 +227,31 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 	te := newTestExecutor(t)
 	lid := types.GetEffectiveGenesis()
 	tickHeight := uint64(111)
+	cbs := []types.Address{{1, 2, 3}, {2, 3, 4}}
 	rewards := []types.AnyReward{
 		{
-			Coinbase: types.Address{1},
+			AtxID:  createATX(t, te.db, cbs[0]),
+			Weight: types.RatNum{Num: 1, Denom: 3},
 		},
 		{
-			Coinbase: types.Address{2},
+			AtxID:  createATX(t, te.db, cbs[1]),
+			Weight: types.RatNum{Num: 2, Denom: 3},
 		},
 	}
+	expRewards := []types.CoinbaseReward{
+		{
+			Coinbase: cbs[0],
+			Weight:   rewards[0].Weight,
+		},
+		{
+			Coinbase: cbs[1],
+			Weight:   rewards[1].Weight,
+		},
+	}
+	sort.Slice(expRewards, func(i, j int) bool {
+		return bytes.Compare(expRewards[i].Coinbase.Bytes(), expRewards[j].Coinbase.Bytes()) < 0
+	})
+
 	tids := mesh.CreateAndSaveTxs(t, te.db, 10)
 	require.NoError(t, layers.SetApplied(te.db, lid, types.EmptyBlockID))
 
@@ -198,8 +276,8 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 
 	errInconceivable := errors.New("inconceivable")
 	t.Run("vm failure", func(t *testing.T) {
-		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, gomock.Any(), rewards).DoAndReturn(
-			func(_ vm.ApplyContext, got []types.Transaction, _ []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, gomock.Any(), expRewards).DoAndReturn(
+			func(_ vm.ApplyContext, got []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 				gotTids := make([]types.TransactionID, 0, len(got))
 				for _, tx := range got {
 					gotTids = append(gotTids, tx.ID)
@@ -215,8 +293,8 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 	var executed []types.TransactionWithResult
 	var ineffective []types.Transaction
 	t.Run("conservative cache failure", func(t *testing.T) {
-		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, gomock.Any(), rewards).DoAndReturn(
-			func(_ vm.ApplyContext, got []types.Transaction, _ []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, gomock.Any(), expRewards).DoAndReturn(
+			func(_ vm.ApplyContext, got []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 				gotTids := make([]types.TransactionID, 0, len(got))
 				for _, tx := range got {
 					gotTids = append(gotTids, tx.ID)
@@ -248,8 +326,8 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 	})
 
 	t.Run("executed in situ", func(t *testing.T) {
-		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, gomock.Any(), rewards).DoAndReturn(
-			func(_ vm.ApplyContext, got []types.Transaction, _ []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, gomock.Any(), expRewards).DoAndReturn(
+			func(_ vm.ApplyContext, got []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 				gotTids := make([]types.TransactionID, 0, len(got))
 				for _, tx := range got {
 					gotTids = append(gotTids, tx.ID)
@@ -284,8 +362,8 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 
 	lid = lid.Add(1)
 	t.Run("no txs in block", func(t *testing.T) {
-		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, gomock.Any(), rewards).DoAndReturn(
-			func(_ vm.ApplyContext, got []types.Transaction, _ []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, gomock.Any(), expRewards).DoAndReturn(
+			func(_ vm.ApplyContext, got []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 				require.Empty(t, got)
 				return nil, nil, nil
 			})

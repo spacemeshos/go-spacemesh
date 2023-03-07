@@ -31,7 +31,7 @@ func testnet() config.Config {
 	conf.HARE.RoundDuration = 10 * time.Second
 	conf.HARE.WakeupDelta = 10 * time.Second
 
-	conf.P2P.TargetOutbound = 10
+	conf.P2P.MinPeers = 10
 
 	conf.Genesis = &config.GenesisConfig{
 		ExtraData: "testnet",
@@ -50,11 +50,13 @@ func testnet() config.Config {
 	conf.SyncRequestTimeout = 60_000
 
 	conf.POST.BitsPerLabel = 8
-	conf.POST.K1 = 2000
-	conf.POST.K2 = 1800
-	conf.POST.LabelsPerUnit = 1024
+	conf.POST.K1 = 200
+	conf.POST.K2 = 212
+	conf.POST.LabelsPerUnit = 2048
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
+	conf.POST.N = 32
+	conf.POST.B = 16
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false

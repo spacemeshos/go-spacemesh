@@ -25,7 +25,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/ed25519-recovery"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
@@ -2630,7 +2630,7 @@ func TestEventsReceived(t *testing.T) {
 
 	weight := new(big.Rat).SetFloat64(18.7)
 	require.NoError(t, err)
-	rewards := []types.AnyReward{{Coinbase: addr2, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}}}
+	rewards := []types.CoinbaseReward{{Coinbase: addr2, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}}}
 	svm.Apply(vm.ApplyContext{Layer: types.GetEffectiveGenesis()},
 		[]types.Transaction{*globalTx}, rewards)
 
@@ -2665,7 +2665,7 @@ func TestTransactionsRewards(t *testing.T) {
 
 	address := newAddress(t)
 	weight := new(big.Rat).SetFloat64(18.7)
-	rewards := []types.AnyReward{{Coinbase: address, Weight: types.RatNumFromBigRat(weight)}}
+	rewards := []types.CoinbaseReward{{Coinbase: address, Weight: types.RatNumFromBigRat(weight)}}
 
 	t.Run("Get rewards from AccountDataStream", func(t *testing.T) {
 		t.Parallel()

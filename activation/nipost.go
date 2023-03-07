@@ -29,7 +29,8 @@ type PoetProvingServiceClient interface {
 	// PoetServiceID returns the public key of the PoET proving service.
 	PoetServiceID(context.Context) (types.PoetServiceID, error)
 
-	GetProof(ctx context.Context, roundID string) (*types.PoetProofMessage, error)
+	// Proof returns the proof for the given round ID.
+	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, error)
 }
 
 func (nb *NIPostBuilder) load(challenge types.Hash32) {
@@ -208,7 +209,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 		nb.log.With().Info("starting post execution",
 			log.Binary("challenge", nb.state.PoetProofRef))
 		startTime := time.Now()
-		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(nb.state.PoetProofRef)
+		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(ctx, nb.state.PoetProofRef)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to execute Post: %v", err)
 		}
@@ -320,7 +321,7 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 			case <-time.After(waitTime):
 			}
 
-			proof, err := client.GetProof(ctx, round)
+			proof, err := client.Proof(ctx, round)
 			switch {
 			case errors.Is(err, context.Canceled):
 				return fmt.Errorf("querying proof: %w", ctx.Err())

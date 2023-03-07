@@ -188,7 +188,7 @@ func TestFetch_getHashes(t *testing.T) {
 					return nil
 				}).Times(len(peers))
 
-			got := f.getHashes(context.TODO(), hashes, datastore.BlockDB, f.blockHandler.HandleSyncedBlock)
+			got := f.getHashes(context.TODO(), hashes, datastore.BlockDB, f.validators.block.HandleSyncedBlock)
 			if len(tc.fetchErrs) > 0 || tc.hdlrErr != nil {
 				require.NotEmpty(t, got)
 			} else {
