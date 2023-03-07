@@ -70,6 +70,7 @@ const (
 // Logger names.
 const (
 	AppLogger              = "app"
+	ClockLogger            = "clock"
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
 	StateDbLogger          = "stateDbStore"
@@ -581,7 +582,7 @@ func (app *App) initServices(
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
-			CertifyThreshold: app.Config.HARE.F + 1,
+			CertifyThreshold: app.Config.HARE.N/2 + 1,
 			LayerBuffer:      app.Config.Tortoise.Zdist,
 			NumLayersToKeep:  app.Config.Tortoise.Zdist * 2,
 		}),
@@ -1095,7 +1096,7 @@ func (app *App) Start(ctx context.Context) error {
 		timesync.WithLayerDuration(app.Config.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(gTime),
-		timesync.WithLogger(lg.WithName("clock")),
+		timesync.WithLogger(app.addLogger(ClockLogger, lg)),
 	)
 	if err != nil {
 		return fmt.Errorf("cannot create clock: %w", err)

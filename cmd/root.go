@@ -132,9 +132,6 @@ func AddCommands(cmd *cobra.Command) {
 	// N determines the size of the hare committee
 	cmd.PersistentFlags().IntVar(&cfg.HARE.N, "hare-committee-size",
 		cfg.HARE.N, "Size of Hare committee")
-	// F determines the max number of adversaries in the Hare committee
-	cmd.PersistentFlags().IntVar(&cfg.HARE.F, "hare-max-adversaries",
-		cfg.HARE.F, "Max number of adversaries in the Hare committee")
 	// RoundDuration determines the duration of a round in the Hare protocol
 	cmd.PersistentFlags().DurationVar(&cfg.HARE.RoundDuration, "hare-round-duration",
 		cfg.HARE.RoundDuration, "Duration of round in the Hare protocol")

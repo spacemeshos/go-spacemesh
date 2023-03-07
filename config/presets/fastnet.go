@@ -29,7 +29,6 @@ func fastnet() config.Config {
 	conf.HARE.N = 800
 	conf.HARE.ExpectedLeaders = 10
 	conf.HARE.LimitConcurrent = 5
-	conf.HARE.F = 399
 	conf.HARE.LimitIterations = 3
 	conf.HARE.RoundDuration = 2 * time.Second
 	conf.HARE.WakeupDelta = 3 * time.Second

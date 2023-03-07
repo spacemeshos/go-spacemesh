@@ -982,7 +982,6 @@ func getTestDefaultConfig() *config.Config {
 	cfg.HARE.RoundDuration = 2
 	cfg.HARE.WakeupDelta = 1
 	cfg.HARE.N = 5
-	cfg.HARE.F = 2
 	cfg.HARE.ExpectedLeaders = 5
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3
