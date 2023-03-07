@@ -52,6 +52,8 @@ ifdef dump
     EXTRA_PARAMS:=$(EXTRA_PARAMS) --dump=$(dump)
 endif
 
+FUZZTIME ?= "10s"
+
 all: install build
 .PHONY: all
 
@@ -188,3 +190,7 @@ endif
 
 docker-local-push: docker-local-build dockerpush-only
 .PHONY: docker-local-push
+
+fuzz:
+	./scripts/fuzz.sh $(FUZZTIME)
+.PHONY: fuzz
