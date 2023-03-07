@@ -1,8 +1,6 @@
 
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
-include Makefile-gpu.Inc
-# TODO(nkryuchkov): uncomment when go-svm is imported
-#include Makefile-svm.Inc
+include Makefile-libs.Inc
 
 DOCKER_HUB ?= spacemeshos
 UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests)
@@ -70,8 +68,7 @@ install:
 build: go-spacemesh
 .PHONY: build
 
-# TODO(nkryuchkov): uncomment when go-svm is imported
-get-libs: get-gpu-setup #get-svm
+get-libs: get-gpu-setup get-postrs-lib
 .PHONY: get-libs
 
 gen-p2p-identity:
