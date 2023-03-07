@@ -265,9 +265,11 @@ func (b *Book) Persist(w io.Writer) error {
 func (b *Book) Recover(r io.Reader) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if err := recover(b.known, r); err != nil {
+	known := map[string]*addressInfo{}
+	if err := recover(known, r); err != nil {
 		return err
 	}
+	b.known = known
 	queue := []*addressInfo{}
 	for _, addr := range b.known {
 		addr.bucket = bucketize(addr.Raw.Address)

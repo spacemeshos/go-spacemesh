@@ -402,6 +402,17 @@ func TestBook(t *testing.T) {
 {"id":"2","raw":"/ip4/0.0.0.0/tcp/2222","class":2,"connected":false}
 111`, "stored checksum 111"),
 		}},
+		{"internal state not corrupted on recovery failure", []step{
+			add("1", "/ip4/0.0.0.0/tcp/1111"),
+			faultyRecover(`
+{"id":"2","raw":"/ip4/0.0.0.0/tcp/2222","class":2,"connected":false}
+111			
+`, "checksum"),
+			persist(`
+{"id":"1","raw":"/ip4/0.0.0.0/tcp/1111","class":2,"connected":false}
+4927299508238403564
+`),
+		}},
 		{"stats", []step{
 			add("1", "/ip4/0.0.0.0/tcp/1111"),
 			stats(book.Stats{Total: 1, Private: 1, Learned: 1}),
