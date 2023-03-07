@@ -21,7 +21,6 @@ require (
 	github.com/hashicorp/golang-lru v0.6.0
 	github.com/libp2p/go-libp2p v0.24.2
 	github.com/libp2p/go-libp2p-pubsub v0.8.3
-	github.com/libp2p/go-libp2p-testing v0.12.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/multiformats/go-multiaddr v0.8.0
 	github.com/natefinch/atomic v1.0.1
@@ -37,7 +36,7 @@ require (
 	github.com/spacemeshos/go-scale v1.1.4
 	github.com/spacemeshos/merkle-tree v0.2.1
 	github.com/spacemeshos/poet v0.6.4
-	github.com/spacemeshos/post v0.4.1
+	github.com/spacemeshos/post v0.5.0
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.15.0

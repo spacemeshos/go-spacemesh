@@ -3,12 +3,13 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
@@ -65,9 +66,10 @@ type Host struct {
 	bootstrap *bootstrap.Bootstrap
 }
 
+// TODO(dshulyak) IsBootnode should be a configuration option.
 func isBootnode(h host.Host, bootnodes []string) (bool, error) {
 	for _, raw := range bootnodes {
-		info, err := addressbook.ParseAddrInfo(raw)
+		info, err := peer.AddrInfoFromString(raw)
 		if err != nil {
 			return false, fmt.Errorf("failed to parse bootstrap node: %w", err)
 		}
@@ -107,21 +109,16 @@ func Upgrade(h host.Host, genesisID types.Hash20, opts ...Opt) (*Host, error) {
 		bootstrap.WithNodeReporter(fh.nodeReporter),
 	)
 	if fh.discovery, err = peerexchange.New(fh.logger, h, peerexchange.Config{
-		DataDir:              cfg.DataDir,
-		Bootnodes:            cfg.Bootnodes,
-		CheckPeersNumber:     cfg.CheckPeersNumber,
-		CheckTimeout:         cfg.CheckTimeout,
-		CheckInterval:        cfg.CheckInterval,
-		CheckPeersUsedBefore: cfg.CheckPeersUsedBefore,
-		AdvertiseAddress:     cfg.AdvertiseAddress,
-		PeerExchange:         cfg.peerExchange,
+		DataDir:          cfg.DataDir,
+		Bootnodes:        cfg.Bootnodes,
+		AdvertiseAddress: cfg.AdvertiseAddress,
+		MinPeers:         cfg.MinPeers,
+		SlowCrawl:        10 * time.Minute,
+		FastCrawl:        10 * time.Second,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
 	}
-	if fh.bootstrap, err = bootstrap.NewBootstrap(fh.logger, bootstrap.Config{
-		TargetOutbound: cfg.TargetOutbound,
-		Timeout:        cfg.BootstrapTimeout,
-	}, fh, fh.discovery); err != nil {
+	if fh.bootstrap, err = bootstrap.NewBootstrap(fh.logger, fh); err != nil {
 		return nil, fmt.Errorf("failed to initiliaze bootstrap: %w", err)
 	}
 	fh.hs = handshake.New(fh, genesisID, handshake.WithLog(fh.logger))
