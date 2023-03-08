@@ -117,7 +117,7 @@ func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-	sig := signer.Sign(encoded)
+	sig := signer.Sign(signing.BEACON, encoded)
 
 	if corruptSignature {
 		msg.Signature = sig[1:]
@@ -155,7 +155,7 @@ func createFollowingVote(t *testing.T, signer *signing.EdSigner, epoch types.Epo
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-	sig := signer.Sign(encoded)
+	sig := signer.Sign(signing.BEACON, encoded)
 	if corruptSignature {
 		msg.Signature = sig[1:]
 	} else {
@@ -1307,7 +1307,7 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	if err != nil {
 		logger.With().Panic("failed to serialize msg1.FollowingVotingMessageBody for signing", log.Err(err))
 	}
-	msg1.Signature = signer.Sign(encodedMsg1FollowingVotingMessageBody)
+	msg1.Signature = signer.Sign(signing.BEACON, encodedMsg1FollowingVotingMessageBody)
 
 	data1, err := codec.Encode(&msg1)
 	require.NoError(t, err)
@@ -1322,7 +1322,7 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	if err != nil {
 		logger.With().Panic("failed to serialize msg2.FollowingVotingMessageBody for signing", log.Err(err))
 	}
-	msg2.Signature = signer.Sign(encodedMsg2FollowingVotingMessageBody)
+	msg2.Signature = signer.Sign(signing.BEACON, encodedMsg2FollowingVotingMessageBody)
 
 	data2, err := codec.Encode(&msg2)
 	require.NoError(t, err)
@@ -1335,7 +1335,7 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	if err != nil {
 		logger.With().Panic("failed to serialize msg1.FollowingVotingMessageBody for signing", log.Err(err))
 	}
-	msg1.Signature = signer.Sign(encodedMsg1FollowingVotingMessageBody)
+	msg1.Signature = signer.Sign(signing.BEACON, encodedMsg1FollowingVotingMessageBody)
 	data1, err = codec.Encode(&msg1)
 	require.NoError(t, err)
 
@@ -1344,7 +1344,7 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	if err != nil {
 		logger.With().Panic("failed to serialize msg2.FollowingVotingMessageBody for signing", log.Err(err))
 	}
-	msg2.Signature = signer.Sign(encodedMsg2FollowingVotingMessageBody)
+	msg2.Signature = signer.Sign(signing.BEACON, encodedMsg2FollowingVotingMessageBody)
 
 	data2, err = codec.Encode(&msg2)
 	require.NoError(t, err)

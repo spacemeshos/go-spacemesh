@@ -75,7 +75,7 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
-			b.Signature = signer.Sign(b.SignedBytes())
+			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
 			require.NoError(tb, b.Initialize())
 			require.NoError(tb, ballots.Add(cdb, b))
 		}
@@ -175,7 +175,7 @@ func TestCalcEligibility_EmptyActiveSet(t *testing.T) {
 		b.AtxID = atx
 		b.RefBallot = types.EmptyBallotID
 		b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
-		b.Signature = signer.Sign(b.SignedBytes())
+		b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
 		require.NoError(t, b.Initialize())
 		require.NoError(t, ballots.Add(o.cdb, b))
 	}
@@ -400,7 +400,7 @@ func Test_VrfSignVerify(t *testing.T) {
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
-			b.Signature = signer.Sign(b.SignedBytes())
+			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
 			require.NoError(t, b.Initialize())
 			require.NoError(t, ballots.Add(o.cdb, b))
 		}
@@ -502,7 +502,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 		b.AtxID = atx
 		b.RefBallot = types.EmptyBallotID
 		b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
-		b.Signature = signer.Sign(b.SignedBytes())
+		b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
 		require.NoError(t, b.Initialize())
 		require.NoError(t, ballots.Add(o.cdb, b))
 	}
@@ -683,7 +683,7 @@ func TestActives_HareActiveSetDifferentBeacon(t *testing.T) {
 			} else {
 				b.EpochData = &types.EpochData{ActiveSet: atxIDs, Beacon: beacon}
 			}
-			b.Signature = signer.Sign(b.SignedBytes())
+			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
 			require.NoError(t, b.Initialize())
 			require.NoError(t, ballots.Add(o.cdb, b))
 		}
@@ -719,7 +719,7 @@ func TestActives_HareActiveSetMultipleLayers(t *testing.T) {
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: atxIDs}
-			b.Signature = signer.Sign(b.SignedBytes())
+			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
 			require.NoError(t, b.Initialize())
 			require.NoError(t, ballots.Add(o.cdb, b))
 		}

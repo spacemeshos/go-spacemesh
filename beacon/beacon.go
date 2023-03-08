@@ -924,7 +924,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 	if err != nil {
 		pd.logger.With().Fatal("failed to serialize message for signing", log.Err(err))
 	}
-	sig := pd.edSigner.Sign(encoded)
+	sig := pd.edSigner.Sign(signing.BEACON, encoded)
 
 	m := FirstVotingMessage{
 		FirstVotingMessageBody: mb,
@@ -970,7 +970,7 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 	if err != nil {
 		pd.logger.With().Fatal("failed to serialize message for signing", log.Err(err))
 	}
-	sig := pd.edSigner.Sign(encoded)
+	sig := pd.edSigner.Sign(signing.BEACON, encoded)
 
 	m := FollowingVotingMessage{
 		FollowingVotingMessageBody: mb,

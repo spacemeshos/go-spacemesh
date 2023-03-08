@@ -11,15 +11,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-func buildStatusMsg(signing Signer, s *Set, ki uint32) *Msg {
+func buildStatusMsg(sig *signing.EdSigner, s *Set, ki uint32) *Msg {
 	builder := newMessageBuilder()
 	builder.SetType(status).SetLayer(instanceID1).SetRoundCounter(statusRound).SetCommittedRound(ki).SetValues(s)
 	builder.SetEligibilityCount(1)
-	return builder.SetPubKey(signing.PublicKey()).Sign(signing).Build()
+	return builder.SetPubKey(sig.PublicKey()).Sign(sig).Build()
 }
 
-func BuildStatusMsg(signing Signer, s *Set) *Msg {
-	return buildStatusMsg(signing, s, preRound)
+func BuildStatusMsg(sig *signing.EdSigner, s *Set) *Msg {
+	return buildStatusMsg(sig, s, preRound)
 }
 
 func TestStatusTracker_RecordStatus(t *testing.T) {

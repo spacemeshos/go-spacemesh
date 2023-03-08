@@ -43,14 +43,6 @@ type atxHandler interface {
 	UnsubscribeAtx(id types.ATXID)
 }
 
-type signer interface {
-	Sign(m []byte) []byte
-}
-
-type keyExtractor interface {
-	ExtractNodeID(m, sig []byte) (types.NodeID, error)
-}
-
 type syncer interface {
 	RegisterForATXSynced() chan struct{}
 }

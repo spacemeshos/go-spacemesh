@@ -78,7 +78,7 @@ func genBallotWithEligibility(tb testing.TB, signer *signing.EdSigner, lid types
 		},
 		EligibilityProofs: []types.VotingEligibility{proof},
 	}
-	ballot.Signature = signer.Sign(ballot.SignedBytes())
+	ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
 	require.NoError(tb, ballot.Initialize())
 	return ballot
 }
@@ -167,6 +167,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 
 		for _, proof := range proofs {
 			b := genBallotWithEligibility(t, o.edSigner, layer, info.atxID, proof, info.activeSet, info.beacon)
+			b.SetSmesherID(o.edSigner.NodeID())
 			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b, info.beacon, gomock.Any()).Times(1)
 			nonceFetcher.EXPECT().VRFNonce(b.SmesherID(), layer.GetEpoch()).Return(nonce, nil).Times(1)
 			eligible, err := validator.CheckEligibility(context.Background(), b)

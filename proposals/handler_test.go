@@ -75,8 +75,10 @@ func fullMockSet(tb testing.TB) *mockSet {
 func createTestHandler(t *testing.T) *testHandler {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	ms := fullMockSet(t)
+	extract, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
 	return &testHandler{
-		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf,
+		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), extract, ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf,
 			WithLogger(logtest.New(t)),
 			WithConfig(Config{
 				LayerSize:      layerAvgSize,
@@ -166,8 +168,9 @@ func createProposal(t *testing.T, opts ...any) *types.Proposal {
 	}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(p.Bytes())
+	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
+	p.SetSmesherID(signer.NodeID())
 	require.NoError(t, p.Initialize())
 	return p
 }
@@ -192,7 +195,8 @@ func signAndInit(tb testing.TB, b *types.Ballot) *types.Ballot {
 	tb.Helper()
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	b.Signature = sig.Sign(b.SignedBytes())
+	b.Signature = sig.Sign(signing.BALLOT, b.SignedBytes())
+	b.SetSmesherID(sig.NodeID())
 	require.NoError(tb, b.Initialize())
 	return b
 }
@@ -237,9 +241,10 @@ func TestBallot_MalformedData(t *testing.T) {
 func TestBallot_BadSignature(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
-	b.Signature = b.Signature[1:]
+	b.Signature = []byte("whatever")
 	data := encodeBallot(t, b)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), p2p.NoPeer, data), errInitialize)
+	got := th.HandleSyncedBallot(context.Background(), p2p.NoPeer, data)
+	require.ErrorContains(t, got, "bad signature format")
 }
 
 func TestBallot_KnownBallot(t *testing.T) {
@@ -807,9 +812,35 @@ func TestProposal_MalformedData(t *testing.T) {
 func TestProposal_BadSignature(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
-	p.Signature = p.Signature[1:]
+	p.Signature = []byte("whatever")
 	data := encodeProposal(t, p)
-	require.ErrorIs(t, th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data), errInitialize)
+	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
+	require.ErrorContains(t, got, "bad signature format")
+
+	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
+	checkProposal(t, th.cdb, p, false)
+}
+
+func TestProposal_InconsistentSmeshers(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	p := &types.Proposal{
+		InnerProposal: types.InnerProposal{
+			Ballot: *types.RandomBallot(),
+			TxIDs:  []types.TransactionID{types.RandomTransactionID(), types.RandomTransactionID()},
+		},
+	}
+	signer1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	signer2, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	p.Ballot.Signature = signer1.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.Signature = signer2.Sign(signing.BALLOT, p.SignedBytes())
+
+	data, err := codec.Encode(p)
+	require.NoError(t, err)
+	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
+	require.ErrorContains(t, got, "inconsistent smesher in proposal")
+
 	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)
 }

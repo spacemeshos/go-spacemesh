@@ -61,7 +61,7 @@ type core struct {
 
 	// generated on setup
 	units  uint32
-	signer signer
+	signer *signing.EdSigner
 
 	// set in the first layer of each epoch
 	refBallot     *types.BallotID
@@ -119,7 +119,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 				Beacon:    beacon,
 			}
 		}
-		ballot.Signature = c.signer.Sign(ballot.SignedBytes())
+		ballot.Signature = c.signer.Sign(signing.BALLOT, ballot.SignedBytes())
 		ballot.Initialize()
 		if c.refBallot == nil {
 			id := ballot.ID()

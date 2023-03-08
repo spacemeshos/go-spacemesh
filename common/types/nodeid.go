@@ -3,7 +3,6 @@ package types
 import (
 	"encoding/hex"
 
-	"github.com/spacemeshos/ed25519-recovery"
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -13,18 +12,6 @@ import (
 func BytesToNodeID(buf []byte) (id NodeID) {
 	copy(id[:], buf)
 	return id
-}
-
-// ExtractNodeIDFromSig extracts the NodeID from a signature.
-//
-// TODO(mafa): this is a hack because the common/types package is not able to import the signing package.
-// The proper fix for this would be to move code that calls this function out of the common/types package.
-var ExtractNodeIDFromSig = func(msg, sig []byte) (NodeID, error) {
-	pub, err := ed25519.ExtractPublicKey(msg, sig)
-	if err != nil {
-		return NodeID{}, err
-	}
-	return BytesToNodeID(pub), nil
 }
 
 // NodeID contains a miner's public key.

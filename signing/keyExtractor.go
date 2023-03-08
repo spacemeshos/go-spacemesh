@@ -41,10 +41,11 @@ func NewPubKeyExtractor(opts ...ExtractorOptionFunc) (*PubKeyExtractor, error) {
 }
 
 // Extract public key from a signature.
-func (e PubKeyExtractor) Extract(m, sig []byte) (*PublicKey, error) {
-	msg := make([]byte, len(m)+len(e.prefix))
+func (e PubKeyExtractor) Extract(d domain, m, sig []byte) (*PublicKey, error) {
+	msg := make([]byte, len(m)+len(e.prefix)+1)
 	copy(msg, e.prefix)
-	copy(msg[len(e.prefix):], m)
+	msg[len(e.prefix)] = byte(d)
+	copy(msg[len(e.prefix)+1:], m)
 	pub, err := ed25519.ExtractPublicKey(msg, sig)
 	if err != nil {
 		return nil, err
@@ -53,8 +54,8 @@ func (e PubKeyExtractor) Extract(m, sig []byte) (*PublicKey, error) {
 }
 
 // ExtractNodeID from a signature.
-func (e PubKeyExtractor) ExtractNodeID(m, sig []byte) (types.NodeID, error) {
-	pub, err := e.Extract(m, sig)
+func (e PubKeyExtractor) ExtractNodeID(d domain, m, sig []byte) (types.NodeID, error) {
+	pub, err := e.Extract(d, m, sig)
 	if err != nil {
 		return types.EmptyNodeID, err
 	}

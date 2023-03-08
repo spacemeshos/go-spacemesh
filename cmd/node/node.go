@@ -514,8 +514,6 @@ func (app *App) initServices(
 		return fmt.Errorf("failed to create key extractor: %w", err)
 	}
 
-	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
-
 	vrfVerifier := signing.NewVRFVerifier()
 	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifier, app.cachedDB, clock,
 		beacon.WithContext(ctx),
@@ -543,6 +541,7 @@ func (app *App) initServices(
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
 		app.cachedDB,
+		app.keyExtractor,
 		clock,
 		app.host,
 		fetcherWrapped,
@@ -561,7 +560,7 @@ func (app *App) initServices(
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier,
+	proposalListener := proposals.NewHandler(app.cachedDB, app.keyExtractor, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,

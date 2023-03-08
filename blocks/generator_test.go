@@ -209,8 +209,9 @@ func createProposal(
 			MeshHash: meshHash,
 		},
 	}
-	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(p.Bytes())
+	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
+	p.SetSmesherID(signer.NodeID())
 	require.NoError(t, p.Initialize())
 	return p
 }

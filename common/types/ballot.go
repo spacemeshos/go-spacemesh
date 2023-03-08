@@ -226,13 +226,6 @@ func (b *Ballot) Initialize() error {
 		return fmt.Errorf("failed to encode byte slice")
 	}
 	b.ballotID = BallotID(BytesToHash(hasher.Sum(nil)).ToHash20())
-
-	data := b.SignedBytes()
-	nodeId, err := ExtractNodeIDFromSig(data, b.Signature)
-	if err != nil {
-		return fmt.Errorf("ballot extract key: %w", err)
-	}
-	b.smesherID = nodeId
 	return nil
 }
 

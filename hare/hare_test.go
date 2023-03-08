@@ -71,7 +71,7 @@ func (mcp *mockConsensusProcess) SetInbox(_ any) {
 
 var _ Consensus = (*mockConsensusProcess)(nil)
 
-func newMockConsensusProcess(_ config.Config, instanceID types.LayerID, s *Set, _ Rolacle, _ Signer, _ pubsub.Publisher, outputChan chan TerminationOutput, started chan struct{}) *mockConsensusProcess {
+func newMockConsensusProcess(_ config.Config, instanceID types.LayerID, s *Set, _ Rolacle, _ *signing.EdSigner, _ pubsub.Publisher, outputChan chan TerminationOutput, started chan struct{}) *mockConsensusProcess {
 	mcp := new(mockConsensusProcess)
 	mcp.started = started
 	mcp.id = instanceID
@@ -106,9 +106,10 @@ func randomProposal(lyrID types.LayerID, beacon types.Beacon) *types.Proposal {
 		Beacon: beacon,
 	}
 	signer, _ := signing.NewEdSigner()
-	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(p.Bytes())
+	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
 	p.TxIDs = []types.TransactionID{}
+	p.SetSmesherID(signer.NodeID())
 	p.Initialize()
 	return p
 }
@@ -310,8 +311,8 @@ func TestHare_onTick(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
-		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, comm.report, startedChan)
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, startedChan)
 		close(createdChan)
 		return nmcp
 	}
@@ -381,8 +382,8 @@ func TestHare_onTick_notMining(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
-		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, comm.report, startedChan)
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, startedChan)
 		close(createdChan)
 		return nmcp
 	}

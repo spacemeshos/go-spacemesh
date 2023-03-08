@@ -13,6 +13,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+type domain byte
+
+const (
+	ATX domain = iota
+	BEACON
+	BALLOT
+	HARE
+)
+
 type edSignerOption struct {
 	priv   PrivateKey
 	prefix []byte
@@ -92,10 +101,11 @@ func NewEdSigner(opts ...EdSignerOptionFunc) (*EdSigner, error) {
 }
 
 // Sign signs the provided message.
-func (es *EdSigner) Sign(m []byte) []byte {
-	msg := make([]byte, len(m)+len(es.prefix))
+func (es *EdSigner) Sign(d domain, m []byte) []byte {
+	msg := make([]byte, len(m)+len(es.prefix)+1)
 	copy(msg, es.prefix)
-	copy(msg[len(es.prefix):], m)
+	msg[len(es.prefix)] = byte(d)
+	copy(msg[len(es.prefix)+1:], m)
 	return ed25519.Sign(es.priv, msg)
 }
 

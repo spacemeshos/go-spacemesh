@@ -131,7 +131,8 @@ func genLayerBallot(tb testing.TB, layerID types.LayerID) *types.Ballot {
 	b.Layer = layerID
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	b.Signature = sig.Sign(b.SignedBytes())
+	b.Signature = sig.Sign(signing.BALLOT, b.SignedBytes())
+	b.SetSmesherID(sig.NodeID())
 	require.NoError(tb, b.Initialize())
 	return b
 }

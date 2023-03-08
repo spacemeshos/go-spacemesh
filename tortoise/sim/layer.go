@@ -3,6 +3,7 @@ package sim
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // DefaultNumBlocks is a number of blocks in a layer by default.
@@ -187,7 +188,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 			Votes:             voting,
 			EligibilityProofs: proofs,
 		}
-		ballot.Signature = signer.Sign(ballot.SignedBytes())
+		ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
 		if err = ballot.Initialize(); err != nil {
 			g.logger.With().Panic("failed to init ballot", log.Err(err))
 		}

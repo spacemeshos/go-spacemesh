@@ -115,7 +115,7 @@ func genLayerBallot(layerID types.LayerID) *types.Ballot {
 	b := types.RandomBallot()
 	b.Layer = layerID
 	signer, _ := signing.NewEdSigner()
-	b.Signature = signer.Sign(b.SignedBytes())
+	b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
 	b.Initialize()
 	return b
 }

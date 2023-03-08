@@ -212,7 +212,7 @@ func (pb *ProposalBuilder) createProposal(
 	logger := pb.logger.WithContext(ctx).WithFields(layerID, layerID.GetEpoch())
 
 	if !layerID.After(types.GetEffectiveGenesis()) {
-		logger.Panic("attempt to create proposal during genesis")
+		logger.With().Fatal("attempt to create proposal during genesis", layerID)
 	}
 
 	ib := &types.InnerBallot{
@@ -255,10 +255,11 @@ func (pb *ProposalBuilder) createProposal(
 			MeshHash: pb.decideMeshHash(logger, layerID),
 		},
 	}
-	p.Ballot.Signature = pb.signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = pb.signer.Sign(p.Bytes())
+	p.Ballot.Signature = pb.signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.Signature = pb.signer.Sign(signing.BALLOT, p.SignedBytes())
+	p.SetSmesherID(pb.signer.NodeID())
 	if err := p.Initialize(); err != nil {
-		logger.Panic("proposal failed to initialize", log.Err(err))
+		logger.With().Fatal("proposal failed to initialize", log.Err(err))
 	}
 	logger.Event().Info("proposal created", p.ID(), log.Int("num_txs", len(p.TxIDs)))
 	return p, nil

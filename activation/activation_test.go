@@ -52,7 +52,7 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID t
 	}
 }
 
-func newAtx(t testing.TB, sig signer, nodeID *types.NodeID, challenge types.NIPostChallenge, nipost *types.NIPost, numUnits uint32, coinbase types.Address) *types.ActivationTx {
+func newAtx(t testing.TB, sig *signing.EdSigner, nodeID *types.NodeID, challenge types.NIPostChallenge, nipost *types.NIPost, numUnits uint32, coinbase types.Address) *types.ActivationTx {
 	atx := types.NewActivationTx(challenge, nodeID, coinbase, nipost, numUnits, nil, nil)
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
@@ -62,7 +62,7 @@ func newAtx(t testing.TB, sig signer, nodeID *types.NodeID, challenge types.NIPo
 
 func newActivationTx(
 	t testing.TB,
-	sig signer,
+	sig *signing.EdSigner,
 	nodeID *types.NodeID,
 	sequence uint64,
 	prevATX types.ATXID,
@@ -205,6 +205,11 @@ func publishAtx(
 			gotAtx, err := types.BytesToAtx(got)
 			require.NoError(t, err)
 			built = gotAtx
+			extractor, err := signing.NewPubKeyExtractor()
+			require.NoError(t, err)
+			nodeID, err := extractor.ExtractNodeID(signing.ATX, gotAtx.SignedBytes(), gotAtx.Signature)
+			require.NoError(t, err)
+			gotAtx.SetNodeID(&nodeID)
 			require.NoError(t, built.CalcAndSetID())
 			built.SetEffectiveNumUnits(gotAtx.NumUnits)
 			vatx, err := built.Verify(0, 1)
@@ -224,7 +229,7 @@ func publishAtx(
 	return built, err
 }
 
-func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID, sig signer, nodeID *types.NodeID) *types.VerifiedActivationTx {
+func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID, sig *signing.EdSigner, nodeID *types.NodeID) *types.VerifiedActivationTx {
 	challenge := types.NIPostChallenge{
 		PubLayerID: epoch.FirstLayer(),
 	}
@@ -233,7 +238,7 @@ func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID, sig signer, 
 	return addAtx(t, db, sig, atx)
 }
 
-func addAtx(t *testing.T, db sql.Executor, sig signer, atx *types.ActivationTx) *types.VerifiedActivationTx {
+func addAtx(t *testing.T, db sql.Executor, sig *signing.EdSigner, atx *types.ActivationTx) *types.VerifiedActivationTx {
 	require.NoError(t, SignAndFinalizeAtx(sig, atx))
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
@@ -794,6 +799,11 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 		atx, err := types.BytesToAtx(msg)
 		r.NoError(err)
 
+		extractor, err := signing.NewPubKeyExtractor()
+		require.NoError(t, err)
+		nodeID, err := extractor.ExtractNodeID(signing.ATX, atx.SignedBytes(), atx.Signature)
+		require.NoError(t, err)
+		atx.SetNodeID(&nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		r.NoError(err)
@@ -881,6 +891,11 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		atx, err := types.BytesToAtx(msg)
 		r.NoError(err)
 
+		extractor, err := signing.NewPubKeyExtractor()
+		require.NoError(t, err)
+		nodeID, err := extractor.ExtractNodeID(signing.ATX, atx.SignedBytes(), atx.Signature)
+		require.NoError(t, err)
+		atx.SetNodeID(&nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		r.NoError(err)
@@ -963,13 +978,13 @@ func TestBuilder_SignAtx(t *testing.T) {
 	atx.SetMetadata()
 	atxBytes, err := codec.Encode(&atx.ATXMetadata)
 	require.NoError(t, err)
-	err = SignAndFinalizeAtx(tab, atx)
+	err = SignAndFinalizeAtx(tab.signer, atx)
 	require.NoError(t, err)
 
 	extractor, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
 
-	nodeId, err := extractor.ExtractNodeID(atxBytes, atx.Signature)
+	nodeId, err := extractor.ExtractNodeID(signing.ATX, atxBytes, atx.Signature)
 	require.NoError(t, err)
 	require.Equal(t, tab.nodeID, nodeId)
 }

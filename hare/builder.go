@@ -130,8 +130,8 @@ func (mb *messageBuilder) SetCertificate(certificate *Certificate) *messageBuild
 }
 
 // Sign calls the provided signer to calculate the signature and then set it accordingly.
-func (mb *messageBuilder) Sign(signing Signer) *messageBuilder {
-	mb.msg.Signature = signing.Sign(mb.msg.SignedBytes())
+func (mb *messageBuilder) Sign(signer *signing.EdSigner) *messageBuilder {
+	mb.msg.Signature = signer.Sign(signing.HARE, mb.msg.SignedBytes())
 	return mb
 }
 
