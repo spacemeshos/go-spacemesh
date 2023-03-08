@@ -22,7 +22,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	var (
 		first      = uint32(layersPerEpoch * 2)
 		startSplit = uint32(4*layersPerEpoch) - 1
-		rejoin     = startSplit + 2*layersPerEpoch
+		rejoin     = startSplit + layersPerEpoch
 		last       = rejoin + (wait-1)*layersPerEpoch
 		stop       = rejoin + wait*layersPerEpoch
 	)
