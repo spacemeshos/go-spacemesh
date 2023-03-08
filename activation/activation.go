@@ -37,18 +37,6 @@ func DefaultPoetConfig() PoetConfig {
 
 const defaultPoetRetryInterval = 5 * time.Second
 
-//go:generate mockgen -package=activation -destination=./activation_mocks.go . SmeshingProvider
-
-// SmeshingProvider defines the functionality required for the node's Smesher API.
-type SmeshingProvider interface {
-	Smeshing() bool
-	StartSmeshing(types.Address, PostSetupOpts) error
-	StopSmeshing(bool) error
-	SmesherID() types.NodeID
-	Coinbase() types.Address
-	SetCoinbase(coinbase types.Address)
-}
-
 // Config defines configuration for Builder.
 type Config struct {
 	CoinbaseAccount types.Address
@@ -354,7 +342,8 @@ func (b *Builder) loop(ctx context.Context) {
 		err := b.PublishActivationTx(ctx)
 		if err == nil {
 			b.log.WithContext(ctx).With().Info("waiting for atx to propagate before building the next challenge",
-				log.Duration("wait", b.poetRetryInterval))
+				log.Duration("wait", b.poetRetryInterval),
+			)
 			select {
 			case <-ctx.Done():
 				return
