@@ -29,7 +29,7 @@ env:
   USE_GKE_GCLOUD_AUTH_PLUGIN: True
 
 concurrency:
-  group: ${{ github.base_ref == 'staging' && 'smci-staging' || format('smci-{0}', github.ref) }}
+  group: ${{ github.base_ref == 'staging' && 'smci-staging' || format('smci-{0}-{1}', github.workflow, github.ref) }}
   cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
 
 jobs:
