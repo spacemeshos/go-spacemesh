@@ -35,7 +35,7 @@ func DefaultConfig() Config {
 		Hdist:                    10,
 		Zdist:                    8,
 		WindowSize:               1000,
-		BadBeaconVoteDelayLayers: 6,
+		BadBeaconVoteDelayLayers: 0,
 		MaxExceptions:            30 * 100, // 100 layers of average size
 	}
 }
