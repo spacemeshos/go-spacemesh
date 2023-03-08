@@ -5,7 +5,6 @@ import "time"
 // Config is the configuration of the Hare.
 type Config struct {
 	N               int           `mapstructure:"hare-committee-size"`   // total number of active parties
-	F               int           `mapstructure:"hare-max-adversaries"`  // number of dishonest parties
 	RoundDuration   time.Duration `mapstructure:"hare-round-duration"`   // the duration of a single round
 	WakeupDelta     time.Duration `mapstructure:"hare-wakeup-delta"`     // the wakeup delta after tick
 	ExpectedLeaders int           `mapstructure:"hare-exp-leaders"`      // the expected number of leaders
@@ -19,7 +18,6 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		N:               10,
-		F:               5,
 		RoundDuration:   10 * time.Second,
 		WakeupDelta:     10 * time.Second,
 		ExpectedLeaders: 5,
