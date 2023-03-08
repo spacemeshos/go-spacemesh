@@ -294,7 +294,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	coinbase := types.Address{1, 1, 1}
 	postSetupOpts := PostSetupOpts{}
 
-	tab.mpost.EXPECT().StartSession(gomock.Any(), postSetupOpts, gomock.Any())
+	tab.mpost.EXPECT().StartSession(gomock.Any(), postSetupOpts)
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any())
 	ch := make(chan struct{})
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch)
@@ -311,7 +311,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 func TestBuilder_RestartSmeshing(t *testing.T) {
 	getBuilder := func(t *testing.T) *Builder {
 		tab := newTestBuilder(t)
-		tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any()).AnyTimes()
 		tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes()
 		tab.mpost.EXPECT().Reset().AnyTimes()
 		ch := make(chan struct{})
@@ -358,7 +358,7 @@ func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
 
 func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	tab := newTestBuilder(t)
-	tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).Return(nil, nil, nil).AnyTimes()
 	ch := make(chan struct{})
 	close(ch)
@@ -371,72 +371,6 @@ func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	tab.mpost.EXPECT().Reset().Return(errors.New("couldn't delete files"))
 	require.Error(t, tab.StopSmeshing(true))
 	require.False(t, tab.Smeshing())
-}
-
-func TestBuilder_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
-	tab := newTestBuilder(t)
-	latestAtx := addPrevAtx(t, tab.cdb, 1, tab.sig, &tab.nodeID)
-	atx, err := tab.findCommitmentAtx()
-	require.NoError(t, err)
-	require.Equal(t, latestAtx.ID(), atx)
-}
-
-func TestBuilder_findCommitmentAtx_DefaultsToGoldenAtx(t *testing.T) {
-	tab := newTestBuilder(t)
-	atx, err := tab.findCommitmentAtx()
-	require.NoError(t, err)
-	require.Equal(t, tab.goldenATXID, atx)
-}
-
-func TestBuilder_getCommitmentAtx_storesCommitmentAtx(t *testing.T) {
-	tab := newTestBuilder(t)
-	tab.commitmentAtx = nil
-
-	atx, err := tab.getCommitmentAtx(context.Background())
-	require.NoError(t, err)
-
-	stored, err := kvstore.GetCommitmentATXForNode(tab.cdb, tab.nodeID)
-	require.NoError(t, err)
-
-	require.Equal(t, *atx, stored)
-}
-
-func TestBuilder_getCommitmentAtx_getsStoredCommitmentAtx(t *testing.T) {
-	tab := newTestBuilder(t)
-	tab.commitmentAtx = nil
-	commitmentAtx := types.RandomATXID()
-
-	diffSigner, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	diffNid := diffSigner.NodeID()
-
-	// add a newer ATX by a different node
-	atx := types.NewActivationTx(types.NIPostChallenge{}, &diffNid, types.Address{}, nil, 1, nil, nil)
-	vatx := addAtx(t, tab.cdb, diffSigner, atx)
-	err = kvstore.AddCommitmentATXForNode(tab.cdb, commitmentAtx, tab.nodeID)
-	require.NoError(t, err)
-
-	atxid, err := tab.getCommitmentAtx(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commitmentAtx, *atxid)
-	require.NotEqual(t, vatx.ID(), atx)
-}
-
-func TestBuilder_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *testing.T) {
-	tab := newTestBuilder(t)
-	tab.commitmentAtx = nil
-	commitmentAtx := types.RandomATXID()
-
-	// add an atx by the same node
-	atx := types.NewActivationTx(types.NIPostChallenge{}, &tab.nodeID, types.Address{}, nil, 1, nil, nil)
-	atx.CommitmentATX = &commitmentAtx
-	vatx := addAtx(t, tab.cdb, tab.sig, atx)
-
-	atxid, err := tab.getCommitmentAtx(context.Background())
-	require.NoError(t, err)
-	require.NotNil(t, atxid)
-	require.Equal(t, commitmentAtx, *atxid)
-	require.NotEqual(t, vatx.ID(), atx)
 }
 
 func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
@@ -712,6 +646,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	// create and publish ATX
 	vrfNonce := types.VRFPostIndex(123)
 	tab.mpost.EXPECT().VRFNonce().Return(&vrfNonce, nil)
+	tab.mpost.EXPECT().CommitmentAtx().Return(types.RandomATXID(), nil)
 	atx, err := publishAtx(t, tab, posAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, atx)
@@ -864,6 +799,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
 
+	tab.mpost.EXPECT().CommitmentAtx().Return(types.RandomATXID(), nil).Times(1)
 	tab.mpost.EXPECT().VRFNonce().Times(1)
 
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).

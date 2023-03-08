@@ -552,6 +552,21 @@ func (mr *MockpostSetupProviderMockRecorder) Benchmark(p interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Benchmark", reflect.TypeOf((*MockpostSetupProvider)(nil).Benchmark), p)
 }
 
+// CommitmentAtx mocks base method.
+func (m *MockpostSetupProvider) CommitmentAtx() (types.ATXID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CommitmentAtx")
+	ret0, _ := ret[0].(types.ATXID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CommitmentAtx indicates an expected call of CommitmentAtx.
+func (mr *MockpostSetupProviderMockRecorder) CommitmentAtx() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CommitmentAtx", reflect.TypeOf((*MockpostSetupProvider)(nil).CommitmentAtx))
+}
+
 // ComputeProviders mocks base method.
 func (m *MockpostSetupProvider) ComputeProviders() []PostSetupComputeProvider {
 	m.ctrl.T.Helper()
@@ -625,17 +640,17 @@ func (mr *MockpostSetupProviderMockRecorder) Reset() *gomock.Call {
 }
 
 // StartSession mocks base method.
-func (m *MockpostSetupProvider) StartSession(context context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error {
+func (m *MockpostSetupProvider) StartSession(context context.Context, opts PostSetupOpts) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSession", context, opts, commitmentAtx)
+	ret := m.ctrl.Call(m, "StartSession", context, opts)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // StartSession indicates an expected call of StartSession.
-func (mr *MockpostSetupProviderMockRecorder) StartSession(context, opts, commitmentAtx interface{}) *gomock.Call {
+func (mr *MockpostSetupProviderMockRecorder) StartSession(context, opts interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockpostSetupProvider)(nil).StartSession), context, opts, commitmentAtx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockpostSetupProvider)(nil).StartSession), context, opts)
 }
 
 // Status mocks base method.

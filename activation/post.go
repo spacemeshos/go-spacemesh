@@ -14,6 +14,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 // PostSetupComputeProvider represent a compute provider for Post setup data creation.
@@ -58,6 +60,11 @@ const (
 	PostSetupStateError
 )
 
+var (
+	errNotComplete = errors.New("not complete")
+	errNotStarted  = errors.New("not started")
+)
+
 // DefaultPostConfig defines the default configuration for Post.
 func DefaultPostConfig() PostConfig {
 	return (PostConfig)(config.DefaultConfig())
@@ -97,8 +104,6 @@ func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger log.Log, db *da
 
 	return mgr, nil
 }
-
-var errNotComplete = errors.New("not complete")
 
 // Status returns the setup current status.
 func (mgr *PostSetupManager) Status() *PostSetupStatus {
@@ -161,7 +166,7 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 // StartSession starts (or continues) a data creation session.
 // It supports resuming a previously started session, as well as changing the Post setup options (e.g., number of units)
 // after initial setup.
-func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error {
+func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts) error {
 	mgr.mu.Lock()
 
 	if mgr.state == PostSetupStateInProgress {
@@ -181,13 +186,8 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	}
 
 	var err error
-	mgr.commitmentAtxId, err = mgr.getCommitmentAtx(opts.DataDir)
-
-	switch {
-	case errors.Is(err, initialization.ErrStateMetadataFileMissing):
-		// TODO(mafa): commitmentAtx shouldn't be passed in as an argument. See: https://github.com/spacemeshos/go-spacemesh/issues/3843
-		mgr.commitmentAtxId = commitmentAtx
-	case err != nil:
+	mgr.commitmentAtxId, err = mgr.commitmentAtx(opts.DataDir)
+	if err != nil {
 		mgr.mu.Unlock()
 		return err
 	}
@@ -251,18 +251,49 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	return nil
 }
 
-func (mgr *PostSetupManager) getCommitmentAtx(dataDir string) (types.ATXID, error) {
-	m, err := initialization.LoadMetadata(dataDir)
+func (mgr *PostSetupManager) CommitmentAtx() (types.ATXID, error) {
+	if mgr.commitmentAtxId != *types.EmptyATXID {
+		return mgr.commitmentAtxId, nil
+	}
+	return *types.EmptyATXID, errNotStarted
+}
+
+func (mgr *PostSetupManager) commitmentAtx(datadir string) (types.ATXID, error) {
+	m, err := initialization.LoadMetadata(datadir)
 	switch {
 	case err == nil:
 		return types.ATXID(types.BytesToHash(m.CommitmentAtxId)), nil
 	case errors.Is(err, initialization.ErrStateMetadataFileMissing):
-		// TODO(mafa): instead of falling back to the provided commitmentAtx, decide here which commitmentAtx to use.
-		// See: https://github.com/spacemeshos/go-spacemesh/issues/3843
-		return *types.EmptyATXID, initialization.ErrStateMetadataFileMissing
+		// if this node has already published an ATX, get its initial ATX and from it the commitment ATX
+		atxId, err := atxs.GetFirstIDByNodeID(mgr.db, mgr.id)
+		if err == nil {
+			atx, err := atxs.Get(mgr.db, atxId)
+			if err != nil {
+				return *types.EmptyATXID, err
+			}
+			return atx.ID(), nil
+		}
+
+		// if this node has not published an ATX select the best ATX with `findCommitmentAtx`
+		return mgr.findCommitmentAtx()
 	default:
 		return *types.EmptyATXID, fmt.Errorf("load metadata: %w", err)
 	}
+}
+
+// findCommitmentAtx determines the best commitment ATX to use for the node.
+// It will use the ATX with the highest height seen by the node and defaults to the goldenATX,
+// when no ATXs have yet been published.
+func (mgr *PostSetupManager) findCommitmentAtx() (types.ATXID, error) {
+	atx, err := atxs.GetAtxIDWithMaxHeight(mgr.db)
+	if errors.Is(err, sql.ErrNotFound) {
+		mgr.logger.With().Info("using golden atx as commitment atx")
+		return mgr.goldenATXID, nil
+	}
+	if err != nil {
+		return *types.EmptyATXID, fmt.Errorf("get commitment atx: %w", err)
+	}
+	return atx, nil
 }
 
 // Reset deletes the data file(s).

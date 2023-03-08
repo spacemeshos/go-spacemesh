@@ -64,20 +64,20 @@ func TestPostSetupManager(t *testing.T) {
 	})
 
 	// Create data.
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
+	req.NoError(mgr.StartSession(context.Background(), opts))
 	cancel()
 	_ = eg.Wait()
 
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
 	// Create data (same opts).
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
+	req.NoError(mgr.StartSession(context.Background(), opts))
 
 	// Cleanup.
 	req.NoError(mgr.Reset())
 
 	// Create data (same opts, after deletion).
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
+	req.NoError(mgr.StartSession(context.Background(), opts))
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
 }
 
@@ -96,7 +96,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req.Zero(status.NumLabelsWritten)
 
 	// Create data.
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
+	req.NoError(mgr.StartSession(context.Background(), opts))
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
 	// Re-instantiate `PostSetupManager`.
@@ -124,7 +124,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.EqualError(err, errNotComplete.Error())
 
 	// Create data.
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
+	req.NoError(mgr.StartSession(context.Background(), opts))
 
 	// Generate proof.
 	p, m, err := mgr.GenerateProof(context.Background(), ch)
@@ -171,7 +171,7 @@ func TestPostSetupManager_VRFNonce(t *testing.T) {
 	req.ErrorIs(err, errNotComplete)
 
 	// Create data.
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
+	req.NoError(mgr.StartSession(context.Background(), opts))
 
 	// Get nonce.
 	nonce, err := mgr.VRFNonce()
@@ -202,7 +202,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 	req.Zero(status.NumLabelsWritten)
 
 	// Create data.
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
+	req.NoError(mgr.StartSession(context.Background(), opts))
 
 	// Verify state.
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
@@ -214,7 +214,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 	req.Equal(PostSetupStateNotStarted, mgr.Status().State)
 
 	// Create data again.
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
+	req.NoError(mgr.StartSession(context.Background(), opts))
 
 	// Verify state.
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
@@ -235,7 +235,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var eg errgroup.Group
 	eg.Go(func() error {
-		return mgr.StartSession(ctx, opts, goldenATXID)
+		return mgr.StartSession(ctx, opts)
 	})
 
 	// Wait a bit for the setup to proceed.
@@ -256,10 +256,76 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	req.LessOrEqual(status.NumLabelsWritten, uint64(opts.NumUnits)*cfg.LabelsPerUnit)
 
 	// Continue to create data.
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
+	req.NoError(mgr.StartSession(context.Background(), opts))
 
 	// Verify status.
 	status = mgr.Status()
 	req.Equal(PostSetupStateComplete, status.State)
 	req.Equal(uint64(opts.NumUnits)*cfg.LabelsPerUnit, status.NumLabelsWritten)
 }
+
+// func TestBuilder_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
+// 	tab := newTestBuilder(t)
+// 	latestAtx := addPrevAtx(t, tab.cdb, 1, tab.sig, &tab.nodeID)
+// 	atx, err := tab.findCommitmentAtx()
+// 	require.NoError(t, err)
+// 	require.Equal(t, latestAtx.ID(), atx)
+// }
+
+// func TestBuilder_findCommitmentAtx_DefaultsToGoldenAtx(t *testing.T) {
+// 	tab := newTestBuilder(t)
+// 	atx, err := tab.findCommitmentAtx()
+// 	require.NoError(t, err)
+// 	require.Equal(t, tab.goldenATXID, atx)
+// }
+
+// func TestBuilder_getCommitmentAtx_storesCommitmentAtx(t *testing.T) {
+// 	tab := newTestBuilder(t)
+// 	tab.commitmentAtx = nil
+
+// 	atx, err := tab.getCommitmentAtx(context.Background())
+// 	require.NoError(t, err)
+
+// 	stored, err := kvstore.GetCommitmentATXForNode(tab.cdb, tab.nodeID)
+// 	require.NoError(t, err)
+
+// 	require.Equal(t, *atx, stored)
+// }
+
+// func TestBuilder_getCommitmentAtx_getsStoredCommitmentAtx(t *testing.T) {
+// 	tab := newTestBuilder(t)
+// 	tab.commitmentAtx = nil
+// 	commitmentAtx := types.RandomATXID()
+
+// 	diffSigner, err := signing.NewEdSigner()
+// 	require.NoError(t, err)
+// 	diffNid := diffSigner.NodeID()
+
+// 	// add a newer ATX by a different node
+// 	atx := types.NewActivationTx(types.NIPostChallenge{}, &diffNid, types.Address{}, nil, 1, nil, nil)
+// 	vatx := addAtx(t, tab.cdb, diffSigner, atx)
+// 	err = kvstore.AddCommitmentATXForNode(tab.cdb, commitmentAtx, tab.nodeID)
+// 	require.NoError(t, err)
+
+// 	atxid, err := tab.getCommitmentAtx(context.Background())
+// 	require.NoError(t, err)
+// 	require.Equal(t, commitmentAtx, *atxid)
+// 	require.NotEqual(t, vatx.ID(), atx)
+// }
+
+// func TestBuilder_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *testing.T) {
+// 	tab := newTestBuilder(t)
+// 	tab.commitmentAtx = nil
+// 	commitmentAtx := types.RandomATXID()
+
+// 	// add an atx by the same node
+// 	atx := types.NewActivationTx(types.NIPostChallenge{}, &tab.nodeID, types.Address{}, nil, 1, nil, nil)
+// 	atx.CommitmentATX = &commitmentAtx
+// 	vatx := addAtx(t, tab.cdb, tab.sig, atx)
+
+// 	atxid, err := tab.getCommitmentAtx(context.Background())
+// 	require.NoError(t, err)
+// 	require.NotNil(t, atxid)
+// 	require.Equal(t, commitmentAtx, *atxid)
+// 	require.NotEqual(t, vatx.ID(), atx)
+// }

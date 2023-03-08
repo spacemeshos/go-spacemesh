@@ -53,7 +53,7 @@ func (p *postSetupProviderMock) Benchmark(PostSetupComputeProvider) (int, error)
 	return 0, nil
 }
 
-func (p *postSetupProviderMock) StartSession(_ context.Context, _ PostSetupOpts, _ types.ATXID) error {
+func (p *postSetupProviderMock) StartSession(_ context.Context, _ PostSetupOpts) error {
 	return nil
 }
 
@@ -69,6 +69,10 @@ func (p *postSetupProviderMock) GenerateProof(ctx context.Context, challenge []b
 	return &types.Post{}, &types.PostMetadata{
 		Challenge: challenge,
 	}, nil
+}
+
+func (p *postSetupProviderMock) CommitmentAtx() (types.ATXID, error) {
+	return types.RandomATXID(), nil
 }
 
 func (p *postSetupProviderMock) VRFNonce() (*types.VRFPostIndex, error) {
@@ -175,7 +179,7 @@ func TestPostSetup(t *testing.T) {
 	nb := NewNIPostBuilder(nodeID, postSetupProvider, []PoetProvingServiceClient{poetProvider},
 		poetDb, sql.InMemory(), logtest.New(t), sig, PoetConfig{}, mclock)
 
-	r.NoError(postSetupProvider.StartSession(context.Background(), getPostSetupOpts(t), goldenATXID))
+	r.NoError(postSetupProvider.StartSession(context.Background(), getPostSetupOpts(t)))
 	t.Cleanup(func() { assert.NoError(t, postSetupProvider.Reset()) })
 
 	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
@@ -243,7 +247,7 @@ func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipos
 	r.NoError(err)
 	r.NotNil(postProvider)
 
-	r.NoError(postProvider.StartSession(context.Background(), getPostSetupOpts(tb), goldenATXID))
+	r.NoError(postProvider.StartSession(context.Background(), getPostSetupOpts(tb)))
 	mclock := defaultLayerClockMock(tb)
 
 	epoch := layersPerEpoch * layerDuration
@@ -325,7 +329,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	r.EqualError(err, "post setup not complete")
 	r.Nil(nipost)
 
-	r.NoError(postProvider.StartSession(context.Background(), getPostSetupOpts(t), goldenATXID))
+	r.NoError(postProvider.StartSession(context.Background(), getPostSetupOpts(t)))
 
 	nipost, _, err = nb.BuildNIPost(context.Background(), &nipostChallenge)
 	r.NoError(err)
