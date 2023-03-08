@@ -289,14 +289,15 @@ func (mgr *PostSetupManager) commitmentAtx(datadir string) (types.ATXID, error) 
 // when no ATXs have yet been published.
 func (mgr *PostSetupManager) findCommitmentAtx() (types.ATXID, error) {
 	atx, err := atxs.GetAtxIDWithMaxHeight(mgr.db)
-	if errors.Is(err, sql.ErrNotFound) {
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
 		mgr.logger.With().Info("using golden atx as commitment atx")
 		return mgr.goldenATXID, nil
-	}
-	if err != nil {
+	case err != nil:
 		return *types.EmptyATXID, fmt.Errorf("get commitment atx: %w", err)
+	default:
+		return atx, nil
 	}
-	return atx, nil
 }
 
 // Reset deletes the data file(s).
