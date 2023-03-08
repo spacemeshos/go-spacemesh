@@ -28,6 +28,10 @@ env:
   CI_REGION_NAME: ${{ secrets.CI_REGION_NAME }}
   USE_GKE_GCLOUD_AUTH_PLUGIN: True
 
+concurrency:
+  group: ${{ github.base_ref == 'staging' && 'smci-staging' || format('smci-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
+
 jobs:
   filter-changes:
     runs-on: ubuntu-latest
@@ -48,9 +52,6 @@ jobs:
     needs:
       - filter-changes
     timeout-minutes: 70
-    concurrency:
-      group: ${{ github.base_ref == 'staging' && 'smci-staging' || format('smci-{0}', github.ref) }}
-      cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
     steps:
       - uses: actions/checkout@v3
 
