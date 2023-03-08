@@ -46,6 +46,7 @@ func fastnet() config.Config {
 
 	conf.Tortoise.Hdist = 4
 	conf.Tortoise.Zdist = 2
+	conf.Tortoise.BadBeaconVoteDelayLayers = 2
 
 	conf.HareEligibility.ConfidenceParam = 2 // half epoch
 	conf.HareEligibility.EpochOffset = 0
