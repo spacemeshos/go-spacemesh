@@ -274,7 +274,7 @@ func (mgr *PostSetupManager) commitmentAtx(datadir string) (types.ATXID, error) 
 			if err != nil {
 				return *types.EmptyATXID, err
 			}
-			return atx.ID(), nil
+			return *atx.CommitmentATX, nil
 		}
 
 		// if this node has not published an ATX select the best ATX with `findCommitmentAtx`

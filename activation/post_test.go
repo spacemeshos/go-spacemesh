@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -264,68 +265,91 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	req.Equal(uint64(opts.NumUnits)*cfg.LabelsPerUnit, status.NumLabelsWritten)
 }
 
-// func TestBuilder_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
-// 	tab := newTestBuilder(t)
-// 	latestAtx := addPrevAtx(t, tab.cdb, 1, tab.sig, &tab.nodeID)
-// 	atx, err := tab.findCommitmentAtx()
-// 	require.NoError(t, err)
-// 	require.Equal(t, latestAtx.ID(), atx)
-// }
+func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
+	req := require.New(t)
 
-// func TestBuilder_findCommitmentAtx_DefaultsToGoldenAtx(t *testing.T) {
-// 	tab := newTestBuilder(t)
-// 	atx, err := tab.findCommitmentAtx()
-// 	require.NoError(t, err)
-// 	require.Equal(t, tab.goldenATXID, atx)
-// }
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	goldenATXID := types.ATXID{2, 3, 4}
+	cfg, _ := getTestConfig(t)
 
-// func TestBuilder_getCommitmentAtx_storesCommitmentAtx(t *testing.T) {
-// 	tab := newTestBuilder(t)
-// 	tab.commitmentAtx = nil
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
+	req.NoError(err)
 
-// 	atx, err := tab.getCommitmentAtx(context.Background())
-// 	require.NoError(t, err)
+	sig, err := signing.NewEdSigner()
+	req.NoError(err)
+	id := sig.NodeID()
 
-// 	stored, err := kvstore.GetCommitmentATXForNode(tab.cdb, tab.nodeID)
-// 	require.NoError(t, err)
+	latestAtx := addPrevAtx(t, mgr.db, 1, sig, &id)
+	atx, err := mgr.findCommitmentAtx()
+	require.NoError(t, err)
+	require.Equal(t, latestAtx.ID(), atx)
+}
 
-// 	require.Equal(t, *atx, stored)
-// }
+func TestPostSetupManager_findCommitmentAtx_DefaultsToGoldenAtx(t *testing.T) {
+	req := require.New(t)
 
-// func TestBuilder_getCommitmentAtx_getsStoredCommitmentAtx(t *testing.T) {
-// 	tab := newTestBuilder(t)
-// 	tab.commitmentAtx = nil
-// 	commitmentAtx := types.RandomATXID()
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	goldenATXID := types.ATXID{2, 3, 4}
+	cfg, _ := getTestConfig(t)
 
-// 	diffSigner, err := signing.NewEdSigner()
-// 	require.NoError(t, err)
-// 	diffNid := diffSigner.NodeID()
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
+	req.NoError(err)
 
-// 	// add a newer ATX by a different node
-// 	atx := types.NewActivationTx(types.NIPostChallenge{}, &diffNid, types.Address{}, nil, 1, nil, nil)
-// 	vatx := addAtx(t, tab.cdb, diffSigner, atx)
-// 	err = kvstore.AddCommitmentATXForNode(tab.cdb, commitmentAtx, tab.nodeID)
-// 	require.NoError(t, err)
+	atx, err := mgr.findCommitmentAtx()
+	require.NoError(t, err)
+	require.Equal(t, goldenATXID, atx)
+}
 
-// 	atxid, err := tab.getCommitmentAtx(context.Background())
-// 	require.NoError(t, err)
-// 	require.Equal(t, commitmentAtx, *atxid)
-// 	require.NotEqual(t, vatx.ID(), atx)
-// }
+func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromPostMetadata(t *testing.T) {
+	req := require.New(t)
 
-// func TestBuilder_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *testing.T) {
-// 	tab := newTestBuilder(t)
-// 	tab.commitmentAtx = nil
-// 	commitmentAtx := types.RandomATXID()
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	goldenATXID := types.ATXID{2, 3, 4}
+	cfg, opts := getTestConfig(t)
 
-// 	// add an atx by the same node
-// 	atx := types.NewActivationTx(types.NIPostChallenge{}, &tab.nodeID, types.Address{}, nil, 1, nil, nil)
-// 	atx.CommitmentATX = &commitmentAtx
-// 	vatx := addAtx(t, tab.cdb, tab.sig, atx)
+	sig, err := signing.NewEdSigner()
+	req.NoError(err)
+	id := sig.NodeID()
 
-// 	atxid, err := tab.getCommitmentAtx(context.Background())
-// 	require.NoError(t, err)
-// 	require.NotNil(t, atxid)
-// 	require.Equal(t, commitmentAtx, *atxid)
-// 	require.NotEqual(t, vatx.ID(), atx)
-// }
+	// write commitment atx to metadata
+	commitmentAtx := types.RandomATXID()
+	initialization.SaveMetadata(opts.DataDir, &shared.PostMetadata{
+		CommitmentAtxId: commitmentAtx.Bytes(),
+		NodeId:          id.Bytes(),
+	})
+
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
+	req.NoError(err)
+
+	atxid, err := mgr.commitmentAtx(opts.DataDir)
+	require.NoError(t, err)
+	require.NotNil(t, atxid)
+	require.Equal(t, commitmentAtx, atxid)
+}
+
+func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *testing.T) {
+	req := require.New(t)
+
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	goldenATXID := types.ATXID{2, 3, 4}
+	cfg, opts := getTestConfig(t)
+
+	sig, err := signing.NewEdSigner()
+	req.NoError(err)
+	id := sig.NodeID()
+
+	// add an atx by the same node
+	commitmentAtx := types.RandomATXID()
+	atx := types.NewActivationTx(types.NIPostChallenge{}, &id, types.Address{}, nil, 1, nil, nil)
+	atx.CommitmentATX = &commitmentAtx
+	vatx := addAtx(t, cdb, sig, atx)
+
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
+	req.NoError(err)
+
+	atxid, err := mgr.commitmentAtx(opts.DataDir)
+	require.NoError(t, err)
+	require.NotNil(t, atxid)
+	require.Equal(t, commitmentAtx, atxid)
+	require.NotEqual(t, vatx.ID(), atx)
+}
