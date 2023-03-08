@@ -252,6 +252,9 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 }
 
 func (mgr *PostSetupManager) CommitmentAtx() (types.ATXID, error) {
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+
 	if mgr.commitmentAtxId != *types.EmptyATXID {
 		return mgr.commitmentAtxId, nil
 	}
