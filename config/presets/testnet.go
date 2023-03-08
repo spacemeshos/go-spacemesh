@@ -48,6 +48,10 @@ func testnet() config.Config {
 	conf.LayersPerEpoch = 60
 	conf.SyncRequestTimeout = 60_000
 
+	conf.Tortoise.Hdist = 60
+	conf.Tortoise.Zdist = 10
+	conf.Tortoise.BadBeaconVoteDelayLayers = 30
+
 	conf.POST.BitsPerLabel = 8
 	conf.POST.K1 = 200
 	conf.POST.K2 = 212
