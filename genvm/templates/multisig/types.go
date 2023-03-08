@@ -9,7 +9,7 @@ import (
 
 // SpawnArguments contains a collection with PublicKeys.
 type SpawnArguments struct {
-	PublicKeys []core.PublicKey
+	PublicKeys []core.PublicKey `scale:"max=10"` // update StorageLimit if it changes.
 }
 
 // Signatures is a collections of parts that must satisfy multisig
