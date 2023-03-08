@@ -83,8 +83,10 @@ var errClosed = errors.New("closed")
 
 // HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
 func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
+	// We lock and unlock here to make sure we see b.ctx if it has been set.
+	// See - https://go.dev/ref/mem#locks
 	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.mu.Unlock()
 	select {
 	case <-ctx.Done():
 		return pubsub.ValidationIgnore
@@ -122,6 +124,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		logger.With().Debug("rejecting message", log.Err(err))
 		return err
 	}
+	b.mu.Lock()
 	out, exist := b.outbox[msgLayer.Uint32()]
 	if !exist {
 		logger.Debug("broker received a message to a consensus process that is not registered, latestLayer: %v, messageLayer: %v, messageType: %v", hareMsg.InnerMsg.Type)
@@ -134,10 +137,12 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 			out = make(chan any, inboxCapacity)
 			b.outbox[msgLayer.Uint32()] = out
 		} else {
+			b.mu.Unlock()
 			// This error is never inspected except to determine if it is not nil.
 			return errors.New("")
 		}
 	}
+	b.mu.Unlock()
 
 	nodeId, err := b.pubKeyExtractor.ExtractNodeID(hareMsg.SignedBytes(), hareMsg.Signature)
 	if err != nil {
