@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 func newRoundClockFromCfg(logger log.Log, cfg config.Config) *SimpleRoundClock {
@@ -152,12 +153,13 @@ func buildBroker(tb testing.TB, testName string) *testBroker {
 func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker {
 	ctrl := gomock.NewController(tb)
 	mockStateQ := mocks.NewMockstateQuerier(ctrl)
+	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
 	mch := make(chan *types.MalfeasanceGossip, 1)
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(tb, err)
 	return &testBroker{
-		Broker: newBroker(cdb, pke, &mockEligibilityValidator{valid: 1}, mockStateQ,
+		Broker: newBroker(cdb, pke, &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
 			mch, limit, logtest.New(tb).WithName(testName)),
 		cdb:        cdb,
 		mockStateQ: mockStateQ,

@@ -172,7 +172,7 @@ func New(
 	ev := newEligibilityValidator(rolacle, conf.N, conf.ExpectedLeaders, logger)
 	h.syncState = syncState
 	h.mchMalfeasance = make(chan *types.MalfeasanceGossip, conf.N)
-	h.broker = newBroker(cdb, pke, ev, stateQ, h.mchMalfeasance, conf.LimitConcurrent, logger)
+	h.broker = newBroker(cdb, pke, ev, stateQ, syncState, h.mchMalfeasance, conf.LimitConcurrent, logger)
 	h.sign = sign
 	h.blockGenCh = ch
 

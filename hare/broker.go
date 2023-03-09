@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const inboxCapacity = 1024 // inbox size per instance
@@ -32,6 +33,7 @@ type Broker struct {
 	pubKeyExtractor *signing.PubKeyExtractor
 	roleValidator   validator    // provides eligibility validation
 	stateQuerier    stateQuerier // provides activeness check
+	nodeSyncState   system.SyncStateProvider
 	mchOut          chan<- *types.MalfeasanceGossip
 	outbox          map[uint32]chan any
 	pending         map[uint32][]any // the buffer of pending early messages for the next layer
@@ -49,6 +51,7 @@ func newBroker(
 	pubKeyExtractor *signing.PubKeyExtractor,
 	roleValidator validator,
 	stateQuerier stateQuerier,
+	syncState system.SyncStateProvider,
 	mch chan<- *types.MalfeasanceGossip,
 	limit int,
 	log log.Log,
@@ -59,6 +62,7 @@ func newBroker(
 		pubKeyExtractor: pubKeyExtractor,
 		roleValidator:   roleValidator,
 		stateQuerier:    stateQuerier,
+		nodeSyncState:   syncState,
 		mchOut:          mch,
 		outbox:          make(map[uint32]chan any),
 		pending:         make(map[uint32][]any),
@@ -150,6 +154,11 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 
 	msgLayer := hareMsg.Layer
 
+	if !(b.nodeSyncState.IsSynced(ctx) && b.nodeSyncState.IsBeaconSynced(msgLayer.GetEpoch())) {
+		err := fmt.Errorf("broker rejecting message because not synced")
+		logger.With().Debug("rejecting message", log.Err(err))
+		return err
+	}
 	isEarly := false
 	if err = b.validateTiming(ctx, &hareMsg); err != nil {
 		if !errors.Is(err, errEarlyMsg) {
