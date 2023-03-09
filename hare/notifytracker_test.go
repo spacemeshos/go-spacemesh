@@ -11,7 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-func BuildNotifyMsg(signing Signer, s *Set) *Msg {
+func BuildNotifyMsg(signing *signing.EdSigner, s *Set) *Msg {
 	builder := newMessageBuilder()
 	builder.SetType(notify).SetLayer(instanceID1).SetRoundCounter(notifyRound).SetCommittedRound(ki).SetValues(s)
 	cert := &Certificate{}

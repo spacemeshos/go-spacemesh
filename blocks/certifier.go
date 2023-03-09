@@ -274,7 +274,7 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 			Proof:          proof,
 		},
 	}
-	msg.Signature = c.signer.Sign(msg.Bytes())
+	msg.Signature = c.signer.Sign(signing.HARE, msg.Bytes())
 	data, err := codec.Encode(&msg)
 	if err != nil {
 		logger.With().Panic("failed to serialize certify message", log.Err(err))
@@ -404,7 +404,7 @@ func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error 
 
 func (c *Certifier) validate(ctx context.Context, logger log.Log, msg types.CertifyMessage) error {
 	// extract public key from signature
-	nodeId, err := c.pubKeyExtractor.ExtractNodeID(msg.Bytes(), msg.Signature)
+	nodeId, err := c.pubKeyExtractor.ExtractNodeID(signing.HARE, msg.Bytes(), msg.Signature)
 	if err != nil {
 		return fmt.Errorf("%w: cert msg extract key: %v", errMalformedData, err.Error())
 	}

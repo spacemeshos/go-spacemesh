@@ -96,7 +96,7 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 	atx2, err := newAtx(sig1, types.NewLayerID(uint32(2*layersPerEpoch)))
 	require.NoError(t, err)
 	atx2.Sequence = atx1.Sequence + 1
-	atx2.Signature = sig1.Sign(atx2.SignedBytes())
+	atx2.Signature = sig1.Sign(signing.ATX, atx2.SignedBytes())
 	require.NoError(t, atx2.CalcAndSetID())
 
 	atx3, err := newAtx(sig2, types.NewLayerID(uint32(3*layersPerEpoch)))
@@ -106,7 +106,7 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 	atx4, err := newAtx(sig2, types.NewLayerID(uint32(4*layersPerEpoch)))
 	require.NoError(t, err)
 	atx4.Sequence = atx3.Sequence + 1
-	atx4.Signature = sig2.Sign(atx4.SignedBytes())
+	atx4.Signature = sig2.Sign(signing.ATX, atx4.SignedBytes())
 	require.NoError(t, atx4.CalcAndSetID())
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
@@ -185,7 +185,7 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	atx2, err := newAtx(sig1, types.NewLayerID(uint32(2*layersPerEpoch)))
 	require.NoError(t, err)
 	atx2.Sequence = atx1.Sequence + 1
-	atx2.Signature = sig1.Sign(atx2.SignedBytes())
+	atx2.Signature = sig1.Sign(signing.ATX, atx2.SignedBytes())
 	require.NoError(t, atx2.CalcAndSetID())
 
 	atx3, err := newAtx(sig2, types.NewLayerID(uint32(3*layersPerEpoch)))
@@ -195,7 +195,7 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	atx4, err := newAtx(sig2, types.NewLayerID(uint32(3*layersPerEpoch)))
 	require.NoError(t, err)
 	atx4.Sequence = atx3.Sequence + 1
-	atx4.Signature = sig2.Sign(atx4.SignedBytes())
+	atx4.Signature = sig2.Sign(signing.ATX, atx4.SignedBytes())
 	require.NoError(t, atx4.CalcAndSetID())
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
@@ -400,6 +400,8 @@ func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedAct
 	}
 
 	activation.SignAndFinalizeAtx(signer, atx)
+	nodeID := signer.NodeID()
+	atx.SetNodeID(&nodeID)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 	return atx.Verify(0, 1)
@@ -453,6 +455,8 @@ func TestPositioningID(t *testing.T) {
 				sig, err := signing.NewEdSigner()
 				require.NoError(t, err)
 				require.NoError(t, activation.SignAndFinalizeAtx(sig, full))
+				nodeID := sig.NodeID()
+				full.SetNodeID(&nodeID)
 
 				full.SetEffectiveNumUnits(full.NumUnits)
 				full.SetReceived(time.Now())

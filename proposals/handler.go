@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -48,6 +49,7 @@ type Handler struct {
 	cfg    Config
 
 	cdb       *datastore.CachedDB
+	extractor *signing.PubKeyExtractor
 	publisher pubsub.Publisher
 	fetcher   system.Fetcher
 	mesh      meshProvider
@@ -96,11 +98,12 @@ func WithConfig(cfg Config) Opt {
 }
 
 // NewHandler creates new Handler.
-func NewHandler(cdb *datastore.CachedDB, p pubsub.Publisher, f system.Fetcher, bc system.BeaconCollector, m meshProvider, decoder ballotDecoder, verifier vrfVerifier, opts ...Opt) *Handler {
+func NewHandler(cdb *datastore.CachedDB, extractor *signing.PubKeyExtractor, p pubsub.Publisher, f system.Fetcher, bc system.BeaconCollector, m meshProvider, decoder ballotDecoder, verifier vrfVerifier, opts ...Opt) *Handler {
 	b := &Handler{
 		logger:    log.NewNop(),
 		cfg:       defaultConfig(),
 		cdb:       cdb,
+		extractor: extractor,
 		publisher: p,
 		fetcher:   f,
 		mesh:      m,
@@ -141,6 +144,12 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []
 		logger.With().Error("malformed ballot", log.Err(err))
 		return errMalformedData
 	}
+
+	smesher, err := h.extractor.ExtractNodeID(signing.BALLOT, b.SignedBytes(), b.Signature)
+	if err != nil {
+		return fmt.Errorf("ballot extract key: %w", err)
+	}
+	b.SetSmesherID(smesher)
 
 	// set the ballot and smesher ID when received
 	if err := b.Initialize(); err != nil {
@@ -201,6 +210,19 @@ func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []
 		logger.With().Error("malformed proposal", log.Err(err))
 		return errMalformedData
 	}
+
+	smesher, err := h.extractor.ExtractNodeID(signing.BALLOT, p.SignedBytes(), p.Signature)
+	if err != nil {
+		return fmt.Errorf("proposal extract key: %w", err)
+	}
+	bSmesher, err := h.extractor.ExtractNodeID(signing.BALLOT, p.Ballot.SignedBytes(), p.Ballot.Signature)
+	if err != nil {
+		return fmt.Errorf("ballot extract key: %w", err)
+	}
+	if smesher != bSmesher {
+		return fmt.Errorf("inconsistent smesher in proposal %v and ballot %v", smesher, bSmesher)
+	}
+	p.SetSmesherID(smesher)
 
 	// set the proposal ID when received
 	if err := p.Initialize(); err != nil {
@@ -477,7 +499,7 @@ func ballotBlockView(b *types.Ballot) []types.BlockID {
 }
 
 func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ballot) error {
-	blts := []types.BallotID{}
+	var blts []types.BallotID
 	if b.Votes.Base != types.EmptyBallotID {
 		blts = append(blts, b.Votes.Base)
 	}
@@ -531,7 +553,7 @@ func (h *Handler) checkTransactions(ctx context.Context, p *types.Proposal) erro
 }
 
 func reportProposalMetrics(p *types.Proposal) {
-	proposalSize.WithLabelValues().Observe(float64(len(p.Bytes())))
+	proposalSize.WithLabelValues().Observe(float64(len(p.SignedBytes())))
 	numTxsInProposal.WithLabelValues().Observe(float64(len(p.TxIDs)))
 }
 

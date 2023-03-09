@@ -404,13 +404,14 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 		nonceFetcher(t, ctrl),
 		mockAllowance,
 		weakcoin.WithThreshold([]byte{0xff}),
+		weakcoin.WithLog(logtest.New(t)),
 	)
 	instance.StartEpoch(context.Background(), epoch)
 	nonce := types.VRFPostIndex(1)
 	instance.StartRound(context.Background(), round, &nonce)
 
 	require.Equal(t,
-		"95838858f8b318d070117421eda3f0d1db5ab97bc366082c17e771873be5ee963122773526fe0c71ba2188cae33cd3ef2212d0188fd07457727c3624b926bf28f2f9aa0ab85a207070688b47f7c6e10f",
+		"78f523319fd2cdf3812a3bc3905561acb2f7f1b7e47de71f92811d7bb82460e5999a048051cefa2d1b6f3f16656de83c2756b7539b33fa563a3e8fea5130235e66e8dce914d69bd40f13174f3914ad07",
 		hex.EncodeToString(sig),
 	)
 }

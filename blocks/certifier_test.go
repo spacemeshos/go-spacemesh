@@ -95,7 +95,7 @@ func genCertifyMsg(tb testing.TB, lid types.LayerID, bid types.BlockID, cnt uint
 			Proof:          []byte("not a fraud"),
 		},
 	}
-	msg.Signature = signer.Sign(msg.Bytes())
+	msg.Signature = signer.Sign(signing.HARE, msg.Bytes())
 	return signer.NodeID(), msg
 }
 
@@ -607,7 +607,7 @@ func Test_CertifyIfEligible(t *testing.T) {
 			var msg types.CertifyMessage
 			require.NoError(t, codec.Decode(got, &msg))
 
-			nodeId, err := extractor.ExtractNodeID(msg.Bytes(), msg.Signature)
+			nodeId, err := extractor.ExtractNodeID(signing.HARE, msg.Bytes(), msg.Signature)
 			require.NoError(t, err)
 			require.Equal(t, tc.nodeID, nodeId)
 			require.Equal(t, b.LayerIndex, msg.LayerID)

@@ -171,7 +171,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		isEarly = true
 	}
 
-	nodeId, err := b.pubKeyExtractor.ExtractNodeID(hareMsg.SignedBytes(), hareMsg.Signature)
+	nodeId, err := b.pubKeyExtractor.ExtractNodeID(signing.HARE, hareMsg.SignedBytes(), hareMsg.Signature)
 	if err != nil {
 		logger.With().Error("failed to extract public key",
 			log.Err(err),

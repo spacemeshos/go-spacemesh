@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
@@ -53,7 +54,7 @@ type Builder struct {
 
 	eg errgroup.Group
 
-	signer
+	signer            *signing.EdSigner
 	accountLock       sync.RWMutex
 	nodeID            types.NodeID
 	coinbaseAccount   types.Address
@@ -125,7 +126,7 @@ func WithPoetConfig(c PoetConfig) BuilderOption {
 func NewBuilder(
 	conf Config,
 	nodeID types.NodeID,
-	signer signer,
+	signer *signing.EdSigner,
 	cdb *datastore.CachedDB,
 	hdlr atxHandler,
 	publisher pubsub.Publisher,
@@ -676,7 +677,7 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 }
 
 // SignAndFinalizeAtx signs the atx with specified signer and calculates the ID of the ATX.
-func SignAndFinalizeAtx(signer signer, atx *types.ActivationTx) error {
-	atx.Signature = signer.Sign(atx.SignedBytes())
+func SignAndFinalizeAtx(signer *signing.EdSigner, atx *types.ActivationTx) error {
+	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
 	return atx.CalcAndSetID()
 }

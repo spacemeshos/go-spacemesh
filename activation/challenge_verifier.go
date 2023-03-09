@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 var (
@@ -42,14 +43,14 @@ type ChallengeVerifier interface {
 
 type challengeVerifier struct {
 	atxDB          atxProvider
-	keyExtractor   keyExtractor
+	keyExtractor   *signing.PubKeyExtractor
 	validator      nipostValidator
 	cfg            PostConfig
 	goldenATXID    types.ATXID
 	layersPerEpoch uint32
 }
 
-func NewChallengeVerifier(cdb atxProvider, signatureVerifier keyExtractor, validator nipostValidator, cfg PostConfig, goldenATX types.ATXID, layersPerEpoch uint32) *challengeVerifier {
+func NewChallengeVerifier(cdb atxProvider, signatureVerifier *signing.PubKeyExtractor, validator nipostValidator, cfg PostConfig, goldenATX types.ATXID, layersPerEpoch uint32) *challengeVerifier {
 	return &challengeVerifier{
 		atxDB:          cdb,
 		keyExtractor:   signatureVerifier,
@@ -61,7 +62,7 @@ func NewChallengeVerifier(cdb atxProvider, signatureVerifier keyExtractor, valid
 }
 
 func (v *challengeVerifier) Verify(ctx context.Context, challengeBytes, signature []byte) (*ChallengeVerificationResult, error) {
-	nodeID, err := v.keyExtractor.ExtractNodeID(challengeBytes, signature)
+	nodeID, err := v.keyExtractor.ExtractNodeID(signing.POET, challengeBytes, signature)
 	if err != nil {
 		return nil, ErrSignatureInvalid
 	}

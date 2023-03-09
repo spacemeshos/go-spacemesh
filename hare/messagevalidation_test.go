@@ -174,7 +174,7 @@ func (m mockValidator) Validate(context.Context, *Msg) bool {
 	return m.res
 }
 
-func initPg(tb testing.TB, validator *syntaxContextValidator) (*pubGetter, []Message, Signer) {
+func initPg(tb testing.TB, validator *syntaxContextValidator) (*pubGetter, []Message, *signing.EdSigner) {
 	pg := newPubGetter()
 	msgs := make([]Message, validator.threshold)
 	var signer *signing.EdSigner
@@ -311,15 +311,15 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 	v := proc.validator
 	b, err := proc.initDefaultBuilder(proc.value)
 	require.Nil(t, err)
-	preround := b.SetType(pre).Sign(proc.signing).Build()
-	preround.PubKey = proc.signing.PublicKey()
+	preround := b.SetType(pre).Sign(proc.signer).Build()
+	preround.PubKey = proc.signer.PublicKey()
 	require.True(t, v.SyntacticallyValidateMessage(context.Background(), preround))
 	e := v.ContextuallyValidateMessage(context.Background(), preround, 0)
 	require.Nil(t, e)
 	b, err = proc.initDefaultBuilder(proc.value)
 	require.Nil(t, err)
-	status := b.SetType(status).Sign(proc.signing).Build()
-	status.PubKey = proc.signing.PublicKey()
+	status := b.SetType(status).Sign(proc.signer).Build()
+	status.PubKey = proc.signer.PublicKey()
 	e = v.ContextuallyValidateMessage(context.Background(), status, 0)
 	require.Nil(t, e)
 	require.True(t, v.SyntacticallyValidateMessage(context.Background(), status))
