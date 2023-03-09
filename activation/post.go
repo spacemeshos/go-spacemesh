@@ -83,7 +83,6 @@ type PostSetupManager struct {
 	cfg         PostConfig
 	logger      log.Log
 	db          *datastore.CachedDB
-	syncer      syncer
 	goldenATXID types.ATXID
 
 	mu       sync.Mutex                  // mu protects setting the values below.
@@ -93,13 +92,12 @@ type PostSetupManager struct {
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
-func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger log.Log, db *datastore.CachedDB, syncer syncer, goldenATXID types.ATXID) (*PostSetupManager, error) {
+func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger log.Log, db *datastore.CachedDB, goldenATXID types.ATXID) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
 		id:          id,
 		cfg:         cfg,
 		logger:      logger,
 		db:          db,
-		syncer:      syncer,
 		goldenATXID: goldenATXID,
 		state:       PostSetupStateNotStarted,
 	}
@@ -290,13 +288,6 @@ func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) 
 // It will use the ATX with the highest height seen by the node and defaults to the goldenATX,
 // when no ATXs have yet been published.
 func (mgr *PostSetupManager) findCommitmentAtx(ctx context.Context) (types.ATXID, error) {
-	// wait for ATX to be synced before selecting commitment ATX
-	select {
-	case <-ctx.Done():
-		return *types.EmptyATXID, ctx.Err()
-	case <-mgr.syncer.RegisterForATXSynced():
-	}
-
 	atx, err := atxs.GetAtxIDWithMaxHeight(mgr.db)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):

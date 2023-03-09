@@ -629,7 +629,6 @@ func TestValidator_Validate(t *testing.T) {
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 
 	postProvider := newTestPostManager(t)
-	postProvider.msync.EXPECT().RegisterForATXSynced().DoAndReturn(atxReady).AnyTimes()
 
 	postCfg := DefaultPostConfig()
 	nipost := buildNIPost(t, postProvider, postCfg, challenge, poetDb)

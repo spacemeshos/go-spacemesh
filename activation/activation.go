@@ -186,6 +186,13 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	b.eg.Go(func() error {
 		defer b.started.Store(false)
 
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-b.syncer.RegisterForATXSynced():
+			// ensure we are ATX synced before starting the PoST Session
+		}
+
 		if err := b.postSetupProvider.StartSession(ctx, opts); err != nil {
 			return err
 		}

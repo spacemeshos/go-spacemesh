@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
@@ -23,7 +22,6 @@ func TestPostSetupManager(t *testing.T) {
 	req := require.New(t)
 
 	mgr := newTestPostManager(t)
-	mgr.msync.EXPECT().RegisterForATXSynced().DoAndReturn(atxReady).AnyTimes()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -71,7 +69,6 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req := require.New(t)
 
 	mgr := newTestPostManager(t)
-	mgr.msync.EXPECT().RegisterForATXSynced().DoAndReturn(atxReady).AnyTimes()
 
 	// Verify the initial status.
 	status := mgr.Status()
@@ -96,7 +93,6 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	ch := make([]byte, 32)
 
 	mgr := newTestPostManager(t)
-	mgr.msync.EXPECT().RegisterForATXSynced().DoAndReturn(atxReady).AnyTimes()
 
 	// Attempt to generate proof.
 	_, _, err := mgr.GenerateProof(context.Background(), ch)
@@ -139,7 +135,6 @@ func TestPostSetupManager_VRFNonce(t *testing.T) {
 	req := require.New(t)
 
 	mgr := newTestPostManager(t)
-	mgr.msync.EXPECT().RegisterForATXSynced().DoAndReturn(atxReady).AnyTimes()
 
 	// Attempt to get nonce.
 	_, err := mgr.VRFNonce()
@@ -165,7 +160,6 @@ func TestPostSetupManager_Stop(t *testing.T) {
 	req := require.New(t)
 
 	mgr := newTestPostManager(t)
-	mgr.msync.EXPECT().RegisterForATXSynced().DoAndReturn(atxReady).AnyTimes()
 
 	// Verify state.
 	status := mgr.Status()
@@ -195,7 +189,6 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	req := require.New(t)
 
 	mgr := newTestPostManager(t)
-	mgr.msync.EXPECT().RegisterForATXSynced().DoAndReturn(atxReady).AnyTimes()
 
 	// Create data.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -232,7 +225,6 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 
 func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 	mgr := newTestPostManager(t)
-	mgr.msync.EXPECT().RegisterForATXSynced().DoAndReturn(atxReady)
 
 	latestAtx := addPrevAtx(t, mgr.db, 1, mgr.signer, &mgr.id)
 	atx, err := mgr.findCommitmentAtx(context.Background())
@@ -242,7 +234,6 @@ func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 
 func TestPostSetupManager_findCommitmentAtx_DefaultsToGoldenAtx(t *testing.T) {
 	mgr := newTestPostManager(t)
-	mgr.msync.EXPECT().RegisterForATXSynced().DoAndReturn(atxReady)
 
 	atx, err := mgr.findCommitmentAtx(context.Background())
 	require.NoError(t, err)
@@ -251,7 +242,6 @@ func TestPostSetupManager_findCommitmentAtx_DefaultsToGoldenAtx(t *testing.T) {
 
 func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromPostMetadata(t *testing.T) {
 	mgr := newTestPostManager(t)
-	mgr.msync.EXPECT().RegisterForATXSynced().DoAndReturn(atxReady).AnyTimes()
 
 	// write commitment atx to metadata
 	commitmentAtx := types.RandomATXID()
@@ -268,7 +258,6 @@ func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromPostMetadata(t *
 
 func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *testing.T) {
 	mgr := newTestPostManager(t)
-	mgr.msync.EXPECT().RegisterForATXSynced().DoAndReturn(atxReady).AnyTimes()
 
 	// add an atx by the same node
 	commitmentAtx := types.RandomATXID()
@@ -289,9 +278,6 @@ type testPostManager struct {
 
 	signer *signing.EdSigner
 	cdb    *datastore.CachedDB
-
-	// Mocks.
-	msync *Mocksyncer
 }
 
 func newTestPostManager(tb testing.TB) *testPostManager {
@@ -310,10 +296,8 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 
 	goldenATXID := types.ATXID{2, 3, 4}
 
-	msync := NewMocksyncer(gomock.NewController(tb))
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-
-	mgr, err := NewPostSetupManager(id, cfg, logtest.New(tb), cdb, msync, goldenATXID)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(tb), cdb, goldenATXID)
 	require.NoError(tb, err)
 
 	return &testPostManager{
@@ -321,12 +305,5 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 		opts:             opts,
 		signer:           sig,
 		cdb:              cdb,
-		msync:            msync,
 	}
-}
-
-func atxReady() chan struct{} {
-	ch := make(chan struct{})
-	close(ch)
-	return ch
 }

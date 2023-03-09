@@ -99,13 +99,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	postConfig, opts := getTestConfig(t)
-	msync := activation.NewMocksyncer(gomock.NewController(t))
-	msync.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	})
-	mgr, err := activation.NewPostSetupManager(nodeID, postConfig, logtest.New(t), cdb, msync, goldenATXID)
+	mgr, err := activation.NewPostSetupManager(nodeID, postConfig, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
 	// Create data.

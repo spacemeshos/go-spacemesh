@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -27,13 +26,7 @@ func TestCanGeneratePOST(t *testing.T) {
 			opts.DataDir = t.TempDir()
 			opts.MaxFileSize = 4096
 
-			msync := activation.NewMocksyncer(gomock.NewController(t))
-			msync.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
-				ch := make(chan struct{})
-				close(ch)
-				return ch
-			})
-			mgr, err := activation.NewPostSetupManager(types.NodeID{}, params.POST, logtest.New(t), cdb, msync, goldenATXID)
+			mgr, err := activation.NewPostSetupManager(types.NodeID{}, params.POST, logtest.New(t), cdb, goldenATXID)
 			req.NoError(err)
 			req.NoError(mgr.StartSession(context.Background(), opts))
 

@@ -662,7 +662,7 @@ func (app *App) initServices(
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
 
-	postSetupMgr, err := activation.NewPostSetupManager(nodeID, app.Config.POST, app.addLogger(PostLogger, lg), app.cachedDB, newSyncer, goldenATXID)
+	postSetupMgr, err := activation.NewPostSetupManager(nodeID, app.Config.POST, app.addLogger(PostLogger, lg), app.cachedDB, goldenATXID)
 	if err != nil {
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}

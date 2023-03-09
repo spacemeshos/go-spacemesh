@@ -84,7 +84,6 @@ func TestPostSetup(t *testing.T) {
 	r := require.New(t)
 
 	postProvider := newTestPostManager(t)
-	postProvider.msync.EXPECT().RegisterForATXSynced().DoAndReturn(atxReady).AnyTimes()
 
 	challenge := types.PoetChallenge{NIPostChallenge: &types.NIPostChallenge{
 		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),
@@ -126,11 +125,6 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 
 	postProvider := newTestPostManager(t)
-	postProvider.msync.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	}).AnyTimes()
 
 	challengeHash := challenge.Hash()
 	postCfg := DefaultPostConfig()
@@ -228,7 +222,6 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	challengeHash := nipostChallenge.Hash()
 
 	postProvider := newTestPostManager(t)
-	postProvider.msync.EXPECT().RegisterForATXSynced().DoAndReturn(atxReady).AnyTimes()
 
 	gtw := spawnMockGateway(t)
 	poetProver := spawnPoet(t, WithGateway(gtw), WithGenesis(time.Now()), WithEpochDuration(time.Second))
