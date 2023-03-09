@@ -163,6 +163,9 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		miners[miner]++
 	}
 	for miner, maxj := range miners {
+		if maxj == 0 {
+			continue
+		}
 		voting := cfg.VoteGen(g.rng, g.layers, miner)
 		atxid := g.activations[miner]
 		signer := g.keys[miner]
@@ -189,9 +192,11 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 			EligibilityProofs: proofs,
 		}
 		ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
+		ballot.SetSmesherID(signer.NodeID())
 		if err = ballot.Initialize(); err != nil {
 			g.logger.With().Panic("failed to init ballot", log.Err(err))
 		}
+		ballot.SetSmesherID(signer.NodeID())
 		for _, state := range g.states {
 			state.OnBallot(ballot)
 		}

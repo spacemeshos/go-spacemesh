@@ -79,6 +79,7 @@ func genBallotWithEligibility(tb testing.TB, signer *signing.EdSigner, lid types
 		EligibilityProofs: []types.VotingEligibility{proof},
 	}
 	ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
+	ballot.SetSmesherID(signer.NodeID())
 	require.NoError(tb, ballot.Initialize())
 	return ballot
 }
