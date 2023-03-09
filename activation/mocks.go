@@ -477,6 +477,21 @@ func (mr *MockpostSetupProviderMockRecorder) Benchmark(p interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Benchmark", reflect.TypeOf((*MockpostSetupProvider)(nil).Benchmark), p)
 }
 
+// CommitmentAtx mocks base method.
+func (m *MockpostSetupProvider) CommitmentAtx() (types.ATXID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CommitmentAtx")
+	ret0, _ := ret[0].(types.ATXID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CommitmentAtx indicates an expected call of CommitmentAtx.
+func (mr *MockpostSetupProviderMockRecorder) CommitmentAtx() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CommitmentAtx", reflect.TypeOf((*MockpostSetupProvider)(nil).CommitmentAtx))
+}
+
 // ComputeProviders mocks base method.
 func (m *MockpostSetupProvider) ComputeProviders() []PostSetupComputeProvider {
 	m.ctrl.T.Helper()
@@ -550,17 +565,17 @@ func (mr *MockpostSetupProviderMockRecorder) Reset() *gomock.Call {
 }
 
 // StartSession mocks base method.
-func (m *MockpostSetupProvider) StartSession(context context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error {
+func (m *MockpostSetupProvider) StartSession(context context.Context, opts PostSetupOpts) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSession", context, opts, commitmentAtx)
+	ret := m.ctrl.Call(m, "StartSession", context, opts)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // StartSession indicates an expected call of StartSession.
-func (mr *MockpostSetupProviderMockRecorder) StartSession(context, opts, commitmentAtx interface{}) *gomock.Call {
+func (mr *MockpostSetupProviderMockRecorder) StartSession(context, opts interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockpostSetupProvider)(nil).StartSession), context, opts, commitmentAtx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockpostSetupProvider)(nil).StartSession), context, opts)
 }
 
 // Status mocks base method.
@@ -590,4 +605,109 @@ func (m *MockpostSetupProvider) VRFNonce() (*types.VRFPostIndex, error) {
 func (mr *MockpostSetupProviderMockRecorder) VRFNonce() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MockpostSetupProvider)(nil).VRFNonce))
+}
+
+// MockSmeshingProvider is a mock of SmeshingProvider interface.
+type MockSmeshingProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockSmeshingProviderMockRecorder
+}
+
+// MockSmeshingProviderMockRecorder is the mock recorder for MockSmeshingProvider.
+type MockSmeshingProviderMockRecorder struct {
+	mock *MockSmeshingProvider
+}
+
+// NewMockSmeshingProvider creates a new mock instance.
+func NewMockSmeshingProvider(ctrl *gomock.Controller) *MockSmeshingProvider {
+	mock := &MockSmeshingProvider{ctrl: ctrl}
+	mock.recorder = &MockSmeshingProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockSmeshingProvider) EXPECT() *MockSmeshingProviderMockRecorder {
+	return m.recorder
+}
+
+// Coinbase mocks base method.
+func (m *MockSmeshingProvider) Coinbase() types.Address {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Coinbase")
+	ret0, _ := ret[0].(types.Address)
+	return ret0
+}
+
+// Coinbase indicates an expected call of Coinbase.
+func (mr *MockSmeshingProviderMockRecorder) Coinbase() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Coinbase", reflect.TypeOf((*MockSmeshingProvider)(nil).Coinbase))
+}
+
+// SetCoinbase mocks base method.
+func (m *MockSmeshingProvider) SetCoinbase(coinbase types.Address) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetCoinbase", coinbase)
+}
+
+// SetCoinbase indicates an expected call of SetCoinbase.
+func (mr *MockSmeshingProviderMockRecorder) SetCoinbase(coinbase interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCoinbase", reflect.TypeOf((*MockSmeshingProvider)(nil).SetCoinbase), coinbase)
+}
+
+// SmesherID mocks base method.
+func (m *MockSmeshingProvider) SmesherID() types.NodeID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SmesherID")
+	ret0, _ := ret[0].(types.NodeID)
+	return ret0
+}
+
+// SmesherID indicates an expected call of SmesherID.
+func (mr *MockSmeshingProviderMockRecorder) SmesherID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SmesherID", reflect.TypeOf((*MockSmeshingProvider)(nil).SmesherID))
+}
+
+// Smeshing mocks base method.
+func (m *MockSmeshingProvider) Smeshing() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Smeshing")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Smeshing indicates an expected call of Smeshing.
+func (mr *MockSmeshingProviderMockRecorder) Smeshing() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Smeshing", reflect.TypeOf((*MockSmeshingProvider)(nil).Smeshing))
+}
+
+// StartSmeshing mocks base method.
+func (m *MockSmeshingProvider) StartSmeshing(arg0 types.Address, arg1 PostSetupOpts) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StartSmeshing", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// StartSmeshing indicates an expected call of StartSmeshing.
+func (mr *MockSmeshingProviderMockRecorder) StartSmeshing(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSmeshing", reflect.TypeOf((*MockSmeshingProvider)(nil).StartSmeshing), arg0, arg1)
+}
+
+// StopSmeshing mocks base method.
+func (m *MockSmeshingProvider) StopSmeshing(arg0 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StopSmeshing", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// StopSmeshing indicates an expected call of StopSmeshing.
+func (mr *MockSmeshingProviderMockRecorder) StopSmeshing(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopSmeshing", reflect.TypeOf((*MockSmeshingProvider)(nil).StopSmeshing), arg0)
 }

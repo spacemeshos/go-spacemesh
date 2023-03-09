@@ -22,7 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
 
@@ -38,18 +37,6 @@ func DefaultPoetConfig() PoetConfig {
 }
 
 const defaultPoetRetryInterval = 5 * time.Second
-
-//go:generate mockgen -package=activation -destination=./activation_mocks.go . SmeshingProvider
-
-// SmeshingProvider defines the functionality required for the node's Smesher API.
-type SmeshingProvider interface {
-	Smeshing() bool
-	StartSmeshing(types.Address, PostSetupOpts) error
-	StopSmeshing(bool) error
-	SmesherID() types.NodeID
-	Coinbase() types.Address
-	SetCoinbase(coinbase types.Address)
-}
 
 // Config defines configuration for Builder.
 type Config struct {
@@ -84,7 +71,6 @@ type Builder struct {
 	// commitmentAtx caches the ATX ID used for the PoST commitment by this node. It is set / fetched
 	// from the DB by calling `getCommitmentAtx()` and cAtxMutex protects its access.
 	commitmentAtx *types.ATXID
-	cAtxMutex     sync.Mutex
 
 	// smeshingMutex protects `StartSmeshing` and `StopSmeshing` from concurrent access
 	smeshingMutex sync.Mutex
@@ -201,12 +187,14 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	b.eg.Go(func() error {
 		defer b.started.Store(false)
 
-		commitmentAtx, err := b.getCommitmentAtx(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to start post setup session: %w", err)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-b.syncer.RegisterForATXSynced():
+			// ensure we are ATX synced before starting the PoST Session
 		}
 
-		if err := b.postSetupProvider.StartSession(ctx, opts, *commitmentAtx); err != nil {
+		if err := b.postSetupProvider.StartSession(ctx, opts); err != nil {
 			return err
 		}
 
@@ -215,21 +203,6 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	})
 
 	return nil
-}
-
-// findCommitmentAtx determines the best commitment ATX to use for the node.
-// It will use the ATX with the highest height seen by the node and defaults to the goldenATX,
-// when no ATXs have yet been published.
-func (b *Builder) findCommitmentAtx() (types.ATXID, error) {
-	atx, err := atxs.GetAtxIDWithMaxHeight(b.cdb)
-	if errors.Is(err, sql.ErrNotFound) {
-		b.log.With().Info("using golden atx as commitment atx")
-		return b.goldenATXID, nil
-	}
-	if err != nil {
-		return *types.EmptyATXID, fmt.Errorf("get commitment atx: %w", err)
-	}
-	return atx, nil
 }
 
 // StopSmeshing stops the atx builder.
@@ -377,7 +350,8 @@ func (b *Builder) loop(ctx context.Context) {
 		err := b.PublishActivationTx(ctx)
 		if err == nil {
 			b.log.WithContext(ctx).With().Info("waiting for atx to propagate before building the next challenge",
-				log.Duration("wait", b.poetRetryInterval))
+				log.Duration("wait", b.poetRetryInterval),
+			)
 			select {
 			case <-ctx.Done():
 				return
@@ -448,12 +422,12 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 	}
 
 	if prevAtx, err := b.cdb.GetLastAtx(b.nodeID); err != nil {
-		commitmentAtx, err := b.getCommitmentAtx(ctx)
+		commitmentAtx, err := b.postSetupProvider.CommitmentAtx()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get commitment ATX: %w", err)
 		}
 
-		challenge.CommitmentATX = commitmentAtx
+		challenge.CommitmentATX = &commitmentAtx
 		challenge.InitialPostIndices = b.initialPost.Indices
 	} else {
 		challenge.PrevATXID = prevAtx.ID
@@ -528,53 +502,6 @@ func (b *Builder) loadChallenge() (*types.NIPostChallenge, error) {
 		return nil, errors.New("atx nipost challenge is stale")
 	}
 	return nipost, nil
-}
-
-func (b *Builder) getCommitmentAtx(ctx context.Context) (*types.ATXID, error) {
-	b.cAtxMutex.Lock()
-	defer b.cAtxMutex.Unlock()
-
-	if b.commitmentAtx != nil {
-		return b.commitmentAtx, nil
-	}
-
-	// if this node has already published an ATX, get its initial ATX and from it the commitment ATX
-	atxId, err := atxs.GetFirstIDByNodeID(b.cdb, b.nodeID)
-	if err == nil {
-		atx, err := atxs.Get(b.cdb, atxId)
-		if err == nil {
-			b.commitmentAtx = atx.CommitmentATX
-			return b.commitmentAtx, nil
-		}
-	}
-
-	// if this node has not published an ATX, get the commitment ATX id from the kvstore (if it exists)
-	// otherwise select the best ATX with `findCommitmentAtx`
-	atxId, err = kvstore.GetCommitmentATXForNode(b.cdb, b.nodeID)
-	switch {
-	case errors.Is(err, sql.ErrNotFound):
-		// wait for ATX to be synced before selecting commitment ATX
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-b.syncer.RegisterForATXSynced():
-		}
-
-		atxId, err := b.findCommitmentAtx()
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine commitment ATX: %w", err)
-		}
-		if err := kvstore.AddCommitmentATXForNode(b.cdb, atxId, b.nodeID); err != nil {
-			return nil, fmt.Errorf("failed to store commitment ATX: %w", err)
-		}
-		b.commitmentAtx = &atxId
-		return b.commitmentAtx, nil
-	case err != nil:
-		return nil, fmt.Errorf("failed to get commitment ATX: %w", err)
-	}
-
-	b.commitmentAtx = &atxId
-	return b.commitmentAtx, nil
 }
 
 // PublishActivationTx attempts to publish an atx, it returns an error if an atx cannot be created.
