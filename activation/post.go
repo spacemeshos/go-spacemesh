@@ -14,6 +14,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 // PostSetupComputeProvider represent a compute provider for Post setup data creation.
@@ -58,6 +60,11 @@ const (
 	PostSetupStateError
 )
 
+var (
+	errNotComplete = errors.New("not complete")
+	errNotStarted  = errors.New("not started")
+)
+
 // DefaultPostConfig defines the default configuration for Post.
 func DefaultPostConfig() PostConfig {
 	return (PostConfig)(config.DefaultConfig())
@@ -97,8 +104,6 @@ func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger log.Log, db *da
 
 	return mgr, nil
 }
-
-var errNotComplete = errors.New("not complete")
 
 // Status returns the setup current status.
 func (mgr *PostSetupManager) Status() *PostSetupStatus {
@@ -158,21 +163,64 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 	return score, nil
 }
 
-// StartSession starts (or continues) a data creation session.
-// It supports resuming a previously started session, as well as changing the Post setup options (e.g., number of units)
-// after initial setup.
-func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error {
+// StartSession starts (or continues) a PoST session. It supports resuming a previously started
+// session, and will return an error if a session is already in progress.
+//
+// Ensure that before calling this method, the node is ATX synced.
+func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts) error {
+	if err := mgr.prepareInitializer(ctx, opts); err != nil {
+		return err
+	}
+
+	mgr.logger.With().Info("post setup session starting",
+		log.String("node_id", mgr.id.String()),
+		log.String("commitment_atx", mgr.commitmentAtxId.String()),
+		log.String("data_dir", opts.DataDir),
+		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
+		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
+		log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
+		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
+	)
+
+	err := mgr.init.Initialize(ctx)
+
 	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+	switch {
+	case errors.Is(err, context.Canceled):
+		mgr.logger.Info("post setup session was stopped")
+		mgr.state = PostSetupStateStopped
+		return err
+	case err != nil:
+		mgr.logger.With().Error("post setup session failed", log.Err(err))
+		mgr.state = PostSetupStateError
+		return err
+	}
+
+	mgr.logger.With().Info("post setup completed",
+		log.String("node_id", mgr.id.String()),
+		log.String("commitment_atx", mgr.commitmentAtxId.String()),
+		log.String("data_dir", opts.DataDir),
+		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
+		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
+		log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
+		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
+	)
+	mgr.state = PostSetupStateComplete
+	return nil
+}
+
+func (mgr *PostSetupManager) prepareInitializer(ctx context.Context, opts PostSetupOpts) error {
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
 
 	if mgr.state == PostSetupStateInProgress {
-		mgr.mu.Unlock()
 		return fmt.Errorf("post setup session in progress")
 	}
 
 	if opts.ComputeProviderID == config.BestProviderID {
 		p, err := mgr.BestProvider()
 		if err != nil {
-			mgr.mu.Unlock()
 			return err
 		}
 
@@ -181,14 +229,8 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	}
 
 	var err error
-	mgr.commitmentAtxId, err = mgr.getCommitmentAtx(opts.DataDir)
-
-	switch {
-	case errors.Is(err, initialization.ErrStateMetadataFileMissing):
-		// TODO(mafa): commitmentAtx shouldn't be passed in as an argument. See: https://github.com/spacemeshos/go-spacemesh/issues/3843
-		mgr.commitmentAtxId = commitmentAtx
-	case err != nil:
-		mgr.mu.Unlock()
+	mgr.commitmentAtxId, err = mgr.commitmentAtx(ctx, opts.DataDir)
+	if err != nil {
 		return err
 	}
 
@@ -201,67 +243,61 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	)
 	if err != nil {
 		mgr.state = PostSetupStateError
-		mgr.mu.Unlock()
 		return fmt.Errorf("new initializer: %w", err)
 	}
 
 	mgr.state = PostSetupStateInProgress
 	mgr.init = newInit
 	mgr.lastOpts = &opts
-	mgr.mu.Unlock()
-
-	mgr.logger.With().Info("post setup session starting",
-		log.String("node_id", mgr.id.String()),
-		log.String("commitment_atx", mgr.commitmentAtxId.String()),
-		log.String("data_dir", opts.DataDir),
-		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
-		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
-		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
-	)
-
-	if err := newInit.Initialize(ctx); err != nil {
-		mgr.mu.Lock()
-		defer mgr.mu.Unlock()
-
-		switch {
-		case errors.Is(err, context.Canceled):
-			mgr.logger.Info("post setup session was stopped")
-			mgr.state = PostSetupStateStopped
-		default:
-			mgr.logger.With().Error("post setup session failed", log.Err(err))
-			mgr.state = PostSetupStateError
-		}
-		return err
-	}
-
-	mgr.logger.With().Info("post setup completed",
-		log.String("node_id", mgr.id.String()),
-		log.String("commitment_atx", mgr.commitmentAtxId.String()),
-		log.String("data_dir", opts.DataDir),
-		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
-		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
-	)
-
-	mgr.mu.Lock()
-	mgr.state = PostSetupStateComplete
-	mgr.mu.Unlock()
-
 	return nil
 }
 
-func (mgr *PostSetupManager) getCommitmentAtx(dataDir string) (types.ATXID, error) {
+func (mgr *PostSetupManager) CommitmentAtx() (types.ATXID, error) {
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+
+	if mgr.commitmentAtxId != *types.EmptyATXID {
+		return mgr.commitmentAtxId, nil
+	}
+	return *types.EmptyATXID, errNotStarted
+}
+
+func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) (types.ATXID, error) {
 	m, err := initialization.LoadMetadata(dataDir)
 	switch {
 	case err == nil:
 		return types.ATXID(types.BytesToHash(m.CommitmentAtxId)), nil
 	case errors.Is(err, initialization.ErrStateMetadataFileMissing):
-		// TODO(mafa): instead of falling back to the provided commitmentAtx, decide here which commitmentAtx to use.
-		// See: https://github.com/spacemeshos/go-spacemesh/issues/3843
-		return *types.EmptyATXID, initialization.ErrStateMetadataFileMissing
+		// if this node has already published an ATX, get its initial ATX and from it the commitment ATX
+		atxId, err := atxs.GetFirstIDByNodeID(mgr.db, mgr.id)
+		if err == nil {
+			atx, err := atxs.Get(mgr.db, atxId)
+			if err != nil {
+				return *types.EmptyATXID, err
+			}
+			return *atx.CommitmentATX, nil
+		}
+
+		// if this node has not published an ATX select the best ATX with `findCommitmentAtx`
+		return mgr.findCommitmentAtx(ctx)
 	default:
 		return *types.EmptyATXID, fmt.Errorf("load metadata: %w", err)
+	}
+}
+
+// findCommitmentAtx determines the best commitment ATX to use for the node.
+// It will use the ATX with the highest height seen by the node and defaults to the goldenATX,
+// when no ATXs have yet been published.
+func (mgr *PostSetupManager) findCommitmentAtx(ctx context.Context) (types.ATXID, error) {
+	atx, err := atxs.GetAtxIDWithMaxHeight(mgr.db)
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		mgr.logger.With().Info("using golden atx as commitment atx")
+		return mgr.goldenATXID, nil
+	case err != nil:
+		return *types.EmptyATXID, fmt.Errorf("get commitment atx: %w", err)
+	default:
+		return atx, nil
 	}
 }
 

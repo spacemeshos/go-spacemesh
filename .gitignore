@@ -9,8 +9,6 @@ temp.js
 *.log
 /build
 /bin
-libgpu-setup-*
-libsvm-*
 
 .project
 .settings
@@ -20,6 +18,8 @@ libsvm-*
 
 *.out
 *.test
+*.zip
+
 /go-spacemesh
 /go-hare
 /cp.out
