@@ -163,21 +163,21 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 	return score, nil
 }
 
-// StartSession starts (or continues) a data creation session.
-// It supports resuming a previously started session, as well as changing the Post setup options (e.g., number of units)
-// after initial setup.
+// StartSession starts (or continues) a PoST session. It supports resuming a previously started
+// session, and will return an error if a session is already in progress.
+//
+// Ensure that before calling this method, the node is ATX synced.
 func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts) error {
 	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
 
 	if mgr.state == PostSetupStateInProgress {
-		mgr.mu.Unlock()
 		return fmt.Errorf("post setup session in progress")
 	}
 
 	if opts.ComputeProviderID == config.BestProviderID {
 		p, err := mgr.BestProvider()
 		if err != nil {
-			mgr.mu.Unlock()
 			return err
 		}
 
@@ -188,7 +188,6 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	var err error
 	mgr.commitmentAtxId, err = mgr.commitmentAtx(ctx, opts.DataDir)
 	if err != nil {
-		mgr.mu.Unlock()
 		return err
 	}
 
@@ -201,14 +200,12 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	)
 	if err != nil {
 		mgr.state = PostSetupStateError
-		mgr.mu.Unlock()
 		return fmt.Errorf("new initializer: %w", err)
 	}
 
 	mgr.state = PostSetupStateInProgress
 	mgr.init = newInit
 	mgr.lastOpts = &opts
-	mgr.mu.Unlock()
 
 	mgr.logger.With().Info("post setup session starting",
 		log.String("node_id", mgr.id.String()),
@@ -220,9 +217,9 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
 	)
 
+	mgr.mu.Unlock() // unlock before starting to initialize
 	if err := newInit.Initialize(ctx); err != nil {
 		mgr.mu.Lock()
-		defer mgr.mu.Unlock()
 
 		switch {
 		case errors.Is(err, context.Canceled):
@@ -246,8 +243,6 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 
 	mgr.mu.Lock()
 	mgr.state = PostSetupStateComplete
-	mgr.mu.Unlock()
-
 	return nil
 }
 

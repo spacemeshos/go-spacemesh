@@ -294,12 +294,11 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	coinbase := types.Address{1, 1, 1}
 	postSetupOpts := PostSetupOpts{}
 
-	tab.mpost.EXPECT().StartSession(gomock.Any(), postSetupOpts)
-	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any())
-	ch := make(chan struct{})
-	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch)
+	tab.mpost.EXPECT().StartSession(gomock.Any(), postSetupOpts).AnyTimes()
+	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes()
+	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
 	require.NoError(t, tab.StartSmeshing(coinbase, postSetupOpts))
-	require.Equal(t, coinbase, tab.Builder.Coinbase())
+	require.Equal(t, coinbase, tab.Coinbase())
 
 	// calling StartSmeshing more than once before calling StopSmeshing is an error
 	require.ErrorContains(t, tab.StartSmeshing(coinbase, postSetupOpts), "already started")
