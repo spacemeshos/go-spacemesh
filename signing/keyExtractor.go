@@ -42,10 +42,10 @@ func NewPubKeyExtractor(opts ...ExtractorOptionFunc) (*PubKeyExtractor, error) {
 
 // Extract public key from a signature.
 func (e PubKeyExtractor) Extract(d domain, m, sig []byte) (*PublicKey, error) {
-	msg := make([]byte, len(m)+len(e.prefix)+1)
-	copy(msg, e.prefix)
-	msg[len(e.prefix)] = byte(d)
-	copy(msg[len(e.prefix)+1:], m)
+	msg := make([]byte, 0, len(e.prefix)+1+len(m))
+	msg = append(msg, e.prefix...)
+	msg = append(msg, byte(d))
+	msg = append(msg, m...)
 	pub, err := ed25519.ExtractPublicKey(msg, sig)
 	if err != nil {
 		return nil, err

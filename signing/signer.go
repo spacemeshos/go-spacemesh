@@ -102,10 +102,10 @@ func NewEdSigner(opts ...EdSignerOptionFunc) (*EdSigner, error) {
 
 // Sign signs the provided message.
 func (es *EdSigner) Sign(d domain, m []byte) []byte {
-	msg := make([]byte, len(m)+len(es.prefix)+1)
-	copy(msg, es.prefix)
-	msg[len(es.prefix)] = byte(d)
-	copy(msg[len(es.prefix)+1:], m)
+	msg := make([]byte, 0, len(es.prefix)+1+len(m))
+	msg = append(msg, es.prefix...)
+	msg = append(msg, byte(d))
+	msg = append(msg, m...)
 	return ed25519.Sign(es.priv, msg)
 }
 
