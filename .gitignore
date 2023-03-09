@@ -34,3 +34,4 @@ database/data
 
 vendor/*
 systest/vendor/*
+.run/*
