@@ -168,6 +168,49 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 //
 // Ensure that before calling this method, the node is ATX synced.
 func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts) error {
+	if err := mgr.prepareInitializer(ctx, opts); err != nil {
+		return err
+	}
+
+	mgr.logger.With().Info("post setup session starting",
+		log.String("node_id", mgr.id.String()),
+		log.String("commitment_atx", mgr.commitmentAtxId.String()),
+		log.String("data_dir", opts.DataDir),
+		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
+		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
+		log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
+		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
+	)
+
+	err := mgr.init.Initialize(ctx)
+
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+	switch {
+	case errors.Is(err, context.Canceled):
+		mgr.logger.Info("post setup session was stopped")
+		mgr.state = PostSetupStateStopped
+		return err
+	case err != nil:
+		mgr.logger.With().Error("post setup session failed", log.Err(err))
+		mgr.state = PostSetupStateError
+		return err
+	}
+
+	mgr.logger.With().Info("post setup completed",
+		log.String("node_id", mgr.id.String()),
+		log.String("commitment_atx", mgr.commitmentAtxId.String()),
+		log.String("data_dir", opts.DataDir),
+		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
+		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
+		log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
+		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
+	)
+	mgr.state = PostSetupStateComplete
+	return nil
+}
+
+func (mgr *PostSetupManager) prepareInitializer(ctx context.Context, opts PostSetupOpts) error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 
@@ -206,43 +249,6 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	mgr.state = PostSetupStateInProgress
 	mgr.init = newInit
 	mgr.lastOpts = &opts
-
-	mgr.logger.With().Info("post setup session starting",
-		log.String("node_id", mgr.id.String()),
-		log.String("commitment_atx", mgr.commitmentAtxId.String()),
-		log.String("data_dir", opts.DataDir),
-		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
-		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
-		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
-	)
-
-	mgr.mu.Unlock() // unlock before starting to initialize
-	if err := newInit.Initialize(ctx); err != nil {
-		mgr.mu.Lock()
-
-		switch {
-		case errors.Is(err, context.Canceled):
-			mgr.logger.Info("post setup session was stopped")
-			mgr.state = PostSetupStateStopped
-		default:
-			mgr.logger.With().Error("post setup session failed", log.Err(err))
-			mgr.state = PostSetupStateError
-		}
-		return err
-	}
-
-	mgr.logger.With().Info("post setup completed",
-		log.String("node_id", mgr.id.String()),
-		log.String("commitment_atx", mgr.commitmentAtxId.String()),
-		log.String("data_dir", opts.DataDir),
-		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
-		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
-	)
-
-	mgr.mu.Lock()
-	mgr.state = PostSetupStateComplete
 	return nil
 }
 
