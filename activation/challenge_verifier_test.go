@@ -116,7 +116,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 		req.NoError(err)
 		challengeHash := challenge.Hash()
 		signedByte := make([]byte, len(challengeBytes)+1)
-		signedByte[0] = byte(signing.ATX)
+		signedByte[0] = byte(signing.POET)
 		copy(signedByte[1:], challengeBytes)
 
 		ctrl := gomock.NewController(t)
@@ -268,7 +268,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 	req.NoError(err)
 	challengeHash := challenge.Hash()
 	signedByte := make([]byte, len(challengeBytes)+1)
-	signedByte[0] = byte(signing.ATX)
+	signedByte[0] = byte(signing.POET)
 	copy(signedByte[1:], challengeBytes)
 
 	t.Run("valid", func(t *testing.T) {

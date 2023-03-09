@@ -62,7 +62,7 @@ func NewChallengeVerifier(cdb atxProvider, signatureVerifier *signing.PubKeyExtr
 }
 
 func (v *challengeVerifier) Verify(ctx context.Context, challengeBytes, signature []byte) (*ChallengeVerificationResult, error) {
-	nodeID, err := v.keyExtractor.ExtractNodeID(signing.ATX, challengeBytes, signature)
+	nodeID, err := v.keyExtractor.ExtractNodeID(signing.POET, challengeBytes, signature)
 	if err != nil {
 		return nil, ErrSignatureInvalid
 	}

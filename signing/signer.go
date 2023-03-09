@@ -20,6 +20,7 @@ const (
 	BEACON
 	BALLOT
 	HARE
+	POET
 )
 
 type edSignerOption struct {

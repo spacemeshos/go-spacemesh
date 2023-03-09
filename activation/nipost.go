@@ -160,7 +160,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 		if err != nil {
 			return nil, 0, err
 		}
-		signature := nb.signer.Sign(signing.ATX, challenge)
+		signature := nb.signer.Sign(signing.POET, challenge)
 		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
 		defer cancel()
 		poetRequests := nb.submitPoetChallenges(submitCtx, challenge, signature)
