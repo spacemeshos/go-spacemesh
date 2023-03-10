@@ -2,6 +2,7 @@ package types
 
 import (
 	"errors"
+	"time"
 
 	"github.com/spacemeshos/go-scale"
 
@@ -21,6 +22,16 @@ type MalfeasanceProof struct {
 	// for network upgrade
 	Layer LayerID
 	Proof Proof
+
+	received time.Time
+}
+
+func (mp *MalfeasanceProof) Received() time.Time {
+	return mp.received
+}
+
+func (mp *MalfeasanceProof) SetReceived(received time.Time) {
+	mp.received = received
 }
 
 func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -53,7 +64,7 @@ func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 	default:
 		encoder.AddString("type", "unknown")
 	}
-
+	encoder.AddTime("received", mp.received)
 	return nil
 }
 

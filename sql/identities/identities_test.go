@@ -2,6 +2,7 @@ package identities
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -36,9 +37,10 @@ func TestMalicious(t *testing.T) {
 			Data: &ballotProof,
 		},
 	}
+	proof.SetReceived(time.Now().Local())
 	data, err := codec.Encode(proof)
 	require.NoError(t, err)
-	require.NoError(t, SetMalicious(db, nodeID, data))
+	require.NoError(t, SetMalicious(db, nodeID, data, proof.Received()))
 
 	mal, err = IsMalicious(db, nodeID)
 	require.NoError(t, err)
@@ -60,7 +62,7 @@ func Test_GetMalicious(t *testing.T) {
 	for i := 0; i < numBad; i++ {
 		nid := types.NodeID{byte(i + 1)}
 		bad = append(bad, nid)
-		require.NoError(t, SetMalicious(db, nid, types.RandomBytes(11)))
+		require.NoError(t, SetMalicious(db, nid, types.RandomBytes(11), time.Now().Local()))
 	}
 	got, err = GetMalicious(db)
 	require.NoError(t, err)

@@ -586,7 +586,7 @@ func createIdentities(tb testing.TB, db sql.Executor, n int, midxs ...int) []*si
 		sigs = append(sigs, sig)
 	}
 	for _, idx := range midxs {
-		require.NoError(tb, identities.SetMalicious(db, sigs[idx].NodeID(), []byte("bad")))
+		require.NoError(tb, identities.SetMalicious(db, sigs[idx].NodeID(), []byte("bad"), time.Now()))
 	}
 	return sigs
 }
