@@ -55,6 +55,8 @@ func createMessage(tb testing.TB, instanceID types.LayerID) []byte {
 // test that a InnerMsg to a specific set ID is delivered by the broker.
 func TestBroker_Received(t *testing.T) {
 	broker := buildBroker(t, t.Name())
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
@@ -72,6 +74,8 @@ func TestBroker_Received(t *testing.T) {
 // the earliest one gets unregistered in favor of the newest one.
 func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	broker := buildBrokerWithLimit(t, t.Name(), 4)
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
@@ -114,6 +118,8 @@ func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 // test that aborting the broker aborts.
 func TestBroker_Abort(t *testing.T) {
 	broker := buildBroker(t, t.Name())
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.Start(context.Background())
 
 	timer := time.NewTimer(3 * time.Second)
@@ -162,6 +168,8 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 	const msgCount = 1
 
 	broker := buildBroker(t, t.Name())
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
@@ -203,6 +211,8 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 
 func TestBroker_RegisterUnregister(t *testing.T) {
 	broker := buildBroker(t, t.Name())
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
 
@@ -227,6 +237,8 @@ func TestBroker_Send(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	mev := &mockEligibilityValidator{valid: 0}
 	broker.roleValidator = mev
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(ctx)
 	t.Cleanup(broker.Close)
@@ -254,6 +266,8 @@ func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 	broker.mchOut = mch
 	mev := &mockEligibilityValidator{valid: 1}
 	broker.roleValidator = mev
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(ctx)
 	t.Cleanup(broker.Close)
@@ -373,6 +387,8 @@ func TestBroker_HandleEligibility(t *testing.T) {
 
 func TestBroker_Register(t *testing.T) {
 	broker := buildBroker(t, t.Name())
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
 
@@ -394,6 +410,8 @@ func TestBroker_Register(t *testing.T) {
 
 func TestBroker_Register2(t *testing.T) {
 	broker := buildBroker(t, t.Name())
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
@@ -414,6 +432,8 @@ func TestBroker_Register2(t *testing.T) {
 
 func TestBroker_Register3(t *testing.T) {
 	broker := buildBroker(t, t.Name())
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
@@ -440,6 +460,8 @@ func TestBroker_Register3(t *testing.T) {
 
 func TestBroker_PubkeyExtraction(t *testing.T) {
 	broker := buildBroker(t, t.Name())
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
@@ -506,8 +528,15 @@ func TestBroker_eventLoop(t *testing.T) {
 	require.NoError(t, err)
 	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), nil).Message
 
-	// synced
+	// not synced
+	m.Layer = instanceID1
 	msg := newMockGossipMsg(m).Message
+	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
+	r.Equal(pubsub.ValidationIgnore, b.HandleMessage(context.Background(), "", mustEncode(t, msg)))
+
+	// synced
+	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	c, e := b.Register(context.Background(), instanceID1)
 	r.Nil(e)
 	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.Background(), "", mustEncode(t, msg)))
@@ -586,6 +615,8 @@ func TestBroker_Flow(t *testing.T) {
 	b := buildBroker(t, t.Name())
 
 	b.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	b.Start(context.Background())
 	t.Cleanup(b.Close)
 
@@ -629,8 +660,10 @@ func TestBroker_Flow(t *testing.T) {
 // Shows that the limit is not enforced when we start registering at some layer greater than genesis.
 // And that we can get up to the starting layer numbers instances.
 func TestBroker_Limit1(t *testing.T) {
-	t.SkipNow()
+	t.Skip("Limit calculation in the broker is broken")
 	broker := buildBrokerWithLimit(t, t.Name(), 1)
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
 
@@ -661,8 +694,10 @@ func TestBroker_Limit1(t *testing.T) {
 // limits. This is because on unregister the minDeleted is not updated beyond
 // exisiting layers, meaning it starts to 'lag'.
 func TestBroker_Limit2(t *testing.T) {
-	t.SkipNow()
+	t.Skip("Limit calculation in the broker is broken")
 	broker := buildBrokerWithLimit(t, t.Name(), 10)
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
 

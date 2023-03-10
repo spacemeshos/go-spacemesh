@@ -144,6 +144,7 @@ type testBroker struct {
 	*Broker
 	cdb        *datastore.CachedDB
 	mockStateQ *mocks.MockstateQuerier
+	mockSyncS  *smocks.MockSyncStateProvider
 }
 
 func buildBroker(tb testing.TB, testName string) *testBroker {
@@ -163,6 +164,7 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 			mch, limit, logtest.New(tb).WithName(testName)),
 		cdb:        cdb,
 		mockStateQ: mockStateQ,
+		mockSyncS:  mockSyncS,
 	}
 }
 
