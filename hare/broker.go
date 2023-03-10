@@ -294,10 +294,9 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any,
 ) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if !id.After(b.latestLayer) { // should expect to update only newer layers
-		b.WithContext(ctx).With().Error("tried to update a previous layer",
-			log.Stringer("this_layer", id),
-			log.Stringer("prev_layer", b.latestLayer))
+
+	if !id.After(b.latestLayer) { // should expect to update only newer layers, its a coding error if this happens
+		panic(fmt.Sprintf("broker register called with old layer, current layer: %v, given layer: %v", b.latestLayer, id))
 	}
 
 	// We check here since early messages could have already constructed this map entry

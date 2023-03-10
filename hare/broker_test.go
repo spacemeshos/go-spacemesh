@@ -346,6 +346,22 @@ func TestBroker_HandleEligibility(t *testing.T) {
 	})
 }
 
+func TestBroker_RegisterOldLayer(t *testing.T) {
+	broker := buildBroker(t, t.Name())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	broker.Start(ctx)
+	t.Cleanup(broker.Close)
+	defer func() {
+		assert.NotNil(t, recover())
+	}()
+
+	_, err := broker.Register(ctx, instanceID2)
+	require.NoError(t, err)
+	_, err = broker.Register(ctx, instanceID1)
+	require.NoError(t, err)
+}
+
 func TestBroker_Register(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
