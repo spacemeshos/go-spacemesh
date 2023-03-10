@@ -392,7 +392,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				if err != nil {
 					h.log.With().Panic("failed to encode MalfeasanceProof", log.Err(err))
 				}
-				if err := identities.SetMalicious(dbtx, atx.SmesherID, encoded); err != nil {
+				if err := identities.SetMalicious(dbtx, atx.SmesherID, encoded, time.Now()); err != nil {
 					return fmt.Errorf("add malfeasance proof: %w", err)
 				}
 

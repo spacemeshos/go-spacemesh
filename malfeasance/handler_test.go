@@ -215,6 +215,8 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
+		require.NotNil(t, malProof.Received())
+		malProof.SetReceived(time.Time{})
 		require.Equal(t, gossip.MalfeasanceProof, *malProof)
 	})
 
@@ -429,6 +431,8 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
+		require.NotNil(t, malProof.Received())
+		malProof.SetReceived(time.Time{})
 		require.Equal(t, gossip.MalfeasanceProof, *malProof)
 	})
 
@@ -657,6 +661,8 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
+		require.NotNil(t, malProof.Received())
+		malProof.SetReceived(time.Time{})
 		require.Equal(t, gossip.MalfeasanceProof, *malProof)
 	})
 

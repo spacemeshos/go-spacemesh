@@ -324,7 +324,7 @@ func TestHandleMaliciousIDsReq(t *testing.T) {
 			for i := 0; i < tc.numBad; i++ {
 				nid := types.NodeID{byte(i + 1)}
 				bad = append(bad, nid)
-				require.NoError(t, identities.SetMalicious(th.cdb, nid, types.RandomBytes(11)))
+				require.NoError(t, identities.SetMalicious(th.cdb, nid, types.RandomBytes(11), time.Now()))
 			}
 
 			out, err := th.handleMaliciousIDsReq(context.TODO(), []byte{})
