@@ -2,6 +2,7 @@ package syncer_test
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -75,10 +76,16 @@ func TestForkFinder_Purge(t *testing.T) {
 }
 
 func layerHash(layer int, good bool) types.Hash32 {
+	var h2 types.Hash32
+	h := h2[:0]
 	if good {
-		return types.BytesToHash([]byte(strconv.Itoa(layer)))
+		h = append(h, "good/"...)
+		binary.LittleEndian.AppendUint32(h, uint32(layer))
+	} else {
+		h = append(h, "bad/"...)
+		binary.LittleEndian.AppendUint32(h, uint32(layer))
 	}
-	return types.BytesToHash([]byte(strconv.Itoa(2 * layer)))
+	return h2
 }
 
 func storeNodeHashes(t *testing.T, db *sql.Database, diverge, max int) {
