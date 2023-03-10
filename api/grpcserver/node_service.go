@@ -111,11 +111,8 @@ func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 
 // SyncStart requests that the node start syncing the mesh (if it isn't already syncing).
 func (s NodeService) SyncStart(context.Context, *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
-	log.Info("GRPC NodeService.SyncStart")
-	s.syncer.Start(s.appCtx)
-	return &pb.SyncStartResponse{
-		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
-	}, nil
+	log.Info("UNIMPLEMENTED GRPC NodeService.SyncStart")
+	return nil, status.Errorf(codes.Unimplemented, "UNIMPLEMENTED")
 }
 
 // Shutdown requests a graceful shutdown.
