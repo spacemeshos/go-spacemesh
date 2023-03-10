@@ -124,7 +124,12 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	b.mu.Lock()
 	out, exist := b.outbox[msgLayer.Uint32()]
 	if !exist {
-		logger.Debug("broker received a message to a consensus process that is not registered, latestLayer: %v, messageLayer: %v, messageType: %v", hareMsg.InnerMsg.Type)
+		logger.Debug(
+			"broker received a message to a consensus process that is not registered, latestLayer: %v, messageLayer: %v, messageType: %v",
+			b.latestLayer,
+			msgLayer.Uint32(),
+			hareMsg.InnerMsg.Type,
+		)
 
 		// We consider messages for the next layer to be early and we process
 		// them, all other messages we ignore. We don't impose the outbox
@@ -136,7 +141,12 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		} else {
 			b.mu.Unlock()
 			// This error is never inspected except to determine if it is not nil.
-			return errors.New("")
+			return fmt.Errorf(
+				"ignoring message to unregistered consensus process, latestLayer: %v, messageLayer: %v, messageType: %v",
+				b.latestLayer,
+				msgLayer.Uint32(),
+				hareMsg.InnerMsg.Type,
+			)
 		}
 	}
 	b.mu.Unlock()
