@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -37,7 +36,6 @@ type Broker struct {
 	mchOut          chan<- *types.MalfeasanceGossip
 	outbox          map[uint32]chan any
 	latestLayer     types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
-	limit           int           // max number of simultaneous consensus processes
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -64,7 +62,6 @@ func newBroker(
 		mchOut:          mch,
 		outbox:          make(map[uint32]chan any),
 		latestLayer:     types.GetEffectiveGenesis(),
-		limit:           limit,
 	}
 	return b
 }
@@ -299,29 +296,9 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any,
 		outboxCh = make(chan any, inboxCapacity)
 		b.outbox[id.Uint32()] = outboxCh
 	}
-
-	oversize := len(b.outbox) - b.limit
-	if oversize >= 0 {
-		// Remove earliest layers to make space for this layer
-		k := sortedKeys(b.outbox)
-		for i := 0; i < oversize; i++ {
-			delete(b.outbox, k[i])
-			b.With().Info("unregistered layer due to maximum concurrent processes limit", types.NewLayerID(k[i]))
-		}
-	}
-
 	b.latestLayer = id
 
 	return outboxCh, nil
-}
-
-func sortedKeys(m map[uint32]chan any) []uint32 {
-	keys := make([]uint32, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
-	return keys
 }
 
 // Unregister a layer from receiving messages.

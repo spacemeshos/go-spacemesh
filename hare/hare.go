@@ -370,6 +370,13 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		nonce = &nnc
 	}
 
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.cps) >= h.config.LimitConcurrent {
+		err := fmt.Errorf("failed to start cp for layer %q hare reached concurrent cp limit %q", lid.Uint32(), h.config.LimitConcurrent)
+		logger.With().Warning("hare failure", log.Err(err))
+		return false, err
+	}
 	ch, err := h.broker.Register(ctx, lid)
 	if err != nil {
 		logger.With().Error("failed to register with broker", log.Err(err))
@@ -387,17 +394,11 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 
 	logger.With().Info("starting hare", log.Int("num_proposals", len(props)))
 	cp.Start()
-	h.addCP(logger, cp)
-	h.patrol.SetHareInCharge(lid)
-	return true, nil
-}
-
-func (h *Hare) addCP(logger log.Log, cp Consensus) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
 	h.cps[cp.ID()] = cp
 	logger.With().Info("number of consensus processes (after register)",
 		log.Int("count", len(h.cps)))
+	h.patrol.SetHareInCharge(lid)
+	return true, nil
 }
 
 func (h *Hare) getCP(lid types.LayerID) Consensus {
