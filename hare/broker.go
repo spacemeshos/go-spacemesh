@@ -100,7 +100,9 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubs
 
 func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	h := types.CalcMessageHash12(msg, pubsub.HareProtocol)
+	b.mu.RLock()
 	logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.latestLayer), h)
+	b.mu.RUnlock()
 	hareMsg, err := MessageFromBuffer(msg)
 	if err != nil {
 		logger.With().Error("failed to build message", h, log.Err(err))
