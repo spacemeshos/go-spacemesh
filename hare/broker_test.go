@@ -63,7 +63,7 @@ func TestBroker_Received(t *testing.T) {
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
 
-	lid := types.NewLayerID(1)
+	lid := instanceID1
 	inbox, err := broker.Register(context.Background(), lid)
 	assert.Nil(t, err)
 
@@ -305,6 +305,7 @@ func TestBroker_HandleEligibility(t *testing.T) {
 
 	t.Run("identity active check failed", func(t *testing.T) {
 		errUnknown := errors.New("blah")
+		em.Layer = instanceID1
 		inbox, err = broker.Register(context.Background(), instanceID1)
 		require.NoError(t, err)
 		require.NotNil(t, inbox)
@@ -314,7 +315,8 @@ func TestBroker_HandleEligibility(t *testing.T) {
 	})
 
 	t.Run("identity not active", func(t *testing.T) {
-		inbox, err = broker.Register(context.Background(), instanceID1)
+		inbox, err = broker.Register(context.Background(), instanceID2)
+		em.Layer = instanceID2
 		require.NoError(t, err)
 		require.NotNil(t, inbox)
 		broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
@@ -323,7 +325,8 @@ func TestBroker_HandleEligibility(t *testing.T) {
 	})
 
 	t.Run("identity not eligible", func(t *testing.T) {
-		inbox, err = broker.Register(context.Background(), instanceID1)
+		inbox, err = broker.Register(context.Background(), instanceID3)
+		em.Layer = instanceID3
 		require.NoError(t, err)
 		require.NotNil(t, inbox)
 		broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
@@ -332,7 +335,8 @@ func TestBroker_HandleEligibility(t *testing.T) {
 	})
 
 	t.Run("identity eligible", func(t *testing.T) {
-		inbox, err = broker.Register(context.Background(), instanceID1)
+		inbox, err = broker.Register(context.Background(), instanceID4)
+		em.Layer = instanceID4
 		require.NoError(t, err)
 		require.NotNil(t, inbox)
 		broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
