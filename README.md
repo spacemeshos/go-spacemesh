@@ -141,6 +141,17 @@ arguments._
 
 ### Running
 
+_Note: go-spacemesh relies on a gpu setup dynamic library in order to run.
+`make install` puts this file in the build folder, so if you are running
+spacemesh from the build folder you don't need to take any extra action.
+However if you have built the binary using `go build` or moved the binary from
+the build folder you need to ensure that you have the gpu setup dynamic library
+(the exact name will vary based on your OS) accessible by the go-spacemesh
+binary. The simplest way to do this is just copy the library file to be in the
+same directory as the go-spacemesh binary. Alternatively you can modify your
+system's library search paths (e.g. LD_LIBRARY_PATH) to ensure that the
+library is found._
+
 go-spacemesh is p2p software which is designed to form a decentralized network by connecting to other instances of go-spacemesh running on remote computers.
 
 To run go-spacemesh you need to specify the parameters shared between all instances on a specific network.

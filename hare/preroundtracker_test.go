@@ -40,17 +40,17 @@ func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.P
 		},
 	}
 	signer, _ := signing.NewEdSigner()
-	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(p.Bytes())
+	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
 	p.Initialize()
 	return p
 }
 
-func BuildPreRoundMsg(signing Signer, s *Set, roleProof []byte) *Msg {
+func BuildPreRoundMsg(sig *signing.EdSigner, s *Set, roleProof []byte) *Msg {
 	builder := newMessageBuilder()
 	builder.SetType(pre).SetLayer(instanceID1).SetRoundCounter(preRound).SetCommittedRound(ki).SetValues(s).SetRoleProof(roleProof)
 	builder.SetEligibilityCount(1)
-	return builder.SetPubKey(signing.PublicKey()).Sign(signing).Build()
+	return builder.SetPubKey(sig.PublicKey()).Sign(sig).Build()
 }
 
 func TestPreRoundTracker_OnPreRound(t *testing.T) {

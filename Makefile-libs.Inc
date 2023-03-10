@@ -80,6 +80,35 @@ go-env-test: get-gpu-setup
 get-gpu-setup: $(PROJ_DIR)$(GPU_SETUP_ZIP) $(BINDIR_GPU_SETUP_LIBS)
 .PHONY: get-gpu-setup
 
+
+####################################################
+# post-rs (https://github.com/spacemeshos/post-rs) #
+####################################################
+ifeq ($(platform), windows)
+    POSTRS_SETUP_LIBS = prover.h post.dll
+else
+  ifeq ($(platform), $(filter $(platform), macos macos-m1))
+    POSTRS_SETUP_LIBS = prover.h libpost.dylib
+  else
+    POSTRS_SETUP_LIBS = prover.h libpost.so
+  endif
+endif
+
+POSTRS_SETUP_REV = 0.1.1
+POSTRS_SETUP_ZIP = libpost-$(platform)-v$(POSTRS_SETUP_REV).zip
+POSTRS_SETUP_URL_ZIP ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SETUP_ZIP)
+
+BINDIR_POSTRS_SETUP_LIBS = $(foreach X,$(POSTRS_SETUP_LIBS),$(BIN_DIR)$(X))
+$(BINDIR_POSTRS_SETUP_LIBS): $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
+	unzip -o -j "$(PROJ_DIR)$(POSTRS_SETUP_ZIP)" -d "$(BIN_DIR)" "**/$(notdir $@)"
+	touch $@
+
+$(PROJ_DIR)$(POSTRS_SETUP_ZIP):
+	curl -L $(POSTRS_SETUP_URL_ZIP) -o $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
+
+get-postrs-lib: $(PROJ_DIR)$(POSTRS_SETUP_ZIP) $(BINDIR_POSTRS_SETUP_LIBS)
+
+
 SUBDIRS_LVL1 := $(foreach X,$(wildcard $(dir $(PROJ_DIR))*/.), $(lastword $(subst /, ,$(dir $(X)))))
 SUBDIRS_ONLY := $(sort \
 	$(foreach X,$(SUBDIRS_LVL1),\

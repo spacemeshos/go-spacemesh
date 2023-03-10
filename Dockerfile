@@ -66,8 +66,7 @@ FROM linux AS spacemesh
 COPY --from=builder /src/build/go-spacemesh /bin/
 COPY --from=builder /src/build/go-harness /bin/
 COPY --from=builder /src/build/libgpu-setup.so /bin/
-# TODO(nkryuchkov): uncomment when go-svm is imported
-#COPY --from=builder /src/build/libsvm.so /bin/
+COPY --from=builder /src/build/libpost.so /bin/
 COPY --from=builder /src/build/gen-p2p-identity /bin/
 
 ENTRYPOINT ["/bin/go-harness"]

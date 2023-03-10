@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
@@ -29,7 +30,8 @@ type PoetProvingServiceClient interface {
 	// PoetServiceID returns the public key of the PoET proving service.
 	PoetServiceID(context.Context) (types.PoetServiceID, error)
 
-	GetProof(ctx context.Context, roundID string) (*types.PoetProofMessage, error)
+	// Proof returns the proof for the given round ID.
+	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, error)
 }
 
 func (nb *NIPostBuilder) load(challenge types.Hash32) {
@@ -60,7 +62,7 @@ type NIPostBuilder struct {
 	poetDB            poetDbAPI
 	state             *types.NIPostBuilderState
 	log               log.Log
-	signer            signer
+	signer            *signing.EdSigner
 	layerClock        layerClock
 	poetCfg           PoetConfig
 }
@@ -78,7 +80,7 @@ func NewNIPostBuilder(
 	poetDB poetDbAPI,
 	db *sql.Database,
 	log log.Log,
-	signer signer,
+	signer *signing.EdSigner,
 	poetCfg PoetConfig,
 	layerClock layerClock,
 ) *NIPostBuilder {
@@ -158,7 +160,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 		if err != nil {
 			return nil, 0, err
 		}
-		signature := nb.signer.Sign(challenge)
+		signature := nb.signer.Sign(signing.POET, challenge)
 		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
 		defer cancel()
 		poetRequests := nb.submitPoetChallenges(submitCtx, challenge, signature)
@@ -320,7 +322,7 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 			case <-time.After(waitTime):
 			}
 
-			proof, err := client.GetProof(ctx, round)
+			proof, err := client.Proof(ctx, round)
 			switch {
 			case errors.Is(err, context.Canceled):
 				return fmt.Errorf("querying proof: %w", ctx.Err())

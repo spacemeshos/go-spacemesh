@@ -190,7 +190,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 }
 
 // Apply transactions.
-func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 	if lctx.Layer.Before(types.GetEffectiveGenesis()) {
 		return nil, nil, fmt.Errorf("%w: applying layer %s before effective genesis %s",
 			core.ErrInternal, lctx.Layer, types.GetEffectiveGenesis(),

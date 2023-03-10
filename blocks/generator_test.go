@@ -209,8 +209,9 @@ func createProposal(
 			MeshHash: meshHash,
 		},
 	}
-	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(p.Bytes())
+	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
+	p.SetSmesherID(signer.NodeID())
 	require.NoError(t, p.Initialize())
 	return p
 }
@@ -218,10 +219,10 @@ func createProposal(
 func checkRewards(t *testing.T, atxs []*types.ActivationTx, expWeightPer *big.Rat, rewards []types.AnyReward) {
 	t.Helper()
 	sort.Slice(atxs, func(i, j int) bool {
-		return bytes.Compare(atxs[i].Coinbase.Bytes(), atxs[j].Coinbase.Bytes()) < 0
+		return bytes.Compare(atxs[i].ID().Bytes(), atxs[j].ID().Bytes()) < 0
 	})
 	for i, r := range rewards {
-		require.Equal(t, atxs[i].Coinbase, r.Coinbase)
+		require.Equal(t, atxs[i].ID(), r.AtxID)
 		got := r.Weight.ToBigRat()
 		require.Equal(t, expWeightPer, got)
 	}
@@ -574,7 +575,7 @@ func Test_generateBlock_StableBlockID(t *testing.T) {
 	require.Equal(t, block.ID(), block2.ID())
 }
 
-func Test_generateBlock_SameCoinbase(t *testing.T) {
+func Test_generateBlock_SameATX(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	numTXs := 1000
@@ -591,17 +592,9 @@ func Test_generateBlock_SameCoinbase(t *testing.T) {
 	proposal2 := createProposal(t, epochData, layerID, types.Hash32{}, atxID, signers[0], txIDs[400:], 1)
 	plist := []*types.Proposal{proposal1, proposal2}
 	block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, plist)
-	require.NoError(t, err)
+	require.ErrorIs(t, err, errDuplicateATX)
 	require.False(t, executed)
-	require.NotEqual(t, types.EmptyBlockID, block.ID())
-	require.Equal(t, layerID, block.LayerIndex)
-	require.Len(t, block.TxIDs, numTXs)
-
-	// numUnit is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1 eligibility
-	// the expected weight for each eligibility is `numUnit` * 1/3
-	// since there are two proposals for the same coinbase, the final weight is `numUnit` * 1/3 * 2
-	expWeight := new(big.Rat).SetInt64(numUnit * 1 / 3 * 2)
-	checkRewards(t, atxes[0:1], expWeight, block.Rewards)
+	require.Nil(t, block)
 }
 
 func Test_generateBlock_EmptyATXID(t *testing.T) {
@@ -644,13 +637,11 @@ func Test_generateBlock_MultipleEligibilities(t *testing.T) {
 	require.False(t, executed)
 	require.Len(t, block.Rewards, len(plist))
 	sort.Slice(plist, func(i, j int) bool {
-		cbi := types.GenerateAddress(plist[i].SmesherID().Bytes())
-		cbj := types.GenerateAddress(plist[j].SmesherID().Bytes())
-		return bytes.Compare(cbi.Bytes(), cbj.Bytes()) < 0
+		return bytes.Compare(plist[i].AtxID.Bytes(), plist[j].AtxID.Bytes()) < 0
 	})
 	totalWeight := new(big.Rat)
 	for i, r := range block.Rewards {
-		require.Equal(t, types.GenerateAddress(plist[i].SmesherID().Bytes()), r.Coinbase)
+		require.Equal(t, plist[i].AtxID, r.AtxID)
 		got := r.Weight.ToBigRat()
 		// numUint is the ATX weight. eligible slots per epoch is 3 for each atx
 		// the expected weight for each eligibility is `numUnit` * 1/3

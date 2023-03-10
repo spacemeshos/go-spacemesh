@@ -17,6 +17,8 @@ env:
 
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:
+  # Allow manually triggering this workflow
+  workflow_dispatch:
   # run for all pull requests and pushes to certain branches
   pull_request:
   push:
@@ -25,7 +27,7 @@ on:
       - trying
 
 concurrency:
-  group: ${{ github.base_ref == 'staging' && format('{0}-staging', github.workflow) || format('{0}-{1}', github.workflow, github.ref) }}
+  group: ${{ github.base_ref == 'staging' && 'smci-staging' || format('smci-{0}-{1}', github.workflow, github.ref) }}
   cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
 
 jobs:

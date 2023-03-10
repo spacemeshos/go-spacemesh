@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -29,7 +28,7 @@ type Broker struct {
 	log.Log
 	mu sync.RWMutex
 
-	cdb             *datastore.CachedDB
+	msh             mesh
 	pubKeyExtractor *signing.PubKeyExtractor
 	roleValidator   validator                // provides eligibility validation
 	stateQuerier    stateQuerier             // provides activeness check
@@ -47,7 +46,7 @@ type Broker struct {
 }
 
 func newBroker(
-	cdb *datastore.CachedDB,
+	msh mesh,
 	pubKeyExtractor *signing.PubKeyExtractor,
 	roleValidator validator,
 	stateQuerier stateQuerier,
@@ -58,7 +57,7 @@ func newBroker(
 ) *Broker {
 	b := &Broker{
 		Log:             log,
-		cdb:             cdb,
+		msh:             msh,
 		pubKeyExtractor: pubKeyExtractor,
 		roleValidator:   roleValidator,
 		stateQuerier:    stateQuerier,
@@ -172,7 +171,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		isEarly = true
 	}
 
-	nodeId, err := b.pubKeyExtractor.ExtractNodeID(hareMsg.SignedBytes(), hareMsg.Signature)
+	nodeId, err := b.pubKeyExtractor.ExtractNodeID(signing.HARE, hareMsg.SignedBytes(), hareMsg.Signature)
 	if err != nil {
 		logger.With().Error("failed to extract public key",
 			log.Err(err),
@@ -196,7 +195,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	logger.With().Debug("broker reported hare message as valid")
 
 	nodeID := types.BytesToNodeID(iMsg.PubKey.Bytes())
-	if proof, err := b.cdb.GetMalfeasanceProof(nodeID); err != nil && !errors.Is(err, sql.ErrNotFound) {
+	if proof, err := b.msh.GetMalfeasanceProof(nodeID); err != nil && !errors.Is(err, sql.ErrNotFound) {
 		logger.With().Error("failed to check malicious identity",
 			log.Stringer("smesher", nodeID),
 			log.Err(err),

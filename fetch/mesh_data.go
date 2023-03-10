@@ -24,7 +24,7 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)))
 	hashes := types.ATXIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.ATXDB, f.atxHandler.HandleAtxData)
+	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleAtxData)
 }
 
 type dataReceiver func(context.Context, p2p.Peer, []byte) error
@@ -48,14 +48,10 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 				return ctx.Err()
 			case <-p.completed:
 				if p.err != nil {
-					f.logger.WithContext(ctx).With().Warning("failed to get hash",
-						log.String("hint", string(hint)),
-						log.Stringer("hash", h),
-						log.Err(p.err))
-					return p.err
+					return fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h, p.err)
 				}
+				return nil
 			}
-			return nil
 		})
 	}
 
@@ -69,7 +65,7 @@ func (f *Fetch) GetMalfeasanceProofs(ctx context.Context, ids []types.NodeID) er
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting malfeasance proofs from peer", log.Int("num_proofs", len(ids)))
 	hashes := types.NodeIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.malHandler.HandleSyncedMalfeasanceProof)
+	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.validators.malfeasance.HandleSyncedMalfeasanceProof)
 }
 
 // GetBallots gets data for the specified BallotIDs and validates them.
@@ -79,7 +75,7 @@ func (f *Fetch) GetBallots(ctx context.Context, ids []types.BallotID) error {
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting ballots from peer", log.Int("num_ballots", len(ids)))
 	hashes := types.BallotIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.BallotDB, f.ballotHandler.HandleSyncedBallot)
+	return f.getHashes(ctx, hashes, datastore.BallotDB, f.validators.ballot.HandleSyncedBallot)
 }
 
 // GetProposals gets the data for given proposal IDs from peers.
@@ -89,7 +85,7 @@ func (f *Fetch) GetProposals(ctx context.Context, ids []types.ProposalID) error 
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting proposals from peer", log.Int("num_proposals", len(ids)))
 	hashes := types.ProposalIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.ProposalDB, f.proposalHandler.HandleSyncedProposal)
+	return f.getHashes(ctx, hashes, datastore.ProposalDB, f.validators.proposal.HandleSyncedProposal)
 }
 
 // GetBlocks gets the data for given block IDs from peers.
@@ -99,18 +95,18 @@ func (f *Fetch) GetBlocks(ctx context.Context, ids []types.BlockID) error {
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting blocks from peer", log.Int("num_blocks", len(ids)))
 	hashes := types.BlockIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.BlockDB, f.blockHandler.HandleSyncedBlock)
+	return f.getHashes(ctx, hashes, datastore.BlockDB, f.validators.block.HandleSyncedBlock)
 }
 
 // GetProposalTxs fetches the txs provided as IDs and validates them, returns an error if one TX failed to be fetched.
 func (f *Fetch) GetProposalTxs(ctx context.Context, ids []types.TransactionID) error {
-	return f.getTxs(ctx, ids, f.txHandler.HandleProposalTransaction)
+	return f.getTxs(ctx, ids, f.validators.tx.HandleProposalTransaction)
 }
 
 // GetBlockTxs fetches the txs provided as IDs and saves them, they will be validated
 // before block is applied.
 func (f *Fetch) GetBlockTxs(ctx context.Context, ids []types.TransactionID) error {
-	return f.getTxs(ctx, ids, f.txHandler.HandleBlockTransaction)
+	return f.getTxs(ctx, ids, f.validators.tx.HandleBlockTransaction)
 }
 
 func (f *Fetch) getTxs(ctx context.Context, ids []types.TransactionID, receiver dataReceiver) error {
@@ -125,7 +121,7 @@ func (f *Fetch) getTxs(ctx context.Context, ids []types.TransactionID, receiver 
 // GetPoetProof gets poet proof from remote peer.
 func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	f.logger.WithContext(ctx).With().Debug("getting poet proof", log.Stringer("hash", id))
-	pm, err := f.getHash(ctx, id, datastore.POETDB, f.poetHandler.ValidateAndStoreMsg)
+	pm, err := f.getHash(ctx, id, datastore.POETDB, f.validators.poet.ValidateAndStoreMsg)
 	if err != nil {
 		return err
 	}

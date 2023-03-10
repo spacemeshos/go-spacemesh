@@ -70,6 +70,7 @@ const (
 // Logger names.
 const (
 	AppLogger              = "app"
+	ClockLogger            = "clock"
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
 	StateDbLogger          = "stateDbStore"
@@ -513,8 +514,6 @@ func (app *App) initServices(
 		return fmt.Errorf("failed to create key extractor: %w", err)
 	}
 
-	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
-
 	vrfVerifier := signing.NewVRFVerifier()
 	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifier, app.cachedDB, clock,
 		beacon.WithContext(ctx),
@@ -524,14 +523,16 @@ func (app *App) initServices(
 
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
-	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
+	if trtlCfg.BadBeaconVoteDelayLayers == 0 {
+		trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
+	}
 	trtl := tortoise.New(app.cachedDB, beaconProtocol,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
 	)
 
-	executor := mesh.NewExecutor(app.db, state, app.conState, app.addLogger(Executor, lg))
+	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(Executor, lg))
 	msh, err := mesh.NewMesh(app.cachedDB, clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
@@ -540,6 +541,7 @@ func (app *App) initServices(
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
 		app.cachedDB,
+		app.keyExtractor,
 		clock,
 		app.host,
 		fetcherWrapped,
@@ -558,7 +560,7 @@ func (app *App) initServices(
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier,
+	proposalListener := proposals.NewHandler(app.cachedDB, app.keyExtractor, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,
@@ -581,7 +583,7 @@ func (app *App) initServices(
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
-			CertifyThreshold: app.Config.HARE.F + 1,
+			CertifyThreshold: app.Config.HARE.N/2 + 1,
 			LayerBuffer:      app.Config.Tortoise.Zdist,
 			NumLayersToKeep:  app.Config.Tortoise.Zdist * 2,
 		}),
@@ -592,12 +594,6 @@ func (app *App) initServices(
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(app.addLogger(Fetcher, lg)),
-		fetch.WithATXHandler(atxHandler),
-		fetch.WithBallotHandler(proposalListener),
-		fetch.WithBlockHandler(blockHandler),
-		fetch.WithProposalHandler(proposalListener),
-		fetch.WithTXHandler(txHandler),
-		fetch.WithPoetHandler(poetDb),
 	)
 	fetcherWrapped.Fetcher = fetcher
 
@@ -707,6 +703,7 @@ func (app *App) initServices(
 		app.hare,
 		app.keyExtractor,
 	)
+	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, txHandler, malfeasanceHandler)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
 		if newSyncer.ListenToGossip() {
@@ -760,7 +757,9 @@ func (app *App) initServices(
 }
 
 func (app *App) startServices(ctx context.Context) error {
-	app.fetcher.Start()
+	if err := app.fetcher.Start(); err != nil {
+		return fmt.Errorf("failed to start fetcher: %w", err)
+	}
 	go app.startSyncer(ctx)
 	app.beaconProtocol.Start(ctx)
 
@@ -1076,7 +1075,11 @@ func (app *App) Start(ctx context.Context) error {
 
 	poetClients := make([]activation.PoetProvingServiceClient, 0, len(app.Config.PoETServers))
 	for _, address := range app.Config.PoETServers {
-		poetClients = append(poetClients, activation.NewHTTPPoetClient(address, app.Config.POET))
+		client, err := activation.NewHTTPPoetClient(address, app.Config.POET)
+		if err != nil {
+			return fmt.Errorf("cannot create poet client: %w", err)
+		}
+		poetClients = append(poetClients, client)
 	}
 
 	edPubkey := edSgn.PublicKey()
@@ -1094,7 +1097,7 @@ func (app *App) Start(ctx context.Context) error {
 		timesync.WithLayerDuration(app.Config.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(gTime),
-		timesync.WithLogger(lg.WithName("clock")),
+		timesync.WithLogger(app.addLogger(ClockLogger, lg)),
 	)
 	if err != nil {
 		return fmt.Errorf("cannot create clock: %w", err)

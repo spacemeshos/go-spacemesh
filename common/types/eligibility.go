@@ -14,6 +14,7 @@ const (
 	EligibilityBeacon EligibilityType = iota + 1
 	EligibilityHare
 	EligibilityVoting
+	EligibilityBeaconWC
 )
 
 type HareEligibilityGossip struct {

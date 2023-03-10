@@ -32,12 +32,6 @@ const ( // constants of the different roles
 	leader  = role(2)
 )
 
-// Signer provides signing and public-key getter.
-type Signer interface {
-	Sign(m []byte) []byte
-	PublicKey() *signing.PublicKey
-}
-
 const (
 	completed    = true
 	notCompleted = false
@@ -201,7 +195,7 @@ type consensusProcess struct {
 	mu               sync.RWMutex
 	layer            types.LayerID
 	oracle           Rolacle // the roles oracle provider
-	signing          Signer
+	signer           *signing.EdSigner
 	nid              types.NodeID
 	nonce            *types.VRFPostIndex
 	publisher        pubsub.Publisher
@@ -229,7 +223,7 @@ func newConsensusProcess(
 	s *Set,
 	oracle Rolacle,
 	stateQuerier stateQuerier,
-	signing Signer,
+	signing *signing.EdSigner,
 	pubKeyExtractor *signing.PubKeyExtractor,
 	nid types.NodeID,
 	nonce *types.VRFPostIndex,
@@ -247,7 +241,7 @@ func newConsensusProcess(
 		},
 		layer:     layer,
 		oracle:    oracle,
-		signing:   signing,
+		signer:    signing,
 		nid:       nid,
 		nonce:     nonce,
 		publisher: p2p,
@@ -260,8 +254,8 @@ func newConsensusProcess(
 		clock:     clock,
 	}
 	proc.ctx, proc.cancel = context.WithCancel(ctx)
-	proc.preRoundTracker = newPreRoundTracker(logger.WithContext(proc.ctx).WithFields(proc.layer), comm.mchOut, proc.eTracker, cfg.F+1, cfg.N)
-	proc.validator = newSyntaxContextValidator(signing, pubKeyExtractor, cfg.F+1, proc.statusValidator(), stateQuerier, ev, proc.mTracker, proc.eTracker, logger)
+	proc.preRoundTracker = newPreRoundTracker(logger.WithContext(proc.ctx).WithFields(proc.layer), comm.mchOut, proc.eTracker, cfg.N/2+1, cfg.N)
+	proc.validator = newSyntaxContextValidator(signing, pubKeyExtractor, cfg.N/2+1, proc.statusValidator(), stateQuerier, ev, proc.mTracker, proc.eTracker, logger)
 
 	return proc
 }
@@ -325,7 +319,7 @@ func (proc *consensusProcess) eventLoop() {
 				logger.With().Error("failed to init msg builder", log.Err(err))
 				return nil
 			}
-			m := builder.SetType(pre).Sign(proc.signing).Build()
+			m := builder.SetType(pre).Sign(proc.signer).Build()
 			proc.sendMessage(ctx, m)
 		} else {
 			logger.With().Debug("should not participate",
@@ -596,7 +590,7 @@ func (proc *consensusProcess) beginStatusRound(ctx context.Context) {
 		proc.getRound(),
 		proc.comm.mchOut,
 		proc.eTracker,
-		proc.cfg.F+1,
+		proc.cfg.N/2+1,
 		proc.cfg.N)
 
 	// check participation
@@ -609,7 +603,7 @@ func (proc *consensusProcess) beginStatusRound(ctx context.Context) {
 		proc.WithContext(ctx).With().Error("failed to init msg builder", proc.layer, log.Err(err))
 		return
 	}
-	statusMsg := b.SetType(status).Sign(proc.signing).Build()
+	statusMsg := b.SetType(status).Sign(proc.signer).Build()
 	proc.sendMessage(ctx, statusMsg)
 }
 
@@ -630,7 +624,7 @@ func (proc *consensusProcess) beginProposalRound(ctx context.Context) {
 		}
 		svp := proc.statusesTracker.BuildSVP()
 		if svp != nil {
-			proposalMsg := builder.SetType(proposal).SetSVP(svp).Sign(proc.signing).Build()
+			proposalMsg := builder.SetType(proposal).SetSVP(svp).Sign(proc.signer).Build()
 			proc.sendMessage(ctx, proposalMsg)
 		} else {
 			proc.WithContext(ctx).With().Error("failed to build SVP", proc.layer)
@@ -647,7 +641,7 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 		proc.getRound(),
 		proc.comm.mchOut,
 		proc.eTracker,
-		proc.cfg.F+1,
+		proc.cfg.N/2+1,
 		proc.cfg.N,
 		proposedSet)
 
@@ -665,7 +659,7 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 		proc.WithContext(ctx).With().Error("failed to init msg builder", proc.layer, log.Err(err))
 		return
 	}
-	builder = builder.SetType(commit).Sign(proc.signing)
+	builder = builder.SetType(commit).Sign(proc.signer)
 	commitMsg := builder.Build()
 	proc.sendMessage(ctx, commitMsg)
 }
@@ -693,7 +687,7 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 
 	if !proc.commitTracker.HasEnoughCommits() {
 		logger.With().Warning("begin notify round: not enough commits",
-			log.Int("expected", proc.cfg.F+1),
+			log.Int("expected", proc.cfg.N/2+1),
 			log.Object("actual", proc.commitTracker.CommitCount()))
 		return
 	}
@@ -727,7 +721,7 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 		return
 	}
 
-	builder = builder.SetType(notify).SetCertificate(proc.certificate).Sign(proc.signing)
+	builder = builder.SetType(notify).SetCertificate(proc.certificate).Sign(proc.signer)
 	notifyMsg := builder.Build()
 	logger.With().Debug("sending notify message", notifyMsg)
 	proc.sendMessage(ctx, notifyMsg)
@@ -842,7 +836,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 		}
 	}
 
-	threshold := proc.cfg.F + 1
+	threshold := proc.cfg.N/2 + 1
 	notifyCount := proc.notifyTracker.NotificationsCount(s)
 	if notifyCount == nil {
 		proc.WithContext(ctx).Fatal("unexpected count")
@@ -927,7 +921,7 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 	}
 
 	// query if identity is active
-	nid := types.BytesToNodeID(proc.signing.PublicKey().Bytes())
+	nid := types.BytesToNodeID(proc.signer.PublicKey().Bytes())
 	res, err := proc.oracle.IsIdentityActiveOnConsensusView(ctx, nid, proc.layer)
 	if err != nil {
 		logger.With().Error("failed to check own identity for activeness", log.Err(err))

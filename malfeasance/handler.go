@@ -182,7 +182,7 @@ func (h *Handler) validateHareEquivocation(logger log.Log, proof *types.Malfeasa
 		return types.NodeID{}, errors.New("wrong message type for hare equivocation")
 	}
 	for _, msg = range hp.Messages {
-		nid, err = h.pubKeyExtractor.ExtractNodeID(msg.SignedBytes(), msg.Signature)
+		nid, err = h.pubKeyExtractor.ExtractNodeID(signing.HARE, msg.SignedBytes(), msg.Signature)
 		if err != nil {
 			return types.NodeID{}, err
 		}
@@ -224,7 +224,7 @@ func (h *Handler) validateMultipleATXs(logger log.Log, proof *types.MalfeasanceP
 		return types.NodeID{}, errors.New("wrong message type for multiple ATXs")
 	}
 	for _, msg = range ap.Messages {
-		nid, err = h.pubKeyExtractor.ExtractNodeID(msg.SignedBytes(), msg.Signature)
+		nid, err = h.pubKeyExtractor.ExtractNodeID(signing.ATX, msg.SignedBytes(), msg.Signature)
 		if err != nil {
 			return types.NodeID{}, err
 		}
@@ -265,7 +265,7 @@ func (h *Handler) validateMultipleBallots(logger log.Log, proof *types.Malfeasan
 		return types.NodeID{}, errors.New("wrong message type for multi ballots")
 	}
 	for _, msg = range bp.Messages {
-		nid, err = h.pubKeyExtractor.ExtractNodeID(msg.SignedBytes(), msg.Signature)
+		nid, err = h.pubKeyExtractor.ExtractNodeID(signing.BALLOT, msg.SignedBytes(), msg.Signature)
 		if err != nil {
 			return types.NodeID{}, err
 		}

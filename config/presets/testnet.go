@@ -27,11 +27,10 @@ func testnet() config.Config {
 	conf.HARE.ExpectedLeaders = 10
 	conf.HARE.LimitConcurrent = 5
 	conf.HARE.LimitIterations = 10
-	conf.HARE.F = 399
 	conf.HARE.RoundDuration = 10 * time.Second
 	conf.HARE.WakeupDelta = 10 * time.Second
 
-	conf.P2P.TargetOutbound = 10
+	conf.P2P.MinPeers = 10
 
 	conf.Genesis = &config.GenesisConfig{
 		ExtraData: "testnet",
@@ -49,14 +48,18 @@ func testnet() config.Config {
 	conf.LayersPerEpoch = 60
 	conf.SyncRequestTimeout = 60_000
 
+	conf.Tortoise.Hdist = 60
+	conf.Tortoise.Zdist = 10
+	conf.Tortoise.BadBeaconVoteDelayLayers = 30
+
 	conf.POST.BitsPerLabel = 8
 	conf.POST.K1 = 200
 	conf.POST.K2 = 212
-	conf.POST.LabelsPerUnit = 1 << 10 // 1K
+	conf.POST.LabelsPerUnit = 2048
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
 	conf.POST.N = 32
-	conf.POST.B = 4
+	conf.POST.B = 16
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false

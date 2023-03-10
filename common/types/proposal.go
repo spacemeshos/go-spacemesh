@@ -70,29 +70,18 @@ func (p *Proposal) Initialize() error {
 	if p.ID() != EmptyProposalID {
 		return fmt.Errorf("proposal already initialized")
 	}
-
 	if err := p.Ballot.Initialize(); err != nil {
 		return err
 	}
-
-	// check proposal signature consistent with ballot's
-	nodeId, err := ExtractNodeIDFromSig(p.Bytes(), p.Signature)
-	if err != nil {
-		return fmt.Errorf("proposal extract nodeId: %w", err)
-	}
-	if p.Ballot.SmesherID() != nodeId {
-		return fmt.Errorf("inconsistent smesher in proposal %v and ballot %v", nodeId.ShortString(), p.Ballot.SmesherID().ShortString())
-	}
-
 	p.proposalID = ProposalID(CalcObjectHash32(p).ToHash20())
 	return nil
 }
 
-// Bytes returns the serialization of the InnerProposal.
-func (p *Proposal) Bytes() []byte {
+// SignedBytes returns the serialization of the InnerProposal.
+func (p *Proposal) SignedBytes() []byte {
 	bytes, err := codec.Encode(&p.InnerProposal)
 	if err != nil {
-		log.Panic("failed to serialize proposal: %v", err)
+		log.With().Fatal("failed to serialize proposal", log.Err(err))
 	}
 	return bytes
 }

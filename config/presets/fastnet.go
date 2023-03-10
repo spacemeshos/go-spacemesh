@@ -29,12 +29,11 @@ func fastnet() config.Config {
 	conf.HARE.N = 800
 	conf.HARE.ExpectedLeaders = 10
 	conf.HARE.LimitConcurrent = 5
-	conf.HARE.F = 399
 	conf.HARE.LimitIterations = 3
 	conf.HARE.RoundDuration = 2 * time.Second
 	conf.HARE.WakeupDelta = 3 * time.Second
 
-	conf.P2P.TargetOutbound = 10
+	conf.P2P.MinPeers = 10
 
 	conf.Genesis = &config.GenesisConfig{
 		ExtraData: "fastnet",
@@ -47,6 +46,7 @@ func fastnet() config.Config {
 
 	conf.Tortoise.Hdist = 4
 	conf.Tortoise.Zdist = 2
+	conf.Tortoise.BadBeaconVoteDelayLayers = 2
 
 	conf.HareEligibility.ConfidenceParam = 2 // half epoch
 	conf.HareEligibility.EpochOffset = 0
@@ -54,11 +54,11 @@ func fastnet() config.Config {
 	conf.POST.BitsPerLabel = 8
 	conf.POST.K1 = 12
 	conf.POST.K2 = 4
-	conf.POST.LabelsPerUnit = 32 // bytes
+	conf.POST.LabelsPerUnit = 128 // bytes
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
 	conf.POST.N = 32
-	conf.POST.B = 2
+	conf.POST.B = 16
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false

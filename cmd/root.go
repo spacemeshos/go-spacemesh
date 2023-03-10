@@ -83,8 +83,8 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&cfg.P2P.HighPeers, "high-peers",
 		cfg.P2P.HighPeers,
 		"high watermark for the number of connections; once reached, connections are pruned until low watermark remains")
-	cmd.PersistentFlags().IntVar(&cfg.P2P.TargetOutbound, "target-outbound",
-		cfg.P2P.TargetOutbound, "target outbound connections")
+	cmd.PersistentFlags().IntVar(&cfg.P2P.MinPeers, "min-peers",
+		cfg.P2P.MinPeers, "actively search for peers until you get this much")
 	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.Bootnodes, "bootnodes",
 		cfg.P2P.Bootnodes, "entrypoints into the network")
 	cmd.PersistentFlags().StringVar(&cfg.P2P.AdvertiseAddress, "advertise-address",
@@ -132,9 +132,6 @@ func AddCommands(cmd *cobra.Command) {
 	// N determines the size of the hare committee
 	cmd.PersistentFlags().IntVar(&cfg.HARE.N, "hare-committee-size",
 		cfg.HARE.N, "Size of Hare committee")
-	// F determines the max number of adversaries in the Hare committee
-	cmd.PersistentFlags().IntVar(&cfg.HARE.F, "hare-max-adversaries",
-		cfg.HARE.F, "Max number of adversaries in the Hare committee")
 	// RoundDuration determines the duration of a round in the Hare protocol
 	cmd.PersistentFlags().DurationVar(&cfg.HARE.RoundDuration, "hare-round-duration",
 		cfg.HARE.RoundDuration, "Duration of round in the Hare protocol")
@@ -181,7 +178,15 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**======================== Tortoise Flags ========================== **/
 	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.Hdist, "tortoise-hdist",
-		cfg.Tortoise.Hdist, "hdist")
+		cfg.Tortoise.Hdist, "the distance for tortoise to vote according to hare output")
+	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.Zdist, "tortoise-zdist",
+		cfg.Tortoise.Zdist, "the distance for tortoise to wait for hare output")
+	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.WindowSize, "tortoise-window-size",
+		cfg.Tortoise.WindowSize, "size of the tortoise sliding window in layers")
+	cmd.PersistentFlags().IntVar(&cfg.Tortoise.MaxExceptions, "tortoise-max-exceptions",
+		cfg.Tortoise.MaxExceptions, "number of exceptions tolerated for a base ballot")
+	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.BadBeaconVoteDelayLayers, "tortoise-delay-layers",
+		cfg.Tortoise.BadBeaconVoteDelayLayers, "number of layers to ignore a ballot with a different beacon")
 
 	// TODO(moshababo): add usage desc
 

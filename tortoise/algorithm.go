@@ -21,10 +21,11 @@ type Config struct {
 	Zdist uint32 `mapstructure:"tortoise-zdist"` // hare result wait distance
 	// how long we are waiting for a switch from verifying to full. relevant during rerun.
 	WindowSize    uint32 `mapstructure:"tortoise-window-size"`    // size of the tortoise sliding window (in layers)
-	MaxExceptions int    `mapstructure:"tortoise-max-exceptions"` // if candidate for base block has more than max exceptions it will be ignored
+	MaxExceptions int    `mapstructure:"tortoise-max-exceptions"` // if candidate for base ballot has more than max exceptions it will be ignored
+	// number of layers to delay votes for blocks with bad beacon values during self-healing. ideally a full epoch.
+	BadBeaconVoteDelayLayers uint32 `mapstructure:"tortoise-delay-layers"`
 
-	LayerSize                uint32
-	BadBeaconVoteDelayLayers uint32 // number of layers to delay votes for blocks with bad beacon values during self-healing
+	LayerSize uint32
 }
 
 // DefaultConfig for Tortoise.
@@ -34,7 +35,7 @@ func DefaultConfig() Config {
 		Hdist:                    10,
 		Zdist:                    8,
 		WindowSize:               1000,
-		BadBeaconVoteDelayLayers: 6,
+		BadBeaconVoteDelayLayers: 0,
 		MaxExceptions:            30 * 100, // 100 layers of average size
 	}
 }

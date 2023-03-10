@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -35,6 +36,7 @@ type atxChan struct {
 // Handler processes the atxs received from all nodes and their validity status.
 type Handler struct {
 	cdb             *datastore.CachedDB
+	extractor       *signing.PubKeyExtractor
 	clock           layerClock
 	publisher       pubsub.Publisher
 	layersPerEpoch  uint32
@@ -51,6 +53,7 @@ type Handler struct {
 // NewHandler returns a data handler for ATX.
 func NewHandler(
 	cdb *datastore.CachedDB,
+	extractor *signing.PubKeyExtractor,
 	c layerClock,
 	pub pubsub.Publisher,
 	fetcher system.Fetcher,
@@ -63,6 +66,7 @@ func NewHandler(
 ) *Handler {
 	return &Handler{
 		cdb:             cdb,
+		extractor:       extractor,
 		clock:           c,
 		publisher:       pub,
 		layersPerEpoch:  layersPerEpoch,
@@ -365,7 +369,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				if err = h.cdb.AddMalfeasanceProof(atx.NodeID(), proof, dbtx); err != nil {
 					return fmt.Errorf("adding malfeasense proof: %w", err)
 				}
-				h.log.With().Warning("smesher produced more than one atx in the same epoch",
+				h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
 					log.Stringer("smesher", atx.NodeID()),
 					log.Object("prev", prev),
 					log.Object("curr", atx),
@@ -469,12 +473,17 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 	if err != nil {
 		return errMalformedData
 	}
-	if err := atx.CalcAndSetID(); err != nil {
-		return fmt.Errorf("failed to derive ID from atx: %w", err)
-	}
-	if err := atx.CalcAndSetNodeID(); err != nil {
+
+	nodeID, err := h.extractor.ExtractNodeID(signing.ATX, atx.SignedBytes(), atx.Signature)
+	if err != nil {
 		return fmt.Errorf("failed to derive Node ID from ATX with sig %v: %w", atx.Signature, err)
 	}
+	atx.SetNodeID(&nodeID)
+
+	if err = atx.CalcAndSetID(); err != nil {
+		return fmt.Errorf("failed to derive ID from atx: %w", err)
+	}
+
 	logger := h.log.WithContext(ctx).WithFields(atx.ID())
 	existing, _ := h.cdb.GetAtxHeader(atx.ID())
 	if existing != nil {

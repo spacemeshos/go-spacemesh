@@ -30,7 +30,7 @@ func Test_CertifyMessage(t *testing.T) {
 	}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	msg.Signature = signer.Sign(msg.Bytes())
+	msg.Signature = signer.Sign(signing.HARE, msg.Bytes())
 	data, err := codec.Encode(&msg)
 	require.NoError(t, err)
 
@@ -39,7 +39,7 @@ func Test_CertifyMessage(t *testing.T) {
 	require.Equal(t, msg, decoded)
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
-	nodeId, err := pke.ExtractNodeID(decoded.Bytes(), decoded.Signature)
+	nodeId, err := pke.ExtractNodeID(signing.HARE, decoded.Bytes(), decoded.Signature)
 	require.NoError(t, err)
 	require.Equal(t, signer.PublicKey().Bytes(), nodeId.Bytes())
 }
@@ -138,8 +138,8 @@ func TestToBlockIDs(t *testing.T) {
 func TestRewardCodec(t *testing.T) {
 	weight := big.NewRat(1234, 7)
 	r := &types.AnyReward{
-		Coinbase: types.GenerateAddress(RandomBytes(types.AddressLength)),
-		Weight:   types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
+		AtxID:  types.RandomATXID(),
+		Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
 	}
 
 	data, err := codec.Encode(r)

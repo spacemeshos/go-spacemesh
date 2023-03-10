@@ -188,7 +188,7 @@ func TestFetch_getHashes(t *testing.T) {
 					return nil
 				}).Times(len(peers))
 
-			got := f.getHashes(context.TODO(), hashes, datastore.BlockDB, f.blockHandler.HandleSyncedBlock)
+			got := f.getHashes(context.TODO(), hashes, datastore.BlockDB, f.validators.block.HandleSyncedBlock)
 			if len(tc.fetchErrs) > 0 || tc.hdlrErr != nil {
 				require.NotEmpty(t, got)
 			} else {
@@ -269,8 +269,9 @@ func genLayerProposal(tb testing.TB, layerID types.LayerID, txs []types.Transact
 	}
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(p.Bytes())
+	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
+	p.SetSmesherID(signer.NodeID())
 	p.Initialize()
 	return p
 }
@@ -280,7 +281,8 @@ func genLayerBallot(tb testing.TB, layerID types.LayerID) *types.Ballot {
 	b.Layer = layerID
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	b.Signature = signer.Sign(b.SignedBytes())
+	b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
+	b.SetSmesherID(signer.NodeID())
 	b.Initialize()
 	return b
 }

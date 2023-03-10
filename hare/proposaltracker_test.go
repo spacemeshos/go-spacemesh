@@ -11,15 +11,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-func buildProposalMsg(signing Signer, s *Set, signature []byte) *Msg {
+func buildProposalMsg(sig *signing.EdSigner, s *Set, signature []byte) *Msg {
 	builder := newMessageBuilder().SetRoleProof(signature)
 	builder.SetType(proposal).SetLayer(instanceID1).SetRoundCounter(proposalRound).SetCommittedRound(ki).SetValues(s).SetSVP(buildSVP(ki, NewSetFromValues(types.ProposalID{1})))
 	builder.SetEligibilityCount(1)
-	return builder.SetPubKey(signing.PublicKey()).Sign(signing).Build()
+	return builder.SetPubKey(sig.PublicKey()).Sign(sig).Build()
 }
 
-func BuildProposalMsg(signing Signer, s *Set) *Msg {
-	return buildProposalMsg(signing, s, []byte{})
+func BuildProposalMsg(sig *signing.EdSigner, s *Set) *Msg {
+	return buildProposalMsg(sig, s, []byte{})
 }
 
 func TestProposalTracker_OnProposalConflict(t *testing.T) {

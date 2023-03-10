@@ -2,150 +2,104 @@ package peerexchange
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	ma "github.com/multiformats/go-multiaddr"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
+	"github.com/spacemeshos/go-spacemesh/p2p/book"
 )
-
-const maxConcurrentRequests = 3
-
-type queryResult struct {
-	Src    *addressbook.AddrInfo
-	Result []*addressbook.AddrInfo
-	Err    error
-}
 
 // crawler is used to crawl reachable peers and query them for addresses.
 type crawler struct {
 	logger log.Log
 	host   host.Host
 
-	book *addressbook.AddrBook
+	book *book.Book
 	disc *peerExchange
 }
 
-func newCrawler(h host.Host, book *addressbook.AddrBook, disc *peerExchange, logger log.Log) *crawler {
+func newCrawler(logger log.Log, h host.Host, book *book.Book, disc *peerExchange) *crawler {
 	return &crawler{
 		logger: logger,
 		host:   h,
-		book:   book,
 		disc:   disc,
+		book:   book,
 	}
 }
 
-// Bootstrap crawls the network until context is canceled or all reachable peers are crawled.
-func (r *crawler) Bootstrap(ctx context.Context) error {
-	seen := map[peer.ID]struct{}{r.host.ID(): {}}
-	servers := r.book.BootstrapAddressCache()
-	for _, srv := range servers {
-		seen[srv.ID] = struct{}{}
+// Crawl connects to number of peers, limit by concurrent parameter, and learns
+// new peers from it.
+func (r *crawler) Crawl(ctx context.Context, concurrent int) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	addrs := r.book.DrainQueue(concurrent)
+	if len(addrs) == 0 {
+		return errors.New("can't connect to the network without addresses")
 	}
-
-	r.logger.With().Debug("starting crawl", log.Int("servers", len(servers)))
-	for {
-		if len(servers) == 0 {
-			r.logger.Debug("crawl finished; no more servers to query")
-			return nil
-		}
-		result, err := r.query(ctx, servers)
+	var eg errgroup.Group
+	for _, addr := range addrs {
+		src, err := peer.AddrInfoFromP2pAddr(addr)
 		if err != nil {
-			r.logger.Debug("crawl finished by timeout")
-			return err
+			return fmt.Errorf("can't parse %v: %w", addr, err)
 		}
-		var round []*addressbook.AddrInfo
-		for _, addr := range result {
-			if _, exist := seen[addr.ID]; !exist {
-				seen[addr.ID] = struct{}{}
-				round = append(round, addr)
+		if src.ID == r.host.ID() {
+			continue
+		}
+		eg.Go(func() error {
+			peers, err := getPeers(ctx, r.host, r.disc, src)
+			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					return nil
+				}
+				r.logger.With().Debug("failed to get more peers",
+					log.Stringer("peer", src),
+					log.Err(err),
+				)
+				r.book.Update(src.ID.String(), book.Fail, book.Disconnected)
+				r.host.Peerstore().ClearAddrs(src.ID)
+				r.host.Network().ClosePeer(src.ID)
+			} else {
+				r.book.Update(src.ID.String(), book.Success, book.Connected)
+				for _, addr := range peers {
+					r.book.Add(src.ID.String(), addr.ID.String(), addr.Addr)
+				}
 			}
-		}
-		servers = round
+			return nil
+		})
 	}
+	return eg.Wait()
 }
 
-func (r *crawler) query(ctx context.Context, servers []*addressbook.AddrInfo) ([]*addressbook.AddrInfo, error) {
-	var (
-		out        []*addressbook.AddrInfo
-		seen       = map[peer.ID]struct{}{}
-		reschan    = make(chan queryResult)
-		pending, i int
-		eg, gctx   = errgroup.WithContext(ctx)
-	)
-	defer eg.Wait()
-	for {
-		for ; i < len(servers) && pending < maxConcurrentRequests; i++ {
-			addr := servers[i]
-			if addr.ID == r.host.ID() {
-				continue
-			}
-			pending++
+type maddrIdTuple struct {
+	ID   peer.ID
+	Addr ma.Multiaddr
+}
 
-			eg.Go(func() error {
-				ainfo, err := peer.AddrInfoFromP2pAddr(addr.Addr())
-				if err == nil {
-					// TODO(dshulyak) skip request if connection is inbound
-					err = r.host.Connect(ctx, *ainfo)
-					if err != nil {
-						r.logger.With().Warning("failed to connect to peer", log.Stringer("peer", ainfo.ID), log.Err(err))
-					}
-				}
-				var res []*addressbook.AddrInfo
-				if err == nil {
-					res, err = r.disc.Request(gctx, addr.ID)
-					if err != nil {
-						r.logger.With().Warning("failed request from peer", log.Stringer("peer", ainfo.ID), log.Err(err))
-					}
-				}
-				select {
-				case reschan <- queryResult{Src: addr, Result: res, Err: err}:
-				case <-gctx.Done():
-					return gctx.Err()
-				}
-				return nil
-			})
-		}
-		if pending == 0 {
-			return out, nil
-		}
-
-		select {
-		case cr := <-reschan:
-			r.book.Attempt(cr.Src.ID)
-			pending--
-			if cr.Err != nil {
-				// TODO(dshulyak) also remove peer from persistent addrbook on validation error
-				r.host.Peerstore().ClearAddrs(cr.Src.ID)
-				// the address may actually be outdate, since we don't actively update address book
-				r.logger.With().Debug("peer failed to respond to protocol queries",
-					log.String("peer", cr.Src.ID.String()),
-					log.Err(cr.Err))
-				continue
-			}
-			// TODO(dshulyak) will be correct to call after EventHandshakeComplete is received
-			r.book.Good(cr.Src.ID)
-			r.book.Connected(cr.Src.ID)
-			for _, a := range cr.Result {
-				if _, ok := seen[a.ID]; ok {
-					continue
-				}
-				seen[a.ID] = struct{}{}
-				if removedAt, ok := r.book.WasRecentlyRemoved(a.ID); ok {
-					r.logger.With().Debug(
-						"Skipped adding an address for a recently removed peer",
-						log.Stringer("peer", a.ID),
-						log.Time("removedAt", *removedAt),
-					)
-				} else {
-					out = append(out, a)
-					r.book.AddAddress(a, cr.Src)
-				}
-			}
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
+func getPeers(ctx context.Context, h host.Host, disc *peerExchange, peer *peer.AddrInfo) ([]maddrIdTuple, error) {
+	err := h.Connect(ctx, *peer)
+	if err != nil {
+		return nil, err
 	}
+	res, err := disc.Request(ctx, peer.ID)
+	if err != nil {
+		return nil, err
+	}
+	rst := make([]maddrIdTuple, 0, len(res))
+	for _, raw := range res {
+		maddr, id, err := parseIdMaddr(raw)
+		if err != nil {
+			return nil, err
+		}
+		if id == h.ID() {
+			return nil, fmt.Errorf("malformed reply: included our own id: %s", h.ID())
+		}
+		rst = append(rst, maddrIdTuple{id, maddr})
+	}
+	return rst, nil
 }

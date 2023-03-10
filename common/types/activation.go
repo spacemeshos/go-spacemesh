@@ -325,20 +325,6 @@ func (atx *ActivationTx) CalcAndSetID() error {
 	return nil
 }
 
-// CalcAndSetNodeID calculates and sets the cached Node ID field. This field must be set before calling the NodeID() method.
-func (atx *ActivationTx) CalcAndSetNodeID() error {
-	if atx.nodeID != nil {
-		return nil
-	}
-
-	nodeId, err := ExtractNodeIDFromSig(atx.SignedBytes(), atx.Signature)
-	if err != nil {
-		return fmt.Errorf("extract NodeID: %w", err)
-	}
-	atx.nodeID = &nodeId
-	return nil
-}
-
 // GetPoetProofRef returns the reference to the PoET proof.
 func (atx *ActivationTx) GetPoetProofRef() Hash32 {
 	return BytesToHash(atx.NIPost.PostMetadata.Challenge)
@@ -408,9 +394,7 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 		}
 	}
 	if atx.nodeID == nil {
-		if err := atx.CalcAndSetNodeID(); err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("nodeID not set")
 	}
 	if atx.effectiveNumUnits == 0 {
 		return nil, fmt.Errorf("effective num units not set")

@@ -71,7 +71,9 @@ func TestHandler_processBlockATXs(t *testing.T) {
 	sig3, err := signing.NewEdSigner()
 	r.NoError(err)
 	nid3 := sig3.NodeID()
-	atxHdlr := NewHandler(cdb, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
+	extractor, err := signing.NewPubKeyExtractor()
+	r.NoError(err)
+	atxHdlr := NewHandler(cdb, extractor, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
 
 	coinbase1 := types.GenerateAddress([]byte("aaaa"))
 	coinbase2 := types.GenerateAddress([]byte("bbbb"))
@@ -140,7 +142,9 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	otherSig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	otherNid := otherSig.NodeID()
-	atxHdlr := NewHandler(cdb, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, nil, lg)
+	extractor, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
+	atxHdlr := NewHandler(cdb, extractor, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, nil, lg)
 
 	coinbase := types.GenerateAddress([]byte("aaaa"))
 
@@ -402,7 +406,9 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	nid := sig.NodeID()
-	atxHdlr := NewHandler(cdb, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
+	extractor, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
+	atxHdlr := NewHandler(cdb, extractor, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
 
 	coinbase := types.GenerateAddress([]byte("aaaa"))
 	chlng := types.HexToHash32("0x3333")
@@ -513,7 +519,9 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	require.NoError(t, err)
 
 	nid := sig.NodeID()
-	atxHdlr := NewHandler(cdb, mclock, mpub, nil, layersPerEpoch, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
+	extractor, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
+	atxHdlr := NewHandler(cdb, extractor, mclock, mpub, nil, layersPerEpoch, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
 
 	coinbase := types.GenerateAddress([]byte("aaaa"))
 
@@ -558,7 +566,9 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	require.NoError(t, err)
 
 	nid := sig.NodeID()
-	atxHdlr := NewHandler(cdb, mclock, mpub, nil, layersPerEpoch, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
+	extractor, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
+	atxHdlr := NewHandler(cdb, extractor, mclock, mpub, nil, layersPerEpoch, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
 
 	coinbase := types.GenerateAddress([]byte("aaaa"))
 
@@ -600,7 +610,9 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	sig, err := signing.NewEdSigner()
 	r.NoError(err)
 	nid := sig.NodeID()
-	atxHdlr := NewHandler(cdb, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
+	extractor, err := signing.NewPubKeyExtractor()
+	r.NoError(err)
+	atxHdlr := NewHandler(cdb, extractor, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
 
 	const (
 		activesetSize         = 300
@@ -657,7 +669,9 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	mclock := NewMocklayerClock(ctrl)
 	mpub := pubsubmocks.NewMockPublisher(ctrl)
 	goldenATXID := types.ATXID{2, 3, 4}
-	atxHdlr := NewHandler(cdb, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
+	extractor, err := signing.NewPubKeyExtractor()
+	r.NoError(err)
+	atxHdlr := NewHandler(cdb, extractor, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
 
 	const (
 		numOfMiners = 300
@@ -732,7 +746,9 @@ func TestHandler_GetPosAtx(t *testing.T) {
 	require.NoError(t, err)
 	otherNid := otherSig.NodeID()
 	coinbase := types.Address{2, 4, 5}
-	atxHdlr := NewHandler(cdb, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
+	extractor, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
+	atxHdlr := NewHandler(cdb, extractor, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
 
 	// Act & Assert
 
@@ -778,7 +794,9 @@ func TestHandler_AwaitAtx(t *testing.T) {
 	r.NoError(err)
 	nid := sig.NodeID()
 	coinbase := types.Address{2, 4, 5}
-	atxHdlr := NewHandler(cdb, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
+	extractor, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
+	atxHdlr := NewHandler(cdb, extractor, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
 	// Act & Assert
 
 	atx := newActivationTx(t, sig, &nid, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{})
@@ -834,7 +852,9 @@ func TestHandler_HandleAtxData(t *testing.T) {
 	require.NoError(t, err)
 	nid := sig.NodeID()
 	coinbase := types.Address{2, 4, 5}
-	atxHdlr := NewHandler(cdb, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
+	extractor, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
+	atxHdlr := NewHandler(cdb, extractor, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
 
 	// Act & Assert
 
@@ -867,7 +887,9 @@ func BenchmarkGetAtxHeaderWithConcurrentProcessAtx(b *testing.B) {
 	mclock.EXPECT().CurrentLayer().Return(types.NewLayerID(0)).AnyTimes()
 	mpub := pubsubmocks.NewMockPublisher(ctrl)
 	goldenATXID := types.ATXID{2, 3, 4}
-	atxHdlr := NewHandler(cdb, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
+	extractor, err := signing.NewPubKeyExtractor()
+	require.NoError(b, err)
+	atxHdlr := NewHandler(cdb, extractor, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
 
 	var (
 		stop uint64
@@ -922,7 +944,9 @@ func TestHandler_FetchAtxReferences(t *testing.T) {
 	nid := sig.NodeID()
 	coinbase := types.Address{2, 4, 5}
 
-	atxHdlr := NewHandler(cdb, mclock, mpub, mockFetch, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
+	extractor, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
+	atxHdlr := NewHandler(cdb, extractor, mclock, mpub, mockFetch, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg)
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, types.NewLayerID(22), nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
 	atx1 := newAtx(t, sig, &nid, challenge, nipost, 2, coinbase)
@@ -982,7 +1006,9 @@ func TestHandler_AtxWeight(t *testing.T) {
 	goldenATXID := types.ATXID{2, 3, 4}
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	handler := NewHandler(cdb, mclock, mpub, mfetch, layersPerEpoch, tickSize, goldenATXID, mvalidator, []AtxReceiver{receiver1, receiver2}, lg)
+	extractor, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
+	handler := NewHandler(cdb, extractor, mclock, mpub, mfetch, layersPerEpoch, tickSize, goldenATXID, mvalidator, []AtxReceiver{receiver1, receiver2}, lg)
 
 	nonce := types.VRFPostIndex(1)
 	atx1 := &types.ActivationTx{
