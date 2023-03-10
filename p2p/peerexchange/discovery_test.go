@@ -2,6 +2,7 @@ package peerexchange
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -87,10 +88,13 @@ func TestDiscovery_PrefereRoutablePort(t *testing.T) {
 	emitter, err := h.EventBus().Emitter(&event.EvtLocalAddressesUpdated{})
 	require.NoError(t, err)
 
+	var mu sync.Mutex
 	returned := []ma.Multiaddr{
 		multiaddrFromString(t, "/ip4/0.0.0.0/tcp/7777"),
 	}
 	addrmock.EXPECT().Addrs().DoAndReturn(func() []ma.Multiaddr {
+		mu.Lock()
+		defer mu.Unlock()
 		return returned
 	}).AnyTimes()
 	discovery, err := New(logtest.New(t), ph, Config{})
@@ -99,9 +103,11 @@ func TestDiscovery_PrefereRoutablePort(t *testing.T) {
 
 	port := uint16(1010)
 	advertised := ma.StringCast(fmt.Sprintf("/tcp/%d", port))
+	mu.Lock()
 	returned = append(returned, multiaddrFromString(
 		t, fmt.Sprintf("/ip4/110.0.0.0/tcp/%d", port),
 	))
+	mu.Unlock()
 
 	emitter.Emit(event.EvtLocalAddressesUpdated{})
 	require.Eventually(t, func() bool {
