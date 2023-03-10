@@ -82,6 +82,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubs
 	// We lock and unlock here to make sure we see b.ctx if it has been set.
 	// See - https://go.dev/ref/mem#locks
 	b.mu.Lock()
+	//nolint:staticcheck
 	b.mu.Unlock()
 	select {
 	case <-ctx.Done():
