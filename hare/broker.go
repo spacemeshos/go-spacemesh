@@ -83,6 +83,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubs
 	// See - https://go.dev/ref/mem#locks
 	b.mu.Lock()
 	//nolint:staticcheck
+	//lint:ignore SA2001 See above comment, this seems legit.
 	b.mu.Unlock()
 	select {
 	case <-ctx.Done():
