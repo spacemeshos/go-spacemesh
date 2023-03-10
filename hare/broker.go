@@ -124,11 +124,10 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	b.mu.Lock()
 	out, exist := b.outbox[msgLayer.Uint32()]
 	if !exist {
-		logger.Debug(
-			"broker received a message to a consensus process that is not registered, latestLayer: %v, messageLayer: %v, messageType: %v",
-			b.latestLayer,
-			msgLayer.Uint32(),
-			hareMsg.InnerMsg.Type,
+		logger.With().Debug(
+			"broker received a message to a consensus process that is not registered",
+			msgLayer.Field(),
+			log.Stringer("msg_type", hareMsg.InnerMsg.Type),
 		)
 
 		// We consider messages for the next layer to be early and we process
