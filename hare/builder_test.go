@@ -86,3 +86,31 @@ func TestMessageFromBuffer_BadMsgHash(t *testing.T) {
 	_, err = MessageFromBuffer(buf)
 	require.Error(t, err)
 }
+
+func TestMessageFromBuffer_TooNested(t *testing.T) {
+	const numCommits = 10
+	commits := make([]Message, 0, numCommits)
+	for i := 0; i < numCommits; i++ {
+		b := newMessageBuilder()
+		signer, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		msg := b.SetPubKey(signer.PublicKey()).SetLayer(instanceID1).Sign(signer).Build().Message
+		// add a nested certificate
+		msg.InnerMsg.Cert = &Certificate{}
+		commits = append(commits, msg)
+	}
+	c := &Certificate{}
+	c.AggMsgs = &AggregatedMessages{}
+	c.AggMsgs.Messages = commits
+
+	b := newMessageBuilder()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	msg := b.SetPubKey(signer.PublicKey()).SetLayer(instanceID1).SetCertificate(c).Sign(signer).Build().Message
+
+	buf, err := codec.Encode(&msg)
+	require.NoError(t, err)
+
+	_, err = MessageFromBuffer(buf)
+	require.ErrorIs(t, err, errExceedDepth)
+}

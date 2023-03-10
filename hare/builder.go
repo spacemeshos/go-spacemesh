@@ -2,6 +2,7 @@ package hare
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -12,6 +13,8 @@ import (
 )
 
 //go:generate scalegen -types Message,Certificate,AggregatedMessages,InnerMessage
+
+var errExceedDepth = errors.New("exceeds msg depth")
 
 type Message struct {
 	types.HareMetadata
@@ -28,10 +31,32 @@ func MessageFromBuffer(buf []byte) (Message, error) {
 	if err := codec.Decode(buf, &msg); err != nil {
 		return msg, fmt.Errorf("serialize: %w", err)
 	}
+	if exceedMsgDepth(&msg) {
+		// TODO: drop peer
+		return msg, errExceedDepth
+	}
 	if msg.MsgHash != types.BytesToHash(msg.InnerMsg.HashBytes()) {
 		return Message{}, fmt.Errorf("bad message hash")
 	}
 	return msg, nil
+}
+
+func exceedMsgDepth(msg *Message) bool {
+	if msg.InnerMsg.Svp != nil {
+		for _, nested := range msg.InnerMsg.Svp.Messages {
+			if nested.InnerMsg.Svp != nil || nested.InnerMsg.Cert != nil {
+				return true
+			}
+		}
+	}
+	if msg.InnerMsg.Cert != nil && msg.InnerMsg.Cert.AggMsgs != nil {
+		for _, nested := range msg.InnerMsg.Cert.AggMsgs.Messages {
+			if nested.InnerMsg.Svp != nil || nested.InnerMsg.Cert != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (m *Message) MarshalLogObject(encoder log.ObjectEncoder) error {
