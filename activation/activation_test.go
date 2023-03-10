@@ -52,7 +52,7 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID t
 	}
 }
 
-func newAtx(t testing.TB, sig signer, nodeID *types.NodeID, challenge types.NIPostChallenge, nipost *types.NIPost, numUnits uint32, coinbase types.Address) *types.ActivationTx {
+func newAtx(t testing.TB, sig *signing.EdSigner, nodeID *types.NodeID, challenge types.NIPostChallenge, nipost *types.NIPost, numUnits uint32, coinbase types.Address) *types.ActivationTx {
 	atx := types.NewActivationTx(challenge, nodeID, coinbase, nipost, numUnits, nil, nil)
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
@@ -62,7 +62,7 @@ func newAtx(t testing.TB, sig signer, nodeID *types.NodeID, challenge types.NIPo
 
 func newActivationTx(
 	t testing.TB,
-	sig signer,
+	sig *signing.EdSigner,
 	nodeID *types.NodeID,
 	sequence uint64,
 	prevATX types.ATXID,
@@ -205,6 +205,11 @@ func publishAtx(
 			gotAtx, err := types.BytesToAtx(got)
 			require.NoError(t, err)
 			built = gotAtx
+			extractor, err := signing.NewPubKeyExtractor()
+			require.NoError(t, err)
+			nodeID, err := extractor.ExtractNodeID(signing.ATX, gotAtx.SignedBytes(), gotAtx.Signature)
+			require.NoError(t, err)
+			gotAtx.SetNodeID(&nodeID)
 			require.NoError(t, built.CalcAndSetID())
 			built.SetEffectiveNumUnits(gotAtx.NumUnits)
 			vatx, err := built.Verify(0, 1)
@@ -224,7 +229,7 @@ func publishAtx(
 	return built, err
 }
 
-func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID, sig signer, nodeID *types.NodeID) *types.VerifiedActivationTx {
+func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID, sig *signing.EdSigner, nodeID *types.NodeID) *types.VerifiedActivationTx {
 	challenge := types.NIPostChallenge{
 		PubLayerID: epoch.FirstLayer(),
 	}
@@ -233,7 +238,7 @@ func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID, sig signer, 
 	return addAtx(t, db, sig, atx)
 }
 
-func addAtx(t *testing.T, db sql.Executor, sig signer, atx *types.ActivationTx) *types.VerifiedActivationTx {
+func addAtx(t *testing.T, db sql.Executor, sig *signing.EdSigner, atx *types.ActivationTx) *types.VerifiedActivationTx {
 	require.NoError(t, SignAndFinalizeAtx(sig, atx))
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
@@ -294,12 +299,11 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	coinbase := types.Address{1, 1, 1}
 	postSetupOpts := PostSetupOpts{}
 
-	tab.mpost.EXPECT().StartSession(gomock.Any(), postSetupOpts, gomock.Any())
-	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any())
-	ch := make(chan struct{})
-	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch)
+	tab.mpost.EXPECT().StartSession(gomock.Any(), postSetupOpts).AnyTimes()
+	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes()
+	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
 	require.NoError(t, tab.StartSmeshing(coinbase, postSetupOpts))
-	require.Equal(t, coinbase, tab.Builder.Coinbase())
+	require.Equal(t, coinbase, tab.Coinbase())
 
 	// calling StartSmeshing more than once before calling StopSmeshing is an error
 	require.ErrorContains(t, tab.StartSmeshing(coinbase, postSetupOpts), "already started")
@@ -311,7 +315,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 func TestBuilder_RestartSmeshing(t *testing.T) {
 	getBuilder := func(t *testing.T) *Builder {
 		tab := newTestBuilder(t)
-		tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any()).AnyTimes()
 		tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes()
 		tab.mpost.EXPECT().Reset().AnyTimes()
 		ch := make(chan struct{})
@@ -358,7 +362,7 @@ func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
 
 func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	tab := newTestBuilder(t)
-	tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).Return(nil, nil, nil).AnyTimes()
 	ch := make(chan struct{})
 	close(ch)
@@ -371,72 +375,6 @@ func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	tab.mpost.EXPECT().Reset().Return(errors.New("couldn't delete files"))
 	require.Error(t, tab.StopSmeshing(true))
 	require.False(t, tab.Smeshing())
-}
-
-func TestBuilder_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
-	tab := newTestBuilder(t)
-	latestAtx := addPrevAtx(t, tab.cdb, 1, tab.sig, &tab.nodeID)
-	atx, err := tab.findCommitmentAtx()
-	require.NoError(t, err)
-	require.Equal(t, latestAtx.ID(), atx)
-}
-
-func TestBuilder_findCommitmentAtx_DefaultsToGoldenAtx(t *testing.T) {
-	tab := newTestBuilder(t)
-	atx, err := tab.findCommitmentAtx()
-	require.NoError(t, err)
-	require.Equal(t, tab.goldenATXID, atx)
-}
-
-func TestBuilder_getCommitmentAtx_storesCommitmentAtx(t *testing.T) {
-	tab := newTestBuilder(t)
-	tab.commitmentAtx = nil
-
-	atx, err := tab.getCommitmentAtx(context.Background())
-	require.NoError(t, err)
-
-	stored, err := kvstore.GetCommitmentATXForNode(tab.cdb, tab.nodeID)
-	require.NoError(t, err)
-
-	require.Equal(t, *atx, stored)
-}
-
-func TestBuilder_getCommitmentAtx_getsStoredCommitmentAtx(t *testing.T) {
-	tab := newTestBuilder(t)
-	tab.commitmentAtx = nil
-	commitmentAtx := types.RandomATXID()
-
-	diffSigner, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	diffNid := diffSigner.NodeID()
-
-	// add a newer ATX by a different node
-	atx := types.NewActivationTx(types.NIPostChallenge{}, &diffNid, types.Address{}, nil, 1, nil, nil)
-	vatx := addAtx(t, tab.cdb, diffSigner, atx)
-	err = kvstore.AddCommitmentATXForNode(tab.cdb, commitmentAtx, tab.nodeID)
-	require.NoError(t, err)
-
-	atxid, err := tab.getCommitmentAtx(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commitmentAtx, *atxid)
-	require.NotEqual(t, vatx.ID(), atx)
-}
-
-func TestBuilder_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *testing.T) {
-	tab := newTestBuilder(t)
-	tab.commitmentAtx = nil
-	commitmentAtx := types.RandomATXID()
-
-	// add an atx by the same node
-	atx := types.NewActivationTx(types.NIPostChallenge{}, &tab.nodeID, types.Address{}, nil, 1, nil, nil)
-	atx.CommitmentATX = &commitmentAtx
-	vatx := addAtx(t, tab.cdb, tab.sig, atx)
-
-	atxid, err := tab.getCommitmentAtx(context.Background())
-	require.NoError(t, err)
-	require.NotNil(t, atxid)
-	require.Equal(t, commitmentAtx, *atxid)
-	require.NotEqual(t, vatx.ID(), atx)
 }
 
 func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
@@ -712,6 +650,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	// create and publish ATX
 	vrfNonce := types.VRFPostIndex(123)
 	tab.mpost.EXPECT().VRFNonce().Return(&vrfNonce, nil)
+	tab.mpost.EXPECT().CommitmentAtx().Return(types.RandomATXID(), nil)
 	atx, err := publishAtx(t, tab, posAtx.ID(), posAtxLayer, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, atx)
@@ -794,6 +733,11 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 		atx, err := types.BytesToAtx(msg)
 		r.NoError(err)
 
+		extractor, err := signing.NewPubKeyExtractor()
+		require.NoError(t, err)
+		nodeID, err := extractor.ExtractNodeID(signing.ATX, atx.SignedBytes(), atx.Signature)
+		require.NoError(t, err)
+		atx.SetNodeID(&nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		r.NoError(err)
@@ -864,6 +808,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
 
+	tab.mpost.EXPECT().CommitmentAtx().Return(types.RandomATXID(), nil).Times(1)
 	tab.mpost.EXPECT().VRFNonce().Times(1)
 
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).
@@ -881,6 +826,11 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		atx, err := types.BytesToAtx(msg)
 		r.NoError(err)
 
+		extractor, err := signing.NewPubKeyExtractor()
+		require.NoError(t, err)
+		nodeID, err := extractor.ExtractNodeID(signing.ATX, atx.SignedBytes(), atx.Signature)
+		require.NoError(t, err)
+		atx.SetNodeID(&nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		r.NoError(err)
@@ -963,13 +913,13 @@ func TestBuilder_SignAtx(t *testing.T) {
 	atx.SetMetadata()
 	atxBytes, err := codec.Encode(&atx.ATXMetadata)
 	require.NoError(t, err)
-	err = SignAndFinalizeAtx(tab, atx)
+	err = SignAndFinalizeAtx(tab.signer, atx)
 	require.NoError(t, err)
 
 	extractor, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
 
-	nodeId, err := extractor.ExtractNodeID(atxBytes, atx.Signature)
+	nodeId, err := extractor.ExtractNodeID(signing.ATX, atxBytes, atx.Signature)
 	require.NoError(t, err)
 	require.Equal(t, tab.nodeID, nodeId)
 }

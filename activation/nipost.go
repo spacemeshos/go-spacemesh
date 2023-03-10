@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
@@ -61,7 +62,7 @@ type NIPostBuilder struct {
 	poetDB            poetDbAPI
 	state             *types.NIPostBuilderState
 	log               log.Log
-	signer            signer
+	signer            *signing.EdSigner
 	layerClock        layerClock
 	poetCfg           PoetConfig
 }
@@ -79,7 +80,7 @@ func NewNIPostBuilder(
 	poetDB poetDbAPI,
 	db *sql.Database,
 	log log.Log,
-	signer signer,
+	signer *signing.EdSigner,
 	poetCfg PoetConfig,
 	layerClock layerClock,
 ) *NIPostBuilder {
@@ -159,7 +160,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 		if err != nil {
 			return nil, 0, err
 		}
-		signature := nb.signer.Sign(challenge)
+		signature := nb.signer.Sign(signing.POET, challenge)
 		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
 		defer cancel()
 		poetRequests := nb.submitPoetChallenges(submitCtx, challenge, signature)

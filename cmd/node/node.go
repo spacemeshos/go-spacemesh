@@ -70,6 +70,7 @@ const (
 // Logger names.
 const (
 	AppLogger              = "app"
+	ClockLogger            = "clock"
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
 	StateDbLogger          = "stateDbStore"
@@ -513,8 +514,6 @@ func (app *App) initServices(
 		return fmt.Errorf("failed to create key extractor: %w", err)
 	}
 
-	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
-
 	vrfVerifier := signing.NewVRFVerifier()
 	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifier, app.cachedDB, clock,
 		beacon.WithContext(ctx),
@@ -524,7 +523,9 @@ func (app *App) initServices(
 
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
-	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
+	if trtlCfg.BadBeaconVoteDelayLayers == 0 {
+		trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
+	}
 	trtl := tortoise.New(app.cachedDB, beaconProtocol,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
@@ -540,6 +541,7 @@ func (app *App) initServices(
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
 		app.cachedDB,
+		app.keyExtractor,
 		clock,
 		app.host,
 		fetcherWrapped,
@@ -558,7 +560,7 @@ func (app *App) initServices(
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier,
+	proposalListener := proposals.NewHandler(app.cachedDB, app.keyExtractor, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,
@@ -581,7 +583,7 @@ func (app *App) initServices(
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
-			CertifyThreshold: app.Config.HARE.F + 1,
+			CertifyThreshold: app.Config.HARE.N/2 + 1,
 			LayerBuffer:      app.Config.Tortoise.Zdist,
 			NumLayersToKeep:  app.Config.Tortoise.Zdist * 2,
 		}),
@@ -1095,7 +1097,7 @@ func (app *App) Start(ctx context.Context) error {
 		timesync.WithLayerDuration(app.Config.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(gTime),
-		timesync.WithLogger(lg.WithName("clock")),
+		timesync.WithLogger(app.addLogger(ClockLogger, lg)),
 	)
 	if err != nil {
 		return fmt.Errorf("cannot create clock: %w", err)

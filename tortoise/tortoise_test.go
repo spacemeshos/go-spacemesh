@@ -779,8 +779,9 @@ func randomRefBallot(tb testing.TB, lyrID types.LayerID, beacon types.Beacon) *t
 	ballot.EpochData = &types.EpochData{
 		Beacon: beacon,
 	}
-	ballot.Signature = signer.Sign(ballot.SignedBytes())
+	ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
 	require.NoError(tb, ballot.Initialize())
+	ballot.SetSmesherID(signer.NodeID())
 	return ballot
 }
 
@@ -1557,8 +1558,9 @@ func TestComputeBallotWeight(t *testing.T) {
 				sig, err := signing.NewEdSigner()
 				require.NoError(t, err)
 
-				ballot.Signature = sig.Sign(ballot.SignedBytes())
+				ballot.Signature = sig.Sign(signing.BALLOT, ballot.SignedBytes())
 				require.NoError(t, ballot.Initialize())
+				ballot.SetSmesherID(sig.NodeID())
 				blts = append(blts, ballot)
 
 				trtl.OnBallot(ballot)
@@ -1814,7 +1816,8 @@ func TestLateBaseBallot(t *testing.T) {
 	var base types.Ballot
 	require.NoError(t, codec.Decode(buf, &base))
 	base.EligibilityProofs[0].J++
-	base.Initialize()
+	require.NoError(t, base.Initialize())
+	base.SetSmesherID(blts[0].SmesherID())
 	tortoise.OnBallot(&base)
 
 	for _, last = range sim.GenLayers(s,

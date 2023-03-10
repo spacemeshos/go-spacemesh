@@ -2,9 +2,7 @@ package bootstrap
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"time"
 
 	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -23,29 +21,14 @@ type EventSpacemeshPeer struct {
 	Connectedness network.Connectedness
 }
 
-// Config for bootstrap.
-type Config struct {
-	TargetOutbound int
-	Timeout        time.Duration
-}
-
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./bootstrap.go
-
-// Discovery is an interface that actively searches for peers when Bootstrap is called.
-type Discovery interface {
-	Bootstrap(context.Context) error
-}
-
 // NewBootstrap create Bootstrap instance.
-func NewBootstrap(logger log.Log, cfg Config, h host.Host, discovery Discovery) (*Bootstrap, error) {
+func NewBootstrap(logger log.Log, h host.Host) (*Bootstrap, error) {
 	// TODO(dshulyak) refactor to option and merge Bootstrap with Peers to avoid unnecessary event
 	ctx, cancel := context.WithCancel(context.Background())
 	b := &Bootstrap{
-		cancel:    cancel,
-		logger:    logger,
-		cfg:       cfg,
-		host:      h,
-		discovery: discovery,
+		cancel: cancel,
+		logger: logger,
+		host:   h,
 	}
 	emitter, err := h.EventBus().Emitter(new(EventSpacemeshPeer))
 	if err != nil {
@@ -65,10 +48,8 @@ func NewBootstrap(logger log.Log, cfg Config, h host.Host, discovery Discovery) 
 // Bootstrap enforces required number of outbound connections.
 type Bootstrap struct {
 	logger log.Log
-	cfg    Config
 
-	host      host.Host
-	discovery Discovery
+	host host.Host
 
 	cancel context.CancelFunc
 	eg     errgroup.Group
@@ -101,16 +82,8 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription, emitter eve
 	b.host.Network().Notify(notifier)
 	defer b.host.Network().StopNotify(notifier)
 
-	var (
-		outbound int
-		peers    = map[peer.ID]network.Direction{}
-		limit    = make(chan struct{}, 1)
-		ticker   = time.NewTicker(b.cfg.Timeout)
-	)
-	defer ticker.Stop()
+	peers := map[peer.ID]network.Direction{}
 
-	bootctx, cancel := context.WithTimeout(ctx, b.cfg.Timeout)
-	b.triggerBootstrap(bootctx, limit, outbound)
 	for {
 		select {
 		case evt := <-sub.Out():
@@ -125,21 +98,10 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription, emitter eve
 				continue
 			}
 			peers[hs.PID] = hs.Direction
-			if hs.Direction == network.DirOutbound {
-				outbound++
-				// peer that is tagged as outbound will have higher weight then inbound peers.
-				// this is taken into account when conn manager high watermark is reached and subset of peers will be pruned.
-				b.host.ConnManager().TagPeer(hs.PID, "outbound", 100)
-				if outbound >= b.cfg.TargetOutbound {
-					// cancel bootctx to terminate bootstrap
-					cancel()
-				}
-			}
 			b.logger.With().Info("peer is connected",
 				log.String("pid", hs.PID.Pretty()),
 				log.Bool("outbound", hs.Direction == network.DirOutbound),
 				log.Int("total", len(peers)),
-				log.Int("outbound-total", outbound),
 			)
 			emitter.Emit(EventSpacemeshPeer{
 				PID:           hs.PID,
@@ -149,9 +111,6 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription, emitter eve
 		case pid := <-disconnected:
 			_, exist := peers[pid]
 			if exist && b.host.Network().Connectedness(pid) == network.NotConnected {
-				if peers[pid] == network.DirOutbound {
-					outbound--
-				}
 				emitter.Emit(EventSpacemeshPeer{
 					PID:           pid,
 					Direction:     peers[pid],
@@ -161,35 +120,11 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription, emitter eve
 					log.String("pid", pid.Pretty()),
 					log.Bool("outbound", peers[pid] == network.DirOutbound),
 					log.Int("total", len(peers)-1),
-					log.Int("outbound-total", outbound),
 				)
 				delete(peers, pid)
 			}
-		case <-ticker.C:
-			bootctx, cancel = context.WithTimeout(ctx, b.cfg.Timeout)
-			b.triggerBootstrap(bootctx, limit, outbound)
 		case <-ctx.Done():
-			cancel()
 			return ctx.Err()
 		}
 	}
-}
-
-func (b *Bootstrap) triggerBootstrap(ctx context.Context, limit chan struct{}, outbound int) {
-	if outbound >= b.cfg.TargetOutbound {
-		return
-	}
-	select {
-	case limit <- struct{}{}:
-	default:
-		return
-	}
-	b.eg.Go(func() error {
-		err := b.discovery.Bootstrap(ctx)
-		<-limit
-		if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return nil
-		}
-		return fmt.Errorf("unexpected error during bootstrap: %w", err)
-	})
 }

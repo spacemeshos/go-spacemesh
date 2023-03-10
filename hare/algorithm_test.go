@@ -13,14 +13,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -142,7 +140,7 @@ func buildMessage(msg Message) *Msg {
 
 type testBroker struct {
 	*Broker
-	cdb        *datastore.CachedDB
+	mockMesh   *mocks.Mockmesh
 	mockStateQ *mocks.MockstateQuerier
 	mockSyncS  *smocks.MockSyncStateProvider
 }
@@ -155,14 +153,15 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 	ctrl := gomock.NewController(tb)
 	mockStateQ := mocks.NewMockstateQuerier(ctrl)
 	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
+	mockMesh := mocks.NewMockmesh(ctrl)
 	mch := make(chan *types.MalfeasanceGossip, 1)
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(tb, err)
 	return &testBroker{
-		Broker: newBroker(cdb, pke, &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
+		Broker: newBroker(mockMesh, pke, &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
 			mch, limit, logtest.New(tb).WithName(testName)),
-		cdb:        cdb,
+
+		mockMesh:   mockMesh,
 		mockStateQ: mockStateQ,
 		mockSyncS:  mockSyncS,
 	}
@@ -181,7 +180,7 @@ func (mev *mockEligibilityValidator) ValidateEligibilityGossip(context.Context, 
 }
 
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
-	c := config.Config{N: 10, F: 5, RoundDuration: 200 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
+	c := config.Config{N: 10, RoundDuration: 200 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
 	p := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
 	p.Start()
 
@@ -191,7 +190,7 @@ func TestConsensusProcess_TerminationLimit(t *testing.T) {
 }
 
 func TestConsensusProcess_PassiveParticipant(t *testing.T) {
-	c := config.Config{N: 10, F: 5, RoundDuration: 200 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
+	c := config.Config{N: 10, RoundDuration: 200 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
 	p := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
 	p.nonce = nil
 	p.Start()
@@ -202,7 +201,7 @@ func TestConsensusProcess_PassiveParticipant(t *testing.T) {
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
 	net := &mockP2p{}
-	c := config.Config{N: 10, F: 5, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
+	c := config.Config{N: 10, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	proc := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
 	proc.publisher = net
 
@@ -227,7 +226,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 
 // test that proc.Stop() actually returns and cause the consensus process to be GC'ed.
 func TestConsensusProcess_StartAndStop(t *testing.T) {
-	c := config.Config{N: 10, F: 5, RoundDuration: 50 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1000, Hdist: 20}
+	c := config.Config{N: 10, RoundDuration: 50 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1000, Hdist: 20}
 	proc := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
 	proc.publisher = &mockP2p{}
 
@@ -300,7 +299,7 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 }
 
 func generateConsensusProcess(t *testing.T) *consensusProcess {
-	cfg := config.Config{N: 10, F: 5, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
+	cfg := config.Config{N: 10, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	return generateConsensusProcessWithConfig(t, cfg, make(chan any, 1000))
 }
 
@@ -529,7 +528,7 @@ func TestConsensusProcess_Termination(t *testing.T) {
 	proc.advanceToNextRound(context.Background())
 	s := NewSetFromValues(types.ProposalID{1})
 
-	for i := 0; i < proc.cfg.F+1; i++ {
+	for i := 0; i < proc.cfg.N/2+1; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		m := BuildNotifyMsg(signer, s)

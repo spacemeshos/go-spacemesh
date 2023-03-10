@@ -43,14 +43,6 @@ type atxHandler interface {
 	UnsubscribeAtx(id types.ATXID)
 }
 
-type signer interface {
-	Sign(m []byte) []byte
-}
-
-type keyExtractor interface {
-	ExtractNodeID(m, sig []byte) (types.NodeID, error)
-}
-
 type syncer interface {
 	RegisterForATXSynced() chan struct{}
 }
@@ -64,10 +56,21 @@ type postSetupProvider interface {
 	Status() *PostSetupStatus
 	ComputeProviders() []PostSetupComputeProvider
 	Benchmark(p PostSetupComputeProvider) (int, error)
-	StartSession(context context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error
+	StartSession(context context.Context, opts PostSetupOpts) error
 	Reset() error
 	GenerateProof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error)
+	CommitmentAtx() (types.ATXID, error)
 	VRFNonce() (*types.VRFPostIndex, error)
 	LastOpts() *PostSetupOpts
 	Config() PostConfig
+}
+
+// SmeshingProvider defines the functionality required for the node's Smesher API.
+type SmeshingProvider interface {
+	Smeshing() bool
+	StartSmeshing(types.Address, PostSetupOpts) error
+	StopSmeshing(bool) error
+	SmesherID() types.NodeID
+	Coinbase() types.Address
+	SetCoinbase(coinbase types.Address)
 }

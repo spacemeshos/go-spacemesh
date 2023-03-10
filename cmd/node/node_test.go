@@ -681,7 +681,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.P2P.Listen = "/ip4/127.0.0.1/tcp/7073"
 
 		// Avoid waiting for new connections.
-		app.Config.P2P.TargetOutbound = 0
+		app.Config.P2P.MinPeers = 0
 
 		// syncer will cause the node to go out of sync (and not listen to gossip)
 		// since we are testing single-node transaction service, we don't need the syncer to run
@@ -964,7 +964,7 @@ func getTestDefaultConfig() *config.Config {
 		return nil
 	}
 	// is set to 0 to make sync start immediately when node starts
-	cfg.P2P.TargetOutbound = 0
+	cfg.P2P.MinPeers = 0
 
 	cfg.POST = activation.DefaultPostConfig()
 	cfg.POST.MinNumUnits = 2
@@ -982,7 +982,6 @@ func getTestDefaultConfig() *config.Config {
 	cfg.HARE.RoundDuration = 2
 	cfg.HARE.WakeupDelta = 1
 	cfg.HARE.N = 5
-	cfg.HARE.F = 2
 	cfg.HARE.ExpectedLeaders = 5
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3

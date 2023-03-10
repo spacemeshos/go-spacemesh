@@ -56,7 +56,7 @@ func (t *ProposalVrfMessage) DecodeScale(dec *scale.Decoder) (total int, err err
 			return total, err
 		}
 		total += n
-		t.Epoch = uint32(field)
+		t.Epoch = types.EpochID(field)
 	}
 	return total, nil
 }

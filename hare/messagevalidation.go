@@ -82,7 +82,7 @@ type pubKeyGetter interface {
 }
 
 type syntaxContextValidator struct {
-	signing          Signer
+	signing          *signing.EdSigner
 	pubKeyExtractor  *signing.PubKeyExtractor
 	threshold        int
 	statusValidator  func(m *Msg) bool // used to validate status Messages in SVP
@@ -94,7 +94,7 @@ type syntaxContextValidator struct {
 }
 
 func newSyntaxContextValidator(
-	sgr Signer,
+	sgr *signing.EdSigner,
 	pubKeyExtractor *signing.PubKeyExtractor,
 	threshold int,
 	validator func(m *Msg) bool,
@@ -312,7 +312,7 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 		}
 
 		// extract public key
-		nodeId, err := v.pubKeyExtractor.ExtractNodeID(innerMsg.SignedBytes(), innerMsg.Signature)
+		nodeId, err := v.pubKeyExtractor.ExtractNodeID(signing.HARE, innerMsg.SignedBytes(), innerMsg.Signature)
 		if err != nil {
 			return fmt.Errorf("extract ed25519 pubkey: %w", err)
 		}

@@ -24,45 +24,13 @@ func TestProposal_Initialize(t *testing.T) {
 	}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(p.Bytes())
+	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
 	require.NoError(t, p.Initialize())
 	require.NotEqual(t, types.EmptyProposalID, p.ID())
 
 	err = p.Initialize()
 	require.EqualError(t, err, "proposal already initialized")
-}
-
-func TestProposal_Initialize_BadSignature(t *testing.T) {
-	p := types.Proposal{
-		InnerProposal: types.InnerProposal{
-			Ballot: *types.RandomBallot(),
-			TxIDs:  []types.TransactionID{types.RandomTransactionID(), types.RandomTransactionID()},
-		},
-	}
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(p.Bytes())[1:]
-	err = p.Initialize()
-	require.EqualError(t, err, "proposal extract nodeId: ed25519: bad signature format")
-}
-
-func TestProposal_Initialize_InconsistentBallot(t *testing.T) {
-	p := types.Proposal{
-		InnerProposal: types.InnerProposal{
-			Ballot: *types.RandomBallot(),
-			TxIDs:  []types.TransactionID{types.RandomTransactionID(), types.RandomTransactionID()},
-		},
-	}
-	signer1, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	signer2, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	p.Ballot.Signature = signer1.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer2.Sign(p.Bytes())
-	err = p.Initialize()
-	require.ErrorContains(t, err, "inconsistent smesher in proposal")
 }
 
 func FuzzProposalConsistency(f *testing.F) {

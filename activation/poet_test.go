@@ -59,7 +59,7 @@ func TestHTTPPoet(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	ch := types.RandomHash()
-	poetRound, err := c.Submit(context.Background(), ch.Bytes(), signer.Sign(ch.Bytes()))
+	poetRound, err := c.Submit(context.Background(), ch.Bytes(), signer.Sign(signing.ATX, ch.Bytes()))
 	r.NoError(err)
 	r.NotNil(poetRound)
 	r.Equal(hash32FromBytes([]byte("hash")), poetRound.ChallengeHash)

@@ -56,8 +56,9 @@ func createLayer(tb testing.TB, db *datastore.CachedDB, lid types.LayerID) ([]ty
 
 		b := types.RandomBallot()
 		b.Layer = lid
-		b.Signature = signer.Sign(b.SignedBytes())
+		b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
 		require.NoError(tb, b.Initialize())
+		b.SetSmesherID(signer.NodeID())
 		require.NoError(tb, ballots.Add(db, b))
 		blts = append(blts, b.ID())
 
@@ -245,6 +246,8 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	activation.SignAndFinalizeAtx(signer, atx)
+	nodeID := signer.NodeID()
+	atx.SetNodeID(&nodeID)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
 	vatx, err := atx.Verify(0, 1)
