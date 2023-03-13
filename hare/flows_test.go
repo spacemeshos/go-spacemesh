@@ -323,7 +323,7 @@ func Test_multipleCPs(t *testing.T) {
 		}
 	}()
 
-	// There are 5 rounds per layer and totoalCPs layers and we double for good measure.
+	// There are 5 rounds per layer and totalCPs layers and we double for good measure.
 	test.WaitForTimedTermination(t, 2*networkDelay*5*time.Duration(totalCp))
 	for _, h := range test.hare {
 		close(h.blockGenCh)
@@ -435,8 +435,10 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		}
 	}()
 
-	// There are 5 rounds per layer and totoalCPs layers and we double for good measure.
-	test.WaitForTimedTermination(t, 2*networkDelay*5*time.Duration(totalCp))
+	// There are 5 rounds per layer and totalCPs layers and we double to allow
+	// for the for good measure. Also one layer in this test will run 2
+	// iterations so we increase the layer count by 1.
+	test.WaitForTimedTermination(t, 2*networkDelay*5*time.Duration(totalCp+1))
 	for _, h := range test.hare {
 		close(h.blockGenCh)
 	}
