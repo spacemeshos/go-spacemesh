@@ -546,7 +546,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		ontime = pd.clock.LayerToTime(epoch.FirstLayer())
 		early  = ontime.Add(-1 * pd.config.GracePeriodDuration)
 	)
-	if err := pd.cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
+	if err := pd.cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) error {
 		epochWeight += header.GetWeight()
 		if _, ok := miners[header.NodeID]; !ok {
 			miners[header.NodeID] = header.ID
@@ -563,7 +563,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		if header.NodeID == pd.nodeID {
 			active = true
 		}
-		return true
+		return nil
 	}); err != nil {
 		return nil, err
 	}
