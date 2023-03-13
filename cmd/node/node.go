@@ -526,11 +526,14 @@ func (app *App) initServices(
 	if trtlCfg.BadBeaconVoteDelayLayers == 0 {
 		trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 	}
-	trtl := tortoise.New(app.cachedDB, beaconProtocol,
+	trtl, err := tortoise.New(app.cachedDB, beaconProtocol,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
 	)
+	if err != nil {
+		return fmt.Errorf("can't recover tortoise state: %w", err)
+	}
 
 	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(Executor, lg))
 	msh, err := mesh.NewMesh(app.cachedDB, clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
@@ -926,10 +929,6 @@ func (app *App) stopServices(ctx context.Context) {
 		app.ptimesync.Stop()
 		app.log.Debug("peer timesync stopped")
 	}
-	if app.tortoise != nil {
-		app.log.Info("stopping tortoise. if tortoise is in rerun it may take a while")
-		app.tortoise.Stop()
-	}
 
 	if app.host != nil {
 		if err := app.host.Stop(); err != nil {
@@ -992,11 +991,6 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 }
 
 func (app *App) startSyncer(ctx context.Context) {
-	app.log.Info("sync: waiting for tortoise to load state")
-	if err := app.tortoise.WaitReady(ctx); err != nil {
-		app.log.With().Error("sync: tortoise failed to load state", log.Err(err))
-		return
-	}
 	app.syncer.Start(ctx)
 }
 

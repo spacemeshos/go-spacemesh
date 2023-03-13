@@ -36,9 +36,9 @@ type boundary struct {
 
 func (b *boundary) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("from", b.from.layer.Uint32())
-	encoder.AddString("from_hash", b.from.hash.ShortString())
+	encoder.AddString("from_hash", b.from.hash.String())
 	encoder.AddUint32("to", b.to.layer.Uint32())
-	encoder.AddString("to_hash", b.to.hash.ShortString())
+	encoder.AddString("to_hash", b.to.hash.String())
 	return nil
 }
 

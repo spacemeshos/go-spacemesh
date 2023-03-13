@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -46,15 +44,6 @@ type Tortoise struct {
 	ctx    context.Context
 	cfg    Config
 
-	eg     errgroup.Group
-	cancel context.CancelFunc
-
-	ready    chan error
-	readyErr struct {
-		sync.Mutex
-		err error
-	}
-
 	mu   sync.Mutex
 	trtl *turtle
 }
@@ -84,12 +73,11 @@ func WithConfig(cfg Config) Opt {
 }
 
 // New creates Tortoise instance.
-func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, opts ...Opt) *Tortoise {
+func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, opts ...Opt) (*Tortoise, error) {
 	t := &Tortoise{
 		ctx:    context.Background(),
 		logger: log.NewNop(),
 		cfg:    DefaultConfig(),
-		ready:  make(chan error, 1),
 	}
 	for _, opt := range opts {
 		opt(t)
@@ -101,9 +89,6 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, opts ...Opt) *Tor
 			log.Uint32("zdist", t.cfg.Zdist),
 		)
 	}
-
-	ctx, cancel := context.WithCancel(t.ctx)
-	t.cancel = cancel
 
 	latest, err := ballots.LatestLayer(cdb)
 	if err != nil {
@@ -123,22 +108,16 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, opts ...Opt) *Tor
 		t.logger.With().Info("loading state from disk. make sure to wait until tortoise is ready",
 			log.Stringer("last layer", latest),
 		)
-		t.eg.Go(func() error {
-			for lid := types.GetEffectiveGenesis().Add(1); !lid.After(latest); lid = lid.Add(1) {
-				err := t.trtl.onLayer(ctx, lid)
-				if err != nil {
-					t.ready <- err
-					return err
-				}
+		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(latest); lid = lid.Add(1) {
+			err := t.trtl.onLayer(context.Background(), lid)
+			if err != nil {
+				return nil, err
 			}
-			close(t.ready)
-			return nil
-		})
+		}
 	} else {
 		t.logger.Info("no state on disk. initialized with genesis")
-		close(t.ready)
 	}
-	return t
+	return t, nil
 }
 
 // LatestComplete returns the latest verified layer.
@@ -299,25 +278,4 @@ func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
 	defer t.mu.Unlock()
 	waitHareOutputDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	t.trtl.onHareOutput(lid, bid)
-}
-
-// WaitReady waits until state will be reloaded from disk.
-func (t *Tortoise) WaitReady(ctx context.Context) error {
-	select {
-	case err := <-t.ready:
-		t.readyErr.Lock()
-		defer t.readyErr.Unlock()
-		if err != nil {
-			t.readyErr.err = err
-		}
-		return t.readyErr.err
-	case <-ctx.Done():
-		return ctx.Err() //nolint
-	}
-}
-
-// Stop background workers.
-func (t *Tortoise) Stop() {
-	t.cancel()
-	_ = t.eg.Wait()
 }
