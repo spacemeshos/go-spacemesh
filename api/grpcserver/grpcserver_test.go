@@ -695,9 +695,8 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, false, syncer.startCalled, "Start() not yet called on syncer")
 			req := &pb.SyncStartRequest{}
 			res, err := c.SyncStart(context.Background(), req)
-			require.NoError(t, err)
-			require.Equal(t, int32(code.Code_OK), res.Status.Code)
-			require.Equal(t, true, syncer.startCalled, "Start() was called on syncer")
+			require.Nil(t, res)
+			require.ErrorIs(t, err, status.Errorf(codes.Unimplemented, "UNIMPLEMENTED"))
 		}},
 		{"Shutdown", func(t *testing.T) {
 			logtest.SetupGlobal(t)
