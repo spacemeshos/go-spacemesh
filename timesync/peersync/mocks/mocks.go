@@ -9,6 +9,7 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
+	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 // MockTime is a mock of Time interface.
@@ -46,4 +47,41 @@ func (m *MockTime) Now() time.Time {
 func (mr *MockTimeMockRecorder) Now() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Now", reflect.TypeOf((*MockTime)(nil).Now))
+}
+
+// MockgetPeers is a mock of getPeers interface.
+type MockgetPeers struct {
+	ctrl     *gomock.Controller
+	recorder *MockgetPeersMockRecorder
+}
+
+// MockgetPeersMockRecorder is the mock recorder for MockgetPeers.
+type MockgetPeersMockRecorder struct {
+	mock *MockgetPeers
+}
+
+// NewMockgetPeers creates a new mock instance.
+func NewMockgetPeers(ctrl *gomock.Controller) *MockgetPeers {
+	mock := &MockgetPeers{ctrl: ctrl}
+	mock.recorder = &MockgetPeersMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockgetPeers) EXPECT() *MockgetPeersMockRecorder {
+	return m.recorder
+}
+
+// GetPeers mocks base method.
+func (m *MockgetPeers) GetPeers() []p2p.Peer {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPeers")
+	ret0, _ := ret[0].([]p2p.Peer)
+	return ret0
+}
+
+// GetPeers indicates an expected call of GetPeers.
+func (mr *MockgetPeersMockRecorder) GetPeers() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*MockgetPeers)(nil).GetPeers))
 }
