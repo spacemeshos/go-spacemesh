@@ -114,9 +114,13 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubs
 
 func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	h := types.CalcMessageHash12(msg, pubsub.HareProtocol)
-	b.mu.RLock()
-	logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.latestLayer), h)
-	b.mu.RUnlock()
+	var logger log.Log
+	func() {
+		b.mu.RLock()
+		defer b.mu.RUnlock()
+		logger = b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.latestLayer), h)
+	}()
+
 	hareMsg, err := MessageFromBuffer(msg)
 	if err != nil {
 		logger.With().Error("failed to build message", h, log.Err(err))
@@ -138,34 +142,42 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		logger.With().Debug("rejecting message", log.Err(err))
 		return err
 	}
-	b.mu.Lock()
-	out, exist := b.outbox[msgLayer.Uint32()]
-	if !exist {
-		logger.With().Debug(
-			"broker received a message to a consensus process that is not registered",
-			msgLayer.Field(),
-			log.Stringer("msg_type", hareMsg.InnerMsg.Type),
-		)
 
-		// We consider messages for the next layer to be early and we process
-		// them, all other messages we ignore. We don't impose the outbox
-		// capacity at this point since this is an externally initiated event
-		// and at most it can cause us to exceed our capacity by one slot.
-		if msgLayer == b.latestLayer.Add(1) {
-			out = make(chan any, inboxCapacity)
-			b.outbox[msgLayer.Uint32()] = out
-		} else {
-			b.mu.Unlock()
-			// This error is never inspected except to determine if it is not nil.
-			return fmt.Errorf(
-				"ignoring message to unregistered consensus process, latestLayer: %v, messageLayer: %v, messageType: %v",
-				b.latestLayer,
-				msgLayer.Uint32(),
-				hareMsg.InnerMsg.Type,
+	var out chan any
+	err = func() error {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		var exist bool
+		out, exist = b.outbox[msgLayer.Uint32()]
+		if !exist {
+			logger.With().Debug(
+				"broker received a message to a consensus process that is not registered",
+				msgLayer.Field(),
+				log.Stringer("msg_type", hareMsg.InnerMsg.Type),
 			)
+
+			// We consider messages for the next layer to be early and we process
+			// them, all other messages we ignore. We don't impose the outbox
+			// capacity at this point since this is an externally initiated event
+			// and at most it can cause us to exceed our capacity by one slot.
+			if msgLayer == b.latestLayer.Add(1) {
+				out = make(chan any, inboxCapacity)
+				b.outbox[msgLayer.Uint32()] = out
+			} else {
+				// This error is never inspected except to determine if it is not nil.
+				return fmt.Errorf(
+					"ignoring message to unregistered consensus process, latestLayer: %v, messageLayer: %v, messageType: %v",
+					b.latestLayer,
+					msgLayer.Uint32(),
+					hareMsg.InnerMsg.Type,
+				)
+			}
 		}
+		return nil
+	}()
+	if err != nil {
+		return err
 	}
-	b.mu.Unlock()
 
 	nodeId, err := b.pubKeyExtractor.ExtractNodeID(signing.HARE, hareMsg.SignedBytes(), hareMsg.Signature)
 	if err != nil {
