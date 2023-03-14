@@ -46,3 +46,12 @@ func TestActivation_BadMsgHash(t *testing.T) {
 	atx.MsgHash = types.RandomHash()
 	require.Error(t, atx.CalcAndSetID())
 }
+
+func Test_PostString(t *testing.T) {
+	p := &types.Post{
+		Nonce:   1,
+		Indices: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	}
+
+	require.Equal(t, "nonce: 0, indices: \"01020…\"", p.String())
+}

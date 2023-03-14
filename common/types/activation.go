@@ -623,7 +623,7 @@ func (p *Post) MarshalLogObject(encoder log.ObjectEncoder) error {
 // String returns a string representation of the PostProof, for logging purposes.
 // It implements the Stringer interface.
 func (p *Post) String() string {
-	return fmt.Sprintf("nonce: %v, indices: %v", p.Nonce, bytesToShortString(p.Indices))
+	return fmt.Sprintf("nonce: %v, indices: %s", p.Nonce, bytesToShortString(p.Indices))
 }
 
 func bytesToShortString(b []byte) string {
