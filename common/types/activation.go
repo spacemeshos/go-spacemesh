@@ -612,8 +612,8 @@ func (p *Post) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if p == nil {
 		return nil
 	}
-	encoder.AddUint32("Nonce", p.Nonce)
-	encoder.AddString("Indices", hex.EncodeToString(p.Indices))
+	encoder.AddUint32("nonce", p.Nonce)
+	encoder.AddString("indices", hex.EncodeToString(p.Indices))
 	return nil
 }
 
