@@ -774,6 +774,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
+		miner.WithNetworkDelay(app.Config.HARE.WakeupDelta),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
 

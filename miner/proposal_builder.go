@@ -66,6 +66,7 @@ type config struct {
 	hdist              uint32
 	minActiveSetWeight uint64
 	nodeID             types.NodeID
+	networkDelay       time.Duration
 }
 
 type defaultFetcher struct {
@@ -123,6 +124,12 @@ func WithHdist(dist uint32) Opt {
 	}
 }
 
+func WithNetworkDelay(delay time.Duration) Opt {
+	return func(pb *ProposalBuilder) {
+		pb.cfg.networkDelay = delay
+	}
+}
+
 func withOracle(o proposalOracle) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.proposalOracle = o
@@ -163,19 +170,15 @@ func NewProposalBuilder(
 		syncer:         syncer,
 		conState:       conState,
 	}
-
 	for _, opt := range opts {
 		opt(pb)
 	}
-
 	if pb.proposalOracle == nil {
-		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, pb.cfg.minActiveSetWeight, cdb, vrfSigner, pb.cfg.nodeID, pb.logger)
+		pb.proposalOracle = newMinerOracle(pb.cfg, clock, cdb, vrfSigner, pb.logger)
 	}
-
 	if pb.nonceFetcher == nil {
 		pb.nonceFetcher = defaultFetcher{pb.cdb}
 	}
-
 	return pb
 }
 
@@ -382,7 +385,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		}
 		return err
 	}
-	epochEligibility, err := pb.proposalOracle.GetProposalEligibility(layerID, beacon, nonce)
+	epochEligibility, err := pb.proposalOracle.ProposalEligibility(layerID, beacon, nonce)
 	if err != nil {
 		if errors.Is(err, errMinerHasNoATXInPreviousEpoch) {
 			return fmt.Errorf("miner no ATX: %w", err)
