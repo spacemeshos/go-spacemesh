@@ -2,6 +2,7 @@ package eligibility
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"math/rand"
 	"strconv"
@@ -16,7 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -202,15 +202,15 @@ func TestCalcEligibility_EligibleFromHareActiveSet(t *testing.T) {
 		"384460966938c87644987fe00c0f9d4f9a5e2dcd4bdc08392ed94203895ba325036725a22346e35aa707993babef716aa1b6b3dfc653a44cb23ac8f743cbbc3d": 1,
 		"15c5f565a75888970059b070bfaed1998a9d423ddac9f6af83da51db02149044ea6aeb86294341c7a950ac5de2855bbebc11cc28b02c08bc903e4cf41439717d": 1,
 	}
-	for hex, exp := range sigs {
-		sig := util.Hex2Bytes(hex)
+	for s, exp := range sigs {
+		sig, _ := hex.DecodeString(s)
 		nid := types.BytesToNodeID([]byte("0"))
 		nonce := types.VRFPostIndex(1)
 		o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
 		o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).Times(1)
 		res, err := o.CalcEligibility(context.Background(), layer, 1, 10, nid, nonce, sig)
-		require.NoError(t, err, hex)
-		require.Equal(t, exp, res, hex)
+		require.NoError(t, err, s)
+		require.Equal(t, exp, res, s)
 	}
 }
 
@@ -238,13 +238,13 @@ func TestCalcEligibility_EligibleFromTortoiseActiveSet(t *testing.T) {
 	// there is no cache for tortoise active set. so each signature will cause 2 calls to GetEpochAtxs() and 2*numMiners calls to GetAtxHeader()
 	prevEpoch := layer.GetEpoch() - 1
 	createActiveSet(t, o.cdb, prevEpoch.FirstLayer(), activeSet)
-	for hex, exp := range sigs {
-		sig := util.Hex2Bytes(hex)
+	for s, exp := range sigs {
+		sig, _ := hex.DecodeString(s)
 		nid := types.BytesToNodeID([]byte("0"))
 		nonce := types.VRFPostIndex(1)
 		res, err := o.CalcEligibility(context.Background(), layer, 1, 10, nid, nonce, sig)
-		require.NoError(t, err, hex)
-		require.Equal(t, exp, res, hex)
+		require.NoError(t, err, s)
+		require.Equal(t, exp, res, s)
 	}
 }
 

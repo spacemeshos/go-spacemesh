@@ -200,7 +200,7 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 		defer close(done)
 		done <- perr
 	}
-	if err := f.servers[atxProtocol].Request(ctx, peer, epoch.ToBytes(), okCB, errCB); err != nil {
+	if err := f.servers[atxProtocol].Request(ctx, peer, epoch.Bytes(), okCB, errCB); err != nil {
 		return nil, err
 	}
 	select {

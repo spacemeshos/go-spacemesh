@@ -2,11 +2,11 @@ package fetch
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -57,7 +57,7 @@ func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ []byte) ([]byte, 
 
 // handleEpochInfoReq returns the ATXs published in the specified epoch.
 func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, error) {
-	epoch := types.EpochID(util.BytesToUint32(msg))
+	epoch := types.EpochID(binary.LittleEndian.Uint32(msg))
 	atxids, err := atxs.GetIDsByEpoch(h.cdb, epoch)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Warning("failed to get epoch atx IDs", epoch, log.Err(err))

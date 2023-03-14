@@ -285,7 +285,7 @@ func TestHandleEpochInfoReq(t *testing.T) {
 				}
 			}
 
-			out, err := th.handleEpochInfoReq(context.TODO(), epoch.ToBytes())
+			out, err := th.handleEpochInfoReq(context.Background(), epoch.Bytes())
 			require.NoError(t, err)
 			var got EpochData
 			require.NoError(t, codec.Decode(out, &got))

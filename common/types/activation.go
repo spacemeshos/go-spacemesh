@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"sort"
@@ -23,8 +24,12 @@ import (
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
 type EpochID uint32
 
-// ToBytes returns a byte-slice representation of the EpochID, using little endian encoding.
-func (l EpochID) ToBytes() []byte { return util.Uint32ToBytes(uint32(l)) }
+// Bytes returns a byte-slice representation of the EpochID, using little endian encoding.
+func (l EpochID) Bytes() []byte {
+	a := make([]byte, 4)
+	binary.LittleEndian.PutUint32(a, uint32(l))
+	return a
+}
 
 // IsGenesis returns true if this epoch is in genesis. The first two epochs are considered genesis epochs.
 func (l EpochID) IsGenesis() bool {

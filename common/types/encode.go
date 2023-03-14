@@ -1,15 +1,19 @@
 package types
 
 import (
+	"encoding/binary"
 	"fmt"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
 // Bytes returns the byte representation of the LayerID, using little endian encoding.
-func (l LayerID) Bytes() []byte { return util.Uint32ToBytes(l.Value) }
+func (l LayerID) Bytes() []byte {
+	a := make([]byte, 4)
+	binary.LittleEndian.PutUint32(a, l.Value)
+	return a
+}
 
 // BytesToAtx deserializes an ActivationTx.
 func BytesToAtx(b []byte) (*ActivationTx, error) {
@@ -24,5 +28,5 @@ func BytesToAtx(b []byte) (*ActivationTx, error) {
 
 // BytesToLayerID return uint64 layer IO.
 func BytesToLayerID(b []byte) LayerID {
-	return NewLayerID(util.BytesToUint32(b))
+	return NewLayerID(binary.LittleEndian.Uint32(b))
 }
