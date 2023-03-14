@@ -448,13 +448,12 @@ func TestHare_onTick_NotSynced(t *testing.T) {
 	h.broker.Start(context.Background())
 	defer h.broker.Close()
 
-	mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
+	mockSyncS.EXPECT().IsSyncedAtEpoch(gomock.Any(), gomock.Any()).Return(false)
 	started, err := h.onTick(context.Background(), lyr)
 	require.NoError(t, err)
 	require.False(t, started)
 
-	mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
-	mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(false)
+	mockSyncS.EXPECT().IsSyncedAtEpoch(gomock.Any(), gomock.Any()).Return(false)
 	started, err = h.onTick(context.Background(), lyr)
 	require.NoError(t, err)
 	require.False(t, started)

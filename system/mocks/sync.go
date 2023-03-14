@@ -62,3 +62,17 @@ func (mr *MockSyncStateProviderMockRecorder) IsSynced(arg0 interface{}) *gomock.
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSynced", reflect.TypeOf((*MockSyncStateProvider)(nil).IsSynced), arg0)
 }
+
+// IsSyncedAtEpoch mocks base method.
+func (m *MockSyncStateProvider) IsSyncedAtEpoch(arg0 context.Context, arg1 types.EpochID) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsSyncedAtEpoch", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsSyncedAtEpoch indicates an expected call of IsSyncedAtEpoch.
+func (mr *MockSyncStateProviderMockRecorder) IsSyncedAtEpoch(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSyncedAtEpoch", reflect.TypeOf((*MockSyncStateProvider)(nil).IsSyncedAtEpoch), arg0, arg1)
+}

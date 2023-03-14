@@ -144,8 +144,7 @@ func createTestHare(tb testing.TB, msh mesh, tcfg config.Config, clock *mockCloc
 	mockStateQ := mocks.NewMockstateQuerier(ctrl)
 	mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
-	mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
+	mockSyncS.EXPECT().IsSyncedAtEpoch(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
 	mockRoracle := mocks.NewMockRolacle(ctrl)
 

@@ -348,7 +348,7 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		return false, errors.New("closed while waiting for hare delta")
 	}
 
-	if !(h.syncState.IsSynced(ctx) && h.syncState.IsBeaconSynced(lid.GetEpoch())) {
+	if !h.syncState.IsSyncedAtEpoch(ctx, lid.GetEpoch()) {
 		// if not currently synced don't start consensus process
 		logger.Info("not starting hare: node not synced at this layer")
 		return false, nil

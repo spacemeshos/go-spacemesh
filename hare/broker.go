@@ -137,7 +137,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 
 	msgLayer := hareMsg.Layer
 
-	if !(b.nodeSyncState.IsSynced(ctx) && b.nodeSyncState.IsBeaconSynced(msgLayer.GetEpoch())) {
+	if !b.nodeSyncState.IsSyncedAtEpoch(ctx, msgLayer.GetEpoch()) {
 		err := fmt.Errorf("broker rejecting message because not synced")
 		logger.With().Debug("rejecting message", log.Err(err))
 		return err

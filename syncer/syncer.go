@@ -223,6 +223,11 @@ func (s *Syncer) IsBeaconSynced(epoch types.EpochID) bool {
 	return err == nil
 }
 
+// IsSyncedAtEpoch returns IsSynced && IsBeaconSynced for the given epoch.
+func (s *Syncer) IsSyncedAtEpoch(ctx context.Context, epoch types.EpochID) bool {
+	return s.IsSynced(ctx) && s.IsBeaconSynced(epoch)
+}
+
 // Start starts the main sync loop that tries to sync data for every SyncInterval.
 func (s *Syncer) Start(ctx context.Context) {
 	s.syncOnce.Do(func() {
