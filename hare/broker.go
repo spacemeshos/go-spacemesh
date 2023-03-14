@@ -78,8 +78,7 @@ func (b *Broker) Start(ctx context.Context) {
 var errClosed = errors.New("closed")
 
 // HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
-func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte)
-pubsub.ValidationResult {
+func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
 	// We lock and unlock here to make sure we see b.ctx if it has been set.
 	// The go memory model (See - https://go.dev/ref/mem#locks) says that:
 	//
