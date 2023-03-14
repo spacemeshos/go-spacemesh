@@ -36,11 +36,8 @@ func (vatx *VerifiedActivationTx) TickHeight() uint64 {
 
 // MarshalLogObject implements logging interface.
 func (vatx *VerifiedActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
-	if vatx.InitialPost != nil {
-		encoder.AddString("nipost", vatx.InitialPost.String())
-	}
+	encoder.AddString("atx_id", vatx.id.String())
 	encoder.AddString("challenge", vatx.NIPostChallenge.Hash().String())
-	encoder.AddString("id", vatx.id.String())
 	encoder.AddString("smesher", vatx.nodeID.String())
 	encoder.AddString("prev_atx_id", vatx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", vatx.PositioningATX.String())
