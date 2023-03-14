@@ -37,19 +37,19 @@ func (m *MockproposalOracle) EXPECT() *MockproposalOracleMockRecorder {
 	return m.recorder
 }
 
-// GetProposalEligibility mocks base method.
-func (m *MockproposalOracle) GetProposalEligibility(arg0 types.LayerID, arg1 types.Beacon, arg2 types.VRFPostIndex) (*EpochEligibility, error) {
+// ProposalEligibility mocks base method.
+func (m *MockproposalOracle) ProposalEligibility(arg0 types.LayerID, arg1 types.Beacon, arg2 types.VRFPostIndex) (*EpochEligibility, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProposalEligibility", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "ProposalEligibility", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*EpochEligibility)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetProposalEligibility indicates an expected call of GetProposalEligibility.
-func (mr *MockproposalOracleMockRecorder) GetProposalEligibility(arg0, arg1, arg2 interface{}) *gomock.Call {
+// ProposalEligibility indicates an expected call of ProposalEligibility.
+func (mr *MockproposalOracleMockRecorder) ProposalEligibility(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposalEligibility", reflect.TypeOf((*MockproposalOracle)(nil).GetProposalEligibility), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposalEligibility", reflect.TypeOf((*MockproposalOracle)(nil).ProposalEligibility), arg0, arg1, arg2)
 }
 
 // MockconservativeState is a mock of conservativeState interface.
@@ -194,6 +194,44 @@ func (m *MocknonceFetcher) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (type
 func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknonceFetcher)(nil).VRFNonce), arg0, arg1)
+}
+
+// Mockmesh is a mock of mesh interface.
+type Mockmesh struct {
+	ctrl     *gomock.Controller
+	recorder *MockmeshMockRecorder
+}
+
+// MockmeshMockRecorder is the mock recorder for Mockmesh.
+type MockmeshMockRecorder struct {
+	mock *Mockmesh
+}
+
+// NewMockmesh creates a new mock instance.
+func NewMockmesh(ctrl *gomock.Controller) *Mockmesh {
+	mock := &Mockmesh{ctrl: ctrl}
+	mock.recorder = &MockmeshMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockmesh) EXPECT() *MockmeshMockRecorder {
+	return m.recorder
+}
+
+// GetMalfeasanceProof mocks base method.
+func (m *Mockmesh) GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMalfeasanceProof", nodeID)
+	ret0, _ := ret[0].(*types.MalfeasanceProof)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMalfeasanceProof indicates an expected call of GetMalfeasanceProof.
+func (mr *MockmeshMockRecorder) GetMalfeasanceProof(nodeID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProof", reflect.TypeOf((*Mockmesh)(nil).GetMalfeasanceProof), nodeID)
 }
 
 // MocklayerClock is a mock of layerClock interface.
