@@ -79,26 +79,15 @@ var errClosed = errors.New("closed")
 
 // HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
 func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
-	// We lock and unlock here to make sure we see b.ctx if it has been set.
-	// The go memory model (See - https://go.dev/ref/mem#locks) says that:
-	//
-	// For any sync.Mutex or sync.RWMutex variable l and n < m, call n of
-	// l.Unlock() is synchronized before call m of l.Lock() returns.
-	//
-	// Because b.ctx is set in Start(), by a different go-routine to the one
-	// that calls this function, in order to ensure that we can see b.ctx's
-	// value we need to ensure that the setting of b.ctx is synchroized before
-	// our access to b.ctx here.
-	//
-	// Assuming that b.ctx has been set, or more precisely that the call to
-	// b.mu.Lock() in Start() has already happened, we can ensure that we see
-	// the result of setting b.ctx in Start() here by calling b.mu.Lock(),
-	// since that will ensure that the call to b.mu.Unlock() in start is
-	// synchroized before the call of b.mu.Lock() here.
-	b.mu.Lock()
-	//nolint:staticcheck
-	//lint:ignore SA2001 See above comment, this seems legit.
-	b.mu.Unlock()
+	// Return if b.ctx == nil, this means that the broker has not been started.
+	// TODO Provide context at construction time - https://github.com/spacemeshos/go-spacemesh/issues/4157
+	if func() bool {
+		b.mu.RLock()
+		defer b.mu.RUnlock()
+		return b.ctx == nil
+	}() {
+		return pubsub.ValidationIgnore
+	}
 	select {
 	case <-ctx.Done():
 		return pubsub.ValidationIgnore
