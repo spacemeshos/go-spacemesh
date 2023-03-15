@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -373,9 +375,12 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if len(h.cps) >= h.config.LimitConcurrent {
-		err := fmt.Errorf("failed to start cp for layer %q hare reached concurrent cp limit %q", lid.Uint32(), h.config.LimitConcurrent)
-		logger.With().Warning("hare failure", log.Err(err))
-		return false, err
+		old := sortedKeys(h.cps)[0]
+		logger.With().Warning("reached concurrent cp limit, unregistering old cp", log.Uint32("old_cp_layer", old.Value), log.Int("limit", h.config.LimitConcurrent), lid)
+		h.broker.Unregister(h.ctx, old)
+		// Note that the consensus process will eventually timeout and return a
+		// TerminationOutput that will be picked up in the outputCollectionLoop
+		// which will then stop the consensus process and remove it from h.cps
 	}
 	ch, err := h.broker.Register(ctx, lid)
 	if err != nil {
@@ -399,6 +404,12 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		log.Int("count", len(h.cps)))
 	h.patrol.SetHareInCharge(lid)
 	return true, nil
+}
+
+func sortedKeys(m map[types.LayerID]Consensus) []types.LayerID {
+	keys := maps.Keys(m)
+	sort.Slice(keys, func(i, j int) bool { return keys[i].Value < keys[j].Value })
+	return keys
 }
 
 func (h *Hare) getCP(lid types.LayerID) Consensus {
