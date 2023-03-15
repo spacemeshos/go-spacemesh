@@ -17,7 +17,7 @@ type ProposalVrfMessage struct {
 type ProposalMessage struct {
 	EpochID      types.EpochID
 	NodeID       types.NodeID
-	VRFSignature []byte
+	VRFSignature []byte `scale:"max=32"`
 }
 
 // FirstVotingMessageBody is FirstVotingMessage without a signature.
@@ -30,7 +30,7 @@ type FirstVotingMessageBody struct {
 // FirstVotingMessage is a message type which is used when sending first voting messages.
 type FirstVotingMessage struct {
 	FirstVotingMessageBody
-	Signature []byte
+	Signature []byte `scale:"max=32"`
 }
 
 // FollowingVotingMessageBody is FollowingVotingMessage without a signature.
@@ -43,5 +43,5 @@ type FollowingVotingMessageBody struct {
 // FollowingVotingMessage is a message type which is used when sending following voting messages.
 type FollowingVotingMessage struct {
 	FollowingVotingMessageBody
-	Signature []byte
+	Signature []byte `scale:"max=32"`
 }
