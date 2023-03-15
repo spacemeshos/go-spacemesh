@@ -466,9 +466,9 @@ func (p *PoetProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 // PoetProofMessage is the envelope which includes the PoetProof, service ID, round ID and signature.
 type PoetProofMessage struct {
 	PoetProof
-	PoetServiceID []byte
-	RoundID       string
-	Signature     []byte
+	PoetServiceID []byte `scale:"max=32"`
+	RoundID       string `scale:"max=32"`
+	Signature     []byte `scale:"max=32"`
 }
 
 func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -526,7 +526,7 @@ func (p *RoundEnd) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 // PoetRound includes the PoET's round ID.
 type PoetRound struct {
-	ID            string
+	ID            string `scale:"max=32"`
 	ChallengeHash Hash32
 	End           RoundEnd
 }
