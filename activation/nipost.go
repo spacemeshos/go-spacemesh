@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/spacemeshos/poet/shared"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -174,7 +175,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 				nb.log.With().Info(
 					"poet returned invalid challenge hash",
 					req.PoetRound.ChallengeHash,
-					log.String("poet_id", hex.EncodeToString(req.PoetServiceID)),
+					log.String("poet_id", hex.EncodeToString(req.PoetServiceID.ServiceID)),
 				)
 			} else {
 				validPoetRequests = append(validPoetRequests, req)
@@ -239,7 +240,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, poet PoetProvi
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoET service ID", source: err}
 	}
-	logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(poetServiceID)))
+	logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(poetServiceID.ServiceID)))
 	logger.Debug("submitting challenge to poet proving service")
 
 	round, err := poet.Submit(ctx, challenge, signature)
@@ -282,16 +283,16 @@ func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, challenge []b
 
 func (nb *NIPostBuilder) getPoetClient(ctx context.Context, id types.PoetServiceID) PoetProvingServiceClient {
 	for _, client := range nb.poetProvers {
-		if clientId, err := client.PoetServiceID(ctx); err == nil && bytes.Equal(id, clientId) {
+		if clientId, err := client.PoetServiceID(ctx); err == nil && bytes.Equal(id.ServiceID, clientId.ServiceID) {
 			return client
 		}
 	}
 	return nil
 }
 
-func membersContain(members [][]byte, challenge *types.Hash32) bool {
+func membersContain(members []shared.Member, challenge *types.Hash32) bool {
 	for _, member := range members {
-		if bytes.Equal(member, challenge.Bytes()) {
+		if bytes.Equal(member.Challenge, challenge.Bytes()) {
 			return true
 		}
 	}
@@ -303,7 +304,7 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 
 	var eg errgroup.Group
 	for _, r := range nb.state.PoetRequests {
-		logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(r.PoetServiceID)), log.String("round", r.PoetRound.ID))
+		logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(r.PoetServiceID.ServiceID)), log.String("round", r.PoetRound.ID))
 		client := nb.getPoetClient(ctx, r.PoetServiceID)
 		if client == nil {
 			logger.Warning("Poet client not found")

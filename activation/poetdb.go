@@ -68,7 +68,7 @@ func (db *PoetDb) ValidateAndStoreMsg(ctx context.Context, _ p2p.Peer, data []by
 func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string, signature []byte) error {
 	const shortIDlth = 5 // check the length to prevent a panic in the errors
 	if len(poetID) < shortIDlth {
-		return types.ProcessingError(fmt.Sprintf("invalid poet id %x", poetID))
+		return types.ProcessingError{Err: fmt.Sprintf("invalid poet id %x", poetID)}
 	}
 	root, err := calcRoot(proof.Members)
 	// we shouldn't care about poet proof with empty membership as it's not relevant.
@@ -76,8 +76,9 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string,
 		return nil
 	}
 	if err != nil {
-		return types.ProcessingError(fmt.Sprintf("failed to calculate membership root for poetID %x round %s: %v",
-			poetID[:shortIDlth], roundID, err))
+		return types.ProcessingError{
+			Err: fmt.Sprintf("failed to calculate membership root for poetID %x round %s: %v", poetID[:shortIDlth], roundID, err),
+		}
 	}
 	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
 		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %w",
@@ -153,21 +154,21 @@ func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, error
 	return &proofMessage.PoetProof, nil
 }
 
-func membershipSliceToMap(membership [][]byte) map[types.Hash32]bool {
+func membershipSliceToMap(membership []shared.Member) map[types.Hash32]bool {
 	res := make(map[types.Hash32]bool)
 	for _, member := range membership {
-		res[types.BytesToHash(member)] = true
+		res[types.BytesToHash(member.Challenge)] = true
 	}
 	return res
 }
 
-func calcRoot(leaves [][]byte) ([]byte, error) {
+func calcRoot(leaves []shared.Member) ([]byte, error) {
 	tree, err := merkle.NewTree()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tree: %w", err)
 	}
 	for _, member := range leaves {
-		err := tree.AddLeaf(member)
+		err := tree.AddLeaf(member.Challenge)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add leaf: %w", err)
 		}

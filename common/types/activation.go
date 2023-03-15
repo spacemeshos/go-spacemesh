@@ -117,7 +117,7 @@ type NIPostChallenge struct {
 
 	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
 	CommitmentATX      *ATXID
-	InitialPostIndices []byte
+	InitialPostIndices []byte `scale:"max=32"` // TODO(mafa): check if this is the right size
 }
 
 func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -227,7 +227,7 @@ type ActivationTx struct {
 	InnerActivationTx
 	ATXMetadata
 	// signature over ATXMetadata
-	Signature []byte
+	Signature []byte `scale:"max=32"`
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
@@ -414,7 +414,7 @@ type PoetProofRef []byte
 // and the actual PoET Merkle proof.
 type PoetProof struct {
 	poetShared.MerkleProof
-	Members   [][]byte
+	Members   []poetShared.Member `scale:"max=36"`
 	LeafCount uint64
 }
 
@@ -425,7 +425,7 @@ func (p *PoetProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint64("LeafCount", p.LeafCount)
 	encoder.AddArray("Indices", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 		for _, member := range p.Members {
-			encoder.AppendString(hex.EncodeToString(member))
+			encoder.AppendString(hex.EncodeToString(member.Challenge))
 		}
 		return nil
 	}))
@@ -625,7 +625,7 @@ func (p *Post) String() string {
 
 // PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
 type PostMetadata struct {
-	Challenge     []byte
+	Challenge     []byte `scale:"max=32"`
 	BitsPerLabel  uint8
 	LabelsPerUnit uint64
 
@@ -651,11 +651,13 @@ func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 // ProcessingError is a type of error (implements the error interface) that is used to differentiate processing errors
 // from validation errors.
-type ProcessingError string
+type ProcessingError struct {
+	Err string `scale:"max=1024"` // TODO(mafa): check if this is the right size
+}
 
 // Error returns the processing error as a string. It implements the error interface.
 func (s ProcessingError) Error() string {
-	return string(s)
+	return s.Err
 }
 
 // IsProcessingError returns true if the given error is a processing error.

@@ -18,7 +18,7 @@ type RequestMessage struct {
 // ResponseMessage is sent to the node as a response.
 type ResponseMessage struct {
 	Hash types.Hash32
-	Data []byte
+	Data []byte `scale:"max=1024"` // TODO(mafa): check if this is the right max size
 }
 
 // RequestBatch is a batch of requests and a hash of all requests as ID.
@@ -48,22 +48,22 @@ func (r *MeshHashRequest) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 type MeshHashes struct {
-	Layers []types.LayerID
-	Hashes []types.Hash32
+	Layers []types.LayerID `scale:"max=32"`
+	Hashes []types.Hash32  `scale:"max=32"`
 }
 
 type MaliciousIDs struct {
-	NodeIDs []types.NodeID
+	NodeIDs []types.NodeID `scale:"max=32"`
 }
 
 type EpochData struct {
-	AtxIDs []types.ATXID
+	AtxIDs []types.ATXID `scale:"max=32"`
 }
 
 // LayerData is the data response for a given layer ID.
 type LayerData struct {
-	Ballots []types.BallotID
-	Blocks  []types.BlockID
+	Ballots []types.BallotID `scale:"max=32"`
+	Blocks  []types.BlockID  `scale:"max=32"`
 }
 
 // LayerOpinion is the response for opinion for a given layer.

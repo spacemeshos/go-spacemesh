@@ -14,7 +14,7 @@ type Account struct {
 	NextNonce       uint64
 	Balance         uint64
 	TemplateAddress *Address
-	State           []byte
+	State           []byte `scale:"max=1024"` // TODO(mafa): check if max. value is correct
 }
 
 // MarshalLogObject implements encoding for the account state.

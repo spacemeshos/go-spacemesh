@@ -118,16 +118,16 @@ func (c *HTTPPoetClient) Submit(ctx context.Context, challenge []byte, signature
 
 // PoetServiceID returns the public key of the PoET proving service.
 func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) (types.PoetServiceID, error) {
-	if c.poetServiceID != nil {
+	if c.poetServiceID.ServiceID != nil {
 		return c.poetServiceID, nil
 	}
 	resBody := rpcapi.InfoResponse{}
 
 	if err := c.req(ctx, http.MethodGet, "/v1/info", nil, &resBody); err != nil {
-		return nil, fmt.Errorf("getting poet ID: %w", err)
+		return types.PoetServiceID{}, fmt.Errorf("getting poet ID: %w", err)
 	}
 
-	c.poetServiceID = types.PoetServiceID(resBody.ServicePubkey)
+	c.poetServiceID.ServiceID = resBody.ServicePubkey
 	return c.poetServiceID, nil
 }
 
@@ -153,6 +153,14 @@ func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.Poet
 		})
 	}
 
+	pMembers := resBody.Proof.GetMembers()
+	members := make([]shared.Member, 0, len(pMembers))
+	for _, m := range pMembers {
+		members = append(members, shared.Member{
+			Challenge: m,
+		})
+	}
+
 	proof := types.PoetProofMessage{
 		PoetProof: types.PoetProof{
 			MerkleProof: shared.MerkleProof{
@@ -160,14 +168,14 @@ func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.Poet
 				ProvenLeaves: leaves,
 				ProofNodes:   nodes,
 			},
-			Members:   resBody.Proof.GetMembers(),
+			Members:   members,
 			LeafCount: resBody.Proof.GetLeaves(),
 		},
 		PoetServiceID: resBody.Pubkey,
 		RoundID:       roundID,
 	}
-	if c.poetServiceID == nil {
-		c.poetServiceID = proof.PoetServiceID
+	if c.poetServiceID.ServiceID == nil {
+		c.poetServiceID.ServiceID = proof.PoetServiceID
 	}
 
 	return &proof, nil

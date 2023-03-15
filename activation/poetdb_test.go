@@ -28,7 +28,7 @@ var (
 
 func getPoetProof(t *testing.T) types.PoetProofMessage {
 	createProofOnce.Do(func() {
-		members := [][]byte{memberHash}
+		members := []shared.Member{{Challenge: memberHash}}
 		challenge, err := prover.CalcTreeRoot(members)
 		require.NoError(t, err)
 
