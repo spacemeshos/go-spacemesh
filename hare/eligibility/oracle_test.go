@@ -203,7 +203,8 @@ func TestCalcEligibility_EligibleFromHareActiveSet(t *testing.T) {
 		"15c5f565a75888970059b070bfaed1998a9d423ddac9f6af83da51db02149044ea6aeb86294341c7a950ac5de2855bbebc11cc28b02c08bc903e4cf41439717d": 1,
 	}
 	for s, exp := range sigs {
-		sig, _ := hex.DecodeString(s)
+		sig, err := hex.DecodeString(s)
+		require.NoError(t, err)
 		nid := types.BytesToNodeID([]byte("0"))
 		nonce := types.VRFPostIndex(1)
 		o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
@@ -239,7 +240,8 @@ func TestCalcEligibility_EligibleFromTortoiseActiveSet(t *testing.T) {
 	prevEpoch := layer.GetEpoch() - 1
 	createActiveSet(t, o.cdb, prevEpoch.FirstLayer(), activeSet)
 	for s, exp := range sigs {
-		sig, _ := hex.DecodeString(s)
+		sig, err := hex.DecodeString(s)
+		require.NoError(t, err)
 		nid := types.BytesToNodeID([]byte("0"))
 		nonce := types.VRFPostIndex(1)
 		res, err := o.CalcEligibility(context.Background(), layer, 1, 10, nid, nonce, sig)

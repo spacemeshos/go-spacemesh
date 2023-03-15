@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/spacemeshos/post/shared"
 	"golang.org/x/exp/maps"
@@ -469,10 +470,11 @@ func (h *Handler) registerHashes(atx *types.ActivationTx, peer p2p.Peer) {
 }
 
 func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte) error {
-	atx, err := types.BytesToAtx(data)
-	if err != nil {
+	var atx types.ActivationTx
+	if err := codec.Decode(data, &atx); err != nil {
 		return errMalformedData
 	}
+	atx.SetReceived(time.Now().Local())
 
 	nodeID, err := h.extractor.ExtractNodeID(signing.ATX, atx.SignedBytes(), atx.Signature)
 	if err != nil {
@@ -495,18 +497,18 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())
 	}
 
-	h.registerHashes(atx, peer)
+	h.registerHashes(&atx, peer)
 	if err := h.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
 		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
 	}
 
-	if err := h.FetchAtxReferences(ctx, atx); err != nil {
+	if err := h.FetchAtxReferences(ctx, &atx); err != nil {
 		return fmt.Errorf("received atx with missing references of prev or pos id %v, %v, %v, %v",
 			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}
 
-	vAtx, err := h.SyntacticallyValidateAtx(ctx, atx)
+	vAtx, err := h.SyntacticallyValidateAtx(ctx, &atx)
 	if err != nil {
 		return fmt.Errorf("received syntactically invalid atx %v: %v", atx.ShortString(), err)
 	}

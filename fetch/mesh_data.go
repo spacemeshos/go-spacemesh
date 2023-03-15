@@ -158,12 +158,20 @@ func (f *Fetch) GetMaliciousIDs(ctx context.Context, peers []p2p.Peer, okCB func
 
 // GetLayerData get layer data from peers.
 func (f *Fetch) GetLayerData(ctx context.Context, peers []p2p.Peer, lid types.LayerID, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
-	return poll(ctx, f.servers[lyrDataProtocol], peers, lid.Bytes(), okCB, errCB)
+	lidBytes, err := codec.Encode(&lid)
+	if err != nil {
+		return err
+	}
+	return poll(ctx, f.servers[lyrDataProtocol], peers, lidBytes, okCB, errCB)
 }
 
 // GetLayerOpinions get opinions on data in the specified layer from peers.
 func (f *Fetch) GetLayerOpinions(ctx context.Context, peers []p2p.Peer, lid types.LayerID, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
-	return poll(ctx, f.servers[lyrOpnsProtocol], peers, lid.Bytes(), okCB, errCB)
+	lidBytes, err := codec.Encode(&lid)
+	if err != nil {
+		return err
+	}
+	return poll(ctx, f.servers[lyrOpnsProtocol], peers, lidBytes, okCB, errCB)
 }
 
 func poll(ctx context.Context, srv requester, peers []p2p.Peer, req []byte, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
@@ -200,7 +208,11 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 		defer close(done)
 		done <- perr
 	}
-	if err := f.servers[atxProtocol].Request(ctx, peer, epoch.Bytes(), okCB, errCB); err != nil {
+	epochBytes, err := codec.Encode(epoch)
+	if err != nil {
+		return nil, err
+	}
+	if err := f.servers[atxProtocol].Request(ctx, peer, epochBytes, okCB, errCB); err != nil {
 		return nil, err
 	}
 	select {
