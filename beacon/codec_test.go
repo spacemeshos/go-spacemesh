@@ -4,38 +4,36 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
 func Test_codec(t *testing.T) {
-	firstRound := [][]byte{
-		util.Hex2Bytes("11"),
-		util.Hex2Bytes("22"),
-		util.Hex2Bytes("33"),
-		util.Hex2Bytes("44"),
-		util.Hex2Bytes("55"),
-		util.Hex2Bytes("66"),
-		util.Hex2Bytes("77"),
-		util.Hex2Bytes("88"),
-		util.Hex2Bytes("99"),
-		util.Hex2Bytes("00"),
+	firstRound := []Proposal{
+		{Value: []byte{0x11}},
+		{Value: []byte{0x22}},
+		{Value: []byte{0x33}},
+		{Value: []byte{0x44}},
+		{Value: []byte{0x55}},
+		{Value: []byte{0x66}},
+		{Value: []byte{0x77}},
+		{Value: []byte{0x88}},
+		{Value: []byte{0x99}},
+		{Value: []byte{0x00}},
 	}
 
 	currentRound := allVotes{
 		support: proposalSet{
-			string(util.Hex2Bytes("11")): {},
-			string(util.Hex2Bytes("33")): {},
-			string(util.Hex2Bytes("55")): {},
-			string(util.Hex2Bytes("77")): {},
-			string(util.Hex2Bytes("99")): {},
+			string([]byte{0x11}): {},
+			string([]byte{0x33}): {},
+			string([]byte{0x55}): {},
+			string([]byte{0x77}): {},
+			string([]byte{0x99}): {},
 		},
 		against: proposalSet{
-			string(util.Hex2Bytes("22")): {},
-			string(util.Hex2Bytes("44")): {},
-			string(util.Hex2Bytes("66")): {},
-			string(util.Hex2Bytes("88")): {},
-			string(util.Hex2Bytes("00")): {},
+			string([]byte{0x22}): {},
+			string([]byte{0x44}): {},
+			string([]byte{0x66}): {},
+			string([]byte{0x88}): {},
+			string([]byte{0x00}): {},
 		},
 	}
 
@@ -49,33 +47,33 @@ func Test_codec(t *testing.T) {
 }
 
 func Test_codec_lessThanActualSize(t *testing.T) {
-	firstRound := [][]byte{
-		util.Hex2Bytes("11"),
-		util.Hex2Bytes("22"),
-		util.Hex2Bytes("33"),
-		util.Hex2Bytes("44"),
-		util.Hex2Bytes("55"),
-		util.Hex2Bytes("66"),
-		util.Hex2Bytes("77"),
-		util.Hex2Bytes("88"),
-		util.Hex2Bytes("99"),
-		util.Hex2Bytes("00"),
+	firstRound := []Proposal{
+		{Value: []byte{0x11}},
+		{Value: []byte{0x22}},
+		{Value: []byte{0x33}},
+		{Value: []byte{0x44}},
+		{Value: []byte{0x55}},
+		{Value: []byte{0x66}},
+		{Value: []byte{0x77}},
+		{Value: []byte{0x88}},
+		{Value: []byte{0x99}},
+		{Value: []byte{0x00}},
 	}
 
 	currentRound := allVotes{
 		support: proposalSet{
-			string(util.Hex2Bytes("11")): {},
-			string(util.Hex2Bytes("22")): {},
-			string(util.Hex2Bytes("33")): {},
-			string(util.Hex2Bytes("44")): {},
-			string(util.Hex2Bytes("55")): {},
-			string(util.Hex2Bytes("66")): {},
-			string(util.Hex2Bytes("77")): {},
-			string(util.Hex2Bytes("88")): {},
+			string([]byte{0x11}): {},
+			string([]byte{0x22}): {},
+			string([]byte{0x33}): {},
+			string([]byte{0x44}): {},
+			string([]byte{0x55}): {},
+			string([]byte{0x66}): {},
+			string([]byte{0x77}): {},
+			string([]byte{0x88}): {},
 		},
 		against: proposalSet{
-			string(util.Hex2Bytes("99")): {},
-			string(util.Hex2Bytes("00")): {},
+			string([]byte{0x99}): {},
+			string([]byte{0x00}): {},
 		},
 	}
 

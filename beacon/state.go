@@ -68,7 +68,7 @@ func (s *state) addPotentiallyValidProposal(proposal []byte) {
 	s.votesMargin[string(proposal)] = new(big.Int)
 }
 
-func (s *state) setMinerFirstRoundVote(minerPK *signing.PublicKey, voteList [][]byte) {
+func (s *state) setMinerFirstRoundVote(minerPK *signing.PublicKey, voteList []Proposal) {
 	s.firstRoundIncomingVotes[string(minerPK.Bytes())] = voteList
 }
 

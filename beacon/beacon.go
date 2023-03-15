@@ -720,7 +720,7 @@ func calcBeacon(logger log.Log, set proposalSet) types.Beacon {
 	allProposals := set.sort()
 	allHexes := make([]string, len(allProposals))
 	for i, h := range allProposals {
-		allHexes[i] = hex.EncodeToString(h)
+		allHexes[i] = hex.EncodeToString(h.Value)
 	}
 	// Beacon should appear to have the same entropy as the initial proposals, hence cropping it
 	// to the same size as the proposal
@@ -941,7 +941,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 	return nil
 }
 
-func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, minerPK *signing.PublicKey) ([][]byte, error) {
+func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, minerPK *signing.PublicKey) (proposalList, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 

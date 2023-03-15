@@ -320,11 +320,11 @@ func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, minerPK *signing
 	}
 
 	for _, proposal := range m.ValidProposals {
-		pd.states[m.EpochID].addVote(string(proposal), up, voteWeight)
+		pd.states[m.EpochID].addVote(string(proposal.Value), up, voteWeight)
 	}
 
 	for _, proposal := range m.PotentiallyValidProposals {
-		pd.states[m.EpochID].addVote(string(proposal), down, voteWeight)
+		pd.states[m.EpochID].addVote(string(proposal.Value), down, voteWeight)
 	}
 
 	// this is used for bit vector calculation

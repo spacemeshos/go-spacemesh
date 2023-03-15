@@ -20,11 +20,15 @@ type ProposalMessage struct {
 	VRFSignature []byte `scale:"max=32"`
 }
 
+type Proposal struct {
+	Value []byte `scale:"max=32"` // TODO(mafa): check if max. value is correct
+}
+
 // FirstVotingMessageBody is FirstVotingMessage without a signature.
 type FirstVotingMessageBody struct {
 	EpochID                   types.EpochID
-	ValidProposals            [][]byte
-	PotentiallyValidProposals [][]byte
+	ValidProposals            []Proposal `scale:"max=32"` // TODO(mafa): check if max. value is correct
+	PotentiallyValidProposals []Proposal `scale:"max=32"` // TODO(mafa): check if max. value is correct
 }
 
 // FirstVotingMessage is a message type which is used when sending first voting messages.
@@ -37,7 +41,7 @@ type FirstVotingMessage struct {
 type FollowingVotingMessageBody struct {
 	EpochID        types.EpochID
 	RoundID        types.RoundID
-	VotesBitVector []byte
+	VotesBitVector []byte `scale:"max=32"` // TODO(mafa): check if max. value is correct
 }
 
 // FollowingVotingMessage is a message type which is used when sending following voting messages.
