@@ -423,7 +423,7 @@ func (p *PoetProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 		return nil
 	}
 	encoder.AddUint64("LeafCount", p.LeafCount)
-	encoder.AddArray("Indicies", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+	encoder.AddArray("Indices", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 		for _, member := range p.Members {
 			encoder.AppendString(hex.EncodeToString(member))
 		}
@@ -433,13 +433,13 @@ func (p *PoetProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("MerkleProof.Root", hex.EncodeToString(p.Root))
 	encoder.AddArray("MerkleProof.ProvenLeaves", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 		for _, v := range p.ProvenLeaves {
-			encoder.AppendString(hex.EncodeToString(v))
+			encoder.AppendString(hex.EncodeToString(v.Value))
 		}
 		return nil
 	}))
 	encoder.AddArray("MerkleProof.ProofNodes", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 		for _, v := range p.ProofNodes {
-			encoder.AppendString(hex.EncodeToString(v))
+			encoder.AppendString(hex.EncodeToString(v.Value))
 		}
 		return nil
 	}))
