@@ -153,7 +153,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 			logger.With().Debug(
 				"broker received a message to a consensus process that is not registered",
 				msgLayer.Field(),
-				log.Stringer("msg_type", hareMsg.InnerMsg.Type),
+				log.Uint32("round", hareMsg.Round),
 			)
 
 			// We consider messages for the next layer to be early and we process
@@ -166,10 +166,10 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 			} else {
 				// This error is never inspected except to determine if it is not nil.
 				return fmt.Errorf(
-					"ignoring message to unregistered consensus process, latestLayer: %v, messageLayer: %v, messageType: %v",
+					"ignoring message to unregistered consensus process, latestLayer: %v, messageLayer: %v, round: %v",
 					b.latestLayer,
 					msgLayer.Uint32(),
-					hareMsg.InnerMsg.Type,
+					hareMsg.Round,
 				)
 			}
 		}
