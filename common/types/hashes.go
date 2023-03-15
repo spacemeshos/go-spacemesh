@@ -79,12 +79,7 @@ func (h *Hash20) UnmarshalJSON(input []byte) error {
 
 // MarshalText returns the hex representation of h.
 func (h Hash20) MarshalText() ([]byte, error) {
-	data, err := util.Bytes(h[:]).MarshalText()
-	if err != nil {
-		return data, fmt.Errorf("marshal text: %w", err)
-	}
-
-	return data, nil
+	return util.Bytes(h[:]).MarshalText()
 }
 
 // SetBytes sets the hash to the value of b.
@@ -245,12 +240,7 @@ func (h *Hash32) UnmarshalJSON(input []byte) error {
 
 // MarshalText returns the hex representation of h.
 func (h Hash32) MarshalText() ([]byte, error) {
-	data, err := util.Bytes(h[:]).MarshalText()
-	if err != nil {
-		return data, fmt.Errorf("marshal text: %w", err)
-	}
-
-	return data, nil
+	return util.Bytes(h[:]).MarshalText()
 }
 
 // SetBytes sets the hash to the value of b.

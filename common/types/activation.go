@@ -23,8 +23,24 @@ import (
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
 type EpochID uint32
 
-// ToBytes returns a byte-slice representation of the EpochID, using little endian encoding.
-func (l EpochID) ToBytes() []byte { return util.Uint32ToBytes(uint32(l)) }
+// EncodeScale implements scale codec interface.
+func (l EpochID) EncodeScale(e *scale.Encoder) (int, error) {
+	n, err := scale.EncodeCompact32(e, uint32(l))
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// DecodeScale implements scale codec interface.
+func (l *EpochID) DecodeScale(d *scale.Decoder) (int, error) {
+	value, n, err := scale.DecodeCompact32(d)
+	if err != nil {
+		return 0, err
+	}
+	*l = EpochID(value)
+	return n, nil
+}
 
 // IsGenesis returns true if this epoch is in genesis. The first two epochs are considered genesis epochs.
 func (l EpochID) IsGenesis() bool {

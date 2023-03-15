@@ -6,7 +6,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -57,7 +56,8 @@ func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ []byte) ([]byte, 
 
 // handleEpochInfoReq returns the ATXs published in the specified epoch.
 func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, error) {
-	epoch := types.EpochID(util.BytesToUint32(msg))
+	var epoch types.EpochID
+	codec.Decode(msg, &epoch)
 	atxids, err := atxs.GetIDsByEpoch(h.cdb, epoch)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Warning("failed to get epoch atx IDs", epoch, log.Err(err))
@@ -79,18 +79,21 @@ func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, e
 // handleLayerDataReq returns all data in a layer, described in LayerData.
 func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, error) {
 	var (
-		lyrID = types.BytesToLayerID(req)
-		ld    LayerData
-		err   error
+		lid types.LayerID
+		ld  LayerData
+		err error
 	)
-	ld.Ballots, err = ballots.IDsInLayer(h.cdb, lyrID)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Warning("failed to get layer ballots", lyrID, log.Err(err))
+	if err := codec.Decode(req, &lid); err != nil {
 		return nil, err
 	}
-	ld.Blocks, err = blocks.IDsInLayer(h.cdb, lyrID)
+	ld.Ballots, err = ballots.IDsInLayer(h.cdb, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Warning("failed to get layer blocks", lyrID, log.Err(err))
+		h.logger.WithContext(ctx).With().Warning("failed to get layer ballots", lid, log.Err(err))
+		return nil, err
+	}
+	ld.Blocks, err = blocks.IDsInLayer(h.cdb, lid)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		h.logger.WithContext(ctx).With().Warning("failed to get layer blocks", lid, log.Err(err))
 		return nil, err
 	}
 
@@ -104,12 +107,14 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 // handleLayerOpinionsReq returns the opinions on data in the specified layer, described in LayerOpinion.
 func (h *handler) handleLayerOpinionsReq(ctx context.Context, req []byte) ([]byte, error) {
 	var (
-		lid = types.BytesToLayerID(req)
+		lid types.LayerID
 		lo  LayerOpinion
 		out []byte
 		err error
 	)
-
+	if err := codec.Decode(req, &lid); err != nil {
+		return nil, err
+	}
 	lo.PrevAggHash, err = layers.GetAggregatedHash(h.cdb, lid.Sub(1))
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get prev agg hash", lid, log.Err(err))

@@ -6,6 +6,8 @@ import (
 	"encoding/binary"
 	"sync"
 
+	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -167,7 +169,8 @@ func hashLayerAndRound(logger log.Log, instanceID types.LayerID, round uint32) t
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, round)
 	h := hash.New()
-	_, err := h.Write(instanceID.Bytes())
+	enc := scale.NewEncoder(h)
+	_, err := instanceID.EncodeScale(enc)
 	_, err2 := h.Write(kInBytes)
 
 	if err != nil || err2 != nil {
