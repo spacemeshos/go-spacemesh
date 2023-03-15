@@ -37,7 +37,7 @@ func (hg *HareEligibilityGossip) MarshalLogObject(encoder log.ObjectEncoder) err
 // allow non-interactive eligibility validation for hare round participation.
 type HareEligibility struct {
 	// VRF signature of EligibilityType, beacon, layer, round
-	Proof []byte
+	Proof []byte `scale:"max=32"`
 	// the eligibility count for this layer, round
 	Count uint16
 }

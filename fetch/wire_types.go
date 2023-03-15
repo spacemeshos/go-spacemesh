@@ -11,7 +11,7 @@ import (
 
 // RequestMessage is sent to the peer for hash query.
 type RequestMessage struct {
-	Hint datastore.Hint
+	Hint datastore.Hint `scale:"max=256"`
 	Hash types.Hash32
 }
 
@@ -24,14 +24,14 @@ type ResponseMessage struct {
 // RequestBatch is a batch of requests and a hash of all requests as ID.
 type RequestBatch struct {
 	ID       types.Hash32
-	Requests []RequestMessage
+	Requests []RequestMessage `scale:"max=32"`
 }
 
 // ResponseBatch is the response struct send for a RequestBatch. the ResponseBatch ID must be the same
 // as stated in RequestBatch even if not all Data is present.
 type ResponseBatch struct {
 	ID        types.Hash32
-	Responses []ResponseMessage
+	Responses []ResponseMessage `scale:"max=32"`
 }
 
 type MeshHashRequest struct {

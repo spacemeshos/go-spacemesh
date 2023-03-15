@@ -121,7 +121,7 @@ func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) (types.PoetServiceID
 	if c.poetServiceID != nil {
 		return c.poetServiceID, nil
 	}
-	resBody := rpcapi.GetInfoResponse{}
+	resBody := rpcapi.InfoResponse{}
 
 	if err := c.req(ctx, http.MethodGet, "/v1/info", nil, &resBody); err != nil {
 		return nil, fmt.Errorf("getting poet ID: %w", err)
@@ -133,17 +133,32 @@ func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) (types.PoetServiceID
 
 // Proof implements PoetProvingServiceClient.
 func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, error) {
-	resBody := rpcapi.GetProofResponse{}
+	resBody := rpcapi.ProofResponse{}
 	if err := c.req(ctx, http.MethodGet, fmt.Sprintf("/v1/proofs/%s", roundID), nil, &resBody); err != nil {
 		return nil, fmt.Errorf("getting proof: %w", err)
+	}
+
+	p := resBody.Proof.GetProof()
+	root := p.GetRoot()
+	leaves := make([]shared.Leaf, 0, len(p.ProvenLeaves))
+	for _, l := range p.ProvenLeaves {
+		leaves = append(leaves, shared.Leaf{
+			Value: l,
+		})
+	}
+	nodes := make([]shared.Node, 0, len(p.ProofNodes))
+	for _, n := range p.ProofNodes {
+		nodes = append(nodes, shared.Node{
+			Value: n,
+		})
 	}
 
 	proof := types.PoetProofMessage{
 		PoetProof: types.PoetProof{
 			MerkleProof: shared.MerkleProof{
-				Root:         resBody.Proof.GetProof().GetRoot(),
-				ProvenLeaves: resBody.Proof.GetProof().GetProvenLeaves(),
-				ProofNodes:   resBody.Proof.GetProof().GetProofNodes(),
+				Root:         root,
+				ProvenLeaves: leaves,
+				ProofNodes:   nodes,
 			},
 			Members:   resBody.Proof.GetMembers(),
 			LeafCount: resBody.Proof.GetLeaves(),
