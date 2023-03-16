@@ -98,7 +98,7 @@ jobs:
         run: make -C systest push
 
       - name: set up go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
 
