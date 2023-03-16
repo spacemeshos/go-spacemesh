@@ -184,11 +184,6 @@ func (*Validator) InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs 
 			return fmt.Errorf("challenge publayer (%v) must be after commitment atx publayer (%v)", challenge.PubLayerID, commitmentAtx.PubLayerID)
 		}
 	}
-
-	if *challenge.CommitmentATX == goldenATXID && !challenge.PublishEpoch().IsGenesis() {
-		return fmt.Errorf("golden atx used for commitment atx in epoch %d, but is only valid in epoch 1", challenge.PublishEpoch())
-	}
-
 	return nil
 }
 
