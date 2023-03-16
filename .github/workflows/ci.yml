@@ -61,17 +61,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: fmt, tidy, generate
         run: |
           make install
@@ -91,17 +83,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
         run: make install
       - name: lint
@@ -119,18 +103,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-build-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-build-
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
         run: make install
       - name: build
@@ -160,18 +135,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-unittests-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-unittests-
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
         run: make install
       - name: Clear test cache
@@ -220,18 +186,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-unittests-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-unittests-
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
         run: make install
       - name: Clear test cache
