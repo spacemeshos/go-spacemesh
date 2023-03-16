@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -195,6 +196,10 @@ func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 	err = vip.ReadInConfig()
 
 	if err != nil {
+		var marshalError viper.ConfigMarshalError
+		if errors.As(err, &marshalError) {
+			log.Panic("failed to parse config from %v. error %v", fileLocation, err)
+		}
 		if fileLocation != defaultConfigFileName {
 			log.Warning("failed loading config from %v trying %v. error %v", fileLocation, defaultConfigFileName, err)
 			vip.SetConfigFile(defaultConfigFileName)
