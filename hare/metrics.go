@@ -99,5 +99,9 @@ func (m messageDelayTracker) trackDelay(t MessageType, clock RoundClock) {
 	}
 	seconds := time.Since(clock.RoundEnd(t.round() - 1)).Seconds()
 	metric := subMap[seconds >= 0]
+	// If the observation is negative make it positive.
+	if seconds < 0 {
+		seconds -= seconds
+	}
 	metric.Observe(float64(seconds))
 }
