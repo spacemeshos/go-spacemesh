@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -74,5 +75,5 @@ func reportLatency(t MessageType, round uint32, clock RoundClock) {
 		// If the observation is negative make it positive.
 		seconds = -seconds
 	}
-	hareLatency.WithLabelValues(t.String(), sign).Observe(seconds)
+	hareLatency.WithLabelValues(strings.ToLower(t.String()), sign).Observe(seconds)
 }
