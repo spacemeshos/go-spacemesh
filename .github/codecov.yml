@@ -12,3 +12,5 @@ coverage:
 
 ignore:
   - "cmd"
+  - "*_scale.go"
+  - "*mock*.go"
