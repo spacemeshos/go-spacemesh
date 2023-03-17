@@ -213,9 +213,6 @@ type consensusProcess struct {
 	eligibilityCount uint16
 	clock            RoundClock
 	once             sync.Once
-	// layerTime is used to calculate the difference between expected message
-	// arrival times and actual message arrival times
-	layerTime time.Time
 }
 
 // newConsensusProcess creates a new consensus process instance.
@@ -235,7 +232,6 @@ func newConsensusProcess(
 	ev roleValidator,
 	clock RoundClock,
 	logger log.Log,
-	layerTime time.Time,
 ) *consensusProcess {
 	proc := &consensusProcess{
 		State: State{
@@ -256,7 +252,6 @@ func newConsensusProcess(
 		mTracker:  newMsgsTracker(),
 		eTracker:  NewEligibilityTracker(cfg.N),
 		clock:     clock,
-		layerTime: layerTime,
 	}
 	proc.ctx, proc.cancel = context.WithCancel(ctx)
 	proc.preRoundTracker = newPreRoundTracker(logger.WithContext(proc.ctx).WithFields(proc.layer), comm.mchOut, proc.eTracker, cfg.N/2+1, cfg.N)

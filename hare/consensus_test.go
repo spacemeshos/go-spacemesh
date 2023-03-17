@@ -211,7 +211,6 @@ func createConsensusProcess(
 		truer{},
 		newRoundClockFromCfg(logtest.New(tb), cfg),
 		logtest.New(tb).WithName(sig.PublicKey().ShortString()),
-		time.Now(),
 	)
 	return &testCP{cp: proc, broker: broker.Broker, mch: mch}
 }
