@@ -2,7 +2,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -19,7 +18,6 @@ import (
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
@@ -187,30 +185,20 @@ func defaultTestConfig() BaseConfig {
 }
 
 // LoadConfig load the config file.
-func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
-	if fileLocation == "" {
-		fileLocation = defaultConfigFileName
+func LoadConfig(config string, vip *viper.Viper) error {
+	if config == defaultConfigFileName || config == "" {
+		if _, err := os.Stat(defaultConfigFileName); err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		config = defaultConfigFileName
 	}
-
-	vip.SetConfigFile(fileLocation)
-	err = vip.ReadInConfig()
-
-	if err != nil {
-		var marshalError viper.ConfigMarshalError
-		if errors.As(err, &marshalError) {
-			log.Panic("failed to parse config from %v. error %v", fileLocation, err)
-		}
-		if fileLocation != defaultConfigFileName {
-			log.Warning("failed loading config from %v trying %v. error %v", fileLocation, defaultConfigFileName, err)
-			vip.SetConfigFile(defaultConfigFileName)
-			err = vip.ReadInConfig()
-		}
-		// we change err so check again
-		if err != nil {
-			return fmt.Errorf("failed to read config file %v", err)
-		}
+	vip.SetConfigFile(config)
+	if err := vip.ReadInConfig(); err != nil {
+		return fmt.Errorf("can't load config at %s: %w", config, err)
 	}
-
 	return nil
 }
 
