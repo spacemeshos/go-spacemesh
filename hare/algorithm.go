@@ -503,7 +503,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.Int("num_values", len(m.InnerMsg.Values)))
 
-	msgDelayTracker.trackDelay(m.InnerMsg.Type, proc.clock)
+	reportLatency(m.InnerMsg.Type, m.Round, proc.clock)
 	switch m.InnerMsg.Type {
 	case pre:
 		proc.processPreRoundMsg(ctx, m)
