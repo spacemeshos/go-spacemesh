@@ -72,7 +72,7 @@ func reportLatency(t MessageType, round uint32, clock RoundClock) {
 	if seconds < 0 {
 		sign = "neg"
 		// If the observation is negative make it positive.
-		seconds -= seconds
+		seconds = -seconds
 	}
 	hareLatency.WithLabelValues(t.String(), sign).Observe(seconds)
 }
