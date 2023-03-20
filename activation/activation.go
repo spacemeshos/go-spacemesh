@@ -68,10 +68,6 @@ type Builder struct {
 	initialPost       *types.Post
 	initialPostMeta   *types.PostMetadata
 
-	// commitmentAtx caches the ATX ID used for the PoST commitment by this node. It is set / fetched
-	// from the DB by calling `getCommitmentAtx()` and cAtxMutex protects its access.
-	commitmentAtx *types.ATXID
-
 	// smeshingMutex protects `StartSmeshing` and `StopSmeshing` from concurrent access
 	smeshingMutex sync.Mutex
 

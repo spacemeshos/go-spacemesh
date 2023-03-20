@@ -137,7 +137,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		Indices: make([]byte, 10),
 	}
 	b.initialPostMeta = &types.PostMetadata{}
-	b.commitmentAtx = &tab.goldenATXID
 	tab.Builder = b
 	return tab
 }
