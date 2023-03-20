@@ -37,7 +37,7 @@ func (hg *HareEligibilityGossip) MarshalLogObject(encoder log.ObjectEncoder) err
 // allow non-interactive eligibility validation for hare round participation.
 type HareEligibility struct {
 	// VRF signature of EligibilityType, beacon, layer, round
-	Proof []byte `scale:"max=32"`
+	Proof []byte `scale:"max=80"`
 	// the eligibility count for this layer, round
 	Count uint16
 }
@@ -57,7 +57,7 @@ type VotingEligibility struct {
 	// eligibility proof of the 3rd ballot/proposal in the epoch.
 	J uint32
 	// the VRF signature of some epoch specific data and J. one can derive a Ballot's layerID from this signature.
-	Sig []byte `scale:"max=64"`
+	Sig []byte `scale:"max=80"`
 }
 
 // MarshalLogObject implements logging interface.

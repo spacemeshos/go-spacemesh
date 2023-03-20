@@ -60,7 +60,7 @@ type FirstVotingMessage struct {
 type FollowingVotingMessageBody struct {
 	EpochID        types.EpochID
 	RoundID        types.RoundID
-	VotesBitVector []byte `scale:"max=32"` // TODO(mafa): check if max. value is correct
+	VotesBitVector []byte `scale:"max=16"`
 }
 
 // FollowingVotingMessage is a message type which is used when sending following voting messages.

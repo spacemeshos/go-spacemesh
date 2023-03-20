@@ -35,16 +35,16 @@ func (id *BallotID) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, id[:])
 }
 
-// Ballot contains the smesher's signed vote on the mesh history.
+// Ballot contains the smeshers signed vote on the mesh history.
 type Ballot struct {
 	// BallotMetadata is the signed part of the ballot.
 	BallotMetadata
 	InnerBallot
-	// smesher's signature on InnerBallot
+	// smeshers signature on InnerBallot
 	Signature []byte `scale:"max=64"`
 	// Votes field is not signed.
 	Votes Votes `scale:"max=100"` // TODO(mafa): check if this is the right max size
-	// the proof of the smesher's eligibility to vote and propose block content in this epoch.
+	// the proof of the smeshers eligibility to vote and propose block content in this epoch.
 	// Eligibilities must be produced in the ascending order.
 	EligibilityProofs []VotingEligibility `scale:"max=800"` // TODO(mafa): check if this is the right max size
 
@@ -70,10 +70,10 @@ func (m *BallotMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// InnerBallot contains all info about a smesher's votes on the mesh history. this structure is
+// InnerBallot contains all info about a smeshers votes on the mesh history. this structure is
 // serialized and signed to produce the signature in Ballot.
 type InnerBallot struct {
-	// the smesher's ATX in the epoch this ballot is cast.
+	// the smeshers ATX in the epoch this ballot is cast.
 	AtxID ATXID
 	// OpinionHash is a aggregated opinion on all previous layers.
 	// It is included into transferred data explicitly, so that signature

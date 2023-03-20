@@ -109,20 +109,12 @@ func checkProposals(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, expec
 
 func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID, valid []Proposal, pValid []Proposal, corruptSignature bool) *FirstVotingMessage {
 	logger := logtest.New(t)
-	validProp := make([]Proposal, 0, len(valid))
-	for _, v := range valid {
-		validProp = append(validProp, v)
-	}
-	pValidProp := make([]Proposal, 0, len(pValid))
-	for _, v := range pValid {
-		pValidProp = append(pValidProp, v)
-	}
 
 	msg := &FirstVotingMessage{
 		FirstVotingMessageBody: FirstVotingMessageBody{
 			EpochID:                   epoch,
-			ValidProposals:            validProp,
-			PotentiallyValidProposals: pValidProp,
+			ValidProposals:            valid,
+			PotentiallyValidProposals: pValid,
 		},
 	}
 	encoded, err := codec.Encode(&msg.FirstVotingMessageBody)
@@ -777,15 +769,8 @@ func Test_HandleFirstVotes_Success(t *testing.T) {
 	res := tpd.HandleFirstVotes(context.Background(), "peerID", msgBytes)
 	require.Equal(t, pubsub.ValidationAccept, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, true)
-	proposals := make([]Proposal, 0, len(validVotes)+len(pValidVotes))
-	for _, v := range validVotes {
-		proposals = append(proposals, v)
-	}
-	for _, v := range pValidVotes {
-		proposals = append(proposals, v)
-	}
 	expected := map[string]proposalList{
-		string(signer.PublicKey().Bytes()): proposals,
+		string(signer.PublicKey().Bytes()): append(validVotes, pValidVotes...),
 	}
 	checkFirstIncomingVotes(t, tpd.ProtocolDriver, epoch, expected)
 }
@@ -986,20 +971,13 @@ func Test_HandleFirstVotes_AlreadyVoted(t *testing.T) {
 	got := tpd.handleFirstVotes(context.Background(), "peerID", msgBytes)
 	require.NoError(t, got)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, true)
-	proposals := make([]Proposal, 0, len(validVotes)+len(pValidVotes))
-	for _, v := range validVotes {
-		proposals = append(proposals, v)
-	}
-	for _, v := range pValidVotes {
-		proposals = append(proposals, v)
-	}
 	expected := map[string]proposalList{
-		string(signer.PublicKey().Bytes()): proposals,
+		string(signer.PublicKey().Bytes()): append(validVotes, pValidVotes...),
 	}
 	checkFirstIncomingVotes(t, tpd.ProtocolDriver, epoch, expected)
 
 	// the same ed key will not cause double-vote
-	msg2 := createFirstVote(t, signer, epoch, validVotes, []Proposal{}, false)
+	msg2 := createFirstVote(t, signer, epoch, validVotes, proposalList{}, false)
 	msgBytes2, err := codec.Encode(msg2)
 	require.NoError(t, err)
 
