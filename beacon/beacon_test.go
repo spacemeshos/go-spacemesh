@@ -1019,13 +1019,13 @@ func TestBeacon_signAndExtractED(t *testing.T) {
 
 func TestBeacon_calcBeacon(t *testing.T) {
 	set := proposalSet{
-		"0x1": {},
-		"0x2": {},
-		"0x4": {},
-		"0x5": {},
+		(Proposal{0x01}).String(): {},
+		(Proposal{0x02}).String(): {},
+		(Proposal{0x04}).String(): {},
+		(Proposal{0x05}).String(): {},
 	}
 
 	beacon := calcBeacon(logtest.New(t), set)
-	expected := types.HexToBeacon("0x98f88210")
+	expected := types.HexToBeacon("0xe69fd154")
 	require.EqualValues(t, expected, beacon)
 }

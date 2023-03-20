@@ -22,18 +22,18 @@ func Test_codec(t *testing.T) {
 
 	currentRound := allVotes{
 		support: proposalSet{
-			string([]byte{0x11}): {},
-			string([]byte{0x33}): {},
-			string([]byte{0x55}): {},
-			string([]byte{0x77}): {},
-			string([]byte{0x99}): {},
+			firstRound[0].String(): {},
+			firstRound[2].String(): {},
+			firstRound[4].String(): {},
+			firstRound[6].String(): {},
+			firstRound[8].String(): {},
 		},
 		against: proposalSet{
-			string([]byte{0x22}): {},
-			string([]byte{0x44}): {},
-			string([]byte{0x66}): {},
-			string([]byte{0x88}): {},
-			string([]byte{0x00}): {},
+			firstRound[1].String(): {},
+			firstRound[3].String(): {},
+			firstRound[5].String(): {},
+			firstRound[7].String(): {},
+			firstRound[9].String(): {},
 		},
 	}
 
@@ -62,18 +62,18 @@ func Test_codec_lessThanActualSize(t *testing.T) {
 
 	currentRound := allVotes{
 		support: proposalSet{
-			string([]byte{0x11}): {},
-			string([]byte{0x22}): {},
-			string([]byte{0x33}): {},
-			string([]byte{0x44}): {},
-			string([]byte{0x55}): {},
-			string([]byte{0x66}): {},
-			string([]byte{0x77}): {},
-			string([]byte{0x88}): {},
+			firstRound[0].String(): {},
+			firstRound[1].String(): {},
+			firstRound[2].String(): {},
+			firstRound[3].String(): {},
+			firstRound[4].String(): {},
+			firstRound[5].String(): {},
+			firstRound[6].String(): {},
+			firstRound[7].String(): {},
 		},
 		against: proposalSet{
-			string([]byte{0x99}): {},
-			string([]byte{0x00}): {},
+			firstRound[8].String(): {},
+			firstRound[9].String(): {},
 		},
 	}
 

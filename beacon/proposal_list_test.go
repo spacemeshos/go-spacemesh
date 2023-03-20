@@ -54,7 +54,7 @@ func Test_proposalList_hash(t *testing.T) {
 		{
 			name:     "Case 1",
 			hashes:   proposalList{[4]byte{0x01}, [4]byte{0x02}, [4]byte{0x03}},
-			expected: types.HexToHash32("0x8f2bf1c17336bff6a6ceebfae7a289a77ce447e4e4e0b6f1cf4a19cdd3de2749"),
+			expected: types.HexToHash32("0xdf07f4904a7ccb203dc935dae7baf4a4c1f0ab9279a863a69109be74f26032ef"),
 		},
 		{
 			name: "Case 2",
@@ -64,7 +64,7 @@ func Test_proposalList_hash(t *testing.T) {
 				[4]byte{0x04},
 				[4]byte{0x05},
 			},
-			expected: types.HexToHash32("0x98f88210b68dd555d34b942072e5d3257bc0abeb6481c67fb96ffe78f479a3aa"),
+			expected: types.HexToHash32("0xe69fd154a11dc1cc3ec2036780c9b9ac36e5c4d781ab5972141a84f9acaaa4b5"),
 		},
 	}
 

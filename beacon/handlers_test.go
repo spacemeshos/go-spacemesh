@@ -1270,7 +1270,7 @@ func Test_handleFollowingVotes_IgnoreUnknownProposal(t *testing.T) {
 		copy(p[:], types.RandomBytes(types.BeaconSize))
 	}
 
-	unknown := make([]Proposal, 3)
+	unknown := make([]Proposal, 2)
 	for _, p := range known {
 		copy(p[:], types.RandomBytes(types.BeaconSize))
 	}
