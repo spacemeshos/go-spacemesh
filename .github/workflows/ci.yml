@@ -209,6 +209,29 @@ jobs:
           annotate_only: true
           fail_on_failure: ${{ matrix.allow-failure == 'false' }}
 
+  coverage:
+    runs-on: ubuntu-latest
+    needs: filter-changes
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    steps:
+      - name: disable TCP/UDP offload
+        run: |
+          sudo ethtool -K eth0 tx off
+          sudo ethtool -K eth0 rx off
+      - uses: actions/checkout@v3
+      - name: set up go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.go-version }}
+      - name: setup env
+        run: make install
+      - name: test coverage
+        run: make cover
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v3
+        with:
+          fail_ci_if_error: true
+
   ci-status:
     # run regardless of status of previous jobs but skip if the required secret is not accessible
     if: always()
