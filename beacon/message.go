@@ -17,7 +17,7 @@ type ProposalVrfMessage struct {
 type ProposalMessage struct {
 	EpochID      types.EpochID
 	NodeID       types.NodeID
-	VRFSignature []byte `scale:"max=64"`
+	VRFSignature []byte `scale:"max=80"`
 }
 
 type Proposal struct {
