@@ -3,9 +3,8 @@ package bootstrap
 //go:generate scalegen -types InnerData,EpochData
 
 type Update struct {
-	Version   string    `json:"version"`
-	Signature string    `json:"signature"`
-	Data      InnerData `json:"data"`
+	Version string    `json:"version"`
+	Data    InnerData `json:"data"`
 }
 
 type InnerData struct {

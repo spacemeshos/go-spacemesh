@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -20,7 +19,6 @@ import (
 	"github.com/spf13/afero"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -35,10 +33,9 @@ const (
 )
 
 var (
-	ErrEpochOutOfOrder  = errors.New("epoch out of order")
-	ErrWrongVersion     = errors.New("wrong schema version")
-	ErrInvalidSignature = errors.New("invalid signature")
-	ErrInvalidBeacon    = errors.New("invalid beacon")
+	ErrEpochOutOfOrder = errors.New("epoch out of order")
+	ErrWrongVersion    = errors.New("wrong schema version")
+	ErrInvalidBeacon   = errors.New("invalid beacon")
 )
 
 type realClient struct{}
@@ -62,9 +59,8 @@ func (realClient) Query(ctx context.Context, resource *url.URL) ([]byte, error) 
 }
 
 type Config struct {
-	URI             string `mapstructure:"bootstrap-uri"`
-	Version         string `mapstructure:"bootstrap-version"`
-	SpacemeshPubKey string `mapstructure:"spacemesh-pubkey"`
+	URI     string `mapstructure:"bootstrap-uri"`
+	Version string `mapstructure:"bootstrap-version"`
 
 	DataDir   string
 	Interval  time.Duration
@@ -99,12 +95,11 @@ func (vd *VerifiedUpdate) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 func DefaultConfig() Config {
 	return Config{
-		URI:             DefaultURI,
-		Version:         "https://spacemesh.io/bootstrap.schema.json.1.0",
-		SpacemeshPubKey: "673d90abfb1fa8396d1fdb5d54bd470ab0ead5fb8e59f7789897d3e5715b9612",
-		DataDir:         os.TempDir(),
-		Interval:        30 * time.Second,
-		NumToKeep:       10,
+		URI:       DefaultURI,
+		Version:   "https://spacemesh.io/bootstrap.schema.json.1.0",
+		DataDir:   os.TempDir(),
+		Interval:  30 * time.Second,
+		NumToKeep: 10,
 	}
 }
 
@@ -305,21 +300,6 @@ func validateData(cfg Config, update *Update, lastUpdateID uint32) (*VerifiedUpd
 	}
 	if update.Data.ID <= lastUpdateID {
 		return nil, nil
-	}
-	pubkey, err := hex.DecodeString(cfg.SpacemeshPubKey)
-	if err != nil {
-		return nil, fmt.Errorf("decode pubkey: %w", err)
-	}
-	signature, err := hex.DecodeString(update.Signature)
-	if err != nil {
-		return nil, fmt.Errorf("decode signature: %w", err)
-	}
-	encoded, err := codec.Encode(&update.Data)
-	if err != nil {
-		return nil, fmt.Errorf("encode signed data: %w", err)
-	}
-	if !ed25519.Verify(pubkey, encoded, signature) {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidSignature, update.Signature)
 	}
 
 	verified := &VerifiedUpdate{

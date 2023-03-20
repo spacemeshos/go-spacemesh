@@ -19,7 +19,6 @@ const (
 	update1 = `
 {
   "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
-  "signature": "6250087eaea38c95a8624469e7cad65691d34b098c2a682f5317606fc76f463027f3e9d616dbd63b8231e9b46b6c62082ef1ff490de20074ad88fc9df70cf90b",
   "data": {
     "id": 1,
     "epochs": [
@@ -42,7 +41,6 @@ const (
 	update2 = `
 {
   "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
-  "signature": "7fb102d69c1b582c32afbf678b1b408570e1c4b59ef76b65d5ab9701474712620f8a49bbcd0f72876b7528302d388126e7b4b16548e5d68090a3df864e781809",
   "data": {
     "id": 2,
     "epochs": [
@@ -68,7 +66,6 @@ const (
 	update3 = `
 {
   "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
-  "signature": "debb9d5e9d9cfb8f771bd1bac54bfafe0fe6ac839c76f3856d2e3244df0462d76db23c6d69606bc3cd3f7268500e5539b66292048a90f7b3d613e5dd443f790f",
   "data": {
     "id": 3,
     "epochs": [
@@ -324,28 +321,6 @@ func TestGetInvalidUpdate(t *testing.T) {
 			update: `
 {
   "version": "https://spacemesh.io/bootstrap.schema.json.1.1",
-  "signature": "b50574625a5e36c854a1886e67af3ea420cb33266ef648149734d949d017fd380fff5b32a41b46c08c010b01ecb7d9350fab76887aadf9c7735932f71e5da507",
-  "data": {
-    "id": 2,
-    "epochs": [{
-        "epoch": 2,
-        "beacon": "f70cf90b",
-        "activeSet": [
-			"0575fc4083eb5b5c4422063c87071eb5123d4db6fee7bc1ecb02e52e97916aef",
-			"23716e2667034edc62595a6d1628ff5c323cf099f2cc161e5653a96c9fd2bd55"]
-      }
-    ]
-  }
-}
-`,
-		},
-		{
-			desc: "bad signature",
-			err:  bootstrap.ErrInvalidSignature,
-			update: `
-{
-  "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
-  "signature": "7fb102d69c1b582c32afbf678b1b408570e1c4b59ef76b65d5ab9701474712620f8a49bbcd0f72876b7528302d388126e7b4b16548e5d68090a3df864e781809",
   "data": {
     "id": 2,
     "epochs": [{
@@ -366,7 +341,6 @@ func TestGetInvalidUpdate(t *testing.T) {
 			update: `
 {
   "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
-  "signature": "b68e889b6bf9a5943e3b9a51c20954d8d016cf1d5d369fac42609efed2c266c03aaca874417244f93d15b41af661bc4c3a4e3f236b75fe100a5d64db4ff57302",
   "data": {
     "id": 2,
     "epochs": [
@@ -395,7 +369,6 @@ func TestGetInvalidUpdate(t *testing.T) {
 			update: `
 {
   "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
-  "signature": "05f0772ff2f852a853184df49818ed79fc21d27b8361fdd33051aae58059f5ea6599b5343899b4625b54a0cc6785ce9836ce2b6c2844fd3ef45695d653f05001",
   "data": {
     "id": 2,
     "epochs": [{

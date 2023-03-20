@@ -4,14 +4,10 @@
   "title": "epoch data",
   "description": "epoch data for bootstrapping and fallback",
   "type": "object",
-  "required": ["version" ,"signature", "data"],
+  "required": ["version", "data"],
   "properties": {
     "version": {
       "description": "version of the checkpoint file. should be compatible schema's $id",
-      "type": "string"
-    },
-    "signature": {
-      "description": "signature of the data portion of this file",
       "type": "string"
     },
     "data": {
