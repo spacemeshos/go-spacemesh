@@ -155,7 +155,7 @@ func (t *AtxProofMsg) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Signature)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 32)
 		if err != nil {
 			return total, err
 		}
@@ -173,7 +173,7 @@ func (t *AtxProofMsg) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
 		if err != nil {
 			return total, err
 		}
@@ -192,7 +192,7 @@ func (t *BallotProofMsg) EncodeScale(enc *scale.Encoder) (total int, err error) 
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Signature)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 32)
 		if err != nil {
 			return total, err
 		}
@@ -210,7 +210,7 @@ func (t *BallotProofMsg) DecodeScale(dec *scale.Decoder) (total int, err error) 
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
 		if err != nil {
 			return total, err
 		}
@@ -229,7 +229,7 @@ func (t *HareProofMsg) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Signature)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 32)
 		if err != nil {
 			return total, err
 		}
@@ -247,7 +247,7 @@ func (t *HareProofMsg) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
 		if err != nil {
 			return total, err
 		}

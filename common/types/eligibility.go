@@ -20,7 +20,7 @@ const (
 type HareEligibilityGossip struct {
 	Layer       LayerID
 	Round       uint32
-	PubKey      []byte
+	PubKey      []byte `scale:"max=32"`
 	Eligibility HareEligibility
 }
 
@@ -57,7 +57,7 @@ type VotingEligibility struct {
 	// eligibility proof of the 3rd ballot/proposal in the epoch.
 	J uint32
 	// the VRF signature of some epoch specific data and J. one can derive a Ballot's layerID from this signature.
-	Sig []byte
+	Sig []byte `scale:"max=32"`
 }
 
 // MarshalLogObject implements logging interface.

@@ -41,12 +41,12 @@ type Ballot struct {
 	BallotMetadata
 	InnerBallot
 	// smesher's signature on InnerBallot
-	Signature []byte
+	Signature []byte `scale:"max=32"`
 	// Votes field is not signed.
-	Votes Votes
+	Votes Votes `scale:"max=100"` // TODO(mafa): check if this is the right max size
 	// the proof of the smesher's eligibility to vote and propose block content in this epoch.
 	// Eligibilities must be produced in the ascending order.
-	EligibilityProofs []VotingEligibility
+	EligibilityProofs []VotingEligibility `scale:"max=800"` // TODO(mafa): check if this is the right max size
 
 	// the following fields are kept private and from being serialized
 	ballotID BallotID
@@ -135,11 +135,11 @@ type Votes struct {
 	// Base ballot.
 	Base BallotID
 	// Support block id at a particular layer and height.
-	Support []Vote
+	Support []Vote `scale:"max=800"` // TODO(mafa): check if this is the right max size
 	// Against previously supported block.
-	Against []Vote
+	Against []Vote `scale:"max=800"` // TODO(mafa): check if this is the right max size
 	// Abstain on layers until they are terminated.
-	Abstain []LayerID
+	Abstain []LayerID `scale:"max=800"` // TODO(mafa): check if this is the right max size
 }
 
 // MarshalLogObject implements logging interface.
@@ -184,8 +184,8 @@ func (s *Vote) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 // Opinion is a tuple from opinion hash and votes that decode to opinion hash.
 type Opinion struct {
-	Hash Hash32
-	Votes
+	Hash  Hash32
+	Votes `scale:"max=800"` // TODO(mafa): check if this is the right max size
 }
 
 // MarshalLogObject implements logging interface.
@@ -197,7 +197,7 @@ func (o *Opinion) MarshalLogObject(encoder log.ObjectEncoder) error {
 // EpochData contains information that cannot be changed mid-epoch.
 type EpochData struct {
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
-	ActiveSet []ATXID
+	ActiveSet []ATXID `scale:"max=800"` // TODO(mafa): check if this is the right max size
 	// the beacon value the smesher recorded for this epoch
 	Beacon Beacon
 }
