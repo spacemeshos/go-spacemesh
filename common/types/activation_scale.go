@@ -45,7 +45,7 @@ func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error)
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.InitialPostIndices, 32)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.InitialPostIndices, 8000)
 		if err != nil {
 			return total, err
 		}
@@ -93,7 +93,7 @@ func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error)
 		t.CommitmentATX = field
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 8000)
 		if err != nil {
 			return total, err
 		}
@@ -580,7 +580,7 @@ func (t *NIPost) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *PostMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Challenge, 32)
+		n, err := scale.EncodeByteArray(enc, t.Challenge[:])
 		if err != nil {
 			return total, err
 		}
@@ -633,12 +633,11 @@ func (t *PostMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *PostMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		n, err := scale.DecodeByteArray(dec, t.Challenge[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Challenge = field
 	}
 	{
 		field, n, err := scale.DecodeCompact8(dec)

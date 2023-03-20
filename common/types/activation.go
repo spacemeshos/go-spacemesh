@@ -133,7 +133,7 @@ type NIPostChallenge struct {
 
 	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
 	CommitmentATX      *ATXID
-	InitialPostIndices []byte `scale:"max=32"` // TODO(mafa): check if this is the right size
+	InitialPostIndices []byte `scale:"max=8000"` // TODO(mafa): check if this is the right size, I think it should be K2
 }
 
 func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -594,7 +594,7 @@ func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, p.Indices)
+		n, err := scale.EncodeByteSliceWithLimit(enc, p.Indices, 8000) // TODO(mafa): should be k2
 		if err != nil {
 			return total, err
 		}
@@ -614,7 +614,7 @@ func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		p.Nonce = uint32(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 8000) // TODO(mafa): should be k2
 		if err != nil {
 			return total, err
 		}

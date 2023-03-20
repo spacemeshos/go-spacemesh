@@ -140,14 +140,16 @@ func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.Poet
 
 	p := resBody.Proof.GetProof()
 	root := p.GetRoot()
-	leaves := make([]shared.Leaf, 0, len(p.ProvenLeaves))
-	for _, l := range p.ProvenLeaves {
+	pLeaves := p.GetProvenLeaves()
+	leaves := make([]shared.Leaf, 0, len(pLeaves))
+	for _, l := range pLeaves {
 		leaves = append(leaves, shared.Leaf{
 			Value: l,
 		})
 	}
-	nodes := make([]shared.Node, 0, len(p.ProofNodes))
-	for _, n := range p.ProofNodes {
+	pNodes := p.GetProofNodes()
+	nodes := make([]shared.Node, 0, len(pNodes))
+	for _, n := range pNodes {
 		nodes = append(nodes, shared.Node{
 			Value: n,
 		})
