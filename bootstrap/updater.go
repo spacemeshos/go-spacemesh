@@ -67,18 +67,6 @@ type Config struct {
 	NumToKeep int
 }
 
-type VerifiedUpdate struct {
-	Persisted string
-	ID        uint32
-	Data      []*EpochOverride
-}
-
-type EpochOverride struct {
-	Epoch     types.EpochID
-	Beacon    types.Beacon
-	ActiveSet []types.ATXID
-}
-
 func (vd *VerifiedUpdate) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("persisted", vd.Persisted)
 	for _, epoch := range vd.Data {

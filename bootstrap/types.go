@@ -1,6 +1,6 @@
 package bootstrap
 
-//go:generate scalegen -types InnerData,EpochData
+import "github.com/spacemeshos/go-spacemesh/common/types"
 
 type Update struct {
 	Version string    `json:"version"`
@@ -16,4 +16,16 @@ type EpochData struct {
 	Epoch     uint32   `json:"epoch"`
 	Beacon    string   `json:"beacon"`
 	ActiveSet []string `json:"activeSet"`
+}
+
+type VerifiedUpdate struct {
+	Persisted string
+	ID        uint32
+	Data      []*EpochOverride
+}
+
+type EpochOverride struct {
+	Epoch     types.EpochID
+	Beacon    types.Beacon
+	ActiveSet []types.ATXID
 }
