@@ -14,6 +14,10 @@ import (
 
 var cfg = config.DefaultConfig()
 
+func ResetConfig() {
+	cfg = config.DefaultConfig()
+}
+
 // AddCommands adds cobra commands to the app.
 func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringP("preset", "p", "",
