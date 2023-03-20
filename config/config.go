@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
@@ -58,6 +59,7 @@ type Config struct {
 	SMESHING        SmeshingConfig        `mapstructure:"smeshing"`
 	LOGGING         LoggerConfig          `mapstructure:"logging"`
 	FETCH           fetch.Config          `mapstructure:"fetch"`
+	Bootstrap       bootstrap.Config      `mapstructure:"bootstrap"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -132,6 +134,7 @@ func DefaultConfig() Config {
 		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           fetch.DefaultConfig(),
 		LOGGING:         defaultLoggingConfig(),
+		Bootstrap:       bootstrap.DefaultConfig(),
 	}
 }
 
@@ -207,9 +210,4 @@ func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 	}
 
 	return nil
-}
-
-// SetConfigFile overrides the default config file path.
-func (cfg *BaseConfig) SetConfigFile(file string) {
-	cfg.ConfigFile = file
 }
