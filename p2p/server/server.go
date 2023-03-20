@@ -51,8 +51,8 @@ type Handler func(context.Context, []byte) ([]byte, error)
 
 // Response is a server response.
 type Response struct {
-	Data  []byte
-	Error string
+	Data  []byte `scale:"max=1024"` // TODO(mafa): generic type? how to define max size?
+	Error string `scale:"max=1024"` // TODO(mafa): check if correct size
 }
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./server.go
