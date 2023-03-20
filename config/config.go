@@ -24,8 +24,7 @@ import (
 )
 
 const (
-	defaultConfigFileName = "./config.toml"
-	defaultDataDirName    = "spacemesh"
+	defaultDataDirName = "spacemesh"
 	// NewBlockProtocol indicates the protocol name for new blocks arriving.
 )
 
@@ -148,7 +147,6 @@ func DefaultTestConfig() Config {
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		DataDirParent:       defaultDataDir,
-		ConfigFile:          defaultConfigFileName,
 		CollectMetrics:      false,
 		MetricsPort:         1010,
 		MetricsPush:         "", // "" = doesn't push
@@ -186,14 +184,8 @@ func defaultTestConfig() BaseConfig {
 
 // LoadConfig load the config file.
 func LoadConfig(config string, vip *viper.Viper) error {
-	if config == defaultConfigFileName || config == "" {
-		if _, err := os.Stat(defaultConfigFileName); err != nil {
-			if os.IsNotExist(err) {
-				return nil
-			}
-			return err
-		}
-		config = defaultConfigFileName
+	if config == "" {
+		return nil
 	}
 	vip.SetConfigFile(config)
 	if err := vip.ReadInConfig(); err != nil {
