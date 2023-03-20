@@ -71,7 +71,8 @@ func (g *TransactionResultGenerator) Next() *types.TransactionWithResult {
 	tx.Block = g.Blocks[g.rng.Intn(len(g.Blocks))]
 	tx.Layer = g.Layers[g.rng.Intn(len(g.Layers))]
 	if lth := g.rng.Intn(len(g.Addrs)); lth > 0 {
-		tx.Addresses = make([]types.Address, lth)
+		// tx.Addresses will only be 1 or 2 addresses
+		tx.Addresses = make([]types.Address, lth%2+1)
 
 		g.rng.Shuffle(len(g.Addrs), func(i, j int) {
 			g.Addrs[i], g.Addrs[j] = g.Addrs[j], g.Addrs[i]

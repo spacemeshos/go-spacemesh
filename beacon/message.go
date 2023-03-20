@@ -1,6 +1,7 @@
 package beacon
 
 import (
+	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -20,15 +21,33 @@ type ProposalMessage struct {
 	VRFSignature []byte `scale:"max=80"`
 }
 
-type Proposal struct {
-	Value []byte `scale:"max=32"` // TODO(mafa): check if max. value is correct
+type Proposal [4]byte
+
+func ProposalFromString(s string) Proposal {
+	var p Proposal
+	copy(p[:], []byte(s))
+	return p
+}
+
+func (p Proposal) String() string {
+	return string(p[:])
+}
+
+// EncodeScale implements scale codec interface.
+func (p *Proposal) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, p[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (p *Proposal) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, p[:])
 }
 
 // FirstVotingMessageBody is FirstVotingMessage without a signature.
 type FirstVotingMessageBody struct {
 	EpochID                   types.EpochID
-	ValidProposals            []Proposal `scale:"max=32"` // TODO(mafa): check if max. value is correct
-	PotentiallyValidProposals []Proposal `scale:"max=32"` // TODO(mafa): check if max. value is correct
+	ValidProposals            []Proposal `scale:"max=200"`
+	PotentiallyValidProposals []Proposal `scale:"max=200"`
 }
 
 // FirstVotingMessage is a message type which is used when sending first voting messages.

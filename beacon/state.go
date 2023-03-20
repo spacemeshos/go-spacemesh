@@ -52,20 +52,20 @@ func newState(
 	}
 }
 
-func (s *state) addValidProposal(proposal []byte) {
+func (s *state) addValidProposal(proposal Proposal) {
 	if s.incomingProposals.valid == nil {
 		s.incomingProposals.valid = make(map[string]struct{})
 	}
-	s.incomingProposals.valid[string(proposal)] = struct{}{}
-	s.votesMargin[string(proposal)] = new(big.Int)
+	s.incomingProposals.valid[proposal.String()] = struct{}{}
+	s.votesMargin[proposal.String()] = new(big.Int)
 }
 
-func (s *state) addPotentiallyValidProposal(proposal []byte) {
+func (s *state) addPotentiallyValidProposal(proposal Proposal) {
 	if s.incomingProposals.potentiallyValid == nil {
 		s.incomingProposals.potentiallyValid = make(map[string]struct{})
 	}
-	s.incomingProposals.potentiallyValid[string(proposal)] = struct{}{}
-	s.votesMargin[string(proposal)] = new(big.Int)
+	s.incomingProposals.potentiallyValid[proposal.String()] = struct{}{}
+	s.votesMargin[proposal.String()] = new(big.Int)
 }
 
 func (s *state) setMinerFirstRoundVote(minerPK *signing.PublicKey, voteList []Proposal) {

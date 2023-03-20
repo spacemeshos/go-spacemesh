@@ -12,7 +12,7 @@ type proposalList []Proposal
 
 func (hl proposalList) sort() []Proposal {
 	sort.Slice(hl, func(i, j int) bool {
-		return bytes.Compare(hl[i].Value, hl[j].Value) == -1
+		return bytes.Compare(hl[i][:], hl[j][:]) == -1
 	})
 
 	return hl
@@ -22,7 +22,7 @@ func (hl proposalList) hash() types.Hash32 {
 	hasher := hash.New()
 
 	for _, proposal := range hl {
-		if _, err := hasher.Write(proposal.Value); err != nil {
+		if _, err := hasher.Write(proposal[:]); err != nil {
 			panic("should not happen") // an error is never returned: https://golang.org/pkg/hash/#Hash
 		}
 	}

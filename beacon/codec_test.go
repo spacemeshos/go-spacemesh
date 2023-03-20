@@ -8,16 +8,16 @@ import (
 
 func Test_codec(t *testing.T) {
 	firstRound := []Proposal{
-		{Value: []byte{0x11}},
-		{Value: []byte{0x22}},
-		{Value: []byte{0x33}},
-		{Value: []byte{0x44}},
-		{Value: []byte{0x55}},
-		{Value: []byte{0x66}},
-		{Value: []byte{0x77}},
-		{Value: []byte{0x88}},
-		{Value: []byte{0x99}},
-		{Value: []byte{0x00}},
+		[4]byte{0x11},
+		[4]byte{0x22},
+		[4]byte{0x33},
+		[4]byte{0x44},
+		[4]byte{0x55},
+		[4]byte{0x66},
+		[4]byte{0x77},
+		[4]byte{0x88},
+		[4]byte{0x99},
+		[4]byte{0x00},
 	}
 
 	currentRound := allVotes{
@@ -48,16 +48,16 @@ func Test_codec(t *testing.T) {
 
 func Test_codec_lessThanActualSize(t *testing.T) {
 	firstRound := []Proposal{
-		{Value: []byte{0x11}},
-		{Value: []byte{0x22}},
-		{Value: []byte{0x33}},
-		{Value: []byte{0x44}},
-		{Value: []byte{0x55}},
-		{Value: []byte{0x66}},
-		{Value: []byte{0x77}},
-		{Value: []byte{0x88}},
-		{Value: []byte{0x99}},
-		{Value: []byte{0x00}},
+		[4]byte{0x11},
+		[4]byte{0x22},
+		[4]byte{0x33},
+		[4]byte{0x44},
+		[4]byte{0x55},
+		[4]byte{0x66},
+		[4]byte{0x77},
+		[4]byte{0x88},
+		[4]byte{0x99},
+		[4]byte{0x00},
 	}
 
 	currentRound := allVotes{

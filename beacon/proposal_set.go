@@ -6,9 +6,7 @@ func (vs proposalSet) list() proposalList {
 	votes := make(proposalList, 0)
 
 	for vote := range vs {
-		votes = append(votes, Proposal{
-			Value: []byte(vote),
-		})
+		votes = append(votes, ProposalFromString(vote))
 	}
 
 	return votes

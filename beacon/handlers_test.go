@@ -32,7 +32,10 @@ func createProtocolDriverWithFirstRoundVotes(
 	id := createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10, time.Now())
 	minerAtxs := map[string]types.ATXID{string(signer.NodeID().Bytes()): id}
 	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, nil)
-	plist := proposalList{{Value: types.RandomBytes(types.BeaconSize)}, {Value: types.RandomBytes(types.BeaconSize)}, {Value: types.RandomBytes(types.BeaconSize)}}
+	plist := make([]Proposal, 3)
+	for _, p := range plist {
+		copy(p[:], types.RandomBytes(types.BeaconSize))
+	}
 	setOwnFirstRoundVotes(t, tpd.ProtocolDriver, epoch, plist)
 	setMinerFirstRoundVotes(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), plist)
 	tpd.setRoundInProgress(round)
@@ -51,7 +54,7 @@ func setOwnFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	for _, p := range ownFirstRound {
-		pd.states[epoch].addValidProposal(p.Value)
+		pd.states[epoch].addValidProposal(p)
 	}
 }
 
@@ -104,15 +107,15 @@ func checkProposals(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, expec
 	}
 }
 
-func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID, valid, pValid [][]byte, corruptSignature bool) *FirstVotingMessage {
+func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID, valid []Proposal, pValid []Proposal, corruptSignature bool) *FirstVotingMessage {
 	logger := logtest.New(t)
 	validProp := make([]Proposal, 0, len(valid))
 	for _, v := range valid {
-		validProp = append(validProp, Proposal{Value: v})
+		validProp = append(validProp, v)
 	}
 	pValidProp := make([]Proposal, 0, len(pValid))
 	for _, v := range pValid {
-		pValidProp = append(pValidProp, Proposal{Value: v})
+		pValidProp = append(pValidProp, v)
 	}
 
 	msg := &FirstVotingMessage{
@@ -183,7 +186,7 @@ func checkVoteMargins(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, exp
 func emptyVoteMargins(plist proposalList) map[string]*big.Int {
 	vm := make(map[string]*big.Int, len(plist))
 	for _, p := range plist {
-		vm[string(p.Value)] = new(big.Int)
+		vm[p.String()] = new(big.Int)
 	}
 	return vm
 }
@@ -756,8 +759,8 @@ func Test_HandleFirstVotes_Success(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.setBeginProtocol(context.Background())
 
-	validVotes := [][]byte{[]byte("0x12345678"), []byte("0x87654321")}
-	pValidVotes := [][]byte{[]byte("0x23456789")}
+	validVotes := []Proposal{{0x12, 0x34, 0x56, 0x78}, {0x87, 0x65, 0x43, 0x21}}
+	pValidVotes := []Proposal{{0x23, 0x45, 0x67, 0x89}}
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -776,10 +779,10 @@ func Test_HandleFirstVotes_Success(t *testing.T) {
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, true)
 	proposals := make([]Proposal, 0, len(validVotes)+len(pValidVotes))
 	for _, v := range validVotes {
-		proposals = append(proposals, Proposal{Value: v})
+		proposals = append(proposals, v)
 	}
 	for _, v := range pValidVotes {
-		proposals = append(proposals, Proposal{Value: v})
+		proposals = append(proposals, v)
 	}
 	expected := map[string]proposalList{
 		string(signer.PublicKey().Bytes()): proposals,
@@ -795,8 +798,8 @@ func Test_HandleFirstVotes_Shutdown(t *testing.T) {
 	tpd.setBeginProtocol(context.Background())
 	tpd.Close()
 
-	validVotes := [][]byte{[]byte("0x12345678"), []byte("0x87654321")}
-	pValidVotes := [][]byte{[]byte("0x23456789")}
+	validVotes := []Proposal{{0x12, 0x34, 0x56, 0x78}, {0x87, 0x65, 0x43, 0x21}}
+	pValidVotes := []Proposal{{0x23, 0x45, 0x67, 0x89}}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	minerAtxs := map[string]types.ATXID{
@@ -821,8 +824,8 @@ func Test_HandleFirstVotes_NotInProtocol(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.setBeginProtocol(context.Background())
 
-	validVotes := [][]byte{[]byte("0x12345678"), []byte("0x87654321")}
-	pValidVotes := [][]byte{[]byte("0x23456789")}
+	validVotes := []Proposal{{0x12, 0x34, 0x56, 0x78}, {0x87, 0x65, 0x43, 0x21}}
+	pValidVotes := []Proposal{{0x23, 0x45, 0x67, 0x89}}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	minerAtxs := map[string]types.ATXID{
@@ -847,8 +850,8 @@ func Test_handleFirstVotes_CorruptMsg(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.setBeginProtocol(context.Background())
 
-	validVotes := [][]byte{[]byte("0x12345678"), []byte("0x87654321")}
-	pValidVotes := [][]byte{[]byte("0x23456789")}
+	validVotes := []Proposal{{0x12, 0x34, 0x56, 0x78}, {0x87, 0x65, 0x43, 0x21}}
+	pValidVotes := []Proposal{{0x23, 0x45, 0x67, 0x89}}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	minerAtxs := map[string]types.ATXID{
@@ -872,8 +875,8 @@ func Test_handleFirstVotes_WrongEpoch(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.setBeginProtocol(context.Background())
 
-	validVotes := [][]byte{[]byte("0x12345678"), []byte("0x87654321")}
-	pValidVotes := [][]byte{[]byte("0x23456789")}
+	validVotes := []Proposal{{0x12, 0x34, 0x56, 0x78}, {0x87, 0x65, 0x43, 0x21}}
+	pValidVotes := []Proposal{{0x23, 0x45, 0x67, 0x89}}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	minerAtxs := map[string]types.ATXID{
@@ -914,8 +917,8 @@ func Test_handleFirstVotes_TooLate(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.setBeginProtocol(context.Background())
 
-	validVotes := [][]byte{[]byte("0x12345678"), []byte("0x87654321")}
-	pValidVotes := [][]byte{[]byte("0x23456789")}
+	validVotes := []Proposal{{0x12, 0x34, 0x56, 0x78}, {0x87, 0x65, 0x43, 0x21}}
+	pValidVotes := []Proposal{{0x23, 0x45, 0x67, 0x89}}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	minerAtxs := map[string]types.ATXID{
@@ -941,8 +944,8 @@ func Test_HandleFirstVotes_FailedToExtractPK(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.setBeginProtocol(context.Background())
 
-	validVotes := [][]byte{[]byte("0x12345678"), []byte("0x87654321")}
-	pValidVotes := [][]byte{[]byte("0x23456789")}
+	validVotes := []Proposal{{0x12, 0x34, 0x56, 0x78}, {0x87, 0x65, 0x43, 0x21}}
+	pValidVotes := []Proposal{{0x23, 0x45, 0x67, 0x89}}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	minerAtxs := map[string]types.ATXID{
@@ -967,8 +970,8 @@ func Test_HandleFirstVotes_AlreadyVoted(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.setBeginProtocol(context.Background())
 
-	validVotes := [][]byte{[]byte("0x12345678"), []byte("0x87654321")}
-	pValidVotes := [][]byte{[]byte("0x23456789")}
+	validVotes := []Proposal{{0x12, 0x34, 0x56, 0x78}, {0x87, 0x65, 0x43, 0x21}}
+	pValidVotes := []Proposal{{0x23, 0x45, 0x67, 0x89}}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	minerAtxs := map[string]types.ATXID{
@@ -985,10 +988,10 @@ func Test_HandleFirstVotes_AlreadyVoted(t *testing.T) {
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, true)
 	proposals := make([]Proposal, 0, len(validVotes)+len(pValidVotes))
 	for _, v := range validVotes {
-		proposals = append(proposals, Proposal{Value: v})
+		proposals = append(proposals, v)
 	}
 	for _, v := range pValidVotes {
-		proposals = append(proposals, Proposal{Value: v})
+		proposals = append(proposals, v)
 	}
 	expected := map[string]proposalList{
 		string(signer.PublicKey().Bytes()): proposals,
@@ -996,7 +999,7 @@ func Test_HandleFirstVotes_AlreadyVoted(t *testing.T) {
 	checkFirstIncomingVotes(t, tpd.ProtocolDriver, epoch, expected)
 
 	// the same ed key will not cause double-vote
-	msg2 := createFirstVote(t, signer, epoch, validVotes, [][]byte{}, false)
+	msg2 := createFirstVote(t, signer, epoch, validVotes, []Proposal{}, false)
 	msgBytes2, err := codec.Encode(msg2)
 	require.NoError(t, err)
 
@@ -1014,8 +1017,8 @@ func Test_HandleFirstVotes_MinerMissingATX(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.setBeginProtocol(context.Background())
 
-	validVotes := [][]byte{[]byte("0x12345678"), []byte("0x87654321")}
-	pValidVotes := [][]byte{[]byte("0x23456789")}
+	validVotes := []Proposal{{0x12, 0x34, 0x56, 0x78}, {0x87, 0x65, 0x43, 0x21}}
+	pValidVotes := []Proposal{{0x23, 0x45, 0x67, 0x89}}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createEpochState(t, tpd.ProtocolDriver, epoch, map[string]types.ATXID{}, nil)
@@ -1051,9 +1054,9 @@ func Test_HandleFollowingVotes_Success(t *testing.T) {
 	expected := make(map[string]*big.Int, len(plist))
 	for i, p := range plist {
 		if i == 0 || i == 2 {
-			expected[string(p.Value)] = big.NewInt(10)
+			expected[p.String()] = big.NewInt(10)
 		} else {
-			expected[string(p.Value)] = big.NewInt(-10)
+			expected[p.String()] = big.NewInt(-10)
 		}
 	}
 	checkVoteMargins(t, tpd.ProtocolDriver, epoch, expected)
@@ -1228,9 +1231,9 @@ func Test_handleFollowingVotes_AlreadyVoted(t *testing.T) {
 	expected := make(map[string]*big.Int, len(plist))
 	for i, p := range plist {
 		if i == 0 || i == 2 {
-			expected[string(p.Value)] = big.NewInt(10)
+			expected[p.String()] = big.NewInt(10)
 		} else {
-			expected[string(p.Value)] = big.NewInt(-10)
+			expected[p.String()] = big.NewInt(-10)
 		}
 	}
 	checkVoteMargins(t, tpd.ProtocolDriver, epoch, expected)
@@ -1285,8 +1288,16 @@ func Test_handleFollowingVotes_IgnoreUnknownProposal(t *testing.T) {
 	}
 	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, nil)
 
-	known := proposalList{{Value: types.RandomBytes(types.BeaconSize)}, {Value: types.RandomBytes(types.BeaconSize)}, {Value: types.RandomBytes(types.BeaconSize)}}
-	unknown := proposalList{{Value: types.RandomBytes(types.BeaconSize)}, {Value: types.RandomBytes(types.BeaconSize)}}
+	known := make([]Proposal, 3)
+	for _, p := range known {
+		copy(p[:], types.RandomBytes(types.BeaconSize))
+	}
+
+	unknown := make([]Proposal, 3)
+	for _, p := range known {
+		copy(p[:], types.RandomBytes(types.BeaconSize))
+	}
+
 	plist := append(known, unknown...)
 	setOwnFirstRoundVotes(t, tpd.ProtocolDriver, epoch, known)
 	setMinerFirstRoundVotes(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), plist)
@@ -1306,9 +1317,9 @@ func Test_handleFollowingVotes_IgnoreUnknownProposal(t *testing.T) {
 	expected := make(map[string]*big.Int, len(known))
 	for i, p := range known {
 		if i == 0 || i == 2 {
-			expected[string(p.Value)] = big.NewInt(10)
+			expected[p.String()] = big.NewInt(10)
 		} else {
-			expected[string(p.Value)] = big.NewInt(-10)
+			expected[p.String()] = big.NewInt(-10)
 		}
 	}
 	checkVoteMargins(t, tpd.ProtocolDriver, epoch, expected)

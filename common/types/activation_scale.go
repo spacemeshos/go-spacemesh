@@ -580,7 +580,7 @@ func (t *NIPost) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *PostMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.Challenge[:])
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Challenge, 32)
 		if err != nil {
 			return total, err
 		}
@@ -633,11 +633,12 @@ func (t *PostMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *PostMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := scale.DecodeByteArray(dec, t.Challenge[:])
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
 		if err != nil {
 			return total, err
 		}
 		total += n
+		t.Challenge = field
 	}
 	{
 		field, n, err := scale.DecodeCompact8(dec)
