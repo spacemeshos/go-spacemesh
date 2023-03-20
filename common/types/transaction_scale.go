@@ -119,7 +119,7 @@ func (t *RawTx) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Raw)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Raw, 100000)
 		if err != nil {
 			return total, err
 		}
@@ -137,7 +137,7 @@ func (t *RawTx) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 100000)
 		if err != nil {
 			return total, err
 		}

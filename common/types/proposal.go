@@ -43,7 +43,7 @@ type Proposal struct {
 	// the content proposal for a given layer and the votes on the mesh history
 	InnerProposal
 	// smesher's signature on InnerProposal
-	Signature []byte
+	Signature []byte `scale:"max=32"`
 
 	// the following fields are kept private and from being serialized
 	proposalID ProposalID
@@ -55,7 +55,7 @@ type InnerProposal struct {
 	// smesher's votes on the mesh history
 	Ballot
 	// smesher's content proposal for a layer
-	TxIDs []TransactionID
+	TxIDs []TransactionID `scale:"max=1000"` // TODO(mafa): check if correct size
 	// aggregated hash up to the layer before this proposal.
 	MeshHash Hash32
 	// TODO add this when a state commitment mechanism is implemented.
