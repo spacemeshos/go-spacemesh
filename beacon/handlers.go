@@ -106,7 +106,6 @@ func (pd *ProtocolDriver) classifyProposal(
 ) category {
 	epochStart := pd.clock.LayerToTime(m.EpochID.FirstLayer())
 	proposal := cropData(m.VRFSignature)
-
 	logger = logger.WithFields(
 		log.String("proposal", hex.EncodeToString(proposal[:])),
 		log.Time("atx_timestamp", atxReceived),
@@ -180,9 +179,7 @@ func (pd *ProtocolDriver) classifyProposal(
 
 func cropData(data []byte) Proposal {
 	var shortened Proposal
-	if types.BeaconSize < len(data) { // TODO(mafa): since data is a VRFSignature and thereby always 80 bytes this check could be removed
-		copy(shortened[:], data)
-	}
+	copy(shortened[:], data)
 	return shortened
 }
 
