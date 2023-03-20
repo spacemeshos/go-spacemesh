@@ -320,7 +320,7 @@ func (t *ActivationTx) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 32)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 64)
 		if err != nil {
 			return total, err
 		}
@@ -345,7 +345,7 @@ func (t *ActivationTx) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 64)
 		if err != nil {
 			return total, err
 		}
@@ -430,7 +430,7 @@ func (t *PoetProofMessage) EncodeScale(enc *scale.Encoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 32)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 64)
 		if err != nil {
 			return total, err
 		}
@@ -464,7 +464,7 @@ func (t *PoetProofMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 		t.RoundID = string(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 64)
 		if err != nil {
 			return total, err
 		}

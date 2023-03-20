@@ -16,7 +16,7 @@ func (t *Proposal) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 32)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 64)
 		if err != nil {
 			return total, err
 		}
@@ -34,7 +34,7 @@ func (t *Proposal) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 64)
 		if err != nil {
 			return total, err
 		}

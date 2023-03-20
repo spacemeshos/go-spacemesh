@@ -243,7 +243,7 @@ type ActivationTx struct {
 	InnerActivationTx
 	ATXMetadata
 	// signature over ATXMetadata
-	Signature []byte `scale:"max=32"`
+	Signature []byte `scale:"max=64"`
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
@@ -468,7 +468,7 @@ type PoetProofMessage struct {
 	PoetProof
 	PoetServiceID []byte `scale:"max=32"`
 	RoundID       string `scale:"max=32"`
-	Signature     []byte `scale:"max=32"`
+	Signature     []byte `scale:"max=64"`
 }
 
 func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {

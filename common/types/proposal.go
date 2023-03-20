@@ -43,7 +43,7 @@ type Proposal struct {
 	// the content proposal for a given layer and the votes on the mesh history
 	InnerProposal
 	// smesher's signature on InnerProposal
-	Signature []byte `scale:"max=32"`
+	Signature []byte `scale:"max=64"`
 
 	// the following fields are kept private and from being serialized
 	proposalID ProposalID

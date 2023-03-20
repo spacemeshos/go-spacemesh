@@ -120,7 +120,7 @@ func (t *VotingEligibility) EncodeScale(enc *scale.Encoder) (total int, err erro
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Sig, 32)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Sig, 64)
 		if err != nil {
 			return total, err
 		}
@@ -139,7 +139,7 @@ func (t *VotingEligibility) DecodeScale(dec *scale.Decoder) (total int, err erro
 		t.J = uint32(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 64)
 		if err != nil {
 			return total, err
 		}

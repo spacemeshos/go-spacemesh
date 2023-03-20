@@ -16,7 +16,7 @@ import (
 type Message struct {
 	types.HareMetadata
 	// signature over Metadata
-	Signature   []byte `scale:"max=32"`
+	Signature   []byte `scale:"max=64"`
 	InnerMsg    *InnerMessage
 	Eligibility types.HareEligibility
 }

@@ -77,7 +77,7 @@ func (t *ProposalMessage) EncodeScale(enc *scale.Encoder) (total int, err error)
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.VRFSignature, 32)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.VRFSignature, 64)
 		if err != nil {
 			return total, err
 		}
@@ -103,7 +103,7 @@ func (t *ProposalMessage) DecodeScale(dec *scale.Decoder) (total int, err error)
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 64)
 		if err != nil {
 			return total, err
 		}
@@ -198,7 +198,7 @@ func (t *FirstVotingMessage) EncodeScale(enc *scale.Encoder) (total int, err err
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 32)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 64)
 		if err != nil {
 			return total, err
 		}
@@ -216,7 +216,7 @@ func (t *FirstVotingMessage) DecodeScale(dec *scale.Decoder) (total int, err err
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 64)
 		if err != nil {
 			return total, err
 		}
@@ -288,7 +288,7 @@ func (t *FollowingVotingMessage) EncodeScale(enc *scale.Encoder) (total int, err
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 32)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 64)
 		if err != nil {
 			return total, err
 		}
@@ -306,7 +306,7 @@ func (t *FollowingVotingMessage) DecodeScale(dec *scale.Decoder) (total int, err
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 64)
 		if err != nil {
 			return total, err
 		}

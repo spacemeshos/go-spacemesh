@@ -41,7 +41,7 @@ type Ballot struct {
 	BallotMetadata
 	InnerBallot
 	// smesher's signature on InnerBallot
-	Signature []byte `scale:"max=32"`
+	Signature []byte `scale:"max=64"`
 	// Votes field is not signed.
 	Votes Votes `scale:"max=100"` // TODO(mafa): check if this is the right max size
 	// the proof of the smesher's eligibility to vote and propose block content in this epoch.

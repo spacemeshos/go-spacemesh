@@ -42,7 +42,7 @@ type Message struct {
 	Round        types.RoundID
 	Unit         uint32
 	MinerPK      []byte `scale:"max=32"`
-	VrfSignature []byte `scale:"max=32"`
+	VrfSignature []byte `scale:"max=64"`
 }
 
 type VrfMessage struct {

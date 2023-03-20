@@ -49,15 +49,15 @@ func (e *HareEligibility) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// VotingEligibility includes the required values that, along with the smesher's VRF public key,
+// VotingEligibility includes the required values that, along with the smeshers VRF public key,
 // allow non-interactive voting eligibility validation. this proof provides eligibility for both voting and
 // making proposals.
 type VotingEligibility struct {
-	// the counter value used to generate this eligibility proof. if the value of J is 3, this is the smesher's
+	// the counter value used to generate this eligibility proof. if the value of J is 3, this is the smeshers
 	// eligibility proof of the 3rd ballot/proposal in the epoch.
 	J uint32
 	// the VRF signature of some epoch specific data and J. one can derive a Ballot's layerID from this signature.
-	Sig []byte `scale:"max=32"`
+	Sig []byte `scale:"max=64"`
 }
 
 // MarshalLogObject implements logging interface.
