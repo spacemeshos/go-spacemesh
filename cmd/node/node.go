@@ -202,7 +202,7 @@ type NodeClock interface {
 func loadConfig(c *cobra.Command) (*config.Config, error) {
 	conf, err := LoadConfigFromFile()
 	if err != nil {
-		return nil, fmt.Errorf("loading config from file: %w", err)
+		return nil, err
 	}
 	if err := cmd.EnsureCLIFlags(c, conf); err != nil {
 		return nil, fmt.Errorf("mapping cli flags to config: %w", err)
@@ -212,17 +212,11 @@ func loadConfig(c *cobra.Command) (*config.Config, error) {
 
 // LoadConfigFromFile tries to load configuration file if the config parameter was specified.
 func LoadConfigFromFile() (*config.Config, error) {
-	fileLocation := viper.GetString("config")
-
 	// read in default config if passed as param using viper
-	if err := config.LoadConfig(fileLocation, viper.GetViper()); err != nil {
-		log.Error(fmt.Sprintf("couldn't load config file at location: %s switching to defaults \n error: %v.",
-			fileLocation, err))
-		// return err
+	if err := config.LoadConfig(viper.GetString("config"), viper.GetViper()); err != nil {
+		return nil, err
 	}
-
 	conf := config.DefaultConfig()
-
 	if name := viper.GetString("preset"); len(name) > 0 {
 		preset, err := presets.Get(name)
 		if err != nil {
