@@ -808,6 +808,7 @@ func TestConfig_Preset(t *testing.T) {
 
 		viper.Set("preset", name)
 		t.Cleanup(viper.Reset)
+		t.Cleanup(cmd.ResetConfig)
 		conf, err := loadConfig(c)
 		require.NoError(t, err)
 		require.Equal(t, preset, *conf)
@@ -824,6 +825,7 @@ func TestConfig_Preset(t *testing.T) {
 
 		viper.Set("preset", name)
 		t.Cleanup(viper.Reset)
+		t.Cleanup(cmd.ResetConfig)
 		conf, err := loadConfig(c)
 		require.NoError(t, err)
 		preset.P2P.LowPeers = lowPeers
@@ -845,6 +847,7 @@ func TestConfig_Preset(t *testing.T) {
 
 		viper.Set("preset", name)
 		t.Cleanup(viper.Reset)
+		t.Cleanup(cmd.ResetConfig)
 		conf, err := loadConfig(c)
 		require.NoError(t, err)
 		preset.P2P.LowPeers = lowPeers
@@ -865,6 +868,7 @@ func TestConfig_Preset(t *testing.T) {
 		require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
 
 		t.Cleanup(viper.Reset)
+		t.Cleanup(cmd.ResetConfig)
 
 		conf, err := loadConfig(c)
 		require.NoError(t, err)
@@ -873,10 +877,39 @@ func TestConfig_Preset(t *testing.T) {
 	})
 }
 
+func TestConfig_Load(t *testing.T) {
+	t.Run("invalid fails to load", func(t *testing.T) {
+		c := &cobra.Command{}
+		cmd.AddCommands(c)
+
+		path := filepath.Join(t.TempDir(), "config.json")
+		require.NoError(t, os.WriteFile(path, []byte("}"), 0o600))
+		require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
+
+		t.Cleanup(viper.Reset)
+		t.Cleanup(cmd.ResetConfig)
+
+		_, err := loadConfig(c)
+		require.ErrorContains(t, err, path)
+	})
+	t.Run("missing default doesn't fail", func(t *testing.T) {
+		c := &cobra.Command{}
+		cmd.AddCommands(c)
+		require.NoError(t, c.ParseFlags([]string{}))
+
+		t.Cleanup(viper.Reset)
+		t.Cleanup(cmd.ResetConfig)
+
+		_, err := loadConfig(c)
+		require.NoError(t, err)
+	})
+}
+
 func TestConfig_GenesisAccounts(t *testing.T) {
 	t.Run("OverwriteDefaults", func(t *testing.T) {
 		c := &cobra.Command{}
 		cmd.AddCommands(c)
+		t.Cleanup(cmd.ResetConfig)
 
 		const value = 100
 		keys := []string{"0x03", "0x04"}
