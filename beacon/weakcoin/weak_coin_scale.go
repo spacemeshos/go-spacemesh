@@ -38,7 +38,7 @@ func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.VrfSignature, 64)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.VrfSignature, 80)
 		if err != nil {
 			return total, err
 		}
@@ -81,7 +81,7 @@ func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.MinerPK = field
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 64)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 80)
 		if err != nil {
 			return total, err
 		}

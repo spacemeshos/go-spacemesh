@@ -546,7 +546,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		postProver := NewMockpostSetupProvider(ctrl)
 		postProver.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
 		poetProver := NewMockPoetProvingServiceClient(ctrl)
-		poetProver.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(nil, errors.New("test"))
+		poetProver.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{}, errors.New("test"))
 
 		nb := NewNIPostBuilder(nodeID, postProver, []PoetProvingServiceClient{poetProver},
 			poetDb, sql.InMemory(), logtest.New(t), sig, poetCfg, mclock)
