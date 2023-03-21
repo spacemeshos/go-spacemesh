@@ -34,11 +34,6 @@ type PostConfig struct {
 	K3PowDifficulty uint64 `mapstructure:"post-k3pow-difficulty"`
 }
 
-const (
-	BitsPerLabel       = 8 * 16
-	DefaultNonces uint = 21
-)
-
 // PostSetupOpts are the options used to initiate a Post setup data creation session,
 // either via the public smesher API, or on node launch (via cmd args).
 type PostSetupOpts struct {
