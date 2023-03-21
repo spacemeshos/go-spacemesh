@@ -344,7 +344,7 @@ func (t *Opinion) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *EpochData) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.ActiveSet, 800)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.ActiveSet, 10000)
 		if err != nil {
 			return total, err
 		}
@@ -362,7 +362,7 @@ func (t *EpochData) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *EpochData) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[ATXID](dec, 800)
+		field, n, err := scale.DecodeStructSliceWithLimit[ATXID](dec, 10000)
 		if err != nil {
 			return total, err
 		}

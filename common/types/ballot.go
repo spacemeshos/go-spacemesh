@@ -197,7 +197,7 @@ func (o *Opinion) MarshalLogObject(encoder log.ObjectEncoder) error {
 // EpochData contains information that cannot be changed mid-epoch.
 type EpochData struct {
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
-	ActiveSet []ATXID `scale:"max=800"` // TODO(mafa): check if this is the right max size
+	ActiveSet []ATXID `scale:"max=10000"` // TODO(mafa): check if this is the right max size
 	// the beacon value the smesher recorded for this epoch
 	Beacon Beacon
 }
@@ -249,12 +249,12 @@ func (b *Ballot) SignedBytes() []byte {
 
 // HashInnerBytes returns the hash of the InnerBallot.
 func (b *Ballot) HashInnerBytes() []byte {
-	hshr := hash.New()
-	_, err := codec.EncodeTo(hshr, &b.InnerBallot)
+	h := hash.New()
+	_, err := codec.EncodeTo(h, &b.InnerBallot)
 	if err != nil {
-		log.Fatal("failed to encode InnerBallot for hashing")
+		log.Fatal("failed to encode InnerBallot for hashing", log.Err(err))
 	}
-	return hshr.Sum(nil)
+	return h.Sum(nil)
 }
 
 // SetID from stored data.
