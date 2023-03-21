@@ -21,9 +21,8 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
-	postCfg.LabelsPerUnit = 1 << 15
+	postCfg.LabelsPerUnit = 128
 	meta := &types.PostMetadata{
-		BitsPerLabel:  postCfg.BitsPerLabel,
 		LabelsPerUnit: postCfg.LabelsPerUnit,
 	}
 
@@ -549,7 +548,6 @@ func Test_Validate_PostMetadata(t *testing.T) {
 		t.Parallel()
 
 		meta := &types.PostMetadata{
-			BitsPerLabel:  postCfg.BitsPerLabel,
 			LabelsPerUnit: postCfg.LabelsPerUnit,
 			K1:            postCfg.K1,
 			K2:            postCfg.K2,
@@ -559,25 +557,10 @@ func Test_Validate_PostMetadata(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("wrong bits per label", func(t *testing.T) {
-		t.Parallel()
-
-		meta := &types.PostMetadata{
-			BitsPerLabel:  postCfg.BitsPerLabel - 1,
-			LabelsPerUnit: postCfg.LabelsPerUnit,
-			K1:            postCfg.K1,
-			K2:            postCfg.K2,
-		}
-
-		err := v.PostMetadata(&postCfg, meta)
-		require.EqualError(t, err, fmt.Sprintf("invalid `BitsPerLabel`; expected: >=%d, given: %d", postCfg.BitsPerLabel, postCfg.BitsPerLabel-1))
-	})
-
 	t.Run("wrong labels per unit", func(t *testing.T) {
 		t.Parallel()
 
 		meta := &types.PostMetadata{
-			BitsPerLabel:  postCfg.BitsPerLabel,
 			LabelsPerUnit: postCfg.LabelsPerUnit - 1,
 			K1:            postCfg.K1,
 			K2:            postCfg.K2,
@@ -591,7 +574,6 @@ func Test_Validate_PostMetadata(t *testing.T) {
 		t.Parallel()
 
 		meta := &types.PostMetadata{
-			BitsPerLabel:  postCfg.BitsPerLabel,
 			LabelsPerUnit: postCfg.LabelsPerUnit,
 			K1:            postCfg.K1 + 1,
 			K2:            postCfg.K2,
@@ -605,7 +587,6 @@ func Test_Validate_PostMetadata(t *testing.T) {
 		t.Parallel()
 
 		meta := &types.PostMetadata{
-			BitsPerLabel:  postCfg.BitsPerLabel,
 			LabelsPerUnit: postCfg.LabelsPerUnit,
 			K1:            postCfg.K1,
 			K2:            postCfg.K2 - 1,
@@ -656,11 +637,6 @@ func TestValidator_Validate(t *testing.T) {
 	newPostCfg.LabelsPerUnit = nipost.PostMetadata.LabelsPerUnit + 1
 	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, poetDb, newPostCfg, postProvider.opts.NumUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", newPostCfg.LabelsPerUnit, nipost.PostMetadata.LabelsPerUnit))
-
-	newPostCfg = postProvider.cfg
-	newPostCfg.BitsPerLabel = nipost.PostMetadata.BitsPerLabel + 1
-	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, poetDb, newPostCfg, postProvider.opts.NumUnits)
-	r.EqualError(err, fmt.Sprintf("invalid `BitsPerLabel`; expected: >=%d, given: %d", newPostCfg.BitsPerLabel, nipost.PostMetadata.BitsPerLabel))
 
 	newPostCfg = postProvider.cfg
 	newPostCfg.K1 = nipost.PostMetadata.K1 - 1

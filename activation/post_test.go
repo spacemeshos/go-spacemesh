@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
@@ -109,18 +110,18 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	err = verifying.Verify(&shared.Proof{
 		Nonce:   p.Nonce,
 		Indices: p.Indices,
+		K2Pow:   p.K2Pow,
+		K3Pow:   p.K3Pow,
 	}, &shared.ProofMetadata{
 		NodeId:          mgr.id.Bytes(),
 		CommitmentAtxId: mgr.goldenATXID.Bytes(),
 		Challenge:       ch,
 		NumUnits:        mgr.opts.NumUnits,
-		BitsPerLabel:    m.BitsPerLabel,
 		LabelsPerUnit:   m.LabelsPerUnit,
 		K1:              m.K1,
 		K2:              m.K2,
-		B:               m.B,
-		N:               m.N,
-	})
+	},
+		config.DefaultConfig())
 	req.NoError(err)
 
 	// Re-instantiate `PostSetupManager`.
@@ -189,6 +190,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	req := require.New(t)
 
 	mgr := newTestPostManager(t)
+	mgr.opts.MaxFileSize = 4096
 
 	// Create data.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -197,12 +199,10 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 		return mgr.StartSession(ctx, mgr.opts)
 	})
 
-	// Wait a bit for the setup to proceed.
-	time.Sleep(100 * time.Millisecond)
-
 	// Verify the intermediate status.
-	status := mgr.Status()
-	req.Equal(PostSetupStateInProgress, status.State)
+	req.Eventually(func() bool {
+		return mgr.Status().State == PostSetupStateInProgress
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Stop initialization.
 	cancel()
@@ -210,7 +210,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	req.ErrorIs(eg.Wait(), context.Canceled)
 
 	// Verify status.
-	status = mgr.Status()
+	status := mgr.Status()
 	req.Equal(PostSetupStateStopped, status.State)
 	req.LessOrEqual(status.NumLabelsWritten, uint64(mgr.opts.NumUnits)*mgr.cfg.LabelsPerUnit)
 
