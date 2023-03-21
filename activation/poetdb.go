@@ -81,8 +81,7 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string,
 		}
 	}
 	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
-		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %w",
-			poetID[:shortIDlth], roundID, err)
+		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %w", poetID[:shortIDlth], roundID, err)
 	}
 	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
 

@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -108,9 +109,9 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	msg.PoetProof.Root = []byte("some other root")
 
 	err := poetDb.Validate(msg.PoetProof, msg.PoetServiceID, msg.RoundID, nil)
-	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid",
-		msg.PoetServiceID[:5]))
-	r.False(types.IsProcessingError(err))
+	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid", msg.PoetServiceID[:5]))
+	var pErr types.ProcessingError
+	r.False(errors.As(err, &pErr))
 }
 
 func TestPoetDbNonExistingKeys(t *testing.T) {

@@ -676,12 +676,6 @@ func (s ProcessingError) Error() string {
 	return s.Err
 }
 
-// IsProcessingError returns true if the given error is a processing error.
-func IsProcessingError(err error) bool {
-	_, ok := err.(ProcessingError)
-	return ok
-}
-
 // ToATXIDs returns a slice of ATXID corresponding to the given activation tx.
 func ToATXIDs(atxs []*ActivationTx) []ATXID {
 	ids := make([]ATXID, 0, len(atxs))
