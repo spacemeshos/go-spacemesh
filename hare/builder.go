@@ -88,12 +88,12 @@ type InnerMessage struct {
 
 // HashBytes returns the message as bytes.
 func (im *InnerMessage) HashBytes() []byte {
-	hshr := hash.New()
-	_, err := codec.EncodeTo(hshr, im)
+	h := hash.New()
+	_, err := codec.EncodeTo(h, im)
 	if err != nil {
-		log.Fatal("failed to encode InnerMsg for hashing")
+		log.Fatal("failed to encode InnerMsg for hashing", log.Err(err))
 	}
-	return hshr.Sum(nil)
+	return h.Sum(nil)
 }
 
 func (im *InnerMessage) MarshalLogObject(encoder log.ObjectEncoder) error {

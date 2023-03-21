@@ -323,7 +323,8 @@ func (proc *consensusProcess) eventLoop() {
 			proc.sendMessage(ctx, m)
 		} else {
 			logger.With().Debug("should not participate",
-				log.Uint32("current_round", proc.getRound()))
+				log.Uint32("current_round", proc.getRound()),
+			)
 		}
 		return nil
 	})
