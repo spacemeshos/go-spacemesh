@@ -219,7 +219,7 @@ func (t *FollowingVotingMessageBody) EncodeScale(enc *scale.Encoder) (total int,
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.VotesBitVector, 16)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.VotesBitVector, 32)
 		if err != nil {
 			return total, err
 		}
@@ -246,7 +246,7 @@ func (t *FollowingVotingMessageBody) DecodeScale(dec *scale.Decoder) (total int,
 		t.RoundID = types.RoundID(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 16)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
 		if err != nil {
 			return total, err
 		}

@@ -179,7 +179,7 @@ func (t *Certificate) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Signatures, 100)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Signatures, 800)
 		if err != nil {
 			return total, err
 		}
@@ -197,7 +197,7 @@ func (t *Certificate) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[CertifyMessage](dec, 100)
+		field, n, err := scale.DecodeStructSliceWithLimit[CertifyMessage](dec, 800)
 		if err != nil {
 			return total, err
 		}
