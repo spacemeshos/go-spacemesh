@@ -118,10 +118,9 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 		Challenge:       ch,
 		NumUnits:        mgr.opts.NumUnits,
 		LabelsPerUnit:   m.LabelsPerUnit,
-		K1:              m.K1,
-		K2:              m.K2,
 	},
-		config.DefaultConfig())
+		config.DefaultConfig(),
+	)
 	req.NoError(err)
 
 	// Re-instantiate `PostSetupManager`.

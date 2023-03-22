@@ -340,8 +340,6 @@ func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte
 	m := &types.PostMetadata{
 		Challenge:     proofMetadata.Challenge,
 		LabelsPerUnit: proofMetadata.LabelsPerUnit,
-		K1:            proofMetadata.K1,
-		K2:            proofMetadata.K2,
 	}
 	return p, m, nil
 }
