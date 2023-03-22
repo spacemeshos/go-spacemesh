@@ -364,7 +364,7 @@ func (t *PoetProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Members, 36)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Members, 100000)
 		if err != nil {
 			return total, err
 		}
@@ -389,7 +389,7 @@ func (t *PoetProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[shared.Member](dec, 36)
+		field, n, err := scale.DecodeStructSliceWithLimit[shared.Member](dec, 100000)
 		if err != nil {
 			return total, err
 		}

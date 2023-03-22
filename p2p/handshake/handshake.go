@@ -48,7 +48,7 @@ type HandshakeMessage struct {
 
 // HandshakeAck is a handshake ack.
 type HandshakeAck struct {
-	Error string `scale:"max=256"`
+	Error string `scale:"max=256"` // TODO(mafa): make error code instead of string
 }
 
 // New instantiates handshake protocol for the host.

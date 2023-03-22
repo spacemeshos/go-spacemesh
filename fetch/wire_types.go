@@ -11,7 +11,7 @@ import (
 
 // RequestMessage is sent to the peer for hash query.
 type RequestMessage struct {
-	Hint datastore.Hint `scale:"max=256"`
+	Hint datastore.Hint `scale:"max=256"` // TODO(mafa): covert to an enum
 	Hash types.Hash32
 }
 
@@ -48,8 +48,8 @@ func (r *MeshHashRequest) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 type MeshHashes struct {
-	Layers []types.LayerID `scale:"max=100"` // Same as syncer Config `MaxHashesInReq`
-	Hashes []types.Hash32  `scale:"max=100"`
+	Layers []types.LayerID `scale:"max=100"` // same as syncer Config `MaxHashesInReq`
+	Hashes []types.Hash32  `scale:"max=100"` // same as syncer Config `MaxHashesInReq`
 }
 
 type MaliciousIDs struct {

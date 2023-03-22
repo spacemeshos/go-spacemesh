@@ -161,7 +161,7 @@ func NewRawTx(raw []byte) RawTx {
 // RawTx stores an identity and a pointer to raw bytes.
 type RawTx struct {
 	ID  TransactionID
-	Raw []byte `scale:"max=4000"`
+	Raw []byte `scale:"max=4096"` // transactions should always be less than 4kb
 }
 
 // AddressNonce is an (address, nonce) named tuple.

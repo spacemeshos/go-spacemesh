@@ -133,7 +133,7 @@ type NIPostChallenge struct {
 
 	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
 	CommitmentATX      *ATXID
-	InitialPostIndices []byte `scale:"max=8000"` // TODO(mafa): check if this is the right size, I think it should be K2
+	InitialPostIndices []byte `scale:"max=8000"` // needs to hold K2*8 bytes at most
 }
 
 func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -430,7 +430,7 @@ type PoetProofRef [32]byte
 // and the actual PoET Merkle proof.
 type PoetProof struct {
 	poetShared.MerkleProof
-	Members   []poetShared.Member `scale:"max=36"`
+	Members   []poetShared.Member `scale:"max=100000"` // max size depends on how many smeshers submit a challenge to a poet server
 	LeafCount uint64
 }
 
@@ -466,7 +466,7 @@ func (p *PoetProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 // PoetProofMessage is the envelope which includes the PoetProof, service ID, round ID and signature.
 type PoetProofMessage struct {
 	PoetProof
-	PoetServiceID []byte `scale:"max=32"`
+	PoetServiceID []byte `scale:"max=32"` // public key of the PoET service
 	RoundID       string `scale:"max=32"`
 	Signature     []byte `scale:"max=64"`
 }
@@ -593,7 +593,7 @@ func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, p.Indices, 8000) // TODO(mafa): should be k2
+		n, err := scale.EncodeByteSliceWithLimit(enc, p.Indices, 8000) // needs to hold K2*8 bytes at most
 		if err != nil {
 			return total, err
 		}
@@ -613,7 +613,7 @@ func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		p.Nonce = uint32(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 8000) // TODO(mafa): should be k2
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 8000) // needs to hold K2*8 bytes at most
 		if err != nil {
 			return total, err
 		}
@@ -667,7 +667,7 @@ func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 // ProcessingError is a type of error (implements the error interface) that is used to differentiate processing errors
 // from validation errors.
 type ProcessingError struct {
-	Err string `scale:"max=1024"` // TODO(mafa): check if this is the right size
+	Err string `scale:"max=1024"` // TODO(mafa): make error code instead of string
 }
 
 // Error returns the processing error as a string. It implements the error interface.
