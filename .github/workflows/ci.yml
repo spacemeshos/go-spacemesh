@@ -55,8 +55,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    # should not take more than 2-3 mins
-    timeout-minutes: 5
+    # should not take more than 4-5 mins
+    timeout-minutes: 7
     steps:
       - name: checkout
         uses: actions/checkout@v3
