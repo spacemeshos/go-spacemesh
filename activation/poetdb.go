@@ -47,8 +47,7 @@ func (db *PoetDb) ValidateAndStore(ctx context.Context, proofMessage *types.Poet
 		return nil
 	}
 
-	if err := db.Validate(proofMessage.PoetProof, proofMessage.PoetServiceID,
-		proofMessage.RoundID, proofMessage.Signature); err != nil {
+	if err := db.Validate(proofMessage.PoetProof, proofMessage.PoetServiceID, proofMessage.RoundID, proofMessage.Signature); err != nil {
 		return err
 	}
 

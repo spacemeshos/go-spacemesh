@@ -311,9 +311,9 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 			continue
 		}
 		round := r.PoetRound.ID
-		// Time to wait before quering for the proof
+		// Time to wait before querying for the proof
 		// The additional second is an optimization to be nicer to poet
-		// and don't accidentially ask it to soon and have to retry.
+		// and don't accidentally ask it to soon and have to retry.
 		waitTime := time.Until(r.PoetRound.End.IntoTime()) + time.Second
 		eg.Go(func() error {
 			logger.With().Info("Waiting till poet round end", log.Duration("wait time", waitTime))
