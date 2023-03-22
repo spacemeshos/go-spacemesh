@@ -5,7 +5,7 @@ import (
 	"net/url"
 )
 
-//go:generate mockgen -package=bootstrap -destination=./mocks.go -source=./interface.go
+//go:generate mockgen -package=bootstrap -write_package_comment=false -destination=./mocks.go -source=./interface.go
 
 type Receiver interface {
 	OnBoostrapUpdate(*VerifiedUpdate)

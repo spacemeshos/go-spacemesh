@@ -1,3 +1,17 @@
+// Package bootstrap checks for the bootstrap/fallback data update from the
+// spacemesh administrator. This is intended as a short-term solution at the
+// beginning of the network deployment and should be removed once the network
+// is stable.
+//
+// The updater periodically checks for the latest update from a URL provided
+// by the spacemesh administrator, verifies the data, persists on disk and
+// notifies subscribers of a new update.
+//
+// Subscribers need to implement the following interface:
+//
+//	OnBoostrapUpdate(*VerifiedUpdate)
+//
+// and register with the updater before the application starts running.
 package bootstrap
 
 import (
@@ -38,9 +52,9 @@ var (
 	ErrInvalidBeacon   = errors.New("invalid beacon")
 )
 
-type realClient struct{}
+type client struct{}
 
-func (realClient) Query(ctx context.Context, resource *url.URL) ([]byte, error) {
+func (client) Query(ctx context.Context, resource *url.URL) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", resource.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("create http request: %w", err)
@@ -133,7 +147,7 @@ func New(subs []Receiver, opts ...Opt) (*Updater, error) {
 		cfg:         DefaultConfig(),
 		logger:      log.NewNop(),
 		fs:          afero.NewOsFs(),
-		client:      realClient{},
+		client:      client{},
 		subscribers: subs,
 	}
 	for _, opt := range opts {
