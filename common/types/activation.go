@@ -642,13 +642,10 @@ func (p *Post) String() string {
 // PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
 type PostMetadata struct {
 	Challenge     []byte
-	BitsPerLabel  uint8
 	LabelsPerUnit uint64
 
 	K1 uint32
 	K2 uint32
-	B  uint32
-	N  uint32
 }
 
 func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -656,12 +653,9 @@ func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 		return nil
 	}
 	encoder.AddString("Challenge", hex.EncodeToString(m.Challenge))
-	encoder.AddUint8("BitsPerLabel", m.BitsPerLabel)
 	encoder.AddUint64("LabelsPerUnit", m.LabelsPerUnit)
 	encoder.AddUint32("K1", m.K1)
 	encoder.AddUint32("K2", m.K2)
-	encoder.AddUint32("B", m.B)
-	encoder.AddUint32("N", m.N)
 	return nil
 }
 

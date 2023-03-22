@@ -220,7 +220,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 	t.Run("invalid post metadata", func(t *testing.T) {
 		t.Parallel()
 		invalidPostMeta := *validPostMeta
-		invalidPostMeta.BitsPerLabel += 1
+		invalidPostMeta.K1 += 1
 		challenge := createInitialChallenge(*validPost, invalidPostMeta, postConfig.MinNumUnits)
 		challengeBytes, err := codec.Encode(&challenge)
 		req.NoError(err)
