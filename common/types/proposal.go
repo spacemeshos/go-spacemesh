@@ -55,7 +55,7 @@ type InnerProposal struct {
 	// smesher's votes on the mesh history
 	Ballot
 	// smesher's content proposal for a layer
-	TxIDs []TransactionID `scale:"max=1000"` // TODO(mafa): check if correct size
+	TxIDs []TransactionID `scale:"max=100"` // The max size is set by the app config parameter TxsPerProposal (default: 100)
 	// aggregated hash up to the layer before this proposal.
 	MeshHash Hash32
 	// TODO add this when a state commitment mechanism is implemented.

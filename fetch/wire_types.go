@@ -18,20 +18,20 @@ type RequestMessage struct {
 // ResponseMessage is sent to the node as a response.
 type ResponseMessage struct {
 	Hash types.Hash32
-	Data []byte `scale:"max=1024"` // TODO(mafa): check if this is the right max size
+	Data []byte `scale:"max=1000000"` // TODO(mafa): check if this is the right max size
 }
 
 // RequestBatch is a batch of requests and a hash of all requests as ID.
 type RequestBatch struct {
 	ID       types.Hash32
-	Requests []RequestMessage `scale:"max=32"`
+	Requests []RequestMessage `scale:"max=20"` // depends on fetch config `BatchSize` which defaults to 20
 }
 
 // ResponseBatch is the response struct send for a RequestBatch. the ResponseBatch ID must be the same
 // as stated in RequestBatch even if not all Data is present.
 type ResponseBatch struct {
 	ID        types.Hash32
-	Responses []ResponseMessage `scale:"max=32"`
+	Responses []ResponseMessage `scale:"max=20"` // depends on fetch config `BatchSize` which defaults to 20
 }
 
 type MeshHashRequest struct {
@@ -48,8 +48,8 @@ func (r *MeshHashRequest) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 type MeshHashes struct {
-	Layers []types.LayerID `scale:"max=32"`
-	Hashes []types.Hash32  `scale:"max=32"`
+	Layers []types.LayerID `scale:"max=100"` // Same as syncer Config `MaxHashesInReq`
+	Hashes []types.Hash32  `scale:"max=100"`
 }
 
 type MaliciousIDs struct {
@@ -57,13 +57,13 @@ type MaliciousIDs struct {
 }
 
 type EpochData struct {
-	AtxIDs []types.ATXID `scale:"max=32"`
+	AtxIDs []types.ATXID `scale:"max=1000000"`
 }
 
 // LayerData is the data response for a given layer ID.
 type LayerData struct {
-	Ballots []types.BallotID `scale:"max=32"`
-	Blocks  []types.BlockID  `scale:"max=32"`
+	Ballots []types.BallotID `scale:"max=800"`
+	Blocks  []types.BlockID  `scale:"max=800"`
 }
 
 // LayerOpinion is the response for opinion for a given layer.

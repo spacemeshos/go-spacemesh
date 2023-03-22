@@ -61,7 +61,7 @@ type FirstVotingMessage struct {
 type FollowingVotingMessageBody struct {
 	EpochID        types.EpochID
 	RoundID        types.RoundID
-	VotesBitVector []byte `scale:"max=16"`
+	VotesBitVector []byte `scale:"max=32"` // 32 bytes = 256 bits, enough to encode 200 votes (ValidProposals)
 }
 
 // FollowingVotingMessage is a message type which is used when sending following voting messages.
