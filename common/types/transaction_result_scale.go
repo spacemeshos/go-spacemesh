@@ -51,7 +51,7 @@ func (t *TransactionResult) EncodeScale(enc *scale.Encoder) (total int, err erro
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Addresses, 2)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Addresses, 10)
 		if err != nil {
 			return total, err
 		}
@@ -108,7 +108,7 @@ func (t *TransactionResult) DecodeScale(dec *scale.Decoder) (total int, err erro
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[Address](dec, 2)
+		field, n, err := scale.DecodeStructSliceWithLimit[Address](dec, 10)
 		if err != nil {
 			return total, err
 		}

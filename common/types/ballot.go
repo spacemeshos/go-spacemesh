@@ -135,11 +135,11 @@ type Votes struct {
 	// Base ballot.
 	Base BallotID
 	// Support block id at a particular layer and height.
-	Support []Vote `scale:"max=800"` // TODO(mafa): check if this is the right max size
+	Support []Vote `scale:"max=10000"`
 	// Against previously supported block.
-	Against []Vote `scale:"max=800"` // TODO(mafa): check if this is the right max size
+	Against []Vote `scale:"max=10000"`
 	// Abstain on layers until they are terminated.
-	Abstain []LayerID `scale:"max=800"` // TODO(mafa): check if this is the right max size
+	Abstain []LayerID `scale:"max=10000"`
 }
 
 // MarshalLogObject implements logging interface.
@@ -184,8 +184,8 @@ func (s *Vote) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 // Opinion is a tuple from opinion hash and votes that decode to opinion hash.
 type Opinion struct {
-	Hash  Hash32
-	Votes `scale:"max=800"` // TODO(mafa): check if this is the right max size
+	Hash Hash32
+	Votes
 }
 
 // MarshalLogObject implements logging interface.
@@ -197,7 +197,7 @@ func (o *Opinion) MarshalLogObject(encoder log.ObjectEncoder) error {
 // EpochData contains information that cannot be changed mid-epoch.
 type EpochData struct {
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
-	ActiveSet []ATXID `scale:"max=10000"` // TODO(mafa): check if this is the right max size
+	ActiveSet []ATXID `scale:"max=100000"`
 	// the beacon value the smesher recorded for this epoch
 	Beacon Beacon
 }

@@ -44,14 +44,13 @@ func (t TransactionStatus) DecodeScale(d *scale.Decoder) (uint8, int, error) {
 // TransactionResult is created after consuming transaction.
 type TransactionResult struct {
 	Status  TransactionStatus
-	Message string `scale:"max=1024"` // TODO(mafa): check max size
+	Message string `scale:"max=1024"`
 	Gas     uint64
 	Fee     uint64
 	Block   BlockID
 	Layer   LayerID
 	// Addresses contains all updated addresses.
-	// For genesis this will be either one or two addresses.
-	Addresses []Address `scale:"max=2"`
+	Addresses []Address `scale:"max=10"`
 }
 
 // MarshalLogObject implements encoding for the tx result.

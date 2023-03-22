@@ -47,8 +47,8 @@ func (p *Proposal) DecodeScale(d *scale.Decoder) (int, error) {
 // FirstVotingMessageBody is FirstVotingMessage without a signature.
 type FirstVotingMessageBody struct {
 	EpochID                   types.EpochID
-	ValidProposals            []Proposal `scale:"max=200"`
-	PotentiallyValidProposals []Proposal `scale:"max=200"`
+	ValidProposals            []Proposal `scale:"max=1000"`
+	PotentiallyValidProposals []Proposal `scale:"max=1000"`
 }
 
 // FirstVotingMessage is a message type which is used when sending first voting messages.
@@ -61,7 +61,7 @@ type FirstVotingMessage struct {
 type FollowingVotingMessageBody struct {
 	EpochID        types.EpochID
 	RoundID        types.RoundID
-	VotesBitVector []byte `scale:"max=32"` // 32 bytes = 256 bits, enough to encode 200 votes (ValidProposals)
+	VotesBitVector []byte `scale:"max=128"` // 128 bytes = 1024 bits and we limit the number of proposals to 1000
 }
 
 // FollowingVotingMessage is a message type which is used when sending following voting messages.

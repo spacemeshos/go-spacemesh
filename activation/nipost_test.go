@@ -384,7 +384,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	// Verify
 	req.Equal(challengeHash, *nipost.Challenge)
 	ref, _ := proof.Ref()
-	req.EqualValues(ref, nipost.PostMetadata.Challenge)
+	req.EqualValues(ref[:], nipost.PostMetadata.Challenge)
 }
 
 func TestNIPostBuilder_ManyPoETs_WaitingForProof_DeadlineReached(t *testing.T) {
@@ -441,7 +441,7 @@ func TestNIPostBuilder_ManyPoETs_WaitingForProof_DeadlineReached(t *testing.T) {
 	// Verify
 	req.Equal(challengeHash, *nipost.Challenge)
 	ref, _ := proof.Ref()
-	req.EqualValues(ref, nipost.PostMetadata.Challenge)
+	req.EqualValues(ref[:], nipost.PostMetadata.Challenge)
 }
 
 func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
@@ -497,7 +497,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	// Verify
 	req.Equal(challengeHash, *nipost.Challenge)
 	ref, _ := proofBetter.Ref()
-	req.EqualValues(ref, nipost.PostMetadata.Challenge)
+	req.EqualValues(ref[:], nipost.PostMetadata.Challenge)
 }
 
 func TestNIPostBuilder_Close(t *testing.T) {

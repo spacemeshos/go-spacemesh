@@ -16,7 +16,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -76,8 +75,8 @@ func TestPoetDbHappyFlow(t *testing.T) {
 
 	proofBytes, err := codec.Encode(&msg.PoetProof)
 	r.NoError(err)
-	expectedRef := hash.Sum(proofBytes)
-	r.Equal(types.PoetProofRef(types.CalcHash32(expectedRef[:]).Bytes()), ref)
+	expectedRef := types.CalcHash32(proofBytes)
+	r.Equal(types.PoetProofRef(expectedRef), ref)
 
 	r.NoError(poetDb.StoreProof(context.TODO(), ref, &msg))
 	got, err := poetDb.GetProofRef(msg.PoetServiceID, msg.RoundID)
@@ -122,7 +121,7 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 	_, err := poetDb.GetProofRef(msg.PoetServiceID, "0")
 	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for poet ID %x in round %v: get value: database: not found", msg.PoetServiceID[:5], "0"))
 
-	ref := []byte("abcde")
+	ref := types.PoetProofRef{0xab, 0xcd, 0xef}
 	_, err = poetDb.GetMembershipMap(ref)
 	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for ref %x: get proof from store: get value: database: not found", ref[:5]))
 }

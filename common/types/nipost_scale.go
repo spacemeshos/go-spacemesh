@@ -23,14 +23,14 @@ func (t *NIPostBuilderState) EncodeScale(enc *scale.Encoder) (total int, err err
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.PoetRequests, 10)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.PoetRequests, 100)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.PoetProofRef, 32)
+		n, err := scale.EncodeByteArray(enc, t.PoetProofRef[:])
 		if err != nil {
 			return total, err
 		}
@@ -56,7 +56,7 @@ func (t *NIPostBuilderState) DecodeScale(dec *scale.Decoder) (total int, err err
 		t.NIPost = field
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[PoetRequest](dec, 10)
+		field, n, err := scale.DecodeStructSliceWithLimit[PoetRequest](dec, 100)
 		if err != nil {
 			return total, err
 		}
@@ -64,12 +64,11 @@ func (t *NIPostBuilderState) DecodeScale(dec *scale.Decoder) (total int, err err
 		t.PoetRequests = field
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		n, err := scale.DecodeByteArray(dec, t.PoetProofRef[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.PoetProofRef = field
 	}
 	return total, nil
 }

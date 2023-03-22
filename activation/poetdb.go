@@ -111,7 +111,7 @@ func (db *PoetDb) StoreProof(ctx context.Context, ref types.PoetProofRef, proofM
 func (db *PoetDb) GetProofRef(poetID []byte, roundID string) (types.PoetProofRef, error) {
 	proofRef, err := poets.GetRef(db.sqlDB, poetID, roundID)
 	if err != nil {
-		return nil, fmt.Errorf("could not fetch poet proof for poet ID %x in round %v: %w", poetID[:5], roundID, err)
+		return types.PoetProofRef{}, fmt.Errorf("could not fetch poet proof for poet ID %x in round %v: %w", poetID[:5], roundID, err)
 	}
 	return proofRef, nil
 }

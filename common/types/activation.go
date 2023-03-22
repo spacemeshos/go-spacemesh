@@ -424,7 +424,7 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 	return vAtx, nil
 }
 
-type PoetProofRef []byte
+type PoetProofRef [32]byte
 
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
 // and the actual PoET Merkle proof.
@@ -487,12 +487,11 @@ func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
 func (proofMessage *PoetProofMessage) Ref() (PoetProofRef, error) {
 	poetProofBytes, err := codec.Encode(&proofMessage.PoetProof)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %w",
+		return PoetProofRef{}, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %w",
 			proofMessage.PoetServiceID, proofMessage.RoundID, err)
 	}
-	ref := hash.Sum(poetProofBytes)
-	h := CalcHash32(ref[:])
-	return h.Bytes(), nil
+	h := CalcHash32(poetProofBytes)
+	return (PoetProofRef)(h), nil
 }
 
 type RoundEnd time.Time

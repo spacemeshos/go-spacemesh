@@ -51,7 +51,7 @@ func (t *Account) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.State, 1024)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.State, 10000)
 		if err != nil {
 			return total, err
 		}
@@ -108,7 +108,7 @@ func (t *Account) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.TemplateAddress = field
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 1024)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 10000)
 		if err != nil {
 			return total, err
 		}

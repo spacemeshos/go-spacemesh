@@ -263,7 +263,7 @@ func (t *MeshHashes) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *MaliciousIDs) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.NodeIDs, 32)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.NodeIDs, 100000)
 		if err != nil {
 			return total, err
 		}
@@ -274,7 +274,7 @@ func (t *MaliciousIDs) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *MaliciousIDs) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.NodeID](dec, 32)
+		field, n, err := scale.DecodeStructSliceWithLimit[types.NodeID](dec, 100000)
 		if err != nil {
 			return total, err
 		}

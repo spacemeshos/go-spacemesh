@@ -53,7 +53,7 @@ type MeshHashes struct {
 }
 
 type MaliciousIDs struct {
-	NodeIDs []types.NodeID `scale:"max=32"`
+	NodeIDs []types.NodeID `scale:"max=100000"` // maximum expected number of nodes in the network
 }
 
 type EpochData struct {

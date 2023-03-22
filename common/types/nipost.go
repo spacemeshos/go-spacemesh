@@ -20,8 +20,8 @@ type NIPostBuilderState struct {
 
 	NIPost *NIPost
 
-	PoetRequests []PoetRequest `scale:"max=10"` // TODO(mafa): check if this is the right max size
+	PoetRequests []PoetRequest `scale:"max=100"` // size based on how many poets a node connects to at most
 
 	// PoetProofRef is the root of the proof received from the PoET service.
-	PoetProofRef PoetProofRef `scale:"max=32"` // TODO(mafa): check if this is the right max size
+	PoetProofRef PoetProofRef
 }

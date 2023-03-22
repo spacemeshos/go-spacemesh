@@ -191,14 +191,15 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 	}
 
 	// Phase 1: query PoET services for proofs
-	if nb.state.PoetProofRef == nil {
+	empty := types.PoetProofRef{}
+	if nb.state.PoetProofRef == empty {
 		getProofsCtx, cancel := context.WithDeadline(ctx, poetProofDeadline)
 		defer cancel()
 		poetProofRef, err := nb.getBestProof(getProofsCtx, &challengeHash)
 		if err != nil {
 			return nil, 0, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
-		if poetProofRef == nil {
+		if poetProofRef == empty {
 			return nil, 0, &PoetSvcUnstableError{source: ErrPoetProofNotReceived}
 		}
 		nb.state.PoetProofRef = poetProofRef
@@ -208,10 +209,9 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 	// Phase 2: Post execution.
 	var postGenDuration time.Duration = 0
 	if nipost.Post == nil {
-		nb.log.With().Info("starting post execution",
-			log.Binary("challenge", nb.state.PoetProofRef))
+		nb.log.With().Info("starting post execution", log.Binary("challenge", nb.state.PoetProofRef[:]))
 		startTime := time.Now()
-		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(ctx, nb.state.PoetProofRef)
+		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(ctx, nb.state.PoetProofRef[:])
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to execute Post: %v", err)
 		}
@@ -348,7 +348,7 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 		})
 	}
 	if err := eg.Wait(); err != nil {
-		return nil, fmt.Errorf("querying for proofs: %w", err)
+		return types.PoetProofRef{}, fmt.Errorf("querying for proofs: %w", err)
 	}
 	close(proofs)
 
@@ -364,11 +364,11 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 	if bestProof != nil {
 		ref, err := bestProof.Ref()
 		if err != nil {
-			return nil, err
+			return types.PoetProofRef{}, err
 		}
-		nb.log.With().Info("Selected the best proof", log.Uint64("leafCount", bestProof.LeafCount), log.Binary("ref", ref))
+		nb.log.With().Info("Selected the best proof", log.Uint64("leafCount", bestProof.LeafCount), log.Binary("ref", ref[:]))
 		return ref, nil
 	}
 
-	return nil, ErrPoetProofNotReceived
+	return types.PoetProofRef{}, ErrPoetProofNotReceived
 }

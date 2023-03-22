@@ -197,21 +197,21 @@ func (t *Votes) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Support, 800)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Support, 10000)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Against, 800)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Against, 10000)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Abstain, 800)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Abstain, 10000)
 		if err != nil {
 			return total, err
 		}
@@ -229,7 +229,7 @@ func (t *Votes) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[Vote](dec, 800)
+		field, n, err := scale.DecodeStructSliceWithLimit[Vote](dec, 10000)
 		if err != nil {
 			return total, err
 		}
@@ -237,7 +237,7 @@ func (t *Votes) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Support = field
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[Vote](dec, 800)
+		field, n, err := scale.DecodeStructSliceWithLimit[Vote](dec, 10000)
 		if err != nil {
 			return total, err
 		}
@@ -245,7 +245,7 @@ func (t *Votes) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Against = field
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[LayerID](dec, 800)
+		field, n, err := scale.DecodeStructSliceWithLimit[LayerID](dec, 10000)
 		if err != nil {
 			return total, err
 		}
@@ -344,7 +344,7 @@ func (t *Opinion) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *EpochData) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.ActiveSet, 10000)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.ActiveSet, 100000)
 		if err != nil {
 			return total, err
 		}
@@ -362,7 +362,7 @@ func (t *EpochData) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *EpochData) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[ATXID](dec, 10000)
+		field, n, err := scale.DecodeStructSliceWithLimit[ATXID](dec, 100000)
 		if err != nil {
 			return total, err
 		}

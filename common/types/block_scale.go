@@ -45,14 +45,14 @@ func (t *InnerBlock) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Rewards, 1000)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Rewards, 500)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.TxIDs, 1000)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.TxIDs, 100000)
 		if err != nil {
 			return total, err
 		}
@@ -78,7 +78,7 @@ func (t *InnerBlock) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.TickHeight = uint64(field)
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[AnyReward](dec, 1000)
+		field, n, err := scale.DecodeStructSliceWithLimit[AnyReward](dec, 500)
 		if err != nil {
 			return total, err
 		}
@@ -86,7 +86,7 @@ func (t *InnerBlock) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Rewards = field
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[TransactionID](dec, 1000)
+		field, n, err := scale.DecodeStructSliceWithLimit[TransactionID](dec, 100000)
 		if err != nil {
 			return total, err
 		}
@@ -179,7 +179,7 @@ func (t *Certificate) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Signatures, 800)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Signatures, 1000)
 		if err != nil {
 			return total, err
 		}
@@ -197,7 +197,7 @@ func (t *Certificate) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[CertifyMessage](dec, 800)
+		field, n, err := scale.DecodeStructSliceWithLimit[CertifyMessage](dec, 1000)
 		if err != nil {
 			return total, err
 		}

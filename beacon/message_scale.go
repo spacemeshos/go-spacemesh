@@ -122,14 +122,14 @@ func (t *FirstVotingMessageBody) EncodeScale(enc *scale.Encoder) (total int, err
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.ValidProposals, 200)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.ValidProposals, 1000)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.PotentiallyValidProposals, 200)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.PotentiallyValidProposals, 1000)
 		if err != nil {
 			return total, err
 		}
@@ -148,7 +148,7 @@ func (t *FirstVotingMessageBody) DecodeScale(dec *scale.Decoder) (total int, err
 		t.EpochID = types.EpochID(field)
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[Proposal](dec, 200)
+		field, n, err := scale.DecodeStructSliceWithLimit[Proposal](dec, 1000)
 		if err != nil {
 			return total, err
 		}
@@ -156,7 +156,7 @@ func (t *FirstVotingMessageBody) DecodeScale(dec *scale.Decoder) (total int, err
 		t.ValidProposals = field
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[Proposal](dec, 200)
+		field, n, err := scale.DecodeStructSliceWithLimit[Proposal](dec, 1000)
 		if err != nil {
 			return total, err
 		}
@@ -219,7 +219,7 @@ func (t *FollowingVotingMessageBody) EncodeScale(enc *scale.Encoder) (total int,
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.VotesBitVector, 32)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.VotesBitVector, 128)
 		if err != nil {
 			return total, err
 		}
@@ -246,7 +246,7 @@ func (t *FollowingVotingMessageBody) DecodeScale(dec *scale.Decoder) (total int,
 		t.RoundID = types.RoundID(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 128)
 		if err != nil {
 			return total, err
 		}
