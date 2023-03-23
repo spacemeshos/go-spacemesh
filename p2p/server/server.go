@@ -12,6 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/multiformats/go-varint"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -98,7 +99,7 @@ func (s *Server) streamHandler(stream network.Stream) {
 	_ = stream.SetDeadline(time.Now().Add(s.timeout))
 	defer stream.SetDeadline(time.Time{})
 	rd := bufio.NewReader(stream)
-	size, err := binary.ReadUvarint(rd)
+	size, err := varint.ReadUvarint(rd)
 	if err != nil {
 		return
 	}

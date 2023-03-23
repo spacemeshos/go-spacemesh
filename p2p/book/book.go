@@ -176,7 +176,7 @@ func (b *Book) Add(src, id ID, raw Address) {
 		b.shareable = append(b.shareable, addr)
 		b.queue.PushBack(addr)
 		b.known[id] = addr
-	} else if addr.Raw.Address != raw {
+	} else if addr.Raw.Address != raw && !addr.protected {
 		addr.Raw.Address = raw
 		addr.bucket = bucket
 	}

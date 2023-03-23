@@ -621,7 +621,7 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 		return
 	}
 	if !lid.After(t.processed) && withinDistance(t.Config.Hdist, lid, t.last) {
-		t.logger.With().Info("local opinion changed within hdist",
+		t.logger.With().Debug("local opinion changed within hdist",
 			lid,
 			log.Stringer("verified", t.verified),
 			log.Stringer("previous", previous),
