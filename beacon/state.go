@@ -23,7 +23,7 @@ type state struct {
 	// this list is used in encoding/decoding votes for each miner in all subsequent voting rounds.
 	firstRoundIncomingVotes map[string]proposalList
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
-	votesMargin               map[string]*big.Int
+	votesMargin               map[Proposal]*big.Int
 	hasProposed               map[string]struct{}
 	hasVoted                  []map[string]struct{}
 	proposalPhaseFinishedTime time.Time
@@ -45,7 +45,7 @@ func newState(
 		nonce:                   nonce,
 		minerAtxs:               miners,
 		firstRoundIncomingVotes: make(map[string]proposalList),
-		votesMargin:             map[string]*big.Int{},
+		votesMargin:             map[Proposal]*big.Int{},
 		hasProposed:             make(map[string]struct{}),
 		hasVoted:                make([]map[string]struct{}, cfg.RoundsNumber),
 		proposalChecker:         checker,
@@ -54,18 +54,18 @@ func newState(
 
 func (s *state) addValidProposal(proposal Proposal) {
 	if s.incomingProposals.valid == nil {
-		s.incomingProposals.valid = make(map[string]struct{})
+		s.incomingProposals.valid = make(map[Proposal]struct{})
 	}
-	s.incomingProposals.valid[proposal.String()] = struct{}{}
-	s.votesMargin[proposal.String()] = new(big.Int)
+	s.incomingProposals.valid[proposal] = struct{}{}
+	s.votesMargin[proposal] = new(big.Int)
 }
 
 func (s *state) addPotentiallyValidProposal(proposal Proposal) {
 	if s.incomingProposals.potentiallyValid == nil {
-		s.incomingProposals.potentiallyValid = make(map[string]struct{})
+		s.incomingProposals.potentiallyValid = make(map[Proposal]struct{})
 	}
-	s.incomingProposals.potentiallyValid[proposal.String()] = struct{}{}
-	s.votesMargin[proposal.String()] = new(big.Int)
+	s.incomingProposals.potentiallyValid[proposal] = struct{}{}
+	s.votesMargin[proposal] = new(big.Int)
 }
 
 func (s *state) setMinerFirstRoundVote(minerPK *signing.PublicKey, voteList []Proposal) {
@@ -80,12 +80,13 @@ func (s *state) getMinerFirstRoundVote(minerPK *signing.PublicKey) (proposalList
 	return p, nil
 }
 
-func (s *state) addVote(proposal string, vote uint, voteWeight *big.Int) {
+func (s *state) addVote(proposal Proposal, vote uint, voteWeight *big.Int) {
 	if _, ok := s.votesMargin[proposal]; !ok {
 		// voteMargin is updated during the proposal phase.
 		// ignore votes on proposals not in the original proposals.
 		s.logger.With().Warning("ignoring vote for unknown proposal",
-			log.String("proposal", hex.EncodeToString([]byte(proposal))))
+			log.String("proposal", hex.EncodeToString(proposal[:])),
+		)
 		return
 	}
 	if vote == up {

@@ -24,16 +24,6 @@ type ProposalMessage struct {
 
 type Proposal [4]byte
 
-func ProposalFromString(s string) Proposal {
-	var p Proposal
-	copy(p[:], []byte(s))
-	return p
-}
-
-func (p Proposal) String() string {
-	return string(p[:])
-}
-
 // EncodeScale implements scale codec interface.
 func (p *Proposal) EncodeScale(e *scale.Encoder) (int, error) {
 	return scale.EncodeByteArray(e, p[:])

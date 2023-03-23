@@ -1019,10 +1019,10 @@ func TestBeacon_signAndExtractED(t *testing.T) {
 
 func TestBeacon_calcBeacon(t *testing.T) {
 	set := proposalSet{
-		(Proposal{0x01}).String(): {},
-		(Proposal{0x02}).String(): {},
-		(Proposal{0x04}).String(): {},
-		(Proposal{0x05}).String(): {},
+		Proposal{0x01}: {},
+		Proposal{0x02}: {},
+		Proposal{0x04}: {},
+		Proposal{0x05}: {},
 	}
 
 	beacon := calcBeacon(logtest.New(t), set)

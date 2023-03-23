@@ -7,33 +7,33 @@ import (
 )
 
 func Test_codec(t *testing.T) {
-	firstRound := []Proposal{
-		[4]byte{0x11},
-		[4]byte{0x22},
-		[4]byte{0x33},
-		[4]byte{0x44},
-		[4]byte{0x55},
-		[4]byte{0x66},
-		[4]byte{0x77},
-		[4]byte{0x88},
-		[4]byte{0x99},
-		[4]byte{0x00},
+	firstRound := proposalList{
+		Proposal{0x11},
+		Proposal{0x22},
+		Proposal{0x33},
+		Proposal{0x44},
+		Proposal{0x55},
+		Proposal{0x66},
+		Proposal{0x77},
+		Proposal{0x88},
+		Proposal{0x99},
+		Proposal{0x00},
 	}
 
 	currentRound := allVotes{
 		support: proposalSet{
-			firstRound[0].String(): {},
-			firstRound[2].String(): {},
-			firstRound[4].String(): {},
-			firstRound[6].String(): {},
-			firstRound[8].String(): {},
+			firstRound[0]: {},
+			firstRound[2]: {},
+			firstRound[4]: {},
+			firstRound[6]: {},
+			firstRound[8]: {},
 		},
 		against: proposalSet{
-			firstRound[1].String(): {},
-			firstRound[3].String(): {},
-			firstRound[5].String(): {},
-			firstRound[7].String(): {},
-			firstRound[9].String(): {},
+			firstRound[1]: {},
+			firstRound[3]: {},
+			firstRound[5]: {},
+			firstRound[7]: {},
+			firstRound[9]: {},
 		},
 	}
 
@@ -47,33 +47,33 @@ func Test_codec(t *testing.T) {
 }
 
 func Test_codec_lessThanActualSize(t *testing.T) {
-	firstRound := []Proposal{
-		[4]byte{0x11},
-		[4]byte{0x22},
-		[4]byte{0x33},
-		[4]byte{0x44},
-		[4]byte{0x55},
-		[4]byte{0x66},
-		[4]byte{0x77},
-		[4]byte{0x88},
-		[4]byte{0x99},
-		[4]byte{0x00},
+	firstRound := proposalList{
+		Proposal{0x11},
+		Proposal{0x22},
+		Proposal{0x33},
+		Proposal{0x44},
+		Proposal{0x55},
+		Proposal{0x66},
+		Proposal{0x77},
+		Proposal{0x88},
+		Proposal{0x99},
+		Proposal{0x00},
 	}
 
 	currentRound := allVotes{
 		support: proposalSet{
-			firstRound[0].String(): {},
-			firstRound[1].String(): {},
-			firstRound[2].String(): {},
-			firstRound[3].String(): {},
-			firstRound[4].String(): {},
-			firstRound[5].String(): {},
-			firstRound[6].String(): {},
-			firstRound[7].String(): {},
+			firstRound[0]: {},
+			firstRound[1]: {},
+			firstRound[2]: {},
+			firstRound[3]: {},
+			firstRound[4]: {},
+			firstRound[5]: {},
+			firstRound[6]: {},
+			firstRound[7]: {},
 		},
 		against: proposalSet{
-			firstRound[8].String(): {},
-			firstRound[9].String(): {},
+			firstRound[8]: {},
+			firstRound[9]: {},
 		},
 	}
 

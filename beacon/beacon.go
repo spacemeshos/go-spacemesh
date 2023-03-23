@@ -815,7 +815,7 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 
 	var (
 		ownVotes  allVotes
-		undecided []string
+		undecided proposalList
 		err       error
 	)
 	for round := types.FirstRound; round < pd.config.RoundsNumber; round++ {
@@ -889,7 +889,7 @@ func (pd *ProtocolDriver) markProposalPhaseFinished(epoch types.EpochID, finishe
 	return nil
 }
 
-func (pd *ProtocolDriver) calcVotesBeforeWeakCoin(logger log.Log, epoch types.EpochID) (allVotes, []string, error) {
+func (pd *ProtocolDriver) calcVotesBeforeWeakCoin(logger log.Log, epoch types.EpochID) (allVotes, proposalList, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 	if _, ok := pd.states[epoch]; !ok {
