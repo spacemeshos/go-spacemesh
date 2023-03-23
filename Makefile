@@ -153,11 +153,8 @@ lint-github-action: get-libs
 	./bin/golangci-lint run --config .golangci.yml --out-format=github-actions
 .PHONY: lint-github-action
 
-, := ,
-UNIT_TESTS_COMMA_SEP:=$(subst $() $(),$(,),$(UNIT_TESTS))
-
 cover: get-libs
-	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -timeout 0 -p 1 -coverpkg=$(UNIT_TESTS_COMMA_SEP) $(UNIT_TESTS)
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -timeout 0 -p 1 -coverpkg=./... $(UNIT_TESTS)
 .PHONY: cover
 
 tag-and-build:
