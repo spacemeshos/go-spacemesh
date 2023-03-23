@@ -576,8 +576,6 @@ github.com/sourcegraph/annotate v0.0.0-20160123013949-f4cad6c6324d/go.mod h1:Udh
 github.com/sourcegraph/syntaxhighlight v0.0.0-20170531221838-bd320f5d308e/go.mod h1:HuIsMU8RRBOtsCgI77wP899iHVBQpCmg4ErYMZB+2IA=
 github.com/spacemeshos/api/release/go v1.5.6 h1:ubcUppvafyRLyq+yvOzXS3u7//rxEkJ85kmcOQWQwUc=
 github.com/spacemeshos/api/release/go v1.5.6/go.mod h1:4EIC5bex4jpz6RbP3i1KhacBLn+2g5xGA4Rw1JfYfZI=
-github.com/spacemeshos/bitstream v0.1.1 h1:ljikzXYoED1HNmrWJwEOqqEHMbMCkimuLbKKQQytwHM=
-github.com/spacemeshos/bitstream v0.1.1/go.mod h1:qEfrejlt2e5z5Clc0HPioRsQeNYkg2rjQWLOMzZokkc=
 github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d h1:ivLphqrvVa4Spg1PdjOALDJc4q+gtivJ9JwRk5LUcPI=
 github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d/go.mod h1:bMv7iXffBCPAHFivV6XM2l2SWXIfDoXkw4ND9yhgyfI=
 github.com/spacemeshos/ed25519-recovery v0.1.0 h1:ITp0ANR5MiJda51G5R0dV1K0oVcZYuMF1dVxgCP0pAk=
@@ -590,8 +588,8 @@ github.com/spacemeshos/merkle-tree v0.2.1 h1:BSs/zt1n3ceZcpWdcqNFRvTeAWDlc0W+bql
 github.com/spacemeshos/merkle-tree v0.2.1/go.mod h1:IsrdlW6AHZ4HSi89H7G94ravFCMFZLGnm6To0tQ0SPY=
 github.com/spacemeshos/poet v0.6.5 h1:SCXtrJC/B3MuXcMf58eqGp8JmwJ7QQ+rHIpGp1nuJ+A=
 github.com/spacemeshos/poet v0.6.5/go.mod h1:Lb83q5OQJgITnOv5FQo9WPVc2uBu7CXFvM/+r3oCTTY=
-github.com/spacemeshos/post v0.5.1-0.20230322144050-66a83af81382 h1:3z04XmHhYZWFP2S7jTjfwUvanv6yVBHum0QzJoUntpg=
-github.com/spacemeshos/post v0.5.1-0.20230322144050-66a83af81382/go.mod h1:d60yAfGkl0DF+Le9oRNeRNkcZDE+caq7aV1t7JDjAlw=
+github.com/spacemeshos/post v0.5.1 h1:40YyfJ4p2LWQvcAdwdZc1MJoD9CaXwm0gJwEWKid6rg=
+github.com/spacemeshos/post v0.5.1/go.mod h1:MPjn9h2FdgKkYUZrFWAcHyRqRrbRfMFR52+YFA+EMSk=
 github.com/spacemeshos/sha256-simd v0.1.0 h1:G7Mfu5RYdQiuE+wu4ZyJ7I0TI74uqLhFnKblEnSpjYI=
 github.com/spacemeshos/sha256-simd v0.1.0/go.mod h1:O8CClVIilId7RtuCMV2+YzMj6qjVn75JsxOxaE8vcfM=
 github.com/spaolacci/murmur3 v1.1.0 h1:7c1g84S4BPRrfL5Xrdp6fOJ206sU9y293DDHaoy0bLI=

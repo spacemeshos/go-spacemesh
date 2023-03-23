@@ -37,7 +37,7 @@ require (
 	github.com/spacemeshos/go-scale v1.1.4
 	github.com/spacemeshos/merkle-tree v0.2.1
 	github.com/spacemeshos/poet v0.6.5
-	github.com/spacemeshos/post v0.5.1-0.20230322144050-66a83af81382
+	github.com/spacemeshos/post v0.5.1
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.15.0
@@ -157,7 +157,6 @@ require (
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
-	github.com/spacemeshos/bitstream v0.1.1 // indirect
 	github.com/spacemeshos/sha256-simd v0.1.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/afero v1.9.3 // indirect
