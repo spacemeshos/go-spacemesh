@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -70,6 +71,11 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 		logger.With().Warning("received malformed beacon proposal", log.Stringer("sender", peer), log.Err(err))
 		return errMalformedMessage
 	}
+
+	// Record message latency, proposals are sent at epoch start + GracePeriodDuration
+	epochStart := pd.clock.LayerToTime(m.EpochID.FirstLayer())
+	latency := receivedTime.Sub(epochStart.Add(pd.config.GracePeriodDuration))
+	metrics.ReportMessageLatency(pubsub.BeaconProposalProtocol, latency)
 
 	if !pd.isProposalTimely(&m, receivedTime) {
 		logger.With().Debug("proposal too early", m.EpochID, log.Time("received_at", receivedTime))
