@@ -28,7 +28,7 @@ var (
 
 func getPoetProof(t *testing.T) types.PoetProofMessage {
 	createProofOnce.Do(func() {
-		members := []shared.Member{{Challenge: memberHash}}
+		members := [][]byte{memberHash}
 		challenge, err := prover.CalcTreeRoot(members)
 		require.NoError(t, err)
 
@@ -54,12 +54,13 @@ func getPoetProof(t *testing.T) types.PoetProofMessage {
 		proof = &types.PoetProofMessage{
 			PoetProof: types.PoetProof{
 				MerkleProof: *merkleProof,
-				Members:     members,
+				Members:     make([]types.Member, 1),
 				LeafCount:   leaves,
 			},
 			PoetServiceID: []byte("poet_id_123456"),
 			RoundID:       "1337",
 		}
+		copy(proof.PoetProof.Members[0][:], memberHash)
 	})
 	return *proof
 }
@@ -78,7 +79,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	expectedRef := types.CalcHash32(proofBytes)
 	r.Equal(types.PoetProofRef(expectedRef), ref)
 
-	r.NoError(poetDb.StoreProof(context.TODO(), ref, &msg))
+	r.NoError(poetDb.StoreProof(context.Background(), ref, &msg))
 	got, err := poetDb.GetProofRef(msg.PoetServiceID, msg.RoundID)
 	r.NoError(err)
 	r.Equal(ref, got)

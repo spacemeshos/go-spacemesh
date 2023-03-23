@@ -79,7 +79,7 @@ func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nip
 
 func contains(proof *types.PoetProof, member []byte) bool {
 	for _, part := range proof.Members {
-		if bytes.Equal(part.Challenge, member) {
+		if bytes.Equal(part[:], member) {
 			return true
 		}
 	}

@@ -152,21 +152,21 @@ func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, error
 	return &proofMessage.PoetProof, nil
 }
 
-func membershipSliceToMap(membership []shared.Member) map[types.Hash32]bool {
+func membershipSliceToMap(membership []types.Member) map[types.Hash32]bool {
 	res := make(map[types.Hash32]bool)
 	for _, member := range membership {
-		res[types.BytesToHash(member.Challenge)] = true
+		res[types.BytesToHash(member[:])] = true
 	}
 	return res
 }
 
-func calcRoot(leaves []shared.Member) ([]byte, error) {
+func calcRoot(leaves []types.Member) ([]byte, error) {
 	tree, err := merkle.NewTree()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tree: %w", err)
 	}
 	for _, member := range leaves {
-		err := tree.AddLeaf(member.Challenge)
+		err := tree.AddLeaf(member[:])
 		if err != nil {
 			return nil, fmt.Errorf("failed to add leaf: %w", err)
 		}

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/require"
@@ -626,7 +625,13 @@ func TestValidator_Validate(t *testing.T) {
 	}}
 	challengeHash := challenge.Hash()
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
-	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().Return(&types.PoetProof{Members: []shared.Member{{Challenge: challengeHash.Bytes()}}}, nil)
+	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().DoAndReturn(func(types.PoetProofRef) (*types.PoetProof, error) {
+		proof := &types.PoetProof{
+			Members: make([]types.Member, 1),
+		}
+		copy(proof.Members[0][:], challengeHash.Bytes())
+		return proof, nil
+	})
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 
 	postProvider := newTestPostManager(t)

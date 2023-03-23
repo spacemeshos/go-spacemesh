@@ -424,13 +424,15 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 	return vAtx, nil
 }
 
+type Member [32]byte
+
 type PoetProofRef [32]byte
 
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
 // and the actual PoET Merkle proof.
 type PoetProof struct {
 	poetShared.MerkleProof
-	Members   []poetShared.Member `scale:"max=100000"` // max size depends on how many smeshers submit a challenge to a poet server
+	Members   []Member `scale:"max=100000"` // max size depends on how many smeshers submit a challenge to a poet server
 	LeafCount uint64
 }
 
@@ -441,7 +443,7 @@ func (p *PoetProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint64("LeafCount", p.LeafCount)
 	encoder.AddArray("Indices", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 		for _, member := range p.Members {
-			encoder.AppendString(hex.EncodeToString(member.Challenge))
+			encoder.AppendString(hex.EncodeToString(member[:]))
 		}
 		return nil
 	}))
@@ -449,13 +451,13 @@ func (p *PoetProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("MerkleProof.Root", hex.EncodeToString(p.Root))
 	encoder.AddArray("MerkleProof.ProvenLeaves", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 		for _, v := range p.ProvenLeaves {
-			encoder.AppendString(hex.EncodeToString(v.Value))
+			encoder.AppendString(hex.EncodeToString(v))
 		}
 		return nil
 	}))
 	encoder.AddArray("MerkleProof.ProofNodes", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 		for _, v := range p.ProofNodes {
-			encoder.AppendString(hex.EncodeToString(v.Value))
+			encoder.AppendString(hex.EncodeToString(v))
 		}
 		return nil
 	}))

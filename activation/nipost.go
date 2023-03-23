@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spacemeshos/poet/shared"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -290,9 +289,9 @@ func (nb *NIPostBuilder) getPoetClient(ctx context.Context, id types.PoetService
 	return nil
 }
 
-func membersContain(members []shared.Member, challenge *types.Hash32) bool {
+func membersContain(members []types.Member, challenge *types.Hash32) bool {
 	for _, member := range members {
-		if bytes.Equal(member.Challenge, challenge.Bytes()) {
+		if bytes.Equal(member[:], challenge.Bytes()) {
 			return true
 		}
 	}

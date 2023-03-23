@@ -21,7 +21,7 @@ func TestBeacon_calcVotes(t *testing.T) {
 		ownFirstRoundVotes allVotes
 		votesMargin        map[Proposal]*big.Int
 		result             allVotes
-		undecided          []string
+		undecided          proposalList
 	}{
 		{
 			name: "Case 1",
@@ -47,7 +47,9 @@ func TestBeacon_calcVotes(t *testing.T) {
 					Proposal{0x02}: {},
 				},
 			},
-			undecided: []string{"0x3"},
+			undecided: proposalList{
+				Proposal{0x03},
+			},
 		},
 		{
 			name: "Case 2",
@@ -64,7 +66,9 @@ func TestBeacon_calcVotes(t *testing.T) {
 					Proposal{0x02}: {},
 				},
 			},
-			undecided: []string{"0x3"},
+			undecided: proposalList{
+				Proposal{0x03},
+			},
 		},
 	}
 
