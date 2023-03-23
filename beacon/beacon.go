@@ -132,6 +132,10 @@ func New(
 	for _, opt := range opts {
 		opt(pd)
 	}
+	pd.bClock = &beaconClock{
+		clock: clock,
+		conf:  pd.config,
+	}
 
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(pd.config.Theta)
@@ -141,6 +145,7 @@ func New(
 
 	if pd.weakCoin == nil {
 		pd.weakCoin = weakcoin.New(pd.publisher, vrfSigner, vrfVerifier, pd.nonceFetcher, pd,
+			pd.bClock,
 			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
 			weakcoin.WithMaxRound(pd.config.RoundsNumber),
 		)
@@ -171,8 +176,9 @@ type ProtocolDriver struct {
 	weakCoin        coin
 	theta           *big.Float
 
-	clock layerClock
-	cdb   *datastore.CachedDB
+	clock  layerClock
+	bClock *beaconClock
+	cdb    *datastore.CachedDB
 
 	mu sync.RWMutex
 
@@ -1137,4 +1143,33 @@ func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 	}
 
 	return observed, calculated
+}
+
+// beaconClock provides methods to determine the intended send time of messages
+// spceific to the beacon protocol.
+type beaconClock struct {
+	clock layerClock
+	conf  Config
+}
+
+// proposalSendTime returns the time at which a proposal is sent for an epoch.
+func (bc *beaconClock) proposalSendTime(epoch types.EpochID) time.Time {
+	return bc.clock.LayerToTime(epoch.FirstLayer())
+}
+
+// firstVoteSendTime returns the time at which the first vote is sent for an epoch.
+func (bc *beaconClock) firstVoteSendTime(epoch types.EpochID) time.Time {
+	return bc.proposalSendTime(epoch).Add(bc.conf.ProposalDuration)
+}
+
+// followupVoteSendTime returns the time at which the followup votes are sent for an epoch and round.
+func (bc *beaconClock) followupVoteSendTime(epoch types.EpochID, round types.RoundID) time.Time {
+	subsequentRoundDuration := bc.conf.VotingRoundDuration + bc.conf.WeakCoinRoundDuration
+	return bc.firstVoteSendTime(epoch).Add(bc.conf.FirstVotingRoundDuration).Add(subsequentRoundDuration * time.Duration(round-1))
+}
+
+// weakCoinProposalSendTime returns the time at which the weak coin proposals are sent for an epoch and round.
+func (bc *beaconClock) WeakCoinProposalSendTime(epoch types.EpochID, round types.RoundID) time.Time {
+	subsequentRoundDuration := bc.conf.VotingRoundDuration + bc.conf.WeakCoinRoundDuration
+	return bc.firstVoteSendTime(epoch).Add(bc.conf.FirstVotingRoundDuration + bc.conf.VotingRoundDuration).Add(subsequentRoundDuration * time.Duration(round-1))
 }

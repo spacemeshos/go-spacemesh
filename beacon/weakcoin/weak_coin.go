@@ -91,6 +91,7 @@ func New(
 	verifier vrfVerifier,
 	nonceFetcher nonceFetcher,
 	allowance allowance,
+	wClock weakCoinClock,
 	opts ...OptionFunc,
 ) *WeakCoin {
 	wc := &WeakCoin{
@@ -102,6 +103,7 @@ func New(
 		publisher:    publisher,
 		coins:        make(map[types.RoundID]bool),
 		verifier:     verifier,
+		wClock:       wClock,
 	}
 	for _, opt := range opts {
 		opt(wc)
@@ -129,6 +131,7 @@ type WeakCoin struct {
 	// nextRoundBuffer is used to optimistically buffer messages from the next round.
 	nextRoundBuffer []Message
 	coins           map[types.RoundID]bool
+	wClock          weakCoinClock
 }
 
 // Get the result of the coin flip in this round. It is only valid in between StartEpoch/EndEpoch

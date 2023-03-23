@@ -149,6 +149,7 @@ func TestWeakCoin(t *testing.T) {
 				sigVerifier(t, ctrl),
 				nonceFetcher(t, ctrl),
 				mockAllowance,
+				nil,
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithLog(logtest.New(t)),
 			)
@@ -303,6 +304,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				sigVerifier(t, ctrl),
 				nonceFetcher(t, ctrl),
 				mockAllowance,
+				nil,
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithLog(logtest.New(t)),
 			)
@@ -337,6 +339,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 		sigVerifier(t, ctrl),
 		nonceFetcher(t, ctrl),
 		mockAllowance,
+		nil,
 		weakcoin.WithNextRoundBufferSize(bufSize),
 	)
 
@@ -403,6 +406,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 		signing.NewVRFVerifier(),
 		nonceFetcher(t, ctrl),
 		mockAllowance,
+		nil,
 		weakcoin.WithThreshold([]byte{0xff}),
 		weakcoin.WithLog(logtest.New(t)),
 	)
@@ -458,6 +462,7 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 			signing.NewVRFVerifier(),
 			nonceFetcher(t, ctrl),
 			mockAllowance,
+			nil,
 			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),
 		)
 	}

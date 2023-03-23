@@ -1,6 +1,8 @@
 package weakcoin
 
 import (
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -23,4 +25,13 @@ type nonceFetcher interface {
 
 type allowance interface {
 	MinerAllowance(types.EpochID, []byte) uint32
+}
+
+// weakCoinClock interface exists so that we can pass an object from the beacon
+// package to the weakCoinPackage (as does allowance), this is indicatave of a
+// circular dependency, probably the weak coin should be merged with the beacon
+// package.
+// TODO add issue for this.
+type weakCoinClock interface {
+	WeakCoinProposalSendTime(epoch types.EpochID, round types.RoundID) time.Time
 }

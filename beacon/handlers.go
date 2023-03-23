@@ -72,9 +72,7 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 		return errMalformedMessage
 	}
 
-	// Record message latency, proposals are sent at epoch start + GracePeriodDuration
-	epochStart := pd.clock.LayerToTime(m.EpochID.FirstLayer())
-	latency := receivedTime.Sub(epochStart.Add(pd.config.GracePeriodDuration))
+	latency := receivedTime.Sub(pd.bClock.proposalSendTime(m.EpochID))
 	metrics.ReportMessageLatency(pubsub.BeaconProposalProtocol, latency)
 
 	if !pd.isProposalTimely(&m, receivedTime) {
@@ -250,6 +248,7 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 }
 
 func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, msg []byte) error {
+	receivedTime := time.Now()
 	logger := pd.logger.WithContext(ctx).WithFields(types.FirstRound, log.Stringer("sender", peer))
 
 	var m FirstVotingMessage
@@ -257,6 +256,9 @@ func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, m
 		logger.With().Warning("received invalid first votes", log.Err(err))
 		return errMalformedMessage
 	}
+
+	latency := receivedTime.Sub(pd.bClock.firstVoteSendTime(m.EpochID))
+	metrics.ReportMessageLatency(pubsub.BeaconFirstVotesProtocol, latency)
 
 	currentEpoch := pd.currentEpoch()
 	if m.EpochID != currentEpoch {
@@ -381,6 +383,9 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 			log.Uint32("message_epoch", uint32(m.EpochID)))
 		return errEpochNotActive
 	}
+
+	latency := receivedTime.Sub(pd.bClock.followupVoteSendTime(m.EpochID, m.RoundID))
+	metrics.ReportMessageLatency(pubsub.BeaconFollowingVotesProtocol, latency)
 
 	// don't accept votes from future rounds
 	if !pd.isVoteTimely(&m, receivedTime) {
