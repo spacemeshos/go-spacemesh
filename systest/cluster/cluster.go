@@ -27,22 +27,21 @@ var errNotInitialized = errors.New("cluster: not initialized")
 
 const (
 	defaultExtraData = "systest"
-	poetSvc          = "poet"
-	bootnodesPrefix  = "boot"
-	smesherPrefix    = "smesher"
+	poetApp          = "poet"
+	bootnodeApp      = "boot"
+	smesherApp       = "smesher"
 	poetPort         = 80
-	defaultBootnodes = 2
 
 	poetFlags    = "poetflags"
 	smesherFlags = "smesherflags"
 )
 
-func setName(podname string) string {
-	return podname[:len(podname)-2]
-}
-
-func headlessSvc(setname string) string {
-	return setname + "-headless"
+func defaultBootnodes(size int) int {
+	bsize := (size / 1000) * 2
+	if bsize == 0 {
+		return 2
+	}
+	return bsize
 }
 
 // MakePoetEndpoint generate a poet endpoint for the ith instance.
@@ -83,13 +82,14 @@ func Reuse(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 // Default deployes bootnodes, one poet and the smeshers according to the cluster size.
 func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	cl := New(cctx, opts...)
-	if err := cl.AddBootnodes(cctx, defaultBootnodes); err != nil {
+	bsize := defaultBootnodes(cctx.ClusterSize)
+	if err := cl.AddBootnodes(cctx, bsize); err != nil {
 		return nil, err
 	}
 	if err := cl.AddPoets(cctx); err != nil {
 		return nil, err
 	}
-	if err := cl.AddSmeshers(cctx, cctx.ClusterSize-defaultBootnodes); err != nil {
+	if err := cl.AddSmeshers(cctx, cctx.ClusterSize-bsize); err != nil {
 		return nil, err
 	}
 	return cl, nil
@@ -231,7 +231,7 @@ func (c *Cluster) addPoetFlag(flag DeploymentFlag) {
 }
 
 func (c *Cluster) reuse(cctx *testcontext.Context) error {
-	clients, err := discoverNodes(cctx, bootnodesPrefix, Smesher)
+	clients, err := discoverNodes(cctx, bootnodeApp)
 	if err != nil {
 		return err
 	}
@@ -244,7 +244,7 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	c.clients = append(c.clients, clients...)
 	c.bootnodes = len(clients)
 
-	clients, err = discoverNodes(cctx, smesherPrefix, Smesher)
+	clients, err = discoverNodes(cctx, smesherApp)
 	if err != nil {
 		return err
 	}
@@ -254,7 +254,7 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	c.clients = append(c.clients, clients...)
 	c.smeshers = len(clients)
 
-	c.poets, err = discoverNodes(cctx, poetSvc, Poet)
+	c.poets, err = discoverNodes(cctx, poetApp)
 	if err != nil {
 		return err
 	}
@@ -283,7 +283,7 @@ func (c *Cluster) AddPoets(cctx *testcontext.Context) error {
 func (c *Cluster) firstFreePoetId() int {
 	set := make(map[int]struct{}, c.Poets())
 	for _, poet := range c.poets {
-		set[decodePoetIdentifier(poet.Identifier)] = struct{}{}
+		set[decodePoetIdentifier(poet.Name)] = struct{}{}
 	}
 	for id := 0; ; id += 1 {
 		if _, ok := set[id]; !ok {
@@ -303,7 +303,7 @@ func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
 	}
 	flags := maps.Values(c.poetFlags)
 	for _, bootnode := range c.clients[:c.bootnodes] {
-		flags = append(flags, Gateway(fmt.Sprintf("dns:///%s.%s:9092", bootnode.Name, headlessSvc(setName(bootnode.Name)))))
+		flags = append(flags, Gateway(fmt.Sprintf("dns:///%s:9092", bootnode.Name)))
 	}
 
 	id := createPoetIdentifier(c.firstFreePoetId())
@@ -337,7 +337,7 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 		flags = append(flags, flag)
 	}
 	flags = append(flags, StartSmeshing(false))
-	clients, err := deployNodes(cctx, bootnodesPrefix, c.bootnodes, c.bootnodes+n, flags)
+	clients, err := deployNodes(cctx, bootnodeApp, c.bootnodes, c.bootnodes+n, flags)
 	if err != nil {
 		return err
 	}
@@ -364,7 +364,7 @@ func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int) error {
 	}
 	flags = append(flags, Bootnodes(endpoints...))
 	flags = append(flags, StartSmeshing(true))
-	clients, err := deployNodes(tctx, smesherPrefix, c.nextSmesher(), c.nextSmesher()+n, flags)
+	clients, err := deployNodes(tctx, smesherApp, c.nextSmesher(), c.nextSmesher()+n, flags)
 	if err != nil {
 		return err
 	}
@@ -395,7 +395,7 @@ func (c *Cluster) DeletePoet(cctx *testcontext.Context, i int) error {
 	if poet == nil {
 		return nil
 	}
-	if err := deletePoet(cctx, poet.Identifier); err != nil {
+	if err := deletePoet(cctx, poet.Name); err != nil {
 		return err
 	}
 	c.poets = append(c.poets[0:i], c.poets[i+1:]...)
@@ -458,7 +458,7 @@ func (c *Cluster) CloseClients() error {
 
 // Wait for i-th client to be up.
 func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
-	nc, err := waitNode(tctx, c.Client(i).Name, Smesher)
+	nc, err := waitNode(tctx, c.Client(i).Name)
 	if err != nil {
 		return err
 	}
@@ -599,7 +599,7 @@ func minPeers(size int) int {
 	}
 	other := size / 3
 	if other > 100 {
-		return 100
+		return 50
 	}
 	return other
 }
