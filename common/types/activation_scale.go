@@ -592,20 +592,6 @@ func (t *PostMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.K1))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.K2))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
 	return total, nil
 }
 
@@ -625,22 +611,6 @@ func (t *PostMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.LabelsPerUnit = uint64(field)
-	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.K1 = uint32(field)
-	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.K2 = uint32(field)
 	}
 	return total, nil
 }

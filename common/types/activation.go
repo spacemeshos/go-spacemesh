@@ -643,9 +643,6 @@ func (p *Post) String() string {
 type PostMetadata struct {
 	Challenge     []byte
 	LabelsPerUnit uint64
-
-	K1 uint32
-	K2 uint32
 }
 
 func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -654,8 +651,6 @@ func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 	}
 	encoder.AddString("Challenge", hex.EncodeToString(m.Challenge))
 	encoder.AddUint64("LabelsPerUnit", m.LabelsPerUnit)
-	encoder.AddUint32("K1", m.K1)
-	encoder.AddUint32("K2", m.K2)
 	return nil
 }
 

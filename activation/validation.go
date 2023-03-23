@@ -96,8 +96,6 @@ func (v *Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST 
 		NumUnits:        numUnits,
 		Challenge:       PostMetadata.Challenge,
 		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
-		K1:              PostMetadata.K1,
-		K2:              PostMetadata.K2,
 	}
 
 	if err := verifying.Verify(p, m, (config.Config)(v.cfg)); err != nil {
@@ -121,14 +119,6 @@ func (*Validator) NumUnits(cfg *PostConfig, numUnits uint32) error {
 func (*Validator) PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error {
 	if metadata.LabelsPerUnit < uint64(cfg.LabelsPerUnit) {
 		return fmt.Errorf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", cfg.LabelsPerUnit, metadata.LabelsPerUnit)
-	}
-
-	if metadata.K1 > cfg.K1 {
-		return fmt.Errorf("invalid `K1`; expected: <=%d, given: %d", cfg.K1, metadata.K1)
-	}
-
-	if metadata.K2 < cfg.K2 {
-		return fmt.Errorf("invalid `K2`; expected: >=%d, given: %d", cfg.K2, metadata.K2)
 	}
 	return nil
 }
