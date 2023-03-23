@@ -68,20 +68,20 @@ func (m *Message) SignedBytes() []byte {
 // Certificate is a collection of messages and the set of values.
 // Typically used as a collection of commit messages.
 type Certificate struct {
-	Values  []types.ProposalID `scale:"max=800"` // the committed set S // TODO(mafa): check if this is the right max size
+	Values  []types.ProposalID `scale:"max=500"` // the committed set S - expected are 50 proposals per layer + safety margin
 	AggMsgs *AggregatedMessages
 }
 
 // AggregatedMessages is a collection of messages.
 type AggregatedMessages struct {
-	Messages []Message `scale:"max=800"` // TODO(mafa): check if this is the right max size
+	Messages []Message `scale:"max=1000"` // limited by hare config parameter N with safety margin
 }
 
 // InnerMessage is the actual set of fields that describe a message in the Hare protocol.
 type InnerMessage struct {
 	Type           MessageType
 	CommittedRound uint32              // the round Values (S) is committed (Ki)
-	Values         []types.ProposalID  `scale:"max=800"` // the set S. optional for commit InnerMsg in a certificate // TODO(mafa): check if this is the right max size
+	Values         []types.ProposalID  `scale:"max=500"` // the set S. optional for commit InnerMsg in a certificate - expected are 50 proposals per layer + safety margin
 	Svp            *AggregatedMessages // optional. only for proposal Messages
 	Cert           *Certificate        // optional
 }

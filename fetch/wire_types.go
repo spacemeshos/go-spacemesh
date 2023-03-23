@@ -18,20 +18,20 @@ type RequestMessage struct {
 // ResponseMessage is sent to the node as a response.
 type ResponseMessage struct {
 	Hash types.Hash32
-	Data []byte `scale:"max=1000000"` // TODO(mafa): check if this is the right max size
+	Data []byte `scale:"max=3200000"` // 100_000 ATXIDs at 32 bytes each is the expected maximum size
 }
 
 // RequestBatch is a batch of requests and a hash of all requests as ID.
 type RequestBatch struct {
 	ID       types.Hash32
-	Requests []RequestMessage `scale:"max=20"` // depends on fetch config `BatchSize` which defaults to 20
+	Requests []RequestMessage `scale:"max=1000"` // depends on fetch config `BatchSize` which defaults to 20, more than 1000 seems unlikely
 }
 
 // ResponseBatch is the response struct send for a RequestBatch. the ResponseBatch ID must be the same
 // as stated in RequestBatch even if not all Data is present.
 type ResponseBatch struct {
 	ID        types.Hash32
-	Responses []ResponseMessage `scale:"max=20"` // depends on fetch config `BatchSize` which defaults to 20
+	Responses []ResponseMessage `scale:"max=1000"` // depends on fetch config `BatchSize` which defaults to 20, more than 1000 seems unlikely
 }
 
 type MeshHashRequest struct {
@@ -48,12 +48,12 @@ func (r *MeshHashRequest) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 type MeshHashes struct {
-	Layers []types.LayerID `scale:"max=100"` // same as syncer Config `MaxHashesInReq`
-	Hashes []types.Hash32  `scale:"max=100"` // same as syncer Config `MaxHashesInReq`
+	Layers []types.LayerID `scale:"max=1000"` // depends on syncer Config `MaxHashesInReq`, defaults to 100, 1000 is a safe upper bound
+	Hashes []types.Hash32  `scale:"max=1000"` // depends on syncer Config `MaxHashesInReq`, defaults to 100, 1000 is a safe upper bound
 }
 
 type MaliciousIDs struct {
-	NodeIDs []types.NodeID `scale:"max=100000"` // maximum expected number of nodes in the network
+	NodeIDs []types.NodeID `scale:"max=100000"` // max. expected number of ATXs per epoch is 100_000
 }
 
 type EpochData struct {
@@ -63,7 +63,7 @@ type EpochData struct {
 // LayerData is the data response for a given layer ID.
 type LayerData struct {
 	Ballots []types.BallotID `scale:"max=800"`
-	Blocks  []types.BlockID  `scale:"max=800"`
+	Blocks  []types.BlockID  `scale:"max=100"` // only expected to have 1 block per layer, 100 is a safe upper bound
 }
 
 // LayerOpinion is the response for opinion for a given layer.

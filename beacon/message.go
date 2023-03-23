@@ -37,8 +37,8 @@ func (p *Proposal) DecodeScale(d *scale.Decoder) (int, error) {
 // FirstVotingMessageBody is FirstVotingMessage without a signature.
 type FirstVotingMessageBody struct {
 	EpochID                   types.EpochID
-	ValidProposals            []Proposal `scale:"max=1000"`
-	PotentiallyValidProposals []Proposal `scale:"max=1000"`
+	ValidProposals            []Proposal `scale:"max=1000"` // number of proposals is expected to be under 100, 1000 is a safe upper bound
+	PotentiallyValidProposals []Proposal `scale:"max=1000"` // number of proposals is expected to be under 100, 1000 is a safe upper bound
 }
 
 // FirstVotingMessage is a message type which is used when sending first voting messages.

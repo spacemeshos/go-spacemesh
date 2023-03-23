@@ -43,10 +43,10 @@ type Ballot struct {
 	// smeshers signature on InnerBallot
 	Signature []byte `scale:"max=64"`
 	// Votes field is not signed.
-	Votes Votes `scale:"max=10000"` // TODO(mafa): check again why this is the right max size
+	Votes Votes
 	// the proof of the smeshers eligibility to vote and propose block content in this epoch.
 	// Eligibilities must be produced in the ascending order.
-	EligibilityProofs []VotingEligibility `scale:"max=500"` // TODO(mafa): check again why this is the right max size
+	EligibilityProofs []VotingEligibility `scale:"max=500"` // according to protocol there are 50 per layer, the rest is safety margin
 
 	// the following fields are kept private and from being serialized
 	ballotID BallotID
@@ -135,11 +135,11 @@ type Votes struct {
 	// Base ballot.
 	Base BallotID
 	// Support block id at a particular layer and height.
-	Support []Vote `scale:"max=10000"` // TODO(mafa): check again why this is the right max size
+	Support []Vote `scale:"max=10000"` // sliding vote window size is 10k layers, vote for one block per layer
 	// Against previously supported block.
-	Against []Vote `scale:"max=10000"` // TODO(mafa): check again why this is the right max size
+	Against []Vote `scale:"max=10000"` // sliding vote window size is 10k layers, vote for one block per layer
 	// Abstain on layers until they are terminated.
-	Abstain []LayerID `scale:"max=10000"` // TODO(mafa): check again why this is the right max size
+	Abstain []LayerID `scale:"max=10000"` // sliding vote window size is 10k layers, vote to abstain on any layer
 }
 
 // MarshalLogObject implements logging interface.

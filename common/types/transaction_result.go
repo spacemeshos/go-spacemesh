@@ -44,7 +44,7 @@ func (t TransactionStatus) DecodeScale(d *scale.Decoder) (uint8, int, error) {
 // TransactionResult is created after consuming transaction.
 type TransactionResult struct {
 	Status  TransactionStatus
-	Message string `scale:"max=1024"` // TODO(mafa): check again why this is the right max size
+	Message string `scale:"max=1024"` // TODO(mafa): human readable error message, convert to error code
 	Gas     uint64
 	Fee     uint64
 	Block   BlockID

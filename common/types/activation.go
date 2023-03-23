@@ -467,7 +467,7 @@ func (p *PoetProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 type PoetProofMessage struct {
 	PoetProof
 	PoetServiceID []byte `scale:"max=32"` // public key of the PoET service
-	RoundID       string `scale:"max=32"`
+	RoundID       string `scale:"max=32"` // TODO(mafa): convert to uint64
 	Signature     []byte `scale:"max=64"`
 }
 
