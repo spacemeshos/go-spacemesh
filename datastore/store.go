@@ -29,7 +29,7 @@ type CachedDB struct {
 	logger log.Log
 
 	atxHdrCache   *Cache[types.ATXID, types.ActivationTxHeader]
-	vrfNonceCache *Cache[string, types.VRFPostIndex]
+	vrfNonceCache *Cache[VrfNonceKey, types.VRFPostIndex]
 
 	// used to coordinate db update and cache
 	mu               sync.Mutex
@@ -128,7 +128,7 @@ func (db *CachedDB) AddMalfeasanceProof(id types.NodeID, proof *types.Malfeasanc
 // VRFNonce returns the VRF nonce of for the given node in the given epoch. This function is thread safe and will return an error if the
 // nonce is not found in the ATX DB.
 func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	key := fmt.Sprintf("%s-%s", id, epoch)
+	key := VrfNonceKey{id, epoch}
 	if nonce, ok := db.vrfNonceCache.Get(key); ok {
 		return *nonce, nil
 	}
