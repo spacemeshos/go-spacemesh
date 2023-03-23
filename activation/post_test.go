@@ -66,6 +66,16 @@ func TestPostSetupManager(t *testing.T) {
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
 }
 
+func TestPostSetupManager_StateError(t *testing.T) {
+	req := require.New(t)
+
+	mgr := newTestPostManager(t)
+	mgr.opts.NumUnits = 0
+	req.Error(mgr.StartSession(context.Background(), mgr.opts))
+	// Verify Status returns StateError
+	req.Equal(PostSetupStateError, mgr.Status().State)
+}
+
 func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req := require.New(t)
 
