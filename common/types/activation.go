@@ -600,6 +600,20 @@ func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeCompact64(enc, p.K2Pow)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact64(enc, p.K3Pow)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
@@ -611,7 +625,7 @@ func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		p.Nonce = uint32(field)
+		p.Nonce = field
 	}
 	{
 		field, n, err := scale.DecodeByteSlice(dec)
@@ -620,6 +634,22 @@ func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		p.Indices = field
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		p.K2Pow = field
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		p.K3Pow = field
 	}
 	return total, nil
 }
