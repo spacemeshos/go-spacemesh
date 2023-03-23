@@ -73,7 +73,7 @@ func createProposal(t *testing.T, vrfSigner *signing.VRFSigner, epoch types.Epoc
 		VRFSignature: sig,
 	}
 	if corruptSignature {
-		msg.VRFSignature[0] ^= sig[0] // invert bits of first byte
+		msg.VRFSignature[0] = 0 // invert bits of first byte
 	}
 	return msg
 }
@@ -120,12 +120,9 @@ func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-	sig := signer.Sign(signing.BEACON, encoded)
-
+	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	if corruptSignature {
-		msg.Signature = sig[1:]
-	} else {
-		msg.Signature = sig
+		msg.Signature = signer.Sign(signing.BEACON, encoded[:len(encoded)-1])
 	}
 	return msg
 }
@@ -158,11 +155,9 @@ func createFollowingVote(t *testing.T, signer *signing.EdSigner, epoch types.Epo
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-	sig := signer.Sign(signing.BEACON, encoded)
+	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	if corruptSignature {
-		msg.Signature = sig[1:]
-	} else {
-		msg.Signature = sig
+		msg.Signature = signer.Sign(signing.BEACON, encoded[:len(encoded)-1])
 	}
 	return msg
 }
@@ -950,7 +945,7 @@ func Test_HandleFirstVotes_FailedToExtractPK(t *testing.T) {
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	got := tpd.handleFirstVotes(context.Background(), "peerID", msgBytes)
-	require.Contains(t, got.Error(), "bad signature format")
+	require.Contains(t, got.Error(), "miner ATX not found in previous epoch")
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, false)
 	checkFirstIncomingVotes(t, tpd.ProtocolDriver, epoch, map[string]proposalList{})
 }
@@ -1190,7 +1185,7 @@ func Test_handleFollowingVotes_FailedToExtractPK(t *testing.T) {
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	got := tpd.handleFollowingVotes(context.Background(), "peerID", msgBytes, time.Now())
-	require.Contains(t, got.Error(), "bad signature format")
+	require.Contains(t, got.Error(), "miner ATX not found in previous epoch")
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, false)
 	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }

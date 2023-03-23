@@ -251,7 +251,6 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 								Round:   round,
 								MsgHash: types.RandomHash(),
 							},
-							Signature: types.RandomBytes(64),
 						},
 						{
 							InnerMsg: types.HareMetadata{
@@ -259,7 +258,6 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 								Round:   round,
 								MsgHash: types.RandomHash(),
 							},
-							Signature: types.RandomBytes(64),
 						},
 					},
 				},
@@ -275,6 +273,8 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 			},
 		},
 	}
+	copy(gossip.MalfeasanceProof.Proof.Data.(*types.HareProof).Messages[0].Signature[:], types.RandomBytes(64))
+	copy(gossip.MalfeasanceProof.Proof.Data.(*types.HareProof).Messages[1].Signature[:], types.RandomBytes(64))
 	h.mchMalfeasance <- &gossip
 	data, err := codec.Encode(&gossip)
 	require.NoError(t, err)

@@ -16,7 +16,7 @@ import (
 type Message struct {
 	types.HareMetadata
 	// signature over Metadata
-	Signature   []byte `scale:"max=64"`
+	Signature   [64]byte 
 	InnerMsg    *InnerMessage
 	Eligibility types.HareEligibility
 }
@@ -38,7 +38,7 @@ func (m *Message) MarshalLogObject(encoder log.ObjectEncoder) error {
 	_ = encoder.AddObject("inner_msg", m.InnerMsg)
 	encoder.AddUint32("layer_id", m.Layer.Value)
 	encoder.AddUint32("round", m.Round)
-	encoder.AddString("signature", hex.EncodeToString(m.Signature))
+	encoder.AddString("signature", hex.EncodeToString(m.Signature[:]))
 	_ = encoder.AddObject("eligibility", &m.Eligibility)
 	return nil
 }

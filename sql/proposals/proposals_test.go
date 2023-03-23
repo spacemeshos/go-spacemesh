@@ -14,7 +14,7 @@ import (
 func TestAdd(t *testing.T) {
 	db := sql.InMemory()
 	pub := types.BytesToNodeID([]byte{1, 1})
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.BallotMetadata{})
+	ballot := types.NewExistingBallot(types.BallotID{1}, [64]byte{1, 1}, pub, types.BallotMetadata{})
 
 	require.NoError(t, ballots.Add(db, &ballot))
 	require.NoError(t, identities.SetMalicious(db, pub, []byte("proof")))
@@ -24,7 +24,7 @@ func TestAdd(t *testing.T) {
 			TxIDs:    []types.TransactionID{{3, 4}},
 			MeshHash: types.RandomHash(),
 		},
-		Signature: []byte{5, 6},
+		Signature: [64]byte{5, 6},
 	}
 	proposal.SetID(types.ProposalID{7, 8})
 
@@ -35,7 +35,7 @@ func TestAdd(t *testing.T) {
 func TestHas(t *testing.T) {
 	db := sql.InMemory()
 	pub := types.BytesToNodeID([]byte{1, 1})
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.BallotMetadata{})
+	ballot := types.NewExistingBallot(types.BallotID{1}, [64]byte{1, 1}, pub, types.BallotMetadata{})
 
 	require.NoError(t, ballots.Add(db, &ballot))
 	require.NoError(t, identities.SetMalicious(db, pub, []byte("proof")))
@@ -45,7 +45,7 @@ func TestHas(t *testing.T) {
 			TxIDs:    []types.TransactionID{{3, 4}},
 			MeshHash: types.RandomHash(),
 		},
-		Signature: []byte{5, 6},
+		Signature: [64]byte{5, 6},
 	}
 
 	proposal.SetID(types.ProposalID{7, 8})
@@ -60,7 +60,7 @@ func TestGet(t *testing.T) {
 	db := sql.InMemory()
 
 	pub := types.BytesToNodeID([]byte{1, 1})
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.BallotMetadata{})
+	ballot := types.NewExistingBallot(types.BallotID{1}, [64]byte{1, 1}, pub, types.BallotMetadata{})
 
 	require.NoError(t, ballots.Add(db, &ballot))
 	require.NoError(t, identities.SetMalicious(db, pub, []byte("proof")))
@@ -72,7 +72,7 @@ func TestGet(t *testing.T) {
 			TxIDs:    []types.TransactionID{{3, 4}},
 			MeshHash: types.RandomHash(),
 		},
-		Signature: []byte{5, 6},
+		Signature: [64]byte{5, 6},
 	}
 
 	proposal.SetID(types.ProposalID{7, 8})

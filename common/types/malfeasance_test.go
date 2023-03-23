@@ -27,7 +27,7 @@ func TestCodec_MultipleATXs(t *testing.T) {
 	var atxProof types.AtxProof
 	for i, a := range []*types.ActivationTx{a1, a2} {
 		a.SetMetadata()
-		a.Signature = types.RandomBytes(64)
+		copy(a.Signature[:], types.RandomBytes(64))
 		atxProof.Messages[i] = types.AtxProofMsg{
 			InnerMsg:  a.ATXMetadata,
 			Signature: a.Signature,
@@ -52,13 +52,13 @@ func TestCodec_MultipleBallot(t *testing.T) {
 	nodeID := types.BytesToNodeID([]byte{1, 1, 1})
 	lid := types.NewLayerID(11)
 
-	b1 := types.NewExistingBallot(types.BallotID{1}, nil, nodeID, types.BallotMetadata{Layer: lid})
-	b2 := types.NewExistingBallot(types.BallotID{2}, nil, nodeID, types.BallotMetadata{Layer: lid})
+	b1 := types.NewExistingBallot(types.BallotID{1}, [64]byte{}, nodeID, types.BallotMetadata{Layer: lid})
+	b2 := types.NewExistingBallot(types.BallotID{2}, [64]byte{}, nodeID, types.BallotMetadata{Layer: lid})
 
 	var ballotProof types.BallotProof
 	for i, b := range []types.Ballot{b1, b2} {
 		b.SetMetadata()
-		b.Signature = types.RandomBytes(64)
+		copy(b.Signature[:], types.RandomBytes(64))
 		ballotProof.Messages[i] = types.BallotProofMsg{
 			InnerMsg:  b.BallotMetadata,
 			Signature: b.Signature,
@@ -89,9 +89,9 @@ func TestCodec_HareEquivocation(t *testing.T) {
 	var hareProof types.HareProof
 	for i, hm := range []types.HareMetadata{hm1, hm2} {
 		hareProof.Messages[i] = types.HareProofMsg{
-			InnerMsg:  hm,
-			Signature: types.RandomBytes(64),
+			InnerMsg: hm,
 		}
+		copy(hareProof.Messages[i].Signature[:], types.RandomBytes(64))
 	}
 	proof := &types.MalfeasanceProof{
 		Layer: lid,
@@ -118,9 +118,9 @@ func TestCodec_MalfeasanceGossip(t *testing.T) {
 	var hareProof types.HareProof
 	for i, hm := range []types.HareMetadata{hm1, hm2} {
 		hareProof.Messages[i] = types.HareProofMsg{
-			InnerMsg:  hm,
-			Signature: types.RandomBytes(64),
+			InnerMsg: hm,
 		}
+		copy(hareProof.Messages[i].Signature[:], types.RandomBytes(64))
 	}
 	gossip := &types.MalfeasanceGossip{
 		MalfeasanceProof: types.MalfeasanceProof{

@@ -56,7 +56,7 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
-	_, err = client.Submit(context.Background(), nil, nil)
+	_, err = client.Submit(context.Background(), nil, [64]byte{})
 	require.NoError(t, err)
 }
 

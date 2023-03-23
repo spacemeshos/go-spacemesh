@@ -123,7 +123,7 @@ func Add(db sql.Executor, proposal *types.Proposal) error {
 		stmt.BindInt64(3, int64(proposal.Layer.Uint32()))
 		stmt.BindBytes(4, txIDsBytes)
 		stmt.BindBytes(5, proposal.MeshHash.Bytes())
-		stmt.BindBytes(6, proposal.Signature)
+		stmt.BindBytes(6, proposal.Signature[:])
 		stmt.BindBytes(7, encodedProposal)
 	}
 
@@ -180,8 +180,8 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 			TxIDs:    txIDs,
 			MeshHash: types.BytesToHash(meshBytes),
 		},
-		Signature: signature,
 	}
+	copy(proposal.Signature[:], signature)
 
 	proposal.SetID(proposalID)
 

@@ -211,7 +211,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 
 	sv.validMsgsTracker = newPubGetter()
 	tmp := msgs[0].Signature
-	msgs[0].Signature = []byte{1}
+	msgs[0].Signature = [64]byte{1}
 	r.Error(sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
 	msgs[0].Signature = tmp
@@ -326,15 +326,15 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 }
 
 type pubGetter struct {
-	mp map[string]*signing.PublicKey
+	mp map[[64]byte]*signing.PublicKey
 }
 
 func newPubGetter() *pubGetter {
-	return &pubGetter{make(map[string]*signing.PublicKey)}
+	return &pubGetter{make(map[[64]byte]*signing.PublicKey)}
 }
 
 func (pg pubGetter) Track(m *Msg) {
-	pg.mp[string(m.Signature)] = m.PubKey
+	pg.mp[m.Signature] = m.PubKey
 }
 
 func (pg pubGetter) PublicKey(m *Message) *signing.PublicKey {
@@ -342,7 +342,7 @@ func (pg pubGetter) PublicKey(m *Message) *signing.PublicKey {
 		return nil
 	}
 
-	p, ok := pg.mp[string(m.Signature)]
+	p, ok := pg.mp[m.Signature]
 	if !ok {
 		return nil
 	}

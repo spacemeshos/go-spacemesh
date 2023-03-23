@@ -25,8 +25,8 @@ func TestMalicious(t *testing.T) {
 				Layer:   types.NewLayerID(9),
 				MsgHash: types.RandomHash(),
 			},
-			Signature: types.RandomBytes(64),
 		}
+		copy(ballotProof.Messages[i].Signature[:], types.RandomBytes(64))
 	}
 	proof := &types.MalfeasanceProof{
 		Layer: types.NewLayerID(11),

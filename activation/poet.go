@@ -95,10 +95,10 @@ func (c *HTTPPoetClient) Start(ctx context.Context, gatewayAddresses []string) e
 }
 
 // Submit registers a challenge in the proving service current open round.
-func (c *HTTPPoetClient) Submit(ctx context.Context, challenge []byte, signature []byte) (*types.PoetRound, error) {
+func (c *HTTPPoetClient) Submit(ctx context.Context, challenge []byte, signature [64]byte) (*types.PoetRound, error) {
 	request := rpcapi.SubmitRequest{
 		Challenge: challenge,
-		Signature: signature,
+		Signature: signature[:],
 	}
 	resBody := rpcapi.SubmitResponse{}
 	if err := c.req(ctx, http.MethodPost, "/v1/submit", &request, &resBody); err != nil {

@@ -41,7 +41,7 @@ type Ballot struct {
 	BallotMetadata
 	InnerBallot
 	// smeshers signature on InnerBallot
-	Signature []byte `scale:"max=64"`
+	Signature [64]byte
 	// Votes field is not signed.
 	Votes Votes
 	// the proof of the smeshers eligibility to vote and propose block content in this epoch.
@@ -208,7 +208,7 @@ func (b *Ballot) Initialize() error {
 	if b.ID() != EmptyBallotID {
 		return fmt.Errorf("ballot already initialized")
 	}
-	if b.Signature == nil {
+	if b.Signature == [64]byte{} {
 		return fmt.Errorf("cannot calculate Ballot ID: signature is nil")
 	}
 
@@ -216,16 +216,16 @@ func (b *Ballot) Initialize() error {
 		return fmt.Errorf("bad message hash")
 	}
 
-	hasher := hash.New()
-	_, err := codec.EncodeTo(hasher, &b.InnerBallot)
+	h := hash.New()
+	_, err := codec.EncodeTo(h, &b.InnerBallot)
 	if err != nil {
 		return fmt.Errorf("failed to encode inner ballot for hashing")
 	}
-	_, err = codec.EncodeByteSlice(hasher, b.Signature)
+	_, err = scale.EncodeByteSlice(scale.NewEncoder(h), b.Signature[:])
 	if err != nil {
 		return fmt.Errorf("failed to encode byte slice")
 	}
-	b.ballotID = BallotID(BytesToHash(hasher.Sum(nil)).ToHash20())
+	b.ballotID = BallotID(BytesToHash(h.Sum(nil)).ToHash20())
 	return nil
 }
 
@@ -360,7 +360,7 @@ func BallotIDsToHashes(ids []BallotID) []Hash32 {
 }
 
 // NewExistingBallot creates ballot from stored data.
-func NewExistingBallot(id BallotID, sig []byte, nodeId NodeID, meta BallotMetadata) Ballot {
+func NewExistingBallot(id BallotID, sig [64]byte, nodeId NodeID, meta BallotMetadata) Ballot {
 	return Ballot{
 		ballotID:       id,
 		Signature:      sig,

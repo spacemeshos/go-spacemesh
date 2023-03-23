@@ -197,7 +197,7 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 func TestMesh_WakeUp(t *testing.T) {
 	tm := createTestMesh(t)
 	latest := types.NewLayerID(11)
-	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, []byte{}, types.NodeID{}, types.BallotMetadata{Layer: latest})
+	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, [64]byte{}, types.NodeID{}, types.BallotMetadata{Layer: latest})
 	require.NoError(t, ballots.Add(tm.cdb, &b))
 	require.NoError(t, layers.SetProcessed(tm.cdb, latest))
 	latestState := latest.Sub(1)
@@ -783,9 +783,9 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	nodeID := types.BytesToNodeID([]byte{1, 1, 1})
 
 	blts := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{1}, []byte("signature 0"), nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{1}}),
-		types.NewExistingBallot(types.BallotID{2}, []byte("signature 1"), nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{2}}),
-		types.NewExistingBallot(types.BallotID{3}, []byte("signature 2"), nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{3}}),
+		types.NewExistingBallot(types.BallotID{1}, [64]byte{0}, nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{1}}),
+		types.NewExistingBallot(types.BallotID{2}, [64]byte{1}, nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{2}}),
+		types.NewExistingBallot(types.BallotID{3}, [64]byte{2}, nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{3}}),
 	}
 	malProof, err := tm.AddBallot(context.Background(), &blts[0])
 	require.NoError(t, err)
