@@ -426,6 +426,16 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 
 type Member [32]byte
 
+// EncodeScale implements scale codec interface.
+func (m *Member) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, m[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (m *Member) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, m[:])
+}
+
 type PoetProofRef [32]byte
 
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration

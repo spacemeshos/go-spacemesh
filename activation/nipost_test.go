@@ -482,7 +482,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),
 	}}
 
-	proofWorse := types.PoetProofMessage{
+	proofWorse := &types.PoetProofMessage{
 		PoetProof: types.PoetProof{
 			Members:   make([]types.Member, 1),
 			LeafCount: 111,
@@ -505,12 +505,12 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	poets := make([]PoetProvingServiceClient, 0, 2)
 	{
 		poet := defaultPoetServiceMock(t, []byte("poet0"))
-		poet.EXPECT().Proof(gomock.Any(), "").Return(&proofWorse, nil)
+		poet.EXPECT().Proof(gomock.Any(), "").Return(proofWorse, nil)
 		poets = append(poets, poet)
 	}
 	{
 		poet := defaultPoetServiceMock(t, []byte("poet1"))
-		poet.EXPECT().Proof(gomock.Any(), "").Return(&proofBetter, nil)
+		poet.EXPECT().Proof(gomock.Any(), "").Return(proofBetter, nil)
 		poets = append(poets, poet)
 	}
 

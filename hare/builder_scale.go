@@ -76,7 +76,7 @@ func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *Certificate) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Values, 800)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Values, 500)
 		if err != nil {
 			return total, err
 		}
@@ -94,7 +94,7 @@ func (t *Certificate) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *Certificate) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.ProposalID](dec, 800)
+		field, n, err := scale.DecodeStructSliceWithLimit[types.ProposalID](dec, 500)
 		if err != nil {
 			return total, err
 		}
@@ -114,7 +114,7 @@ func (t *Certificate) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *AggregatedMessages) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Messages, 800)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Messages, 1000)
 		if err != nil {
 			return total, err
 		}
@@ -125,7 +125,7 @@ func (t *AggregatedMessages) EncodeScale(enc *scale.Encoder) (total int, err err
 
 func (t *AggregatedMessages) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[Message](dec, 800)
+		field, n, err := scale.DecodeStructSliceWithLimit[Message](dec, 1000)
 		if err != nil {
 			return total, err
 		}
@@ -151,7 +151,7 @@ func (t *InnerMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Values, 800)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Values, 500)
 		if err != nil {
 			return total, err
 		}
@@ -192,7 +192,7 @@ func (t *InnerMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.CommittedRound = uint32(field)
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.ProposalID](dec, 800)
+		field, n, err := scale.DecodeStructSliceWithLimit[types.ProposalID](dec, 500)
 		if err != nil {
 			return total, err
 		}
