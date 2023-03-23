@@ -600,6 +600,20 @@ func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeCompact64(enc, p.K2Pow)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact64(enc, p.K3Pow)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
@@ -611,7 +625,7 @@ func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		p.Nonce = uint32(field)
+		p.Nonce = field
 	}
 	{
 		field, n, err := scale.DecodeByteSlice(dec)
@@ -620,6 +634,22 @@ func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		p.Indices = field
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		p.K2Pow = field
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		p.K3Pow = field
 	}
 	return total, nil
 }
@@ -642,13 +672,7 @@ func (p *Post) String() string {
 // PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
 type PostMetadata struct {
 	Challenge     []byte
-	BitsPerLabel  uint8
 	LabelsPerUnit uint64
-
-	K1 uint32
-	K2 uint32
-	B  uint32
-	N  uint32
 }
 
 func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -656,12 +680,7 @@ func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 		return nil
 	}
 	encoder.AddString("Challenge", hex.EncodeToString(m.Challenge))
-	encoder.AddUint8("BitsPerLabel", m.BitsPerLabel)
 	encoder.AddUint64("LabelsPerUnit", m.LabelsPerUnit)
-	encoder.AddUint32("K1", m.K1)
-	encoder.AddUint32("K2", m.K2)
-	encoder.AddUint32("B", m.B)
-	encoder.AddUint32("N", m.N)
 	return nil
 }
 

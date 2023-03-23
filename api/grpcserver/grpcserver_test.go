@@ -240,7 +240,6 @@ func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPo
 		PostMetadata: &types.PostMetadata{
 			Challenge:     poetRef,
 			LabelsPerUnit: labelsPerUnit,
-			BitsPerLabel:  bitsPerLabel,
 		},
 	}
 }
