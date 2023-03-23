@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
@@ -88,7 +89,7 @@ func contains(proof *types.PoetProof, member []byte) bool {
 
 // Post validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
 // validation failed.
-func (*Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
+func (v *Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
 	p := (*shared.Proof)(PoST)
 
 	m := &shared.ProofMetadata{
@@ -96,15 +97,10 @@ func (*Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *t
 		CommitmentAtxId: commitmentAtxId.Bytes(),
 		NumUnits:        numUnits,
 		Challenge:       PostMetadata.Challenge,
-		BitsPerLabel:    PostMetadata.BitsPerLabel,
 		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
-		K1:              PostMetadata.K1,
-		K2:              PostMetadata.K2,
-		B:               PostMetadata.B,
-		N:               PostMetadata.N,
 	}
 
-	if err := verifying.Verify(p, m); err != nil {
+	if err := verifying.Verify(p, m, (config.Config)(v.cfg)); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
 	}
 
@@ -123,20 +119,8 @@ func (*Validator) NumUnits(cfg *PostConfig, numUnits uint32) error {
 }
 
 func (*Validator) PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error {
-	if metadata.BitsPerLabel < cfg.BitsPerLabel {
-		return fmt.Errorf("invalid `BitsPerLabel`; expected: >=%d, given: %d", cfg.BitsPerLabel, metadata.BitsPerLabel)
-	}
-
 	if metadata.LabelsPerUnit < uint64(cfg.LabelsPerUnit) {
 		return fmt.Errorf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", cfg.LabelsPerUnit, metadata.LabelsPerUnit)
-	}
-
-	if metadata.K1 > cfg.K1 {
-		return fmt.Errorf("invalid `K1`; expected: <=%d, given: %d", cfg.K1, metadata.K1)
-	}
-
-	if metadata.K2 < cfg.K2 {
-		return fmt.Errorf("invalid `K2`; expected: >=%d, given: %d", cfg.K2, metadata.K2)
 	}
 	return nil
 }
@@ -150,7 +134,6 @@ func (*Validator) VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrf
 		NodeId:          nodeId.Bytes(),
 		CommitmentAtxId: commitmentAtxId.Bytes(),
 		NumUnits:        numUnits,
-		BitsPerLabel:    PostMetadata.BitsPerLabel,
 		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
 	}
 
