@@ -75,7 +75,7 @@ func TestGet_HappyPath(t *testing.T) {
 		},
 	}
 	atx.SetID(&id)
-	nodeId := types.BytesToNodeID(types.RandomBytes(32))
+	nodeId := types.RandomNodeID()
 	atx.SetNodeID(&nodeId)
 	atxProvider.EXPECT().GetFullAtx(id).Return(&atx, nil)
 

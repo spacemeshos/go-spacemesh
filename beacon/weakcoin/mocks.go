@@ -9,7 +9,6 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	signing "github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // MockvrfSigner is a mock of vrfSigner interface.
@@ -49,18 +48,18 @@ func (mr *MockvrfSignerMockRecorder) LittleEndian() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LittleEndian", reflect.TypeOf((*MockvrfSigner)(nil).LittleEndian))
 }
 
-// PublicKey mocks base method.
-func (m *MockvrfSigner) PublicKey() *signing.PublicKey {
+// NodeID mocks base method.
+func (m *MockvrfSigner) NodeID() types.NodeID {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PublicKey")
-	ret0, _ := ret[0].(*signing.PublicKey)
+	ret := m.ctrl.Call(m, "NodeID")
+	ret0, _ := ret[0].(types.NodeID)
 	return ret0
 }
 
-// PublicKey indicates an expected call of PublicKey.
-func (mr *MockvrfSignerMockRecorder) PublicKey() *gomock.Call {
+// NodeID indicates an expected call of NodeID.
+func (mr *MockvrfSignerMockRecorder) NodeID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublicKey", reflect.TypeOf((*MockvrfSigner)(nil).PublicKey))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NodeID", reflect.TypeOf((*MockvrfSigner)(nil).NodeID))
 }
 
 // Sign mocks base method.

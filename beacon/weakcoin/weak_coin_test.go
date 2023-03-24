@@ -39,7 +39,7 @@ func staticSigner(tb testing.TB, ctrl *gomock.Controller, nodeId types.NodeID, s
 	tb.Helper()
 	signer := weakcoin.NewMockvrfSigner(ctrl)
 	signer.EXPECT().Sign(gomock.Any()).Return(sig).AnyTimes()
-	signer.EXPECT().PublicKey().Return(signing.NewPublicKey(nodeId.Bytes())).AnyTimes()
+	signer.EXPECT().NodeID().Return(nodeId).AnyTimes()
 	signer.EXPECT().LittleEndian().Return(true).AnyTimes()
 	return signer
 }

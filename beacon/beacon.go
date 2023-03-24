@@ -768,7 +768,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 		return
 	}
 
-	atx, err := pd.minerAtxHdr(epoch, types.BytesToNodeID(pd.edSigner.PublicKey().Bytes()))
+	atx, err := pd.minerAtxHdr(epoch, pd.edSigner.NodeID())
 	if err != nil {
 		return
 	}

@@ -223,7 +223,7 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 }
 
 func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) ([]byte, types.VrfSignature) {
-	minerAllowance := wc.allowance.MinerAllowance(wc.epoch, types.BytesToNodeID(wc.signer.PublicKey().Bytes()))
+	minerAllowance := wc.allowance.MinerAllowance(wc.epoch, wc.signer.NodeID())
 	if minerAllowance == 0 {
 		return nil, types.VrfSignature{}
 	}
@@ -244,7 +244,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         unit,
-				MinerPK:      types.BytesToNodeID(wc.signer.PublicKey().Bytes()),
+				MinerPK:      wc.signer.NodeID(),
 				VrfSignature: signature,
 			}
 			msg, err := codec.Encode(&message)
