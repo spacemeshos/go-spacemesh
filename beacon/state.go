@@ -25,7 +25,7 @@ type state struct {
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
 	votesMargin               map[Proposal]*big.Int
 	hasProposed               map[string]struct{}
-	hasVoted                  []map[string]struct{}
+	hasVoted                  []map[types.NodeID]struct{}
 	proposalPhaseFinishedTime time.Time
 	proposalChecker           eligibilityChecker
 	minerAtxs                 map[types.NodeID]types.ATXID
@@ -47,7 +47,7 @@ func newState(
 		firstRoundIncomingVotes: make(map[types.NodeID]proposalList),
 		votesMargin:             map[Proposal]*big.Int{},
 		hasProposed:             make(map[string]struct{}),
-		hasVoted:                make([]map[string]struct{}, cfg.RoundsNumber),
+		hasVoted:                make([]map[types.NodeID]struct{}, cfg.RoundsNumber),
 		proposalChecker:         checker,
 	}
 }
@@ -108,14 +108,13 @@ func (s *state) registerProposed(logger log.Log, minerPK *signing.PublicKey) err
 	return nil
 }
 
-func (s *state) registerVoted(logger log.Log, minerPK *signing.PublicKey, round types.RoundID) error {
+func (s *state) registerVoted(logger log.Log, nodeID types.NodeID, round types.RoundID) error {
 	if s.hasVoted[round] == nil {
-		s.hasVoted[round] = make(map[string]struct{})
+		s.hasVoted[round] = make(map[types.NodeID]struct{})
 	}
 
-	minerID := string(minerPK.Bytes())
 	// TODO(nkryuchkov): consider having a separate table for an epoch with one bit in it if atx/miner is voted already
-	if _, ok := s.hasVoted[round][minerID]; ok {
+	if _, ok := s.hasVoted[round][nodeID]; ok {
 		logger.Warning("already received vote from miner for this round")
 
 		// TODO(nkryuchkov): report this miner through gossip
@@ -125,9 +124,9 @@ func (s *state) registerVoted(logger log.Log, minerPK *signing.PublicKey, round 
 		// TODO(nkryuchkov): ban id forever globally across packages since this epoch
 		// TODO(nkryuchkov): (not specific to beacon) do the same for ATXs
 
-		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, minerPK.ShortString(), errAlreadyVoted)
+		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, nodeID.ShortString(), errAlreadyVoted)
 	}
 
-	s.hasVoted[round][minerID] = struct{}{}
+	s.hasVoted[round][nodeID] = struct{}{}
 	return nil
 }

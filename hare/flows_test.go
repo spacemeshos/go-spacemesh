@@ -290,7 +290,7 @@ func Test_multipleCPs(t *testing.T) {
 		pubsubs = append(pubsubs, ps)
 		h := createTestHare(t, meshes[i], cfg, test.clock, ps, t.Name())
 		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 80), nil).AnyTimes()
+		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(types.RandomVrfSignature(), nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
 		h.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 		outputsWaitGroup.Add(1)
@@ -411,7 +411,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.GetEffectiveGenesis().Add(1), err: errors.New("fake err")}
 		h := createTestHare(t, meshes[i], cfg, test.clock, mp2p, t.Name())
 		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 80), nil).AnyTimes()
+		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(types.RandomVrfSignature(), nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
 		h.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 		outputsWaitGroup.Add(1)

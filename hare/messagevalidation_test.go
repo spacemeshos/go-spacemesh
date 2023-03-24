@@ -326,11 +326,11 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 }
 
 type pubGetter struct {
-	mp map[[64]byte]*signing.PublicKey
+	mp map[types.EdSignature]*signing.PublicKey
 }
 
 func newPubGetter() *pubGetter {
-	return &pubGetter{make(map[[64]byte]*signing.PublicKey)}
+	return &pubGetter{make(map[types.EdSignature]*signing.PublicKey)}
 }
 
 func (pg pubGetter) Track(m *Msg) {

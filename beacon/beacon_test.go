@@ -1011,10 +1011,10 @@ func TestBeacon_signAndExtractED(t *testing.T) {
 	message := []byte{1, 2, 3, 4}
 
 	signature := signer.Sign(signing.BEACON, message)
-	extractedPK, err := extractor.Extract(signing.BEACON, message, signature)
+	extractedNodeID, err := extractor.ExtractNodeID(signing.BEACON, message, signature)
 	r.NoError(err)
 
-	r.Equal(signer.PublicKey().String(), extractedPK.String())
+	r.Equal(signer.NodeID(), extractedNodeID)
 }
 
 func TestBeacon_calcBeacon(t *testing.T) {

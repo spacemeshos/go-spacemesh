@@ -320,7 +320,7 @@ func Test_CalcEligibility_MainnetParams(t *testing.T) {
 	for i := 0; i < numOfMiners; i++ {
 		n, err := rng.Read(sig[:])
 		r.NoError(err)
-		r.Equal(64, n)
+		r.Equal(types.VrfSignatureSize, n)
 		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))
 		nonce := types.VRFPostIndex(rng.Uint64())
 		o.mNonceFetcher.EXPECT().VRFNonce(nodeID, layer.GetEpoch()).Return(nonce, nil).Times(1)
@@ -473,8 +473,7 @@ func Test_Proof_BeaconError(t *testing.T) {
 	errUnknown := errors.New("unknown")
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
 
-	sig, err := o.Proof(context.Background(), types.VRFPostIndex(rand.Uint64()), layer, 3)
-	require.Nil(t, sig)
+	_, err = o.Proof(context.Background(), types.VRFPostIndex(rand.Uint64()), layer, 3)
 	require.ErrorIs(t, err, errUnknown)
 }
 

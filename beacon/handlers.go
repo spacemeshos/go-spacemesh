@@ -285,15 +285,14 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 		logger.With().Fatal("failed to serialize first voting message", log.Err(err))
 	}
 
-	minerPK, err := pd.pubKeyExtractor.Extract(signing.BEACON, messageBytes, m.Signature)
+	nodeID, err := pd.pubKeyExtractor.ExtractNodeID(signing.BEACON, messageBytes, m.Signature)
 	if err != nil {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] recover ID %x: %w", types.FirstRound, m.Signature, err)
 	}
 
-	nodeID := types.BytesToNodeID(minerPK.Bytes())
 	logger = logger.WithFields(log.Stringer("smesher", nodeID))
 
-	if err = pd.registerVoted(logger, m.EpochID, minerPK, types.FirstRound); err != nil {
+	if err = pd.registerVoted(logger, m.EpochID, nodeID, types.FirstRound); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] register proposal (miner ID %v): %w", types.FirstRound, nodeID.String(), err)
 	}
 	return nodeID, nil
@@ -402,15 +401,14 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 		pd.logger.With().Fatal("failed to serialize voting message", log.Err(err))
 	}
 
-	minerPK, err := pd.pubKeyExtractor.Extract(signing.BEACON, messageBytes, m.Signature)
+	nodeID, err := pd.pubKeyExtractor.ExtractNodeID(signing.BEACON, messageBytes, m.Signature)
 	if err != nil {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] recover ID from signature %x: %w", round, m.Signature, err)
 	}
 
-	nodeID := types.BytesToNodeID(minerPK.Bytes())
 	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, round, log.Stringer("smesher", nodeID))
 
-	if err := pd.registerVoted(logger, m.EpochID, minerPK, m.RoundID); err != nil {
+	if err := pd.registerVoted(logger, m.EpochID, nodeID, m.RoundID); err != nil {
 		return types.EmptyNodeID, err
 	}
 
@@ -514,7 +512,7 @@ func (pd *ProtocolDriver) registerProposed(logger log.Log, epoch types.EpochID, 
 	return pd.states[epoch].registerProposed(logger, minerPK)
 }
 
-func (pd *ProtocolDriver) registerVoted(logger log.Log, epoch types.EpochID, minerPK *signing.PublicKey, round types.RoundID) error {
+func (pd *ProtocolDriver) registerVoted(logger log.Log, epoch types.EpochID, minerPK types.NodeID, round types.RoundID) error {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	if _, ok := pd.states[epoch]; !ok {

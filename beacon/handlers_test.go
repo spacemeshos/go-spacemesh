@@ -131,7 +131,7 @@ func checkVoted(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, signer *s
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 	require.NotNil(t, pd.states[epoch])
-	_, ok := pd.states[epoch].hasVoted[round][string(signer.PublicKey().Bytes())]
+	_, ok := pd.states[epoch].hasVoted[round][signer.NodeID()]
 	require.Equal(t, voted, ok)
 }
 
