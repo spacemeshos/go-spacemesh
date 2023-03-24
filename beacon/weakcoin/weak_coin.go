@@ -312,7 +312,7 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 }
 
 func (wc *WeakCoin) updateSmallest(ctx context.Context, proposal types.VrfSignature) error {
-	if len(proposal) > 0 && (bytes.Compare(proposal[:], (*wc.smallest)[:]) == -1 || wc.smallest == nil) {
+	if len(proposal) > 0 && (wc.smallest == nil || bytes.Compare(proposal[:], (*wc.smallest)[:]) == -1) {
 		wc.logger.WithContext(ctx).With().Debug("saving new proposal",
 			wc.epoch,
 			wc.round,

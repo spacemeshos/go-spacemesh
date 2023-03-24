@@ -39,6 +39,7 @@ func TestBallotIDUnaffectedByVotes(t *testing.T) {
 }
 
 func TestBallot_IDSize(t *testing.T) {
+	// FIXME(mafa): why is ballot ID with size 20 serialized to 32 bytes?
 	var id types.BallotID
 	require.Len(t, id.Bytes(), types.BallotIDSize)
 }

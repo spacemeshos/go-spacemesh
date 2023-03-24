@@ -66,7 +66,7 @@ func RandomNodeID() NodeID {
 
 // RandomBallotID generates a random BallotID for testing.
 func RandomBallotID() BallotID {
-	var b [BallotIDSize]byte
+	var b [hash20Length]byte // TODO(mafa): BallotIDSize is 32???
 	_, err := rand.Read(b[:])
 	if err != nil {
 		return EmptyBallotID

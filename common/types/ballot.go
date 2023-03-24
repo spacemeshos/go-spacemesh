@@ -13,7 +13,8 @@ import (
 
 const (
 	// BallotIDSize in bytes.
-	BallotIDSize = hash20Length
+	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
+	BallotIDSize = Hash32Length
 )
 
 //go:generate scalegen
@@ -40,7 +41,7 @@ type Ballot struct {
 	BallotMetadata
 	InnerBallot
 	// smeshers signature on InnerBallot
-	Signature [64]byte
+	Signature EdSignature
 	// Votes field is not signed.
 	Votes Votes
 	// the proof of the smeshers eligibility to vote and propose block content in this epoch.
@@ -359,7 +360,7 @@ func BallotIDsToHashes(ids []BallotID) []Hash32 {
 }
 
 // NewExistingBallot creates ballot from stored data.
-func NewExistingBallot(id BallotID, sig [64]byte, nodeId NodeID, meta BallotMetadata) Ballot {
+func NewExistingBallot(id BallotID, sig EdSignature, nodeId NodeID, meta BallotMetadata) Ballot {
 	return Ballot{
 		ballotID:       id,
 		Signature:      sig,

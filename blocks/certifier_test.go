@@ -593,7 +593,7 @@ func Test_CertifyIfEligible(t *testing.T) {
 	tc := newTestCertifier(t)
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
-	proof := []byte("not a fraud")
+	proof := types.RandomVrfSignature()
 
 	extractor, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
@@ -623,7 +623,7 @@ func Test_CertifyIfEligible_NotEligible(t *testing.T) {
 	tc := newTestCertifier(t)
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
-	proof := []byte("not a fraud")
+	proof := types.RandomVrfSignature()
 	nonce := types.VRFPostIndex(rand.Uint64())
 	tc.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), b.LayerIndex.GetEpoch()).Return(nonce, nil)
 	tc.mOracle.EXPECT().Proof(gomock.Any(), nonce, b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
@@ -636,7 +636,7 @@ func Test_CertifyIfEligible_EligibilityErr(t *testing.T) {
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 	errUnknown := errors.New("unknown")
-	proof := []byte("not a fraud")
+	proof := types.RandomVrfSignature()
 	nonce := types.VRFPostIndex(rand.Uint64())
 	tc.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), b.LayerIndex.GetEpoch()).Return(nonce, nil)
 	tc.mOracle.EXPECT().Proof(gomock.Any(), nonce, b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
@@ -651,7 +651,7 @@ func Test_CertifyIfEligible_ProofErr(t *testing.T) {
 	errUnknown := errors.New("unknown")
 	nonce := types.VRFPostIndex(rand.Uint64())
 	tc.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), b.LayerIndex.GetEpoch()).Return(nonce, nil)
-	tc.mOracle.EXPECT().Proof(gomock.Any(), nonce, b.LayerIndex, eligibility.CertifyRound).Return(nil, errUnknown)
+	tc.mOracle.EXPECT().Proof(gomock.Any(), nonce, b.LayerIndex, eligibility.CertifyRound).Return(types.VrfSignature{}, errUnknown)
 	require.ErrorIs(t, tc.CertifyIfEligible(context.TODO(), tc.logger, b.LayerIndex, b.ID()), errUnknown)
 }
 
