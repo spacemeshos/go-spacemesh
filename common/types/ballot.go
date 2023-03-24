@@ -13,8 +13,7 @@ import (
 
 const (
 	// BallotIDSize in bytes.
-	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
-	BallotIDSize = Hash32Length
+	BallotIDSize = hash20Length
 )
 
 //go:generate scalegen

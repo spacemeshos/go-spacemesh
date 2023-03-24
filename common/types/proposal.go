@@ -13,9 +13,7 @@ import (
 
 const (
 	// ProposalIDSize in bytes.
-	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
-	// probably required for fetching by hash between peers.
-	ProposalIDSize = Hash32Length
+	ProposalIDSize = hash20Length
 )
 
 //go:generate scalegen

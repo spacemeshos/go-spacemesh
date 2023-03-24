@@ -81,9 +81,7 @@ func Test_SignatureVerification(t *testing.T) {
 	req.NoError(err)
 
 	verifier := activation.NewChallengeVerifier(atxProvider, extractor, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
-	var sig [64]byte
-	copy(sig[:], types.RandomBytes(64))
-	_, err = verifier.Verify(context.Background(), challengeBytes, sig)
+	_, err = verifier.Verify(context.Background(), challengeBytes, signing.RandomEdSignature())
 	req.ErrorIs(err, activation.ErrSignatureInvalid)
 }
 
@@ -95,6 +93,9 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	req.NoError(err)
 	nodeID := types.BytesToNodeID(pubKey)
+
+	signer, err := signing.NewEdSigner(signing.WithPrivateKey(privKey))
+	require.NoError(t, err)
 
 	sigVerifier, err := signing.NewPubKeyExtractor()
 	req.NoError(err)
@@ -116,10 +117,6 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 		challenge := createInitialChallenge(*validPost, *validPostMeta, postConfig.MinNumUnits)
 		challengeBytes, err := codec.Encode(&challenge)
 		req.NoError(err)
-		challengeHash := challenge.Hash()
-		signedByte := make([]byte, len(challengeBytes)+1)
-		signedByte[0] = byte(signing.POET)
-		copy(signedByte[1:], challengeBytes)
 
 		ctrl := gomock.NewController(t)
 		atxProvider := activation.NewMockatxProvider(ctrl)
@@ -131,11 +128,9 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, postConfig, goldenATXID, layersPerEpoch)
-		var sig [64]byte
-		copy(sig[:], ed25519.Sign(privKey, signedByte))
-		result, err := verifier.Verify(context.Background(), challengeBytes, sig)
+		result, err := verifier.Verify(context.Background(), challengeBytes, signer.Sign(signing.POET, challengeBytes))
 		req.NoError(err)
-		req.Equal(challengeHash, result.Hash)
+		req.Equal(challenge.Hash(), result.Hash)
 		req.EqualValues(pubKey, result.NodeID.Bytes())
 	})
 
@@ -154,9 +149,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid initial nipost challenge")).Times(1)
 
 		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, postConfig, goldenATXID, layersPerEpoch)
-		var sig [64]byte
-		copy(sig[:], ed25519.Sign(privKey, challengeBytes))
-		_, err = verifier.Verify(context.Background(), challengeBytes, sig)
+		_, err = verifier.Verify(context.Background(), challengeBytes, signer.Sign(signing.POET, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
 		req.ErrorContains(err, "invalid initial nipost challenge")
 	})
@@ -175,9 +168,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, postConfig, goldenATXID, layersPerEpoch)
-		var sig [64]byte
-		copy(sig[:], ed25519.Sign(privKey, challengeBytes))
-		_, err = verifier.Verify(context.Background(), challengeBytes, sig)
+		_, err = verifier.Verify(context.Background(), challengeBytes, signer.Sign(signing.POET, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
 		req.ErrorContains(err, "initial Post is not included")
 	})
@@ -201,9 +192,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid post")).Times(1)
 
 		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, postConfig, goldenATXID, layersPerEpoch)
-		var sig [64]byte
-		copy(sig[:], ed25519.Sign(privKey, challengeBytes))
-		_, err = verifier.Verify(context.Background(), challengeBytes, sig)
+		_, err = verifier.Verify(context.Background(), challengeBytes, signer.Sign(signing.POET, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
 		req.ErrorContains(err, "invalid post")
 	})
@@ -222,9 +211,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 		validator.EXPECT().NumUnits(gomock.Any(), gomock.Any()).Return(errors.New("wrong num units")).Times(1)
 
 		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, postConfig, goldenATXID, layersPerEpoch)
-		var sig [64]byte
-		copy(sig[:], ed25519.Sign(privKey, challengeBytes))
-		_, err = verifier.Verify(context.Background(), challengeBytes, sig)
+		_, err = verifier.Verify(context.Background(), challengeBytes, signer.Sign(signing.POET, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
 		req.ErrorContains(err, "wrong num units")
 	})
@@ -246,9 +233,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 		validator.EXPECT().PostMetadata(gomock.Any(), gomock.Any()).Return(errors.New("wrong post metadata")).Times(1)
 
 		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, postConfig, goldenATXID, layersPerEpoch)
-		var sig [64]byte
-		copy(sig[:], ed25519.Sign(privKey, challengeBytes))
-		_, err = verifier.Verify(context.Background(), challengeBytes, sig)
+		_, err = verifier.Verify(context.Background(), challengeBytes, signer.Sign(signing.POET, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
 		req.ErrorContains(err, "wrong post metadata")
 	})
@@ -280,13 +265,13 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 	}
 	challengeBytes, err := codec.Encode(&challenge)
 	req.NoError(err)
-	challengeHash := challenge.Hash()
-	signedByte := make([]byte, len(challengeBytes)+1)
-	signedByte[0] = byte(signing.POET)
-	copy(signedByte[1:], challengeBytes)
+
+	signer, err := signing.NewEdSigner(signing.WithPrivateKey(privKey))
+	require.NoError(t, err)
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
+
 		ctrl := gomock.NewController(t)
 		atxProvider := activation.NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(gomock.Any()).AnyTimes().Return(
@@ -303,11 +288,9 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 		validator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
-		var sig [64]byte
-		copy(sig[:], ed25519.Sign(privKey, signedByte))
-		result, err := verifier.Verify(context.Background(), challengeBytes, sig)
+		result, err := verifier.Verify(context.Background(), challengeBytes, signer.Sign(signing.POET, challengeBytes))
 		req.NoError(err)
-		req.Equal(challengeHash, result.Hash)
+		req.Equal(challenge.Hash(), result.Hash)
 		req.EqualValues(pubKey, result.NodeID.Bytes())
 	})
 
@@ -322,9 +305,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&activation.ErrAtxNotFound{Id: challenge.PositioningATX}).Times(1)
 
 		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
-		var sig [64]byte
-		copy(sig[:], ed25519.Sign(privKey, signedByte))
-		_, err := verifier.Verify(context.Background(), challengeBytes, sig)
+		_, err := verifier.Verify(context.Background(), challengeBytes, signer.Sign(signing.POET, challengeBytes))
 		req.ErrorIs(err, &activation.VerifyError{})
 		req.ErrorIs(err, &activation.ErrAtxNotFound{Id: challenge.PositioningATX})
 	})
@@ -340,9 +321,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 		validator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("failed positioning ATX validation")).Times(1)
 
 		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
-		var sig [64]byte
-		copy(sig[:], ed25519.Sign(privKey, signedByte))
-		_, err := verifier.Verify(context.Background(), challengeBytes, sig)
+		_, err := verifier.Verify(context.Background(), challengeBytes, signer.Sign(signing.POET, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
 		req.ErrorContains(err, "failed positioning ATX validation")
 	})
@@ -360,9 +339,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 		validator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("failed nipost challenge validation")).Times(1)
 
 		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
-		var sig [64]byte
-		copy(sig[:], ed25519.Sign(privKey, signedByte))
-		_, err := verifier.Verify(context.Background(), challengeBytes, sig)
+		_, err := verifier.Verify(context.Background(), challengeBytes, signer.Sign(signing.POET, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
 		req.ErrorContains(err, "failed nipost challenge validation")
 	})
