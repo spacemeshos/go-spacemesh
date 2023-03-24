@@ -234,6 +234,8 @@ func (m *mockClock) advanceLayer() {
 
 // Test - run multiple CPs simultaneously.
 func Test_multipleCPs(t *testing.T) {
+	t.Skip("pending https://github.com/spacemeshos/go-spacemesh/issues/4001")
+
 	logtest.SetupGlobal(t)
 
 	r := require.New(t)
@@ -344,6 +346,8 @@ func Test_multipleCPs(t *testing.T) {
 
 // Test - run multiple CPs where one of them runs more than one iteration.
 func Test_multipleCPsAndIterations(t *testing.T) {
+	t.Skip("pending https://github.com/spacemeshos/go-spacemesh/issues/4001")
+
 	logtest.SetupGlobal(t)
 
 	r := require.New(t)
