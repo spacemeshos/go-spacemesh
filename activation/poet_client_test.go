@@ -65,7 +65,7 @@ func Test_HTTPPoetClient_Proof(t *testing.T) {
 		require.Equal(t, http.MethodGet, r.Method)
 
 		w.WriteHeader(http.StatusOK)
-		resp, err := protojson.Marshal(&rpcapi.GetProofResponse{})
+		resp, err := protojson.Marshal(&rpcapi.ProofResponse{})
 		require.NoError(t, err)
 
 		w.Write(resp)
@@ -113,7 +113,7 @@ func Test_HTTPPoetClient_PoetServiceID(t *testing.T) {
 		require.Equal(t, http.MethodGet, r.Method)
 
 		w.WriteHeader(http.StatusOK)
-		resp, err := protojson.Marshal(&rpcapi.GetInfoResponse{})
+		resp, err := protojson.Marshal(&rpcapi.InfoResponse{})
 		require.NoError(t, err)
 		w.Write(resp)
 

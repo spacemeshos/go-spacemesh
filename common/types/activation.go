@@ -133,7 +133,7 @@ type NIPostChallenge struct {
 
 	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
 	CommitmentATX      *ATXID
-	InitialPostIndices []byte
+	InitialPostIndices []byte `scale:"max=8000"` // needs to hold K2*8 bytes at most
 }
 
 func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -243,7 +243,7 @@ type ActivationTx struct {
 	InnerActivationTx
 	ATXMetadata
 	// signature over ATXMetadata
-	Signature []byte
+	Signature []byte `scale:"max=64"`
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
@@ -424,13 +424,25 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 	return vAtx, nil
 }
 
-type PoetProofRef []byte
+type Member [32]byte
+
+// EncodeScale implements scale codec interface.
+func (m *Member) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, m[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (m *Member) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, m[:])
+}
+
+type PoetProofRef [32]byte
 
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
 // and the actual PoET Merkle proof.
 type PoetProof struct {
 	poetShared.MerkleProof
-	Members   [][]byte
+	Members   []Member `scale:"max=100000"` // max size depends on how many smeshers submit a challenge to a poet server
 	LeafCount uint64
 }
 
@@ -439,9 +451,9 @@ func (p *PoetProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 		return nil
 	}
 	encoder.AddUint64("LeafCount", p.LeafCount)
-	encoder.AddArray("Indicies", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+	encoder.AddArray("Indices", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 		for _, member := range p.Members {
-			encoder.AppendString(hex.EncodeToString(member))
+			encoder.AppendString(hex.EncodeToString(member[:]))
 		}
 		return nil
 	}))
@@ -466,9 +478,9 @@ func (p *PoetProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 // PoetProofMessage is the envelope which includes the PoetProof, service ID, round ID and signature.
 type PoetProofMessage struct {
 	PoetProof
-	PoetServiceID []byte
-	RoundID       string
-	Signature     []byte
+	PoetServiceID []byte `scale:"max=32"` // public key of the PoET service
+	RoundID       string `scale:"max=32"` // TODO(mafa): convert to uint64
+	Signature     []byte `scale:"max=64"`
 }
 
 func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -487,12 +499,11 @@ func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
 func (proofMessage *PoetProofMessage) Ref() (PoetProofRef, error) {
 	poetProofBytes, err := codec.Encode(&proofMessage.PoetProof)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %w",
+		return PoetProofRef{}, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %w",
 			proofMessage.PoetServiceID, proofMessage.RoundID, err)
 	}
-	ref := hash.Sum(poetProofBytes)
-	h := CalcHash32(ref[:])
-	return h.Bytes(), nil
+	h := CalcHash32(poetProofBytes)
+	return (PoetProofRef)(h), nil
 }
 
 type RoundEnd time.Time
@@ -526,7 +537,7 @@ func (p *RoundEnd) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 // PoetRound includes the PoET's round ID.
 type PoetRound struct {
-	ID            string
+	ID            string `scale:"max=32"`
 	ChallengeHash Hash32
 	End           RoundEnd
 }
@@ -594,7 +605,21 @@ func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, p.Indices)
+		n, err := scale.EncodeByteSliceWithLimit(enc, p.Indices, 8000) // needs to hold K2*8 bytes at most
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact64(enc, p.K2Pow)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact64(enc, p.K3Pow)
 		if err != nil {
 			return total, err
 		}
@@ -611,15 +636,31 @@ func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		p.Nonce = uint32(field)
+		p.Nonce = field
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 8000) // needs to hold K2*8 bytes at most
 		if err != nil {
 			return total, err
 		}
 		total += n
 		p.Indices = field
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		p.K2Pow = field
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		p.K3Pow = field
 	}
 	return total, nil
 }
@@ -641,14 +682,8 @@ func (p *Post) String() string {
 
 // PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
 type PostMetadata struct {
-	Challenge     []byte
-	BitsPerLabel  uint8
+	Challenge     []byte `scale:"max=32"`
 	LabelsPerUnit uint64
-
-	K1 uint32
-	K2 uint32
-	B  uint32
-	N  uint32
 }
 
 func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -656,28 +691,19 @@ func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 		return nil
 	}
 	encoder.AddString("Challenge", hex.EncodeToString(m.Challenge))
-	encoder.AddUint8("BitsPerLabel", m.BitsPerLabel)
 	encoder.AddUint64("LabelsPerUnit", m.LabelsPerUnit)
-	encoder.AddUint32("K1", m.K1)
-	encoder.AddUint32("K2", m.K2)
-	encoder.AddUint32("B", m.B)
-	encoder.AddUint32("N", m.N)
 	return nil
 }
 
 // ProcessingError is a type of error (implements the error interface) that is used to differentiate processing errors
 // from validation errors.
-type ProcessingError string
+type ProcessingError struct {
+	Err string `scale:"max=1024"` // TODO(mafa): make error code instead of string
+}
 
 // Error returns the processing error as a string. It implements the error interface.
 func (s ProcessingError) Error() string {
-	return string(s)
-}
-
-// IsProcessingError returns true if the given error is a processing error.
-func IsProcessingError(err error) bool {
-	_, ok := err.(ProcessingError)
-	return ok
+	return s.Err
 }
 
 // ToATXIDs returns a slice of ATXID corresponding to the given activation tx.

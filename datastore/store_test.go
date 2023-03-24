@@ -334,7 +334,9 @@ func TestBlobStore_GetPoetBlob(t *testing.T) {
 
 	_, err := bs.Get(datastore.POETDB, ref)
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.NoError(t, poets.Add(db, ref, poet, sid, rid))
+	var poetRef types.PoetProofRef
+	copy(poetRef[:], ref)
+	require.NoError(t, poets.Add(db, poetRef, poet, sid, rid))
 	got, err := bs.Get(datastore.POETDB, ref)
 	require.NoError(t, err)
 	require.True(t, bytes.Equal(poet, got))

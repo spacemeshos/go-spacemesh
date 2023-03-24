@@ -17,9 +17,14 @@ func NewMalfeasanceCache(size int) *Cache[types.NodeID, types.MalfeasanceProof] 
 	return NewCache[types.NodeID, types.MalfeasanceProof](size)
 }
 
+type VrfNonceKey struct {
+	ID    types.NodeID
+	Epoch types.EpochID
+}
+
 // NewVRFCache creates a new cache for VRF nonces.
-func NewVRFNonceCache(size int) *Cache[string, types.VRFPostIndex] {
-	return NewCache[string, types.VRFPostIndex](size)
+func NewVRFNonceCache(size int) *Cache[VrfNonceKey, types.VRFPostIndex] {
+	return NewCache[VrfNonceKey, types.VRFPostIndex](size)
 }
 
 // Cache holds a lru cache of recent T instances.

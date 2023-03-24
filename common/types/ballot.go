@@ -35,18 +35,18 @@ func (id *BallotID) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, id[:])
 }
 
-// Ballot contains the smesher's signed vote on the mesh history.
+// Ballot contains the smeshers signed vote on the mesh history.
 type Ballot struct {
 	// BallotMetadata is the signed part of the ballot.
 	BallotMetadata
 	InnerBallot
-	// smesher's signature on InnerBallot
-	Signature []byte
+	// smeshers signature on InnerBallot
+	Signature []byte `scale:"max=64"`
 	// Votes field is not signed.
 	Votes Votes
-	// the proof of the smesher's eligibility to vote and propose block content in this epoch.
+	// the proof of the smeshers eligibility to vote and propose block content in this epoch.
 	// Eligibilities must be produced in the ascending order.
-	EligibilityProofs []VotingEligibility
+	EligibilityProofs []VotingEligibility `scale:"max=500"` // according to protocol there are 50 per layer, the rest is safety margin
 
 	// the following fields are kept private and from being serialized
 	ballotID BallotID
@@ -70,10 +70,10 @@ func (m *BallotMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// InnerBallot contains all info about a smesher's votes on the mesh history. this structure is
+// InnerBallot contains all info about a smeshers votes on the mesh history. this structure is
 // serialized and signed to produce the signature in Ballot.
 type InnerBallot struct {
-	// the smesher's ATX in the epoch this ballot is cast.
+	// the smeshers ATX in the epoch this ballot is cast.
 	AtxID ATXID
 	// OpinionHash is a aggregated opinion on all previous layers.
 	// It is included into transferred data explicitly, so that signature
@@ -135,11 +135,11 @@ type Votes struct {
 	// Base ballot.
 	Base BallotID
 	// Support block id at a particular layer and height.
-	Support []Vote
+	Support []Vote `scale:"max=10000"` // sliding vote window size is 10k layers, vote for one block per layer
 	// Against previously supported block.
-	Against []Vote
+	Against []Vote `scale:"max=10000"` // sliding vote window size is 10k layers, vote for one block per layer
 	// Abstain on layers until they are terminated.
-	Abstain []LayerID
+	Abstain []LayerID `scale:"max=10000"` // sliding vote window size is 10k layers, vote to abstain on any layer
 }
 
 // MarshalLogObject implements logging interface.
@@ -197,7 +197,7 @@ func (o *Opinion) MarshalLogObject(encoder log.ObjectEncoder) error {
 // EpochData contains information that cannot be changed mid-epoch.
 type EpochData struct {
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
-	ActiveSet []ATXID
+	ActiveSet []ATXID `scale:"max=100000"`
 	// the beacon value the smesher recorded for this epoch
 	Beacon Beacon
 }
@@ -249,12 +249,12 @@ func (b *Ballot) SignedBytes() []byte {
 
 // HashInnerBytes returns the hash of the InnerBallot.
 func (b *Ballot) HashInnerBytes() []byte {
-	hshr := hash.New()
-	_, err := codec.EncodeTo(hshr, &b.InnerBallot)
+	h := hash.New()
+	_, err := codec.EncodeTo(h, &b.InnerBallot)
 	if err != nil {
-		log.Fatal("failed to encode InnerBallot for hashing")
+		log.Fatal("failed to encode InnerBallot for hashing", log.Err(err))
 	}
-	return hshr.Sum(nil)
+	return h.Sum(nil)
 }
 
 // SetID from stored data.

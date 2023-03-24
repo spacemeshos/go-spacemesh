@@ -118,41 +118,49 @@ func (c *HTTPPoetClient) Submit(ctx context.Context, challenge []byte, signature
 
 // PoetServiceID returns the public key of the PoET proving service.
 func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) (types.PoetServiceID, error) {
-	if c.poetServiceID != nil {
+	if c.poetServiceID.ServiceID != nil {
 		return c.poetServiceID, nil
 	}
-	resBody := rpcapi.GetInfoResponse{}
+	resBody := rpcapi.InfoResponse{}
 
 	if err := c.req(ctx, http.MethodGet, "/v1/info", nil, &resBody); err != nil {
-		return nil, fmt.Errorf("getting poet ID: %w", err)
+		return types.PoetServiceID{}, fmt.Errorf("getting poet ID: %w", err)
 	}
 
-	c.poetServiceID = types.PoetServiceID(resBody.ServicePubkey)
+	c.poetServiceID.ServiceID = resBody.ServicePubkey
 	return c.poetServiceID, nil
 }
 
 // Proof implements PoetProvingServiceClient.
 func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, error) {
-	resBody := rpcapi.GetProofResponse{}
+	resBody := rpcapi.ProofResponse{}
 	if err := c.req(ctx, http.MethodGet, fmt.Sprintf("/v1/proofs/%s", roundID), nil, &resBody); err != nil {
 		return nil, fmt.Errorf("getting proof: %w", err)
+	}
+
+	p := resBody.Proof.GetProof()
+
+	pMembers := resBody.Proof.GetMembers()
+	members := make([]types.Member, len(pMembers))
+	for i, m := range pMembers {
+		copy(members[i][:], m)
 	}
 
 	proof := types.PoetProofMessage{
 		PoetProof: types.PoetProof{
 			MerkleProof: shared.MerkleProof{
-				Root:         resBody.Proof.GetProof().GetRoot(),
-				ProvenLeaves: resBody.Proof.GetProof().GetProvenLeaves(),
-				ProofNodes:   resBody.Proof.GetProof().GetProofNodes(),
+				Root:         p.GetRoot(),
+				ProvenLeaves: p.GetProvenLeaves(),
+				ProofNodes:   p.GetProofNodes(),
 			},
-			Members:   resBody.Proof.GetMembers(),
+			Members:   members,
 			LeafCount: resBody.Proof.GetLeaves(),
 		},
 		PoetServiceID: resBody.Pubkey,
 		RoundID:       roundID,
 	}
-	if c.poetServiceID == nil {
-		c.poetServiceID = proof.PoetServiceID
+	if c.poetServiceID.ServiceID == nil {
+		c.poetServiceID.ServiceID = proof.PoetServiceID
 	}
 
 	return &proof, nil

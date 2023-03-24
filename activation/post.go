@@ -25,22 +25,24 @@ type PostSetupComputeProvider initialization.ComputeProvider
 type PostConfig struct {
 	MinNumUnits   uint32 `mapstructure:"post-min-numunits"`
 	MaxNumUnits   uint32 `mapstructure:"post-max-numunits"`
-	BitsPerLabel  uint8  `mapstructure:"post-bits-per-label"`
 	LabelsPerUnit uint64 `mapstructure:"post-labels-per-unit"`
 	K1            uint32 `mapstructure:"post-k1"`
 	K2            uint32 `mapstructure:"post-k2"`
-	B             uint32 `mapstructure:"post-b"`
-	N             uint32 `mapstructure:"post-n"`
+	K3            uint32 `mapstructure:"post-k3"`
+	// Difficulties for K2 and K3 Proofs of Work
+	K2PowDifficulty uint64 `mapstructure:"post-k2pow-difficulty"`
+	K3PowDifficulty uint64 `mapstructure:"post-k3pow-difficulty"`
 }
 
 // PostSetupOpts are the options used to initiate a Post setup data creation session,
 // either via the public smesher API, or on node launch (via cmd args).
 type PostSetupOpts struct {
-	DataDir           string `mapstructure:"smeshing-opts-datadir"`
-	NumUnits          uint32 `mapstructure:"smeshing-opts-numunits"`
-	MaxFileSize       uint64 `mapstructure:"smeshing-opts-maxfilesize"`
-	ComputeProviderID int    `mapstructure:"smeshing-opts-provider"`
-	Throttle          bool   `mapstructure:"smeshing-opts-throttle"`
+	DataDir           string              `mapstructure:"smeshing-opts-datadir"`
+	NumUnits          uint32              `mapstructure:"smeshing-opts-numunits"`
+	MaxFileSize       uint64              `mapstructure:"smeshing-opts-maxfilesize"`
+	ComputeProviderID int                 `mapstructure:"smeshing-opts-provider"`
+	Throttle          bool                `mapstructure:"smeshing-opts-throttle"`
+	Scrypt            config.ScryptParams `mapstructure:"smeshing-opts-scrypt"`
 }
 
 // PostSetupStatus represents a status snapshot of the Post setup.
@@ -115,6 +117,10 @@ func (mgr *PostSetupManager) Status() *PostSetupStatus {
 		return &PostSetupStatus{
 			State: mgr.state,
 		}
+	case PostSetupStateError:
+		return &PostSetupStatus{
+			State: mgr.state,
+		}
 	default:
 		return &PostSetupStatus{
 			State:            mgr.state,
@@ -178,7 +184,6 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 		log.String("data_dir", opts.DataDir),
 		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
 		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
 	)
 
@@ -203,7 +208,6 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 		log.String("data_dir", opts.DataDir),
 		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
 		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
 	)
 	mgr.state = PostSetupStateComplete
@@ -335,12 +339,7 @@ func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte
 	p := (*types.Post)(proof)
 	m := &types.PostMetadata{
 		Challenge:     proofMetadata.Challenge,
-		BitsPerLabel:  proofMetadata.BitsPerLabel,
 		LabelsPerUnit: proofMetadata.LabelsPerUnit,
-		K1:            proofMetadata.K1,
-		K2:            proofMetadata.K2,
-		B:             proofMetadata.B,
-		N:             proofMetadata.N,
 	}
 	return p, m, nil
 }

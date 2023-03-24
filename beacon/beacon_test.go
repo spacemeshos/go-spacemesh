@@ -16,7 +16,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -950,7 +949,7 @@ func TestBeacon_buildProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  13110,
-			result: string(util.Hex2Bytes("0404d9cc")),
+			result: string([]byte{0x04, 0x04, 0xd9, 0xcc}),
 		},
 	}
 
@@ -981,12 +980,12 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: vrfSigner.Sign(util.Hex2Bytes("040404")),
+			result: vrfSigner.Sign([]byte{0x04, 0x04, 0x04}),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: vrfSigner.Sign(util.Hex2Bytes("040408")),
+			result: vrfSigner.Sign([]byte{0x04, 0x04, 0x08}),
 		},
 	}
 
@@ -1020,13 +1019,13 @@ func TestBeacon_signAndExtractED(t *testing.T) {
 
 func TestBeacon_calcBeacon(t *testing.T) {
 	set := proposalSet{
-		"0x1": {},
-		"0x2": {},
-		"0x4": {},
-		"0x5": {},
+		Proposal{0x01}: {},
+		Proposal{0x02}: {},
+		Proposal{0x04}: {},
+		Proposal{0x05}: {},
 	}
 
 	beacon := calcBeacon(logtest.New(t), set)
-	expected := types.HexToBeacon("0x98f88210")
+	expected := types.HexToBeacon("0xe69fd154")
 	require.EqualValues(t, expected, beacon)
 }
