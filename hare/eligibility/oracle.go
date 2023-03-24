@@ -59,9 +59,8 @@ type Oracle struct {
 	vrfVerifier    vrfVerifier
 	nonceFetcher   nonceFetcher
 	layersPerEpoch uint32
-	// map from cacheKey to map[types.NodeID]uint64
-	activesCache cache
-	cfg          config.Config
+	activesCache   cache
+	cfg            config.Config
 	log.Log
 }
 
