@@ -250,7 +250,7 @@ func TestBroker_Send(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), nil).Message
+	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature()).Message
 	msg.Layer = instanceID2
 	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
 
@@ -280,7 +280,7 @@ func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), nil)
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature())
 	data := mustEncode(t, m.Message)
 
 	broker.mockMesh.EXPECT().GetMalfeasanceProof(signer.NodeID())
@@ -336,7 +336,7 @@ func TestBroker_HandleEligibility(t *testing.T) {
 		Round:  preRound,
 		PubKey: signer.PublicKey().Bytes(),
 		Eligibility: types.HareEligibility{
-			Proof: []byte{1, 2, 3},
+			Proof: types.RandomVrfSignature(),
 			Count: 3,
 		},
 	}
@@ -422,7 +422,7 @@ func TestBroker_Register(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), nil)
+	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature())
 
 	broker.mu.Lock()
 	broker.pending[instanceID1.Uint32()] = []any{msg, msg}
@@ -448,7 +448,7 @@ func TestBroker_Register2(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), nil).Message
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature()).Message
 	m.Layer = instanceID1
 
 	msg := newMockGossipMsg(m).Message

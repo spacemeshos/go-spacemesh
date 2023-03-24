@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
@@ -58,7 +58,7 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
-	_, err = client.Submit(context.Background(), nil, signing.RandomEdSignature())
+	_, err = client.Submit(context.Background(), nil, types.RandomEdSignature())
 	require.NoError(t, err)
 }
 

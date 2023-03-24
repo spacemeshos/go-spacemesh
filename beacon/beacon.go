@@ -277,7 +277,7 @@ func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTxHeader) {
 	s.minerAtxs[string(atx.NodeID.Bytes())] = atx.ID
 }
 
-func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, minerPK []byte) (*types.ActivationTxHeader, error) {
+func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, minerPK types.NodeID) (*types.ActivationTxHeader, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
@@ -286,17 +286,18 @@ func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, minerPK []byte) (*typ
 		return nil, errEpochNotActive
 	}
 
-	id, ok := st.minerAtxs[string(minerPK)]
+	id, ok := st.minerAtxs[minerPK.String()]
 	if !ok {
 		pd.logger.With().Debug("miner does not have atx in previous epoch",
 			epoch-1,
-			log.Stringer("smesher", types.BytesToNodeID(minerPK)))
+			log.Stringer("smesher", minerPK),
+		)
 		return nil, errMinerNotActive
 	}
 	return pd.cdb.GetAtxHeader(id)
 }
 
-func (pd *ProtocolDriver) MinerAllowance(epoch types.EpochID, minerPK []byte) uint32 {
+func (pd *ProtocolDriver) MinerAllowance(epoch types.EpochID, minerPK types.NodeID) uint32 {
 	atx, err := pd.minerAtxHdr(epoch, minerPK)
 	if err != nil {
 		return 0
@@ -767,7 +768,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 		return
 	}
 
-	atx, err := pd.minerAtxHdr(epoch, pd.edSigner.PublicKey().Bytes())
+	atx, err := pd.minerAtxHdr(epoch, types.BytesToNodeID(pd.edSigner.PublicKey().Bytes()))
 	if err != nil {
 		return
 	}
@@ -1009,13 +1010,13 @@ func createProposalChecker(logger log.Log, conf Config, numEarlyATXs, numATXs in
 	return &proposalChecker{threshold: high, thresholdStrict: low}
 }
 
-func (pc *proposalChecker) PassStrictThreshold(proposal []byte) bool {
-	proposalInt := new(big.Int).SetBytes(proposal)
+func (pc *proposalChecker) PassStrictThreshold(proposal types.VrfSignature) bool {
+	proposalInt := new(big.Int).SetBytes(proposal[:])
 	return proposalInt.Cmp(pc.thresholdStrict) == -1
 }
 
-func (pc *proposalChecker) PassThreshold(proposal []byte) bool {
-	proposalInt := new(big.Int).SetBytes(proposal)
+func (pc *proposalChecker) PassThreshold(proposal types.VrfSignature) bool {
+	proposalInt := new(big.Int).SetBytes(proposal[:])
 	return proposalInt.Cmp(pc.threshold) == -1
 }
 
@@ -1072,7 +1073,7 @@ func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 	return threshold
 }
 
-func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, epoch types.EpochID, nonce types.VRFPostIndex) []byte {
+func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, epoch types.EpochID, nonce types.VRFPostIndex) types.VrfSignature {
 	p := buildProposal(logger, epoch, nonce)
 	vrfSig := signer.Sign(p)
 	proposal := cropData(vrfSig)

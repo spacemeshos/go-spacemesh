@@ -22,8 +22,8 @@ type coin interface {
 }
 
 type eligibilityChecker interface {
-	PassThreshold([]byte) bool
-	PassStrictThreshold([]byte) bool
+	PassThreshold(types.VrfSignature) bool
+	PassStrictThreshold(types.VrfSignature) bool
 }
 
 type layerClock interface {
@@ -33,13 +33,13 @@ type layerClock interface {
 }
 
 type vrfSigner interface {
-	Sign(msg []byte) []byte
+	Sign(msg []byte) types.VrfSignature
 	PublicKey() *signing.PublicKey
 	LittleEndian() bool
 }
 
 type vrfVerifier interface {
-	Verify(nodeID types.NodeID, msg, sig []byte) bool
+	Verify(types.NodeID, []byte, types.VrfSignature) bool
 }
 
 type nonceFetcher interface {

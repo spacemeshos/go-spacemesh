@@ -4,7 +4,6 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 //go:generate scalegen
@@ -20,7 +19,7 @@ type ProposalVrfMessage struct {
 type ProposalMessage struct {
 	EpochID      types.EpochID
 	NodeID       types.NodeID
-	VRFSignature []byte `scale:"max=80"`
+	VRFSignature types.VrfSignature
 }
 
 type Proposal [4]byte
@@ -45,7 +44,7 @@ type FirstVotingMessageBody struct {
 // FirstVotingMessage is a message type which is used when sending first voting messages.
 type FirstVotingMessage struct {
 	FirstVotingMessageBody
-	Signature signing.EdSignature
+	Signature types.EdSignature
 }
 
 // FollowingVotingMessageBody is FollowingVotingMessage without a signature.
@@ -58,5 +57,5 @@ type FollowingVotingMessageBody struct {
 // FollowingVotingMessage is a message type which is used when sending following voting messages.
 type FollowingVotingMessage struct {
 	FollowingVotingMessageBody
-	Signature signing.EdSignature
+	Signature types.EdSignature
 }

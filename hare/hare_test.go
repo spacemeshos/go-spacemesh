@@ -268,7 +268,7 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 			Round:  round,
 			PubKey: types.RandomBytes(32),
 			Eligibility: types.HareEligibility{
-				Proof: []byte("eligible"),
+				Proof: types.RandomVrfSignature(),
 				Count: 3,
 			},
 		},

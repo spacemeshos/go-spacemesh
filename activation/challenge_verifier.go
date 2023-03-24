@@ -38,7 +38,7 @@ type ChallengeVerificationResult struct {
 }
 
 type ChallengeVerifier interface {
-	Verify(context.Context, []byte, signing.EdSignature) (*ChallengeVerificationResult, error)
+	Verify(context.Context, []byte, types.EdSignature) (*ChallengeVerificationResult, error)
 }
 
 type challengeVerifier struct {
@@ -61,7 +61,7 @@ func NewChallengeVerifier(cdb atxProvider, signatureVerifier *signing.PubKeyExtr
 	}
 }
 
-func (v *challengeVerifier) Verify(ctx context.Context, challengeBytes []byte, signature signing.EdSignature) (*ChallengeVerificationResult, error) {
+func (v *challengeVerifier) Verify(ctx context.Context, challengeBytes []byte, signature types.EdSignature) (*ChallengeVerificationResult, error) {
 	nodeID, err := v.keyExtractor.ExtractNodeID(signing.POET, challengeBytes, signature)
 	if err != nil {
 		return nil, ErrSignatureInvalid

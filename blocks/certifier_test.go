@@ -92,7 +92,7 @@ func genCertifyMsg(tb testing.TB, lid types.LayerID, bid types.BlockID, cnt uint
 			LayerID:        lid,
 			BlockID:        bid,
 			EligibilityCnt: cnt,
-			Proof:          []byte("not a fraud"),
+			Proof:          types.RandomVrfSignature(),
 		},
 	}
 	msg.Signature = signer.Sign(signing.HARE, msg.Bytes())

@@ -250,9 +250,9 @@ func Test_HandleProposal_Success(t *testing.T) {
 	require.Equal(t, pubsub.ValidationAccept, res)
 
 	var p1 Proposal
-	copy(p1[:], msg1.VRFSignature)
+	copy(p1[:], msg1.VRFSignature[:])
 	var p2 Proposal
-	copy(p2[:], msg2.VRFSignature)
+	copy(p2[:], msg2.VRFSignature[:])
 	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner1.PublicKey(), true)
 	expectedProposals := proposals{
 		valid:            proposalSet{p1: struct{}{}},
@@ -317,7 +317,7 @@ func Test_HandleProposal_NotInProtocolStillWorks(t *testing.T) {
 	require.Equal(t, pubsub.ValidationAccept, res)
 
 	var p Proposal
-	copy(p[:], msg.VRFSignature)
+	copy(p[:], msg.VRFSignature[:])
 	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), true)
 	expectedProposals := proposals{
 		valid: proposalSet{p: struct{}{}},
@@ -407,7 +407,7 @@ func Test_handleProposal_NextEpoch(t *testing.T) {
 
 	// proposal added to the next epoch
 	var p Proposal
-	copy(p[:], msg.VRFSignature)
+	copy(p[:], msg.VRFSignature[:])
 	checkProposed(t, tpd.ProtocolDriver, nextEpoch, vrfSigner.PublicKey(), true)
 	expectedProposals := proposals{
 		valid: proposalSet{p: struct{}{}},
@@ -538,7 +538,7 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 
 	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), true)
 	var p Proposal
-	copy(p[:], msg1.VRFSignature)
+	copy(p[:], msg1.VRFSignature[:])
 	expectedProposals := proposals{
 		valid: proposalSet{p: struct{}{}},
 	}
@@ -580,7 +580,7 @@ func Test_handleProposal_PotentiallyValid_Timing(t *testing.T) {
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 	var p Proposal
-	copy(p[:], msg.VRFSignature)
+	copy(p[:], msg.VRFSignature[:])
 	expectedProposals := proposals{
 		potentiallyValid: proposalSet{p: struct{}{}},
 	}
@@ -618,7 +618,7 @@ func Test_handleProposal_PotentiallyValid_Threshold(t *testing.T) {
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 	var p Proposal
-	copy(p[:], msg.VRFSignature)
+	copy(p[:], msg.VRFSignature[:])
 	expectedProposals := proposals{
 		potentiallyValid: proposalSet{p: struct{}{}},
 	}
@@ -721,7 +721,7 @@ func Test_handleProposal_MinerMissingATX(t *testing.T) {
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 	var p Proposal
-	copy(p[:], msg.VRFSignature)
+	copy(p[:], msg.VRFSignature[:])
 	expectedProposals := proposals{
 		potentiallyValid: proposalSet{p: struct{}{}},
 	}

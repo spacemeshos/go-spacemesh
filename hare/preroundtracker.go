@@ -49,13 +49,14 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	nodeID := types.BytesToNodeID(msg.PubKey.Bytes())
 
 	// check for winning VRF
-	vrfHash := hash.Sum(msg.Eligibility.Proof)
+	vrfHash := hash.Sum(msg.Eligibility.Proof[:])
 	vrfHashVal := binary.LittleEndian.Uint32(vrfHash[:4])
 	logger.With().Debug("received preround message",
 		nodeID,
 		log.Stringer("smesher", nodeID),
 		log.Int("num_values", len(msg.InnerMsg.Values)),
-		log.Uint32("vrf_value", vrfHashVal))
+		log.Uint32("vrf_value", vrfHashVal),
+	)
 	if vrfHashVal < pre.bestVRF {
 		pre.bestVRF = vrfHashVal
 		// store lowest-order bit as coin toss value
@@ -63,7 +64,8 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		pre.logger.With().Debug("got new best vrf value",
 			log.Stringer("smesher", nodeID),
 			log.String("vrf_value", fmt.Sprintf("%x", vrfHashVal)),
-			log.Bool("weak_coin", pre.coinflip))
+			log.Bool("weak_coin", pre.coinflip),
+		)
 	}
 
 	sToTrack := NewSet(msg.InnerMsg.Values) // assume track all Values

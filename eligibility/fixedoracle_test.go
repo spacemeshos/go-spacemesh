@@ -32,8 +32,8 @@ func TestFixedRolacle_Eligible(t *testing.T) {
 	v := genNode()
 	oracle.Register(true, v)
 
-	res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 10, v, nil)
-	res2, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 10, v, nil)
+	res, _ := oracle.eligible(context.Background(), types.NewLayerID(1), 1, 10, v, types.RandomVrfSignature())
+	res2, _ := oracle.eligible(context.Background(), types.NewLayerID(1), 1, 10, v, types.RandomVrfSignature())
 	assert.True(t, res == res2)
 }
 
@@ -48,7 +48,7 @@ func TestFixedRolacle_Eligible2(t *testing.T) {
 
 	count := 0
 	for _, p := range pubs {
-		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 10, p, nil)
+		res, _ := oracle.eligible(context.Background(), types.NewLayerID(1), 1, 10, p, types.RandomVrfSignature())
 		if res {
 			count++
 		}
@@ -58,7 +58,7 @@ func TestFixedRolacle_Eligible2(t *testing.T) {
 
 	count = 0
 	for _, p := range pubs {
-		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 20, p, nil)
+		res, _ := oracle.eligible(context.Background(), types.NewLayerID(1), 1, 20, p, types.RandomVrfSignature())
 		if res {
 			count++
 		}
@@ -78,7 +78,7 @@ func TestFixedRolacle_Range(t *testing.T) {
 
 	count := 0
 	for _, p := range pubs {
-		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, numOfClients, p, nil)
+		res, _ := oracle.eligible(context.Background(), types.NewLayerID(1), 1, numOfClients, p, types.RandomVrfSignature())
 		if res {
 			count++
 		}
@@ -89,7 +89,7 @@ func TestFixedRolacle_Range(t *testing.T) {
 
 	count = 0
 	for _, p := range pubs {
-		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(2), 1, 0, p, nil)
+		res, _ := oracle.eligible(context.Background(), types.NewLayerID(2), 1, 0, p, types.RandomVrfSignature())
 		if res {
 			count++
 		}
@@ -112,13 +112,13 @@ func TestFixedRolacle_Eligible3(t *testing.T) {
 	}
 
 	exp := numOfClients / 2
-	ok, err := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, exp, types.NodeID{1}, nil)
+	ok, err := oracle.eligible(context.Background(), types.NewLayerID(1), 1, exp, types.NodeID{1}, types.RandomVrfSignature())
 	require.NoError(t, err)
 	require.False(t, ok)
 
 	hc := 0
 	for k := range oracle.honest {
-		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, exp, k, nil)
+		res, _ := oracle.eligible(context.Background(), types.NewLayerID(1), 1, exp, k, types.RandomVrfSignature())
 		if res {
 			hc++
 		}
@@ -126,7 +126,7 @@ func TestFixedRolacle_Eligible3(t *testing.T) {
 
 	dc := 0
 	for k := range oracle.faulty {
-		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, exp, k, nil)
+		res, _ := oracle.eligible(context.Background(), types.NewLayerID(1), 1, exp, k, types.RandomVrfSignature())
 		if res {
 			dc++
 		}
@@ -165,7 +165,7 @@ func TestFixedRolacle_Eligible4(t *testing.T) {
 	// when requesting a bigger committee size everyone should be eligible
 
 	for _, s := range ids {
-		res, _ := oracle.eligible(context.TODO(), types.LayerID{}, 1, numOfClients, s, nil)
+		res, _ := oracle.eligible(context.Background(), types.LayerID{}, 1, numOfClients, s, types.RandomVrfSignature())
 		assert.True(t, res)
 	}
 }

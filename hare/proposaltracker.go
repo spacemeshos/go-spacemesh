@@ -70,7 +70,7 @@ func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Msg) {
 	}
 
 	// ignore msgs with higher ranked role proof
-	if bytes.Compare(msg.Eligibility.Proof, pt.proposal.Eligibility.Proof) > 0 {
+	if bytes.Compare(msg.Eligibility.Proof[:], pt.proposal.Eligibility.Proof[:]) > 0 {
 		return
 	}
 
@@ -115,7 +115,7 @@ func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Msg) {
 
 	// not equal check rank
 	// lower ranked proposal on late proposal is a conflict
-	if bytes.Compare(msg.Eligibility.Proof, pt.proposal.Eligibility.Proof) < 0 {
+	if bytes.Compare(msg.Eligibility.Proof[:], pt.proposal.Eligibility.Proof[:]) < 0 {
 		pt.logger.WithContext(ctx).With().Warning("late lower rank detected",
 			log.String("id_malicious", msg.PubKey.String()))
 		pt.isConflicting = true

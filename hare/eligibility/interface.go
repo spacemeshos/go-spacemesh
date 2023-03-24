@@ -10,7 +10,7 @@ type cache interface {
 }
 
 type vrfVerifier interface {
-	Verify(nodeID types.NodeID, msg, sig []byte) bool
+	Verify(types.NodeID, []byte, types.VrfSignature) bool
 }
 
 type nonceFetcher interface {

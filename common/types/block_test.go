@@ -25,7 +25,7 @@ func Test_CertifyMessage(t *testing.T) {
 			LayerID:        types.NewLayerID(11),
 			BlockID:        types.RandomBlockID(),
 			EligibilityCnt: 2,
-			Proof:          []byte("not a fraud"),
+			Proof:          types.RandomVrfSignature(),
 		},
 	}
 	signer, err := signing.NewEdSigner()

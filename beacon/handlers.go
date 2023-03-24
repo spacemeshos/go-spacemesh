@@ -85,7 +85,7 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 		return err
 	}
 
-	atx, err := pd.minerAtxHdr(m.EpochID, m.NodeID.Bytes())
+	atx, err := pd.minerAtxHdr(m.EpochID, m.NodeID)
 	if err != nil {
 		return err
 	}
@@ -177,9 +177,9 @@ func (pd *ProtocolDriver) classifyProposal(
 	return invalid
 }
 
-func cropData(data []byte) Proposal {
+func cropData(data types.VrfSignature) Proposal {
 	var shortened Proposal
-	copy(shortened[:], data)
+	copy(shortened[:], data[:])
 	return shortened
 }
 
@@ -306,7 +306,7 @@ func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, minerPK *signing
 		return errProtocolNotRunning
 	}
 
-	atx, err := pd.minerAtxHdr(m.EpochID, minerPK.Bytes())
+	atx, err := pd.minerAtxHdr(m.EpochID, types.BytesToNodeID(minerPK.Bytes()))
 	if err != nil {
 		return err
 	}
@@ -424,7 +424,7 @@ func (pd *ProtocolDriver) storeFollowingVotes(m FollowingVotingMessage, minerPK 
 		return errProtocolNotRunning
 	}
 
-	atx, err := pd.minerAtxHdr(m.EpochID, minerPK.Bytes())
+	atx, err := pd.minerAtxHdr(m.EpochID, types.BytesToNodeID(minerPK.Bytes()))
 	if err != nil {
 		return err
 	}

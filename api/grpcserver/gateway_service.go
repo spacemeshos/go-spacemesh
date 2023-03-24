@@ -10,8 +10,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // GatewayService exposes transaction data, and a submit tx endpoint.
@@ -32,7 +32,7 @@ func NewGatewayService(verifier api.ChallengeVerifier) *GatewayService {
 // VerifyChallenge implements v1.GatewayServiceServer.
 func (s *GatewayService) VerifyChallenge(ctx context.Context, in *pb.VerifyChallengeRequest) (*pb.VerifyChallengeResponse, error) {
 	ctx = log.WithNewRequestID(ctx)
-	var sig signing.EdSignature
+	var sig types.EdSignature
 	copy(sig[:], in.Signature)
 	result, err := s.verifier.Verify(ctx, in.Challenge, sig)
 	if err == nil {

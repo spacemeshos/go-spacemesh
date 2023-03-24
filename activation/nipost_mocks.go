@@ -10,7 +10,6 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	signing "github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // MockPoetProvingServiceClient is a mock of PoetProvingServiceClient interface.
@@ -67,7 +66,7 @@ func (mr *MockPoetProvingServiceClientMockRecorder) Proof(ctx, roundID interface
 }
 
 // Submit mocks base method.
-func (m *MockPoetProvingServiceClient) Submit(arg0 context.Context, arg1 []byte, arg2 signing.EdSignature) (*types.PoetRound, error) {
+func (m *MockPoetProvingServiceClient) Submit(arg0 context.Context, arg1 []byte, arg2 types.EdSignature) (*types.PoetRound, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Submit", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*types.PoetRound)

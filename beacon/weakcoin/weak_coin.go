@@ -41,8 +41,8 @@ type Message struct {
 	Epoch        types.EpochID
 	Round        types.RoundID
 	Unit         uint32
-	MinerPK      []byte `scale:"max=32"`
-	VrfSignature []byte `scale:"max=80"`
+	MinerPK      types.NodeID
+	VrfSignature types.VrfSignature
 }
 
 type VrfMessage struct {
@@ -124,7 +124,7 @@ type WeakCoin struct {
 	epochStarted, roundStarted bool
 	epoch                      types.EpochID
 	round                      types.RoundID
-	smallest                   []byte
+	smallest                   *types.VrfSignature
 	allowance                  allowance
 	// nextRoundBuffer is used to optimistically buffer messages from the next round.
 	nextRoundBuffer []Message
@@ -186,7 +186,6 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, nonce *
 	logger.Info("started beacon weak coin round")
 	wc.roundStarted = true
 	wc.round = round
-	wc.smallest = nil
 	for i, msg := range wc.nextRoundBuffer {
 		if msg.Epoch != wc.epoch || msg.Round != wc.round {
 			continue
@@ -205,14 +204,13 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, nonce *
 }
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
-	nodeID := types.BytesToNodeID(message.MinerPK)
-	nonce, err := wc.nonceFetcher.VRFNonce(nodeID, message.Epoch)
+	nonce, err := wc.nonceFetcher.VRFNonce(message.MinerPK, message.Epoch)
 	if err != nil {
 		wc.logger.With().Error("failed to get vrf nonce", log.Err(err))
-		return fmt.Errorf("failed to get vrf nonce for node %s: %w", nodeID, err)
+		return fmt.Errorf("failed to get vrf nonce for node %s: %w", message.MinerPK, err)
 	}
 	buf := wc.encodeProposal(message.Epoch, nonce, message.Round, message.Unit)
-	if !wc.verifier.Verify(types.BytesToNodeID(message.MinerPK), buf, message.VrfSignature) {
+	if !wc.verifier.Verify(message.MinerPK, buf, message.VrfSignature) {
 		return fmt.Errorf("signature is invalid signature %x", message.VrfSignature)
 	}
 
@@ -224,25 +222,25 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 	return wc.updateSmallest(ctx, message.VrfSignature)
 }
 
-func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) ([]byte, []byte) {
-	minerAllowance := wc.allowance.MinerAllowance(wc.epoch, wc.signer.PublicKey().Bytes())
+func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) ([]byte, types.VrfSignature) {
+	minerAllowance := wc.allowance.MinerAllowance(wc.epoch, types.BytesToNodeID(wc.signer.PublicKey().Bytes()))
 	if minerAllowance == 0 {
-		return nil, nil
+		return nil, types.VrfSignature{}
 	}
 	var broadcast []byte
-	var smallest []byte
+	var smallest *types.VrfSignature
 	for unit := uint32(0); unit < minerAllowance; unit++ {
 		proposal := wc.encodeProposal(epoch, nonce, round, unit)
 		signature := wc.signer.Sign(proposal)
 		if wc.aboveThreshold(signature) {
 			continue
 		}
-		if smallest == nil || bytes.Compare(signature, smallest) == -1 {
+		if smallest == nil || bytes.Compare(signature[:], (*smallest)[:]) == -1 {
 			message := Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         unit,
-				MinerPK:      wc.signer.PublicKey().Bytes(),
+				MinerPK:      types.BytesToNodeID(wc.signer.PublicKey().Bytes()),
 				VrfSignature: signature,
 			}
 			msg, err := codec.Encode(&message)
@@ -251,16 +249,16 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 			}
 
 			broadcast = msg
-			smallest = signature
+			smallest = &signature
 		}
 	}
 
 	wc.mu.RLock()
 	defer wc.mu.RUnlock()
-	if wc.smallest == nil || bytes.Compare(smallest, wc.smallest) == -1 {
-		return broadcast, smallest
+	if wc.smallest == nil || bytes.Compare((*smallest)[:], (*wc.smallest)[:]) == -1 {
+		return broadcast, *smallest
 	}
-	return nil, nil
+	return nil, types.VrfSignature{}
 }
 
 func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) {
@@ -273,7 +271,7 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, no
 		wc.logger.With().Warning("failed to publish own weak coin proposal",
 			epoch,
 			round,
-			log.String("proposal", hex.EncodeToString(proposal)),
+			log.String("proposal", hex.EncodeToString(proposal[:])),
 			log.Err(err),
 		)
 		return
@@ -282,7 +280,7 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, no
 	wc.logger.WithContext(ctx).With().Info("published proposal",
 		epoch,
 		round,
-		log.String("proposal", hex.EncodeToString(proposal)),
+		log.String("proposal", hex.EncodeToString(proposal[:])),
 	)
 }
 
@@ -308,27 +306,27 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 
 	wc.coins[wc.round] = coinflip
 	logger.With().Info("completed round with beacon weak coin",
-		log.String("proposal", hex.EncodeToString(wc.smallest)),
+		log.String("proposal", hex.EncodeToString((*wc.smallest)[:])),
 		log.Bool("beacon_weak_coin", coinflip))
 	wc.smallest = nil
 }
 
-func (wc *WeakCoin) updateSmallest(ctx context.Context, proposal []byte) error {
-	if len(proposal) > 0 && (bytes.Compare(proposal, wc.smallest) == -1 || wc.smallest == nil) {
+func (wc *WeakCoin) updateSmallest(ctx context.Context, proposal types.VrfSignature) error {
+	if len(proposal) > 0 && (bytes.Compare(proposal[:], (*wc.smallest)[:]) == -1 || wc.smallest == nil) {
 		wc.logger.WithContext(ctx).With().Debug("saving new proposal",
 			wc.epoch,
 			wc.round,
-			log.String("proposal", hex.EncodeToString(proposal)),
-			log.String("previous", hex.EncodeToString(wc.smallest)),
+			log.String("proposal", hex.EncodeToString(proposal[:])),
+			log.String("previous", hex.EncodeToString((*wc.smallest)[:])),
 		)
-		wc.smallest = proposal
+		wc.smallest = &proposal
 		return nil
 	}
 	return errNotSmallest
 }
 
-func (wc *WeakCoin) aboveThreshold(proposal []byte) bool {
-	return bytes.Compare(proposal, wc.config.Threshold) == 1
+func (wc *WeakCoin) aboveThreshold(proposal types.VrfSignature) bool {
+	return bytes.Compare(proposal[:], wc.config.Threshold) == 1
 }
 
 func (wc *WeakCoin) encodeProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID, unit uint32) []byte {

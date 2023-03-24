@@ -143,7 +143,7 @@ func TestCodec_MalfeasanceGossip(t *testing.T) {
 		Round:  round,
 		PubKey: types.RandomBytes(32),
 		Eligibility: types.HareEligibility{
-			Proof: []byte{1, 2, 3},
+			Proof: types.RandomVrfSignature(),
 			Count: 12,
 		},
 	}

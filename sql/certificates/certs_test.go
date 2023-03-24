@@ -18,7 +18,7 @@ func makeCert(lid types.LayerID, bid types.BlockID) *types.Certificate {
 					LayerID:        lid,
 					BlockID:        bid,
 					EligibilityCnt: 1,
-					Proof:          []byte("not a fraud 1"),
+					Proof:          types.RandomVrfSignature(),
 				},
 			},
 			{
@@ -26,7 +26,7 @@ func makeCert(lid types.LayerID, bid types.BlockID) *types.Certificate {
 					LayerID:        lid,
 					BlockID:        bid,
 					EligibilityCnt: 2,
-					Proof:          []byte("not a fraud 2"),
+					Proof:          types.RandomVrfSignature(),
 				},
 			},
 		},

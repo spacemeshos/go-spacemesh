@@ -39,7 +39,7 @@ func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byt
 
 func (wc *WeakCoin) receiveMessage(ctx context.Context, message Message) error {
 	if wc.aboveThreshold(message.VrfSignature) {
-		return fmt.Errorf("proposal %x is above threshold", hex.EncodeToString(message.VrfSignature))
+		return fmt.Errorf("proposal %x is above threshold", hex.EncodeToString(message.VrfSignature[:]))
 	}
 
 	wc.mu.Lock()

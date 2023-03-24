@@ -140,7 +140,7 @@ func (m *MockeligibilityChecker) EXPECT() *MockeligibilityCheckerMockRecorder {
 }
 
 // PassStrictThreshold mocks base method.
-func (m *MockeligibilityChecker) PassStrictThreshold(arg0 []byte) bool {
+func (m *MockeligibilityChecker) PassStrictThreshold(arg0 types.VrfSignature) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PassStrictThreshold", arg0)
 	ret0, _ := ret[0].(bool)
@@ -154,7 +154,7 @@ func (mr *MockeligibilityCheckerMockRecorder) PassStrictThreshold(arg0 interface
 }
 
 // PassThreshold mocks base method.
-func (m *MockeligibilityChecker) PassThreshold(arg0 []byte) bool {
+func (m *MockeligibilityChecker) PassThreshold(arg0 types.VrfSignature) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PassThreshold", arg0)
 	ret0, _ := ret[0].(bool)
@@ -284,10 +284,10 @@ func (mr *MockvrfSignerMockRecorder) PublicKey() *gomock.Call {
 }
 
 // Sign mocks base method.
-func (m *MockvrfSigner) Sign(msg []byte) []byte {
+func (m *MockvrfSigner) Sign(msg []byte) types.VrfSignature {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Sign", msg)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].(types.VrfSignature)
 	return ret0
 }
 
@@ -321,17 +321,17 @@ func (m *MockvrfVerifier) EXPECT() *MockvrfVerifierMockRecorder {
 }
 
 // Verify mocks base method.
-func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg, sig []byte) bool {
+func (m *MockvrfVerifier) Verify(arg0 types.NodeID, arg1 []byte, arg2 types.VrfSignature) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Verify", nodeID, msg, sig)
+	ret := m.ctrl.Call(m, "Verify", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockvrfVerifierMockRecorder) Verify(nodeID, msg, sig interface{}) *gomock.Call {
+func (mr *MockvrfVerifierMockRecorder) Verify(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), nodeID, msg, sig)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), arg0, arg1, arg2)
 }
 
 // MocknonceFetcher is a mock of nonceFetcher interface.

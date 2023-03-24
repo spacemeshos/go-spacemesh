@@ -1,4 +1,4 @@
-package signing
+package types
 
 const (
 	EdSignatureSize  = 64

@@ -63,8 +63,9 @@ func TestWeakCoin(t *testing.T) {
 		ctrl                          = gomock.NewController(t)
 		epoch           types.EpochID = 10
 		round           types.RoundID = 4
-		oneLSB                        = []byte{0b0001}
-		zeroLSB                       = []byte{0b0110}
+		oneLSBMiner                   = types.NodeID{0b0001}
+		zeroLSBMiner                  = types.NodeID{0b0110}
+		zeroLSBSig                    = types.VrfSignature{0b0110}
 		higherThreshold               = []byte{0xff}
 	)
 
@@ -84,8 +85,8 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
-				MinerPK:      zeroLSB,
-				VrfSignature: zeroLSB,
+				MinerPK:      zeroLSBMiner,
+				VrfSignature: zeroLSBSig,
 			}),
 			result: pubsub.ValidationAccept,
 		},
@@ -98,8 +99,8 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
-				MinerPK:      zeroLSB,
-				VrfSignature: zeroLSB,
+				MinerPK:      zeroLSBMiner,
+				VrfSignature: zeroLSBSig,
 			}),
 			result: pubsub.ValidationIgnore,
 		},
@@ -112,14 +113,14 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
-				MinerPK:      zeroLSB,
-				VrfSignature: zeroLSB,
+				MinerPK:      zeroLSBMiner,
+				VrfSignature: zeroLSBSig,
 			}),
 			result: pubsub.ValidationAccept,
 		},
 		{
 			desc:     "node only miner",
-			nodeSig:  oneLSB,
+			nodeSig:  oneLSBMiner[:],
 			mining:   true,
 			expected: true,
 		},

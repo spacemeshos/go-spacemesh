@@ -121,7 +121,7 @@ func TestCalcEligibility_ZeroCommittee(t *testing.T) {
 	o := defaultOracle(t)
 	nid := types.NodeID{1, 1}
 	nonce := types.VRFPostIndex(1)
-	res, err := o.CalcEligibility(context.Background(), types.NewLayerID(50), 1, 0, nid, nonce, []byte{})
+	res, err := o.CalcEligibility(context.Background(), types.NewLayerID(50), 1, 0, nid, nonce, types.VrfSignature{})
 	require.ErrorIs(t, err, errZeroCommitteeSize)
 	require.Equal(t, 0, int(res))
 }
@@ -134,7 +134,7 @@ func TestCalcEligibility_BeaconFailure(t *testing.T) {
 	errUnknown := errors.New("unknown")
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
 
-	res, err := o.CalcEligibility(context.Background(), layer, 0, 1, nid, nonce, []byte{})
+	res, err := o.CalcEligibility(context.Background(), layer, 0, 1, nid, nonce, types.VrfSignature{})
 	require.ErrorIs(t, err, errUnknown)
 	require.Equal(t, 0, int(res))
 }
@@ -147,7 +147,7 @@ func TestCalcEligibility_VerifyFailure(t *testing.T) {
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
 	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(false).Times(1)
 
-	res, err := o.CalcEligibility(context.Background(), layer, 0, 1, nid, nonce, []byte{})
+	res, err := o.CalcEligibility(context.Background(), layer, 0, 1, nid, nonce, types.VrfSignature{})
 	require.NoError(t, err)
 	require.Equal(t, 0, int(res))
 }
@@ -181,7 +181,7 @@ func TestCalcEligibility_EmptyActiveSet(t *testing.T) {
 		b.SetSmesherID(signer.NodeID())
 		require.NoError(t, ballots.Add(o.cdb, b))
 	}
-	res, err := o.CalcEligibility(context.Background(), layer, 1, 1, nid, nonce, []byte{})
+	res, err := o.CalcEligibility(context.Background(), layer, 1, 1, nid, nonce, types.VrfSignature{})
 	require.ErrorIs(t, err, errEmptyActiveSet)
 	require.Equal(t, 0, int(res))
 }
@@ -205,11 +205,15 @@ func TestCalcEligibility_EligibleFromHareActiveSet(t *testing.T) {
 	for s, exp := range sigs {
 		sig, err := hex.DecodeString(s)
 		require.NoError(t, err)
+
+		var vrfSig types.VrfSignature
+		copy(vrfSig[:], sig)
+
 		nid := types.BytesToNodeID([]byte("0"))
 		nonce := types.VRFPostIndex(1)
 		o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
 		o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).Times(1)
-		res, err := o.CalcEligibility(context.Background(), layer, 1, 10, nid, nonce, sig)
+		res, err := o.CalcEligibility(context.Background(), layer, 1, 10, nid, nonce, vrfSig)
 		require.NoError(t, err, s)
 		require.Equal(t, exp, res, s)
 	}
@@ -241,9 +245,13 @@ func TestCalcEligibility_EligibleFromTortoiseActiveSet(t *testing.T) {
 	for s, exp := range sigs {
 		sig, err := hex.DecodeString(s)
 		require.NoError(t, err)
+
+		var vrfSig types.VrfSignature
+		copy(vrfSig[:], sig)
+
 		nid := types.BytesToNodeID([]byte("0"))
 		nonce := types.VRFPostIndex(1)
-		res, err := o.CalcEligibility(context.Background(), layer, 1, 10, nid, nonce, sig)
+		res, err := o.CalcEligibility(context.Background(), layer, 1, 10, nid, nonce, vrfSig)
 		require.NoError(t, err, s)
 		require.Equal(t, exp, res, s)
 	}
@@ -264,9 +272,9 @@ func TestCalcEligibility_WithSpaceUnits(t *testing.T) {
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
 
 	var eligibilityCount uint16
-	sig := make([]byte, 80)
+	var sig types.VrfSignature
 	for nodeID := range createMapWithSize(numOfMiners) {
-		_, err := rand.Read(sig)
+		_, err := rand.Read(sig[:])
 		r.NoError(err)
 
 		nonce := types.VRFPostIndex(rand.Uint64())
@@ -308,9 +316,9 @@ func Test_CalcEligibility_MainnetParams(t *testing.T) {
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
 
 	var eligibilityCount uint16
-	sig := make([]byte, 64)
+	var sig types.VrfSignature
 	for i := 0; i < numOfMiners; i++ {
-		n, err := rng.Read(sig)
+		n, err := rng.Read(sig[:])
 		r.NoError(err)
 		r.Equal(64, n)
 		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))
@@ -353,7 +361,7 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
 
 	var eligibilityCount uint16
-	sig := make([]byte, 64)
+	var sig types.VrfSignature
 
 	var nodeIDs []types.NodeID
 	for pubkey := range createMapWithSize(b.N) {

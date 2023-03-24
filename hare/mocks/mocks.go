@@ -72,7 +72,7 @@ func (m *MockRolacle) EXPECT() *MockRolacleMockRecorder {
 }
 
 // CalcEligibility mocks base method.
-func (m *MockRolacle) CalcEligibility(arg0 context.Context, arg1 types.LayerID, arg2 uint32, arg3 int, arg4 types.NodeID, arg5 types.VRFPostIndex, arg6 []byte) (uint16, error) {
+func (m *MockRolacle) CalcEligibility(arg0 context.Context, arg1 types.LayerID, arg2 uint32, arg3 int, arg4 types.NodeID, arg5 types.VRFPostIndex, arg6 types.VrfSignature) (uint16, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CalcEligibility", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 	ret0, _ := ret[0].(uint16)
@@ -102,10 +102,10 @@ func (mr *MockRolacleMockRecorder) IsIdentityActiveOnConsensusView(arg0, arg1, a
 }
 
 // Proof mocks base method.
-func (m *MockRolacle) Proof(arg0 context.Context, arg1 types.VRFPostIndex, arg2 types.LayerID, arg3 uint32) ([]byte, error) {
+func (m *MockRolacle) Proof(arg0 context.Context, arg1 types.VRFPostIndex, arg2 types.LayerID, arg3 uint32) (types.VrfSignature, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Proof", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].(types.VrfSignature)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -117,7 +117,7 @@ func (mr *MockRolacleMockRecorder) Proof(arg0, arg1, arg2, arg3 interface{}) *go
 }
 
 // Validate mocks base method.
-func (m *MockRolacle) Validate(arg0 context.Context, arg1 types.LayerID, arg2 uint32, arg3 int, arg4 types.NodeID, arg5 []byte, arg6 uint16) (bool, error) {
+func (m *MockRolacle) Validate(arg0 context.Context, arg1 types.LayerID, arg2 uint32, arg3 int, arg4 types.NodeID, arg5 types.VrfSignature, arg6 uint16) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Validate", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 	ret0, _ := ret[0].(bool)

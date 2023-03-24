@@ -14,8 +14,10 @@ type VRFSigner struct {
 }
 
 // Sign signs a message for VRF purposes.
-func (s VRFSigner) Sign(msg []byte) []byte {
-	return ecvrf.Prove(s.privateKey, msg)
+func (s VRFSigner) Sign(msg []byte) types.VrfSignature {
+	var sig types.VrfSignature
+	copy(sig[:], ecvrf.Prove(s.privateKey, msg))
+	return sig
 }
 
 // NodeID of the signer.
@@ -33,19 +35,19 @@ func (s VRFSigner) LittleEndian() bool {
 	return true
 }
 
-type VRFVerifier func(types.NodeID, []byte, []byte) bool
+type VRFVerifier func(types.NodeID, []byte, types.VrfSignature) bool
 
 func NewVRFVerifier() VRFVerifier {
 	return VRFVerify
 }
 
 // Verify verifies that a signature matches public key and message.
-func (v VRFVerifier) Verify(nodeID types.NodeID, msg, sig []byte) bool {
+func (v VRFVerifier) Verify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool {
 	return v(nodeID, msg, sig)
 }
 
 // VRFVerify verifies that a signature matches public key and message.
-func VRFVerify(nodeID types.NodeID, msg, sig []byte) bool {
-	valid, _ := ecvrf.Verify(nodeID.Bytes(), sig, msg)
+func VRFVerify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool {
+	valid, _ := ecvrf.Verify(nodeID.Bytes(), sig[:], msg)
 	return valid
 }

@@ -115,3 +115,23 @@ func RandomBallot() *Ballot {
 		},
 	}
 }
+
+// RandomEdSignature generates a random EdSignature for testing.
+func RandomEdSignature() EdSignature {
+	var b [EdSignatureSize]byte
+	_, err := rand.Read(b[:])
+	if err != nil {
+		return EdSignature{}
+	}
+	return EdSignature(b)
+}
+
+// RandomVrfSignature generates a random VrfSignature for testing.
+func RandomVrfSignature() VrfSignature {
+	var b [VrfSignatureSize]byte
+	_, err := rand.Read(b[:])
+	if err != nil {
+		return VrfSignature{}
+	}
+	return VrfSignature(b)
+}
