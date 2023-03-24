@@ -31,7 +31,7 @@ type allowance interface {
 // package to the weakCoinPackage (as does allowance), this is indicatave of a
 // circular dependency, probably the weak coin should be merged with the beacon
 // package.
-// TODO add issue for this.
+// Issue: https://github.com/spacemeshos/go-spacemesh/issues/4199
 type weakCoinClock interface {
 	WeakCoinProposalSendTime(epoch types.EpochID, round types.RoundID) time.Time
 }
