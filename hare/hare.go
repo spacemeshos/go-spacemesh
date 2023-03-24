@@ -55,6 +55,9 @@ type TerminationOutput interface {
 // RoundClock is a timer interface.
 type RoundClock interface {
 	AwaitWakeup() <-chan struct{}
+	// RoundEnd returns the time at which round ends, passing round-1 will
+	// return the time at which round starts.
+	RoundEnd(round uint32) time.Time
 	AwaitEndOfRound(round uint32) <-chan struct{}
 }
 

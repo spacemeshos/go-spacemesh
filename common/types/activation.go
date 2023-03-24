@@ -23,8 +23,24 @@ import (
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
 type EpochID uint32
 
-// ToBytes returns a byte-slice representation of the EpochID, using little endian encoding.
-func (l EpochID) ToBytes() []byte { return util.Uint32ToBytes(uint32(l)) }
+// EncodeScale implements scale codec interface.
+func (l EpochID) EncodeScale(e *scale.Encoder) (int, error) {
+	n, err := scale.EncodeCompact32(e, uint32(l))
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// DecodeScale implements scale codec interface.
+func (l *EpochID) DecodeScale(d *scale.Decoder) (int, error) {
+	value, n, err := scale.DecodeCompact32(d)
+	if err != nil {
+		return 0, err
+	}
+	*l = EpochID(value)
+	return n, nil
+}
 
 // IsGenesis returns true if this epoch is in genesis. The first two epochs are considered genesis epochs.
 func (l EpochID) IsGenesis() bool {
@@ -285,11 +301,8 @@ func (atx *ActivationTx) HashInnerBytes() []byte {
 
 // MarshalLogObject implements logging interface.
 func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
-	if atx.InitialPost != nil {
-		encoder.AddString("nipost", atx.InitialPost.String())
-	}
+	encoder.AddString("atx_id", atx.id.String())
 	encoder.AddString("challenge", atx.NIPostChallenge.Hash().String())
-	encoder.AddString("id", atx.id.String())
 	encoder.AddString("smesher", atx.nodeID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
@@ -587,6 +600,20 @@ func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeCompact64(enc, p.K2Pow)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact64(enc, p.K3Pow)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
@@ -598,7 +625,7 @@ func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		p.Nonce = uint32(field)
+		p.Nonce = field
 	}
 	{
 		field, n, err := scale.DecodeByteSlice(dec)
@@ -608,6 +635,22 @@ func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 		p.Indices = field
 	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		p.K2Pow = field
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		p.K3Pow = field
+	}
 	return total, nil
 }
 
@@ -615,35 +658,21 @@ func (p *Post) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if p == nil {
 		return nil
 	}
-	encoder.AddUint32("Nonce", p.Nonce)
-	encoder.AddString("Indicies", hex.EncodeToString(p.Indices))
+	encoder.AddUint32("nonce", p.Nonce)
+	encoder.AddString("indices", hex.EncodeToString(p.Indices))
 	return nil
 }
 
 // String returns a string representation of the PostProof, for logging purposes.
 // It implements the Stringer interface.
 func (p *Post) String() string {
-	return fmt.Sprintf("nonce: %v, indices: %v", p.Nonce, bytesToShortString(p.Indices))
-}
-
-func bytesToShortString(b []byte) string {
-	l := len(b)
-	if l == 0 {
-		return "empty"
-	}
-	return fmt.Sprintf("\"%s…\"", hex.EncodeToString(b)[:util.Min(l, 5)])
+	return fmt.Sprintf("nonce: %v, indices: %s", p.Nonce, hex.EncodeToString(p.Indices))
 }
 
 // PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
 type PostMetadata struct {
 	Challenge     []byte
-	BitsPerLabel  uint8
 	LabelsPerUnit uint64
-
-	K1 uint32
-	K2 uint32
-	B  uint32
-	N  uint32
 }
 
 func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -651,12 +680,7 @@ func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 		return nil
 	}
 	encoder.AddString("Challenge", hex.EncodeToString(m.Challenge))
-	encoder.AddUint8("BitsPerLabel", m.BitsPerLabel)
 	encoder.AddUint64("LabelsPerUnit", m.LabelsPerUnit)
-	encoder.AddUint32("K1", m.K1)
-	encoder.AddUint32("K2", m.K2)
-	encoder.AddUint32("B", m.B)
-	encoder.AddUint32("N", m.N)
 	return nil
 }
 

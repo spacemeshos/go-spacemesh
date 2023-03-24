@@ -202,9 +202,10 @@ func publishAtx(
 	var built *types.ActivationTx
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
-			gotAtx, err := types.BytesToAtx(got)
-			require.NoError(t, err)
-			built = gotAtx
+			var gotAtx types.ActivationTx
+			require.NoError(t, codec.Decode(got, &gotAtx))
+			gotAtx.SetReceived(time.Now().Local())
+			built = &gotAtx
 			extractor, err := signing.NewPubKeyExtractor()
 			require.NoError(t, err)
 			nodeID, err := extractor.ExtractNodeID(signing.ATX, gotAtx.SignedBytes(), gotAtx.Signature)
@@ -511,9 +512,10 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	publishErr := errors.New("blah")
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
-			gotAtx, err := types.BytesToAtx(got)
-			require.NoError(t, err)
-			built = gotAtx
+			var gotAtx types.ActivationTx
+			require.NoError(t, codec.Decode(got, &gotAtx))
+			gotAtx.SetReceived(time.Now().Local())
+			built = &gotAtx
 			require.NoError(t, built.CalcAndSetID())
 			return publishErr
 		})
@@ -529,11 +531,12 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(never)
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
-			gotAtx, err := types.BytesToAtx(got)
-			require.NoError(t, err)
+			var gotAtx types.ActivationTx
+			require.NoError(t, codec.Decode(got, &gotAtx))
+			gotAtx.SetReceived(time.Now().Local())
 			require.NoError(t, gotAtx.CalcAndSetID())
 			built.SetReceived(gotAtx.Received())
-			require.Equal(t, gotAtx, built)
+			require.Equal(t, &gotAtx, built)
 			return nil
 		})
 	expireEpoch := publishEpoch + 2
@@ -602,9 +605,10 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	publishErr := errors.New("blah")
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
-			gotAtx, err := types.BytesToAtx(got)
-			require.NoError(t, err)
-			built = gotAtx
+			var gotAtx types.ActivationTx
+			require.NoError(t, codec.Decode(got, &gotAtx))
+			gotAtx.SetReceived(time.Now().Local())
+			built = &gotAtx
 			require.NoError(t, built.CalcAndSetID())
 			return publishErr
 		})
@@ -730,8 +734,9 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any())
 
 	tab.mpub.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
-		atx, err := types.BytesToAtx(msg)
-		r.NoError(err)
+		var atx types.ActivationTx
+		require.NoError(t, codec.Decode(msg, &atx))
+		atx.SetReceived(time.Now().Local())
 
 		extractor, err := signing.NewPubKeyExtractor()
 		require.NoError(t, err)
@@ -823,8 +828,9 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any())
 
 	tab.mpub.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
-		atx, err := types.BytesToAtx(msg)
-		r.NoError(err)
+		var atx types.ActivationTx
+		require.NoError(t, codec.Decode(msg, &atx))
+		atx.SetReceived(time.Now().Local())
 
 		extractor, err := signing.NewPubKeyExtractor()
 		require.NoError(t, err)
@@ -895,10 +901,11 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 	bt, err := codec.Encode(act)
 	require.NoError(t, err)
 
-	a, err := types.BytesToAtx(bt)
-	require.NoError(t, err)
+	var a types.ActivationTx
+	require.NoError(t, codec.Decode(bt, &a))
+	a.SetReceived(time.Now().Local())
 
-	bt2, err := codec.Encode(a)
+	bt2, err := codec.Encode(&a)
 	require.NoError(t, err)
 
 	require.Equal(t, bt, bt2)
@@ -965,9 +972,10 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	publishErr := errors.New("blah")
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
-			gotAtx, err := types.BytesToAtx(got)
-			require.NoError(t, err)
-			built = gotAtx
+			var gotAtx types.ActivationTx
+			require.NoError(t, codec.Decode(got, &gotAtx))
+			gotAtx.SetReceived(time.Now().Local())
+			built = &gotAtx
 			require.NoError(t, built.CalcAndSetID())
 			return publishErr
 		})
@@ -988,11 +996,12 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(never)
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
-			gotAtx, err := types.BytesToAtx(got)
-			require.NoError(t, err)
+			var gotAtx types.ActivationTx
+			require.NoError(t, codec.Decode(got, &gotAtx))
+			gotAtx.SetReceived(time.Now().Local())
 			require.NoError(t, gotAtx.CalcAndSetID())
 			built.SetReceived(gotAtx.Received())
-			require.Equal(t, gotAtx, built)
+			require.Equal(t, &gotAtx, built)
 			return nil
 		})
 	expireEpoch := publishEpoch + 2

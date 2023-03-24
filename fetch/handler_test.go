@@ -104,7 +104,10 @@ func TestHandleLayerDataReq(t *testing.T) {
 			th := createTestHandler(t)
 			blts, blks := createLayer(t, th.cdb, lid)
 
-			out, err := th.handleLayerDataReq(context.TODO(), lid.Bytes())
+			lidBytes, err := codec.Encode(&lid)
+			require.NoError(t, err)
+
+			out, err := th.handleLayerDataReq(context.Background(), lidBytes)
 			require.NoError(t, err)
 			var got LayerData
 			err = codec.Decode(out, &got)
@@ -147,7 +150,10 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 				}))
 			}
 
-			out, err := th.handleLayerOpinionsReq(context.TODO(), lid.Bytes())
+			lidBytes, err := codec.Encode(&lid)
+			require.NoError(t, err)
+
+			out, err := th.handleLayerOpinionsReq(context.Background(), lidBytes)
 			require.NoError(t, err)
 
 			var got LayerOpinion
@@ -285,7 +291,10 @@ func TestHandleEpochInfoReq(t *testing.T) {
 				}
 			}
 
-			out, err := th.handleEpochInfoReq(context.TODO(), epoch.ToBytes())
+			epochBytes, err := codec.Encode(epoch)
+			require.NoError(t, err)
+
+			out, err := th.handleEpochInfoReq(context.Background(), epochBytes)
 			require.NoError(t, err)
 			var got EpochData
 			require.NoError(t, codec.Decode(out, &got))

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
-	grpcmw "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
@@ -24,6 +23,7 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -202,7 +202,7 @@ type NodeClock interface {
 func loadConfig(c *cobra.Command) (*config.Config, error) {
 	conf, err := LoadConfigFromFile()
 	if err != nil {
-		return nil, fmt.Errorf("loading config from file: %w", err)
+		return nil, err
 	}
 	if err := cmd.EnsureCLIFlags(c, conf); err != nil {
 		return nil, fmt.Errorf("mapping cli flags to config: %w", err)
@@ -212,17 +212,11 @@ func loadConfig(c *cobra.Command) (*config.Config, error) {
 
 // LoadConfigFromFile tries to load configuration file if the config parameter was specified.
 func LoadConfigFromFile() (*config.Config, error) {
-	fileLocation := viper.GetString("config")
-
 	// read in default config if passed as param using viper
-	if err := config.LoadConfig(fileLocation, viper.GetViper()); err != nil {
-		log.Error(fmt.Sprintf("couldn't load config file at location: %s switching to defaults \n error: %v.",
-			fileLocation, err))
-		// return err
+	if err := config.LoadConfig(viper.GetString("config"), viper.GetViper()); err != nil {
+		return nil, err
 	}
-
 	conf := config.DefaultConfig()
-
 	if name := viper.GetString("preset"); len(name) > 0 {
 		preset, err := presets.Get(name)
 		if err != nil {
@@ -810,12 +804,10 @@ func (app *App) startAPIServices(ctx context.Context) {
 			logger := app.addLogger(GRPCLogger, app.log).Zap()
 			grpczap.SetGrpcLoggerV2(grpclog, logger)
 			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
-				grpcmw.WithStreamServerChain(
-					grpctags.StreamServerInterceptor(),
-					grpczap.StreamServerInterceptor(logger)),
-				grpcmw.WithUnaryServerChain(
-					grpctags.UnaryServerInterceptor(),
-					grpczap.UnaryServerInterceptor(logger)),
+				grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger)),
+				grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger)),
+				grpc.MaxSendMsgSize(apiConf.GrpcSendMsgSize),
+				grpc.MaxRecvMsgSize(apiConf.GrpcRecvMsgSize),
 			)
 		}
 		services = append(services, svc)
