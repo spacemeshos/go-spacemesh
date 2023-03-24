@@ -846,7 +846,11 @@ func TestActives_ConcurrentCalls(t *testing.T) {
 				firstCall = false
 				return nil, false
 			}
-			return createMapWithSize(5), true
+			aset := activeSet{set: createMapWithSize(5)}
+			for _, value := range aset.set {
+				aset.total += value
+			}
+			return &aset, true
 		}).Times(102)
 	mc.EXPECT().Add(start.GetEpoch(), gomock.Any()).Times(1)
 	o.activesCache = mc

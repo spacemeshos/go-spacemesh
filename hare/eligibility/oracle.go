@@ -50,6 +50,11 @@ var (
 	errZeroTotalWeight   = errors.New("zero total weight")
 )
 
+type activeSet struct {
+	set   map[types.NodeID]uint64
+	total uint64
+}
+
 // Oracle is the hare eligibility oracle.
 type Oracle struct {
 	lock           sync.Mutex
@@ -185,12 +190,7 @@ func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, 
 	if err != nil {
 		return 0, err
 	}
-
-	var totalWeight uint64
-	for _, w := range actives {
-		totalWeight += w
-	}
-	return totalWeight, nil
+	return actives.total, nil
 }
 
 func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error) {
@@ -199,10 +199,10 @@ func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.
 		return 0, err
 	}
 
-	w, ok := actives[id]
+	w, ok := actives.set[id]
 	if !ok {
 		o.With().Debug("miner is not active in specified layer",
-			log.Int("active_set_size", len(actives)),
+			log.Int("active_set_size", len(actives.set)),
 			log.String("actives", fmt.Sprintf("%v", actives)),
 			layer, log.Stringer("id.Key", id),
 		)
@@ -387,18 +387,21 @@ func (o *Oracle) Proof(ctx context.Context, nonce types.VRFPostIndex, layer type
 }
 
 // Returns a map of all active node IDs in the specified layer id.
-func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[types.NodeID]uint64, error) {
-	logger := o.WithContext(ctx).WithFields(
-		log.FieldNamed("target_layer", targetLayer),
-		log.FieldNamed("target_layer_epoch", targetLayer.GetEpoch()),
-	)
-	logger.Debug("hare oracle getting active set")
+func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*activeSet, error) {
 
 	o.lock.Lock()
 	defer o.lock.Unlock()
 	// we first try to get the hare active set for a range of safe layers
 	safeLayerStart, safeLayerEnd := safeLayerRange(
 		targetLayer, o.cfg.ConfidenceParam, o.layersPerEpoch, o.cfg.EpochOffset)
+
+	if value, exists := o.activesCache.Get(safeLayerStart.GetEpoch()); exists {
+		return value.(*activeSet), nil
+	}
+	logger := o.WithContext(ctx).WithFields(
+		log.FieldNamed("target_layer", targetLayer),
+		log.FieldNamed("target_layer_epoch", targetLayer.GetEpoch()),
+	)
 	logger.With().Debug("safe layer range",
 		log.FieldNamed("safe_layer_start", safeLayerStart),
 		log.FieldNamed("safe_layer_end", safeLayerEnd),
@@ -408,16 +411,16 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 		log.Uint32("epoch_offset", o.cfg.EpochOffset),
 		log.Uint64("layers_per_epoch", uint64(o.layersPerEpoch)),
 		log.FieldNamed("effective_genesis", types.GetEffectiveGenesis()))
-
-	if value, exists := o.activesCache.Get(safeLayerStart.GetEpoch()); exists {
-		return value.(map[types.NodeID]uint64), nil
-	}
-	activeSet, err := o.computeActiveSet(logger, targetLayer, safeLayerStart, safeLayerEnd)
+	set, err := o.computeActiveSet(logger, targetLayer, safeLayerStart, safeLayerEnd)
 	if err != nil {
 		return nil, err
 	}
-	o.activesCache.Add(safeLayerStart.GetEpoch(), activeSet)
-	return activeSet, nil
+	aset := activeSet{set: set}
+	for _, value := range set {
+		aset.total += value
+	}
+	o.activesCache.Add(safeLayerStart.GetEpoch(), &aset)
+	return &aset, nil
 }
 
 func (o *Oracle) computeActiveSet(logger log.Log, targetLayer, safeLayerStart, safeLayerEnd types.LayerID) (map[types.NodeID]uint64, error) {
@@ -563,6 +566,6 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID types
 		o.WithContext(ctx).With().Error("error getting active set", layer, log.Err(err))
 		return false, err
 	}
-	_, exist := actives[edID]
+	_, exist := actives.set[edID]
 	return exist, nil
 }
