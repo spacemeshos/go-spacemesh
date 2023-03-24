@@ -523,6 +523,11 @@ func (app *App) initServices(
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
+	poetCfg := activation.PoetConfig{
+		PhaseShift:  app.Config.POET.PhaseShift,
+		CycleGap:    app.Config.POET.CycleGap,
+		GracePeriod: app.Config.POET.GracePeriod,
+	}
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
 		app.cachedDB,
@@ -536,6 +541,7 @@ func (app *App) initServices(
 		validator,
 		[]activation.AtxReceiver{trtl, beaconProtocol},
 		app.addLogger(ATXHandlerLogger, lg),
+		poetCfg,
 	)
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
@@ -651,11 +657,6 @@ func (app *App) initServices(
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	poetCfg := activation.PoetConfig{
-		PhaseShift:  app.Config.POET.PhaseShift,
-		CycleGap:    app.Config.POET.CycleGap,
-		GracePeriod: app.Config.POET.GracePeriod,
-	}
 	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, app.db, app.addLogger(NipostBuilderLogger, lg), sgn, poetCfg, clock)
 
 	var coinbaseAddr types.Address
