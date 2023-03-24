@@ -667,7 +667,7 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	createIdentity(t, db, sig)
 	lid := types.NewLayerID(11)
 	round := uint32(11)
-	proofByte := types.RandomBytes(64)
+	proofByte := types.RandomVrfSignature()
 	eCount := uint16(3)
 
 	bp := types.BallotProof{

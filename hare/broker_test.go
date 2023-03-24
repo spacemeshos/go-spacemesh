@@ -470,7 +470,7 @@ func TestBroker_Register3(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), nil).Message
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature()).Message
 	m.Layer = instanceID1
 
 	broker.HandleMessage(context.Background(), "", mustEncode(t, m))
@@ -500,7 +500,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), nil).Message
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature()).Message
 	m.Layer = instanceID1
 
 	broker.HandleMessage(context.Background(), "", mustEncode(t, m))
@@ -524,7 +524,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 func Test_newMsg(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), nil).Message
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature()).Message
 	// TODO: remove this comment when ready
 	//_, e := newMsg(m, MockStateQuerier{false, errors.New("my err")})
 	//assert.NotNil(t, e)
@@ -593,7 +593,7 @@ func TestBroker_eventLoop(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), nil).Message
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature()).Message
 
 	// not synced
 	m.Layer = instanceID1
