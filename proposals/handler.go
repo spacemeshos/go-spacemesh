@@ -228,7 +228,7 @@ func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []
 	}
 
 	latency := receivedTime.Sub(h.clock.LayerToTime(p.Layer))
-	metrics.ReportMessageLatency(pubsub.ProposalProtocol, latency)
+	metrics.ReportMessageLatency(pubsub.ProposalProtocol, pubsub.ProposalProtocol, latency)
 
 	smesher, err := h.extractor.ExtractNodeID(signing.BALLOT, p.SignedBytes(), p.Signature)
 	if err != nil {

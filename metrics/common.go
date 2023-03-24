@@ -42,11 +42,14 @@ var receivedMessagesLatency = NewHistogramWithBuckets(
 	"message_latency_seconds",
 	"",
 	"Observed latency for message",
-	[]string{"protocol", "sign"},
+	[]string{"protocol", "type", "sign"},
 	prometheus.ExponentialBuckets(0.1, 2, 12),
 )
 
-func ReportMessageLatency(protocol string, latency time.Duration) {
+// ReportMessageLatency records the latency for the given protocol and message
+// type, if the protocol consists only of a single message then the protocol
+// should be provided as the message type.
+func ReportMessageLatency(protocol, msgType string, latency time.Duration) {
 	seconds := latency.Seconds()
 	sign := "pos"
 	if seconds < 0 {
@@ -54,5 +57,5 @@ func ReportMessageLatency(protocol string, latency time.Duration) {
 		// If the observation is negative make it positive.
 		seconds = -seconds
 	}
-	receivedMessagesLatency.WithLabelValues(protocol, sign).Observe(seconds)
+	receivedMessagesLatency.WithLabelValues(protocol, msgType, sign).Observe(seconds)
 }

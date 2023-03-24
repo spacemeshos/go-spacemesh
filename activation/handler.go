@@ -483,7 +483,7 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 	epochStart := h.clock.LayerToTime(atx.PublishEpoch().FirstLayer())
 	poetRoundEnd := epochStart.Add(h.poetCfg.PhaseShift - h.poetCfg.CycleGap)
 	latency := receivedTime.Sub(poetRoundEnd)
-	metrics.ReportMessageLatency(pubsub.AtxProtocol, latency)
+	metrics.ReportMessageLatency(pubsub.AtxProtocol, pubsub.AtxProtocol, latency)
 
 	atx.SetReceived(receivedTime.Local())
 
