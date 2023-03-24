@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -55,6 +56,7 @@ type Handler struct {
 	mesh      meshProvider
 	validator eligibilityValidator
 	decoder   ballotDecoder
+	clock     *timesync.NodeClock
 }
 
 // Config defines configuration for the handler.
@@ -98,7 +100,18 @@ func WithConfig(cfg Config) Opt {
 }
 
 // NewHandler creates new Handler.
-func NewHandler(cdb *datastore.CachedDB, extractor *signing.PubKeyExtractor, p pubsub.Publisher, f system.Fetcher, bc system.BeaconCollector, m meshProvider, decoder ballotDecoder, verifier vrfVerifier, opts ...Opt) *Handler {
+func NewHandler(
+	cdb *datastore.CachedDB,
+	extractor *signing.PubKeyExtractor,
+	p pubsub.Publisher,
+	f system.Fetcher,
+	bc system.BeaconCollector,
+	m meshProvider,
+	decoder ballotDecoder,
+	verifier vrfVerifier,
+	clock *timesync.NodeClock,
+	opts ...Opt,
+) *Handler {
 	b := &Handler{
 		logger:    log.NewNop(),
 		cfg:       defaultConfig(),
@@ -108,6 +121,7 @@ func NewHandler(cdb *datastore.CachedDB, extractor *signing.PubKeyExtractor, p p
 		fetcher:   f,
 		mesh:      m,
 		decoder:   decoder,
+		clock:     clock,
 	}
 	for _, opt := range opts {
 		opt(b)

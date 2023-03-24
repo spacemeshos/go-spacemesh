@@ -187,18 +187,6 @@ type Service interface {
 	Close()
 }
 
-// NodeClock is an interface to a global system clock that releases ticks on each layer.
-type NodeClock interface {
-	LayerToTime(types.LayerID) time.Time
-	TimeToLayer(time.Time) types.LayerID
-	GenesisTime() time.Time
-
-	CurrentLayer() types.LayerID
-	AwaitLayer(types.LayerID) chan struct{}
-
-	Close()
-}
-
 func loadConfig(c *cobra.Command) (*config.Config, error) {
 	conf, err := LoadConfigFromFile()
 	if err != nil {
@@ -287,7 +275,7 @@ type App struct {
 	proposalBuilder  *miner.ProposalBuilder
 	mesh             *mesh.Mesh
 	cachedDB         *datastore.CachedDB
-	clock            NodeClock
+	clock            *timesync.NodeClock
 	hare             *hare.Hare
 	blockGen         *blocks.Generator
 	certifier        *blocks.Certifier
@@ -458,7 +446,7 @@ func (app *App) initServices(
 	sgn *signing.EdSigner,
 	poetClients []activation.PoetProvingServiceClient,
 	vrfSigner *signing.VRFSigner,
-	clock NodeClock,
+	clock *timesync.NodeClock,
 ) error {
 	nodeID := sgn.NodeID()
 	layerSize := uint32(app.Config.LayerAvgSize)
@@ -557,7 +545,7 @@ func (app *App) initServices(
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.keyExtractor, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier,
+	proposalListener := proposals.NewHandler(app.cachedDB, app.keyExtractor, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, clock,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,
