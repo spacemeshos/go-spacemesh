@@ -442,9 +442,6 @@ func (t *turtle) verifyLayers() {
 			success = t.full.verify(logger, target)
 		}
 		if !success {
-			logger.With().Info("verification terminated",
-				log.Stringer("old verified", t.verified),
-				log.Stringer("new verified", verified))
 			break
 		}
 		verified = target
@@ -542,11 +539,6 @@ func (t *turtle) loadAtxs(epoch types.EpochID) error {
 	}
 	einfo := t.epoch(epoch)
 	einfo.height = getMedian(heights)
-	t.logger.With().Info("computed height and weight for epoch",
-		epoch,
-		log.Stringer("weight", einfo.weight),
-		log.Uint64("height", einfo.height),
-	)
 	return nil
 }
 
@@ -806,7 +798,7 @@ func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, layerID type
 		return false, err
 	}
 	if beacon != epochBeacon {
-		logger.With().Warning("ballot has different beacon",
+		logger.With().Debug("ballot has different beacon",
 			layerID,
 			bid,
 			log.String("ballot_beacon", beacon.ShortString()),
