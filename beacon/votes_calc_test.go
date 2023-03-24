@@ -1,6 +1,7 @@
 package beacon
 
 import (
+	"bytes"
 	"math/big"
 	"sort"
 	"testing"
@@ -18,52 +19,56 @@ func TestBeacon_calcVotes(t *testing.T) {
 	tt := []struct {
 		name               string
 		ownFirstRoundVotes allVotes
-		votesMargin        map[string]*big.Int
+		votesMargin        map[Proposal]*big.Int
 		result             allVotes
-		undecided          []string
+		undecided          proposalList
 	}{
 		{
 			name: "Case 1",
 			ownFirstRoundVotes: allVotes{
 				support: proposalSet{
-					"0x1": {},
-					"0x2": {},
+					Proposal{0x01}: {},
+					Proposal{0x02}: {},
 				},
 				against: proposalSet{
-					"0x3": {},
+					Proposal{0x03}: {},
 				},
 			},
-			votesMargin: map[string]*big.Int{
-				"0x1": big.NewInt(threshold * 2),
-				"0x2": big.NewInt(-threshold * 3),
-				"0x3": big.NewInt(threshold / 2),
+			votesMargin: map[Proposal]*big.Int{
+				{0x01}: big.NewInt(threshold * 2),
+				{0x02}: big.NewInt(-threshold * 3),
+				{0x03}: big.NewInt(threshold / 2),
 			},
 			result: allVotes{
 				support: proposalSet{
-					"0x1": {},
+					Proposal{0x01}: {},
 				},
 				against: proposalSet{
-					"0x2": {},
+					Proposal{0x02}: {},
 				},
 			},
-			undecided: []string{"0x3"},
+			undecided: proposalList{
+				Proposal{0x03},
+			},
 		},
 		{
 			name: "Case 2",
-			votesMargin: map[string]*big.Int{
-				"0x1": big.NewInt(threshold * 2),
-				"0x2": big.NewInt(-threshold * 3),
-				"0x3": big.NewInt(threshold / 2),
+			votesMargin: map[Proposal]*big.Int{
+				{0x01}: big.NewInt(threshold * 2),
+				{0x02}: big.NewInt(-threshold * 3),
+				{0x03}: big.NewInt(threshold / 2),
 			},
 			result: allVotes{
 				support: proposalSet{
-					"0x1": {},
+					Proposal{0x01}: {},
 				},
 				against: proposalSet{
-					"0x2": {},
+					Proposal{0x02}: {},
 				},
 			},
-			undecided: []string{"0x3"},
+			undecided: proposalList{
+				Proposal{0x03},
+			},
 		},
 	}
 
@@ -80,7 +85,7 @@ func TestBeacon_calcVotes(t *testing.T) {
 			logger := logtest.New(t).WithName(tc.name)
 
 			result, undecided := calcVotes(logger, theta, eh)
-			sort.Strings(undecided)
+			sort.Slice(undecided, func(i, j int) bool { return bytes.Compare(undecided[i][:], undecided[j][:]) == -1 })
 			require.Equal(t, tc.undecided, undecided)
 			require.EqualValues(t, tc.result, result)
 		})
@@ -92,31 +97,31 @@ func TestTallyUndecided(t *testing.T) {
 	for _, tc := range []struct {
 		desc      string
 		expected  allVotes
-		undecided []string
+		undecided proposalList
 		coinFlip  bool
 	}{
 		{
 			desc: "Valid",
 			expected: allVotes{
 				support: proposalSet{
-					"1": struct{}{},
-					"2": struct{}{},
+					Proposal{0x01}: struct{}{},
+					Proposal{0x02}: struct{}{},
 				},
 				against: proposalSet{},
 			},
-			undecided: []string{"1", "2"},
+			undecided: proposalList{Proposal{0x01}, Proposal{0x02}},
 			coinFlip:  true,
 		},
 		{
 			desc: "Invalid",
 			expected: allVotes{
 				against: proposalSet{
-					"1": struct{}{},
-					"2": struct{}{},
+					Proposal{0x01}: struct{}{},
+					Proposal{0x02}: struct{}{},
 				},
 				support: proposalSet{},
 			},
-			undecided: []string{"1", "2"},
+			undecided: proposalList{Proposal{0x01}, Proposal{0x02}},
 			coinFlip:  false,
 		},
 	} {

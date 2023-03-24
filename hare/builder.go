@@ -16,7 +16,7 @@ import (
 type Message struct {
 	types.HareMetadata
 	// signature over Metadata
-	Signature   []byte
+	Signature   []byte `scale:"max=64"`
 	InnerMsg    *InnerMessage
 	Eligibility types.HareEligibility
 }
@@ -68,32 +68,32 @@ func (m *Message) SignedBytes() []byte {
 // Certificate is a collection of messages and the set of values.
 // Typically used as a collection of commit messages.
 type Certificate struct {
-	Values  []types.ProposalID // the committed set S
+	Values  []types.ProposalID `scale:"max=500"` // the committed set S - expected are 50 proposals per layer + safety margin
 	AggMsgs *AggregatedMessages
 }
 
 // AggregatedMessages is a collection of messages.
 type AggregatedMessages struct {
-	Messages []Message
+	Messages []Message `scale:"max=1000"` // limited by hare config parameter N with safety margin
 }
 
 // InnerMessage is the actual set of fields that describe a message in the Hare protocol.
 type InnerMessage struct {
 	Type           MessageType
 	CommittedRound uint32              // the round Values (S) is committed (Ki)
-	Values         []types.ProposalID  // the set S. optional for commit InnerMsg in a certificate
+	Values         []types.ProposalID  `scale:"max=500"` // the set S. optional for commit InnerMsg in a certificate - expected are 50 proposals per layer + safety margin
 	Svp            *AggregatedMessages // optional. only for proposal Messages
 	Cert           *Certificate        // optional
 }
 
 // HashBytes returns the message as bytes.
 func (im *InnerMessage) HashBytes() []byte {
-	hshr := hash.New()
-	_, err := codec.EncodeTo(hshr, im)
+	h := hash.New()
+	_, err := codec.EncodeTo(h, im)
 	if err != nil {
-		log.Fatal("failed to encode InnerMsg for hashing")
+		log.Fatal("failed to encode InnerMsg for hashing", log.Err(err))
 	}
-	return hshr.Sum(nil)
+	return h.Sum(nil)
 }
 
 func (im *InnerMessage) MarshalLogObject(encoder log.ObjectEncoder) error {

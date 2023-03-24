@@ -137,7 +137,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		Indices: make([]byte, 10),
 	}
 	b.initialPostMeta = &types.PostMetadata{}
-	b.commitmentAtx = &tab.goldenATXID
 	tab.Builder = b
 	return tab
 }
@@ -1120,7 +1119,7 @@ func TestBuilder_UpdatePoets(t *testing.T) {
 
 	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (PoetProvingServiceClient, error) {
 		poet := NewMockPoetProvingServiceClient(gomock.NewController(t))
-		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return([]byte("poetid"), nil)
+		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte("poetid")}, nil)
 		return poet, nil
 	}))
 
@@ -1140,7 +1139,7 @@ func TestBuilder_UpdatePoetsUnstable(t *testing.T) {
 
 	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (PoetProvingServiceClient, error) {
 		poet := NewMockPoetProvingServiceClient(gomock.NewController(t))
-		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return([]byte("poetid"), errors.New("ERROR"))
+		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte("poetid")}, errors.New("ERROR"))
 		return poet, nil
 	}))
 

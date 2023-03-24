@@ -192,6 +192,15 @@ func TestBook(t *testing.T) {
 			),
 			share("2", 3, "1"),
 		}},
+		{"do not overwrite protected", []step{
+			add("1", "/dns4/protect/tcp/1111"),
+			update("1", book.Protect),
+			add("1", "/ip4/0.0.0.0/tcp/1111"),
+			persist(`
+{"id":"1","raw":"/dns4/protect/tcp/1111","class":3,"connected":false}
+4878977086878651846			
+`),
+		}},
 		{"share protected even if it got stale", []step{
 			add("1", "/ip4/0.0.0.0/tcp/6666"),
 			drain(1, "1"),

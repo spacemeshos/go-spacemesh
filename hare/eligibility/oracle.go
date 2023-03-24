@@ -394,11 +394,8 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 	)
 	logger.Debug("hare oracle getting active set")
 
-	// lock until any return
-	// note: no need to lock per safeEp - we do not expect many concurrent requests per safeEp (max two)
 	o.lock.Lock()
 	defer o.lock.Unlock()
-
 	// we first try to get the hare active set for a range of safe layers
 	safeLayerStart, safeLayerEnd := safeLayerRange(
 		targetLayer, o.cfg.ConfidenceParam, o.layersPerEpoch, o.cfg.EpochOffset)
@@ -412,19 +409,23 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 		log.Uint64("layers_per_epoch", uint64(o.layersPerEpoch)),
 		log.FieldNamed("effective_genesis", types.GetEffectiveGenesis()))
 
+	if value, exists := o.activesCache.Get(safeLayerStart.GetEpoch()); exists {
+		return value.(map[types.NodeID]uint64), nil
+	}
+	activeSet, err := o.computeActiveSet(logger, targetLayer, safeLayerStart, safeLayerEnd)
+	if err != nil {
+		return nil, err
+	}
+	o.activesCache.Add(safeLayerStart.GetEpoch(), activeSet)
+	return activeSet, nil
+}
+
+func (o *Oracle) computeActiveSet(logger log.Log, targetLayer, safeLayerStart, safeLayerEnd types.LayerID) (map[types.NodeID]uint64, error) {
 	// check cache first
 	// as long as epochOffset < layersPerEpoch, we expect safeLayerStart and safeLayerEnd to be in the same epoch.
 	// if not, don't attempt to cache on the basis of a single epoch since the safe layer range will span multiple
 	// epochs.
 	if safeLayerStart.GetEpoch() == safeLayerEnd.GetEpoch() {
-		if val, exist := o.activesCache.Get(safeLayerStart.GetEpoch()); exist {
-			activeMap := val.(map[types.NodeID]uint64)
-			logger.With().Debug("found value in cache for safe layer start epoch",
-				log.FieldNamed("safe_layer_start", safeLayerStart),
-				log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()),
-				log.Int("count", len(activeMap)))
-			return activeMap, nil
-		}
 		logger.With().Debug("no value in cache for safe layer start epoch",
 			log.FieldNamed("safe_layer_start", safeLayerStart),
 			log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()))
@@ -518,7 +519,6 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 		logger.With().Info("successfully got hare active set for layer range",
 			log.Uint32("layer_range_epoch", uint32(safeLayerStart.GetEpoch())),
 			log.Int("count", len(hareActiveSet)))
-		o.activesCache.Add(safeLayerStart.GetEpoch(), hareActiveSet)
 		return hareActiveSet, nil
 	}
 

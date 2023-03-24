@@ -174,7 +174,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 				nb.log.With().Info(
 					"poet returned invalid challenge hash",
 					req.PoetRound.ChallengeHash,
-					log.String("poet_id", hex.EncodeToString(req.PoetServiceID)),
+					log.String("poet_id", hex.EncodeToString(req.PoetServiceID.ServiceID)),
 				)
 			} else {
 				validPoetRequests = append(validPoetRequests, req)
@@ -190,14 +190,15 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 	}
 
 	// Phase 1: query PoET services for proofs
-	if nb.state.PoetProofRef == nil {
+	empty := types.PoetProofRef{}
+	if nb.state.PoetProofRef == empty {
 		getProofsCtx, cancel := context.WithDeadline(ctx, poetProofDeadline)
 		defer cancel()
 		poetProofRef, err := nb.getBestProof(getProofsCtx, &challengeHash)
 		if err != nil {
 			return nil, 0, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
-		if poetProofRef == nil {
+		if poetProofRef == empty {
 			return nil, 0, &PoetSvcUnstableError{source: ErrPoetProofNotReceived}
 		}
 		nb.state.PoetProofRef = poetProofRef
@@ -207,10 +208,9 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 	// Phase 2: Post execution.
 	var postGenDuration time.Duration = 0
 	if nipost.Post == nil {
-		nb.log.With().Info("starting post execution",
-			log.Binary("challenge", nb.state.PoetProofRef))
+		nb.log.With().Info("starting post execution", log.Binary("challenge", nb.state.PoetProofRef[:]))
 		startTime := time.Now()
-		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(ctx, nb.state.PoetProofRef)
+		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(ctx, nb.state.PoetProofRef[:])
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to execute Post: %v", err)
 		}
@@ -239,7 +239,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, poet PoetProvi
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoET service ID", source: err}
 	}
-	logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(poetServiceID)))
+	logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(poetServiceID.ServiceID)))
 	logger.Debug("submitting challenge to poet proving service")
 
 	round, err := poet.Submit(ctx, challenge, signature)
@@ -282,16 +282,16 @@ func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, challenge []b
 
 func (nb *NIPostBuilder) getPoetClient(ctx context.Context, id types.PoetServiceID) PoetProvingServiceClient {
 	for _, client := range nb.poetProvers {
-		if clientId, err := client.PoetServiceID(ctx); err == nil && bytes.Equal(id, clientId) {
+		if clientId, err := client.PoetServiceID(ctx); err == nil && bytes.Equal(id.ServiceID, clientId.ServiceID) {
 			return client
 		}
 	}
 	return nil
 }
 
-func membersContain(members [][]byte, challenge *types.Hash32) bool {
+func membersContain(members []types.Member, challenge *types.Hash32) bool {
 	for _, member := range members {
-		if bytes.Equal(member, challenge.Bytes()) {
+		if bytes.Equal(member[:], challenge.Bytes()) {
 			return true
 		}
 	}
@@ -303,16 +303,16 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 
 	var eg errgroup.Group
 	for _, r := range nb.state.PoetRequests {
-		logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(r.PoetServiceID)), log.String("round", r.PoetRound.ID))
+		logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(r.PoetServiceID.ServiceID)), log.String("round", r.PoetRound.ID))
 		client := nb.getPoetClient(ctx, r.PoetServiceID)
 		if client == nil {
 			logger.Warning("Poet client not found")
 			continue
 		}
 		round := r.PoetRound.ID
-		// Time to wait before quering for the proof
+		// Time to wait before querying for the proof
 		// The additional second is an optimization to be nicer to poet
-		// and don't accidentially ask it to soon and have to retry.
+		// and don't accidentally ask it to soon and have to retry.
 		waitTime := time.Until(r.PoetRound.End.IntoTime()) + time.Second
 		eg.Go(func() error {
 			logger.With().Info("Waiting till poet round end", log.Duration("wait time", waitTime))
@@ -347,7 +347,7 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 		})
 	}
 	if err := eg.Wait(); err != nil {
-		return nil, fmt.Errorf("querying for proofs: %w", err)
+		return types.PoetProofRef{}, fmt.Errorf("querying for proofs: %w", err)
 	}
 	close(proofs)
 
@@ -363,11 +363,11 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 	if bestProof != nil {
 		ref, err := bestProof.Ref()
 		if err != nil {
-			return nil, err
+			return types.PoetProofRef{}, err
 		}
-		nb.log.With().Info("Selected the best proof", log.Uint64("leafCount", bestProof.LeafCount), log.Binary("ref", ref))
+		nb.log.With().Info("Selected the best proof", log.Uint64("leafCount", bestProof.LeafCount), log.Binary("ref", ref[:]))
 		return ref, nil
 	}
 
-	return nil, ErrPoetProofNotReceived
+	return types.PoetProofRef{}, ErrPoetProofNotReceived
 }

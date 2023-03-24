@@ -265,8 +265,9 @@ func Test_multipleCPs(t *testing.T) {
 		}
 	}
 	meshes := make([]*mocks.Mockmesh, 0, totalNodes)
+	ctrl, ctx := gomock.WithContext(ctx, t)
 	for i := 0; i < totalNodes; i++ {
-		mockMesh := newMockMesh(t)
+		mockMesh := mocks.NewMockmesh(ctrl)
 		mockMesh.EXPECT().GetEpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
 		mockMesh.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
 		mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
@@ -292,21 +293,29 @@ func Test_multipleCPs(t *testing.T) {
 		pubsubs = append(pubsubs, ps)
 		h := createTestHare(t, meshes[i], cfg, test.clock, ps, t.Name())
 		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 100), nil).AnyTimes()
+		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 80), nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
 		h.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 		outputsWaitGroup.Add(1)
 		go func(idx int) {
 			defer outputsWaitGroup.Done()
-			for out := range h.blockGenCh {
-				if outputs[idx] == nil {
-					outputs[idx] = make(map[types.LayerID]LayerOutput)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case out, ok := <-h.blockGenCh:
+					if !ok {
+						return
+					}
+					if outputs[idx] == nil {
+						outputs[idx] = make(map[types.LayerID]LayerOutput)
+					}
+					outputs[idx][out.Layer] = out
 				}
-				outputs[idx][out.Layer] = out
 			}
 		}(i)
 		test.hare = append(test.hare, h.Hare)
-		e := h.Start(context.TODO())
+		e := h.Start(ctx)
 		r.NoError(e)
 	}
 	require.NoError(t, mesh.ConnectAllButSelf())
@@ -378,8 +387,9 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	}
 
 	meshes := make([]*mocks.Mockmesh, 0, totalNodes)
+	ctrl, ctx := gomock.WithContext(ctx, t)
 	for i := 0; i < totalNodes; i++ {
-		mockMesh := newMockMesh(t)
+		mockMesh := mocks.NewMockmesh(ctrl)
 		mockMesh.EXPECT().GetEpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
 		mockMesh.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
 		mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
@@ -406,21 +416,29 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.GetEffectiveGenesis().Add(1), err: errors.New("fake err")}
 		h := createTestHare(t, meshes[i], cfg, test.clock, mp2p, t.Name())
 		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 100), nil).AnyTimes()
+		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 80), nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
 		h.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 		outputsWaitGroup.Add(1)
 		go func(idx int) {
 			defer outputsWaitGroup.Done()
-			for out := range h.blockGenCh {
-				if outputs[idx] == nil {
-					outputs[idx] = make(map[types.LayerID]LayerOutput)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case out, ok := <-h.blockGenCh:
+					if !ok {
+						return
+					}
+					if outputs[idx] == nil {
+						outputs[idx] = make(map[types.LayerID]LayerOutput)
+					}
+					outputs[idx][out.Layer] = out
 				}
-				outputs[idx][out.Layer] = out
 			}
 		}(i)
 		test.hare = append(test.hare, h.Hare)
-		e := h.Start(context.TODO())
+		e := h.Start(ctx)
 		r.NoError(e)
 	}
 	require.NoError(t, mesh.ConnectAllButSelf())

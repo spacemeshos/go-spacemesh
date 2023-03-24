@@ -182,7 +182,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 				},
 			},
 			Eligibility: &types.HareEligibilityGossip{
-				PubKey: types.RandomBytes(64),
+				PubKey: types.RandomBytes(32),
 			},
 		}
 		data, err := codec.Encode(gossip)
@@ -377,7 +377,7 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 				},
 			},
 			Eligibility: &types.HareEligibilityGossip{
-				PubKey: types.RandomBytes(64),
+				PubKey: types.RandomBytes(32),
 			},
 		}
 		data, err := codec.Encode(gossip)
@@ -597,7 +597,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 				},
 			},
 			Eligibility: &types.HareEligibilityGossip{
-				PubKey: types.RandomBytes(64),
+				PubKey: types.RandomBytes(32),
 			},
 		}
 		data, err := codec.Encode(gossip)
@@ -701,7 +701,7 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	t.Run("different node id", func(t *testing.T) {
 		gs := gossip
 		gs.Eligibility = &types.HareEligibilityGossip{
-			PubKey: types.RandomBytes(64),
+			PubKey: types.RandomBytes(32),
 		}
 		data, err := codec.Encode(gs)
 		require.NoError(t, err)

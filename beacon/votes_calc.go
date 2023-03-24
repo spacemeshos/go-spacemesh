@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-func calcVotes(logger log.Log, theta *big.Float, s *state) (allVotes, []string) {
+func calcVotes(logger log.Log, theta *big.Float, s *state) (allVotes, proposalList) {
 	logger.With().Debug("calculating votes", log.String("vote_margins", fmt.Sprint(s.votesMargin)))
 
 	ownCurrentRoundVotes := allVotes{
@@ -18,7 +18,7 @@ func calcVotes(logger log.Log, theta *big.Float, s *state) (allVotes, []string) 
 	positiveVotingThreshold := votingThreshold(theta, s.epochWeight)
 	negativeThreshold := new(big.Int).Neg(positiveVotingThreshold)
 
-	var undecided []string
+	var undecided proposalList
 	for vote, weightCount := range s.votesMargin {
 		switch {
 		case weightCount.Cmp(positiveVotingThreshold) >= 0:
@@ -45,7 +45,7 @@ func votingThreshold(theta *big.Float, epochWeight uint64) *big.Int {
 	return v
 }
 
-func tallyUndecided(votes *allVotes, undecided []string, coinFlip bool) {
+func tallyUndecided(votes *allVotes, undecided proposalList, coinFlip bool) {
 	for _, vote := range undecided {
 		if coinFlip {
 			votes.support[vote] = struct{}{}

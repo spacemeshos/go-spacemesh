@@ -51,14 +51,12 @@ func fastnet() config.Config {
 	conf.HareEligibility.ConfidenceParam = 2 // half epoch
 	conf.HareEligibility.EpochOffset = 0
 
-	conf.POST.BitsPerLabel = 8
 	conf.POST.K1 = 12
 	conf.POST.K2 = 4
-	conf.POST.LabelsPerUnit = 128 // bytes
+	conf.POST.K3 = 4
+	conf.POST.LabelsPerUnit = 128
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
-	conf.POST.N = 32
-	conf.POST.B = 16
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
