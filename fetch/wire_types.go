@@ -57,12 +57,12 @@ type MaliciousIDs struct {
 }
 
 type EpochData struct {
-	AtxIDs []types.ATXID `scale:"max=1000000"`
+	AtxIDs []types.ATXID `scale:"max=100000"` // max. expected number of ATXs per epoch is 100_000
 }
 
 // LayerData is the data response for a given layer ID.
 type LayerData struct {
-	Ballots []types.BallotID `scale:"max=800"`
+	Ballots []types.BallotID `scale:"max=500"` // expected are 50 proposals per layer + safety margin
 	Blocks  []types.BlockID  `scale:"max=100"` // only expected to have 1 block per layer, 100 is a safe upper bound
 }
 
