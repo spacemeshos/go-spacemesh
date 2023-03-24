@@ -20,6 +20,8 @@ const (
 	defaultStartSmesherService     = false
 	defaultStartTransactionService = false
 	defaultStartActivationService  = false
+	defaultGrpcSendBufferSize      = 1024 * 1024 * 10
+	defaultGrpcRecvBufferSize      = 1024 * 1024 * 10
 
 	defaultSmesherStreamInterval = 1 * time.Second
 )
@@ -29,8 +31,12 @@ type Config struct {
 	StartGrpcServices   []string `mapstructure:"grpc"`
 	GrpcServerPort      int      `mapstructure:"grpc-port"`
 	GrpcServerInterface string   `mapstructure:"grpc-interface"`
-	StartJSONServer     bool     `mapstructure:"json-server"`
-	JSONServerPort      int      `mapstructure:"json-port"`
+	// GRPC send and receive buffer size
+	GrpcSendBufferSize int `mapstructure:"grpc-send-buffer-size"`
+	GrpcRecvBufferSize int `mapstructure:"grpc-recv-buffer-size"`
+
+	StartJSONServer bool `mapstructure:"json-server"`
+	JSONServerPort  int  `mapstructure:"json-port"`
 	// no direct command line flags for these
 	StartDebugService       bool
 	StartGatewayService     bool
@@ -65,6 +71,8 @@ func DefaultConfig() Config {
 		StartSmesherService:     defaultStartSmesherService,
 		StartTransactionService: defaultStartTransactionService,
 		StartActivationService:  defaultStartActivationService,
+		GrpcSendBufferSize:      defaultGrpcSendBufferSize,
+		GrpcRecvBufferSize:      defaultGrpcRecvBufferSize,
 
 		SmesherStreamInterval: defaultSmesherStreamInterval,
 	}

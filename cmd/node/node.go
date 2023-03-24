@@ -806,7 +806,8 @@ func (app *App) startAPIServices(ctx context.Context) {
 			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
 				grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger)),
 				grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger)),
-				grpc.MaxSendMsgSize(50*1024*1024), // 50MB
+				grpc.MaxSendMsgSize(apiConf.GrpcSendBufferSize),
+				grpc.MaxRecvMsgSize(apiConf.GrpcRecvBufferSize),
 			)
 		}
 		services = append(services, svc)
