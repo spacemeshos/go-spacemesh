@@ -60,7 +60,9 @@ func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nip
 		return 0, err
 	}
 
-	proof, err := v.poetDb.GetProof(nipost.PostMetadata.Challenge)
+	var ref types.PoetProofRef
+	copy(ref[:], nipost.PostMetadata.Challenge)
+	proof, err := v.poetDb.GetProof(ref)
 	if err != nil {
 		return 0, fmt.Errorf("poet proof is not available %x: %w", nipost.PostMetadata.Challenge, err)
 	}
@@ -78,7 +80,7 @@ func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nip
 
 func contains(proof *types.PoetProof, member []byte) bool {
 	for _, part := range proof.Members {
-		if bytes.Equal(part, member) {
+		if bytes.Equal(part[:], member) {
 			return true
 		}
 	}

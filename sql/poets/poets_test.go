@@ -6,15 +6,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func TestHas(t *testing.T) {
 	db := sql.InMemory()
 
-	refs := [][]byte{
-		[]byte("ref1"),
-		[]byte("ref2"),
+	refs := []types.PoetProofRef{
+		{0xca, 0xfe},
+		{0xde, 0xad},
 	}
 
 	proofs := [][]byte{
@@ -52,10 +53,10 @@ func TestHas(t *testing.T) {
 func TestGet(t *testing.T) {
 	db := sql.InMemory()
 
-	refs := [][]byte{
-		[]byte("ref1"),
-		[]byte("ref2"),
-		[]byte("ref3"),
+	refs := []types.PoetProofRef{
+		{0xca, 0xfe},
+		{0xde, 0xad},
+		{0xbe, 0xef},
 	}
 
 	proofs := [][]byte{
@@ -86,14 +87,14 @@ func TestGet(t *testing.T) {
 		require.Equal(t, proofs[i], proof)
 	}
 
-	_, err := Get(db, []byte("ref0"))
+	_, err := Get(db, types.PoetProofRef{0xab, 0xba})
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
 func TestAdd(t *testing.T) {
 	db := sql.InMemory()
 
-	ref := []byte("ref0")
+	ref := types.PoetProofRef{0xca, 0xfe}
 	poet := []byte("proof0")
 	sid := []byte("sid0")
 	rid := "rid0"
@@ -124,10 +125,10 @@ func TestGetRef(t *testing.T) {
 		"rid3",
 	}
 
-	refs := [][]byte{
-		[]byte("ref1"),
-		[]byte("ref2"),
-		[]byte("ref3"),
+	refs := []types.PoetProofRef{
+		{0xca, 0xfe},
+		{0xde, 0xad},
+		{0xbe, 0xef},
 	}
 
 	proofs := [][]byte{

@@ -11,27 +11,27 @@ import (
 
 // RequestMessage is sent to the peer for hash query.
 type RequestMessage struct {
-	Hint datastore.Hint
+	Hint datastore.Hint `scale:"max=256"` // TODO(mafa): covert to an enum
 	Hash types.Hash32
 }
 
 // ResponseMessage is sent to the node as a response.
 type ResponseMessage struct {
 	Hash types.Hash32
-	Data []byte
+	Data []byte `scale:"max=3200000"` // 100_000 ATXIDs at 32 bytes each is the expected maximum size
 }
 
 // RequestBatch is a batch of requests and a hash of all requests as ID.
 type RequestBatch struct {
 	ID       types.Hash32
-	Requests []RequestMessage
+	Requests []RequestMessage `scale:"max=1000"` // depends on fetch config `BatchSize` which defaults to 20, more than 1000 seems unlikely
 }
 
 // ResponseBatch is the response struct send for a RequestBatch. the ResponseBatch ID must be the same
 // as stated in RequestBatch even if not all Data is present.
 type ResponseBatch struct {
 	ID        types.Hash32
-	Responses []ResponseMessage
+	Responses []ResponseMessage `scale:"max=1000"` // depends on fetch config `BatchSize` which defaults to 20, more than 1000 seems unlikely
 }
 
 type MeshHashRequest struct {
@@ -48,22 +48,22 @@ func (r *MeshHashRequest) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 type MeshHashes struct {
-	Layers []types.LayerID
-	Hashes []types.Hash32
+	Layers []types.LayerID `scale:"max=1000"` // depends on syncer Config `MaxHashesInReq`, defaults to 100, 1000 is a safe upper bound
+	Hashes []types.Hash32  `scale:"max=1000"` // depends on syncer Config `MaxHashesInReq`, defaults to 100, 1000 is a safe upper bound
 }
 
 type MaliciousIDs struct {
-	NodeIDs []types.NodeID
+	NodeIDs []types.NodeID `scale:"max=100000"` // max. expected number of ATXs per epoch is 100_000
 }
 
 type EpochData struct {
-	AtxIDs []types.ATXID
+	AtxIDs []types.ATXID `scale:"max=100000"` // max. expected number of ATXs per epoch is 100_000
 }
 
 // LayerData is the data response for a given layer ID.
 type LayerData struct {
-	Ballots []types.BallotID
-	Blocks  []types.BlockID
+	Ballots []types.BallotID `scale:"max=500"` // expected are 50 proposals per layer + safety margin
+	Blocks  []types.BlockID  `scale:"max=100"` // only expected to have 1 block per layer, 100 is a safe upper bound
 }
 
 // LayerOpinion is the response for opinion for a given layer.

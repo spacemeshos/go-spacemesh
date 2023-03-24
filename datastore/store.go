@@ -311,7 +311,9 @@ func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
 	case TXDB:
 		return transactions.GetBlob(bs.DB, key)
 	case POETDB:
-		return poets.Get(bs.DB, key)
+		var ref types.PoetProofRef
+		copy(ref[:], key)
+		return poets.Get(bs.DB, ref)
 	case Malfeasance:
 		return identities.GetMalfeasanceBlob(bs.DB, key)
 	}

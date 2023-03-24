@@ -42,13 +42,13 @@ const (
 //go:generate scalegen -types HandshakeMessage,HandshakeAck
 
 // HandshakeMessage is a handshake message.
-type HandshakeMessage struct { // nolint
+type HandshakeMessage struct {
 	GenesisID types.Hash20
 }
 
 // HandshakeAck is a handshake ack.
-type HandshakeAck struct { // nolint
-	Error string
+type HandshakeAck struct {
+	Error string `scale:"max=256"` // TODO(mafa): make error code instead of string
 }
 
 // New instantiates handshake protocol for the host.

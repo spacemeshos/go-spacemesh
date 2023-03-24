@@ -720,7 +720,7 @@ func calcBeacon(logger log.Log, set proposalSet) types.Beacon {
 	allProposals := set.sort()
 	allHexes := make([]string, len(allProposals))
 	for i, h := range allProposals {
-		allHexes[i] = hex.EncodeToString(h)
+		allHexes[i] = hex.EncodeToString(h[:])
 	}
 	// Beacon should appear to have the same entropy as the initial proposals, hence cropping it
 	// to the same size as the proposal
@@ -774,7 +774,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	vrfSig := buildSignedProposal(ctx, pd.logger, pd.vrfSigner, epoch, nonce)
-	proposal := hex.EncodeToString(cropData(vrfSig))
+	proposal := cropData(vrfSig)
 	m := ProposalMessage{
 		EpochID:      epoch,
 		NodeID:       pd.nodeID,
@@ -783,13 +783,13 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 
 	if invalid == pd.classifyProposal(logger, m, atx.Received, time.Now(), checker) {
 		logger.With().Debug("own proposal doesn't pass threshold",
-			log.String("proposal", proposal),
+			log.String("proposal", hex.EncodeToString(proposal[:])),
 		)
 		return
 	}
 
 	logger.With().Debug("own proposal passes threshold",
-		log.String("proposal", proposal),
+		log.String("proposal", hex.EncodeToString(proposal[:])),
 	)
 
 	serialized, err := codec.Encode(&m)
@@ -798,7 +798,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 	}
 
 	pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, serialized)
-	logger.With().Info("beacon proposal sent", log.String("proposal", proposal))
+	logger.With().Info("beacon proposal sent", log.String("proposal", hex.EncodeToString(proposal[:])))
 }
 
 // runConsensusPhase runs K voting rounds and returns result from last weak coin round.
@@ -815,7 +815,7 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 
 	var (
 		ownVotes  allVotes
-		undecided []string
+		undecided proposalList
 		err       error
 	)
 	for round := types.FirstRound; round < pd.config.RoundsNumber; round++ {
@@ -889,7 +889,7 @@ func (pd *ProtocolDriver) markProposalPhaseFinished(epoch types.EpochID, finishe
 	return nil
 }
 
-func (pd *ProtocolDriver) calcVotesBeforeWeakCoin(logger log.Log, epoch types.EpochID) (allVotes, []string, error) {
+func (pd *ProtocolDriver) calcVotesBeforeWeakCoin(logger log.Log, epoch types.EpochID) (allVotes, proposalList, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 	if _, ok := pd.states[epoch]; !ok {
@@ -941,7 +941,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 	return nil
 }
 
-func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, minerPK *signing.PublicKey) ([][]byte, error) {
+func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, minerPK *signing.PublicKey) (proposalList, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
@@ -1075,10 +1075,11 @@ func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, epoch types.EpochID, nonce types.VRFPostIndex) []byte {
 	p := buildProposal(logger, epoch, nonce)
 	vrfSig := signer.Sign(p)
+	proposal := cropData(vrfSig)
 	logger.WithContext(ctx).With().Debug("calculated beacon proposal",
 		epoch,
 		nonce,
-		log.String("proposal", hex.EncodeToString(cropData(vrfSig))),
+		log.String("proposal", hex.EncodeToString(proposal[:])),
 	)
 	return vrfSig
 }

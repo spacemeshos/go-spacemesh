@@ -44,7 +44,7 @@ func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error)
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.InitialPostIndices)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.InitialPostIndices, 8000)
 		if err != nil {
 			return total, err
 		}
@@ -92,7 +92,7 @@ func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error)
 		t.CommitmentATX = field
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 8000)
 		if err != nil {
 			return total, err
 		}
@@ -319,7 +319,7 @@ func (t *ActivationTx) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Signature)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 64)
 		if err != nil {
 			return total, err
 		}
@@ -344,7 +344,7 @@ func (t *ActivationTx) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 64)
 		if err != nil {
 			return total, err
 		}
@@ -363,7 +363,7 @@ func (t *PoetProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeSliceOfByteSlice(enc, t.Members)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Members, 100000)
 		if err != nil {
 			return total, err
 		}
@@ -388,7 +388,7 @@ func (t *PoetProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeSliceOfByteSlice(dec)
+		field, n, err := scale.DecodeStructSliceWithLimit[Member](dec, 100000)
 		if err != nil {
 			return total, err
 		}
@@ -415,21 +415,21 @@ func (t *PoetProofMessage) EncodeScale(enc *scale.Encoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.PoetServiceID)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.PoetServiceID, 32)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeString(enc, string(t.RoundID))
+		n, err := scale.EncodeStringWithLimit(enc, string(t.RoundID), 32)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Signature)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 64)
 		if err != nil {
 			return total, err
 		}
@@ -447,7 +447,7 @@ func (t *PoetProofMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
 		if err != nil {
 			return total, err
 		}
@@ -455,7 +455,7 @@ func (t *PoetProofMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 		t.PoetServiceID = field
 	}
 	{
-		field, n, err := scale.DecodeString(dec)
+		field, n, err := scale.DecodeStringWithLimit(dec, 32)
 		if err != nil {
 			return total, err
 		}
@@ -463,7 +463,7 @@ func (t *PoetProofMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 		t.RoundID = string(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 64)
 		if err != nil {
 			return total, err
 		}
@@ -475,7 +475,7 @@ func (t *PoetProofMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 
 func (t *PoetRound) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeString(enc, string(t.ID))
+		n, err := scale.EncodeStringWithLimit(enc, string(t.ID), 32)
 		if err != nil {
 			return total, err
 		}
@@ -500,7 +500,7 @@ func (t *PoetRound) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *PoetRound) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeString(dec)
+		field, n, err := scale.DecodeStringWithLimit(dec, 32)
 		if err != nil {
 			return total, err
 		}
@@ -579,7 +579,7 @@ func (t *NIPost) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *PostMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Challenge)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Challenge, 32)
 		if err != nil {
 			return total, err
 		}
@@ -597,7 +597,7 @@ func (t *PostMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *PostMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
 		if err != nil {
 			return total, err
 		}
@@ -611,6 +611,29 @@ func (t *PostMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.LabelsPerUnit = uint64(field)
+	}
+	return total, nil
+}
+
+func (t *ProcessingError) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeStringWithLimit(enc, string(t.Err), 1024)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *ProcessingError) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeStringWithLimit(dec, 1024)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Err = string(field)
 	}
 	return total, nil
 }

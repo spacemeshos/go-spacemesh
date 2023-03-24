@@ -49,13 +49,6 @@ func Encode(b []byte) string {
 	return string(enc)
 }
 
-// Hex2Bytes returns the bytes represented by the hexadecimal string str.
-// Note that str should not be "0x" prefixed. To decode a "0x" prefixed string use FromHex.
-func Hex2Bytes(str string) []byte {
-	h, _ := hex.DecodeString(str)
-	return h
-}
-
 // FromHex returns the bytes represented by the hexadecimal string s.
 // Parameter s may be prefixed with "0x".
 func FromHex(s string) []byte {
@@ -67,5 +60,6 @@ func FromHex(s string) []byte {
 	if len(s)%2 == 1 {
 		s = "0" + s
 	}
-	return Hex2Bytes(s)
+	h, _ := hex.DecodeString(s)
+	return h
 }
