@@ -17,6 +17,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 var (
@@ -95,7 +96,7 @@ func (c *HTTPPoetClient) Start(ctx context.Context, gatewayAddresses []string) e
 }
 
 // Submit registers a challenge in the proving service current open round.
-func (c *HTTPPoetClient) Submit(ctx context.Context, challenge []byte, signature [64]byte) (*types.PoetRound, error) {
+func (c *HTTPPoetClient) Submit(ctx context.Context, challenge []byte, signature signing.EdSignature) (*types.PoetRound, error) {
 	request := rpcapi.SubmitRequest{
 		Challenge: challenge,
 		Signature: signature[:],

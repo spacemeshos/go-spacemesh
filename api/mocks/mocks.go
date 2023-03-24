@@ -12,6 +12,7 @@ import (
 	peer "github.com/libp2p/go-libp2p/core/peer"
 	activation "github.com/spacemeshos/go-spacemesh/activation"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	signing "github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // MockNetworkIdentity is a mock of NetworkIdentity interface.
@@ -193,7 +194,7 @@ func (m *MockChallengeVerifier) EXPECT() *MockChallengeVerifierMockRecorder {
 }
 
 // Verify mocks base method.
-func (m *MockChallengeVerifier) Verify(arg0 context.Context, arg1 []byte, arg2 [64]byte) (*activation.ChallengeVerificationResult, error) {
+func (m *MockChallengeVerifier) Verify(arg0 context.Context, arg1 []byte, arg2 signing.EdSignature) (*activation.ChallengeVerificationResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Verify", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*activation.ChallengeVerificationResult)

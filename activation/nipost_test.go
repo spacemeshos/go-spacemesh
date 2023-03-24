@@ -26,7 +26,7 @@ func defaultPoetServiceMock(tb testing.TB, id []byte) *MockPoetProvingServiceCli
 	tb.Helper()
 	poetClient := NewMockPoetProvingServiceClient(gomock.NewController(tb))
 	poetClient.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-		func(_ context.Context, challenge []byte, _ [64]byte) (*types.PoetRound, error) {
+		func(_ context.Context, challenge []byte, _ signing.EdSignature) (*types.PoetRound, error) {
 			hash, err := getSerializedChallengeHash(challenge)
 			require.NoError(tb, err)
 			return &types.PoetRound{
@@ -369,7 +369,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 		poet := NewMockPoetProvingServiceClient(ctrl)
 		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte("poet0")}, nil)
 		poet.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, _ []byte, _ [64]byte) (*types.PoetRound, error) {
+			func(ctx context.Context, _ []byte, _ signing.EdSignature) (*types.PoetRound, error) {
 				<-ctx.Done()
 				return nil, ctx.Err()
 			})
@@ -378,7 +378,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	{
 		poet := NewMockPoetProvingServiceClient(ctrl)
 		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte("poet1")}, nil)
-		poet.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, []byte, [64]byte) (*types.PoetRound, error) {
+		poet.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, []byte, signing.EdSignature) (*types.PoetRound, error) {
 			return &types.PoetRound{
 				ChallengeHash: challenge.Hash(),
 			}, nil
@@ -616,7 +616,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		postProver.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
 		poetProver := NewMockPoetProvingServiceClient(ctrl)
 		poetProver.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte{}}, nil)
-		poetProver.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ []byte, _ [64]byte) (*types.PoetRound, error) {
+		poetProver.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ []byte, _ signing.EdSignature) (*types.PoetRound, error) {
 			<-ctx.Done()
 			return nil, ctx.Err()
 		})

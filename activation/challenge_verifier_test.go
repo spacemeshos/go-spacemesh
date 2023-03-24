@@ -271,7 +271,6 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
-
 		ctrl := gomock.NewController(t)
 		atxProvider := activation.NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(gomock.Any()).AnyTimes().Return(

@@ -73,7 +73,7 @@ func createProposal(t *testing.T, vrfSigner *signing.VRFSigner, epoch types.Epoc
 		VRFSignature: sig,
 	}
 	if corruptSignature {
-		msg.VRFSignature[0] = 0 // invert bits of first byte
+		msg.VRFSignature[0] = 0
 	}
 	return msg
 }
@@ -120,10 +120,10 @@ func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	if corruptSignature {
-		msg.Signature = signer.Sign(signing.BEACON, encoded[:len(encoded)-1])
+		encoded = encoded[:len(encoded)-1]
 	}
+	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	return msg
 }
 
@@ -155,10 +155,10 @@ func createFollowingVote(t *testing.T, signer *signing.EdSigner, epoch types.Epo
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	if corruptSignature {
-		msg.Signature = signer.Sign(signing.BEACON, encoded[:len(encoded)-1])
+		encoded = encoded[:len(encoded)-1]
 	}
+	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	return msg
 }
 

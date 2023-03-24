@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	signing "github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // MockPoetProvingServiceClient is a mock of PoetProvingServiceClient interface.
@@ -66,18 +67,18 @@ func (mr *MockPoetProvingServiceClientMockRecorder) Proof(ctx, roundID interface
 }
 
 // Submit mocks base method.
-func (m *MockPoetProvingServiceClient) Submit(ctx context.Context, challenge []byte, signature [64]byte) (*types.PoetRound, error) {
+func (m *MockPoetProvingServiceClient) Submit(arg0 context.Context, arg1 []byte, arg2 signing.EdSignature) (*types.PoetRound, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Submit", ctx, challenge, signature)
+	ret := m.ctrl.Call(m, "Submit", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*types.PoetRound)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Submit indicates an expected call of Submit.
-func (mr *MockPoetProvingServiceClientMockRecorder) Submit(ctx, challenge, signature interface{}) *gomock.Call {
+func (mr *MockPoetProvingServiceClientMockRecorder) Submit(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Submit", reflect.TypeOf((*MockPoetProvingServiceClient)(nil).Submit), ctx, challenge, signature)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Submit", reflect.TypeOf((*MockPoetProvingServiceClient)(nil).Submit), arg0, arg1, arg2)
 }
 
 // MockpoetDbAPI is a mock of poetDbAPI interface.
