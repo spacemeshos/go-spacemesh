@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -216,6 +217,7 @@ func (h *Handler) HandleSyncedProposal(ctx context.Context, peer p2p.Peer, data 
 }
 
 func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []byte) error {
+	receivedTime := time.Now()
 	logger := h.logger.WithContext(ctx)
 
 	t0 := time.Now()
@@ -224,6 +226,9 @@ func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []
 		logger.With().Error("malformed proposal", log.Err(err))
 		return errMalformedData
 	}
+
+	latency := receivedTime.Sub(h.clock.LayerToTime(p.Layer))
+	metrics.ReportMessageLatency(pubsub.ProposalProtocol, latency)
 
 	smesher, err := h.extractor.ExtractNodeID(signing.BALLOT, p.SignedBytes(), p.Signature)
 	if err != nil {
