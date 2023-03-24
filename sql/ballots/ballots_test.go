@@ -64,7 +64,7 @@ func TestAdd(t *testing.T) {
 
 func TestHas(t *testing.T) {
 	db := sql.InMemory()
-	ballot := types.NewExistingBallot(types.BallotID{1}, [64]byte{}, types.NodeID{}, types.BallotMetadata{})
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.EdSignature{}, types.NodeID{}, types.BallotMetadata{})
 
 	exists, err := Has(db, ballot.ID())
 	require.NoError(t, err)
@@ -82,13 +82,13 @@ func TestLatest(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.LayerID{}, latest)
 
-	ballot := types.NewExistingBallot(types.BallotID{1}, [64]byte{}, types.NodeID{}, types.BallotMetadata{Layer: types.NewLayerID(11)})
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.EdSignature{}, types.NodeID{}, types.BallotMetadata{Layer: types.NewLayerID(11)})
 	require.NoError(t, Add(db, &ballot))
 	latest, err = LatestLayer(db)
 	require.NoError(t, err)
 	require.Equal(t, ballot.Layer, latest)
 
-	newBallot := types.NewExistingBallot(types.BallotID{2}, [64]byte{}, types.NodeID{}, types.BallotMetadata{Layer: types.NewLayerID(12)})
+	newBallot := types.NewExistingBallot(types.BallotID{2}, types.EdSignature{}, types.NodeID{}, types.BallotMetadata{Layer: types.NewLayerID(12)})
 	require.NoError(t, Add(db, &newBallot))
 	latest, err = LatestLayer(db)
 	require.NoError(t, err)

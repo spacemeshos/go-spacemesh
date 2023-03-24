@@ -138,14 +138,14 @@ func TestFixedRolacle_Eligible3(t *testing.T) {
 
 func TestGenerateElibility(t *testing.T) {
 	oracle := New(logtest.New(t))
-	ids := []types.NodeID{}
+	ids := make([]types.NodeID, 0, 30)
 	for i := 0; i < 30; i++ {
 		s := genNode()
 		ids = append(ids, s)
 		oracle.Register(true, s)
 	}
 
-	m := oracle.generateEligibility(context.TODO(), len(oracle.honest))
+	m := oracle.generateEligibility(context.Background(), len(oracle.honest))
 
 	for _, s := range ids {
 		_, ok := m[s]

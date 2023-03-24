@@ -124,7 +124,7 @@ type WeakCoin struct {
 	epochStarted, roundStarted bool
 	epoch                      types.EpochID
 	round                      types.RoundID
-	smallest                   *types.VrfSignature
+	smallest                   *big.Int
 	allowance                  allowance
 	// nextRoundBuffer is used to optimistically buffer messages from the next round.
 	nextRoundBuffer []Message
@@ -228,14 +228,18 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 		return nil, types.VrfSignature{}
 	}
 	var broadcast []byte
-	var smallest *types.VrfSignature
+	max := make([]byte, types.VrfSignatureSize)
+	for i := range max {
+		max[i] = 0xff
+	}
+	smallest := new(big.Int).SetBytes(max)
 	for unit := uint32(0); unit < minerAllowance; unit++ {
 		proposal := wc.encodeProposal(epoch, nonce, round, unit)
 		signature := wc.signer.Sign(proposal)
 		if wc.aboveThreshold(signature) {
 			continue
 		}
-		if smallest == nil || bytes.Compare(signature[:], (*smallest)[:]) == -1 {
+		if new(big.Int).SetBytes(signature[:]).Cmp(smallest) == -1 {
 			message := Message{
 				Epoch:        epoch,
 				Round:        round,
@@ -249,14 +253,16 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 			}
 
 			broadcast = msg
-			smallest = &signature
+			smallest.SetBytes(signature[:])
 		}
 	}
 
 	wc.mu.RLock()
 	defer wc.mu.RUnlock()
-	if wc.smallest == nil || bytes.Compare((*smallest)[:], (*wc.smallest)[:]) == -1 {
-		return broadcast, *smallest
+	if wc.smallest == nil || smallest.Cmp(wc.smallest) == -1 {
+		var sig types.VrfSignature
+		smallest.FillBytes(sig[:])
+		return broadcast, sig
 	}
 	return nil, types.VrfSignature{}
 }
@@ -300,26 +306,32 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 	// For another signature algorithm this may change
 	lsbIndex := 0
 	if !wc.signer.LittleEndian() {
-		lsbIndex = len(wc.smallest) - 1
+		lsbIndex = len(wc.smallest.Bytes()) - 1
 	}
-	coinflip := wc.smallest[lsbIndex]&1 == 1
+	coinflip := wc.smallest.Bytes()[lsbIndex]&1 == 1
 
 	wc.coins[wc.round] = coinflip
 	logger.With().Info("completed round with beacon weak coin",
-		log.String("proposal", hex.EncodeToString((*wc.smallest)[:])),
-		log.Bool("beacon_weak_coin", coinflip))
+		log.String("proposal", hex.EncodeToString(wc.smallest.Bytes())),
+		log.Bool("beacon_weak_coin", coinflip),
+	)
 	wc.smallest = nil
 }
 
-func (wc *WeakCoin) updateSmallest(ctx context.Context, proposal types.VrfSignature) error {
-	if len(proposal) > 0 && (wc.smallest == nil || bytes.Compare(proposal[:], (*wc.smallest)[:]) == -1) {
+func (wc *WeakCoin) updateSmallest(ctx context.Context, sig types.VrfSignature) error {
+	proposal := new(big.Int).SetBytes(sig[:])
+	if wc.smallest == nil || proposal.Cmp(wc.smallest) == -1 {
+		var previous types.VrfSignature
+		if wc.smallest != nil {
+			wc.smallest.FillBytes(previous[:])
+		}
 		wc.logger.WithContext(ctx).With().Debug("saving new proposal",
 			wc.epoch,
 			wc.round,
-			log.String("proposal", hex.EncodeToString(proposal[:])),
-			log.String("previous", hex.EncodeToString((*wc.smallest)[:])),
+			log.String("proposal", hex.EncodeToString(sig[:])),
+			log.String("previous", hex.EncodeToString(previous[:])),
 		)
-		wc.smallest = &proposal
+		wc.smallest = proposal
 		return nil
 	}
 	return errNotSmallest

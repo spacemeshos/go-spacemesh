@@ -278,7 +278,7 @@ func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	return pd.storeFirstVotes(m, minerPK)
 }
 
-func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMessage) (*signing.PublicKey, error) {
+func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMessage) (types.NodeID, error) {
 	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound)
 	messageBytes, err := codec.Encode(&m.FirstVotingMessageBody)
 	if err != nil {
@@ -287,26 +287,25 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 
 	minerPK, err := pd.pubKeyExtractor.Extract(signing.BEACON, messageBytes, m.Signature)
 	if err != nil {
-		return nil, fmt.Errorf("[round %v] recover ID %x: %w", types.FirstRound, m.Signature, err)
+		return types.EmptyNodeID, fmt.Errorf("[round %v] recover ID %x: %w", types.FirstRound, m.Signature, err)
 	}
 
 	nodeID := types.BytesToNodeID(minerPK.Bytes())
-	minerID := nodeID.String()
 	logger = logger.WithFields(log.Stringer("smesher", nodeID))
 
 	if err = pd.registerVoted(logger, m.EpochID, minerPK, types.FirstRound); err != nil {
-		return nil, fmt.Errorf("[round %v] register proposal (miner ID %v): %w", types.FirstRound, minerID, err)
+		return types.EmptyNodeID, fmt.Errorf("[round %v] register proposal (miner ID %v): %w", types.FirstRound, nodeID.String(), err)
 	}
-	return minerPK, nil
+	return nodeID, nil
 }
 
-func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, minerPK *signing.PublicKey) error {
+func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, minerPK types.NodeID) error {
 	if !pd.isInProtocol() {
 		pd.logger.Debug("beacon not in protocol, not storing first votes")
 		return errProtocolNotRunning
 	}
 
-	atx, err := pd.minerAtxHdr(m.EpochID, types.BytesToNodeID(minerPK.Bytes()))
+	atx, err := pd.minerAtxHdr(m.EpochID, minerPK)
 	if err != nil {
 		return err
 	}
@@ -396,7 +395,7 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 	return nil
 }
 
-func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingVotingMessage) (*signing.PublicKey, error) {
+func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingVotingMessage) (types.NodeID, error) {
 	round := m.RoundID
 	messageBytes, err := codec.Encode(&m.FollowingVotingMessageBody)
 	if err != nil {
@@ -405,34 +404,34 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 
 	minerPK, err := pd.pubKeyExtractor.Extract(signing.BEACON, messageBytes, m.Signature)
 	if err != nil {
-		return nil, fmt.Errorf("[round %v] recover ID from signature %x: %w", round, m.Signature, err)
+		return types.EmptyNodeID, fmt.Errorf("[round %v] recover ID from signature %x: %w", round, m.Signature, err)
 	}
 
 	nodeID := types.BytesToNodeID(minerPK.Bytes())
 	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, round, log.Stringer("smesher", nodeID))
 
 	if err := pd.registerVoted(logger, m.EpochID, minerPK, m.RoundID); err != nil {
-		return nil, err
+		return types.EmptyNodeID, err
 	}
 
-	return minerPK, nil
+	return nodeID, nil
 }
 
-func (pd *ProtocolDriver) storeFollowingVotes(m FollowingVotingMessage, minerPK *signing.PublicKey) error {
+func (pd *ProtocolDriver) storeFollowingVotes(m FollowingVotingMessage, nodeID types.NodeID) error {
 	if !pd.isInProtocol() {
 		pd.logger.Debug("beacon not in protocol, not storing following votes")
 		return errProtocolNotRunning
 	}
 
-	atx, err := pd.minerAtxHdr(m.EpochID, types.BytesToNodeID(minerPK.Bytes()))
+	atx, err := pd.minerAtxHdr(m.EpochID, nodeID)
 	if err != nil {
 		return err
 	}
 	voteWeight := new(big.Int).SetUint64(atx.GetWeight())
 
-	firstRoundVotes, err := pd.getFirstRoundVote(m.EpochID, minerPK)
+	firstRoundVotes, err := pd.getFirstRoundVote(m.EpochID, nodeID)
 	if err != nil {
-		return fmt.Errorf("get miner first round votes %v: %w", minerPK.String(), err)
+		return fmt.Errorf("get miner first round votes %v: %w", nodeID.String(), err)
 	}
 
 	thisRoundVotes := decodeVotes(m.VotesBitVector, firstRoundVotes)

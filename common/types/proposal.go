@@ -13,7 +13,9 @@ import (
 
 const (
 	// ProposalIDSize in bytes.
-	ProposalIDSize = hash20Length
+	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
+	// probably required for fetching by hash between peers.
+	ProposalIDSize = Hash32Length
 )
 
 //go:generate scalegen
@@ -41,7 +43,7 @@ type Proposal struct {
 	// the content proposal for a given layer and the votes on the mesh history
 	InnerProposal
 	// smesher's signature on InnerProposal
-	Signature [64]byte
+	Signature EdSignature
 
 	// the following fields are kept private and from being serialized
 	proposalID ProposalID

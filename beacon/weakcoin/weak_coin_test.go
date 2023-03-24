@@ -395,8 +395,8 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 
 	mockAllowance := weakcoin.NewMockallowance(gomock.NewController(t))
 	mockAllowance.EXPECT().MinerAllowance(epoch, gomock.Any()).DoAndReturn(
-		func(_ types.EpochID, miner []byte) uint32 {
-			if bytes.Equal(miner, signer.PublicKey().Bytes()) {
+		func(_ types.EpochID, miner types.NodeID) uint32 {
+			if bytes.Equal(miner.Bytes(), signer.PublicKey().Bytes()) {
 				return 1
 			}
 			return 0

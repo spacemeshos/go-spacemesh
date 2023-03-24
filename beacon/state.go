@@ -21,14 +21,14 @@ type state struct {
 	incomingProposals proposals
 	// minerPublicKey -> list of proposal.
 	// this list is used in encoding/decoding votes for each miner in all subsequent voting rounds.
-	firstRoundIncomingVotes map[string]proposalList
+	firstRoundIncomingVotes map[types.NodeID]proposalList
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
 	votesMargin               map[Proposal]*big.Int
 	hasProposed               map[string]struct{}
 	hasVoted                  []map[string]struct{}
 	proposalPhaseFinishedTime time.Time
 	proposalChecker           eligibilityChecker
-	minerAtxs                 map[string]types.ATXID
+	minerAtxs                 map[types.NodeID]types.ATXID
 }
 
 func newState(
@@ -36,7 +36,7 @@ func newState(
 	cfg Config,
 	nonce *types.VRFPostIndex,
 	epochWeight uint64,
-	miners map[string]types.ATXID,
+	miners map[types.NodeID]types.ATXID,
 	checker eligibilityChecker,
 ) *state {
 	return &state{
@@ -44,7 +44,7 @@ func newState(
 		epochWeight:             epochWeight,
 		nonce:                   nonce,
 		minerAtxs:               miners,
-		firstRoundIncomingVotes: make(map[string]proposalList),
+		firstRoundIncomingVotes: make(map[types.NodeID]proposalList),
 		votesMargin:             map[Proposal]*big.Int{},
 		hasProposed:             make(map[string]struct{}),
 		hasVoted:                make([]map[string]struct{}, cfg.RoundsNumber),
@@ -68,12 +68,12 @@ func (s *state) addPotentiallyValidProposal(proposal Proposal) {
 	s.votesMargin[proposal] = new(big.Int)
 }
 
-func (s *state) setMinerFirstRoundVote(minerPK *signing.PublicKey, voteList []Proposal) {
-	s.firstRoundIncomingVotes[string(minerPK.Bytes())] = voteList
+func (s *state) setMinerFirstRoundVote(minerPK types.NodeID, voteList []Proposal) {
+	s.firstRoundIncomingVotes[minerPK] = voteList
 }
 
-func (s *state) getMinerFirstRoundVote(minerPK *signing.PublicKey) (proposalList, error) {
-	p, ok := s.firstRoundIncomingVotes[string(minerPK.Bytes())]
+func (s *state) getMinerFirstRoundVote(minerPK types.NodeID) (proposalList, error) {
+	p, ok := s.firstRoundIncomingVotes[minerPK]
 	if !ok {
 		return nil, fmt.Errorf("no first round votes for miner")
 	}

@@ -76,7 +76,7 @@ func RandomBallotID() BallotID {
 
 // RandomProposalID generates a random ProposalID for testing.
 func RandomProposalID() ProposalID {
-	var b [ProposalIDSize]byte
+	var b [hash20Length]byte // TODO(mafa): ProposalIDSize is 32???
 	_, err := rand.Read(b[:])
 	if err != nil {
 		return ProposalID{}

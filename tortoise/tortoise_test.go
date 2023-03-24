@@ -890,7 +890,7 @@ func TestDecodeVotes(t *testing.T) {
 		ballots, err := ballots.Layer(s.GetState(0).DB, last)
 		require.NoError(t, err)
 		ballot := types.NewExistingBallot(
-			types.BallotID{3, 3, 3}, [64]byte{}, types.NodeID{},
+			types.BallotID{3, 3, 3}, types.EdSignature{}, types.NodeID{},
 			ballots[0].BallotMetadata,
 		)
 		ballot.BallotMetadata = ballots[0].BallotMetadata
@@ -2286,7 +2286,7 @@ func TestSwitchMode(t *testing.T) {
 		// feed ballots that vote against previously validated layer
 		// without the fix they would be ignored
 		for i := 1; i <= 16; i++ {
-			ballot := types.NewExistingBallot(types.BallotID{byte(i)}, [64]byte{}, types.NodeID{}, template.BallotMetadata)
+			ballot := types.NewExistingBallot(types.BallotID{byte(i)}, types.EdSignature{}, types.NodeID{}, template.BallotMetadata)
 			ballot.InnerBallot = template.InnerBallot
 			ballot.EligibilityProofs = template.EligibilityProofs
 			tortoise.OnBallot(&ballot)
@@ -2333,7 +2333,7 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		require.NotEmpty(t, rst)
 
 		id := types.BallotID{1}
-		ballot := types.NewExistingBallot(id, [64]byte{}, types.NodeID{}, rst[0].BallotMetadata)
+		ballot := types.NewExistingBallot(id, types.EdSignature{}, types.NodeID{}, rst[0].BallotMetadata)
 		ballot.InnerBallot = rst[0].InnerBallot
 		ballot.EligibilityProofs = rst[0].EligibilityProofs
 		ballot.Votes.Base = types.EmptyBallotID
@@ -2559,7 +2559,7 @@ func TestCountOnBallot(t *testing.T) {
 	for i := 1; i <= size*2; i++ {
 		id := types.BallotID{}
 		binary.BigEndian.PutUint64(id[:], uint64(i))
-		ballot := types.NewExistingBallot(id, [64]byte{}, types.NodeID{}, blts[0].BallotMetadata)
+		ballot := types.NewExistingBallot(id, types.EdSignature{}, types.NodeID{}, blts[0].BallotMetadata)
 		ballot.InnerBallot = blts[0].InnerBallot
 		ballot.EligibilityProofs = blts[0].EligibilityProofs
 		// unset support to be consistent with local opinion
@@ -2855,7 +2855,7 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 		tortoise.TallyVotes(ctx, last)
 		ballots, err := ballots.Layer(s.GetState(0).DB, last)
 		require.NoError(t, err)
-		ballot := types.NewExistingBallot(types.BallotID{1}, [64]byte{}, types.NodeID{}, ballots[0].BallotMetadata)
+		ballot := types.NewExistingBallot(types.BallotID{1}, types.EdSignature{}, types.NodeID{}, ballots[0].BallotMetadata)
 		ballot.InnerBallot = ballots[0].InnerBallot
 		ballot.EligibilityProofs = ballots[0].EligibilityProofs
 		ballot.Votes.Base = ballots[1].ID()
@@ -2904,7 +2904,7 @@ func BenchmarkOnBallot(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			id := types.BallotID{}
 			binary.BigEndian.PutUint64(id[:], uint64(i)+1)
-			ballot := types.NewExistingBallot(id, [64]byte{}, types.NodeID{}, modified.BallotMetadata)
+			ballot := types.NewExistingBallot(id, types.EdSignature{}, types.NodeID{}, modified.BallotMetadata)
 			ballot.InnerBallot = modified.InnerBallot
 			ballot.EligibilityProofs = modified.EligibilityProofs
 			tortoise.OnBallot(&ballot)
