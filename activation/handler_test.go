@@ -846,6 +846,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 	validator := NewMocknipostValidator(ctrl)
 	receiver := NewMockAtxReceiver(ctrl)
 	mclock := NewMocklayerClock(ctrl)
+	mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	mpub := pubsubmocks.NewMockPublisher(ctrl)
 	goldenATXID := types.ATXID{2, 3, 4}
 	sig, err := signing.NewEdSigner()
@@ -854,6 +855,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 	coinbase := types.Address{2, 4, 5}
 	extractor, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
+
 	atxHdlr := NewHandler(cdb, extractor, mclock, mpub, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, []AtxReceiver{receiver}, lg, PoetConfig{})
 
 	// Act & Assert
@@ -993,6 +995,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	receiver1 := NewMockAtxReceiver(ctrl)
 	receiver2 := NewMockAtxReceiver(ctrl)
 	mclock := NewMocklayerClock(ctrl)
+	mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	mpub := pubsubmocks.NewMockPublisher(ctrl)
 
 	const (
