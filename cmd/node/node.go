@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -816,6 +817,8 @@ func (app *App) startAPIServices(ctx context.Context) {
 				grpcmw.WithUnaryServerChain(
 					grpctags.UnaryServerInterceptor(),
 					grpczap.UnaryServerInterceptor(logger)),
+				grpc.MaxSendMsgSize(apiConf.GrpcSendMsgSize),
+				grpc.MaxRecvMsgSize(apiConf.GrpcRecvMsgSize),
 			)
 		}
 		services = append(services, svc)

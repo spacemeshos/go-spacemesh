@@ -10,6 +10,8 @@ import (
 const (
 	defaultGRPCServerPort          = 9092
 	defaultGRPCServerInterface     = ""
+	defaultGrpcSendMsgSize         = 1024 * 1024 * 10
+	defaultGrpcRecvMsgSize         = 1024 * 1024 * 10
 	defaultStartJSONServer         = false
 	defaultJSONServerPort          = 9093
 	defaultStartDebugService       = false
@@ -29,6 +31,8 @@ type Config struct {
 	StartGrpcServices   []string `mapstructure:"grpc"`
 	GrpcServerPort      int      `mapstructure:"grpc-port"`
 	GrpcServerInterface string   `mapstructure:"grpc-interface"`
+	GrpcSendMsgSize     int      `mapstructure:"grpc-send-msg-size"`
+	GrpcRecvMsgSize     int      `mapstructure:"grpc-recv-msg-size"`
 	StartJSONServer     bool     `mapstructure:"json-server"`
 	JSONServerPort      int      `mapstructure:"json-port"`
 	// no direct command line flags for these
@@ -65,6 +69,9 @@ func DefaultConfig() Config {
 		StartSmesherService:     defaultStartSmesherService,
 		StartTransactionService: defaultStartTransactionService,
 		StartActivationService:  defaultStartActivationService,
+
+		GrpcSendMsgSize: defaultGrpcSendMsgSize,
+		GrpcRecvMsgSize: defaultGrpcRecvMsgSize,
 
 		SmesherStreamInterval: defaultSmesherStreamInterval,
 	}
