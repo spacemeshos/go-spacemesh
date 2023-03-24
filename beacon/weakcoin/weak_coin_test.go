@@ -59,6 +59,10 @@ func nonceFetcher(tb testing.TB, ctrl *gomock.Controller) *weakcoin.MocknonceFet
 	return fetcher
 }
 
+// stubClock is provided to satisfy the needs of metric reporting in order to
+// avoid nil pointer exceptions in tests. It's simpler to do this than use a
+// mock which would require setting expectations for in every test where the
+// clock is interacted with.
 type stubClock struct{}
 
 func (c *stubClock) WeakCoinProposalSendTime(epoch types.EpochID, round types.RoundID) time.Time {
