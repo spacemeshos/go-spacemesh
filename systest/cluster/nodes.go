@@ -150,7 +150,9 @@ func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (
 						WithName("poet").
 						WithImage(ctx.PoetImage).
 						WithArgs(args...).
-						WithPorts(corev1.ContainerPort().WithName("rest").WithProtocol("TCP").WithContainerPort(poetPort)).
+						WithPorts(
+							corev1.ContainerPort().WithName("rest").WithProtocol("TCP").WithContainerPort(poetPort),
+						).
 						WithVolumeMounts(
 							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
 						).
@@ -342,7 +344,6 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, flags []De
 			}
 			clients <- node
 			return nil
-
 		})
 	}
 	if err := eg.Wait(); err != nil {
