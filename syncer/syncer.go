@@ -358,7 +358,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 	// no need to worry about race condition for s.run. only one instance of synchronize can run at a time
 	s.run++
-	logger.With().Info(fmt.Sprintf("starting sync run #%v", s.run),
+	logger.With().Debug(fmt.Sprintf("starting sync run #%v", s.run),
 		log.Stringer("sync_state", s.getSyncState()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
 		log.Stringer("current", s.ticker.CurrentLayer()),
@@ -421,7 +421,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 	success := syncFunc()
 	s.setStateAfterSync(ctx, success)
-	logger.With().Info(fmt.Sprintf("finished sync run #%v", s.run),
+	logger.With().Debug(fmt.Sprintf("finished sync run #%v", s.run),
 		log.Bool("success", success),
 		log.String("sync_state", s.getSyncState().String()),
 		log.Stringer("current", s.ticker.CurrentLayer()),
