@@ -1,6 +1,7 @@
 package bootstrap_test
 
 import (
+	"context"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -143,7 +144,7 @@ func checkUpdate3(t *testing.T, got *bootstrap.VerifiedUpdate) {
 
 type checkFunc func(*testing.T, *bootstrap.VerifiedUpdate)
 
-func TestNew(t *testing.T) {
+func TestLoad(t *testing.T) {
 	tcs := []struct {
 		desc       string
 		resultFunc checkFunc
@@ -175,37 +176,25 @@ func TestNew(t *testing.T) {
 			t.Parallel()
 
 			cfg := bootstrap.DefaultConfig()
-			ctrl := gomock.NewController(t)
-			r1 := bootstrap.NewMockReceiver(ctrl)
-			r2 := bootstrap.NewMockReceiver(ctrl)
-			receivers := []bootstrap.Receiver{r1, r2}
-			if len(tc.persisted) > 0 {
-				var received *bootstrap.VerifiedUpdate
-				for _, r := range []*bootstrap.MockReceiver{r1, r2} {
-					r.EXPECT().OnBoostrapUpdate(gomock.Any()).Do(
-						func(got *bootstrap.VerifiedUpdate) {
-							tc.resultFunc(t, got)
-							if received == nil {
-								received = got
-							} else {
-								require.EqualValues(t, received, got)
-							}
-						})
-				}
-			}
 			fs := afero.NewMemMapFs()
 			persistDir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			for file, update := range tc.persisted {
 				path := filepath.Join(persistDir, file)
 				require.NoError(t, afero.WriteFile(fs, path, []byte(update), 0o400))
 			}
-			_, err := bootstrap.New(
-				receivers,
+			updater := bootstrap.New(
 				bootstrap.WithConfig(cfg),
 				bootstrap.WithLogger(logtest.New(t)),
 				bootstrap.WithFilesystem(fs),
 			)
-			require.NoError(t, err)
+			ch := updater.Subscribe()
+			require.NoError(t, updater.Load(context.Background()))
+			if len(tc.persisted) > 0 {
+				require.Len(t, ch, 1)
+				got := <-ch
+				require.NotNil(t, got)
+				tc.resultFunc(t, got)
+			}
 		})
 	}
 }
@@ -221,8 +210,7 @@ func TestPrune(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, files, cfg.NumToKeep)
 	mockhttp := bootstrap.NewMockhttpclient(gomock.NewController(t))
-	updater, err := bootstrap.New(
-		nil,
+	updater := bootstrap.New(
 		bootstrap.WithConfig(cfg),
 		bootstrap.WithLogger(logtest.New(t)),
 		bootstrap.WithFilesystem(fs),
@@ -230,7 +218,7 @@ func TestPrune(t *testing.T) {
 	)
 	require.NoError(t, err)
 	mockhttp.EXPECT().Query(gomock.Any(), gomock.Any()).Return([]byte(update3), nil)
-	require.NoError(t, updater.DoIt())
+	require.NoError(t, updater.DoIt(context.Background()))
 	files, err = afero.ReadDir(fs, persistDir)
 	require.NoError(t, err)
 	require.Len(t, files, cfg.NumToKeep)
@@ -266,41 +254,28 @@ func TestManyUpdates(t *testing.T) {
 			cfg := bootstrap.DefaultConfig()
 			fs := afero.NewMemMapFs()
 			ctrl := gomock.NewController(t)
-			r1 := bootstrap.NewMockReceiver(ctrl)
-			r2 := bootstrap.NewMockReceiver(ctrl)
-			receivers := []bootstrap.Receiver{r1, r2}
 			mockhttp := bootstrap.NewMockhttpclient(ctrl)
-			updater, err := bootstrap.New(
-				receivers,
+			updater := bootstrap.New(
 				bootstrap.WithConfig(cfg),
 				bootstrap.WithLogger(logtest.New(t)),
 				bootstrap.WithFilesystem(fs),
 				bootstrap.WithHttpclient(mockhttp),
 			)
-			require.NoError(t, err)
+			ch := updater.Subscribe()
 			expectedURL, err := url.Parse(bootstrap.DefaultURI)
 			require.NoError(t, err)
 			for i, update := range tc.updates {
 				mockhttp.EXPECT().Query(gomock.Any(), expectedURL).Return([]byte(update), nil)
-				var received *bootstrap.VerifiedUpdate
-				if tc.checkers[i] != nil {
-					for _, r := range []*bootstrap.MockReceiver{r1, r2} {
-						r.EXPECT().OnBoostrapUpdate(gomock.Any()).Do(
-							func(got *bootstrap.VerifiedUpdate) {
-								tc.checkers[i](t, got)
-								if received == nil {
-									received = got
-								} else {
-									require.EqualValues(t, received, got)
-								}
-							})
-					}
-				}
-				require.NoError(t, updater.DoIt())
-				if tc.checkers[i] != nil {
-					require.NotNil(t, received)
-					require.NotEmpty(t, received.Persisted)
-					data, err := afero.ReadFile(fs, received.Persisted)
+				require.NoError(t, updater.DoIt(context.Background()))
+				if tc.checkers[i] == nil {
+					require.Empty(t, ch)
+				} else {
+					require.Len(t, ch, 1)
+					got := <-ch
+					require.NotNil(t, got)
+					tc.checkers[i](t, got)
+					require.NotEmpty(t, got.Persisted)
+					data, err := afero.ReadFile(fs, got.Persisted)
 					require.NoError(t, err)
 					require.Equal(t, []byte(update), data)
 				}
@@ -320,18 +295,18 @@ func TestGetInvalidUpdate(t *testing.T) {
 			err:  bootstrap.ErrWrongVersion,
 			update: `
 {
-  "version": "https://spacemesh.io/bootstrap.schema.json.1.1",
-  "data": {
-    "id": 2,
-    "epochs": [{
-        "epoch": 2,
-        "beacon": "f70cf90b",
-        "activeSet": [
+ "version": "https://spacemesh.io/bootstrap.schema.json.1.1",
+ "data": {
+   "id": 2,
+   "epochs": [{
+       "epoch": 2,
+       "beacon": "f70cf90b",
+       "activeSet": [
 			"0575fc4083eb5b5c4422063c87071eb5123d4db6fee7bc1ecb02e52e97916aef",
 			"23716e2667034edc62595a6d1628ff5c323cf099f2cc161e5653a96c9fd2bd55"]
-      }
-    ]
-  }
+     }
+   ]
+ }
 }
 `,
 		},
@@ -340,26 +315,26 @@ func TestGetInvalidUpdate(t *testing.T) {
 			err:  bootstrap.ErrEpochOutOfOrder,
 			update: `
 {
-  "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
-  "data": {
-    "id": 2,
-    "epochs": [
-      {
-        "epoch": 3,
-        "beacon": "6fe7c971",
-        "activeSet": [
+ "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
+ "data": {
+   "id": 2,
+   "epochs": [
+     {
+       "epoch": 3,
+       "beacon": "6fe7c971",
+       "activeSet": [
 		  "85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210",
 		  "65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64"]
-      },
-      {
-        "epoch": 2,
-        "beacon": "f70cf90b",
-        "activeSet": [
+     },
+     {
+       "epoch": 2,
+       "beacon": "f70cf90b",
+       "activeSet": [
 		  "0575fc4083eb5b5c4422063c87071eb5123d4db6fee7bc1ecb02e52e97916aef",
 		  "23716e2667034edc62595a6d1628ff5c323cf099f2cc161e5653a96c9fd2bd55"]
-      }
-    ]
-  }
+     }
+   ]
+ }
 }
 `,
 		},
@@ -368,17 +343,17 @@ func TestGetInvalidUpdate(t *testing.T) {
 			err:  bootstrap.ErrInvalidBeacon,
 			update: `
 {
-  "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
-  "data": {
-    "id": 2,
-    "epochs": [{
-        "epoch": 2,
-        "activeSet": [
+ "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
+ "data": {
+   "id": 2,
+   "epochs": [{
+       "epoch": 2,
+       "activeSet": [
 			"0575fc4083eb5b5c4422063c87071eb5123d4db6fee7bc1ecb02e52e97916aef",
 			"23716e2667034edc62595a6d1628ff5c323cf099f2cc161e5653a96c9fd2bd55"]
-      }
-    ]
-  }
+     }
+   ]
+ }
 }
 `,
 		},
@@ -390,29 +365,29 @@ func TestGetInvalidUpdate(t *testing.T) {
 
 			cfg := bootstrap.DefaultConfig()
 			ctrl := gomock.NewController(t)
-			r := bootstrap.NewMockReceiver(ctrl)
-			r.EXPECT().OnBoostrapUpdate(gomock.Any()).Do(
-				func(got *bootstrap.VerifiedUpdate) {
-					checkUpdate1(t, got)
-				})
 			fs := afero.NewMemMapFs()
 			mockhttp := bootstrap.NewMockhttpclient(ctrl)
 			path := filepath.Join(cfg.DataDir, bootstrap.DirName, "00001-2023-03-18T22-26-13")
 			require.NoError(t, afero.WriteFile(fs, path, []byte(update1), 0o400))
 
-			updater, err := bootstrap.New(
-				[]bootstrap.Receiver{r},
+			updater := bootstrap.New(
 				bootstrap.WithConfig(cfg),
 				bootstrap.WithLogger(logtest.New(t)),
 				bootstrap.WithFilesystem(fs),
 				bootstrap.WithHttpclient(mockhttp),
 			)
-			require.NoError(t, err)
+
+			ch := updater.Subscribe()
+			require.NoError(t, updater.Load(context.Background()))
+			require.Len(t, ch, 1)
+			got := <-ch
+			require.NotNil(t, got)
+			checkUpdate1(t, got)
 
 			expectedURL, err := url.Parse(bootstrap.DefaultURI)
 			require.NoError(t, err)
 			mockhttp.EXPECT().Query(gomock.Any(), expectedURL).Return([]byte(tc.update), nil)
-			require.ErrorIs(t, updater.DoIt(), tc.err)
+			require.ErrorIs(t, updater.DoIt(context.Background()), tc.err)
 		})
 	}
 }

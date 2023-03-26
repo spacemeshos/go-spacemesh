@@ -1,17 +1,15 @@
 // Package bootstrap checks for the bootstrap/fallback data update from the
-// spacemesh administrator. This is intended as a short-term solution at the
-// beginning of the network deployment and should be removed once the network
-// is stable.
+// spacemesh administrator (a centralized entity controlled by the spacemesh
+// team). This is intended as a short-term solution at the beginning of the
+// network deployment to facilitate recovering from network failures and
+// should be removed once the network is stable.
 //
 // The updater periodically checks for the latest update from a URL provided
 // by the spacemesh administrator, verifies the data, persists on disk and
 // notifies subscribers of a new update.
 //
-// Subscribers need to implement the following interface:
-//
-//	OnBoostrapUpdate(*VerifiedUpdate)
-//
-// and register with the updater before the application starts running.
+// Subscribers register by calling `Subscribe()` to receive a channel for
+// the latest update.
 package bootstrap
 
 import (
@@ -41,9 +39,10 @@ const (
 	DefaultURI = "http://localhost:3000/bootstrap"
 	DirName    = "bootstrap"
 
-	timeout    = 5 * time.Second
-	schemaFile = "schema.json"
-	format     = "2006-01-02T15-04-05"
+	httpTimeout   = 5 * time.Second
+	notifyTimeout = time.Second
+	schemaFile    = "schema.json"
+	format        = "2006-01-02T15-04-05"
 )
 
 var (
@@ -81,20 +80,6 @@ type Config struct {
 	NumToKeep int
 }
 
-func (vd *VerifiedUpdate) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddString("persisted", vd.Persisted)
-	for _, epoch := range vd.Data {
-		encoder.AddString("beacon", epoch.Beacon.String())
-		encoder.AddArray("activeset", log.ArrayMarshalerFunc(func(aencoder log.ArrayEncoder) error {
-			for _, atx := range epoch.ActiveSet {
-				aencoder.AppendString(atx.String())
-			}
-			return nil
-		}))
-	}
-	return nil
-}
-
 func DefaultConfig() Config {
 	return Config{
 		URI:       DefaultURI,
@@ -106,14 +91,16 @@ func DefaultConfig() Config {
 }
 
 type Updater struct {
-	cfg         Config
-	logger      log.Log
-	subscribers []Receiver
+	cfg    Config
+	logger log.Log
+	fs     afero.Fs
+	client httpclient
+	once   sync.Once
+	eg     errgroup.Group
+
+	mu          sync.Mutex
+	subscribers []chan *VerifiedUpdate
 	latest      *VerifiedUpdate
-	fs          afero.Fs
-	client      httpclient
-	once        sync.Once
-	eg          errgroup.Group
 }
 
 type Opt func(*Updater)
@@ -142,40 +129,58 @@ func WithHttpclient(c httpclient) Opt {
 	}
 }
 
-func New(subs []Receiver, opts ...Opt) (*Updater, error) {
+func New(opts ...Opt) *Updater {
 	u := &Updater{
-		cfg:         DefaultConfig(),
-		logger:      log.NewNop(),
-		fs:          afero.NewOsFs(),
-		client:      client{},
-		subscribers: subs,
+		cfg:    DefaultConfig(),
+		logger: log.NewNop(),
+		fs:     afero.NewOsFs(),
+		client: client{},
 	}
 	for _, opt := range opts {
 		opt(u)
 	}
+	return u
+}
+
+func (u *Updater) Subscribe() chan *VerifiedUpdate {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	ch := make(chan *VerifiedUpdate, 10)
+	u.subscribers = append(u.subscribers, ch)
+	return ch
+}
+
+func (u *Updater) Load(ctx context.Context) error {
 	verified, err := load(u.fs, u.cfg)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if verified != nil {
-		u.latest = verified
-		notify(verified, subs)
+		if err = u.updateAndNotify(ctx, verified); err != nil {
+			return err
+		}
 	}
-	return u, nil
+	return nil
 }
 
 func (u *Updater) Start(ctx context.Context) {
 	u.once.Do(func() {
 		u.eg.Go(func() error {
+			if err := u.Load(ctx); err != nil {
+				return err
+			}
+			wait := time.Duration(0)
 			for {
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
-				case <-time.After(u.cfg.Interval):
-					if err := u.DoIt(); err != nil {
+				case <-time.After(wait):
+					ctx := log.WithNewSessionID(ctx)
+					if err := u.DoIt(ctx); err != nil {
 						u.logger.With().Error("failed to get bootstrap update", log.Err(err))
 					}
 				}
+				wait = u.cfg.Interval
 			}
 		})
 	})
@@ -185,51 +190,52 @@ func (u *Updater) Close() {
 	u.eg.Wait()
 }
 
-func (u *Updater) DoIt() error {
-	var lastUpdate uint32
+func (u *Updater) latestUpdateId() uint32 {
+	u.mu.Lock()
+	defer u.mu.Unlock()
 	if u.latest != nil {
-		lastUpdate = u.latest.ID
+		return u.latest.ID
 	}
-	verified, err := get(u.fs, u.client, u.cfg, lastUpdate)
+	return 0
+}
+
+func (u *Updater) DoIt(ctx context.Context) error {
+	logger := u.logger.WithContext(ctx)
+	verified, data, err := get(u.client, u.cfg, u.latestUpdateId())
 	if err != nil {
 		return err
 	}
 	if verified == nil { // no new update
 		return nil
 	}
-	u.latest = verified
-	u.logger.With().Info("updated bootstrap file", log.Inline(verified))
-	notify(verified, u.subscribers)
-	if err = prune(u.fs, filepath.Dir(verified.Persisted), u.cfg.NumToKeep); err != nil {
-		u.logger.With().Warning("failed to prune bootstrap files", log.Err(err))
+	verified.Persisted, err = persist(logger, u.fs, u.cfg, verified.ID, data)
+	if err != nil {
+		return err
+	}
+	logger.With().Info("new bootstrap file", log.Inline(verified))
+	if err = u.updateAndNotify(ctx, verified); err != nil {
+		return err
 	}
 	return nil
 }
 
-func notify(newUpdate *VerifiedUpdate, subscribers []Receiver) {
-	for _, sub := range subscribers {
-		sub.OnBoostrapUpdate(newUpdate)
-	}
-}
-
-func prune(fs afero.Fs, dir string, numToKeep int) error {
-	files, err := afero.ReadDir(fs, dir)
-	if err != nil {
-		return err
-	}
-	if len(files) < numToKeep {
-		return nil
-	}
-	sort.Slice(files, func(i, j int) bool { return files[i].Name() > files[j].Name() })
-	for _, f := range files[numToKeep:] {
-		if err = fs.Remove(filepath.Join(dir, f.Name())); err != nil {
-			return err
+func (u *Updater) updateAndNotify(ctx context.Context, verified *VerifiedUpdate) error {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.latest = verified
+	notifyCtx, cancel := context.WithTimeout(ctx, notifyTimeout)
+	defer cancel()
+	for _, ch := range u.subscribers {
+		select {
+		case ch <- verified:
+		case <-notifyCtx.Done():
+			return fmt.Errorf("notify subscriber: %w", notifyCtx.Err())
 		}
 	}
 	return nil
 }
 
-func get(fs afero.Fs, client httpclient, cfg Config, lastUpdate uint32) (*VerifiedUpdate, error) {
+func get(client httpclient, cfg Config, lastUpdate uint32) (*VerifiedUpdate, []byte, error) {
 	var (
 		data     []byte
 		err      error
@@ -237,31 +243,24 @@ func get(fs afero.Fs, client httpclient, cfg Config, lastUpdate uint32) (*Verifi
 	)
 	resource, err = url.Parse(cfg.URI)
 	if err != nil {
-		return nil, fmt.Errorf("parse bootstrap uri: %w", err)
+		return nil, nil, fmt.Errorf("parse bootstrap uri: %w", err)
 	}
 	if resource.Scheme == "https" || resource.Scheme == "http" {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx, cancel := context.WithTimeout(context.Background(), httpTimeout)
 		defer cancel()
 		data, err = client.Query(ctx, resource)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	} else {
-		return nil, fmt.Errorf("scheme not supported %v", resource.Scheme)
+		return nil, nil, fmt.Errorf("scheme not supported %v", resource.Scheme)
 	}
 
 	verified, err := validate(cfg, resource.String(), data, lastUpdate)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if verified == nil {
-		return nil, nil
-	}
-	verified.Persisted, err = persist(fs, cfg.DataDir, verified.ID, data)
-	if err != nil {
-		return nil, err
-	}
-	return verified, nil
+	return verified, data, nil
 }
 
 func validate(cfg Config, source string, data []byte, lastUpdate uint32) (*VerifiedUpdate, error) {
@@ -360,19 +359,39 @@ func load(fs afero.Fs, cfg Config) (*VerifiedUpdate, error) {
 	return verified, nil
 }
 
-func persist(fs afero.Fs, dataDir string, id uint32, data []byte) (string, error) {
-	if len(dataDir) == 0 {
+func persist(logger log.Log, fs afero.Fs, cfg Config, id uint32, data []byte) (string, error) {
+	if len(cfg.DataDir) == 0 {
 		return "", nil
 	}
-	dir, err := bootstrapDir(fs, dataDir)
+	dir, err := bootstrapDir(fs, cfg.DataDir)
 	if err != nil {
 		return "", err
 	}
 	filename := PersistFilename(dir, id)
-	if err := afero.WriteFile(fs, filename, data, 0o400); err != nil {
+	if err = afero.WriteFile(fs, filename, data, 0o400); err != nil {
 		return "", fmt.Errorf("persist bootstrap: %w", err)
 	}
+	if err = prune(fs, dir, cfg.NumToKeep); err != nil {
+		logger.With().Warning("failed to prune bootstrap files", log.Err(err))
+	}
 	return filename, nil
+}
+
+func prune(fs afero.Fs, dir string, numToKeep int) error {
+	files, err := afero.ReadDir(fs, dir)
+	if err != nil {
+		return err
+	}
+	if len(files) < numToKeep {
+		return nil
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].Name() > files[j].Name() })
+	for _, f := range files[numToKeep:] {
+		if err = fs.Remove(filepath.Join(dir, f.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func bootstrapDir(fs afero.Fs, dataDir string) (string, error) {

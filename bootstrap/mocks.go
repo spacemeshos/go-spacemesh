@@ -11,41 +11,6 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockReceiver is a mock of Receiver interface.
-type MockReceiver struct {
-	ctrl     *gomock.Controller
-	recorder *MockReceiverMockRecorder
-}
-
-// MockReceiverMockRecorder is the mock recorder for MockReceiver.
-type MockReceiverMockRecorder struct {
-	mock *MockReceiver
-}
-
-// NewMockReceiver creates a new mock instance.
-func NewMockReceiver(ctrl *gomock.Controller) *MockReceiver {
-	mock := &MockReceiver{ctrl: ctrl}
-	mock.recorder = &MockReceiverMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockReceiver) EXPECT() *MockReceiverMockRecorder {
-	return m.recorder
-}
-
-// OnBoostrapUpdate mocks base method.
-func (m *MockReceiver) OnBoostrapUpdate(arg0 *VerifiedUpdate) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnBoostrapUpdate", arg0)
-}
-
-// OnBoostrapUpdate indicates an expected call of OnBoostrapUpdate.
-func (mr *MockReceiverMockRecorder) OnBoostrapUpdate(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnBoostrapUpdate", reflect.TypeOf((*MockReceiver)(nil).OnBoostrapUpdate), arg0)
-}
-
 // Mockhttpclient is a mock of httpclient interface.
 type Mockhttpclient struct {
 	ctrl     *gomock.Controller
