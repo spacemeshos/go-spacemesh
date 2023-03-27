@@ -55,8 +55,6 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(&cfg.PprofHTTPServer, "pprof-server",
 		cfg.PprofHTTPServer, "enable http pprof server")
 	cmd.PersistentFlags().Uint64Var(&cfg.TickSize, "tick-size", cfg.TickSize, "number of poet leaves in a single tick")
-	cmd.PersistentFlags().StringVar(&cfg.PublishEventsURL, "events-url",
-		cfg.PublishEventsURL, "publish events to this url; if no url specified no events will be published")
 	cmd.PersistentFlags().StringVar(&cfg.ProfilerURL, "profiler-url",
 		cfg.ProfilerURL, "send profiler data to certain url, if no url no profiling will be sent, format: http://<IP>:<PORT>")
 	cmd.PersistentFlags().StringVar(&cfg.ProfilerName, "profiler-name",
@@ -74,6 +72,10 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(cfg.Genesis.Accounts), "accounts", "a",
 		"List of prefunded accounts")
 
+	cmd.PersistentFlags().IntVar(&cfg.DatabaseConnections, "db-connections",
+		cfg.DatabaseConnections, "configure number of active connections to enable parallel read requests")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.Flood, "db-latency-metering",
+		cfg.DatabaseLatencyMetering, "if enabled collect latency histogram for every database query")
 	/** ======================== P2P Flags ========================== **/
 
 	cmd.PersistentFlags().StringVar(&cfg.P2P.Listen, "listen",
