@@ -19,6 +19,7 @@ type eligibilityValidator interface {
 }
 
 type ballotDecoder interface {
+	GetMissingActiveSet(types.EpochID, []types.ATXID) []types.ATXID
 	DecodeBallot(*types.Ballot) (*tortoise.DecodedBallot, error)
 	StoreBallot(*tortoise.DecodedBallot) error
 }

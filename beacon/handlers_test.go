@@ -58,11 +58,11 @@ func setOwnFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID
 	}
 }
 
-func setMinerFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, nodeID types.NodeID, minerFirstRound proposalList) {
+func setMinerFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, minerID types.NodeID, minerFirstRound proposalList) {
 	t.Helper()
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.states[epoch].setMinerFirstRoundVote(nodeID, minerFirstRound)
+	pd.states[epoch].setMinerFirstRoundVote(minerID, minerFirstRound)
 }
 
 func createProposal(t *testing.T, vrfSigner *signing.VRFSigner, epoch types.EpochID, corruptSignature bool) *ProposalMessage {

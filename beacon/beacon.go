@@ -277,7 +277,7 @@ func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTxHeader) {
 	s.minerAtxs[atx.NodeID] = atx.ID
 }
 
-func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, minerPK types.NodeID) (*types.ActivationTxHeader, error) {
+func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, minerID types.NodeID) (*types.ActivationTxHeader, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
@@ -286,19 +286,19 @@ func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, minerPK types.NodeID)
 		return nil, errEpochNotActive
 	}
 
-	id, ok := st.minerAtxs[minerPK]
+	id, ok := st.minerAtxs[minerID]
 	if !ok {
 		pd.logger.With().Debug("miner does not have atx in previous epoch",
 			epoch-1,
-			log.Stringer("smesher", minerPK),
+			log.Stringer("smesher", minerID),
 		)
 		return nil, errMinerNotActive
 	}
 	return pd.cdb.GetAtxHeader(id)
 }
 
-func (pd *ProtocolDriver) MinerAllowance(epoch types.EpochID, minerPK types.NodeID) uint32 {
-	atx, err := pd.minerAtxHdr(epoch, minerPK)
+func (pd *ProtocolDriver) MinerAllowance(epoch types.EpochID, minerID types.NodeID) uint32 {
+	atx, err := pd.minerAtxHdr(epoch, minerID)
 	if err != nil {
 		return 0
 	}
@@ -942,7 +942,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 	return nil
 }
 
-func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, nodeId types.NodeID) (proposalList, error) {
+func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, minerID types.NodeID) (proposalList, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
@@ -951,13 +951,13 @@ func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, nodeId types.No
 		return nil, errEpochNotActive
 	}
 
-	return st.getMinerFirstRoundVote(nodeId)
+	return st.getMinerFirstRoundVote(minerID)
 }
 
 func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {
 	firstRoundVotes, err := pd.getFirstRoundVote(epoch, pd.edSigner.NodeID())
 	if err != nil {
-		return fmt.Errorf("get own first round votes %v: %w", pd.edSigner.PublicKey().String(), err)
+		return fmt.Errorf("get own first round votes %v: %w", pd.edSigner.NodeID().String(), err)
 	}
 
 	bitVector := encodeVotes(ownCurrentRoundVotes, firstRoundVotes)

@@ -41,7 +41,7 @@ type Message struct {
 	Epoch        types.EpochID
 	Round        types.RoundID
 	Unit         uint32
-	MinerPK      types.NodeID
+	MinerID      types.NodeID
 	VrfSignature types.VrfSignature
 }
 
@@ -204,19 +204,19 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, nonce *
 }
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
-	nonce, err := wc.nonceFetcher.VRFNonce(message.MinerPK, message.Epoch)
+	nonce, err := wc.nonceFetcher.VRFNonce(message.MinerID, message.Epoch)
 	if err != nil {
 		wc.logger.With().Error("failed to get vrf nonce", log.Err(err))
-		return fmt.Errorf("failed to get vrf nonce for node %s: %w", message.MinerPK, err)
+		return fmt.Errorf("failed to get vrf nonce for node %s: %w", message.MinerID, err)
 	}
 	buf := wc.encodeProposal(message.Epoch, nonce, message.Round, message.Unit)
-	if !wc.verifier.Verify(message.MinerPK, buf, message.VrfSignature) {
+	if !wc.verifier.Verify(message.MinerID, buf, message.VrfSignature) {
 		return fmt.Errorf("signature is invalid signature %x", message.VrfSignature)
 	}
 
-	allowance := wc.allowance.MinerAllowance(wc.epoch, message.MinerPK)
+	allowance := wc.allowance.MinerAllowance(wc.epoch, message.MinerID)
 	if allowance < message.Unit {
-		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d (allowed %d)", message.MinerPK, message.Unit, allowance)
+		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d (allowed %d)", message.MinerID, message.Unit, allowance)
 	}
 
 	return wc.updateSmallest(ctx, message.VrfSignature)
@@ -244,7 +244,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         unit,
-				MinerPK:      wc.signer.NodeID(),
+				MinerID:      wc.signer.NodeID(),
 				VrfSignature: signature,
 			}
 			msg, err := codec.Encode(&message)

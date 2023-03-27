@@ -528,7 +528,7 @@ func (h *Handler) fetchReferencedATXs(ctx context.Context, b *types.Ballot) erro
 	if b.EpochData != nil {
 		atxs = append(atxs, b.EpochData.ActiveSet...)
 	}
-	if err := h.fetcher.GetAtxs(ctx, atxs); err != nil {
+	if err := h.fetcher.GetAtxs(ctx, h.decoder.GetMissingActiveSet(b.Layer.GetEpoch(), atxs)); err != nil {
 		return fmt.Errorf("proposal get ATXs: %w", err)
 	}
 	return nil

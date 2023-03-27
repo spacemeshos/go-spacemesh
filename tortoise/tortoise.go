@@ -68,7 +68,7 @@ func newTurtle(
 	t.verified = genesis
 	t.evicted = genesis.Sub(1)
 
-	t.epochs[genesis.GetEpoch()] = &epochInfo{}
+	t.epochs[genesis.GetEpoch()] = &epochInfo{atxs: map[types.ATXID]uint64{}}
 	t.layers[genesis] = &layerInfo{
 		lid:            genesis,
 		hareTerminated: true,

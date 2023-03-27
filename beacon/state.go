@@ -68,12 +68,12 @@ func (s *state) addPotentiallyValidProposal(proposal Proposal) {
 	s.votesMargin[proposal] = new(big.Int)
 }
 
-func (s *state) setMinerFirstRoundVote(minerPK types.NodeID, voteList []Proposal) {
-	s.firstRoundIncomingVotes[minerPK] = voteList
+func (s *state) setMinerFirstRoundVote(minerID types.NodeID, voteList []Proposal) {
+	s.firstRoundIncomingVotes[minerID] = voteList
 }
 
-func (s *state) getMinerFirstRoundVote(minerPK types.NodeID) (proposalList, error) {
-	p, ok := s.firstRoundIncomingVotes[minerPK]
+func (s *state) getMinerFirstRoundVote(minerID types.NodeID) (proposalList, error) {
+	p, ok := s.firstRoundIncomingVotes[minerID]
 	if !ok {
 		return nil, fmt.Errorf("no first round votes for miner")
 	}
@@ -108,13 +108,13 @@ func (s *state) registerProposed(logger log.Log, minerPK *signing.PublicKey) err
 	return nil
 }
 
-func (s *state) registerVoted(logger log.Log, nodeID types.NodeID, round types.RoundID) error {
+func (s *state) registerVoted(logger log.Log, minerID types.NodeID, round types.RoundID) error {
 	if s.hasVoted[round] == nil {
 		s.hasVoted[round] = make(map[types.NodeID]struct{})
 	}
 
 	// TODO(nkryuchkov): consider having a separate table for an epoch with one bit in it if atx/miner is voted already
-	if _, ok := s.hasVoted[round][nodeID]; ok {
+	if _, ok := s.hasVoted[round][minerID]; ok {
 		logger.Warning("already received vote from miner for this round")
 
 		// TODO(nkryuchkov): report this miner through gossip
@@ -124,9 +124,9 @@ func (s *state) registerVoted(logger log.Log, nodeID types.NodeID, round types.R
 		// TODO(nkryuchkov): ban id forever globally across packages since this epoch
 		// TODO(nkryuchkov): (not specific to beacon) do the same for ATXs
 
-		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, nodeID.ShortString(), errAlreadyVoted)
+		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, minerID.ShortString(), errAlreadyVoted)
 	}
 
-	s.hasVoted[round][nodeID] = struct{}{}
+	s.hasVoted[round][minerID] = struct{}{}
 	return nil
 }

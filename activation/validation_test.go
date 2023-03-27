@@ -31,7 +31,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	initOpts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	nodeId := types.BytesToNodeID(make([]byte, 32))
-	commitmentAtxId := types.ATXID([types.ATXIDSize]byte{})
+	commitmentAtxId := *types.EmptyATXID
 
 	init, err := initialization.NewInitializer(
 		initialization.WithNodeId(nodeId.Bytes()),
