@@ -8,11 +8,12 @@ import (
 
 const namespace = "database"
 
-// QueryDuration in nanoseconds.
-var queryDuration = metrics.NewHistogramWithBuckets(
-	"query_duration",
-	namespace,
-	"Duration of the query in nanoseconds",
-	[]string{"query"},
-	prometheus.ExponentialBuckets(100_000, 2, 20),
-)
+func newQueryLatency() *prometheus.HistogramVec {
+	return metrics.NewHistogramWithBuckets(
+		"query_latency_ns",
+		namespace,
+		"Latency of the query in nanoseconds",
+		[]string{"query"},
+		prometheus.ExponentialBuckets(100_000, 2, 20),
+	)
+}
