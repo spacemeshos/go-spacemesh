@@ -73,7 +73,7 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 	}
 
 	latency := receivedTime.Sub(pd.bClock.proposalSendTime(m.EpochID))
-	metrics.ReportMessageLatency(pubsub.BeaconProposalProtocol, pubsub.BeaconProposalProtocol, latency)
+	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconProposalProtocol, latency)
 
 	if !pd.isProposalTimely(&m, receivedTime) {
 		logger.With().Debug("proposal too early", m.EpochID, log.Time("received_at", receivedTime))
@@ -258,7 +258,7 @@ func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	}
 
 	latency := receivedTime.Sub(pd.bClock.firstVoteSendTime(m.EpochID))
-	metrics.ReportMessageLatency(pubsub.BeaconFirstVotesProtocol, pubsub.BeaconFirstVotesProtocol, latency)
+	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconFirstVotesProtocol, latency)
 
 	currentEpoch := pd.currentEpoch()
 	if m.EpochID != currentEpoch {
@@ -385,7 +385,7 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 	}
 
 	latency := receivedTime.Sub(pd.bClock.followupVoteSendTime(m.EpochID, m.RoundID))
-	metrics.ReportMessageLatency(pubsub.BeaconFollowingVotesProtocol, pubsub.BeaconFollowingVotesProtocol, latency)
+	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconFollowingVotesProtocol, latency)
 
 	// don't accept votes from future rounds
 	if !pd.isVoteTimely(&m, receivedTime) {
