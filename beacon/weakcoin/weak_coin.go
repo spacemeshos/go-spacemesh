@@ -41,8 +41,8 @@ type Message struct {
 	Epoch        types.EpochID
 	Round        types.RoundID
 	Unit         uint32
-	MinerPK      []byte
-	VrfSignature []byte
+	MinerPK      []byte `scale:"max=32"`
+	VrfSignature []byte `scale:"max=80"`
 }
 
 type VrfMessage struct {

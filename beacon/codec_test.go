@@ -4,38 +4,36 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
 func Test_codec(t *testing.T) {
-	firstRound := [][]byte{
-		util.Hex2Bytes("11"),
-		util.Hex2Bytes("22"),
-		util.Hex2Bytes("33"),
-		util.Hex2Bytes("44"),
-		util.Hex2Bytes("55"),
-		util.Hex2Bytes("66"),
-		util.Hex2Bytes("77"),
-		util.Hex2Bytes("88"),
-		util.Hex2Bytes("99"),
-		util.Hex2Bytes("00"),
+	firstRound := proposalList{
+		Proposal{0x11},
+		Proposal{0x22},
+		Proposal{0x33},
+		Proposal{0x44},
+		Proposal{0x55},
+		Proposal{0x66},
+		Proposal{0x77},
+		Proposal{0x88},
+		Proposal{0x99},
+		Proposal{0x00},
 	}
 
 	currentRound := allVotes{
 		support: proposalSet{
-			string(util.Hex2Bytes("11")): {},
-			string(util.Hex2Bytes("33")): {},
-			string(util.Hex2Bytes("55")): {},
-			string(util.Hex2Bytes("77")): {},
-			string(util.Hex2Bytes("99")): {},
+			firstRound[0]: {},
+			firstRound[2]: {},
+			firstRound[4]: {},
+			firstRound[6]: {},
+			firstRound[8]: {},
 		},
 		against: proposalSet{
-			string(util.Hex2Bytes("22")): {},
-			string(util.Hex2Bytes("44")): {},
-			string(util.Hex2Bytes("66")): {},
-			string(util.Hex2Bytes("88")): {},
-			string(util.Hex2Bytes("00")): {},
+			firstRound[1]: {},
+			firstRound[3]: {},
+			firstRound[5]: {},
+			firstRound[7]: {},
+			firstRound[9]: {},
 		},
 	}
 
@@ -49,33 +47,33 @@ func Test_codec(t *testing.T) {
 }
 
 func Test_codec_lessThanActualSize(t *testing.T) {
-	firstRound := [][]byte{
-		util.Hex2Bytes("11"),
-		util.Hex2Bytes("22"),
-		util.Hex2Bytes("33"),
-		util.Hex2Bytes("44"),
-		util.Hex2Bytes("55"),
-		util.Hex2Bytes("66"),
-		util.Hex2Bytes("77"),
-		util.Hex2Bytes("88"),
-		util.Hex2Bytes("99"),
-		util.Hex2Bytes("00"),
+	firstRound := proposalList{
+		Proposal{0x11},
+		Proposal{0x22},
+		Proposal{0x33},
+		Proposal{0x44},
+		Proposal{0x55},
+		Proposal{0x66},
+		Proposal{0x77},
+		Proposal{0x88},
+		Proposal{0x99},
+		Proposal{0x00},
 	}
 
 	currentRound := allVotes{
 		support: proposalSet{
-			string(util.Hex2Bytes("11")): {},
-			string(util.Hex2Bytes("22")): {},
-			string(util.Hex2Bytes("33")): {},
-			string(util.Hex2Bytes("44")): {},
-			string(util.Hex2Bytes("55")): {},
-			string(util.Hex2Bytes("66")): {},
-			string(util.Hex2Bytes("77")): {},
-			string(util.Hex2Bytes("88")): {},
+			firstRound[0]: {},
+			firstRound[1]: {},
+			firstRound[2]: {},
+			firstRound[3]: {},
+			firstRound[4]: {},
+			firstRound[5]: {},
+			firstRound[6]: {},
+			firstRound[7]: {},
 		},
 		against: proposalSet{
-			string(util.Hex2Bytes("99")): {},
-			string(util.Hex2Bytes("00")): {},
+			firstRound[8]: {},
+			firstRound[9]: {},
 		},
 	}
 

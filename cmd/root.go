@@ -130,6 +130,10 @@ func AddCommands(cmd *cobra.Command) {
 	// GrpcServerInterface determines the interface the GRPC server listens on
 	cmd.PersistentFlags().StringVar(&cfg.API.GrpcServerInterface, "grpc-interface",
 		cfg.API.GrpcServerInterface, "GRPC api server interface")
+	cmd.PersistentFlags().IntVar(&cfg.API.GrpcRecvMsgSize, "grpc-recv-msg-size",
+		cfg.API.GrpcServerPort, "GRPC api recv message size")
+	cmd.PersistentFlags().IntVar(&cfg.API.GrpcSendMsgSize, "grpc-send-msg-size",
+		cfg.API.GrpcServerPort, "GRPC api send message size")
 
 	/**======================== Hare Flags ========================== **/
 
@@ -193,9 +197,6 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.Tortoise.BadBeaconVoteDelayLayers, "number of layers to ignore a ballot with a different beacon")
 
 	// TODO(moshababo): add usage desc
-
-	cmd.PersistentFlags().Uint8Var(&cfg.POST.BitsPerLabel, "post-bits-per-label",
-		cfg.POST.BitsPerLabel, "")
 	cmd.PersistentFlags().Uint64Var(&cfg.POST.LabelsPerUnit, "post-labels-per-unit",
 		cfg.POST.LabelsPerUnit, "")
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.MinNumUnits, "post-min-numunits",
@@ -203,9 +204,15 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.MaxNumUnits, "post-max-numunits",
 		cfg.POST.MaxNumUnits, "")
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.K1, "post-k1",
-		cfg.POST.K1, "")
+		cfg.POST.K1, "difficulty factor for finding a good label when generating a proof")
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.K2, "post-k2",
-		cfg.POST.K2, "")
+		cfg.POST.K2, "number of labels to prove")
+	cmd.PersistentFlags().Uint32Var(&cfg.POST.K3, "post-k3",
+		cfg.POST.K3, "subset of labels to verify in a proof")
+	cmd.PersistentFlags().Uint64Var(&cfg.POST.K2PowDifficulty, "post-k2pow-difficulty",
+		cfg.POST.K2PowDifficulty, "difficulty of K2 proof of work")
+	cmd.PersistentFlags().Uint64Var(&cfg.POST.K3PowDifficulty, "post-k3pow-difficulty",
+		cfg.POST.K3PowDifficulty, "difficulty of K3 proof of work")
 
 	/**======================== Smeshing Flags ========================== **/
 

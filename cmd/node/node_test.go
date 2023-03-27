@@ -1003,7 +1003,6 @@ func getTestDefaultConfig() *config.Config {
 	cfg.POST.MinNumUnits = 2
 	cfg.POST.MaxNumUnits = 4
 	cfg.POST.LabelsPerUnit = 32
-	cfg.POST.BitsPerLabel = 8
 	cfg.POST.K2 = 4
 
 	cfg.SMESHING = config.DefaultSmeshingConfig()

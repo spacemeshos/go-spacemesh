@@ -147,7 +147,7 @@ func TestIterateSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	gen := fixture.NewTransactionResultGenerator()
 	expect := 10
-	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+	require.NoError(t, db.WithTx(context.Background(), func(dtx *sql.Tx) error {
 		for i := 0; i < expect; i++ {
 			tx := gen.Next()
 

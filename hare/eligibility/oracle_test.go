@@ -233,8 +233,7 @@ func TestCalcEligibility_EligibleFromTortoiseActiveSet(t *testing.T) {
 
 	numMiners := 5
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(numMiners)
-	// there is no cache for tortoise active set. so each signature will cause 2 calls to GetBeacon()
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(2 * numMiners)
+	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
 	activeSet := types.RandomActiveSet(numMiners)
 	// there is no cache for tortoise active set. so each signature will cause 2 calls to GetEpochAtxs() and 2*numMiners calls to GetAtxHeader()
 	prevEpoch := layer.GetEpoch() - 1
@@ -785,7 +784,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	o := defaultOracle(t)
 	layer := types.NewLayerID(40)
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(types.RandomBeacon(), nil).Times(2)
+	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
 
 	numMiners := 5
 	activeSet := types.RandomActiveSet(numMiners)
@@ -810,7 +809,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, createMapWithSize(numMiners), oldActiveSet)
 
-	// tortoise active set is not cached. same layer may yield different answer
+	// tortoise active set is cached. it will have to be bootstrapped to guarantee consensus.
 	activeSet = types.RandomActiveSet(numMiners)
 	for i, id := range activeSet {
 		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(numMiners + i)))
@@ -830,8 +829,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	}
 	newActiveSet, err := o.actives(context.Background(), layer)
 	require.NoError(t, err)
-	require.Equal(t, createMapWithSize(numMiners*2), newActiveSet)
-	require.NotEqual(t, oldActiveSet, newActiveSet)
+	require.Equal(t, oldActiveSet, newActiveSet)
 }
 
 func TestActives_ConcurrentCalls(t *testing.T) {

@@ -232,8 +232,7 @@ func (fo *FixedRolacle) Proof(ctx context.Context, nonce types.VRFPostIndex, lay
 	if _, err := h.Write(kInBytes); err != nil {
 		fo.logger.WithContext(ctx).With().Error("error writing hash", log.Err(err))
 	}
-
-	sum := h.Sum([]byte{})
-
-	return sum, nil
+	proof := make([]byte, 80)
+	_, err := h.Digest().Read(proof)
+	return proof, err
 }

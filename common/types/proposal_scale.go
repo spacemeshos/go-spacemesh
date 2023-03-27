@@ -16,7 +16,7 @@ func (t *Proposal) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Signature)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 64)
 		if err != nil {
 			return total, err
 		}
@@ -34,7 +34,7 @@ func (t *Proposal) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 64)
 		if err != nil {
 			return total, err
 		}
@@ -53,7 +53,7 @@ func (t *InnerProposal) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSlice(enc, t.TxIDs)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.TxIDs, 100000)
 		if err != nil {
 			return total, err
 		}
@@ -78,7 +78,7 @@ func (t *InnerProposal) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeStructSlice[TransactionID](dec)
+		field, n, err := scale.DecodeStructSliceWithLimit[TransactionID](dec, 100000)
 		if err != nil {
 			return total, err
 		}
