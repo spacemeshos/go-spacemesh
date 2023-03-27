@@ -235,6 +235,9 @@ func get(ctx context.Context, client *http.Client, cfg Config, lastId uint32) (*
 	if err != nil {
 		return nil, nil, err
 	}
+	if len(data) == 0 { // no update data
+		return nil, nil, nil
+	}
 	verified, err := validate(cfg, resource.String(), data, lastId)
 	if err != nil {
 		return nil, nil, err

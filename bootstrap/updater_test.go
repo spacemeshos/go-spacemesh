@@ -322,6 +322,27 @@ func TestManyUpdates(t *testing.T) {
 	}
 }
 
+func TestEmptyResponse(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodGet, r.Method)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+	cfg := bootstrap.DefaultConfig()
+	cfg.URL = ts.URL
+	updater := bootstrap.New(
+		bootstrap.WithConfig(cfg),
+		bootstrap.WithLogger(logtest.New(t)),
+		bootstrap.WithFilesystem(fs),
+		bootstrap.WithHttpClient(ts.Client()),
+	)
+
+	ch := updater.Subscribe()
+	require.NoError(t, updater.DoIt(context.Background()))
+	require.Empty(t, ch)
+}
+
 func TestGetInvalidUpdate(t *testing.T) {
 	tcs := []struct {
 		desc   string
