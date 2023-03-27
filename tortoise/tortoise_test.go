@@ -2864,6 +2864,32 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 	})
 }
 
+func TestMissingActiveSet(t *testing.T) {
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	tortoise := defaultAlgorithm(t, cdb)
+	epoch := types.EpochID(3)
+	aset := []types.ATXID{
+		types.ATXID(types.BytesToHash([]byte("first"))),
+		types.ATXID(types.BytesToHash([]byte("second"))),
+		types.ATXID(types.BytesToHash([]byte("third"))),
+	}
+	for _, atxid := range aset[:2] {
+		atx := &types.ActivationTxHeader{}
+		atx.ID = atxid
+		atx.PubLayerID = (epoch - 1).FirstLayer()
+		tortoise.OnAtx(atx)
+	}
+	t.Run("empty", func(t *testing.T) {
+		require.Equal(t, aset, tortoise.GetMissingActiveSet(epoch+1, aset))
+	})
+	t.Run("all available", func(t *testing.T) {
+		require.Empty(t, tortoise.GetMissingActiveSet(epoch, aset[:2]))
+	})
+	t.Run("some available", func(t *testing.T) {
+		require.Equal(t, []types.ATXID{aset[2]}, tortoise.GetMissingActiveSet(epoch, aset))
+	})
+}
+
 func BenchmarkOnBallot(b *testing.B) {
 	const (
 		layerSize = 50
