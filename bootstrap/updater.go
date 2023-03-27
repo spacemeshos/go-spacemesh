@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	DefaultURI = "http://localhost:3000/bootstrap"
+	DefaultURL = "http://localhost:3000/bootstrap"
 	DirName    = "bootstrap"
 
 	httpTimeout   = 5 * time.Second
@@ -51,28 +51,8 @@ var (
 	ErrInvalidBeacon   = errors.New("invalid beacon")
 )
 
-type client struct{}
-
-func (client) Query(ctx context.Context, resource *url.URL) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", resource.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("create http request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{}).Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("http get bootstrap file: %w", err)
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("bootstrap read resonse: %w", err)
-	}
-	return data, nil
-}
-
 type Config struct {
-	URI     string `mapstructure:"bootstrap-uri"`
+	URL     string `mapstructure:"bootstrap-uri"`
 	Version string `mapstructure:"bootstrap-version"`
 
 	DataDir   string
@@ -82,7 +62,7 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		URI:       DefaultURI,
+		URL:       DefaultURL,
 		Version:   "https://spacemesh.io/bootstrap.schema.json.1.0",
 		DataDir:   os.TempDir(),
 		Interval:  30 * time.Second,
@@ -94,7 +74,7 @@ type Updater struct {
 	cfg    Config
 	logger log.Log
 	fs     afero.Fs
-	client httpclient
+	client *http.Client
 	once   sync.Once
 	eg     errgroup.Group
 
@@ -123,7 +103,7 @@ func WithFilesystem(fs afero.Fs) Opt {
 	}
 }
 
-func WithHttpclient(c httpclient) Opt {
+func WithHttpClient(c *http.Client) Opt {
 	return func(u *Updater) {
 		u.client = c
 	}
@@ -134,7 +114,7 @@ func New(opts ...Opt) *Updater {
 		cfg:    DefaultConfig(),
 		logger: log.NewNop(),
 		fs:     afero.NewOsFs(),
-		client: client{},
+		client: &http.Client{},
 	}
 	for _, opt := range opts {
 		opt(u)
@@ -206,7 +186,7 @@ func (u *Updater) latestUpdateId() uint32 {
 
 func (u *Updater) DoIt(ctx context.Context) error {
 	logger := u.logger.WithContext(ctx)
-	verified, data, err := get(u.client, u.cfg, u.latestUpdateId())
+	verified, data, err := get(ctx, u.client, u.cfg, u.latestUpdateId())
 	if err != nil {
 		return err
 	}
@@ -240,8 +220,8 @@ func (u *Updater) updateAndNotify(ctx context.Context, verified *VerifiedUpdate)
 	return nil
 }
 
-func get(client httpclient, cfg Config, lastId uint32) (*VerifiedUpdate, []byte, error) {
-	resource, err := url.Parse(cfg.URI)
+func get(ctx context.Context, client *http.Client, cfg Config, lastId uint32) (*VerifiedUpdate, []byte, error) {
+	resource, err := url.Parse(cfg.URL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse bootstrap uri: %w", err)
 	}
@@ -249,9 +229,9 @@ func get(client httpclient, cfg Config, lastId uint32) (*VerifiedUpdate, []byte,
 		return nil, nil, fmt.Errorf("scheme not supported %v", resource.Scheme)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout)
+	ctx, cancel := context.WithTimeout(ctx, httpTimeout)
 	defer cancel()
-	data, err := client.Query(ctx, resource)
+	data, err := query(ctx, client, resource)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -260,6 +240,24 @@ func get(client httpclient, cfg Config, lastId uint32) (*VerifiedUpdate, []byte,
 		return nil, nil, err
 	}
 	return verified, data, nil
+}
+
+func query(ctx context.Context, client *http.Client, resource *url.URL) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, resource.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("create http request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("http get bootstrap file: %w", err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap read resonse: %w", err)
+	}
+	return data, nil
 }
 
 func validate(cfg Config, source string, data []byte, lastId uint32) (*VerifiedUpdate, error) {

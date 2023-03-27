@@ -2,13 +2,13 @@ package bootstrap_test
 
 import (
 	"context"
-	"net/url"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 
@@ -239,15 +239,19 @@ func TestPrune(t *testing.T) {
 	files, err := afero.ReadDir(fs, persistDir)
 	require.NoError(t, err)
 	require.Len(t, files, cfg.NumToKeep)
-	mockhttp := bootstrap.NewMockhttpclient(gomock.NewController(t))
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodGet, r.Method)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(update3))
+	}))
+	defer ts.Close()
+	cfg.URL = ts.URL
 	updater := bootstrap.New(
 		bootstrap.WithConfig(cfg),
 		bootstrap.WithLogger(logtest.New(t)),
 		bootstrap.WithFilesystem(fs),
-		bootstrap.WithHttpclient(mockhttp),
+		bootstrap.WithHttpClient(ts.Client()),
 	)
-	require.NoError(t, err)
-	mockhttp.EXPECT().Query(gomock.Any(), gomock.Any()).Return([]byte(update3), nil)
 	require.NoError(t, updater.DoIt(context.Background()))
 	files, err = afero.ReadDir(fs, persistDir)
 	require.NoError(t, err)
@@ -281,21 +285,25 @@ func TestManyUpdates(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 
+			ith := 0
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				require.Equal(t, http.MethodGet, r.Method)
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(tc.updates[ith]))
+				ith++
+			}))
+			defer ts.Close()
 			cfg := bootstrap.DefaultConfig()
+			cfg.URL = ts.URL
 			fs := afero.NewMemMapFs()
-			ctrl := gomock.NewController(t)
-			mockhttp := bootstrap.NewMockhttpclient(ctrl)
 			updater := bootstrap.New(
 				bootstrap.WithConfig(cfg),
 				bootstrap.WithLogger(logtest.New(t)),
 				bootstrap.WithFilesystem(fs),
-				bootstrap.WithHttpclient(mockhttp),
+				bootstrap.WithHttpClient(ts.Client()),
 			)
 			ch := updater.Subscribe()
-			expectedURL, err := url.Parse(bootstrap.DefaultURI)
-			require.NoError(t, err)
 			for i, update := range tc.updates {
-				mockhttp.EXPECT().Query(gomock.Any(), expectedURL).Return([]byte(update), nil)
 				require.NoError(t, updater.DoIt(context.Background()))
 				if tc.checkers[i] == nil {
 					require.Empty(t, ch)
@@ -394,17 +402,22 @@ func TestGetInvalidUpdate(t *testing.T) {
 			t.Parallel()
 
 			cfg := bootstrap.DefaultConfig()
-			ctrl := gomock.NewController(t)
 			fs := afero.NewMemMapFs()
-			mockhttp := bootstrap.NewMockhttpclient(ctrl)
 			path := filepath.Join(cfg.DataDir, bootstrap.DirName, "00001-2023-03-18T22-26-13")
 			require.NoError(t, afero.WriteFile(fs, path, []byte(update1), 0o400))
 
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				require.Equal(t, http.MethodGet, r.Method)
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(tc.update))
+			}))
+			defer ts.Close()
+			cfg.URL = ts.URL
 			updater := bootstrap.New(
 				bootstrap.WithConfig(cfg),
 				bootstrap.WithLogger(logtest.New(t)),
 				bootstrap.WithFilesystem(fs),
-				bootstrap.WithHttpclient(mockhttp),
+				bootstrap.WithHttpClient(ts.Client()),
 			)
 
 			ch := updater.Subscribe()
@@ -413,10 +426,6 @@ func TestGetInvalidUpdate(t *testing.T) {
 			got := <-ch
 			require.NotNil(t, got)
 			checkUpdate1(t, got)
-
-			expectedURL, err := url.Parse(bootstrap.DefaultURI)
-			require.NoError(t, err)
-			mockhttp.EXPECT().Query(gomock.Any(), expectedURL).Return([]byte(tc.update), nil)
 			require.ErrorIs(t, updater.DoIt(context.Background()), tc.err)
 		})
 	}
