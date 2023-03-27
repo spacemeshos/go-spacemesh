@@ -366,8 +366,7 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	builder, err := proc.initDefaultBuilder(s)
 	require.Nil(t, err)
 	require.True(t, NewSet(builder.inner.Values).Equals(s))
-	verifier := builder.msg.NodeID
-	require.Nil(t, verifier)
+	require.Equal(t, types.EmptyNodeID, builder.msg.NodeID)
 	require.Equal(t, builder.msg.Round, proc.getRound())
 	require.Equal(t, builder.inner.CommittedRound, proc.committedRound)
 	require.Equal(t, builder.msg.Layer, proc.layer)

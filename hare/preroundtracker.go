@@ -23,10 +23,10 @@ type preRoundTracker struct {
 	logger    log.Log
 	malCh     chan<- *types.MalfeasanceGossip
 	preRound  map[types.NodeID]*preroundData // maps PubKey->Set of already tracked Values
-	tracker   *RefCountTracker         // keeps track of seen Values
-	threshold int                      // the threshold to prove a value
-	bestVRF   uint32                   // the lowest VRF value seen in the round
-	coinflip  bool                     // the value of the weak coin (based on bestVRF)
+	tracker   *RefCountTracker               // keeps track of seen Values
+	threshold int                            // the threshold to prove a value
+	bestVRF   uint32                         // the lowest VRF value seen in the round
+	coinflip  bool                           // the value of the weak coin (based on bestVRF)
 	eTracker  *EligibilityTracker
 }
 
