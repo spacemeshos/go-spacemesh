@@ -51,7 +51,7 @@ type Proposal struct {
 }
 
 func (p Proposal) Equal(other Proposal) bool {
-	return cmp.Equal(p.InnerProposal, other.InnerProposal) && bytes.Equal(p.Signature, other.Signature)
+	return cmp.Equal(p.InnerProposal, other.InnerProposal) && p.Signature == other.Signature
 }
 
 // InnerProposal contains a smesher's content proposal for layer and its votes on the mesh history.

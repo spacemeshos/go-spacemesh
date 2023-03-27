@@ -65,7 +65,7 @@ func (b Ballot) Equal(other Ballot) bool {
 	if !cmp.Equal(other.InnerBallot, b.InnerBallot, cmpopts.EquateEmpty()) {
 		return false
 	}
-	if !bytes.Equal(other.Signature, b.Signature) {
+	if other.Signature != b.Signature {
 		return false
 	}
 	if !cmp.Equal(other.Votes, b.Votes) {
