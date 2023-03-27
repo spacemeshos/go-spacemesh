@@ -102,6 +102,9 @@ type BaseConfig struct {
 	// then we optimistically filter out infeasible transactions before constructing the block.
 	OptFilterThreshold int    `mapstructure:"optimistic-filtering-threshold"`
 	TickSize           uint64 `mapstructure:"tick-size"`
+
+	DatabaseConnections     int  `mapstructure:"db-connections"`
+	DatabaseLatencyMetering bool `mapstructure:"db-latency-metering"`
 }
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
@@ -164,6 +167,7 @@ func defaultBaseConfig() BaseConfig {
 		BlockGasLimit:       math.MaxUint64,
 		OptFilterThreshold:  90,
 		TickSize:            100,
+		DatabaseConnections: 16,
 	}
 }
 

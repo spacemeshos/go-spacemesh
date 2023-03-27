@@ -991,7 +991,10 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
 
-	sqlDB, err := sql.Open("file:" + filepath.Join(dbPath, "state.sql"))
+	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, "state.sql"),
+		sql.WithConnections(app.Config.DatabaseConnections),
+		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
+	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
