@@ -187,7 +187,12 @@ func (u *Updater) Start(ctx context.Context) {
 }
 
 func (u *Updater) Close() {
-	u.eg.Wait()
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	for _, ch := range u.subscribers {
+		close(ch)
+	}
+	_ = u.eg.Wait()
 }
 
 func (u *Updater) latestUpdateId() uint32 {

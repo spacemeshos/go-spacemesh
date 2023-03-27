@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/spf13/afero"
@@ -197,6 +198,35 @@ func TestLoad(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStartClose(t *testing.T) {
+	cfg := bootstrap.DefaultConfig()
+	fs := afero.NewMemMapFs()
+	persistDir := filepath.Join(cfg.DataDir, bootstrap.DirName)
+	require.NoError(t, afero.WriteFile(fs, bootstrap.PersistFilename(persistDir, uint32(1)), []byte(update1), 0o400))
+	updater := bootstrap.New(
+		bootstrap.WithConfig(cfg),
+		bootstrap.WithLogger(logtest.New(t)),
+		bootstrap.WithFilesystem(fs),
+	)
+	ch := updater.Subscribe()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	updater.Start(ctx)
+	t.Cleanup(updater.Close)
+
+	var got *bootstrap.VerifiedUpdate
+	require.Eventually(t, func() bool {
+		select {
+		case got = <-ch:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 100*time.Millisecond)
+	checkUpdate1(t, got)
+	cancel()
 }
 
 func TestPrune(t *testing.T) {
