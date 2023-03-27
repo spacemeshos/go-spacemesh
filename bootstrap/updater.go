@@ -235,35 +235,29 @@ func (u *Updater) updateAndNotify(ctx context.Context, verified *VerifiedUpdate)
 	return nil
 }
 
-func get(client httpclient, cfg Config, lastUpdate uint32) (*VerifiedUpdate, []byte, error) {
-	var (
-		data     []byte
-		err      error
-		resource *url.URL
-	)
-	resource, err = url.Parse(cfg.URI)
+func get(client httpclient, cfg Config, lastId uint32) (*VerifiedUpdate, []byte, error) {
+	resource, err := url.Parse(cfg.URI)
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse bootstrap uri: %w", err)
 	}
-	if resource.Scheme == "https" || resource.Scheme == "http" {
-		ctx, cancel := context.WithTimeout(context.Background(), httpTimeout)
-		defer cancel()
-		data, err = client.Query(ctx, resource)
-		if err != nil {
-			return nil, nil, err
-		}
-	} else {
+	if resource.Scheme != "https" && resource.Scheme != "http" {
 		return nil, nil, fmt.Errorf("scheme not supported %v", resource.Scheme)
 	}
 
-	verified, err := validate(cfg, resource.String(), data, lastUpdate)
+	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout)
+	defer cancel()
+	data, err := client.Query(ctx, resource)
+	if err != nil {
+		return nil, nil, err
+	}
+	verified, err := validate(cfg, resource.String(), data, lastId)
 	if err != nil {
 		return nil, nil, err
 	}
 	return verified, data, nil
 }
 
-func validate(cfg Config, source string, data []byte, lastUpdate uint32) (*VerifiedUpdate, error) {
+func validate(cfg Config, source string, data []byte, lastId uint32) (*VerifiedUpdate, error) {
 	if err := validateSchema(data); err != nil {
 		return nil, err
 	}
@@ -273,7 +267,7 @@ func validate(cfg Config, source string, data []byte, lastUpdate uint32) (*Verif
 		return nil, fmt.Errorf("unmarshal %s: %w", source, err)
 	}
 
-	verified, err := validateData(cfg, update, lastUpdate)
+	verified, err := validateData(cfg, update, lastId)
 	if err != nil {
 		return nil, err
 	}
@@ -295,11 +289,11 @@ func validateSchema(data []byte) error {
 	return nil
 }
 
-func validateData(cfg Config, update *Update, lastUpdateID uint32) (*VerifiedUpdate, error) {
+func validateData(cfg Config, update *Update, lastId uint32) (*VerifiedUpdate, error) {
 	if update.Version != cfg.Version {
 		return nil, fmt.Errorf("%w: expected %v, got %v", ErrWrongVersion, cfg.Version, update.Version)
 	}
-	if update.Data.ID <= lastUpdateID {
+	if update.Data.ID <= lastId {
 		return nil, nil
 	}
 
