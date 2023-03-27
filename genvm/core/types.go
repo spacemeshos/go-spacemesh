@@ -22,8 +22,8 @@ type (
 	Hash20 = types.Hash20
 	// Address is an alias to types.Address.
 	Address = types.Address
-	// Signature is an alias to types.Bytes64.
-	Signature = types.Bytes64
+	// Signature is an alias to types.EdSignature.
+	Signature = types.EdSignature
 
 	// Account is an alis to types.Account.
 	Account = types.Account
