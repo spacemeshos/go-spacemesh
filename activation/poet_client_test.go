@@ -6,11 +6,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/poet/config"
 	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api/v1"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
