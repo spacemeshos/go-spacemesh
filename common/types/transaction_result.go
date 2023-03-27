@@ -1,8 +1,6 @@
 package types
 
 import (
-	"github.com/spacemeshos/go-scale"
-
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -29,16 +27,6 @@ func (t TransactionStatus) String() string {
 		return "failure"
 	}
 	panic("unknown status")
-}
-
-// EncodeScale implements scale codec interface.
-func (t TransactionStatus) EncodeScale(e *scale.Encoder) (int, error) {
-	return scale.EncodeCompact8(e, uint8(t))
-}
-
-// DecodeScale implements scale codec interface.
-func (t TransactionStatus) DecodeScale(d *scale.Decoder) (uint8, int, error) {
-	return scale.DecodeCompact8(d)
 }
 
 // TransactionResult is created after consuming transaction.

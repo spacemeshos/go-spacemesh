@@ -65,6 +65,14 @@ func TestBallot_Initialize_BadMsgHash(t *testing.T) {
 	require.EqualError(t, err, "bad message hash")
 }
 
+func FuzzBallotIDConsistency(f *testing.F) {
+	tester.FuzzConsistency[types.BallotID](f)
+}
+
+func FuzzBallotIDSafety(f *testing.F) {
+	tester.FuzzSafety[types.BallotID](f)
+}
+
 func FuzzBallotConsistency(f *testing.F) {
 	tester.FuzzConsistency[types.Ballot](f)
 }
