@@ -46,7 +46,7 @@ func newPreRoundTracker(logger log.Log, mch chan<- *types.MalfeasanceGossip, et 
 func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	logger := pre.logger.WithContext(ctx)
 
-	nodeID := types.BytesToNodeID(msg.PubKey.Bytes())
+	nodeID := types.BytesToNodeID(msg.NodeID.Bytes())
 
 	// check for winning VRF
 	vrfHash := hash.Sum(msg.Eligibility.Proof)
@@ -69,7 +69,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	sToTrack := NewSet(msg.InnerMsg.Values) // assume track all Values
 	alreadyTracked := NewDefaultEmptySet()  // assume nothing tracked so far
 
-	if prev, exist := pre.preRound[string(msg.PubKey.Bytes())]; exist { // not first pre-round msg from this sender
+	if prev, exist := pre.preRound[string(msg.NodeID.Bytes())]; exist { // not first pre-round msg from this sender
 		if prev.InnerMsg.Layer == msg.Layer &&
 			prev.InnerMsg.Round == msg.Round &&
 			prev.InnerMsg.MsgHash != msg.MsgHash {
@@ -78,12 +78,12 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 				log.Object("prev", &prev.InnerMsg),
 				log.Object("curr", &msg.HareMetadata),
 			)
-			pre.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
+			pre.eTracker.Track(msg.NodeID.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			this := &types.HareProofMsg{
 				InnerMsg:  msg.HareMetadata,
 				Signature: msg.Signature,
 			}
-			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev.HareProofMsg, this, &msg.Eligibility, pre.malCh); err != nil {
+			if err := reportEquivocation(ctx, msg.NodeID.Bytes(), prev.HareProofMsg, this, &msg.Eligibility, pre.malCh); err != nil {
 				pre.logger.WithContext(ctx).With().Warning("failed to report equivocation in preround",
 					log.Stringer("smesher", nodeID),
 					log.Err(err))
@@ -94,17 +94,17 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		alreadyTracked = prev.Set         // update already tracked Values
 		sToTrack.Subtract(alreadyTracked) // subtract the already tracked Values
 	} else {
-		pre.preRound[string(msg.PubKey.Bytes())] = &preroundData{}
+		pre.preRound[string(msg.NodeID.Bytes())] = &preroundData{}
 	}
 
 	// record Values
 	for _, v := range sToTrack.ToSlice() {
-		pre.tracker.Track(v, msg.PubKey.Bytes())
+		pre.tracker.Track(v, msg.NodeID.Bytes())
 	}
 
 	// update the union to include new Values
-	pre.preRound[string(msg.PubKey.Bytes())].Set = alreadyTracked.Union(sToTrack)
-	pre.preRound[string(msg.PubKey.Bytes())].HareProofMsg = &types.HareProofMsg{
+	pre.preRound[string(msg.NodeID.Bytes())].Set = alreadyTracked.Union(sToTrack)
+	pre.preRound[string(msg.NodeID.Bytes())].HareProofMsg = &types.HareProofMsg{
 		InnerMsg:  msg.HareMetadata,
 		Signature: msg.Signature,
 	}

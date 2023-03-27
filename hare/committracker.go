@@ -59,22 +59,22 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
 		return
 	}
 
-	if prev, ok := ct.seenSenders[string(msg.PubKey.Bytes())]; ok {
+	if prev, ok := ct.seenSenders[string(msg.NodeID.Bytes())]; ok {
 		if prev.InnerMsg.Layer == msg.Layer &&
 			prev.InnerMsg.Round == msg.Round &&
 			prev.InnerMsg.MsgHash != msg.MsgHash {
-			nodeID := types.BytesToNodeID(msg.PubKey.Bytes())
+			nodeID := types.BytesToNodeID(msg.NodeID.Bytes())
 			ct.logger.WithContext(ctx).With().Warning("equivocation detected in commit round",
 				log.Stringer("smesher", nodeID),
 				log.Object("prev", &prev.InnerMsg),
 				log.Object("curr", &msg.HareMetadata),
 			)
-			ct.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
+			ct.eTracker.Track(msg.NodeID.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			this := &types.HareProofMsg{
 				InnerMsg:  msg.HareMetadata,
 				Signature: msg.Signature,
 			}
-			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev, this, &msg.Eligibility, ct.malCh); err != nil {
+			if err := reportEquivocation(ctx, msg.NodeID.Bytes(), prev, this, &msg.Eligibility, ct.malCh); err != nil {
 				ct.logger.WithContext(ctx).With().Warning("failed to report equivocation in commit round",
 					log.Stringer("smesher", nodeID),
 					log.Err(err))
@@ -83,7 +83,7 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
 		}
 		return
 	}
-	ct.seenSenders[string(msg.PubKey.Bytes())] = &types.HareProofMsg{
+	ct.seenSenders[string(msg.NodeID.Bytes())] = &types.HareProofMsg{
 		InnerMsg:  msg.HareMetadata,
 		Signature: msg.Signature,
 	}
@@ -95,7 +95,7 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
 
 	// add msg
 	ct.commits = append(ct.commits, msg.Message)
-	ct.committed[string(msg.PubKey.Bytes())] = struct{}{}
+	ct.committed[string(msg.NodeID.Bytes())] = struct{}{}
 }
 
 // HasEnoughCommits returns true if the tracker can build a certificate, false otherwise.

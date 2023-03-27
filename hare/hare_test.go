@@ -251,7 +251,7 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 								Round:   round,
 								MsgHash: types.RandomHash(),
 							},
-							Signature: types.RandomBytes(64),
+							Signature: types.RandomEdSignature(),
 						},
 						{
 							InnerMsg: types.HareMetadata{
@@ -259,7 +259,7 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 								Round:   round,
 								MsgHash: types.RandomHash(),
 							},
-							Signature: types.RandomBytes(64),
+							Signature: types.RandomEdSignature(),
 						},
 					},
 				},

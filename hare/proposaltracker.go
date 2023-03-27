@@ -41,15 +41,15 @@ func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Msg) {
 	}
 
 	// if same sender then we should check for equivocation
-	if pt.proposal.PubKey.Equals(msg.PubKey) {
+	if pt.proposal.NodeID == msg.NodeID {
 		s := NewSet(msg.InnerMsg.Values)
 		g := NewSet(pt.proposal.InnerMsg.Values)
 		if !s.Equals(g) { // equivocation detected
 			pt.logger.WithContext(ctx).With().Warning("equivocation detected in proposal round",
-				log.Stringer("smesher", types.BytesToNodeID(msg.PubKey.Bytes())),
+				log.Stringer("smesher", types.BytesToNodeID(msg.NodeID.Bytes())),
 				log.Stringer("prev", g),
 				log.Stringer("curr", s))
-			pt.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
+			pt.eTracker.Track(msg.NodeID.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			pt.isConflicting = true
 			prev := &types.HareProofMsg{
 				InnerMsg:  pt.proposal.HareMetadata,
@@ -59,9 +59,9 @@ func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Msg) {
 				InnerMsg:  msg.HareMetadata,
 				Signature: msg.Signature,
 			}
-			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev, this, &msg.Eligibility, pt.malCh); err != nil {
+			if err := reportEquivocation(ctx, msg.NodeID.Bytes(), prev, this, &msg.Eligibility, pt.malCh); err != nil {
 				pt.logger.WithContext(ctx).With().Warning("failed to report equivocation in proposal round",
-					log.Stringer("smesher", types.BytesToNodeID(msg.PubKey.Bytes())),
+					log.Stringer("smesher", types.BytesToNodeID(msg.NodeID.Bytes())),
 					log.Err(err))
 			}
 		}
@@ -86,15 +86,15 @@ func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Msg) {
 	}
 
 	// if same sender then we should check for equivocation
-	if pt.proposal.PubKey.Equals(msg.PubKey) {
+	if pt.proposal.NodeID == msg.NodeID {
 		s := NewSet(msg.InnerMsg.Values)
 		g := NewSet(pt.proposal.InnerMsg.Values)
 		if !s.Equals(g) { // equivocation detected
 			pt.logger.WithContext(ctx).With().Warning("equivocation detected in proposal round - late",
-				log.Stringer("smesher", types.BytesToNodeID(msg.PubKey.Bytes())),
+				log.Stringer("smesher", types.BytesToNodeID(msg.NodeID.Bytes())),
 				log.Stringer("prev", g),
 				log.Stringer("curr", s))
-			pt.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
+			pt.eTracker.Track(msg.NodeID.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			pt.isConflicting = true
 			prev := &types.HareProofMsg{
 				InnerMsg:  pt.proposal.HareMetadata,
@@ -104,9 +104,9 @@ func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Msg) {
 				InnerMsg:  msg.HareMetadata,
 				Signature: msg.Signature,
 			}
-			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev, this, &msg.Eligibility, pt.malCh); err != nil {
+			if err := reportEquivocation(ctx, msg.NodeID.Bytes(), prev, this, &msg.Eligibility, pt.malCh); err != nil {
 				pt.logger.WithContext(ctx).With().Warning("failed to report equivocation in proposal round - late",
-					log.Stringer("smesher", types.BytesToNodeID(msg.PubKey.Bytes())),
+					log.Stringer("smesher", types.BytesToNodeID(msg.NodeID.Bytes())),
 					log.Err(err))
 			}
 			pt.isConflicting = true
@@ -117,7 +117,7 @@ func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Msg) {
 	// lower ranked proposal on late proposal is a conflict
 	if bytes.Compare(msg.Eligibility.Proof, pt.proposal.Eligibility.Proof) < 0 {
 		pt.logger.WithContext(ctx).With().Warning("late lower rank detected",
-			log.String("id_malicious", msg.PubKey.String()))
+			log.String("id_malicious", msg.NodeID.String()))
 		pt.isConflicting = true
 	}
 }

@@ -194,7 +194,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	// validation passed, report
 	logger.With().Debug("broker reported hare message as valid")
 
-	nodeID := types.BytesToNodeID(iMsg.PubKey.Bytes())
+	nodeID := types.BytesToNodeID(iMsg.NodeID.Bytes())
 	if proof, err := b.msh.GetMalfeasanceProof(nodeID); err != nil && !errors.Is(err, sql.ErrNotFound) {
 		logger.With().Error("failed to check malicious identity",
 			log.Stringer("smesher", nodeID),
@@ -247,7 +247,7 @@ func (b *Broker) handleMaliciousHareMessage(
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       msg.Layer,
 			Round:       msg.Round,
-			PubKey:      msg.PubKey.Bytes(),
+			PubKey:      msg.NodeID.Bytes(),
 			Eligibility: msg.Eligibility,
 		},
 	}

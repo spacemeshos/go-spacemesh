@@ -175,7 +175,7 @@ func (t *FirstVotingMessage) EncodeScale(enc *scale.Encoder) (total int, err err
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 64)
+		n, err := scale.EncodeByteArray(enc, t.Signature[:])
 		if err != nil {
 			return total, err
 		}
@@ -193,12 +193,11 @@ func (t *FirstVotingMessage) DecodeScale(dec *scale.Decoder) (total int, err err
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 64)
+		n, err := scale.DecodeByteArray(dec, t.Signature[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Signature = field
 	}
 	return total, nil
 }
@@ -265,7 +264,7 @@ func (t *FollowingVotingMessage) EncodeScale(enc *scale.Encoder) (total int, err
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 64)
+		n, err := scale.EncodeByteArray(enc, t.Signature[:])
 		if err != nil {
 			return total, err
 		}
@@ -283,12 +282,11 @@ func (t *FollowingVotingMessage) DecodeScale(dec *scale.Decoder) (total int, err
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 64)
+		n, err := scale.DecodeByteArray(dec, t.Signature[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Signature = field
 	}
 	return total, nil
 }

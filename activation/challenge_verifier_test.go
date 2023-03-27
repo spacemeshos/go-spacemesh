@@ -81,7 +81,7 @@ func Test_SignatureVerification(t *testing.T) {
 	req.NoError(err)
 
 	verifier := activation.NewChallengeVerifier(atxProvider, extractor, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
-	_, err = verifier.Verify(context.Background(), challengeBytes, types.RandomBytes(32))
+	_, err = verifier.Verify(context.Background(), challengeBytes, types.RandomEdSignature())
 	req.ErrorIs(err, activation.ErrSignatureInvalid)
 }
 

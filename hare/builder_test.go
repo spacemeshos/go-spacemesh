@@ -26,7 +26,7 @@ func TestBuilder_TestBuild(t *testing.T) {
 	b := newMessageBuilder()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	msg := b.SetPubKey(signer.PublicKey()).SetLayer(instanceID1).Sign(signer).Build()
+	msg := b.SetNodeID(signer.NodeID()).SetLayer(instanceID1).Sign(signer).Build()
 
 	m := marshallUnmarshall(t, &msg.Message)
 	assert.Equal(t, m, &msg.Message)
@@ -50,7 +50,7 @@ func TestMessageBuilder_SetCertificate(t *testing.T) {
 	et := NewEligibilityTracker(1)
 	tr := newCommitTracker(logtest.New(t), commitRound, make(chan *types.MalfeasanceGossip), et, 1, 1, s)
 	m := BuildCommitMsg(signer, s)
-	et.Track(m.PubKey.Bytes(), m.Round, m.Eligibility.Count, true)
+	et.Track(m.NodeID.Bytes(), m.Round, m.Eligibility.Count, true)
 	tr.OnCommit(context.Background(), m)
 	cert := tr.BuildCertificate()
 	assert.NotNil(t, cert)
@@ -63,7 +63,7 @@ func TestMessageFromBuffer(t *testing.T) {
 	b := newMessageBuilder()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	msg := b.SetPubKey(signer.PublicKey()).SetLayer(instanceID1).Sign(signer).Build().Message
+	msg := b.SetNodeID(signer.NodeID()).SetLayer(instanceID1).Sign(signer).Build().Message
 
 	buf, err := codec.Encode(&msg)
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestMessageFromBuffer_BadMsgHash(t *testing.T) {
 	b := newMessageBuilder()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	msg := b.SetPubKey(signer.PublicKey()).SetLayer(instanceID1).Sign(signer).Build().Message
+	msg := b.SetNodeID(signer.NodeID()).SetLayer(instanceID1).Sign(signer).Build().Message
 	msg.MsgHash = types.RandomHash()
 
 	buf, err := codec.Encode(&msg)

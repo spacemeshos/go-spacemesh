@@ -47,7 +47,7 @@ func createMessage(tb testing.TB, instanceID types.LayerID) []byte {
 	sr, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	b := newMessageBuilder()
-	msg := b.SetPubKey(sr.PublicKey()).SetLayer(instanceID).Sign(sr).Build()
+	msg := b.SetNodeID(sr.NodeID()).SetLayer(instanceID).Sign(sr).Build()
 	return mustEncode(tb, msg.Message)
 }
 
@@ -511,7 +511,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 		case msg := <-inbox:
 			inMsg, ok := msg.(*Msg)
 			require.True(t, ok)
-			assert.True(t, signer.PublicKey().Equals(inMsg.PubKey))
+			assert.Equal(t, signer.NodeID(), inMsg.NodeID)
 			return
 		case <-tm.C:
 			t.Error("Timeout")

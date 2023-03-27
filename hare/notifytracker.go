@@ -42,8 +42,8 @@ func newNotifyTracker(
 // OnNotify tracks the provided notification message.
 // Returns true if the InnerMsg didn't affect the state, false otherwise.
 func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Msg) bool {
-	nodeID := types.BytesToNodeID(msg.PubKey.Bytes())
-	if prev, exist := nt.notifies[string(msg.PubKey.Bytes())]; exist { // already seenSenders
+	nodeID := types.BytesToNodeID(msg.NodeID.Bytes())
+	if prev, exist := nt.notifies[string(msg.NodeID.Bytes())]; exist { // already seenSenders
 		if prev.InnerMsg.Layer == msg.Layer &&
 			prev.InnerMsg.Round == msg.Round &&
 			prev.InnerMsg.MsgHash != msg.MsgHash {
@@ -52,12 +52,12 @@ func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Msg) bool {
 				log.Object("prev", &prev.InnerMsg),
 				log.Object("curr", &msg.HareMetadata),
 			)
-			nt.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
+			nt.eTracker.Track(msg.NodeID.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			this := &types.HareProofMsg{
 				InnerMsg:  msg.HareMetadata,
 				Signature: msg.Signature,
 			}
-			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev, this, &msg.Eligibility, nt.malCh); err != nil {
+			if err := reportEquivocation(ctx, msg.NodeID.Bytes(), prev, this, &msg.Eligibility, nt.malCh); err != nil {
 				nt.logger.WithContext(ctx).With().Warning("failed to report equivocation in notify round",
 					log.Stringer("smesher", nodeID),
 					log.Err(err))
@@ -67,7 +67,7 @@ func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Msg) bool {
 	}
 
 	// keep msg for pub
-	nt.notifies[string(msg.PubKey.Bytes())] = &types.HareProofMsg{
+	nt.notifies[string(msg.NodeID.Bytes())] = &types.HareProofMsg{
 		InnerMsg:  msg.HareMetadata,
 		Signature: msg.Signature,
 	}
@@ -75,7 +75,7 @@ func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Msg) bool {
 	// track that set
 	s := NewSet(msg.InnerMsg.Values)
 	nt.onCertificate(msg.InnerMsg.Cert.AggMsgs.Messages[0].Round, s)
-	nt.tracker.Track(s.ID(), msg.PubKey.Bytes())
+	nt.tracker.Track(s.ID(), msg.NodeID.Bytes())
 	return false
 }
 

@@ -123,7 +123,7 @@ func Add(db sql.Executor, proposal *types.Proposal) error {
 		stmt.BindInt64(3, int64(proposal.Layer.Uint32()))
 		stmt.BindBytes(4, txIDsBytes)
 		stmt.BindBytes(5, proposal.MeshHash.Bytes())
-		stmt.BindBytes(6, proposal.Signature)
+		stmt.BindBytes(6, proposal.Signature.Bytes())
 		stmt.BindBytes(7, encodedProposal)
 	}
 
@@ -165,8 +165,8 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 
 	meshBytes := make([]byte, stmt.ColumnLen(6))
 	stmt.ColumnBytes(6, meshBytes)
-	signature := make([]byte, stmt.ColumnLen(7))
-	stmt.ColumnBytes(7, signature)
+	signature := types.EdSignature{}
+	stmt.ColumnBytes(7, signature[:])
 
 	txIDs, err := codec.DecodeSlice[types.TransactionID](txIDsBytes)
 	if err != nil {

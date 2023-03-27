@@ -135,7 +135,7 @@ func (mct *mockCommitTracker) BuildCertificate() *Certificate {
 }
 
 func buildMessage(msg Message) *Msg {
-	return &Msg{Message: msg, PubKey: nil}
+	return &Msg{Message: msg, NodeID: types.EmptyNodeID}
 }
 
 type testBroker struct {
@@ -366,7 +366,7 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	builder, err := proc.initDefaultBuilder(s)
 	require.Nil(t, err)
 	require.True(t, NewSet(builder.inner.Values).Equals(s))
-	verifier := builder.msg.PubKey
+	verifier := builder.msg.NodeID
 	require.Nil(t, verifier)
 	require.Equal(t, builder.msg.Round, proc.getRound())
 	require.Equal(t, builder.inner.CommittedRound, proc.committedRound)
@@ -535,7 +535,7 @@ func TestConsensusProcess_Termination(t *testing.T) {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		m := BuildNotifyMsg(signer, s)
-		proc.eTracker.Track(m.PubKey.Bytes(), m.Round, m.Eligibility.Count, true)
+		proc.eTracker.Track(m.NodeID.Bytes(), m.Round, m.Eligibility.Count, true)
 		proc.processNotifyMsg(context.Background(), m)
 	}
 
@@ -647,7 +647,7 @@ func TestConsensusProcess_beginProposalRound(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildStatusMsg(signer, s)
-	proc.eTracker.Track(m.PubKey.Bytes(), m.Round, m.Eligibility.Count, true)
+	proc.eTracker.Track(m.NodeID.Bytes(), m.Round, m.Eligibility.Count, true)
 	statusTracker.RecordStatus(context.Background(), m)
 	statusTracker.AnalyzeStatusMessages(func(*Msg) bool { return true })
 	proc.statusesTracker = statusTracker

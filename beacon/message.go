@@ -44,7 +44,7 @@ type FirstVotingMessageBody struct {
 // FirstVotingMessage is a message type which is used when sending first voting messages.
 type FirstVotingMessage struct {
 	FirstVotingMessageBody
-	Signature []byte `scale:"max=64"`
+	Signature types.EdSignature
 }
 
 // FollowingVotingMessageBody is FollowingVotingMessage without a signature.
@@ -57,5 +57,5 @@ type FollowingVotingMessageBody struct {
 // FollowingVotingMessage is a message type which is used when sending following voting messages.
 type FollowingVotingMessage struct {
 	FollowingVotingMessageBody
-	Signature []byte `scale:"max=64"`
+	Signature types.EdSignature
 }

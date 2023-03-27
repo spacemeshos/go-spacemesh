@@ -46,22 +46,22 @@ func RandomTXSet(size int) []TransactionID {
 
 // RandomATXID generates a random ATXID for testing.
 func RandomATXID() ATXID {
-	b := make([]byte, ATXIDSize)
-	_, err := rand.Read(b)
+	var b [ATXIDSize]byte
+	_, err := rand.Read(b[:])
 	if err != nil {
 		return *EmptyATXID
 	}
-	return ATXID(CalcHash32(b))
+	return ATXID(b)
 }
 
 // RandomNodeID generates a random NodeID for testing.
 func RandomNodeID() NodeID {
-	b := make([]byte, NodeIDSize)
-	_, err := rand.Read(b)
+	var b [NodeIDSize]byte
+	_, err := rand.Read(b[:])
 	if err != nil {
 		return EmptyNodeID
 	}
-	return NodeID(CalcHash32(b))
+	return NodeID(b)
 }
 
 // RandomBallotID generates a random BallotID for testing.
@@ -91,12 +91,12 @@ func RandomBlockID() BlockID {
 
 // RandomTransactionID generates a random TransactionID for testing.
 func RandomTransactionID() TransactionID {
-	b := make([]byte, TransactionIDSize)
-	_, err := rand.Read(b)
+	var b [TransactionIDSize]byte
+	_, err := rand.Read(b[:])
 	if err != nil {
 		return TransactionID{}
 	}
-	return TransactionID(CalcHash32(b))
+	return TransactionID(b)
 }
 
 // RandomBallot generates a Ballot with random content for testing.
@@ -114,4 +114,14 @@ func RandomBallot() *Ballot {
 			Support: []Vote{{ID: RandomBlockID()}, {ID: RandomBlockID()}},
 		},
 	}
+}
+
+// RandomEdSignature generates a random EdSignature for testing.
+func RandomEdSignature() EdSignature {
+	var b [EdSignatureSize]byte
+	_, err := rand.Read(b[:])
+	if err != nil {
+		return EdSignature{}
+	}
+	return EdSignature(b)
 }

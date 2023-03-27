@@ -405,9 +405,7 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 		return types.EmptyNodeID, fmt.Errorf("[round %v] recover ID from signature %x: %w", round, m.Signature, err)
 	}
 
-	nodeID := types.BytesToNodeID(minerID.Bytes())
-	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, round, log.Stringer("smesher", nodeID))
-
+	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, round, log.Stringer("smesher", minerID))
 	if err := pd.registerVoted(logger, m.EpochID, minerID, m.RoundID); err != nil {
 		return types.EmptyNodeID, err
 	}

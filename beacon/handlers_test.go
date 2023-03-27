@@ -120,12 +120,10 @@ func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-	sig := signer.Sign(signing.BEACON, encoded)
+	msg.Signature = signer.Sign(signing.BEACON, encoded)
 
 	if corruptSignature {
-		msg.Signature = sig[1:]
-	} else {
-		msg.Signature = sig
+		msg.Signature = types.RandomEdSignature()
 	}
 	return msg
 }
@@ -158,11 +156,9 @@ func createFollowingVote(t *testing.T, signer *signing.EdSigner, epoch types.Epo
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-	sig := signer.Sign(signing.BEACON, encoded)
+	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	if corruptSignature {
-		msg.Signature = sig[1:]
-	} else {
-		msg.Signature = sig
+		msg.Signature = types.RandomEdSignature()
 	}
 	return msg
 }

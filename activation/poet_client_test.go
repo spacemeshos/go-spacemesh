@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/poet/config"
 	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api/v1"
 	"github.com/stretchr/testify/require"
@@ -56,7 +57,7 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
-	_, err = client.Submit(context.Background(), nil, nil)
+	_, err = client.Submit(context.Background(), nil, types.EmptyEdSignature)
 	require.NoError(t, err)
 }
 

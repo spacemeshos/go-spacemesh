@@ -76,10 +76,10 @@ type State struct {
 }
 
 // Msg is the wrapper of the protocol's message.
-// Messages are sent as type Message. Upon receiving, the public key is added to this wrapper (public key extraction).
+// Messages are sent as type Message. Upon receiving, the NodeID is added to this wrapper (public key extraction).
 type Msg struct {
 	Message
-	PubKey *signing.PublicKey
+	NodeID types.NodeID
 }
 
 // Bytes returns the message as bytes (without the public key).
@@ -118,7 +118,7 @@ func newMsg(ctx context.Context, logger log.Log, nodeId types.NodeID, hareMsg Me
 		return nil, errors.New("inactive identity")
 	}
 
-	msg := &Msg{Message: hareMsg, PubKey: signing.NewPublicKey(nodeId.Bytes())}
+	msg := &Msg{Message: hareMsg, NodeID: nodeId}
 
 	return msg, nil
 }
@@ -426,15 +426,15 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 		return
 	}
 
-	if m.PubKey == nil {
+	if m.NodeID == types.EmptyNodeID {
 		logger.Error("onEarlyMessage called with nil pub key")
 		return
 	}
 
-	pub := m.PubKey
+	pub := m.NodeID
 	if _, exist := proc.pending[pub.String()]; exist { // ignore, already received
 		logger.With().Warning("already received message from sender",
-			log.Stringer("smesher", types.BytesToNodeID(m.PubKey.Bytes())),
+			log.Stringer("smesher", types.BytesToNodeID(m.NodeID.Bytes())),
 		)
 		return
 	}
@@ -446,7 +446,7 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	logger := proc.WithContext(ctx).WithFields(
 		log.String("msg_type", m.InnerMsg.Type.String()),
-		log.Stringer("smesher", types.BytesToNodeID(m.PubKey.Bytes())),
+		log.Stringer("smesher", types.BytesToNodeID(m.NodeID.Bytes())),
 		log.Uint32("current_round", proc.getRound()),
 		log.Uint32("msg_round", m.Round),
 		proc.layer)
@@ -454,7 +454,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	// Note: instanceID is already verified by the broker
 	logger.Debug("consensus process received message")
 	// broker already validated the eligibility of this message
-	proc.eTracker.Track(m.PubKey.Bytes(), m.Round, m.Eligibility.Count, true)
+	proc.eTracker.Track(m.NodeID.Bytes(), m.Round, m.Eligibility.Count, true)
 
 	// validate context
 	if err := proc.validator.ContextuallyValidateMessage(ctx, m, proc.getRound()); err != nil {
@@ -515,7 +515,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 		proc.WithContext(ctx).With().Warning("unknown message type",
 			proc.layer,
 			log.String("msg_type", m.InnerMsg.Type.String()),
-			log.Stringer("smesher", types.BytesToNodeID(m.PubKey.Bytes())),
+			log.Stringer("smesher", types.BytesToNodeID(m.NodeID.Bytes())),
 		)
 	}
 }
@@ -824,7 +824,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 
 	if ignored := proc.notifyTracker.OnNotify(ctx, msg); ignored {
 		proc.WithContext(ctx).With().Warning("ignoring notification",
-			log.Stringer("smesher", types.BytesToNodeID(msg.PubKey.Bytes())),
+			log.Stringer("smesher", types.BytesToNodeID(msg.NodeID.Bytes())),
 		)
 		return
 	}

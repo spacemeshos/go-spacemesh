@@ -36,8 +36,8 @@ func newStatusTracker(logger log.Log, round uint32, mch chan<- *types.Malfeasanc
 
 // RecordStatus records the given status message.
 func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
-	nodeID := types.BytesToNodeID(msg.PubKey.Bytes())
-	if prev, exist := st.statuses[string(msg.PubKey.Bytes())]; exist { // already handled this sender's status msg
+	nodeID := types.BytesToNodeID(msg.NodeID.Bytes())
+	if prev, exist := st.statuses[string(msg.NodeID.Bytes())]; exist { // already handled this sender's status msg
 		if prev.Layer == msg.Layer &&
 			prev.Round == msg.Round &&
 			prev.MsgHash != msg.MsgHash {
@@ -46,7 +46,7 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 				log.Object("prev", prev),
 				log.Object("curr", &msg.HareMetadata),
 			)
-			st.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
+			st.eTracker.Track(msg.NodeID.Bytes(), msg.Round, msg.Eligibility.Count, false)
 			old := &types.HareProofMsg{
 				InnerMsg:  prev.HareMetadata,
 				Signature: prev.Signature,
@@ -55,7 +55,7 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 				InnerMsg:  msg.HareMetadata,
 				Signature: msg.Signature,
 			}
-			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), old, this, &msg.Eligibility, st.malCh); err != nil {
+			if err := reportEquivocation(ctx, msg.NodeID.Bytes(), old, this, &msg.Eligibility, st.malCh); err != nil {
 				st.logger.WithContext(ctx).With().Warning("failed to report equivocation in status round",
 					log.Stringer("smesher", nodeID),
 					log.Err(err))
@@ -67,7 +67,7 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 		return
 	}
 
-	st.statuses[string(msg.PubKey.Bytes())] = msg
+	st.statuses[string(msg.NodeID.Bytes())] = msg
 }
 
 // AnalyzeStatusMessages analyzes the recorded status messages by the validation function.

@@ -241,7 +241,7 @@ func TestBallot_MalformedData(t *testing.T) {
 func TestBallot_BadSignature(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
-	b.Signature = []byte("whatever")
+	b.Signature = types.RandomEdSignature()
 	data := encodeBallot(t, b)
 	got := th.HandleSyncedBallot(context.Background(), p2p.NoPeer, data)
 	require.ErrorContains(t, got, "bad signature format")
@@ -830,7 +830,7 @@ func TestProposal_MalformedData(t *testing.T) {
 func TestProposal_BadSignature(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
-	p.Signature = []byte("whatever")
+	p.Signature = types.RandomEdSignature()
 	data := encodeProposal(t, p)
 	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
 	require.ErrorContains(t, got, "bad signature format")

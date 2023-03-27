@@ -243,7 +243,7 @@ type ActivationTx struct {
 	InnerActivationTx
 	ATXMetadata
 	// signature over ATXMetadata
-	Signature []byte `scale:"max=64"`
+	Signature EdSignature
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
@@ -325,7 +325,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
 func (atx *ActivationTx) CalcAndSetID() error {
-	if atx.Signature == nil {
+	if atx.Signature == EmptyEdSignature {
 		return fmt.Errorf("cannot calculate ATX ID: sig is nil")
 	}
 

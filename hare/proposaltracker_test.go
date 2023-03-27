@@ -15,7 +15,7 @@ func buildProposalMsg(sig *signing.EdSigner, s *Set, signature []byte) *Msg {
 	builder := newMessageBuilder().SetRoleProof(signature)
 	builder.SetType(proposal).SetLayer(instanceID1).SetRoundCounter(proposalRound).SetCommittedRound(ki).SetValues(s).SetSVP(buildSVP(ki, NewSetFromValues(types.ProposalID{1})))
 	builder.SetEligibilityCount(1)
-	return builder.SetPubKey(sig.PublicKey()).Sign(sig).Build()
+	return builder.SetNodeID(sig.NodeID()).Sign(sig).Build()
 }
 
 func BuildProposalMsg(sig *signing.EdSigner, s *Set) *Msg {
@@ -60,14 +60,14 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			PubKey:      m2.PubKey.Bytes(),
+			PubKey:      m2.NodeID.Bytes(),
 			Eligibility: m2.Eligibility,
 		},
 	}
 	gossip := <-mch
 	require.Equal(t, expected, *gossip)
 	tracker.eTracker.ForEach(proposalRound, func(s string, cred *Cred) {
-		require.Equal(t, string(m1.PubKey.Bytes()), s)
+		require.Equal(t, string(m1.NodeID.Bytes()), s)
 		require.False(t, cred.Honest)
 		require.EqualValues(t, 1, cred.Count)
 	})
@@ -127,14 +127,14 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			PubKey:      m2.PubKey.Bytes(),
+			PubKey:      m2.NodeID.Bytes(),
 			Eligibility: m2.Eligibility,
 		},
 	}
 	gossip := <-mch
 	require.Equal(t, expected, *gossip)
 	tracker.eTracker.ForEach(proposalRound, func(s string, cred *Cred) {
-		require.Equal(t, string(m1.PubKey.Bytes()), s)
+		require.Equal(t, string(m1.NodeID.Bytes()), s)
 		require.False(t, cred.Honest)
 		require.EqualValues(t, 1, cred.Count)
 	})
@@ -193,14 +193,14 @@ func TestProposalTracker_ProposedSet(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			PubKey:      m2.PubKey.Bytes(),
+			PubKey:      m2.NodeID.Bytes(),
 			Eligibility: m2.Eligibility,
 		},
 	}
 	gossip := <-mch
 	require.Equal(t, expected, *gossip)
 	tracker.eTracker.ForEach(proposalRound, func(s string, cred *Cred) {
-		require.Equal(t, string(m1.PubKey.Bytes()), s)
+		require.Equal(t, string(m1.NodeID.Bytes()), s)
 		require.False(t, cred.Honest)
 		require.EqualValues(t, 1, cred.Count)
 	})
