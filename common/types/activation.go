@@ -508,6 +508,10 @@ func (proofMessage *PoetProofMessage) Ref() (PoetProofRef, error) {
 
 type RoundEnd time.Time
 
+func (re RoundEnd) Equal(other RoundEnd) bool {
+	return (time.Time)(re).Equal((time.Time)(other))
+}
+
 func (re *RoundEnd) IntoTime() time.Time {
 	return (time.Time)(*re)
 }
