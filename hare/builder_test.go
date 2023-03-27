@@ -50,7 +50,7 @@ func TestMessageBuilder_SetCertificate(t *testing.T) {
 	et := NewEligibilityTracker(1)
 	tr := newCommitTracker(logtest.New(t), commitRound, make(chan *types.MalfeasanceGossip), et, 1, 1, s)
 	m := BuildCommitMsg(signer, s)
-	et.Track(m.NodeID.Bytes(), m.Round, m.Eligibility.Count, true)
+	et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
 	tr.OnCommit(context.Background(), m)
 	cert := tr.BuildCertificate()
 	assert.NotNil(t, cert)

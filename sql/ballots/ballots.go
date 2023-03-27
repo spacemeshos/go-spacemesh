@@ -12,13 +12,12 @@ import (
 )
 
 func decodeBallot(id types.BallotID, pubkey, body *bytes.Reader, malicious bool) (*types.Ballot, error) {
-	size := pubkey.Len()
-	pubkeyBytes := make([]byte, size)
-	if n, err := pubkey.Read(pubkeyBytes); err != nil {
+	var nodeID types.NodeID
+	if n, err := pubkey.Read(nodeID[:]); err != nil {
 		if err != io.EOF {
 			return nil, fmt.Errorf("copy pubkey: %w", err)
 		}
-	} else if n != size {
+	} else if n != types.NodeIDSize {
 		return nil, errors.New("public key data missing")
 	}
 	ballot := types.Ballot{}
@@ -30,7 +29,7 @@ func decodeBallot(id types.BallotID, pubkey, body *bytes.Reader, malicious bool)
 		return nil, errors.New("ballot data missing")
 	}
 	ballot.SetID(id)
-	ballot.SetSmesherID(types.BytesToNodeID(pubkeyBytes))
+	ballot.SetSmesherID(nodeID)
 	if malicious {
 		ballot.SetMalicious()
 	}

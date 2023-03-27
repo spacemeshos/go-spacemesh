@@ -1,7 +1,6 @@
 package proposals
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -135,8 +134,8 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		return false, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
 			errTargetEpochMismatch, targetEpoch, epoch)
 	}
-	if pub := ballot.SmesherID(); !bytes.Equal(owned.NodeID.Bytes(), pub.Bytes()) {
-		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), owned.NodeID)
+	if ballot.SmesherID() != owned.NodeID {
+		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, ballot.SmesherID().String(), owned.NodeID)
 	}
 
 	atxWeight = owned.GetWeight()

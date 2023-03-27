@@ -214,8 +214,7 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 		return fmt.Errorf("[proposal] verify VRF (miner ID %v): %w", minerID, errVRFNotVerified)
 	}
 
-	vrfPK := signing.NewPublicKey(m.NodeID.Bytes())
-	if err = pd.registerProposed(logger, m.EpochID, vrfPK); err != nil {
+	if err = pd.registerProposed(logger, m.EpochID, m.NodeID); err != nil {
 		logger.With().Warning("[proposal] failed to register miner proposed", log.Err(err))
 		return fmt.Errorf("[proposal] register proposal (miner ID %v): %w", minerID, err)
 	}
@@ -501,13 +500,13 @@ func (pd *ProtocolDriver) isVoteTimely(m *FollowingVotingMessage, receivedTime t
 	return false
 }
 
-func (pd *ProtocolDriver) registerProposed(logger log.Log, epoch types.EpochID, minerPK *signing.PublicKey) error {
+func (pd *ProtocolDriver) registerProposed(logger log.Log, epoch types.EpochID, nodeID types.NodeID) error {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	if _, ok := pd.states[epoch]; !ok {
 		return errEpochNotActive
 	}
-	return pd.states[epoch].registerProposed(logger, minerPK)
+	return pd.states[epoch].registerProposed(logger, nodeID)
 }
 
 func (pd *ProtocolDriver) registerVoted(logger log.Log, epoch types.EpochID, minerID types.NodeID, round types.RoundID) error {

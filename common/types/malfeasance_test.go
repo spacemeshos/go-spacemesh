@@ -143,7 +143,7 @@ func TestCodec_MalfeasanceGossip(t *testing.T) {
 	gossip.Eligibility = &types.HareEligibilityGossip{
 		Layer:  lid,
 		Round:  round,
-		PubKey: types.RandomBytes(32),
+		NodeID: types.RandomNodeID(),
 		Eligibility: types.HareEligibility{
 			Proof: []byte{1, 2, 3},
 			Count: 12,

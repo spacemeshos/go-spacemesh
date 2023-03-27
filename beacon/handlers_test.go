@@ -84,12 +84,12 @@ func setEarliestProposalTime(pd *ProtocolDriver, t time.Time) {
 	pd.earliestProposalTime = t
 }
 
-func checkProposed(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, minerPK *signing.PublicKey, expected bool) {
+func checkProposed(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, nodeID types.NodeID, expected bool) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
 	if _, ok := pd.states[epoch]; ok {
-		_, proposed := pd.states[epoch].hasProposed[string(minerPK.Bytes())]
+		_, proposed := pd.states[epoch].hasProposed[nodeID]
 		require.Equal(t, expected, proposed)
 	} else {
 		require.False(t, expected)
@@ -254,7 +254,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 	copy(p1[:], msg1.VRFSignature)
 	var p2 Proposal
 	copy(p2[:], msg2.VRFSignature)
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner1.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner1.NodeID(), true)
 	expectedProposals := proposals{
 		valid:            proposalSet{p1: struct{}{}},
 		potentiallyValid: proposalSet{p2: struct{}{}},
@@ -282,7 +282,7 @@ func Test_HandleProposal_Shutdown(t *testing.T) {
 	res := tpd.HandleProposal(context.Background(), "peerID", msgBytes)
 	require.Equal(t, pubsub.ValidationIgnore, res)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 }
 
@@ -319,7 +319,7 @@ func Test_HandleProposal_NotInProtocolStillWorks(t *testing.T) {
 
 	var p Proposal
 	copy(p[:], msg.VRFSignature)
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), true)
 	expectedProposals := proposals{
 		valid: proposalSet{p: struct{}{}},
 	}
@@ -342,7 +342,7 @@ func Test_handleProposal_Corrupted(t *testing.T) {
 	got := tpd.handleProposal(context.Background(), "peerID", msg, time.Now())
 	require.ErrorIs(t, got, errMalformedMessage)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 }
 
@@ -366,7 +366,7 @@ func Test_handleProposal_EpochTooOld(t *testing.T) {
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.ErrorIs(t, got, errUntimelyMessage)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 }
 
@@ -403,13 +403,13 @@ func Test_handleProposal_NextEpoch(t *testing.T) {
 	require.NoError(t, got)
 
 	// nothing added to the current epoch
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 
 	// proposal added to the next epoch
 	var p Proposal
 	copy(p[:], msg.VRFSignature)
-	checkProposed(t, tpd.ProtocolDriver, nextEpoch, vrfSigner.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, nextEpoch, vrfSigner.NodeID(), true)
 	expectedProposals := proposals{
 		valid: proposalSet{p: struct{}{}},
 	}
@@ -440,11 +440,11 @@ func Test_handleProposal_NextEpochTooEarly(t *testing.T) {
 	require.ErrorIs(t, got, errUntimelyMessage)
 
 	// nothing added to the current epoch
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 
 	// proposal added to the next epoch
-	checkProposed(t, tpd.ProtocolDriver, nextEpoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, nextEpoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, nextEpoch, proposals{})
 }
 
@@ -468,7 +468,7 @@ func Test_handleProposal_EpochTooFarAhead(t *testing.T) {
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.ErrorIs(t, got, errUntimelyMessage)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 }
 
@@ -503,7 +503,7 @@ func Test_handleProposal_BadVrfSignature(t *testing.T) {
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.ErrorIs(t, got, errVRFNotVerified)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 }
 
@@ -537,7 +537,7 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes1, time.Now())
 	require.NoError(t, got)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), true)
 	var p Proposal
 	copy(p[:], msg1.VRFSignature)
 	expectedProposals := proposals{
@@ -554,7 +554,7 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 	got = tpd.handleProposal(context.Background(), "peerID", msgBytes2, time.Now())
 	require.ErrorIs(t, got, errAlreadyProposed)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), true)
 	checkProposals(t, tpd.ProtocolDriver, epoch, expectedProposals)
 }
 
@@ -592,7 +592,7 @@ func Test_handleProposal_PotentiallyValid_Timing(t *testing.T) {
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.NoError(t, got)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, signer.NodeID(), true)
 	checkProposals(t, tpd.ProtocolDriver, epoch, expectedProposals)
 }
 
@@ -631,7 +631,7 @@ func Test_handleProposal_PotentiallyValid_Threshold(t *testing.T) {
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.NoError(t, got)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, signer.NodeID(), true)
 	checkProposals(t, tpd.ProtocolDriver, epoch, expectedProposals)
 }
 
@@ -663,7 +663,7 @@ func Test_handleProposal_Invalid_Timing(t *testing.T) {
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.NoError(t, got)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, signer.NodeID(), true)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 }
 
@@ -697,7 +697,7 @@ func Test_handleProposal_Invalid_threshold(t *testing.T) {
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.NoError(t, got)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, signer.NodeID(), true)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 }
 
@@ -731,7 +731,7 @@ func Test_handleProposal_MinerMissingATX(t *testing.T) {
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.ErrorIs(t, got, errMinerNotActive)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 
 	id := createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10, epochStart.Add(tpd.config.GracePeriodDuration))
@@ -743,7 +743,7 @@ func Test_handleProposal_MinerMissingATX(t *testing.T) {
 	mockChecker.EXPECT().PassThreshold(gomock.Any()).Return(true)
 	got = tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.NoError(t, got)
-	checkProposed(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, signer.NodeID(), true)
 	checkProposals(t, tpd.ProtocolDriver, epoch, expectedProposals)
 }
 

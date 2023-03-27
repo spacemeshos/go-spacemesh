@@ -1,7 +1,6 @@
 package weakcoin_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -396,7 +395,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	mockAllowance := weakcoin.NewMockallowance(gomock.NewController(t))
 	mockAllowance.EXPECT().MinerAllowance(epoch, gomock.Any()).DoAndReturn(
 		func(_ types.EpochID, miner types.NodeID) uint32 {
-			if bytes.Equal(miner.Bytes(), signer.PublicKey().Bytes()) {
+			if miner == signer.NodeID() {
 				return 1
 			}
 			return 0

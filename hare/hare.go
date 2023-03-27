@@ -574,16 +574,15 @@ func (h *Hare) malfeasanceLoop(ctx context.Context) {
 			if gossip.Eligibility == nil {
 				h.WithContext(ctx).Fatal("missing hare eligibility")
 			}
-			nodeID := types.BytesToNodeID(gossip.Eligibility.PubKey)
-			logger := h.WithContext(ctx).WithFields(nodeID)
-			if malicious, err := h.msh.IsMalicious(nodeID); err != nil {
+			logger := h.WithContext(ctx).WithFields(gossip.Eligibility.NodeID)
+			if malicious, err := h.msh.IsMalicious(gossip.Eligibility.NodeID); err != nil {
 				logger.With().Error("failed to check identity", log.Err(err))
 				continue
 			} else if malicious {
 				logger.Debug("known malicious identity")
 				continue
 			}
-			if err := h.msh.AddMalfeasanceProof(nodeID, &gossip.MalfeasanceProof, nil); err != nil {
+			if err := h.msh.AddMalfeasanceProof(gossip.Eligibility.NodeID, &gossip.MalfeasanceProof, nil); err != nil {
 				logger.With().Error("failed to save MalfeasanceProof", log.Err(err))
 				continue
 			}
@@ -647,7 +646,7 @@ func (h *Hare) Close() {
 
 func reportEquivocation(
 	ctx context.Context,
-	pubKey []byte,
+	pubKey types.NodeID,
 	old, new *types.HareProofMsg,
 	eligibility *types.HareEligibility,
 	mch chan<- *types.MalfeasanceGossip,
@@ -665,7 +664,7 @@ func reportEquivocation(
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       old.InnerMsg.Layer,
 			Round:       old.InnerMsg.Round,
-			PubKey:      pubKey,
+			NodeID:      pubKey,
 			Eligibility: *eligibility,
 		},
 	}

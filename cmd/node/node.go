@@ -1071,8 +1071,7 @@ func (app *App) Start(ctx context.Context) error {
 		poetClients = append(poetClients, client)
 	}
 
-	edPubkey := edSgn.PublicKey()
-	app.nodeID = types.BytesToNodeID(edPubkey.Bytes())
+	app.nodeID = edSgn.NodeID()
 
 	lg := logger.Named(app.nodeID.ShortString()).WithFields(app.nodeID)
 

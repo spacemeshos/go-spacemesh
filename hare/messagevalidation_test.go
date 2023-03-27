@@ -77,18 +77,18 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 	require.False(t, sv.validateCertificate(context.Background(), cert))
 
 	msgs = make([]Message, 0, sv.threshold)
-	identities := make(map[string]struct{})
+	identities := make(map[types.NodeID]struct{})
 	for i := 0; i < sv.threshold; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		m := BuildCommitMsg(signer, valueSet).Message
 		msgs = append(msgs, m)
-		identities[string(signer.PublicKey().Bytes())] = struct{}{}
+		identities[signer.NodeID()] = struct{}{}
 	}
 	cert.AggMsgs.Messages = msgs
 	require.True(t, sv.validateCertificate(context.Background(), cert))
 
-	sv.eTracker.ForEach(commitRound, func(s string, cred *Cred) {
+	sv.eTracker.ForEach(commitRound, func(s types.NodeID, cred *Cred) {
 		_, ok := identities[s]
 		require.True(t, ok)
 		require.True(t, cred.Honest)
@@ -183,7 +183,7 @@ func initPg(tb testing.TB, validator *syntaxContextValidator) (*pubGetter, []Mes
 		signer, err = signing.NewEdSigner()
 		require.NoError(tb, err)
 		iMsg := BuildStatusMsg(signer, NewSetFromValues(types.ProposalID{1}))
-		validator.eTracker.Track(iMsg.NodeID.Bytes(), iMsg.Round, iMsg.Eligibility.Count, true)
+		validator.eTracker.Track(iMsg.NodeID, iMsg.Round, iMsg.Eligibility.Count, true)
 		msgs[i] = iMsg.Message
 		pg.Track(iMsg)
 	}
@@ -260,7 +260,7 @@ func TestMessageValidator_Aggregated_WithEquivocation(t *testing.T) {
 	ke, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	sv.eTracker.Track(ke.PublicKey().Bytes(), msgs[0].Round, 1, false)
+	sv.eTracker.Track(ke.NodeID(), msgs[0].Round, 1, false)
 	r.NoError(sv.validateAggregatedMessage(context.Background(), agg, funcs))
 }
 

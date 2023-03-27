@@ -60,14 +60,14 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			PubKey:      m2.NodeID.Bytes(),
+			NodeID:      m2.NodeID,
 			Eligibility: m2.Eligibility,
 		},
 	}
 	gossip := <-mch
 	require.Equal(t, expected, *gossip)
-	tracker.eTracker.ForEach(proposalRound, func(s string, cred *Cred) {
-		require.Equal(t, string(m1.NodeID.Bytes()), s)
+	tracker.eTracker.ForEach(proposalRound, func(s types.NodeID, cred *Cred) {
+		require.Equal(t, m1.NodeID, s)
 		require.False(t, cred.Honest)
 		require.EqualValues(t, 1, cred.Count)
 	})
@@ -127,14 +127,14 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			PubKey:      m2.NodeID.Bytes(),
+			NodeID:      m2.NodeID,
 			Eligibility: m2.Eligibility,
 		},
 	}
 	gossip := <-mch
 	require.Equal(t, expected, *gossip)
-	tracker.eTracker.ForEach(proposalRound, func(s string, cred *Cred) {
-		require.Equal(t, string(m1.NodeID.Bytes()), s)
+	tracker.eTracker.ForEach(proposalRound, func(s types.NodeID, cred *Cred) {
+		require.Equal(t, m1.NodeID, s)
 		require.False(t, cred.Honest)
 		require.EqualValues(t, 1, cred.Count)
 	})
@@ -193,14 +193,14 @@ func TestProposalTracker_ProposedSet(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			PubKey:      m2.NodeID.Bytes(),
+			NodeID:      m2.NodeID,
 			Eligibility: m2.Eligibility,
 		},
 	}
 	gossip := <-mch
 	require.Equal(t, expected, *gossip)
-	tracker.eTracker.ForEach(proposalRound, func(s string, cred *Cred) {
-		require.Equal(t, string(m1.NodeID.Bytes()), s)
+	tracker.eTracker.ForEach(proposalRound, func(s types.NodeID, cred *Cred) {
+		require.Equal(t, m1.NodeID, s)
 		require.False(t, cred.Honest)
 		require.EqualValues(t, 1, cred.Count)
 	})

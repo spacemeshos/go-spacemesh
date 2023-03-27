@@ -306,7 +306,7 @@ func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       instanceID1,
 			Round:       preRound,
-			PubKey:      signer.PublicKey().Bytes(),
+			NodeID:      signer.NodeID(),
 			Eligibility: msg.Eligibility,
 		},
 	}
@@ -334,7 +334,7 @@ func TestBroker_HandleEligibility(t *testing.T) {
 	em := &types.HareEligibilityGossip{
 		Layer:  instanceID1,
 		Round:  preRound,
-		PubKey: signer.PublicKey().Bytes(),
+		NodeID: signer.NodeID(),
 		Eligibility: types.HareEligibility{
 			Proof: []byte{1, 2, 3},
 			Count: 3,

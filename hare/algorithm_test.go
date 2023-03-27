@@ -535,7 +535,7 @@ func TestConsensusProcess_Termination(t *testing.T) {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		m := BuildNotifyMsg(signer, s)
-		proc.eTracker.Track(m.NodeID.Bytes(), m.Round, m.Eligibility.Count, true)
+		proc.eTracker.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
 		proc.processNotifyMsg(context.Background(), m)
 	}
 
@@ -647,7 +647,7 @@ func TestConsensusProcess_beginProposalRound(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildStatusMsg(signer, s)
-	proc.eTracker.Track(m.NodeID.Bytes(), m.Round, m.Eligibility.Count, true)
+	proc.eTracker.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
 	statusTracker.RecordStatus(context.Background(), m)
 	statusTracker.AnalyzeStatusMessages(func(*Msg) bool { return true })
 	proc.statusesTracker = statusTracker
@@ -701,12 +701,12 @@ func (m *mockNet) Publish(ctx context.Context, protocol string, payload []byte) 
 func TestConsensusProcess_handlePending(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	const count = 5
-	pending := make(map[string]*Msg)
+	pending := make(map[types.NodeID]*Msg)
 	for i := 0; i < count; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		m := BuildStatusMsg(signer, NewSetFromValues(types.ProposalID{1}))
-		pending[signer.PublicKey().String()] = m
+		pending[signer.NodeID()] = m
 	}
 	proc.handlePending(pending)
 	require.Equal(t, count, len(proc.comm.inbox))

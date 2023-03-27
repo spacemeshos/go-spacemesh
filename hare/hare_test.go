@@ -268,7 +268,7 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:  lid,
 			Round:  round,
-			PubKey: types.RandomBytes(32),
+			NodeID: types.RandomNodeID(),
 			Eligibility: types.HareEligibility{
 				Proof: []byte("eligible"),
 				Count: 3,
@@ -279,8 +279,8 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 	data, err := codec.Encode(&gossip)
 	require.NoError(t, err)
 	done := make(chan struct{})
-	mockMesh.EXPECT().IsMalicious(types.BytesToNodeID(gossip.Eligibility.PubKey)).Return(false, nil)
-	mockMesh.EXPECT().AddMalfeasanceProof(types.BytesToNodeID(gossip.Eligibility.PubKey), &gossip.MalfeasanceProof, nil).Return(nil)
+	mockMesh.EXPECT().IsMalicious(gossip.Eligibility.NodeID).Return(false, nil)
+	mockMesh.EXPECT().AddMalfeasanceProof(gossip.Eligibility.NodeID, &gossip.MalfeasanceProof, nil).Return(nil)
 	mpubsub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, data).DoAndReturn(
 		func(_ context.Context, _ string, _ []byte) error {
 			close(done)

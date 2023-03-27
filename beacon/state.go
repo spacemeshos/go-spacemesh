@@ -8,7 +8,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // state does the data management for epoch specific data for the protocol.
@@ -24,7 +23,7 @@ type state struct {
 	firstRoundIncomingVotes map[types.NodeID]proposalList
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
 	votesMargin               map[Proposal]*big.Int
-	hasProposed               map[string]struct{}
+	hasProposed               map[types.NodeID]struct{}
 	hasVoted                  []map[types.NodeID]struct{}
 	proposalPhaseFinishedTime time.Time
 	proposalChecker           eligibilityChecker
@@ -46,7 +45,7 @@ func newState(
 		minerAtxs:               miners,
 		firstRoundIncomingVotes: make(map[types.NodeID]proposalList),
 		votesMargin:             map[Proposal]*big.Int{},
-		hasProposed:             make(map[string]struct{}),
+		hasProposed:             make(map[types.NodeID]struct{}),
 		hasVoted:                make([]map[types.NodeID]struct{}, cfg.RoundsNumber),
 		proposalChecker:         checker,
 	}
@@ -96,15 +95,14 @@ func (s *state) addVote(proposal Proposal, vote uint, voteWeight *big.Int) {
 	}
 }
 
-func (s *state) registerProposed(logger log.Log, minerPK *signing.PublicKey) error {
-	minerID := string(minerPK.Bytes())
-	if _, ok := s.hasProposed[minerID]; ok {
+func (s *state) registerProposed(logger log.Log, nodeID types.NodeID) error {
+	if _, ok := s.hasProposed[nodeID]; ok {
 		// see TODOs for registerVoted()
 		logger.Warning("already received proposal from miner")
-		return fmt.Errorf("already made proposal (miner ID %v): %w", minerPK.ShortString(), errAlreadyProposed)
+		return fmt.Errorf("already made proposal (miner ID %v): %w", nodeID.ShortString(), errAlreadyProposed)
 	}
 
-	s.hasProposed[minerID] = struct{}{}
+	s.hasProposed[nodeID] = struct{}{}
 	return nil
 }
 

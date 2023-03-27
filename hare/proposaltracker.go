@@ -46,10 +46,11 @@ func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Msg) {
 		g := NewSet(pt.proposal.InnerMsg.Values)
 		if !s.Equals(g) { // equivocation detected
 			pt.logger.WithContext(ctx).With().Warning("equivocation detected in proposal round",
-				log.Stringer("smesher", types.BytesToNodeID(msg.NodeID.Bytes())),
+				log.Stringer("smesher", msg.NodeID),
 				log.Stringer("prev", g),
-				log.Stringer("curr", s))
-			pt.eTracker.Track(msg.NodeID.Bytes(), msg.Round, msg.Eligibility.Count, false)
+				log.Stringer("curr", s),
+			)
+			pt.eTracker.Track(msg.NodeID, msg.Round, msg.Eligibility.Count, false)
 			pt.isConflicting = true
 			prev := &types.HareProofMsg{
 				InnerMsg:  pt.proposal.HareMetadata,
@@ -59,9 +60,9 @@ func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Msg) {
 				InnerMsg:  msg.HareMetadata,
 				Signature: msg.Signature,
 			}
-			if err := reportEquivocation(ctx, msg.NodeID.Bytes(), prev, this, &msg.Eligibility, pt.malCh); err != nil {
+			if err := reportEquivocation(ctx, msg.NodeID, prev, this, &msg.Eligibility, pt.malCh); err != nil {
 				pt.logger.WithContext(ctx).With().Warning("failed to report equivocation in proposal round",
-					log.Stringer("smesher", types.BytesToNodeID(msg.NodeID.Bytes())),
+					log.Stringer("smesher", msg.NodeID),
 					log.Err(err))
 			}
 		}
@@ -91,10 +92,11 @@ func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Msg) {
 		g := NewSet(pt.proposal.InnerMsg.Values)
 		if !s.Equals(g) { // equivocation detected
 			pt.logger.WithContext(ctx).With().Warning("equivocation detected in proposal round - late",
-				log.Stringer("smesher", types.BytesToNodeID(msg.NodeID.Bytes())),
+				log.Stringer("smesher", msg.NodeID),
 				log.Stringer("prev", g),
-				log.Stringer("curr", s))
-			pt.eTracker.Track(msg.NodeID.Bytes(), msg.Round, msg.Eligibility.Count, false)
+				log.Stringer("curr", s),
+			)
+			pt.eTracker.Track(msg.NodeID, msg.Round, msg.Eligibility.Count, false)
 			pt.isConflicting = true
 			prev := &types.HareProofMsg{
 				InnerMsg:  pt.proposal.HareMetadata,
@@ -104,10 +106,11 @@ func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Msg) {
 				InnerMsg:  msg.HareMetadata,
 				Signature: msg.Signature,
 			}
-			if err := reportEquivocation(ctx, msg.NodeID.Bytes(), prev, this, &msg.Eligibility, pt.malCh); err != nil {
+			if err := reportEquivocation(ctx, msg.NodeID, prev, this, &msg.Eligibility, pt.malCh); err != nil {
 				pt.logger.WithContext(ctx).With().Warning("failed to report equivocation in proposal round - late",
-					log.Stringer("smesher", types.BytesToNodeID(msg.NodeID.Bytes())),
-					log.Err(err))
+					log.Stringer("smesher", msg.NodeID),
+					log.Err(err),
+				)
 			}
 			pt.isConflicting = true
 		}
