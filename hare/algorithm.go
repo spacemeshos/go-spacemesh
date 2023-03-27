@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -503,7 +502,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 
 	// Report the latency since the beginning of the round
 	latency := time.Since(proc.clock.RoundEnd(m.Round - 1))
-	metrics.ReportMessageLatency(pubsub.HareProtocol, strings.ToLower(m.InnerMsg.Type.String()), latency)
+	metrics.ReportMessageLatency(pubsub.HareProtocol, m.InnerMsg.Type.String(), latency)
 	switch m.InnerMsg.Type {
 	case pre:
 		proc.processPreRoundMsg(ctx, m)
