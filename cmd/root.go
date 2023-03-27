@@ -130,6 +130,10 @@ func AddCommands(cmd *cobra.Command) {
 	// GrpcServerInterface determines the interface the GRPC server listens on
 	cmd.PersistentFlags().StringVar(&cfg.API.GrpcServerInterface, "grpc-interface",
 		cfg.API.GrpcServerInterface, "GRPC api server interface")
+	cmd.PersistentFlags().IntVar(&cfg.API.GrpcRecvMsgSize, "grpc-recv-msg-size",
+		cfg.API.GrpcServerPort, "GRPC api recv message size")
+	cmd.PersistentFlags().IntVar(&cfg.API.GrpcSendMsgSize, "grpc-send-msg-size",
+		cfg.API.GrpcServerPort, "GRPC api send message size")
 
 	/**======================== Hare Flags ========================== **/
 
