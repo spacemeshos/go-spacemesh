@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 
+	fuzz "github.com/google/gofuzz"
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -152,4 +154,30 @@ func TestCodec_MalfeasanceGossip(t *testing.T) {
 
 	require.NoError(t, codec.Decode(encoded, &decoded))
 	require.Equal(t, *gossip, decoded)
+}
+
+func FuzzProofConsistency(f *testing.F) {
+	tester.FuzzConsistency[types.Proof](f, func(p *types.Proof, c fuzz.Continue) {
+		switch c.Intn(3) {
+		case 0:
+			p.Type = types.MultipleATXs
+			data := types.AtxProof{}
+			c.Fuzz(&data)
+			p.Data = &data
+		case 1:
+			p.Type = types.MultipleBallots
+			data := types.BallotProof{}
+			c.Fuzz(&data)
+			p.Data = &data
+		case 2:
+			p.Type = types.HareEquivocation
+			data := types.HareProof{}
+			c.Fuzz(&data)
+			p.Data = &data
+		}
+	})
+}
+
+func FuzzProofSafety(f *testing.F) {
+	tester.FuzzSafety[types.Proof](f)
 }

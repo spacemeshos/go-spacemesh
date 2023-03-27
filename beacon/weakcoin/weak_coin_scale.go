@@ -31,7 +31,7 @@ func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.MinerPK, 32)
+		n, err := scale.EncodeByteArray(enc, t.MinerID[:])
 		if err != nil {
 			return total, err
 		}
@@ -73,12 +73,11 @@ func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Unit = uint32(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		n, err := scale.DecodeByteArray(dec, t.MinerID[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.MinerPK = field
 	}
 	{
 		field, n, err := scale.DecodeByteSliceWithLimit(dec, 80)

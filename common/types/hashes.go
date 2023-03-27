@@ -108,11 +108,6 @@ func CalcHash12(data []byte) (h Hash12) {
 	return
 }
 
-// DecodeScale implements scale codec interface.
-func (h *Hash20) DecodeScale(d *scale.Decoder) (int, error) {
-	return scale.DecodeByteArray(d, h[:])
-}
-
 // CalcProposalsHash32 returns the 32-byte blake3 sum of the IDs, sorted in lexicographic order. The pre-image is
 // prefixed with additionalBytes.
 func CalcProposalsHash32(view []ProposalID, additionalBytes []byte) Hash32 {

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -138,4 +139,12 @@ func RandomBytes(size int) []byte {
 		return nil
 	}
 	return b
+}
+
+func FuzzAddressConsistency(f *testing.F) {
+	tester.FuzzConsistency[types.Address](f)
+}
+
+func FuzzAddressStateSafety(f *testing.F) {
+	tester.FuzzSafety[types.Address](f)
 }

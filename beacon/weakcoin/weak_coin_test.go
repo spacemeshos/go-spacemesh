@@ -35,11 +35,11 @@ func encoded(tb testing.TB, msg weakcoin.Message) []byte {
 	return buf
 }
 
-func staticSigner(tb testing.TB, ctrl *gomock.Controller, sig []byte) *weakcoin.MockvrfSigner {
+func staticSigner(tb testing.TB, ctrl *gomock.Controller, nodeId types.NodeID, sig []byte) *weakcoin.MockvrfSigner {
 	tb.Helper()
 	signer := weakcoin.NewMockvrfSigner(ctrl)
 	signer.EXPECT().Sign(gomock.Any()).Return(sig).AnyTimes()
-	signer.EXPECT().PublicKey().Return(signing.NewPublicKey(sig)).AnyTimes()
+	signer.EXPECT().NodeID().Return(nodeId).AnyTimes()
 	signer.EXPECT().LittleEndian().Return(true).AnyTimes()
 	return signer
 }
@@ -64,6 +64,7 @@ func TestWeakCoin(t *testing.T) {
 		epoch           types.EpochID = 10
 		round           types.RoundID = 4
 		oneLSB                        = []byte{0b0001}
+		zeroLSBMiner                  = types.NodeID{0b0110}
 		zeroLSB                       = []byte{0b0110}
 		higherThreshold               = []byte{0xff}
 	)
@@ -84,7 +85,7 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
-				MinerPK:      zeroLSB,
+				MinerID:      zeroLSBMiner,
 				VrfSignature: zeroLSB,
 			}),
 			result: pubsub.ValidationAccept,
@@ -98,7 +99,7 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
-				MinerPK:      zeroLSB,
+				MinerID:      zeroLSBMiner,
 				VrfSignature: zeroLSB,
 			}),
 			result: pubsub.ValidationIgnore,
@@ -112,7 +113,7 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
-				MinerPK:      zeroLSB,
+				MinerID:      zeroLSBMiner,
 				VrfSignature: zeroLSB,
 			}),
 			result: pubsub.ValidationAccept,
@@ -145,7 +146,7 @@ func TestWeakCoin(t *testing.T) {
 			).AnyTimes()
 			wc = weakcoin.New(
 				mockPublisher,
-				staticSigner(t, ctrl, tc.nodeSig),
+				staticSigner(t, ctrl, types.RandomNodeID(), tc.nodeSig),
 				sigVerifier(t, ctrl),
 				nonceFetcher(t, ctrl),
 				mockAllowance,
@@ -182,7 +183,9 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 		allowance uint32        = 1
 
 		oneLSB          = []byte{0b0001}
+		oneLSBMiner     = types.NodeID{0b0001}
 		zeroLSB         = []byte{0b0110}
+		highLSBMiner    = types.NodeID{0xff}
 		higherThreshold = []byte{0xff}
 	)
 
@@ -201,7 +204,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         allowance,
-				MinerPK:      oneLSB,
+				MinerID:      oneLSBMiner,
 				VrfSignature: oneLSB,
 			}),
 			expected: pubsub.ValidationAccept,
@@ -221,7 +224,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         allowance + 1,
-				MinerPK:      oneLSB,
+				MinerID:      oneLSBMiner,
 				VrfSignature: oneLSB,
 			}),
 			expected: pubsub.ValidationIgnore,
@@ -234,7 +237,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         allowance,
-				MinerPK:      higherThreshold,
+				MinerID:      highLSBMiner,
 				VrfSignature: higherThreshold,
 			}),
 			expected: pubsub.ValidationIgnore,
@@ -247,7 +250,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch - 1,
 				Round:        round,
 				Unit:         allowance,
-				MinerPK:      oneLSB,
+				MinerID:      oneLSBMiner,
 				VrfSignature: oneLSB,
 			}),
 			expected: pubsub.ValidationIgnore,
@@ -260,7 +263,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch + 1,
 				Round:        round,
 				Unit:         allowance,
-				MinerPK:      oneLSB,
+				MinerID:      oneLSBMiner,
 				VrfSignature: oneLSB,
 			}),
 			expected: pubsub.ValidationIgnore,
@@ -273,7 +276,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round - 1,
 				Unit:         allowance,
-				MinerPK:      oneLSB,
+				MinerID:      oneLSBMiner,
 				VrfSignature: oneLSB,
 			}),
 			expected: pubsub.ValidationIgnore,
@@ -286,7 +289,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round + 1,
 				Unit:         allowance,
-				MinerPK:      oneLSB,
+				MinerID:      oneLSBMiner,
 				VrfSignature: oneLSB,
 			}),
 			expected: pubsub.ValidationAccept,
@@ -299,7 +302,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			mockAllowance.EXPECT().MinerAllowance(epoch, gomock.Any()).Return(allowance).AnyTimes()
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
-				staticSigner(t, ctrl, zeroLSB),
+				staticSigner(t, ctrl, types.RandomNodeID(), zeroLSB),
 				sigVerifier(t, ctrl),
 				nonceFetcher(t, ctrl),
 				mockAllowance,
@@ -320,8 +323,9 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	var (
 		ctrl = gomock.NewController(t)
 
-		oneLSB  = []byte{0b0001}
-		zeroLSB = []byte{0b0000}
+		oneLSBMiner = types.NodeID{0b0001}
+		oneLSB      = []byte{0b0001}
+		zeroLSB     = []byte{0b0000}
 
 		epoch     types.EpochID = 10
 		round     types.RoundID = 2
@@ -333,7 +337,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	mockAllowance.EXPECT().MinerAllowance(epoch, gomock.Any()).Return(uint32(1)).AnyTimes()
 	wc := weakcoin.New(
 		noopBroadcaster(t, ctrl),
-		staticSigner(t, ctrl, oneLSB),
+		staticSigner(t, ctrl, types.RandomNodeID(), oneLSB),
 		sigVerifier(t, ctrl),
 		nonceFetcher(t, ctrl),
 		mockAllowance,
@@ -347,7 +351,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 			Epoch:        epoch,
 			Round:        nextRound,
 			Unit:         1,
-			MinerPK:      oneLSB,
+			MinerID:      oneLSBMiner,
 			VrfSignature: oneLSB,
 		}))
 	}
@@ -391,8 +395,8 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 
 	mockAllowance := weakcoin.NewMockallowance(gomock.NewController(t))
 	mockAllowance.EXPECT().MinerAllowance(epoch, gomock.Any()).DoAndReturn(
-		func(_ types.EpochID, miner []byte) uint32 {
-			if bytes.Equal(miner, signer.PublicKey().Bytes()) {
+		func(_ types.EpochID, miner types.NodeID) uint32 {
+			if bytes.Equal(miner.Bytes(), signer.PublicKey().Bytes()) {
 				return 1
 			}
 			return 0

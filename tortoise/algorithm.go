@@ -279,3 +279,22 @@ func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
 	waitHareOutputDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	t.trtl.onHareOutput(lid, bid)
 }
+
+// GetMissingActiveSet returns unknown atxs from the original list. It is done for a specific epoch
+// as active set atxs never cross epoch boundary.
+func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) []types.ATXID {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	edata, exists := t.trtl.epochs[epoch]
+	if !exists {
+		return atxs
+	}
+	var missing []types.ATXID
+	for _, atx := range atxs {
+		_, exists := edata.atxs[atx]
+		if !exists {
+			missing = append(missing, atx)
+		}
+	}
+	return missing
+}
