@@ -69,7 +69,6 @@ const (
 
 // Logger names.
 const (
-	AppLogger              = "app"
 	ClockLogger            = "clock"
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
@@ -1115,7 +1114,6 @@ func (app *App) Start(ctx context.Context) error {
 		return fmt.Errorf("could not create vrf signer: %w", err)
 	}
 
-	app.log = app.addLogger(AppLogger, lg)
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 	err = app.initServices(
 		ctx,
