@@ -22,10 +22,11 @@ This testing setup can run on top of any k8s installation. The instructions belo
 
 3. Install chaos-mesh
 
+
     chaos-mesh is used for some tests. See <https://chaos-mesh.org/docs/quick-start/> for more up-to-date instructions.
 
     ```bash
-    curl -sSL https://mirrors.chaos-mesh.org/v2.3.0/install.sh | bash
+    curl -sSL https://mirrors.chaos-mesh.org/v2.5.1/install.sh | bash
     ```
 
 4. Install `loki` to use grafana dashboard.

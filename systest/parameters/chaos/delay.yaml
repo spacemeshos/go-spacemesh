@@ -1,7 +1,7 @@
 apiVersion: chaos-mesh.org/v1alpha1
 kind: NetworkChaos
 metadata:
-  name: delay-smesher
+  name: delay-smesher-200
 spec:
   action: delay
   mode: all
@@ -12,6 +12,6 @@ spec:
         values: ["boot", "smesher"]
   direction: to
   delay:
-    latency: "50ms"
+    latency: "200ms"
     correlation: "0"
-    jitter: "50ms"
+    jitter: "10ms"
