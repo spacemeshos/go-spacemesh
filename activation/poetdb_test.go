@@ -70,7 +70,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	msg := getPoetProof(t)
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 
-	r.NoError(poetDb.Validate(msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.RandomEdSignature()))
+	r.NoError(poetDb.Validate(msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature))
 	ref, err := msg.Ref()
 	r.NoError(err)
 
@@ -98,7 +98,7 @@ func TestPoetDbPoetProofNoMembers(t *testing.T) {
 	poetProof.Root = []byte("some other root")
 	poetProof.Members = nil
 
-	err := poetDb.Validate(poetProof.PoetProof, poetProof.PoetServiceID, poetProof.RoundID, types.RandomEdSignature())
+	err := poetDb.Validate(poetProof.PoetProof, poetProof.PoetServiceID, poetProof.RoundID, types.EmptyEdSignature)
 	r.NoError(err)
 }
 
@@ -108,7 +108,7 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 	msg.PoetProof.Root = []byte("some other root")
 
-	err := poetDb.Validate(msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.RandomEdSignature())
+	err := poetDb.Validate(msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
 	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid", msg.PoetServiceID[:5]))
 	var pErr types.ProcessingError
 	r.False(errors.As(err, &pErr))

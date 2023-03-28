@@ -45,7 +45,7 @@ func (e PubKeyExtractor) Extract(d domain, m []byte, sig types.EdSignature) (*Pu
 	msg := make([]byte, 0, len(e.prefix)+1+len(m))
 	msg = append(msg, e.prefix...)
 	msg = append(msg, byte(d))
-	msg = append(msg, m[:]...)
+	msg = append(msg, m...)
 	pub, err := ed25519.ExtractPublicKey(msg, sig[:])
 	if err != nil {
 		return nil, err

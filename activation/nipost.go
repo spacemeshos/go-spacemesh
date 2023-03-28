@@ -55,7 +55,7 @@ func (nb *NIPostBuilder) persist() {
 
 // NIPostBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPost).
 type NIPostBuilder struct {
-	minerID           []byte
+	nodeID            types.NodeID
 	db                *sql.Database
 	postSetupProvider postSetupProvider
 	poetProvers       []PoetProvingServiceClient
@@ -74,7 +74,7 @@ type poetDbAPI interface {
 
 // NewNIPostBuilder returns a NIPostBuilder.
 func NewNIPostBuilder(
-	minerID types.NodeID,
+	nodeID types.NodeID,
 	postSetupProvider postSetupProvider,
 	poetProvers []PoetProvingServiceClient,
 	poetDB poetDbAPI,
@@ -85,7 +85,7 @@ func NewNIPostBuilder(
 	layerClock layerClock,
 ) *NIPostBuilder {
 	return &NIPostBuilder{
-		minerID:           minerID.Bytes(),
+		nodeID:            nodeID,
 		postSetupProvider: postSetupProvider,
 		poetProvers:       poetProvers,
 		poetDB:            poetDB,

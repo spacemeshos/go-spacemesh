@@ -98,7 +98,7 @@ func (c *HTTPPoetClient) Start(ctx context.Context, gatewayAddresses []string) e
 func (c *HTTPPoetClient) Submit(ctx context.Context, challenge []byte, signature types.EdSignature) (*types.PoetRound, error) {
 	request := rpcapi.SubmitRequest{
 		Challenge: challenge,
-		Signature: signature[:],
+		Signature: signature.Bytes(),
 	}
 	resBody := rpcapi.SubmitResponse{}
 	if err := c.req(ctx, http.MethodPost, "/v1/submit", &request, &resBody); err != nil {

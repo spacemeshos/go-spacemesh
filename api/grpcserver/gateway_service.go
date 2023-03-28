@@ -32,7 +32,7 @@ func NewGatewayService(verifier api.ChallengeVerifier) *GatewayService {
 // VerifyChallenge implements v1.GatewayServiceServer.
 func (s *GatewayService) VerifyChallenge(ctx context.Context, in *pb.VerifyChallengeRequest) (*pb.VerifyChallengeResponse, error) {
 	ctx = log.WithNewRequestID(ctx)
-	var sig types.EdSignature
+	sig := types.EdSignature{}
 	copy(sig[:], in.Signature)
 	result, err := s.verifier.Verify(ctx, in.Challenge, sig)
 	if err == nil {

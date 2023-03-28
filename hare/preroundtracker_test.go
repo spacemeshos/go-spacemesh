@@ -50,7 +50,7 @@ func BuildPreRoundMsg(sig *signing.EdSigner, s *Set, roleProof types.VrfSignatur
 	builder := newMessageBuilder()
 	builder.SetType(pre).SetLayer(instanceID1).SetRoundCounter(preRound).SetCommittedRound(ki).SetValues(s).SetRoleProof(roleProof)
 	builder.SetEligibilityCount(1)
-	return builder.SetPubKey(sig.PublicKey()).Sign(sig).Build()
+	return builder.SetNodeID(sig.NodeID()).Sign(sig).Build()
 }
 
 func TestPreRoundTracker_OnPreRound(t *testing.T) {
@@ -64,20 +64,20 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	mch := make(chan *types.MalfeasanceGossip, lowThresh10)
 	tracker := newPreRoundTracker(logtest.New(t), mch, et, lowThresh10, lowThresh10)
 
-	m1 := BuildPreRoundMsg(signer, s, types.RandomVrfSignature())
-	et.Track(m1.PubKey.Bytes(), m1.Round, m1.Eligibility.Count, true)
+	m1 := BuildPreRoundMsg(signer, s, types.EmptyVrfSignature)
+	et.Track(m1.NodeID, m1.Round, m1.Eligibility.Count, true)
 	tracker.OnPreRound(context.Background(), m1)
 	require.Equal(t, 1, len(tracker.preRound))      // one msg
 	require.Equal(t, 2, len(tracker.tracker.table)) // two Values
-	g := tracker.preRound[string(signer.PublicKey().Bytes())]
+	g := tracker.preRound[signer.NodeID()]
 	require.True(t, s.Equals(g.Set))
 	require.Equal(t, 1, tracker.tracker.CountStatus(types.ProposalID{1}).hCount)
 	nSet := NewSetFromValues(types.ProposalID{3}, types.ProposalID{4})
-	m2 := BuildPreRoundMsg(signer, nSet, types.RandomVrfSignature())
+	m2 := BuildPreRoundMsg(signer, nSet, types.EmptyVrfSignature)
 	m2.Eligibility.Count = 2
-	et.Track(m2.PubKey.Bytes(), m2.Round, m2.Eligibility.Count, true)
+	et.Track(m2.NodeID, m2.Round, m2.Eligibility.Count, true)
 	tracker.OnPreRound(context.Background(), m2)
-	h := tracker.preRound[string(signer.PublicKey().Bytes())]
+	h := tracker.preRound[signer.NodeID()]
 	require.True(t, h.Equals(s.Union(nSet)))
 	require.Len(t, mch, 1)
 	expected := types.MalfeasanceGossip{
@@ -102,7 +102,7 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			PubKey:      m2.PubKey.Bytes(),
+			NodeID:      m2.NodeID,
 			Eligibility: m2.Eligibility,
 		},
 	}
@@ -110,10 +110,10 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	require.Equal(t, expected, *gossip)
 
 	interSet := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{5})
-	m3 := BuildPreRoundMsg(signer, interSet, types.RandomVrfSignature())
-	et.Track(m3.PubKey.Bytes(), m3.Round, m3.Eligibility.Count, true)
+	m3 := BuildPreRoundMsg(signer, interSet, types.EmptyVrfSignature)
+	et.Track(m3.NodeID, m3.Round, m3.Eligibility.Count, true)
 	tracker.OnPreRound(context.Background(), m3)
-	h = tracker.preRound[string(signer.PublicKey().Bytes())]
+	h = tracker.preRound[signer.NodeID()]
 	require.True(t, h.Equals(s.Union(nSet).Union(interSet)))
 	require.Equal(t, 0, tracker.tracker.CountStatus(types.ProposalID{1}).hCount)
 	require.Equal(t, 0, tracker.tracker.CountStatus(types.ProposalID{2}).hCount)
@@ -130,10 +130,10 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	signer2, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	s4 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{5})
-	m4 := BuildPreRoundMsg(signer2, s4, types.RandomVrfSignature())
-	et.Track(m4.PubKey.Bytes(), m4.Round, m4.Eligibility.Count, true)
+	m4 := BuildPreRoundMsg(signer2, s4, types.EmptyVrfSignature)
+	et.Track(m4.NodeID, m4.Round, m4.Eligibility.Count, true)
 	tracker.OnPreRound(context.Background(), m4)
-	h = tracker.preRound[string(signer2.PublicKey().Bytes())]
+	h = tracker.preRound[signer2.NodeID()]
 	require.True(t, h.Equals(s4))
 	require.Equal(t, 1, tracker.tracker.CountStatus(types.ProposalID{1}).hCount)
 	require.Equal(t, 0, tracker.tracker.CountStatus(types.ProposalID{2}).hCount)
@@ -157,8 +157,8 @@ func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {
 		require.False(t, tracker.CanProveSet(s))
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		m1 := BuildPreRoundMsg(sig, s, types.RandomVrfSignature())
-		et.Track(m1.PubKey.Bytes(), m1.Round, m1.Eligibility.Count, true)
+		m1 := BuildPreRoundMsg(sig, s, types.EmptyVrfSignature)
+		et.Track(m1.NodeID, m1.Round, m1.Eligibility.Count, true)
 		tracker.OnPreRound(context.Background(), m1)
 	}
 
@@ -177,8 +177,8 @@ func TestPreRoundTracker_CanProveValueAndSet_WithKnownEquivocators(t *testing.T)
 		require.False(t, tracker.CanProveSet(s))
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		m := BuildPreRoundMsg(sig, s, types.RandomVrfSignature())
-		et.Track(m.PubKey.Bytes(), m.Round, m.Eligibility.Count, true)
+		m := BuildPreRoundMsg(sig, s, types.EmptyVrfSignature)
+		et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
 		tracker.OnPreRound(context.Background(), m)
 	}
 
@@ -189,7 +189,7 @@ func TestPreRoundTracker_CanProveValueAndSet_WithKnownEquivocators(t *testing.T)
 	// add a known equivocator
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	et.Track(sig.PublicKey().Bytes(), preRound, 1, false)
+	et.Track(sig.NodeID(), preRound, 1, false)
 	require.True(t, tracker.CanProveValue(types.ProposalID{1}))
 	require.True(t, tracker.CanProveValue(types.ProposalID{2}))
 	require.True(t, tracker.CanProveSet(s))
@@ -205,14 +205,14 @@ func TestPreRoundTracker_CanProveValueAndSet_TooFewKnownEquivocators(t *testing.
 	for i := 0; i < lowThresh10-1; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		et.Track(sig.PublicKey().Bytes(), preRound, 1, false)
+		et.Track(sig.NodeID(), preRound, 1, false)
 	}
 
 	require.False(t, tracker.CanProveSet(s))
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(sig, s, types.RandomVrfSignature())
-	et.Track(m.PubKey.Bytes(), m.Round, m.Eligibility.Count, true)
+	m := BuildPreRoundMsg(sig, s, types.EmptyVrfSignature)
+	et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
 	tracker.OnPreRound(context.Background(), m)
 
 	require.False(t, tracker.CanProveValue(types.ProposalID{1}))
@@ -230,7 +230,7 @@ func TestPreRoundTracker_CanProveValueAndSet_TooHonestVotes(t *testing.T) {
 	for i := 0; i < lowThresh10*2; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		et.Track(sig.PublicKey().Bytes(), preRound, 1, false)
+		et.Track(sig.NodeID(), preRound, 1, false)
 	}
 
 	require.False(t, tracker.CanProveValue(types.ProposalID{1}))
@@ -248,14 +248,14 @@ func TestPreRoundTracker_CanProveValueAndSet_JustEnough(t *testing.T) {
 	for i := 0; i < lowThresh10; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		et.Track(sig.PublicKey().Bytes(), preRound, 1, false)
+		et.Track(sig.NodeID(), preRound, 1, false)
 	}
 
 	require.False(t, tracker.CanProveSet(s))
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(sig, s, types.RandomVrfSignature())
-	et.Track(m.PubKey.Bytes(), m.Round, m.Eligibility.Count, true)
+	m := BuildPreRoundMsg(sig, s, types.EmptyVrfSignature)
+	et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
 	tracker.OnPreRound(context.Background(), m)
 
 	require.True(t, tracker.CanProveValue(types.ProposalID{1}))
@@ -273,11 +273,11 @@ func TestPreRoundTracker_UpdateSet(t *testing.T) {
 	require.NoError(t, err)
 	s1 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3})
 	s2 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{4})
-	prMsg1 := BuildPreRoundMsg(sig1, s1, types.RandomVrfSignature())
-	et.Track(prMsg1.PubKey.Bytes(), prMsg1.Round, prMsg1.Eligibility.Count, true)
+	prMsg1 := BuildPreRoundMsg(sig1, s1, types.EmptyVrfSignature)
+	et.Track(prMsg1.NodeID, prMsg1.Round, prMsg1.Eligibility.Count, true)
 	tracker.OnPreRound(context.Background(), prMsg1)
-	prMsg2 := BuildPreRoundMsg(sig2, s2, types.RandomVrfSignature())
-	et.Track(prMsg2.PubKey.Bytes(), prMsg2.Round, prMsg2.Eligibility.Count, true)
+	prMsg2 := BuildPreRoundMsg(sig2, s2, types.EmptyVrfSignature)
+	et.Track(prMsg2.NodeID, prMsg2.Round, prMsg2.Eligibility.Count, true)
 	tracker.OnPreRound(context.Background(), prMsg2)
 	require.True(t, tracker.CanProveValue(types.ProposalID{1}))
 	require.True(t, tracker.CanProveValue(types.ProposalID{2}))
@@ -293,12 +293,12 @@ func TestPreRoundTracker_OnPreRound2(t *testing.T) {
 	s1 := NewSetFromValues(types.ProposalID{1})
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	prMsg1 := BuildPreRoundMsg(sig, s1, types.RandomVrfSignature())
-	et.Track(prMsg1.PubKey.Bytes(), prMsg1.Round, prMsg1.Eligibility.Count, true)
+	prMsg1 := BuildPreRoundMsg(sig, s1, types.EmptyVrfSignature)
+	et.Track(prMsg1.NodeID, prMsg1.Round, prMsg1.Eligibility.Count, true)
 	tracker.OnPreRound(context.Background(), prMsg1)
 	require.Equal(t, 1, len(tracker.preRound))
-	prMsg2 := BuildPreRoundMsg(sig, s1, types.RandomVrfSignature())
-	et.Track(prMsg2.PubKey.Bytes(), prMsg2.Round, prMsg2.Eligibility.Count, true)
+	prMsg2 := BuildPreRoundMsg(sig, s1, types.EmptyVrfSignature)
+	et.Track(prMsg2.NodeID, prMsg2.Round, prMsg2.Eligibility.Count, true)
 	tracker.OnPreRound(context.Background(), prMsg2)
 	require.Equal(t, 1, len(tracker.preRound))
 	require.Empty(t, mch)
@@ -313,11 +313,11 @@ func TestPreRoundTracker_FilterSet(t *testing.T) {
 	sig2, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	s1 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2})
-	prMsg1 := BuildPreRoundMsg(sig1, s1, types.RandomVrfSignature())
-	et.Track(prMsg1.PubKey.Bytes(), prMsg1.Round, prMsg1.Eligibility.Count, true)
+	prMsg1 := BuildPreRoundMsg(sig1, s1, types.EmptyVrfSignature)
+	et.Track(prMsg1.NodeID, prMsg1.Round, prMsg1.Eligibility.Count, true)
 	tracker.OnPreRound(context.Background(), prMsg1)
-	prMsg2 := BuildPreRoundMsg(sig2, s1, types.RandomVrfSignature())
-	et.Track(prMsg2.PubKey.Bytes(), prMsg2.Round, prMsg2.Eligibility.Count, true)
+	prMsg2 := BuildPreRoundMsg(sig2, s1, types.EmptyVrfSignature)
+	et.Track(prMsg2.NodeID, prMsg2.Round, prMsg2.Eligibility.Count, true)
 	tracker.OnPreRound(context.Background(), prMsg2)
 	set := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3})
 	tracker.FilterSet(set)

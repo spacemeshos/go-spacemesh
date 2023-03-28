@@ -9,7 +9,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 const (
@@ -18,18 +17,12 @@ const (
 	letterBytes  = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 )
 
-func genNode() types.NodeID {
-	b := types.NodeID{}
-	rand.Read(b[:])
-	return b
-}
-
 func TestFixedRolacle_Eligible(t *testing.T) {
 	oracle := New(logtest.New(t))
 	for i := 0; i < numOfClients-1; i++ {
-		oracle.Register(true, genNode())
+		oracle.Register(true, types.RandomNodeID())
 	}
-	v := genNode()
+	v := types.RandomNodeID()
 	oracle.Register(true, v)
 
 	res, _ := oracle.eligible(context.Background(), types.NewLayerID(1), 1, 10, v, types.RandomVrfSignature())
@@ -41,7 +34,7 @@ func TestFixedRolacle_Eligible2(t *testing.T) {
 	pubs := make([]types.NodeID, 0, numOfClients)
 	oracle := New(logtest.New(t))
 	for i := 0; i < numOfClients; i++ {
-		s := genNode()
+		s := types.RandomNodeID()
 		pubs = append(pubs, s)
 		oracle.Register(true, s)
 	}
@@ -71,7 +64,7 @@ func TestFixedRolacle_Range(t *testing.T) {
 	oracle := New(logtest.New(t))
 	pubs := make([]types.NodeID, 0, numOfClients)
 	for i := 0; i < numOfClients; i++ {
-		s := genNode()
+		s := types.RandomNodeID()
 		pubs = append(pubs, s)
 		oracle.Register(true, s)
 	}
@@ -102,12 +95,12 @@ func TestFixedRolacle_Range(t *testing.T) {
 func TestFixedRolacle_Eligible3(t *testing.T) {
 	oracle := New(logtest.New(t))
 	for i := 0; i < numOfClients/3; i++ {
-		s := genNode()
+		s := types.RandomNodeID()
 		oracle.Register(true, s)
 	}
 
 	for i := 0; i < 2*numOfClients/3; i++ {
-		s := genNode()
+		s := types.RandomNodeID()
 		oracle.Register(false, s)
 	}
 
@@ -140,7 +133,7 @@ func TestGenerateElibility(t *testing.T) {
 	oracle := New(logtest.New(t))
 	ids := make([]types.NodeID, 0, 30)
 	for i := 0; i < 30; i++ {
-		s := genNode()
+		s := types.RandomNodeID()
 		ids = append(ids, s)
 		oracle.Register(true, s)
 	}
@@ -157,7 +150,7 @@ func TestFixedRolacle_Eligible4(t *testing.T) {
 	oracle := New(logtest.New(t))
 	var ids []types.NodeID
 	for i := 0; i < 33; i++ {
-		s := genNode()
+		s := types.RandomNodeID()
 		ids = append(ids, s)
 		oracle.Register(true, s)
 	}
@@ -174,7 +167,7 @@ func TestFixedRolacle_Export(t *testing.T) {
 	oracle := New(logtest.New(t))
 	var ids []types.NodeID
 	for i := 0; i < 35; i++ {
-		s := genNode()
+		s := types.RandomNodeID()
 		ids = append(ids, s)
 		oracle.Register(true, s)
 	}

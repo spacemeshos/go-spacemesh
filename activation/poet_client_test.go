@@ -58,7 +58,7 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
-	_, err = client.Submit(context.Background(), nil, types.RandomEdSignature())
+	_, err = client.Submit(context.Background(), nil, types.EmptyEdSignature)
 	require.NoError(t, err)
 }
 

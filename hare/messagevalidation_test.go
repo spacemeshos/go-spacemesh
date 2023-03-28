@@ -77,18 +77,18 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 	require.False(t, sv.validateCertificate(context.Background(), cert))
 
 	msgs = make([]Message, 0, sv.threshold)
-	identities := make(map[string]struct{})
+	identities := make(map[types.NodeID]struct{})
 	for i := 0; i < sv.threshold; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		m := BuildCommitMsg(signer, valueSet).Message
 		msgs = append(msgs, m)
-		identities[string(signer.PublicKey().Bytes())] = struct{}{}
+		identities[signer.NodeID()] = struct{}{}
 	}
 	cert.AggMsgs.Messages = msgs
 	require.True(t, sv.validateCertificate(context.Background(), cert))
 
-	sv.eTracker.ForEach(commitRound, func(s string, cred *Cred) {
+	sv.eTracker.ForEach(commitRound, func(s types.NodeID, cred *Cred) {
 		_, ok := identities[s]
 		require.True(t, ok)
 		require.True(t, cred.Honest)
@@ -152,9 +152,9 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 	require.NoError(t, err)
 
 	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), nil))
-	m := &Msg{Message: Message{}, PubKey: nil}
+	m := &Msg{Message: Message{}, NodeID: types.EmptyNodeID}
 	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), m))
-	m.PubKey = signer.PublicKey()
+	m.NodeID = signer.NodeID()
 	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), m))
 
 	// empty set is allowed now
@@ -183,7 +183,7 @@ func initPg(tb testing.TB, validator *syntaxContextValidator) (*pubGetter, []Mes
 		signer, err = signing.NewEdSigner()
 		require.NoError(tb, err)
 		iMsg := BuildStatusMsg(signer, NewSetFromValues(types.ProposalID{1}))
-		validator.eTracker.Track(iMsg.PubKey.Bytes(), iMsg.Round, iMsg.Eligibility.Count, true)
+		validator.eTracker.Track(iMsg.NodeID, iMsg.Round, iMsg.Eligibility.Count, true)
 		msgs[i] = iMsg.Message
 		pg.Track(iMsg)
 	}
@@ -211,7 +211,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 
 	sv.validMsgsTracker = newPubGetter()
 	tmp := msgs[0].Signature
-	msgs[0].Signature = [64]byte{1}
+	msgs[0].Signature = types.RandomEdSignature()
 	r.Error(sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
 	msgs[0].Signature = tmp
@@ -239,9 +239,9 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	require.NoError(t, err)
 
 	msgs[0] = BuildStatusMsg(signer, NewSetFromValues(types.ProposalID{1})).Message
-	r.Nil(pg.PublicKey(&msgs[0]))
+	r.Equal(types.EmptyNodeID, pg.NodeID(&msgs[0]))
 	require.NoError(t, sv.validateAggregatedMessage(context.Background(), agg, funcs))
-	r.NotNil(pg.PublicKey(&msgs[0]))
+	r.NotEqual(types.EmptyNodeID, pg.NodeID(&msgs[0]))
 }
 
 func TestMessageValidator_Aggregated_WithEquivocation(t *testing.T) {
@@ -260,7 +260,7 @@ func TestMessageValidator_Aggregated_WithEquivocation(t *testing.T) {
 	ke, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	sv.eTracker.Track(ke.PublicKey().Bytes(), msgs[0].Round, 1, false)
+	sv.eTracker.Track(ke.NodeID(), msgs[0].Round, 1, false)
 	r.NoError(sv.validateAggregatedMessage(context.Background(), agg, funcs))
 }
 
@@ -312,39 +312,39 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 	b, err := proc.initDefaultBuilder(proc.value)
 	require.Nil(t, err)
 	preround := b.SetType(pre).Sign(proc.signer).Build()
-	preround.PubKey = proc.signer.PublicKey()
+	preround.NodeID = proc.signer.NodeID()
 	require.True(t, v.SyntacticallyValidateMessage(context.Background(), preround))
 	e := v.ContextuallyValidateMessage(context.Background(), preround, 0)
 	require.Nil(t, e)
 	b, err = proc.initDefaultBuilder(proc.value)
 	require.Nil(t, err)
 	status := b.SetType(status).Sign(proc.signer).Build()
-	status.PubKey = proc.signer.PublicKey()
+	status.NodeID = proc.signer.NodeID()
 	e = v.ContextuallyValidateMessage(context.Background(), status, 0)
 	require.Nil(t, e)
 	require.True(t, v.SyntacticallyValidateMessage(context.Background(), status))
 }
 
 type pubGetter struct {
-	mp map[types.EdSignature]*signing.PublicKey
+	mp map[types.EdSignature]types.NodeID
 }
 
 func newPubGetter() *pubGetter {
-	return &pubGetter{make(map[types.EdSignature]*signing.PublicKey)}
+	return &pubGetter{make(map[types.EdSignature]types.NodeID)}
 }
 
 func (pg pubGetter) Track(m *Msg) {
-	pg.mp[m.Signature] = m.PubKey
+	pg.mp[m.Signature] = m.NodeID
 }
 
-func (pg pubGetter) PublicKey(m *Message) *signing.PublicKey {
+func (pg pubGetter) NodeID(m *Message) types.NodeID {
 	if pg.mp == nil {
-		return nil
+		return types.EmptyNodeID
 	}
 
 	p, ok := pg.mp[m.Signature]
 	if !ok {
-		return nil
+		return types.EmptyNodeID
 	}
 
 	return p

@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -47,6 +48,10 @@ type Block struct {
 	InnerBlock
 	// the following fields are kept private and from being serialized
 	blockID BlockID
+}
+
+func (b Block) Equal(other Block) bool {
+	return cmp.Equal(b.InnerBlock, other.InnerBlock)
 }
 
 // InnerBlock contains the transactions and rewards of a block.

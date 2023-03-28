@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -54,6 +56,25 @@ type Ballot struct {
 	smesherID NodeID
 	// malicious is set to true if smesher that produced this ballot is known to be malicious.
 	malicious bool
+}
+
+func (b Ballot) Equal(other Ballot) bool {
+	if !cmp.Equal(other.BallotMetadata, b.BallotMetadata) {
+		return false
+	}
+	if !cmp.Equal(other.InnerBallot, b.InnerBallot, cmpopts.EquateEmpty()) {
+		return false
+	}
+	if other.Signature != b.Signature {
+		return false
+	}
+	if !cmp.Equal(other.Votes, b.Votes) {
+		return false
+	}
+	if !cmp.Equal(other.EligibilityProofs, b.EligibilityProofs) {
+		return false
+	}
+	return true
 }
 
 // BallotMetadata is the signed part of Ballot.
@@ -208,7 +229,7 @@ func (b *Ballot) Initialize() error {
 	if b.ID() != EmptyBallotID {
 		return fmt.Errorf("ballot already initialized")
 	}
-	if b.Signature == [64]byte{} {
+	if b.Signature == EmptyEdSignature {
 		return fmt.Errorf("cannot calculate Ballot ID: signature is nil")
 	}
 

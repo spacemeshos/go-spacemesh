@@ -1,7 +1,9 @@
 package hare
 
+import "github.com/spacemeshos/go-spacemesh/common/types"
+
 type item struct {
-	counts map[string]struct{}
+	counts map[types.NodeID]struct{}
 }
 
 // RefCountTracker tracks the number of references of any object id.
@@ -30,8 +32,8 @@ func (rt *RefCountTracker) CountStatus(id any) *CountInfo {
 
 	votes := rt.table[id].counts
 	var ci CountInfo
-	rt.eTracker.ForEach(rt.round, func(node string, cr *Cred) {
-		if _, ok := votes[node]; ok {
+	rt.eTracker.ForEach(rt.round, func(nodeID types.NodeID, cr *Cred) {
+		if _, ok := votes[nodeID]; ok {
 			if cr.Honest {
 				ci.IncHonest(cr.Count)
 			} else {
@@ -45,9 +47,9 @@ func (rt *RefCountTracker) CountStatus(id any) *CountInfo {
 }
 
 // Track increases the count for the given object id.
-func (rt *RefCountTracker) Track(id any, pubKey []byte) {
+func (rt *RefCountTracker) Track(id any, nodeID types.NodeID) {
 	if _, ok := rt.table[id]; !ok {
-		rt.table[id] = &item{counts: make(map[string]struct{}, rt.expectedSize)}
+		rt.table[id] = &item{counts: make(map[types.NodeID]struct{}, rt.expectedSize)}
 	}
-	rt.table[id].counts[string(pubKey)] = struct{}{}
+	rt.table[id].counts[nodeID] = struct{}{}
 }

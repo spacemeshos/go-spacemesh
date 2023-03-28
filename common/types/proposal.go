@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -47,6 +48,10 @@ type Proposal struct {
 
 	// the following fields are kept private and from being serialized
 	proposalID ProposalID
+}
+
+func (p Proposal) Equal(other Proposal) bool {
+	return cmp.Equal(p.InnerProposal, other.InnerProposal) && p.Signature == other.Signature
 }
 
 // InnerProposal contains a smesher's content proposal for layer and its votes on the mesh history.

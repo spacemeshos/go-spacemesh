@@ -273,7 +273,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 			NumUnits: defaultATXUnit,
 		}}
 		atx.SetID(&id)
-		atx.SetNodeID(&types.NodeID{})
+		atx.SetNodeID(&types.EmptyNodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
@@ -455,7 +455,7 @@ func TestCheckEligibility_AtxNotIncluded(t *testing.T) {
 		},
 	}}
 	atx1.SetID(&types.ATXID{1})
-	atx1.SetNodeID(&types.NodeID{})
+	atx1.SetNodeID(&types.EmptyNodeID)
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	atx2 := &types.VerifiedActivationTx{ActivationTx: &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
@@ -463,7 +463,7 @@ func TestCheckEligibility_AtxNotIncluded(t *testing.T) {
 		},
 	}}
 	atx2.SetID(&types.ATXID{2})
-	atx2.SetNodeID(&types.NodeID{})
+	atx2.SetNodeID(&types.EmptyNodeID)
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	require.NoError(t, atxs.Add(tv.cdb, atx1))
 	require.NoError(t, atxs.Add(tv.cdb, atx2))

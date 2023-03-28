@@ -14,7 +14,7 @@ do
     for func in ${funcs}
     do
         parentDir=$(dirname $file)
-        command="go test $parentDir -run=$func -fuzz=$func -fuzztime=${fuzzTime}"
+        command="go test $parentDir -run=$func -fuzz=^$func\$ -fuzztime=${fuzzTime}"
         echo $command
         eval $command
     done

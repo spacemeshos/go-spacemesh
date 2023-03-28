@@ -23,7 +23,7 @@ func (t *HareEligibilityGossip) EncodeScale(enc *scale.Encoder) (total int, err 
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.PubKey, 32)
+		n, err := scale.EncodeByteArray(enc, t.NodeID[:])
 		if err != nil {
 			return total, err
 		}
@@ -56,12 +56,11 @@ func (t *HareEligibilityGossip) DecodeScale(dec *scale.Decoder) (total int, err 
 		t.Round = uint32(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		n, err := scale.DecodeByteArray(dec, t.NodeID[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.PubKey = field
 	}
 	{
 		n, err := t.Eligibility.DecodeScale(dec)

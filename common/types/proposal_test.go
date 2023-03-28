@@ -34,6 +34,14 @@ func TestProposal_Initialize(t *testing.T) {
 	require.EqualError(t, err, "proposal already initialized")
 }
 
+func FuzzProposalIDConsistency(f *testing.F) {
+	tester.FuzzConsistency[types.ProposalID](f)
+}
+
+func FuzzProposalIDSafety(f *testing.F) {
+	tester.FuzzSafety[types.ProposalID](f)
+}
+
 func FuzzProposalConsistency(f *testing.F) {
 	tester.FuzzConsistency[types.Proposal](f)
 }

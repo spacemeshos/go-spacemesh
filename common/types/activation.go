@@ -325,7 +325,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
 func (atx *ActivationTx) CalcAndSetID() error {
-	if atx.Signature == [64]byte{} {
+	if atx.Signature == EmptyEdSignature {
 		return fmt.Errorf("cannot calculate ATX ID: sig is nil")
 	}
 
@@ -490,7 +490,7 @@ func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddObject("PoetProof", &p.PoetProof)
 	encoder.AddString("PoetServiceID", hex.EncodeToString(p.PoetServiceID))
 	encoder.AddString("RoundID", p.RoundID)
-	encoder.AddString("Signature", hex.EncodeToString(p.Signature[:]))
+	encoder.AddString("Signature", p.Signature.String())
 
 	return nil
 }
@@ -507,6 +507,10 @@ func (proofMessage *PoetProofMessage) Ref() (PoetProofRef, error) {
 }
 
 type RoundEnd time.Time
+
+func (re RoundEnd) Equal(other RoundEnd) bool {
+	return (time.Time)(re).Equal((time.Time)(other))
+}
 
 func (re *RoundEnd) IntoTime() time.Time {
 	return (time.Time)(*re)

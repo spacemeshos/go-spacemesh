@@ -12,21 +12,21 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func discoverNodes(ctx *testcontext.Context, kind string, pt PodType) ([]*NodeClient, error) {
-	pods, err := ctx.Client.CoreV1().Pods(ctx.Namespace).List(ctx,
+func discoverNodes(ctx *testcontext.Context, kind string) ([]*NodeClient, error) {
+	deployments, err := ctx.Client.AppsV1().Deployments(ctx.Namespace).List(ctx,
 		apimetav1.ListOptions{LabelSelector: fmt.Sprintf("app=%s", kind)})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pods app=%s: %w", kind, err)
 	}
 	var (
 		eg      errgroup.Group
-		clients = make(chan *NodeClient, len(pods.Items))
+		clients = make(chan *NodeClient, len(deployments.Items))
 		rst     []*NodeClient
 	)
-	for _, pod := range pods.Items {
-		pod := pod
+	for _, deployment := range deployments.Items {
+		deployment := deployment
 		eg.Go(func() error {
-			client, err := waitNode(ctx, pod.Name, pt)
+			client, err := waitNode(ctx, deployment.Name)
 			if err != nil {
 				return err
 			}

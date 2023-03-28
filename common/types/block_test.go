@@ -41,7 +41,7 @@ func Test_CertifyMessage(t *testing.T) {
 	require.NoError(t, err)
 	nodeId, err := pke.ExtractNodeID(signing.HARE, decoded.Bytes(), decoded.Signature)
 	require.NoError(t, err)
-	require.Equal(t, signer.PublicKey().Bytes(), nodeId.Bytes())
+	require.Equal(t, signer.NodeID(), nodeId)
 }
 
 func Test_BlockIDsToHashes(t *testing.T) {
