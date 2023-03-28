@@ -122,7 +122,7 @@ func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID
 	}
 	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	if corruptSignature {
-		msg.Signature = signer.Sign(signing.BEACON, types.RandomBytes(32))
+		msg.Signature = signer.Sign(signing.BEACON, encoded[1:])
 	}
 	return msg
 }
@@ -157,7 +157,7 @@ func createFollowingVote(t *testing.T, signer *signing.EdSigner, epoch types.Epo
 	}
 	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	if corruptSignature {
-		msg.Signature = signer.Sign(signing.BEACON, types.RandomBytes(32))
+		msg.Signature = signer.Sign(signing.BEACON, encoded[1:])
 	}
 	return msg
 }

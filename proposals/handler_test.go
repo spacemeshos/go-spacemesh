@@ -252,7 +252,7 @@ func TestBallot_MalformedData(t *testing.T) {
 func TestBallot_BadSignature(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
-	b.Signature = types.RandomEdSignature()
+	b.Signature[types.EdSignatureSize-1] = 0xff
 	data := encodeBallot(t, b)
 	got := th.HandleSyncedBallot(context.Background(), p2p.NoPeer, data)
 	require.ErrorContains(t, got, "bad signature format")

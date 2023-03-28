@@ -211,7 +211,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 
 	sv.validMsgsTracker = newPubGetter()
 	tmp := msgs[0].Signature
-	msgs[0].Signature = types.RandomEdSignature()
+	msgs[0].Signature[types.EdSignatureSize-1] = 0xff
 	r.Error(sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
 	msgs[0].Signature = tmp
