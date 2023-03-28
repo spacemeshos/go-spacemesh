@@ -2,7 +2,6 @@
 package cmd
 
 import (
-	"fmt"
 	"math/big"
 	"reflect"
 
@@ -149,10 +148,5 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
 			assignFields(ff, elem, name)
 		}
 	})
-	// check list of requested GRPC services (if any)
-	if err := appCFG.API.ParseServicesList(); err != nil {
-		return fmt.Errorf("parse services list: %w", err)
-	}
-
 	return nil
 }

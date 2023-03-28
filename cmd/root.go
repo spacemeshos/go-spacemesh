@@ -114,29 +114,20 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.TIME.Peersync.RequiredResponses, "min number of clock samples from other that need to be collected to verify time")
 	/** ======================== API Flags ========================== **/
 
-	// StartJSONServer determines if json api server should be started
-	cmd.PersistentFlags().BoolVar(&cfg.API.StartJSONServer, "json-server",
-		cfg.API.StartJSONServer, "Start the grpc-gateway (json http) server. "+
-			"The gateway server will be enabled for all corresponding, enabled GRPC services.",
-	)
-	// JSONServerPort determines the json api server local listening port
-	cmd.PersistentFlags().IntVar(&cfg.API.JSONServerPort, "json-port",
-		cfg.API.JSONServerPort, "JSON api server port")
-	// StartGrpcServices determines which (if any) GRPC API services should be started
-	cmd.PersistentFlags().StringSliceVar(&cfg.API.StartGrpcServices, "grpc",
-		cfg.API.StartGrpcServices, "Comma-separated list of individual grpc services to enable "+
-			"(gateway,globalstate,mesh,node,smesher,transaction)")
-	// GrpcServerPort determines the grpc server local listening port
-	cmd.PersistentFlags().IntVar(&cfg.API.GrpcServerPort, "grpc-port",
-		cfg.API.GrpcServerPort, "GRPC api server port")
-	// GrpcServerInterface determines the interface the GRPC server listens on
-	cmd.PersistentFlags().StringVar(&cfg.API.GrpcServerInterface, "grpc-interface",
-		cfg.API.GrpcServerInterface, "GRPC api server interface")
+	cmd.PersistentFlags().StringSliceVar(&cfg.API.PublicServices, "grpc-public-services",
+		cfg.API.PublicServices, "List of services that are safe to open for the network.")
+	cmd.PersistentFlags().StringVar(&cfg.API.PublicListener, "grpc-public-listener",
+		cfg.API.PublicListener, "Socket for the list of services specified in grpc-public-services.")
+	cmd.PersistentFlags().StringSliceVar(&cfg.API.PrivateServices, "grpc-private-services",
+		cfg.API.PublicServices, "List of services that must be kept private or exposed only in secure environments.")
+	cmd.PersistentFlags().StringVar(&cfg.API.PublicListener, "grpc-private-listener",
+		cfg.API.PublicListener, "Socket for the list of services specified in grpc-private-services.")
 	cmd.PersistentFlags().IntVar(&cfg.API.GrpcRecvMsgSize, "grpc-recv-msg-size",
-		cfg.API.GrpcServerPort, "GRPC api recv message size")
+		cfg.API.GrpcRecvMsgSize, "GRPC api recv message size")
 	cmd.PersistentFlags().IntVar(&cfg.API.GrpcSendMsgSize, "grpc-send-msg-size",
-		cfg.API.GrpcServerPort, "GRPC api send message size")
-
+		cfg.API.GrpcSendMsgSize, "GRPC api send message size")
+	cmd.PersistentFlags().StringVar(&cfg.API.JSONListener, "grpc-json-listener",
+		cfg.API.JSONListener, "Socket for the grpc gateway on the list of services in grpc-public-services. If left empty - grpc gateway won't be enabled.")
 	/**======================== Hare Flags ========================== **/
 
 	// N determines the size of the hare committee

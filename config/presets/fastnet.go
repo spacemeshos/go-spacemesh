@@ -16,14 +16,6 @@ func fastnet() config.Config {
 	conf := config.DefaultConfig()
 	conf.Address = types.DefaultTestAddressConfig()
 
-	conf.API.StartGrpcServices = []string{
-		"gateway", "node", "mesh", "globalstate",
-		"transaction", "smesher", "debug",
-	}
-	if err := conf.API.ParseServicesList(); err != nil {
-		panic(err)
-	}
-
 	conf.BaseConfig.OptFilterThreshold = 90
 
 	conf.HARE.N = 800
