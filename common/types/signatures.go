@@ -33,7 +33,7 @@ func (s EdSignature) String() string {
 }
 
 // Bytes returns the byte representation of the Signature.
-func (s EdSignature) Bytes() []byte {
+func (s *EdSignature) Bytes() []byte {
 	return s[:]
 }
 
@@ -49,6 +49,6 @@ func (s VrfSignature) String() string {
 }
 
 // Bytes returns the byte representation of the Signature.
-func (s VrfSignature) Bytes() []byte {
+func (s *VrfSignature) Bytes() []byte {
 	return s[:]
 }
