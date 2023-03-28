@@ -119,7 +119,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&cfg.API.PublicListener, "grpc-public-listener",
 		cfg.API.PublicListener, "Socket for the list of services specified in grpc-public-services.")
 	cmd.PersistentFlags().StringSliceVar(&cfg.API.PrivateServices, "grpc-private-services",
-		cfg.API.PublicServices, "List of services that must be kept private or exposed only in secure environments.")
+		cfg.API.PrivateServices, "List of services that must be kept private or exposed only in secure environments.")
 	cmd.PersistentFlags().StringVar(&cfg.API.PrivateListener, "grpc-private-listener",
 		cfg.API.PrivateListener, "Socket for the list of services specified in grpc-private-services.")
 	cmd.PersistentFlags().IntVar(&cfg.API.GrpcRecvMsgSize, "grpc-recv-msg-size",
