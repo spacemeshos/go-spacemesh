@@ -69,7 +69,6 @@ const (
 
 // Logger names.
 const (
-	AppLogger              = "app"
 	ClockLogger            = "clock"
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
@@ -187,18 +186,6 @@ type Service interface {
 	Close()
 }
 
-// NodeClock is an interface to a global system clock that releases ticks on each layer.
-type NodeClock interface {
-	LayerToTime(types.LayerID) time.Time
-	TimeToLayer(time.Time) types.LayerID
-	GenesisTime() time.Time
-
-	CurrentLayer() types.LayerID
-	AwaitLayer(types.LayerID) chan struct{}
-
-	Close()
-}
-
 func loadConfig(c *cobra.Command) (*config.Config, error) {
 	conf, err := LoadConfigFromFile()
 	if err != nil {
@@ -287,7 +274,7 @@ type App struct {
 	proposalBuilder  *miner.ProposalBuilder
 	mesh             *mesh.Mesh
 	cachedDB         *datastore.CachedDB
-	clock            NodeClock
+	clock            *timesync.NodeClock
 	hare             *hare.Hare
 	blockGen         *blocks.Generator
 	certifier        *blocks.Certifier
@@ -458,7 +445,7 @@ func (app *App) initServices(
 	sgn *signing.EdSigner,
 	poetClients []activation.PoetProvingServiceClient,
 	vrfSigner *signing.VRFSigner,
-	clock NodeClock,
+	clock *timesync.NodeClock,
 ) error {
 	nodeID := sgn.NodeID()
 	layerSize := uint32(app.Config.LayerAvgSize)
@@ -535,6 +522,11 @@ func (app *App) initServices(
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
+	poetCfg := activation.PoetConfig{
+		PhaseShift:  app.Config.POET.PhaseShift,
+		CycleGap:    app.Config.POET.CycleGap,
+		GracePeriod: app.Config.POET.GracePeriod,
+	}
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
 		app.cachedDB,
@@ -548,6 +540,7 @@ func (app *App) initServices(
 		validator,
 		[]activation.AtxReceiver{trtl, beaconProtocol},
 		app.addLogger(ATXHandlerLogger, lg),
+		poetCfg,
 	)
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
@@ -557,7 +550,7 @@ func (app *App) initServices(
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.keyExtractor, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier,
+	proposalListener := proposals.NewHandler(app.cachedDB, app.keyExtractor, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, clock,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,
@@ -663,11 +656,6 @@ func (app *App) initServices(
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	poetCfg := activation.PoetConfig{
-		PhaseShift:  app.Config.POET.PhaseShift,
-		CycleGap:    app.Config.POET.CycleGap,
-		GracePeriod: app.Config.POET.GracePeriod,
-	}
 	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, app.db, app.addLogger(NipostBuilderLogger, lg), sgn, poetCfg, clock)
 
 	var coinbaseAddr types.Address
@@ -1115,7 +1103,6 @@ func (app *App) Start(ctx context.Context) error {
 		return fmt.Errorf("could not create vrf signer: %w", err)
 	}
 
-	app.log = app.addLogger(AppLogger, lg)
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 	err = app.initServices(
 		ctx,

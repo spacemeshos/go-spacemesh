@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -70,6 +71,9 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 		logger.With().Warning("received malformed beacon proposal", log.Stringer("sender", peer), log.Err(err))
 		return errMalformedMessage
 	}
+
+	latency := receivedTime.Sub(pd.msgTimes.proposalSendTime(m.EpochID))
+	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconProposalProtocol, latency)
 
 	if !pd.isProposalTimely(&m, receivedTime) {
 		logger.With().Debug("proposal too early", m.EpochID, log.Time("received_at", receivedTime))
@@ -235,6 +239,7 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 }
 
 func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, msg []byte) error {
+	receivedTime := time.Now()
 	logger := pd.logger.WithContext(ctx).WithFields(types.FirstRound, log.Stringer("sender", peer))
 
 	var m FirstVotingMessage
@@ -242,6 +247,9 @@ func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, m
 		logger.With().Warning("received invalid first votes", log.Err(err))
 		return errMalformedMessage
 	}
+
+	latency := receivedTime.Sub(pd.msgTimes.firstVoteSendTime(m.EpochID))
+	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconFirstVotesProtocol, latency)
 
 	currentEpoch := pd.currentEpoch()
 	if m.EpochID != currentEpoch {
@@ -363,6 +371,9 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 			log.Uint32("message_epoch", uint32(m.EpochID)))
 		return errEpochNotActive
 	}
+
+	latency := receivedTime.Sub(pd.msgTimes.followupVoteSendTime(m.EpochID, m.RoundID))
+	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconFollowingVotesProtocol, latency)
 
 	// don't accept votes from future rounds
 	if !pd.isVoteTimely(&m, receivedTime) {

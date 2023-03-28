@@ -132,6 +132,10 @@ func New(
 	for _, opt := range opts {
 		opt(pd)
 	}
+	pd.msgTimes = &messageTimes{
+		clock: clock,
+		conf:  pd.config,
+	}
 
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(pd.config.Theta)
@@ -141,6 +145,7 @@ func New(
 
 	if pd.weakCoin == nil {
 		pd.weakCoin = weakcoin.New(pd.publisher, vrfSigner, vrfVerifier, pd.nonceFetcher, pd,
+			pd.msgTimes,
 			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
 			weakcoin.WithMaxRound(pd.config.RoundsNumber),
 		)
@@ -171,8 +176,9 @@ type ProtocolDriver struct {
 	weakCoin        coin
 	theta           *big.Float
 
-	clock layerClock
-	cdb   *datastore.CachedDB
+	clock    layerClock
+	msgTimes *messageTimes
+	cdb      *datastore.CachedDB
 
 	mu sync.RWMutex
 
@@ -1139,4 +1145,33 @@ func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 	}
 
 	return observed, calculated
+}
+
+// messageTimes provides methods to determine the intended send time of
+// messages spceific to the beacon protocol.
+type messageTimes struct {
+	clock layerClock
+	conf  Config
+}
+
+// proposalSendTime returns the time at which a proposal is sent for an epoch.
+func (mt *messageTimes) proposalSendTime(epoch types.EpochID) time.Time {
+	return mt.clock.LayerToTime(epoch.FirstLayer())
+}
+
+// firstVoteSendTime returns the time at which the first vote is sent for an epoch.
+func (mt *messageTimes) firstVoteSendTime(epoch types.EpochID) time.Time {
+	return mt.proposalSendTime(epoch).Add(mt.conf.ProposalDuration)
+}
+
+// followupVoteSendTime returns the time at which the followup votes are sent for an epoch and round.
+func (mt *messageTimes) followupVoteSendTime(epoch types.EpochID, round types.RoundID) time.Time {
+	subsequentRoundDuration := mt.conf.VotingRoundDuration + mt.conf.WeakCoinRoundDuration
+	return mt.firstVoteSendTime(epoch).Add(mt.conf.FirstVotingRoundDuration).Add(subsequentRoundDuration * time.Duration(round-1))
+}
+
+// weakCoinProposalSendTime returns the time at which the weak coin proposals are sent for an epoch and round.
+func (mt *messageTimes) WeakCoinProposalSendTime(epoch types.EpochID, round types.RoundID) time.Time {
+	subsequentRoundDuration := mt.conf.VotingRoundDuration + mt.conf.WeakCoinRoundDuration
+	return mt.firstVoteSendTime(epoch).Add(mt.conf.FirstVotingRoundDuration + mt.conf.VotingRoundDuration).Add(subsequentRoundDuration * time.Duration(round-1))
 }

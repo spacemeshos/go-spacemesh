@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-scale/tester"
@@ -54,6 +55,16 @@ func nonceFetcher(tb testing.TB, ctrl *gomock.Controller) *weakcoin.MocknonceFet
 	fetcher := weakcoin.NewMocknonceFetcher(ctrl)
 	fetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).AnyTimes()
 	return fetcher
+}
+
+// stubClock is provided to satisfy the needs of metric reporting in order to
+// avoid nil pointer exceptions in tests. It's simpler to do this than use a
+// mock which would require setting expectations for in every test where the
+// clock is interacted with.
+type stubClock struct{}
+
+func (c *stubClock) WeakCoinProposalSendTime(epoch types.EpochID, round types.RoundID) time.Time {
+	return time.Now()
 }
 
 func TestWeakCoin(t *testing.T) {
@@ -148,6 +159,7 @@ func TestWeakCoin(t *testing.T) {
 				sigVerifier(t, ctrl),
 				nonceFetcher(t, ctrl),
 				mockAllowance,
+				&stubClock{},
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithLog(logtest.New(t)),
 			)
@@ -304,6 +316,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				sigVerifier(t, ctrl),
 				nonceFetcher(t, ctrl),
 				mockAllowance,
+				&stubClock{},
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithLog(logtest.New(t)),
 			)
@@ -339,6 +352,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 		sigVerifier(t, ctrl),
 		nonceFetcher(t, ctrl),
 		mockAllowance,
+		&stubClock{},
 		weakcoin.WithNextRoundBufferSize(bufSize),
 	)
 
@@ -405,6 +419,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 		signing.NewVRFVerifier(),
 		nonceFetcher(t, ctrl),
 		mockAllowance,
+		&stubClock{},
 		weakcoin.WithThreshold([]byte{0xff}),
 		weakcoin.WithLog(logtest.New(t)),
 	)
@@ -460,6 +475,7 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 			signing.NewVRFVerifier(),
 			nonceFetcher(t, ctrl),
 			mockAllowance,
+			&stubClock{},
 			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),
 		)
 	}
