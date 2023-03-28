@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -49,6 +50,7 @@ type Handler struct {
 	mu              sync.Mutex
 	atxChannels     map[types.ATXID]*atxChan
 	fetcher         system.Fetcher
+	poetCfg         PoetConfig
 }
 
 // NewHandler returns a data handler for ATX.
@@ -64,6 +66,7 @@ func NewHandler(
 	nipostValidator nipostValidator,
 	atxReceivers []AtxReceiver,
 	log log.Log,
+	poetCfg PoetConfig,
 ) *Handler {
 	return &Handler{
 		cdb:             cdb,
@@ -78,6 +81,7 @@ func NewHandler(
 		log:             log,
 		atxChannels:     make(map[types.ATXID]*atxChan),
 		fetcher:         fetcher,
+		poetCfg:         poetCfg,
 	}
 }
 
@@ -470,11 +474,18 @@ func (h *Handler) registerHashes(atx *types.ActivationTx, peer p2p.Peer) {
 }
 
 func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte) error {
+	receivedTime := time.Now()
 	var atx types.ActivationTx
 	if err := codec.Decode(data, &atx); err != nil {
 		return errMalformedData
 	}
-	atx.SetReceived(time.Now().Local())
+
+	epochStart := h.clock.LayerToTime(atx.PublishEpoch().FirstLayer())
+	poetRoundEnd := epochStart.Add(h.poetCfg.PhaseShift - h.poetCfg.CycleGap)
+	latency := receivedTime.Sub(poetRoundEnd)
+	metrics.ReportMessageLatency(pubsub.AtxProtocol, pubsub.AtxProtocol, latency)
+
+	atx.SetReceived(receivedTime.Local())
 
 	nodeID, err := h.extractor.ExtractNodeID(signing.ATX, atx.SignedBytes(), atx.Signature)
 	if err != nil {

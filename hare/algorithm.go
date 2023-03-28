@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -499,7 +500,9 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.Int("num_values", len(m.InnerMsg.Values)))
 
-	reportLatency(m.InnerMsg.Type, m.Round, proc.clock)
+	// Report the latency since the beginning of the round
+	latency := time.Since(proc.clock.RoundEnd(m.Round - 1))
+	metrics.ReportMessageLatency(pubsub.HareProtocol, m.InnerMsg.Type.String(), latency)
 	switch m.InnerMsg.Type {
 	case pre:
 		proc.processPreRoundMsg(ctx, m)
