@@ -73,7 +73,7 @@ func createProposal(t *testing.T, vrfSigner *signing.VRFSigner, epoch types.Epoc
 		VRFSignature: sig,
 	}
 	if corruptSignature {
-		msg.VRFSignature[0] ^= sig[0] // invert bits of first byte
+		msg.VRFSignature = vrfSigner.Sign(types.RandomBytes(32))
 	}
 	return msg
 }
@@ -121,9 +121,8 @@ func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
 	msg.Signature = signer.Sign(signing.BEACON, encoded)
-
 	if corruptSignature {
-		msg.Signature = types.RandomEdSignature()
+		msg.Signature = signer.Sign(signing.BEACON, encoded[1:])
 	}
 	return msg
 }
@@ -158,7 +157,7 @@ func createFollowingVote(t *testing.T, signer *signing.EdSigner, epoch types.Epo
 	}
 	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	if corruptSignature {
-		msg.Signature = types.RandomEdSignature()
+		msg.Signature = signer.Sign(signing.BEACON, encoded[1:])
 	}
 	return msg
 }
@@ -954,7 +953,7 @@ func Test_HandleFirstVotes_FailedToExtractPK(t *testing.T) {
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleFirstVotes(context.Background(), "peerID", msgBytes)
-	require.Contains(t, got.Error(), "bad signature format")
+	require.Contains(t, got.Error(), "miner ATX not found in previous epoch")
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, false)
 	checkFirstIncomingVotes(t, tpd.ProtocolDriver, epoch, map[types.NodeID]proposalList{})
 }
@@ -1199,7 +1198,7 @@ func Test_handleFollowingVotes_FailedToExtractPK(t *testing.T) {
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleFollowingVotes(context.Background(), "peerID", msgBytes, time.Now())
-	require.Contains(t, got.Error(), "bad signature format")
+	require.Contains(t, got.Error(), "miner ATX not found in previous epoch")
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, false)
 	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }
