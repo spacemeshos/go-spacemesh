@@ -24,7 +24,6 @@ func TestCanGeneratePOST(t *testing.T) {
 
 			opts := params.SMESHING.Opts
 			opts.DataDir = t.TempDir()
-			opts.MaxFileSize = 4096
 
 			mgr, err := activation.NewPostSetupManager(types.NodeID{}, params.POST, logtest.New(t), cdb, goldenATXID)
 			req.NoError(err)

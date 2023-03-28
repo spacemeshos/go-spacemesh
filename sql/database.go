@@ -8,6 +8,7 @@ import (
 
 	"crawshaw.io/sqlite"
 	"crawshaw.io/sqlite/sqlitex"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var (
@@ -53,9 +54,10 @@ func defaultConf() *conf {
 }
 
 type conf struct {
-	flags       sqlite.OpenFlags
-	connections int
-	migrations  Migrations
+	flags         sqlite.OpenFlags
+	connections   int
+	migrations    Migrations
+	enableLatency bool
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -69,6 +71,15 @@ func WithConnections(n int) Opt {
 func WithMigrations(migrations Migrations) Opt {
 	return func(c *conf) {
 		c.migrations = migrations
+	}
+}
+
+// WithLatencyMetering enables metric that track latency for every database query.
+// Note that it will be a significant amount of data, and should not be enabled on
+// multiple nodes by default.
+func WithLatencyMetering(enable bool) Opt {
+	return func(c *conf) {
+		c.enableLatency = enable
 	}
 }
 
@@ -100,6 +111,9 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		return nil, fmt.Errorf("open db %s: %w", uri, err)
 	}
 	db := &Database{pool: pool}
+	if config.enableLatency {
+		db.latency = newQueryLatency()
+	}
 	if config.migrations != nil {
 		tx, err := db.Tx(context.Background())
 		if err != nil {
@@ -127,6 +141,8 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 // Database is an instance of sqlite database.
 type Database struct {
 	pool *sqlitex.Pool
+
+	latency *prometheus.HistogramVec
 }
 
 func (db *Database) getTx(ctx context.Context, initstmt string) (*Tx, error) {
@@ -199,6 +215,12 @@ func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, e
 		return 0, ErrNoConnection
 	}
 	defer db.pool.Put(conn)
+	if db.latency != nil {
+		start := time.Now()
+		defer func() {
+			db.latency.WithLabelValues(query).Observe(float64(time.Since(start)))
+		}()
+	}
 	return exec(conn, query, encoder, decoder)
 }
 
@@ -211,11 +233,6 @@ func (db *Database) Close() error {
 }
 
 func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (int, error) {
-	start := time.Now()
-	defer func() {
-		queryDuration.WithLabelValues(query).Observe(float64(time.Since(start)))
-	}()
-
 	stmt, err := conn.Prepare(query)
 	if err != nil {
 		return 0, fmt.Errorf("prepare %s: %w", query, err)
@@ -293,5 +310,11 @@ func (tx *Tx) Release() error {
 
 // Exec query.
 func (tx *Tx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
+	if tx.db.latency != nil {
+		start := time.Now()
+		defer func() {
+			tx.db.latency.WithLabelValues(query).Observe(float64(time.Since(start)))
+		}()
+	}
 	return exec(tx.conn, query, encoder, decoder)
 }

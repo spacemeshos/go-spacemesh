@@ -14,6 +14,10 @@ import (
 
 var cfg = config.DefaultConfig()
 
+func ResetConfig() {
+	cfg = config.DefaultConfig()
+}
+
 // AddCommands adds cobra commands to the app.
 func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringP("preset", "p", "",
@@ -51,8 +55,6 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(&cfg.PprofHTTPServer, "pprof-server",
 		cfg.PprofHTTPServer, "enable http pprof server")
 	cmd.PersistentFlags().Uint64Var(&cfg.TickSize, "tick-size", cfg.TickSize, "number of poet leaves in a single tick")
-	cmd.PersistentFlags().StringVar(&cfg.PublishEventsURL, "events-url",
-		cfg.PublishEventsURL, "publish events to this url; if no url specified no events will be published")
 	cmd.PersistentFlags().StringVar(&cfg.ProfilerURL, "profiler-url",
 		cfg.ProfilerURL, "send profiler data to certain url, if no url no profiling will be sent, format: http://<IP>:<PORT>")
 	cmd.PersistentFlags().StringVar(&cfg.ProfilerName, "profiler-name",
@@ -70,12 +72,16 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(cfg.Genesis.Accounts), "accounts", "a",
 		"List of prefunded accounts")
 
+	cmd.PersistentFlags().IntVar(&cfg.DatabaseConnections, "db-connections",
+		cfg.DatabaseConnections, "configure number of active connections to enable parallel read requests")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.Flood, "db-latency-metering",
+		cfg.DatabaseLatencyMetering, "if enabled collect latency histogram for every database query")
 	/** ======================== P2P Flags ========================== **/
 
 	cmd.PersistentFlags().StringVar(&cfg.P2P.Listen, "listen",
 		cfg.P2P.Listen, "address for listening")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.Flood, "flood",
-		cfg.P2P.Flood, "flood created messages to all peers (true by default. disable to lower traffic requirements)")
+		cfg.P2P.Flood, "flood created messages to all peers")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.DisableNatPort, "disable-natport",
 		cfg.P2P.DisableNatPort, "disable nat port-mapping (if enabled upnp protocol is used to negotiate external port with router)")
 	cmd.PersistentFlags().IntVar(&cfg.P2P.LowPeers, "low-peers",
@@ -126,6 +132,10 @@ func AddCommands(cmd *cobra.Command) {
 	// GrpcServerInterface determines the interface the GRPC server listens on
 	cmd.PersistentFlags().StringVar(&cfg.API.GrpcServerInterface, "grpc-interface",
 		cfg.API.GrpcServerInterface, "GRPC api server interface")
+	cmd.PersistentFlags().IntVar(&cfg.API.GrpcRecvMsgSize, "grpc-recv-msg-size",
+		cfg.API.GrpcServerPort, "GRPC api recv message size")
+	cmd.PersistentFlags().IntVar(&cfg.API.GrpcSendMsgSize, "grpc-send-msg-size",
+		cfg.API.GrpcServerPort, "GRPC api send message size")
 
 	/**======================== Hare Flags ========================== **/
 
@@ -189,9 +199,6 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.Tortoise.BadBeaconVoteDelayLayers, "number of layers to ignore a ballot with a different beacon")
 
 	// TODO(moshababo): add usage desc
-
-	cmd.PersistentFlags().Uint8Var(&cfg.POST.BitsPerLabel, "post-bits-per-label",
-		cfg.POST.BitsPerLabel, "")
 	cmd.PersistentFlags().Uint64Var(&cfg.POST.LabelsPerUnit, "post-labels-per-unit",
 		cfg.POST.LabelsPerUnit, "")
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.MinNumUnits, "post-min-numunits",
@@ -199,9 +206,15 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.MaxNumUnits, "post-max-numunits",
 		cfg.POST.MaxNumUnits, "")
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.K1, "post-k1",
-		cfg.POST.K1, "")
+		cfg.POST.K1, "difficulty factor for finding a good label when generating a proof")
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.K2, "post-k2",
-		cfg.POST.K2, "")
+		cfg.POST.K2, "number of labels to prove")
+	cmd.PersistentFlags().Uint32Var(&cfg.POST.K3, "post-k3",
+		cfg.POST.K3, "subset of labels to verify in a proof")
+	cmd.PersistentFlags().Uint64Var(&cfg.POST.K2PowDifficulty, "post-k2pow-difficulty",
+		cfg.POST.K2PowDifficulty, "difficulty of K2 proof of work")
+	cmd.PersistentFlags().Uint64Var(&cfg.POST.K3PowDifficulty, "post-k3pow-difficulty",
+		cfg.POST.K3PowDifficulty, "difficulty of K3 proof of work")
 
 	/**======================== Smeshing Flags ========================== **/
 

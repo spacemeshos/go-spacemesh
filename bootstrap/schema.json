@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spacemesh.io/checkpoint.schema.json.1.0",
+  "title": "epoch data",
+  "description": "epoch data for bootstrapping and fallback",
+  "type": "object",
+  "required": ["version", "data"],
+  "properties": {
+    "version": {
+      "description": "version of the checkpoint file. should be compatible schema's $id",
+      "type": "string"
+    },
+    "data": {
+      "type": "object",
+      "required": ["id", "epochs"],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "epochs": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "epoch": {
+                "description": "epoch number",
+                "type": "integer",
+                "minimum": 0
+              },
+              "beacon": {
+                "description": "the random beacon value for this epoch",
+                "type": "string",
+                "minLength": 8
+              },
+              "activeSet": {
+                "description": "the set of ATXs for hare protocol in this epoch",
+                "type": "array",
+                "uniqueItems": true,
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+

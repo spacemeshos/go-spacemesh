@@ -68,10 +68,6 @@ type Builder struct {
 	initialPost       *types.Post
 	initialPostMeta   *types.PostMetadata
 
-	// commitmentAtx caches the ATX ID used for the PoST commitment by this node. It is set / fetched
-	// from the DB by calling `getCommitmentAtx()` and cAtxMutex protects its access.
-	commitmentAtx *types.ATXID
-
 	// smeshingMutex protects `StartSmeshing` and `StopSmeshing` from concurrent access
 	smeshingMutex sync.Mutex
 
@@ -464,7 +460,7 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 		if err != nil {
 			return &PoetSvcUnstableError{source: fmt.Errorf("failed to query poet '%s' for ID: %w", endpoint, err)}
 		}
-		b.log.WithContext(ctx).With().Debug("preparing to update poet service", log.String("poet_id", hex.EncodeToString(sid)))
+		b.log.WithContext(ctx).With().Debug("preparing to update poet service", log.String("poet_id", hex.EncodeToString(sid.ServiceID)))
 		clients = append(clients, client)
 	}
 

@@ -202,7 +202,7 @@ type NodeClock interface {
 func loadConfig(c *cobra.Command) (*config.Config, error) {
 	conf, err := LoadConfigFromFile()
 	if err != nil {
-		return nil, fmt.Errorf("loading config from file: %w", err)
+		return nil, err
 	}
 	if err := cmd.EnsureCLIFlags(c, conf); err != nil {
 		return nil, fmt.Errorf("mapping cli flags to config: %w", err)
@@ -212,17 +212,11 @@ func loadConfig(c *cobra.Command) (*config.Config, error) {
 
 // LoadConfigFromFile tries to load configuration file if the config parameter was specified.
 func LoadConfigFromFile() (*config.Config, error) {
-	fileLocation := viper.GetString("config")
-
 	// read in default config if passed as param using viper
-	if err := config.LoadConfig(fileLocation, viper.GetViper()); err != nil {
-		log.Error(fmt.Sprintf("couldn't load config file at location: %s switching to defaults \n error: %v.",
-			fileLocation, err))
-		// return err
+	if err := config.LoadConfig(viper.GetString("config"), viper.GetViper()); err != nil {
+		return nil, err
 	}
-
 	conf := config.DefaultConfig()
-
 	if name := viper.GetString("preset"); len(name) > 0 {
 		preset, err := presets.Get(name)
 		if err != nil {
@@ -812,6 +806,8 @@ func (app *App) startAPIServices(ctx context.Context) {
 			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
 				grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger)),
 				grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger)),
+				grpc.MaxSendMsgSize(apiConf.GrpcSendMsgSize),
+				grpc.MaxRecvMsgSize(apiConf.GrpcRecvMsgSize),
 			)
 		}
 		services = append(services, svc)
@@ -995,7 +991,10 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
 
-	sqlDB, err := sql.Open("file:" + filepath.Join(dbPath, "state.sql"))
+	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, "state.sql"),
+		sql.WithConnections(app.Config.DatabaseConnections),
+		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
+	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}

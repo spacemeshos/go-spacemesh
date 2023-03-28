@@ -52,14 +52,12 @@ func testnet() config.Config {
 	conf.Tortoise.Zdist = 10
 	conf.Tortoise.BadBeaconVoteDelayLayers = 30
 
-	conf.POST.BitsPerLabel = 8
-	conf.POST.K1 = 200
-	conf.POST.K2 = 212
-	conf.POST.LabelsPerUnit = 2048
+	conf.POST.K1 = 273
+	conf.POST.K2 = 300
+	conf.POST.K3 = 100
+	conf.POST.LabelsPerUnit = 20 * 1024 / 16 // 20 kB units
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
-	conf.POST.N = 32
-	conf.POST.B = 16
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -43,10 +44,14 @@ type Proposal struct {
 	// the content proposal for a given layer and the votes on the mesh history
 	InnerProposal
 	// smesher's signature on InnerProposal
-	Signature []byte
+	Signature []byte `scale:"max=64"`
 
 	// the following fields are kept private and from being serialized
 	proposalID ProposalID
+}
+
+func (p Proposal) Equal(other Proposal) bool {
+	return cmp.Equal(p.InnerProposal, other.InnerProposal) && bytes.Equal(p.Signature, other.Signature)
 }
 
 // InnerProposal contains a smesher's content proposal for layer and its votes on the mesh history.
@@ -55,7 +60,7 @@ type InnerProposal struct {
 	// smesher's votes on the mesh history
 	Ballot
 	// smesher's content proposal for a layer
-	TxIDs []TransactionID
+	TxIDs []TransactionID `scale:"max=100000"`
 	// aggregated hash up to the layer before this proposal.
 	MeshHash Hash32
 	// TODO add this when a state commitment mechanism is implemented.

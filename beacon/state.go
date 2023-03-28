@@ -21,14 +21,14 @@ type state struct {
 	incomingProposals proposals
 	// minerPublicKey -> list of proposal.
 	// this list is used in encoding/decoding votes for each miner in all subsequent voting rounds.
-	firstRoundIncomingVotes map[string]proposalList
+	firstRoundIncomingVotes map[types.NodeID]proposalList
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
-	votesMargin               map[string]*big.Int
+	votesMargin               map[Proposal]*big.Int
 	hasProposed               map[string]struct{}
-	hasVoted                  []map[string]struct{}
+	hasVoted                  []map[types.NodeID]struct{}
 	proposalPhaseFinishedTime time.Time
 	proposalChecker           eligibilityChecker
-	minerAtxs                 map[string]types.ATXID
+	minerAtxs                 map[types.NodeID]types.ATXID
 }
 
 func newState(
@@ -36,7 +36,7 @@ func newState(
 	cfg Config,
 	nonce *types.VRFPostIndex,
 	epochWeight uint64,
-	miners map[string]types.ATXID,
+	miners map[types.NodeID]types.ATXID,
 	checker eligibilityChecker,
 ) *state {
 	return &state{
@@ -44,48 +44,49 @@ func newState(
 		epochWeight:             epochWeight,
 		nonce:                   nonce,
 		minerAtxs:               miners,
-		firstRoundIncomingVotes: make(map[string]proposalList),
-		votesMargin:             map[string]*big.Int{},
+		firstRoundIncomingVotes: make(map[types.NodeID]proposalList),
+		votesMargin:             map[Proposal]*big.Int{},
 		hasProposed:             make(map[string]struct{}),
-		hasVoted:                make([]map[string]struct{}, cfg.RoundsNumber),
+		hasVoted:                make([]map[types.NodeID]struct{}, cfg.RoundsNumber),
 		proposalChecker:         checker,
 	}
 }
 
-func (s *state) addValidProposal(proposal []byte) {
+func (s *state) addValidProposal(proposal Proposal) {
 	if s.incomingProposals.valid == nil {
-		s.incomingProposals.valid = make(map[string]struct{})
+		s.incomingProposals.valid = make(map[Proposal]struct{})
 	}
-	s.incomingProposals.valid[string(proposal)] = struct{}{}
-	s.votesMargin[string(proposal)] = new(big.Int)
+	s.incomingProposals.valid[proposal] = struct{}{}
+	s.votesMargin[proposal] = new(big.Int)
 }
 
-func (s *state) addPotentiallyValidProposal(proposal []byte) {
+func (s *state) addPotentiallyValidProposal(proposal Proposal) {
 	if s.incomingProposals.potentiallyValid == nil {
-		s.incomingProposals.potentiallyValid = make(map[string]struct{})
+		s.incomingProposals.potentiallyValid = make(map[Proposal]struct{})
 	}
-	s.incomingProposals.potentiallyValid[string(proposal)] = struct{}{}
-	s.votesMargin[string(proposal)] = new(big.Int)
+	s.incomingProposals.potentiallyValid[proposal] = struct{}{}
+	s.votesMargin[proposal] = new(big.Int)
 }
 
-func (s *state) setMinerFirstRoundVote(minerPK *signing.PublicKey, voteList [][]byte) {
-	s.firstRoundIncomingVotes[string(minerPK.Bytes())] = voteList
+func (s *state) setMinerFirstRoundVote(minerID types.NodeID, voteList []Proposal) {
+	s.firstRoundIncomingVotes[minerID] = voteList
 }
 
-func (s *state) getMinerFirstRoundVote(minerPK *signing.PublicKey) (proposalList, error) {
-	p, ok := s.firstRoundIncomingVotes[string(minerPK.Bytes())]
+func (s *state) getMinerFirstRoundVote(minerID types.NodeID) (proposalList, error) {
+	p, ok := s.firstRoundIncomingVotes[minerID]
 	if !ok {
 		return nil, fmt.Errorf("no first round votes for miner")
 	}
 	return p, nil
 }
 
-func (s *state) addVote(proposal string, vote uint, voteWeight *big.Int) {
+func (s *state) addVote(proposal Proposal, vote uint, voteWeight *big.Int) {
 	if _, ok := s.votesMargin[proposal]; !ok {
 		// voteMargin is updated during the proposal phase.
 		// ignore votes on proposals not in the original proposals.
 		s.logger.With().Warning("ignoring vote for unknown proposal",
-			log.String("proposal", hex.EncodeToString([]byte(proposal))))
+			log.String("proposal", hex.EncodeToString(proposal[:])),
+		)
 		return
 	}
 	if vote == up {
@@ -107,12 +108,11 @@ func (s *state) registerProposed(logger log.Log, minerPK *signing.PublicKey) err
 	return nil
 }
 
-func (s *state) registerVoted(logger log.Log, minerPK *signing.PublicKey, round types.RoundID) error {
+func (s *state) registerVoted(logger log.Log, minerID types.NodeID, round types.RoundID) error {
 	if s.hasVoted[round] == nil {
-		s.hasVoted[round] = make(map[string]struct{})
+		s.hasVoted[round] = make(map[types.NodeID]struct{})
 	}
 
-	minerID := string(minerPK.Bytes())
 	// TODO(nkryuchkov): consider having a separate table for an epoch with one bit in it if atx/miner is voted already
 	if _, ok := s.hasVoted[round][minerID]; ok {
 		logger.Warning("already received vote from miner for this round")
@@ -124,7 +124,7 @@ func (s *state) registerVoted(logger log.Log, minerPK *signing.PublicKey, round 
 		// TODO(nkryuchkov): ban id forever globally across packages since this epoch
 		// TODO(nkryuchkov): (not specific to beacon) do the same for ATXs
 
-		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, minerPK.ShortString(), errAlreadyVoted)
+		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, minerID.ShortString(), errAlreadyVoted)
 	}
 
 	s.hasVoted[round][minerID] = struct{}{}
