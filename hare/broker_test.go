@@ -250,7 +250,7 @@ func TestBroker_Send(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature()).Message
+	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature).Message
 	msg.Layer = instanceID2
 	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
 
@@ -280,7 +280,7 @@ func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature())
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
 	data := mustEncode(t, m.Message)
 
 	broker.mockMesh.EXPECT().GetMalfeasanceProof(signer.NodeID())
@@ -422,7 +422,7 @@ func TestBroker_Register(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature())
+	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
 
 	broker.mu.Lock()
 	broker.pending[instanceID1.Uint32()] = []any{msg, msg}
@@ -448,7 +448,7 @@ func TestBroker_Register2(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature()).Message
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature).Message
 	m.Layer = instanceID1
 
 	msg := newMockGossipMsg(m).Message
@@ -470,7 +470,7 @@ func TestBroker_Register3(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature()).Message
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature).Message
 	m.Layer = instanceID1
 
 	broker.HandleMessage(context.Background(), "", mustEncode(t, m))
@@ -500,7 +500,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature()).Message
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature).Message
 	m.Layer = instanceID1
 
 	broker.HandleMessage(context.Background(), "", mustEncode(t, m))
@@ -524,7 +524,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 func Test_newMsg(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature()).Message
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature).Message
 	// TODO: remove this comment when ready
 	//_, e := newMsg(m, MockStateQuerier{false, errors.New("my err")})
 	//assert.NotNil(t, e)
@@ -593,7 +593,7 @@ func TestBroker_eventLoop(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature()).Message
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature).Message
 
 	// not synced
 	m.Layer = instanceID1

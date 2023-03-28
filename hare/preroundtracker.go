@@ -47,7 +47,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	logger := pre.logger.WithContext(ctx)
 
 	// check for winning VRF
-	vrfHash := hash.Sum(msg.Eligibility.Proof[:])
+	vrfHash := hash.Sum(msg.Eligibility.Proof.Bytes())
 	vrfHashVal := binary.LittleEndian.Uint32(vrfHash[:4])
 	logger.With().Debug("received preround message",
 		msg.NodeID,

@@ -182,6 +182,8 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 		},
 		Signature: signature,
 	}
+
 	proposal.SetID(proposalID)
+
 	return proposal, nil
 }

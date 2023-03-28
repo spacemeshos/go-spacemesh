@@ -38,7 +38,7 @@ type ChallengeVerificationResult struct {
 }
 
 type ChallengeVerifier interface {
-	Verify(context.Context, []byte, types.EdSignature) (*ChallengeVerificationResult, error)
+	Verify(ctx context.Context, challenge []byte, signature types.EdSignature) (*ChallengeVerificationResult, error)
 }
 
 type challengeVerifier struct {

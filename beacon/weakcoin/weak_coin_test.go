@@ -2,7 +2,6 @@ package weakcoin_test
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -415,7 +414,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 
 	require.Equal(t,
 		"78f523319fd2cdf3812a3bc3905561acb2f7f1b7e47de71f92811d7bb82460e5999a048051cefa2d1b6f3f16656de83c2756b7539b33fa563a3e8fea5130235e66e8dce914d69bd40f13174f3914ad07",
-		hex.EncodeToString(sig[:]),
+		sig.String(),
 	)
 }
 

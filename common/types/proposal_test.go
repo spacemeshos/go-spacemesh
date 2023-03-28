@@ -11,7 +11,6 @@ import (
 )
 
 func TestProposal_IDSize(t *testing.T) {
-	// FIXME(mafa): why is proposal ID with size 20 serialized to 32 bytes?
 	var id types.ProposalID
 	require.Len(t, id.Bytes(), types.ProposalIDSize)
 }

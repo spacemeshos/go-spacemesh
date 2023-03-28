@@ -186,6 +186,7 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, nonce *
 	logger.Info("started beacon weak coin round")
 	wc.roundStarted = true
 	wc.round = round
+	wc.smallest = new(big.Int).Lsh(big.NewInt(1), types.VrfSignatureSize*8)
 	for i, msg := range wc.nextRoundBuffer {
 		if msg.Epoch != wc.epoch || msg.Round != wc.round {
 			continue
@@ -228,11 +229,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 		return nil, types.VrfSignature{}
 	}
 	var broadcast []byte
-	max := make([]byte, types.VrfSignatureSize)
-	for i := range max {
-		max[i] = 0xff
-	}
-	smallest := new(big.Int).SetBytes(max)
+	smallest := new(big.Int).Lsh(big.NewInt(1), types.VrfSignatureSize*8)
 	for unit := uint32(0); unit < minerAllowance; unit++ {
 		proposal := wc.encodeProposal(epoch, nonce, round, unit)
 		signature := wc.signer.Sign(proposal)
@@ -264,7 +261,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 		smallest.FillBytes(sig[:])
 		return broadcast, sig
 	}
-	return nil, types.VrfSignature{}
+	return nil, types.EmptyVrfSignature
 }
 
 func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) {
@@ -277,7 +274,7 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, no
 		wc.logger.With().Warning("failed to publish own weak coin proposal",
 			epoch,
 			round,
-			log.String("proposal", hex.EncodeToString(proposal[:])),
+			log.Stringer("proposal", proposal),
 			log.Err(err),
 		)
 		return
@@ -286,7 +283,7 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, no
 	wc.logger.WithContext(ctx).With().Info("published proposal",
 		epoch,
 		round,
-		log.String("proposal", hex.EncodeToString(proposal[:])),
+		log.Stringer("proposal", proposal),
 	)
 }
 
@@ -319,17 +316,16 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 }
 
 func (wc *WeakCoin) updateSmallest(ctx context.Context, sig types.VrfSignature) error {
-	proposal := new(big.Int).SetBytes(sig[:])
+	proposal := new(big.Int).SetBytes(sig.Bytes())
 	if wc.smallest == nil || proposal.Cmp(wc.smallest) == -1 {
-		var previous types.VrfSignature
-		if wc.smallest != nil {
-			wc.smallest.FillBytes(previous[:])
+		if wc.smallest == nil {
+			wc.smallest = new(big.Int).Lsh(big.NewInt(1), types.VrfSignatureSize*8)
 		}
 		wc.logger.WithContext(ctx).With().Debug("saving new proposal",
 			wc.epoch,
 			wc.round,
-			log.String("proposal", hex.EncodeToString(sig[:])),
-			log.String("previous", hex.EncodeToString(previous[:])),
+			log.String("proposal", hex.EncodeToString(proposal.Bytes())),
+			log.String("previous", hex.EncodeToString(wc.smallest.Bytes())),
 		)
 		wc.smallest = proposal
 		return nil
@@ -338,7 +334,7 @@ func (wc *WeakCoin) updateSmallest(ctx context.Context, sig types.VrfSignature) 
 }
 
 func (wc *WeakCoin) aboveThreshold(proposal types.VrfSignature) bool {
-	return bytes.Compare(proposal[:], wc.config.Threshold) == 1
+	return bytes.Compare(proposal.Bytes(), wc.config.Threshold) == 1
 }
 
 func (wc *WeakCoin) encodeProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID, unit uint32) []byte {

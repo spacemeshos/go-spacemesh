@@ -165,8 +165,8 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 			J:   counter,
 			Sig: vrfSig,
 		})
-		logger.Debug("signed vrf message, counter: %v, vrfSig: %v, layer: %v",
-			counter, types.BytesToHash(vrfSig[:]).ShortString(), eligibleLayer,
+		logger.Debug("signed vrf message, counter: %v, vrfSig: %s, layer: %v",
+			counter, vrfSig, eligibleLayer,
 		)
 	}
 

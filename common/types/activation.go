@@ -438,6 +438,9 @@ func (m *Member) DecodeScale(d *scale.Decoder) (int, error) {
 
 type PoetProofRef [32]byte
 
+// EmptyPoetProofRef is an empty PoET proof reference.
+var EmptyPoetProofRef = PoetProofRef{}
+
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
 // and the actual PoET Merkle proof.
 type PoetProof struct {

@@ -775,7 +775,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	vrfSig := buildSignedProposal(ctx, pd.logger, pd.vrfSigner, epoch, nonce)
-	proposal := cropData(vrfSig)
+	proposal := ProposalFromVrf(vrfSig)
 	m := ProposalMessage{
 		EpochID:      epoch,
 		NodeID:       pd.nodeID,
@@ -1076,7 +1076,7 @@ func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, epoch types.EpochID, nonce types.VRFPostIndex) types.VrfSignature {
 	p := buildProposal(logger, epoch, nonce)
 	vrfSig := signer.Sign(p)
-	proposal := cropData(vrfSig)
+	proposal := ProposalFromVrf(vrfSig)
 	logger.WithContext(ctx).With().Debug("calculated beacon proposal",
 		epoch,
 		nonce,

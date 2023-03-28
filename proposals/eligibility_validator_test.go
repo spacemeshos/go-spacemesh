@@ -365,7 +365,7 @@ func TestCheckEligibility_BadVRFSignature(t *testing.T) {
 	require.NoError(t, ballots.Add(tv.cdb, rb))
 
 	b := blts[1]
-	b.EligibilityProofs[0].Sig[0] = 0
+	b.EligibilityProofs[0].Sig = types.RandomVrfSignature()
 	tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), b.EligibilityProofs[0].Sig).Return(false)
 	tv.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
 
@@ -387,7 +387,7 @@ func TestCheckEligibility_IncorrectLayerIndex(t *testing.T) {
 	require.NoError(t, ballots.Add(tv.cdb, rb))
 
 	b := blts[1]
-	b.EligibilityProofs[0].Sig[0] = 0
+	b.EligibilityProofs[0].Sig = types.RandomVrfSignature()
 	tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), b.EligibilityProofs[0].Sig).Return(false)
 	tv.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
 

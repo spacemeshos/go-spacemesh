@@ -77,7 +77,7 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 	}
 
 	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, log.Stringer("smesher", m.NodeID))
-	proposal := cropData(m.VRFSignature)
+	proposal := ProposalFromVrf(m.VRFSignature)
 	logger.With().Debug("new beacon proposal", log.String("proposal", hex.EncodeToString(proposal[:])))
 
 	st, err := pd.initEpochStateIfNotPresent(logger, m.EpochID)
@@ -105,7 +105,7 @@ func (pd *ProtocolDriver) classifyProposal(
 	checker eligibilityChecker,
 ) category {
 	epochStart := pd.clock.LayerToTime(m.EpochID.FirstLayer())
-	proposal := cropData(m.VRFSignature)
+	proposal := ProposalFromVrf(m.VRFSignature)
 	logger = logger.WithFields(
 		log.String("proposal", hex.EncodeToString(proposal[:])),
 		log.Time("atx_timestamp", atxReceived),
@@ -177,14 +177,8 @@ func (pd *ProtocolDriver) classifyProposal(
 	return invalid
 }
 
-func cropData(data types.VrfSignature) Proposal {
-	var shortened Proposal
-	copy(shortened[:], data[:])
-	return shortened
-}
-
 func (pd *ProtocolDriver) addProposal(m ProposalMessage, cat category) error {
-	p := cropData(m.VRFSignature)
+	p := ProposalFromVrf(m.VRFSignature)
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	if _, ok := pd.states[m.EpochID]; !ok {

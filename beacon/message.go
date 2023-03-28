@@ -22,7 +22,12 @@ type ProposalMessage struct {
 	VRFSignature types.VrfSignature
 }
 
-type Proposal [4]byte
+const (
+	// ProposalSize in bytes.
+	ProposalSize = 4
+)
+
+type Proposal [ProposalSize]byte
 
 // EncodeScale implements scale codec interface.
 func (p *Proposal) EncodeScale(e *scale.Encoder) (int, error) {
@@ -32,6 +37,12 @@ func (p *Proposal) EncodeScale(e *scale.Encoder) (int, error) {
 // DecodeScale implements scale codec interface.
 func (p *Proposal) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, p[:])
+}
+
+func ProposalFromVrf(vrf types.VrfSignature) Proposal {
+	var p Proposal
+	copy(p[:], vrf[:])
+	return p
 }
 
 // FirstVotingMessageBody is FirstVotingMessage without a signature.

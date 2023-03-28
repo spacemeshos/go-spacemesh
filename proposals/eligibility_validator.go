@@ -175,8 +175,9 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 
 		beaconStr := beacon.ShortString()
 		if !v.vrfVerifier.Verify(owned.NodeID, message, vrfSig) {
-			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
-				errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig[:]).ShortString())
+			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %s",
+				errIncorrectVRFSig, beaconStr, epoch, counter, vrfSig,
+			)
 		}
 
 		eligibleLayer := CalcEligibleLayer(epoch, v.layersPerEpoch, vrfSig)

@@ -28,12 +28,12 @@ func (s *EdSignature) DecodeScale(decoder *scale.Decoder) (int, error) {
 
 // String returns a string representation of the Signature, for logging purposes.
 // It implements the Stringer interface.
-func (s *EdSignature) String() string {
+func (s EdSignature) String() string {
 	return hex.EncodeToString(s.Bytes())
 }
 
 // Bytes returns the byte representation of the Signature.
-func (s *EdSignature) Bytes() []byte {
+func (s EdSignature) Bytes() []byte {
 	return s[:]
 }
 
@@ -41,3 +41,14 @@ type VrfSignature [VrfSignatureSize]byte
 
 // EmptyVrfSignature is a canonical empty VrfSignature.
 var EmptyVrfSignature VrfSignature
+
+// String returns a string representation of the Signature, for logging purposes.
+// It implements the Stringer interface.
+func (s VrfSignature) String() string {
+	return hex.EncodeToString(s.Bytes())
+}
+
+// Bytes returns the byte representation of the Signature.
+func (s VrfSignature) Bytes() []byte {
+	return s[:]
+}

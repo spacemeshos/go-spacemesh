@@ -354,7 +354,7 @@ func TestPreRoundTracker_BestVRF(t *testing.T) {
 	s1 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2})
 
 	for _, v := range values {
-		vrfHash := hash.Sum(v.proof[:])
+		vrfHash := hash.Sum(v.proof.Bytes())
 		vrfHashVal := binary.LittleEndian.Uint32(vrfHash[:4])
 		r.Equal(v.val, vrfHashVal, "mismatch in hash output")
 		sig, err := signing.NewEdSigner()

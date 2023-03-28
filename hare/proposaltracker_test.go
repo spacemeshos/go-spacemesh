@@ -19,7 +19,7 @@ func buildProposalMsg(sig *signing.EdSigner, s *Set, signature types.VrfSignatur
 }
 
 func BuildProposalMsg(sig *signing.EdSigner, s *Set) *Msg {
-	return buildProposalMsg(sig, s, types.VrfSignature{})
+	return buildProposalMsg(sig, s, types.EmptyVrfSignature)
 }
 
 func TestProposalTracker_OnProposalConflict(t *testing.T) {
@@ -159,13 +159,13 @@ func TestProposalTracker_ProposedSet(t *testing.T) {
 	s2 := NewSetFromValues(types.ProposalID{3}, types.ProposalID{4}, types.ProposalID{5})
 	signer2, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m1 := buildProposalMsg(signer2, s2, types.VrfSignature{0})
+	m1 := buildProposalMsg(signer2, s2, types.EmptyVrfSignature)
 	tracker.OnProposal(context.Background(), m1)
 	proposedSet = tracker.ProposedSet()
 	require.True(t, s2.Equals(proposedSet))
 	require.False(t, tracker.IsConflicting())
 
-	m2 := buildProposalMsg(signer2, s1, types.VrfSignature{0})
+	m2 := buildProposalMsg(signer2, s1, types.EmptyVrfSignature)
 	tracker.OnProposal(context.Background(), m2)
 	proposedSet = tracker.ProposedSet()
 	require.Nil(t, proposedSet)

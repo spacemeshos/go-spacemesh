@@ -13,7 +13,7 @@ type vrfSigner interface {
 }
 
 type vrfVerifier interface {
-	Verify(types.NodeID, []byte, types.VrfSignature) bool
+	Verify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool
 }
 
 type nonceFetcher interface {

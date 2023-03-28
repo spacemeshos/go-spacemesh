@@ -1,8 +1,6 @@
 package types
 
 import (
-	"encoding/hex"
-
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -29,7 +27,7 @@ func (hg *HareEligibilityGossip) MarshalLogObject(encoder log.ObjectEncoder) err
 	encoder.AddUint32("round", hg.Round)
 	encoder.AddString("smesher", hg.NodeID.String())
 	encoder.AddUint16("count", hg.Eligibility.Count)
-	encoder.AddString("proof", hex.EncodeToString(hg.Eligibility.Proof[:]))
+	encoder.AddString("proof", hg.Eligibility.Proof.String())
 	return nil
 }
 
@@ -45,7 +43,7 @@ type HareEligibility struct {
 // MarshalLogObject implements logging interface.
 func (e *HareEligibility) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint16("count", e.Count)
-	encoder.AddString("proof", hex.EncodeToString(e.Proof[:]))
+	encoder.AddString("proof", e.Proof.String())
 	return nil
 }
 
@@ -63,6 +61,6 @@ type VotingEligibility struct {
 // MarshalLogObject implements logging interface.
 func (v *VotingEligibility) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("j", v.J)
-	encoder.AddString("sig", hex.EncodeToString(v.Sig[:]))
+	encoder.AddString("sig", v.Sig.String())
 	return nil
 }

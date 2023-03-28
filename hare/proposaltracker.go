@@ -71,7 +71,7 @@ func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Msg) {
 	}
 
 	// ignore msgs with higher ranked role proof
-	if bytes.Compare(msg.Eligibility.Proof[:], pt.proposal.Eligibility.Proof[:]) > 0 {
+	if bytes.Compare(msg.Eligibility.Proof.Bytes(), pt.proposal.Eligibility.Proof.Bytes()) > 0 {
 		return
 	}
 

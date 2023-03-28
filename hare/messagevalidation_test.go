@@ -104,7 +104,7 @@ func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.RandomVrfSignature())
+	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.EmptyVrfSignature)
 	m.Layer = types.NewLayerID(111)
 	myErr := errors.New("my error")
 
@@ -121,7 +121,7 @@ func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.RandomVrfSignature())
+	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.EmptyVrfSignature)
 	m.Layer = types.NewLayerID(111)
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil).Times(1)
@@ -137,7 +137,7 @@ func TestEligibilityValidator_validateRole_Success(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.RandomVrfSignature())
+	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.EmptyVrfSignature)
 	m.Layer = types.NewLayerID(111)
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
@@ -269,7 +269,7 @@ func TestSyntaxContextValidator_PreRoundContext(t *testing.T) {
 	validator := defaultValidator(t)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	pre := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.RandomVrfSignature())
+	pre := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.EmptyVrfSignature)
 	for i := uint32(0); i < 10; i++ {
 		k := i * 4
 		pre.Round = k
@@ -284,7 +284,7 @@ func TestSyntaxContextValidator_ContextuallyValidateMessageForIteration(t *testi
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	set := NewDefaultEmptySet()
-	pre := BuildPreRoundMsg(signer, set, types.RandomVrfSignature())
+	pre := BuildPreRoundMsg(signer, set, types.EmptyVrfSignature)
 	pre.Round = preRound
 	r.Nil(v.ContextuallyValidateMessage(context.Background(), pre, 1))
 
@@ -359,9 +359,9 @@ func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 	vfunc := func(m *Msg) bool { return true }
 
 	sv := newSyntaxContextValidator(signer, pke, 1, vfunc, nil, truer{}, newPubGetter(), et, logtest.New(t))
-	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.RandomVrfSignature())
+	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.EmptyVrfSignature)
 	require.True(t, sv.SyntacticallyValidateMessage(context.Background(), m))
-	m = BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.RandomVrfSignature())
+	m = BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
 	require.True(t, sv.SyntacticallyValidateMessage(context.Background(), m))
 }
 
@@ -369,7 +369,7 @@ func TestMessageValidator_validateSVPTypeA(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), types.RandomVrfSignature())
+	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), types.EmptyVrfSignature)
 	s1 := NewSetFromValues(types.ProposalID{1})
 	s2 := NewSetFromValues(types.ProposalID{3})
 	s3 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{5})
@@ -386,7 +386,7 @@ func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), types.RandomVrfSignature())
+	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), types.EmptyVrfSignature)
 	s1 := NewSetFromValues(types.ProposalID{1})
 	m.InnerMsg.Svp = buildSVP(preRound, s1)
 	m.InnerMsg.Values = NewSetFromValues(types.ProposalID{1}).ToSlice()
@@ -407,7 +407,7 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	et := NewEligibilityTracker(100)
 	vfunc := func(m *Msg) bool { return true }
 	sv := newSyntaxContextValidator(signer, pke, 1, vfunc, mockStateQ, truer{}, newPubGetter(), et, logtest.New(t))
-	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), types.RandomVrfSignature())
+	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), types.EmptyVrfSignature)
 	s1 := NewSetFromValues(types.ProposalID{1})
 	m.InnerMsg.Svp = buildSVP(preRound, s1)
 	m.InnerMsg.Svp.Messages[0].InnerMsg.Type = commit

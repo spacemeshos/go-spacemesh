@@ -206,7 +206,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 
 	mo := mocks.NewMockRolacle(gomock.NewController(t))
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
-	mo.EXPECT().Proof(gomock.Any(), gomock.Any(), proc.layer, proc.getRound()).Return(types.RandomVrfSignature(), nil).Times(2)
+	mo.EXPECT().Proof(gomock.Any(), gomock.Any(), proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(2)
 	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(1), nil).Times(1)
 	proc.oracle = mo
 	proc.value = NewSetFromValues(types.ProposalID{1}, types.ProposalID{2})
@@ -231,7 +231,7 @@ func TestConsensusProcess_StartAndStop(t *testing.T) {
 
 	mo := mocks.NewMockRolacle(gomock.NewController(t))
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).AnyTimes()
-	mo.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(types.RandomVrfSignature(), nil).AnyTimes()
+	mo.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(types.EmptyVrfSignature, nil).AnyTimes()
 	mo.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(1), nil).AnyTimes()
 	proc.oracle = mo
 
@@ -260,7 +260,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	proc.validator = mValidator
 	signer, err := signing.NewEdSigner()
 	r.NoError(err)
-	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), types.VrfSignature{2})
+	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.RandomVrfSignature())
 	mValidator.syntaxValid = false
 	r.False(proc.preRoundTracker.coinflip, "default coinflip should be false")
 	proc.handleMessage(context.Background(), msg)
@@ -379,7 +379,7 @@ func TestConsensusProcess_isEligible_NotEligible(t *testing.T) {
 	mo := mocks.NewMockRolacle(ctrl)
 	proc.oracle = mo
 
-	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.RandomVrfSignature(), nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(1)
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
 	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(0), nil).Times(1)
 	require.False(t, proc.shouldParticipate(context.Background()))
@@ -392,7 +392,7 @@ func TestConsensusProcess_isEligible_Eligible(t *testing.T) {
 	mo := mocks.NewMockRolacle(ctrl)
 	proc.oracle = mo
 
-	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.RandomVrfSignature(), nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(1)
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
 	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(1), nil).Times(1)
 	require.True(t, proc.shouldParticipate(context.Background()))
@@ -449,7 +449,7 @@ func TestConsensusProcess_procPre(t *testing.T) {
 	s := NewDefaultEmptySet()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, s, types.VrfSignature{3})
+	m := BuildPreRoundMsg(signer, s, types.RandomVrfSignature())
 	require.False(t, proc.preRoundTracker.coinflip)
 	proc.processPreRoundMsg(context.Background(), m)
 	require.Len(t, proc.preRoundTracker.preRound, 1)
@@ -558,7 +558,7 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	signer1, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer1, NewDefaultEmptySet(), types.RandomVrfSignature())
+	m := BuildPreRoundMsg(signer1, NewDefaultEmptySet(), types.EmptyVrfSignature)
 	proc.advanceToNextRound(context.Background())
 	proc.onEarlyMessage(context.Background(), buildMessage(Message{}))
 	r.Len(proc.pending, 0)
@@ -568,11 +568,11 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	r.Len(proc.pending, 1)
 	signer2, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m2 := BuildPreRoundMsg(signer2, NewDefaultEmptySet(), types.RandomVrfSignature())
+	m2 := BuildPreRoundMsg(signer2, NewDefaultEmptySet(), types.EmptyVrfSignature)
 	proc.onEarlyMessage(context.Background(), m2)
 	signer3, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m3 := BuildPreRoundMsg(signer3, NewDefaultEmptySet(), types.RandomVrfSignature())
+	m3 := BuildPreRoundMsg(signer3, NewDefaultEmptySet(), types.EmptyVrfSignature)
 	proc.onEarlyMessage(context.Background(), m3)
 	r.Len(proc.pending, 3)
 	proc.onRoundBegin(context.Background())
@@ -610,14 +610,14 @@ func TestConsensusProcess_beginStatusRound(t *testing.T) {
 
 	mo := mocks.NewMockRolacle(ctrl)
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
-	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.RandomVrfSignature(), nil).Times(2)
+	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(2)
 	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(1), nil).Times(1)
 	proc.oracle = mo
 
 	s := NewDefaultEmptySet()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, s, types.RandomVrfSignature())
+	m := BuildPreRoundMsg(signer, s, types.EmptyVrfSignature)
 	proc.statusesTracker.RecordStatus(context.Background(), m)
 
 	preStatusTracker := proc.statusesTracker
@@ -637,7 +637,7 @@ func TestConsensusProcess_beginProposalRound(t *testing.T) {
 
 	mo := mocks.NewMockRolacle(ctrl)
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
-	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.RandomVrfSignature(), nil).Times(2)
+	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(2)
 	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(1), nil).Times(1)
 	proc.oracle = mo
 
@@ -673,7 +673,7 @@ func TestConsensusProcess_beginCommitRound(t *testing.T) {
 
 	preCommitTracker := proc.commitTracker
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
-	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.RandomVrfSignature(), nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(1)
 	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(0), nil).Times(1)
 	proc.beginCommitRound(context.Background())
 	require.NotEqual(t, preCommitTracker, proc.commitTracker)
@@ -681,7 +681,7 @@ func TestConsensusProcess_beginCommitRound(t *testing.T) {
 	mpt.isConflicting = false
 	mpt.proposedSet = NewSetFromValues(types.ProposalID{1})
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
-	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.RandomVrfSignature(), nil).Times(2)
+	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(2)
 	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(1), nil).Times(1)
 	proc.beginCommitRound(context.Background())
 	require.Equal(t, 1, network.getCount())

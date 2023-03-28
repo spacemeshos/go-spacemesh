@@ -381,7 +381,7 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 func (o *Oracle) Proof(ctx context.Context, nonce types.VRFPostIndex, layer types.LayerID, round uint32) (types.VrfSignature, error) {
 	msg, err := o.buildVRFMessage(ctx, nonce, layer, round)
 	if err != nil {
-		return types.VrfSignature{}, err
+		return types.EmptyVrfSignature, err
 	}
 	return o.vrfSigner.Sign(msg), nil
 }

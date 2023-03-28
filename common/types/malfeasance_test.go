@@ -94,7 +94,6 @@ func TestCodec_HareEquivocation(t *testing.T) {
 			InnerMsg:  hm,
 			Signature: types.RandomEdSignature(),
 		}
-		copy(hareProof.Messages[i].Signature[:], types.RandomBytes(64))
 	}
 	proof := &types.MalfeasanceProof{
 		Layer: lid,
@@ -124,7 +123,6 @@ func TestCodec_MalfeasanceGossip(t *testing.T) {
 			InnerMsg:  hm,
 			Signature: types.RandomEdSignature(),
 		}
-		copy(hareProof.Messages[i].Signature[:], types.RandomBytes(64))
 	}
 	gossip := &types.MalfeasanceGossip{
 		MalfeasanceProof: types.MalfeasanceProof{

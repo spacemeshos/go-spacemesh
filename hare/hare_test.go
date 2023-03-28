@@ -275,8 +275,6 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 			},
 		},
 	}
-	copy(gossip.MalfeasanceProof.Proof.Data.(*types.HareProof).Messages[0].Signature[:], types.RandomBytes(64))
-	copy(gossip.MalfeasanceProof.Proof.Data.(*types.HareProof).Messages[1].Signature[:], types.RandomBytes(64))
 	h.mchMalfeasance <- &gossip
 	data, err := codec.Encode(&gossip)
 	require.NoError(t, err)
