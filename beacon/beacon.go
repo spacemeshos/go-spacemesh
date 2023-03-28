@@ -277,7 +277,7 @@ func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTxHeader) {
 	s.minerAtxs[atx.NodeID] = atx.ID
 }
 
-func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, minerID types.NodeID) (*types.ActivationTxHeader, error) {
+func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, nodeID types.NodeID) (*types.ActivationTxHeader, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
@@ -286,19 +286,19 @@ func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, minerID types.NodeID)
 		return nil, errEpochNotActive
 	}
 
-	id, ok := st.minerAtxs[minerID]
+	id, ok := st.minerAtxs[nodeID]
 	if !ok {
 		pd.logger.With().Debug("miner does not have atx in previous epoch",
 			epoch-1,
-			log.Stringer("smesher", minerID),
+			log.Stringer("smesher", nodeID),
 		)
 		return nil, errMinerNotActive
 	}
 	return pd.cdb.GetAtxHeader(id)
 }
 
-func (pd *ProtocolDriver) MinerAllowance(epoch types.EpochID, minerID types.NodeID) uint32 {
-	atx, err := pd.minerAtxHdr(epoch, minerID)
+func (pd *ProtocolDriver) MinerAllowance(epoch types.EpochID, nodeID types.NodeID) uint32 {
+	atx, err := pd.minerAtxHdr(epoch, nodeID)
 	if err != nil {
 		return 0
 	}
@@ -942,7 +942,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 	return nil
 }
 
-func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, minerID types.NodeID) (proposalList, error) {
+func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, nodeID types.NodeID) (proposalList, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
@@ -951,7 +951,7 @@ func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, minerID types.N
 		return nil, errEpochNotActive
 	}
 
-	return st.getMinerFirstRoundVote(minerID)
+	return st.getMinerFirstRoundVote(nodeID)
 }
 
 func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {

@@ -200,23 +200,21 @@ func (pd *ProtocolDriver) addProposal(m ProposalMessage, cat category) error {
 }
 
 func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessage) error {
-	minerID := m.NodeID.String()
-
 	nonce, err := pd.nonceFetcher.VRFNonce(m.NodeID, m.EpochID)
 	if err != nil {
 		logger.With().Warning("[proposal] failed to get VRF nonce", log.Err(err))
-		return fmt.Errorf("[proposal] get VRF nonce (miner ID %v): %w", minerID, err)
+		return fmt.Errorf("[proposal] get VRF nonce (miner ID %s): %w", m.NodeID, err)
 	}
 	currentEpochProposal := buildProposal(logger, m.EpochID, nonce)
 	if !pd.vrfVerifier.Verify(m.NodeID, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
 		logger.With().Warning("[proposal] failed to verify VRF signature")
-		return fmt.Errorf("[proposal] verify VRF (miner ID %v): %w", minerID, errVRFNotVerified)
+		return fmt.Errorf("[proposal] verify VRF (miner ID %s): %w", m.NodeID, errVRFNotVerified)
 	}
 
 	if err = pd.registerProposed(logger, m.EpochID, m.NodeID); err != nil {
 		logger.With().Warning("[proposal] failed to register miner proposed", log.Err(err))
-		return fmt.Errorf("[proposal] register proposal (miner ID %v): %w", minerID, err)
+		return fmt.Errorf("[proposal] register proposal (miner ID %s): %w", m.NodeID, err)
 	}
 
 	return nil
@@ -284,25 +282,25 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 		logger.With().Fatal("failed to serialize first voting message", log.Err(err))
 	}
 
-	minerID, err := pd.pubKeyExtractor.ExtractNodeID(signing.BEACON, messageBytes, m.Signature)
+	nodeID, err := pd.pubKeyExtractor.ExtractNodeID(signing.BEACON, messageBytes, m.Signature)
 	if err != nil {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] recover ID %x: %w", types.FirstRound, m.Signature, err)
 	}
 
-	logger = logger.WithFields(log.Stringer("smesher", minerID))
-	if err = pd.registerVoted(logger, m.EpochID, minerID, types.FirstRound); err != nil {
-		return types.EmptyNodeID, fmt.Errorf("[round %v] register proposal (miner ID %v): %w", types.FirstRound, minerID.ShortString(), err)
+	logger = logger.WithFields(log.Stringer("smesher", nodeID))
+	if err = pd.registerVoted(logger, m.EpochID, nodeID, types.FirstRound); err != nil {
+		return types.EmptyNodeID, fmt.Errorf("[round %v] register proposal (miner ID %v): %w", types.FirstRound, nodeID.ShortString(), err)
 	}
-	return minerID, nil
+	return nodeID, nil
 }
 
-func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, minerID types.NodeID) error {
+func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, nodeID types.NodeID) error {
 	if !pd.isInProtocol() {
 		pd.logger.Debug("beacon not in protocol, not storing first votes")
 		return errProtocolNotRunning
 	}
 
-	atx, err := pd.minerAtxHdr(m.EpochID, minerID)
+	atx, err := pd.minerAtxHdr(m.EpochID, nodeID)
 	if err != nil {
 		return err
 	}
@@ -329,7 +327,7 @@ func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, minerID types.No
 		voteList = voteList[:pd.config.VotesLimit]
 	}
 
-	pd.states[m.EpochID].setMinerFirstRoundVote(minerID, voteList)
+	pd.states[m.EpochID].setMinerFirstRoundVote(nodeID, voteList)
 	return nil
 }
 
@@ -378,13 +376,13 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 		return errUntimelyMessage
 	}
 
-	minerID, err := pd.verifyFollowingVotes(ctx, m)
+	nodeID, err := pd.verifyFollowingVotes(ctx, m)
 	if err != nil {
 		return err
 	}
 
 	logger.Debug("received following voting message, counting its votes")
-	if err = pd.storeFollowingVotes(m, minerID); err != nil {
+	if err = pd.storeFollowingVotes(m, nodeID); err != nil {
 		logger.With().Warning("failed to store following votes", log.Err(err))
 		return err
 	}
@@ -399,34 +397,34 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 		pd.logger.With().Fatal("failed to serialize voting message", log.Err(err))
 	}
 
-	minerID, err := pd.pubKeyExtractor.ExtractNodeID(signing.BEACON, messageBytes, m.Signature)
+	nodeID, err := pd.pubKeyExtractor.ExtractNodeID(signing.BEACON, messageBytes, m.Signature)
 	if err != nil {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] recover ID from signature %x: %w", round, m.Signature, err)
 	}
 
-	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, round, log.Stringer("smesher", minerID))
-	if err := pd.registerVoted(logger, m.EpochID, minerID, m.RoundID); err != nil {
+	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, round, log.Stringer("smesher", nodeID))
+	if err := pd.registerVoted(logger, m.EpochID, nodeID, m.RoundID); err != nil {
 		return types.EmptyNodeID, err
 	}
 
-	return minerID, nil
+	return nodeID, nil
 }
 
-func (pd *ProtocolDriver) storeFollowingVotes(m FollowingVotingMessage, minerID types.NodeID) error {
+func (pd *ProtocolDriver) storeFollowingVotes(m FollowingVotingMessage, nodeID types.NodeID) error {
 	if !pd.isInProtocol() {
 		pd.logger.Debug("beacon not in protocol, not storing following votes")
 		return errProtocolNotRunning
 	}
 
-	atx, err := pd.minerAtxHdr(m.EpochID, minerID)
+	atx, err := pd.minerAtxHdr(m.EpochID, nodeID)
 	if err != nil {
 		return err
 	}
 	voteWeight := new(big.Int).SetUint64(atx.GetWeight())
 
-	firstRoundVotes, err := pd.getFirstRoundVote(m.EpochID, minerID)
+	firstRoundVotes, err := pd.getFirstRoundVote(m.EpochID, nodeID)
 	if err != nil {
-		return fmt.Errorf("get miner first round votes %v: %w", minerID.ShortString(), err)
+		return fmt.Errorf("get miner first round votes %v: %w", nodeID.ShortString(), err)
 	}
 
 	thisRoundVotes := decodeVotes(m.VotesBitVector, firstRoundVotes)
@@ -509,11 +507,11 @@ func (pd *ProtocolDriver) registerProposed(logger log.Log, epoch types.EpochID, 
 	return pd.states[epoch].registerProposed(logger, nodeID)
 }
 
-func (pd *ProtocolDriver) registerVoted(logger log.Log, epoch types.EpochID, minerID types.NodeID, round types.RoundID) error {
+func (pd *ProtocolDriver) registerVoted(logger log.Log, epoch types.EpochID, nodeID types.NodeID, round types.RoundID) error {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	if _, ok := pd.states[epoch]; !ok {
 		return errEpochNotActive
 	}
-	return pd.states[epoch].registerVoted(logger, minerID, round)
+	return pd.states[epoch].registerVoted(logger, nodeID, round)
 }

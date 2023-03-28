@@ -25,13 +25,13 @@ func (s *EdSignature) DecodeScale(decoder *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(decoder, s[:])
 }
 
-// String returns a string representation of the NodeID, for logging purposes.
+// String returns a string representation of the Signature, for logging purposes.
 // It implements the Stringer interface.
 func (s *EdSignature) String() string {
 	return hex.EncodeToString(s.Bytes())
 }
 
-// Bytes returns the byte representation of the Edwards public key.
+// Bytes returns the byte representation of the Signature.
 func (s *EdSignature) Bytes() []byte {
 	return s[:]
 }

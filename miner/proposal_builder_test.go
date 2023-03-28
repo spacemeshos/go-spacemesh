@@ -64,7 +64,7 @@ func createBuilder(tb testing.TB) *testBuilder {
 		WithLogger(lg),
 		WithLayerSize(20),
 		WithLayerPerEpoch(3),
-		WithMinerID(nodeID),
+		WithNodeID(nodeID),
 		WithHdist(3),
 		withOracle(pb.mOracle),
 		withNonceFetcher(pb.mNonce),

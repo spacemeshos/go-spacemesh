@@ -64,7 +64,7 @@ type config struct {
 	layerSize      uint32
 	layersPerEpoch uint32
 	hdist          uint32
-	minerID        types.NodeID
+	nodeID         types.NodeID
 }
 
 type defaultFetcher struct {
@@ -96,10 +96,10 @@ func WithLayerPerEpoch(layers uint32) Opt {
 	}
 }
 
-// WithMinerID defines the miner's NodeID.
-func WithMinerID(id types.NodeID) Opt {
+// WithNodeID defines the miner's NodeID.
+func WithNodeID(id types.NodeID) Opt {
 	return func(pb *ProposalBuilder) {
-		pb.cfg.minerID = id
+		pb.cfg.nodeID = id
 	}
 }
 
@@ -162,7 +162,7 @@ func NewProposalBuilder(
 	}
 
 	if pb.proposalOracle == nil {
-		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, cdb, vrfSigner, pb.cfg.minerID, pb.logger)
+		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, cdb, vrfSigner, pb.cfg.nodeID, pb.logger)
 	}
 
 	if pb.nonceFetcher == nil {

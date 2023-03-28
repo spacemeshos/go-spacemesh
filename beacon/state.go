@@ -67,12 +67,12 @@ func (s *state) addPotentiallyValidProposal(proposal Proposal) {
 	s.votesMargin[proposal] = new(big.Int)
 }
 
-func (s *state) setMinerFirstRoundVote(minerID types.NodeID, voteList []Proposal) {
-	s.firstRoundIncomingVotes[minerID] = voteList
+func (s *state) setMinerFirstRoundVote(nodeID types.NodeID, voteList []Proposal) {
+	s.firstRoundIncomingVotes[nodeID] = voteList
 }
 
-func (s *state) getMinerFirstRoundVote(minerID types.NodeID) (proposalList, error) {
-	p, ok := s.firstRoundIncomingVotes[minerID]
+func (s *state) getMinerFirstRoundVote(nodeID types.NodeID) (proposalList, error) {
+	p, ok := s.firstRoundIncomingVotes[nodeID]
 	if !ok {
 		return nil, fmt.Errorf("no first round votes for miner")
 	}
@@ -106,13 +106,13 @@ func (s *state) registerProposed(logger log.Log, nodeID types.NodeID) error {
 	return nil
 }
 
-func (s *state) registerVoted(logger log.Log, minerID types.NodeID, round types.RoundID) error {
+func (s *state) registerVoted(logger log.Log, nodeID types.NodeID, round types.RoundID) error {
 	if s.hasVoted[round] == nil {
 		s.hasVoted[round] = make(map[types.NodeID]struct{})
 	}
 
 	// TODO(nkryuchkov): consider having a separate table for an epoch with one bit in it if atx/miner is voted already
-	if _, ok := s.hasVoted[round][minerID]; ok {
+	if _, ok := s.hasVoted[round][nodeID]; ok {
 		logger.Warning("already received vote from miner for this round")
 
 		// TODO(nkryuchkov): report this miner through gossip
@@ -122,9 +122,9 @@ func (s *state) registerVoted(logger log.Log, minerID types.NodeID, round types.
 		// TODO(nkryuchkov): ban id forever globally across packages since this epoch
 		// TODO(nkryuchkov): (not specific to beacon) do the same for ATXs
 
-		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, minerID.ShortString(), errAlreadyVoted)
+		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, nodeID.ShortString(), errAlreadyVoted)
 	}
 
-	s.hasVoted[round][minerID] = struct{}{}
+	s.hasVoted[round][nodeID] = struct{}{}
 	return nil
 }
