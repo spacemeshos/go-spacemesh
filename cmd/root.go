@@ -120,14 +120,14 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.API.PublicListener, "Socket for the list of services specified in grpc-public-services.")
 	cmd.PersistentFlags().StringSliceVar(&cfg.API.PrivateServices, "grpc-private-services",
 		cfg.API.PublicServices, "List of services that must be kept private or exposed only in secure environments.")
-	cmd.PersistentFlags().StringVar(&cfg.API.PublicListener, "grpc-private-listener",
-		cfg.API.PublicListener, "Socket for the list of services specified in grpc-private-services.")
+	cmd.PersistentFlags().StringVar(&cfg.API.PrivateListener, "grpc-private-listener",
+		cfg.API.PrivateListener, "Socket for the list of services specified in grpc-private-services.")
 	cmd.PersistentFlags().IntVar(&cfg.API.GrpcRecvMsgSize, "grpc-recv-msg-size",
 		cfg.API.GrpcRecvMsgSize, "GRPC api recv message size")
 	cmd.PersistentFlags().IntVar(&cfg.API.GrpcSendMsgSize, "grpc-send-msg-size",
 		cfg.API.GrpcSendMsgSize, "GRPC api send message size")
 	cmd.PersistentFlags().StringVar(&cfg.API.JSONListener, "grpc-json-listener",
-		cfg.API.JSONListener, "Socket for the grpc gateway on the list of services in grpc-public-services. If left empty - grpc gateway won't be enabled.")
+		cfg.API.JSONListener, "Socket for the grpc gateway for the list of services in grpc-public-services. If left empty - grpc gateway won't be enabled.")
 	/**======================== Hare Flags ========================== **/
 
 	// N determines the size of the hare committee

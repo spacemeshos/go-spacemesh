@@ -219,8 +219,8 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 	return buf.String()
 }
 
-func callEndpoint(t *testing.T, endpoint, payload string, port int) (string, int) {
-	url := fmt.Sprintf("http://127.0.0.1:%d/%s", port, endpoint)
+func callEndpoint(t *testing.T, endpoint, payload string, address string) (string, int) {
+	url := fmt.Sprintf("http://%s/%s", address, endpoint)
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
@@ -229,6 +229,138 @@ func callEndpoint(t *testing.T, endpoint, payload string, port int) (string, int
 	require.NoError(t, resp.Body.Close())
 
 	return string(buf), resp.StatusCode
+}
+
+func TestSpacemeshApp_GrpcService(t *testing.T) {
+	// Use a unique port
+	listener := "127.0.0.1:1242"
+
+	r := require.New(t)
+	app := New(WithLog(logtest.New(t)))
+
+	path := t.TempDir()
+
+	run := func(c *cobra.Command, args []string) {
+		app.Config.API.PublicListener = listener
+		app.Config.API.PublicServices = nil
+		app.Config.API.PrivateServices = nil
+		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
+		app.Config.DataDirParent = path
+		app.startAPIServices(context.Background())
+	}
+	defer app.stopServices(context.Background())
+
+	// Make sure the service is not running by default
+	str, err := testArgs(context.Background(), cmdWithRun(run)) // no args
+	r.Empty(str)
+	r.NoError(err)
+	r.Empty(app.Config.API.PublicServices)
+
+	_, err = grpc.Dial(
+		listener,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(2*time.Second),
+	)
+	r.ErrorContains(err, "context deadline exceeded")
+
+	events.CloseEventReporter()
+
+	// Test starting the server from the command line
+	str, err = testArgs(context.Background(), cmdWithRun(run), "--grpc-public-listener", listener, "--grpc-public-services", "node")
+	r.Empty(str)
+	r.NoError(err)
+	r.Equal(listener, app.Config.API.PublicListener)
+	r.Contains(app.Config.API.PublicServices, "node")
+
+	conn, err := grpc.Dial(
+		listener,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(2*time.Second),
+	)
+	r.NoError(err)
+	t.Cleanup(func() { r.NoError(conn.Close()) })
+	c := pb.NewNodeServiceClient(conn)
+
+	// call echo and validate result
+	// We expect this one to succeed
+	const message = "Hello World"
+	response, err := c.Echo(context.Background(), &pb.EchoRequest{
+		Msg: &pb.SimpleString{Value: message},
+	})
+	r.NoError(err)
+	r.Equal(message, response.Msg.Value)
+}
+
+func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
+	r := require.New(t)
+	app := New(WithLog(logtest.New(t)))
+
+	// Make sure the service is not running by default
+	run := func(c *cobra.Command, args []string) {
+		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
+		app.Config.DataDirParent = t.TempDir()
+		app.startAPIServices(context.Background())
+	}
+
+	str, err := testArgs(context.Background(), cmdWithRun(run))
+	r.Empty(str)
+	r.NoError(err)
+	defer app.stopServices(context.Background())
+
+	// Try talking to the server
+	const message = "nihao shijie"
+
+	// generate request payload (api input params)
+	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+
+	// We expect this one to fail
+	url := fmt.Sprintf("http://%s/%s", app.Config.API.JSONListener, "v1/node/echo")
+	_, err = http.Post(url, "application/json", strings.NewReader(payload))
+	r.Error(err)
+
+	events.CloseEventReporter()
+}
+
+func TestSpacemeshApp_JsonService(t *testing.T) {
+	r := require.New(t)
+	app := New(WithLog(logtest.New(t)))
+	const message = "nihao shijie"
+	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+
+	// Make sure the service is not running by default
+	run := func(c *cobra.Command, args []string) {
+		app.Config.API.PrivateServices = nil
+		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
+		app.Config.DataDirParent = t.TempDir()
+		app.startAPIServices(context.Background())
+	}
+
+	// Test starting the JSON server from the commandline
+	// uses Cmd.Run from above
+	listener := "127.0.0.1:1234"
+	str, err := testArgs(context.Background(), cmdWithRun(run), "--grpc-public-services", "node", "--grpc-json-listener", listener)
+	r.Empty(str)
+	r.NoError(err)
+	defer app.stopServices(context.Background())
+	r.Equal(listener, app.Config.API.JSONListener)
+	r.Contains(app.Config.API.PublicServices, "node")
+
+	var (
+		respBody   string
+		respStatus int
+	)
+	require.Eventually(t, func() bool {
+		respBody, respStatus = callEndpoint(t, "v1/node/echo", payload, app.Config.API.JSONListener)
+		return respStatus == http.StatusOK
+	}, 2*time.Second, 100*time.Millisecond)
+	var msg pb.EchoResponse
+	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
+	require.Equal(t, message, msg.Msg.Value)
+	require.Equal(t, http.StatusOK, respStatus)
+	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
+	require.Equal(t, message, msg.Msg.Value)
 }
 
 // E2E app test of the stream endpoints in the NodeService.
