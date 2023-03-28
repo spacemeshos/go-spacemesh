@@ -6,7 +6,6 @@ package weakcoin
 
 import (
 	reflect "reflect"
-	time "time"
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
@@ -188,41 +187,4 @@ func (m *Mockallowance) MinerAllowance(arg0 types.EpochID, arg1 []byte) uint32 {
 func (mr *MockallowanceMockRecorder) MinerAllowance(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MinerAllowance", reflect.TypeOf((*Mockallowance)(nil).MinerAllowance), arg0, arg1)
-}
-
-// MockweakCoinClock is a mock of weakCoinClock interface.
-type MockweakCoinClock struct {
-	ctrl     *gomock.Controller
-	recorder *MockweakCoinClockMockRecorder
-}
-
-// MockweakCoinClockMockRecorder is the mock recorder for MockweakCoinClock.
-type MockweakCoinClockMockRecorder struct {
-	mock *MockweakCoinClock
-}
-
-// NewMockweakCoinClock creates a new mock instance.
-func NewMockweakCoinClock(ctrl *gomock.Controller) *MockweakCoinClock {
-	mock := &MockweakCoinClock{ctrl: ctrl}
-	mock.recorder = &MockweakCoinClockMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockweakCoinClock) EXPECT() *MockweakCoinClockMockRecorder {
-	return m.recorder
-}
-
-// WeakCoinProposalSendTime mocks base method.
-func (m *MockweakCoinClock) WeakCoinProposalSendTime(epoch types.EpochID, round types.RoundID) time.Time {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WeakCoinProposalSendTime", epoch, round)
-	ret0, _ := ret[0].(time.Time)
-	return ret0
-}
-
-// WeakCoinProposalSendTime indicates an expected call of WeakCoinProposalSendTime.
-func (mr *MockweakCoinClockMockRecorder) WeakCoinProposalSendTime(epoch, round interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WeakCoinProposalSendTime", reflect.TypeOf((*MockweakCoinClock)(nil).WeakCoinProposalSendTime), epoch, round)
 }

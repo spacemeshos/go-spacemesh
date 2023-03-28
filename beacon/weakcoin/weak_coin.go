@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -82,6 +83,15 @@ func WithNextRoundBufferSize(size int) OptionFunc {
 	return func(wc *WeakCoin) {
 		wc.config.NextRoundBufferSize = size
 	}
+}
+
+// weakCoinClock interface exists so that we can pass an object from the beacon
+// package to the weakCoinPackage (as does allowance), this is indicatave of a
+// circular dependency, probably the weak coin should be merged with the beacon
+// package.
+// Issue: https://github.com/spacemeshos/go-spacemesh/issues/4199
+type weakCoinClock interface {
+	WeakCoinProposalSendTime(epoch types.EpochID, round types.RoundID) time.Time
 }
 
 // New creates an instance of weak coin protocol.
