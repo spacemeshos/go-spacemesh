@@ -830,10 +830,10 @@ func TestProposal_MalformedData(t *testing.T) {
 func TestProposal_BadSignature(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
-	p.Signature = types.RandomEdSignature()
+	p.Signature = types.EmptyEdSignature
 	data := encodeProposal(t, p)
 	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
-	require.ErrorContains(t, got, "bad signature format")
+	require.ErrorContains(t, got, "inconsistent smesher in proposal")
 
 	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)
