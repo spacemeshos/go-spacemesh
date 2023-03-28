@@ -29,7 +29,7 @@ func TestCodec_MultipleATXs(t *testing.T) {
 	var atxProof types.AtxProof
 	for i, a := range []*types.ActivationTx{a1, a2} {
 		a.SetMetadata()
-		a.Signature = types.RandomBytes(64)
+		a.Signature = types.RandomEdSignature()
 		atxProof.Messages[i] = types.AtxProofMsg{
 			InnerMsg:  a.ATXMetadata,
 			Signature: a.Signature,
@@ -54,13 +54,13 @@ func TestCodec_MultipleBallot(t *testing.T) {
 	nodeID := types.BytesToNodeID([]byte{1, 1, 1})
 	lid := types.NewLayerID(11)
 
-	b1 := types.NewExistingBallot(types.BallotID{1}, nil, nodeID, types.BallotMetadata{Layer: lid})
-	b2 := types.NewExistingBallot(types.BallotID{2}, nil, nodeID, types.BallotMetadata{Layer: lid})
+	b1 := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, nodeID, types.BallotMetadata{Layer: lid})
+	b2 := types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, nodeID, types.BallotMetadata{Layer: lid})
 
 	var ballotProof types.BallotProof
 	for i, b := range []types.Ballot{b1, b2} {
 		b.SetMetadata()
-		b.Signature = types.RandomBytes(64)
+		b.Signature = types.RandomEdSignature()
 		ballotProof.Messages[i] = types.BallotProofMsg{
 			InnerMsg:  b.BallotMetadata,
 			Signature: b.Signature,
@@ -92,7 +92,7 @@ func TestCodec_HareEquivocation(t *testing.T) {
 	for i, hm := range []types.HareMetadata{hm1, hm2} {
 		hareProof.Messages[i] = types.HareProofMsg{
 			InnerMsg:  hm,
-			Signature: types.RandomBytes(64),
+			Signature: types.RandomEdSignature(),
 		}
 	}
 	proof := &types.MalfeasanceProof{
@@ -121,7 +121,7 @@ func TestCodec_MalfeasanceGossip(t *testing.T) {
 	for i, hm := range []types.HareMetadata{hm1, hm2} {
 		hareProof.Messages[i] = types.HareProofMsg{
 			InnerMsg:  hm,
-			Signature: types.RandomBytes(64),
+			Signature: types.RandomEdSignature(),
 		}
 	}
 	gossip := &types.MalfeasanceGossip{
@@ -143,7 +143,7 @@ func TestCodec_MalfeasanceGossip(t *testing.T) {
 	gossip.Eligibility = &types.HareEligibilityGossip{
 		Layer:  lid,
 		Round:  round,
-		PubKey: types.RandomBytes(32),
+		NodeID: types.RandomNodeID(),
 		Eligibility: types.HareEligibility{
 			Proof: []byte{1, 2, 3},
 			Count: 12,

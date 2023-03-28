@@ -10,6 +10,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -31,7 +32,9 @@ func NewGatewayService(verifier api.ChallengeVerifier) *GatewayService {
 // VerifyChallenge implements v1.GatewayServiceServer.
 func (s *GatewayService) VerifyChallenge(ctx context.Context, in *pb.VerifyChallengeRequest) (*pb.VerifyChallengeResponse, error) {
 	ctx = log.WithNewRequestID(ctx)
-	result, err := s.verifier.Verify(ctx, in.Challenge, in.Signature)
+	sig := types.EdSignature{}
+	copy(sig[:], in.Signature)
+	result, err := s.verifier.Verify(ctx, in.Challenge, sig)
 	if err == nil {
 		return &pb.VerifyChallengeResponse{Hash: result.Hash.Bytes(), NodeId: result.NodeID.Bytes()}, nil
 	}

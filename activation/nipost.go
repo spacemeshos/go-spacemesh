@@ -25,7 +25,7 @@ import (
 // a small number of hash evaluations to the total cost.
 type PoetProvingServiceClient interface {
 	// Submit registers a challenge in the proving service current open round.
-	Submit(ctx context.Context, challenge []byte, signature []byte) (*types.PoetRound, error)
+	Submit(ctx context.Context, challenge []byte, signature types.EdSignature) (*types.PoetRound, error)
 
 	// PoetServiceID returns the public key of the PoET proving service.
 	PoetServiceID(context.Context) (types.PoetServiceID, error)
@@ -55,7 +55,7 @@ func (nb *NIPostBuilder) persist() {
 
 // NIPostBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPost).
 type NIPostBuilder struct {
-	minerID           []byte
+	nodeID            types.NodeID
 	db                *sql.Database
 	postSetupProvider postSetupProvider
 	poetProvers       []PoetProvingServiceClient
@@ -74,7 +74,7 @@ type poetDbAPI interface {
 
 // NewNIPostBuilder returns a NIPostBuilder.
 func NewNIPostBuilder(
-	minerID types.NodeID,
+	nodeID types.NodeID,
 	postSetupProvider postSetupProvider,
 	poetProvers []PoetProvingServiceClient,
 	poetDB poetDbAPI,
@@ -85,7 +85,7 @@ func NewNIPostBuilder(
 	layerClock layerClock,
 ) *NIPostBuilder {
 	return &NIPostBuilder{
-		minerID:           minerID.Bytes(),
+		nodeID:            nodeID,
 		postSetupProvider: postSetupProvider,
 		poetProvers:       poetProvers,
 		poetDB:            poetDB,
@@ -234,7 +234,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 }
 
 // Submit the challenge to a single PoET.
-func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, poet PoetProvingServiceClient, challenge []byte, signature []byte) (*types.PoetRequest, error) {
+func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, poet PoetProvingServiceClient, challenge []byte, signature types.EdSignature) (*types.PoetRequest, error) {
 	poetServiceID, err := poet.PoetServiceID(ctx)
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoET service ID", source: err}
@@ -256,7 +256,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, poet PoetProvi
 }
 
 // Submit the challenge to all registered PoETs.
-func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, challenge []byte, signature []byte) []types.PoetRequest {
+func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, challenge []byte, signature types.EdSignature) []types.PoetRequest {
 	g, ctx := errgroup.WithContext(ctx)
 	poetRequestsChannel := make(chan types.PoetRequest, len(nb.poetProvers))
 	for _, poetProver := range nb.poetProvers {

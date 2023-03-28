@@ -34,7 +34,7 @@ func TestActivation_BadMsgHash(t *testing.T) {
 		PubLayerID: types.NewLayerID(11),
 	}
 	atx := types.NewActivationTx(challenge, &types.NodeID{1}, types.Address{}, nil, 1, nil, nil)
-	atx.Signature = types.RandomBytes(64)
+	atx.Signature = types.RandomEdSignature()
 	atx.MsgHash = types.RandomHash()
 	require.Error(t, atx.CalcAndSetID())
 }

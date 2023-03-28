@@ -64,7 +64,7 @@ type config struct {
 	layerSize      uint32
 	layersPerEpoch uint32
 	hdist          uint32
-	minerID        types.NodeID
+	nodeID         types.NodeID
 }
 
 type defaultFetcher struct {
@@ -96,10 +96,10 @@ func WithLayerPerEpoch(layers uint32) Opt {
 	}
 }
 
-// WithMinerID defines the miner's NodeID.
-func WithMinerID(id types.NodeID) Opt {
+// WithNodeID defines the miner's NodeID.
+func WithNodeID(id types.NodeID) Opt {
 	return func(pb *ProposalBuilder) {
-		pb.cfg.minerID = id
+		pb.cfg.nodeID = id
 	}
 }
 
@@ -162,7 +162,7 @@ func NewProposalBuilder(
 	}
 
 	if pb.proposalOracle == nil {
-		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, cdb, vrfSigner, pb.cfg.minerID, pb.logger)
+		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, cdb, vrfSigner, pb.cfg.nodeID, pb.logger)
 	}
 
 	if pb.nonceFetcher == nil {
@@ -221,7 +221,7 @@ func (pb *ProposalBuilder) createProposal(
 	}
 
 	epoch := layerID.GetEpoch()
-	refBallot, err := ballots.GetRefBallot(pb.cdb, epoch, pb.signer.PublicKey().Bytes())
+	refBallot, err := ballots.GetRefBallot(pb.cdb, epoch, pb.signer.NodeID())
 	if err != nil {
 		if !errors.Is(err, sql.ErrNotFound) {
 			logger.With().Error("failed to get ref ballot", log.Err(err))
@@ -334,7 +334,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 
 	started := time.Now()
 
-	count, err := ballots.CountByPubkeyLayer(pb.cdb, layerID, pb.signer.PublicKey().Bytes())
+	count, err := ballots.CountByPubkeyLayer(pb.cdb, layerID, pb.signer.NodeID())
 	if err != nil {
 		logger.With().Error("count ballots in a layer for public key", log.Err(err))
 		return err

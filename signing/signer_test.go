@@ -30,7 +30,7 @@ func TestEdSigner_Sign(t *testing.T) {
 	signed[0] = byte(BALLOT)
 	copy(signed[1:], m)
 
-	ok := ed25519.Verify(ed.PublicKey().Bytes(), signed, sig)
+	ok := ed25519.Verify(ed.PublicKey().Bytes(), signed, sig[:])
 	require.Truef(t, ok, "failed to verify message %x with sig %x", m, sig)
 }
 

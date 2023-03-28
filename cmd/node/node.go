@@ -651,7 +651,7 @@ func (app *App) initServices(
 		beaconProtocol,
 		newSyncer,
 		app.conState,
-		miner.WithMinerID(nodeID),
+		miner.WithNodeID(nodeID),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
@@ -1071,8 +1071,7 @@ func (app *App) Start(ctx context.Context) error {
 		poetClients = append(poetClients, client)
 	}
 
-	edPubkey := edSgn.PublicKey()
-	app.nodeID = types.BytesToNodeID(edPubkey.Bytes())
+	app.nodeID = edSgn.NodeID()
 
 	lg := logger.Named(app.nodeID.ShortString()).WithFields(app.nodeID)
 

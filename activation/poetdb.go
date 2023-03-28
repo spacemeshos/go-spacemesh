@@ -64,7 +64,7 @@ func (db *PoetDb) ValidateAndStoreMsg(ctx context.Context, _ p2p.Peer, data []by
 }
 
 // Validate validates a new PoET proof.
-func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string, signature []byte) error {
+func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string, signature types.EdSignature) error {
 	const shortIDlth = 5 // check the length to prevent a panic in the errors
 	if len(poetID) < shortIDlth {
 		return types.ProcessingError{Err: fmt.Sprintf("invalid poet id %x", poetID)}

@@ -25,7 +25,7 @@ func TestMalicious(t *testing.T) {
 				Layer:   types.NewLayerID(9),
 				MsgHash: types.RandomHash(),
 			},
-			Signature: types.RandomBytes(64),
+			Signature: types.RandomEdSignature(),
 		}
 	}
 	proof := &types.MalfeasanceProof{

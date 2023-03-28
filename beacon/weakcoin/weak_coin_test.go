@@ -1,7 +1,6 @@
 package weakcoin_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -85,7 +84,7 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
-				MinerID:      zeroLSBMiner,
+				NodeID:       zeroLSBMiner,
 				VrfSignature: zeroLSB,
 			}),
 			result: pubsub.ValidationAccept,
@@ -99,7 +98,7 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
-				MinerID:      zeroLSBMiner,
+				NodeID:       zeroLSBMiner,
 				VrfSignature: zeroLSB,
 			}),
 			result: pubsub.ValidationIgnore,
@@ -113,7 +112,7 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
-				MinerID:      zeroLSBMiner,
+				NodeID:       zeroLSBMiner,
 				VrfSignature: zeroLSB,
 			}),
 			result: pubsub.ValidationAccept,
@@ -204,7 +203,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         allowance,
-				MinerID:      oneLSBMiner,
+				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSB,
 			}),
 			expected: pubsub.ValidationAccept,
@@ -224,7 +223,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         allowance + 1,
-				MinerID:      oneLSBMiner,
+				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSB,
 			}),
 			expected: pubsub.ValidationIgnore,
@@ -237,7 +236,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         allowance,
-				MinerID:      highLSBMiner,
+				NodeID:       highLSBMiner,
 				VrfSignature: higherThreshold,
 			}),
 			expected: pubsub.ValidationIgnore,
@@ -250,7 +249,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch - 1,
 				Round:        round,
 				Unit:         allowance,
-				MinerID:      oneLSBMiner,
+				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSB,
 			}),
 			expected: pubsub.ValidationIgnore,
@@ -263,7 +262,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch + 1,
 				Round:        round,
 				Unit:         allowance,
-				MinerID:      oneLSBMiner,
+				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSB,
 			}),
 			expected: pubsub.ValidationIgnore,
@@ -276,7 +275,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round - 1,
 				Unit:         allowance,
-				MinerID:      oneLSBMiner,
+				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSB,
 			}),
 			expected: pubsub.ValidationIgnore,
@@ -289,7 +288,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round + 1,
 				Unit:         allowance,
-				MinerID:      oneLSBMiner,
+				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSB,
 			}),
 			expected: pubsub.ValidationAccept,
@@ -351,7 +350,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 			Epoch:        epoch,
 			Round:        nextRound,
 			Unit:         1,
-			MinerID:      oneLSBMiner,
+			NodeID:       oneLSBMiner,
 			VrfSignature: oneLSB,
 		}))
 	}
@@ -396,7 +395,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	mockAllowance := weakcoin.NewMockallowance(gomock.NewController(t))
 	mockAllowance.EXPECT().MinerAllowance(epoch, gomock.Any()).DoAndReturn(
 		func(_ types.EpochID, miner types.NodeID) uint32 {
-			if bytes.Equal(miner.Bytes(), signer.PublicKey().Bytes()) {
+			if miner == signer.NodeID() {
 				return 1
 			}
 			return 0

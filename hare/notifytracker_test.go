@@ -20,7 +20,7 @@ func BuildNotifyMsg(signing *signing.EdSigner, s *Set) *Msg {
 	cert.AggMsgs.Messages = []Message{BuildCommitMsg(signing, s).Message}
 	builder.SetCertificate(cert)
 	builder.SetEligibilityCount(1)
-	return builder.SetPubKey(signing.PublicKey()).Sign(signing).Build()
+	return builder.SetNodeID(signing.NodeID()).Sign(signing).Build()
 }
 
 func TestNotifyTracker_OnNotify(t *testing.T) {
@@ -34,7 +34,7 @@ func TestNotifyTracker_OnNotify(t *testing.T) {
 	mch := make(chan *types.MalfeasanceGossip, lowDefaultSize)
 	tracker := newNotifyTracker(logtest.New(t), notifyRound, mch, et, lowDefaultSize)
 	m1 := BuildNotifyMsg(signer, s1)
-	et.Track(m1.PubKey.Bytes(), m1.Round, m1.Eligibility.Count, true)
+	et.Track(m1.NodeID, m1.Round, m1.Eligibility.Count, true)
 	exist := tracker.OnNotify(context.Background(), m1)
 	require.Equal(t, CountInfo{hCount: 1, numHonest: 1}, *tracker.NotificationsCount(s1))
 	require.False(t, exist)
@@ -72,7 +72,7 @@ func TestNotifyTracker_OnNotify(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			PubKey:      m2.PubKey.Bytes(),
+			NodeID:      m2.NodeID,
 			Eligibility: m2.Eligibility,
 		},
 	}
@@ -93,12 +93,12 @@ func TestNotifyTracker_NotificationsCount(t *testing.T) {
 	mch := make(chan *types.MalfeasanceGossip, lowDefaultSize)
 	tracker := newNotifyTracker(logtest.New(t), notifyRound, mch, et, lowDefaultSize)
 	m1 := BuildNotifyMsg(signer1, s)
-	et.Track(m1.PubKey.Bytes(), m1.Round, m1.Eligibility.Count, true)
+	et.Track(m1.NodeID, m1.Round, m1.Eligibility.Count, true)
 	tracker.OnNotify(context.Background(), m1)
 	require.Equal(t, CountInfo{hCount: 1, numHonest: 1}, *tracker.NotificationsCount(s))
 
 	m2 := BuildNotifyMsg(signer2, s)
-	et.Track(m2.PubKey.Bytes(), m2.Round, m2.Eligibility.Count, false)
+	et.Track(m2.NodeID, m2.Round, m2.Eligibility.Count, false)
 	tracker.OnNotify(context.Background(), m2)
 	ci := tracker.NotificationsCount(s)
 	require.Equal(t, CountInfo{hCount: 1, dhCount: 1, numHonest: 1, numDishonest: 1}, *ci)
@@ -108,7 +108,7 @@ func TestNotifyTracker_NotificationsCount(t *testing.T) {
 	// add a known equivocator
 	signer3, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	et.Track(signer3.PublicKey().Bytes(), m2.Round, 1, false)
+	et.Track(signer3.NodeID(), m2.Round, 1, false)
 	ci = tracker.NotificationsCount(s)
 	require.Equal(t, CountInfo{hCount: 1, dhCount: 1, keCount: 1, numHonest: 1, numDishonest: 1, numKE: 1}, *ci)
 	require.True(t, ci.Meet(2))
@@ -125,13 +125,13 @@ func TestNotifyTracker_NotificationsCount_TooFewKnownEquivocator(t *testing.T) {
 	for i := 0; i < threshold-2; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		et.Track(sig.PublicKey().Bytes(), notifyRound, 1, false)
+		et.Track(sig.NodeID(), notifyRound, 1, false)
 	}
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildNotifyMsg(sig, s)
-	et.Track(m.PubKey.Bytes(), m.Round, m.Eligibility.Count, true)
+	et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
 	tracker.OnNotify(context.Background(), m)
 
 	ci := tracker.NotificationsCount(s)
@@ -140,7 +140,7 @@ func TestNotifyTracker_NotificationsCount_TooFewKnownEquivocator(t *testing.T) {
 	// add another known equivocator
 	sig2, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	et.Track(sig2.PublicKey().Bytes(), notifyRound, 1, false)
+	et.Track(sig2.NodeID(), notifyRound, 1, false)
 	ci = tracker.NotificationsCount(s)
 	require.True(t, ci.Meet(threshold))
 }
@@ -156,7 +156,7 @@ func TestNotifyTracker_NotificationsCount_NoHonestVotes(t *testing.T) {
 	for i := 0; i < threshold; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		et.Track(sig.PublicKey().Bytes(), notifyRound, 1, false)
+		et.Track(sig.NodeID(), notifyRound, 1, false)
 	}
 
 	ci := tracker.NotificationsCount(s)

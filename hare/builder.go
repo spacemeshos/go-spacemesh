@@ -1,7 +1,6 @@
 package hare
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -16,7 +15,7 @@ import (
 type Message struct {
 	types.HareMetadata
 	// signature over Metadata
-	Signature   []byte `scale:"max=64"`
+	Signature   types.EdSignature
 	InnerMsg    *InnerMessage
 	Eligibility types.HareEligibility
 }
@@ -35,11 +34,11 @@ func MessageFromBuffer(buf []byte) (Message, error) {
 }
 
 func (m *Message) MarshalLogObject(encoder log.ObjectEncoder) error {
-	_ = encoder.AddObject("inner_msg", m.InnerMsg)
+	encoder.AddObject("inner_msg", m.InnerMsg)
 	encoder.AddUint32("layer_id", m.Layer.Value)
 	encoder.AddUint32("round", m.Round)
-	encoder.AddString("signature", hex.EncodeToString(m.Signature))
-	_ = encoder.AddObject("eligibility", &m.Eligibility)
+	encoder.AddString("signature", m.Signature.String())
+	encoder.AddObject("eligibility", &m.Eligibility)
 	return nil
 }
 
@@ -112,7 +111,7 @@ type messageBuilder struct {
 // newMessageBuilder returns a new, empty message builder.
 // One should not assume any values are pre-set.
 func newMessageBuilder() *messageBuilder {
-	m := &messageBuilder{&Msg{Message: Message{}, PubKey: nil}, &InnerMessage{}}
+	m := &messageBuilder{&Msg{Message: Message{}, NodeID: types.EmptyNodeID}, &InnerMessage{}}
 	m.msg.InnerMsg = m.inner
 
 	return m
@@ -137,8 +136,8 @@ func (mb *messageBuilder) Sign(signer *signing.EdSigner) *messageBuilder {
 
 // SetPubKey sets the public key of the message.
 // Note: the message itself does not contain the public key. The builder returns the wrapper of the message which does.
-func (mb *messageBuilder) SetPubKey(pub *signing.PublicKey) *messageBuilder {
-	mb.msg.PubKey = pub
+func (mb *messageBuilder) SetNodeID(nodeID types.NodeID) *messageBuilder {
+	mb.msg.NodeID = nodeID
 	return mb
 }
 

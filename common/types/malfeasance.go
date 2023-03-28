@@ -170,7 +170,7 @@ func (hp *HareProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 type AtxProofMsg struct {
 	InnerMsg  ATXMetadata
-	Signature []byte `scale:"max=64"`
+	Signature EdSignature
 }
 
 // SignedBytes returns the actual data being signed in a AtxProofMsg.
@@ -184,7 +184,7 @@ func (m *AtxProofMsg) SignedBytes() []byte {
 
 type BallotProofMsg struct {
 	InnerMsg  BallotMetadata
-	Signature []byte `scale:"max=64"`
+	Signature EdSignature
 }
 
 // SignedBytes returns the actual data being signed in a BallotProofMsg.
@@ -213,7 +213,7 @@ func (hm *HareMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 type HareProofMsg struct {
 	InnerMsg  HareMetadata
-	Signature []byte `scale:"max=64"`
+	Signature EdSignature
 }
 
 // SignedBytes returns the actual data being signed in a HareProofMsg.
