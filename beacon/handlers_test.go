@@ -73,7 +73,7 @@ func createProposal(t *testing.T, vrfSigner *signing.VRFSigner, epoch types.Epoc
 		VRFSignature: sig,
 	}
 	if corruptSignature {
-		msg.VRFSignature = types.RandomVrfSignature()
+		msg.VRFSignature = vrfSigner.Sign(types.RandomBytes(32))
 	}
 	return msg
 }
@@ -122,7 +122,7 @@ func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID
 	}
 	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	if corruptSignature {
-		msg.Signature = types.RandomEdSignature()
+		msg.Signature = signer.Sign(signing.BEACON, types.RandomBytes(32))
 	}
 	return msg
 }
@@ -157,7 +157,7 @@ func createFollowingVote(t *testing.T, signer *signing.EdSigner, epoch types.Epo
 	}
 	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	if corruptSignature {
-		msg.Signature = types.RandomEdSignature()
+		msg.Signature = signer.Sign(signing.BEACON, types.RandomBytes(32))
 	}
 	return msg
 }
