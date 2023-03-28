@@ -110,7 +110,7 @@ jobs:
           storage: premium-rwo=10Gi
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 50
-          bootstrap: 10m
+          bootstrap: 4m
           level: info
           clusters: 4
         run: make -C systest run test_name=.

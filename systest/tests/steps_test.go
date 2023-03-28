@@ -298,12 +298,8 @@ func TestStepVerifySynced(t *testing.T) {
 			if time.Since(node.Restarted) < 30*time.Minute {
 				continue
 			}
-			if time.Since(node.Created) < 120*time.Minute {
-				continue
-			}
 			cctx.Log.Warnw("node is not synced",
 				"node", node.Name,
-				"created", node.Created,
 				"restarted", node.Restarted,
 			)
 			return false
