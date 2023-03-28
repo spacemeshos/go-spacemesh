@@ -26,7 +26,7 @@ func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byt
 		return pubsub.ValidationReject
 	}
 
-	latency := receivedTime.Sub(wc.wClock.WeakCoinProposalSendTime(message.Epoch, message.Round))
+	latency := receivedTime.Sub(wc.msgTime.WeakCoinProposalSendTime(message.Epoch, message.Round))
 	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconWeakCoinProtocol, latency)
 
 	if err := wc.receiveMessage(ctx, message); err != nil {

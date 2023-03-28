@@ -85,12 +85,12 @@ func WithNextRoundBufferSize(size int) OptionFunc {
 	}
 }
 
-// weakCoinMessageTime interface exists so that we can pass an object from the beacon
+// messageTime interface exists so that we can pass an object from the beacon
 // package to the weakCoinPackage (as does allowance), this is indicatave of a
 // circular dependency, probably the weak coin should be merged with the beacon
 // package.
 // Issue: https://github.com/spacemeshos/go-spacemesh/issues/4199
-type weakCoinMessageTime interface {
+type messageTime interface {
 	WeakCoinProposalSendTime(epoch types.EpochID, round types.RoundID) time.Time
 }
 
@@ -101,7 +101,7 @@ func New(
 	verifier vrfVerifier,
 	nonceFetcher nonceFetcher,
 	allowance allowance,
-	wClock weakCoinMessageTime,
+	msgTime messageTime,
 	opts ...OptionFunc,
 ) *WeakCoin {
 	wc := &WeakCoin{
@@ -113,7 +113,7 @@ func New(
 		publisher:    publisher,
 		coins:        make(map[types.RoundID]bool),
 		verifier:     verifier,
-		wClock:       wClock,
+		msgTime:      msgTime,
 	}
 	for _, opt := range opts {
 		opt(wc)
@@ -141,7 +141,7 @@ type WeakCoin struct {
 	// nextRoundBuffer is used to optimistically buffer messages from the next round.
 	nextRoundBuffer []Message
 	coins           map[types.RoundID]bool
-	wClock          weakCoinMessageTime
+	msgTime         messageTime
 }
 
 // Get the result of the coin flip in this round. It is only valid in between StartEpoch/EndEpoch
