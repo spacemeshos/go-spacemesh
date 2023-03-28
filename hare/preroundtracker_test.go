@@ -337,13 +337,13 @@ func TestPreRoundTracker_BestVRF(t *testing.T) {
 		// order matters! lowest VRF value wins
 		// first is input bytes, second is output blake3 checksum as uint32 (lowest order four bytes),
 		// third is lowest val seen so far, fourth is lowest-order bit of lowest value
-		{types.VrfSignature{0}, 3755883053, 3755883053, true},
-		{types.VrfSignature{1}, 527629384, 527629384, false},
-		{types.VrfSignature{2}, 3753776043, 527629384, false},
-		{types.VrfSignature{3}, 501801185, 501801185, true},
-		{types.VrfSignature{4}, 1956263948, 501801185, true},
-		{types.VrfSignature{1, 0}, 3379983208, 501801185, true},
-		{types.VrfSignature{1, 0, 0}, 2393599545, 501801185, true},
+		{types.VrfSignature{0}, 0xaa12a26b, 0xaa12a26b, true},
+		{types.VrfSignature{1}, 0xd86d811f, 0xaa12a26b, true},
+		{types.VrfSignature{3}, 0x88931e8b, 0x88931e8b, true},
+		{types.VrfSignature{4}, 0x1e578f2e, 0x1e578f2e, false},
+		{types.VrfSignature{2}, 0x03375bb2, 0x03375bb2, false},
+		{types.VrfSignature{0, 1}, 0xb9c68b13, 0x03375bb2, false},
+		{types.VrfSignature{0, 0, 1}, 0x0ae0757b, 0x03375bb2, false},
 	}
 
 	// check default coin value
@@ -356,12 +356,12 @@ func TestPreRoundTracker_BestVRF(t *testing.T) {
 	for _, v := range values {
 		vrfHash := hash.Sum(v.proof.Bytes())
 		vrfHashVal := binary.LittleEndian.Uint32(vrfHash[:4])
-		r.Equal(v.val, vrfHashVal, "mismatch in hash output")
+		r.Equalf(v.val, vrfHashVal, "mismatch in hash output for input %s", v.proof)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		prMsg := BuildPreRoundMsg(sig, s1, v.proof)
 		tracker.OnPreRound(context.Background(), prMsg)
-		r.Equal(v.bestVal, tracker.bestVRF, "mismatch in best VRF value")
-		r.Equal(v.coin, tracker.coinflip, "mismatch in weak coin flip")
+		r.Equalf(v.bestVal, tracker.bestVRF, "mismatch in best VRF value for input %s", v.proof)
+		r.Equalf(v.coin, tracker.coinflip, "mismatch in weak coin flip for input %s", v.proof)
 	}
 }
