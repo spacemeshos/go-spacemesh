@@ -226,7 +226,7 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) ([]byte, types.VrfSignature) {
 	minerAllowance := wc.allowance.MinerAllowance(wc.epoch, wc.signer.NodeID())
 	if minerAllowance == 0 {
-		return nil, types.VrfSignature{}
+		return nil, types.EmptyVrfSignature
 	}
 	var broadcast []byte
 	smallest := new(big.Int).Lsh(big.NewInt(1), types.VrfSignatureSize*8)
