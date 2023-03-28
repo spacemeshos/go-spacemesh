@@ -80,8 +80,11 @@ func Test_SignatureVerification(t *testing.T) {
 	challengeBytes, err := codec.Encode(&challenge)
 	req.NoError(err)
 
+	var sig types.EdSignature
+	sig[types.EdSignatureSize-1] = 0xff
+
 	verifier := activation.NewChallengeVerifier(atxProvider, extractor, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
-	_, err = verifier.Verify(context.Background(), challengeBytes, types.RandomEdSignature())
+	_, err = verifier.Verify(context.Background(), challengeBytes, sig)
 	req.ErrorIs(err, activation.ErrSignatureInvalid)
 }
 
