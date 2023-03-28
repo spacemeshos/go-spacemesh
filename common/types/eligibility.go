@@ -20,14 +20,14 @@ const (
 type HareEligibilityGossip struct {
 	Layer       LayerID
 	Round       uint32
-	PubKey      []byte `scale:"max=32"`
+	NodeID      NodeID
 	Eligibility HareEligibility
 }
 
 func (hg *HareEligibilityGossip) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("layer", hg.Layer.Value)
 	encoder.AddUint32("round", hg.Round)
-	encoder.AddString("smesher", BytesToNodeID(hg.PubKey).String())
+	encoder.AddString("smesher", hg.NodeID.String())
 	encoder.AddUint16("count", hg.Eligibility.Count)
 	encoder.AddString("proof", hex.EncodeToString(hg.Eligibility.Proof))
 	return nil

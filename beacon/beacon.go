@@ -272,7 +272,7 @@ func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTxHeader) {
 	if !ok {
 		return
 	}
-	if id, ok := s.minerAtxs[string(atx.NodeID.Bytes())]; ok && id != atx.ID {
+	if id, ok := s.minerAtxs[atx.NodeID]; ok && id != atx.ID {
 		pd.logger.With().Warning("ignoring malicious atx",
 			log.Stringer("smesher", atx.NodeID),
 			log.Stringer("previous_atx", id),
@@ -280,10 +280,10 @@ func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTxHeader) {
 		)
 		return
 	}
-	s.minerAtxs[string(atx.NodeID.Bytes())] = atx.ID
+	s.minerAtxs[atx.NodeID] = atx.ID
 }
 
-func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, minerPK []byte) (*types.ActivationTxHeader, error) {
+func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, nodeID types.NodeID) (*types.ActivationTxHeader, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
@@ -292,18 +292,19 @@ func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, minerPK []byte) (*typ
 		return nil, errEpochNotActive
 	}
 
-	id, ok := st.minerAtxs[string(minerPK)]
+	id, ok := st.minerAtxs[nodeID]
 	if !ok {
 		pd.logger.With().Debug("miner does not have atx in previous epoch",
 			epoch-1,
-			log.Stringer("smesher", types.BytesToNodeID(minerPK)))
+			log.Stringer("smesher", nodeID),
+		)
 		return nil, errMinerNotActive
 	}
 	return pd.cdb.GetAtxHeader(id)
 }
 
-func (pd *ProtocolDriver) MinerAllowance(epoch types.EpochID, minerPK []byte) uint32 {
-	atx, err := pd.minerAtxHdr(epoch, minerPK)
+func (pd *ProtocolDriver) MinerAllowance(epoch types.EpochID, nodeID types.NodeID) uint32 {
+	atx, err := pd.minerAtxHdr(epoch, nodeID)
 	if err != nil {
 		return 0
 	}
@@ -511,7 +512,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 
 	var (
 		epochWeight uint64
-		miners      = make(map[string]types.ATXID)
+		miners      = make(map[types.NodeID]types.ATXID)
 		active      bool
 		nonce       *types.VRFPostIndex
 		// w1 is the weight units at δ before the end of the previous epoch, used to calculate `thresholdStrict`
@@ -522,8 +523,8 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 	)
 	if err := pd.cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
 		epochWeight += header.GetWeight()
-		if _, ok := miners[string(header.NodeID.Bytes())]; !ok {
-			miners[string(header.NodeID.Bytes())] = header.ID
+		if _, ok := miners[header.NodeID]; !ok {
+			miners[header.NodeID] = header.ID
 			if header.Received.Before(early) {
 				w1++
 			} else if header.Received.Before(ontime) {
@@ -773,7 +774,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 		return
 	}
 
-	atx, err := pd.minerAtxHdr(epoch, pd.edSigner.PublicKey().Bytes())
+	atx, err := pd.minerAtxHdr(epoch, pd.edSigner.NodeID())
 	if err != nil {
 		return
 	}
@@ -947,7 +948,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 	return nil
 }
 
-func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, minerPK *signing.PublicKey) (proposalList, error) {
+func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, nodeID types.NodeID) (proposalList, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
@@ -956,13 +957,13 @@ func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, minerPK *signin
 		return nil, errEpochNotActive
 	}
 
-	return st.getMinerFirstRoundVote(minerPK)
+	return st.getMinerFirstRoundVote(nodeID)
 }
 
 func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {
-	firstRoundVotes, err := pd.getFirstRoundVote(epoch, pd.edSigner.PublicKey())
+	firstRoundVotes, err := pd.getFirstRoundVote(epoch, pd.edSigner.NodeID())
 	if err != nil {
-		return fmt.Errorf("get own first round votes %v: %w", pd.edSigner.PublicKey().String(), err)
+		return fmt.Errorf("get own first round votes %v: %w", pd.edSigner.NodeID().String(), err)
 	}
 
 	bitVector := encodeVotes(ownCurrentRoundVotes, firstRoundVotes)

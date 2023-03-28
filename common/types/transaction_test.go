@@ -6,6 +6,14 @@ import (
 	"github.com/spacemeshos/go-scale/tester"
 )
 
+func FuzzTransactionIDConsistency(f *testing.F) {
+	tester.FuzzConsistency[TransactionID](f)
+}
+
+func FuzzTransactionIDSafety(f *testing.F) {
+	tester.FuzzSafety[TransactionID](f)
+}
+
 func FuzzTransactionConsistency(f *testing.F) {
 	tester.FuzzConsistency[Transaction](f)
 }

@@ -158,8 +158,7 @@ func (h *Handler) validateHareEligibility(ctx context.Context, logger log.Log, n
 	}
 
 	emsg := gossip.Eligibility
-	eNodeID := types.BytesToNodeID(emsg.PubKey)
-	if nodeID != eNodeID {
+	if nodeID != emsg.NodeID {
 		return fmt.Errorf("mismatch node id")
 	}
 	// any type of MalfeasanceProof can be accompanied by a hare eligibility
