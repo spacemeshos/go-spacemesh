@@ -1,19 +1,31 @@
 package hare
 
 import (
+	"bytes"
 	"context"
-	"encoding/binary"
-	"fmt"
-	"math"
+	"encoding/hex"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type preroundData struct {
 	*Set
 	*types.HareProofMsg
+}
+
+var biggest = &types.VrfSignature{
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 }
 
 // preRoundTracker tracks pre-round messages.
@@ -25,7 +37,7 @@ type preRoundTracker struct {
 	preRound  map[types.NodeID]*preroundData // maps PubKey->Set of already tracked Values
 	tracker   *RefCountTracker               // keeps track of seen Values
 	threshold int                            // the threshold to prove a value
-	bestVRF   uint32                         // the lowest VRF value seen in the round
+	bestVRF   *types.VrfSignature            // the lowest VRF value seen in the round
 	coinflip  bool                           // the value of the weak coin (based on bestVRF)
 	eTracker  *EligibilityTracker
 }
@@ -37,7 +49,7 @@ func newPreRoundTracker(logger log.Log, mch chan<- *types.MalfeasanceGossip, et 
 		preRound:  make(map[types.NodeID]*preroundData, expectedSize),
 		tracker:   NewRefCountTracker(preRound, et, expectedSize),
 		threshold: threshold,
-		bestVRF:   math.MaxUint32,
+		bestVRF:   biggest,
 		eTracker:  et,
 	}
 }
@@ -47,21 +59,20 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	logger := pre.logger.WithContext(ctx)
 
 	// check for winning VRF
-	vrfHash := hash.Sum(msg.Eligibility.Proof.Bytes())
-	vrfHashVal := binary.LittleEndian.Uint32(vrfHash[:4])
 	logger.With().Debug("received preround message",
 		msg.NodeID,
 		log.Stringer("smesher", msg.NodeID),
 		log.Int("num_values", len(msg.InnerMsg.Values)),
-		log.Uint32("vrf_value", vrfHashVal),
+		log.String("proposal_vrf", hex.EncodeToString(msg.Eligibility.Proof.Bytes())),
+		log.String("previous_vrf", hex.EncodeToString(pre.bestVRF.Bytes())),
 	)
-	if vrfHashVal < pre.bestVRF {
-		pre.bestVRF = vrfHashVal
+	if bytes.Compare(msg.Eligibility.Proof.Bytes(), pre.bestVRF.Bytes()) == -1 {
+		pre.bestVRF = &msg.Eligibility.Proof
 		// store lowest-order bit as coin toss value
-		pre.coinflip = vrfHash[0]&byte(1) == byte(1)
+		pre.coinflip = msg.Eligibility.Proof[types.VrfSignatureSize-1]&byte(1) == byte(1)
 		pre.logger.With().Debug("got new best vrf value",
 			log.Stringer("smesher", msg.NodeID),
-			log.String("vrf_value", fmt.Sprintf("%x", vrfHashVal)),
+			log.String("vrf", hex.EncodeToString(msg.Eligibility.Proof.Bytes())),
 			log.Bool("weak_coin", pre.coinflip),
 		)
 	}
