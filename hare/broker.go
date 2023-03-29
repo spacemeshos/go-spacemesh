@@ -131,35 +131,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		return errNotSynced
 	}
 
-	var out chan any
-	err = func() error {
-		b.mu.Lock()
-		defer b.mu.Unlock()
-		var exist bool
-		out, exist = b.outbox[msgLayer]
-		if !exist {
-			// If the message is not early then return
-			if msgLayer != b.latestLayer.Add(1) {
-				logger.With().Debug(
-					"broker received a message to a consensus process that is not registered",
-					msgLayer.Field(),
-				)
-				return fmt.Errorf(
-					"ignoring message to unregistered consensus process, latestLayer: %v, messageLayer: %v",
-					b.latestLayer,
-					msgLayer.Uint32(),
-				)
-			}
-			// message is early
-			logger.With().Debug(
-				"early message detected",
-				msgLayer.Field(),
-			)
-			out = make(chan any, inboxCapacity)
-			b.outbox[msgLayer] = out
-		}
-		return nil
-	}()
+	out, err := b.getOutbox(logger, msgLayer)
 	if err != nil {
 		return err
 	}
@@ -216,6 +188,37 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		return errClosed
 	}
 	return nil
+}
+
+// getOutbox gets the outbox if it exists, and creates an outbox if the message
+// is early (the message is for the subsequent layer). If the message is not
+// early and an outbox does not exist an error is returned.
+func (b *Broker) getOutbox(logger log.Log, msgLayer types.LayerID) (chan any, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out, exist := b.outbox[msgLayer]
+	if !exist {
+		// If the message is not early then return an error
+		if msgLayer != b.latestLayer.Add(1) {
+			logger.With().Debug(
+				"broker received a message to a consensus process that is not registered",
+				msgLayer.Field(),
+			)
+			return nil, fmt.Errorf(
+				"ignoring message to unregistered consensus process, latestLayer: %v, messageLayer: %v",
+				b.latestLayer,
+				msgLayer.Uint32(),
+			)
+		}
+		// message is early
+		logger.With().Debug(
+			"early message detected",
+			msgLayer.Field(),
+		)
+		out = make(chan any, inboxCapacity)
+		b.outbox[msgLayer] = out
+	}
+	return out, nil
 }
 
 func (b *Broker) handleMaliciousHareMessage(
