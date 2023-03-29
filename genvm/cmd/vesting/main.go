@@ -6,12 +6,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/economics/constants"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
@@ -39,7 +39,7 @@ func must(err error) {
 const pemext = ".pem"
 
 func decodeKeys(dir string) []core.PublicKey {
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	must(err)
 	var keys []core.PublicKey
 	for _, file := range files {
