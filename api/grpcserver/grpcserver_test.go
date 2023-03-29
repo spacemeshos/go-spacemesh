@@ -68,6 +68,7 @@ const (
 	accountBalance = 8675301
 	accountCounter = 0
 	rewardAmount   = 5551234
+	activesetSize  = pageSize*10 + 1
 )
 
 var (
@@ -292,6 +293,10 @@ func (m *MeshAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 	ballots := []*types.Ballot{ballot1}
 	blocks := []*types.Block{block1, block2, block3}
 	return types.NewExistingLayer(tid, ballots, blocks), nil
+}
+
+func (m *MeshAPIMock) EpochAtxs(types.EpochID) ([]types.ATXID, error) {
+	return types.RandomActiveSet(activesetSize), nil
 }
 
 func (m *MeshAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
@@ -2793,4 +2798,29 @@ func TestVMAccountUpdates(t *testing.T) {
 		require.Less(t, int(state.Balance.Value), initial-amount)
 	}
 	require.Equal(t, len(accounts), i)
+}
+
+func TestMeshService_EpochStream(t *testing.T) {
+	logtest.SetupGlobal(t)
+	srv := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	t.Cleanup(launchServer(t, srv))
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	conn := dialGrpc(ctx, t, cfg)
+	client := pb.NewMeshServiceClient(conn)
+
+	stream, err := client.EpochStream(ctx, &pb.EpochStreamRequest{Epoch: 3})
+	require.NoError(t, err)
+	var total, pages int
+	for {
+		resp, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		total += len(resp.Ids)
+		pages++
+	}
+	require.Equal(t, activesetSize, total)
+	require.Equal(t, 1+(activesetSize/pageSize), pages)
 }
