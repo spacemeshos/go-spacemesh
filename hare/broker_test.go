@@ -417,6 +417,9 @@ func TestBroker_Register(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	broker.mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
+
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
 
@@ -424,15 +427,16 @@ func TestBroker_Register(t *testing.T) {
 	require.NoError(t, err)
 	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
 
-	broker.mu.Lock()
-	broker.pending[instanceID1] = []any{msg, msg}
-	broker.mu.Unlock()
+	bytes, err := codec.Encode(msg)
+	require.NoError(t, err)
+
+	broker.HandleMessage(context.Background(), "", bytes)
+	broker.HandleMessage(context.Background(), "", bytes)
 
 	broker.Register(context.Background(), instanceID1)
 
 	broker.mu.RLock()
 	assert.Equal(t, 2, len(broker.outbox[instanceID1]))
-	assert.Equal(t, 0, len(broker.pending[instanceID1]))
 	broker.mu.RUnlock()
 }
 
@@ -637,29 +641,45 @@ func TestBroker_eventLoop(t *testing.T) {
 	r.Equal(msg, rec.Message)
 }
 
-func Test_validate(t *testing.T) {
-	r := require.New(t)
-	b := buildBroker(t, t.Name())
+func encode(t *testing.T, m *Msg) []byte {
+	bytes, err := codec.Encode(m)
+	require.NoError(t, err)
+	return bytes
+}
 
+func Test_validate(t *testing.T) {
+	b := buildBroker(t, t.Name())
+	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
+	b.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	b.mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
+
+	ctx := context.Background()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildStatusMsg(signer, NewDefaultEmptySet())
-	m.Layer = instanceID1
 	b.latestLayer = instanceID2
-	e := b.validateTiming(context.Background(), &m.Message)
-	r.ErrorIs(e, errUnregistered)
 
+	// old messages are ignored
+	m.Layer = instanceID1
+	validationResult := b.HandleMessage(ctx, "", encode(t, m))
+	assert.Equal(t, pubsub.ValidationIgnore, validationResult)
+
+	// messages for current layer are ignored, this can happen if registration
+	// fails in certain ways for that layer.
 	m.Layer = instanceID2
-	e = b.validateTiming(context.Background(), &m.Message)
-	r.ErrorIs(e, errRegistration)
+	validationResult = b.HandleMessage(ctx, "", encode(t, m))
+	assert.Equal(t, pubsub.ValidationIgnore, validationResult)
 
+	// early messages (currentLayer + 1) are accepted
 	m.Layer = instanceID3
-	e = b.validateTiming(context.Background(), &m.Message)
-	r.ErrorIs(e, errEarlyMsg)
+	validationResult = b.HandleMessage(ctx, "", encode(t, m))
+	assert.Equal(t, pubsub.ValidationAccept, validationResult)
 
+	// future messages (currentLayer + >1) are ignored
 	m.Layer = instanceID4
-	e = b.validateTiming(context.Background(), &m.Message)
-	r.ErrorIs(e, errFutureMsg)
+	validationResult = b.HandleMessage(ctx, "", encode(t, m))
+	assert.Equal(t, pubsub.ValidationIgnore, validationResult)
 }
 
 func TestBroker_clean(t *testing.T) {

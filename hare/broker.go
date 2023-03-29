@@ -35,8 +35,7 @@ type Broker struct {
 	nodeSyncState   system.SyncStateProvider // provider function to check if the node is currently synced
 	mchOut          chan<- *types.MalfeasanceGossip
 	outbox          map[types.LayerID]chan any
-	pending         map[types.LayerID][]any // the buffer of pending early messages for the next layer
-	latestLayer     types.LayerID           // the latest layer to attempt register (successfully or unsuccessfully)
+	latestLayer     types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
 	minDeleted      types.LayerID
 	limit           int // max number of simultaneous consensus processes
 
@@ -64,7 +63,6 @@ func newBroker(
 		nodeSyncState:   syncState,
 		mchOut:          mch,
 		outbox:          make(map[types.LayerID]chan any),
-		pending:         make(map[types.LayerID][]any),
 		latestLayer:     types.GetEffectiveGenesis(),
 		limit:           limit,
 		minDeleted:      types.GetEffectiveGenesis(),
@@ -86,38 +84,10 @@ func (b *Broker) Start(ctx context.Context) {
 }
 
 var (
-	errUnregistered      = errors.New("layer is unregistered")
 	errNotSynced         = errors.New("layer is not synced")
-	errFutureMsg         = errors.New("future message")
-	errRegistration      = errors.New("failed during registration")
 	errInstanceNotSynced = errors.New("instance not synchronized")
 	errClosed            = errors.New("closed")
 )
-
-func (b *Broker) validateTiming(ctx context.Context, m *Message) error {
-	msgInstID := m.Layer
-	if b.outbox[msgInstID] != nil {
-		b.Log.WithContext(ctx).With().Debug("instance exists", msgInstID)
-		return nil
-	}
-
-	if msgInstID.Before(b.latestLayer) {
-		return fmt.Errorf("%w: msg %v, latest %v", errUnregistered, msgInstID.Uint32(), b.latestLayer)
-	}
-
-	// current layer
-	if msgInstID == b.latestLayer {
-		return fmt.Errorf("%w: latest %v", errRegistration, b.latestLayer)
-	}
-
-	// early msg
-	if msgInstID == b.latestLayer.Add(1) {
-		return fmt.Errorf("%w: latest %v", errEarlyMsg, b.latestLayer)
-	}
-
-	// future msg
-	return fmt.Errorf("%w: msg %v, latest %v", errFutureMsg, msgInstID, b.latestLayer)
-}
 
 // HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
 func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
@@ -158,18 +128,30 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		return errNotSynced
 	}
 
-	isEarly := false
-	if err = b.validateTiming(ctx, &hareMsg); err != nil {
-		if !errors.Is(err, errEarlyMsg) {
-			// not early, validation failed
-			logger.With().Debug("broker received a message to a consensus process that is not registered",
-				log.Err(err))
-			return err
+	out, exist := b.outbox[msgLayer]
+	if !exist {
+		// If the message is not early then return
+		if msgLayer != b.latestLayer.Add(1) {
+			logger.With().Debug(
+				"broker received a message to a consensus process that is not registered",
+				msgLayer.Field(),
+			)
+			return fmt.Errorf(
+				"ignoring message to unregistered consensus process, latestLayer: %v, messageLayer: %v",
+				b.latestLayer,
+				msgLayer.Uint32(),
+			)
 		}
-
-		logger.With().Debug("early message detected", log.Err(err))
-		isEarly = true
+		// message is early
+		logger.With().Debug(
+			"early message detected",
+			msgLayer.Field(),
+		)
+		out = make(chan any, inboxCapacity)
+		b.outbox[msgLayer] = out
 	}
+
+	b.Log.WithContext(ctx).With().Debug("instance exists", msgLayer)
 
 	nodeId, err := b.pubKeyExtractor.ExtractNodeID(signing.HARE, hareMsg.SignedBytes(), hareMsg.Signature)
 	if err != nil {
@@ -205,22 +187,12 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		// - gossip its malfeasance + eligibility proofs to the network
 		// - relay the eligibility proof to the consensus process
 		// - return error so the node don't relay messages from malicious parties
-		if err := b.handleMaliciousHareMessage(ctx, logger, iMsg.NodeID, proof, iMsg, isEarly); err != nil {
+		if err := b.handleMaliciousHareMessage(ctx, logger, iMsg.NodeID, proof, iMsg, out); err != nil {
 			return err
 		}
 		return fmt.Errorf("known malicious %v", iMsg.NodeID.String())
 	}
 
-	if isEarly {
-		return b.handleEarlyMessage(logger, msgLayer, iMsg.NodeID, iMsg)
-	}
-
-	// has instance, just send
-	out := b.outbox[msgLayer]
-	if out == nil {
-		logger.With().Debug("missing broker instance for layer", msgLayer)
-		return errTooOld
-	}
 	logger.With().Debug("broker forwarding message to outbox",
 		log.Int("queue_size", len(out)))
 	select {
@@ -239,7 +211,7 @@ func (b *Broker) handleMaliciousHareMessage(
 	nodeID types.NodeID,
 	proof *types.MalfeasanceProof,
 	msg *Msg,
-	early bool,
+	out chan any,
 ) error {
 	gossip := &types.MalfeasanceGossip{
 		MalfeasanceProof: *proof,
@@ -259,20 +231,10 @@ func (b *Broker) handleMaliciousHareMessage(
 		// causes the node to gossip the malfeasance and eligibility proof
 	}
 
-	toRelay := gossip.Eligibility
-	if early {
-		return b.handleEarlyMessage(logger, msg.Layer, nodeID, toRelay)
-	}
-
-	out := b.outbox[msg.Layer]
-	if out == nil {
-		b.Log.WithContext(ctx).With().Debug("consensus not running for layer", msg.Layer)
-		return nil
-	}
 	b.Log.WithContext(ctx).With().Debug("broker forwarding hare eligibility to consensus process",
 		log.Int("queue_size", len(out)))
 	select {
-	case out <- toRelay:
+	case out <- gossip.Eligibility:
 	case <-ctx.Done():
 	case <-b.ctx.Done():
 	}
@@ -329,23 +291,6 @@ func (b *Broker) HandleEligibility(ctx context.Context, em *types.HareEligibilit
 	return false
 }
 
-func (b *Broker) handleEarlyMessage(logger log.Log, layer types.LayerID, nodeID types.NodeID, msg any) error {
-	if _, exist := b.pending[layer]; !exist { // create buffer if first msg
-		b.pending[layer] = make([]any, 0, inboxCapacity)
-	}
-
-	// we want to write all buffered messages to a chan with InboxCapacity len
-	// hence, we limit the buffer for pending messages
-	if len(b.pending[layer]) == inboxCapacity {
-		logger.With().Warning("too many pending messages, ignoring message",
-			log.Int("inbox_capacity", inboxCapacity),
-			log.Stringer("smesher", nodeID))
-		return nil
-	}
-	b.pending[layer] = append(b.pending[layer], msg)
-	return nil
-}
-
 func (b *Broker) cleanOldLayers() {
 	for i := b.minDeleted.Add(1); i.Before(b.latestLayer); i = i.Add(1) {
 		_, exist := b.outbox[i]
@@ -387,14 +332,14 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any,
 		b.minDeleted = instance
 		b.With().Info("unregistered layer due to maximum concurrent processes", instance)
 	}
-	// Make a new outbox
-	outboxCh := make(chan any, inboxCapacity)
-	b.outbox[id] = outboxCh
-	// Copy any pending messages to this outbox
-	for _, mOut := range b.pending[id] {
-		outboxCh <- mOut
+	// Check for existing outbox, this can happen if we receive early messages
+	// for the next layer.
+	outboxCh, exist := b.outbox[id]
+	if !exist {
+		// Create it if it does not exist
+		outboxCh = make(chan any, inboxCapacity)
+		b.outbox[id] = outboxCh
 	}
-	delete(b.pending, id)
 	return outboxCh, nil
 }
 
