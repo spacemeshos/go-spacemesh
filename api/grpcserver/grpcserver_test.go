@@ -68,7 +68,7 @@ const (
 	accountBalance = 8675301
 	accountCounter = 0
 	rewardAmount   = 5551234
-	activesetSize  = pageSize*10 + 1
+	activesetSize  = 10001
 )
 
 var (
@@ -2812,15 +2812,13 @@ func TestMeshService_EpochStream(t *testing.T) {
 
 	stream, err := client.EpochStream(ctx, &pb.EpochStreamRequest{Epoch: 3})
 	require.NoError(t, err)
-	var total, pages int
+	var total int
 	for {
-		resp, err := stream.Recv()
+		_, err = stream.Recv()
 		if errors.Is(err, io.EOF) {
 			break
 		}
-		total += len(resp.Ids)
-		pages++
+		total++
 	}
 	require.Equal(t, activesetSize, total)
-	require.Equal(t, 1+(activesetSize/pageSize), pages)
 }

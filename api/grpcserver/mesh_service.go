@@ -15,8 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-const pageSize = 1000
-
 // MeshService exposes mesh data such as accounts, blocks, and transactions.
 type MeshService struct {
 	mesh           api.MeshAPI // Mesh
@@ -576,19 +574,13 @@ func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshServi
 	if err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
-	for i := 0; i < len(atxids); i += pageSize {
-		end := i + pageSize
-		if end > len(atxids) {
-			end = len(atxids)
-		}
+	for _, id := range atxids {
 		select {
 		case <-stream.Context().Done():
 			return nil
 		default:
 			var res pb.EpochStreamResponse
-			for _, id := range atxids[i:end] {
-				res.Ids = append(res.Ids, &pb.ActivationId{Id: id.Bytes()})
-			}
+			res.Id = &pb.ActivationId{Id: id.Bytes()}
 			if err = stream.Send(&res); err != nil {
 				return status.Error(codes.Internal, err.Error())
 			}
