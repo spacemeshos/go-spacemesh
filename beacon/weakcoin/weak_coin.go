@@ -21,8 +21,19 @@ var (
 	errNotSmallest  = errors.New("proposal not smallest")
 )
 
-// biggest is 1 bigger than the largest value that can be represented by a VRF signature.
-var biggest = new(big.Int).Lsh(big.NewInt(1), types.VrfSignatureSize*8)
+var biggest = &types.VrfSignature{
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+}
 
 func defaultConfig() config {
 	return config{
@@ -112,7 +123,7 @@ func New(
 		config:       defaultConfig(),
 		signer:       signer,
 		nonceFetcher: nonceFetcher,
-		smallest:     new(big.Int).Set(biggest),
+		smallest:     biggest,
 		allowance:    allowance,
 		publisher:    publisher,
 		coins:        make(map[types.RoundID]bool),
@@ -140,7 +151,7 @@ type WeakCoin struct {
 	epochStarted, roundStarted bool
 	epoch                      types.EpochID
 	round                      types.RoundID
-	smallest                   *big.Int
+	smallest                   *types.VrfSignature
 	allowance                  allowance
 	// nextRoundBuffer is used to optimistically buffer messages from the next round.
 	nextRoundBuffer []Message
@@ -203,7 +214,7 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, nonce *
 	logger.Info("started beacon weak coin round")
 	wc.roundStarted = true
 	wc.round = round
-	wc.smallest.Set(biggest)
+	wc.smallest = biggest // initialize smallest candidate with the biggest value possible for a VRF signature
 	for i, msg := range wc.nextRoundBuffer {
 		if msg.Epoch != wc.epoch || msg.Round != wc.round {
 			continue
@@ -246,14 +257,14 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 		return nil, types.EmptyVrfSignature
 	}
 	var broadcast []byte
-	smallest := new(big.Int).Lsh(big.NewInt(1), types.VrfSignatureSize*8)
+	smallest := biggest // initialize smallest candidate with the biggest value possible for a VRF signature
 	for unit := uint32(0); unit < minerAllowance; unit++ {
 		proposal := wc.encodeProposal(epoch, nonce, round, unit)
 		signature := wc.signer.Sign(proposal)
 		if wc.aboveThreshold(signature) {
 			continue
 		}
-		if new(big.Int).SetBytes(signature[:]).Cmp(smallest) == -1 {
+		if bytes.Compare(signature.Bytes(), smallest.Bytes()) == -1 {
 			message := Message{
 				Epoch:        epoch,
 				Round:        round,
@@ -267,16 +278,14 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 			}
 
 			broadcast = msg
-			smallest.SetBytes(signature[:])
+			smallest = &signature
 		}
 	}
 
 	wc.mu.RLock()
 	defer wc.mu.RUnlock()
-	if smallest.Cmp(wc.smallest) == -1 {
-		var sig types.VrfSignature
-		smallest.FillBytes(sig[:])
-		return broadcast, sig
+	if bytes.Compare(smallest.Bytes(), wc.smallest.Bytes()) == -1 {
+		return broadcast, *smallest
 	}
 	return nil, types.EmptyVrfSignature
 }
@@ -311,7 +320,7 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 	defer wc.mu.Unlock()
 	logger := wc.logger.WithContext(ctx).WithFields(wc.epoch, wc.round)
 	wc.roundStarted = false
-	if wc.smallest.Cmp(biggest) == 0 {
+	if bytes.Compare(wc.smallest.Bytes(), biggest.Bytes()) == 0 {
 		logger.Warning("completed round without valid proposals")
 		return
 	}
@@ -329,19 +338,18 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 		log.String("proposal", hex.EncodeToString(wc.smallest.Bytes())),
 		log.Bool("beacon_weak_coin", coinflip),
 	)
-	wc.smallest.Set(biggest)
+	wc.smallest = biggest
 }
 
 func (wc *WeakCoin) updateSmallest(ctx context.Context, sig types.VrfSignature) error {
-	proposal := new(big.Int).SetBytes(sig.Bytes())
-	if proposal.Cmp(wc.smallest) == -1 {
+	if bytes.Compare(sig.Bytes(), wc.smallest.Bytes()) == -1 {
 		wc.logger.WithContext(ctx).With().Debug("saving new proposal",
 			wc.epoch,
 			wc.round,
-			log.String("proposal", hex.EncodeToString(proposal.Bytes())),
+			log.String("proposal", hex.EncodeToString(sig.Bytes())),
 			log.String("previous", hex.EncodeToString(wc.smallest.Bytes())),
 		)
-		wc.smallest.Set(proposal)
+		wc.smallest = &sig
 		return nil
 	}
 	return errNotSmallest
