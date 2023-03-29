@@ -320,7 +320,7 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 	defer wc.mu.Unlock()
 	logger := wc.logger.WithContext(ctx).WithFields(wc.epoch, wc.round)
 	wc.roundStarted = false
-	if bytes.Compare(wc.smallest.Bytes(), biggest.Bytes()) == 0 {
+	if bytes.Equal(wc.smallest.Bytes(), biggest.Bytes()) {
 		logger.Warning("completed round without valid proposals")
 		return
 	}
