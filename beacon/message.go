@@ -22,12 +22,7 @@ type ProposalMessage struct {
 	VRFSignature types.VrfSignature
 }
 
-const (
-	// ProposalSize in bytes.
-	ProposalSize = 4
-)
-
-type Proposal [ProposalSize]byte
+type Proposal [types.BeaconSize]byte
 
 // EncodeScale implements scale codec interface.
 func (p *Proposal) EncodeScale(e *scale.Encoder) (int, error) {

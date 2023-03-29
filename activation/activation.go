@@ -236,7 +236,7 @@ func (b *Builder) SmesherID() types.NodeID {
 
 func (b *Builder) run(ctx context.Context) {
 	if err := b.generateProof(ctx); err != nil {
-		b.log.Error("Failed to generate proof: %w", err)
+		b.log.Error("Failed to generate proof: %s", err)
 		return
 	}
 

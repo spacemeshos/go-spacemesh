@@ -34,7 +34,7 @@ func createProtocolDriverWithFirstRoundVotes(
 	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, nil)
 	plist := make(proposalList, 3)
 	for i := range plist {
-		copy(plist[i][:], types.RandomBytes(ProposalSize))
+		copy(plist[i][:], types.RandomBytes(types.BeaconSize))
 	}
 	setOwnFirstRoundVotes(t, tpd.ProtocolDriver, epoch, plist)
 	setMinerFirstRoundVotes(t, tpd.ProtocolDriver, epoch, signer.NodeID(), plist)
@@ -1278,12 +1278,12 @@ func Test_handleFollowingVotes_IgnoreUnknownProposal(t *testing.T) {
 
 	known := make([]Proposal, 3)
 	for i := range known {
-		copy(known[i][:], types.RandomBytes(ProposalSize))
+		copy(known[i][:], types.RandomBytes(types.BeaconSize))
 	}
 
 	unknown := make([]Proposal, 2)
 	for i := range unknown {
-		copy(unknown[i][:], types.RandomBytes(ProposalSize))
+		copy(unknown[i][:], types.RandomBytes(types.BeaconSize))
 	}
 
 	plist := append(known, unknown...)
