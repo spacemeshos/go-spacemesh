@@ -2081,7 +2081,7 @@ func BenchmarkTransactions(b *testing.B) {
 		bench(b, tt, (&spendTx{from: 0, to: 1, amount: 10}).gen(tt))
 	})
 	b.Run("multisig/selfspawn", func(b *testing.B) {
-		tt := newTester(b).addMultisig(2, 3, 10, multisig.TemplateAddress3).applyGenesis()
+		tt := newTester(b).addMultisig(2, 3, 5, multisig.TemplateAddress3).applyGenesis()
 		bench(b, tt, (&selfSpawnTx{principal: 0}).gen(tt))
 	})
 	b.Run("multisig/spend", func(b *testing.B) {
@@ -2096,6 +2096,22 @@ func BenchmarkTransactions(b *testing.B) {
 		require.NoError(b, err)
 		require.Empty(b, ineffective)
 		bench(b, tt, (&spendTx{from: 0, to: 1, amount: 10}).gen(tt))
+	})
+	b.Run("vesting/spawnvault", func(b *testing.B) {
+		tt := newTester(b).
+			addVesting(1, 3, 5, vesting.TemplateAddress3).
+			addVault(1, 200000, 100000, types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(100)).
+			applyGenesis()
+		ineffective, _, err := tt.Apply(
+			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
+			[]types.Transaction{
+				{RawTx: (&selfSpawnTx{principal: 0}).gen(tt)},
+			},
+			nil,
+		)
+		require.NoError(b, err)
+		require.Empty(b, ineffective)
+		bench(b, tt, (&spawnTx{principal: 0, target: 1}).gen(tt))
 	})
 	b.Run("vesting/drain", func(b *testing.B) {
 		tt := newTester(b).
