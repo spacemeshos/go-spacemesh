@@ -91,8 +91,6 @@ var (
 
 // HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
 func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
-	b.mu.Lock()
-	defer b.mu.Unlock()
 	select {
 	case <-ctx.Done():
 		return pubsub.ValidationIgnore
@@ -108,7 +106,12 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubs
 
 func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	h := types.CalcMessageHash12(msg, pubsub.HareProtocol)
+
+	// lock over b.latestLayer access
+	b.mu.Lock()
 	logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.latestLayer), h)
+	b.mu.Unlock()
+
 	hareMsg, err := MessageFromBuffer(msg)
 	if err != nil {
 		logger.With().Error("failed to build message", h, log.Err(err))
@@ -128,27 +131,37 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		return errNotSynced
 	}
 
-	out, exist := b.outbox[msgLayer]
-	if !exist {
-		// If the message is not early then return
-		if msgLayer != b.latestLayer.Add(1) {
+	var out chan any
+	err = func() error {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		var exist bool
+		out, exist = b.outbox[msgLayer]
+		if !exist {
+			// If the message is not early then return
+			if msgLayer != b.latestLayer.Add(1) {
+				logger.With().Debug(
+					"broker received a message to a consensus process that is not registered",
+					msgLayer.Field(),
+				)
+				return fmt.Errorf(
+					"ignoring message to unregistered consensus process, latestLayer: %v, messageLayer: %v",
+					b.latestLayer,
+					msgLayer.Uint32(),
+				)
+			}
+			// message is early
 			logger.With().Debug(
-				"broker received a message to a consensus process that is not registered",
+				"early message detected",
 				msgLayer.Field(),
 			)
-			return fmt.Errorf(
-				"ignoring message to unregistered consensus process, latestLayer: %v, messageLayer: %v",
-				b.latestLayer,
-				msgLayer.Uint32(),
-			)
+			out = make(chan any, inboxCapacity)
+			b.outbox[msgLayer] = out
 		}
-		// message is early
-		logger.With().Debug(
-			"early message detected",
-			msgLayer.Field(),
-		)
-		out = make(chan any, inboxCapacity)
-		b.outbox[msgLayer] = out
+		return nil
+	}()
+	if err != nil {
+		return err
 	}
 
 	b.Log.WithContext(ctx).With().Debug("instance exists", msgLayer)
