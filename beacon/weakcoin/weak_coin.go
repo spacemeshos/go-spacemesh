@@ -329,9 +329,9 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 	// For another signature algorithm this may change
 	lsbIndex := 0
 	if !wc.signer.LittleEndian() {
-		lsbIndex = len(wc.smallest.Bytes()) - 1
+		lsbIndex = len(wc.smallest) - 1
 	}
-	coinflip := wc.smallest.Bytes()[lsbIndex]&1 == 1
+	coinflip := wc.smallest[lsbIndex]&1 == 1
 
 	wc.coins[wc.round] = coinflip
 	logger.With().Info("completed round with beacon weak coin",
