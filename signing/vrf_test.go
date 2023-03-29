@@ -78,7 +78,7 @@ func Test_VRFVerifier(t *testing.T) {
 
 	var sig2 types.VrfSignature
 	copy(sig2[:], sig[:])
-	sig2[0] = 0
+	sig2[0] = ^sig2[0] // flip all bits of first byte in the signature
 	ok = VRFVerify(signer.NodeID(), []byte("hello world"), sig2)
 	require.False(t, ok, "VRF signature should not be verified")
 }
