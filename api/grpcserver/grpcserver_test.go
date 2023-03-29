@@ -25,7 +25,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/ed25519-recovery"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
@@ -2730,23 +2729,23 @@ func TestVMAccountUpdates(t *testing.T) {
 	svm := vm.New(db, vm.WithLogger(logtest.New(t)))
 	t.Cleanup(launchServer(t, NewGlobalStateService(nil, txs.NewConservativeState(svm, db))))
 
-	keys := make([]ed25519.PrivateKey, 10)
+	keys := make([]*signing.EdSigner, 10)
 	accounts := make([]types.Account, len(keys))
 	const initial = 100_000_000
 	for i := range keys {
-		pub, pk, err := ed25519.GenerateKey(nil)
+		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		keys[i] = pk
+		keys[i] = signer
 		accounts[i] = types.Account{
-			Address: wallet.Address(pub),
+			Address: wallet.Address(signer.PublicKey().Bytes()),
 			Balance: initial,
 		}
 	}
 	require.NoError(t, svm.ApplyGenesis(accounts))
 	spawns := []types.Transaction{}
-	for _, pk := range keys {
+	for _, key := range keys {
 		spawns = append(spawns, types.Transaction{
-			RawTx: types.NewRawTx(wallet.SelfSpawn(pk, 0)),
+			RawTx: types.NewRawTx(wallet.SelfSpawn(key.PrivateKey(), 0)),
 		})
 	}
 	lid := types.GetEffectiveGenesis().Add(1)
@@ -2780,10 +2779,10 @@ func TestVMAccountUpdates(t *testing.T) {
 
 	spends := []types.Transaction{}
 	const amount = 100_000
-	for _, pk := range keys {
+	for _, key := range keys {
 		spends = append(spends, types.Transaction{
 			RawTx: types.NewRawTx(wallet.Spend(
-				pk, types.Address{1}, amount, 1,
+				key.PrivateKey(), types.Address{1}, amount, 1,
 			)),
 		})
 	}

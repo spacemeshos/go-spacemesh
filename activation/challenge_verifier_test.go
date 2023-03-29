@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/spacemeshos/ed25519-recovery"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
@@ -244,10 +243,6 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 	t.Parallel()
 	req := require.New(t)
 
-	pubKey, privKey, err := ed25519.GenerateKey(nil)
-	req.NoError(err)
-	nodeID := types.BytesToNodeID(pubKey)
-
 	sigVerifier, err := signing.NewPubKeyExtractor()
 	req.NoError(err)
 
@@ -265,7 +260,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 	challengeBytes, err := codec.Encode(&challenge)
 	req.NoError(err)
 
-	signer, err := signing.NewEdSigner(signing.WithPrivateKey(privKey))
+	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
 	t.Run("valid", func(t *testing.T) {
@@ -278,7 +273,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 					Sequence: 0,
 				},
 				ID:     goldenATXID,
-				NodeID: nodeID,
+				NodeID: signer.NodeID(),
 			}, nil)
 		validator := activation.NewMocknipostValidator(ctrl)
 		validator.EXPECT().NumUnits(gomock.Any(), gomock.Any()).Return(nil).Times(1)
@@ -289,7 +284,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 		result, err := verifier.Verify(context.Background(), challengeBytes, signer.Sign(signing.POET, challengeBytes))
 		req.NoError(err)
 		req.Equal(challenge.Hash(), result.Hash)
-		req.EqualValues(pubKey, result.NodeID.Bytes())
+		req.EqualValues(signer.NodeID(), result.NodeID)
 	})
 
 	t.Run("positioning ATX validation fails with ErrAtxNotFound", func(t *testing.T) {
