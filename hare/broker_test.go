@@ -539,13 +539,15 @@ func Test_newMsg(t *testing.T) {
 func TestBroker_updateInstance(t *testing.T) {
 	r := require.New(t)
 
+	ctx := context.Background()
 	b := buildBroker(t, t.Name())
-	r.Equal(instanceID0, b.getLatestLayer())
-	b.setLatestLayer(context.Background(), instanceID1)
-	r.Equal(instanceID1, b.getLatestLayer())
-
-	b.setLatestLayer(context.Background(), instanceID2)
-	r.Equal(instanceID2, b.getLatestLayer())
+	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
+	r.Equal(instanceID0, b.latestLayer)
+	b.Register(ctx, instanceID1)
+	r.Equal(instanceID1, b.latestLayer)
+	b.Register(ctx, instanceID2)
+	r.Equal(instanceID2, b.latestLayer)
 }
 
 func TestBroker_Synced(t *testing.T) {
@@ -643,7 +645,7 @@ func Test_validate(t *testing.T) {
 	require.NoError(t, err)
 	m := BuildStatusMsg(signer, NewDefaultEmptySet())
 	m.Layer = instanceID1
-	b.setLatestLayer(context.Background(), instanceID2)
+	b.latestLayer = instanceID2
 	e := b.validateTiming(context.Background(), &m.Message)
 	r.ErrorIs(e, errUnregistered)
 
@@ -665,7 +667,7 @@ func TestBroker_clean(t *testing.T) {
 	b := buildBroker(t, t.Name())
 
 	ten := instanceID0.Add(10)
-	b.setLatestLayer(context.Background(), ten.Sub(1))
+	b.latestLayer = ten.Sub(1)
 
 	b.mu.Lock()
 	b.outbox[5] = make(chan any)
