@@ -13,7 +13,6 @@ const (
 	defaultStartJSONServer         = false
 	defaultJSONServerPort          = 9093
 	defaultStartDebugService       = false
-	defaultStartGatewayService     = false
 	defaultStartGlobalStateService = false
 	defaultStartMeshService        = false
 	defaultStartNodeService        = false
@@ -39,7 +38,6 @@ type Config struct {
 	JSONServerPort  int  `mapstructure:"json-port"`
 	// no direct command line flags for these
 	StartDebugService       bool
-	StartGatewayService     bool
 	StartGlobalStateService bool
 	StartMeshService        bool
 	StartNodeService        bool
@@ -64,7 +62,6 @@ func DefaultConfig() Config {
 		StartJSONServer:         defaultStartJSONServer,
 		JSONServerPort:          defaultJSONServerPort,
 		StartDebugService:       defaultStartDebugService,
-		StartGatewayService:     defaultStartGatewayService,
 		StartGlobalStateService: defaultStartGlobalStateService,
 		StartMeshService:        defaultStartMeshService,
 		StartNodeService:        defaultStartNodeService,
@@ -94,8 +91,6 @@ func (s *Config) ParseServicesList() error {
 		switch svc {
 		case "debug":
 			s.StartDebugService = true
-		case "gateway":
-			s.StartGatewayService = true
 		case "globalstate":
 			s.StartGlobalStateService = true
 		case "mesh":
@@ -117,7 +112,6 @@ func (s *Config) ParseServicesList() error {
 	// GRPC service is also enabled
 	if s.StartJSONServer &&
 		!s.StartDebugService &&
-		!s.StartGatewayService &&
 		!s.StartGlobalStateService &&
 		!s.StartMeshService &&
 		!s.StartNodeService &&

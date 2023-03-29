@@ -17,8 +17,7 @@ func fastnet() config.Config {
 	conf.Address = types.DefaultTestAddressConfig()
 
 	conf.API.StartGrpcServices = []string{
-		"gateway", "node", "mesh", "globalstate",
-		"transaction", "smesher", "debug",
+		"node", "mesh", "globalstate", "transaction", "smesher", "debug",
 	}
 	if err := conf.API.ParseServicesList(); err != nil {
 		panic(err)

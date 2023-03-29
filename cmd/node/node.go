@@ -817,10 +817,6 @@ func (app *App) startAPIServices(ctx context.Context) {
 	if apiConf.StartDebugService {
 		registerService(grpcserver.NewDebugService(app.conState, app.host))
 	}
-	if apiConf.StartGatewayService {
-		verifier := activation.NewChallengeVerifier(app.cachedDB, app.keyExtractor, app.validator, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
-		registerService(grpcserver.NewGatewayService(verifier))
-	}
 	if apiConf.StartGlobalStateService {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
 	}
