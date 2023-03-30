@@ -273,7 +273,7 @@ func (m *MocknipostBuilder) EXPECT() *MocknipostBuilderMockRecorder {
 }
 
 // BuildNIPost mocks base method.
-func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error) {
+func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, time.Duration, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BuildNIPost", ctx, challenge)
 	ret0, _ := ret[0].(*types.NIPost)

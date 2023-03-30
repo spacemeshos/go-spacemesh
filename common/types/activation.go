@@ -151,30 +151,6 @@ func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-type PoetChallenge struct {
-	*NIPostChallenge
-	InitialPost         *Post
-	InitialPostMetadata *PostMetadata
-	NumUnits            uint32
-}
-
-func (c *PoetChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
-	if c == nil {
-		return nil
-	}
-	if err := encoder.AddObject("NIPostChallenge", c.NIPostChallenge); err != nil {
-		return err
-	}
-	if err := encoder.AddObject("InitialPost", c.InitialPost); err != nil {
-		return err
-	}
-	if err := encoder.AddObject("InitialPostMetadata", c.InitialPostMetadata); err != nil {
-		return err
-	}
-	encoder.AddUint32("NumUnits", c.NumUnits)
-	return nil
-}
-
 // Hash serializes the NIPostChallenge and returns its hash.
 func (challenge *NIPostChallenge) Hash() Hash32 {
 	ncBytes, err := codec.Encode(challenge)
@@ -541,9 +517,8 @@ func (p *RoundEnd) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 // PoetRound includes the PoET's round ID.
 type PoetRound struct {
-	ID            string `scale:"max=32"`
-	ChallengeHash Hash32
-	End           RoundEnd
+	ID  string `scale:"max=32"`
+	End RoundEnd
 }
 
 // NIPost is Non-Interactive Proof of Space-Time.

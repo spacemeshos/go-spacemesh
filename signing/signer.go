@@ -134,3 +134,7 @@ func (es *EdSigner) VRFSigner() (*VRFSigner, error) {
 		nodeID:     es.NodeID(),
 	}, nil
 }
+
+func (es *EdSigner) Prefix() []byte {
+	return es.prefix
+}
