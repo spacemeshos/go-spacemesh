@@ -32,3 +32,10 @@ func Test_SignatureCompare(t *testing.T) {
 
 	require.Equal(t, 1, s3.Cmp(&s4))
 }
+
+func Test_SignatureCompareNil(t *testing.T) {
+	var s1 VrfSignature
+	s1[79] = 0x01
+
+	require.Equal(t, -1, s1.Cmp(nil))
+}

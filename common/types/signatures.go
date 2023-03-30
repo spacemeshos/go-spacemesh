@@ -34,6 +34,9 @@ func (s EdSignature) String() string {
 
 // Bytes returns the byte representation of the Signature.
 func (s *EdSignature) Bytes() []byte {
+	if s == nil {
+		return nil
+	}
 	return s[:]
 }
 

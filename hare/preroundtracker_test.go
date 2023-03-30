@@ -394,6 +394,7 @@ func TestPreRoundTracker_BestVRF(t *testing.T) {
 		{sig411, sig411, false},
 		{sig322, sig322, true},
 		{sig177, sig177, true},
+		{sig411, sig177, true},
 		{sig322, sig177, true},
 		{sig0a7, sig0a7, false},
 	}

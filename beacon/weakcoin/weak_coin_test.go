@@ -69,15 +69,15 @@ func (c *stubClock) WeakCoinProposalSendTime(epoch types.EpochID, round types.Ro
 
 func TestWeakCoin(t *testing.T) {
 	var (
-		ctrl                       = gomock.NewController(t)
-		epoch        types.EpochID = 10
-		round        types.RoundID = 4
-		oneLSBSig                  = types.VrfSignature{0b0001}
-		zeroLSBMiner               = types.NodeID{0b0110}
-		zeroLSBSig                 = types.VrfSignature{0b0110}
-		highLSBSig   types.VrfSignature
+		ctrl                          = gomock.NewController(t)
+		epoch           types.EpochID = 10
+		round           types.RoundID = 4
+		oneLSBSig                     = types.VrfSignature{0b0001}
+		zeroLSBMiner                  = types.NodeID{0b0110}
+		zeroLSBSig                    = types.VrfSignature{0b0110}
+		higherThreshold types.VrfSignature
 	)
-	highLSBSig[79] = 0xff
+	higherThreshold[79] = 0xff
 
 	for _, tc := range []struct {
 		desc             string
@@ -116,7 +116,7 @@ func TestWeakCoin(t *testing.T) {
 		},
 		{
 			desc:     "node mining but exceed threshold",
-			nodeSig:  highLSBSig,
+			nodeSig:  higherThreshold,
 			mining:   true,
 			expected: false,
 			msg: encoded(t, weakcoin.Message{
@@ -195,13 +195,13 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 		round     types.RoundID = 4
 		allowance uint32        = 1
 
-		oneLSBMiner  = types.NodeID{0b0001}
-		oneLSBSig    = types.VrfSignature{0b0001}
-		zeroLSBSig   = types.VrfSignature{0b0110}
-		highLSBMiner = types.NodeID{0xff}
-		highLSBSig   types.VrfSignature
+		oneLSBMiner     = types.NodeID{0b0001}
+		oneLSBSig       = types.VrfSignature{0b0001}
+		zeroLSBSig      = types.VrfSignature{0b0110}
+		highLSBMiner    = types.NodeID{0xff}
+		higherThreshold types.VrfSignature
 	)
-	highLSBSig[79] = 0xff
+	higherThreshold[79] = 0xff
 
 	tcs := []struct {
 		desc         string
@@ -252,7 +252,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Round:        round,
 				Unit:         allowance,
 				NodeID:       highLSBMiner,
-				VrfSignature: highLSBSig,
+				VrfSignature: higherThreshold,
 			}),
 			expected: pubsub.ValidationIgnore,
 		},
