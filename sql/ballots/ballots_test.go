@@ -80,7 +80,7 @@ func TestLatest(t *testing.T) {
 	db := sql.InMemory()
 	latest, err := LatestLayer(db)
 	require.NoError(t, err)
-	require.Equal(t, types.LayerID{}, latest)
+	require.Equal(t, 0, latest)
 
 	ballot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{Layer: types.NewLayerID(11)})
 	require.NoError(t, Add(db, &ballot))

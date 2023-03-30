@@ -67,11 +67,9 @@ func Test_SignatureVerification(t *testing.T) {
 	req.NoError(err)
 	challenge := types.PoetChallenge{
 		NIPostChallenge: &types.NIPostChallenge{
-			Sequence:  1,
-			PrevATXID: *randomATXID(),
-			PubLayerID: types.LayerID{
-				Value: 10,
-			},
+			Sequence:       1,
+			PrevATXID:      *randomATXID(),
+			PubLayerID:     10,
 			PositioningATX: types.RandomATXID(),
 		},
 		NumUnits: 1,
@@ -248,11 +246,9 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 
 	challenge := types.PoetChallenge{
 		NIPostChallenge: &types.NIPostChallenge{
-			Sequence:  1,
-			PrevATXID: *randomATXID(),
-			PubLayerID: types.LayerID{
-				Value: 10,
-			},
+			Sequence:       1,
+			PrevATXID:      *randomATXID(),
+			PubLayerID:     10,
 			PositioningATX: types.RandomATXID(),
 		},
 		NumUnits: 1,

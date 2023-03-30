@@ -74,6 +74,6 @@ func TestAll(t *testing.T) {
 	require.Len(t, accounts, len(addresses))
 	for i, address := range addresses {
 		require.Equal(t, address, accounts[i].Address)
-		require.EqualValues(t, n[i], accounts[i].Layer.Value)
+		require.EqualValues(t, n[i], accounts[i].Layer)
 	}
 }

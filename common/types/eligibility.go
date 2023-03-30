@@ -23,7 +23,7 @@ type HareEligibilityGossip struct {
 }
 
 func (hg *HareEligibilityGossip) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddUint32("layer", hg.Layer.Value)
+	encoder.AddUint32("layer", hg.Layer.Uint32())
 	encoder.AddUint32("round", hg.Round)
 	encoder.AddString("smesher", hg.NodeID.String())
 	encoder.AddUint16("count", hg.Eligibility.Count)

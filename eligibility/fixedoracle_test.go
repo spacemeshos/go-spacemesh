@@ -158,7 +158,7 @@ func TestFixedRolacle_Eligible4(t *testing.T) {
 	// when requesting a bigger committee size everyone should be eligible
 
 	for _, s := range ids {
-		res, _ := oracle.eligible(context.Background(), types.LayerID{}, 1, numOfClients, s, types.RandomVrfSignature())
+		res, _ := oracle.eligible(context.Background(), 0, 1, numOfClients, s, types.RandomVrfSignature())
 		assert.True(t, res)
 	}
 }

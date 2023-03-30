@@ -575,7 +575,7 @@ func TestBroker_Register4(t *testing.T) {
 	r.NoError(e)
 
 	b.mu.RLock()
-	r.Equal(b.outbox[instanceID1.Value], c)
+	r.Equal(b.outbox[instanceID1.Uint32()], c)
 	b.mu.RUnlock()
 
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)

@@ -57,7 +57,7 @@ func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Account, error) {
 	account, err := load(db, address, "select balance, initialized, next_nonce, layer_updated, template, state from accounts where address = ?1 and layer_updated <= ?2;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, address.Bytes())
-		stmt.BindInt64(2, int64(layer.Value))
+		stmt.BindInt64(2, int64(layer))
 	})
 	if err != nil {
 		return types.Account{}, fmt.Errorf("failed to load %v for layer %v: %w", address, layer, err)
@@ -100,7 +100,7 @@ func Update(db sql.Executor, to *types.Account) error {
 		stmt.BindInt64(2, int64(to.Balance))
 		stmt.BindBool(3, to.Initialized)
 		stmt.BindInt64(4, int64(to.NextNonce))
-		stmt.BindInt64(5, int64(to.Layer.Value))
+		stmt.BindInt64(5, int64(to.Layer))
 		if to.TemplateAddress == nil {
 			stmt.BindNull(6)
 			stmt.BindNull(7)
@@ -119,7 +119,7 @@ func Update(db sql.Executor, to *types.Account) error {
 func Revert(db sql.Executor, after types.LayerID) error {
 	_, err := db.Exec(`delete from accounts where layer_updated > ?1;`,
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(after.Value))
+			stmt.BindInt64(1, int64(after))
 		}, nil)
 	if err != nil {
 		return fmt.Errorf("failed to revert up to %v: %w", after, err)

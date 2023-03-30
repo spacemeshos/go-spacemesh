@@ -178,8 +178,8 @@ func publishAtx(
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(currLayer.Uint32()) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got.Uint32()))
 		}).AnyTimes()
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
@@ -422,8 +422,8 @@ func TestBuilder_PublishActivationTx_StaleChallenge(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(currLayer.Uint32()) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got.Uint32()))
 		}).AnyTimes()
 
 	// Act & Verify
@@ -452,8 +452,8 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(currLayer.Uint32()) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got.Uint32()))
 		}).AnyTimes()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -487,8 +487,8 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(currLayer.Uint32()) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got.Uint32()))
 		}).AnyTimes()
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
@@ -580,8 +580,8 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(currLayer.Uint32()) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got.Uint32()))
 		}).AnyTimes()
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
@@ -704,8 +704,8 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(layer types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currentLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(layer.Value))
+			genesis := time.Now().Add(-time.Duration(currentLayer.Uint32()) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(layer.Uint32()))
 		}).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch().FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(layer types.LayerID) chan struct{} {
 		ch := make(chan struct{})
@@ -795,8 +795,8 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(layer types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currentLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(layer.Value))
+			genesis := time.Now().Add(-time.Duration(currentLayer.Uint32()) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(layer.Uint32()))
 		}).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch().FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(types.LayerID) chan struct{} {
 		ch := make(chan struct{})
@@ -875,8 +875,8 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(currLayer.Uint32()) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got.Uint32()))
 		}).AnyTimes()
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
@@ -947,8 +947,8 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(currLayer.Uint32()) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got.Uint32()))
 		}).AnyTimes()
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
@@ -1050,8 +1050,8 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(currLayer.Uint32()) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got.Uint32()))
 		}).AnyTimes()
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()

@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/spacemeshos/go-scale"
@@ -19,56 +18,6 @@ import (
 )
 
 //go:generate scalegen
-
-// EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
-type EpochID uint32
-
-// EncodeScale implements scale codec interface.
-func (l EpochID) EncodeScale(e *scale.Encoder) (int, error) {
-	n, err := scale.EncodeCompact32(e, uint32(l))
-	if err != nil {
-		return 0, err
-	}
-	return n, nil
-}
-
-// DecodeScale implements scale codec interface.
-func (l *EpochID) DecodeScale(d *scale.Decoder) (int, error) {
-	value, n, err := scale.DecodeCompact32(d)
-	if err != nil {
-		return 0, err
-	}
-	*l = EpochID(value)
-	return n, nil
-}
-
-// IsGenesis returns true if this epoch is in genesis. The first two epochs are considered genesis epochs.
-func (l EpochID) IsGenesis() bool {
-	return l < 2
-}
-
-// FirstLayer returns the layer ID of the first layer in the epoch.
-func (l EpochID) FirstLayer() LayerID {
-	return NewLayerID(uint32(l)).Mul(GetLayersPerEpoch())
-}
-
-// Add Epochs to the EpochID. Panics on wraparound.
-func (l EpochID) Add(epochs uint32) EpochID {
-	nl := uint32(l) + epochs
-	if nl < uint32(l) {
-		panic("epoch_id wraparound")
-	}
-	l = EpochID(nl)
-	return l
-}
-
-// Field returns a log field. Implements the LoggableField interface.
-func (l EpochID) Field() log.Field { return log.Uint32("epoch_id", uint32(l)) }
-
-// String returns string representation of the epoch id numeric value.
-func (l EpochID) String() string {
-	return strconv.FormatUint(uint64(l), 10)
-}
 
 // ATXID is a 32-bit hash used to identify an activation transaction.
 type ATXID Hash32
@@ -119,38 +68,6 @@ func (t *ATXID) DecodeScale(d *scale.Decoder) (int, error) {
 // EmptyATXID is a canonical empty ATXID.
 var EmptyATXID = &ATXID{}
 
-// NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
-// PoET membership proof. It includes ATX sequence number, the previous ATX's ID (for all but the first in the sequence),
-// the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
-// the first ATX in the sequence also the commitment Merkle root.
-type NIPostChallenge struct {
-	PubLayerID LayerID
-	// Sequence number counts the number of ancestors of the ATX. It sequentially increases for each ATX in the chain.
-	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against that miner.
-	Sequence       uint64
-	PrevATXID      ATXID
-	PositioningATX ATXID
-
-	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
-	CommitmentATX      *ATXID
-	InitialPostIndices []byte `scale:"max=8000"` // needs to hold K2*8 bytes at most
-}
-
-func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
-	if c == nil {
-		return nil
-	}
-	encoder.AddUint64("Sequence", c.Sequence)
-	encoder.AddString("PrevATXID", c.PrevATXID.String())
-	encoder.AddUint32("PubLayerID", c.PubLayerID.Value)
-	encoder.AddString("PositioningATX", c.PositioningATX.String())
-	if c.CommitmentATX != nil {
-		encoder.AddString("CommitmentATX", c.CommitmentATX.String())
-	}
-	encoder.AddBinary("InitialPostIndices", c.InitialPostIndices)
-	return nil
-}
-
 type PoetChallenge struct {
 	*NIPostChallenge
 	InitialPost         *Post
@@ -173,55 +90,6 @@ func (c *PoetChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
 	}
 	encoder.AddUint32("NumUnits", c.NumUnits)
 	return nil
-}
-
-// Hash serializes the NIPostChallenge and returns its hash.
-func (challenge *NIPostChallenge) Hash() Hash32 {
-	ncBytes, err := codec.Encode(challenge)
-	if err != nil {
-		log.With().Fatal("failed to encode NIPostChallenge", log.Err(err))
-	}
-	return CalcHash32(ncBytes)
-}
-
-// String returns a string representation of the NIPostChallenge, for logging purposes.
-// It implements the Stringer interface.
-func (challenge *NIPostChallenge) String() string {
-	return fmt.Sprintf("<seq: %v, prevATX: %v, PubLayer: %v, posATX: %s>",
-		challenge.Sequence,
-		challenge.PrevATXID.ShortString(),
-		challenge.PubLayerID,
-		challenge.PositioningATX.ShortString())
-}
-
-// TargetEpoch returns the target epoch of the NIPostChallenge. This is the epoch in which the miner is eligible
-// to participate thanks to the ATX.
-func (challenge *NIPostChallenge) TargetEpoch() EpochID {
-	return challenge.PubLayerID.GetEpoch() + 1
-}
-
-// PublishEpoch returns the publishing epoch of the NIPostChallenge.
-func (challenge *NIPostChallenge) PublishEpoch() EpochID {
-	return challenge.PubLayerID.GetEpoch()
-}
-
-// InnerActivationTx is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
-// structure is serialized and signed. It includes the header fields, as well as the larger fields that are only used
-// for validation: the NIPost and the initial Post.
-type InnerActivationTx struct {
-	NIPostChallenge
-	Coinbase Address
-	NumUnits uint32
-
-	NIPost      *NIPost
-	InitialPost *Post
-	VRFNonce    *VRFPostIndex
-
-	// the following fields are kept private and from being serialized
-	id                *ATXID    // non-exported cache of the ATXID
-	nodeID            *NodeID   // the id of the Node that created the ATX (public key)
-	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
-	received          time.Time // time received by node, gossiped or synced
 }
 
 // ATXMetadata is the signed data of ActivationTx.
@@ -313,7 +181,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddUint64("vrf_nonce", uint64(*atx.VRFNonce))
 	}
 	encoder.AddString("coinbase", atx.Coinbase.String())
-	encoder.AddUint32("pub_layer_id", atx.PubLayerID.Value)
+	encoder.AddUint32("pub_layer_id", atx.PubLayerID.Uint32())
 	encoder.AddUint32("epoch", uint32(atx.PublishEpoch()))
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
 	if atx.effectiveNumUnits != 0 {
