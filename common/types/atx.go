@@ -8,6 +8,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+//go:generate scalegen
+
 // InnerActivationTx is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
 // structure is serialized and signed. It includes the header fields, as well as the larger fields that are only used
 // for validation: the NIPost and the initial Post.
