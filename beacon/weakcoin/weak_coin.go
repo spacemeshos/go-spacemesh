@@ -2,7 +2,6 @@ package weakcoin
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -278,10 +277,10 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 
 	wc.mu.RLock()
 	defer wc.mu.RUnlock()
-	if smallest.Cmp(wc.smallest) == -1 {
-		return broadcast, *smallest
+	if smallest == nil || smallest.Cmp(wc.smallest) != -1 {
+		return nil, types.EmptyVrfSignature
 	}
-	return nil, types.EmptyVrfSignature
+	return broadcast, *smallest
 }
 
 func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) {
@@ -322,7 +321,7 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 
 	wc.coins[wc.round] = coinflip
 	logger.With().Info("completed round with beacon weak coin",
-		log.String("proposal", hex.EncodeToString(wc.smallest.Bytes())),
+		log.Stringer("proposal", wc.smallest),
 		log.Bool("beacon_weak_coin", coinflip),
 	)
 	wc.smallest = nil
@@ -333,8 +332,8 @@ func (wc *WeakCoin) updateSmallest(ctx context.Context, sig types.VrfSignature) 
 		wc.logger.WithContext(ctx).With().Debug("saving new proposal",
 			wc.epoch,
 			wc.round,
-			log.String("proposal", hex.EncodeToString(sig.Bytes())),
-			log.String("previous", hex.EncodeToString(wc.smallest.Bytes())),
+			log.Stringer("proposal", sig),
+			log.Stringer("previous", wc.smallest),
 		)
 		wc.smallest = &sig
 		return nil

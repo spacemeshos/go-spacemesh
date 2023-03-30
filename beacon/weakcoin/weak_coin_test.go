@@ -75,8 +75,9 @@ func TestWeakCoin(t *testing.T) {
 		oneLSBSig                  = types.VrfSignature{0b0001}
 		zeroLSBMiner               = types.NodeID{0b0110}
 		zeroLSBSig                 = types.VrfSignature{0b0110}
-		highLSBSig                 = types.VrfSignature{0xff}
+		highLSBSig   types.VrfSignature
 	)
+	highLSBSig[79] = 0xff
 
 	for _, tc := range []struct {
 		desc             string

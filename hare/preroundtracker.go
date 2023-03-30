@@ -2,7 +2,6 @@ package hare
 
 import (
 	"context"
-	"encoding/hex"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -47,8 +46,8 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		msg.NodeID,
 		log.Stringer("smesher", msg.NodeID),
 		log.Int("num_values", len(msg.InnerMsg.Values)),
-		log.String("proposal_vrf", hex.EncodeToString(msg.Eligibility.Proof.Bytes())),
-		log.String("previous_vrf", hex.EncodeToString(pre.bestVRF.Bytes())),
+		log.Stringer("proposal_vrf", msg.Eligibility.Proof),
+		log.Stringer("previous_vrf", pre.bestVRF),
 	)
 	if msg.Eligibility.Proof.Cmp(pre.bestVRF) == -1 {
 		pre.bestVRF = &msg.Eligibility.Proof
@@ -56,7 +55,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		pre.coinflip = msg.Eligibility.Proof.LSB()&byte(1) == byte(1)
 		pre.logger.With().Debug("got new best vrf value",
 			log.Stringer("smesher", msg.NodeID),
-			log.String("vrf", hex.EncodeToString(msg.Eligibility.Proof.Bytes())),
+			log.Stringer("vrf", msg.Eligibility.Proof),
 			log.Bool("weak_coin", pre.coinflip),
 		)
 	}
