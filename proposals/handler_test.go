@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/prometheus/client_golang/prometheus"
@@ -14,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -24,6 +26,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -77,8 +80,16 @@ func createTestHandler(t *testing.T) *testHandler {
 	ms := fullMockSet(t)
 	extract, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
+
+	clock, err := timesync.NewClock(
+		timesync.WithLayerDuration(time.Minute),
+		timesync.WithTickInterval(time.Second),
+		timesync.WithGenesisTime(time.Now()),
+		timesync.WithLogger(log.NewNop()),
+	)
+	require.NoError(t, err)
 	return &testHandler{
-		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), extract, ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf,
+		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), extract, ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf, clock,
 			WithLogger(logtest.New(t)),
 			WithConfig(Config{
 				LayerSize:      layerAvgSize,
@@ -241,7 +252,7 @@ func TestBallot_MalformedData(t *testing.T) {
 func TestBallot_BadSignature(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
-	b.Signature = types.RandomEdSignature()
+	b.Signature[types.EdSignatureSize-1] = 0xff
 	data := encodeBallot(t, b)
 	got := th.HandleSyncedBallot(context.Background(), p2p.NoPeer, data)
 	require.ErrorContains(t, got, "bad signature format")
@@ -830,10 +841,10 @@ func TestProposal_MalformedData(t *testing.T) {
 func TestProposal_BadSignature(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
-	p.Signature = types.RandomEdSignature()
+	p.Signature = types.EmptyEdSignature
 	data := encodeProposal(t, p)
 	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
-	require.ErrorContains(t, got, "bad signature format")
+	require.ErrorContains(t, got, "inconsistent smesher in proposal")
 
 	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)

@@ -116,7 +116,7 @@ func RandomBallot() *Ballot {
 	}
 }
 
-// RandomEdSignature generates a random EdSignature for testing.
+// RandomEdSignature generates a random (not necessarily valid) EdSignature for testing.
 func RandomEdSignature() EdSignature {
 	var b [EdSignatureSize]byte
 	_, err := rand.Read(b[:])
