@@ -272,19 +272,19 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	r.NotEqual(0, mValidator.countContext)
 	mValidator.contextValid = nil
 	proc.handleMessage(context.Background(), msg)
-	r.True(proc.preRoundTracker.coinflip)
+	r.False(proc.preRoundTracker.coinflip)
 	r.Equal(0, len(proc.pending))
 	r.Equal(3, mValidator.countContext)
 	r.Equal(3, mValidator.countSyntax)
 	mValidator.contextValid = errors.New("not valid")
 	proc.handleMessage(context.Background(), msg)
-	r.True(proc.preRoundTracker.coinflip)
+	r.False(proc.preRoundTracker.coinflip)
 	r.Equal(4, mValidator.countContext)
 	r.Equal(3, mValidator.countSyntax)
 	r.Equal(0, len(proc.pending))
 	mValidator.contextValid = errEarlyMsg
 	proc.handleMessage(context.Background(), msg)
-	r.True(proc.preRoundTracker.coinflip)
+	r.False(proc.preRoundTracker.coinflip)
 	r.Equal(1, len(proc.pending))
 }
 
