@@ -1,6 +1,7 @@
 package signing
 
 import (
+	"crypto/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -81,4 +82,31 @@ func Test_VRFVerifier(t *testing.T) {
 	sig2[0] = ^sig2[0] // flip all bits of first byte in the signature
 	ok = VRFVerify(signer.NodeID(), []byte("hello world"), sig2)
 	require.False(t, ok, "VRF signature should not be verified")
+}
+
+func Test_VRF_LSB_evenly_distributed(t *testing.T) {
+	// Arrange
+	signer, err := NewEdSigner()
+	require.NoError(t, err, "failed to create EdSigner")
+	vrfSig, err := signer.VRFSigner()
+	require.NoError(t, err, "failed to create VRF signer")
+
+	iterations := 10_000
+
+	// Act
+	var lsb [2]int
+	for i := 0; i < iterations; i++ {
+		msg := make([]byte, 32)
+		_, err := rand.Read(msg)
+		require.NoError(t, err, "failed to read random bytes")
+
+		sig := vrfSig.Sign(msg)
+		lsb[sig.LSB()&1]++
+	}
+
+	// Assert
+	for i := 0; i < 2; i++ {
+		maxDeviation := float64(250) // expecting at most a deviation of 5% from expected value (5_000)
+		require.InDelta(t, iterations/2, lsb[i], maxDeviation, "LSB %d was not evenly distributed", i)
+	}
 }
