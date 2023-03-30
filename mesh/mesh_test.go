@@ -197,7 +197,7 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 func TestMesh_WakeUp(t *testing.T) {
 	tm := createTestMesh(t)
 	latest := types.NewLayerID(11)
-	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, types.EmptyEdSignature, types.NodeID{}, types.BallotMetadata{Layer: latest})
+	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{Layer: latest})
 	require.NoError(t, ballots.Add(tm.cdb, &b))
 	require.NoError(t, layers.SetProcessed(tm.cdb, latest))
 	latestState := latest.Sub(1)

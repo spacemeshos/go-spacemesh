@@ -27,7 +27,7 @@ func newEligibilityValidator(oracle Rolacle, maxExpActives, expLeaders int, logg
 	return &eligibilityValidator{oracle, maxExpActives, expLeaders, logger}
 }
 
-func (ev *eligibilityValidator) validateRole(ctx context.Context, nodeID types.NodeID, layer types.LayerID, round uint32, proof []byte, eligibilityCount uint16) (bool, error) {
+func (ev *eligibilityValidator) validateRole(ctx context.Context, nodeID types.NodeID, layer types.LayerID, round uint32, proof types.VrfSignature, eligibilityCount uint16) (bool, error) {
 	return ev.oracle.Validate(ctx, layer, round, expectedCommitteeSize(round, ev.maxExpActives, ev.expLeaders), nodeID, proof, eligibilityCount)
 }
 

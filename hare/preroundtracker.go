@@ -2,12 +2,8 @@ package hare
 
 import (
 	"context"
-	"encoding/binary"
-	"fmt"
-	"math"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -25,7 +21,7 @@ type preRoundTracker struct {
 	preRound  map[types.NodeID]*preroundData // maps PubKey->Set of already tracked Values
 	tracker   *RefCountTracker               // keeps track of seen Values
 	threshold int                            // the threshold to prove a value
-	bestVRF   uint32                         // the lowest VRF value seen in the round
+	bestVRF   *types.VrfSignature            // the lowest VRF value seen in the round
 	coinflip  bool                           // the value of the weak coin (based on bestVRF)
 	eTracker  *EligibilityTracker
 }
@@ -37,7 +33,6 @@ func newPreRoundTracker(logger log.Log, mch chan<- *types.MalfeasanceGossip, et 
 		preRound:  make(map[types.NodeID]*preroundData, expectedSize),
 		tracker:   NewRefCountTracker(preRound, et, expectedSize),
 		threshold: threshold,
-		bestVRF:   math.MaxUint32,
 		eTracker:  et,
 	}
 }
@@ -47,21 +42,20 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	logger := pre.logger.WithContext(ctx)
 
 	// check for winning VRF
-	vrfHash := hash.Sum(msg.Eligibility.Proof)
-	vrfHashVal := binary.LittleEndian.Uint32(vrfHash[:4])
 	logger.With().Debug("received preround message",
 		msg.NodeID,
 		log.Stringer("smesher", msg.NodeID),
 		log.Int("num_values", len(msg.InnerMsg.Values)),
-		log.Uint32("vrf_value", vrfHashVal),
+		log.Stringer("proposal_vrf", msg.Eligibility.Proof),
+		log.Stringer("previous_vrf", pre.bestVRF),
 	)
-	if vrfHashVal < pre.bestVRF {
-		pre.bestVRF = vrfHashVal
+	if msg.Eligibility.Proof.Cmp(pre.bestVRF) == -1 {
+		pre.bestVRF = &msg.Eligibility.Proof
 		// store lowest-order bit as coin toss value
-		pre.coinflip = vrfHash[0]&byte(1) == byte(1)
+		pre.coinflip = msg.Eligibility.Proof.LSB()&byte(1) == byte(1)
 		pre.logger.With().Debug("got new best vrf value",
 			log.Stringer("smesher", msg.NodeID),
-			log.String("vrf_value", fmt.Sprintf("%x", vrfHashVal)),
+			log.Stringer("vrf", msg.Eligibility.Proof),
 			log.Bool("weak_coin", pre.coinflip),
 		)
 	}

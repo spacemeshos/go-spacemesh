@@ -482,7 +482,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 				}}
 				id := types.RandomATXID()
 				atx.SetID(&id)
-				atx.SetNodeID(&types.NodeID{})
+				atx.SetNodeID(&types.EmptyNodeID)
 				atx.SetEffectiveNumUnits(atx.NumUnits)
 				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(0, 1)

@@ -77,7 +77,7 @@ func (t *ProposalMessage) EncodeScale(enc *scale.Encoder) (total int, err error)
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.VRFSignature, 80)
+		n, err := scale.EncodeByteArray(enc, t.VRFSignature[:])
 		if err != nil {
 			return total, err
 		}
@@ -103,12 +103,11 @@ func (t *ProposalMessage) DecodeScale(dec *scale.Decoder) (total int, err error)
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 80)
+		n, err := scale.DecodeByteArray(dec, t.VRFSignature[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.VRFSignature = field
 	}
 	return total, nil
 }

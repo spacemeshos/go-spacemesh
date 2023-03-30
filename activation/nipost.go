@@ -190,15 +190,14 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 	}
 
 	// Phase 1: query PoET services for proofs
-	empty := types.PoetProofRef{}
-	if nb.state.PoetProofRef == empty {
+	if nb.state.PoetProofRef == types.EmptyPoetProofRef {
 		getProofsCtx, cancel := context.WithDeadline(ctx, poetProofDeadline)
 		defer cancel()
 		poetProofRef, err := nb.getBestProof(getProofsCtx, &challengeHash)
 		if err != nil {
 			return nil, 0, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
-		if poetProofRef == empty {
+		if poetProofRef == types.EmptyPoetProofRef {
 			return nil, 0, &PoetSvcUnstableError{source: ErrPoetProofNotReceived}
 		}
 		nb.state.PoetProofRef = poetProofRef
