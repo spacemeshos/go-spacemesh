@@ -4,8 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/post/verifying"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 //go:generate mockgen -package=activation -destination=./mocks.go -source=./interface.go
