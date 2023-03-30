@@ -282,14 +282,17 @@ func Test_multipleCPs(t *testing.T) {
 	}
 
 	var pubsubs []*pubsub.PubSub
+	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
 	outputs := make([]map[types.LayerID]LayerOutput, totalNodes)
 	var outputsWaitGroup sync.WaitGroup
 	for i := 0; i < totalNodes; i++ {
 		host := mesh.Hosts()[i]
 		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
 		require.NoError(t, err)
+		src := NewSimRoundClock(ps, scMap)
 		pubsubs = append(pubsubs, ps)
-		h := createTestHare(t, meshes[i], cfg, test.clock, ps, t.Name())
+		h := createTestHare(t, meshes[i], cfg, test.clock, src, t.Name())
+		h.newRoundClock = src.NewRoundClock
 		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(types.EmptyVrfSignature, nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
@@ -475,4 +478,119 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 			h.Close()
 		}
 	})
+}
+
+type SharedRoundClock struct {
+	currentRound     uint32
+	rounds           map[uint32]chan struct{}
+	minCount         int
+	processingDelay  time.Duration
+	sentMessages     int
+	advanceScheduled bool
+	m                sync.Mutex
+}
+
+func NewSharedClock(minCount int, totalCP uint32, processingDelay time.Duration) map[types.LayerID]*SharedRoundClock {
+	m := make(map[types.LayerID]*SharedRoundClock)
+	for i := types.GetEffectiveGenesis().Add(1); !i.After(types.GetEffectiveGenesis().Add(totalCP)); i = i.Add(1) {
+		m[i] = &SharedRoundClock{
+			currentRound:    preRound,
+			rounds:          make(map[uint32]chan struct{}),
+			minCount:        minCount,
+			processingDelay: processingDelay,
+			sentMessages:    0,
+		}
+	}
+	return m
+}
+
+func (c *SharedRoundClock) AwaitWakeup() <-chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}
+
+func (c *SharedRoundClock) AwaitEndOfRound(round uint32) <-chan struct{} {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	ch, ok := c.rounds[round]
+	if !ok {
+		ch = make(chan struct{})
+		c.rounds[round] = ch
+	}
+	return ch
+}
+
+// RoundEnd is currently called only by metrics reporting code, so the returned
+// value should not affect how components behave.
+func (c *SharedRoundClock) RoundEnd(round uint32) time.Time {
+	return time.Now()
+}
+
+func (c *SharedRoundClock) IncMessages(cnt int) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.sentMessages += cnt
+	if c.sentMessages >= c.minCount && !c.advanceScheduled {
+		time.AfterFunc(c.processingDelay, func() {
+			c.m.Lock()
+			defer c.m.Unlock()
+			c.sentMessages = 0
+			c.advanceScheduled = false
+			c.advanceRound()
+		})
+		c.advanceScheduled = true
+	}
+}
+
+func (c *SharedRoundClock) advanceRound() {
+	c.currentRound++
+	if prevRound, ok := c.rounds[c.currentRound-1]; ok {
+		close(prevRound)
+	}
+}
+
+type SimRoundClock struct {
+	clocks map[types.LayerID]*SharedRoundClock
+	m      sync.Mutex
+	s      pubsub.PublishSubsciber
+}
+
+func (c *SimRoundClock) Register(protocol string, handler pubsub.GossipHandler) {
+	c.s.Register(protocol, handler)
+}
+
+func (c *SimRoundClock) Publish(ctx context.Context, protocol string, payload []byte) error {
+	instanceID, cnt := extractInstanceID(payload)
+
+	c.m.Lock()
+	clock := c.clocks[instanceID]
+	clock.IncMessages(int(cnt))
+	c.m.Unlock()
+
+	if err := c.s.Publish(ctx, protocol, payload); err != nil {
+		return fmt.Errorf("failed to broadcast: %w", err)
+	}
+	return nil
+}
+
+func extractInstanceID(payload []byte) (types.LayerID, uint16) {
+	m, err := MessageFromBuffer(payload)
+	if err != nil {
+		panic(err)
+	}
+	return m.Layer, m.Eligibility.Count
+}
+
+func (c *SimRoundClock) NewRoundClock(layerID types.LayerID) RoundClock {
+	return c.clocks[layerID]
+}
+
+func NewSimRoundClock(s pubsub.PublishSubsciber, clocks map[types.LayerID]*SharedRoundClock) *SimRoundClock {
+	return &SimRoundClock{
+		clocks: clocks,
+		s:      s,
+	}
 }
