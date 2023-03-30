@@ -107,7 +107,7 @@ func (es *EdSigner) Sign(d domain, m []byte) types.EdSignature {
 	msg = append(msg, es.prefix...)
 	msg = append(msg, byte(d))
 	msg = append(msg, m...)
-	return *(*[64]byte)(ed25519.Sign(es.priv, msg))
+	return *(*[types.EdSignatureSize]byte)(ed25519.Sign(es.priv, msg))
 }
 
 // NodeID returns the node ID of the signer.

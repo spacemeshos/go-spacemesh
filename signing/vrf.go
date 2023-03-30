@@ -15,7 +15,7 @@ type VRFSigner struct {
 
 // Sign signs a message for VRF purposes.
 func (s VRFSigner) Sign(msg []byte) types.VrfSignature {
-	return *(*[80]byte)(ecvrf.Prove(s.privateKey, msg))
+	return *(*[types.VrfSignatureSize]byte)(ecvrf.Prove(s.privateKey, msg))
 }
 
 // NodeID of the signer.
