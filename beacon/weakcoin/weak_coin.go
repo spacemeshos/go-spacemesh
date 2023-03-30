@@ -1,12 +1,10 @@
 package weakcoin
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/big"
 	"sync"
 	"time"
 
@@ -37,14 +35,14 @@ var biggest = &types.VrfSignature{
 
 func defaultConfig() config {
 	return config{
-		Threshold:           new(big.Int).Lsh(big.NewInt(1), 255).Bytes(), // equal to 2^255
-		NextRoundBufferSize: 10000,                                        // ~1mb given the size of Message is ~100b
+		Threshold:           *biggest,
+		NextRoundBufferSize: 10000, // ~1mb given the size of Message is ~100b
 		MaxRound:            300,
 	}
 }
 
 type config struct {
-	Threshold           []byte
+	Threshold           types.VrfSignature
 	NextRoundBufferSize int
 	MaxRound            types.RoundID
 }
@@ -86,7 +84,7 @@ func WithMaxRound(round types.RoundID) OptionFunc {
 }
 
 // WithThreshold changes signature threshold.
-func WithThreshold(threshold []byte) OptionFunc {
+func WithThreshold(threshold types.VrfSignature) OptionFunc {
 	return func(wc *WeakCoin) {
 		wc.config.Threshold = threshold
 	}
@@ -123,7 +121,6 @@ func New(
 		config:       defaultConfig(),
 		signer:       signer,
 		nonceFetcher: nonceFetcher,
-		smallest:     biggest,
 		allowance:    allowance,
 		publisher:    publisher,
 		coins:        make(map[types.RoundID]bool),
@@ -214,7 +211,6 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, nonce *
 	logger.Info("started beacon weak coin round")
 	wc.roundStarted = true
 	wc.round = round
-	wc.smallest = biggest // initialize smallest candidate with the biggest value possible for a VRF signature
 	for i, msg := range wc.nextRoundBuffer {
 		if msg.Epoch != wc.epoch || msg.Round != wc.round {
 			continue
@@ -257,14 +253,14 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 		return nil, types.EmptyVrfSignature
 	}
 	var broadcast []byte
-	smallest := biggest // initialize smallest candidate with the biggest value possible for a VRF signature
+	var smallest *types.VrfSignature
 	for unit := uint32(0); unit < minerAllowance; unit++ {
 		proposal := wc.encodeProposal(epoch, nonce, round, unit)
 		signature := wc.signer.Sign(proposal)
 		if wc.aboveThreshold(signature) {
 			continue
 		}
-		if bytes.Compare(signature.Bytes(), smallest.Bytes()) == -1 {
+		if signature.Cmp(smallest) == -1 {
 			message := Message{
 				Epoch:        epoch,
 				Round:        round,
@@ -284,7 +280,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 
 	wc.mu.RLock()
 	defer wc.mu.RUnlock()
-	if bytes.Compare(smallest.Bytes(), wc.smallest.Bytes()) == -1 {
+	if smallest.Cmp(wc.smallest) == -1 {
 		return broadcast, *smallest
 	}
 	return nil, types.EmptyVrfSignature
@@ -320,18 +316,11 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 	defer wc.mu.Unlock()
 	logger := wc.logger.WithContext(ctx).WithFields(wc.epoch, wc.round)
 	wc.roundStarted = false
-	if bytes.Equal(wc.smallest.Bytes(), biggest.Bytes()) {
+	if wc.smallest == nil {
 		logger.Warning("completed round without valid proposals")
 		return
 	}
-	// NOTE(dshulyak) we need to select good bit here. for ed25519 it means select LSB and never MSB.
-	// https://datatracker.ietf.org/doc/html/draft-josefsson-eddsa-ed25519-03#section-5.2
-	// For another signature algorithm this may change
-	lsbIndex := 0
-	if !wc.signer.LittleEndian() {
-		lsbIndex = len(wc.smallest) - 1
-	}
-	coinflip := wc.smallest[lsbIndex]&1 == 1
+	coinflip := wc.smallest.LSB()&1 == 1
 
 	wc.coins[wc.round] = coinflip
 	logger.With().Info("completed round with beacon weak coin",
@@ -342,7 +331,7 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 }
 
 func (wc *WeakCoin) updateSmallest(ctx context.Context, sig types.VrfSignature) error {
-	if bytes.Compare(sig.Bytes(), wc.smallest.Bytes()) == -1 {
+	if sig.Cmp(wc.smallest) == -1 {
 		wc.logger.WithContext(ctx).With().Debug("saving new proposal",
 			wc.epoch,
 			wc.round,
@@ -356,7 +345,7 @@ func (wc *WeakCoin) updateSmallest(ctx context.Context, sig types.VrfSignature) 
 }
 
 func (wc *WeakCoin) aboveThreshold(proposal types.VrfSignature) bool {
-	return bytes.Compare(proposal.Bytes(), wc.config.Threshold) == 1
+	return proposal.Cmp(&wc.config.Threshold) == 1
 }
 
 func (wc *WeakCoin) encodeProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID, unit uint32) []byte {

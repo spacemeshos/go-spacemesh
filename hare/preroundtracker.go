@@ -1,7 +1,6 @@
 package hare
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 
@@ -12,20 +11,6 @@ import (
 type preroundData struct {
 	*Set
 	*types.HareProofMsg
-}
-
-var biggest = &types.VrfSignature{
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 }
 
 // preRoundTracker tracks pre-round messages.
@@ -49,7 +34,6 @@ func newPreRoundTracker(logger log.Log, mch chan<- *types.MalfeasanceGossip, et 
 		preRound:  make(map[types.NodeID]*preroundData, expectedSize),
 		tracker:   NewRefCountTracker(preRound, et, expectedSize),
 		threshold: threshold,
-		bestVRF:   biggest,
 		eTracker:  et,
 	}
 }
@@ -66,10 +50,10 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		log.String("proposal_vrf", hex.EncodeToString(msg.Eligibility.Proof.Bytes())),
 		log.String("previous_vrf", hex.EncodeToString(pre.bestVRF.Bytes())),
 	)
-	if bytes.Compare(msg.Eligibility.Proof.Bytes(), pre.bestVRF.Bytes()) == -1 {
+	if msg.Eligibility.Proof.Cmp(pre.bestVRF) == -1 {
 		pre.bestVRF = &msg.Eligibility.Proof
 		// store lowest-order bit as coin toss value
-		pre.coinflip = msg.Eligibility.Proof[types.VrfSignatureSize-1]&byte(1) == byte(1)
+		pre.coinflip = msg.Eligibility.Proof.LSB()&byte(1) == byte(1)
 		pre.logger.With().Debug("got new best vrf value",
 			log.Stringer("smesher", msg.NodeID),
 			log.String("vrf", hex.EncodeToString(msg.Eligibility.Proof.Bytes())),
