@@ -9,6 +9,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
+	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -588,35 +589,36 @@ func TestValidator_Validate(t *testing.T) {
 	postProvider := newTestPostManager(t)
 	nipost := buildNIPost(t, postProvider, postProvider.cfg, challenge, poetDb)
 
-	err := validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, poetDb, postProvider.cfg, postProvider.opts.NumUnits)
+	opts := []verifying.OptionFunc{verifying.WithLabelScryptParams(postProvider.opts.Scrypt)}
+	err := validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, poetDb, postProvider.cfg, postProvider.opts.NumUnits, opts...)
 	r.NoError(err)
 
-	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, types.BytesToHash([]byte("lerner")), poetDb, postProvider.cfg, postProvider.opts.NumUnits)
+	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, types.BytesToHash([]byte("lerner")), poetDb, postProvider.cfg, postProvider.opts.NumUnits, opts...)
 	r.Contains(err.Error(), "invalid `Challenge`")
 
 	newNIPost := *nipost
 	newNIPost.Post = &types.Post{}
-	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, &newNIPost, challengeHash, poetDb, postProvider.cfg, postProvider.opts.NumUnits)
+	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, &newNIPost, challengeHash, poetDb, postProvider.cfg, postProvider.opts.NumUnits, opts...)
 	r.Contains(err.Error(), "invalid Post")
 
 	newPostCfg := postProvider.cfg
 	newPostCfg.MinNumUnits = postProvider.opts.NumUnits + 1
-	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, poetDb, newPostCfg, postProvider.opts.NumUnits)
+	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, poetDb, newPostCfg, postProvider.opts.NumUnits, opts...)
 	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", newPostCfg.MinNumUnits, postProvider.opts.NumUnits))
 
 	newPostCfg = postProvider.cfg
 	newPostCfg.MaxNumUnits = postProvider.opts.NumUnits - 1
-	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, poetDb, newPostCfg, postProvider.opts.NumUnits)
+	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, poetDb, newPostCfg, postProvider.opts.NumUnits, opts...)
 	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", newPostCfg.MaxNumUnits, postProvider.opts.NumUnits))
 
 	newPostCfg = postProvider.cfg
 	newPostCfg.LabelsPerUnit = nipost.PostMetadata.LabelsPerUnit + 1
-	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, poetDb, newPostCfg, postProvider.opts.NumUnits)
+	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, poetDb, newPostCfg, postProvider.opts.NumUnits, opts...)
 	r.EqualError(err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", newPostCfg.LabelsPerUnit, nipost.PostMetadata.LabelsPerUnit))
 }
 
-func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint32) error {
+func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint32, opts ...verifying.OptionFunc) error {
 	v := &Validator{poetDb, postCfg}
-	_, err := v.NIPost(minerID, commitmentAtx, nipost, challenge, numUnits)
+	_, err := v.NIPost(minerID, commitmentAtx, nipost, challenge, numUnits, opts...)
 	return err
 }
