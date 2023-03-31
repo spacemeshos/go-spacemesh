@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -198,8 +199,8 @@ func TestGetActiveSet(t *testing.T) {
 }
 
 // a very simple clock that only allows one caller to call AwaitLayer.
-// not thread-safe.
 type mockClock struct {
+	mu       sync.Mutex
 	current  types.LayerID
 	target   types.LayerID
 	targetCh chan struct{}
@@ -215,11 +216,15 @@ func newMockClock(current types.LayerID, ch chan types.LayerID) *mockClock {
 }
 
 func (mc *mockClock) WakeUp() {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
 	mc.current = mc.target
 	close(mc.targetCh)
 }
 
 func (mc *mockClock) AwaitLayer(layerID types.LayerID) chan struct{} {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
 	mc.subscribed <- layerID
 	mc.target = layerID
 	mc.targetCh = make(chan struct{})
@@ -227,6 +232,8 @@ func (mc *mockClock) AwaitLayer(layerID types.LayerID) chan struct{} {
 }
 
 func (mc *mockClock) CurrentLayer() types.LayerID {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
 	return mc.current
 }
 
