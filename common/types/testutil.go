@@ -66,22 +66,22 @@ func RandomNodeID() NodeID {
 
 // RandomBallotID generates a random BallotID for testing.
 func RandomBallotID() BallotID {
-	b := make([]byte, BallotIDSize)
-	_, err := rand.Read(b)
+	var b [hash20Length]byte // TODO(mafa): BallotIDSize is 32???
+	_, err := rand.Read(b[:])
 	if err != nil {
 		return EmptyBallotID
 	}
-	return BallotID(CalcHash32(b).ToHash20())
+	return BallotID(b)
 }
 
 // RandomProposalID generates a random ProposalID for testing.
 func RandomProposalID() ProposalID {
-	b := make([]byte, ProposalIDSize)
-	_, err := rand.Read(b)
+	var b [hash20Length]byte // TODO(mafa): ProposalIDSize is 32???
+	_, err := rand.Read(b[:])
 	if err != nil {
 		return ProposalID{}
 	}
-	return ProposalID(CalcHash32(b).ToHash20())
+	return ProposalID(b)
 }
 
 // RandomBlockID generates a random ProposalID for testing.
@@ -124,4 +124,14 @@ func RandomEdSignature() EdSignature {
 		return EdSignature{}
 	}
 	return EdSignature(b)
+}
+
+// RandomVrfSignature generates a random VrfSignature for testing.
+func RandomVrfSignature() VrfSignature {
+	var b [VrfSignatureSize]byte
+	_, err := rand.Read(b[:])
+	if err != nil {
+		return VrfSignature{}
+	}
+	return VrfSignature(b)
 }

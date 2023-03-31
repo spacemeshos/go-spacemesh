@@ -567,3 +567,24 @@ func convertLayerStatus(in int) pb.Layer_LayerStatus {
 		return pb.Layer_LAYER_STATUS_UNSPECIFIED
 	}
 }
+
+func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshService_EpochStreamServer) error {
+	epoch := types.EpochID(req.Epoch)
+	atxids, err := s.mesh.EpochAtxs(epoch)
+	if err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+	for _, id := range atxids {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		default:
+			var res pb.EpochStreamResponse
+			res.Id = &pb.ActivationId{Id: id.Bytes()}
+			if err = stream.Send(&res); err != nil {
+				return status.Error(codes.Internal, err.Error())
+			}
+		}
+	}
+	return nil
+}

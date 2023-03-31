@@ -38,7 +38,7 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 			NumUnits: defaultATXUnit,
 		}}
 		atx.SetID(&id)
-		atx.SetNodeID(&types.NodeID{})
+		atx.SetNodeID(&types.EmptyNodeID)
 		if id == rb.AtxID {
 			nodeID := signer.NodeID()
 			atx.SetNodeID(&nodeID)

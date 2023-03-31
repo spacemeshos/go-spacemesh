@@ -9,6 +9,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-scale/tester"
+	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -142,7 +143,16 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	challengeHash := challenge.Hash()
 	postCfg := DefaultPostConfig()
 	nipost := buildNIPost(t, postProvider, postCfg, challenge, poetDb)
-	err := validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, poetDb, postCfg, postProvider.opts.NumUnits)
+	err := validateNIPost(
+		postProvider.id,
+		postProvider.commitmentAtxId,
+		nipost,
+		challengeHash,
+		poetDb,
+		postCfg,
+		postProvider.opts.NumUnits,
+		verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
+	)
 	r.NoError(err)
 }
 
@@ -230,7 +240,16 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 	r.NotNil(nipost)
 
-	r.NoError(validateNIPost(postProvider.id, postProvider.goldenATXID, nipost, challenge.Hash(), poetDb, postProvider.cfg, postProvider.opts.NumUnits))
+	r.NoError(validateNIPost(
+		postProvider.id,
+		postProvider.goldenATXID,
+		nipost,
+		challenge.Hash(),
+		poetDb,
+		postProvider.cfg,
+		postProvider.opts.NumUnits,
+		verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
+	))
 }
 
 func TestNIPostBuilder_BuildNIPost(t *testing.T) {

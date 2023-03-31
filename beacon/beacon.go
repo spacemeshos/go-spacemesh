@@ -781,7 +781,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	vrfSig := buildSignedProposal(ctx, pd.logger, pd.vrfSigner, epoch, nonce)
-	proposal := cropData(vrfSig)
+	proposal := ProposalFromVrf(vrfSig)
 	m := ProposalMessage{
 		EpochID:      epoch,
 		NodeID:       pd.nodeID,
@@ -1016,13 +1016,13 @@ func createProposalChecker(logger log.Log, conf Config, numEarlyATXs, numATXs in
 	return &proposalChecker{threshold: high, thresholdStrict: low}
 }
 
-func (pc *proposalChecker) PassStrictThreshold(proposal []byte) bool {
-	proposalInt := new(big.Int).SetBytes(proposal)
+func (pc *proposalChecker) PassStrictThreshold(proposal types.VrfSignature) bool {
+	proposalInt := new(big.Int).SetBytes(proposal[:])
 	return proposalInt.Cmp(pc.thresholdStrict) == -1
 }
 
-func (pc *proposalChecker) PassThreshold(proposal []byte) bool {
-	proposalInt := new(big.Int).SetBytes(proposal)
+func (pc *proposalChecker) PassThreshold(proposal types.VrfSignature) bool {
+	proposalInt := new(big.Int).SetBytes(proposal[:])
 	return proposalInt.Cmp(pc.threshold) == -1
 }
 
@@ -1079,10 +1079,10 @@ func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 	return threshold
 }
 
-func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, epoch types.EpochID, nonce types.VRFPostIndex) []byte {
+func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, epoch types.EpochID, nonce types.VRFPostIndex) types.VrfSignature {
 	p := buildProposal(logger, epoch, nonce)
 	vrfSig := signer.Sign(p)
-	proposal := cropData(vrfSig)
+	proposal := ProposalFromVrf(vrfSig)
 	logger.WithContext(ctx).With().Debug("calculated beacon proposal",
 		epoch,
 		nonce,

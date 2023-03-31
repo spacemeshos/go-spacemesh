@@ -44,12 +44,8 @@ func (b Beacon) Field() log.Field {
 
 // BytesToBeacon sets the first BeaconSize bytes of b to the Beacon's data.
 func BytesToBeacon(b []byte) Beacon {
-	l := BeaconSize
-	if len(b) < BeaconSize {
-		l = len(b)
-	}
 	var beacon Beacon
-	copy(beacon[:], b[:l])
+	copy(beacon[:], b)
 	return beacon
 }
 

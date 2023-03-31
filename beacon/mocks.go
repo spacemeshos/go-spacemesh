@@ -139,7 +139,7 @@ func (m *MockeligibilityChecker) EXPECT() *MockeligibilityCheckerMockRecorder {
 }
 
 // PassStrictThreshold mocks base method.
-func (m *MockeligibilityChecker) PassStrictThreshold(arg0 []byte) bool {
+func (m *MockeligibilityChecker) PassStrictThreshold(arg0 types.VrfSignature) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PassStrictThreshold", arg0)
 	ret0, _ := ret[0].(bool)
@@ -153,7 +153,7 @@ func (mr *MockeligibilityCheckerMockRecorder) PassStrictThreshold(arg0 interface
 }
 
 // PassThreshold mocks base method.
-func (m *MockeligibilityChecker) PassThreshold(arg0 []byte) bool {
+func (m *MockeligibilityChecker) PassThreshold(arg0 types.VrfSignature) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PassThreshold", arg0)
 	ret0, _ := ret[0].(bool)
@@ -283,10 +283,10 @@ func (mr *MockvrfSignerMockRecorder) NodeID() *gomock.Call {
 }
 
 // Sign mocks base method.
-func (m *MockvrfSigner) Sign(msg []byte) []byte {
+func (m *MockvrfSigner) Sign(msg []byte) types.VrfSignature {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Sign", msg)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].(types.VrfSignature)
 	return ret0
 }
 
@@ -320,7 +320,7 @@ func (m *MockvrfVerifier) EXPECT() *MockvrfVerifierMockRecorder {
 }
 
 // Verify mocks base method.
-func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg, sig []byte) bool {
+func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Verify", nodeID, msg, sig)
 	ret0, _ := ret[0].(bool)

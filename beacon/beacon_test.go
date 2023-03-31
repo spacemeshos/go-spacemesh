@@ -97,7 +97,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	minerID := edSgn.NodeID()
 	lg := logtest.New(tb).WithName(minerID.ShortString())
 
-	tpd.mSigner.EXPECT().Sign(gomock.Any()).AnyTimes().Return([]byte{})
+	tpd.mSigner.EXPECT().Sign(gomock.Any()).AnyTimes().Return(types.EmptyVrfSignature)
 	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
 	tpd.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).AnyTimes().Return(types.VRFPostIndex(1), nil)
 
@@ -975,7 +975,7 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 	tt := []struct {
 		name   string
 		epoch  types.EpochID
-		result []byte
+		result types.VrfSignature
 	}{
 		{
 			name:   "Case 1",
@@ -995,7 +995,7 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 			t.Parallel()
 
 			result := buildSignedProposal(context.Background(), logtest.New(t), vrfSigner, tc.epoch, types.VRFPostIndex(1))
-			require.Equal(t, string(tc.result), string(result))
+			require.Equal(t, tc.result, result)
 		})
 	}
 }

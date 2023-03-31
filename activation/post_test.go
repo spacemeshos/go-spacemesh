@@ -130,6 +130,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 		LabelsPerUnit:   m.LabelsPerUnit,
 	},
 		config.DefaultConfig(),
+		verifying.WithLabelScryptParams(mgr.opts.Scrypt),
 	)
 	req.NoError(err)
 
@@ -302,6 +303,7 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 	opts.DataDir = tb.TempDir()
 	opts.NumUnits = cfg.MaxNumUnits
 	opts.ComputeProviderID = int(initialization.CPUProviderID())
+	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
 	goldenATXID := types.ATXID{2, 3, 4}
 

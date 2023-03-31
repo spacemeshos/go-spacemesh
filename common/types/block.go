@@ -222,7 +222,7 @@ type CertifyContent struct {
 	// as a hare output certifier.
 	EligibilityCnt uint16
 	// Proof is the role proof for being a hare output certifier on the given Layer.
-	Proof []byte `scale:"max=80"`
+	Proof VrfSignature
 }
 
 // Bytes returns the actual data being signed in a CertifyMessage.

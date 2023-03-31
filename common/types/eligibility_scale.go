@@ -74,7 +74,7 @@ func (t *HareEligibilityGossip) DecodeScale(dec *scale.Decoder) (total int, err 
 
 func (t *HareEligibility) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Proof, 80)
+		n, err := scale.EncodeByteArray(enc, t.Proof[:])
 		if err != nil {
 			return total, err
 		}
@@ -92,12 +92,11 @@ func (t *HareEligibility) EncodeScale(enc *scale.Encoder) (total int, err error)
 
 func (t *HareEligibility) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 80)
+		n, err := scale.DecodeByteArray(dec, t.Proof[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Proof = field
 	}
 	{
 		field, n, err := scale.DecodeCompact16(dec)
@@ -119,7 +118,7 @@ func (t *VotingEligibility) EncodeScale(enc *scale.Encoder) (total int, err erro
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Sig, 80)
+		n, err := scale.EncodeByteArray(enc, t.Sig[:])
 		if err != nil {
 			return total, err
 		}
@@ -138,12 +137,11 @@ func (t *VotingEligibility) DecodeScale(dec *scale.Decoder) (total int, err erro
 		t.J = uint32(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 80)
+		n, err := scale.DecodeByteArray(dec, t.Sig[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Sig = field
 	}
 	return total, nil
 }

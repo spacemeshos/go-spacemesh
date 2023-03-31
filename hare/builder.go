@@ -172,7 +172,7 @@ func (mb *messageBuilder) SetValues(set *Set) *messageBuilder {
 }
 
 // SetRoleProof sets role proof.
-func (mb *messageBuilder) SetRoleProof(sig []byte) *messageBuilder {
+func (mb *messageBuilder) SetRoleProof(sig types.VrfSignature) *messageBuilder {
 	mb.msg.Eligibility.Proof = sig
 	return mb
 }

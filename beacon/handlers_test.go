@@ -249,10 +249,8 @@ func Test_HandleProposal_Success(t *testing.T) {
 	res = tpd.HandleProposal(context.Background(), "peerID", msgBytes2)
 	require.Equal(t, pubsub.ValidationAccept, res)
 
-	var p1 Proposal
-	copy(p1[:], msg1.VRFSignature)
-	var p2 Proposal
-	copy(p2[:], msg2.VRFSignature)
+	p1 := ProposalFromVrf(msg1.VRFSignature)
+	p2 := ProposalFromVrf(msg2.VRFSignature)
 	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner1.NodeID(), true)
 	expectedProposals := proposals{
 		valid:            proposalSet{p1: struct{}{}},
@@ -316,8 +314,7 @@ func Test_HandleProposal_NotInProtocolStillWorks(t *testing.T) {
 	res := tpd.HandleProposal(context.Background(), "peerID", msgBytes)
 	require.Equal(t, pubsub.ValidationAccept, res)
 
-	var p Proposal
-	copy(p[:], msg.VRFSignature)
+	p := ProposalFromVrf(msg.VRFSignature)
 	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), true)
 	expectedProposals := proposals{
 		valid: proposalSet{p: struct{}{}},
@@ -407,8 +404,7 @@ func Test_handleProposal_NextEpoch(t *testing.T) {
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 
 	// proposal added to the next epoch
-	var p Proposal
-	copy(p[:], msg.VRFSignature)
+	p := ProposalFromVrf(msg.VRFSignature)
 	checkProposed(t, tpd.ProtocolDriver, nextEpoch, vrfSigner.NodeID(), true)
 	expectedProposals := proposals{
 		valid: proposalSet{p: struct{}{}},
@@ -540,9 +536,8 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes1, time.Now())
 	require.NoError(t, got)
 
+	p := ProposalFromVrf(msg1.VRFSignature)
 	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), true)
-	var p Proposal
-	copy(p[:], msg1.VRFSignature)
 	expectedProposals := proposals{
 		valid: proposalSet{p: struct{}{}},
 	}
@@ -583,8 +578,7 @@ func Test_handleProposal_PotentiallyValid_Timing(t *testing.T) {
 	msg := createProposal(t, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
-	var p Proposal
-	copy(p[:], msg.VRFSignature)
+	p := ProposalFromVrf(msg.VRFSignature)
 	expectedProposals := proposals{
 		potentiallyValid: proposalSet{p: struct{}{}},
 	}
@@ -621,8 +615,7 @@ func Test_handleProposal_PotentiallyValid_Threshold(t *testing.T) {
 	msg := createProposal(t, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
-	var p Proposal
-	copy(p[:], msg.VRFSignature)
+	p := ProposalFromVrf(msg.VRFSignature)
 	expectedProposals := proposals{
 		potentiallyValid: proposalSet{p: struct{}{}},
 	}
@@ -724,8 +717,7 @@ func Test_handleProposal_MinerMissingATX(t *testing.T) {
 	msg := createProposal(t, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
-	var p Proposal
-	copy(p[:], msg.VRFSignature)
+	p := ProposalFromVrf(msg.VRFSignature)
 	expectedProposals := proposals{
 		potentiallyValid: proposalSet{p: struct{}{}},
 	}
