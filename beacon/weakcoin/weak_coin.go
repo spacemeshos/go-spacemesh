@@ -1,13 +1,11 @@
 package weakcoin
 
 import (
-	"bytes"
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/big"
 	"sync"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -22,14 +20,26 @@ var (
 
 func defaultConfig() config {
 	return config{
-		Threshold:           new(big.Int).Lsh(big.NewInt(1), 255).Bytes(), // equal to 2^255
-		NextRoundBufferSize: 10000,                                        // ~1mb given the size of Message is ~100b
+		NextRoundBufferSize: 10000, // ~1mb given the size of Message is ~100b
 		MaxRound:            300,
+		Threshold: types.VrfSignature{
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		},
 	}
 }
 
 type config struct {
-	Threshold           []byte
+	Threshold           types.VrfSignature
 	NextRoundBufferSize int
 	MaxRound            types.RoundID
 }
@@ -41,8 +51,8 @@ type Message struct {
 	Epoch        types.EpochID
 	Round        types.RoundID
 	Unit         uint32
-	MinerID      types.NodeID
-	VrfSignature []byte `scale:"max=80"`
+	NodeID       types.NodeID
+	VrfSignature types.VrfSignature
 }
 
 type VrfMessage struct {
@@ -71,7 +81,7 @@ func WithMaxRound(round types.RoundID) OptionFunc {
 }
 
 // WithThreshold changes signature threshold.
-func WithThreshold(threshold []byte) OptionFunc {
+func WithThreshold(threshold types.VrfSignature) OptionFunc {
 	return func(wc *WeakCoin) {
 		wc.config.Threshold = threshold
 	}
@@ -84,6 +94,15 @@ func WithNextRoundBufferSize(size int) OptionFunc {
 	}
 }
 
+// messageTime interface exists so that we can pass an object from the beacon
+// package to the weakCoinPackage (as does allowance), this is indicative of a
+// circular dependency, probably the weak coin should be merged with the beacon
+// package.
+// Issue: https://github.com/spacemeshos/go-spacemesh/issues/4199
+type messageTime interface {
+	WeakCoinProposalSendTime(epoch types.EpochID, round types.RoundID) time.Time
+}
+
 // New creates an instance of weak coin protocol.
 func New(
 	publisher pubsub.Publisher,
@@ -91,6 +110,7 @@ func New(
 	verifier vrfVerifier,
 	nonceFetcher nonceFetcher,
 	allowance allowance,
+	msgTime messageTime,
 	opts ...OptionFunc,
 ) *WeakCoin {
 	wc := &WeakCoin{
@@ -102,6 +122,7 @@ func New(
 		publisher:    publisher,
 		coins:        make(map[types.RoundID]bool),
 		verifier:     verifier,
+		msgTime:      msgTime,
 	}
 	for _, opt := range opts {
 		opt(wc)
@@ -124,11 +145,12 @@ type WeakCoin struct {
 	epochStarted, roundStarted bool
 	epoch                      types.EpochID
 	round                      types.RoundID
-	smallest                   []byte
+	smallest                   *types.VrfSignature
 	allowance                  allowance
 	// nextRoundBuffer is used to optimistically buffer messages from the next round.
 	nextRoundBuffer []Message
 	coins           map[types.RoundID]bool
+	msgTime         messageTime
 }
 
 // Get the result of the coin flip in this round. It is only valid in between StartEpoch/EndEpoch
@@ -186,7 +208,6 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, nonce *
 	logger.Info("started beacon weak coin round")
 	wc.roundStarted = true
 	wc.round = round
-	wc.smallest = nil
 	for i, msg := range wc.nextRoundBuffer {
 		if msg.Epoch != wc.epoch || msg.Round != wc.round {
 			continue
@@ -205,43 +226,43 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, nonce *
 }
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
-	nonce, err := wc.nonceFetcher.VRFNonce(message.MinerID, message.Epoch)
+	nonce, err := wc.nonceFetcher.VRFNonce(message.NodeID, message.Epoch)
 	if err != nil {
 		wc.logger.With().Error("failed to get vrf nonce", log.Err(err))
-		return fmt.Errorf("failed to get vrf nonce for node %s: %w", message.MinerID, err)
+		return fmt.Errorf("failed to get vrf nonce for node %s: %w", message.NodeID, err)
 	}
 	buf := wc.encodeProposal(message.Epoch, nonce, message.Round, message.Unit)
-	if !wc.verifier.Verify(message.MinerID, buf, message.VrfSignature) {
+	if !wc.verifier.Verify(message.NodeID, buf, message.VrfSignature) {
 		return fmt.Errorf("signature is invalid signature %x", message.VrfSignature)
 	}
 
-	allowance := wc.allowance.MinerAllowance(wc.epoch, message.MinerID)
+	allowance := wc.allowance.MinerAllowance(wc.epoch, message.NodeID)
 	if allowance < message.Unit {
-		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d (allowed %d)", message.MinerID, message.Unit, allowance)
+		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d (allowed %d)", message.NodeID, message.Unit, allowance)
 	}
 
 	return wc.updateSmallest(ctx, message.VrfSignature)
 }
 
-func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) ([]byte, []byte) {
+func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) ([]byte, types.VrfSignature) {
 	minerAllowance := wc.allowance.MinerAllowance(wc.epoch, wc.signer.NodeID())
 	if minerAllowance == 0 {
-		return nil, nil
+		return nil, types.EmptyVrfSignature
 	}
 	var broadcast []byte
-	var smallest []byte
+	var smallest *types.VrfSignature
 	for unit := uint32(0); unit < minerAllowance; unit++ {
 		proposal := wc.encodeProposal(epoch, nonce, round, unit)
 		signature := wc.signer.Sign(proposal)
 		if wc.aboveThreshold(signature) {
 			continue
 		}
-		if smallest == nil || bytes.Compare(signature, smallest) == -1 {
+		if signature.Cmp(smallest) == -1 {
 			message := Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         unit,
-				MinerID:      wc.signer.NodeID(),
+				NodeID:       wc.signer.NodeID(),
 				VrfSignature: signature,
 			}
 			msg, err := codec.Encode(&message)
@@ -250,16 +271,16 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 			}
 
 			broadcast = msg
-			smallest = signature
+			smallest = &signature
 		}
 	}
 
 	wc.mu.RLock()
 	defer wc.mu.RUnlock()
-	if wc.smallest == nil || bytes.Compare(smallest, wc.smallest) == -1 {
-		return broadcast, smallest
+	if smallest == nil || smallest.Cmp(wc.smallest) != -1 {
+		return nil, types.EmptyVrfSignature
 	}
-	return nil, nil
+	return broadcast, *smallest
 }
 
 func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) {
@@ -272,7 +293,7 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, no
 		wc.logger.With().Warning("failed to publish own weak coin proposal",
 			epoch,
 			round,
-			log.String("proposal", hex.EncodeToString(proposal)),
+			log.Stringer("proposal", proposal),
 			log.Err(err),
 		)
 		return
@@ -281,7 +302,7 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, no
 	wc.logger.WithContext(ctx).With().Info("published proposal",
 		epoch,
 		round,
-		log.String("proposal", hex.EncodeToString(proposal)),
+		log.Stringer("proposal", proposal),
 	)
 }
 
@@ -296,38 +317,32 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 		logger.Warning("completed round without valid proposals")
 		return
 	}
-	// NOTE(dshulyak) we need to select good bit here. for ed25519 it means select LSB and never MSB.
-	// https://datatracker.ietf.org/doc/html/draft-josefsson-eddsa-ed25519-03#section-5.2
-	// For another signature algorithm this may change
-	lsbIndex := 0
-	if !wc.signer.LittleEndian() {
-		lsbIndex = len(wc.smallest) - 1
-	}
-	coinflip := wc.smallest[lsbIndex]&1 == 1
+	coinflip := wc.smallest.LSB()&1 == 1
 
 	wc.coins[wc.round] = coinflip
 	logger.With().Info("completed round with beacon weak coin",
-		log.String("proposal", hex.EncodeToString(wc.smallest)),
-		log.Bool("beacon_weak_coin", coinflip))
+		log.Stringer("proposal", wc.smallest),
+		log.Bool("beacon_weak_coin", coinflip),
+	)
 	wc.smallest = nil
 }
 
-func (wc *WeakCoin) updateSmallest(ctx context.Context, proposal []byte) error {
-	if len(proposal) > 0 && (bytes.Compare(proposal, wc.smallest) == -1 || wc.smallest == nil) {
+func (wc *WeakCoin) updateSmallest(ctx context.Context, sig types.VrfSignature) error {
+	if sig.Cmp(wc.smallest) == -1 {
 		wc.logger.WithContext(ctx).With().Debug("saving new proposal",
 			wc.epoch,
 			wc.round,
-			log.String("proposal", hex.EncodeToString(proposal)),
-			log.String("previous", hex.EncodeToString(wc.smallest)),
+			log.Stringer("proposal", sig),
+			log.Stringer("previous", wc.smallest),
 		)
-		wc.smallest = proposal
+		wc.smallest = &sig
 		return nil
 	}
 	return errNotSmallest
 }
 
-func (wc *WeakCoin) aboveThreshold(proposal []byte) bool {
-	return bytes.Compare(proposal, wc.config.Threshold) == 1
+func (wc *WeakCoin) aboveThreshold(proposal types.VrfSignature) bool {
+	return proposal.Cmp(&wc.config.Threshold) == 1
 }
 
 func (wc *WeakCoin) encodeProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID, unit uint32) []byte {

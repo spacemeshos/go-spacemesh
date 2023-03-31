@@ -216,7 +216,7 @@ func (t *CertifyMessage) EncodeScale(enc *scale.Encoder) (total int, err error) 
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Signature, 64)
+		n, err := scale.EncodeByteArray(enc, t.Signature[:])
 		if err != nil {
 			return total, err
 		}
@@ -234,12 +234,11 @@ func (t *CertifyMessage) DecodeScale(dec *scale.Decoder) (total int, err error) 
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 64)
+		n, err := scale.DecodeByteArray(dec, t.Signature[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Signature = field
 	}
 	return total, nil
 }
@@ -267,7 +266,7 @@ func (t *CertifyContent) EncodeScale(enc *scale.Encoder) (total int, err error) 
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Proof, 80)
+		n, err := scale.EncodeByteArray(enc, t.Proof[:])
 		if err != nil {
 			return total, err
 		}
@@ -300,12 +299,11 @@ func (t *CertifyContent) DecodeScale(dec *scale.Decoder) (total int, err error) 
 		t.EligibilityCnt = uint16(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 80)
+		n, err := scale.DecodeByteArray(dec, t.Proof[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Proof = field
 	}
 	return total, nil
 }

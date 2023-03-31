@@ -8,7 +8,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // state does the data management for epoch specific data for the protocol.
@@ -24,7 +23,7 @@ type state struct {
 	firstRoundIncomingVotes map[types.NodeID]proposalList
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
 	votesMargin               map[Proposal]*big.Int
-	hasProposed               map[string]struct{}
+	hasProposed               map[types.NodeID]struct{}
 	hasVoted                  []map[types.NodeID]struct{}
 	proposalPhaseFinishedTime time.Time
 	proposalChecker           eligibilityChecker
@@ -46,7 +45,7 @@ func newState(
 		minerAtxs:               miners,
 		firstRoundIncomingVotes: make(map[types.NodeID]proposalList),
 		votesMargin:             map[Proposal]*big.Int{},
-		hasProposed:             make(map[string]struct{}),
+		hasProposed:             make(map[types.NodeID]struct{}),
 		hasVoted:                make([]map[types.NodeID]struct{}, cfg.RoundsNumber),
 		proposalChecker:         checker,
 	}
@@ -68,12 +67,12 @@ func (s *state) addPotentiallyValidProposal(proposal Proposal) {
 	s.votesMargin[proposal] = new(big.Int)
 }
 
-func (s *state) setMinerFirstRoundVote(minerID types.NodeID, voteList []Proposal) {
-	s.firstRoundIncomingVotes[minerID] = voteList
+func (s *state) setMinerFirstRoundVote(nodeID types.NodeID, voteList []Proposal) {
+	s.firstRoundIncomingVotes[nodeID] = voteList
 }
 
-func (s *state) getMinerFirstRoundVote(minerID types.NodeID) (proposalList, error) {
-	p, ok := s.firstRoundIncomingVotes[minerID]
+func (s *state) getMinerFirstRoundVote(nodeID types.NodeID) (proposalList, error) {
+	p, ok := s.firstRoundIncomingVotes[nodeID]
 	if !ok {
 		return nil, fmt.Errorf("no first round votes for miner")
 	}
@@ -96,25 +95,24 @@ func (s *state) addVote(proposal Proposal, vote uint, voteWeight *big.Int) {
 	}
 }
 
-func (s *state) registerProposed(logger log.Log, minerPK *signing.PublicKey) error {
-	minerID := string(minerPK.Bytes())
-	if _, ok := s.hasProposed[minerID]; ok {
+func (s *state) registerProposed(logger log.Log, nodeID types.NodeID) error {
+	if _, ok := s.hasProposed[nodeID]; ok {
 		// see TODOs for registerVoted()
 		logger.Warning("already received proposal from miner")
-		return fmt.Errorf("already made proposal (miner ID %v): %w", minerPK.ShortString(), errAlreadyProposed)
+		return fmt.Errorf("already made proposal (miner ID %v): %w", nodeID.ShortString(), errAlreadyProposed)
 	}
 
-	s.hasProposed[minerID] = struct{}{}
+	s.hasProposed[nodeID] = struct{}{}
 	return nil
 }
 
-func (s *state) registerVoted(logger log.Log, minerID types.NodeID, round types.RoundID) error {
+func (s *state) registerVoted(logger log.Log, nodeID types.NodeID, round types.RoundID) error {
 	if s.hasVoted[round] == nil {
 		s.hasVoted[round] = make(map[types.NodeID]struct{})
 	}
 
 	// TODO(nkryuchkov): consider having a separate table for an epoch with one bit in it if atx/miner is voted already
-	if _, ok := s.hasVoted[round][minerID]; ok {
+	if _, ok := s.hasVoted[round][nodeID]; ok {
 		logger.Warning("already received vote from miner for this round")
 
 		// TODO(nkryuchkov): report this miner through gossip
@@ -124,9 +122,9 @@ func (s *state) registerVoted(logger log.Log, minerID types.NodeID, round types.
 		// TODO(nkryuchkov): ban id forever globally across packages since this epoch
 		// TODO(nkryuchkov): (not specific to beacon) do the same for ATXs
 
-		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, minerID.ShortString(), errAlreadyVoted)
+		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, nodeID.ShortString(), errAlreadyVoted)
 	}
 
-	s.hasVoted[round][minerID] = struct{}{}
+	s.hasVoted[round][nodeID] = struct{}{}
 	return nil
 }

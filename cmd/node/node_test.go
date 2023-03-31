@@ -901,7 +901,7 @@ func getTestDefaultConfig() *config.Config {
 // initSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
 func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle,
-	poetClient *activation.HTTPPoetClient, clock NodeClock, host *p2p.Host, edSgn *signing.EdSigner,
+	poetClient *activation.HTTPPoetClient, clock *timesync.NodeClock, host *p2p.Host, edSgn *signing.EdSigner,
 ) (*App, error) {
 	smApp := New(WithLog(lg))
 	smApp.Config = &cfg

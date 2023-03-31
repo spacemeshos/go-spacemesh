@@ -19,10 +19,10 @@ type ProposalVrfMessage struct {
 type ProposalMessage struct {
 	EpochID      types.EpochID
 	NodeID       types.NodeID
-	VRFSignature []byte `scale:"max=80"`
+	VRFSignature types.VrfSignature
 }
 
-type Proposal [4]byte
+type Proposal [types.BeaconSize]byte
 
 // EncodeScale implements scale codec interface.
 func (p *Proposal) EncodeScale(e *scale.Encoder) (int, error) {
@@ -32,6 +32,12 @@ func (p *Proposal) EncodeScale(e *scale.Encoder) (int, error) {
 // DecodeScale implements scale codec interface.
 func (p *Proposal) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, p[:])
+}
+
+func ProposalFromVrf(vrf types.VrfSignature) Proposal {
+	var p Proposal
+	copy(p[:], vrf[:])
+	return p
 }
 
 // FirstVotingMessageBody is FirstVotingMessage without a signature.
@@ -44,7 +50,7 @@ type FirstVotingMessageBody struct {
 // FirstVotingMessage is a message type which is used when sending first voting messages.
 type FirstVotingMessage struct {
 	FirstVotingMessageBody
-	Signature []byte `scale:"max=64"`
+	Signature types.EdSignature
 }
 
 // FollowingVotingMessageBody is FollowingVotingMessage without a signature.
@@ -57,5 +63,5 @@ type FollowingVotingMessageBody struct {
 // FollowingVotingMessage is a message type which is used when sending following voting messages.
 type FollowingVotingMessage struct {
 	FollowingVotingMessageBody
-	Signature []byte `scale:"max=64"`
+	Signature types.EdSignature
 }

@@ -44,14 +44,14 @@ type Proposal struct {
 	// the content proposal for a given layer and the votes on the mesh history
 	InnerProposal
 	// smesher's signature on InnerProposal
-	Signature []byte `scale:"max=64"`
+	Signature EdSignature
 
 	// the following fields are kept private and from being serialized
 	proposalID ProposalID
 }
 
 func (p Proposal) Equal(other Proposal) bool {
-	return cmp.Equal(p.InnerProposal, other.InnerProposal) && bytes.Equal(p.Signature, other.Signature)
+	return cmp.Equal(p.InnerProposal, other.InnerProposal) && p.Signature == other.Signature
 }
 
 // InnerProposal contains a smesher's content proposal for layer and its votes on the mesh history.

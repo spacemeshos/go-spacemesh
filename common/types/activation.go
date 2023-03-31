@@ -243,7 +243,7 @@ type ActivationTx struct {
 	InnerActivationTx
 	ATXMetadata
 	// signature over ATXMetadata
-	Signature []byte `scale:"max=64"`
+	Signature EdSignature
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
@@ -325,7 +325,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
 func (atx *ActivationTx) CalcAndSetID() error {
-	if atx.Signature == nil {
+	if atx.Signature == EmptyEdSignature {
 		return fmt.Errorf("cannot calculate ATX ID: sig is nil")
 	}
 
@@ -438,6 +438,9 @@ func (m *Member) DecodeScale(d *scale.Decoder) (int, error) {
 
 type PoetProofRef [32]byte
 
+// EmptyPoetProofRef is an empty PoET proof reference.
+var EmptyPoetProofRef = PoetProofRef{}
+
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
 // and the actual PoET Merkle proof.
 type PoetProof struct {
@@ -480,7 +483,7 @@ type PoetProofMessage struct {
 	PoetProof
 	PoetServiceID []byte `scale:"max=32"` // public key of the PoET service
 	RoundID       string `scale:"max=32"` // TODO(mafa): convert to uint64
-	Signature     []byte `scale:"max=64"`
+	Signature     EdSignature
 }
 
 func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -490,7 +493,7 @@ func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddObject("PoetProof", &p.PoetProof)
 	encoder.AddString("PoetServiceID", hex.EncodeToString(p.PoetServiceID))
 	encoder.AddString("RoundID", p.RoundID)
-	encoder.AddString("Signature", hex.EncodeToString(p.Signature))
+	encoder.AddString("Signature", p.Signature.String())
 
 	return nil
 }

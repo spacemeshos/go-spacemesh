@@ -1,7 +1,6 @@
 package hare
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -571,7 +570,7 @@ func TestEquivocation(t *testing.T) {
 	for _, ch := range mchs {
 		require.Len(t, ch, 1)
 		gossip := <-ch
-		require.True(t, bytes.Equal(gossip.Eligibility.PubKey, badGuy.PublicKey().Bytes()))
+		require.Equal(t, badGuy.NodeID(), gossip.Eligibility.NodeID)
 	}
 }
 

@@ -13,11 +13,11 @@ type statusTracker struct {
 	logger            log.Log
 	round             uint32
 	malCh             chan<- *types.MalfeasanceGossip
-	statuses          map[string]*Msg // maps PubKey->StatusMsg
-	threshold         int             // threshold to indicate a set can be proved
-	maxCommittedRound uint32          // tracks max committed round (Ki) value in tracked status Messages
-	maxSet            *Set            // tracks the max raw set in the tracked status Messages
-	analyzed          bool            // indicates if the Messages have already been analyzed
+	statuses          map[types.NodeID]*Msg // maps PubKey->StatusMsg
+	threshold         int                   // threshold to indicate a set can be proved
+	maxCommittedRound uint32                // tracks max committed round (Ki) value in tracked status Messages
+	maxSet            *Set                  // tracks the max raw set in the tracked status Messages
+	analyzed          bool                  // indicates if the Messages have already been analyzed
 	eTracker          *EligibilityTracker
 	tally             *CountInfo
 }
@@ -27,7 +27,7 @@ func newStatusTracker(logger log.Log, round uint32, mch chan<- *types.Malfeasanc
 		logger:            logger,
 		malCh:             mch,
 		round:             round,
-		statuses:          make(map[string]*Msg, expectedSize),
+		statuses:          make(map[types.NodeID]*Msg, expectedSize),
 		threshold:         threshold,
 		maxCommittedRound: preRound,
 		eTracker:          et,
@@ -36,17 +36,16 @@ func newStatusTracker(logger log.Log, round uint32, mch chan<- *types.Malfeasanc
 
 // RecordStatus records the given status message.
 func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
-	nodeID := types.BytesToNodeID(msg.PubKey.Bytes())
-	if prev, exist := st.statuses[string(msg.PubKey.Bytes())]; exist { // already handled this sender's status msg
+	if prev, exist := st.statuses[msg.NodeID]; exist { // already handled this sender's status msg
 		if prev.Layer == msg.Layer &&
 			prev.Round == msg.Round &&
 			prev.MsgHash != msg.MsgHash {
 			st.logger.WithContext(ctx).With().Warning("equivocation detected in status round",
-				log.Stringer("smesher", nodeID),
+				log.Stringer("smesher", msg.NodeID),
 				log.Object("prev", prev),
 				log.Object("curr", &msg.HareMetadata),
 			)
-			st.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
+			st.eTracker.Track(msg.NodeID, msg.Round, msg.Eligibility.Count, false)
 			old := &types.HareProofMsg{
 				InnerMsg:  prev.HareMetadata,
 				Signature: prev.Signature,
@@ -55,19 +54,21 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 				InnerMsg:  msg.HareMetadata,
 				Signature: msg.Signature,
 			}
-			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), old, this, &msg.Eligibility, st.malCh); err != nil {
+			if err := reportEquivocation(ctx, msg.NodeID, old, this, &msg.Eligibility, st.malCh); err != nil {
 				st.logger.WithContext(ctx).With().Warning("failed to report equivocation in status round",
-					log.Stringer("smesher", nodeID),
-					log.Err(err))
+					log.Stringer("smesher", msg.NodeID),
+					log.Err(err),
+				)
 				return
 			}
 		}
 		st.logger.WithContext(ctx).With().Warning("duplicate status message detected",
-			log.Stringer("smesher", nodeID))
+			log.Stringer("smesher", msg.NodeID),
+		)
 		return
 	}
 
-	st.statuses[string(msg.PubKey.Bytes())] = msg
+	st.statuses[msg.NodeID] = msg
 }
 
 // AnalyzeStatusMessages analyzes the recorded status messages by the validation function.
@@ -85,7 +86,7 @@ func (st *statusTracker) AnalyzeStatusMessages(isValid func(m *Msg) bool) {
 
 	// only valid messages are left now
 	var ci CountInfo
-	st.eTracker.ForEach(st.round, func(node string, cr *Cred) {
+	st.eTracker.ForEach(st.round, func(node types.NodeID, cr *Cred) {
 		// only counts the eligibility count from the committed msgs
 		if _, ok := st.statuses[node]; ok {
 			if cr.Honest {

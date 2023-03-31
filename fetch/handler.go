@@ -57,7 +57,9 @@ func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ []byte) ([]byte, 
 // handleEpochInfoReq returns the ATXs published in the specified epoch.
 func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, error) {
 	var epoch types.EpochID
-	codec.Decode(msg, &epoch)
+	if err := codec.Decode(msg, &epoch); err != nil {
+		return nil, err
+	}
 	atxids, err := atxs.GetIDsByEpoch(h.cdb, epoch)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Warning("failed to get epoch atx IDs", epoch, log.Err(err))

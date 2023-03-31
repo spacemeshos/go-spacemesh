@@ -194,10 +194,9 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	// validation passed, report
 	logger.With().Debug("broker reported hare message as valid")
 
-	nodeID := types.BytesToNodeID(iMsg.PubKey.Bytes())
-	if proof, err := b.msh.GetMalfeasanceProof(nodeID); err != nil && !errors.Is(err, sql.ErrNotFound) {
+	if proof, err := b.msh.GetMalfeasanceProof(iMsg.NodeID); err != nil && !errors.Is(err, sql.ErrNotFound) {
 		logger.With().Error("failed to check malicious identity",
-			log.Stringer("smesher", nodeID),
+			log.Stringer("smesher", iMsg.NodeID),
 			log.Err(err),
 		)
 		return err
@@ -206,14 +205,14 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		// - gossip its malfeasance + eligibility proofs to the network
 		// - relay the eligibility proof to the consensus process
 		// - return error so the node don't relay messages from malicious parties
-		if err := b.handleMaliciousHareMessage(ctx, logger, nodeID, proof, iMsg, isEarly); err != nil {
+		if err := b.handleMaliciousHareMessage(ctx, logger, iMsg.NodeID, proof, iMsg, isEarly); err != nil {
 			return err
 		}
-		return fmt.Errorf("known malicious %v", nodeID.String())
+		return fmt.Errorf("known malicious %v", iMsg.NodeID.String())
 	}
 
 	if isEarly {
-		return b.handleEarlyMessage(logger, msgLayer, nodeID, iMsg)
+		return b.handleEarlyMessage(logger, msgLayer, iMsg.NodeID, iMsg)
 	}
 
 	// has instance, just send
@@ -247,7 +246,7 @@ func (b *Broker) handleMaliciousHareMessage(
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       msg.Layer,
 			Round:       msg.Round,
-			PubKey:      msg.PubKey.Bytes(),
+			NodeID:      msg.NodeID,
 			Eligibility: msg.Eligibility,
 		},
 	}
@@ -291,28 +290,30 @@ func (b *Broker) HandleEligibility(ctx context.Context, em *types.HareEligibilit
 		return false
 	}
 
-	nodeID := types.BytesToNodeID(em.PubKey)
-	isActive, err := b.stateQuerier.IsIdentityActiveOnConsensusView(ctx, nodeID, em.Layer)
+	isActive, err := b.stateQuerier.IsIdentityActiveOnConsensusView(ctx, em.NodeID, em.Layer)
 	if err != nil {
 		b.Log.WithContext(ctx).With().Error("failed to check if identity is active",
 			em.Layer,
 			log.Uint32("round", em.Round),
-			log.Stringer("smesher", nodeID),
-			log.Err(err))
+			log.Stringer("smesher", em.NodeID),
+			log.Err(err),
+		)
 		return false
 	}
 	if !isActive {
 		b.Log.WithContext(ctx).With().Debug("identity is not active",
 			em.Layer,
 			log.Uint32("round", em.Round),
-			log.Stringer("smesher", nodeID))
+			log.Stringer("smesher", em.NodeID),
+		)
 		return false
 	}
 	if !b.roleValidator.ValidateEligibilityGossip(ctx, em) {
 		b.Log.WithContext(ctx).With().Debug("invalid gossip eligibility",
 			em.Layer,
 			log.Uint32("round", em.Round),
-			log.Stringer("smesher", nodeID))
+			log.Stringer("smesher", em.NodeID),
+		)
 		return false
 	}
 	b.Log.WithContext(ctx).With().Debug("broker forwarding gossip eligibility to consensus process",

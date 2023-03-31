@@ -66,7 +66,7 @@ func (mr *MockPoetProvingServiceClientMockRecorder) Proof(ctx, roundID interface
 }
 
 // Submit mocks base method.
-func (m *MockPoetProvingServiceClient) Submit(ctx context.Context, challenge, signature []byte) (*types.PoetRound, error) {
+func (m *MockPoetProvingServiceClient) Submit(ctx context.Context, challenge []byte, signature types.EdSignature) (*types.PoetRound, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Submit", ctx, challenge, signature)
 	ret0, _ := ret[0].(*types.PoetRound)

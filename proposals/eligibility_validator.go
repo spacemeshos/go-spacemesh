@@ -1,7 +1,6 @@
 package proposals
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -135,8 +134,8 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		return false, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
 			errTargetEpochMismatch, targetEpoch, epoch)
 	}
-	if pub := ballot.SmesherID(); !bytes.Equal(owned.NodeID.Bytes(), pub.Bytes()) {
-		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), owned.NodeID)
+	if ballot.SmesherID() != owned.NodeID {
+		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, ballot.SmesherID().String(), owned.NodeID)
 	}
 
 	atxWeight = owned.GetWeight()
@@ -176,8 +175,9 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 
 		beaconStr := beacon.ShortString()
 		if !v.vrfVerifier.Verify(owned.NodeID, message, vrfSig) {
-			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
-				errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
+			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %s",
+				errIncorrectVRFSig, beaconStr, epoch, counter, vrfSig,
+			)
 		}
 
 		eligibleLayer := CalcEligibleLayer(epoch, v.layersPerEpoch, vrfSig)

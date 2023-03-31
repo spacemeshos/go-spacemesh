@@ -182,7 +182,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 				},
 			},
 			Eligibility: &types.HareEligibilityGossip{
-				PubKey: types.RandomBytes(32),
+				NodeID: types.RandomNodeID(),
 			},
 		}
 		data, err := codec.Encode(gossip)
@@ -377,7 +377,7 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 				},
 			},
 			Eligibility: &types.HareEligibilityGossip{
-				PubKey: types.RandomBytes(32),
+				NodeID: types.RandomNodeID(),
 			},
 		}
 		data, err := codec.Encode(gossip)
@@ -597,7 +597,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 				},
 			},
 			Eligibility: &types.HareEligibilityGossip{
-				PubKey: types.RandomBytes(32),
+				NodeID: types.RandomNodeID(),
 			},
 		}
 		data, err := codec.Encode(gossip)
@@ -667,7 +667,7 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	createIdentity(t, db, sig)
 	lid := types.NewLayerID(11)
 	round := uint32(11)
-	proofByte := types.RandomBytes(64)
+	proofByte := types.RandomVrfSignature()
 	eCount := uint16(3)
 
 	bp := types.BallotProof{
@@ -701,7 +701,7 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	t.Run("different node id", func(t *testing.T) {
 		gs := gossip
 		gs.Eligibility = &types.HareEligibilityGossip{
-			PubKey: types.RandomBytes(32),
+			NodeID: types.RandomNodeID(),
 		}
 		data, err := codec.Encode(gs)
 		require.NoError(t, err)
@@ -713,7 +713,7 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 		gs.Eligibility = &types.HareEligibilityGossip{
 			Layer:  lid,
 			Round:  round,
-			PubKey: sig.PublicKey().Bytes(),
+			NodeID: sig.NodeID(),
 			Eligibility: types.HareEligibility{
 				Proof: proofByte,
 				Count: eCount,

@@ -132,6 +132,10 @@ func New(
 	for _, opt := range opts {
 		opt(pd)
 	}
+	pd.msgTimes = &messageTimes{
+		clock: clock,
+		conf:  pd.config,
+	}
 
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(pd.config.Theta)
@@ -141,6 +145,7 @@ func New(
 
 	if pd.weakCoin == nil {
 		pd.weakCoin = weakcoin.New(pd.publisher, vrfSigner, vrfVerifier, pd.nonceFetcher, pd,
+			pd.msgTimes,
 			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
 			weakcoin.WithMaxRound(pd.config.RoundsNumber),
 		)
@@ -171,8 +176,9 @@ type ProtocolDriver struct {
 	weakCoin        coin
 	theta           *big.Float
 
-	clock layerClock
-	cdb   *datastore.CachedDB
+	clock    layerClock
+	msgTimes *messageTimes
+	cdb      *datastore.CachedDB
 
 	mu sync.RWMutex
 
@@ -277,7 +283,7 @@ func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTxHeader) {
 	s.minerAtxs[atx.NodeID] = atx.ID
 }
 
-func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, minerID types.NodeID) (*types.ActivationTxHeader, error) {
+func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, nodeID types.NodeID) (*types.ActivationTxHeader, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
@@ -286,19 +292,19 @@ func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, minerID types.NodeID)
 		return nil, errEpochNotActive
 	}
 
-	id, ok := st.minerAtxs[minerID]
+	id, ok := st.minerAtxs[nodeID]
 	if !ok {
 		pd.logger.With().Debug("miner does not have atx in previous epoch",
 			epoch-1,
-			log.Stringer("smesher", minerID),
+			log.Stringer("smesher", nodeID),
 		)
 		return nil, errMinerNotActive
 	}
 	return pd.cdb.GetAtxHeader(id)
 }
 
-func (pd *ProtocolDriver) MinerAllowance(epoch types.EpochID, minerID types.NodeID) uint32 {
-	atx, err := pd.minerAtxHdr(epoch, minerID)
+func (pd *ProtocolDriver) MinerAllowance(epoch types.EpochID, nodeID types.NodeID) uint32 {
+	atx, err := pd.minerAtxHdr(epoch, nodeID)
 	if err != nil {
 		return 0
 	}
@@ -775,7 +781,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	vrfSig := buildSignedProposal(ctx, pd.logger, pd.vrfSigner, epoch, nonce)
-	proposal := cropData(vrfSig)
+	proposal := ProposalFromVrf(vrfSig)
 	m := ProposalMessage{
 		EpochID:      epoch,
 		NodeID:       pd.nodeID,
@@ -942,7 +948,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 	return nil
 }
 
-func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, minerID types.NodeID) (proposalList, error) {
+func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, nodeID types.NodeID) (proposalList, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
@@ -951,7 +957,7 @@ func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, minerID types.N
 		return nil, errEpochNotActive
 	}
 
-	return st.getMinerFirstRoundVote(minerID)
+	return st.getMinerFirstRoundVote(nodeID)
 }
 
 func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {
@@ -1010,13 +1016,13 @@ func createProposalChecker(logger log.Log, conf Config, numEarlyATXs, numATXs in
 	return &proposalChecker{threshold: high, thresholdStrict: low}
 }
 
-func (pc *proposalChecker) PassStrictThreshold(proposal []byte) bool {
-	proposalInt := new(big.Int).SetBytes(proposal)
+func (pc *proposalChecker) PassStrictThreshold(proposal types.VrfSignature) bool {
+	proposalInt := new(big.Int).SetBytes(proposal[:])
 	return proposalInt.Cmp(pc.thresholdStrict) == -1
 }
 
-func (pc *proposalChecker) PassThreshold(proposal []byte) bool {
-	proposalInt := new(big.Int).SetBytes(proposal)
+func (pc *proposalChecker) PassThreshold(proposal types.VrfSignature) bool {
+	proposalInt := new(big.Int).SetBytes(proposal[:])
 	return proposalInt.Cmp(pc.threshold) == -1
 }
 
@@ -1073,10 +1079,10 @@ func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 	return threshold
 }
 
-func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, epoch types.EpochID, nonce types.VRFPostIndex) []byte {
+func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, epoch types.EpochID, nonce types.VRFPostIndex) types.VrfSignature {
 	p := buildProposal(logger, epoch, nonce)
 	vrfSig := signer.Sign(p)
-	proposal := cropData(vrfSig)
+	proposal := ProposalFromVrf(vrfSig)
 	logger.WithContext(ctx).With().Debug("calculated beacon proposal",
 		epoch,
 		nonce,
@@ -1139,4 +1145,33 @@ func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 	}
 
 	return observed, calculated
+}
+
+// messageTimes provides methods to determine the intended send time of
+// messages spceific to the beacon protocol.
+type messageTimes struct {
+	clock layerClock
+	conf  Config
+}
+
+// proposalSendTime returns the time at which a proposal is sent for an epoch.
+func (mt *messageTimes) proposalSendTime(epoch types.EpochID) time.Time {
+	return mt.clock.LayerToTime(epoch.FirstLayer())
+}
+
+// firstVoteSendTime returns the time at which the first vote is sent for an epoch.
+func (mt *messageTimes) firstVoteSendTime(epoch types.EpochID) time.Time {
+	return mt.proposalSendTime(epoch).Add(mt.conf.ProposalDuration)
+}
+
+// followupVoteSendTime returns the time at which the followup votes are sent for an epoch and round.
+func (mt *messageTimes) followupVoteSendTime(epoch types.EpochID, round types.RoundID) time.Time {
+	subsequentRoundDuration := mt.conf.VotingRoundDuration + mt.conf.WeakCoinRoundDuration
+	return mt.firstVoteSendTime(epoch).Add(mt.conf.FirstVotingRoundDuration).Add(subsequentRoundDuration * time.Duration(round-1))
+}
+
+// weakCoinProposalSendTime returns the time at which the weak coin proposals are sent for an epoch and round.
+func (mt *messageTimes) WeakCoinProposalSendTime(epoch types.EpochID, round types.RoundID) time.Time {
+	subsequentRoundDuration := mt.conf.VotingRoundDuration + mt.conf.WeakCoinRoundDuration
+	return mt.firstVoteSendTime(epoch).Add(mt.conf.FirstVotingRoundDuration + mt.conf.VotingRoundDuration).Add(subsequentRoundDuration * time.Duration(round-1))
 }

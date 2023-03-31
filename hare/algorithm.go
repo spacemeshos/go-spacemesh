@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -76,10 +77,10 @@ type State struct {
 }
 
 // Msg is the wrapper of the protocol's message.
-// Messages are sent as type Message. Upon receiving, the public key is added to this wrapper (public key extraction).
+// Messages are sent as type Message. Upon receiving, the NodeID is added to this wrapper (public key extraction).
 type Msg struct {
 	Message
-	PubKey *signing.PublicKey
+	NodeID types.NodeID
 }
 
 // Bytes returns the message as bytes (without the public key).
@@ -118,7 +119,7 @@ func newMsg(ctx context.Context, logger log.Log, nodeId types.NodeID, hareMsg Me
 		return nil, errors.New("inactive identity")
 	}
 
-	msg := &Msg{Message: hareMsg, PubKey: signing.NewPublicKey(nodeId.Bytes())}
+	msg := &Msg{Message: hareMsg, NodeID: nodeId}
 
 	return msg, nil
 }
@@ -207,9 +208,9 @@ type consensusProcess struct {
 	commitTracker    commitTrackerProvider
 	notifyTracker    *notifyTracker
 	cfg              config.Config
-	pending          map[string]*Msg     // buffer for early messages that are pending process
-	mTracker         *msgsTracker        // tracks valid messages
-	eTracker         *EligibilityTracker // tracks eligible identities by rounds
+	pending          map[types.NodeID]*Msg // buffer for early messages that are pending process
+	mTracker         *msgsTracker          // tracks valid messages
+	eTracker         *EligibilityTracker   // tracks eligible identities by rounds
 	eligibilityCount uint16
 	clock            RoundClock
 	once             sync.Once
@@ -247,7 +248,7 @@ func newConsensusProcess(
 		publisher: p2p,
 		cfg:       cfg,
 		comm:      comm,
-		pending:   make(map[string]*Msg, cfg.N),
+		pending:   make(map[types.NodeID]*Msg, cfg.N),
 		Log:       logger,
 		mTracker:  newMsgsTracker(),
 		eTracker:  NewEligibilityTracker(cfg.N),
@@ -409,7 +410,7 @@ PreRound:
 
 // handles eligibility proof from hare gossip handler and malfeasance proof gossip handler.
 func (proc *consensusProcess) onMalfeasance(msg *types.HareEligibilityGossip) {
-	proc.eTracker.Track(msg.PubKey, msg.Round, msg.Eligibility.Count, false)
+	proc.eTracker.Track(msg.NodeID, msg.Round, msg.Eligibility.Count, false)
 }
 
 // handles a message that has arrived early.
@@ -426,35 +427,35 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 		return
 	}
 
-	if m.PubKey == nil {
+	if m.NodeID == types.EmptyNodeID {
 		logger.Error("onEarlyMessage called with nil pub key")
 		return
 	}
 
-	pub := m.PubKey
-	if _, exist := proc.pending[pub.String()]; exist { // ignore, already received
+	if _, exist := proc.pending[m.NodeID]; exist { // ignore, already received
 		logger.With().Warning("already received message from sender",
-			log.Stringer("smesher", types.BytesToNodeID(m.PubKey.Bytes())),
+			log.Stringer("smesher", m.NodeID),
 		)
 		return
 	}
 
-	proc.pending[pub.String()] = m
+	proc.pending[m.NodeID] = m
 }
 
 // the very first step of handling a message.
 func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	logger := proc.WithContext(ctx).WithFields(
 		log.String("msg_type", m.InnerMsg.Type.String()),
-		log.Stringer("smesher", types.BytesToNodeID(m.PubKey.Bytes())),
+		log.Stringer("smesher", m.NodeID),
 		log.Uint32("current_round", proc.getRound()),
 		log.Uint32("msg_round", m.Round),
-		proc.layer)
+		proc.layer,
+	)
 
 	// Note: instanceID is already verified by the broker
 	logger.Debug("consensus process received message")
 	// broker already validated the eligibility of this message
-	proc.eTracker.Track(m.PubKey.Bytes(), m.Round, m.Eligibility.Count, true)
+	proc.eTracker.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
 
 	// validate context
 	if err := proc.validator.ContextuallyValidateMessage(ctx, m, proc.getRound()); err != nil {
@@ -499,7 +500,9 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.Int("num_values", len(m.InnerMsg.Values)))
 
-	reportLatency(m.InnerMsg.Type, m.Round, proc.clock)
+	// Report the latency since the beginning of the round
+	latency := time.Since(proc.clock.RoundEnd(m.Round - 1))
+	metrics.ReportMessageLatency(pubsub.HareProtocol, m.InnerMsg.Type.String(), latency)
 	switch m.InnerMsg.Type {
 	case pre:
 		proc.processPreRoundMsg(ctx, m)
@@ -515,7 +518,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 		proc.WithContext(ctx).With().Warning("unknown message type",
 			proc.layer,
 			log.String("msg_type", m.InnerMsg.Type.String()),
-			log.Stringer("smesher", types.BytesToNodeID(m.PubKey.Bytes())),
+			log.Stringer("smesher", m.NodeID),
 		)
 	}
 }
@@ -730,7 +733,7 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 }
 
 // passes all pending messages to the inbox of the process so they will be handled.
-func (proc *consensusProcess) handlePending(pending map[string]*Msg) {
+func (proc *consensusProcess) handlePending(pending map[types.NodeID]*Msg) {
 	for _, m := range pending {
 		select {
 		case <-proc.ctx.Done():
@@ -763,7 +766,7 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 
 	// handle pending messages
 	pendingProcess := proc.pending
-	proc.pending = make(map[string]*Msg, proc.cfg.N)
+	proc.pending = make(map[types.NodeID]*Msg, proc.cfg.N)
 	proc.eg.Go(func() error {
 		proc.handlePending(pendingProcess)
 		return nil
@@ -824,7 +827,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 
 	if ignored := proc.notifyTracker.OnNotify(ctx, msg); ignored {
 		proc.WithContext(ctx).With().Warning("ignoring notification",
-			log.Stringer("smesher", types.BytesToNodeID(msg.PubKey.Bytes())),
+			log.Stringer("smesher", msg.NodeID),
 		)
 		return
 	}
@@ -923,8 +926,7 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 	}
 
 	// query if identity is active
-	nid := types.BytesToNodeID(proc.signer.PublicKey().Bytes())
-	res, err := proc.oracle.IsIdentityActiveOnConsensusView(ctx, nid, proc.layer)
+	res, err := proc.oracle.IsIdentityActiveOnConsensusView(ctx, proc.signer.NodeID(), proc.layer)
 	if err != nil {
 		logger.With().Error("failed to check own identity for activeness", log.Err(err))
 		return false

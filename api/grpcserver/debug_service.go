@@ -115,7 +115,7 @@ func castEventProposal(ev *events.EventProposal) *pb.Proposal {
 	for _, el := range ev.Proposal.Ballot.EligibilityProofs {
 		proposal.Eligibilities = append(proposal.Eligibilities, &pb.Eligibility{
 			J:         el.J,
-			Signature: el.Sig,
+			Signature: el.Sig[:],
 		})
 	}
 	return proposal

@@ -73,7 +73,7 @@ func createProposal(t *testing.T, vrfSigner *signing.VRFSigner, epoch types.Epoc
 		VRFSignature: sig,
 	}
 	if corruptSignature {
-		msg.VRFSignature[0] ^= sig[0] // invert bits of first byte
+		msg.VRFSignature = vrfSigner.Sign(types.RandomBytes(32))
 	}
 	return msg
 }
@@ -84,12 +84,12 @@ func setEarliestProposalTime(pd *ProtocolDriver, t time.Time) {
 	pd.earliestProposalTime = t
 }
 
-func checkProposed(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, minerPK *signing.PublicKey, expected bool) {
+func checkProposed(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, nodeID types.NodeID, expected bool) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
 	if _, ok := pd.states[epoch]; ok {
-		_, proposed := pd.states[epoch].hasProposed[string(minerPK.Bytes())]
+		_, proposed := pd.states[epoch].hasProposed[nodeID]
 		require.Equal(t, expected, proposed)
 	} else {
 		require.False(t, expected)
@@ -120,12 +120,9 @@ func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-	sig := signer.Sign(signing.BEACON, encoded)
-
+	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	if corruptSignature {
-		msg.Signature = sig[1:]
-	} else {
-		msg.Signature = sig
+		msg.Signature = signer.Sign(signing.BEACON, encoded[1:])
 	}
 	return msg
 }
@@ -158,11 +155,9 @@ func createFollowingVote(t *testing.T, signer *signing.EdSigner, epoch types.Epo
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-	sig := signer.Sign(signing.BEACON, encoded)
+	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	if corruptSignature {
-		msg.Signature = sig[1:]
-	} else {
-		msg.Signature = sig
+		msg.Signature = signer.Sign(signing.BEACON, encoded[1:])
 	}
 	return msg
 }
@@ -237,7 +232,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
-	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart)
+	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 	mockChecker.EXPECT().PassStrictThreshold(gomock.Any()).Return(true)
 	res := tpd.HandleProposal(context.Background(), "peerID", msgBytes1)
 	require.Equal(t, pubsub.ValidationAccept, res)
@@ -249,16 +244,14 @@ func Test_HandleProposal_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
-	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart)
+	// tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart)
 	mockChecker.EXPECT().PassThreshold(gomock.Any()).Return(true)
 	res = tpd.HandleProposal(context.Background(), "peerID", msgBytes2)
 	require.Equal(t, pubsub.ValidationAccept, res)
 
-	var p1 Proposal
-	copy(p1[:], msg1.VRFSignature)
-	var p2 Proposal
-	copy(p2[:], msg2.VRFSignature)
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner1.PublicKey(), true)
+	p1 := ProposalFromVrf(msg1.VRFSignature)
+	p2 := ProposalFromVrf(msg2.VRFSignature)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner1.NodeID(), true)
 	expectedProposals := proposals{
 		valid:            proposalSet{p1: struct{}{}},
 		potentiallyValid: proposalSet{p2: struct{}{}},
@@ -286,7 +279,7 @@ func Test_HandleProposal_Shutdown(t *testing.T) {
 	res := tpd.HandleProposal(context.Background(), "peerID", msgBytes)
 	require.Equal(t, pubsub.ValidationIgnore, res)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 }
 
@@ -316,14 +309,13 @@ func Test_HandleProposal_NotInProtocolStillWorks(t *testing.T) {
 	tpd.setEndProtocol(context.Background())
 	require.False(t, tpd.isInProtocol())
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
-	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart)
+	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 	mockChecker.EXPECT().PassStrictThreshold(gomock.Any()).Return(true)
 	res := tpd.HandleProposal(context.Background(), "peerID", msgBytes)
 	require.Equal(t, pubsub.ValidationAccept, res)
 
-	var p Proposal
-	copy(p[:], msg.VRFSignature)
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), true)
+	p := ProposalFromVrf(msg.VRFSignature)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), true)
 	expectedProposals := proposals{
 		valid: proposalSet{p: struct{}{}},
 	}
@@ -346,7 +338,7 @@ func Test_handleProposal_Corrupted(t *testing.T) {
 	got := tpd.handleProposal(context.Background(), "peerID", msg, time.Now())
 	require.ErrorIs(t, got, errMalformedMessage)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 }
 
@@ -367,10 +359,11 @@ func Test_handleProposal_EpochTooOld(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.ErrorIs(t, got, errUntimelyMessage)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 }
 
@@ -401,19 +394,18 @@ func Test_handleProposal_NextEpoch(t *testing.T) {
 
 	setEarliestProposalTime(tpd.ProtocolDriver, now.Add(-1*time.Second))
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
-	tpd.mClock.EXPECT().LayerToTime((nextEpoch).FirstLayer()).Return(time.Now())
+	tpd.mClock.EXPECT().LayerToTime((nextEpoch).FirstLayer()).Return(time.Now()).AnyTimes()
 	mockChecker.EXPECT().PassStrictThreshold(gomock.Any()).Return(true)
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, now)
 	require.NoError(t, got)
 
 	// nothing added to the current epoch
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 
 	// proposal added to the next epoch
-	var p Proposal
-	copy(p[:], msg.VRFSignature)
-	checkProposed(t, tpd.ProtocolDriver, nextEpoch, vrfSigner.PublicKey(), true)
+	p := ProposalFromVrf(msg.VRFSignature)
+	checkProposed(t, tpd.ProtocolDriver, nextEpoch, vrfSigner.NodeID(), true)
 	expectedProposals := proposals{
 		valid: proposalSet{p: struct{}{}},
 	}
@@ -440,15 +432,16 @@ func Test_handleProposal_NextEpochTooEarly(t *testing.T) {
 	now := time.Now()
 	setEarliestProposalTime(tpd.ProtocolDriver, now.Add(1*time.Second))
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, now)
 	require.ErrorIs(t, got, errUntimelyMessage)
 
 	// nothing added to the current epoch
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 
 	// proposal added to the next epoch
-	checkProposed(t, tpd.ProtocolDriver, nextEpoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, nextEpoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, nextEpoch, proposals{})
 }
 
@@ -469,10 +462,11 @@ func Test_handleProposal_EpochTooFarAhead(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.ErrorIs(t, got, errUntimelyMessage)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 }
 
@@ -504,10 +498,11 @@ func Test_handleProposal_BadVrfSignature(t *testing.T) {
 	tpd.vrfVerifier = mVerifier
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.ErrorIs(t, got, errVRFNotVerified)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 }
 
@@ -536,14 +531,13 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
-	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart)
+	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 	mockChecker.EXPECT().PassStrictThreshold(gomock.Any()).Return(true)
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes1, time.Now())
 	require.NoError(t, got)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), true)
-	var p Proposal
-	copy(p[:], msg1.VRFSignature)
+	p := ProposalFromVrf(msg1.VRFSignature)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), true)
 	expectedProposals := proposals{
 		valid: proposalSet{p: struct{}{}},
 	}
@@ -558,7 +552,7 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 	got = tpd.handleProposal(context.Background(), "peerID", msgBytes2, time.Now())
 	require.ErrorIs(t, got, errAlreadyProposed)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), true)
 	checkProposals(t, tpd.ProtocolDriver, epoch, expectedProposals)
 }
 
@@ -584,19 +578,18 @@ func Test_handleProposal_PotentiallyValid_Timing(t *testing.T) {
 	msg := createProposal(t, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
-	var p Proposal
-	copy(p[:], msg.VRFSignature)
+	p := ProposalFromVrf(msg.VRFSignature)
 	expectedProposals := proposals{
 		potentiallyValid: proposalSet{p: struct{}{}},
 	}
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
-	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart)
+	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 	mockChecker.EXPECT().PassThreshold(gomock.Any()).Return(true)
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.NoError(t, got)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, signer.NodeID(), true)
 	checkProposals(t, tpd.ProtocolDriver, epoch, expectedProposals)
 }
 
@@ -622,20 +615,19 @@ func Test_handleProposal_PotentiallyValid_Threshold(t *testing.T) {
 	msg := createProposal(t, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
-	var p Proposal
-	copy(p[:], msg.VRFSignature)
+	p := ProposalFromVrf(msg.VRFSignature)
 	expectedProposals := proposals{
 		potentiallyValid: proposalSet{p: struct{}{}},
 	}
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
-	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart)
+	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 	mockChecker.EXPECT().PassStrictThreshold(gomock.Any()).Return(false)
 	mockChecker.EXPECT().PassThreshold(gomock.Any()).Return(true)
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.NoError(t, got)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, signer.NodeID(), true)
 	checkProposals(t, tpd.ProtocolDriver, epoch, expectedProposals)
 }
 
@@ -663,11 +655,11 @@ func Test_handleProposal_Invalid_Timing(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
-	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart)
+	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.NoError(t, got)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, signer.NodeID(), true)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 }
 
@@ -695,13 +687,13 @@ func Test_handleProposal_Invalid_threshold(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
-	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart)
+	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 	mockChecker.EXPECT().PassStrictThreshold(gomock.Any()).Return(false)
 	mockChecker.EXPECT().PassThreshold(gomock.Any()).Return(false)
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.NoError(t, got)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, signer.NodeID(), true)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 }
 
@@ -725,17 +717,17 @@ func Test_handleProposal_MinerMissingATX(t *testing.T) {
 	msg := createProposal(t, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
-	var p Proposal
-	copy(p[:], msg.VRFSignature)
+	p := ProposalFromVrf(msg.VRFSignature)
 	expectedProposals := proposals{
 		potentiallyValid: proposalSet{p: struct{}{}},
 	}
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(epochStart).AnyTimes()
 	got := tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.ErrorIs(t, got, errMinerNotActive)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
+	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 
 	id := createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10, epochStart.Add(tpd.config.GracePeriodDuration))
@@ -743,11 +735,10 @@ func Test_handleProposal_MinerMissingATX(t *testing.T) {
 	require.NoError(t, err)
 	tpd.OnAtx(hdr)
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
-	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart)
 	mockChecker.EXPECT().PassThreshold(gomock.Any()).Return(true)
 	got = tpd.handleProposal(context.Background(), "peerID", msgBytes, time.Now())
 	require.NoError(t, got)
-	checkProposed(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, signer.NodeID(), true)
 	checkProposals(t, tpd.ProtocolDriver, epoch, expectedProposals)
 }
 
@@ -773,6 +764,7 @@ func Test_HandleFirstVotes_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	res := tpd.HandleFirstVotes(context.Background(), "peerID", msgBytes)
 	require.Equal(t, pubsub.ValidationAccept, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, true)
@@ -881,6 +873,7 @@ func Test_handleFirstVotes_WrongEpoch(t *testing.T) {
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	got := tpd.handleFirstVotes(context.Background(), "peerID", msgBytes)
 	require.ErrorIs(t, got, errEpochNotActive)
@@ -922,6 +915,7 @@ func Test_handleFirstVotes_TooLate(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	tpd.setRoundInProgress(types.RoundID(1))
 	got := tpd.handleFirstVotes(context.Background(), "peerID", msgBytes)
 	require.ErrorIs(t, got, errUntimelyMessage)
@@ -949,8 +943,9 @@ func Test_HandleFirstVotes_FailedToExtractPK(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleFirstVotes(context.Background(), "peerID", msgBytes)
-	require.Contains(t, got.Error(), "bad signature format")
+	require.Contains(t, got.Error(), "miner ATX not found in previous epoch")
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, false)
 	checkFirstIncomingVotes(t, tpd.ProtocolDriver, epoch, map[types.NodeID]proposalList{})
 }
@@ -975,6 +970,7 @@ func Test_HandleFirstVotes_AlreadyVoted(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleFirstVotes(context.Background(), "peerID", msgBytes)
 	require.NoError(t, got)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, true)
@@ -1012,6 +1008,7 @@ func Test_HandleFirstVotes_MinerMissingATX(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleFirstVotes(context.Background(), "peerID", msgBytes)
 	require.ErrorIs(t, got, errMinerNotActive)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, true)
@@ -1033,6 +1030,7 @@ func Test_HandleFollowingVotes_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	res := tpd.HandleFollowingVotes(context.Background(), "peerID", msgBytes)
 	require.Equal(t, pubsub.ValidationAccept, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, true)
@@ -1168,6 +1166,7 @@ func Test_handleFollowingVotes_TooEarly(t *testing.T) {
 
 	tpd.setRoundInProgress(round - 1)
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleFollowingVotes(context.Background(), "peerID", msgBytes, time.Now())
 	require.ErrorIs(t, got, errUntimelyMessage)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, false)
@@ -1189,8 +1188,9 @@ func Test_handleFollowingVotes_FailedToExtractPK(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleFollowingVotes(context.Background(), "peerID", msgBytes, time.Now())
-	require.Contains(t, got.Error(), "bad signature format")
+	require.Contains(t, got.Error(), "miner ATX not found in previous epoch")
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, false)
 	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }
@@ -1210,6 +1210,7 @@ func Test_handleFollowingVotes_AlreadyVoted(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleFollowingVotes(context.Background(), "peerID", msgBytes, time.Now())
 	require.NoError(t, got)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, true)
@@ -1229,6 +1230,7 @@ func Test_handleFollowingVotes_AlreadyVoted(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got = tpd.handleFollowingVotes(context.Background(), "peerID", msgBytes, time.Now())
 	require.ErrorIs(t, got, errAlreadyVoted)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, true)
@@ -1253,6 +1255,7 @@ func Test_handleFollowingVotes_MinerMissingATX(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleFollowingVotes(context.Background(), "peerID", msgBytes, time.Now())
 	require.ErrorIs(t, got, errMinerNotActive)
 	checkVoted(t, tpd.ProtocolDriver, epoch, miner, round, true)
@@ -1295,6 +1298,7 @@ func Test_handleFollowingVotes_IgnoreUnknownProposal(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleFollowingVotes(context.Background(), "peerID", msgBytes, time.Now())
 	require.NoError(t, got)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, true)

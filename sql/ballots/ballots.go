@@ -12,13 +12,12 @@ import (
 )
 
 func decodeBallot(id types.BallotID, pubkey, body *bytes.Reader, malicious bool) (*types.Ballot, error) {
-	size := pubkey.Len()
-	pubkeyBytes := make([]byte, size)
-	if n, err := pubkey.Read(pubkeyBytes); err != nil {
+	var nodeID types.NodeID
+	if n, err := pubkey.Read(nodeID[:]); err != nil {
 		if err != io.EOF {
 			return nil, fmt.Errorf("copy pubkey: %w", err)
 		}
-	} else if n != size {
+	} else if n != types.NodeIDSize {
 		return nil, errors.New("public key data missing")
 	}
 	ballot := types.Ballot{}
@@ -30,7 +29,7 @@ func decodeBallot(id types.BallotID, pubkey, body *bytes.Reader, malicious bool)
 		return nil, errors.New("ballot data missing")
 	}
 	ballot.SetID(id)
-	ballot.SetSmesherID(types.BytesToNodeID(pubkeyBytes))
+	ballot.SetSmesherID(nodeID)
 	if malicious {
 		ballot.SetMalicious()
 	}
@@ -133,11 +132,11 @@ func IDsInLayer(db sql.Executor, lid types.LayerID) (rst []types.BallotID, err e
 	return rst, err
 }
 
-// CountByPubkeyLayer counts number of ballots in the layer for the pubkey.
-func CountByPubkeyLayer(db sql.Executor, lid types.LayerID, pubkey []byte) (int, error) {
+// CountByPubkeyLayer counts number of ballots in the layer for the nodeID.
+func CountByPubkeyLayer(db sql.Executor, lid types.LayerID, nodeID types.NodeID) (int, error) {
 	rows, err := db.Exec("select 1 from ballots where layer = ?1 and pubkey = ?2;", func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Value))
-		stmt.BindBytes(2, pubkey)
+		stmt.BindBytes(2, nodeID.Bytes())
 	}, nil)
 	if err != nil {
 		return 0, fmt.Errorf("counting layer %s: %w", lid, err)
@@ -185,8 +184,8 @@ func LayerBallotByNodeID(db sql.Executor, lid types.LayerID, nodeID types.NodeID
 	return &ballot, err
 }
 
-// GetRefBallot gets a ref ballot for a layer and a pubkey.
-func GetRefBallot(db sql.Executor, epochID types.EpochID, pubkey []byte) (ballotID types.BallotID, err error) {
+// GetRefBallot gets a ref ballot for a layer and a nodeID.
+func GetRefBallot(db sql.Executor, epochID types.EpochID, nodeID types.NodeID) (ballotID types.BallotID, err error) {
 	firstLayer := epochID.FirstLayer()
 	lastLayer := firstLayer.Add(types.GetLayersPerEpoch()).Sub(1)
 	rows, err := db.Exec(`
@@ -197,7 +196,7 @@ func GetRefBallot(db sql.Executor, epochID types.EpochID, pubkey []byte) (ballot
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(firstLayer.Value))
 			stmt.BindInt64(2, int64(lastLayer.Value))
-			stmt.BindBytes(3, pubkey)
+			stmt.BindBytes(3, nodeID.Bytes())
 		}, func(stmt *sql.Statement) bool {
 			stmt.ColumnBytes(0, ballotID[:])
 			return true

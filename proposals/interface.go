@@ -25,7 +25,7 @@ type ballotDecoder interface {
 }
 
 type vrfVerifier interface {
-	Verify(types.NodeID, []byte, []byte) bool
+	Verify(types.NodeID, []byte, types.VrfSignature) bool
 }
 
 type nonceFetcher interface {

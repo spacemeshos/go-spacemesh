@@ -102,12 +102,12 @@ func NewEdSigner(opts ...EdSignerOptionFunc) (*EdSigner, error) {
 }
 
 // Sign signs the provided message.
-func (es *EdSigner) Sign(d domain, m []byte) []byte {
+func (es *EdSigner) Sign(d domain, m []byte) types.EdSignature {
 	msg := make([]byte, 0, len(es.prefix)+1+len(m))
 	msg = append(msg, es.prefix...)
 	msg = append(msg, byte(d))
 	msg = append(msg, m...)
-	return ed25519.Sign(es.priv, msg)
+	return *(*[types.EdSignatureSize]byte)(ed25519.Sign(es.priv, msg))
 }
 
 // NodeID returns the node ID of the signer.

@@ -25,7 +25,7 @@ func Test_CertifyMessage(t *testing.T) {
 			LayerID:        types.NewLayerID(11),
 			BlockID:        types.RandomBlockID(),
 			EligibilityCnt: 2,
-			Proof:          []byte("not a fraud"),
+			Proof:          types.RandomVrfSignature(),
 		},
 	}
 	signer, err := signing.NewEdSigner()
@@ -41,7 +41,7 @@ func Test_CertifyMessage(t *testing.T) {
 	require.NoError(t, err)
 	nodeId, err := pke.ExtractNodeID(signing.HARE, decoded.Bytes(), decoded.Signature)
 	require.NoError(t, err)
-	require.Equal(t, signer.PublicKey().Bytes(), nodeId.Bytes())
+	require.Equal(t, signer.NodeID(), nodeId)
 }
 
 func Test_BlockIDsToHashes(t *testing.T) {

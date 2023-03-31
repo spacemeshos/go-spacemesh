@@ -43,7 +43,7 @@ func TestVerify(t *testing.T) {
 	wallet := New(spawn)
 
 	t.Run("Invalid", func(t *testing.T) {
-		buf64 := types.Bytes64{}
+		buf64 := types.EdSignature{}
 		require.False(t, wallet.Verify(&core.Context{}, buf64[:], scale.NewDecoder(bytes.NewReader(buf64[:]))))
 	})
 	t.Run("Empty", func(t *testing.T) {

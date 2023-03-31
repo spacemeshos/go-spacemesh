@@ -80,8 +80,11 @@ func Test_SignatureVerification(t *testing.T) {
 	challengeBytes, err := codec.Encode(&challenge)
 	req.NoError(err)
 
+	var sig types.EdSignature
+	sig[types.EdSignatureSize-1] = 0xff
+
 	verifier := activation.NewChallengeVerifier(atxProvider, extractor, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
-	_, err = verifier.Verify(context.Background(), challengeBytes, types.RandomBytes(32))
+	_, err = verifier.Verify(context.Background(), challengeBytes, sig)
 	req.ErrorIs(err, activation.ErrSignatureInvalid)
 }
 
@@ -90,11 +93,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 	t.Parallel()
 	req := require.New(t)
 
-	pubKey, privKey, err := ed25519.GenerateKey(nil)
-	req.NoError(err)
-	nodeID := types.BytesToNodeID(pubKey)
-
-	signer, err := signing.NewEdSigner(signing.WithPrivateKey(privKey))
+	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
 	sigVerifier, err := signing.NewPubKeyExtractor()
@@ -102,7 +101,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	postConfig, opts := getTestConfig(t)
-	mgr, err := activation.NewPostSetupManager(nodeID, postConfig, logtest.New(t), cdb, goldenATXID)
+	mgr, err := activation.NewPostSetupManager(signer.NodeID(), postConfig, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
 	// Create data.
@@ -131,7 +130,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 		result, err := verifier.Verify(context.Background(), challengeBytes, signer.Sign(signing.POET, challengeBytes))
 		req.NoError(err)
 		req.Equal(challenge.Hash(), result.Hash)
-		req.EqualValues(pubKey, result.NodeID.Bytes())
+		req.EqualValues(signer.NodeID(), result.NodeID)
 	})
 
 	t.Run("invalid initial NIPostChallenge", func(t *testing.T) {

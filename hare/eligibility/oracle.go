@@ -211,11 +211,11 @@ func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.
 	return w, nil
 }
 
-func calcVrfFrac(vrfSig []byte) fixed.Fixed {
+func calcVrfFrac(vrfSig types.VrfSignature) fixed.Fixed {
 	return fixed.FracFromBytes(vrfSig[:8])
 }
 
-func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, nonce types.VRFPostIndex, vrfSig []byte) (n int, p, vrfFrac fixed.Fixed, done bool, err error) {
+func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, nonce types.VRFPostIndex, vrfSig types.VrfSignature) (n int, p, vrfFrac fixed.Fixed, done bool, err error) {
 	logger := o.WithContext(ctx).WithFields(
 		layer,
 		log.Stringer("smesher", id),
@@ -294,7 +294,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 
 // Validate validates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is the role
 // proof and assuming commSize as the expected committee size.
-func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
+func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig types.VrfSignature, eligibilityCount uint16) (bool, error) {
 	nonce, err := o.nonceFetcher.VRFNonce(id, layer.GetEpoch())
 	if err != nil {
 		o.Log.WithContext(ctx).With().Warning("failed to find nonce for node",
@@ -341,7 +341,7 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32
 // CalcEligibility calculates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is
 // the role proof and assuming commSize as the expected committee size.
 func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int,
-	id types.NodeID, nonce types.VRFPostIndex, vrfSig []byte,
+	id types.NodeID, nonce types.VRFPostIndex, vrfSig types.VrfSignature,
 ) (uint16, error) {
 	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, nonce, vrfSig)
 	if done {
@@ -378,10 +378,10 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 }
 
 // Proof returns the role proof for the current Layer & Round.
-func (o *Oracle) Proof(ctx context.Context, nonce types.VRFPostIndex, layer types.LayerID, round uint32) ([]byte, error) {
+func (o *Oracle) Proof(ctx context.Context, nonce types.VRFPostIndex, layer types.LayerID, round uint32) (types.VrfSignature, error) {
 	msg, err := o.buildVRFMessage(ctx, nonce, layer, round)
 	if err != nil {
-		return nil, err
+		return types.EmptyVrfSignature, err
 	}
 	return o.vrfSigner.Sign(msg), nil
 }
