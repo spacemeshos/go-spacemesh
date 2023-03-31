@@ -392,15 +392,15 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 
 func TestGetATXs(t *testing.T) {
 	atxs := genATXs(t, 2)
-	atxIDs := types.ToATXIDs(atxs)
 	f := createFetch(t)
-	f.mAtxH.EXPECT().HandleAtxData(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(atxIDs))
+	f.mAtxH.EXPECT().HandleAtxData(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(atxs))
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.GetAtxs(context.TODO(), atxIDs))
+	atxIDs := types.ToATXIDs(atxs)
+	require.NoError(t, f.GetAtxs(context.Background(), atxIDs))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }
