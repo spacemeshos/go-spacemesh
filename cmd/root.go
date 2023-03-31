@@ -249,6 +249,12 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().DurationVar(&cfg.POET.GracePeriod, "grace-period",
 		cfg.POET.GracePeriod, "propagation time for ATXs in the network")
 
+	/**======================== bootstrap data updater Flags ========================== **/
+	cmd.PersistentFlags().StringVar(&cfg.Bootstrap.URL, "bootstrap-url",
+		cfg.Bootstrap.URL, "the url to query bootstrap data update")
+	cmd.PersistentFlags().StringVar(&cfg.Bootstrap.Version, "bootstrap-version",
+		cfg.Bootstrap.Version, "the update version of the bootstrap data")
+
 	// Bind Flags to config
 	err := viper.BindPFlags(cmd.PersistentFlags())
 	if err != nil {

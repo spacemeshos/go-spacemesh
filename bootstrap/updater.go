@@ -52,7 +52,7 @@ var (
 )
 
 type Config struct {
-	URL     string `mapstructure:"bootstrap-uri"`
+	URL     string `mapstructure:"bootstrap-url"`
 	Version string `mapstructure:"bootstrap-version"`
 
 	DataDir   string
@@ -264,7 +264,7 @@ func query(ctx context.Context, client *http.Client, resource *url.URL) ([]byte,
 }
 
 func validate(cfg Config, source string, data []byte, lastId uint32) (*VerifiedUpdate, error) {
-	if err := validateSchema(data); err != nil {
+	if err := ValidateSchema(data); err != nil {
 		return nil, err
 	}
 
@@ -280,8 +280,8 @@ func validate(cfg Config, source string, data []byte, lastId uint32) (*VerifiedU
 	return verified, nil
 }
 
-func validateSchema(data []byte) error {
-	sch, err := jsonschema.Compile(schemaFile)
+func ValidateSchema(data []byte) error {
+	sch, err := jsonschema.CompileString(schemaFile, Schema)
 	if err != nil {
 		return fmt.Errorf("compile bootstrap json schema: %w", err)
 	}

@@ -147,6 +147,10 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
 			ff = reflect.TypeOf(appCFG.Tortoise)
 			elem = reflect.ValueOf(&appCFG.Tortoise).Elem()
 			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appCFG.Bootstrap)
+			elem = reflect.ValueOf(&appCFG.Bootstrap).Elem()
+			assignFields(ff, elem, name)
 		}
 	})
 	// check list of requested GRPC services (if any)
