@@ -232,7 +232,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, poet PoetProvi
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoW params", source: err}
 	}
 	logger.Debug("Doing Pow with params: %v", powParams)
-	nonce, err := shared.SubmitPow(ctx, powParams.Challenge, challenge, nodeID.Bytes(), powParams.Difficulty)
+	nonce, err := shared.FindSubmitPowNonce(ctx, powParams.Challenge, challenge, nodeID.Bytes(), powParams.Difficulty)
 	if err != nil {
 		return nil, fmt.Errorf("running poet PoW: %w", err)
 	}
