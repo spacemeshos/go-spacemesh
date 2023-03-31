@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/poet/shared"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -226,13 +227,16 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, poet PoetProvi
 	}
 	logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(poetServiceID.ServiceID)))
 
-	logger.Debug("Querying for poet PoW parameters")
+	logger.Debug("querying for poet PoW parameters")
 	powParams, err := poet.PowParams(ctx)
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoW params", source: err}
 	}
-	logger.Debug("Doing Pow with params: %v", powParams)
+
+	logger.Debug("doing Pow with params: %v", powParams)
+	startTime := time.Now()
 	nonce, err := shared.FindSubmitPowNonce(ctx, powParams.Challenge, challenge, nodeID.Bytes(), powParams.Difficulty)
+	metrics.PoetPowDuration.Set(float64(time.Since(startTime).Nanoseconds()))
 	if err != nil {
 		return nil, fmt.Errorf("running poet PoW: %w", err)
 	}
