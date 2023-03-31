@@ -375,7 +375,7 @@ func getVerifiedLayer(ctx context.Context, node *cluster.NodeClient) (*pb.Layer,
 func updatePoetServers(ctx context.Context, node *cluster.NodeClient, targets []string) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	svc := pb.NewNodeServiceClient(node)
+	svc := pb.NewSmesherServiceClient(node)
 	resp, err := svc.UpdatePoetServers(ctx, &pb.UpdatePoetServersRequest{Urls: targets})
 	if err != nil {
 		return false, err

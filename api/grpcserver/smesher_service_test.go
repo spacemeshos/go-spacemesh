@@ -18,6 +18,7 @@ func TestPostConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	postSetupProvider := activation.NewMockpostSetupProvider(ctrl)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
+
 	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second)
 
 	postConfig := activation.PostConfig{

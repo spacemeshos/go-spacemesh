@@ -722,3 +722,17 @@ func (mr *MockSmeshingProviderMockRecorder) StopSmeshing(arg0 interface{}) *gomo
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopSmeshing", reflect.TypeOf((*MockSmeshingProvider)(nil).StopSmeshing), arg0)
 }
+
+// UpdatePoETServers mocks base method.
+func (m *MockSmeshingProvider) UpdatePoETServers(ctx context.Context, endpoints []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePoETServers", ctx, endpoints)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdatePoETServers indicates an expected call of UpdatePoETServers.
+func (mr *MockSmeshingProviderMockRecorder) UpdatePoETServers(ctx, endpoints interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePoETServers", reflect.TypeOf((*MockSmeshingProvider)(nil).UpdatePoETServers), ctx, endpoints)
+}

@@ -481,7 +481,13 @@ func (p *PostAPIMock) Config() activation.PostConfig {
 }
 
 // SmeshingAPIMock is a mock for Smeshing API.
-type SmeshingAPIMock struct{}
+type SmeshingAPIMock struct {
+	UpdatePoETErr error
+}
+
+func (s *SmeshingAPIMock) UpdatePoETServers(context.Context, []string) error {
+	return s.UpdatePoETErr
+}
 
 func (*SmeshingAPIMock) Smeshing() bool {
 	return false
@@ -534,14 +540,6 @@ type SyncerMock struct {
 
 func (s *SyncerMock) IsSynced(context.Context) bool { return s.isSynced }
 func (s *SyncerMock) Start(context.Context)         { s.startCalled = true }
-
-type ActivationAPIMock struct {
-	UpdatePoETErr error
-}
-
-func (a *ActivationAPIMock) UpdatePoETServers(context.Context, []string) error {
-	return a.UpdatePoETErr
-}
 
 func launchServer(tb testing.TB, cfg config.Config, services ...ServiceAPI) func() {
 	grpcService := New(cfg.PublicListener)
@@ -615,12 +613,11 @@ func TestNewServersConfig(t *testing.T) {
 func TestNodeService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	syncer := SyncerMock{}
-	atxapi := &ActivationAPIMock{}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	grpcService := NewNodeService(ctx, &networkMock, meshAPI, &genTime, &syncer, atxapi)
+	grpcService := NewNodeService(ctx, &networkMock, meshAPI, &genTime, &syncer)
 	shutDown := launchServer(t, cfg, grpcService)
 	defer shutDown()
 
@@ -694,36 +691,6 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, layerLatest.Uint32(), res.Status.SyncedLayer.Number)
 			require.Equal(t, layerCurrent.Uint32(), res.Status.TopLayer.Number)
 			require.Equal(t, layerVerified.Uint32(), res.Status.VerifiedLayer.Number)
-		}},
-		{"SyncStart", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			require.Equal(t, false, syncer.startCalled, "Start() not yet called on syncer")
-			req := &pb.SyncStartRequest{}
-			res, err := c.SyncStart(context.Background(), req)
-			require.Nil(t, res)
-			require.ErrorIs(t, err, status.Errorf(codes.Unimplemented, "UNIMPLEMENTED"))
-		}},
-		{"Shutdown", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			req := &pb.ShutdownRequest{}
-			res, err := c.Shutdown(context.Background(), req)
-			require.Nil(t, res)
-			require.ErrorIs(t, err, status.Errorf(codes.Unimplemented, "UNIMPLEMENTED"))
-		}},
-		{"UpdatePoetServer", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			atxapi.UpdatePoETErr = nil
-			res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
-			require.NoError(t, err)
-			require.EqualValues(t, res.Status.Code, code.Code_OK)
-		}},
-		{"UpdatePoetServerUnavailable", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			atxapi.UpdatePoETErr = activation.ErrPoetServiceUnstable
-			urls := []string{"test"}
-			res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: urls})
-			require.Nil(t, res)
-			require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", atxapi.UpdatePoETErr))
 		}},
 		// NOTE: ErrorStream and StatusStream have comprehensive, E2E tests in cmd/node/node_test.go.
 	}
@@ -1018,7 +985,8 @@ func TestGlobalStateService(t *testing.T) {
 
 func TestSmesherService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	svc := NewSmesherService(&PostAPIMock{}, &SmeshingAPIMock{}, 10*time.Millisecond)
+	smeshingAPI := &SmeshingAPIMock{}
+	svc := NewSmesherService(&PostAPIMock{}, smeshingAPI, 10*time.Millisecond)
 	shutDown := launchServer(t, cfg, svc)
 	defer shutDown()
 
@@ -1138,6 +1106,21 @@ func TestSmesherService(t *testing.T) {
 		cancel()
 		_, err = stream.Recv()
 		require.ErrorContains(t, err, context.Canceled.Error())
+	})
+	t.Run("UpdatePoetServer", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		smeshingAPI.UpdatePoETErr = nil
+		res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
+		require.NoError(t, err)
+		require.EqualValues(t, res.Status.Code, code.Code_OK)
+	})
+	t.Run("UpdatePoetServerUnavailable", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		smeshingAPI.UpdatePoETErr = activation.ErrPoetServiceUnstable
+		urls := []string{"test"}
+		res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: urls})
+		require.Nil(t, res)
+		require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", smeshingAPI.UpdatePoETErr))
 	})
 }
 
@@ -2410,7 +2393,7 @@ func TestMultiService(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	svc1 := NewNodeService(ctx, &networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
+	svc1 := NewNodeService(ctx, &networkMock, meshAPI, &genTime, &SyncerMock{})
 	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, cfg, svc1, svc2)
 	defer shutDown()
@@ -2458,7 +2441,7 @@ func TestJsonApi(t *testing.T) {
 	shutDown()
 
 	// enable services and try again
-	svc1 := NewNodeService(context.Background(), &networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
+	svc1 := NewNodeService(context.Background(), &networkMock, meshAPI, &genTime, &SyncerMock{})
 	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	shutDown = launchServer(t, cfg, svc1, svc2)
 	defer shutDown()
@@ -2797,11 +2780,11 @@ func TestVMAccountUpdates(t *testing.T) {
 func TestMeshService_EpochStream(t *testing.T) {
 	logtest.SetupGlobal(t)
 	srv := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
-	t.Cleanup(launchServer(t, srv))
+	t.Cleanup(launchServer(t, cfg, srv))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	client := pb.NewMeshServiceClient(conn)
 
 	stream, err := client.EpochStream(ctx, &pb.EpochStreamRequest{Epoch: 3})

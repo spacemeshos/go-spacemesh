@@ -789,7 +789,7 @@ func (app *App) initService(ctx context.Context, svc apiconf.Service) (grpcserve
 	case apiconf.Mesh:
 		return grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal)), nil
 	case apiconf.Node:
-		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer, app.atxBuilder), nil
+		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer), nil
 	case apiconf.Smesher:
 		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval), nil
 	case apiconf.Transaction:

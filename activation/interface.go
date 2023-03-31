@@ -75,4 +75,5 @@ type SmeshingProvider interface {
 	SmesherID() types.NodeID
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
+	UpdatePoETServers(ctx context.Context, endpoints []string) error
 }

@@ -60,7 +60,7 @@ type MeshAPI interface {
 }
 
 // NOTE that mockgen doesn't use source-mode to avoid generating mocks for all interfaces in this file.
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go . NetworkIdentity,AtxProvider,PostSetupProvider,ChallengeVerifier
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go . NetworkIdentity,AtxProvider,PostSetupProvider,ChallengeVerifier,ActivationAPI
 
 // NetworkIdentity interface.
 type NetworkIdentity interface {
@@ -77,11 +77,6 @@ type PostSetupProvider interface {
 	ComputeProviders() []activation.PostSetupComputeProvider
 	Benchmark(p activation.PostSetupComputeProvider) (int, error)
 	Config() activation.PostConfig
-}
-
-// ActivationAPI is an API for activation module.
-type ActivationAPI interface {
-	UpdatePoETServers(ctx context.Context, endpoints []string) error
 }
 
 // AtxProvider is used by ActivationService to get ATXes.
