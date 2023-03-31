@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/libp2p/go-libp2p/core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
@@ -282,7 +283,7 @@ func Test_multipleCPs(t *testing.T) {
 	}
 
 	var pubsubs []*pubsub.PubSub
-	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
+	scMap := NewSharedClock(totalNodes*totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
 	outputs := make([]map[types.LayerID]LayerOutput, totalNodes)
 	var outputsWaitGroup sync.WaitGroup
 	for i := 0; i < totalNodes; i++ {
@@ -559,21 +560,22 @@ type SimRoundClock struct {
 }
 
 func (c *SimRoundClock) Register(protocol string, handler pubsub.GossipHandler) {
-	c.s.Register(protocol, handler)
+	c.s.Register(
+		protocol,
+		func(ctx context.Context, id peer.ID, msg []byte) pubsub.ValidationResult {
+			instanceID, cnt := extractInstanceID(msg)
+			res := handler(ctx, id, msg)
+			c.m.Lock()
+			clock := c.clocks[instanceID]
+			clock.IncMessages(int(cnt))
+			c.m.Unlock()
+			return res
+		},
+	)
 }
 
 func (c *SimRoundClock) Publish(ctx context.Context, protocol string, payload []byte) error {
-	instanceID, cnt := extractInstanceID(payload)
-
-	c.m.Lock()
-	clock := c.clocks[instanceID]
-	clock.IncMessages(int(cnt))
-	c.m.Unlock()
-
-	if err := c.s.Publish(ctx, protocol, payload); err != nil {
-		return fmt.Errorf("failed to broadcast: %w", err)
-	}
-	return nil
+	return c.s.Publish(ctx, protocol, payload)
 }
 
 func extractInstanceID(payload []byte) (types.LayerID, uint16) {
