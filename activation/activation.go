@@ -562,19 +562,10 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 		return nil, fmt.Errorf("%w: poet round has already started at %s (now: %s)", ErrATXChallengeExpired, poetRoundStart, now)
 	}
 
-	poetChallenge := types.PoetChallenge{
-		NIPostChallenge: challenge,
-		NumUnits:        b.postSetupProvider.LastOpts().NumUnits,
-	}
-	if challenge.PrevATXID == types.EmptyATXID {
-		poetChallenge.InitialPost = b.initialPost
-		poetChallenge.InitialPostMetadata = b.initialPostMeta
-	}
-
 	// NiPoST must be ready before start of the next poet round.
 	buildingNipostCtx, cancel := context.WithDeadline(ctx, nextPoetRoundStart)
 	defer cancel()
-	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(buildingNipostCtx, &poetChallenge)
+	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(buildingNipostCtx, challenge)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}

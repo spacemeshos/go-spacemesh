@@ -158,9 +158,8 @@ func (p *RoundEnd) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 // PoetRound includes the PoET's round ID.
 type PoetRound struct {
-	ID            string `scale:"max=32"`
-	ChallengeHash Hash32
-	End           RoundEnd
+	ID  string `scale:"max=32"`
+	End RoundEnd
 }
 
 // ProcessingError is a type of error (implements the error interface) that is used to differentiate processing errors

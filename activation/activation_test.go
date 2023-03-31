@@ -184,7 +184,7 @@ func publishAtx(
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error) {
+		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, time.Duration, error) {
 			*currLayer = currLayer.Add(buildNIPostLayerDuration)
 			return newNIPostWithChallenge(challenge.Hash(), []byte("66666")), 0, nil
 		})
@@ -493,7 +493,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error) {
+		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, time.Duration, error) {
 			currLayer = currLayer.Add(layersPerEpoch)
 			return newNIPostWithChallenge(challenge.Hash(), []byte("66666")), 0, nil
 		})
@@ -586,7 +586,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error) {
+		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, time.Duration, error) {
 			currLayer = currLayer.Add(layersPerEpoch)
 			return newNIPostWithChallenge(challenge.Hash(), []byte("66666")), 0, nil
 		})
@@ -722,7 +722,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
 
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, challenge *types.PoetChallenge) (*types.NIPost, int, error) {
+		DoAndReturn(func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, int, error) {
 			currentLayer = currentLayer.Add(5)
 			return newNIPostWithChallenge(challenge.Hash(), poetBytes), 0, nil
 		})
@@ -816,7 +816,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	tab.mpost.EXPECT().VRFNonce().Times(1)
 
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, challenge *types.PoetChallenge) (*types.NIPost, int, error) {
+		DoAndReturn(func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, int, error) {
 			currentLayer = currentLayer.Add(layersPerEpoch)
 			return newNIPostWithChallenge(challenge.Hash(), poetBytes), 0, nil
 		})
@@ -953,7 +953,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error) {
+		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, time.Duration, error) {
 			currLayer = currLayer.Add(layersPerEpoch)
 			return newNIPostWithChallenge(challenge.Hash(), []byte("66666")), 0, nil
 		})
@@ -1062,7 +1062,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	builderConfirmation := make(chan struct{})
 	// TODO(dshulyak) maybe measure time difference between attempts. It should be no less than retryInterval
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error) {
+		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, time.Duration, error) {
 			tries++
 			if tries == expectedTries {
 				close(builderConfirmation)

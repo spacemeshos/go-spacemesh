@@ -2544,28 +2544,6 @@ func TestDebugService(t *testing.T) {
 	})
 }
 
-func TestGatewayService(t *testing.T) {
-	logtest.SetupGlobal(t)
-	ctrl := gomock.NewController(t)
-	verifier := mocks.NewMockChallengeVerifier(ctrl)
-	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(&activation.ChallengeVerificationResult{}, nil)
-
-	svc := NewGatewayService(verifier)
-	shutDown := launchServer(t, svc)
-	defer shutDown()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
-	c := pb.NewGatewayServiceClient(conn)
-
-	req := &pb.VerifyChallengeRequest{}
-	_, err := c.VerifyChallenge(ctx, req)
-	s, ok := status.FromError(err)
-	require.True(t, ok)
-	require.Equal(t, codes.OK, s.Code())
-}
-
 func TestEventsReceived(t *testing.T) {
 	logtest.SetupGlobal(t)
 	events.CloseEventReporter()
