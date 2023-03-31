@@ -899,7 +899,9 @@ func (app *App) stopServices(ctx context.Context) {
 		_ = app.grpcAPIService.Close()
 	}
 
-	app.updater.Close()
+	if app.updater != nil {
+		app.updater.Close()
+	}
 
 	if app.proposalBuilder != nil {
 		app.proposalBuilder.Close()
