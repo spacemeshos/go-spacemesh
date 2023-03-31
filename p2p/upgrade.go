@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -111,6 +112,16 @@ func Upgrade(h host.Host, genesisID types.Hash20, opts ...Opt) (*Host, error) {
 		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
 	}
 	fh.hs = handshake.New(fh, genesisID, handshake.WithLog(fh.logger))
+	if fh.nodeReporter != nil {
+		fh.Network().Notify(&network.NotifyBundle{
+			ConnectedF: func(network.Network, network.Conn) {
+				fh.nodeReporter()
+			},
+			DisconnectedF: func(network.Network, network.Conn) {
+				fh.nodeReporter()
+			},
+		})
+	}
 	return fh, nil
 }
 
