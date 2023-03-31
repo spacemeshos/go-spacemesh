@@ -53,8 +53,8 @@ func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publish
 		},
 		NumUnits: defaultAtxWeight,
 	}}
-	atx.SetID(&id)
-	atx.SetNodeID(&nodeID)
+	atx.SetID(id)
+	atx.SetNodeID(nodeID)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(0, 1)
@@ -197,7 +197,7 @@ func TestOracle_OwnATXNotFound(t *testing.T) {
 	lid := types.NewLayerID(layersPerEpoch * 3)
 	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
 	assert.ErrorIs(t, err, errMinerHasNoATXInPreviousEpoch)
-	assert.Equal(t, *types.EmptyATXID, atxID)
+	assert.Equal(t, types.EmptyATXID, atxID)
 	assert.Len(t, activeSet, 0)
 	assert.Len(t, proofs, 0)
 }

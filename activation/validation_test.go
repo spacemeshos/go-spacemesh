@@ -32,7 +32,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	initOpts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	nodeId := types.BytesToNodeID(make([]byte, 32))
-	commitmentAtxId := *types.EmptyATXID
+	commitmentAtxId := types.EmptyATXID
 
 	init, err := initialization.NewInitializer(
 		initialization.WithNodeId(nodeId.Bytes()),
@@ -100,7 +100,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Indices: make([]byte, 10),
 		}
 
-		challenge := newChallenge(0, *types.EmptyATXID, posAtxId, types.NewLayerID(1012), &commitmentAtxId)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.NewLayerID(1012), &commitmentAtxId)
 		challenge.InitialPostIndices = initialPost.Indices
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -123,7 +123,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Indices: make([]byte, 10),
 		}
 
-		challenge := newChallenge(0, *types.EmptyATXID, posAtxId, types.NewLayerID(2), &goldenATXID)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.NewLayerID(2), &goldenATXID)
 		challenge.InitialPostIndices = initialPost.Indices
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -146,7 +146,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		t.Parallel()
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(0, *types.EmptyATXID, posAtxId, types.NewLayerID(2), &goldenATXID)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.NewLayerID(2), &goldenATXID)
 
 		err := v.InitialNIPostChallenge(&challenge, nil, goldenATXID, nil)
 		require.EqualError(t, err, "no prevATX declared, but initial Post indices is not included in challenge")
@@ -161,7 +161,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Indices: make([]byte, 10),
 		}
 
-		challenge := newChallenge(0, *types.EmptyATXID, posAtxId, types.NewLayerID(2), &goldenATXID)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.NewLayerID(2), &goldenATXID)
 		challenge.InitialPostIndices = make([]byte, 10)
 		challenge.InitialPostIndices[0] = 1
 
@@ -178,7 +178,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Indices: make([]byte, 10),
 		}
 
-		challenge := newChallenge(0, *types.EmptyATXID, posAtxId, types.NewLayerID(2), nil)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.NewLayerID(2), nil)
 		challenge.InitialPostIndices = initialPost.Indices
 
 		err := v.InitialNIPostChallenge(&challenge, nil, goldenATXID, initialPost.Indices)
@@ -195,7 +195,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Indices: make([]byte, 10),
 		}
 
-		challenge := newChallenge(0, *types.EmptyATXID, posAtxId, types.NewLayerID(1012), &commitmentAtxId)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.NewLayerID(1012), &commitmentAtxId)
 		challenge.InitialPostIndices = initialPost.Indices
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -443,7 +443,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 
-		err := v.PositioningAtx(types.EmptyATXID, atxProvider, goldenAtxId, types.NewLayerID(1012), layersPerEpochBig)
+		err := v.PositioningAtx(&types.EmptyATXID, atxProvider, goldenAtxId, types.NewLayerID(1012), layersPerEpochBig)
 		require.EqualError(t, err, "empty positioning atx")
 	})
 

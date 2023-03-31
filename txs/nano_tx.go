@@ -66,7 +66,7 @@ func (n *NanoTX) Better(other *NanoTX, blockSeed []byte) bool {
 
 // UpdateLayerMaybe updates the layer of a transaction if it's lower than the current value.
 func (n *NanoTX) UpdateLayerMaybe(lid types.LayerID, bid types.BlockID) {
-	if n.Layer == (types.LayerID{}) || lid.Before(n.Layer) {
+	if n.Layer == 0 || lid.Before(n.Layer) {
 		n.UpdateLayer(lid, bid)
 	}
 }

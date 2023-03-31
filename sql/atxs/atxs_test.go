@@ -401,7 +401,7 @@ func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedAct
 
 	activation.SignAndFinalizeAtx(signer, atx)
 	nodeID := signer.NodeID()
-	atx.SetNodeID(&nodeID)
+	atx.SetNodeID(nodeID)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 	return atx.Verify(0, 1)
@@ -456,7 +456,7 @@ func TestPositioningID(t *testing.T) {
 				require.NoError(t, err)
 				require.NoError(t, activation.SignAndFinalizeAtx(sig, full))
 				nodeID := sig.NodeID()
-				full.SetNodeID(&nodeID)
+				full.SetNodeID(nodeID)
 
 				full.SetEffectiveNumUnits(full.NumUnits)
 				full.SetReceived(time.Now())

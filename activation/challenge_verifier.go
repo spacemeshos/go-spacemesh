@@ -98,7 +98,7 @@ func (v *challengeVerifier) verifyChallenge(ctx context.Context, challenge *type
 		}
 	}
 
-	if challenge.PrevATXID == *types.EmptyATXID {
+	if challenge.PrevATXID == types.EmptyATXID {
 		return v.verifyInitialChallenge(ctx, challenge, nodeID)
 	} else {
 		return v.verifyNonInitialChallenge(ctx, challenge, nodeID)

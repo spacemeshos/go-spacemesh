@@ -130,7 +130,7 @@ func createModifiedATXs(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerI
 		address := types.GenerateAddress(signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(
 			types.NIPostChallenge{PubLayerID: lid},
-			&nodeID,
+			nodeID,
 			address,
 			nil,
 			numUnit,
@@ -609,7 +609,7 @@ func Test_generateBlock_EmptyATXID(t *testing.T) {
 	plist := createProposals(t, tg.cdb, layerID, types.Hash32{}, signers, activeSet, txIDs)
 	// set the last proposal ID to be empty
 	types.SortProposals(plist)
-	plist[numProposals-1].AtxID = *types.EmptyATXID
+	plist[numProposals-1].AtxID = types.EmptyATXID
 	block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, plist)
 	require.ErrorIs(t, err, errInvalidATXID)
 	require.False(t, executed)

@@ -118,7 +118,7 @@ func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *si
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PubLayerID: lid},
-		&nodeID,
+		nodeID,
 		types.Address{},
 		nil,
 		numUnits,

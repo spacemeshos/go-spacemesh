@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 

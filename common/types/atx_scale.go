@@ -198,3 +198,56 @@ func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error)
 	}
 	return total, nil
 }
+
+func (t *NIPost) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeOption(enc, t.Challenge)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeOption(enc, t.Post)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeOption(enc, t.PostMetadata)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *NIPost) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeOption[Hash32](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Challenge = field
+	}
+	{
+		field, n, err := scale.DecodeOption[Post](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Post = field
+	}
+	{
+		field, n, err := scale.DecodeOption[PostMetadata](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.PostMetadata = field
+	}
+	return total, nil
+}

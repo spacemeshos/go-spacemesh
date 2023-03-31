@@ -291,7 +291,7 @@ func TestBuilder_HandleLayer_EligibilityError(t *testing.T) {
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	errUnknown := errors.New("unknown")
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(*types.EmptyATXID, nil, nil, errUnknown)
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(types.EmptyATXID, nil, nil, errUnknown)
 
 	require.ErrorIs(t, b.handleLayer(context.Background(), layerID), errUnknown)
 }

@@ -35,7 +35,7 @@ func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
 		PubLayerID: types.NewLayerID(1),
 	}
 	nodeID := sig.NodeID()
-	atx := types.NewActivationTx(challenge, &nodeID, types.Address{}, nil, 1, nil, nil)
+	atx := types.NewActivationTx(challenge, nodeID, types.Address{}, nil, 1, nil, nil)
 	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())

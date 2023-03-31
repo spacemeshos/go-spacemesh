@@ -81,15 +81,15 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon, 
 	atx, err := o.getOwnEpochATX(epoch)
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
-			return *types.EmptyATXID, nil, nil, errMinerHasNoATXInPreviousEpoch
+			return types.EmptyATXID, nil, nil, errMinerHasNoATXInPreviousEpoch
 		}
-		return *types.EmptyATXID, nil, nil, fmt.Errorf("failed to get valid atx for node for target epoch %d: %w", epoch, err)
+		return types.EmptyATXID, nil, nil, fmt.Errorf("failed to get valid atx for node for target epoch %d: %w", epoch, err)
 	}
 
 	newProofs, activeSet, err := o.calcEligibilityProofs(atx.GetWeight(), epoch, beacon, nonce)
 	if err != nil {
 		logger.With().Error("failed to calculate eligibility proofs", log.Err(err))
-		return *types.EmptyATXID, nil, nil, err
+		return types.EmptyATXID, nil, nil, err
 	}
 
 	o.cache = oracleCache{

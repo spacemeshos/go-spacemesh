@@ -566,7 +566,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 		NIPostChallenge: challenge,
 		NumUnits:        b.postSetupProvider.LastOpts().NumUnits,
 	}
-	if challenge.PrevATXID == *types.EmptyATXID {
+	if challenge.PrevATXID == types.EmptyATXID {
 		poetChallenge.InitialPost = b.initialPost
 		poetChallenge.InitialPostMetadata = b.initialPostMeta
 	}
@@ -610,7 +610,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 
 	var initialPost *types.Post
 	var nonce *types.VRFPostIndex
-	if challenge.PrevATXID == *types.EmptyATXID {
+	if challenge.PrevATXID == types.EmptyATXID {
 		initialPost = b.initialPost
 		nonce, err = b.postSetupProvider.VRFNonce()
 		if err != nil {
@@ -620,7 +620,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 
 	atx := types.NewActivationTx(
 		*challenge,
-		&b.nodeID,
+		b.nodeID,
 		b.Coinbase(),
 		nipost,
 		b.postSetupProvider.LastOpts().NumUnits,

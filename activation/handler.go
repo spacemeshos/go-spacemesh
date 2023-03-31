@@ -178,7 +178,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		err           error
 	)
 
-	if atx.PrevATXID == *types.EmptyATXID {
+	if atx.PrevATXID == types.EmptyATXID {
 		if err := h.validateInitialAtx(ctx, atx); err != nil {
 			return nil, err
 		}
@@ -314,7 +314,7 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 		return nil
 	}
 
-	if err == nil && atx.PrevATXID == *types.EmptyATXID {
+	if err == nil && atx.PrevATXID == types.EmptyATXID {
 		// no previous atx declared, but already seen at least one atx from node
 		return fmt.Errorf("no prevATX reported, but other atx with same nodeID (%v) found: %v", atx.NodeID(), lastAtx.ShortString())
 	}
@@ -324,12 +324,12 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 		return fmt.Errorf("last atx is not the one referenced")
 	}
 
-	if errors.Is(err, sql.ErrNotFound) && atx.PrevATXID == *types.EmptyATXID {
+	if errors.Is(err, sql.ErrNotFound) && atx.PrevATXID == types.EmptyATXID {
 		// no previous atx found and none referenced
 		return nil
 	}
 
-	if err != nil && atx.PrevATXID != *types.EmptyATXID {
+	if err != nil && atx.PrevATXID != types.EmptyATXID {
 		// no previous atx found but previous atx referenced
 		h.log.With().Error("could not fetch node last atx",
 			atx.ID(),
@@ -429,7 +429,7 @@ func (h *Handler) GetEpochAtxs(epochID types.EpochID) (ids []types.ATXID, err er
 func (h *Handler) GetPosAtxID() (types.ATXID, error) {
 	id, err := atxs.GetAtxIDWithMaxHeight(h.cdb)
 	if err != nil {
-		return *types.EmptyATXID, fmt.Errorf("failed to get positioning atx: %w", err)
+		return types.EmptyATXID, fmt.Errorf("failed to get positioning atx: %w", err)
 	}
 	return id, nil
 }
@@ -465,7 +465,7 @@ func (h *Handler) HandleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 func (h *Handler) registerHashes(atx *types.ActivationTx, peer p2p.Peer) {
 	hashes := map[types.Hash32]struct{}{}
 	for _, id := range []types.ATXID{atx.PositioningATX, atx.PrevATXID} {
-		if id != *types.EmptyATXID && id != h.goldenATXID {
+		if id != types.EmptyATXID && id != h.goldenATXID {
 			hashes[id.Hash32()] = struct{}{}
 		}
 	}
@@ -491,7 +491,7 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 	if err != nil {
 		return fmt.Errorf("failed to derive Node ID from ATX with sig %v: %w", atx.Signature, err)
 	}
-	atx.SetNodeID(&nodeID)
+	atx.SetNodeID(nodeID)
 
 	if err = atx.CalcAndSetID(); err != nil {
 		return fmt.Errorf("failed to derive ID from atx: %w", err)
@@ -544,12 +544,12 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 func (h *Handler) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) error {
 	logger := h.log.WithContext(ctx)
 	var atxIDs []types.ATXID
-	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != h.goldenATXID {
+	if atx.PositioningATX != types.EmptyATXID && atx.PositioningATX != h.goldenATXID {
 		logger.With().Debug("going to fetch pos atx", atx.PositioningATX, atx.ID())
 		atxIDs = append(atxIDs, atx.PositioningATX)
 	}
 
-	if atx.PrevATXID != *types.EmptyATXID {
+	if atx.PrevATXID != types.EmptyATXID {
 		logger.With().Debug("going to fetch prev atx", atx.PrevATXID, atx.ID())
 		if len(atxIDs) < 1 || atx.PrevATXID != atxIDs[0] {
 			atxIDs = append(atxIDs, atx.PrevATXID)

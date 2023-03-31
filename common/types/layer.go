@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 

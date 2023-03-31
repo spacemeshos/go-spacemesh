@@ -154,7 +154,7 @@ func Test_NodeClock_Await_BeforeGenesis(t *testing.T) {
 	require.NotNil(t, clock)
 
 	select {
-	case <-clock.AwaitLayer(types.LayerID{}):
+	case <-clock.AwaitLayer(types.NewLayerID(0)):
 		require.WithinRange(t, time.Now(), genesis, genesis.Add(tickInterval))
 	case <-time.After(1 * time.Second):
 		require.Fail(t, "timeout")

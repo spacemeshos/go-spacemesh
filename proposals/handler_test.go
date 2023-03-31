@@ -271,7 +271,7 @@ func TestBallot_KnownBallot(t *testing.T) {
 func TestBallot_EmptyATXID(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := types.RandomBallot()
-	b.AtxID = *types.EmptyATXID
+	b.AtxID = types.EmptyATXID
 	b = signAndInit(t, b)
 	data := encodeBallot(t, b)
 	peer := p2p.Peer("buddy")

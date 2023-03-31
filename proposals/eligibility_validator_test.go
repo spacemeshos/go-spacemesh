@@ -45,8 +45,8 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 		NumUnits: testedATXUnit,
 		VRFNonce: &nonce,
 	}}
-	atx.SetID(&activeset[0])
-	atx.SetNodeID(&nid)
+	atx.SetID(activeset[0])
+	atx.SetNodeID(nid)
 	atx.SetEffectiveNumUnits(testedATXUnit)
 	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(0, 1)
@@ -61,8 +61,8 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 			},
 			NumUnits: defaultATXUnit,
 		}}
-		atx.SetID(&id)
-		atx.SetNodeID(&nodeID)
+		atx.SetID(id)
+		atx.SetNodeID(nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
@@ -256,9 +256,9 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 		},
 		NumUnits: testedATXUnit,
 	}}
-	atx.SetID(&rb.EpochData.ActiveSet[0])
+	atx.SetID(rb.EpochData.ActiveSet[0])
 	nodeID := signer.NodeID()
-	atx.SetNodeID(&nodeID)
+	atx.SetNodeID(nodeID)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(0, 1)
@@ -272,8 +272,8 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 			},
 			NumUnits: defaultATXUnit,
 		}}
-		atx.SetID(&id)
-		atx.SetNodeID(&types.EmptyNodeID)
+		atx.SetID(id)
+		atx.SetNodeID(types.RandomNodeID())
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
@@ -454,16 +454,16 @@ func TestCheckEligibility_AtxNotIncluded(t *testing.T) {
 			NumUnits: 2,
 		},
 	}}
-	atx1.SetID(&types.ATXID{1})
-	atx1.SetNodeID(&types.EmptyNodeID)
+	atx1.SetID(types.ATXID{1})
+	atx1.SetNodeID(types.RandomNodeID())
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	atx2 := &types.VerifiedActivationTx{ActivationTx: &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NumUnits: 2,
 		},
 	}}
-	atx2.SetID(&types.ATXID{2})
-	atx2.SetNodeID(&types.EmptyNodeID)
+	atx2.SetID(types.ATXID{2})
+	atx2.SetNodeID(types.RandomNodeID())
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	require.NoError(t, atxs.Add(tv.cdb, atx1))
 	require.NoError(t, atxs.Add(tv.cdb, atx2))

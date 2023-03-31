@@ -9,7 +9,6 @@ import (
 
 	"github.com/spacemeshos/go-scale"
 	poetShared "github.com/spacemeshos/poet/shared"
-	postShared "github.com/spacemeshos/post/shared"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -66,7 +65,7 @@ func (t *ATXID) DecodeScale(d *scale.Decoder) (int, error) {
 }
 
 // EmptyATXID is a canonical empty ATXID.
-var EmptyATXID = &ATXID{}
+var EmptyATXID = ATXID{}
 
 type PoetChallenge struct {
 	*NIPostChallenge
@@ -117,7 +116,7 @@ type ActivationTx struct {
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
 func NewActivationTx(
 	challenge NIPostChallenge,
-	nodeID *NodeID,
+	nodeID NodeID,
 	coinbase Address,
 	nipost *NIPost,
 	numUnits uint32,
@@ -132,8 +131,7 @@ func NewActivationTx(
 
 			NIPost:      nipost,
 			InitialPost: initialPost,
-
-			VRFNonce: nonce,
+			VRFNonce:    nonce,
 
 			nodeID: nodeID,
 		},
@@ -202,7 +200,7 @@ func (atx *ActivationTx) CalcAndSetID() error {
 	}
 
 	id := ATXID(CalcObjectHash32(atx))
-	atx.id = &id
+	atx.id = id
 	return nil
 }
 
@@ -224,18 +222,18 @@ func (atx *ActivationTx) ShortString() string {
 
 // ID returns the ATX's ID.
 func (atx *ActivationTx) ID() ATXID {
-	if atx.id == nil {
+	if atx.id == EmptyATXID {
 		panic("id field must be set")
 	}
-	return *atx.id
+	return atx.id
 }
 
 // NodeID returns the ATX's Node ID.
 func (atx *ActivationTx) NodeID() NodeID {
-	if atx.nodeID == nil {
+	if atx.nodeID == EmptyNodeID {
 		panic("nodeID field must be set")
 	}
-	return *atx.nodeID
+	return atx.nodeID
 }
 
 func (atx *ActivationTx) EffectiveNumUnits() uint32 {
@@ -246,12 +244,12 @@ func (atx *ActivationTx) EffectiveNumUnits() uint32 {
 }
 
 // SetID sets the ATXID in this ATX's cache.
-func (atx *ActivationTx) SetID(id *ATXID) {
+func (atx *ActivationTx) SetID(id ATXID) {
 	atx.id = id
 }
 
 // SetNodeID sets the Node ID in the ATX's cache.
-func (atx *ActivationTx) SetNodeID(nodeID *NodeID) {
+func (atx *ActivationTx) SetNodeID(nodeID NodeID) {
 	atx.nodeID = nodeID
 }
 
@@ -269,12 +267,12 @@ func (atx *ActivationTx) Received() time.Time {
 
 // Verify an ATX for a given base TickHeight and TickCount.
 func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActivationTx, error) {
-	if atx.id == nil {
+	if atx.id == EmptyATXID {
 		if err := atx.CalcAndSetID(); err != nil {
 			return nil, err
 		}
 	}
-	if atx.nodeID == nil {
+	if atx.nodeID == EmptyNodeID {
 		return nil, fmt.Errorf("nodeID not set")
 	}
 	if atx.effectiveNumUnits == 0 {
@@ -415,144 +413,6 @@ type PoetRound struct {
 	ID            string `scale:"max=32"`
 	ChallengeHash Hash32
 	End           RoundEnd
-}
-
-// NIPost is Non-Interactive Proof of Space-Time.
-// Given an id, a space parameter S, a duration D and a challenge C,
-// it can convince a verifier that (1) the prover expended S * D space-time
-// after learning the challenge C. (2) the prover did not know the NIPost until D time
-// after the prover learned C.
-type NIPost struct {
-	// Challenge is the challenge for the PoET which is
-	// constructed from fields in the activation transaction.
-	Challenge *Hash32
-
-	// Post is the proof that the prover data is still stored (or was recomputed) at
-	// the time he learned the challenge constructed from the PoET.
-	Post *Post
-
-	// PostMetadata is the Post metadata, associated with the proof.
-	// The proof should be verified upon the metadata during the syntactic validation,
-	// while the metadata should be verified during the contextual validation.
-	PostMetadata *PostMetadata
-}
-
-// VRFPostIndex is the nonce generated using Pow during post initialization. It is used as a mitigation for
-// grinding of identities for VRF eligibility.
-type VRFPostIndex uint64
-
-// Field returns a log field. Implements the LoggableField interface.
-func (v VRFPostIndex) Field() log.Field { return log.Uint64("vrf_nonce", uint64(v)) }
-
-func (v *VRFPostIndex) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeCompact64(enc, uint64(*v))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (v *VRFPostIndex) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		value, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		*v = VRFPostIndex(value)
-	}
-	return total, nil
-}
-
-// Post is an alias to postShared.Proof.
-type Post postShared.Proof
-
-// EncodeScale implements scale codec interface.
-func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(p.Nonce))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, p.Indices, 8000) // needs to hold K2*8 bytes at most
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact64(enc, p.K2Pow)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact64(enc, p.K3Pow)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-// DecodeScale implements scale codec interface.
-func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		p.Nonce = field
-	}
-	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 8000) // needs to hold K2*8 bytes at most
-		if err != nil {
-			return total, err
-		}
-		total += n
-		p.Indices = field
-	}
-	{
-		field, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		p.K2Pow = field
-	}
-	{
-		field, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		p.K3Pow = field
-	}
-	return total, nil
-}
-
-func (p *Post) MarshalLogObject(encoder log.ObjectEncoder) error {
-	if p == nil {
-		return nil
-	}
-	encoder.AddUint32("nonce", p.Nonce)
-	encoder.AddString("indices", hex.EncodeToString(p.Indices))
-	return nil
-}
-
-// String returns a string representation of the PostProof, for logging purposes.
-// It implements the Stringer interface.
-func (p *Post) String() string {
-	return fmt.Sprintf("nonce: %v, indices: %s", p.Nonce, hex.EncodeToString(p.Indices))
 }
 
 // PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).

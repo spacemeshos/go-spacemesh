@@ -481,8 +481,8 @@ func TestComputeExpectedWeight(t *testing.T) {
 					NumUnits: uint32(weight),
 				}}
 				id := types.RandomATXID()
-				atx.SetID(&id)
-				atx.SetNodeID(&types.EmptyNodeID)
+				atx.SetID(id)
+				atx.SetNodeID(types.RandomNodeID())
 				atx.SetEffectiveNumUnits(atx.NumUnits)
 				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(0, 1)
@@ -1519,15 +1519,14 @@ func TestComputeBallotWeight(t *testing.T) {
 			require.NoError(t, err)
 			lid := types.NewLayerID(111)
 			atxLid := lid.GetEpoch().FirstLayer().Sub(1)
-			for i, weight := range tc.atxs {
+			for _, weight := range tc.atxs {
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 					NumUnits: uint32(weight),
 				}}
 				atx.PubLayerID = atxLid
-				nodeID := types.NodeID{byte(i)}
-				atx.SetNodeID(&nodeID)
+				atx.SetNodeID(types.RandomNodeID())
 				atxID := types.RandomATXID()
-				atx.SetID(&atxID)
+				atx.SetID(atxID)
 				atx.SetEffectiveNumUnits(atx.NumUnits)
 				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(0, 1)
@@ -2756,8 +2755,8 @@ func TestEncodeVotes(t *testing.T) {
 		atxid := types.ATXID{1}
 		atx := &types.ActivationTx{}
 		atx.NumUnits = 10
-		atx.SetID(&atxid)
-		atx.SetNodeID(&types.NodeID{1})
+		atx.SetID(atxid)
+		atx.SetNodeID(types.NodeID{1})
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
 		vatx, err := atx.Verify(1, 1)

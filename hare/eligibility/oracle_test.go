@@ -95,8 +95,8 @@ func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 			},
 			NumUnits: uint32(i + 1),
 		}}
-		atx.SetID(&id)
-		atx.SetNodeID(&nodeID)
+		atx.SetID(id)
+		atx.SetNodeID(nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
@@ -419,8 +419,8 @@ func Test_VrfSignVerify(t *testing.T) {
 		},
 		NumUnits: 1 * 1024,
 	}}
-	atx1.SetID(&activeSet[0])
-	atx1.SetNodeID(&nid)
+	atx1.SetID(activeSet[0])
+	atx1.SetNodeID(nid)
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	atx1.SetReceived(time.Now())
 	vAtx1, err := atx1.Verify(0, 1)
@@ -433,8 +433,8 @@ func Test_VrfSignVerify(t *testing.T) {
 		},
 		NumUnits: 9 * 1024,
 	}}
-	atx2.SetID(&activeSet[1])
-	atx2.SetNodeID(&types.NodeID{1})
+	atx2.SetID(activeSet[1])
+	atx2.SetNodeID(types.NodeID{1})
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	atx2.SetReceived(time.Now())
 	vAtx2, err := atx2.Verify(0, 1)
@@ -520,8 +520,8 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 		},
 		NumUnits: 1 * 1024,
 	}}
-	atx1.SetID(&activeSet[0])
-	atx1.SetNodeID(&types.NodeID{1})
+	atx1.SetID(activeSet[0])
+	atx1.SetNodeID(types.NodeID{1})
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	atx1.SetReceived(time.Now())
 	vAtx1, err := atx1.Verify(0, 1)
@@ -534,8 +534,8 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 		},
 		NumUnits: 9 * 1024,
 	}}
-	atx2.SetID(&activeSet[1])
-	atx2.SetNodeID(&types.NodeID{2})
+	atx2.SetID(activeSet[1])
+	atx2.SetNodeID(types.NodeID{2})
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	atx2.SetReceived(time.Now())
 	vAtx2, err := atx2.Verify(0, 1)
@@ -798,8 +798,8 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 			},
 			NumUnits: uint32(i + 1),
 		}}
-		atx.SetID(&id)
-		atx.SetNodeID(&nodeID)
+		atx.SetID(id)
+		atx.SetNodeID(nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
@@ -820,8 +820,8 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 			},
 			NumUnits: uint32(numMiners + i + 1),
 		}}
-		atx.SetID(&id)
-		atx.SetNodeID(&nodeID)
+		atx.SetID(id)
+		atx.SetNodeID(nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
