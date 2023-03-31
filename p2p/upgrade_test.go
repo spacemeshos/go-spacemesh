@@ -57,14 +57,9 @@ func TestConnectionsNotifier(t *testing.T) {
 	require.NoError(t, err)
 	counter := [n]atomic.Uint32{}
 	// we count events - not peers
-	reporter := func(i int) func() {
-		return func() {
-			counter[i].Add(1)
-		}
-	}
-
 	for i, host := range mesh.Hosts() {
-		_, err := Upgrade(host, types.Hash20{}, WithNodeReporter(reporter(i)))
+	       i := i
+		_, err := Upgrade(host, types.Hash20{}, WithNodeReporter( func() { counter[i].Add(1) }))
 		require.NoError(t, err)
 	}
 
