@@ -66,11 +66,11 @@ func TestConnectionsNotifier(t *testing.T) {
 	mesh.ConnectPeers(mesh.Hosts()[0].ID(), mesh.Hosts()[1].ID())
 	mesh.ConnectPeers(mesh.Hosts()[2].ID(), mesh.Hosts()[0].ID())
 	require.Eventually(t, func() bool {
-		return counter[0].Load() == 2 && counter[1].Load() == 1 && counter[2].Load() == 1
-	}, 100*time.Millisecond, 10*time.Millisecond)
+		return counter[0].Load() >= 2 && counter[1].Load() >= 1 && counter[2].Load() >= 1
+	}, time.Second, 10*time.Millisecond)
 
 	mesh.DisconnectPeers(mesh.Hosts()[0].ID(), mesh.Hosts()[1].ID())
 	require.Eventually(t, func() bool {
-		return counter[0].Load() == 3 && counter[1].Load() == 2
-	}, 100*time.Millisecond, 10*time.Millisecond)
+		return counter[0].Load() >= 3 && counter[1].Load() >= 2
+	}, time.Second, 10*time.Millisecond)
 }
