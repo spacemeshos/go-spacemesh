@@ -7,16 +7,44 @@ import (
 	"github.com/spacemeshos/go-scale"
 )
 
-func (t *ATXMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.Target))
+		n, err := scale.EncodeCompact32(enc, uint32(t.PubLayerID))
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.MsgHash[:])
+		n, err := scale.EncodeCompact64(enc, uint64(t.Sequence))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.PrevATXID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.PositioningATX[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeOption(enc, t.CommitmentATX)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.InitialPostIndices, 8000)
 		if err != nil {
 			return total, err
 		}
@@ -25,71 +53,52 @@ func (t *ATXMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	return total, nil
 }
 
-func (t *ATXMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Target = EpochID(field)
+		t.PubLayerID = LayerID(field)
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.MsgHash[:])
+		field, n, err := scale.DecodeCompact64(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-	}
-	return total, nil
-}
-
-func (t *ActivationTx) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := t.InnerActivationTx.EncodeScale(enc)
-		if err != nil {
-			return total, err
-		}
-		total += n
+		t.Sequence = uint64(field)
 	}
 	{
-		n, err := t.ATXMetadata.EncodeScale(enc)
+		n, err := scale.DecodeByteArray(dec, t.PrevATXID[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.Signature[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *ActivationTx) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := t.InnerActivationTx.DecodeScale(dec)
+		n, err := scale.DecodeByteArray(dec, t.PositioningATX[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := t.ATXMetadata.DecodeScale(dec)
+		field, n, err := scale.DecodeOption[ATXID](dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
+		t.CommitmentATX = field
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.Signature[:])
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 8000)
 		if err != nil {
 			return total, err
 		}
 		total += n
+		t.InitialPostIndices = field
 	}
 	return total, nil
 }
@@ -190,44 +199,16 @@ func (t *InnerActivationTx) DecodeScale(dec *scale.Decoder) (total int, err erro
 	return total, nil
 }
 
-func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *ATXMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.PubLayerID))
+		n, err := scale.EncodeCompact32(enc, uint32(t.Target))
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact64(enc, uint64(t.Sequence))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.PrevATXID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.PositioningATX[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeOption(enc, t.CommitmentATX)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.InitialPostIndices, 8000)
+		n, err := scale.EncodeByteArray(enc, t.MsgHash[:])
 		if err != nil {
 			return total, err
 		}
@@ -236,52 +217,71 @@ func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error)
 	return total, nil
 }
 
-func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *ATXMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.PubLayerID = LayerID(field)
+		t.Target = EpochID(field)
 	}
 	{
-		field, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Sequence = uint64(field)
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.PrevATXID[:])
+		n, err := scale.DecodeByteArray(dec, t.MsgHash[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
+	return total, nil
+}
+
+func (t *ActivationTx) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.DecodeByteArray(dec, t.PositioningATX[:])
+		n, err := t.InnerActivationTx.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeOption[ATXID](dec)
+		n, err := t.ATXMetadata.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.CommitmentATX = field
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 8000)
+		n, err := scale.EncodeByteArray(enc, t.Signature[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.InitialPostIndices = field
+	}
+	return total, nil
+}
+
+func (t *ActivationTx) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := t.InnerActivationTx.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.ATXMetadata.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.Signature[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
 	}
 	return total, nil
 }
