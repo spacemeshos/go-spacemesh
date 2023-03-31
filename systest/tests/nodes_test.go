@@ -39,6 +39,7 @@ func TestAddNodes(t *testing.T) {
 	total := min(tctx.ClusterSize, 30)
 
 	require.NoError(t, cl.AddBootnodes(tctx, 2))
+	require.NoError(t, cl.AddBootstrapper(tctx, 1))
 	require.NoError(t, cl.AddPoets(tctx))
 	require.NoError(t, cl.AddSmeshers(tctx, total-2-addedLater))
 
@@ -113,15 +114,13 @@ func TestFailedNodes(t *testing.T) {
 	t.Parallel()
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	require.NoError(t, err)
 
 	const (
 		failAt    = 15
 		lastLayer = failAt + 8
 	)
-
-	cl, err := cluster.Default(tctx)
-	require.NoError(t, err)
-
 	failed := int(0.6 * float64(tctx.ClusterSize))
 
 	eg, ctx := errgroup.WithContext(tctx)

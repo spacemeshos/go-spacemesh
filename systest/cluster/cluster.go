@@ -94,9 +94,6 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	if err := cl.AddBootnodes(cctx, bsize); err != nil {
 		return nil, err
 	}
-	if err := queryNetworkConfig(cctx, cl.Client(0)); err != nil {
-		return nil, err
-	}
 	if err := cl.AddBootstrappers(cctx); err != nil {
 		return nil, err
 	}
@@ -228,7 +225,6 @@ func (c *Cluster) recoverFlags(ctx *testcontext.Context) error {
 	if err != nil {
 		return err
 	}
-	// ? why do these flags get manually added before comparing deep equal ?
 	c.smesherFlags[genesisTimeFlag] = sflags[genesisTimeFlag]
 	c.smesherFlags[accountsFlag] = sflags[accountsFlag]
 	if !reflect.DeepEqual(c.smesherFlags, sflags) {
@@ -383,7 +379,8 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 	c.clients = append(c.clients, clients...)
 	c.clients = append(c.clients, smeshers...)
 	c.bootnodes = len(clients)
-	return nil
+
+	return fillNetworkConfig(cctx, clients[0])
 }
 
 // AddSmeshers ...
@@ -700,7 +697,7 @@ func recoverFlags(ctx *testcontext.Context, name string) (map[string]DeploymentF
 	return flags, nil
 }
 
-func queryNetworkConfig(ctx *testcontext.Context, node *NodeClient) error {
+func fillNetworkConfig(ctx *testcontext.Context, node *NodeClient) error {
 	svc := pb.NewMeshServiceClient(node)
 	resp1, err := svc.EpochNumLayers(ctx, &pb.EpochNumLayersRequest{})
 	if err != nil {
