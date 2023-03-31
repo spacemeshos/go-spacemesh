@@ -33,9 +33,9 @@ const (
 // DefaultConfig defines the default configuration options for api.
 func DefaultConfig() Config {
 	return Config{
-		PublicServices:        []Service{Debug, Gateway, GlobalState, Mesh, Transaction},
+		PublicServices:        []Service{Debug, Gateway, GlobalState, Mesh, Transaction, Node},
 		PublicListener:        "0.0.0.0:9092",
-		PrivateServices:       []Service{Smesher, Node},
+		PrivateServices:       []Service{Smesher},
 		PrivateListener:       "127.0.0.1:9093",
 		JSONListener:          "",
 		GrpcSendMsgSize:       1024 * 1024 * 10,
