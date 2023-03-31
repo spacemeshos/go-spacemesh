@@ -18,9 +18,10 @@ import (
 
 func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, pct int, wait uint32) {
 	require.Greater(t, cl.Bootnodes(), 1)
+	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
 
 	var (
-		first      = uint32(layersPerEpoch * 2)
+		first      = layersPerEpoch * 2
 		startSplit = uint32(4*layersPerEpoch) - 1
 		rejoin     = startSplit + layersPerEpoch
 		last       = rejoin + (wait-1)*layersPerEpoch

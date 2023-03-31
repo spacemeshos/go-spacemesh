@@ -37,6 +37,7 @@ func TestPoetsFailures(t *testing.T) {
 }
 
 func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
+	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
 	layersCount := uint32(layersToCheck.Get(tctx.Parameters))
 	first := nextFirstLayer(currentLayer(tctx, t, cl.Client(0)), layersPerEpoch)
 	last := first + layersCount - 1
@@ -147,6 +148,7 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 	}
 
 	layersCount := uint32(layersToCheck.Get(tctx.Parameters))
+	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
 	first := nextFirstLayer(currentLayer(tctx, t, cl.Client(0)), layersPerEpoch)
 	last := first + layersCount - 1
 	logger.Debugw("watching layers between", "first", first, "last", last)

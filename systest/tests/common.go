@@ -24,8 +24,7 @@ import (
 )
 
 const (
-	attempts       = 3
-	layersPerEpoch = 4
+	attempts = 3
 )
 
 func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.SugaredLogger, cl *cluster.Cluster, first, stop uint32, batch, amount int) {

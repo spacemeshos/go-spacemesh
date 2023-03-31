@@ -7,6 +7,7 @@ org ?= spacemeshos
 image_name ?= $(org)/systest:$(version_info)
 poet_image ?= spacemeshos/poet:v0.7.0
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
+bs_image ?= $(org)/go-spacemesh-dev-bs:$(version_info)
 test_id ?= systest-$(version_info)
 test_job_name ?= systest-$(version_info)-$(date)
 keep ?= false
@@ -52,6 +53,7 @@ template:
 	@echo storage=$(storage) >> $(tmpfile)
 	@echo node-selector=$(node_selector) >> $(tmpfile)
 	@echo image=$(smesher_image) >> $(tmpfile)
+	@echo bs-image=$(bs_image) >> $(tmpfile)
 	@echo poet-image=$(poet_image) >> $(tmpfile)
 	@echo poet-size=$(poet_size) >> $(tmpfile)
 	@echo keep=$(keep) >> $(tmpfile)

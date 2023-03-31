@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
+	"github.com/spacemeshos/go-spacemesh/systest/parameters"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
@@ -30,10 +31,13 @@ const (
 	poetApp          = "poet"
 	bootnodeApp      = "boot"
 	smesherApp       = "smesher"
+	bootstrapperApp  = "bootstrapper"
+	bootstrapperPort = 80
 	poetPort         = 80
 
 	poetFlags    = "poetflags"
 	smesherFlags = "smesherflags"
+	bsFlags      = "bsflags"
 )
 
 func defaultBootnodes(size int) int {
@@ -47,6 +51,10 @@ func defaultBootnodes(size int) int {
 // MakePoetEndpoint generate a poet endpoint for the ith instance.
 func MakePoetEndpoint(ith int) string {
 	return fmt.Sprintf("http://%s:%d", createPoetIdentifier(ith), poetPort)
+}
+
+func BootstrapperEndpoint(ith int) string {
+	return fmt.Sprintf("http://%s:%d", createBootstrapperIdentifier(ith), bootstrapperPort)
 }
 
 // Opt is for configuring cluster.
@@ -86,6 +94,12 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	if err := cl.AddBootnodes(cctx, bsize); err != nil {
 		return nil, err
 	}
+	if err := queryNetworkConfig(cctx, cl.Client(0)); err != nil {
+		return nil, err
+	}
+	if err := cl.AddBootstrappers(cctx); err != nil {
+		return nil, err
+	}
 	if err := cl.AddPoets(cctx); err != nil {
 		return nil, err
 	}
@@ -98,8 +112,9 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 // New initializes Cluster with options.
 func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	cluster := &Cluster{
-		smesherFlags: map[string]DeploymentFlag{},
-		poetFlags:    map[string]DeploymentFlag{},
+		smesherFlags:      map[string]DeploymentFlag{},
+		poetFlags:         map[string]DeploymentFlag{},
+		bootstrapperFlags: map[string]DeploymentFlag{},
 	}
 	genesis := GenesisTime(time.Now().Add(cctx.BootstrapDuration))
 	cluster.addFlag(genesis)
@@ -108,6 +123,9 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 
 	cluster.addPoetFlag(genesis)
 	cluster.addPoetFlag(PoetRestListen(poetPort))
+
+	cluster.addBootstrapperFlag(genesis)
+	cluster.addBootstrapperFlag(BootstrapperPort(bootstrapperPort))
 
 	for _, opt := range opts {
 		opt(cluster)
@@ -121,16 +139,18 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 
 // Cluster for managing state of the spacemesh cluster.
 type Cluster struct {
-	persisted    bool
-	smesherFlags map[string]DeploymentFlag
-	poetFlags    map[string]DeploymentFlag
+	persisted         bool
+	smesherFlags      map[string]DeploymentFlag
+	poetFlags         map[string]DeploymentFlag
+	bootstrapperFlags map[string]DeploymentFlag
 
 	accounts
 
-	bootnodes int
-	smeshers  int
-	clients   []*NodeClient
-	poets     []*NodeClient
+	bootnodes     int
+	smeshers      int
+	clients       []*NodeClient
+	poets         []*NodeClient
+	bootstrappers []*NodeClient
 }
 
 // GenesisID computes id from the configuration.
@@ -197,6 +217,9 @@ func (c *Cluster) persistFlags(ctx *testcontext.Context) error {
 	if err := persistFlags(ctx, poetFlags, c.poetFlags); err != nil {
 		return err
 	}
+	if err := persistFlags(ctx, bsFlags, c.bootstrapperFlags); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -205,6 +228,7 @@ func (c *Cluster) recoverFlags(ctx *testcontext.Context) error {
 	if err != nil {
 		return err
 	}
+	// ? why do these flags get manually added before comparing deep equal ?
 	c.smesherFlags[genesisTimeFlag] = sflags[genesisTimeFlag]
 	c.smesherFlags[accountsFlag] = sflags[accountsFlag]
 	if !reflect.DeepEqual(c.smesherFlags, sflags) {
@@ -216,7 +240,15 @@ func (c *Cluster) recoverFlags(ctx *testcontext.Context) error {
 	}
 	c.poetFlags[genesisTimeFlag] = pflags[genesisTimeFlag]
 	if !reflect.DeepEqual(c.poetFlags, pflags) {
-		return fmt.Errorf("poet configuration doesn't match %+v != %+v", c.poetFlags, sflags)
+		return fmt.Errorf("poet configuration doesn't match %+v != %+v", c.poetFlags, pflags)
+	}
+	bflags, err := recoverFlags(ctx, bsFlags)
+	if err != nil {
+		return err
+	}
+	c.bootstrapperFlags[genesisTimeFlag] = bflags[genesisTimeFlag]
+	if !reflect.DeepEqual(c.bootstrapperFlags, bflags) {
+		return fmt.Errorf("bootstrapper configuration doesn't match %+v != %+v", c.bootstrapperFlags, bflags)
 	}
 	c.persisted = true
 	return nil
@@ -228,6 +260,10 @@ func (c *Cluster) addFlag(flag DeploymentFlag) {
 
 func (c *Cluster) addPoetFlag(flag DeploymentFlag) {
 	c.poetFlags[flag.Name] = flag
+}
+
+func (c *Cluster) addBootstrapperFlag(flag DeploymentFlag) {
+	c.bootstrapperFlags[flag.Name] = flag
 }
 
 func (c *Cluster) reuse(cctx *testcontext.Context) error {
@@ -268,6 +304,13 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	}
 	if err := c.recoverFlags(cctx); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (c *Cluster) AddBootstrappers(cctx *testcontext.Context) error {
+	for i := 0; i < cctx.BootstrapperSize; i++ {
+		c.AddBootstrapper(cctx, i)
 	}
 	return nil
 }
@@ -369,6 +412,39 @@ func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int) error {
 	c.clients = append(c.clients, smeshers...)
 	c.clients = append(c.clients, clients...)
 	c.smeshers += len(clients)
+	return nil
+}
+
+func (c *Cluster) AddBootstrapper(cctx *testcontext.Context, i int) error {
+	if err := c.persist(cctx); err != nil {
+		return err
+	}
+	var flags []DeploymentFlag
+	for _, flag := range c.bootstrapperFlags {
+		flags = append(flags, flag)
+	}
+	flags = append(flags, DeploymentFlag{
+		Name:  "--node-endpoint",
+		Value: fmt.Sprintf("dns:///%s:9092", c.clients[0].Name),
+	})
+	flags = append(flags, DeploymentFlag{
+		Name:  "--layer-duration",
+		Value: testcontext.LayerDuration.Get(cctx.Parameters).String(),
+	})
+	flags = append(flags, DeploymentFlag{
+		Name:  "--layers-per-epoch",
+		Value: fmt.Sprintf("%d", testcontext.LayersPerEpoch.Get(cctx.Parameters)),
+	})
+	flags = append(flags, DeploymentFlag{
+		Name:  "--epoch-offset",
+		Value: "1",
+	})
+
+	bs, err := deployBootstrapper(cctx, fmt.Sprintf("%s-%d", bootstrapperApp, i), flags...)
+	if err != nil {
+		return err
+	}
+	c.bootstrappers = append(c.bootstrappers, bs)
 	return nil
 }
 
@@ -622,4 +698,26 @@ func recoverFlags(ctx *testcontext.Context, name string) (map[string]DeploymentF
 		flags[name] = DeploymentFlag{Name: name, Value: value}
 	}
 	return flags, nil
+}
+
+func queryNetworkConfig(ctx *testcontext.Context, node *NodeClient) error {
+	svc := pb.NewMeshServiceClient(node)
+	resp1, err := svc.EpochNumLayers(ctx, &pb.EpochNumLayersRequest{})
+	if err != nil {
+		return fmt.Errorf("query layers per epoch from %v: %w", node.Name, err)
+	}
+	resp2, err := svc.LayerDuration(ctx, &pb.LayerDurationRequest{})
+	if err != nil {
+		return fmt.Errorf("query layers duration from %v: %w", node.Name, err)
+	}
+	ctx.Log.Debugw("queried layers per epoch", "layers", resp1.Numlayers.Value)
+	ctx.Log.Debugw("queried layer duration", "duration", resp2.Duration.Value)
+	parameters.New()
+	configs := map[string]string{}
+	configs[testcontext.ParamLayersPerEpoch] = fmt.Sprintf("%d", resp1.Numlayers.Value)
+	configs[testcontext.ParamLayerDuration] = fmt.Sprintf("%ds", resp2.Duration.Value)
+	ctx.Parameters.Update(configs)
+	ctx.Log.Debugw("updated param layers per epoch", "layers", testcontext.LayersPerEpoch.Get(ctx.Parameters))
+	ctx.Log.Debugw("updated param layer duration", "duration", testcontext.LayerDuration.Get(ctx.Parameters))
+	return nil
 }
