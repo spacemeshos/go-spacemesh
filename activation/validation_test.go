@@ -572,9 +572,9 @@ func TestValidator_Validate(t *testing.T) {
 	t.Parallel()
 	r := require.New(t)
 
-	challenge := types.PoetChallenge{NIPostChallenge: &types.NIPostChallenge{
+	challenge := types.NIPostChallenge{
 		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),
-	}}
+	}
 	challengeHash := challenge.Hash()
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
 	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().DoAndReturn(func(types.PoetProofRef) (*types.PoetProof, error) {

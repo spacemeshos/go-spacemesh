@@ -102,74 +102,6 @@ func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error)
 	return total, nil
 }
 
-func (t *PoetChallenge) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeOption(enc, t.NIPostChallenge)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeOption(enc, t.InitialPost)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeOption(enc, t.InitialPostMetadata)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.NumUnits))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *PoetChallenge) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		field, n, err := scale.DecodeOption[NIPostChallenge](dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.NIPostChallenge = field
-	}
-	{
-		field, n, err := scale.DecodeOption[Post](dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.InitialPost = field
-	}
-	{
-		field, n, err := scale.DecodeOption[PostMetadata](dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.InitialPostMetadata = field
-	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.NumUnits = uint32(field)
-	}
-	return total, nil
-}
-
 func (t *InnerActivationTx) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := t.NIPostChallenge.EncodeScale(enc)
@@ -480,13 +412,6 @@ func (t *PoetRound) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.ChallengeHash[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := t.End.EncodeScale(enc)
 		if err != nil {
 			return total, err
@@ -504,13 +429,6 @@ func (t *PoetRound) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.ID = string(field)
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.ChallengeHash[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
 	}
 	{
 		n, err := t.End.DecodeScale(dec)

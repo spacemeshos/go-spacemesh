@@ -31,13 +31,13 @@ require (
 	github.com/pyroscope-io/pyroscope v0.37.2
 	github.com/santhosh-tekuri/jsonschema/v5 v5.2.0
 	github.com/seehuhn/mt19937 v1.0.0
-	github.com/spacemeshos/api/release/go v1.5.9
+	github.com/spacemeshos/api/release/go v1.6.0
 	github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d
 	github.com/spacemeshos/ed25519-recovery v0.2.0
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
 	github.com/spacemeshos/go-scale v1.1.7
 	github.com/spacemeshos/merkle-tree v0.2.1
-	github.com/spacemeshos/poet v0.6.6
+	github.com/spacemeshos/poet v0.7.0
 	github.com/spacemeshos/post v0.5.2
 	github.com/spf13/afero v1.9.5
 	github.com/spf13/cobra v1.6.1
@@ -63,6 +63,7 @@ require (
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect
 	github.com/aquasecurity/libbpfgo v0.3.0-libbpf-0.8.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/c0mm4nd/go-ripemd v0.0.0-20200326052756-bd1759ad7d10 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/containerd/cgroups v1.0.4 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
