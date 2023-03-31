@@ -1,7 +1,6 @@
 package types
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
 	"time"
@@ -10,7 +9,6 @@ import (
 	"github.com/spacemeshos/post/shared"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -47,11 +45,6 @@ func (t ATXID) Bytes() []byte {
 
 // Field returns a log field. Implements the LoggableField interface.
 func (t ATXID) Field() log.Field { return log.FieldNamed("atx_id", t.Hash32()) }
-
-// Less returns true if other (the given ATXID) is less than this ATXID, by lexicographic comparison.
-func (t ATXID) Less(other ATXID) bool {
-	return bytes.Compare(t.Bytes(), other.Bytes()) < 0
-}
 
 // EncodeScale implements scale codec interface.
 func (t *ATXID) EncodeScale(e *scale.Encoder) (int, error) {
@@ -114,7 +107,8 @@ func (challenge *NIPostChallenge) String() string {
 		challenge.Sequence,
 		challenge.PrevATXID.ShortString(),
 		challenge.PubLayerID,
-		challenge.PositioningATX.ShortString())
+		challenge.PositioningATX.ShortString(),
+	)
 }
 
 // TargetEpoch returns the target epoch of the NIPostChallenge. This is the epoch in which the miner is eligible
@@ -265,12 +259,6 @@ func (atx *ActivationTx) GetPoetProofRef() Hash32 {
 	return BytesToHash(atx.NIPost.PostMetadata.Challenge)
 }
 
-// GetShortPoetProofRef returns the first 5 characters of the PoET proof reference, for logging purposes.
-func (atx *ActivationTx) GetShortPoetProofRef() []byte {
-	ref := atx.GetPoetProofRef()
-	return ref[:util.Min(5, len(ref))]
-}
-
 // ShortString returns the first 5 characters of the ID, for logging purposes.
 func (atx *ActivationTx) ShortString() string {
 	return atx.ID().ShortString()
@@ -364,6 +352,36 @@ type NIPost struct {
 	// The proof should be verified upon the metadata during the syntactic validation,
 	// while the metadata should be verified during the contextual validation.
 	PostMetadata *PostMetadata
+}
+
+// VRFPostIndex is the nonce generated using Pow during post initialization. It is used as a mitigation for
+// grinding of identities for VRF eligibility.
+type VRFPostIndex uint64
+
+// Field returns a log field. Implements the LoggableField interface.
+func (v VRFPostIndex) Field() log.Field { return log.Uint64("vrf_nonce", uint64(v)) }
+
+func (v *VRFPostIndex) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeCompact64(enc, uint64(*v))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (v *VRFPostIndex) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		value, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		*v = VRFPostIndex(value)
+	}
+	return total, nil
 }
 
 // Post is an alias to postShared.Proof.
@@ -467,36 +485,6 @@ func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("Challenge", hex.EncodeToString(m.Challenge))
 	encoder.AddUint64("LabelsPerUnit", m.LabelsPerUnit)
 	return nil
-}
-
-// VRFPostIndex is the nonce generated using Pow during post initialization. It is used as a mitigation for
-// grinding of identities for VRF eligibility.
-type VRFPostIndex uint64
-
-// Field returns a log field. Implements the LoggableField interface.
-func (v VRFPostIndex) Field() log.Field { return log.Uint64("vrf_nonce", uint64(v)) }
-
-func (v *VRFPostIndex) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeCompact64(enc, uint64(*v))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (v *VRFPostIndex) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		value, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		*v = VRFPostIndex(value)
-	}
-	return total, nil
 }
 
 // ToATXIDs returns a slice of ATXID corresponding to the given activation tx.
