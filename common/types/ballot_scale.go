@@ -153,7 +153,7 @@ func (t *InnerBallot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact8(enc, uint8(t.EligibilityCount))
+		n, err := scale.EncodeCompact32(enc, uint32(t.EligibilityCount))
 		if err != nil {
 			return total, err
 		}
@@ -192,7 +192,7 @@ func (t *InnerBallot) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeCompact8(dec)
+		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
