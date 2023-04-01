@@ -110,7 +110,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		return false, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, refBallot.ID())
 	}
 
-	activeSets := refBallot.EpochData.ActiveSet
+	activeSets := refBallot.ActiveSet
 	if len(activeSets) == 0 {
 		return false, fmt.Errorf("%w: ref ballot %v", errEmptyActiveSet, refBallot.ID())
 	}

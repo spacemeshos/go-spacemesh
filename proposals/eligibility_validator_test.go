@@ -126,9 +126,10 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 		if isRef {
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{
-				ActiveSet: activeSet,
-				Beacon:    beacon,
+				ActiveSetHash: activeSet.Hash(),
+				Beacon:        beacon,
 			}
+			b.ActiveSet = activeSet
 		} else {
 			b.RefBallot = blts[0].ID()
 		}
@@ -196,7 +197,7 @@ func TestCheckEligibility_RefBallotEmptyActiveSet(t *testing.T) {
 
 	blts := createBallots(t, signer, genActiveSet(), types.Beacon{1, 1, 1})
 	rb := blts[0]
-	rb.EpochData.ActiveSet = nil
+	rb.ActiveSet = nil
 	require.NoError(t, ballots.Add(tv.cdb, rb))
 	eligible, err := tv.CheckEligibility(context.Background(), blts[1])
 	require.ErrorIs(t, err, errEmptyActiveSet)
@@ -231,7 +232,7 @@ func TestCheckEligibility_FailToGetBallotATXHeader(t *testing.T) {
 	blts := createBallots(t, signer, activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
 	randomAtx := types.RandomATXID()
-	rb.EpochData.ActiveSet = append(rb.EpochData.ActiveSet, randomAtx)
+	rb.ActiveSet = append(rb.ActiveSet, randomAtx)
 	rb.AtxID = randomAtx
 	eligible, err := tv.CheckEligibility(context.Background(), rb)
 	require.ErrorIs(t, err, sql.ErrNotFound)
@@ -256,7 +257,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 		},
 		NumUnits: testedATXUnit,
 	}}
-	atx.SetID(&rb.EpochData.ActiveSet[0])
+	atx.SetID(&rb.ActiveSet[0])
 	nodeID := signer.NodeID()
 	atx.SetNodeID(&nodeID)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
@@ -265,7 +266,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tv.cdb, vAtx))
 
-	for _, id := range rb.EpochData.ActiveSet[1:] {
+	for _, id := range rb.ActiveSet[1:] {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
@@ -472,10 +473,12 @@ func TestCheckEligibility_AtxNotIncluded(t *testing.T) {
 	ballot.EligibilityProofs = []types.VotingEligibility{{}}
 	ballot.SetID(types.BallotID{1})
 	ballot.AtxID = types.ATXID{3}
+	activeSet := types.ATXIDList{atx1.ID(), atx2.ID()}
 	ballot.EpochData = &types.EpochData{
-		ActiveSet: []types.ATXID{atx1.ID(), atx2.ID()},
-		Beacon:    types.Beacon{1},
+		ActiveSetHash: activeSet.Hash(),
+		Beacon:        types.Beacon{1},
 	}
+	ballot.ActiveSet = activeSet
 	require.NoError(t, ballots.Add(tv.cdb, ballot))
 
 	eligibile, err := tv.CheckEligibility(context.Background(), ballot)

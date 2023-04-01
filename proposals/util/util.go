@@ -63,7 +63,10 @@ func ComputeWeightPerEligibility(
 			return nil, fmt.Errorf("%w: missing ref ballot %s (for %s)", err, ballot.RefBallot, ballot.ID())
 		}
 	}
-	for _, atxID := range refBallot.EpochData.ActiveSet {
+	if len(refBallot.ActiveSet) == 0 {
+		return nil, fmt.Errorf("ref ballot missing active set %s (for %s)", ballot.RefBallot, ballot.ID())
+	}
+	for _, atxID := range refBallot.ActiveSet {
 		hdr, err = cdb.GetAtxHeader(atxID)
 		if err != nil {
 			return nil, fmt.Errorf("%w: missing atx %s in active set of %s (for %s)", err, atxID, refBallot.ID(), ballot.ID())

@@ -492,7 +492,7 @@ func (o *Oracle) computeActiveSet(logger log.Log, targetLayer, safeLayerStart, s
 				log.String("epoch_beacon", beacon.ShortString()))
 			continue
 		}
-		for _, id := range ballot.EpochData.ActiveSet {
+		for _, id := range ballot.ActiveSet {
 			if _, exist := seenATXIDs[id]; exist {
 				continue
 			}
