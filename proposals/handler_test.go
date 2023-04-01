@@ -223,7 +223,7 @@ func createRefBallot(t *testing.T) *types.Ballot {
 	t.Helper()
 	b := types.RandomBallot()
 	b.RefBallot = types.EmptyBallotID
-	activeSet := types.ATXIDList{types.RandomATXID(), types.RandomATXID()}
+	activeSet := types.ATXIDList{types.ATXID{1, 2, 3}, types.ATXID{2, 3, 4}}
 	b.EpochData = &types.EpochData{
 		ActiveSetHash: activeSet.Hash(),
 		Beacon:        types.RandomBeacon(),
