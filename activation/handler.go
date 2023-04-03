@@ -496,7 +496,9 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 
 	atx.SetReceived(receivedTime.Local())
 
-	h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature)
+	if ok := h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature); !ok {
+		return fmt.Errorf("failed to verify atx signature: %w", errMalformedData)
+	}
 	atx.SetNodeID(atx.SmesherID)
 
 	if err := atx.Initialize(); err != nil {
