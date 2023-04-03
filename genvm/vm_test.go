@@ -2060,7 +2060,7 @@ func getMultisigTemplate(k int) types.Address {
 	case 3:
 		return multisig.TemplateAddress3
 	}
-	panic(fmt.Sprintf("unkown k %d", k))
+	panic(fmt.Sprintf("unknown k %d", k))
 }
 
 func BenchmarkTransactions(b *testing.B) {
