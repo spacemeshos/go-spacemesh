@@ -2715,7 +2715,7 @@ func TestVMAccountUpdates(t *testing.T) {
 		require.NoError(t, err)
 		keys[i] = signer
 		accounts[i] = types.Account{
-			Address: wallet.Address(signer.PublicKey().Bytes()),
+			Address: wallet.Address(signer.NodeID().Bytes()),
 			Balance: initial,
 		}
 	}

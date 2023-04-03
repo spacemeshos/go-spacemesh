@@ -5,7 +5,6 @@ package vault
 
 import (
 	"github.com/spacemeshos/go-scale"
-	
 )
 
 func (t *SpawnArguments) EncodeScale(enc *scale.Encoder) (total int, err error) {
@@ -30,7 +29,20 @@ func (t *SpawnArguments) EncodeScale(enc *scale.Encoder) (total int, err error) 
 		}
 		total += n
 	}
-	
+	{
+		n, err := t.VestingStart.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.VestingEnd.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
@@ -58,6 +70,19 @@ func (t *SpawnArguments) DecodeScale(dec *scale.Decoder) (total int, err error) 
 		total += n
 		t.InitialUnlockAmount = uint64(field)
 	}
-	
+	{
+		n, err := t.VestingStart.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.VestingEnd.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }

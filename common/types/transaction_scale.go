@@ -45,7 +45,13 @@ func (t *Transaction) DecodeScale(dec *scale.Decoder) (total int, err error) {
 }
 
 func (t *Reward) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	
+	{
+		n, err := t.Layer.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		n, err := scale.EncodeCompact64(enc, uint64(t.TotalReward))
 		if err != nil {
@@ -71,7 +77,13 @@ func (t *Reward) EncodeScale(enc *scale.Encoder) (total int, err error) {
 }
 
 func (t *Reward) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	
+	{
+		n, err := t.Layer.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		field, n, err := scale.DecodeCompact64(dec)
 		if err != nil {

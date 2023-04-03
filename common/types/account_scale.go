@@ -8,7 +8,13 @@ import (
 )
 
 func (t *Account) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	
+	{
+		n, err := t.Layer.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		n, err := scale.EncodeByteArray(enc, t.Address[:])
 		if err != nil {
@@ -55,7 +61,13 @@ func (t *Account) EncodeScale(enc *scale.Encoder) (total int, err error) {
 }
 
 func (t *Account) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	
+	{
+		n, err := t.Layer.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.Address[:])
 		if err != nil {

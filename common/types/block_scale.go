@@ -30,7 +30,13 @@ func (t *Block) DecodeScale(dec *scale.Decoder) (total int, err error) {
 }
 
 func (t *InnerBlock) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	
+	{
+		n, err := t.LayerIndex.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		n, err := scale.EncodeCompact64(enc, uint64(t.TickHeight))
 		if err != nil {
@@ -56,7 +62,13 @@ func (t *InnerBlock) EncodeScale(enc *scale.Encoder) (total int, err error) {
 }
 
 func (t *InnerBlock) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	
+	{
+		n, err := t.LayerIndex.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		field, n, err := scale.DecodeCompact64(dec)
 		if err != nil {
@@ -232,7 +244,13 @@ func (t *CertifyMessage) DecodeScale(dec *scale.Decoder) (total int, err error) 
 }
 
 func (t *CertifyContent) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	
+	{
+		n, err := t.LayerID.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		n, err := scale.EncodeByteArray(enc, t.BlockID[:])
 		if err != nil {
@@ -258,7 +276,13 @@ func (t *CertifyContent) EncodeScale(enc *scale.Encoder) (total int, err error) 
 }
 
 func (t *CertifyContent) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	
+	{
+		n, err := t.LayerID.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.BlockID[:])
 		if err != nil {

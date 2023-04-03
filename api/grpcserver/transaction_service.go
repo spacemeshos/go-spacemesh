@@ -370,7 +370,7 @@ func castResult(rst *types.TransactionWithResult) *pb.TransactionResult {
 		GasConsumed: rst.Gas,
 		Fee:         rst.Fee,
 		Block:       rst.Block[:],
-		Layer:       rst.Layer.Uint32(),
+		Layer:       rst.Layer.Value,
 	}
 	if len(rst.Addresses) > 0 {
 		casted.TouchedAddresses = make([]string, len(rst.Addresses))

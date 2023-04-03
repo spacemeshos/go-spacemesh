@@ -158,7 +158,20 @@ func (t *ResponseBatch) DecodeScale(dec *scale.Decoder) (total int, err error) {
 }
 
 func (t *MeshHashRequest) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	
+	{
+		n, err := t.From.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.To.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		n, err := scale.EncodeCompact32(enc, uint32(t.Delta))
 		if err != nil {
@@ -177,7 +190,20 @@ func (t *MeshHashRequest) EncodeScale(enc *scale.Encoder) (total int, err error)
 }
 
 func (t *MeshHashRequest) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	
+	{
+		n, err := t.From.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.To.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {

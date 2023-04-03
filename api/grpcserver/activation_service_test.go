@@ -83,7 +83,7 @@ func TestGet_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, atx.ID().Bytes(), response.Atx.Id.Id)
-	require.Equal(t, atx.PubLayerID.Uint32(), response.Atx.Layer.Number)
+	require.Equal(t, atx.PubLayerID.Value, response.Atx.Layer.Number)
 	require.Equal(t, atx.NodeID().Bytes(), response.Atx.SmesherId.Id)
 	require.Equal(t, atx.Coinbase.String(), response.Atx.Coinbase.Address)
 	require.Equal(t, atx.PrevATXID.Bytes(), response.Atx.PrevAtx.Id)
