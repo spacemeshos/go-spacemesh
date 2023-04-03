@@ -918,6 +918,15 @@ func TestHandler_HandleAtxData(t *testing.T) {
 		require.NoError(t, atxHdlr.HandleAtxData(context.Background(), p2p.NoPeer, buf))
 		require.Equal(t, pubsub.ValidationIgnore, atxHdlr.HandleGossipAtx(context.Background(), "", buf))
 	})
+
+	t.Run("atx with invalid signature", func(t *testing.T) {
+		atx := newActivationTx(t, sig, nid, 0, types.EmptyATXID, types.EmptyATXID, nil, types.LayerID{}, 0, 0, coinbase, 2, nil)
+		atx.Signature[0] = ^atx.Signature[0] // fip first 8 bits
+		buf, err := codec.Encode(atx)
+		require.NoError(t, err)
+
+		require.ErrorContains(t, atxHdlr.HandleAtxData(context.Background(), p2p.NoPeer, buf), "failed to verify atx signature")
+	})
 }
 
 func BenchmarkGetAtxHeaderWithConcurrentProcessAtx(b *testing.B) {
