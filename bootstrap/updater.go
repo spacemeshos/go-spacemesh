@@ -150,6 +150,7 @@ func (u *Updater) Start(ctx context.Context) {
 				return err
 			}
 			wait := time.Duration(0)
+			u.logger.With().Info("start listening to update", log.String("source", u.cfg.URL))
 			for {
 				select {
 				case <-ctx.Done():

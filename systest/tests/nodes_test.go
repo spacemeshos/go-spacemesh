@@ -24,24 +24,26 @@ func init() {
 func TestAddNodes(t *testing.T) {
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
-
 	const (
 		epochBeforeJoin = 5
 		lastEpoch       = 9
-
-		beforeAdding = 12
-
-		addedLater = 2
+		beforeAdding    = 12
+		addedLater      = 2
 	)
 
-	cl := cluster.New(tctx)
-	total := min(tctx.ClusterSize, 30)
+	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	size := min(tctx.ClusterSize, 30)
+	oldSize := size - addedLater
+	if tctx.ClusterSize > oldSize {
+		tctx.Log.Info("cluster size changed to ", oldSize)
+		tctx.ClusterSize = oldSize
+	}
+	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	require.NoError(t, err)
 
-	require.NoError(t, cl.AddBootnodes(tctx, 2))
-	require.NoError(t, cl.AddBootstrapper(tctx, 1))
-	require.NoError(t, cl.AddPoets(tctx))
-	require.NoError(t, cl.AddSmeshers(tctx, total-2-addedLater))
+	// increase the cluster size to the original test size
+	tctx.Log.Info("cluster size changed to ", size)
+	tctx.ClusterSize = size
 
 	var eg errgroup.Group
 	{
