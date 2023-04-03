@@ -230,7 +230,7 @@ func (b *Ballot) Initialize() error {
 		return fmt.Errorf("ballot already initialized")
 	}
 	if b.Signature == EmptyEdSignature {
-		return fmt.Errorf("Ballot must be signed before initialization")
+		return fmt.Errorf("cannot calculate Ballot ID: signature is nil")
 	}
 
 	if b.MsgHash != BytesToHash(b.HashInnerBytes()) {

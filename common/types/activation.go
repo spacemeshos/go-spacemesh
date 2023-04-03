@@ -248,7 +248,7 @@ func (atx *ActivationTx) Initialize() error {
 	}
 
 	if atx.Signature == EmptyEdSignature {
-		return fmt.Errorf("ATX must be signed before initialization")
+		return fmt.Errorf("cannot calculate ATX ID: sig is nil")
 	}
 
 	if atx.MsgHash != BytesToHash(atx.HashInnerBytes()) {
