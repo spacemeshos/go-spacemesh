@@ -197,7 +197,9 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		ap := atxProof
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
+		ap.Messages[0].SmesherID = sig.NodeID()
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
+		ap.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -219,7 +221,9 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	t.Run("proof equivalence", func(t *testing.T) {
 		ap := atxProof
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
+		ap.Messages[0].SmesherID = sig.NodeID()
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
+		ap.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid.Add(11),
