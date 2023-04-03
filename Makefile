@@ -75,13 +75,9 @@ get-libs: get-gpu-setup get-postrs-lib
 
 gen-p2p-identity:
 	cd $@ ; go build -o $(BIN_DIR)$@$(EXE) .
-hare p2p: get-libs
-	cd $@ ; go build -o $(BIN_DIR)go-$@$(EXE) .
 go-spacemesh: get-libs
 	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
-harness: get-libs
-	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) .
-.PHONY: hare p2p harness go-spacemesh gen-p2p-identity
+.PHONY: go-spacemesh gen-p2p-identity
 
 tidy:
 	go mod tidy
@@ -95,7 +91,7 @@ endif
 
 # available only for linux host because CGO usage
 ifeq ($(HOST_OS),linux)
-docker-local-build: go-spacemesh hare p2p harness
+docker-local-build: go-spacemesh
 	cd build; DOCKER_BUILDKIT=1 docker build -f ../Dockerfile.prebuiltBinary -t $(DOCKER_IMAGE) .
 .PHONY: docker-local-build
 endif
