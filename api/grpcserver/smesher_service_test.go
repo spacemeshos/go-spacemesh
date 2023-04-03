@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/post/config"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	v1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/post/config"
 )
 
 func TestPostConfig(t *testing.T) {
@@ -59,9 +59,9 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 		Scrypt:            config.DefaultLabelParams(),
 	}).Return(nil)
 
-	_, err = svc.StartSmeshing(context.Background(), &v1.StartSmeshingRequest{
-		Coinbase: &v1.AccountId{Address: "stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5"},
-		Opts: &v1.PostSetupOpts{
+	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
+		Coinbase: &pb.AccountId{Address: "stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5"},
+		Opts: &pb.PostSetupOpts{
 			DataDir:           "data-dir",
 			NumUnits:          1,
 			MaxFileSize:       1024,
