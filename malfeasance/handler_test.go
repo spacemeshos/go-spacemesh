@@ -219,6 +219,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	})
 
 	t.Run("proof equivalence", func(t *testing.T) {
+		// FIXME(mafa): this test relies on the previous test to pass (database needs to contain malfeasance proof)
 		ap := atxProof
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[0].SmesherID = sig.NodeID()
