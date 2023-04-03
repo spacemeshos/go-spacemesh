@@ -3,6 +3,7 @@ package vm
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"math/big"
 	"math/rand"
 	"os"
@@ -41,8 +42,11 @@ func testContext(lid types.LayerID) ApplyContext {
 
 func newTester(tb testing.TB) *tester {
 	return &tester{
-		TB:  tb,
-		VM:  New(sql.InMemory(), WithLogger(logtest.New(tb))),
+		TB: tb,
+		VM: New(sql.InMemory(),
+			WithLogger(logtest.New(tb)),
+			WithConfig(Config{GasLimit: math.MaxUint64, StorageCostFactor: 1}),
+		),
 		rng: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
@@ -2047,90 +2051,124 @@ func FuzzParse(f *testing.F) {
 }
 
 func BenchmarkTransactions(b *testing.B) {
-	bench := func(b *testing.B, tt *tester, raw types.RawTx) {
-		b.Log("tx size", len(raw.Raw))
+	bench := func(b *testing.B, tt *tester, txs []types.Transaction) {
 		lid := types.GetEffectiveGenesis().Add(2)
 		for i := 0; i < b.N; i++ {
 			b.StartTimer()
-			ineffective, txs, err := tt.Apply(ApplyContext{Layer: lid}, []types.Transaction{{RawTx: raw}}, nil)
+			ineffective, txs, err := tt.Apply(ApplyContext{Layer: lid}, txs, nil)
 			b.StopTimer()
 			require.NoError(b, err)
 			require.Empty(b, ineffective)
-			require.Equal(b, types.TransactionSuccess, txs[0].Status)
+			for _, tx := range txs {
+				require.Equal(b, types.TransactionSuccess, tx.Status)
+			}
 			require.NoError(b, tt.Revert(lid.Sub(1)))
 		}
 	}
-
+	const n = 100000
+	b.Logf("n=%d", n)
 	// benchmarks below will have overhead beside the transaction itself.
 	// they are useful mainly to collect execution profiles and make estimations based on them.
 	b.Run("singlesig/selfspawn", func(b *testing.B) {
-		tt := newTester(b).addSingleSig(1).applyGenesis()
-		bench(b, tt, (&selfSpawnTx{principal: 0}).gen(tt))
+		tt := newTester(b).addSingleSig(n).applyGenesis()
+		txs := make([]types.Transaction, n)
+		for i := range txs {
+			tx := &selfSpawnTx{principal: i}
+			txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+		}
+		bench(b, tt, txs)
 	})
 	b.Run("singlesig/spend", func(b *testing.B) {
-		tt := newTester(b).addSingleSig(2).applyGenesis()
+		tt := newTester(b).addSingleSig(n).applyGenesis()
 		ineffective, _, err := tt.Apply(
 			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
-			[]types.Transaction{
-				{RawTx: (&selfSpawnTx{principal: 0}).gen(tt)},
-			},
+			notVerified(tt.spawnAll()...),
 			nil,
 		)
+		tt = tt.addSingleSig(n)
+
 		require.NoError(b, err)
 		require.Empty(b, ineffective)
-		bench(b, tt, (&spendTx{from: 0, to: 1, amount: 10}).gen(tt))
+		txs := make([]types.Transaction, n)
+		for i := range txs {
+			tx := &spendTx{from: i, to: i + n, amount: 10}
+			txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+		}
+		bench(b, tt, txs)
 	})
 	b.Run("multisig/selfspawn", func(b *testing.B) {
-		tt := newTester(b).addMultisig(2, 3, 5, multisig.TemplateAddress3).applyGenesis()
-		bench(b, tt, (&selfSpawnTx{principal: 0}).gen(tt))
+		tt := newTester(b).addMultisig(n, 3, 5, multisig.TemplateAddress3).applyGenesis()
+		txs := make([]types.Transaction, n)
+		for i := range txs {
+			tx := &selfSpawnTx{principal: i}
+			txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+		}
+		bench(b, tt, txs)
 	})
 	b.Run("multisig/spend", func(b *testing.B) {
-		tt := newTester(b).addMultisig(2, 3, 10, multisig.TemplateAddress3).applyGenesis()
+		tt := newTester(b).addMultisig(n, 3, 5, multisig.TemplateAddress3).applyGenesis()
 		ineffective, _, err := tt.Apply(
 			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
-			[]types.Transaction{
-				{RawTx: (&selfSpawnTx{principal: 0}).gen(tt)},
-			},
+			notVerified(tt.spawnAll()...),
 			nil,
 		)
+		tt = tt.addMultisig(n, 3, 5, multisig.TemplateAddress3)
+
 		require.NoError(b, err)
 		require.Empty(b, ineffective)
-		bench(b, tt, (&spendTx{from: 0, to: 1, amount: 10}).gen(tt))
+		txs := make([]types.Transaction, n)
+		for i := range txs {
+			tx := &spendTx{from: i, to: i + n, amount: 10}
+			txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+		}
+		bench(b, tt, txs)
 	})
 	b.Run("vesting/spawnvault", func(b *testing.B) {
 		tt := newTester(b).
-			addVesting(1, 3, 5, vesting.TemplateAddress3).
-			addVault(1, 200000, 100000, types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(100)).
+			addVesting(n, 3, 5, vesting.TemplateAddress3).
 			applyGenesis()
 		ineffective, _, err := tt.Apply(
 			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
-			[]types.Transaction{
-				{RawTx: (&selfSpawnTx{principal: 0}).gen(tt)},
-			},
+			notVerified(tt.spawnAll()...),
 			nil,
 		)
+		tt = tt.addVault(n, 200000, 100000, types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(100))
 		require.NoError(b, err)
 		require.Empty(b, ineffective)
-		bench(b, tt, (&spawnTx{principal: 0, target: 1}).gen(tt))
+
+		txs := make([]types.Transaction, n)
+		for i := range txs {
+			tx := &spawnTx{principal: i, target: i + n}
+			txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+		}
+		bench(b, tt, txs)
 	})
 	b.Run("vesting/drain", func(b *testing.B) {
 		tt := newTester(b).
-			addVesting(1, 3, 10, vesting.TemplateAddress3).
-			addVault(1, 200000, 100000, types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(100)).
+			addVesting(n, 3, 5, vesting.TemplateAddress3).
+			addVault(n, 200000, 100000, types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(100)).
 			applyGenesis()
+		var txs []types.Transaction
+		for i := 0; i < n; i++ {
+			tx := &selfSpawnTx{principal: i}
+			txs = append(txs, types.Transaction{RawTx: tx.gen(tt)})
+			spawn := &spawnTx{principal: i, target: i + n}
+			txs = append(txs, types.Transaction{RawTx: spawn.gen(tt)})
+		}
 		ineffective, _, err := tt.Apply(
 			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
-			[]types.Transaction{
-				{RawTx: (&selfSpawnTx{principal: 0}).gen(tt)},
-				{RawTx: (&spawnTx{principal: 0, target: 1}).gen(tt)},
-			},
+			txs,
 			nil,
 		)
 		require.NoError(b, err)
 		require.Empty(b, ineffective)
-		bench(b, tt, (&drainVault{
-			owner: 0, vault: 1, recipient: 0, amount: 10,
-		}).gen(tt))
+
+		txs = make([]types.Transaction, n)
+		for i := range txs {
+			tx := &drainVault{owner: i, vault: i + n, recipient: i, amount: 100}
+			txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+		}
+		bench(b, tt, txs)
 	})
 }
 
