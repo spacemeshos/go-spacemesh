@@ -38,7 +38,7 @@ type atxChan struct {
 // Handler processes the atxs received from all nodes and their validity status.
 type Handler struct {
 	cdb             *datastore.CachedDB
-	verifier        *signing.EdVerifier
+	edVerifier      *signing.EdVerifier
 	clock           layerClock
 	publisher       pubsub.Publisher
 	layersPerEpoch  uint32
@@ -56,7 +56,7 @@ type Handler struct {
 // NewHandler returns a data handler for ATX.
 func NewHandler(
 	cdb *datastore.CachedDB,
-	verifier *signing.EdVerifier,
+	edVerifier *signing.EdVerifier,
 	c layerClock,
 	pub pubsub.Publisher,
 	fetcher system.Fetcher,
@@ -70,7 +70,7 @@ func NewHandler(
 ) *Handler {
 	return &Handler{
 		cdb:             cdb,
-		verifier:        verifier,
+		edVerifier:      edVerifier,
 		clock:           c,
 		publisher:       pub,
 		layersPerEpoch:  layersPerEpoch,
@@ -496,7 +496,7 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 
 	atx.SetReceived(receivedTime.Local())
 
-	h.verifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature)
+	h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature)
 	atx.SetNodeID(atx.SmesherID)
 
 	if err := atx.Initialize(); err != nil {

@@ -1,9 +1,8 @@
 package signing_test
 
 import (
-	"testing"
-
 	"crypto/ed25519"
+	"testing"
 
 	"github.com/stretchr/testify/require"
 
