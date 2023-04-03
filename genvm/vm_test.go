@@ -2234,7 +2234,7 @@ func BenchmarkTransactions(b *testing.B) {
 
 func BenchmarkValidation(b *testing.B) {
 	tt := newTester(b).addSingleSig(2).applyGenesis()
-	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)},
+	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(3)},
 		notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
@@ -2319,8 +2319,8 @@ func BenchmarkWallet(b *testing.B) {
 func benchmarkWallet(b *testing.B, accounts, n int) {
 	tt := newTester(b).persistent().
 		addSingleSig(accounts).applyGenesis().withSeed(101)
-	lid := types.NewLayerID(1)
-	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)},
+	lid := types.NewLayerID(3)
+	skipped, _, err := tt.Apply(ApplyContext{Layer: lid},
 		notVerified(tt.spawnAll()...), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
