@@ -2051,6 +2051,18 @@ func FuzzParse(f *testing.F) {
 	})
 }
 
+func getMultisigTemplate(k int) types.Address {
+	switch k {
+	case 1:
+		return multisig.TemplateAddress1
+	case 2:
+		return multisig.TemplateAddress2
+	case 3:
+		return multisig.TemplateAddress3
+	}
+	panic(fmt.Sprintf("unkown k %d", k))
+}
+
 func BenchmarkTransactions(b *testing.B) {
 	bench := func(b *testing.B, tt *tester, txs []types.Transaction) {
 		lid := types.GetEffectiveGenesis().Add(2)
@@ -2079,6 +2091,24 @@ func BenchmarkTransactions(b *testing.B) {
 		}
 		bench(b, tt, txs)
 	})
+	b.Run("singlesig/spawn", func(b *testing.B) {
+		tt := newTester(b).persistent().addSingleSig(n).applyGenesis()
+		ineffective, _, err := tt.Apply(
+			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
+			notVerified(tt.spawnAll()...),
+			nil,
+		)
+		tt = tt.addSingleSig(n)
+
+		require.NoError(b, err)
+		require.Empty(b, ineffective)
+		txs := make([]types.Transaction, n)
+		for i := range txs {
+			tx := &spawnTx{principal: i, target: i + n}
+			txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+		}
+		bench(b, tt, txs)
+	})
 	b.Run("singlesig/spend", func(b *testing.B) {
 		tt := newTester(b).persistent().addSingleSig(n).applyGenesis()
 		ineffective, _, err := tt.Apply(
@@ -2097,33 +2127,62 @@ func BenchmarkTransactions(b *testing.B) {
 		}
 		bench(b, tt, txs)
 	})
-	b.Run("multisig/selfspawn", func(b *testing.B) {
-		tt := newTester(b).persistent().addMultisig(n, 3, 5, multisig.TemplateAddress3).applyGenesis()
-		txs := make([]types.Transaction, n)
-		for i := range txs {
-			tx := &selfSpawnTx{principal: i}
-			txs[i] = types.Transaction{RawTx: tx.gen(tt)}
-		}
-		bench(b, tt, txs)
-	})
-	b.Run("multisig/spend", func(b *testing.B) {
-		tt := newTester(b).persistent().addMultisig(n, 3, 5, multisig.TemplateAddress3).applyGenesis()
-		ineffective, _, err := tt.Apply(
-			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
-			notVerified(tt.spawnAll()...),
-			nil,
-		)
-		tt = tt.addMultisig(n, 3, 5, multisig.TemplateAddress3)
+	type variant struct {
+		k, n int
+	}
+	for _, v := range []variant{
+		{1, 1},
+		{1, 2},
+		{2, 3},
+		{3, 5},
+		{3, 7},
+	} {
+		b.Run(fmt.Sprintf("multisig/k=%d/n=%d/selfspawn", v.k, v.n), func(b *testing.B) {
+			tt := newTester(b).persistent().addMultisig(n, v.k, v.n, getMultisigTemplate(v.k)).applyGenesis()
+			txs := make([]types.Transaction, n)
+			for i := range txs {
+				tx := &selfSpawnTx{principal: i}
+				txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+			}
+			bench(b, tt, txs)
+		})
+		b.Run(fmt.Sprintf("multisig/k=%d/n=%d/spawn", v.k, v.n), func(b *testing.B) {
+			tt := newTester(b).persistent().addMultisig(n, v.k, v.n, getMultisigTemplate(v.k)).applyGenesis()
+			ineffective, _, err := tt.Apply(
+				ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
+				notVerified(tt.spawnAll()...),
+				nil,
+			)
+			tt = tt.addMultisig(n, v.k, v.n, getMultisigTemplate(v.k))
 
-		require.NoError(b, err)
-		require.Empty(b, ineffective)
-		txs := make([]types.Transaction, n)
-		for i := range txs {
-			tx := &spendTx{from: i, to: i + n, amount: 10}
-			txs[i] = types.Transaction{RawTx: tx.gen(tt)}
-		}
-		bench(b, tt, txs)
-	})
+			require.NoError(b, err)
+			require.Empty(b, ineffective)
+			txs := make([]types.Transaction, n)
+			for i := range txs {
+				tx := &spawnTx{principal: i, target: i + n}
+				txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+			}
+			bench(b, tt, txs)
+		})
+		b.Run(fmt.Sprintf("multisig/k=%d/n=%d/spend", v.k, v.n), func(b *testing.B) {
+			tt := newTester(b).persistent().addMultisig(n, v.k, v.n, getMultisigTemplate(v.k)).applyGenesis()
+			ineffective, _, err := tt.Apply(
+				ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
+				notVerified(tt.spawnAll()...),
+				nil,
+			)
+			tt = tt.addMultisig(n, 3, 5, multisig.TemplateAddress3)
+
+			require.NoError(b, err)
+			require.Empty(b, ineffective)
+			txs := make([]types.Transaction, n)
+			for i := range txs {
+				tx := &spendTx{from: i, to: i + n, amount: 10}
+				txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+			}
+			bench(b, tt, txs)
+		})
+	}
 	b.Run("vesting/spawnvault", func(b *testing.B) {
 		tt := newTester(b).persistent().
 			addVesting(n, 3, 5, vesting.TemplateAddress3).
