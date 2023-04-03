@@ -584,13 +584,10 @@ func (app *App) initServices(
 
 	app.Config.Bootstrap.DataDir = app.Config.DataDir()
 	app.Config.Bootstrap.Interval = app.Config.LayerDuration / 10
-	app.updater = bootstrap.New(
-		bootstrap.WithConfig(app.Config.Bootstrap),
-		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to initialize bootstrap updater: %w", err)
-	}
+	//app.updater = bootstrap.New(
+	//	bootstrap.WithConfig(app.Config.Bootstrap),
+	//	bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
+	//)
 
 	app.certifier = blocks.NewCertifier(app.cachedDB, app.hOracle, nodeID, sgn, app.keyExtractor, app.host, clock, beaconProtocol, trtl,
 		blocks.WithCertContext(ctx),
@@ -816,7 +813,9 @@ func (app *App) startServices(ctx context.Context) error {
 		app.ptimesync.Start()
 	}
 
-	app.listenToUpdates(ctx)
+	if app.updater != nil {
+		app.listenToUpdates(ctx)
+	}
 	return nil
 }
 
