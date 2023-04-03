@@ -13,6 +13,8 @@ const (
 	MethodSpend = 16
 )
 
+const TxSizeLimit = 1024
+
 type (
 	// PublicKey is an alias to Hash32.
 	PublicKey = types.Hash32

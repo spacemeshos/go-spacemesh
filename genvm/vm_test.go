@@ -1620,6 +1620,11 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			tx:   tt.spawn(1, 0),
 			err:  core.ErrNotSpawned,
 		},
+		{
+			desc: "OverflowsLimit",
+			tx:   types.NewRawTx(make([]byte, core.TxSizeLimit+1)),
+			err:  core.ErrTxLimit,
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			req := tt.Validation(tc.tx)
