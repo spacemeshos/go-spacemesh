@@ -56,11 +56,11 @@ func (f *ResultsFilter) binding(stmt *sql.Statement) {
 		position++
 	}
 	if f.Start != nil {
-		stmt.BindInt64(position, int64(*f.Start))
+		stmt.BindInt64(position, int64(f.Start.Value))
 		position++
 	}
 	if f.End != nil {
-		stmt.BindInt64(position, int64(*f.End))
+		stmt.BindInt64(position, int64(f.End.Value))
 		position++
 	}
 	if f.TID != nil {

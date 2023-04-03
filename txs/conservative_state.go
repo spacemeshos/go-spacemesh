@@ -117,7 +117,7 @@ func (cs *ConservativeState) AddToCache(ctx context.Context, tx *types.Transacti
 	if err := cs.cache.Add(ctx, cs.db, tx, received, false); err != nil {
 		return err
 	}
-	events.ReportNewTx(0, tx)
+	events.ReportNewTx(types.LayerID{}, tx)
 	events.ReportAccountUpdate(tx.Principal)
 	return nil
 }

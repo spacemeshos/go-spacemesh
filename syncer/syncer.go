@@ -177,7 +177,7 @@ func NewSyncer(
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
 	s.isBusy.Store(0)
-	s.targetSyncedLayer.Store(types.LayerID(0))
+	s.targetSyncedLayer.Store(types.LayerID{})
 	s.lastLayerSynced.Store(s.mesh.ProcessedLayer())
 	s.lastATXsSynced.Store(types.EpochID(0))
 	return s
@@ -397,7 +397,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			}
 		}
 
-		if missing := s.mesh.MissingLayer(); missing != 0 {
+		if missing := s.mesh.MissingLayer(); missing != (types.LayerID{}) {
 			logger.With().Info("fetching data for missing layer", missing)
 			if err := s.syncLayer(ctx, missing); err != nil {
 				logger.With().Warning("failed to fetch missing layer", missing, log.Err(err))

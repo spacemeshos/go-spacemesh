@@ -8,13 +8,7 @@ import (
 )
 
 func (t *MalfeasanceProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.Layer))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
+	
 	{
 		n, err := t.Proof.EncodeScale(enc)
 		if err != nil {
@@ -26,14 +20,7 @@ func (t *MalfeasanceProof) EncodeScale(enc *scale.Encoder) (total int, err error
 }
 
 func (t *MalfeasanceProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Layer = LayerID(field)
-	}
+	
 	{
 		n, err := t.Proof.DecodeScale(dec)
 		if err != nil {
@@ -270,13 +257,7 @@ func (t *HareProofMsg) DecodeScale(dec *scale.Decoder) (total int, err error) {
 }
 
 func (t *HareMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.Layer))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
+	
 	{
 		n, err := scale.EncodeCompact32(enc, uint32(t.Round))
 		if err != nil {
@@ -295,14 +276,7 @@ func (t *HareMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
 }
 
 func (t *HareMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Layer = LayerID(field)
-	}
+
 	{
 		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {

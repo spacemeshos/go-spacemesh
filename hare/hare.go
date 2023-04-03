@@ -221,7 +221,7 @@ func (h *Hare) getLastLayer() types.LayerID {
 }
 
 func (h *Hare) setLastLayer(layerID types.LayerID) {
-	if layerID == 0 {
+	if layerID == (types.LayerID{}) {
 		// layers starts from 0. nothing to do here.
 		return
 	}

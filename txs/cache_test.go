@@ -199,7 +199,7 @@ func buildCache(t *testing.T, tc *testCache, accounts map[types.Address]*testAcc
 			newNextNonce := ta.nonce + uint64(num)
 			newBalance := ta.balance
 			for _, mtx := range mtxs[:num] {
-				checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+				checkTX(t, tc.Cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 				newBalance -= mtx.Spending()
 			}
 			checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
@@ -221,7 +221,7 @@ func buildSingleAccountCache(t *testing.T, tc *testCache, ta *testAcct, mtxs []*
 
 	require.NoError(t, tc.Cache.buildFromScratch(tc.db))
 	for _, mtx := range mtxs {
-		checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+		checkTX(t, tc.Cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 	}
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
 	var expectedMempool map[types.Address][]*types.MeshTransaction
@@ -250,7 +250,7 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 	// build the cache from DB
 	require.NoError(t, tc.buildFromScratch(tc.db))
 	for _, mtx := range mtxs {
-		checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+		checkTX(t, tc.Cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 	}
 	for _, mtx := range append(oldNonces, sameNonces...) {
 		checkNoTX(t, tc.Cache, mtx.ID)
@@ -277,7 +277,7 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 	}
 	checkTX(t, tc.Cache, mtxs[2].ID, lid.Add(1), types.EmptyBlockID)
 	for _, mtx := range mtxs[3:] {
-		checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+		checkTX(t, tc.Cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 	}
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
 	// mempool will only include transactions that are not in proposals/blocks
@@ -305,7 +305,7 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 	checkTXStateFromDB(t, tc.db, mtxs[:2], types.APPLIED)
 	checkTX(t, tc.Cache, mtxs[2].ID, lid.Add(1), types.EmptyBlockID)
 	for _, mtx := range mtxs[3:] {
-		checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+		checkTX(t, tc.Cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 	}
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance+income)
 	// mempool is unchanged
@@ -326,7 +326,7 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 	}
 	checkTX(t, tc.Cache, mtxs[2].ID, lid.Add(1), types.EmptyBlockID)
 	for _, mtx := range mtxs[3:] {
-		checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+		checkTX(t, tc.Cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 	}
 	for _, mtx := range append(oldNonces, sameNonces...) {
 		checkNoTX(t, tc.Cache, mtx.ID)
@@ -355,7 +355,7 @@ func TestCache_Account_TXInMultipleLayers(t *testing.T) {
 	checkTX(t, tc.Cache, mtxs[0].ID, lid, bid0)
 	checkTX(t, tc.Cache, mtxs[1].ID, lid, bid1)
 	for _, mtx := range mtxs[2:] {
-		checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+		checkTX(t, tc.Cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 	}
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
 
@@ -374,7 +374,7 @@ func TestCache_Account_TXInMultipleLayers(t *testing.T) {
 	checkNoTX(t, tc.Cache, mtxs[0].ID)
 	checkTX(t, tc.Cache, mtxs[1].ID, lid.Add(1), types.EmptyBlockID)
 	for _, mtx := range mtxs[2:] {
-		checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+		checkTX(t, tc.Cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 	}
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance+income)
 	// mempool is unchanged
@@ -409,13 +409,13 @@ func TestCache_Account_EmptyLayerApplied_LowerNonceBackToMempool(t *testing.T) {
 	// empty layer is applied.
 	// there is also an incoming fund of `income` to the principal's account
 	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, types.EmptyBlockID, nil, nil))
-	checkTX(t, tc.Cache, mtxs[0].ID, 0, types.EmptyBlockID)
+	checkTX(t, tc.Cache, mtxs[0].ID, types.LayerID{}, types.EmptyBlockID)
 	checkTX(t, tc.Cache, mtxs[1].ID, lid.Add(1), types.EmptyBlockID)
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
 	// tx0 is back to mempool, and mtxs[1] will be too, because mempool starts from the
 	// first nonce without an empty layer
 	mtxs[0].BlockID = types.EmptyBlockID
-	mtxs[0].LayerID = 0
+	mtxs[0].LayerID = types.LayerID{}
 	mtxs[1].BlockID = types.EmptyBlockID
 	mtxs[1].LayerID = lid.Add(1)
 	expectedMempool := map[types.Address][]*types.MeshTransaction{ta.principal: mtxs}
@@ -450,11 +450,11 @@ func TestCache_Account_EmptyLayerApplied_HigherNonceBackToMempool(t *testing.T) 
 	// there is also an incoming fund of `income` to the principal's account
 	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, types.EmptyBlockID, nil, nil))
 	checkTX(t, tc.Cache, mtxs[0].ID, lid.Add(1), types.EmptyBlockID)
-	checkTX(t, tc.Cache, mtxs[1].ID, 0, types.EmptyBlockID)
+	checkTX(t, tc.Cache, mtxs[1].ID, types.LayerID{}, types.EmptyBlockID)
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
 	// tx1 is back to mempool
 	mtxs[1].BlockID = types.EmptyBlockID
-	mtxs[1].LayerID = 0
+	mtxs[1].LayerID = types.LayerID{}
 	expectedMempool := map[types.Address][]*types.MeshTransaction{ta.principal: mtxs[1:]}
 	checkMempool(t, tc.Cache, expectedMempool)
 	checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
@@ -471,7 +471,7 @@ func TestCache_Account_TooManyNonce(t *testing.T) {
 	require.True(t, tc.MoreInDB(ta.principal))
 	last := len(mtxs) - 1
 	for _, mtx := range mtxs[:last] {
-		checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+		checkTX(t, tc.Cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 	}
 	// the last one is not in the cache
 	checkNoTX(t, tc.Cache, mtxs[last].ID)
@@ -504,10 +504,10 @@ func TestCache_Account_TooManySameNonceTXs(t *testing.T) {
 	require.NoError(t, tc.buildFromScratch(tc.db))
 	cutoff := len(mtxs) - 2
 	best := mtxs[cutoff]
-	checkTX(t, tc.Cache, best.ID, 0, types.EmptyBlockID)
+	checkTX(t, tc.Cache, best.ID, types.LayerID{}, types.EmptyBlockID)
 	for _, mtx := range mtxs {
 		if mtx == best {
-			checkTX(t, tc.Cache, best.ID, 0, types.EmptyBlockID)
+			checkTX(t, tc.Cache, best.ID, types.LayerID{}, types.EmptyBlockID)
 		} else {
 			checkNoTX(t, tc.Cache, mtx.ID)
 		}
@@ -594,7 +594,7 @@ func TestCache_Account_Add_SuperiorReplacesInferior(t *testing.T) {
 		Received:    time.Now(),
 	}
 	require.NoError(t, tc.Add(context.Background(), tc.db, &better.Transaction, better.Received, false))
-	checkTX(t, tc.Cache, better.ID, 0, types.EmptyBlockID)
+	checkTX(t, tc.Cache, better.ID, types.LayerID{}, types.EmptyBlockID)
 	checkNoTX(t, tc.Cache, oldOne.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce+1, ta.balance-better.Spending())
 	expectedMempool := map[types.Address][]*types.MeshTransaction{ta.principal: {better}}
@@ -615,7 +615,7 @@ func TestCache_Account_Add_SuperiorReplacesInferior_EvictLaterNonce(t *testing.T
 		Received:    time.Now(),
 	}
 	require.NoError(t, tc.Add(context.Background(), tc.db, &better.Transaction, better.Received, false))
-	checkTX(t, tc.Cache, better.ID, 0, types.EmptyBlockID)
+	checkTX(t, tc.Cache, better.ID, types.LayerID{}, types.EmptyBlockID)
 	for _, mtx := range mtxs {
 		checkNoTX(t, tc.Cache, mtx.ID)
 	}
@@ -675,7 +675,7 @@ func TestCache_Account_Add_RandomOrder(t *testing.T) {
 	}
 	newBalance := ta.balance
 	for _, mtx := range mtxs {
-		checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+		checkTX(t, tc.Cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 		newBalance -= mtx.Spending()
 	}
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce+uint64(len(mtxs)), newBalance)
@@ -705,7 +705,7 @@ func TestCache_Account_Add_InsufficientBalance_ResetAfterApply(t *testing.T) {
 	ta.balance += ta.balance
 	require.NoError(t, tc.Cache.ApplyLayer(context.Background(), tc.db, lid, types.BlockID{1, 2, 3}, nil, nil))
 
-	checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+	checkTX(t, tc.Cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 	expectedMempool := map[types.Address][]*types.MeshTransaction{ta.principal: {mtx}}
 	checkMempool(t, tc.Cache, expectedMempool)
 	require.False(t, tc.MoreInDB(ta.principal))
@@ -739,7 +739,7 @@ func TestCache_Account_Add_InsufficientBalance_HigherNonceFeasibleFirst(t *testi
 	ta.balance = mtx1.Spending()
 	require.NoError(t, tc.Cache.ApplyLayer(context.Background(), tc.db, lid, types.BlockID{1, 2, 3}, nil, nil))
 	checkNoTX(t, tc.Cache, mtx0.ID)
-	checkTX(t, tc.Cache, mtx1.ID, 0, types.EmptyBlockID)
+	checkTX(t, tc.Cache, mtx1.ID, types.LayerID{}, types.EmptyBlockID)
 	checkProjection(t, tc.Cache, ta.principal, mtx1.Nonce+1, 0)
 	expectedMempool := map[types.Address][]*types.MeshTransaction{ta.principal: {mtx1}}
 	checkMempool(t, tc.Cache, expectedMempool)
@@ -752,8 +752,8 @@ func TestCache_Account_Add_InsufficientBalance_HigherNonceFeasibleFirst(t *testi
 	// but the account receive enough funds in layer 98 (via rewards or incoming transfer) for both mtx0 and mtx1
 	ta.balance = mtx0.Spending() + mtx1.Spending()
 	require.NoError(t, tc.Cache.ApplyLayer(context.Background(), tc.db, lid, types.BlockID{2, 3, 4}, nil, nil))
-	checkTX(t, tc.Cache, mtx0.ID, 0, types.EmptyBlockID)
-	checkTX(t, tc.Cache, mtx1.ID, 0, types.EmptyBlockID)
+	checkTX(t, tc.Cache, mtx0.ID, types.LayerID{}, types.EmptyBlockID)
+	checkTX(t, tc.Cache, mtx1.ID, types.LayerID{}, types.EmptyBlockID)
 	checkProjection(t, tc.Cache, ta.principal, mtx1.Nonce+1, 0)
 	expectedMempool = map[types.Address][]*types.MeshTransaction{ta.principal: {mtx0, mtx1}}
 	checkMempool(t, tc.Cache, expectedMempool)
@@ -1088,7 +1088,7 @@ func TestCache_LinkTXsWithProposal(t *testing.T) {
 		}
 		if cnt > 2 {
 			for _, mtx := range mtxs[2:] {
-				checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+				checkTX(t, tc.Cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 			}
 		}
 		checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
@@ -1118,7 +1118,7 @@ func TestCache_LinkTXsWithProposal_MultipleLayers(t *testing.T) {
 		checkTX(t, tc.Cache, mtxs[0].ID, lid0, types.EmptyBlockID)
 		if len(mtxs) > 1 {
 			for _, mtx := range mtxs[1:] {
-				checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+				checkTX(t, tc.Cache, mtx.ID,types.LayerID{}, types.EmptyBlockID)
 			}
 		}
 		checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
@@ -1157,7 +1157,7 @@ func TestCache_LinkTXsWithBlock(t *testing.T) {
 		}
 		if cnt > 2 {
 			for _, mtx := range mtxs[2:] {
-				checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+				checkTX(t, tc.Cache, mtx.ID, types.LayerID{},types.EmptyBlockID)
 			}
 		}
 		checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
@@ -1187,7 +1187,7 @@ func TestCache_LinkTXsWithBlock_MultipleLayers(t *testing.T) {
 		checkTX(t, tc.Cache, mtxs[0].ID, lid0, bid0)
 		if len(mtxs) > 1 {
 			for _, mtx := range mtxs[1:] {
-				checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+				checkTX(t, tc.Cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 			}
 		}
 		checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)

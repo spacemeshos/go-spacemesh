@@ -35,7 +35,7 @@ func MessageFromBuffer(buf []byte) (Message, error) {
 
 func (m *Message) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddObject("inner_msg", m.InnerMsg)
-	encoder.AddUint32("layer_id", m.Layer.Uint32())
+	encoder.AddUint32("layer_id", m.Layer.Value)
 	encoder.AddUint32("round", m.Round)
 	encoder.AddString("signature", m.Signature.String())
 	encoder.AddObject("eligibility", &m.Eligibility)
@@ -48,7 +48,7 @@ func (m *Message) Field() log.Field {
 }
 
 func (m *Message) SetMetadata() {
-	if m.Layer == 0 {
+	if m.Layer == (types.LayerID{}) {
 		log.Fatal("Message is missing layer")
 	}
 	m.MsgHash = types.BytesToHash(m.InnerMsg.HashBytes())

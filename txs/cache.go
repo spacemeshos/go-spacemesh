@@ -297,7 +297,7 @@ func (ac *accountCache) add(logger log.Log, tx *types.Transaction, received time
 	ntx := NewNanoTX(&types.MeshTransaction{
 		Transaction: *tx,
 		Received:    received,
-		LayerID:     0,
+		LayerID:     types.LayerID{},
 		BlockID:     types.EmptyBlockID,
 	})
 
@@ -326,7 +326,7 @@ func (ac *accountCache) addPendingFromNonce(logger log.Log, db *sql.Database, no
 		return nil
 	}
 
-	if applied != 0 {
+	if applied != (types.LayerID{}) {
 		for _, mtx := range mtxs {
 			if mtx.State == types.APPLIED {
 				continue
@@ -337,7 +337,7 @@ func (ac *accountCache) addPendingFromNonce(logger log.Log, db *sql.Database, no
 			}
 			mtx.LayerID = nextLayer
 			mtx.BlockID = nextBlock
-			if nextLayer != 0 {
+			if nextLayer != (types.LayerID{}) {
 				logger.With().Debug("next layer found", mtx.ID, nextLayer)
 			}
 		}
@@ -358,9 +358,9 @@ func (ac *accountCache) getMempool(logger log.Log) []*NanoTX {
 	found := false
 	for e := ac.txsByNonce.Front(); e != nil; e = e.Next() {
 		cand := e.Value.(*candidate)
-		if !found && cand.layer() == 0 {
+		if !found && cand.layer() == (types.LayerID{}) {
 			found = true
-		} else if found && cand.layer() != 0 {
+		} else if found && cand.layer() != (types.LayerID{}) {
 			logger.With().Warning("some proposals/blocks packed txs out of order",
 				cand.id(),
 				cand.layer(),

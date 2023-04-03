@@ -86,7 +86,7 @@ type BallotMetadata struct {
 }
 
 func (m *BallotMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddUint32("layer", m.Layer.Uint32())
+	encoder.AddUint32("layer", m.Layer.Value)
 	encoder.AddString("msgHash", m.MsgHash.String())
 	return nil
 }
@@ -198,7 +198,7 @@ type Vote struct {
 // MarshalLogObject implements logging interface.
 func (s *Vote) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("id", s.ID.String())
-	encoder.AddUint32("layer", s.LayerID.Uint32())
+	encoder.AddUint32("layer", s.LayerID.Value)
 	encoder.AddUint64("height", s.Height)
 	return nil
 }
@@ -250,7 +250,7 @@ func (b *Ballot) Initialize() error {
 
 // SetMetadata sets BallotMetadata.
 func (b *Ballot) SetMetadata() {
-	if b.Layer == 0 {
+	if b.Layer == (LayerID{}) {
 		log.Fatal("ballot is missing layer")
 	}
 	b.MsgHash = BytesToHash(b.HashInnerBytes())
@@ -319,7 +319,7 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	}
 
 	encoder.AddString("ballot_id", b.ID().String())
-	encoder.AddUint32("layer_id", b.Layer.Uint32())
+	encoder.AddUint32("layer_id", b.Layer.Value)
 	encoder.AddUint32("epoch_id", uint32(b.Layer.GetEpoch()))
 	encoder.AddString("smesher", b.SmesherID().String())
 	encoder.AddString("opinion hash", b.OpinionHash.String())

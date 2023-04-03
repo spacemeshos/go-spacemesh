@@ -43,13 +43,7 @@ func (t *TransactionResult) EncodeScale(enc *scale.Encoder) (total int, err erro
 		}
 		total += n
 	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.Layer))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
+	
 	{
 		n, err := scale.EncodeStructSliceWithLimit(enc, t.Addresses, 10)
 		if err != nil {
@@ -100,14 +94,7 @@ func (t *TransactionResult) DecodeScale(dec *scale.Decoder) (total int, err erro
 		}
 		total += n
 	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Layer = LayerID(field)
-	}
+	
 	{
 		field, n, err := scale.DecodeStructSliceWithLimit[Address](dec, 10)
 		if err != nil {

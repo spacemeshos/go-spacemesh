@@ -325,7 +325,7 @@ type ConStateAPIMock struct {
 func (t *ConStateAPIMock) Put(id types.TransactionID, tx *types.Transaction) {
 	t.poolByTxId[id] = tx
 	t.poolByAddress[tx.Principal] = id
-	events.ReportNewTx(0, tx)
+	events.ReportNewTx(types.LayerID{}, tx)
 }
 
 // Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
@@ -1852,7 +1852,7 @@ func TestTransactionService(t *testing.T) {
 			// Give the server-side time to subscribe to events
 			time.Sleep(time.Millisecond * 50)
 
-			events.ReportNewTx(0, globalTx)
+			events.ReportNewTx(types.LayerID{}, globalTx)
 			res, err := stream.Recv()
 			require.NoError(t, err)
 			require.Nil(t, res.Transaction)
@@ -1878,7 +1878,7 @@ func TestTransactionService(t *testing.T) {
 			// Give the server-side time to subscribe to events
 			time.Sleep(time.Millisecond * 50)
 
-			events.ReportNewTx(0, globalTx)
+			events.ReportNewTx(types.LayerID{}, globalTx)
 
 			// Verify
 			res, err := stream.Recv()
@@ -1974,7 +1974,7 @@ func TestTransactionService(t *testing.T) {
 
 			// TODO send header after stream has subscribed
 
-			events.ReportNewTx(0, globalTx)
+			events.ReportNewTx(types.LayerID{}, globalTx)
 
 			for _, stream := range streams {
 				res, err := stream.Recv()
@@ -2005,7 +2005,7 @@ func TestTransactionService(t *testing.T) {
 			time.Sleep(time.Millisecond * 50)
 
 			for i := 0; i < subscriptionChanBufSize*2; i++ {
-				events.ReportNewTx(0, globalTx)
+				events.ReportNewTx(types.LayerID{}, globalTx)
 			}
 
 			for i := 0; i < subscriptionChanBufSize; i++ {
@@ -2120,7 +2120,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	time.Sleep(time.Millisecond * 50)
 
 	// publish a tx
-	events.ReportNewTx(0, globalTx)
+	events.ReportNewTx(types.LayerID{}, globalTx)
 	res, err := stream.Recv()
 	require.NoError(t, err, "got error from stream")
 	checkAccountMeshDataItemTx(t, res.Datum.Datum)
@@ -2133,7 +2133,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	// test streaming a tx and an atx that are filtered out
 	// these should not be received
-	events.ReportNewTx(0, globalTx2)
+	events.ReportNewTx(types.LayerID{}, globalTx2)
 	events.ReportNewActivation(globalAtx2)
 
 	_, err = stream.Recv()

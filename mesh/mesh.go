@@ -64,16 +64,16 @@ func NewMesh(cdb *datastore.CachedDB, c layerClock, trtl system.Tortoise, exec *
 		conState:            state,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
 	}
-	msh.latestLayer.Store(types.LayerID(0))
-	msh.latestLayerInState.Store(types.LayerID(0))
-	msh.processedLayer.Store(types.LayerID(0))
+	msh.latestLayer.Store((types.LayerID{}))
+	msh.latestLayerInState.Store((types.LayerID{}))
+	msh.processedLayer.Store((types.LayerID{}))
 
 	lid, err := ballots.LatestLayer(cdb)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, fmt.Errorf("get latest layer %w", err)
 	}
 
-	if err == nil && lid != 0 {
+	if err == nil && lid != (types.LayerID{}) {
 		msh.recoverFromDB(lid)
 		return msh, nil
 	}
@@ -148,7 +148,7 @@ func (msh *Mesh) MeshHash(lid types.LayerID) (types.Hash32, error) {
 func (msh *Mesh) MissingLayer() types.LayerID {
 	value := msh.missingLayer.Load()
 	if value == nil {
-		return 0
+		return types.LayerID{}
 	}
 	return value.(types.LayerID)
 }
@@ -287,13 +287,13 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, upd
 			logger.With().Info("incorrect block applied",
 				log.Stringer("expected", bid),
 				log.Stringer("applied", applied))
-			if minChanged == 0 || lid.Before(minChanged) {
+			if minChanged == (types.LayerID{}) || lid.Before(minChanged) {
 				minChanged = lid
 			}
 		}
 	}
 
-	if minChanged != 0 {
+	if minChanged != (types.LayerID{}) {
 		revertTo := minChanged.Sub(1)
 		logger := logger.WithFields(log.Stringer("revert_to", revertTo))
 		logger.Info("reverting state")
@@ -424,7 +424,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, logger log.Log, from, to
 			return err
 		}
 		if layerID == missing {
-			msh.missingLayer.Store(types.LayerID(0))
+			msh.missingLayer.Store(types.LayerID{})
 		}
 	}
 

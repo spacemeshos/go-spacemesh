@@ -8,13 +8,7 @@ import (
 )
 
 func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.PubLayerID))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
+	
 	{
 		n, err := scale.EncodeCompact64(enc, uint64(t.Sequence))
 		if err != nil {
@@ -54,14 +48,7 @@ func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error)
 }
 
 func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.PubLayerID = LayerID(field)
-	}
+	
 	{
 		field, n, err := scale.DecodeCompact64(dec)
 		if err != nil {

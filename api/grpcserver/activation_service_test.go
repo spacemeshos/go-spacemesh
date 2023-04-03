@@ -65,7 +65,7 @@ func TestGet_HappyPath(t *testing.T) {
 				NIPostChallenge: types.NIPostChallenge{
 					Sequence:           rand.Uint64(),
 					PrevATXID:          types.RandomATXID(),
-					PubLayerID:         0,
+					PubLayerID:         types.LayerID{},
 					PositioningATX:     types.RandomATXID(),
 					InitialPostIndices: types.RandomBytes(7),
 				},

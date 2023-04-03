@@ -273,7 +273,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 	blockDurationPersist.Observe(float64(time.Since(t4)))
 	blockDuration.Observe(float64(time.Since(t1)))
 	transactionsPerBlock.Observe(float64(len(txs)))
-	appliedLayer.Set(float64(lctx.Layer))
+	appliedLayer.Set(float64(lctx.Layer.Value))
 
 	v.logger.With().Info("applied layer",
 		lctx.Layer,

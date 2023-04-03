@@ -87,13 +87,7 @@ func (t *Ballot) DecodeScale(dec *scale.Decoder) (total int, err error) {
 }
 
 func (t *BallotMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.Layer))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
+	
 	{
 		n, err := scale.EncodeByteArray(enc, t.MsgHash[:])
 		if err != nil {
@@ -105,14 +99,7 @@ func (t *BallotMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) 
 }
 
 func (t *BallotMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Layer = LayerID(field)
-	}
+	
 	{
 		n, err := scale.DecodeByteArray(dec, t.MsgHash[:])
 		if err != nil {
@@ -263,13 +250,7 @@ func (t *Vote) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.LayerID))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
+	
 	{
 		n, err := scale.EncodeCompact64(enc, uint64(t.Height))
 		if err != nil {
@@ -288,14 +269,7 @@ func (t *Vote) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.LayerID = LayerID(field)
-	}
+	
 	{
 		field, n, err := scale.DecodeCompact64(dec)
 		if err != nil {

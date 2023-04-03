@@ -20,7 +20,7 @@ func setHareOutput(db sql.Executor, lid types.LayerID, bid types.BlockID, valid 
 	if _, err := db.Exec(`insert into certificates (layer, block, valid) values (?1, ?2, ?3)
 		on conflict do nothing;`,
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(lid))
+			stmt.BindInt64(1, int64(lid.Value))
 			stmt.BindBytes(2, bid[:])
 			stmt.BindBool(3, valid)
 		}, nil); err != nil {
@@ -38,7 +38,7 @@ func GetHareOutput(db sql.Executor, lid types.LayerID) (types.BlockID, error) {
 		rows   int
 	)
 	if rows, err = db.Exec("select block from certificates where layer = ?1 and valid = 1;", func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(lid))
+		stmt.BindInt64(1, int64(lid.Value))
 	}, func(stmt *sql.Statement) bool {
 		stmt.ColumnBytes(0, result[:])
 		return true
@@ -60,7 +60,7 @@ func Add(db sql.Executor, lid types.LayerID, cert *types.Certificate) error {
 	if _, err = db.Exec(`insert into certificates (layer, block, cert, valid) values (?1, ?2, ?3, 1)
 		on conflict do update set cert = ?3, valid = 1;`,
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(lid))
+			stmt.BindInt64(1, int64(lid.Value))
 			stmt.BindBytes(2, cert.BlockID[:])
 			stmt.BindBytes(3, data[:])
 		}, nil); err != nil {
@@ -78,7 +78,7 @@ type CertValidity struct {
 func Get(db sql.Executor, lid types.LayerID) ([]CertValidity, error) {
 	var result []CertValidity
 	if rows, err := db.Exec("select block, cert, valid from certificates where layer = ?1 order by length(cert) desc;", func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(lid))
+		stmt.BindInt64(1, int64(lid.Value))
 	}, func(stmt *sql.Statement) bool {
 		var (
 			cv   CertValidity
@@ -107,7 +107,7 @@ func Get(db sql.Executor, lid types.LayerID) ([]CertValidity, error) {
 func SetValid(db sql.Executor, lid types.LayerID, bid types.BlockID) error {
 	if _, err := db.Exec(`update certificates set valid = 1 where layer = ?1 and block = ?2;`,
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(lid))
+			stmt.BindInt64(1, int64(lid.Value))
 			stmt.BindBytes(2, bid[:])
 		}, nil); err != nil {
 		return fmt.Errorf("invalidate %s: %w", lid, err)
@@ -118,7 +118,7 @@ func SetValid(db sql.Executor, lid types.LayerID, bid types.BlockID) error {
 func SetInvalid(db sql.Executor, lid types.LayerID, bid types.BlockID) error {
 	if _, err := db.Exec(`update certificates set valid = 0 where layer = ?1 and block = ?2;`,
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(lid))
+			stmt.BindInt64(1, int64(lid.Value))
 			stmt.BindBytes(2, bid[:])
 		}, nil); err != nil {
 		return fmt.Errorf("invalidate %s: %w", lid, err)

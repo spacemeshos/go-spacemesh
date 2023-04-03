@@ -5,7 +5,7 @@ package vault
 
 import (
 	"github.com/spacemeshos/go-scale"
-	"github.com/spacemeshos/go-spacemesh/common/types"
+
 )
 
 func (t *Vault) EncodeScale(enc *scale.Encoder) (total int, err error) {
@@ -30,20 +30,7 @@ func (t *Vault) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.VestingStart))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.VestingEnd))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
+	
 	{
 		n, err := scale.EncodeCompact64(enc, uint64(t.DrainedSoFar))
 		if err != nil {
@@ -78,22 +65,7 @@ func (t *Vault) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 		t.InitialUnlockAmount = uint64(field)
 	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.VestingStart = types.LayerID(field)
-	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.VestingEnd = types.LayerID(field)
-	}
+	
 	{
 		field, n, err := scale.DecodeCompact64(dec)
 		if err != nil {

@@ -69,7 +69,7 @@ func TestNewNanoTX(t *testing.T) {
 func TestUpdateMaybe(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	mtx := createMeshTX(t, sig, 0)
+	mtx := createMeshTX(t, sig, types.LayerID{})
 	ntx := NewNanoTX(mtx)
 	lid := types.NewLayerID(23)
 	bid := types.RandomBlockID()
@@ -94,15 +94,15 @@ func TestBetter_PanicOnInvalidArguments(t *testing.T) {
 	signer1, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	received := time.Now()
-	ntx0 := NewNanoTX(createMeshTX(t, signer1, 0, WithReceived(received)))
+	ntx0 := NewNanoTX(createMeshTX(t, signer1, types.LayerID{}, WithReceived(received)))
 	received = received.Add(time.Nanosecond)
 	signer2, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	ntx1 := NewNanoTX(createMeshTX(t, signer2, 0, WithReceived(received)))
+	ntx1 := NewNanoTX(createMeshTX(t, signer2, types.LayerID{}, WithReceived(received)))
 	require.Panics(t, func() { ntx0.Better(ntx1, nil) })
 
 	received = received.Add(time.Nanosecond)
-	ntx2 := NewNanoTX(createMeshTX(t, signer1, 0, WithReceived(received)))
+	ntx2 := NewNanoTX(createMeshTX(t, signer1, types.LayerID{}, WithReceived(received)))
 	ntx2.Nonce = ntx0.Nonce + 1
 	require.Panics(t, func() { ntx0.Better(ntx2, nil) })
 }
@@ -111,8 +111,8 @@ func TestBetter(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	received := time.Now()
-	ntx0 := NewNanoTX(createMeshTX(t, signer, 0, WithReceived(received)))
-	ntx1 := NewNanoTX(createMeshTX(t, signer, 0, WithReceived(received.Add(time.Nanosecond))))
+	ntx0 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}, WithReceived(received)))
+	ntx1 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}, WithReceived(received.Add(time.Nanosecond))))
 	require.Equal(t, ntx0.Principal, ntx1.Principal)
 	require.Equal(t, ntx0.Nonce, ntx1.Nonce)
 	// fees are equal, ntx0 is better due to earlier timestamp

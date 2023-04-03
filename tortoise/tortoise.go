@@ -133,7 +133,7 @@ func (t *turtle) evict(ctx context.Context) {
 		ballot.votes.cutBefore(windowStart)
 	}
 	t.evicted = windowStart.Sub(1)
-	evictedLayer.Set(float64(t.evicted))
+	evictedLayer.Set(float64(t.evicted.Value))
 }
 
 // EncodeVotes by choosing base ballot and explicit votes.
@@ -165,7 +165,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 			var opinion *types.Opinion
 			opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
 			if err == nil {
-				metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last - base.layer))
+				metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last.Value - base.layer.Value))
 				logger.With().Info("encoded votes",
 					log.Stringer("base ballot", base.id),
 					log.Stringer("base layer", base.layer),
@@ -318,7 +318,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 	defer t.evict(ctx)
 	if last.After(t.last) {
 		t.last = last
-		lastLayer.Set(float64(t.last))
+		lastLayer.Set(float64(t.last.Value))
 	}
 	if err := t.drainRetriable(); err != nil {
 		return nil
@@ -338,7 +338,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 		prev := t.layer(process.Sub(1))
 		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(prev.verifying.goodUncounted)
 		t.processed = process
-		processedLayer.Set(float64(t.processed))
+		processedLayer.Set(float64(t.processed.Value))
 
 		if t.isFull {
 			t.full.countDelayed(t.logger, process)
@@ -416,11 +416,11 @@ func (t *turtle) verifyLayers() {
 		verified = maxLayer(t.evicted, types.GetEffectiveGenesis())
 	)
 
-	if t.changedOpinion.min != 0 && !withinDistance(t.Hdist, t.changedOpinion.max, t.last) {
+	if t.changedOpinion.min != (types.LayerID{}) && !withinDistance(t.Hdist, t.changedOpinion.max, t.last) {
 		logger.With().Debug("changed opinion outside hdist", log.Stringer("from", t.changedOpinion.min), log.Stringer("to", t.changedOpinion.max))
 		t.onOpinionChange(t.changedOpinion.min)
-		t.changedOpinion.min = 0
-		t.changedOpinion.max = 0
+		t.changedOpinion.min = types.LayerID{}
+		t.changedOpinion.max = types.LayerID{}
 	}
 
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
@@ -455,7 +455,7 @@ func (t *turtle) verifyLayers() {
 				if target.After(t.changedOpinion.max) {
 					t.changedOpinion.max = target
 				}
-				if t.changedOpinion.min == 0 || target.Before(t.changedOpinion.min) {
+				if t.changedOpinion.min == (types.LayerID{}) || target.Before(t.changedOpinion.min) {
 					t.changedOpinion.min = target
 				}
 			}
@@ -478,7 +478,7 @@ func (t *turtle) verifyLayers() {
 		}
 	}
 	t.verified = verified
-	verifiedLayer.Set(float64(t.verified))
+	verifiedLayer.Set(float64(t.verified.Value))
 }
 
 // loadBlocksData loads blocks, hare output and contextual validity.
