@@ -131,7 +131,7 @@ func TestProcessed(t *testing.T) {
 	db := sql.InMemory()
 	lid, err := GetProcessed(db)
 	require.NoError(t, err)
-	require.EqualValues(t, 0, lid)
+	require.Equal(t, types.LayerID{}, lid)
 	layers := []uint32{9, 10, 8, 7}
 	expected := []uint32{9, 10, 10, 10}
 	for i := range layers {

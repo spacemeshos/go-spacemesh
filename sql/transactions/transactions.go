@@ -155,7 +155,7 @@ func decodeTransaction(id types.TransactionID, stmt *sql.Statement) (*types.Mesh
 
 	state := types.PENDING
 	layer := types.NewLayerID(uint32(stmt.ColumnInt64(2)))
-	if layer != (types.LayerID{}) {
+	if layer.Value != 0 {
 		state = types.APPLIED
 	} else if parsed.TxHeader != nil {
 		state = types.MEMPOOL

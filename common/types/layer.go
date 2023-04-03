@@ -49,10 +49,14 @@ func NewLayerID(value uint32) LayerID {
 	return LayerID{Value: value}
 }
 
+//go:generate scalegen -types LayerID
+
 // LayerID is representing a layer number. Zero value is safe to use, and means 0.
 // Internally it is a simple wrapper over uint32 and should be considered immutable
 // the same way as any integer.
 type LayerID struct {
+	// NOTE(dshulyak) it is made public for compatibility with encoding library.
+	// Don't modify it directly, as it will likely to be made private in the future.
 	Value uint32
 }
 

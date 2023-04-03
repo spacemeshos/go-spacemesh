@@ -416,7 +416,7 @@ func (t *turtle) verifyLayers() {
 		verified = maxLayer(t.evicted, types.GetEffectiveGenesis())
 	)
 
-	if t.changedOpinion.min != (types.LayerID{}) && !withinDistance(t.Hdist, t.changedOpinion.max, t.last) {
+	if t.changedOpinion.min.Value != 0 && !withinDistance(t.Hdist, t.changedOpinion.max, t.last) {
 		logger.With().Debug("changed opinion outside hdist", log.Stringer("from", t.changedOpinion.min), log.Stringer("to", t.changedOpinion.max))
 		t.onOpinionChange(t.changedOpinion.min)
 		t.changedOpinion.min = types.LayerID{}
@@ -455,7 +455,7 @@ func (t *turtle) verifyLayers() {
 				if target.After(t.changedOpinion.max) {
 					t.changedOpinion.max = target
 				}
-				if t.changedOpinion.min == (types.LayerID{}) || target.Before(t.changedOpinion.min) {
+				if t.changedOpinion.min.Value == 0 || target.Before(t.changedOpinion.min) {
 					t.changedOpinion.min = target
 				}
 			}
@@ -674,7 +674,7 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 
 	t.logger.With().Debug("on ballot",
 		log.Inline(ballot),
-		log.Uint32("processed", t.processed.Uint32()),
+		log.Uint32("processed", t.processed.Value),
 	)
 
 	var (
@@ -751,7 +751,7 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 		ballot.ID(),
 		log.Stringer("weight", binfo.weight),
 		log.Uint64("height", refinfo.height),
-		log.Uint32("lid", ballot.Layer.Uint32()),
+		log.Uint32("lid", ballot.Layer.Value),
 	)
 
 	var err error

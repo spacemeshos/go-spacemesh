@@ -24,7 +24,7 @@ type MalfeasanceProof struct {
 }
 
 func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddUint32("generated_layer", mp.Layer.Uint32())
+	encoder.AddUint32("generated_layer", mp.Layer.Value)
 	switch mp.Proof.Type {
 	case MultipleATXs:
 		encoder.AddString("type", "multiple atxs")
@@ -207,7 +207,7 @@ type HareMetadata struct {
 }
 
 func (hm *HareMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddUint32("layer", hm.Layer.Uint32())
+	encoder.AddUint32("layer", hm.Layer.Value)
 	encoder.AddUint32("round", hm.Round)
 	encoder.AddString("msgHash", hm.MsgHash.String())
 	return nil

@@ -397,7 +397,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			}
 		}
 
-		if missing := s.mesh.MissingLayer(); missing != (types.LayerID{}) {
+		if missing := s.mesh.MissingLayer(); (missing != types.LayerID{}) {
 			logger.With().Info("fetching data for missing layer", missing)
 			if err := s.syncLayer(ctx, missing); err != nil {
 				logger.With().Warning("failed to fetch missing layer", missing, log.Err(err))

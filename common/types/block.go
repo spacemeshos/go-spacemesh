@@ -126,7 +126,7 @@ func (b *Block) ToVote() Vote {
 // MarshalLogObject implements logging encoder for Block.
 func (b *Block) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("block_id", b.ID().String())
-	encoder.AddUint32("layer_id", b.LayerIndex.Uint32())
+	encoder.AddUint32("layer_id", b.LayerIndex.Value)
 	encoder.AddUint64("tick_height", b.TickHeight)
 	encoder.AddInt("num_tx", len(b.TxIDs))
 	encoder.AddInt("num_rewards", len(b.Rewards))

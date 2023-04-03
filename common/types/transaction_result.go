@@ -50,7 +50,7 @@ func (h *TransactionResult) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint64("gas", h.Gas)
 	encoder.AddUint64("fee", h.Fee)
 	encoder.AddString("block", h.Block.String())
-	encoder.AddUint32("layer", h.Layer.Uint32())
+	encoder.AddUint32("layer", h.Layer.Value)
 	encoder.AddArray("addresses", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 		for i := range h.Addresses {
 			encoder.AppendString((&h.Addresses[i]).String())

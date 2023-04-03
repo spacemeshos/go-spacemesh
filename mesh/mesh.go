@@ -64,9 +64,9 @@ func NewMesh(cdb *datastore.CachedDB, c layerClock, trtl system.Tortoise, exec *
 		conState:            state,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
 	}
-	msh.latestLayer.Store((types.LayerID{}))
-	msh.latestLayerInState.Store((types.LayerID{}))
-	msh.processedLayer.Store((types.LayerID{}))
+	msh.latestLayer.Store(types.LayerID{})
+	msh.latestLayerInState.Store(types.LayerID{})
+	msh.processedLayer.Store(types.LayerID{})
 
 	lid, err := ballots.LatestLayer(cdb)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {

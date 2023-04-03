@@ -1118,7 +1118,7 @@ func TestCache_LinkTXsWithProposal_MultipleLayers(t *testing.T) {
 		checkTX(t, tc.Cache, mtxs[0].ID, lid0, types.EmptyBlockID)
 		if len(mtxs) > 1 {
 			for _, mtx := range mtxs[1:] {
-				checkTX(t, tc.Cache, mtx.ID,types.LayerID{}, types.EmptyBlockID)
+				checkTX(t, tc.Cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 			}
 		}
 		checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
@@ -1157,7 +1157,7 @@ func TestCache_LinkTXsWithBlock(t *testing.T) {
 		}
 		if cnt > 2 {
 			for _, mtx := range mtxs[2:] {
-				checkTX(t, tc.Cache, mtx.ID, types.LayerID{},types.EmptyBlockID)
+				checkTX(t, tc.Cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 			}
 		}
 		checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
