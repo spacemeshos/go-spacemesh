@@ -38,7 +38,7 @@ type atxChan struct {
 // Handler processes the atxs received from all nodes and their validity status.
 type Handler struct {
 	cdb             *datastore.CachedDB
-	extractor       *signing.PubKeyExtractor
+	verifier        *signing.EdVerifier
 	clock           layerClock
 	publisher       pubsub.Publisher
 	layersPerEpoch  uint32
@@ -56,7 +56,7 @@ type Handler struct {
 // NewHandler returns a data handler for ATX.
 func NewHandler(
 	cdb *datastore.CachedDB,
-	extractor *signing.PubKeyExtractor,
+	verifier *signing.EdVerifier,
 	c layerClock,
 	pub pubsub.Publisher,
 	fetcher system.Fetcher,
@@ -70,7 +70,7 @@ func NewHandler(
 ) *Handler {
 	return &Handler{
 		cdb:             cdb,
-		extractor:       extractor,
+		verifier:        verifier,
 		clock:           c,
 		publisher:       pub,
 		layersPerEpoch:  layersPerEpoch,
@@ -221,6 +221,10 @@ func (h *Handler) validateInitialAtx(_ context.Context, atx *types.ActivationTx)
 		return fmt.Errorf("no prevATX declared, but initial Post is not included")
 	}
 
+	if atx.InnerActivationTx.NodeID == nil {
+		return fmt.Errorf("no prevATX declared, but NodeID is missing")
+	}
+
 	if err := h.nipostValidator.InitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, h.goldenATXID, atx.InitialPost.Indices); err != nil {
 		return err
 	}
@@ -247,6 +251,10 @@ func (h *Handler) validateInitialAtx(_ context.Context, atx *types.ActivationTx)
 }
 
 func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.ActivationTx, commitmentATX types.ATXID) error {
+	if atx.InnerActivationTx.NodeID != nil {
+		return fmt.Errorf("prevATX declared, but NodeID is included")
+	}
+
 	if err := h.nipostValidator.NIPostChallenge(&atx.NIPostChallenge, h.cdb, atx.NodeID()); err != nil {
 		return err
 	}
@@ -361,6 +369,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				for i, a := range []*types.VerifiedActivationTx{prev, atx} {
 					atxProof.Messages[i] = types.AtxProofMsg{
 						InnerMsg:  a.ATXMetadata,
+						SmesherID: a.SmesherID,
 						Signature: a.Signature,
 					}
 				}
@@ -487,13 +496,10 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 
 	atx.SetReceived(receivedTime.Local())
 
-	nodeID, err := h.extractor.ExtractNodeID(signing.ATX, atx.SignedBytes(), atx.Signature)
-	if err != nil {
-		return fmt.Errorf("failed to derive Node ID from ATX with sig %v: %w", atx.Signature, err)
-	}
-	atx.SetNodeID(nodeID)
+	h.verifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature)
+	atx.SetNodeID(atx.SmesherID)
 
-	if err = atx.CalcAndSetID(); err != nil {
+	if err := atx.Initialize(); err != nil {
 		return fmt.Errorf("failed to derive ID from atx: %w", err)
 	}
 

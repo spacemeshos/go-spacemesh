@@ -253,12 +253,8 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 
 	var gotA types.ActivationTx
 	require.NoError(t, codec.Decode(got, &gotA))
-	require.NoError(t, gotA.CalcAndSetID())
-	extract, err := signing.NewPubKeyExtractor()
-	require.NoError(t, err)
-	extractedNodeID, err = extract.ExtractNodeID(signing.ATX, atx.SignedBytes(), atx.Signature)
-	require.NoError(t, err)
-	gotA.SetNodeID(extractedNodeID)
+	require.NoError(t, gotA.Initialize())
+	gotA.SetNodeID(gotA.SmesherID)
 	gotA.SetEffectiveNumUnits(gotA.NumUnits)
 	gotA.SetReceived(atx.Received())
 	require.Equal(t, *atx, gotA)

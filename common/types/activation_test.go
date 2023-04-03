@@ -36,7 +36,7 @@ func TestActivation_BadMsgHash(t *testing.T) {
 	atx := types.NewActivationTx(challenge, types.NodeID{1}, types.Address{}, nil, 1, nil, nil)
 	atx.Signature = types.RandomEdSignature()
 	atx.MsgHash = types.RandomHash()
-	require.Error(t, atx.CalcAndSetID())
+	require.Error(t, atx.Initialize())
 }
 
 func FuzzEpochIDConsistency(f *testing.F) {

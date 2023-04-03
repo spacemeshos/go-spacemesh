@@ -132,11 +132,12 @@ type InnerActivationTx struct {
 
 	NIPost      *NIPost
 	InitialPost *Post
+	NodeID      *NodeID
 	VRFNonce    *VRFPostIndex
 
 	// the following fields are kept private and from being serialized
 	id                ATXID     // non-exported cache of the ATXID
-	nodeID            NodeID    // the id of the Node that created the ATX (public key)
+	nodeID            NodeID    // non-exported cache of the NodeID that created the ATX
 	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
 	received          time.Time // time received by node, gossiped or synced
 }
@@ -159,7 +160,8 @@ func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 type ActivationTx struct {
 	InnerActivationTx
 	ATXMetadata
-	// signature over ATXMetadata
+
+	SmesherID NodeID
 	Signature EdSignature
 }
 
@@ -207,12 +209,12 @@ func (atx *ActivationTx) SignedBytes() []byte {
 
 // HashInnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
 func (atx *ActivationTx) HashInnerBytes() []byte {
-	hshr := hash.New()
-	_, err := codec.EncodeTo(hshr, &atx.InnerActivationTx)
+	h := hash.New()
+	_, err := codec.EncodeTo(h, &atx.InnerActivationTx)
 	if err != nil {
 		log.Fatal("failed to encode InnerActivationTx for hashing")
 	}
-	return hshr.Sum(nil)
+	return h.Sum(nil)
 }
 
 // MarshalLogObject implements logging interface.
@@ -239,18 +241,28 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
-func (atx *ActivationTx) CalcAndSetID() error {
+// Initialize calculates and sets the cached ID field. This field must be set before calling the ID() method.
+func (atx *ActivationTx) Initialize() error {
+	if atx.ID() != EmptyATXID {
+		return fmt.Errorf("ATX already initialized")
+	}
+
 	if atx.Signature == EmptyEdSignature {
-		return fmt.Errorf("cannot calculate ATX ID: sig is nil")
+		return fmt.Errorf("ATX must be signed before initialization")
 	}
 
 	if atx.MsgHash != BytesToHash(atx.HashInnerBytes()) {
 		return fmt.Errorf("bad message hash")
 	}
 
-	id := ATXID(CalcObjectHash32(atx))
-	atx.id = id
+	h := hash.New()
+	if _, err := h.Write(atx.MsgHash[:]); err != nil {
+		return fmt.Errorf("failed to write to hash")
+	}
+	if _, err := scale.EncodeByteSlice(scale.NewEncoder(h), atx.Signature[:]); err != nil {
+		return fmt.Errorf("failed to encode signature")
+	}
+	atx.id = ATXID(BytesToHash(h.Sum(nil)))
 	return nil
 }
 
@@ -266,9 +278,6 @@ func (atx *ActivationTx) ShortString() string {
 
 // ID returns the ATX's ID.
 func (atx *ActivationTx) ID() ATXID {
-	if atx.id == EmptyATXID {
-		panic("id field must be set")
-	}
 	return atx.id
 }
 
@@ -312,7 +321,7 @@ func (atx *ActivationTx) Received() time.Time {
 // Verify an ATX for a given base TickHeight and TickCount.
 func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActivationTx, error) {
 	if atx.id == EmptyATXID {
-		if err := atx.CalcAndSetID(); err != nil {
+		if err := atx.Initialize(); err != nil {
 			return nil, err
 		}
 	}

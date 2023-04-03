@@ -601,7 +601,9 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 
 	var initialPost *types.Post
 	var nonce *types.VRFPostIndex
+	var nodeID *types.NodeID
 	if challenge.PrevATXID == types.EmptyATXID {
+		nodeID = &b.nodeID
 		initialPost = b.initialPost
 		nonce, err = b.postSetupProvider.VRFNonce()
 		if err != nil {
@@ -618,6 +620,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 		initialPost,
 		nonce,
 	)
+	atx.InnerActivationTx.NodeID = nodeID
 	if err = SignAndFinalizeAtx(b.signer, atx); err != nil {
 		return nil, fmt.Errorf("sign atx: %w", err)
 	}
@@ -666,5 +669,6 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 // SignAndFinalizeAtx signs the atx with specified signer and calculates the ID of the ATX.
 func SignAndFinalizeAtx(signer *signing.EdSigner, atx *types.ActivationTx) error {
 	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
-	return atx.CalcAndSetID()
+	atx.SmesherID = signer.NodeID()
+	return atx.Initialize()
 }

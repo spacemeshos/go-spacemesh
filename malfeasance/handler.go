@@ -23,6 +23,7 @@ type Handler struct {
 	self            p2p.Peer
 	cp              consensusProtocol
 	pubKeyExtractor *signing.PubKeyExtractor
+	sigVerifier     *signing.EdVerifier
 }
 
 func NewHandler(
@@ -31,6 +32,7 @@ func NewHandler(
 	self p2p.Peer,
 	cp consensusProtocol,
 	pubKeyExtractor *signing.PubKeyExtractor,
+	sigVerifier *signing.EdVerifier,
 ) *Handler {
 	return &Handler{
 		logger:          lg,
@@ -38,6 +40,7 @@ func NewHandler(
 		self:            self,
 		cp:              cp,
 		pubKeyExtractor: pubKeyExtractor,
+		sigVerifier:     sigVerifier,
 	}
 }
 
@@ -223,9 +226,8 @@ func (h *Handler) validateMultipleATXs(logger log.Log, proof *types.MalfeasanceP
 		return types.EmptyNodeID, errors.New("wrong message type for multiple ATXs")
 	}
 	for _, msg = range ap.Messages {
-		nid, err = h.pubKeyExtractor.ExtractNodeID(signing.ATX, msg.SignedBytes(), msg.Signature)
-		if err != nil {
-			return types.EmptyNodeID, err
+		if !h.sigVerifier.Verify(signing.ATX, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
+			return types.EmptyNodeID, errors.New("invalid signature")
 		}
 		if err = checkIdentityExists(h.cdb, nid); err != nil {
 			return types.EmptyNodeID, fmt.Errorf("check identity in atx malfeasance %v: %w", nid, err)

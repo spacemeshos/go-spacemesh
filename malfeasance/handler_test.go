@@ -50,8 +50,10 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
+	sigVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke, sigVerifier)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.NewLayerID(11)
@@ -76,7 +78,9 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	t.Run("unknown identity", func(t *testing.T) {
 		ap := atxProof
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
+		ap.Messages[0].SmesherID = sig.NodeID()
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
+		ap.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -245,8 +249,10 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
+	sigVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke, sigVerifier)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.NewLayerID(11)
@@ -440,8 +446,10 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
+	sigVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke, sigVerifier)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.NewLayerID(11)
@@ -660,8 +668,10 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
+	sigVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke, sigVerifier)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -736,8 +746,10 @@ func TestHandler_CrossDomain(t *testing.T) {
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
+	sigVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke, sigVerifier)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)

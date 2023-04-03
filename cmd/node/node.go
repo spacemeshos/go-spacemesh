@@ -283,6 +283,7 @@ type App struct {
 	atxHandler       *activation.Handler
 	validator        *activation.Validator
 	keyExtractor     *signing.PubKeyExtractor
+	sigVerifier      *signing.EdVerifier
 	beaconProtocol   *beacon.ProtocolDriver
 	log              log.Log
 	svm              *vm.VM
@@ -495,6 +496,11 @@ func (app *App) initServices(
 		return fmt.Errorf("failed to create key extractor: %w", err)
 	}
 
+	app.sigVerifier, err = signing.NewEdVerifier(signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
+	if err != nil {
+		return fmt.Errorf("failed to create signature verifier: %w", err)
+	}
+
 	vrfVerifier := signing.NewVRFVerifier()
 	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifier, app.cachedDB, clock,
 		beacon.WithContext(ctx),
@@ -530,7 +536,7 @@ func (app *App) initServices(
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
 		app.cachedDB,
-		app.keyExtractor,
+		app.sigVerifier,
 		clock,
 		app.host,
 		fetcherWrapped,
@@ -687,6 +693,7 @@ func (app *App) initServices(
 		app.host.ID(),
 		app.hare,
 		app.keyExtractor,
+		app.sigVerifier,
 	)
 	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, txHandler, malfeasanceHandler)
 

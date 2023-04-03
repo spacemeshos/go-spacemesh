@@ -56,7 +56,6 @@ func newAtx(t testing.TB, sig *signing.EdSigner, nodeID types.NodeID, challenge 
 	atx := types.NewActivationTx(challenge, nodeID, coinbase, nipost, numUnits, nil, nil)
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
-	require.NoError(t, SignAndFinalizeAtx(sig, atx))
 	return atx
 }
 
@@ -78,6 +77,7 @@ func newActivationTx(
 	atx := newAtx(t, sig, nodeID, challenge, nipost, numUnits, coinbase)
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
+	require.NoError(t, SignAndFinalizeAtx(sig, atx))
 	vAtx, err := atx.Verify(startTick, numTicks)
 	require.NoError(t, err)
 	return vAtx
@@ -205,12 +205,8 @@ func publishAtx(
 			require.NoError(t, codec.Decode(got, &gotAtx))
 			gotAtx.SetReceived(time.Now().Local())
 			built = &gotAtx
-			extractor, err := signing.NewPubKeyExtractor()
-			require.NoError(t, err)
-			nodeID, err := extractor.ExtractNodeID(signing.ATX, gotAtx.SignedBytes(), gotAtx.Signature)
-			require.NoError(t, err)
-			gotAtx.SetNodeID(nodeID)
-			require.NoError(t, built.CalcAndSetID())
+			gotAtx.SetNodeID(gotAtx.SmesherID)
+			require.NoError(t, built.Initialize())
 			built.SetEffectiveNumUnits(gotAtx.NumUnits)
 			vatx, err := built.Verify(0, 1)
 			require.NoError(t, err)
@@ -384,6 +380,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
 	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx))
@@ -413,6 +410,7 @@ func TestBuilder_PublishActivationTx_StaleChallenge(t *testing.T) {
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
 	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx))
@@ -443,6 +441,7 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
 	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx))
@@ -477,6 +476,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
 	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx))
@@ -515,7 +515,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 			require.NoError(t, codec.Decode(got, &gotAtx))
 			gotAtx.SetReceived(time.Now().Local())
 			built = &gotAtx
-			require.NoError(t, built.CalcAndSetID())
+			require.NoError(t, built.Initialize())
 			return publishErr
 		})
 	never := make(chan struct{})
@@ -533,7 +533,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 			var gotAtx types.ActivationTx
 			require.NoError(t, codec.Decode(got, &gotAtx))
 			gotAtx.SetReceived(time.Now().Local())
-			require.NoError(t, gotAtx.CalcAndSetID())
+			require.NoError(t, gotAtx.Initialize())
 			built.SetReceived(gotAtx.Received())
 			require.Equal(t, &gotAtx, built)
 			return nil
@@ -550,6 +550,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	posAtxLayer = posAtxLayer.Add(layersPerEpoch + 1)
 	challenge = newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	posAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	SignAndFinalizeAtx(tab.sig, posAtx)
 	vPosAtx, err := posAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPosAtx))
@@ -567,6 +568,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
 	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx))
@@ -608,7 +610,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 			require.NoError(t, codec.Decode(got, &gotAtx))
 			gotAtx.SetReceived(time.Now().Local())
 			built = &gotAtx
-			require.NoError(t, built.CalcAndSetID())
+			require.NoError(t, built.Initialize())
 			return publishErr
 		})
 	never := make(chan struct{})
@@ -626,6 +628,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	currLayer = posAtxLayer
 	challenge = newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	posAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	SignAndFinalizeAtx(tab.sig, posAtx)
 	vPosAtx, err := posAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPosAtx))
@@ -646,6 +649,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	require.NoError(t, err)
 	otherNodeId := otherSigner.NodeID()
 	posAtx := newAtx(t, otherSigner, otherNodeId, challenge, nipost, 2, types.Address{})
+	SignAndFinalizeAtx(otherSigner, posAtx)
 	vPosAtx, err := posAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPosAtx))
@@ -681,6 +685,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	poetBytes := []byte("66666")
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), poetBytes)
 	posAtx := newAtx(t, otherSigner, otherNodeId, challenge, nipost, 2, types.Address{})
+	SignAndFinalizeAtx(otherSigner, posAtx)
 	vPosAtx, err := posAtx.Verify(0, 1)
 	r.NoError(err)
 	r.NoError(atxs.Add(tab.cdb, vPosAtx))
@@ -689,6 +694,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	challenge.InitialPostIndices = initialPost.Indices
 	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
 	prevAtx.InitialPost = initialPost
+	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	r.NoError(err)
 	r.NoError(atxs.Add(tab.cdb, vPrevAtx))
@@ -737,11 +743,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 		require.NoError(t, codec.Decode(msg, &atx))
 		atx.SetReceived(time.Now().Local())
 
-		extractor, err := signing.NewPubKeyExtractor()
-		require.NoError(t, err)
-		nodeID, err := extractor.ExtractNodeID(signing.ATX, atx.SignedBytes(), atx.Signature)
-		require.NoError(t, err)
-		atx.SetNodeID(nodeID)
+		atx.SetNodeID(atx.SmesherID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		r.NoError(err)
@@ -780,6 +782,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	poetBytes := []byte("66666")
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), poetBytes)
 	posAtx := newAtx(t, otherSigner, otherNodeId, challenge, nipost, 2, types.Address{})
+	SignAndFinalizeAtx(otherSigner, posAtx)
 	vPosAtx, err := posAtx.Verify(0, 1)
 	r.NoError(err)
 	r.NoError(atxs.Add(tab.cdb, vPosAtx))
@@ -831,11 +834,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		require.NoError(t, codec.Decode(msg, &atx))
 		atx.SetReceived(time.Now().Local())
 
-		extractor, err := signing.NewPubKeyExtractor()
-		require.NoError(t, err)
-		nodeID, err := extractor.ExtractNodeID(signing.ATX, atx.SignedBytes(), atx.Signature)
-		require.NoError(t, err)
-		atx.SetNodeID(nodeID)
+		atx.SetNodeID(atx.SmesherID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		vAtx, err := atx.Verify(0, 1)
 		r.NoError(err)
@@ -866,6 +865,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
 	posAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	SignAndFinalizeAtx(tab.sig, posAtx)
 	vPosAtx, err := posAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPosAtx))
@@ -922,12 +922,12 @@ func TestBuilder_SignAtx(t *testing.T) {
 	err = SignAndFinalizeAtx(tab.signer, atx)
 	require.NoError(t, err)
 
-	extractor, err := signing.NewPubKeyExtractor()
+	verifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	nodeId, err := extractor.ExtractNodeID(signing.ATX, atxBytes, atx.Signature)
-	require.NoError(t, err)
-	require.Equal(t, tab.nodeID, nodeId)
+	ok := verifier.Verify(signing.ATX, tab.signer.NodeID(), atxBytes, atx.Signature)
+	require.True(t, ok)
+	require.Equal(t, tab.nodeID, atx.SmesherID)
 }
 
 func TestBuilder_NIPostPublishRecovery(t *testing.T) {
@@ -937,6 +937,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
 	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx))
@@ -975,7 +976,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 			require.NoError(t, codec.Decode(got, &gotAtx))
 			gotAtx.SetReceived(time.Now().Local())
 			built = &gotAtx
-			require.NoError(t, built.CalcAndSetID())
+			require.NoError(t, built.Initialize())
 			return publishErr
 		})
 	never := make(chan struct{})
@@ -998,7 +999,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 			var gotAtx types.ActivationTx
 			require.NoError(t, codec.Decode(got, &gotAtx))
 			gotAtx.SetReceived(time.Now().Local())
-			require.NoError(t, gotAtx.CalcAndSetID())
+			require.NoError(t, gotAtx.Initialize())
 			built.SetReceived(gotAtx.Received())
 			require.Equal(t, &gotAtx, built)
 			return nil
@@ -1018,6 +1019,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	posAtxLayer = posAtxLayer.Add(layersPerEpoch + 1)
 	challenge = newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
 	posAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	SignAndFinalizeAtx(tab.sig, posAtx)
 	vPosAtx, err := posAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPosAtx))
@@ -1040,6 +1042,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	poetBytes := []byte("66666")
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), poetBytes)
 	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx))
@@ -1100,6 +1103,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	poetByte := []byte("66666")
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), poetByte)
 	prevAtx := newAtx(t, tab.sig, tab.nodeID, challenge, nipost, 2, types.Address{})
+	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx))
