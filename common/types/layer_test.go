@@ -41,7 +41,7 @@ func TestLayerIDWraparound(t *testing.T) {
 			max.Add(1)
 		})
 		require.Panics(t, func() {
-			LayerID{}.Add(math.MaxUint32 - 2).Add(math.MaxUint32 - 3)
+			LayerID(math.MaxUint32 - 2).Add(math.MaxUint32 - 3)
 		})
 	})
 	t.Run("Sub", func(t *testing.T) {
@@ -50,13 +50,13 @@ func TestLayerIDWraparound(t *testing.T) {
 			zero.Sub(1)
 		})
 		require.Panics(t, func() {
-			LayerID{}.Add(math.MaxUint32 - 2).Sub(math.MaxUint32 - 1)
+			LayerID(math.MaxUint32 - 2).Sub(math.MaxUint32 - 1)
 		})
 	})
 	t.Run("Mul", func(t *testing.T) {
 		require.EqualValues(t, 0, zero.Mul(1).Uint32())
-		require.EqualValues(t, 0, LayerID{}.Add(1).Mul(0).Uint32())
-		require.EqualValues(t, 4, LayerID{}.Add(2).Mul(2).Uint32())
+		require.EqualValues(t, 0, LayerID(1).Mul(0).Uint32())
+		require.EqualValues(t, 4, LayerID(2).Mul(2).Uint32())
 		require.Panics(t, func() {
 			max.Mul(2)
 		})
@@ -94,7 +94,7 @@ func TestLayerIDBinaryEncoding(t *testing.T) {
 	lid := NewLayerID(100)
 	buf, err := codec.Encode(&lid)
 	require.NoError(t, err)
-	decoded := LayerID{}
+	decoded := LayerID(0)
 	require.NoError(t, codec.Decode(buf, &decoded))
 	require.Equal(t, lid, decoded)
 }

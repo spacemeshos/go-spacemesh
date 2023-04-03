@@ -100,7 +100,7 @@ func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	broker.HandleMessage(context.Background(), "", serMsg)
 	waitForMessages(t, inbox5, instanceID5, 1)
 	broker.mu.RLock()
-	assert.Nil(t, broker.outbox[instanceID1.Uint32()])
+	assert.Nil(t, broker.outbox[instanceID1])
 	broker.mu.RUnlock()
 
 	inbox6, _ := broker.Register(context.Background(), instanceID6)
@@ -108,7 +108,7 @@ func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	assert.Equal(t, 4, len(broker.outbox))
 	broker.mu.RUnlock()
 	broker.mu.RLock()
-	assert.Nil(t, broker.outbox[instanceID2.Uint32()])
+	assert.Nil(t, broker.outbox[instanceID2])
 	broker.mu.RUnlock()
 
 	serMsg = createMessage(t, instanceID6)
@@ -226,7 +226,7 @@ func TestBroker_RegisterUnregister(t *testing.T) {
 
 	broker.Unregister(context.Background(), instanceID1)
 	broker.mu.RLock()
-	assert.Nil(t, broker.outbox[instanceID1.Uint32()])
+	assert.Nil(t, broker.outbox[instanceID1])
 	broker.mu.RUnlock()
 }
 
@@ -425,14 +425,14 @@ func TestBroker_Register(t *testing.T) {
 	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
 
 	broker.mu.Lock()
-	broker.pending[instanceID1.Uint32()] = []any{msg, msg}
+	broker.pending[instanceID1] = []any{msg, msg}
 	broker.mu.Unlock()
 
 	broker.Register(context.Background(), instanceID1)
 
 	broker.mu.RLock()
-	assert.Equal(t, 2, len(broker.outbox[instanceID1.Uint32()]))
-	assert.Equal(t, 0, len(broker.pending[instanceID1.Uint32()]))
+	assert.Equal(t, 2, len(broker.outbox[instanceID1]))
+	assert.Equal(t, 0, len(broker.pending[instanceID1]))
 	broker.mu.RUnlock()
 }
 
@@ -575,7 +575,7 @@ func TestBroker_Register4(t *testing.T) {
 	r.NoError(e)
 
 	b.mu.RLock()
-	r.Equal(b.outbox[instanceID1.Value], c)
+	r.Equal(b.outbox[instanceID1], c)
 	b.mu.RUnlock()
 
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)

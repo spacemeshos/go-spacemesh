@@ -619,7 +619,7 @@ func TestSyncMissingLayer(t *testing.T) {
 		}
 	}
 	require.NoError(t, ts.syncer.processLayers(context.Background()))
-	require.Equal(t, types.LayerID{}, ts.msh.MissingLayer())
+	require.Equal(t, types.LayerID(0), ts.msh.MissingLayer())
 	require.Equal(t, last.Sub(1), ts.msh.ProcessedLayer())
 	require.Equal(t, last.Sub(1), ts.msh.LatestLayerInState())
 }

@@ -423,7 +423,7 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 		sig1, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		nid1 := sig1.NodeID()
-		challenge := newChallenge(1, *types.EmptyATXID, goldenATXID, types.LayerID{}, nil)
+		challenge := newChallenge(1, *types.EmptyATXID, goldenATXID, 0, nil)
 		atx, err := newAtx(t, sig1, &nid1, challenge, nil, 2, types.Address{}).Verify(0, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxHdlr.ContextuallyValidateAtx(atx))
@@ -449,7 +449,7 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 		require.NoError(t, err)
 		nid1 := sig1.NodeID()
 		arbitraryAtxID := types.ATXID(types.HexToHash32("11111"))
-		challenge := newChallenge(1, arbitraryAtxID, prevAtx.ID(), types.LayerID{}, nil)
+		challenge := newChallenge(1, arbitraryAtxID, prevAtx.ID(), 0, nil)
 		atx, err := newAtx(t, sig1, &nid1, challenge, nil, 2, types.Address{}).Verify(0, 1)
 		require.NoError(t, err)
 		err = atxHdlr.ContextuallyValidateAtx(atx)
@@ -630,11 +630,11 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 		atx.NIPost = newNIPostWithChallenge(atx.NIPostChallenge.Hash(), poetRef)
 	}
 
-	challenge := newChallenge(0, *types.EmptyATXID, goldenATXID, types.LayerID{}.Add(numberOfLayers+1), &goldenATXID)
+	challenge := newChallenge(0, *types.EmptyATXID, goldenATXID, types.LayerID(numberOfLayers+1), &goldenATXID)
 	npst := newNIPostWithChallenge(challenge.Hash(), poetRef)
 	prevAtx := newAtx(b, sig, &nid, challenge, npst, 2, coinbase)
 
-	challenge = newChallenge(1, prevAtx.ID(), prevAtx.ID(), types.LayerID{}.Add(numberOfLayers+1+layersPerEpochBig), nil)
+	challenge = newChallenge(1, prevAtx.ID(), prevAtx.ID(), types.LayerID(numberOfLayers+1+layersPerEpochBig), nil)
 	atx := newAtx(b, sig, &nid, challenge, &types.NIPost{}, 100, coinbase)
 	nonce := types.VRFPostIndex(1)
 	atx.VRFNonce = &nonce
@@ -861,7 +861,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 	// Act & Assert
 
 	t.Run("missing nipost", func(t *testing.T) {
-		atx := newActivationTx(t, sig, &nid, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.LayerID{}, 0, 0, coinbase, 2, nil)
+		atx := newActivationTx(t, sig, &nid, 0, *types.EmptyATXID, *types.EmptyATXID, nil, 0, 0, 0, coinbase, 2, nil)
 		buf, err := codec.Encode(atx)
 		require.NoError(t, err)
 
@@ -869,7 +869,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 	})
 
 	t.Run("known atx is ignored by handleAtxData", func(t *testing.T) {
-		atx := newActivationTx(t, sig, &nid, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.LayerID{}, 0, 0, coinbase, 2, nil)
+		atx := newActivationTx(t, sig, &nid, 0, *types.EmptyATXID, *types.EmptyATXID, nil, 0, 0, 0, coinbase, 2, nil)
 		require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx))
 		buf, err := codec.Encode(atx)
 		require.NoError(t, err)

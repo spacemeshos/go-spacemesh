@@ -80,7 +80,7 @@ func TestAddGetHas(t *testing.T) {
 	for _, tx := range txs {
 		got, err := transactions.Get(db, tx.ID)
 		require.NoError(t, err)
-		expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
+		expected := makeMeshTX(tx, 0, types.EmptyBlockID, received, types.MEMPOOL)
 		checkMeshTXEqual(t, *expected, *got)
 
 		has, err := transactions.Has(db, tx.ID)
@@ -222,7 +222,7 @@ func TestApplyAndUndoLayers(t *testing.T) {
 	for lid := firstLayer; lid.Before(firstLayer.Add(numLayers)); lid = lid.Add(1) {
 		signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 		require.NoError(t, err)
-		tx := createTX(t, signer, types.Address{1}, uint64(lid.Value), 191, 2)
+		tx := createTX(t, signer, types.Address{1}, uint64(lid), 191, 2)
 		require.NoError(t, transactions.Add(db, tx, time.Now()))
 		bid := types.RandomBlockID()
 
@@ -302,7 +302,7 @@ func TestGetByAddress(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, got)
 
-	got, err = transactions.GetByAddress(db, types.LayerID{}, lid, signer2Address)
+	got, err = transactions.GetByAddress(db, 0, lid, signer2Address)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	expected1 := makeMeshTX(txs[1], lid, types.EmptyBlockID, received, types.APPLIED)
@@ -465,7 +465,7 @@ func TestTransactionInProposal(t *testing.T) {
 	for i := range lids {
 		require.NoError(t, transactions.AddToProposal(db, tid, lids[i], pids[i]))
 	}
-	lid, err := transactions.TransactionInProposal(db, tid, types.LayerID{})
+	lid, err := transactions.TransactionInProposal(db, tid, 0)
 	require.NoError(t, err)
 	require.Equal(t, lids[0], lid)
 	lid, err = transactions.TransactionInProposal(db, tid, lids[1])
@@ -491,7 +491,7 @@ func TestTransactionInBlock(t *testing.T) {
 	for i := range lids {
 		require.NoError(t, transactions.AddToBlock(db, tid, lids[i], bids[i]))
 	}
-	bid, lid, err := transactions.TransactionInBlock(db, tid, types.LayerID{})
+	bid, lid, err := transactions.TransactionInBlock(db, tid, 0)
 	require.NoError(t, err)
 	require.Equal(t, lids[0], lid)
 	require.Equal(t, bids[0], bid)

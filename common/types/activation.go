@@ -142,7 +142,7 @@ func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
 	}
 	encoder.AddUint64("Sequence", c.Sequence)
 	encoder.AddString("PrevATXID", c.PrevATXID.String())
-	encoder.AddUint32("PubLayerID", c.PubLayerID.Value)
+	encoder.AddUint32("PubLayerID", c.PubLayerID.Uint32())
 	encoder.AddString("PositioningATX", c.PositioningATX.String())
 	if c.CommitmentATX != nil {
 		encoder.AddString("CommitmentATX", c.CommitmentATX.String())
@@ -289,7 +289,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddUint64("vrf_nonce", uint64(*atx.VRFNonce))
 	}
 	encoder.AddString("coinbase", atx.Coinbase.String())
-	encoder.AddUint32("pub_layer_id", atx.PubLayerID.Value)
+	encoder.AddUint32("pub_layer_id", atx.PubLayerID.Uint32())
 	encoder.AddUint32("epoch", uint32(atx.PublishEpoch()))
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
 	if atx.effectiveNumUnits != 0 {
