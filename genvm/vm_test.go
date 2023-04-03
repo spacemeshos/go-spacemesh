@@ -45,7 +45,7 @@ func newTester(tb testing.TB) *tester {
 		TB: tb,
 		VM: New(sql.InMemory(),
 			WithLogger(logtest.New(tb)),
-			WithConfig(Config{GasLimit: math.MaxUint64, StorageCostFactor: 1}),
+			WithConfig(Config{GasLimit: math.MaxUint64, StorageCostFactor: 2}),
 		),
 		rng: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
@@ -297,7 +297,8 @@ func (t *tester) persistent() *tester {
 	db, err := sql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	require.NoError(t, err)
-	t.VM = New(db, WithLogger(logtest.New(t)))
+	t.VM = New(db, WithLogger(logtest.New(t)),
+		WithConfig(Config{StorageCostFactor: 2, GasLimit: math.MaxUint64}))
 	return t
 }
 
@@ -2070,7 +2071,7 @@ func BenchmarkTransactions(b *testing.B) {
 	// benchmarks below will have overhead beside the transaction itself.
 	// they are useful mainly to collect execution profiles and make estimations based on them.
 	b.Run("singlesig/selfspawn", func(b *testing.B) {
-		tt := newTester(b).addSingleSig(n).applyGenesis()
+		tt := newTester(b).persistent().addSingleSig(n).applyGenesis()
 		txs := make([]types.Transaction, n)
 		for i := range txs {
 			tx := &selfSpawnTx{principal: i}
@@ -2079,7 +2080,7 @@ func BenchmarkTransactions(b *testing.B) {
 		bench(b, tt, txs)
 	})
 	b.Run("singlesig/spend", func(b *testing.B) {
-		tt := newTester(b).addSingleSig(n).applyGenesis()
+		tt := newTester(b).persistent().addSingleSig(n).applyGenesis()
 		ineffective, _, err := tt.Apply(
 			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
 			notVerified(tt.spawnAll()...),
@@ -2097,7 +2098,7 @@ func BenchmarkTransactions(b *testing.B) {
 		bench(b, tt, txs)
 	})
 	b.Run("multisig/selfspawn", func(b *testing.B) {
-		tt := newTester(b).addMultisig(n, 3, 5, multisig.TemplateAddress3).applyGenesis()
+		tt := newTester(b).persistent().addMultisig(n, 3, 5, multisig.TemplateAddress3).applyGenesis()
 		txs := make([]types.Transaction, n)
 		for i := range txs {
 			tx := &selfSpawnTx{principal: i}
@@ -2106,7 +2107,7 @@ func BenchmarkTransactions(b *testing.B) {
 		bench(b, tt, txs)
 	})
 	b.Run("multisig/spend", func(b *testing.B) {
-		tt := newTester(b).addMultisig(n, 3, 5, multisig.TemplateAddress3).applyGenesis()
+		tt := newTester(b).persistent().addMultisig(n, 3, 5, multisig.TemplateAddress3).applyGenesis()
 		ineffective, _, err := tt.Apply(
 			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
 			notVerified(tt.spawnAll()...),
@@ -2124,7 +2125,7 @@ func BenchmarkTransactions(b *testing.B) {
 		bench(b, tt, txs)
 	})
 	b.Run("vesting/spawnvault", func(b *testing.B) {
-		tt := newTester(b).
+		tt := newTester(b).persistent().
 			addVesting(n, 3, 5, vesting.TemplateAddress3).
 			applyGenesis()
 		ineffective, _, err := tt.Apply(
@@ -2144,7 +2145,7 @@ func BenchmarkTransactions(b *testing.B) {
 		bench(b, tt, txs)
 	})
 	b.Run("vesting/drain", func(b *testing.B) {
-		tt := newTester(b).
+		tt := newTester(b).persistent().
 			addVesting(n, 3, 5, vesting.TemplateAddress3).
 			addVault(n, 200000, 100000, types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(100)).
 			applyGenesis()
