@@ -65,6 +65,7 @@ type FollowingVotingMessageBody struct {
 // FollowingVotingMessage is a message type which is used when sending following voting messages.
 type FollowingVotingMessage struct {
 	FollowingVotingMessageBody
+
 	SmesherID types.NodeID
 	Signature types.EdSignature
 }

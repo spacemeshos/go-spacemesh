@@ -285,7 +285,7 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 	}
 
 	if !pd.edVerifier.Verify(signing.BEACON, m.SmesherID, messageBytes, m.Signature) {
-		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %x: failed", types.FirstRound, m.Signature)
+		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
 
 	logger = logger.WithFields(log.Stringer("smesher", m.SmesherID))
@@ -402,7 +402,7 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 	}
 
 	if !pd.edVerifier.Verify(signing.BEACON, m.SmesherID, messageBytes, m.Signature) {
-		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %x: failed", types.FirstRound, m.Signature)
+		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
 
 	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, round, log.Stringer("smesher", m.SmesherID))
