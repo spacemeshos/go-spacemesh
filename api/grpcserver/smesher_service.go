@@ -233,6 +233,7 @@ func (s SmesherService) PostConfig(context.Context, *empty.Empty) (*pb.PostConfi
 	cfg := s.postSetupProvider.Config()
 
 	return &pb.PostConfigResponse{
+		BitsPerLabel:  config.BitsPerLabel,
 		LabelsPerUnit: cfg.LabelsPerUnit,
 		MinNumUnits:   cfg.MinNumUnits,
 		MaxNumUnits:   cfg.MaxNumUnits,

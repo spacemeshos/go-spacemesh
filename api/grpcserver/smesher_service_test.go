@@ -34,6 +34,7 @@ func TestPostConfig(t *testing.T) {
 
 	response, err := svc.PostConfig(context.Background(), &emptypb.Empty{})
 	require.NoError(t, err)
+	require.EqualValues(t, config.BitsPerLabel, response.BitsPerLabel)
 	require.Equal(t, postConfig.MinNumUnits, response.MinNumUnits)
 	require.Equal(t, postConfig.MaxNumUnits, response.MaxNumUnits)
 	require.Equal(t, postConfig.LabelsPerUnit, response.LabelsPerUnit)
