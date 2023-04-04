@@ -71,7 +71,7 @@ func Test_multipleCPs(t *testing.T) {
 	}
 
 	// setup roundClocks to progress a layer only when all nodes have received messages from all nodes.
-	roundClocks := newSharedRoundClocks(totalNodes*totalNodes, 50*time.Millisecond)
+	roundClocks := newSharedRoundClocks(totalNodes*totalNodes, 200*time.Millisecond)
 	var pubsubs []*pubsub.PubSub
 	outputs := make([]map[types.LayerID]LayerOutput, totalNodes)
 	var outputsWaitGroup sync.WaitGroup
@@ -210,7 +210,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	}
 
 	// setup roundClocks to progress a layer only when all nodes have received messages from all nodes.
-	roundClocks := newSharedRoundClocks(totalNodes*totalNodes, 50*time.Millisecond)
+	roundClocks := newSharedRoundClocks(totalNodes*totalNodes, 200*time.Millisecond)
 	var pubsubs []*pubsub.PubSub
 	outputs := make([]map[types.LayerID]LayerOutput, totalNodes)
 	var outputsWaitGroup sync.WaitGroup
