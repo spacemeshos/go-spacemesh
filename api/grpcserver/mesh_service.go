@@ -127,8 +127,8 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
 		for _, b := range layer.Ballots() {
-			if b.EpochData != nil && b.EpochData.ActiveSet != nil {
-				atxids = append(atxids, b.EpochData.ActiveSet...)
+			if b.EpochData != nil && b.ActiveSet != nil {
+				atxids = append(atxids, b.ActiveSet...)
 			}
 		}
 	}
@@ -330,8 +330,8 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	}
 
 	for _, b := range layer.Ballots() {
-		if b.EpochData != nil && b.EpochData.ActiveSet != nil {
-			activations = append(activations, b.EpochData.ActiveSet...)
+		if b.EpochData != nil && b.ActiveSet != nil {
+			activations = append(activations, b.ActiveSet...)
 		}
 	}
 

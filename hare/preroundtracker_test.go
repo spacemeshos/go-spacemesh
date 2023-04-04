@@ -28,8 +28,7 @@ func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.P
 				InnerBallot: types.InnerBallot{
 					AtxID: types.RandomATXID(),
 					EpochData: &types.EpochData{
-						ActiveSet: types.RandomActiveSet(10),
-						Beacon:    types.RandomBeacon(),
+						Beacon: types.RandomBeacon(),
 					},
 				},
 			},

@@ -379,7 +379,8 @@ func TestFullCountVotes(t *testing.T) {
 					ballot := &types.Ballot{}
 					ballot.EligibilityProofs = []types.VotingEligibility{{J: uint32(j)}}
 					ballot.AtxID = activeset[b.ATX]
-					ballot.EpochData = &types.EpochData{ActiveSet: activeset}
+					ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}}
+					ballot.ActiveSet = activeset
 					ballot.Layer = lid
 					// don't vote on genesis for simplicity,
 					// since we don't care about block goodness in this test

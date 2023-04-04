@@ -1,6 +1,7 @@
 package proposals
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -29,16 +30,18 @@ var (
 	errMalformedData         = errors.New("malformed data")
 	errInitialize            = errors.New("failed to initialize")
 	errInvalidATXID          = errors.New("ballot has invalid ATXID")
+	errMissingCount          = errors.New("missing eligibility count")
 	errMissingEpochData      = errors.New("epoch data is missing in ref ballot")
 	errUnexpectedEpochData   = errors.New("non-ref ballot declares epoch data")
 	errEmptyActiveSet        = errors.New("ref ballot declares empty active set")
+	errActiveSetNotSorted    = errors.New("active set not sorted")
+	errBadActiveSetHash      = errors.New("incorrect active set hash")
 	errMissingBeacon         = errors.New("beacon is missing in ref ballot")
 	errNotEligible           = errors.New("ballot not eligible")
 	errDoubleVoting          = errors.New("ballot doubly-voted in same layer")
 	errConflictingExceptions = errors.New("conflicting exceptions")
 	errExceptionsOverflow    = errors.New("too many exceptions")
 	errDuplicateTX           = errors.New("duplicate TxID in proposal")
-	errDuplicateATX          = errors.New("duplicate ATXID in active set")
 	errKnownProposal         = errors.New("known proposal")
 	errKnownBallot           = errors.New("known ballot")
 	errInvalidVote           = errors.New("invalid layer/height in the vote")
@@ -409,6 +412,10 @@ func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
 		return errInvalidATXID
 	}
 
+	if b.EligibilityCount == 0 {
+		return errMissingCount
+	}
+
 	if b.RefBallot == types.EmptyBallotID {
 		// this is the smesher's first Ballot in this epoch, should contain EpochData
 		if b.EpochData == nil {
@@ -417,16 +424,17 @@ func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
 		if b.EpochData.Beacon == types.EmptyBeacon {
 			return errMissingBeacon
 		}
-		if len(b.EpochData.ActiveSet) == 0 {
+		if len(b.ActiveSet) == 0 {
 			return errEmptyActiveSet
 		}
-		// check for duplicate ATXIDs in active set
-		set := make(map[types.ATXID]struct{}, len(b.EpochData.ActiveSet))
-		for _, atx := range b.EpochData.ActiveSet {
-			if _, exist := set[atx]; exist {
-				return errDuplicateATX
+		for i := 0; i < len(b.ActiveSet)-1; i++ {
+			if bytes.Compare(b.ActiveSet[i].Bytes(), b.ActiveSet[i+1].Bytes()) >= 0 {
+				return errActiveSetNotSorted
 			}
-			set[atx] = struct{}{}
+		}
+		activeSetHash := types.ATXIDList(b.ActiveSet).Hash()
+		if activeSetHash != b.EpochData.ActiveSetHash {
+			return errBadActiveSetHash
 		}
 	} else if b.EpochData != nil {
 		return errUnexpectedEpochData
@@ -545,7 +553,7 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 func (h *Handler) fetchReferencedATXs(ctx context.Context, b *types.Ballot) error {
 	atxs := []types.ATXID{b.AtxID}
 	if b.EpochData != nil {
-		atxs = append(atxs, b.EpochData.ActiveSet...)
+		atxs = append(atxs, b.ActiveSet...)
 	}
 	if err := h.fetcher.GetAtxs(ctx, h.decoder.GetMissingActiveSet(b.Layer.GetEpoch(), atxs)); err != nil {
 		return fmt.Errorf("proposal get ATXs: %w", err)

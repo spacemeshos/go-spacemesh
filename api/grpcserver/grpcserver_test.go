@@ -211,7 +211,8 @@ func TestMain(m *testing.M) {
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
 	ballot1.AtxID = globalAtx.ID()
-	ballot1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
+	ballot1.EpochData = &types.EpochData{}
+	ballot1.ActiveSet = []types.ATXID{globalAtx.ID(), globalAtx2.ID()}
 
 	globalTx = NewTx(0, addr1, signer1)
 	globalTx2 = NewTx(1, addr2, signer2)

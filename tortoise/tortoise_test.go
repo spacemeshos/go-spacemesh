@@ -894,6 +894,7 @@ func TestDecodeVotes(t *testing.T) {
 		)
 		ballot.BallotMetadata = ballots[0].BallotMetadata
 		ballot.InnerBallot = ballots[0].InnerBallot
+		ballot.ActiveSet = ballots[0].ActiveSet
 		ballot.Votes.Support = []types.Vote{{ID: types.BlockID{2, 2, 2}}}
 		_, err = tortoise.DecodeBallot(&ballot)
 		require.ErrorContains(t, err, "not in state")
@@ -1550,8 +1551,9 @@ func TestComputeBallotWeight(t *testing.T) {
 				}
 				if b.ActiveSet != nil {
 					ballot.EpochData = &types.EpochData{
-						ActiveSet: createActiveSet(b.ActiveSet, atxids),
+						ActiveSetHash: types.Hash32{1, 2, 3},
 					}
+					ballot.ActiveSet = createActiveSet(b.ActiveSet, atxids)
 				} else {
 					ballot.RefBallot = blts[b.RefBallot].ID()
 				}
@@ -2286,6 +2288,7 @@ func TestSwitchMode(t *testing.T) {
 			ballot := types.NewExistingBallot(types.BallotID{byte(i)}, types.EmptyEdSignature, types.EmptyNodeID, template.BallotMetadata)
 			ballot.InnerBallot = template.InnerBallot
 			ballot.EligibilityProofs = template.EligibilityProofs
+			ballot.ActiveSet = template.ActiveSet
 			tortoise.OnBallot(&ballot)
 		}
 		tortoise.TallyVotes(ctx, last)
@@ -2333,6 +2336,7 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		ballot := types.NewExistingBallot(id, types.EmptyEdSignature, types.EmptyNodeID, rst[0].BallotMetadata)
 		ballot.InnerBallot = rst[0].InnerBallot
 		ballot.EligibilityProofs = rst[0].EligibilityProofs
+		ballot.ActiveSet = rst[0].ActiveSet
 		ballot.Votes.Base = types.EmptyBallotID
 		ballot.Votes.Support = nil
 		ballot.Votes.Against = nil
@@ -2760,7 +2764,8 @@ func TestEncodeVotes(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(cdb, vatx))
 
-		ballot.EpochData = &types.EpochData{ActiveSet: []types.ATXID{atxid}}
+		ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}}
+		ballot.ActiveSet = []types.ATXID{atxid}
 		ballot.AtxID = atxid
 		ballot.Layer = lid
 		ballot.Votes.Support = []types.Vote{

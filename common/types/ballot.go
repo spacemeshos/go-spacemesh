@@ -48,7 +48,11 @@ type Ballot struct {
 	Votes Votes
 	// the proof of the smeshers eligibility to vote and propose block content in this epoch.
 	// Eligibilities must be produced in the ascending order.
+	// the proofs are vrf signatures and need not be included in the ballot's signature.
 	EligibilityProofs []VotingEligibility `scale:"max=500"` // according to protocol there are 50 per layer, the rest is safety margin
+	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
+	// only present in smesher's first ballot of the epoch
+	ActiveSet []ATXID `scale:"max=100000"`
 
 	// the following fields are kept private and from being serialized
 	ballotID BallotID
@@ -100,6 +104,9 @@ type InnerBallot struct {
 	// It is included into transferred data explicitly, so that signature
 	// can be verified before decoding votes.
 	OpinionHash Hash32
+
+	// total number of ballots the smesher is eligible in this epoch.
+	EligibilityCount uint32
 
 	// the first Ballot the smesher cast in the epoch. this Ballot is a special Ballot that contains information
 	// that cannot be changed mid-epoch.
@@ -217,8 +224,7 @@ func (o *Opinion) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 // EpochData contains information that cannot be changed mid-epoch.
 type EpochData struct {
-	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
-	ActiveSet []ATXID `scale:"max=100000"`
+	ActiveSetHash Hash32
 	// the beacon value the smesher recorded for this epoch
 	Beacon Beacon
 }
@@ -314,7 +320,7 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	)
 
 	if b.EpochData != nil {
-		activeSetSize = len(b.EpochData.ActiveSet)
+		activeSetSize = len(b.ActiveSet)
 		beacon = b.EpochData.Beacon
 	}
 

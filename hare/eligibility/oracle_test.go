@@ -75,7 +75,8 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 			b.Layer = lyr
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
-			b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
+			b.EpochData = &types.EpochData{Beacon: beacon}
+			b.ActiveSet = activeSet
 			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
 			b.SetSmesherID(signer.NodeID())
 			require.NoError(tb, b.Initialize())
@@ -175,7 +176,8 @@ func TestCalcEligibility_EmptyActiveSet(t *testing.T) {
 		b := types.RandomBallot()
 		b.AtxID = atx
 		b.RefBallot = types.EmptyBallotID
-		b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
+		b.EpochData = &types.EpochData{Beacon: beacon}
+		b.ActiveSet = activeSet
 		b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
 		require.NoError(t, b.Initialize())
 		b.SetSmesherID(signer.NodeID())
@@ -404,7 +406,8 @@ func Test_VrfSignVerify(t *testing.T) {
 			b.Layer = lyr
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
-			b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
+			b.EpochData = &types.EpochData{Beacon: beacon}
+			b.ActiveSet = activeSet
 			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
 			b.SetSmesherID(signer.NodeID())
 			require.NoError(t, b.Initialize())
@@ -509,7 +512,8 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 		b.Layer = start
 		b.AtxID = atx
 		b.RefBallot = types.EmptyBallotID
-		b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
+		b.EpochData = &types.EpochData{Beacon: beacon}
+		b.ActiveSet = activeSet
 		b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
 		require.NoError(t, b.Initialize())
 		b.SetSmesherID(signer.NodeID())
@@ -692,10 +696,13 @@ func TestActives_HareActiveSetDifferentBeacon(t *testing.T) {
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			if atx == badBeaconATX {
-				b.EpochData = &types.EpochData{ActiveSet: atxIDs, Beacon: badBeacon}
+				b.EpochData = &types.EpochData{Beacon: badBeacon}
+				b.ActiveSet = atxIDs
 			} else {
-				b.EpochData = &types.EpochData{ActiveSet: atxIDs, Beacon: beacon}
+				b.EpochData = &types.EpochData{Beacon: beacon}
+				b.ActiveSet = atxIDs
 			}
+			b.ActiveSet = atxIDs
 			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
 			b.SetSmesherID(signer.NodeID())
 			require.NoError(t, b.Initialize())
@@ -732,7 +739,8 @@ func TestActives_HareActiveSetMultipleLayers(t *testing.T) {
 			b := types.RandomBallot()
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
-			b.EpochData = &types.EpochData{ActiveSet: atxIDs}
+			b.EpochData = &types.EpochData{ActiveSetHash: types.ATXIDList(atxIDs).Hash()}
+			b.ActiveSet = atxIDs
 			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
 			require.NoError(t, b.Initialize())
 			b.SetSmesherID(signer.NodeID())

@@ -118,9 +118,10 @@ func (c *core) OnMessage(m Messenger, event Message) {
 				c.beacons.StoreBeacon(ev.LayerID.GetEpoch(), beacon)
 			}
 			ballot.EpochData = &types.EpochData{
-				ActiveSet: activeset,
-				Beacon:    beacon,
+				ActiveSetHash: types.Hash32{1, 2, 3},
+				Beacon:        beacon,
 			}
+			ballot.ActiveSet = activeset
 		}
 		ballot.Signature = c.signer.Sign(signing.BALLOT, ballot.SignedBytes())
 		ballot.SetSmesherID(c.signer.NodeID())
