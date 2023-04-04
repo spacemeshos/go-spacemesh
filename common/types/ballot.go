@@ -238,13 +238,11 @@ func (b *Ballot) Initialize() error {
 	}
 
 	h := hash.New()
-	_, err := codec.EncodeTo(h, &b.InnerBallot)
-	if err != nil {
-		return fmt.Errorf("failed to encode inner ballot for hashing")
+	if _, err := h.Write(b.MsgHash[:]); err != nil {
+		return fmt.Errorf("failed to write to hash")
 	}
-	_, err = scale.EncodeByteSlice(scale.NewEncoder(h), b.Signature[:])
-	if err != nil {
-		return fmt.Errorf("failed to encode byte slice")
+	if _, err := scale.EncodeByteSlice(scale.NewEncoder(h), b.Signature[:]); err != nil {
+		return fmt.Errorf("failed to encode signature")
 	}
 	b.ballotID = BallotID(BytesToHash(h.Sum(nil)).ToHash20())
 	return nil
