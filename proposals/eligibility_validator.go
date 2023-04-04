@@ -21,6 +21,7 @@ var (
 	errInvalidProofsOrder  = errors.New("proofs are out of order")
 	errIncorrectVRFSig     = errors.New("proof contains incorrect VRF signature")
 	errIncorrectLayerIndex = errors.New("ballot has incorrect layer index")
+	errIncorrectEligCount  = errors.New("ballot has incorrect eligibility count")
 )
 
 // Validator validates the eligibility of a Ballot.
@@ -110,7 +111,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		return false, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, refBallot.ID())
 	}
 
-	activeSets := refBallot.EpochData.ActiveSet
+	activeSets := refBallot.ActiveSet
 	if len(activeSets) == 0 {
 		return false, fmt.Errorf("%w: ref ballot %v", errEmptyActiveSet, refBallot.ID())
 	}
@@ -143,6 +144,9 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	numEligibleSlots, err := GetNumEligibleSlots(atxWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
 	if err != nil {
 		return false, err
+	}
+	if ballot.EligibilityCount != numEligibleSlots {
+		return false, fmt.Errorf("%w: expected %v, got: %v", errIncorrectEligCount, numEligibleSlots, ballot.EligibilityCount)
 	}
 
 	var (
