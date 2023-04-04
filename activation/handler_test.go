@@ -516,7 +516,7 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
-		vAtx := newActivationTx(t, sig1, 1, prevAtx.ID(), prevAtx.ID(), nil, types.LayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
+		vAtx := newActivationTx(t, sig1, 2, prevAtx.ID(), prevAtx.ID(), nil, types.LayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
 		require.NoError(t, atxs.Add(cdb, vAtx))
 
 		prevAtx := newActivationTx(t, otherSig, 0, types.EmptyATXID, types.EmptyATXID, nil, types.LayerID(100), 0, 100, coinbase, 100, npst)

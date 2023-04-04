@@ -126,6 +126,8 @@ func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *si
 
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(received)
+	nodeID := sig.NodeID()
+	atx.NodeID = &nodeID
 	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(tb, err)

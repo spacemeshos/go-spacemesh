@@ -74,6 +74,11 @@ func newActivationTx(
 ) *types.VerifiedActivationTx {
 	challenge := newChallenge(sequence, prevATX, positioningATX, pubLayerID, cATX)
 	atx := newAtx(t, sig, challenge, nipost, numUnits, coinbase)
+	if sequence == 0 {
+		nodeID := sig.NodeID()
+		atx.NodeID = &nodeID
+	}
+
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
 	require.NoError(t, SignAndFinalizeAtx(sig, atx))

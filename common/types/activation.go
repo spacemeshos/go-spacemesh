@@ -159,7 +159,7 @@ func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
 	InnerActivationTx
-	ATXMetadata
+	ATXMetadata // TODO(mafa): remove ATXMetadata from ActivationTx (only use it for signature calculation)
 
 	SmesherID NodeID
 	Signature EdSignature
@@ -244,22 +244,11 @@ func (atx *ActivationTx) Initialize() error {
 		return fmt.Errorf("ATX already initialized")
 	}
 
-	if atx.Signature == EmptyEdSignature {
-		return fmt.Errorf("cannot calculate ATX ID: sig is nil")
-	}
-
+	// TODO(mafa): replace atx.MsgHash with atx.ID()
 	if atx.MsgHash != BytesToHash(atx.HashInnerBytes()) {
 		return fmt.Errorf("bad message hash")
 	}
-
-	h := hash.New()
-	if _, err := h.Write(atx.MsgHash[:]); err != nil {
-		return fmt.Errorf("failed to write to hash")
-	}
-	if _, err := scale.EncodeByteSlice(scale.NewEncoder(h), atx.Signature[:]); err != nil {
-		return fmt.Errorf("failed to encode signature")
-	}
-	atx.id = ATXID(BytesToHash(h.Sum(nil)))
+	atx.id = ATXID(atx.MsgHash)
 	return nil
 }
 
