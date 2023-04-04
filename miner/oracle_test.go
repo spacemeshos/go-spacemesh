@@ -2,13 +2,13 @@ package miner
 
 import (
 	"context"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -45,17 +45,17 @@ func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *s
 	return nodeID, edSigner, vrfSigner
 }
 
-func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publishLayer types.LayerID, nodeID types.NodeID) *types.VerifiedActivationTx {
+func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publishLayer types.LayerID, signer *signing.EdSigner) *types.VerifiedActivationTx {
 	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
 			PubLayerID: publishLayer,
 		},
 		NumUnits: defaultAtxWeight,
 	}}
-	atx.SetID(&id)
-	atx.SetNodeID(&nodeID)
+	atx.SetID(id)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
+	activation.SignAndFinalizeAtx(signer, atx)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(tb, err)
 	require.NoError(tb, atxs.Add(cdb, vAtx))
@@ -112,24 +112,21 @@ type epochATXInfo struct {
 	beacon    types.Beacon
 }
 
-func genATXForTargetEpochs(tb testing.TB, cdb *datastore.CachedDB, start, end types.EpochID, nodeID types.NodeID, layersPerEpoch uint32) map[types.EpochID]epochATXInfo {
+func genATXForTargetEpochs(tb testing.TB, cdb *datastore.CachedDB, start, end types.EpochID, signer *signing.EdSigner, layersPerEpoch uint32) map[types.EpochID]epochATXInfo {
 	epochInfo := make(map[types.EpochID]epochATXInfo)
 	for epoch := start; epoch < end; epoch++ {
 		publishLayer := epoch.FirstLayer().Sub(layersPerEpoch)
 		activeSet := types.RandomActiveSet(activeSetSize)
+		atx := genMinerATX(tb, cdb, activeSet[0], publishLayer, signer)
 		info := epochATXInfo{
 			beacon:    types.RandomBeacon(),
 			activeSet: activeSet,
+			atxID:     atx.ID(),
 		}
-		for i, id := range activeSet {
-			nid := types.BytesToNodeID([]byte(strconv.Itoa(i)))
-			if i == 0 {
-				nid = nodeID
-			}
-			atx := genMinerATX(tb, cdb, id, publishLayer, nid)
-			if i == 0 {
-				info.atxID = atx.ID()
-			}
+		for _, id := range activeSet[1:] {
+			signer, err := signing.NewEdSigner()
+			require.NoError(tb, err)
+			genMinerATX(tb, cdb, id, publishLayer, signer)
 		}
 		epochInfo[epoch] = info
 	}
@@ -166,7 +163,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 	startLayer := layersPerEpoch * startEpoch
 	endLayer := types.LayerID(numberOfEpochsToTest * layersPerEpoch).Add(startLayer)
 	counterValuesSeen := map[uint32]int{}
-	epochInfo := genATXForTargetEpochs(t, o.cdb, types.EpochID(startEpoch), types.EpochID(startEpoch+numberOfEpochsToTest), o.nodeID, layersPerEpoch)
+	epochInfo := genATXForTargetEpochs(t, o.cdb, types.EpochID(startEpoch), types.EpochID(startEpoch+numberOfEpochsToTest), o.edSigner, layersPerEpoch)
 	for layer := types.LayerID(startLayer); layer.Before(endLayer); layer = layer.Add(1) {
 		info, ok := epochInfo[layer.GetEpoch()]
 		require.True(t, ok)

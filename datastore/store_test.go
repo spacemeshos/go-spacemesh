@@ -168,8 +168,6 @@ func TestIdentityExists(t *testing.T) {
 	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
 	atx.SetReceived(time.Now())
 	atx.SetEffectiveNumUnits(atx.NumUnits)
-	nodeID := signer.NodeID()
-	atx.SetNodeID(&nodeID)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(cdb, vAtx))
@@ -202,12 +200,10 @@ func TestStore_GetAtxByNodeID(t *testing.T) {
 	}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	nodeID := signer.NodeID()
 	for _, atx := range []*types.ActivationTx{atx3, atx4} {
 		require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		atx.SetNodeID(&nodeID)
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(cdb, vAtx))
@@ -240,8 +236,6 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
-	extractedNodeID := signer.NodeID()
-	atx.SetNodeID(&extractedNodeID)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 
@@ -253,12 +247,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 
 	var gotA types.ActivationTx
 	require.NoError(t, codec.Decode(got, &gotA))
-	require.NoError(t, gotA.CalcAndSetID())
-	extract, err := signing.NewPubKeyExtractor()
-	require.NoError(t, err)
-	extractedNodeID, err = extract.ExtractNodeID(signing.ATX, atx.SignedBytes(), atx.Signature)
-	require.NoError(t, err)
-	gotA.SetNodeID(&extractedNodeID)
+	require.NoError(t, gotA.Initialize())
 	gotA.SetEffectiveNumUnits(gotA.NumUnits)
 	gotA.SetReceived(atx.Received())
 	require.Equal(t, *atx, gotA)

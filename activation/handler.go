@@ -38,7 +38,7 @@ type atxChan struct {
 // Handler processes the atxs received from all nodes and their validity status.
 type Handler struct {
 	cdb             *datastore.CachedDB
-	extractor       *signing.PubKeyExtractor
+	edVerifier      *signing.EdVerifier
 	clock           layerClock
 	publisher       pubsub.Publisher
 	layersPerEpoch  uint32
@@ -56,7 +56,7 @@ type Handler struct {
 // NewHandler returns a data handler for ATX.
 func NewHandler(
 	cdb *datastore.CachedDB,
-	extractor *signing.PubKeyExtractor,
+	edVerifier *signing.EdVerifier,
 	c layerClock,
 	pub pubsub.Publisher,
 	fetcher system.Fetcher,
@@ -70,7 +70,7 @@ func NewHandler(
 ) *Handler {
 	return &Handler{
 		cdb:             cdb,
-		extractor:       extractor,
+		edVerifier:      edVerifier,
 		clock:           c,
 		publisher:       pub,
 		layersPerEpoch:  layersPerEpoch,
@@ -142,13 +142,13 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 	h.log.WithContext(ctx).With().Info("processing atx",
 		atx.ID(),
 		atx.PublishEpoch(),
-		log.FieldNamed("smesher", atx.NodeID()),
+		log.FieldNamed("smesher", atx.SmesherID),
 		atx.PubLayerID,
 	)
 	if err := h.ContextuallyValidateAtx(atx); err != nil {
 		h.log.WithContext(ctx).With().Warning("atx failed contextual validation",
 			atx.ID(),
-			log.FieldNamed("smesher", atx.NodeID()),
+			log.FieldNamed("smesher", atx.SmesherID),
 			log.Err(err),
 		)
 	} else {
@@ -178,7 +178,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		err           error
 	)
 
-	if atx.PrevATXID == *types.EmptyATXID {
+	if atx.PrevATXID == types.EmptyATXID {
 		if err := h.validateInitialAtx(ctx, atx); err != nil {
 			return nil, err
 		}
@@ -186,7 +186,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	} else {
 		commitmentATX, err = h.getCommitmentAtx(atx)
 		if err != nil {
-			return nil, fmt.Errorf("commitment atx for %s not found: %w", atx.NodeID(), err)
+			return nil, fmt.Errorf("commitment atx for %s not found: %w", atx.SmesherID, err)
 		}
 
 		err = h.validateNonInitialAtx(ctx, atx, *commitmentATX)
@@ -208,7 +208,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	expectedChallengeHash := atx.NIPostChallenge.Hash()
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	leaves, err := h.nipostValidator.NIPost(atx.NodeID(), *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
+	leaves, err := h.nipostValidator.NIPost(atx.SmesherID, *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
@@ -221,6 +221,10 @@ func (h *Handler) validateInitialAtx(_ context.Context, atx *types.ActivationTx)
 		return fmt.Errorf("no prevATX declared, but initial Post is not included")
 	}
 
+	if atx.InnerActivationTx.NodeID == nil {
+		return fmt.Errorf("no prevATX declared, but NodeID is missing")
+	}
+
 	if err := h.nipostValidator.InitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, h.goldenATXID, atx.InitialPost.Indices); err != nil {
 		return err
 	}
@@ -230,7 +234,7 @@ func (h *Handler) validateInitialAtx(_ context.Context, atx *types.ActivationTx)
 	initialPostMetadata := *atx.NIPost.PostMetadata
 	initialPostMetadata.Challenge = shared.ZeroChallenge
 
-	if err := h.nipostValidator.Post(atx.NodeID(), *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
+	if err := h.nipostValidator.Post(atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid initial Post: %w", err)
 	}
 
@@ -238,7 +242,7 @@ func (h *Handler) validateInitialAtx(_ context.Context, atx *types.ActivationTx)
 		return fmt.Errorf("no prevATX declared, but VRFNonce is missing")
 	}
 
-	if err := h.nipostValidator.VRFNonce(atx.NodeID(), *atx.CommitmentATX, atx.VRFNonce, &initialPostMetadata, atx.NumUnits); err != nil {
+	if err := h.nipostValidator.VRFNonce(atx.SmesherID, *atx.CommitmentATX, atx.VRFNonce, &initialPostMetadata, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid VRFNonce: %w", err)
 	}
 
@@ -247,7 +251,11 @@ func (h *Handler) validateInitialAtx(_ context.Context, atx *types.ActivationTx)
 }
 
 func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.ActivationTx, commitmentATX types.ATXID) error {
-	if err := h.nipostValidator.NIPostChallenge(&atx.NIPostChallenge, h.cdb, atx.NodeID()); err != nil {
+	if atx.InnerActivationTx.NodeID != nil {
+		return fmt.Errorf("prevATX declared, but NodeID is included")
+	}
+
+	if err := h.nipostValidator.NIPostChallenge(&atx.NIPostChallenge, h.cdb, atx.SmesherID); err != nil {
 		return err
 	}
 
@@ -260,10 +268,10 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 	if atx.NumUnits > prevAtx.NumUnits && nonce == nil {
 		h.log.WithContext(ctx).With().Info("PoST size increased without new VRF Nonce, re-validating current nonce",
 			atx.ID(),
-			log.FieldNamed("smesher", atx.NodeID()),
+			log.FieldNamed("smesher", atx.SmesherID),
 		)
 
-		current, err := h.cdb.VRFNonce(atx.NodeID(), atx.TargetEpoch())
+		current, err := h.cdb.VRFNonce(atx.SmesherID, atx.TargetEpoch())
 		if err != nil {
 			return fmt.Errorf("failed to get current nonce: %w", err)
 		}
@@ -271,7 +279,7 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 	}
 
 	if nonce != nil {
-		err = h.nipostValidator.VRFNonce(atx.NodeID(), commitmentATX, nonce, atx.NIPost.PostMetadata, atx.NumUnits)
+		err = h.nipostValidator.VRFNonce(atx.SmesherID, commitmentATX, nonce, atx.NIPost.PostMetadata, atx.NumUnits)
 		if err != nil {
 			return fmt.Errorf("invalid VRFNonce: %w", err)
 		}
@@ -294,7 +302,7 @@ func (h *Handler) getCommitmentAtx(atx *types.ActivationTx) (*types.ATXID, error
 		return atx.CommitmentATX, nil
 	}
 
-	id, err := atxs.GetFirstIDByNodeID(h.cdb, atx.NodeID())
+	id, err := atxs.GetFirstIDByNodeID(h.cdb, atx.SmesherID)
 	if err != nil {
 		return nil, err
 	}
@@ -308,15 +316,15 @@ func (h *Handler) getCommitmentAtx(atx *types.ActivationTx) (*types.ATXID, error
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
 func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error {
-	lastAtx, err := atxs.GetLastIDByNodeID(h.cdb, atx.NodeID())
+	lastAtx, err := atxs.GetLastIDByNodeID(h.cdb, atx.SmesherID)
 	if err == nil && atx.PrevATXID == lastAtx {
 		// last atx referenced equals last ATX seen from node
 		return nil
 	}
 
-	if err == nil && atx.PrevATXID == *types.EmptyATXID {
+	if err == nil && atx.PrevATXID == types.EmptyATXID {
 		// no previous atx declared, but already seen at least one atx from node
-		return fmt.Errorf("no prevATX reported, but other atx with same nodeID (%v) found: %v", atx.NodeID(), lastAtx.ShortString())
+		return fmt.Errorf("no prevATX reported, but other atx with same nodeID (%v) found: %v", atx.SmesherID, lastAtx.ShortString())
 	}
 
 	if err == nil && atx.PrevATXID != lastAtx {
@@ -324,16 +332,16 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 		return fmt.Errorf("last atx is not the one referenced")
 	}
 
-	if errors.Is(err, sql.ErrNotFound) && atx.PrevATXID == *types.EmptyATXID {
+	if errors.Is(err, sql.ErrNotFound) && atx.PrevATXID == types.EmptyATXID {
 		// no previous atx found and none referenced
 		return nil
 	}
 
-	if err != nil && atx.PrevATXID != *types.EmptyATXID {
+	if err != nil && atx.PrevATXID != types.EmptyATXID {
 		// no previous atx found but previous atx referenced
 		h.log.With().Error("could not fetch node last atx",
 			atx.ID(),
-			log.FieldNamed("smesher", atx.NodeID()),
+			log.FieldNamed("smesher", atx.SmesherID),
 			log.Err(err),
 		)
 		return fmt.Errorf("could not fetch node last atx: %w", err)
@@ -344,14 +352,14 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
 func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx) error {
-	malicious, err := h.cdb.IsMalicious(atx.NodeID())
+	malicious, err := h.cdb.IsMalicious(atx.SmesherID)
 	if err != nil {
 		return fmt.Errorf("checking if node is malicious: %w", err)
 	}
 	var proof *types.MalfeasanceProof
 	if err = h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		if !malicious {
-			prev, err := atxs.GetByEpochAndNodeID(dbtx, atx.PublishEpoch(), atx.NodeID())
+			prev, err := atxs.GetByEpochAndNodeID(dbtx, atx.PublishEpoch(), atx.SmesherID)
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
 				return err
 			}
@@ -361,6 +369,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				for i, a := range []*types.VerifiedActivationTx{prev, atx} {
 					atxProof.Messages[i] = types.AtxProofMsg{
 						InnerMsg:  a.ATXMetadata,
+						SmesherID: a.SmesherID,
 						Signature: a.Signature,
 					}
 				}
@@ -371,11 +380,11 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 						Data: &atxProof,
 					},
 				}
-				if err = h.cdb.AddMalfeasanceProof(atx.NodeID(), proof, dbtx); err != nil {
+				if err = h.cdb.AddMalfeasanceProof(atx.SmesherID, proof, dbtx); err != nil {
 					return fmt.Errorf("adding malfeasense proof: %w", err)
 				}
 				h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
-					log.Stringer("smesher", atx.NodeID()),
+					log.Stringer("smesher", atx.SmesherID),
 					log.Object("prev", prev),
 					log.Object("curr", atx),
 				)
@@ -429,7 +438,7 @@ func (h *Handler) GetEpochAtxs(epochID types.EpochID) (ids []types.ATXID, err er
 func (h *Handler) GetPosAtxID() (types.ATXID, error) {
 	id, err := atxs.GetAtxIDWithMaxHeight(h.cdb)
 	if err != nil {
-		return *types.EmptyATXID, fmt.Errorf("failed to get positioning atx: %w", err)
+		return types.EmptyATXID, fmt.Errorf("failed to get positioning atx: %w", err)
 	}
 	return id, nil
 }
@@ -465,7 +474,7 @@ func (h *Handler) HandleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 func (h *Handler) registerHashes(atx *types.ActivationTx, peer p2p.Peer) {
 	hashes := map[types.Hash32]struct{}{}
 	for _, id := range []types.ATXID{atx.PositioningATX, atx.PrevATXID} {
-		if id != *types.EmptyATXID && id != h.goldenATXID {
+		if id != types.EmptyATXID && id != h.goldenATXID {
 			hashes[id.Hash32()] = struct{}{}
 		}
 	}
@@ -487,13 +496,11 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 
 	atx.SetReceived(receivedTime.Local())
 
-	nodeID, err := h.extractor.ExtractNodeID(signing.ATX, atx.SignedBytes(), atx.Signature)
-	if err != nil {
-		return fmt.Errorf("failed to derive Node ID from ATX with sig %v: %w", atx.Signature, err)
+	if ok := h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature); !ok {
+		return fmt.Errorf("failed to verify atx signature: %w", errMalformedData)
 	}
-	atx.SetNodeID(&nodeID)
 
-	if err = atx.CalcAndSetID(); err != nil {
+	if err := atx.Initialize(); err != nil {
 		return fmt.Errorf("failed to derive ID from atx: %w", err)
 	}
 
@@ -544,12 +551,12 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 func (h *Handler) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) error {
 	logger := h.log.WithContext(ctx)
 	var atxIDs []types.ATXID
-	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != h.goldenATXID {
+	if atx.PositioningATX != types.EmptyATXID && atx.PositioningATX != h.goldenATXID {
 		logger.With().Debug("going to fetch pos atx", atx.PositioningATX, atx.ID())
 		atxIDs = append(atxIDs, atx.PositioningATX)
 	}
 
-	if atx.PrevATXID != *types.EmptyATXID {
+	if atx.PrevATXID != types.EmptyATXID {
 		logger.With().Debug("going to fetch prev atx", atx.PrevATXID, atx.ID())
 		if len(atxIDs) < 1 || atx.PrevATXID != atxIDs[0] {
 			atxIDs = append(atxIDs, atx.PrevATXID)

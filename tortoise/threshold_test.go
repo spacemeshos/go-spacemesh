@@ -7,11 +7,9 @@ import (
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
@@ -162,12 +160,7 @@ func TestReferenceHeight(t *testing.T) {
 					},
 					NumUnits: 2,
 				}}
-				atx.SetID(&types.ATXID{byte(i + 1)})
-				sig, err := signing.NewEdSigner()
-				require.NoError(t, err)
-				require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
-				nodeID := sig.NodeID()
-				atx.SetNodeID(&nodeID)
+				atx.SetID(types.ATXID{byte(i + 1)})
 				atx.SetEffectiveNumUnits(atx.NumUnits)
 				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(0, uint64(height))

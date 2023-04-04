@@ -283,6 +283,7 @@ type App struct {
 	atxHandler       *activation.Handler
 	validator        *activation.Validator
 	keyExtractor     *signing.PubKeyExtractor
+	edVerifier       *signing.EdVerifier
 	beaconProtocol   *beacon.ProtocolDriver
 	log              log.Log
 	svm              *vm.VM
@@ -483,7 +484,7 @@ func (app *App) initServices(
 	}
 
 	goldenATXID := types.ATXID(app.Config.Genesis.GenesisID().ToHash32())
-	if goldenATXID == *types.EmptyATXID {
+	if goldenATXID == types.EmptyATXID {
 		return errors.New("invalid golden atx id")
 	}
 
@@ -493,6 +494,11 @@ func (app *App) initServices(
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create key extractor: %w", err)
+	}
+
+	app.edVerifier, err = signing.NewEdVerifier(signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
+	if err != nil {
+		return fmt.Errorf("failed to create signature verifier: %w", err)
 	}
 
 	vrfVerifier := signing.NewVRFVerifier()
@@ -530,7 +536,7 @@ func (app *App) initServices(
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
 		app.cachedDB,
-		app.keyExtractor,
+		app.edVerifier,
 		clock,
 		app.host,
 		fetcherWrapped,
@@ -687,6 +693,7 @@ func (app *App) initServices(
 		app.host.ID(),
 		app.hare,
 		app.keyExtractor,
+		app.edVerifier,
 	)
 	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, txHandler, malfeasanceHandler)
 

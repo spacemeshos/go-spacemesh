@@ -195,7 +195,7 @@ func rewardInfoAndHeight(logger log.Log, cdb *datastore.CachedDB, cfg Config, pr
 	atxids := make([]types.ATXID, 0, len(props))
 	max := uint64(0)
 	for _, p := range props {
-		if p.AtxID == *types.EmptyATXID {
+		if p.AtxID == types.EmptyATXID {
 			// this proposal would not have been validated
 			logger.With().Error("proposal with invalid ATXID, skipping reward distribution", p.Layer, p.ID())
 			return 0, nil, errInvalidATXID

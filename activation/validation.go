@@ -208,7 +208,7 @@ func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProv
 }
 
 func (*Validator) PositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, publayer types.LayerID, layersPerEpoch uint32) error {
-	if *id == *types.EmptyATXID {
+	if *id == types.EmptyATXID {
 		return fmt.Errorf("empty positioning atx")
 	}
 

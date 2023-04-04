@@ -408,7 +408,7 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.L
 }
 
 func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
-	if b.AtxID == *types.EmptyATXID || b.AtxID == h.cfg.GoldenATXID {
+	if b.AtxID == types.EmptyATXID || b.AtxID == h.cfg.GoldenATXID {
 		return errInvalidATXID
 	}
 

@@ -236,7 +236,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 	mgr := newTestPostManager(t)
 
-	latestAtx := addPrevAtx(t, mgr.db, 1, mgr.signer, &mgr.id)
+	latestAtx := addPrevAtx(t, mgr.db, 1, mgr.signer)
 	atx, err := mgr.findCommitmentAtx(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, latestAtx.ID(), atx)
@@ -271,8 +271,7 @@ func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *te
 
 	// add an atx by the same node
 	commitmentAtx := types.RandomATXID()
-	id := mgr.signer.NodeID()
-	atx := types.NewActivationTx(types.NIPostChallenge{}, &id, types.Address{}, nil, 1, nil, nil)
+	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, nil, 1, nil, nil)
 	atx.CommitmentATX = &commitmentAtx
 	addAtx(t, mgr.cdb, mgr.signer, atx)
 

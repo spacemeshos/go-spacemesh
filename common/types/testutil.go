@@ -49,7 +49,7 @@ func RandomATXID() ATXID {
 	var b [ATXIDSize]byte
 	_, err := rand.Read(b[:])
 	if err != nil {
-		return *EmptyATXID
+		return EmptyATXID
 	}
 	return ATXID(b)
 }
