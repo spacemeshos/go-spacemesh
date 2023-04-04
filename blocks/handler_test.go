@@ -67,7 +67,7 @@ func Test_HandleBlockData_InvalidRewards(t *testing.T) {
 
 func Test_HandleBlockData_AlreadyHasBlock(t *testing.T) {
 	th := createTestHandler(t)
-	layerID := types.NewLayerID(99)
+	layerID := types.LayerID(99)
 	txIDs := createTransactions(t, max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
@@ -77,7 +77,7 @@ func Test_HandleBlockData_AlreadyHasBlock(t *testing.T) {
 
 func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
 	th := createTestHandler(t)
-	layerID := types.NewLayerID(99)
+	layerID := types.LayerID(99)
 	txIDs := createTransactions(t, max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
@@ -90,7 +90,7 @@ func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
 
 func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 	th := createTestHandler(t)
-	layerID := types.NewLayerID(99)
+	layerID := types.LayerID(99)
 	txIDs := createTransactions(t, max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
@@ -104,7 +104,7 @@ func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 
 func Test_HandleBlockData(t *testing.T) {
 	th := createTestHandler(t)
-	layerID := types.NewLayerID(99)
+	layerID := types.LayerID(99)
 	txIDs := createTransactions(t, max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)

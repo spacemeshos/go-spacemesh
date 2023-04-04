@@ -70,12 +70,12 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		}
 
 		if s.patrol.IsHareInCharge(lid) {
-			lag := types.NewLayerID(0)
+			lag := types.LayerID(0)
 			current := s.ticker.CurrentLayer()
 			if current.After(lid) {
 				lag = current.Sub(lid.Uint32())
 			}
-			if lag.Value < s.cfg.HareDelayLayers {
+			if lag.Uint32() < s.cfg.HareDelayLayers {
 				logger.Info("skip validating layer: hare still working")
 				return errHareInCharge
 			}

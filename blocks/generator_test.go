@@ -242,7 +242,7 @@ func Test_SerialProcessing(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numLayers)
 	for i := uint32(1); i <= uint32(numLayers); i++ {
-		lid := types.NewLayerID(i)
+		lid := types.LayerID(i)
 		tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), lid, types.EmptyBlockID).Return(nil)
 		tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), lid, types.EmptyBlockID).Return(nil)
 		tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lid, types.EmptyBlockID, false).Do(
@@ -256,19 +256,19 @@ func Test_SerialProcessing(t *testing.T) {
 
 	tg.hareCh <- hare.LayerOutput{
 		Ctx:   context.Background(),
-		Layer: types.NewLayerID(3),
+		Layer: types.LayerID(3),
 	}
 	tg.hareCh <- hare.LayerOutput{
 		Ctx:   context.Background(),
-		Layer: types.NewLayerID(4),
+		Layer: types.LayerID(4),
 	}
 	tg.hareCh <- hare.LayerOutput{
 		Ctx:   context.Background(),
-		Layer: types.NewLayerID(2),
+		Layer: types.LayerID(2),
 	}
 	tg.hareCh <- hare.LayerOutput{
 		Ctx:   context.Background(),
-		Layer: types.NewLayerID(1),
+		Layer: types.LayerID(1),
 	}
 
 	wg.Wait()

@@ -103,7 +103,7 @@ func RandomTransactionID() TransactionID {
 func RandomBallot() *Ballot {
 	return &Ballot{
 		BallotMetadata: BallotMetadata{
-			Layer: NewLayerID(10),
+			Layer: LayerID(10),
 		},
 		InnerBallot: InnerBallot{
 			AtxID:     RandomATXID(),

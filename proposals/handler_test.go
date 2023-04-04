@@ -347,7 +347,7 @@ func TestBallot_NotRefBallotButHasEpochData(t *testing.T) {
 
 func TestBallot_BallotDoubleVotedWithinHdist(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	cutoff := lid.Sub(th.cfg.Hdist)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: cutoff.Add(1)}),
@@ -372,7 +372,7 @@ func TestBallot_BallotDoubleVotedWithinHdist(t *testing.T) {
 
 func TestBallot_BallotDoubleVotedWithinHdist_LyrBfrHdist(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	th.cfg.Hdist = lid.Add(1).Uint32()
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
@@ -398,7 +398,7 @@ func TestBallot_BallotDoubleVotedWithinHdist_LyrBfrHdist(t *testing.T) {
 
 func TestBallot_BallotDoubleVotedOutsideHdist(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	cutoff := lid.Sub(th.cfg.Hdist)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: cutoff.Sub(1)}),
@@ -430,7 +430,7 @@ func TestBallot_BallotDoubleVotedOutsideHdist(t *testing.T) {
 
 func TestBallot_ConflictingForAndAgainst(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -455,7 +455,7 @@ func TestBallot_ConflictingForAndAgainst(t *testing.T) {
 
 func TestBallot_ConflictingForAndAbstain(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -480,7 +480,7 @@ func TestBallot_ConflictingForAndAbstain(t *testing.T) {
 
 func TestBallot_ConflictingAgainstAndAbstain(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	against := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
@@ -506,7 +506,7 @@ func TestBallot_ConflictingAgainstAndAbstain(t *testing.T) {
 
 func TestBallot_ExceedMaxExceptions(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -557,7 +557,7 @@ func TestBallot_ATXsNotAvailable(t *testing.T) {
 
 func TestBallot_BlocksNotAvailable(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 	}
@@ -581,7 +581,7 @@ func TestBallot_BlocksNotAvailable(t *testing.T) {
 
 func TestBallot_ErrorCheckingEligible(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -610,7 +610,7 @@ func TestBallot_ErrorCheckingEligible(t *testing.T) {
 
 func TestBallot_NotEligible(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -638,7 +638,7 @@ func TestBallot_NotEligible(t *testing.T) {
 }
 
 func TestBallot_InvalidVote(t *testing.T) {
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	blks := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -687,7 +687,7 @@ func TestBallot_InvalidVote(t *testing.T) {
 
 func TestBallot_Success(t *testing.T) {
 	th := createTestHandler(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -720,7 +720,7 @@ func TestBallot_Success(t *testing.T) {
 
 func TestBallot_MaliciousProofIgnoredInSyncFlow(t *testing.T) {
 	th := createTestHandler(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -753,7 +753,7 @@ func TestBallot_MaliciousProofIgnoredInSyncFlow(t *testing.T) {
 
 func TestBallot_RefBallot(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -887,7 +887,7 @@ func TestProposal_KnownProposal(t *testing.T) {
 
 func TestProposal_DuplicateTXs(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -924,7 +924,7 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 
 func TestProposal_TXsNotAvailable(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -962,7 +962,7 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 
 func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -1000,7 +1000,7 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 
 func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -1056,7 +1056,7 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 
 func TestProposal_BroadcastMaliciousGossip(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	p := createProposal(t, withLayer(lid))
 	require.NoError(t, ballots.Add(th.cdb, &p.Ballot))
 	require.NoError(t, proposals.Add(th.cdb, p))
@@ -1133,7 +1133,7 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			th := createTestHandlerNoopDecoder(t)
-			lid := types.NewLayerID(100)
+			lid := types.LayerID(100)
 			supported := []*types.Block{
 				types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 				types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -1181,7 +1181,7 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 
 func TestProposal_ValidProposal(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(10)
+	lid := types.LayerID(10)
 	blks := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -1218,7 +1218,7 @@ func TestProposal_ValidProposal(t *testing.T) {
 
 func TestMetrics(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.NewLayerID(100)
+	lid := types.LayerID(100)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),

@@ -31,7 +31,7 @@ func TestActivationEncoding(t *testing.T) {
 
 func TestActivation_BadMsgHash(t *testing.T) {
 	challenge := types.NIPostChallenge{
-		PubLayerID: types.NewLayerID(11),
+		PubLayerID: types.LayerID(11),
 	}
 	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil, nil)
 	atx.Signature = types.RandomEdSignature()

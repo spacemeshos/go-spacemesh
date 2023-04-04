@@ -196,7 +196,7 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 
 func TestMesh_WakeUp(t *testing.T) {
 	tm := createTestMesh(t)
-	latest := types.NewLayerID(11)
+	latest := types.LayerID(11)
 	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{Layer: latest})
 	require.NoError(t, ballots.Add(tm.cdb, &b))
 	require.NoError(t, layers.SetProcessed(tm.cdb, latest))
@@ -541,12 +541,12 @@ func TestMesh_Revert(t *testing.T) {
 func TestMesh_LatestKnownLayer(t *testing.T) {
 	tm := createTestMesh(t)
 	lg := logtest.New(t)
-	tm.setLatestLayer(lg, types.NewLayerID(3))
-	tm.setLatestLayer(lg, types.NewLayerID(7))
-	tm.setLatestLayer(lg, types.NewLayerID(10))
-	tm.setLatestLayer(lg, types.NewLayerID(1))
-	tm.setLatestLayer(lg, types.NewLayerID(2))
-	require.Equal(t, types.NewLayerID(10), tm.LatestLayer(), "wrong layer")
+	tm.setLatestLayer(lg, types.LayerID(3))
+	tm.setLatestLayer(lg, types.LayerID(7))
+	tm.setLatestLayer(lg, types.LayerID(10))
+	tm.setLatestLayer(lg, types.LayerID(1))
+	tm.setLatestLayer(lg, types.LayerID(2))
+	require.Equal(t, types.LayerID(10), tm.LatestLayer(), "wrong layer")
 }
 
 func TestMesh_pushLayersToState_verified(t *testing.T) {
@@ -769,7 +769,7 @@ func TestMesh_MissingTransactionsFailure(t *testing.T) {
 func TestMesh_CallOnBlock(t *testing.T) {
 	tm := createTestMesh(t)
 	block := types.Block{}
-	block.LayerIndex = types.NewLayerID(10)
+	block.LayerIndex = types.LayerID(10)
 	block.Initialize()
 
 	tm.mockTortoise.EXPECT().OnBlock(&block)
@@ -779,7 +779,7 @@ func TestMesh_CallOnBlock(t *testing.T) {
 
 func TestMesh_MaliciousBallots(t *testing.T) {
 	tm := createTestMesh(t)
-	lid := types.NewLayerID(1)
+	lid := types.LayerID(1)
 	nodeID := types.BytesToNodeID([]byte{1, 1, 1})
 
 	blts := []types.Ballot{
@@ -799,7 +799,7 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.Nil(t, saved)
 
 	// second one will create a MalfeasanceProof
-	tm.mockClock.EXPECT().CurrentLayer().Return(types.NewLayerID(11))
+	tm.mockClock.EXPECT().CurrentLayer().Return(types.LayerID(11))
 	malProof, err = tm.AddBallot(context.Background(), &blts[1])
 	require.NoError(t, err)
 	require.NotNil(t, malProof)

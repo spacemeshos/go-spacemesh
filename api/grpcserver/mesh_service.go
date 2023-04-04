@@ -154,7 +154,7 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 
 	var startLayer types.LayerID
 	if in.MinLayer != nil {
-		startLayer = types.NewLayerID(in.MinLayer.Number)
+		startLayer = types.LayerID(in.MinLayer.Number)
 	}
 
 	if startLayer.After(s.mesh.LatestLayer()) {
@@ -379,10 +379,10 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 
 	var startLayer, endLayer types.LayerID
 	if in.StartLayer != nil {
-		startLayer = types.NewLayerID(in.StartLayer.Number)
+		startLayer = types.LayerID(in.StartLayer.Number)
 	}
 	if in.EndLayer != nil {
-		endLayer = types.NewLayerID(in.EndLayer.Number)
+		endLayer = types.LayerID(in.EndLayer.Number)
 	}
 
 	// Get the latest layers that passed both consensus engines.

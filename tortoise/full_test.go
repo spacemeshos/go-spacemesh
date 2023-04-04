@@ -35,12 +35,12 @@ func TestFullBallotFilter(t *testing.T) {
 			desc: "BadFromRecent",
 			ballot: ballotInfo{
 				id:    types.BallotID{1},
-				layer: types.NewLayerID(10),
+				layer: types.LayerID(10),
 				conditions: conditions{
 					badBeacon: true,
 				},
 			},
-			last:     types.NewLayerID(11),
+			last:     types.LayerID(11),
 			distance: 2,
 			expect:   true,
 		},
@@ -48,12 +48,12 @@ func TestFullBallotFilter(t *testing.T) {
 			desc: "BadFromOld",
 			ballot: ballotInfo{
 				id:    types.BallotID{1},
-				layer: types.NewLayerID(8),
+				layer: types.LayerID(8),
 				conditions: conditions{
 					badBeacon: true,
 				},
 			},
-			last:     types.NewLayerID(11),
+			last:     types.LayerID(11),
 			distance: 2,
 			expect:   false,
 		},

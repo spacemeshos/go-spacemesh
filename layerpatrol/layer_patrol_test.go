@@ -10,7 +10,7 @@ import (
 
 func Test_GetAndSetHareInCharge(t *testing.T) {
 	patrol := New()
-	lyr := types.NewLayerID(10)
+	lyr := types.LayerID(10)
 	for i := lyr; !i.After(lyr.Add(bufferSize)); i = i.Add(1) {
 		patrol.SetHareInCharge(i)
 		assert.True(t, patrol.IsHareInCharge(i))

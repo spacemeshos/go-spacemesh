@@ -74,7 +74,7 @@ func TestMalfeasanceProof_Honest(t *testing.T) {
 
 	// but an add will update the cache
 	proof := &types.MalfeasanceProof{
-		Layer: types.NewLayerID(11),
+		Layer: types.LayerID(11),
 		Proof: types.Proof{
 			Type: types.MultipleBallots,
 			Data: &types.BallotProof{
@@ -99,7 +99,7 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 
 	// a bad guy
 	proof := &types.MalfeasanceProof{
-		Layer: types.NewLayerID(11),
+		Layer: types.LayerID(11),
 		Proof: types.Proof{
 			Type: types.MultipleBallots,
 			Data: &types.BallotProof{
@@ -159,7 +159,7 @@ func TestIdentityExists(t *testing.T) {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(22),
+				PubLayerID: types.LayerID(22),
 				Sequence:   11,
 			},
 			NumUnits: 11,
@@ -225,7 +225,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(22),
+				PubLayerID: types.LayerID(22),
 				Sequence:   11,
 			},
 			NumUnits: 11,
@@ -293,7 +293,7 @@ func TestBlobStore_GetBlockBlob(t *testing.T) {
 
 	blk := types.Block{
 		InnerBlock: types.InnerBlock{
-			LayerIndex: types.NewLayerID(11),
+			LayerIndex: types.LayerID(11),
 			TxIDs:      types.RandomTXSet(3),
 		},
 	}
@@ -395,7 +395,7 @@ func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
 	bs := datastore.NewBlobStore(db)
 
 	proof := &types.MalfeasanceProof{
-		Layer: types.NewLayerID(11),
+		Layer: types.LayerID(11),
 		Proof: types.Proof{
 			Type: types.HareEquivocation,
 			Data: &types.HareProof{

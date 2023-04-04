@@ -92,8 +92,8 @@ func main() {
 		Owner:               vestingAddress,
 		TotalAmount:         uint64(*total),
 		InitialUnlockAmount: uint64(*initial),
-		VestingStart:        types.NewLayerID(uint32(*start)),
-		VestingEnd:          types.NewLayerID(uint32(*end)),
+		VestingStart:        types.LayerID(uint32(*start)),
+		VestingEnd:          types.LayerID(uint32(*end)),
 	}
 	vaultAddress := core.ComputePrincipal(vault.TemplateAddress, vaultArgs)
 	types.DefaultAddressConfig().NetworkHRP = *hrp

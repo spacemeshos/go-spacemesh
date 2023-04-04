@@ -37,7 +37,7 @@ func (l EpochID) IsGenesis() bool {
 
 // FirstLayer returns the layer ID of the first layer in the epoch.
 func (l EpochID) FirstLayer() LayerID {
-	return NewLayerID(uint32(l)).Mul(GetLayersPerEpoch())
+	return LayerID(uint32(l)).Mul(GetLayersPerEpoch())
 }
 
 // Add Epochs to the EpochID. Panics on wraparound.

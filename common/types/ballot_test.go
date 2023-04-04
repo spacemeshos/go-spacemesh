@@ -12,7 +12,7 @@ import (
 
 func TestBallotIDUnaffectedByVotes(t *testing.T) {
 	meta := types.BallotMetadata{
-		Layer: types.NewLayerID(1),
+		Layer: types.LayerID(1),
 	}
 	inner := types.InnerBallot{
 		AtxID: types.ATXID{1, 2, 3},

@@ -154,10 +154,10 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 
 	startEpoch, numberOfEpochsToTest := uint32(2), uint32(2)
 	startLayer := layersPerEpoch * startEpoch
-	endLayer := types.NewLayerID(numberOfEpochsToTest * layersPerEpoch).Add(startLayer)
+	endLayer := types.LayerID(numberOfEpochsToTest * layersPerEpoch).Add(startLayer)
 	counterValuesSeen := map[uint32]int{}
 	epochInfo := genATXForTargetEpochs(t, o.cdb, types.EpochID(startEpoch), types.EpochID(startEpoch+numberOfEpochsToTest), o.edSigner, layersPerEpoch)
-	for layer := types.NewLayerID(startLayer); layer.Before(endLayer); layer = layer.Add(1) {
+	for layer := types.LayerID(startLayer); layer.Before(endLayer); layer = layer.Add(1) {
 		info, ok := epochInfo[layer.GetEpoch()]
 		require.True(t, ok)
 		_, _, proofs, err := o.GetProposalEligibility(layer, info.beacon, nonce)
@@ -191,7 +191,7 @@ func TestOracle_OwnATXNotFound(t *testing.T) {
 	avgLayerSize := uint32(10)
 	layersPerEpoch := uint32(20)
 	o := createTestOracle(t, avgLayerSize, layersPerEpoch)
-	lid := types.NewLayerID(layersPerEpoch * 3)
+	lid := types.LayerID(layersPerEpoch * 3)
 	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
 	assert.ErrorIs(t, err, errMinerHasNoATXInPreviousEpoch)
 	assert.Equal(t, types.EmptyATXID, atxID)

@@ -71,12 +71,12 @@ const (
 )
 
 var (
-	txReturnLayer         = types.NewLayerID(1)
-	layerFirst            = types.NewLayerID(0)
-	layerVerified         = types.NewLayerID(8)
-	layerLatest           = types.NewLayerID(10)
-	layerCurrent          = types.NewLayerID(12)
-	postGenesisEpochLayer = types.NewLayerID(22)
+	txReturnLayer         = types.LayerID(1)
+	layerFirst            = types.LayerID(0)
+	layerVerified         = types.LayerID(8)
+	layerLatest           = types.LayerID(10)
+	layerCurrent          = types.LayerID(12)
+	postGenesisEpochLayer = types.LayerID(22)
 	genesisID             = types.Hash20{}
 
 	networkMock = NetworkMock{}
@@ -95,10 +95,10 @@ var (
 	signer2     *signing.EdSigner
 	globalTx    *types.Transaction
 	globalTx2   *types.Transaction
-	ballot1     = genLayerBallot(types.NewLayerID(11))
-	block1      = genLayerBlock(types.NewLayerID(11), nil)
-	block2      = genLayerBlock(types.NewLayerID(11), nil)
-	block3      = genLayerBlock(types.NewLayerID(11), nil)
+	ballot1     = genLayerBallot(types.LayerID(11))
+	block1      = genLayerBlock(types.LayerID(11), nil)
+	block2      = genLayerBlock(types.LayerID(11), nil)
+	block3      = genLayerBlock(types.LayerID(11), nil)
 	meshAPI     = &MeshAPIMock{}
 	conStateAPI = &ConStateAPIMock{
 		returnTx:      make(map[types.TransactionID]*types.Transaction),
@@ -324,7 +324,7 @@ type ConStateAPIMock struct {
 func (t *ConStateAPIMock) Put(id types.TransactionID, tx *types.Transaction) {
 	t.poolByTxId[id] = tx
 	t.poolByAddress[tx.Principal] = id
-	events.ReportNewTx(types.LayerID{}, tx)
+	events.ReportNewTx(0, tx)
 }
 
 // Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
@@ -672,7 +672,7 @@ func TestNodeService(t *testing.T) {
 			// First do a mock checking during a genesis layer
 			// During genesis all layers should be set to current layer
 			oldCurLayer := layerCurrent
-			layerCurrent = types.NewLayerID(layersPerEpoch) // end of first epoch
+			layerCurrent = types.LayerID(layersPerEpoch) // end of first epoch
 			req := &pb.StatusRequest{}
 			res, err := c.Status(context.Background(), req)
 			require.NoError(t, err)
@@ -1851,7 +1851,7 @@ func TestTransactionService(t *testing.T) {
 			// Give the server-side time to subscribe to events
 			time.Sleep(time.Millisecond * 50)
 
-			events.ReportNewTx(types.LayerID{}, globalTx)
+			events.ReportNewTx(0, globalTx)
 			res, err := stream.Recv()
 			require.NoError(t, err)
 			require.Nil(t, res.Transaction)
@@ -1877,7 +1877,7 @@ func TestTransactionService(t *testing.T) {
 			// Give the server-side time to subscribe to events
 			time.Sleep(time.Millisecond * 50)
 
-			events.ReportNewTx(types.LayerID{}, globalTx)
+			events.ReportNewTx(0, globalTx)
 
 			// Verify
 			res, err := stream.Recv()
@@ -1973,7 +1973,7 @@ func TestTransactionService(t *testing.T) {
 
 			// TODO send header after stream has subscribed
 
-			events.ReportNewTx(types.LayerID{}, globalTx)
+			events.ReportNewTx(0, globalTx)
 
 			for _, stream := range streams {
 				res, err := stream.Recv()
@@ -2004,7 +2004,7 @@ func TestTransactionService(t *testing.T) {
 			time.Sleep(time.Millisecond * 50)
 
 			for i := 0; i < subscriptionChanBufSize*2; i++ {
-				events.ReportNewTx(types.LayerID{}, globalTx)
+				events.ReportNewTx(0, globalTx)
 			}
 
 			for i := 0; i < subscriptionChanBufSize; i++ {
@@ -2119,7 +2119,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	time.Sleep(time.Millisecond * 50)
 
 	// publish a tx
-	events.ReportNewTx(types.LayerID{}, globalTx)
+	events.ReportNewTx(0, globalTx)
 	res, err := stream.Recv()
 	require.NoError(t, err, "got error from stream")
 	checkAccountMeshDataItemTx(t, res.Datum.Datum)
@@ -2132,7 +2132,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	// test streaming a tx and an atx that are filtered out
 	// these should not be received
-	events.ReportNewTx(types.LayerID{}, globalTx2)
+	events.ReportNewTx(0, globalTx2)
 	events.ReportNewActivation(globalAtx2)
 
 	_, err = stream.Recv()
@@ -2660,7 +2660,7 @@ func TestTransactionsRewards(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 
 		svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
-		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.NewLayerID(17)}, []types.Transaction{*globalTx}, rewards)
+		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
 		data, err := stream.Recv()
@@ -2681,7 +2681,7 @@ func TestTransactionsRewards(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 
 		svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
-		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.NewLayerID(17)}, []types.Transaction{*globalTx}, rewards)
+		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
 		data, err := stream.Recv()

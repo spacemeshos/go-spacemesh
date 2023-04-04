@@ -46,7 +46,7 @@ type mockLayerTicker struct {
 
 func newMockLayerTicker() *mockLayerTicker {
 	mt := &mockLayerTicker{}
-	mt.current.Store(types.NewLayerID(1))
+	mt.current.Store(types.LayerID(1))
 	return mt
 }
 
@@ -140,7 +140,7 @@ func TestStartAndShutdown(t *testing.T) {
 
 func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
-	current := types.NewLayerID(10)
+	current := types.LayerID(10)
 	ts.mTicker.advanceToLayer(current)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -262,7 +262,7 @@ func TestSynchronize_FetchMalfeasanceFailed(t *testing.T) {
 func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
 	failedEpoch := types.EpochID(4)
-	current := types.NewLayerID(layersPerEpoch * uint32(failedEpoch+1))
+	current := types.LayerID(layersPerEpoch * uint32(failedEpoch+1))
 	ts.mTicker.advanceToLayer(current)
 	for epoch := types.GetEffectiveGenesis().GetEpoch(); epoch < failedEpoch; epoch++ {
 		ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), epoch)
@@ -499,7 +499,7 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, ts *testSyncer) {
 	require.False(t, ts.syncer.IsSynced(context.Background()))
 
 	// next layer will be still gossip syncing
-	require.Equal(t, types.NewLayerID(2).Uint32(), numGossipSyncLayers)
+	require.Equal(t, types.LayerID(2).Uint32(), numGossipSyncLayers)
 	require.Equal(t, current.Add(numGossipSyncLayers), ts.syncer.getTargetSyncedLayer())
 
 	lyr := current
@@ -619,7 +619,7 @@ func TestSyncMissingLayer(t *testing.T) {
 		}
 	}
 	require.NoError(t, ts.syncer.processLayers(context.Background()))
-	require.Equal(t, types.LayerID{}, ts.msh.MissingLayer())
+	require.Equal(t, types.LayerID(0), ts.msh.MissingLayer())
 	require.Equal(t, last.Sub(1), ts.msh.ProcessedLayer())
 	require.Equal(t, last.Sub(1), ts.msh.LatestLayerInState())
 }
