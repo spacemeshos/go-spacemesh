@@ -77,13 +77,13 @@ func (his *HareWrapper) waitForTermination() {
 func (his *HareWrapper) WaitForTimedTermination(t *testing.T, timeout time.Duration) {
 	timer := time.After(timeout)
 	go his.waitForTermination()
-	total := types.NewLayerID(his.totalCP)
+	total := types.LayerID(his.totalCP)
 	select {
 	case <-timer:
 		t.Fatal("Timeout")
 		return
 	case <-his.termination:
-		for i := types.NewLayerID(1); !i.After(total); i = i.Add(1) {
+		for i := types.LayerID(1); !i.After(total); i = i.Add(1) {
 			his.checkResult(t, i)
 		}
 		return

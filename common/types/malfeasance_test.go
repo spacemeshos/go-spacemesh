@@ -21,7 +21,7 @@ func TestMain(m *testing.M) {
 
 func TestCodec_MultipleATXs(t *testing.T) {
 	nodeID := types.BytesToNodeID([]byte{1, 1, 1})
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 
 	a1 := types.NewActivationTx(types.NIPostChallenge{PubLayerID: lid}, &nodeID, types.Address{1, 2, 3}, nil, 10, nil, nil)
 	a2 := types.NewActivationTx(types.NIPostChallenge{PubLayerID: lid}, &nodeID, types.Address{3, 2, 1}, nil, 11, nil, nil)
@@ -52,7 +52,7 @@ func TestCodec_MultipleATXs(t *testing.T) {
 
 func TestCodec_MultipleBallot(t *testing.T) {
 	nodeID := types.BytesToNodeID([]byte{1, 1, 1})
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 
 	b1 := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, nodeID, types.BallotMetadata{Layer: lid})
 	b2 := types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, nodeID, types.BallotMetadata{Layer: lid})
@@ -82,7 +82,7 @@ func TestCodec_MultipleBallot(t *testing.T) {
 }
 
 func TestCodec_HareEquivocation(t *testing.T) {
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 	round := uint32(3)
 
 	hm1 := types.HareMetadata{Layer: lid, Round: round, MsgHash: types.RandomHash()}
@@ -111,7 +111,7 @@ func TestCodec_HareEquivocation(t *testing.T) {
 }
 
 func TestCodec_MalfeasanceGossip(t *testing.T) {
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 	round := uint32(3)
 
 	hm1 := types.HareMetadata{Layer: lid, Round: round, MsgHash: types.RandomHash()}

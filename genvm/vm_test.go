@@ -1990,7 +1990,7 @@ func TestValidation(t *testing.T) {
 func TestVaultValidation(t *testing.T) {
 	tt := newTester(t).
 		addVesting(1, 1, 2, vesting.TemplateAddress1).
-		addVault(2, 100, 10, types.NewLayerID(1), types.NewLayerID(10)).
+		addVault(2, 100, 10, types.LayerID(1), types.LayerID(10)).
 		applyGenesis()
 	_, _, err := tt.Apply(ApplyContext{Layer: types.GetEffectiveGenesis()},
 		notVerified(tt.selfSpawn(0), tt.spawn(0, 1)), nil)
@@ -2053,7 +2053,7 @@ func FuzzParse(f *testing.F) {
 
 func BenchmarkValidation(b *testing.B) {
 	tt := newTester(b).addSingleSig(2).applyGenesis()
-	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)},
+	skipped, _, err := tt.Apply(ApplyContext{Layer: types.LayerID(1)},
 		notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
@@ -2138,8 +2138,8 @@ func BenchmarkWallet(b *testing.B) {
 func benchmarkWallet(b *testing.B, accounts, n int) {
 	tt := newTester(b).persistent().
 		addSingleSig(accounts).applyGenesis().withSeed(101)
-	lid := types.NewLayerID(1)
-	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)},
+	lid := types.LayerID(1)
+	skipped, _, err := tt.Apply(ApplyContext{Layer: types.LayerID(1)},
 		notVerified(tt.spawnAll()...), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
