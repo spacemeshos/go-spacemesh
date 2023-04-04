@@ -265,7 +265,7 @@ func TestBlobStore_GetBallotBlob(t *testing.T) {
 
 	blt := types.RandomBallot()
 	blt.Signature = sig.Sign(signing.BALLOT, blt.SignedBytes())
-	blt.SetSmesherID(sig.NodeID())
+	blt.SmesherID = sig.NodeID()
 	require.NoError(t, blt.Initialize())
 
 	_, err = bs.Get(datastore.BallotDB, blt.ID().Bytes())
@@ -275,11 +275,7 @@ func TestBlobStore_GetBallotBlob(t *testing.T) {
 	require.NoError(t, err)
 	var gotB types.Ballot
 	require.NoError(t, codec.Decode(got, &gotB))
-	extract, err := signing.NewPubKeyExtractor()
-	require.NoError(t, err)
-	nodeID, err := extract.ExtractNodeID(signing.BALLOT, gotB.SignedBytes(), gotB.Signature)
-	require.NoError(t, err)
-	gotB.SetSmesherID(nodeID)
+
 	require.NoError(t, gotB.Initialize())
 	require.Equal(t, *blt, gotB)
 
@@ -349,7 +345,7 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 		},
 	}
 	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
-	p.SetSmesherID(signer.NodeID())
+	p.SmesherID = signer.NodeID()
 	require.NoError(t, p.Initialize())
 
 	_, err = bs.Get(datastore.ProposalDB, p.ID().Bytes())
@@ -360,11 +356,6 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 	require.NoError(t, err)
 	var gotP types.Proposal
 	require.NoError(t, codec.Decode(got, &gotP))
-	extract, err := signing.NewPubKeyExtractor()
-	require.NoError(t, err)
-	nodeID, err := extract.ExtractNodeID(signing.BALLOT, gotP.SignedBytes(), gotP.Signature)
-	require.NoError(t, err)
-	gotP.SetSmesherID(nodeID)
 	require.NoError(t, gotP.Initialize())
 	require.Equal(t, p, gotP)
 	_, err = bs.Get(datastore.BlockDB, p.ID().Bytes())

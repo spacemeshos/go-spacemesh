@@ -270,7 +270,7 @@ func genLayerProposal(tb testing.TB, layerID types.LayerID, txs []types.Transact
 	require.NoError(tb, err)
 	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
-	p.SetSmesherID(signer.NodeID())
+	p.SmesherID = signer.NodeID()
 	p.Initialize()
 	return p
 }
@@ -281,7 +281,7 @@ func genLayerBallot(tb testing.TB, layerID types.LayerID) *types.Ballot {
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
-	b.SetSmesherID(signer.NodeID())
+	b.SmesherID = signer.NodeID()
 	b.Initialize()
 	return b
 }

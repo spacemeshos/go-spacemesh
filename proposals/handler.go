@@ -53,14 +53,14 @@ type Handler struct {
 	logger log.Log
 	cfg    Config
 
-	cdb       *datastore.CachedDB
-	extractor *signing.PubKeyExtractor
-	publisher pubsub.Publisher
-	fetcher   system.Fetcher
-	mesh      meshProvider
-	validator eligibilityValidator
-	decoder   ballotDecoder
-	clock     *timesync.NodeClock
+	cdb        *datastore.CachedDB
+	edVerifier *signing.EdVerifier
+	publisher  pubsub.Publisher
+	fetcher    system.Fetcher
+	mesh       meshProvider
+	validator  eligibilityValidator
+	decoder    ballotDecoder
+	clock      *timesync.NodeClock
 }
 
 // Config defines configuration for the handler.
@@ -106,7 +106,7 @@ func WithConfig(cfg Config) Opt {
 // NewHandler creates new Handler.
 func NewHandler(
 	cdb *datastore.CachedDB,
-	extractor *signing.PubKeyExtractor,
+	edVerifier *signing.EdVerifier,
 	p pubsub.Publisher,
 	f system.Fetcher,
 	bc system.BeaconCollector,
@@ -117,15 +117,15 @@ func NewHandler(
 	opts ...Opt,
 ) *Handler {
 	b := &Handler{
-		logger:    log.NewNop(),
-		cfg:       defaultConfig(),
-		cdb:       cdb,
-		extractor: extractor,
-		publisher: p,
-		fetcher:   f,
-		mesh:      m,
-		decoder:   decoder,
-		clock:     clock,
+		logger:     log.NewNop(),
+		cfg:        defaultConfig(),
+		cdb:        cdb,
+		edVerifier: edVerifier,
+		publisher:  p,
+		fetcher:    f,
+		mesh:       m,
+		decoder:    decoder,
+		clock:      clock,
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -163,11 +163,9 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []
 		return errMalformedData
 	}
 
-	smesher, err := h.extractor.ExtractNodeID(signing.BALLOT, b.SignedBytes(), b.Signature)
-	if err != nil {
-		return fmt.Errorf("ballot extract key: %w", err)
+	if !h.edVerifier.Verify(signing.BALLOT, b.SmesherID, b.SignedBytes(), b.Signature) {
+		return fmt.Errorf("failed to verify ballot signature")
 	}
-	b.SetSmesherID(smesher)
 
 	// set the ballot and smesher ID when received
 	if err := b.Initialize(); err != nil {
@@ -233,18 +231,9 @@ func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []
 	latency := receivedTime.Sub(h.clock.LayerToTime(p.Layer))
 	metrics.ReportMessageLatency(pubsub.ProposalProtocol, pubsub.ProposalProtocol, latency)
 
-	smesher, err := h.extractor.ExtractNodeID(signing.BALLOT, p.SignedBytes(), p.Signature)
-	if err != nil {
-		return fmt.Errorf("proposal extract key: %w", err)
+	if p.SmesherID != p.Ballot.SmesherID {
+		return fmt.Errorf("inconsistent smesher in proposal %v and ballot %v", p.SmesherID, p.Ballot.SmesherID)
 	}
-	bSmesher, err := h.extractor.ExtractNodeID(signing.BALLOT, p.Ballot.SignedBytes(), p.Ballot.Signature)
-	if err != nil {
-		return fmt.Errorf("ballot extract key: %w", err)
-	}
-	if smesher != bSmesher {
-		return fmt.Errorf("inconsistent smesher in proposal %v and ballot %v", smesher, bSmesher)
-	}
-	p.SetSmesherID(smesher)
 
 	// set the proposal ID when received
 	if err := p.Initialize(); err != nil {
@@ -464,10 +453,11 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 				h.logger.WithContext(ctx).With().Warning("ballot doubly voted within hdist, set smesher malicious",
 					b.ID(),
 					b.Layer,
-					log.Stringer("smesher", b.SmesherID()),
+					log.Stringer("smesher", b.SmesherID),
 					log.Stringer("voted_bid", voted),
 					log.Stringer("voted_bid", vote.ID),
-					log.Uint32("hdist", h.cfg.Hdist))
+					log.Uint32("hdist", h.cfg.Hdist),
+				)
 				return errDoubleVoting
 			}
 		} else {

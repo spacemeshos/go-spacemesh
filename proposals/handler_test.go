@@ -80,7 +80,7 @@ func fullMockSet(tb testing.TB) *mockSet {
 func createTestHandler(t *testing.T) *testHandler {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	ms := fullMockSet(t)
-	extract, err := signing.NewPubKeyExtractor()
+	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
 	clock, err := timesync.NewClock(
@@ -91,7 +91,7 @@ func createTestHandler(t *testing.T) *testHandler {
 	)
 	require.NoError(t, err)
 	return &testHandler{
-		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), extract, ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf, clock,
+		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), edVerifier, ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf, clock,
 			WithLogger(logtest.New(t)),
 			WithConfig(Config{
 				LayerSize:      layerAvgSize,
@@ -188,7 +188,7 @@ func createProposal(t *testing.T, opts ...any) *types.Proposal {
 	require.NoError(t, err)
 	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
-	p.SetSmesherID(signer.NodeID())
+	p.SmesherID = signer.NodeID()
 	require.NoError(t, p.Initialize())
 	return p
 }
@@ -214,7 +214,7 @@ func signAndInit(tb testing.TB, b *types.Ballot) *types.Ballot {
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	b.Signature = sig.Sign(signing.BALLOT, b.SignedBytes())
-	b.SetSmesherID(sig.NodeID())
+	b.SmesherID = sig.NodeID()
 	require.NoError(tb, b.Initialize())
 	return b
 }
@@ -264,7 +264,7 @@ func TestBallot_BadSignature(t *testing.T) {
 	b.Signature[types.EdSignatureSize-1] = 0xff
 	data := encodeBallot(t, b)
 	got := th.HandleSyncedBallot(context.Background(), p2p.NoPeer, data)
-	require.ErrorContains(t, got, "bad signature format")
+	require.ErrorContains(t, got, "failed to verify ballot signature")
 }
 
 func TestBallot_KnownBallot(t *testing.T) {

@@ -42,7 +42,7 @@ func NewEdVerifier(opts ...VerifierOptionFunc) (*EdVerifier, error) {
 // Verify verifies that a signature matches public key and message.
 func (es *EdVerifier) Verify(d domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 	switch d {
-	case ATX:
+	case ATX, BALLOT:
 	// all good
 	default:
 		panic("verify not supported for domain " + d.String())

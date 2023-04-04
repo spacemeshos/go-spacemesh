@@ -135,8 +135,8 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		return false, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
 			errTargetEpochMismatch, targetEpoch, epoch)
 	}
-	if ballot.SmesherID() != owned.NodeID {
-		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, ballot.SmesherID().String(), owned.NodeID)
+	if ballot.SmesherID != owned.NodeID {
+		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, ballot.SmesherID.String(), owned.NodeID)
 	}
 
 	atxWeight = owned.GetWeight()
@@ -154,7 +154,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		isFirst = true
 	)
 
-	nonce, err := v.nonceFetcher.VRFNonce(ballot.SmesherID(), epoch)
+	nonce, err := v.nonceFetcher.VRFNonce(ballot.SmesherID, epoch)
 	if err != nil {
 		return false, err
 	}

@@ -124,7 +124,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			ballot.ActiveSet = activeset
 		}
 		ballot.Signature = c.signer.Sign(signing.BALLOT, ballot.SignedBytes())
-		ballot.SetSmesherID(c.signer.NodeID())
+		ballot.SmesherID = c.signer.NodeID()
 		ballot.Initialize()
 		if c.refBallot == nil {
 			id := ballot.ID()

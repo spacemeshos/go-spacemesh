@@ -26,6 +26,7 @@ func TestMalicious(t *testing.T) {
 				MsgHash: types.RandomHash(),
 			},
 			Signature: types.RandomEdSignature(),
+			SmesherID: nodeID,
 		}
 	}
 	proof := &types.MalfeasanceProof{

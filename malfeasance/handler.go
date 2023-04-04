@@ -256,37 +256,36 @@ func (h *Handler) validateMultipleBallots(logger log.Log, proof *types.Malfeasan
 		return types.EmptyNodeID, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.MultipleBallots, proof.Proof.Type)
 	}
 	var (
-		firstNid, nid types.NodeID
-		firstMsg, msg types.BallotProofMsg
-		err           error
+		firstNid types.NodeID
+		firstMsg types.BallotProofMsg
+		err      error
 	)
 	bp, ok := proof.Proof.Data.(*types.BallotProof)
 	if !ok {
 		return types.EmptyNodeID, errors.New("wrong message type for multi ballots")
 	}
-	for _, msg = range bp.Messages {
-		nid, err = h.pubKeyExtractor.ExtractNodeID(signing.BALLOT, msg.SignedBytes(), msg.Signature)
-		if err != nil {
-			return types.EmptyNodeID, err
+	for _, msg := range bp.Messages {
+		if !h.edVerifier.Verify(signing.BALLOT, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
+			return types.EmptyNodeID, errors.New("invalid signature")
 		}
-		if err = checkIdentityExists(h.cdb, nid); err != nil {
-			return types.EmptyNodeID, fmt.Errorf("check identity in ballot malfeasance %v: %w", nid, err)
+		if err = checkIdentityExists(h.cdb, msg.SmesherID); err != nil {
+			return types.EmptyNodeID, fmt.Errorf("check identity in ballot malfeasance %v: %w", msg.SmesherID, err)
 		}
 		if firstNid == types.EmptyNodeID {
-			firstNid = nid
+			firstNid = msg.SmesherID
 			firstMsg = msg
-		} else if nid == firstNid {
+		} else if msg.SmesherID == firstNid {
 			if msg.InnerMsg.Layer == firstMsg.InnerMsg.Layer &&
 				msg.InnerMsg.MsgHash != firstMsg.InnerMsg.MsgHash {
-				return nid, nil
+				return msg.SmesherID, nil
 			}
 		}
 	}
 	logger.With().Warning("received invalid ballot malfeasance proof",
-		log.Stringer("smesher", firstNid),
-		log.Stringer("smesher", nid),
-		log.Object("first", &firstMsg.InnerMsg),
-		log.Object("second", &msg.InnerMsg),
+		log.Stringer("smesher", bp.Messages[0].SmesherID),
+		log.Stringer("smesher", bp.Messages[1].SmesherID),
+		log.Object("first", &bp.Messages[0].InnerMsg),
+		log.Object("second", &bp.Messages[1].InnerMsg),
 	)
 	numInvalidProofsBallot.Inc()
 	return types.EmptyNodeID, errors.New("invalid ballot malfeasance proof")
