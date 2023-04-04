@@ -32,7 +32,7 @@ func Test_multipleCPs(t *testing.T) {
 	// function, wakeupDelta controls whether a consensus process will skip a
 	// layer, if the layer tick arrives after wakeup delta then the process
 	// skips the layer.
-	cfg := config.Config{N: totalNodes, WakeupDelta: time.Hour, RoundDuration: 0, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
+	cfg := config.Config{N: totalNodes, WakeupDelta: time.Hour, RoundDuration: 0, ExpectedLeaders: totalNodes/2 + 1, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -170,7 +170,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	// function, wakeupDelta controls whether a consensus process will skip a
 	// layer, if the layer tick arrives after wakeup delta then the process
 	// skips the layer.
-	cfg := config.Config{N: totalNodes, WakeupDelta: time.Hour, RoundDuration: 0, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
+	cfg := config.Config{N: totalNodes, WakeupDelta: time.Hour, RoundDuration: 0, ExpectedLeaders: totalNodes/2 + 1, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
