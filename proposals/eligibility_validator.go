@@ -146,7 +146,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		return false, err
 	}
 	if ballot.EligibilityCount != numEligibleSlots {
-		return false, errIncorrectEligCount
+		return false, fmt.Errorf("%w: expected %v, got: %v", errIncorrectEligCount, numEligibleSlots, ballot.EligibilityCount)
 	}
 
 	var (

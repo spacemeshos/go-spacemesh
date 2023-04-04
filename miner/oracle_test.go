@@ -62,21 +62,28 @@ func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publish
 	return vAtx
 }
 
-func genBallotWithEligibility(tb testing.TB, signer *signing.EdSigner, lid types.LayerID, atxID types.ATXID, proof types.VotingEligibility, activeSet types.ATXIDList, beacon types.Beacon) *types.Ballot {
+func genBallotWithEligibility(
+	tb testing.TB,
+	signer *signing.EdSigner,
+	beacon types.Beacon,
+	lid types.LayerID,
+	ee *EpochEligibility,
+) *types.Ballot {
 	tb.Helper()
 	ballot := &types.Ballot{
 		BallotMetadata: types.BallotMetadata{
 			Layer: lid,
 		},
 		InnerBallot: types.InnerBallot{
-			AtxID: atxID,
+			AtxID: ee.Atx,
 			EpochData: &types.EpochData{
-				ActiveSetHash: activeSet.Hash(),
+				ActiveSetHash: ee.ActiveSet.Hash(),
 				Beacon:        beacon,
 			},
+			EligibilityCount: ee.Slots,
 		},
-		ActiveSet:         activeSet,
-		EligibilityProofs: []types.VotingEligibility{proof},
+		ActiveSet:         ee.ActiveSet,
+		EligibilityProofs: ee.Proofs[lid],
 	}
 	ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
 	ballot.SetSmesherID(signer.NodeID())
@@ -167,7 +174,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 		require.NoError(t, err)
 
 		for _, proof := range ee.Proofs[layer] {
-			b := genBallotWithEligibility(t, o.edSigner, layer, info.atxID, proof, info.activeSet, info.beacon)
+			b := genBallotWithEligibility(t, o.edSigner, info.beacon, layer, ee)
 			b.SetSmesherID(o.edSigner.NodeID())
 			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b, info.beacon, gomock.Any()).Times(1)
 			nonceFetcher.EXPECT().VRFNonce(b.SmesherID(), layer.GetEpoch()).Return(nonce, nil).Times(1)
