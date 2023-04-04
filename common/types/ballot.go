@@ -90,7 +90,7 @@ type BallotMetadata struct {
 }
 
 func (m *BallotMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddUint32("layer", m.Layer.Value)
+	encoder.AddUint32("layer", m.Layer.Uint32())
 	encoder.AddString("msgHash", m.MsgHash.String())
 	return nil
 }
@@ -205,7 +205,7 @@ type Vote struct {
 // MarshalLogObject implements logging interface.
 func (s *Vote) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("id", s.ID.String())
-	encoder.AddUint32("layer", s.LayerID.Value)
+	encoder.AddUint32("layer", s.LayerID.Uint32())
 	encoder.AddUint64("height", s.Height)
 	return nil
 }
@@ -244,13 +244,11 @@ func (b *Ballot) Initialize() error {
 	}
 
 	h := hash.New()
-	_, err := codec.EncodeTo(h, &b.InnerBallot)
-	if err != nil {
-		return fmt.Errorf("failed to encode inner ballot for hashing")
+	if _, err := h.Write(b.MsgHash[:]); err != nil {
+		return fmt.Errorf("failed to write to hash")
 	}
-	_, err = scale.EncodeByteSlice(scale.NewEncoder(h), b.Signature[:])
-	if err != nil {
-		return fmt.Errorf("failed to encode byte slice")
+	if _, err := scale.EncodeByteSlice(scale.NewEncoder(h), b.Signature[:]); err != nil {
+		return fmt.Errorf("failed to encode signature")
 	}
 	b.ballotID = BallotID(BytesToHash(h.Sum(nil)).ToHash20())
 	return nil
@@ -258,7 +256,7 @@ func (b *Ballot) Initialize() error {
 
 // SetMetadata sets BallotMetadata.
 func (b *Ballot) SetMetadata() {
-	if b.Layer == (LayerID{}) {
+	if b.Layer == 0 {
 		log.Fatal("ballot is missing layer")
 	}
 	b.MsgHash = BytesToHash(b.HashInnerBytes())
@@ -327,7 +325,7 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	}
 
 	encoder.AddString("ballot_id", b.ID().String())
-	encoder.AddUint32("layer_id", b.Layer.Value)
+	encoder.AddUint32("layer_id", b.Layer.Uint32())
 	encoder.AddUint32("epoch_id", uint32(b.Layer.GetEpoch()))
 	encoder.AddString("smesher", b.SmesherID().String())
 	encoder.AddString("opinion hash", b.OpinionHash.String())

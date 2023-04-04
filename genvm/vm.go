@@ -273,7 +273,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 	blockDurationPersist.Observe(float64(time.Since(t4)))
 	blockDuration.Observe(float64(time.Since(t1)))
 	transactionsPerBlock.Observe(float64(len(txs)))
-	appliedLayer.Set(float64(lctx.Layer.Value))
+	appliedLayer.Set(float64(lctx.Layer))
 
 	v.logger.With().Info("applied layer",
 		lctx.Layer,
@@ -443,6 +443,9 @@ type Request struct {
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
 	start := time.Now()
+	if len(r.raw.Raw) > core.TxSizeLimit {
+		return nil, fmt.Errorf("%w: tx size (%d) > limit (%d)", core.ErrTxLimit, len(r.raw.Raw), core.TxSizeLimit)
+	}
 	header, ctx, args, err := parse(r.vm.logger, r.lid, r.vm.registry, r.cache, r.vm.cfg, r.raw.Raw, r.decoder)
 	if err != nil {
 		return nil, err

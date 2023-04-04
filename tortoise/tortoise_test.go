@@ -306,7 +306,7 @@ func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
 		})
 	}
 	require.Equal(t, votes.Support, supported)
-	require.Equal(t, votes.Abstain, []types.LayerID{types.NewLayerID(9)})
+	require.Equal(t, votes.Abstain, []types.LayerID{types.LayerID(9)})
 }
 
 func mockedBeacons(tb testing.TB) system.BeaconGetter {
@@ -1518,7 +1518,7 @@ func TestComputeBallotWeight(t *testing.T) {
 			cfg.LayerSize = tc.layerSize
 			trtl, err := New(cdb, nil, WithLogger(logtest.New(t)), WithConfig(cfg))
 			require.NoError(t, err)
-			lid := types.NewLayerID(111)
+			lid := types.LayerID(111)
 			atxLid := lid.GetEpoch().FirstLayer().Sub(1)
 			for i, weight := range tc.atxs {
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{

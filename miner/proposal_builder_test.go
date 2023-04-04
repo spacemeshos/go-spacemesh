@@ -116,7 +116,7 @@ func genProofs(tb testing.TB, size int) []types.VotingEligibility {
 func TestBuilder_StartAndClose(t *testing.T) {
 	b := createBuilder(t)
 
-	current := types.NewLayerID(layersPerEpoch * 3)
+	current := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(current)
 	b.mClock.EXPECT().AwaitLayer(current.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		ch := make(chan struct{})
@@ -142,7 +142,7 @@ func TestBuilder_StartAndClose(t *testing.T) {
 func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		return make(chan struct{})
@@ -210,7 +210,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		return make(chan struct{})
@@ -277,14 +277,14 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 func TestBuilder_HandleLayer_Genesis(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch)
+	layerID := types.LayerID(layersPerEpoch)
 	require.ErrorIs(t, b.handleLayer(context.Background(), layerID), errGenesis)
 }
 
 func TestBuilder_HandleLayer_NotSynced(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(false)
 
 	require.ErrorIs(t, b.handleLayer(context.Background(), layerID), errNotSynced)
@@ -293,7 +293,7 @@ func TestBuilder_HandleLayer_NotSynced(t *testing.T) {
 func TestBuilder_HandleLayer_NoBeacon(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, errors.New("unknown"))
 
@@ -303,7 +303,7 @@ func TestBuilder_HandleLayer_NoBeacon(t *testing.T) {
 func TestBuilder_HandleLayer_EligibilityError(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	nonce := types.VRFPostIndex(rand.Uint64())
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
@@ -320,7 +320,7 @@ func TestBuilder_HandleLayer_NotEligible(t *testing.T) {
 
 	nonce := types.VRFPostIndex(rand.Uint64())
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
@@ -337,7 +337,7 @@ func TestBuilder_HandleLayer_NotEligible(t *testing.T) {
 func TestBuilder_HandleLayer_BaseBlockError(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	nonce := types.VRFPostIndex(rand.Uint64())
 
@@ -360,7 +360,7 @@ func TestBuilder_HandleLayer_BaseBlockError(t *testing.T) {
 func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	activeSet := genActiveSet(t)
 	sig, err := signing.NewEdSigner()
@@ -401,7 +401,7 @@ func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3).Add(1)
+	layerID := types.LayerID(layersPerEpoch * 3).Add(1)
 	refBallot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, b.ProposalBuilder.signer.NodeID(), types.BallotMetadata{Layer: layerID.Sub(1)})
 	require.NoError(t, ballots.Add(b.cdb, &refBallot))
 	beacon := types.RandomBeacon()
@@ -442,7 +442,7 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		return make(chan struct{})
@@ -477,7 +477,7 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		return make(chan struct{})
@@ -514,7 +514,7 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		return make(chan struct{})
@@ -559,7 +559,7 @@ func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 5)
+	layerID := types.LayerID(layersPerEpoch * 5)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		return make(chan struct{})
@@ -604,7 +604,7 @@ func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		return make(chan struct{})
@@ -648,7 +648,7 @@ func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 
 func TestBuilder_HandleLayer_Duplicate(t *testing.T) {
 	b := createBuilder(t)
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 
 	ballot := types.NewExistingBallot(
@@ -664,7 +664,7 @@ func TestBuilder_HandleLayer_Duplicate(t *testing.T) {
 }
 
 func TestBuilder_UniqueBlockID(t *testing.T) {
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 
 	builder1 := createBuilder(t)
 	builder2 := createBuilder(t)

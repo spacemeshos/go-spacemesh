@@ -35,7 +35,7 @@ func makeCert(lid types.LayerID, bid types.BlockID) *types.Certificate {
 
 func TestCertificates(t *testing.T) {
 	db := sql.InMemory()
-	lid := types.NewLayerID(10)
+	lid := types.LayerID(10)
 
 	got, err := Get(db, lid)
 	require.ErrorIs(t, err, sql.ErrNotFound)
@@ -85,7 +85,7 @@ func TestCertificates(t *testing.T) {
 
 func TestHareOutput(t *testing.T) {
 	db := sql.InMemory()
-	lid := types.NewLayerID(10)
+	lid := types.LayerID(10)
 
 	ho, err := GetHareOutput(db, lid)
 	require.ErrorIs(t, err, sql.ErrNotFound)

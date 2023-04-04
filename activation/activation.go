@@ -243,7 +243,7 @@ func (b *Builder) run(ctx context.Context) {
 	select {
 	case <-ctx.Done():
 		return
-	case <-b.layerClock.AwaitLayer(types.NewLayerID(0)):
+	case <-b.layerClock.AwaitLayer(types.LayerID(0)):
 	}
 
 	b.waitForFirstATX(ctx)
@@ -652,13 +652,13 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
 			b.log.With().Info("using golden atx as positioning atx", b.goldenATXID)
-			return b.goldenATXID, types.NewLayerID(0), nil
+			return b.goldenATXID, types.LayerID(0), nil
 		}
-		return types.ATXID{}, types.LayerID{}, fmt.Errorf("cannot find pos atx: %w", err)
+		return types.ATXID{}, 0, fmt.Errorf("cannot find pos atx: %w", err)
 	}
 	atx, err := b.cdb.GetAtxHeader(id)
 	if err != nil {
-		return types.ATXID{}, types.LayerID{}, fmt.Errorf("inconsistent state: failed to get atx header: %w", err)
+		return types.ATXID{}, 0, fmt.Errorf("inconsistent state: failed to get atx header: %w", err)
 	}
 	return id, atx.PubLayerID, nil
 }

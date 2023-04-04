@@ -178,8 +178,8 @@ func publishAtx(
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(*currLayer) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
@@ -253,14 +253,14 @@ func addAtx(t *testing.T, db sql.Executor, sig *signing.EdSigner, atx *types.Act
 func TestBuilder_waitForFirstATX(t *testing.T) {
 	t.Run("genesis", func(t *testing.T) {
 		tab := newTestBuilder(t)
-		tab.mclock.EXPECT().CurrentLayer().Return(types.NewLayerID(0))
+		tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0))
 		require.False(t, tab.waitForFirstATX(context.Background()))
 	})
 
 	// previous ATX not for current epoch -> need to wait
 	t.Run("new miner", func(t *testing.T) {
 		tab := newTestBuilder(t)
-		current := types.NewLayerID(layersPerEpoch * 2) // first layer of epoch 2
+		current := types.LayerID(layersPerEpoch * 2) // first layer of epoch 2
 		addPrevAtx(t, tab.cdb, current.GetEpoch()-1, tab.sig, &tab.nodeID)
 		tab.mclock.EXPECT().CurrentLayer().Return(current).AnyTimes()
 		tab.mclock.EXPECT().LayerToTime(current).Return(time.Now().Add(100 * time.Millisecond)).AnyTimes()
@@ -274,7 +274,7 @@ func TestBuilder_waitForFirstATX(t *testing.T) {
 			GracePeriod: time.Millisecond,
 		}
 		tab := newTestBuilder(t, WithPoetConfig(poetCfg))
-		current := types.NewLayerID(layersPerEpoch * 2) // first layer of epoch 2
+		current := types.LayerID(layersPerEpoch * 2) // first layer of epoch 2
 		next := current.Add(layersPerEpoch)
 		addPrevAtx(t, tab.cdb, current.GetEpoch()-1, tab.sig, &tab.nodeID)
 		tab.mclock.EXPECT().CurrentLayer().Return(current)
@@ -287,7 +287,7 @@ func TestBuilder_waitForFirstATX(t *testing.T) {
 	// previous ATX for current epoch -> no wait
 	t.Run("existing miner", func(t *testing.T) {
 		tab := newTestBuilder(t)
-		current := types.NewLayerID(layersPerEpoch * 2) // first layer of epoch 2
+		current := types.LayerID(layersPerEpoch * 2) // first layer of epoch 2
 		tab.mclock.EXPECT().CurrentLayer().Return(current)
 		addPrevAtx(t, tab.cdb, current.GetEpoch(), tab.sig, &tab.nodeID)
 		require.False(t, tab.waitForFirstATX(context.Background()))
@@ -321,7 +321,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		ch := make(chan struct{})
 		close(ch)
 		tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch).AnyTimes()
-		tab.mclock.EXPECT().CurrentLayer().Return(types.NewLayerID(0)).AnyTimes()
+		tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 		tab.mhdlr.EXPECT().GetPosAtxID().Return(types.ATXID{1, 2, 3}, nil).AnyTimes()
 		return tab.Builder
 	}
@@ -367,7 +367,7 @@ func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	ch := make(chan struct{})
 	close(ch)
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch).AnyTimes()
-	tab.mclock.EXPECT().CurrentLayer().Return(types.NewLayerID(0)).AnyTimes()
+	tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 	tab.mhdlr.EXPECT().GetPosAtxID().Return(types.ATXID{1, 2, 3}, nil).AnyTimes()
 	tab.msync.EXPECT().RegisterForATXSynced().Return(ch).AnyTimes()
 	require.NoError(t, tab.StartSmeshing(tab.coinbase, PostSetupOpts{}))
@@ -422,8 +422,8 @@ func TestBuilder_PublishActivationTx_StaleChallenge(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
 
 	// Act & Verify
@@ -452,8 +452,8 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -487,8 +487,8 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
@@ -580,8 +580,8 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
@@ -704,8 +704,8 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(layer types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currentLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(layer.Value))
+			genesis := time.Now().Add(-time.Duration(currentLayer) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(layer))
 		}).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch().FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(layer types.LayerID) chan struct{} {
 		ch := make(chan struct{})
@@ -795,8 +795,8 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(layer types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currentLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(layer.Value))
+			genesis := time.Now().Add(-time.Duration(currentLayer) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(layer))
 		}).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch().FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(types.LayerID) chan struct{} {
 		ch := make(chan struct{})
@@ -875,8 +875,8 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
@@ -892,7 +892,7 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 	nid := sig.NodeID()
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
 	coinbase := types.Address{4, 5, 6}
-	atx := newActivationTx(t, sig, &nid, 1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, nil, types.NewLayerID(5), 1, 100, coinbase, 100, nipost)
+	atx := newActivationTx(t, sig, &nid, 1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, nil, types.LayerID(5), 1, 100, coinbase, 100, nipost)
 	require.NoError(t, atxs.Add(cdb, atx))
 
 	act := newActivationTx(t, sig, &nid, 2, atx.ID(), atx.ID(), nil, atx.PubLayerID.Add(10), 0, 100, coinbase, 100, nipost)
@@ -913,7 +913,7 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 func TestBuilder_SignAtx(t *testing.T) {
 	tab := newTestBuilder(t)
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
-	challenge := newChallenge(1, prevAtx, prevAtx, types.NewLayerID(15), nil)
+	challenge := newChallenge(1, prevAtx, prevAtx, types.LayerID(15), nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
 	atx := newAtx(t, tab.sig, &tab.nodeID, challenge, nipost, 100, types.Address{})
 	atx.SetMetadata()
@@ -947,8 +947,8 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()
@@ -1050,8 +1050,8 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer.Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
 	lastOpts := DefaultPostSetupOpts()
 	tab.mpost.EXPECT().LastOpts().Return(&lastOpts).AnyTimes()

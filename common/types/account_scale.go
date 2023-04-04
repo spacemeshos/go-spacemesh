@@ -9,7 +9,7 @@ import (
 
 func (t *Account) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := t.Layer.EncodeScale(enc)
+		n, err := scale.EncodeCompact32(enc, uint32(t.Layer))
 		if err != nil {
 			return total, err
 		}
@@ -62,11 +62,12 @@ func (t *Account) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *Account) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := t.Layer.DecodeScale(dec)
+		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
+		t.Layer = LayerID(field)
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.Address[:])

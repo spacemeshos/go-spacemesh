@@ -300,14 +300,14 @@ func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stre
 		filter.TID = &id
 	}
 	if in.Start > 0 {
-		lid := types.NewLayerID(in.Start)
+		lid := types.LayerID(in.Start)
 		filter.Start = &lid
 	}
 	if in.End > 0 {
 		if in.Watch {
 			return status.Error(codes.InvalidArgument, "watch stream should have an empty End argument")
 		}
-		lid := types.NewLayerID(in.End)
+		lid := types.LayerID(in.End)
 		filter.End = &lid
 	}
 
@@ -370,7 +370,7 @@ func castResult(rst *types.TransactionWithResult) *pb.TransactionResult {
 		GasConsumed: rst.Gas,
 		Fee:         rst.Fee,
 		Block:       rst.Block[:],
-		Layer:       rst.Layer.Value,
+		Layer:       rst.Layer.Uint32(),
 	}
 	if len(rst.Addresses) > 0 {
 		casted.TouchedAddresses = make([]string, len(rst.Addresses))

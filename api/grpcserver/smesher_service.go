@@ -7,6 +7,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/post/config"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
@@ -72,6 +73,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		MaxFileSize:       in.Opts.MaxFileSize,
 		ComputeProviderID: int(in.Opts.ComputeProviderId),
 		Throttle:          in.Opts.Throttle,
+		Scrypt:            config.DefaultLabelParams(),
 	}
 
 	coinbaseAddr, err := types.StringToAddress(in.Coinbase.Address)
@@ -231,6 +233,7 @@ func (s SmesherService) PostConfig(context.Context, *empty.Empty) (*pb.PostConfi
 	cfg := s.postSetupProvider.Config()
 
 	return &pb.PostConfigResponse{
+		BitsPerLabel:  config.BitsPerLabel,
 		LabelsPerUnit: cfg.LabelsPerUnit,
 		MinNumUnits:   cfg.MinNumUnits,
 		MaxNumUnits:   cfg.MaxNumUnits,

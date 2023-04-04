@@ -34,8 +34,8 @@ func defaultLayerClockMock(tb testing.TB) *MocklayerClock {
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
 		func(got types.LayerID) time.Time {
 			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(postGenesisEpoch.FirstLayer().Value) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got.Value))
+			genesis := time.Now().Add(-time.Duration(postGenesisEpoch.FirstLayer()) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got))
 		},
 	)
 	return mclock
