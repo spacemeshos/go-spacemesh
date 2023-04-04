@@ -22,10 +22,7 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err 
 			return true
 		}
 		v.SetID(id)
-
-		nodeID := types.NodeID{}
-		stmt.ColumnBytes(3, nodeID[:])
-		v.SetNodeID(nodeID)
+		stmt.ColumnBytes(3, v.SmesherID[:])
 
 		effectiveNumUnits := uint32(stmt.ColumnInt32(4))
 		v.SetEffectiveNumUnits(effectiveNumUnits)
@@ -155,7 +152,7 @@ func GetByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.Node
 			return false
 		}
 		v.SetID(id)
-		v.SetNodeID(nodeID)
+		v.SmesherID = nodeID
 		v.SetEffectiveNumUnits(uint32(stmt.ColumnInt32(4)))
 		v.SetReceived(time.Unix(0, stmt.ColumnInt64(5)).Local())
 		baseTickHeight := uint64(stmt.ColumnInt64(2))
@@ -252,7 +249,7 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 		if atx.VRFNonce != nil {
 			stmt.BindInt64(5, int64(*atx.VRFNonce))
 		}
-		stmt.BindBytes(6, atx.NodeID().Bytes())
+		stmt.BindBytes(6, atx.SmesherID.Bytes())
 		stmt.BindBytes(7, buf)
 		stmt.BindInt64(8, atx.Received().UnixNano())
 		stmt.BindInt64(9, int64(atx.BaseTickHeight()))

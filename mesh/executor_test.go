@@ -66,11 +66,9 @@ func makeResults(lid types.LayerID, txs ...types.Transaction) []types.Transactio
 func createATX(t testing.TB, db sql.Executor, cb types.Address) types.ATXID {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	nodeID := sig.NodeID()
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PubLayerID: types.NewLayerID(11)},
-		nodeID,
 		cb,
 		nil,
 		11,

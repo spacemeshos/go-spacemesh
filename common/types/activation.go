@@ -137,7 +137,6 @@ type InnerActivationTx struct {
 
 	// the following fields are kept private and from being serialized
 	id                ATXID     // non-exported cache of the ATXID
-	nodeID            NodeID    // non-exported cache of the NodeID that created the ATX
 	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
 	received          time.Time // time received by node, gossiped or synced
 }
@@ -168,7 +167,6 @@ type ActivationTx struct {
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
 func NewActivationTx(
 	challenge NIPostChallenge,
-	nodeID NodeID,
 	coinbase Address,
 	nipost *NIPost,
 	numUnits uint32,
@@ -184,8 +182,6 @@ func NewActivationTx(
 			NIPost:      nipost,
 			InitialPost: initialPost,
 			VRFNonce:    nonce,
-
-			nodeID: nodeID,
 		},
 	}
 	return atx
@@ -221,7 +217,7 @@ func (atx *ActivationTx) HashInnerBytes() []byte {
 func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("atx_id", atx.id.String())
 	encoder.AddString("challenge", atx.NIPostChallenge.Hash().String())
-	encoder.AddString("smesher", atx.nodeID.String())
+	encoder.AddString("smesher", atx.SmesherID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
 	if atx.CommitmentATX != nil {
@@ -281,14 +277,6 @@ func (atx *ActivationTx) ID() ATXID {
 	return atx.id
 }
 
-// NodeID returns the ATX's Node ID.
-func (atx *ActivationTx) NodeID() NodeID {
-	if atx.nodeID == EmptyNodeID {
-		panic("nodeID field must be set")
-	}
-	return atx.nodeID
-}
-
 func (atx *ActivationTx) EffectiveNumUnits() uint32 {
 	if atx.effectiveNumUnits == 0 {
 		panic("effectiveNumUnits field must be set")
@@ -299,11 +287,6 @@ func (atx *ActivationTx) EffectiveNumUnits() uint32 {
 // SetID sets the ATXID in this ATX's cache.
 func (atx *ActivationTx) SetID(id ATXID) {
 	atx.id = id
-}
-
-// SetNodeID sets the Node ID in the ATX's cache.
-func (atx *ActivationTx) SetNodeID(nodeID NodeID) {
-	atx.nodeID = nodeID
 }
 
 func (atx *ActivationTx) SetEffectiveNumUnits(numUnits uint32) {
@@ -324,9 +307,6 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 		if err := atx.Initialize(); err != nil {
 			return nil, err
 		}
-	}
-	if atx.nodeID == EmptyNodeID {
-		return nil, fmt.Errorf("nodeID not set")
 	}
 	if atx.effectiveNumUnits == 0 {
 		return nil, fmt.Errorf("effective num units not set")

@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
@@ -88,7 +89,6 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 
 func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, activeSet []types.ATXID) {
 	for i, id := range activeSet {
-		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PubLayerID: lid,
@@ -96,9 +96,9 @@ func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 			NumUnits: uint32(i + 1),
 		}}
 		atx.SetID(id)
-		atx.SetNodeID(nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
+		atx.SmesherID = types.BytesToNodeID([]byte(strconv.Itoa(i)))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(tb, err)
 		require.NoError(tb, atxs.Add(cdb, vAtx))
@@ -420,12 +420,15 @@ func Test_VrfSignVerify(t *testing.T) {
 		NumUnits: 1 * 1024,
 	}}
 	atx1.SetID(activeSet[0])
-	atx1.SetNodeID(nid)
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	atx1.SetReceived(time.Now())
+	activation.SignAndFinalizeAtx(signer, atx1)
 	vAtx1, err := atx1.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx1))
+
+	signer2, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+	require.NoError(t, err)
 
 	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
@@ -434,9 +437,9 @@ func Test_VrfSignVerify(t *testing.T) {
 		NumUnits: 9 * 1024,
 	}}
 	atx2.SetID(activeSet[1])
-	atx2.SetNodeID(types.NodeID{1})
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	atx2.SetReceived(time.Now())
+	activation.SignAndFinalizeAtx(signer2, atx1)
 	vAtx2, err := atx2.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx2))
@@ -514,6 +517,8 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	}
 	prevEpoch := layer.GetEpoch() - 1
 
+	signer1, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
 			PubLayerID: prevEpoch.FirstLayer(),
@@ -521,13 +526,15 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 		NumUnits: 1 * 1024,
 	}}
 	atx1.SetID(activeSet[0])
-	atx1.SetNodeID(types.NodeID{1})
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	atx1.SetReceived(time.Now())
+	activation.SignAndFinalizeAtx(signer1, atx1)
 	vAtx1, err := atx1.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx1))
 
+	signer2, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
 			PubLayerID: prevEpoch.FirstLayer(),
@@ -535,14 +542,14 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 		NumUnits: 9 * 1024,
 	}}
 	atx2.SetID(activeSet[1])
-	atx2.SetNodeID(types.NodeID{2})
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	atx2.SetReceived(time.Now())
+	activation.SignAndFinalizeAtx(signer2, atx2)
 	vAtx2, err := atx2.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx2))
 
-	for _, edID := range []types.NodeID{atx1.NodeID(), atx2.NodeID()} {
+	for _, edID := range []types.NodeID{signer1.NodeID(), signer2.NodeID()} {
 		v, err := o.IsIdentityActiveOnConsensusView(context.Background(), edID, layer)
 		require.NoError(t, err)
 		require.True(t, v)
@@ -791,7 +798,6 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	activeSet := types.RandomActiveSet(numMiners)
 	prevEpoch := layer.GetEpoch() - 1
 	for i, id := range activeSet {
-		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PubLayerID: prevEpoch.FirstLayer(),
@@ -799,9 +805,9 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 			NumUnits: uint32(i + 1),
 		}}
 		atx.SetID(id)
-		atx.SetNodeID(nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
+		atx.SmesherID = types.BytesToNodeID([]byte(strconv.Itoa(i)))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(o.cdb, vAtx))
@@ -813,7 +819,6 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	// tortoise active set is cached. it will have to be bootstrapped to guarantee consensus.
 	activeSet = types.RandomActiveSet(numMiners)
 	for i, id := range activeSet {
-		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(numMiners + i)))
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PubLayerID: prevEpoch.FirstLayer(),
@@ -821,9 +826,9 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 			NumUnits: uint32(numMiners + i + 1),
 		}}
 		atx.SetID(id)
-		atx.SetNodeID(nodeID)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
+		atx.SmesherID = types.BytesToNodeID([]byte(strconv.Itoa(numMiners + i)))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(o.cdb, vAtx))

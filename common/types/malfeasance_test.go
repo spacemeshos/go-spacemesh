@@ -20,16 +20,16 @@ func TestMain(m *testing.M) {
 }
 
 func TestCodec_MultipleATXs(t *testing.T) {
-	nodeID := types.NodeID{1, 1, 1}
 	lid := types.NewLayerID(11)
 
-	a1 := types.NewActivationTx(types.NIPostChallenge{PubLayerID: lid}, nodeID, types.Address{1, 2, 3}, nil, 10, nil, nil)
-	a2 := types.NewActivationTx(types.NIPostChallenge{PubLayerID: lid}, nodeID, types.Address{3, 2, 1}, nil, 11, nil, nil)
+	a1 := types.NewActivationTx(types.NIPostChallenge{PubLayerID: lid}, types.Address{1, 2, 3}, nil, 10, nil, nil)
+	a2 := types.NewActivationTx(types.NIPostChallenge{PubLayerID: lid}, types.Address{3, 2, 1}, nil, 11, nil, nil)
 
 	var atxProof types.AtxProof
 	for i, a := range []*types.ActivationTx{a1, a2} {
 		a.SetMetadata()
 		a.Signature = types.RandomEdSignature()
+		a.SmesherID = types.RandomNodeID()
 		atxProof.Messages[i] = types.AtxProofMsg{
 			InnerMsg:  a.ATXMetadata,
 			SmesherID: a.SmesherID,

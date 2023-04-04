@@ -168,7 +168,6 @@ func TestMain(m *testing.M) {
 		log.Println("failed to create signer:", err)
 		os.Exit(1)
 	}
-	nodeID := signer.NodeID()
 	signer1, err = signing.NewEdSigner()
 	if err != nil {
 		log.Println("failed to create signer:", err)
@@ -183,7 +182,7 @@ func TestMain(m *testing.M) {
 	addr1 = wallet.Address(signer1.PublicKey().Bytes())
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
-	atx := types.NewActivationTx(challenge, nodeID, addr1, nipost, numUnits, nil, nil)
+	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil, nil)
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx); err != nil {
@@ -196,7 +195,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	atx2 := types.NewActivationTx(challenge, nodeID, addr2, nipost, numUnits, nil, nil)
+	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil, nil)
 	atx2.SetEffectiveNumUnits(numUnits)
 	atx2.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx2); err != nil {
@@ -2053,7 +2052,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if !bytes.Equal(a.Id.Id, globalAtx.ID().Bytes()) {
 				continue
 			}
-			if !bytes.Equal(a.SmesherId.Id, globalAtx.NodeID().Bytes()) {
+			if !bytes.Equal(a.SmesherId.Id, globalAtx.SmesherID.Bytes()) {
 				continue
 			}
 			if a.Coinbase.Address != globalAtx.Coinbase.String() {
@@ -2346,7 +2345,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem any) {
 	x := dataItem.(*pb.AccountMeshData_Activation)
 	require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
 	require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
-	require.Equal(t, globalAtx.NodeID().Bytes(), x.Activation.SmesherId.Id)
+	require.Equal(t, globalAtx.SmesherID.Bytes(), x.Activation.SmesherId.Id)
 	require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
 	require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
 	require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))

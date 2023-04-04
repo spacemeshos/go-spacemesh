@@ -613,7 +613,6 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 
 	atx := types.NewActivationTx(
 		*challenge,
-		b.nodeID,
 		b.Coinbase(),
 		nipost,
 		b.postSetupProvider.LastOpts().NumUnits,

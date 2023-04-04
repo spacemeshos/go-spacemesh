@@ -330,7 +330,7 @@ func getHeader(vatx *types.VerifiedActivationTx) *types.ActivationTxHeader {
 		Received:          vatx.Received(),
 
 		ID:     vatx.ID(),
-		NodeID: vatx.NodeID(),
+		NodeID: vatx.SmesherID,
 
 		BaseTickHeight: vatx.BaseTickHeight(),
 		TickCount:      vatx.TickCount(),

@@ -75,8 +75,6 @@ func TestGet_HappyPath(t *testing.T) {
 		},
 	}
 	atx.SetID(id)
-	nodeId := types.RandomNodeID()
-	atx.SetNodeID(nodeId)
 	atxProvider.EXPECT().GetFullAtx(id).Return(&atx, nil)
 
 	response, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
@@ -84,7 +82,7 @@ func TestGet_HappyPath(t *testing.T) {
 
 	require.Equal(t, atx.ID().Bytes(), response.Atx.Id.Id)
 	require.Equal(t, atx.PubLayerID.Value, response.Atx.Layer.Number)
-	require.Equal(t, atx.NodeID().Bytes(), response.Atx.SmesherId.Id)
+	require.Equal(t, atx.SmesherID.Bytes(), response.Atx.SmesherId.Id)
 	require.Equal(t, atx.Coinbase.String(), response.Atx.Coinbase.Address)
 	require.Equal(t, atx.PrevATXID.Bytes(), response.Atx.PrevAtx.Id)
 	require.Equal(t, atx.NumUnits, response.Atx.NumUnits)
