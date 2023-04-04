@@ -134,6 +134,7 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 			b.RefBallot = blts[0].ID()
 		}
 		b.EligibilityProofs = proofs
+		b.EligibilityCount = eligibleSlots
 		b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
 		b.SetSmesherID(signer.NodeID())
 		require.NoError(tb, b.Initialize())
@@ -300,6 +301,25 @@ func TestCheckEligibility_KeyMismatch(t *testing.T) {
 	eligible, err := tv.CheckEligibility(context.Background(), blts[1])
 	require.ErrorIs(t, err, errPublicKeyMismatch)
 	require.False(t, eligible)
+}
+
+func TestCheckEligibility_IncorrectEligibilityCount(t *testing.T) {
+	tv := createTestValidator(t)
+	signer, err := signing.NewEdSigner(
+		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
+	)
+	require.NoError(t, err)
+
+	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
+	blts := createBallots(t, signer, activeset, types.Beacon{1, 1, 1})
+	rb := blts[0]
+	require.NoError(t, ballots.Add(tv.cdb, rb))
+	b := blts[1]
+	b.EligibilityCount = eligibleSlots - 1
+
+	got, err := tv.CheckEligibility(context.Background(), b)
+	require.ErrorIs(t, err, errIncorrectEligCount)
+	require.False(t, got)
 }
 
 func TestCheckEligibility_BadCounter(t *testing.T) {
