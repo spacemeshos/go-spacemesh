@@ -2,6 +2,7 @@ package beacon
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -124,6 +125,7 @@ func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID
 	if corruptSignature {
 		msg.Signature = signer.Sign(signing.BEACON, encoded[1:])
 	}
+	msg.SmesherID = signer.NodeID()
 	return msg
 }
 
@@ -159,6 +161,7 @@ func createFollowingVote(t *testing.T, signer *signing.EdSigner, epoch types.Epo
 	if corruptSignature {
 		msg.Signature = signer.Sign(signing.BEACON, encoded[1:])
 	}
+	msg.SmesherID = signer.NodeID()
 	return msg
 }
 
@@ -923,7 +926,7 @@ func Test_handleFirstVotes_TooLate(t *testing.T) {
 	checkFirstIncomingVotes(t, tpd.ProtocolDriver, epoch, map[types.NodeID]proposalList{})
 }
 
-func Test_HandleFirstVotes_FailedToExtractPK(t *testing.T) {
+func Test_HandleFirstVotes_FailedToVerifySig(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
@@ -945,7 +948,7 @@ func Test_HandleFirstVotes_FailedToExtractPK(t *testing.T) {
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleFirstVotes(context.Background(), "peerID", msgBytes)
-	require.Contains(t, got.Error(), "miner ATX not found in previous epoch")
+	require.Contains(t, got.Error(), fmt.Sprintf("verify signature %s: failed", msg.Signature))
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, false)
 	checkFirstIncomingVotes(t, tpd.ProtocolDriver, epoch, map[types.NodeID]proposalList{})
 }
@@ -1173,7 +1176,7 @@ func Test_handleFollowingVotes_TooEarly(t *testing.T) {
 	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }
 
-func Test_handleFollowingVotes_FailedToExtractPK(t *testing.T) {
+func Test_handleFollowingVotes_FailedToVerifySig(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
@@ -1190,7 +1193,7 @@ func Test_handleFollowingVotes_FailedToExtractPK(t *testing.T) {
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.handleFollowingVotes(context.Background(), "peerID", msgBytes, time.Now())
-	require.Contains(t, got.Error(), "miner ATX not found in previous epoch")
+	require.Contains(t, got.Error(), fmt.Sprintf("verify signature %s: failed", msg.Signature))
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, false)
 	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }
