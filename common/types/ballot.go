@@ -44,7 +44,7 @@ type Ballot struct {
 	InnerBallot
 	// smeshers signature on InnerBallot
 	Signature EdSignature
-	// the public key of the smesher used
+	// the public key of the smesher that produced this ballot.
 	SmesherID NodeID
 	// Votes field is not signed.
 	Votes Votes

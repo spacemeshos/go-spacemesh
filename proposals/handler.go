@@ -231,6 +231,13 @@ func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []
 	latency := receivedTime.Sub(h.clock.LayerToTime(p.Layer))
 	metrics.ReportMessageLatency(pubsub.ProposalProtocol, pubsub.ProposalProtocol, latency)
 
+	if !h.edVerifier.Verify(signing.BALLOT, p.SmesherID, p.SignedBytes(), p.Signature) {
+		return fmt.Errorf("failed to verify proposal signature")
+	}
+	if !h.edVerifier.Verify(signing.BALLOT, p.Ballot.SmesherID, p.Ballot.SignedBytes(), p.Ballot.Signature) {
+		return fmt.Errorf("failed to verify ballot signature")
+	}
+
 	if p.SmesherID != p.Ballot.SmesherID {
 		return fmt.Errorf("inconsistent smesher in proposal %v and ballot %v", p.SmesherID, p.Ballot.SmesherID)
 	}

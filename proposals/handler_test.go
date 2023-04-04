@@ -187,6 +187,7 @@ func createProposal(t *testing.T, opts ...any) *types.Proposal {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.Ballot.SmesherID = signer.NodeID()
 	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
 	p.SmesherID = signer.NodeID()
 	require.NoError(t, p.Initialize())
@@ -889,7 +890,7 @@ func TestProposal_BadSignature(t *testing.T) {
 	p.Signature = types.EmptyEdSignature
 	data := encodeProposal(t, p)
 	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
-	require.ErrorContains(t, got, "inconsistent smesher in proposal")
+	require.ErrorContains(t, got, "failed to verify proposal signature")
 
 	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)
@@ -908,7 +909,9 @@ func TestProposal_InconsistentSmeshers(t *testing.T) {
 	signer2, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	p.Ballot.Signature = signer1.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.Ballot.SmesherID = signer1.NodeID()
 	p.Signature = signer2.Sign(signing.BALLOT, p.SignedBytes())
+	p.SmesherID = signer2.NodeID()
 
 	data, err := codec.Encode(p)
 	require.NoError(t, err)

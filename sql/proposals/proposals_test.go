@@ -73,6 +73,7 @@ func TestGet(t *testing.T) {
 			MeshHash: types.RandomHash(),
 		},
 		Signature: types.RandomEdSignature(),
+		SmesherID: nodeID,
 	}
 
 	proposal.SetID(types.ProposalID{7, 8})

@@ -141,6 +141,9 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 	ballotID := types.BallotID{}
 	stmt.ColumnBytes(4, ballotID[:])
 
+	var nodeID types.NodeID
+	stmt.ColumnBytes(0, nodeID[:])
+
 	bodyBytes := make([]byte, stmt.ColumnLen(1))
 	stmt.ColumnBytes(1, bodyBytes[:])
 
@@ -149,6 +152,7 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 		return nil, err
 	}
 	ballot.SetID(ballotID)
+	ballot.SmesherID = nodeID
 	if stmt.ColumnInt(2) > 0 {
 		ballot.SetMalicious()
 	}
@@ -177,9 +181,8 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 			MeshHash: types.BytesToHash(meshBytes),
 		},
 		Signature: signature,
+		SmesherID: nodeID,
 	}
-
 	proposal.SetID(proposalID)
-
 	return proposal, nil
 }
