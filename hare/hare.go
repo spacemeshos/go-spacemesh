@@ -640,6 +640,8 @@ func (h *Hare) Start(ctx context.Context) error {
 
 // Close sends a termination signal to hare goroutines and waits for their termination.
 func (h *Hare) Close() {
+	close(h.blockGenCh)
+	h.broker.Close()
 	h.cancel()
 	_ = h.eg.Wait()
 }

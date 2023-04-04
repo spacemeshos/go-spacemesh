@@ -38,6 +38,10 @@ func Test_multipleCPs(t *testing.T) {
 	defer cancel()
 	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
+	defer func() {
+		err := mesh.Close()
+		require.NoError(t, err)
+	}()
 
 	test.initialSets = make([]*Set, totalNodes)
 
@@ -138,10 +142,11 @@ func Test_multipleCPs(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	// There are 5 rounds per layer and totalCPs layers and we double for good measure.
 	test.WaitForTimedTermination(t, time.Minute)
+	// We close hare here so that the blockGenCh is closed which allows for the
+	// outputsWaitGroup to complete.
 	for _, h := range test.hare {
-		close(h.blockGenCh)
+		h.Close()
 	}
 	outputsWaitGroup.Wait()
 	for _, out := range outputs {
@@ -150,11 +155,6 @@ func Test_multipleCPs(t *testing.T) {
 			require.ElementsMatch(t, types.ToProposalIDs(pList[lid]), out[lid].Proposals)
 		}
 	}
-	t.Cleanup(func() {
-		for _, h := range test.hare {
-			h.Close()
-		}
-	})
 }
 
 // Test - run multiple CPs where one of them runs more than one iteration.
@@ -176,6 +176,10 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	defer cancel()
 	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
+	defer func() {
+		err := mesh.Close()
+		require.NoError(t, err)
+	}()
 
 	test.initialSets = make([]*Set, totalNodes)
 
@@ -330,7 +334,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	// iterations so we increase the layer count by 1.
 	test.WaitForTimedTermination(t, time.Minute)
 	for _, h := range test.hare {
-		close(h.blockGenCh)
+		h.Close()
 	}
 	outputsWaitGroup.Wait()
 	for _, out := range outputs {
@@ -339,9 +343,4 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 			require.ElementsMatch(t, types.ToProposalIDs(pList[lid]), out[lid].Proposals)
 		}
 	}
-	t.Cleanup(func() {
-		for _, h := range test.hare {
-			h.Close()
-		}
-	})
 }
