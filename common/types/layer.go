@@ -46,11 +46,6 @@ func GetEffectiveGenesis() LayerID {
 	return LayerID(atomic.LoadUint32(&effectiveGenesis))
 }
 
-// NewLayerID creates LayerID from uint32.
-func NewLayerID(value uint32) LayerID {
-	return LayerID(value)
-}
-
 // LayerID is representing a layer number. Zero value is safe to use, and means 0.
 // Internally it is a simple wrapper over uint32 and should be considered immutable
 // the same way as any integer.

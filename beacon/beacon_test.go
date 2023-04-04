@@ -170,7 +170,7 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 			return nil
 		}).AnyTimes()
 
-	atxPublishLid := types.NewLayerID(types.GetLayersPerEpoch()*2 - 1)
+	atxPublishLid := types.LayerID(types.GetLayersPerEpoch()*2 - 1)
 	current := atxPublishLid.Add(1)
 	dbs := make([]*datastore.CachedDB, 0, numNodes)
 	cfg := NodeSimUnitTestConfig()
@@ -226,7 +226,7 @@ func TestBeacon_NoProposals(t *testing.T) {
 	publisher := pubsubmocks.NewMockPublisher(gomock.NewController(t))
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	atxPublishLid := types.NewLayerID(types.GetLayersPerEpoch()*2 - 1)
+	atxPublishLid := types.LayerID(types.GetLayersPerEpoch()*2 - 1)
 	current := atxPublishLid.Add(1)
 	dbs := make([]*datastore.CachedDB, 0, numNodes)
 	cfg := NodeSimUnitTestConfig()
@@ -335,7 +335,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 		createATX(t, tpd.cdb, lid, tpd.edSigner, 199, time.Now())
 		createRandomATXs(t, tpd.cdb, lid, numATXs-1)
 	}
-	finalLayer := types.NewLayerID(types.GetLayersPerEpoch() * uint32(epoch))
+	finalLayer := types.LayerID(types.GetLayersPerEpoch() * uint32(epoch))
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 	for layer := gLayer.Add(1); layer.Before(finalLayer); layer = layer.Add(1) {

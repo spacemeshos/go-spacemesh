@@ -13,7 +13,7 @@ func load(db sql.Executor, address types.Address, query string, enc sql.Encoder)
 		account.Balance = uint64(stmt.ColumnInt64(0))
 		account.Initialized = stmt.ColumnInt(1) > 0
 		account.NextNonce = uint64(stmt.ColumnInt64(2))
-		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(3)))
+		account.Layer = types.LayerID(uint32(stmt.ColumnInt64(3)))
 		if stmt.ColumnLen(4) > 0 {
 			account.TemplateAddress = &types.Address{}
 			stmt.ColumnBytes(4, account.TemplateAddress[:])
@@ -74,7 +74,7 @@ func All(db sql.Executor) ([]*types.Account, error) {
 		account.Balance = uint64(stmt.ColumnInt64(1))
 		account.Initialized = stmt.ColumnInt(2) > 0
 		account.NextNonce = uint64(stmt.ColumnInt64(3))
-		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(4)))
+		account.Layer = types.LayerID(uint32(stmt.ColumnInt64(4)))
 		if stmt.ColumnLen(5) > 0 {
 			var template types.Address
 			stmt.ColumnBytes(5, template[:])

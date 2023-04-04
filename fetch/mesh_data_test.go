@@ -114,9 +114,9 @@ func generateLayerContent(t *testing.T) []byte {
 
 func TestFetch_getHashes(t *testing.T) {
 	blks := []*types.Block{
-		genLayerBlock(types.NewLayerID(10), types.RandomTXSet(10)),
-		genLayerBlock(types.NewLayerID(11), types.RandomTXSet(10)),
-		genLayerBlock(types.NewLayerID(20), types.RandomTXSet(10)),
+		genLayerBlock(types.LayerID(10), types.RandomTXSet(10)),
+		genLayerBlock(types.LayerID(11), types.RandomTXSet(10)),
+		genLayerBlock(types.LayerID(20), types.RandomTXSet(10)),
 	}
 	blockIDs := types.ToBlockIDs(blks)
 	hashes := types.BlockIDsToHashes(blockIDs)
@@ -214,8 +214,8 @@ func TestFetch_GetMalfeasanceProofs(t *testing.T) {
 
 func TestFetch_GetBlocks(t *testing.T) {
 	blks := []*types.Block{
-		genLayerBlock(types.NewLayerID(10), types.RandomTXSet(10)),
-		genLayerBlock(types.NewLayerID(20), types.RandomTXSet(10)),
+		genLayerBlock(types.LayerID(10), types.RandomTXSet(10)),
+		genLayerBlock(types.LayerID(20), types.RandomTXSet(10)),
 	}
 	blockIDs := types.ToBlockIDs(blks)
 	f := createFetch(t)
@@ -232,8 +232,8 @@ func TestFetch_GetBlocks(t *testing.T) {
 
 func TestFetch_GetBallots(t *testing.T) {
 	blts := []*types.Ballot{
-		genLayerBallot(t, types.NewLayerID(10)),
-		genLayerBallot(t, types.NewLayerID(20)),
+		genLayerBallot(t, types.LayerID(10)),
+		genLayerBallot(t, types.LayerID(20)),
 	}
 	ballotIDs := types.ToBallotIDs(blts)
 	f := createFetch(t)
@@ -300,8 +300,8 @@ func genLayerBlock(layerID types.LayerID, txs []types.TransactionID) *types.Bloc
 
 func TestFetch_GetProposals(t *testing.T) {
 	proposals := []*types.Proposal{
-		genLayerProposal(t, types.NewLayerID(10), nil),
-		genLayerProposal(t, types.NewLayerID(20), nil),
+		genLayerProposal(t, types.LayerID(10), nil),
+		genLayerProposal(t, types.LayerID(20), nil),
 	}
 	proposalIDs := types.ToProposalIDs(proposals)
 	f := createFetch(t)
@@ -535,7 +535,7 @@ func TestFetch_GetLayerData(t *testing.T) {
 						return nil
 					})
 			}
-			require.NoError(t, f.GetLayerData(context.TODO(), peers, types.NewLayerID(111), okFunc, errFunc))
+			require.NoError(t, f.GetLayerData(context.TODO(), peers, types.LayerID(111), okFunc, errFunc))
 			wg.Wait()
 			require.Len(t, oks, expOk)
 			require.Len(t, errs, expErr)
@@ -597,7 +597,7 @@ func TestFetch_GetLayerOpinions(t *testing.T) {
 						return nil
 					})
 			}
-			require.NoError(t, f.GetLayerOpinions(context.TODO(), peers, types.NewLayerID(111), okFunc, errFunc))
+			require.NoError(t, f.GetLayerOpinions(context.TODO(), peers, types.LayerID(111), okFunc, errFunc))
 			wg.Wait()
 			require.Len(t, oks, expOk)
 			require.Len(t, errs, expErr)
@@ -671,11 +671,11 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 			name:   "success",
 			params: [4]uint32{7, 23, 5, 4},
 			expected: []types.LayerID{
-				types.NewLayerID(7),
-				types.NewLayerID(12),
-				types.NewLayerID(17),
-				types.NewLayerID(22),
-				types.NewLayerID(23),
+				types.LayerID(7),
+				types.LayerID(12),
+				types.LayerID(17),
+				types.LayerID(22),
+				types.LayerID(23),
 			},
 		},
 		{
@@ -692,8 +692,8 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 
 			f := createFetch(t)
 			req := &MeshHashRequest{
-				From:  types.NewLayerID(tc.params[0]),
-				To:    types.NewLayerID(tc.params[1]),
+				From:  types.LayerID(tc.params[0]),
+				To:    types.LayerID(tc.params[1]),
 				Delta: tc.params[2],
 				Steps: tc.params[3],
 			}

@@ -14,9 +14,9 @@ func TestVotesUpdate(t *testing.T) {
 		original := votes{}
 		const last = 10
 		for i := 0; i < last; i++ {
-			original.append(&layerVote{layerInfo: &layerInfo{lid: types.NewLayerID(uint32(i))}})
+			original.append(&layerVote{layerInfo: &layerInfo{lid: types.LayerID(uint32(i))}})
 		}
-		cp := original.update(types.NewLayerID(last), nil)
+		cp := original.update(types.LayerID(last), nil)
 		c1 := original.tail
 		c2 := cp.tail
 		for c1 != nil || c2 != nil {
@@ -29,10 +29,10 @@ func TestVotesUpdate(t *testing.T) {
 		original := votes{}
 		const last = 10
 		for i := 0; i < last; i++ {
-			original.append(&layerVote{layerInfo: &layerInfo{lid: types.NewLayerID(uint32(i))}})
+			original.append(&layerVote{layerInfo: &layerInfo{lid: types.LayerID(uint32(i))}})
 		}
 		const modified = last - 2
-		cp := original.update(types.NewLayerID(modified), nil)
+		cp := original.update(types.LayerID(modified), nil)
 		c1 := original.tail
 		c2 := cp.tail
 		for c1 != nil || c2 != nil {
@@ -52,11 +52,11 @@ func TestVotesUpdate(t *testing.T) {
 		for i := 0; i < last; i++ {
 			original.append(&layerVote{
 				vote:      against,
-				layerInfo: &layerInfo{lid: types.NewLayerID(uint32(i))},
+				layerInfo: &layerInfo{lid: types.LayerID(uint32(i))},
 			})
-			update[types.NewLayerID(uint32(i))] = map[types.BlockID]sign{}
+			update[types.LayerID(uint32(i))] = map[types.BlockID]sign{}
 		}
-		cp := original.update(types.NewLayerID(0), update)
+		cp := original.update(types.LayerID(0), update)
 		for c := original.tail; c != nil; c = c.prev {
 			require.Equal(t, against, c.vote)
 		}
@@ -71,17 +71,17 @@ func TestVotesUpdate(t *testing.T) {
 		for i := 0; i < last; i++ {
 			original.append(&layerVote{
 				layerInfo: &layerInfo{
-					lid: types.NewLayerID(uint32(i)),
+					lid: types.LayerID(uint32(i)),
 					blocks: []*blockInfo{{
 						id: types.BlockID{byte(i)},
 					}},
 				},
 			})
-			update[types.NewLayerID(uint32(i))] = map[types.BlockID]sign{
+			update[types.LayerID(uint32(i))] = map[types.BlockID]sign{
 				{byte(i)}: support,
 			}
 		}
-		cp := original.update(types.NewLayerID(0), update)
+		cp := original.update(types.LayerID(0), update)
 		for c := original.tail; c != nil; c = c.prev {
 			require.Len(t, c.supported, 0)
 		}
@@ -124,11 +124,11 @@ func TestComputeOpinion(t *testing.T) {
 		}
 		v.append(&layerVote{
 			supported: []*blockInfo{blocks[0]},
-			layerInfo: &layerInfo{lid: types.NewLayerID(0)},
+			layerInfo: &layerInfo{lid: types.LayerID(0)},
 		})
 		v.append(&layerVote{
 			supported: []*blockInfo{blocks[1]},
-			layerInfo: &layerInfo{lid: types.NewLayerID(1)},
+			layerInfo: &layerInfo{lid: types.LayerID(1)},
 		})
 
 		hh := opinionhash.New()
@@ -147,11 +147,11 @@ func TestComputeOpinion(t *testing.T) {
 		}
 		v.append(&layerVote{
 			supported: []*blockInfo{blocks[0]},
-			layerInfo: &layerInfo{lid: types.NewLayerID(0)},
+			layerInfo: &layerInfo{lid: types.LayerID(0)},
 		})
 		v.append(&layerVote{
 			vote:      against,
-			layerInfo: &layerInfo{lid: types.NewLayerID(1)},
+			layerInfo: &layerInfo{lid: types.LayerID(1)},
 		})
 
 		hh := opinionhash.New()
@@ -168,7 +168,7 @@ func TestComputeOpinion(t *testing.T) {
 			{id: types.BlockID{1}},
 			{id: types.BlockID{2}},
 		}
-		updated := types.NewLayerID(0)
+		updated := types.LayerID(0)
 		original.append(&layerVote{
 			vote:      against,
 			supported: []*blockInfo{blocks[0]},

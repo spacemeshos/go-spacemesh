@@ -32,7 +32,7 @@ func TestMain(m *testing.M) {
 
 func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
 	challenge := types.NIPostChallenge{
-		PubLayerID: types.NewLayerID(1),
+		PubLayerID: types.LayerID(1),
 	}
 	nodeID := sig.NodeID()
 	atx := types.NewActivationTx(challenge, &nodeID, types.Address{}, nil, 1, nil, nil)
@@ -54,7 +54,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 
 	atxProof := types.AtxProof{
 		Messages: [2]types.AtxProofMsg{
@@ -249,7 +249,7 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 
 	ballotProof := types.BallotProof{
 		Messages: [2]types.BallotProofMsg{
@@ -444,7 +444,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 
 	hareProof := types.HareProof{
 		Messages: [2]types.HareProofMsg{
@@ -665,7 +665,7 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 	round := uint32(11)
 	proofByte := types.RandomVrfSignature()
 	eCount := uint16(3)
@@ -744,7 +744,7 @@ func TestHandler_CrossDomain(t *testing.T) {
 
 	target := 10
 	m1 := types.BallotMetadata{
-		Layer:   types.NewLayerID(uint32(target)),
+		Layer:   types.LayerID(uint32(target)),
 		MsgHash: types.Hash32{1, 1, 1},
 	}
 	m2 := types.ATXMetadata{

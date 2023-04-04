@@ -146,7 +146,7 @@ func GetLastApplied(db sql.Executor) (types.LayerID, error) {
 	var lid types.LayerID
 	if _, err := db.Exec("select max(id) from layers where applied_block is not null", nil,
 		func(stmt *sql.Statement) bool {
-			lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+			lid = types.LayerID(uint32(stmt.ColumnInt64(0)))
 			return true
 		}); err != nil {
 		return lid, fmt.Errorf("last applied: %w", err)
@@ -173,7 +173,7 @@ func GetProcessed(db sql.Executor) (types.LayerID, error) {
 	if _, err := db.Exec("select max(id) from layers where processed = 1;",
 		nil,
 		func(stmt *sql.Statement) bool {
-			lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+			lid = types.LayerID(uint32(stmt.ColumnInt64(0)))
 			return true
 		}); err != nil {
 		return lid, fmt.Errorf("processed layer: %w", err)

@@ -121,7 +121,7 @@ func TestCalcEligibility_ZeroCommittee(t *testing.T) {
 	o := defaultOracle(t)
 	nid := types.NodeID{1, 1}
 	nonce := types.VRFPostIndex(1)
-	res, err := o.CalcEligibility(context.Background(), types.NewLayerID(50), 1, 0, nid, nonce, types.EmptyVrfSignature)
+	res, err := o.CalcEligibility(context.Background(), types.LayerID(50), 1, 0, nid, nonce, types.EmptyVrfSignature)
 	require.ErrorIs(t, err, errZeroCommitteeSize)
 	require.Equal(t, 0, int(res))
 }
@@ -130,7 +130,7 @@ func TestCalcEligibility_BeaconFailure(t *testing.T) {
 	o := defaultOracle(t)
 	nid := types.NodeID{1, 1}
 	nonce := types.VRFPostIndex(1)
-	layer := types.NewLayerID(50)
+	layer := types.LayerID(50)
 	errUnknown := errors.New("unknown")
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
 
@@ -143,7 +143,7 @@ func TestCalcEligibility_VerifyFailure(t *testing.T) {
 	o := defaultOracle(t)
 	nid := types.NodeID{1, 1}
 	nonce := types.VRFPostIndex(1)
-	layer := types.NewLayerID(50)
+	layer := types.LayerID(50)
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
 	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(false).Times(1)
 
@@ -156,7 +156,7 @@ func TestCalcEligibility_EmptyActiveSet(t *testing.T) {
 	o := defaultOracle(t)
 	nid := types.NodeID{1, 1}
 	nonce := types.VRFPostIndex(1)
-	layer := types.NewLayerID(40)
+	layer := types.LayerID(40)
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	require.Equal(t, start, end)
 
@@ -188,7 +188,7 @@ func TestCalcEligibility_EmptyActiveSet(t *testing.T) {
 
 func TestCalcEligibility_EligibleFromHareActiveSet(t *testing.T) {
 	o := defaultOracle(t)
-	layer := types.NewLayerID(50)
+	layer := types.LayerID(50)
 	beacon := beaconWithValOne()
 	createLayerData(t, o.cdb, layer, beacon, 5)
 
@@ -221,7 +221,7 @@ func TestCalcEligibility_EligibleFromHareActiveSet(t *testing.T) {
 
 func TestCalcEligibility_EligibleFromTortoiseActiveSet(t *testing.T) {
 	o := defaultOracle(t)
-	layer := types.NewLayerID(40)
+	layer := types.LayerID(40)
 	beacon := beaconWithValOne()
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	require.Equal(t, start, end)
@@ -265,7 +265,7 @@ func TestCalcEligibility_WithSpaceUnits(t *testing.T) {
 	o := defaultOracle(t)
 	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
-	layer := types.NewLayerID(50)
+	layer := types.LayerID(50)
 	beacon := beaconWithValOne()
 	createLayerData(t, o.cdb, layer, beacon, numOfMiners)
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
@@ -307,7 +307,7 @@ func Test_CalcEligibility_MainnetParams(t *testing.T) {
 	o := defaultOracle(t)
 	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
-	layer := types.NewLayerID(50)
+	layer := types.LayerID(50)
 	beacon := types.RandomBeacon()
 	createLayerData(t, o.cdb, layer, beacon, numOfMiners)
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
@@ -348,7 +348,7 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 	numOfMiners := 2000
 	committeeSize := 800
 
-	layer := types.NewLayerID(50)
+	layer := types.LayerID(50)
 	beacon := types.RandomBeacon()
 	createLayerData(b, o.cdb, layer, beacon, numOfMiners)
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
@@ -389,7 +389,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	nid := signer.NodeID()
 	nonce := types.VRFPostIndex(1)
 
-	layer := types.NewLayerID(50)
+	layer := types.LayerID(50)
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beaconWithValOne(), nil).Times(int(end.Difference(start)))
 	o.mNonceFetcher.EXPECT().VRFNonce(nid, layer.GetEpoch()).Return(nonce, nil).Times(1)
@@ -463,7 +463,7 @@ func Test_Proof_BeaconError(t *testing.T) {
 	o.vrfSigner, err = signer.VRFSigner()
 	require.NoError(t, err)
 
-	layer := types.NewLayerID(2)
+	layer := types.LayerID(2)
 	errUnknown := errors.New("unknown")
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
 
@@ -473,7 +473,7 @@ func Test_Proof_BeaconError(t *testing.T) {
 
 func Test_Proof(t *testing.T) {
 	o := defaultOracle(t)
-	layer := types.NewLayerID(2)
+	layer := types.LayerID(2)
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beaconWithValOne(), nil).Times(1)
 
 	signer, err := signing.NewEdSigner()
@@ -489,7 +489,7 @@ func Test_Proof(t *testing.T) {
 
 func TestOracle_IsIdentityActive(t *testing.T) {
 	o := defaultOracle(t)
-	layer := types.NewLayerID(40)
+	layer := types.LayerID(40)
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	require.Equal(t, start, end)
 
@@ -556,7 +556,7 @@ func TestBuildVRFMessage_BeaconError(t *testing.T) {
 	o := defaultOracle(t)
 	errUnknown := errors.New("unknown")
 	o.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, errUnknown).Times(1)
-	msg, err := o.buildVRFMessage(context.Background(), types.VRFPostIndex(1), types.NewLayerID(1), 1)
+	msg, err := o.buildVRFMessage(context.Background(), types.VRFPostIndex(1), types.LayerID(1), 1)
 	require.ErrorIs(t, err, errUnknown)
 	require.Nil(t, msg)
 }
@@ -564,7 +564,7 @@ func TestBuildVRFMessage_BeaconError(t *testing.T) {
 func TestBuildVRFMessage(t *testing.T) {
 	o := defaultOracle(t)
 	nonce := types.VRFPostIndex(2)
-	firstLayer := types.NewLayerID(1)
+	firstLayer := types.LayerID(1)
 	secondLayer := firstLayer.Add(1)
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
@@ -596,7 +596,7 @@ func TestBuildVRFMessage_Concurrency(t *testing.T) {
 	total := 1000
 	expectAdd := 10
 	wg := sync.WaitGroup{}
-	firstLayer := types.NewLayerID(1)
+	firstLayer := types.LayerID(1)
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(types.RandomBeacon(), nil).AnyTimes()
 	for i := 0; i < total; i++ {
 		wg.Add(1)
@@ -625,23 +625,23 @@ func TestSafeLayerRange(t *testing.T) {
 		safeLayerEnd   types.LayerID
 	}{
 		// a target layer prior to effective genesis returns effective genesis
-		{types.NewLayerID(0), safetyParam, defLayersPerEpoch, 1, effGenesis, effGenesis},
+		{types.LayerID(0), safetyParam, defLayersPerEpoch, 1, effGenesis, effGenesis},
 		// large safety param also returns effective genesis
-		{types.NewLayerID(100), 100, defLayersPerEpoch, 1, effGenesis, effGenesis},
+		{types.LayerID(100), 100, defLayersPerEpoch, 1, effGenesis, effGenesis},
 		// safe layer in first safetyParam + epochOffset layers of epoch, rewinds one epoch further (two prior to target)
-		{types.NewLayerID(100), safetyParam, defLayersPerEpoch, 1, types.NewLayerID(80), types.NewLayerID(81)},
+		{types.LayerID(100), safetyParam, defLayersPerEpoch, 1, types.LayerID(80), types.LayerID(81)},
 		// zero offset
-		{types.NewLayerID(100), safetyParam, defLayersPerEpoch, 0, types.NewLayerID(90), types.NewLayerID(90)},
+		{types.LayerID(100), safetyParam, defLayersPerEpoch, 0, types.LayerID(90), types.LayerID(90)},
 		// safetyParam < layersPerEpoch means only look back one epoch
-		{types.NewLayerID(100), safetyParam - 1, defLayersPerEpoch, 1, types.NewLayerID(90), types.NewLayerID(91)},
+		{types.LayerID(100), safetyParam - 1, defLayersPerEpoch, 1, types.LayerID(90), types.LayerID(91)},
 		// larger epochOffset looks back further
-		{types.NewLayerID(100), safetyParam, defLayersPerEpoch, 5, types.NewLayerID(80), types.NewLayerID(85)},
+		{types.LayerID(100), safetyParam, defLayersPerEpoch, 5, types.LayerID(80), types.LayerID(85)},
 		// smaller safety param returns one epoch prior
-		{types.NewLayerID(100), 5, defLayersPerEpoch, 5, types.NewLayerID(90), types.NewLayerID(95)},
+		{types.LayerID(100), 5, defLayersPerEpoch, 5, types.LayerID(90), types.LayerID(95)},
 		// targetLayer within safetyParam returns one epoch prior
-		{types.NewLayerID(105), 5, defLayersPerEpoch, 5, types.NewLayerID(90), types.NewLayerID(95)},
+		{types.LayerID(105), 5, defLayersPerEpoch, 5, types.LayerID(90), types.LayerID(95)},
 		// targetLayer after safetyParam+epochOffset returns start of same epoch
-		{types.NewLayerID(105), 2, defLayersPerEpoch, 2, types.NewLayerID(100), types.NewLayerID(102)},
+		{types.LayerID(105), 2, defLayersPerEpoch, 2, types.LayerID(100), types.LayerID(102)},
 	}
 	for _, testCase := range testCases {
 		sls, sle := safeLayerRange(testCase.targetLayer, testCase.safetyParam, testCase.layersPerEpoch, testCase.epochOffset)
@@ -653,7 +653,7 @@ func TestSafeLayerRange(t *testing.T) {
 func TestActives_HareActiveSet(t *testing.T) {
 	o := defaultOracle(t)
 	numMiners := 5
-	layer := types.NewLayerID(50)
+	layer := types.LayerID(50)
 	beacon := types.RandomBeacon()
 	createLayerData(t, o.cdb, layer, beacon, numMiners)
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
@@ -666,7 +666,7 @@ func TestActives_HareActiveSet(t *testing.T) {
 
 func TestActives_HareActiveSetDifferentBeacon(t *testing.T) {
 	o := defaultOracle(t)
-	layer := types.NewLayerID(50)
+	layer := types.LayerID(50)
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 
 	signer, err := signing.NewEdSigner()
@@ -704,7 +704,7 @@ func TestActives_HareActiveSetDifferentBeacon(t *testing.T) {
 
 func TestActives_HareActiveSetMultipleLayers(t *testing.T) {
 	o := defaultOracle(t)
-	layer := types.NewLayerID(100)
+	layer := types.LayerID(100)
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	require.NotEqual(t, start, end)
 
@@ -742,7 +742,7 @@ func TestActives_HareActiveSetMultipleLayers(t *testing.T) {
 func TestActives_HareActiveSetCached(t *testing.T) {
 	o := defaultOracle(t)
 	numMiners := 5
-	layer := types.NewLayerID(38) // manually calculated. first layer of the safe layer range
+	layer := types.LayerID(38) // manually calculated. first layer of the safe layer range
 	beacon := types.RandomBeacon()
 	createLayerData(t, o.cdb, layer, beacon, numMiners)
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
@@ -773,7 +773,7 @@ func TestActives_HareActiveSetCached(t *testing.T) {
 
 func TestActives_EmptyTortoiseActiveSet(t *testing.T) {
 	o := defaultOracle(t)
-	layer := types.NewLayerID(40)
+	layer := types.LayerID(40)
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
 	activeSet, err := o.actives(context.Background(), layer)
@@ -783,7 +783,7 @@ func TestActives_EmptyTortoiseActiveSet(t *testing.T) {
 
 func TestActives_TortoiseActiveSet(t *testing.T) {
 	o := defaultOracle(t)
-	layer := types.NewLayerID(40)
+	layer := types.LayerID(40)
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
 
@@ -836,7 +836,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 func TestActives_ConcurrentCalls(t *testing.T) {
 	r := require.New(t)
 	o := defaultOracle(t)
-	layer := types.NewLayerID(100)
+	layer := types.LayerID(100)
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
@@ -858,7 +858,7 @@ func TestActives_ConcurrentCalls(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(102)
 	runFn := func() {
-		_, err := o.actives(context.Background(), types.NewLayerID(100))
+		_, err := o.actives(context.Background(), types.LayerID(100))
 		r.NoError(err)
 		wg.Done()
 	}

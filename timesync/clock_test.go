@@ -176,7 +176,7 @@ func Test_NodeClock_Await_PassedLayer(t *testing.T) {
 	require.NotNil(t, clock)
 
 	select {
-	case <-clock.AwaitLayer(types.NewLayerID(4)):
+	case <-clock.AwaitLayer(types.LayerID(4)):
 		require.Greater(t, time.Now(), genesis.Add(4*layerDuration))
 	default:
 		require.Fail(t, "await layer closed early")
@@ -206,7 +206,7 @@ func Test_NodeClock_Await_WithClockMovingBackwards(t *testing.T) {
 	clock.tick()
 
 	select {
-	case <-clock.AwaitLayer(types.NewLayerID(10)):
+	case <-clock.AwaitLayer(types.LayerID(10)):
 		require.Greater(t, time.Now(), genesis.Add(10*layerDuration))
 	default:
 		require.Fail(t, "awaited layer didn't signal")
@@ -214,7 +214,7 @@ func Test_NodeClock_Await_WithClockMovingBackwards(t *testing.T) {
 
 	// move the clock backwards by a layer
 	mClock.Set(now.Add(-2 * layerDuration))
-	ch := clock.AwaitLayer(types.NewLayerID(9))
+	ch := clock.AwaitLayer(types.LayerID(9))
 
 	select {
 	case <-ch:
@@ -250,14 +250,14 @@ func Test_NodeClock_NonMonotonicTick_Forward(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
-	ch := clock.AwaitLayer(types.NewLayerID(6))
+	ch := clock.AwaitLayer(types.LayerID(6))
 
 	select {
 	case <-ch:
 		require.Fail(t, "await layer closed early")
 	case <-time.After(10 * time.Millisecond):
 		// channel returned by AwaitLayer should not be closed yet and we should still be in layer 5
-		require.Equal(t, types.NewLayerID(5), clock.CurrentLayer())
+		require.Equal(t, types.LayerID(5), clock.CurrentLayer())
 	}
 
 	// hibernate for 5 layers (clock jumps forward)
@@ -266,7 +266,7 @@ func Test_NodeClock_NonMonotonicTick_Forward(t *testing.T) {
 	select {
 	case <-ch:
 		// channel returned by AwaitLayer should be closed and we should be in the future layer 10
-		require.Equal(t, types.NewLayerID(10), clock.CurrentLayer())
+		require.Equal(t, types.LayerID(10), clock.CurrentLayer())
 	case <-time.After(10 * time.Millisecond):
 		require.Fail(t, "await layer not closed")
 	}
@@ -290,8 +290,8 @@ func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, clock)
 
-	ch6 := clock.AwaitLayer(types.NewLayerID(6))
-	ch7 := clock.AwaitLayer(types.NewLayerID(7))
+	ch6 := clock.AwaitLayer(types.LayerID(6))
+	ch7 := clock.AwaitLayer(types.LayerID(7))
 
 	select {
 	case <-ch6:
@@ -300,7 +300,7 @@ func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
 		require.Fail(t, "await layer 7 closed early")
 	case <-time.After(10 * time.Millisecond):
 		// channel returned by AwaitLayer should not be closed yet and we should still be in layer 5
-		require.Equal(t, types.NewLayerID(5), clock.CurrentLayer())
+		require.Equal(t, types.LayerID(5), clock.CurrentLayer())
 	}
 
 	// simulate time passing
@@ -309,7 +309,7 @@ func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
 	select {
 	case <-ch6:
 		// channel returned by AwaitLayer should be closed and we should be in layer 6
-		require.Equal(t, types.NewLayerID(6), clock.CurrentLayer())
+		require.Equal(t, types.LayerID(6), clock.CurrentLayer())
 	case <-time.After(100 * time.Millisecond):
 		require.Fail(t, "await layer 6 not closed")
 	}
@@ -322,7 +322,7 @@ func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
 
 	// NTP corrects time backwards
 	mClock.Add(-1 * layerDuration)
-	ch6 = clock.AwaitLayer(types.NewLayerID(6))
+	ch6 = clock.AwaitLayer(types.LayerID(6))
 
 	select {
 	case <-ch6:
@@ -331,7 +331,7 @@ func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
 		require.Fail(t, "await layer 7 closed early")
 	case <-time.After(10 * time.Millisecond):
 		// channel returned by AwaitLayer should not be closed yet and we should still be in layer 5
-		require.Equal(t, types.NewLayerID(5), clock.CurrentLayer())
+		require.Equal(t, types.LayerID(5), clock.CurrentLayer())
 	}
 
 	// simulate time passing
@@ -347,7 +347,7 @@ func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
 	select {
 	case <-ch7:
 		// channel returned by AwaitLayer should be closed and we should be in layer 7
-		require.Equal(t, types.NewLayerID(7), clock.CurrentLayer())
+		require.Equal(t, types.LayerID(7), clock.CurrentLayer())
 	case <-time.After(10 * time.Millisecond):
 		require.Fail(t, "await layer 7 not closed")
 	}
@@ -392,6 +392,6 @@ func Fuzz_NodeClock_CurrentLayer(f *testing.F) {
 			expectedLayer = (now - genesis) / layerSecs
 		}
 		layer := clock.CurrentLayer()
-		require.Equal(t, types.NewLayerID(expectedLayer), layer)
+		require.Equal(t, types.LayerID(expectedLayer), layer)
 	})
 }

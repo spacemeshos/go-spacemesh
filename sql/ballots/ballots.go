@@ -215,7 +215,7 @@ func LatestLayer(db sql.Executor) (types.LayerID, error) {
 	if _, err := db.Exec("select max(layer) from ballots;",
 		nil,
 		func(stmt *sql.Statement) bool {
-			lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+			lid = types.LayerID(uint32(stmt.ColumnInt64(0)))
 			return true
 		}); err != nil {
 		return lid, fmt.Errorf("latest layer: %w", err)

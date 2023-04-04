@@ -52,7 +52,7 @@ func createMeshTX(t *testing.T, signer *signing.EdSigner, lid types.LayerID, opt
 func TestNewNanoTX(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	mtx := createMeshTX(t, sig, types.NewLayerID(13))
+	mtx := createMeshTX(t, sig, types.LayerID(13))
 	ntx := NewNanoTX(mtx)
 	require.Equal(t, mtx.ID, ntx.ID)
 	require.Equal(t, mtx.Principal, ntx.Principal)
@@ -71,7 +71,7 @@ func TestUpdateMaybe(t *testing.T) {
 	require.NoError(t, err)
 	mtx := createMeshTX(t, sig, 0)
 	ntx := NewNanoTX(mtx)
-	lid := types.NewLayerID(23)
+	lid := types.LayerID(23)
 	bid := types.RandomBlockID()
 	require.NotEqual(t, lid, ntx.Layer)
 	require.NotEqual(t, bid, ntx.Block)

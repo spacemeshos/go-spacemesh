@@ -77,7 +77,7 @@ func generateBlock(t *testing.T, db *datastore.CachedDB) *types.Block {
 	t.Helper()
 	block := types.NewExistingBlock(
 		types.RandomBlockID(),
-		types.InnerBlock{LayerIndex: types.NewLayerID(11)},
+		types.InnerBlock{LayerIndex: types.LayerID(11)},
 	)
 	require.NoError(t, blocks.Add(db, block))
 	return block
@@ -142,7 +142,7 @@ func verifyCerts(t *testing.T, db *datastore.CachedDB, lid types.LayerID, expect
 
 func TestStartStop(t *testing.T) {
 	tc := newTestCertifier(t)
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 	ch := make(chan struct{}, 1)
 	tc.mClk.EXPECT().CurrentLayer().Return(lid).AnyTimes()
 	tc.mClk.EXPECT().AwaitLayer(gomock.Any()).DoAndReturn(
@@ -294,7 +294,7 @@ func Test_HandleSyncedCertificate_NotEnoughEligibility(t *testing.T) {
 
 func Test_HandleCertifyMessage(t *testing.T) {
 	cfg := defaultCertConfig()
-	lid := types.NewLayerID(10)
+	lid := types.LayerID(10)
 	tt := []struct {
 		name     string
 		diff     int
@@ -509,7 +509,7 @@ func Test_HandleCertifyMessage_NotRegistered(t *testing.T) {
 func Test_HandleCertifyMessage_Stopped(t *testing.T) {
 	tc := newTestCertifier(t)
 	tc.Stop()
-	_, _, encoded := genEncodedMsg(t, types.NewLayerID(11), types.RandomBlockID())
+	_, _, encoded := genEncodedMsg(t, types.LayerID(11), types.RandomBlockID())
 
 	res := tc.HandleCertifyMessage(context.Background(), "peer", encoded)
 	require.Equal(t, pubsub.ValidationIgnore, res)
@@ -564,7 +564,7 @@ func Test_HandleCertifyMessage_BeaconNotAvailable(t *testing.T) {
 
 func Test_OldLayersPruned(t *testing.T) {
 	tc := newTestCertifier(t)
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 
 	require.NoError(t, tc.RegisterForCert(context.Background(), lid, types.RandomBlockID()))
 	require.NoError(t, tc.RegisterForCert(context.Background(), lid.Add(1), types.RandomBlockID()))

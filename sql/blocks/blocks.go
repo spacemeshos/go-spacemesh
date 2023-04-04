@@ -118,7 +118,7 @@ func GetLayer(db sql.Executor, id types.BlockID) (types.LayerID, error) {
 	if rows, err := db.Exec("select layer from blocks where id = ?1;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}, func(stmt *sql.Statement) bool {
-		lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+		lid = types.LayerID(uint32(stmt.ColumnInt64(0)))
 		return true
 	}); err != nil {
 		return lid, fmt.Errorf("get block layer %s: %w", id, err)

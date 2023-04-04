@@ -100,7 +100,7 @@ func TestHandleLayerDataReq(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			lid := types.NewLayerID(111)
+			lid := types.LayerID(111)
 			th := createTestHandler(t)
 			blts, blks := createLayer(t, th.cdb, lid)
 
@@ -142,7 +142,7 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 			t.Parallel()
 
 			th := createTestHandler(t)
-			lid := types.NewLayerID(111)
+			lid := types.LayerID(111)
 			certified, aggHash := createOpinions(t, th.cdb, lid, !tc.missingCert)
 			if tc.multipleCerts {
 				require.NoError(t, certificates.Add(th.cdb, lid, &types.Certificate{
@@ -211,8 +211,8 @@ func TestHandleMeshHashReq(t *testing.T) {
 
 			th := createTestHandler(t)
 			req := &MeshHashRequest{
-				From:  types.NewLayerID(tc.params[0]),
-				To:    types.NewLayerID(tc.params[1]),
+				From:  types.LayerID(tc.params[0]),
+				To:    types.LayerID(tc.params[1]),
 				Delta: tc.params[2],
 				Steps: tc.params[3],
 			}

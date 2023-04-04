@@ -371,8 +371,8 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 			return nil
 		},
 	)
-	fork0 := types.NewLayerID(101)
-	fork2 := types.NewLayerID(121)
+	fork0 := types.LayerID(101)
+	fork2 := types.LayerID(121)
 	ts.mForkFinder.EXPECT().FindFork(gomock.Any(), opns[0].Peer(), instate.Sub(1), opns[0].PrevAggHash).Return(fork0, nil)
 	ts.mForkFinder.EXPECT().FindFork(gomock.Any(), opns[2].Peer(), instate.Sub(1), opns[2].PrevAggHash).Return(fork2, nil)
 	ts.mForkFinder.EXPECT().FindFork(gomock.Any(), opns[5].Peer(), instate.Sub(1), opns[5].PrevAggHash).Return(types.LayerID(0), errUnknown)

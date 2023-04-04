@@ -264,7 +264,7 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 
 	// tx0 and tx1 got packed into a block
 	// tx1 and tx2 got packed into a proposal
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	pid := types.ProposalID{1, 2, 3}
 	bid := types.BlockID{3, 2, 1}
@@ -342,7 +342,7 @@ func TestCache_Account_TXInMultipleLayers(t *testing.T) {
 	mtxs := genAndSaveTXs(t, tc.db, ta.signer, ta.nonce, ta.nonce+4, time.Now())
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs)
 
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	// tx0 got packed into block0 at lid
 	// tx1 got packed into block1 at lid and a proposal at lid+1
@@ -388,7 +388,7 @@ func TestCache_Account_EmptyLayerApplied_LowerNonceBackToMempool(t *testing.T) {
 	mtxs := genAndSaveTXs(t, tc.db, ta.signer, ta.nonce, ta.nonce+1, time.Now())
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs)
 
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	// tx0 got packed into block0 at lid
 	// tx1 got packed into block1 at lid and a proposal at lid+1
@@ -428,7 +428,7 @@ func TestCache_Account_EmptyLayerApplied_HigherNonceBackToMempool(t *testing.T) 
 	mtxs := genAndSaveTXs(t, tc.db, ta.signer, ta.nonce, ta.nonce+1, time.Now())
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs)
 
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	// tx0 got packed into block0 at lid
 	// tx1 got packed into block1 at lid and a proposal at lid+1
@@ -699,7 +699,7 @@ func TestCache_Account_Add_InsufficientBalance_ResetAfterApply(t *testing.T) {
 	require.True(t, tc.MoreInDB(ta.principal))
 	checkTXStateFromDB(t, tc.db, []*types.MeshTransaction{mtx}, types.MEMPOOL)
 
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	// the account will receive funds in layer 97 (via rewards or incoming transfer)
 	ta.balance += ta.balance
@@ -733,7 +733,7 @@ func TestCache_Account_Add_InsufficientBalance_HigherNonceFeasibleFirst(t *testi
 	require.True(t, tc.MoreInDB(ta.principal))
 	checkTXStateFromDB(t, tc.db, []*types.MeshTransaction{mtx0, mtx1}, types.MEMPOOL)
 
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	// the account receive enough funds in layer 97 (via rewards or incoming transfer) for mtx1
 	ta.balance = mtx1.Spending()
@@ -808,7 +808,7 @@ func TestCache_Account_AppliedTXsNotInCache(t *testing.T) {
 		checkNoTX(t, tc.Cache, mtx.ID)
 	}
 
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 
@@ -834,7 +834,7 @@ func TestCache_Account_TooManyNonceAfterApply(t *testing.T) {
 
 	ta.nonce = newNextNonce
 	ta.balance = newBalance
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtxs[0].Transaction)
@@ -883,7 +883,7 @@ func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 	income := defaultBalance * 100
 	ta.nonce++
 	ta.balance = ta.balance - mtx.Spending() + income
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtx.Transaction)
@@ -926,7 +926,7 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 	income := mtxs[0].Spending()
 	ta.nonce++
 	ta.balance = ta.balance - mtxs[0].Spending() + income
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtxs[0].Transaction)
@@ -949,7 +949,7 @@ func TestCache_Account_EvictedAfterApply(t *testing.T) {
 
 	ta.nonce++
 	ta.balance = ta.balance - mtx.Spending()
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtx.Transaction)
@@ -971,7 +971,7 @@ func TestCache_Account_NotEvictedAfterApplyDueToNonceGap(t *testing.T) {
 
 	ta.nonce++
 	ta.balance = ta.balance - mtx.Spending()
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtx.Transaction)
@@ -1059,7 +1059,7 @@ func checkMempoolSize(t *testing.T, c *Cache, expected int) {
 func TestCache_LinkTXsWithProposal(t *testing.T) {
 	tc, accounts := createCache(t, 100)
 	mtxsByAccount := buildSmallCache(t, tc, accounts, 10)
-	lid0 := types.NewLayerID(97)
+	lid0 := types.LayerID(97)
 	pid0 := types.ProposalID{1, 2, 3}
 	// take the first tx out of each account for proposal 0
 	tids0 := make([]types.TransactionID, 0, len(mtxsByAccount))
@@ -1099,7 +1099,7 @@ func TestCache_LinkTXsWithProposal(t *testing.T) {
 func TestCache_LinkTXsWithProposal_MultipleLayers(t *testing.T) {
 	tc, accounts := createCache(t, 100)
 	mtxsByAccount := buildSmallCache(t, tc, accounts, 10)
-	lid0 := types.NewLayerID(97)
+	lid0 := types.LayerID(97)
 	pid0 := types.ProposalID{1, 2, 3}
 	// take the first tx out of each account for proposal 0
 	tids0 := make([]types.TransactionID, 0, len(mtxsByAccount))
@@ -1129,7 +1129,7 @@ func TestCache_LinkTXsWithProposal_MultipleLayers(t *testing.T) {
 func TestCache_LinkTXsWithBlock(t *testing.T) {
 	tc, accounts := createCache(t, 100)
 	mtxsByAccount := buildSmallCache(t, tc, accounts, 10)
-	lid0 := types.NewLayerID(97)
+	lid0 := types.LayerID(97)
 	bid0 := types.BlockID{1, 2, 3}
 	// take the first tx out of each account for block 0
 	tids0 := make([]types.TransactionID, 0, len(mtxsByAccount))
@@ -1168,7 +1168,7 @@ func TestCache_LinkTXsWithBlock(t *testing.T) {
 func TestCache_LinkTXsWithBlock_MultipleLayers(t *testing.T) {
 	tc, accounts := createCache(t, 100)
 	mtxsByAccount := buildSmallCache(t, tc, accounts, 10)
-	lid0 := types.NewLayerID(97)
+	lid0 := types.LayerID(97)
 	bid0 := types.BlockID{1, 2, 3}
 	// take the first tx out of each account for block 0
 	tids0 := make([]types.TransactionID, 0, len(mtxsByAccount))
@@ -1198,7 +1198,7 @@ func TestCache_LinkTXsWithBlock_MultipleLayers(t *testing.T) {
 func TestCache_ApplyLayerAndRevert(t *testing.T) {
 	tc, accounts := createCache(t, 100)
 	mtxsByAccount := buildSmallCache(t, tc, accounts, 10)
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	allApplied := make([]types.TransactionWithResult, 0, len(mtxsByAccount)*2)
@@ -1250,7 +1250,7 @@ func TestCache_ApplyLayerAndRevert(t *testing.T) {
 func TestCache_ApplyLayerWithSkippedTXs(t *testing.T) {
 	tc, accounts := createCache(t, 100)
 	mtxsByAccount := buildSmallCache(t, tc, accounts, 10)
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	var allSkipped []types.Transaction
@@ -1303,7 +1303,7 @@ func TestCache_ApplyLayerWithSkippedTXs(t *testing.T) {
 func TestCache_ApplyLayer_OutOfOrder(t *testing.T) {
 	tc, accounts := createCache(t, 100)
 	buildSmallCache(t, tc, accounts, 10)
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(2), types.RandomBlockID()))
 	err := tc.ApplyLayer(context.Background(), tc.db, lid, types.BlockID{1, 2, 3}, nil, []types.Transaction{})
 	require.ErrorIs(t, err, errLayerNotInOrder)
@@ -1312,7 +1312,7 @@ func TestCache_ApplyLayer_OutOfOrder(t *testing.T) {
 func TestCache_GetMempool(t *testing.T) {
 	tc, accounts := createCache(t, 100)
 	mtxsByAccount := buildSmallCache(t, tc, accounts, 10)
-	lid0 := types.NewLayerID(97)
+	lid0 := types.LayerID(97)
 	bid := types.BlockID{1, 2, 3}
 	tids0 := make([]types.TransactionID, 0, len(mtxsByAccount))
 	for _, mtxs := range mtxsByAccount {

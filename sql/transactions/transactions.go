@@ -106,7 +106,7 @@ func GetAppliedLayer(db sql.Executor, tid types.TransactionID) (types.LayerID, e
 	rows, err := db.Exec("select layer from transactions where id = ?1 and result is not null", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, tid[:])
 	}, func(stmt *sql.Statement) bool {
-		rst = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+		rst = types.LayerID(uint32(stmt.ColumnInt64(0)))
 		return false
 	})
 	if err != nil {
@@ -154,7 +154,7 @@ func decodeTransaction(id types.TransactionID, stmt *sql.Statement) (*types.Mesh
 	parsed.ID = id
 
 	state := types.PENDING
-	layer := types.NewLayerID(uint32(stmt.ColumnInt64(2)))
+	layer := types.LayerID(uint32(stmt.ColumnInt64(2)))
 	if layer != 0 {
 		state = types.APPLIED
 	} else if parsed.TxHeader != nil {
@@ -348,7 +348,7 @@ func TransactionInProposal(db sql.Executor, id types.TransactionID, after types.
 			stmt.BindBytes(1, id.Bytes())
 			stmt.BindInt64(2, int64(after))
 		}, func(s *sql.Statement) bool {
-			rst = types.NewLayerID(uint32(s.ColumnInt64(0)))
+			rst = types.LayerID(uint32(s.ColumnInt64(0)))
 			return false
 		})
 	if rows == 0 {
@@ -371,7 +371,7 @@ func TransactionInBlock(db sql.Executor, id types.TransactionID, after types.Lay
 			stmt.BindBytes(1, id.Bytes())
 			stmt.BindInt64(2, int64(after))
 		}, func(s *sql.Statement) bool {
-			rst = types.NewLayerID(uint32(s.ColumnInt64(0)))
+			rst = types.LayerID(uint32(s.ColumnInt64(0)))
 			s.ColumnBytes(1, bid[:])
 			return false
 		})

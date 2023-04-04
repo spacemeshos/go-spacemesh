@@ -61,7 +61,7 @@ func TestBroker_Received(t *testing.T) {
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
 
-	lid := types.NewLayerID(1)
+	lid := types.LayerID(1)
 	inbox, err := broker.Register(context.Background(), lid)
 	assert.Nil(t, err)
 
@@ -292,7 +292,7 @@ func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 	require.EqualValues(t, m, msg)
 
 	proof := types.MalfeasanceProof{
-		Layer: types.NewLayerID(1111),
+		Layer: types.LayerID(1111),
 		Proof: types.Proof{
 			Type: types.MultipleBallots,
 			Data: &types.BallotProof{

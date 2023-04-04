@@ -84,8 +84,8 @@ func newTurtle(
 
 func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
 	// prevent overflow/wraparound
-	if t.verified.Before(types.NewLayerID(t.WindowSize)) {
-		return types.NewLayerID(0), false
+	if t.verified.Before(types.LayerID(t.WindowSize)) {
+		return types.LayerID(0), false
 	}
 	return t.verified.Sub(t.WindowSize), true
 }
@@ -369,7 +369,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 
 		// terminate layer that falls out of the zdist window and wasn't terminated
 		// by any other component
-		if process.After(types.NewLayerID(t.Zdist)) {
+		if process.After(types.LayerID(t.Zdist)) {
 			terminated := process.Sub(t.Zdist)
 			if terminated.After(t.evicted) && !t.layer(terminated).hareTerminated {
 				t.onHareOutput(terminated, types.EmptyBlockID)

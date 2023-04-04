@@ -300,14 +300,14 @@ func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stre
 		filter.TID = &id
 	}
 	if in.Start > 0 {
-		lid := types.NewLayerID(in.Start)
+		lid := types.LayerID(in.Start)
 		filter.Start = &lid
 	}
 	if in.End > 0 {
 		if in.Watch {
 			return status.Error(codes.InvalidArgument, "watch stream should have an empty End argument")
 		}
-		lid := types.NewLayerID(in.End)
+		lid := types.LayerID(in.End)
 		filter.End = &lid
 	}
 
