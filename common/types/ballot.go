@@ -105,9 +105,6 @@ type InnerBallot struct {
 	// can be verified before decoding votes.
 	OpinionHash Hash32
 
-	// total number of ballots the smesher is eligible in this epoch.
-	EligibilityCount uint32
-
 	// the first Ballot the smesher cast in the epoch. this Ballot is a special Ballot that contains information
 	// that cannot be changed mid-epoch.
 	RefBallot BallotID
@@ -227,6 +224,8 @@ type EpochData struct {
 	ActiveSetHash Hash32
 	// the beacon value the smesher recorded for this epoch
 	Beacon Beacon
+	// total number of ballots the smesher is eligible in this epoch.
+	EligibilityCount uint32
 }
 
 // Initialize calculates and sets the Ballot's cached ballotID and smesherID.

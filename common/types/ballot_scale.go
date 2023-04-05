@@ -154,13 +154,6 @@ func (t *InnerBallot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.EligibilityCount))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := scale.EncodeByteArray(enc, t.RefBallot[:])
 		if err != nil {
 			return total, err
@@ -191,14 +184,6 @@ func (t *InnerBallot) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.EligibilityCount = uint32(field)
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.RefBallot[:])
@@ -388,6 +373,13 @@ func (t *EpochData) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.EligibilityCount))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
@@ -405,6 +397,14 @@ func (t *EpochData) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.EligibilityCount = uint32(field)
 	}
 	return total, nil
 }

@@ -106,9 +106,8 @@ func RandomBallot() *Ballot {
 			Layer: LayerID(10),
 		},
 		InnerBallot: InnerBallot{
-			AtxID:            RandomATXID(),
-			RefBallot:        RandomBallotID(),
-			EligibilityCount: 3,
+			AtxID:     RandomATXID(),
+			RefBallot: RandomBallotID(),
 		},
 		Votes: Votes{
 			Base:    RandomBallotID(),
