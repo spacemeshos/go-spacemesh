@@ -130,6 +130,8 @@ var txs = []tx{
 	describe("multisig/3/10/spend", 250, load(321), load(16), update(16), update(16), edverify(3)),
 }
 
+const price = 8.3e-08
+
 func main() {
 	fmt.Println("| name | eth | spacemesh | description |")
 	fmt.Println("| - | - | - | - |")
@@ -137,9 +139,9 @@ func main() {
 		fmt.Printf("| %s | %d | %d | %s | \n", charge.name, charge.eth, charge.spacemesh(), charge.desc)
 	}
 	fmt.Println("------")
-	fmt.Println("| name | gas (eth) | gas (spacemesh) |")
-	fmt.Println("| - | - | - |")
+	fmt.Println("| name | gas (eth) | gas (spacemesh) | usd (eth) |")
+	fmt.Println("| - | - | - | - | ")
 	for _, tx := range txs {
-		fmt.Printf("| %s | %d | %d |\n", tx.name, tx.cost(eth), tx.cost(spacemesh))
+		fmt.Printf("| %s | %d | %d | %0.4f |\n", tx.name, tx.cost(eth), tx.cost(spacemesh), float64(tx.cost(eth))*price)
 	}
 }
