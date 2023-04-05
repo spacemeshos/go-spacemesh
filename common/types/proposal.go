@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -78,7 +79,9 @@ func (p *Proposal) Initialize() error {
 	if err := p.Ballot.Initialize(); err != nil {
 		return err
 	}
-	p.proposalID = ProposalID(CalcObjectHash32(p).ToHash20())
+
+	h := hash.Sum(p.SignedBytes())
+	p.proposalID = ProposalID(Hash32(h).ToHash20())
 	return nil
 }
 
