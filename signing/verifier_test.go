@@ -68,7 +68,7 @@ func TestVerifier_WithPrefix(t *testing.T) {
 		sig := signer.Sign(signing.ATX, msg)
 
 		// TODO(mafa): at the moment all domains besides ATX panic, since they are unsupported.
-		require.Panics(t, func() { verifier.Verify(signing.BALLOT, signer.NodeID(), msg, sig) })
+		require.Panics(t, func() { verifier.Verify(signing.HARE, signer.NodeID(), msg, sig) })
 	})
 }
 
