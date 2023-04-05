@@ -237,10 +237,6 @@ func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []
 		return fmt.Errorf("failed to verify ballot signature")
 	}
 
-	if p.SmesherID != p.Ballot.SmesherID {
-		return fmt.Errorf("inconsistent smesher in proposal %v and ballot %v", p.SmesherID, p.Ballot.SmesherID)
-	}
-
 	// set the proposal ID when received
 	if err := p.Initialize(); err != nil {
 		logger.With().Warning("failed to initialize proposal", log.Err(err))

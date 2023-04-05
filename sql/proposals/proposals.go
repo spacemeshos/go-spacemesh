@@ -181,7 +181,6 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 			MeshHash: types.BytesToHash(meshBytes),
 		},
 		Signature: signature,
-		SmesherID: nodeID,
 	}
 	proposal.SetID(proposalID)
 	return proposal, nil

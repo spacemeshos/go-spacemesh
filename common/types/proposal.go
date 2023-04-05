@@ -43,8 +43,6 @@ func (id *ProposalID) DecodeScale(d *scale.Decoder) (int, error) {
 type Proposal struct {
 	// the content proposal for a given layer and the votes on the mesh history
 	InnerProposal
-	// the public key of the smesher that produced this proposal
-	SmesherID NodeID
 	// the smesher's signature on the InnerProposal
 	Signature EdSignature
 

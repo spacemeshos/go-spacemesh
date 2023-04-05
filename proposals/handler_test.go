@@ -905,7 +905,7 @@ func TestProposal_InconsistentSmeshers(t *testing.T) {
 	data, err := codec.Encode(p)
 	require.NoError(t, err)
 	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
-	require.ErrorContains(t, got, "inconsistent smesher in proposal")
+	require.ErrorContains(t, got, "failed to verify proposal signature")
 
 	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)
