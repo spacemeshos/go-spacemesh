@@ -188,9 +188,9 @@ func createProposal(t *testing.T, opts ...any) *types.Proposal {
 	require.NoError(t, err)
 	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
 	p.Ballot.SmesherID = signer.NodeID()
-	require.NoError(t, p.Initialize())
 	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
 	p.SmesherID = signer.NodeID()
+	require.NoError(t, p.Initialize())
 	return p
 }
 
@@ -214,9 +214,9 @@ func signAndInit(tb testing.TB, b *types.Ballot) *types.Ballot {
 	tb.Helper()
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	require.NoError(tb, b.Initialize())
 	b.Signature = sig.Sign(signing.BALLOT, b.SignedBytes())
 	b.SmesherID = sig.NodeID()
+	require.NoError(tb, b.Initialize())
 	return b
 }
 

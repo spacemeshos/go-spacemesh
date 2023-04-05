@@ -239,7 +239,10 @@ func (b *Ballot) Initialize() error {
 		return fmt.Errorf("bad message hash")
 	}
 
-	b.ballotID = BallotID(b.MsgHash.ToHash20())
+	msg := b.SignedBytes()
+	h := hash.Sum(msg)
+
+	b.ballotID = BallotID(Hash32(h).ToHash20())
 	return nil
 }
 
