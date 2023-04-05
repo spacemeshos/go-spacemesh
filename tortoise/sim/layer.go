@@ -192,11 +192,11 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 			EligibilityProofs: proofs,
 			ActiveSet:         activeset,
 		}
-		ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
-		ballot.SmesherID = signer.NodeID()
-		if err = ballot.Initialize(); err != nil {
+		if err := ballot.Initialize(); err != nil {
 			g.logger.With().Panic("failed to init ballot", log.Err(err))
 		}
+		ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
+		ballot.SmesherID = signer.NodeID()
 		for _, state := range g.states {
 			state.OnBallot(ballot)
 		}

@@ -47,8 +47,8 @@ func TestBallot_Initialize(t *testing.T) {
 	b := types.RandomBallot()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
 	require.NoError(t, b.Initialize())
+	b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
 	require.NotEqual(t, types.EmptyBallotID, b.ID())
 
 	err = b.Initialize()

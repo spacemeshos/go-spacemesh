@@ -264,9 +264,9 @@ func TestBlobStore_GetBallotBlob(t *testing.T) {
 	require.NoError(t, err)
 
 	blt := types.RandomBallot()
+	require.NoError(t, blt.Initialize())
 	blt.Signature = sig.Sign(signing.BALLOT, blt.SignedBytes())
 	blt.SmesherID = sig.NodeID()
-	require.NoError(t, blt.Initialize())
 
 	_, err = bs.Get(datastore.BallotDB, blt.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
@@ -344,9 +344,9 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 			TxIDs:  types.RandomTXSet(11),
 		},
 	}
+	require.NoError(t, p.Initialize())
 	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
 	p.SmesherID = signer.NodeID()
-	require.NoError(t, p.Initialize())
 
 	_, err = bs.Get(datastore.ProposalDB, p.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)

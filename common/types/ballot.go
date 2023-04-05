@@ -234,22 +234,12 @@ func (b *Ballot) Initialize() error {
 	if b.ID() != EmptyBallotID {
 		return fmt.Errorf("ballot already initialized")
 	}
-	if b.Signature == EmptyEdSignature {
-		return fmt.Errorf("cannot calculate Ballot ID: signature is nil")
-	}
 
 	if b.MsgHash != BytesToHash(b.HashInnerBytes()) {
 		return fmt.Errorf("bad message hash")
 	}
 
-	h := hash.New()
-	if _, err := h.Write(b.MsgHash[:]); err != nil {
-		return fmt.Errorf("failed to write to hash")
-	}
-	if _, err := scale.EncodeByteSlice(scale.NewEncoder(h), b.Signature[:]); err != nil {
-		return fmt.Errorf("failed to encode signature")
-	}
-	b.ballotID = BallotID(BytesToHash(h.Sum(nil)).ToHash20())
+	b.ballotID = BallotID(b.MsgHash.ToHash20())
 	return nil
 }
 

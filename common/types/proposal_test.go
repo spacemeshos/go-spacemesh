@@ -24,9 +24,9 @@ func TestProposal_Initialize(t *testing.T) {
 	}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
+	require.NoError(t, p.Initialize())
 	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
-	require.NoError(t, p.Initialize())
 	require.NotEqual(t, types.EmptyProposalID, p.ID())
 
 	err = p.Initialize()

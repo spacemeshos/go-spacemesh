@@ -72,7 +72,7 @@ type InnerProposal struct {
 // Initialize calculates and sets the Proposal's cached proposalID.
 // this should be called once all the other fields of the Proposal are set.
 func (p *Proposal) Initialize() error {
-	if p.ID() != EmptyProposalID {
+	if p.proposalID != EmptyProposalID {
 		return fmt.Errorf("proposal already initialized")
 	}
 	if err := p.Ballot.Initialize(); err != nil {
