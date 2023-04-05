@@ -590,8 +590,8 @@ github.com/spacemeshos/go-scale v1.1.7 h1:nxoNju55EesKjhyXuus3cMM2OZSePYXyn5hY/5
 github.com/spacemeshos/go-scale v1.1.7/go.mod h1:AxKr+yCe5qn7EsM5ZAygGdulxVVfU+Fe2bc4PsnNakM=
 github.com/spacemeshos/merkle-tree v0.2.1 h1:BSs/zt1n3ceZcpWdcqNFRvTeAWDlc0W+bql0XQH/Gz4=
 github.com/spacemeshos/merkle-tree v0.2.1/go.mod h1:IsrdlW6AHZ4HSi89H7G94ravFCMFZLGnm6To0tQ0SPY=
-github.com/spacemeshos/poet v0.7.0 h1:0f1UbU5qOsac8xQXMTRoObhpf1PMNFXoFbEtTdM+SlA=
-github.com/spacemeshos/poet v0.7.0/go.mod h1:YcwwJ1WvtG5gDJdNYNcq734twEh1TbUduj4Wsqqa3ks=
+github.com/spacemeshos/poet v0.7.1-0.20230405184528-298199ded0e6 h1:BY6lKTkRuuwz0/hzPeTCaHEk8nsz9Po+hlTbunHWcV4=
+github.com/spacemeshos/poet v0.7.1-0.20230405184528-298199ded0e6/go.mod h1:tIm/BNgojkYx1A2DUNDLSpsEXGxs/4IcSKE9lf7z4rs=
 github.com/spacemeshos/post v0.5.3 h1:VpdKTRDgVExDCdKncZS/pt2v05OHvBwpm0X2pK1hrrQ=
 github.com/spacemeshos/post v0.5.3/go.mod h1:MPjn9h2FdgKkYUZrFWAcHyRqRrbRfMFR52+YFA+EMSk=
 github.com/spacemeshos/sha256-simd v0.1.0 h1:G7Mfu5RYdQiuE+wu4ZyJ7I0TI74uqLhFnKblEnSpjYI=
@@ -872,8 +872,8 @@ golang.org/x/sys v0.0.0-20220503163025-988cb79eb6c6/go.mod h1:oPkhp1MJrh7nUepCBc
 golang.org/x/sys v0.0.0-20220704084225-05e143d24a9e/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220811171246-fbc7d0a398ab/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220908164124-27713097b956/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.6.0 h1:MVltZSvRTcU2ljQOhs94SXPftV6DCNnZViHeQps87pQ=
-golang.org/x/sys v0.6.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.7.0 h1:3jlCCIQZPdOYu1h8BkNvLz8Kgwtae2cagcG/VamtZRU=
+golang.org/x/sys v0.7.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/term v0.6.0 h1:clScbb1cHjoCkyRbWwBEUZ5H/tIFu5TAXIqaZD0Gcjw=
 golang.org/x/term v0.6.0/go.mod h1:m6U89DPEgQRMq3DNkDClhWw02AUbt2daBVO4cn4Hv9U=
