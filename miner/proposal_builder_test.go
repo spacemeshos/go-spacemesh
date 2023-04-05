@@ -201,6 +201,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 			require.Equal(t, []types.TransactionID{tx1.ID}, p.TxIDs)
 			require.Equal(t, proofs, p.EligibilityProofs)
 			require.Equal(t, meshHash, p.MeshHash)
+			require.Equal(t, b.signer.NodeID(), p.SmesherID)
 			require.True(t, edVerifier.Verify(signing.BALLOT, p.SmesherID, p.SignedBytes(), p.Signature))
 			return nil
 		})
@@ -253,6 +254,8 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 		require.NoError(t, certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID))
 	}
 	meshHash := types.RandomHash()
+	edVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
 	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), meshHash))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
@@ -269,6 +272,8 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 			require.Equal(t, beacon, p.EpochData.Beacon)
 			require.Equal(t, []types.TransactionID{tx.ID}, p.TxIDs)
 			require.Equal(t, meshHash, p.MeshHash)
+			require.Equal(t, b.signer.NodeID(), p.SmesherID)
+			require.True(t, edVerifier.Verify(signing.BALLOT, p.SmesherID, p.SignedBytes(), p.Signature))
 			return nil
 		})
 
