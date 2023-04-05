@@ -1,8 +1,10 @@
 package proposals
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -145,10 +147,15 @@ func withLayer(lid types.LayerID) createBallotOpt {
 func withAnyRefData() createBallotOpt {
 	return func(b *types.Ballot) {
 		b.RefBallot = types.EmptyBallotID
+		activeSet := types.ATXIDList{types.RandomATXID(), types.RandomATXID()}
+		sort.Slice(activeSet, func(i, j int) bool {
+			return bytes.Compare(activeSet[i].Bytes(), activeSet[j].Bytes()) < 0
+		})
 		b.EpochData = &types.EpochData{
-			ActiveSet: types.ATXIDList{types.RandomATXID(), types.RandomATXID()},
-			Beacon:    types.RandomBeacon(),
+			ActiveSetHash: activeSet.Hash(),
+			Beacon:        types.RandomBeacon(),
 		}
+		b.ActiveSet = activeSet
 	}
 }
 
@@ -216,10 +223,12 @@ func createRefBallot(t *testing.T) *types.Ballot {
 	t.Helper()
 	b := types.RandomBallot()
 	b.RefBallot = types.EmptyBallotID
+	activeSet := types.ATXIDList{types.ATXID{1, 2, 3}, types.ATXID{2, 3, 4}}
 	b.EpochData = &types.EpochData{
-		ActiveSet: types.ATXIDList{types.RandomATXID(), types.RandomATXID()},
-		Beacon:    types.RandomBeacon(),
+		ActiveSetHash: activeSet.Hash(),
+		Beacon:        types.RandomBeacon(),
 	}
+	b.ActiveSet = activeSet
 	return b
 }
 
@@ -271,7 +280,7 @@ func TestBallot_KnownBallot(t *testing.T) {
 func TestBallot_EmptyATXID(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := types.RandomBallot()
-	b.AtxID = *types.EmptyATXID
+	b.AtxID = types.EmptyATXID
 	b = signAndInit(t, b)
 	data := encodeBallot(t, b)
 	peer := p2p.Peer("buddy")
@@ -315,7 +324,7 @@ func TestBallot_RefBallotMissingBeacon(t *testing.T) {
 func TestBallot_RefBallotEmptyActiveSet(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := createRefBallot(t)
-	b.EpochData.ActiveSet = nil
+	b.ActiveSet = nil
 	signAndInit(t, b)
 	data := encodeBallot(t, b)
 	peer := p2p.Peer("buddy")
@@ -326,12 +335,37 @@ func TestBallot_RefBallotEmptyActiveSet(t *testing.T) {
 func TestBallot_RefBallotDuplicateInActiveSet(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := createRefBallot(t)
-	b.EpochData.ActiveSet = append(b.EpochData.ActiveSet, b.EpochData.ActiveSet[0])
+	b.ActiveSet = append(b.ActiveSet, b.ActiveSet[0])
 	signAndInit(t, b)
 	data := encodeBallot(t, b)
 	peer := p2p.Peer("buddy")
 	th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
-	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), peer, data), errDuplicateATX)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), peer, data), errActiveSetNotSorted)
+}
+
+func TestBallot_RefBallotActiveSetNotSorted(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	b := createRefBallot(t)
+	b.ActiveSet = types.RandomActiveSet(11)
+	sort.Slice(b.ActiveSet, func(i, j int) bool {
+		return bytes.Compare(b.ActiveSet[i].Bytes(), b.ActiveSet[j].Bytes()) > 0
+	})
+	signAndInit(t, b)
+	data := encodeBallot(t, b)
+	peer := p2p.Peer("buddy")
+	th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), peer, data), errActiveSetNotSorted)
+}
+
+func TestBallot_RefBallotBadActiveSetHash(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	b := createRefBallot(t)
+	b.EpochData.ActiveSetHash = types.Hash32{}
+	signAndInit(t, b)
+	data := encodeBallot(t, b)
+	peer := p2p.Peer("buddy")
+	th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), peer, data), errBadActiveSetHash)
 }
 
 func TestBallot_NotRefBallotButHasEpochData(t *testing.T) {
@@ -771,7 +805,7 @@ func TestBallot_RefBallot(t *testing.T) {
 	th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base}).Return(nil).Times(1)
 	atxIDs := types.ATXIDList{b.AtxID}
-	atxIDs = append(atxIDs, b.EpochData.ActiveSet...)
+	atxIDs = append(atxIDs, b.ActiveSet...)
 	th.md.EXPECT().GetMissingActiveSet(gomock.Any(), atxIDs).Return(atxIDs)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), atxIDs).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), toIds(b.Votes.Support)).Return(nil).Times(1)

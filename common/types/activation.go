@@ -1,74 +1,19 @@
 package types
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
-	"sort"
-	"strconv"
 	"time"
 
 	"github.com/spacemeshos/go-scale"
-	poetShared "github.com/spacemeshos/poet/shared"
-	postShared "github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/post/shared"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 //go:generate scalegen
-
-// EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
-type EpochID uint32
-
-// EncodeScale implements scale codec interface.
-func (l EpochID) EncodeScale(e *scale.Encoder) (int, error) {
-	n, err := scale.EncodeCompact32(e, uint32(l))
-	if err != nil {
-		return 0, err
-	}
-	return n, nil
-}
-
-// DecodeScale implements scale codec interface.
-func (l *EpochID) DecodeScale(d *scale.Decoder) (int, error) {
-	value, n, err := scale.DecodeCompact32(d)
-	if err != nil {
-		return 0, err
-	}
-	*l = EpochID(value)
-	return n, nil
-}
-
-// IsGenesis returns true if this epoch is in genesis. The first two epochs are considered genesis epochs.
-func (l EpochID) IsGenesis() bool {
-	return l < 2
-}
-
-// FirstLayer returns the layer ID of the first layer in the epoch.
-func (l EpochID) FirstLayer() LayerID {
-	return LayerID(uint32(l)).Mul(GetLayersPerEpoch())
-}
-
-// Add Epochs to the EpochID. Panics on wraparound.
-func (l EpochID) Add(epochs uint32) EpochID {
-	nl := uint32(l) + epochs
-	if nl < uint32(l) {
-		panic("epoch_id wraparound")
-	}
-	l = EpochID(nl)
-	return l
-}
-
-// Field returns a log field. Implements the LoggableField interface.
-func (l EpochID) Field() log.Field { return log.Uint32("epoch_id", uint32(l)) }
-
-// String returns string representation of the epoch id numeric value.
-func (l EpochID) String() string {
-	return strconv.FormatUint(uint64(l), 10)
-}
 
 // ATXID is a 32-bit hash used to identify an activation transaction.
 type ATXID Hash32
@@ -101,11 +46,6 @@ func (t ATXID) Bytes() []byte {
 // Field returns a log field. Implements the LoggableField interface.
 func (t ATXID) Field() log.Field { return log.FieldNamed("atx_id", t.Hash32()) }
 
-// Less returns true if other (the given ATXID) is less than this ATXID, by lexicographic comparison.
-func (t ATXID) Less(other ATXID) bool {
-	return bytes.Compare(t.Bytes(), other.Bytes()) < 0
-}
-
 // EncodeScale implements scale codec interface.
 func (t *ATXID) EncodeScale(e *scale.Encoder) (int, error) {
 	return scale.EncodeByteArray(e, t[:])
@@ -117,7 +57,7 @@ func (t *ATXID) DecodeScale(d *scale.Decoder) (int, error) {
 }
 
 // EmptyATXID is a canonical empty ATXID.
-var EmptyATXID = &ATXID{}
+var EmptyATXID = ATXID{}
 
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
 // PoET membership proof. It includes ATX sequence number, the previous ATX's ID (for all but the first in the sequence),
@@ -140,6 +80,7 @@ func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if c == nil {
 		return nil
 	}
+	encoder.AddUint32("PubLayerID", c.PubLayerID.Uint32())
 	encoder.AddUint64("Sequence", c.Sequence)
 	encoder.AddString("PrevATXID", c.PrevATXID.String())
 	encoder.AddUint32("PubLayerID", c.PubLayerID.Uint32())
@@ -167,7 +108,8 @@ func (challenge *NIPostChallenge) String() string {
 		challenge.Sequence,
 		challenge.PrevATXID.ShortString(),
 		challenge.PubLayerID,
-		challenge.PositioningATX.ShortString())
+		challenge.PositioningATX.ShortString(),
+	)
 }
 
 // TargetEpoch returns the target epoch of the NIPostChallenge. This is the epoch in which the miner is eligible
@@ -191,11 +133,11 @@ type InnerActivationTx struct {
 
 	NIPost      *NIPost
 	InitialPost *Post
+	NodeID      *NodeID
 	VRFNonce    *VRFPostIndex
 
 	// the following fields are kept private and from being serialized
-	id                *ATXID    // non-exported cache of the ATXID
-	nodeID            *NodeID   // the id of the Node that created the ATX (public key)
+	id                ATXID     // non-exported cache of the ATXID
 	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
 	received          time.Time // time received by node, gossiped or synced
 }
@@ -217,15 +159,15 @@ func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
 	InnerActivationTx
-	ATXMetadata
-	// signature over ATXMetadata
+	ATXMetadata // TODO(mafa): remove ATXMetadata from ActivationTx (only use it for signature calculation)
+
+	SmesherID NodeID
 	Signature EdSignature
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
 func NewActivationTx(
 	challenge NIPostChallenge,
-	nodeID *NodeID,
 	coinbase Address,
 	nipost *NIPost,
 	numUnits uint32,
@@ -240,10 +182,7 @@ func NewActivationTx(
 
 			NIPost:      nipost,
 			InitialPost: initialPost,
-
-			VRFNonce: nonce,
-
-			nodeID: nodeID,
+			VRFNonce:    nonce,
 		},
 	}
 	return atx
@@ -267,19 +206,19 @@ func (atx *ActivationTx) SignedBytes() []byte {
 
 // HashInnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
 func (atx *ActivationTx) HashInnerBytes() []byte {
-	hshr := hash.New()
-	_, err := codec.EncodeTo(hshr, &atx.InnerActivationTx)
+	h := hash.New()
+	_, err := codec.EncodeTo(h, &atx.InnerActivationTx)
 	if err != nil {
 		log.Fatal("failed to encode InnerActivationTx for hashing")
 	}
-	return hshr.Sum(nil)
+	return h.Sum(nil)
 }
 
 // MarshalLogObject implements logging interface.
 func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("atx_id", atx.id.String())
 	encoder.AddString("challenge", atx.NIPostChallenge.Hash().String())
-	encoder.AddString("smesher", atx.nodeID.String())
+	encoder.AddString("smesher", atx.SmesherID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
 	if atx.CommitmentATX != nil {
@@ -299,30 +238,23 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
-func (atx *ActivationTx) CalcAndSetID() error {
-	if atx.Signature == EmptyEdSignature {
-		return fmt.Errorf("cannot calculate ATX ID: sig is nil")
+// Initialize calculates and sets the cached ID field. This field must be set before calling the ID() method.
+func (atx *ActivationTx) Initialize() error {
+	if atx.ID() != EmptyATXID {
+		return fmt.Errorf("ATX already initialized")
 	}
 
+	// TODO(mafa): replace atx.MsgHash with atx.ID()
 	if atx.MsgHash != BytesToHash(atx.HashInnerBytes()) {
 		return fmt.Errorf("bad message hash")
 	}
-
-	id := ATXID(CalcObjectHash32(atx))
-	atx.id = &id
+	atx.id = ATXID(atx.MsgHash)
 	return nil
 }
 
 // GetPoetProofRef returns the reference to the PoET proof.
 func (atx *ActivationTx) GetPoetProofRef() Hash32 {
 	return BytesToHash(atx.NIPost.PostMetadata.Challenge)
-}
-
-// GetShortPoetProofRef returns the first 5 characters of the PoET proof reference, for logging purposes.
-func (atx *ActivationTx) GetShortPoetProofRef() []byte {
-	ref := atx.GetPoetProofRef()
-	return ref[:util.Min(5, len(ref))]
 }
 
 // ShortString returns the first 5 characters of the ID, for logging purposes.
@@ -332,18 +264,7 @@ func (atx *ActivationTx) ShortString() string {
 
 // ID returns the ATX's ID.
 func (atx *ActivationTx) ID() ATXID {
-	if atx.id == nil {
-		panic("id field must be set")
-	}
-	return *atx.id
-}
-
-// NodeID returns the ATX's Node ID.
-func (atx *ActivationTx) NodeID() NodeID {
-	if atx.nodeID == nil {
-		panic("nodeID field must be set")
-	}
-	return *atx.nodeID
+	return atx.id
 }
 
 func (atx *ActivationTx) EffectiveNumUnits() uint32 {
@@ -354,13 +275,8 @@ func (atx *ActivationTx) EffectiveNumUnits() uint32 {
 }
 
 // SetID sets the ATXID in this ATX's cache.
-func (atx *ActivationTx) SetID(id *ATXID) {
+func (atx *ActivationTx) SetID(id ATXID) {
 	atx.id = id
-}
-
-// SetNodeID sets the Node ID in the ATX's cache.
-func (atx *ActivationTx) SetNodeID(nodeID *NodeID) {
-	atx.nodeID = nodeID
 }
 
 func (atx *ActivationTx) SetEffectiveNumUnits(numUnits uint32) {
@@ -377,13 +293,10 @@ func (atx *ActivationTx) Received() time.Time {
 
 // Verify an ATX for a given base TickHeight and TickCount.
 func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActivationTx, error) {
-	if atx.id == nil {
-		if err := atx.CalcAndSetID(); err != nil {
+	if atx.id == EmptyATXID {
+		if err := atx.Initialize(); err != nil {
 			return nil, err
 		}
-	}
-	if atx.nodeID == nil {
-		return nil, fmt.Errorf("nodeID not set")
 	}
 	if atx.effectiveNumUnits == 0 {
 		return nil, fmt.Errorf("effective num units not set")
@@ -398,130 +311,6 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 		tickCount:      tickCount,
 	}
 	return vAtx, nil
-}
-
-type Member [32]byte
-
-// EncodeScale implements scale codec interface.
-func (m *Member) EncodeScale(e *scale.Encoder) (int, error) {
-	return scale.EncodeByteArray(e, m[:])
-}
-
-// DecodeScale implements scale codec interface.
-func (m *Member) DecodeScale(d *scale.Decoder) (int, error) {
-	return scale.DecodeByteArray(d, m[:])
-}
-
-type PoetProofRef [32]byte
-
-// EmptyPoetProofRef is an empty PoET proof reference.
-var EmptyPoetProofRef = PoetProofRef{}
-
-// PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
-// and the actual PoET Merkle proof.
-type PoetProof struct {
-	poetShared.MerkleProof
-	Members   []Member `scale:"max=100000"` // max size depends on how many smeshers submit a challenge to a poet server
-	LeafCount uint64
-}
-
-func (p *PoetProof) MarshalLogObject(encoder log.ObjectEncoder) error {
-	if p == nil {
-		return nil
-	}
-	encoder.AddUint64("LeafCount", p.LeafCount)
-	encoder.AddArray("Indices", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		for _, member := range p.Members {
-			encoder.AppendString(hex.EncodeToString(member[:]))
-		}
-		return nil
-	}))
-
-	encoder.AddString("MerkleProof.Root", hex.EncodeToString(p.Root))
-	encoder.AddArray("MerkleProof.ProvenLeaves", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		for _, v := range p.ProvenLeaves {
-			encoder.AppendString(hex.EncodeToString(v))
-		}
-		return nil
-	}))
-	encoder.AddArray("MerkleProof.ProofNodes", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		for _, v := range p.ProofNodes {
-			encoder.AppendString(hex.EncodeToString(v))
-		}
-		return nil
-	}))
-
-	return nil
-}
-
-// PoetProofMessage is the envelope which includes the PoetProof, service ID, round ID and signature.
-type PoetProofMessage struct {
-	PoetProof
-	PoetServiceID []byte `scale:"max=32"` // public key of the PoET service
-	RoundID       string `scale:"max=32"` // TODO(mafa): convert to uint64
-	Signature     EdSignature
-}
-
-func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
-	if p == nil {
-		return nil
-	}
-	encoder.AddObject("PoetProof", &p.PoetProof)
-	encoder.AddString("PoetServiceID", hex.EncodeToString(p.PoetServiceID))
-	encoder.AddString("RoundID", p.RoundID)
-	encoder.AddString("Signature", p.Signature.String())
-
-	return nil
-}
-
-// Ref returns the reference to the PoET proof message. It's the blake3 sum of the entire proof message.
-func (proofMessage *PoetProofMessage) Ref() (PoetProofRef, error) {
-	poetProofBytes, err := codec.Encode(&proofMessage.PoetProof)
-	if err != nil {
-		return PoetProofRef{}, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %w",
-			proofMessage.PoetServiceID, proofMessage.RoundID, err)
-	}
-	h := CalcHash32(poetProofBytes)
-	return (PoetProofRef)(h), nil
-}
-
-type RoundEnd time.Time
-
-func (re RoundEnd) Equal(other RoundEnd) bool {
-	return (time.Time)(re).Equal((time.Time)(other))
-}
-
-func (re *RoundEnd) IntoTime() time.Time {
-	return (time.Time)(*re)
-}
-
-func (p *RoundEnd) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	t := p.IntoTime()
-	n, err := scale.EncodeString(enc, t.Format(time.RFC3339Nano))
-	if err != nil {
-		return 0, err
-	}
-	return n, nil
-}
-
-// DecodeScale implements scale codec interface.
-func (p *RoundEnd) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	field, n, err := scale.DecodeString(dec)
-	if err != nil {
-		return 0, err
-	}
-	t, err := time.Parse(time.RFC3339Nano, field)
-	if err != nil {
-		return n, err
-	}
-	*p = (RoundEnd)(t)
-	return n, nil
-}
-
-// PoetRound includes the PoET's round ID.
-type PoetRound struct {
-	ID  string `scale:"max=32"`
-	End RoundEnd
 }
 
 // NIPost is Non-Interactive Proof of Space-Time.
@@ -575,7 +364,7 @@ func (v *VRFPostIndex) DecodeScale(dec *scale.Decoder) (total int, err error) {
 }
 
 // Post is an alias to postShared.Proof.
-type Post postShared.Proof
+type Post shared.Proof
 
 // EncodeScale implements scale codec interface.
 func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
@@ -677,29 +466,12 @@ func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// ProcessingError is a type of error (implements the error interface) that is used to differentiate processing errors
-// from validation errors.
-type ProcessingError struct {
-	Err string `scale:"max=1024"` // TODO(mafa): make error code instead of string
-}
-
-// Error returns the processing error as a string. It implements the error interface.
-func (s ProcessingError) Error() string {
-	return s.Err
-}
-
 // ToATXIDs returns a slice of ATXID corresponding to the given activation tx.
 func ToATXIDs(atxs []*ActivationTx) []ATXID {
 	ids := make([]ATXID, 0, len(atxs))
 	for _, atx := range atxs {
 		ids = append(ids, atx.ID())
 	}
-	return ids
-}
-
-// SortAtxIDs sorts a list of atx IDs in lexicographic order, in-place.
-func SortAtxIDs(ids []ATXID) []ATXID {
-	sort.Slice(ids, func(i, j int) bool { return ids[i].Less(ids[j]) })
 	return ids
 }
 

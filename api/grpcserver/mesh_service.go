@@ -127,8 +127,8 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
 		for _, b := range layer.Ballots() {
-			if b.EpochData != nil && b.EpochData.ActiveSet != nil {
-				atxids = append(atxids, b.EpochData.ActiveSet...)
+			if b.EpochData != nil && b.ActiveSet != nil {
+				atxids = append(atxids, b.ActiveSet...)
 			}
 		}
 	}
@@ -278,7 +278,7 @@ func convertActivation(a *types.VerifiedActivationTx) *pb.Activation {
 	return &pb.Activation{
 		Id:        &pb.ActivationId{Id: a.ID().Bytes()},
 		Layer:     &pb.LayerNumber{Number: a.PubLayerID.Uint32()},
-		SmesherId: &pb.SmesherId{Id: a.NodeID().Bytes()},
+		SmesherId: &pb.SmesherId{Id: a.SmesherID.Bytes()},
 		Coinbase:  &pb.AccountId{Address: a.Coinbase.String()},
 		PrevAtx:   &pb.ActivationId{Id: a.PrevATXID.Bytes()},
 		NumUnits:  uint32(a.NumUnits),
@@ -330,8 +330,8 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	}
 
 	for _, b := range layer.Ballots() {
-		if b.EpochData != nil && b.EpochData.ActiveSet != nil {
-			activations = append(activations, b.EpochData.ActiveSet...)
+		if b.EpochData != nil && b.ActiveSet != nil {
+			activations = append(activations, b.ActiveSet...)
 		}
 	}
 

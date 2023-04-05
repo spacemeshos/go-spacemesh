@@ -118,9 +118,10 @@ func (c *core) OnMessage(m Messenger, event Message) {
 				c.beacons.StoreBeacon(ev.LayerID.GetEpoch(), beacon)
 			}
 			ballot.EpochData = &types.EpochData{
-				ActiveSet: activeset,
-				Beacon:    beacon,
+				ActiveSetHash: types.Hash32{1, 2, 3},
+				Beacon:        beacon,
 			}
+			ballot.ActiveSet = activeset
 		}
 		ballot.Signature = c.signer.Sign(signing.BALLOT, ballot.SignedBytes())
 		ballot.SetSmesherID(c.signer.NodeID())
@@ -144,8 +145,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			PubLayerID: ev.LayerID,
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
-		nodeID := c.signer.NodeID()
-		atx := types.NewActivationTx(nipost, &nodeID, addr, nil, c.units, nil, nil)
+		atx := types.NewActivationTx(nipost, addr, nil, c.units, nil, nil)
 		if err := activation.SignAndFinalizeAtx(c.signer, atx); err != nil {
 			c.logger.With().Fatal("failed to sign atx", log.Err(err))
 		}

@@ -125,12 +125,10 @@ func createModifiedATXs(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerI
 	for i := 0; i < numATXs; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(tb, err)
-		nodeID := signer.NodeID()
 		signers = append(signers, signer)
 		address := types.GenerateAddress(signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(
 			types.NIPostChallenge{PubLayerID: lid},
-			&nodeID,
 			address,
 			nil,
 			numUnit,
@@ -155,7 +153,7 @@ func createProposals(
 	layerID types.LayerID,
 	meshHash types.Hash32,
 	signers []*signing.EdSigner,
-	activeSet []types.ATXID,
+	activeSet types.ATXIDList,
 	txIDs []types.TransactionID,
 ) []*types.Proposal {
 	t.Helper()
@@ -164,17 +162,14 @@ func createProposals(
 	require.Zero(t, len(txIDs)%numProposals)
 	pieSize := len(txIDs) / numProposals
 	plist := make([]*types.Proposal, 0, numProposals)
-	epochData := &types.EpochData{
-		ActiveSet: activeSet,
-		Beacon:    types.RandomBeacon(),
-	}
 	for i := 0; i < numProposals; i++ {
 		from := i * pieSize
 		to := from + (2 * pieSize) // every adjacent proposal will overlap pieSize of TXs
 		if to > len(txIDs) {
 			to = len(txIDs)
 		}
-		p := createProposal(t, epochData, layerID, meshHash, activeSet[i], signers[i], txIDs[from:to], 1)
+		p := createProposal(t, activeSet, layerID, meshHash, activeSet[i], signers[i], txIDs[from:to], 1)
+		p.ActiveSet = activeSet
 		plist = append(plist, p)
 		require.NoError(t, proposals.Add(db, p))
 		require.NoError(t, ballots.Add(db, &p.Ballot))
@@ -184,7 +179,7 @@ func createProposals(
 
 func createProposal(
 	t *testing.T,
-	epochData *types.EpochData,
+	activeSet types.ATXIDList,
 	lid types.LayerID,
 	meshHash types.Hash32,
 	atxID types.ATXID,
@@ -201,9 +196,10 @@ func createProposal(
 				},
 				InnerBallot: types.InnerBallot{
 					AtxID:     atxID,
-					EpochData: epochData,
+					EpochData: &types.EpochData{Beacon: types.RandomBeacon()},
 				},
 				EligibilityProofs: make([]types.VotingEligibility, numEligibility),
+				ActiveSet:         activeSet,
 			},
 			TxIDs:    txIDs,
 			MeshHash: meshHash,
@@ -492,13 +488,9 @@ func Test_generateBlock_bad_state(t *testing.T) {
 	layerID := types.GetEffectiveGenesis().Add(100)
 	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), 1)
 	activeSet := types.ToATXIDs(atxes)
-	epochData := &types.EpochData{
-		ActiveSet: activeSet,
-		Beacon:    types.RandomBeacon(),
-	}
 
 	t.Run("tx missing", func(t *testing.T) {
-		p := createProposal(t, epochData, layerID, types.Hash32{}, activeSet[0], signers[0], []types.TransactionID{types.RandomTransactionID()}, 1)
+		p := createProposal(t, activeSet, layerID, types.Hash32{}, activeSet[0], signers[0], []types.TransactionID{types.RandomTransactionID()}, 1)
 		block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, []*types.Proposal{p})
 		require.ErrorIs(t, err, errProposalTxMissing)
 		require.False(t, executed)
@@ -510,7 +502,7 @@ func Test_generateBlock_bad_state(t *testing.T) {
 			RawTx: types.NewRawTx([]byte{1, 1, 1}),
 		}
 		require.NoError(t, transactions.Add(tg.cdb, &tx, time.Now()))
-		p := createProposal(t, epochData, layerID, types.Hash32{}, activeSet[0], signers[0], []types.TransactionID{tx.ID}, 1)
+		p := createProposal(t, activeSet, layerID, types.Hash32{}, activeSet[0], signers[0], []types.TransactionID{tx.ID}, 1)
 		block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, []*types.Proposal{p})
 		require.ErrorIs(t, err, errProposalTxHdrMissing)
 		require.False(t, executed)
@@ -524,13 +516,9 @@ func Test_generateBlock_EmptyProposals(t *testing.T) {
 	lid := types.GetEffectiveGenesis().Add(20)
 	signers, atxes := createATXs(t, tg.cdb, (lid.GetEpoch() - 1).FirstLayer(), numProposals)
 	activeSet := types.ToATXIDs(atxes)
-	epochData := &types.EpochData{
-		ActiveSet: activeSet,
-		Beacon:    types.RandomBeacon(),
-	}
 	plist := make([]*types.Proposal, 0, numProposals)
 	for i := 0; i < numProposals; i++ {
-		p := createProposal(t, epochData, lid, types.Hash32{}, activeSet[i], signers[i], nil, 1)
+		p := createProposal(t, activeSet, lid, types.Hash32{}, activeSet[i], signers[i], nil, 1)
 		plist = append(plist, p)
 	}
 	block, executed, err := tg.generateBlock(context.Background(), tg.logger, lid, plist)
@@ -583,13 +571,9 @@ func Test_generateBlock_SameATX(t *testing.T) {
 	txIDs := createAndSaveTxs(t, numTXs, tg.cdb)
 	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
 	activeSet := types.ToATXIDs(atxes)
-	epochData := &types.EpochData{
-		ActiveSet: activeSet,
-		Beacon:    types.RandomBeacon(),
-	}
 	atxID := activeSet[0]
-	proposal1 := createProposal(t, epochData, layerID, types.Hash32{}, atxID, signers[0], txIDs[0:500], 1)
-	proposal2 := createProposal(t, epochData, layerID, types.Hash32{}, atxID, signers[0], txIDs[400:], 1)
+	proposal1 := createProposal(t, activeSet, layerID, types.Hash32{}, atxID, signers[0], txIDs[0:500], 1)
+	proposal2 := createProposal(t, activeSet, layerID, types.Hash32{}, atxID, signers[0], txIDs[400:], 1)
 	plist := []*types.Proposal{proposal1, proposal2}
 	block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, plist)
 	require.ErrorIs(t, err, errDuplicateATX)
@@ -609,7 +593,7 @@ func Test_generateBlock_EmptyATXID(t *testing.T) {
 	plist := createProposals(t, tg.cdb, layerID, types.Hash32{}, signers, activeSet, txIDs)
 	// set the last proposal ID to be empty
 	types.SortProposals(plist)
-	plist[numProposals-1].AtxID = *types.EmptyATXID
+	plist[numProposals-1].AtxID = types.EmptyATXID
 	block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, plist)
 	require.ErrorIs(t, err, errInvalidATXID)
 	require.False(t, executed)
@@ -622,14 +606,10 @@ func Test_generateBlock_MultipleEligibilities(t *testing.T) {
 	ids := createAndSaveTxs(t, 1000, tg.cdb)
 	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
-	epochData := &types.EpochData{
-		ActiveSet: activeSet,
-		Beacon:    types.RandomBeacon(),
-	}
 	plist := []*types.Proposal{
-		createProposal(t, epochData, layerID, types.Hash32{}, atxes[0].ID(), signers[0], ids, 2),
-		createProposal(t, epochData, layerID, types.Hash32{}, atxes[1].ID(), signers[1], ids, 1),
-		createProposal(t, epochData, layerID, types.Hash32{}, atxes[2].ID(), signers[2], ids, 5),
+		createProposal(t, activeSet, layerID, types.Hash32{}, atxes[0].ID(), signers[0], ids, 2),
+		createProposal(t, activeSet, layerID, types.Hash32{}, atxes[1].ID(), signers[1], ids, 1),
+		createProposal(t, activeSet, layerID, types.Hash32{}, atxes[2].ID(), signers[2], ids, 5),
 	}
 
 	block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, plist)

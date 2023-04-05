@@ -92,7 +92,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	}
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	extractor, err := signing.NewPubKeyExtractor()
+	edVerify, err := signing.NewEdVerifier()
 	require.NoError(tb, err)
 	minerID := edSgn.NodeID()
 	lg := logtest.New(tb).WithName(minerID.ShortString())
@@ -102,7 +102,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	tpd.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).AnyTimes().Return(types.VRFPostIndex(1), nil)
 
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
-	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, tpd.mSigner, tpd.mVerifier, tpd.cdb, tpd.mClock,
+	tpd.ProtocolDriver = New(minerID, p, edSgn, edVerify, tpd.mSigner, tpd.mVerifier, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withWeakCoin(coinValueMock(tb, true)),
@@ -114,11 +114,9 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 }
 
 func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint32, received time.Time) types.ATXID {
-	nodeID := sig.NodeID()
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PubLayerID: lid},
-		&nodeID,
 		types.Address{},
 		nil,
 		numUnits,
@@ -128,6 +126,8 @@ func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *si
 
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(received)
+	nodeID := sig.NodeID()
+	atx.NodeID = &nodeID
 	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(tb, err)
@@ -998,23 +998,6 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 			require.Equal(t, tc.result, result)
 		})
 	}
-}
-
-func TestBeacon_signAndExtractED(t *testing.T) {
-	r := require.New(t)
-
-	signer, err := signing.NewEdSigner()
-	r.NoError(err)
-	extractor, err := signing.NewPubKeyExtractor()
-	r.NoError(err)
-
-	message := []byte{1, 2, 3, 4}
-
-	signature := signer.Sign(signing.BEACON, message)
-	extractedID, err := extractor.ExtractNodeID(signing.BEACON, message, signature)
-	r.NoError(err)
-
-	r.Equal(signer.NodeID(), extractedID)
 }
 
 func TestBeacon_calcBeacon(t *testing.T) {

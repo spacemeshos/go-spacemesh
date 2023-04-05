@@ -225,13 +225,12 @@ func (g *Generator) generateAtxs() {
 		if err != nil {
 			panic(err)
 		}
-		nodeID := sig.NodeID()
 		address := types.GenerateAddress(sig.PublicKey().Bytes())
 
 		nipost := types.NIPostChallenge{
 			PubLayerID: g.nextLayer.Sub(1),
 		}
-		atx := types.NewActivationTx(nipost, &nodeID, address, nil, units, nil, nil)
+		atx := types.NewActivationTx(nipost, address, nil, units, nil, nil)
 		var ticks uint64
 		if g.ticks != nil {
 			ticks = g.ticks[i]

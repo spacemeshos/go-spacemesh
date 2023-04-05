@@ -259,8 +259,7 @@ func genLayerProposal(tb testing.TB, layerID types.LayerID, txs []types.Transact
 				InnerBallot: types.InnerBallot{
 					AtxID: types.RandomATXID(),
 					EpochData: &types.EpochData{
-						ActiveSet: types.RandomActiveSet(10),
-						Beacon:    types.RandomBeacon(),
+						Beacon: types.RandomBeacon(),
 					},
 				},
 			},
@@ -380,10 +379,9 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 	tb.Helper()
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	nodeID := sig.NodeID()
 	atxs := make([]*types.ActivationTx, 0, num)
 	for i := uint32(0); i < num; i++ {
-		atx := types.NewActivationTx(types.NIPostChallenge{}, &nodeID, types.Address{1, 2, 3}, &types.NIPost{}, i, nil, nil)
+		atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{1, 2, 3}, &types.NIPost{}, i, nil, nil)
 		require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
 		atxs = append(atxs, atx)
 	}
@@ -392,15 +390,15 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 
 func TestGetATXs(t *testing.T) {
 	atxs := genATXs(t, 2)
-	atxIDs := types.ToATXIDs(atxs)
 	f := createFetch(t)
-	f.mAtxH.EXPECT().HandleAtxData(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(atxIDs))
+	f.mAtxH.EXPECT().HandleAtxData(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(atxs))
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.GetAtxs(context.TODO(), atxIDs))
+	atxIDs := types.ToATXIDs(atxs)
+	require.NoError(t, f.GetAtxs(context.Background(), atxIDs))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }

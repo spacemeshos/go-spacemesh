@@ -156,6 +156,13 @@ func (t *AtxProofMsg) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
+		n, err := scale.EncodeByteArray(enc, t.SmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeByteArray(enc, t.Signature[:])
 		if err != nil {
 			return total, err
@@ -168,6 +175,13 @@ func (t *AtxProofMsg) EncodeScale(enc *scale.Encoder) (total int, err error) {
 func (t *AtxProofMsg) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		n, err := t.InnerMsg.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
 		if err != nil {
 			return total, err
 		}
