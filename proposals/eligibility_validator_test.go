@@ -125,15 +125,15 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 		if isRef {
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{
-				ActiveSetHash: activeSet.Hash(),
-				Beacon:        beacon,
+				ActiveSetHash:    activeSet.Hash(),
+				Beacon:           beacon,
+				EligibilityCount: eligibleSlots,
 			}
 			b.ActiveSet = activeSet
 		} else {
 			b.RefBallot = blts[0].ID()
 		}
 		b.EligibilityProofs = proofs
-		b.EligibilityCount = eligibleSlots
 		b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
 		b.SetSmesherID(signer.NodeID())
 		require.NoError(tb, b.Initialize())
@@ -313,11 +313,9 @@ func TestCheckEligibility_IncorrectEligibilityCount(t *testing.T) {
 	activeset := genActiveSetAndSave(t, tv.cdb, signer)
 	blts := createBallots(t, signer, activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
-	require.NoError(t, ballots.Add(tv.cdb, rb))
-	b := blts[1]
-	b.EligibilityCount = eligibleSlots - 1
+	rb.EpochData.EligibilityCount = eligibleSlots - 1
 
-	got, err := tv.CheckEligibility(context.Background(), b)
+	got, err := tv.CheckEligibility(context.Background(), rb)
 	require.ErrorIs(t, err, errIncorrectEligCount)
 	require.False(t, got)
 }
