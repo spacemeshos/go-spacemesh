@@ -115,7 +115,6 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	if len(activeSets) == 0 {
 		return false, fmt.Errorf("%w: ref ballot %v", errEmptyActiveSet, refBallot.ID())
 	}
-	advertisedCount := refBallot.EpochData.EligibilityCount
 
 	// todo: optimize by using reference to active set size and cache active set size to not load all atxsIDs from db
 	var owned *types.ActivationTxHeader
@@ -146,8 +145,8 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	if err != nil {
 		return false, err
 	}
-	if advertisedCount != numEligibleSlots {
-		return false, fmt.Errorf("%w: expected %v, got: %v", errIncorrectEligCount, numEligibleSlots, advertisedCount)
+	if ballot.EpochData != nil && ballot.EpochData.EligibilityCount != numEligibleSlots {
+		return false, fmt.Errorf("%w: expected %v, got: %v", errIncorrectEligCount, numEligibleSlots, ballot.EpochData.EligibilityCount)
 	}
 
 	var (
