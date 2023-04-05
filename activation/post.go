@@ -43,6 +43,7 @@ type PostSetupOpts struct {
 	ComputeProviderID int                 `mapstructure:"smeshing-opts-provider"`
 	Throttle          bool                `mapstructure:"smeshing-opts-throttle"`
 	Scrypt            config.ScryptParams `mapstructure:"smeshing-opts-scrypt"`
+	ComputeBatchSize  uint64              `mapstructure:"smeshing-opts-compute-batch-size"`
 }
 
 // PostSetupStatus represents a status snapshot of the Post setup.
