@@ -57,8 +57,8 @@ func createLayer(tb testing.TB, db *datastore.CachedDB, lid types.LayerID) ([]ty
 		b := types.RandomBallot()
 		b.Layer = lid
 		b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
+		b.SmesherID = signer.NodeID()
 		require.NoError(tb, b.Initialize())
-		b.SetSmesherID(signer.NodeID())
 		require.NoError(tb, ballots.Add(db, b))
 		blts = append(blts, b.ID())
 

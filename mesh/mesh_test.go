@@ -132,7 +132,7 @@ func genLayerBallot(tb testing.TB, layerID types.LayerID) *types.Ballot {
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	b.Signature = sig.Sign(signing.BALLOT, b.SignedBytes())
-	b.SetSmesherID(sig.NodeID())
+	b.SmesherID = sig.NodeID()
 	require.NoError(tb, b.Initialize())
 	return b
 }
@@ -809,8 +809,10 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, blts[0].BallotMetadata, proof.Messages[0].InnerMsg)
 	require.Equal(t, blts[0].Signature, proof.Messages[0].Signature)
+	require.Equal(t, blts[0].SmesherID, proof.Messages[0].SmesherID)
 	require.Equal(t, blts[1].BallotMetadata, proof.Messages[1].InnerMsg)
 	require.Equal(t, blts[1].Signature, proof.Messages[1].Signature)
+	require.Equal(t, blts[1].SmesherID, proof.Messages[1].SmesherID)
 	mal, err = identities.IsMalicious(tm.cdb, nodeID)
 	require.NoError(t, err)
 	require.True(t, mal)
