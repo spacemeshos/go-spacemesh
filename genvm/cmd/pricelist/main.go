@@ -127,7 +127,7 @@ var txs = []tx{
 	describe("multisig/3/5/selfspawn", 410, store(176), edverify(3), spawn()),
 	describe("multisig/3/5/spend", 250, load(176), load(16), update(16), update(8), edverify(3)),
 	describe("multisig/3/10/selfspawn", 568, store(337), edverify(3), spawn()),
-	describe("multisig/3/10/spend", 250, load(321), load(16), update(16), update(16), edverify(3)),
+	describe("multisig/3/10/spend", 250, load(337), load(16), update(16), update(16), edverify(3)),
 }
 
 const price = 8.3e-08
