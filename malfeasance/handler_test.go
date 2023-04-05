@@ -60,15 +60,15 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	atxProof := types.AtxProof{
 		Messages: [2]types.AtxProofMsg{
 			{
-				InnerMsg: types.ATXMetadata{
-					Target:  types.EpochID(3),
-					MsgHash: types.RandomHash(),
+				InnerMsg: types.ATXSigMsg{
+					ID:           types.RandomATXID(),
+					PublishEpoch: types.EpochID(3),
 				},
 			},
 			{
-				InnerMsg: types.ATXMetadata{
-					Target:  types.EpochID(3),
-					MsgHash: types.RandomHash(),
+				InnerMsg: types.ATXSigMsg{
+					ID:           types.RandomATXID(),
+					PublishEpoch: types.EpochID(3),
 				},
 			},
 		},
@@ -100,11 +100,11 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 
 	createIdentity(t, db, sig)
 
-	t.Run("same msg hash", func(t *testing.T) {
-		msgHash := types.RandomHash()
+	t.Run("same ATXID", func(t *testing.T) {
+		atxID := types.RandomATXID()
 		ap := atxProof
-		ap.Messages[0].InnerMsg.MsgHash = msgHash
-		ap.Messages[1].InnerMsg.MsgHash = msgHash
+		ap.Messages[0].InnerMsg.ID = atxID
+		ap.Messages[1].InnerMsg.ID = atxID
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 		gossip := &types.MalfeasanceGossip{
@@ -127,7 +127,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 
 	t.Run("different epoch", func(t *testing.T) {
 		ap := atxProof
-		ap.Messages[0].InnerMsg.Target = ap.Messages[1].InnerMsg.Target + 1
+		ap.Messages[0].InnerMsg.PublishEpoch = ap.Messages[1].InnerMsg.PublishEpoch + 1
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 		gossip := &types.MalfeasanceGossip{
@@ -763,13 +763,15 @@ func TestHandler_CrossDomain(t *testing.T) {
 		Layer:   types.LayerID(uint32(target)),
 		MsgHash: types.Hash32{1, 1, 1},
 	}
-	m2 := types.ATXMetadata{
-		Target:  types.EpochID(target),
-		MsgHash: types.Hash32{2, 2, 2},
+	m2 := types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: types.EpochID(target).FirstLayer(),
+			},
+		},
 	}
+	m2.SetID(types.ATXID{2, 2, 2})
 	m1buf, err := codec.Encode(&m1)
-	require.NoError(t, err)
-	m2buf, err := codec.Encode(&m2)
 	require.NoError(t, err)
 
 	msg, err := codec.Encode(&types.MalfeasanceGossip{
@@ -779,7 +781,7 @@ func TestHandler_CrossDomain(t *testing.T) {
 				Data: &types.BallotProof{
 					Messages: [2]types.BallotProofMsg{
 						{InnerMsg: m1, Signature: sig.Sign(signing.BALLOT, m1buf)},
-						{InnerMsg: *(*types.BallotMetadata)(unsafe.Pointer(&m2)), Signature: sig.Sign(signing.ATX, m2buf)},
+						{InnerMsg: *(*types.BallotMetadata)(unsafe.Pointer(&m2)), Signature: sig.Sign(signing.ATX, m2.SignedBytes())},
 					},
 				},
 			},

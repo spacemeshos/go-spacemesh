@@ -368,7 +368,10 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				var atxProof types.AtxProof
 				for i, a := range []*types.VerifiedActivationTx{prev, atx} {
 					atxProof.Messages[i] = types.AtxProofMsg{
-						InnerMsg:  a.ATXMetadata,
+						InnerMsg: types.ATXSigMsg{
+							ID:           a.ID(),
+							PublishEpoch: a.PublishEpoch(),
+						},
 						SmesherID: a.SmesherID,
 						Signature: a.Signature,
 					}
@@ -495,13 +498,12 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 	metrics.ReportMessageLatency(pubsub.AtxProtocol, pubsub.AtxProtocol, latency)
 
 	atx.SetReceived(receivedTime.Local())
+	if err := atx.Initialize(); err != nil {
+		return fmt.Errorf("failed to derive ID from atx: %w", err)
+	}
 
 	if ok := h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature); !ok {
 		return fmt.Errorf("failed to verify atx signature: %w", errMalformedData)
-	}
-
-	if err := atx.Initialize(); err != nil {
-		return fmt.Errorf("failed to derive ID from atx: %w", err)
 	}
 
 	logger := h.log.WithContext(ctx).WithFields(atx.ID())

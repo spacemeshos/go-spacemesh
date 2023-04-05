@@ -914,16 +914,12 @@ func TestBuilder_SignAtx(t *testing.T) {
 	challenge := newChallenge(1, prevAtx, prevAtx, types.LayerID(15), nil)
 	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
 	atx := newAtx(t, tab.sig, challenge, nipost, 100, types.Address{})
-	atx.SetMetadata()
-	atxBytes, err := codec.Encode(&atx.ATXMetadata)
-	require.NoError(t, err)
-	err = SignAndFinalizeAtx(tab.signer, atx)
-	require.NoError(t, err)
+	require.NoError(t, SignAndFinalizeAtx(tab.signer, atx))
 
 	verifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	ok := verifier.Verify(signing.ATX, tab.nodeID, atxBytes, atx.Signature)
+	ok := verifier.Verify(signing.ATX, tab.nodeID, atx.SignedBytes(), atx.Signature)
 	require.True(t, ok)
 	require.Equal(t, tab.nodeID, atx.SmesherID)
 }

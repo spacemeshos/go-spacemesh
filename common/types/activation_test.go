@@ -36,7 +36,7 @@ func TestActivation_BadMsgHash(t *testing.T) {
 	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil, nil)
 	atx.Signature = types.RandomEdSignature()
 	atx.SmesherID = types.RandomNodeID()
-	atx.MsgHash = types.RandomHash()
+	atx.SetID(types.RandomATXID())
 	require.Error(t, atx.Initialize())
 }
 

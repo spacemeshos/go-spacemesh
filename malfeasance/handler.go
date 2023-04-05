@@ -235,17 +235,17 @@ func (h *Handler) validateMultipleATXs(logger log.Log, proof *types.MalfeasanceP
 			firstNid = msg.SmesherID
 			firstMsg = msg
 		} else if msg.SmesherID == firstNid {
-			if msg.InnerMsg.Target == firstMsg.InnerMsg.Target &&
-				msg.InnerMsg.MsgHash != firstMsg.InnerMsg.MsgHash {
+			if msg.InnerMsg.PublishEpoch == firstMsg.InnerMsg.PublishEpoch &&
+				msg.InnerMsg.ID != firstMsg.InnerMsg.ID {
 				return msg.SmesherID, nil
 			}
 		}
 	}
 	logger.With().Warning("received invalid atx malfeasance proof",
-		log.Stringer("smesher", ap.Messages[0].SmesherID),
-		log.Stringer("smesher", ap.Messages[1].SmesherID),
-		log.Object("first", &ap.Messages[0].InnerMsg),
-		log.Object("second", &ap.Messages[1].InnerMsg),
+		log.Stringer("first_smesher", ap.Messages[0].SmesherID),
+		log.Object("first_proof", &ap.Messages[0].InnerMsg),
+		log.Stringer("second_smesher", ap.Messages[1].SmesherID),
+		log.Object("second_proof", &ap.Messages[1].InnerMsg),
 	)
 	numInvalidProofsATX.Inc()
 	return types.EmptyNodeID, errors.New("invalid atx malfeasance proof")

@@ -169,7 +169,7 @@ func (hp *HareProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 type AtxProofMsg struct {
-	InnerMsg ATXMetadata
+	InnerMsg ATXSigMsg
 
 	SmesherID NodeID
 	Signature EdSignature
