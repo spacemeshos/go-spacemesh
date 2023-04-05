@@ -9,7 +9,7 @@ import (
 
 func (t *HareEligibilityGossip) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := t.Layer.EncodeScale(enc)
+		n, err := scale.EncodeCompact32(enc, uint32(t.Layer))
 		if err != nil {
 			return total, err
 		}
@@ -23,7 +23,7 @@ func (t *HareEligibilityGossip) EncodeScale(enc *scale.Encoder) (total int, err 
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.PubKey)
+		n, err := scale.EncodeByteArray(enc, t.NodeID[:])
 		if err != nil {
 			return total, err
 		}
@@ -41,11 +41,12 @@ func (t *HareEligibilityGossip) EncodeScale(enc *scale.Encoder) (total int, err 
 
 func (t *HareEligibilityGossip) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := t.Layer.DecodeScale(dec)
+		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
+		t.Layer = LayerID(field)
 	}
 	{
 		field, n, err := scale.DecodeCompact32(dec)
@@ -56,12 +57,11 @@ func (t *HareEligibilityGossip) DecodeScale(dec *scale.Decoder) (total int, err 
 		t.Round = uint32(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		n, err := scale.DecodeByteArray(dec, t.NodeID[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.PubKey = field
 	}
 	{
 		n, err := t.Eligibility.DecodeScale(dec)
@@ -75,7 +75,7 @@ func (t *HareEligibilityGossip) DecodeScale(dec *scale.Decoder) (total int, err 
 
 func (t *HareEligibility) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Proof)
+		n, err := scale.EncodeByteArray(enc, t.Proof[:])
 		if err != nil {
 			return total, err
 		}
@@ -93,12 +93,11 @@ func (t *HareEligibility) EncodeScale(enc *scale.Encoder) (total int, err error)
 
 func (t *HareEligibility) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		n, err := scale.DecodeByteArray(dec, t.Proof[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Proof = field
 	}
 	{
 		field, n, err := scale.DecodeCompact16(dec)
@@ -120,7 +119,7 @@ func (t *VotingEligibility) EncodeScale(enc *scale.Encoder) (total int, err erro
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Sig)
+		n, err := scale.EncodeByteArray(enc, t.Sig[:])
 		if err != nil {
 			return total, err
 		}
@@ -139,12 +138,11 @@ func (t *VotingEligibility) DecodeScale(dec *scale.Decoder) (total int, err erro
 		t.J = uint32(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		n, err := scale.DecodeByteArray(dec, t.Sig[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Sig = field
 	}
 	return total, nil
 }

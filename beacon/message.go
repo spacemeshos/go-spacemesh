@@ -1,74 +1,71 @@
 package beacon
 
 import (
-	"encoding/json"
+	"github.com/spacemeshos/go-scale"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 //go:generate scalegen
+
+// ProposalVrfMessage is a message for buildProposal below.
+type ProposalVrfMessage struct {
+	Type  types.EligibilityType
+	Nonce types.VRFPostIndex
+	Epoch types.EpochID
+}
 
 // ProposalMessage is a message type which is used when sending proposals.
 type ProposalMessage struct {
 	EpochID      types.EpochID
 	NodeID       types.NodeID
-	VRFSignature []byte
+	VRFSignature types.VrfSignature
 }
 
-// String returns a string form of ProposalMessage.
-func (p ProposalMessage) String() string {
-	bytes, err := codec.Encode(&p)
-	if err != nil {
-		log.With().Fatal("failed to encode ProposalMessage", log.Err(err))
-	}
+type Proposal [types.BeaconSize]byte
 
-	return string(bytes)
+// EncodeScale implements scale codec interface.
+func (p *Proposal) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, p[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (p *Proposal) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, p[:])
+}
+
+func ProposalFromVrf(vrf types.VrfSignature) Proposal {
+	var p Proposal
+	copy(p[:], vrf[:])
+	return p
 }
 
 // FirstVotingMessageBody is FirstVotingMessage without a signature.
 type FirstVotingMessageBody struct {
 	EpochID                   types.EpochID
-	ValidProposals            [][]byte
-	PotentiallyValidProposals [][]byte
+	ValidProposals            []Proposal `scale:"max=1000"` // number of proposals is expected to be under 100, 1000 is a safe upper bound
+	PotentiallyValidProposals []Proposal `scale:"max=1000"` // number of proposals is expected to be under 100, 1000 is a safe upper bound
 }
 
 // FirstVotingMessage is a message type which is used when sending first voting messages.
 type FirstVotingMessage struct {
 	FirstVotingMessageBody
-	Signature []byte
-}
 
-// String returns a string form of FirstVotingMessage.
-func (v FirstVotingMessage) String() string {
-	bytes, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-
-	return string(bytes)
+	SmesherID types.NodeID
+	Signature types.EdSignature
 }
 
 // FollowingVotingMessageBody is FollowingVotingMessage without a signature.
 type FollowingVotingMessageBody struct {
 	EpochID        types.EpochID
 	RoundID        types.RoundID
-	VotesBitVector []byte
+	VotesBitVector []byte `scale:"max=128"` // 128 bytes = 1024 bits and we limit the number of proposals to 1000
 }
 
 // FollowingVotingMessage is a message type which is used when sending following voting messages.
 type FollowingVotingMessage struct {
 	FollowingVotingMessageBody
-	Signature []byte
-}
 
-// String returns a string form of FollowingVotingMessage.
-func (v FollowingVotingMessage) String() string {
-	bytes, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-
-	return string(bytes)
+	SmesherID types.NodeID
+	Signature types.EdSignature
 }

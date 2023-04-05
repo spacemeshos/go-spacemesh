@@ -18,8 +18,8 @@ type SmeshingAPI = activation.SmeshingProvider
 
 // GenesisTimeAPI is an API to get genesis time and current layer of the system.
 type GenesisTimeAPI interface {
-	GetGenesisTime() time.Time
-	GetCurrentLayer() types.LayerID
+	GenesisTime() time.Time
+	CurrentLayer() types.LayerID
 }
 
 // LoggingAPI is an API to system loggers.
@@ -49,16 +49,18 @@ type ConservativeState interface {
 
 // MeshAPI is an api for getting mesh status about layers/blocks/rewards.
 type MeshAPI interface {
+	EpochAtxs(types.EpochID) ([]types.ATXID, error)
 	GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
 	GetRewards(types.Address) ([]*types.Reward, error)
 	LatestLayer() types.LayerID
 	LatestLayerInState() types.LayerID
 	ProcessedLayer() types.LayerID
+	MeshHash(types.LayerID) (types.Hash32, error)
 }
 
 // NOTE that mockgen doesn't use source-mode to avoid generating mocks for all interfaces in this file.
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go . NetworkIdentity,AtxProvider,PostSetupProvider,ChallengeVerifier
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go . NetworkIdentity,AtxProvider,PostSetupProvider
 
 // NetworkIdentity interface.
 type NetworkIdentity interface {
@@ -86,5 +88,3 @@ type ActivationAPI interface {
 type AtxProvider interface {
 	GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error)
 }
-
-type ChallengeVerifier = activation.ChallengeVerifier

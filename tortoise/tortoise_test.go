@@ -65,7 +65,7 @@ func TestLayerPatterns(t *testing.T) {
 		ctx := context.Background()
 		cfg := defaultTestConfig()
 		cfg.LayerSize = size
-		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var (
 			last     types.LayerID
@@ -90,7 +90,7 @@ func TestLayerPatterns(t *testing.T) {
 		cfg.LayerSize = size
 		cfg.Hdist = 4
 		cfg.Zdist = cfg.Hdist
-		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var (
 			last    types.LayerID
@@ -121,7 +121,7 @@ func TestLayerPatterns(t *testing.T) {
 		ctx := context.Background()
 		cfg := defaultTestConfig()
 		cfg.LayerSize = size
-		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var (
 			last     types.LayerID
@@ -154,7 +154,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 	cfg.LayerSize = size
 	cfg.Hdist = 10
 	cfg.Zdist = 3
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 	var last, verified types.LayerID
 	for i := 0; i < 5; i++ {
@@ -196,7 +196,7 @@ func TestAbstainLateBlock(t *testing.T) {
 	cfg.LayerSize = size
 	cfg.Hdist = 1
 	cfg.Zdist = 1
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 	s.Next(sim.WithNumBlocks(1))
 	s.Next(sim.WithNumBlocks(0))
@@ -235,7 +235,7 @@ func TestEncodeAbstainVotesForZdist(t *testing.T) {
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.Zdist = zdist
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 	var (
 		last     types.LayerID
@@ -281,7 +281,7 @@ func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 	var last types.LayerID
 	for _, lid := range sim.GenLayers(s,
@@ -306,7 +306,7 @@ func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
 		})
 	}
 	require.Equal(t, votes.Support, supported)
-	require.Equal(t, votes.Abstain, []types.LayerID{types.NewLayerID(9)})
+	require.Equal(t, votes.Abstain, []types.LayerID{types.LayerID(9)})
 }
 
 func mockedBeacons(tb testing.TB) system.BeaconGetter {
@@ -340,16 +340,20 @@ func defaultTestConfig() Config {
 	}
 }
 
-func tortoiseFromSimState(state sim.State, opts ...Opt) *Tortoise {
-	return New(state.DB, state.Beacons, opts...)
+func tortoiseFromSimState(tb testing.TB, state sim.State, opts ...Opt) *Tortoise {
+	trtl, err := New(state.DB, state.Beacons, opts...)
+	require.NoError(tb, err)
+	return trtl
 }
 
 func defaultAlgorithm(tb testing.TB, cdb *datastore.CachedDB) *Tortoise {
 	tb.Helper()
-	return New(cdb, mockedBeacons(tb),
+	trtl, err := New(cdb, mockedBeacons(tb),
 		WithConfig(defaultTestConfig()),
 		WithLogger(logtest.New(tb)),
 	)
+	require.NoError(tb, err)
+	return trtl
 }
 
 func TestCalculateOpinionWithThreshold(t *testing.T) {
@@ -440,13 +444,6 @@ func TestComputeExpectedWeight(t *testing.T) {
 			expect: 10,
 		},
 		{
-			desc:   "ExpectZeroEpoch",
-			target: genesis,
-			last:   genesis.Add(8),
-			totals: []uint64{10, 0},
-			expect: 10,
-		},
-		{
 			desc:   "MultipleIncompleteEpochs",
 			target: genesis.Add(2),
 			last:   genesis.Add(7),
@@ -484,11 +481,12 @@ func TestComputeExpectedWeight(t *testing.T) {
 					NumUnits: uint32(weight),
 				}}
 				id := types.RandomATXID()
-				atx.SetID(&id)
-				atx.SetNodeID(&types.NodeID{})
+				atx.SetID(id)
+				atx.SetEffectiveNumUnits(atx.NumUnits)
+				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(0, 1)
 				require.NoError(t, err)
-				require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+				require.NoError(t, atxs.Add(cdb, vAtx))
 			}
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
 				weight, _, err := extractAtxsData(cdb, lid.GetEpoch())
@@ -526,7 +524,7 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 	var (
 		last     types.LayerID
@@ -576,7 +574,7 @@ func TestLongTermination(t *testing.T) {
 		cfg.LayerSize = size
 		cfg.Zdist = zdist
 		cfg.Hdist = hdist
-		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var (
 			last     types.LayerID
@@ -619,7 +617,7 @@ func TestLongTermination(t *testing.T) {
 		cfg.LayerSize = size
 		cfg.Zdist = zdist
 		cfg.Hdist = hdist
-		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var (
 			last     types.LayerID
@@ -671,7 +669,7 @@ func TestLongTermination(t *testing.T) {
 		cfg.LayerSize = size
 		cfg.Zdist = zdist
 		cfg.Hdist = hdist
-		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var (
 			last     types.LayerID
@@ -725,7 +723,7 @@ func benchmarkLayersHandling(b *testing.B, opts ...sim.NextOpt) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
+		tortoise := tortoiseFromSimState(b, s.GetState(0), WithConfig(cfg))
 		for _, lid := range lids {
 			tortoise.TallyVotes(ctx, lid)
 		}
@@ -753,7 +751,7 @@ func benchmarkBaseBallot(b *testing.B, opts ...sim.NextOpt) {
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.WindowSize = 100
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
+	tortoise := tortoiseFromSimState(b, s.GetState(0), WithConfig(cfg))
 
 	var last, verified types.LayerID
 	for i := 0; i < 400; i++ {
@@ -784,8 +782,9 @@ func randomRefBallot(tb testing.TB, lyrID types.LayerID, beacon types.Beacon) *t
 	ballot.EpochData = &types.EpochData{
 		Beacon: beacon,
 	}
-	ballot.Signature = signer.Sign(ballot.SignedBytes())
+	ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
 	require.NoError(tb, ballot.Initialize())
+	ballot.SetSmesherID(signer.NodeID())
 	return ballot
 }
 
@@ -820,7 +819,7 @@ func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
 	s := sim.New()
 	s.Setup()
 	cfg := defaultTestConfig()
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 	last := s.Next()
 
 	beacon, err := s.GetState(0).Beacons.GetBeacon(last.GetEpoch())
@@ -844,7 +843,7 @@ func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
 		s := sim.New()
 		s.Setup()
 		cfg := defaultTestConfig()
-		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var verified types.LayerID
 		for _, last := range sim.GenLayers(s, sim.WithSequence(2,
@@ -863,7 +862,7 @@ func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
 		s.Setup()
 		cfg := defaultTestConfig()
 		cfg.LayerSize = size
-		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var last, verified types.LayerID
 		for _, last = range sim.GenLayers(s, sim.WithSequence(2, sim.WithVoteGenerator(func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
@@ -884,17 +883,18 @@ func TestDecodeVotes(t *testing.T) {
 		s := sim.New()
 		s.Setup()
 		cfg := defaultTestConfig()
-		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 		last := s.Next()
 		tortoise.TallyVotes(context.TODO(), last)
 		ballots, err := ballots.Layer(s.GetState(0).DB, last)
 		require.NoError(t, err)
 		ballot := types.NewExistingBallot(
-			types.BallotID{3, 3, 3}, nil, types.NodeID{},
+			types.BallotID{3, 3, 3}, types.EmptyEdSignature, types.EmptyNodeID,
 			ballots[0].BallotMetadata,
 		)
 		ballot.BallotMetadata = ballots[0].BallotMetadata
 		ballot.InnerBallot = ballots[0].InnerBallot
+		ballot.ActiveSet = ballots[0].ActiveSet
 		ballot.Votes.Support = []types.Vote{{ID: types.BlockID{2, 2, 2}}}
 		_, err = tortoise.DecodeBallot(&ballot)
 		require.ErrorContains(t, err, "not in state")
@@ -1014,7 +1014,7 @@ func TestBaseBallotGenesis(t *testing.T) {
 
 	s := sim.New()
 	cfg := defaultTestConfig()
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg),
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg),
 		WithLogger(logtest.New(t)))
 
 	votes, err := tortoise.EncodeVotes(ctx)
@@ -1050,7 +1050,7 @@ func TestBaseBallotEvictedBlock(t *testing.T) {
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.WindowSize = 10
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 	var last, verified types.LayerID
 
@@ -1133,7 +1133,7 @@ func TestBaseBallotPrioritization(t *testing.T) {
 			cfg := defaultTestConfig()
 			cfg.LayerSize = size
 			cfg.WindowSize = tc.window
-			tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+			tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 			for _, lid := range sim.GenLayers(s, tc.seqs...) {
 				tortoise.TallyVotes(ctx, lid)
@@ -1221,7 +1221,7 @@ func TestWeakCoinVoting(t *testing.T) {
 	cfg.Zdist = hdist
 
 	var (
-		tortoise = tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		tortoise = tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 		last     types.LayerID
 		genesis  = types.GetEffectiveGenesis()
 	)
@@ -1269,7 +1269,7 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	cfg.Zdist = 1
 
 	var (
-		tortoise       = tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		tortoise       = tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 		last, verified types.LayerID
 		genesis        = types.GetEffectiveGenesis()
 	)
@@ -1383,7 +1383,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 			cfg.LayerSize = size
 			cfg.Hdist = hdist
 			cfg.Zdist = hdist
-			tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
+			tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg))
 			for _, lid := range sim.GenLayers(s, tc.seqs...) {
 				tortoise.TallyVotes(ctx, lid)
 			}
@@ -1515,22 +1515,22 @@ func TestComputeBallotWeight(t *testing.T) {
 			cdb := newCachedDB(t, logtest.New(t))
 			cfg := DefaultConfig()
 			cfg.LayerSize = tc.layerSize
-			trtl := New(cdb, nil, WithLogger(logtest.New(t)), WithConfig(cfg))
-
-			lid := types.NewLayerID(111)
+			trtl, err := New(cdb, nil, WithLogger(logtest.New(t)), WithConfig(cfg))
+			require.NoError(t, err)
+			lid := types.LayerID(111)
 			atxLid := lid.GetEpoch().FirstLayer().Sub(1)
-			for i, weight := range tc.atxs {
+			for _, weight := range tc.atxs {
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 					NumUnits: uint32(weight),
 				}}
 				atx.PubLayerID = atxLid
-				nodeID := types.NodeID{byte(i)}
-				atx.SetNodeID(&nodeID)
 				atxID := types.RandomATXID()
-				atx.SetID(&atxID)
+				atx.SetID(atxID)
+				atx.SetEffectiveNumUnits(atx.NumUnits)
+				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(0, 1)
 				require.NoError(t, err)
-				require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+				require.NoError(t, atxs.Add(cdb, vAtx))
 				atxids = append(atxids, atxID)
 			}
 
@@ -1551,8 +1551,9 @@ func TestComputeBallotWeight(t *testing.T) {
 				}
 				if b.ActiveSet != nil {
 					ballot.EpochData = &types.EpochData{
-						ActiveSet: createActiveSet(b.ActiveSet, atxids),
+						ActiveSetHash: types.Hash32{1, 2, 3},
 					}
+					ballot.ActiveSet = createActiveSet(b.ActiveSet, atxids)
 				} else {
 					ballot.RefBallot = blts[b.RefBallot].ID()
 				}
@@ -1560,8 +1561,9 @@ func TestComputeBallotWeight(t *testing.T) {
 				sig, err := signing.NewEdSigner()
 				require.NoError(t, err)
 
-				ballot.Signature = sig.Sign(ballot.SignedBytes())
+				ballot.Signature = sig.Sign(signing.BALLOT, ballot.SignedBytes())
 				require.NoError(t, ballot.Initialize())
+				ballot.SetSmesherID(sig.NodeID())
 				blts = append(blts, ballot)
 
 				trtl.OnBallot(ballot)
@@ -1591,9 +1593,9 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	cfg.BadBeaconVoteDelayLayers = types.GetLayersPerEpoch()
 
 	var (
-		tortoise1 = tortoiseFromSimState(s1.GetState(0), WithConfig(cfg),
+		tortoise1 = tortoiseFromSimState(t, s1.GetState(0), WithConfig(cfg),
 			WithLogger(logtest.New(t).Named("first")))
-		tortoise2 = tortoiseFromSimState(s1.GetState(1), WithConfig(cfg),
+		tortoise2 = tortoiseFromSimState(t, s1.GetState(1), WithConfig(cfg),
 			WithLogger(logtest.New(t).Named("second")))
 		last types.LayerID
 	)
@@ -1696,7 +1698,7 @@ func TestVerifyLayerByWeightNotSize(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 	var last types.LayerID
 	for _, last = range sim.GenLayers(s,
@@ -1739,7 +1741,7 @@ func TestAbstainVotingVerifyingMode(t *testing.T) {
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 
-	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
 	var last, verified types.LayerID
 	for _, last = range sim.GenLayers(s,
 		sim.WithSequence(1),
@@ -1799,7 +1801,7 @@ func TestLateBaseBallot(t *testing.T) {
 	cfg.Hdist = 1
 	cfg.Zdist = cfg.Hdist
 
-	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
 	var last, verified types.LayerID
 	for _, last = range sim.GenLayers(s,
 		sim.WithSequence(2, sim.WithEmptyHareOutput()),
@@ -1817,7 +1819,8 @@ func TestLateBaseBallot(t *testing.T) {
 	var base types.Ballot
 	require.NoError(t, codec.Decode(buf, &base))
 	base.EligibilityProofs[0].J++
-	base.Initialize()
+	require.NoError(t, base.Initialize())
+	base.SetSmesherID(blts[0].SmesherID())
 	tortoise.OnBallot(&base)
 
 	for _, last = range sim.GenLayers(s,
@@ -1842,7 +1845,7 @@ func TestLateBlock(t *testing.T) {
 	cfg.Hdist = 1
 	cfg.Zdist = cfg.Hdist
 
-	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
 	last := s.Next()
 	tortoise.TallyVotes(ctx, last)
 
@@ -1884,7 +1887,7 @@ func TestMaliciousBallotsAreIgnored(t *testing.T) {
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 
-	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
 	var last types.LayerID
 	for _, last = range sim.GenLayers(s, sim.WithSequence(int(types.GetLayersPerEpoch()))) {
 	}
@@ -1921,7 +1924,7 @@ func TestStateManagement(t *testing.T) {
 	)
 	s.Setup()
 
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 	var last, verified types.LayerID
 	for _, last = range sim.GenLayers(s,
@@ -1966,7 +1969,7 @@ func TestFutureHeight(t *testing.T) {
 		)
 		s.Setup()
 
-		tortoise := tortoiseFromSimState(
+		tortoise := tortoiseFromSimState(t,
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
 		tortoise.TallyVotes(context.Background(),
@@ -2001,7 +2004,7 @@ func TestFutureHeight(t *testing.T) {
 				slow, slow, slow,
 			))
 
-		tortoise := tortoiseFromSimState(
+		tortoise := tortoiseFromSimState(t,
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
 		tortoise.TallyVotes(context.Background(), s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(slow+1)))
@@ -2030,7 +2033,7 @@ func TestFutureHeight(t *testing.T) {
 				slow, slow, slow,
 			),
 		)
-		tortoise := tortoiseFromSimState(
+		tortoise := tortoiseFromSimState(t,
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
 		var last types.LayerID
@@ -2052,7 +2055,7 @@ func TestFutureHeight(t *testing.T) {
 			sim.WithSetupMinerRange(7, 7),
 			sim.WithSetupTicks(normal, normal, normal, normal, normal, slow, slow),
 		)
-		tortoise := tortoiseFromSimState(
+		tortoise := tortoiseFromSimState(t,
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
 		var last types.LayerID
@@ -2083,7 +2086,7 @@ func testEmptyLayers(t *testing.T, hdist int) {
 	s.Setup(
 		sim.WithSetupMinerRange(size, size),
 	)
-	tortoise := tortoiseFromSimState(
+	tortoise := tortoiseFromSimState(t,
 		s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 	)
 	last := types.GetEffectiveGenesis()
@@ -2137,7 +2140,7 @@ func TestSwitchMode(t *testing.T) {
 		s.Setup(
 			sim.WithSetupMinerRange(size, size),
 		)
-		tortoise := tortoiseFromSimState(
+		tortoise := tortoiseFromSimState(t,
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
 		var last types.LayerID
@@ -2169,7 +2172,7 @@ func TestSwitchMode(t *testing.T) {
 		s.Setup(
 			sim.WithSetupMinerRange(size, size),
 		)
-		tortoise := tortoiseFromSimState(
+		tortoise := tortoiseFromSimState(t,
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
 		var last types.LayerID
@@ -2179,10 +2182,9 @@ func TestSwitchMode(t *testing.T) {
 		tortoise.TallyVotes(ctx, last)
 		require.True(t, tortoise.trtl.isFull)
 
-		tortoise1 := tortoiseFromSimState(
+		tortoise1 := tortoiseFromSimState(t,
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
-		require.NoError(t, tortoise1.WaitReady(ctx))
 		for i := 0; i <= int(cfg.Hdist); i++ {
 			last = s.Next(sim.WithNumBlocks(1))
 			tortoise1.TallyVotes(ctx, last)
@@ -2206,7 +2208,7 @@ func TestSwitchMode(t *testing.T) {
 		s.Setup(
 			sim.WithSetupMinerRange(size, size),
 		)
-		tortoise := tortoiseFromSimState(
+		tortoise := tortoiseFromSimState(t,
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
 		var last types.LayerID
@@ -2250,7 +2252,7 @@ func TestSwitchMode(t *testing.T) {
 		s.Setup(
 			sim.WithSetupMinerRange(size, size),
 		)
-		tortoise := tortoiseFromSimState(
+		tortoise := tortoiseFromSimState(t,
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
 		nohare := s.Next(sim.WithEmptyHareOutput(), sim.WithNumBlocks(1))
@@ -2277,15 +2279,16 @@ func TestSwitchMode(t *testing.T) {
 		template.Votes.Support = nil
 
 		// add an atx to increase optimistic threshold in verifying tortoise to trigger a switch
-		header := &types.ActivationTxHeader{ID: types.ATXID{1}, NumUnits: 1, TickCount: 200}
+		header := &types.ActivationTxHeader{ID: types.ATXID{1}, EffectiveNumUnits: 1, TickCount: 200}
 		header.PubLayerID = types.EpochID(1).FirstLayer()
 		tortoise.OnAtx(header)
 		// feed ballots that vote against previously validated layer
 		// without the fix they would be ignored
 		for i := 1; i <= 16; i++ {
-			ballot := types.NewExistingBallot(types.BallotID{byte(i)}, nil, types.NodeID{}, template.BallotMetadata)
+			ballot := types.NewExistingBallot(types.BallotID{byte(i)}, types.EmptyEdSignature, types.EmptyNodeID, template.BallotMetadata)
 			ballot.InnerBallot = template.InnerBallot
 			ballot.EligibilityProofs = template.EligibilityProofs
+			ballot.ActiveSet = template.ActiveSet
 			tortoise.OnBallot(&ballot)
 		}
 		tortoise.TallyVotes(ctx, last)
@@ -2316,7 +2319,7 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		s.Setup(
 			sim.WithSetupMinerRange(size, size),
 		)
-		tortoise := tortoiseFromSimState(
+		tortoise := tortoiseFromSimState(t,
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
 		var last types.LayerID
@@ -2330,9 +2333,10 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		require.NotEmpty(t, rst)
 
 		id := types.BallotID{1}
-		ballot := types.NewExistingBallot(id, nil, types.NodeID{}, rst[0].BallotMetadata)
+		ballot := types.NewExistingBallot(id, types.EmptyEdSignature, types.EmptyNodeID, rst[0].BallotMetadata)
 		ballot.InnerBallot = rst[0].InnerBallot
 		ballot.EligibilityProofs = rst[0].EligibilityProofs
+		ballot.ActiveSet = rst[0].ActiveSet
 		ballot.Votes.Base = types.EmptyBallotID
 		ballot.Votes.Support = nil
 		ballot.Votes.Against = nil
@@ -2357,7 +2361,7 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		s.Setup(
 			sim.WithSetupMinerRange(size, size),
 		)
-		tortoise := tortoiseFromSimState(
+		tortoise := tortoiseFromSimState(t,
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
 		var last types.LayerID
@@ -2434,7 +2438,7 @@ func TestOnHareOutput(t *testing.T) {
 			s.Setup(
 				sim.WithSetupMinerRange(size, size),
 			)
-			tortoise := tortoiseFromSimState(
+			tortoise := tortoiseFromSimState(t,
 				s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 			)
 			tortoise.TallyVotes(ctx, s.Next(tc.failedOptions...))
@@ -2465,7 +2469,7 @@ func TestDecodeExceptions(t *testing.T) {
 		sim.WithSetupMinerRange(size, size),
 	)
 
-	tortoise := tortoiseFromSimState(
+	tortoise := tortoiseFromSimState(t,
 		s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 	)
 	last := s.Next(sim.WithNumBlocks(2))
@@ -2541,7 +2545,7 @@ func TestCountOnBallot(t *testing.T) {
 		sim.WithSetupMinerRange(size, size),
 	)
 
-	tortoise := tortoiseFromSimState(
+	tortoise := tortoiseFromSimState(t,
 		s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 	)
 	s.Next(sim.WithNumBlocks(1), sim.WithEmptyHareOutput())
@@ -2556,7 +2560,7 @@ func TestCountOnBallot(t *testing.T) {
 	for i := 1; i <= size*2; i++ {
 		id := types.BallotID{}
 		binary.BigEndian.PutUint64(id[:], uint64(i))
-		ballot := types.NewExistingBallot(id, nil, types.NodeID{}, blts[0].BallotMetadata)
+		ballot := types.NewExistingBallot(id, types.EmptyEdSignature, types.EmptyNodeID, blts[0].BallotMetadata)
 		ballot.InnerBallot = blts[0].InnerBallot
 		ballot.EligibilityProofs = blts[0].EligibilityProofs
 		// unset support to be consistent with local opinion
@@ -2583,7 +2587,7 @@ func TestOnBallotBeforeTallyVotes(t *testing.T) {
 	s.Setup(
 		sim.WithSetupMinerRange(size, size),
 	)
-	tortoise := tortoiseFromSimState(
+	tortoise := tortoiseFromSimState(t,
 		s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 	)
 	var last types.LayerID
@@ -2614,7 +2618,7 @@ func TestNonTerminatedLayers(t *testing.T) {
 		sim.WithSetupMinerRange(size, size),
 	)
 
-	tortoise := tortoiseFromSimState(
+	tortoise := tortoiseFromSimState(t,
 		s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 	)
 	for i := 0; i < int(cfg.Zdist); i++ {
@@ -2695,10 +2699,11 @@ func TestEncodeVotes(t *testing.T) {
 		cfg := defaultTestConfig()
 		cfg.Hdist = 1
 		cfg.Zdist = 1
-		tortoise := New(cdb, mockedBeacons(t),
+		tortoise, err := New(cdb, mockedBeacons(t),
 			WithConfig(cfg),
 			WithLogger(logtest.New(t)),
 		)
+		require.NoError(t, err)
 
 		lid := types.GetEffectiveGenesis().Add(1)
 		blks := []*types.Block{
@@ -2734,10 +2739,11 @@ func TestEncodeVotes(t *testing.T) {
 	})
 	t.Run("rewrite before base", func(t *testing.T) {
 		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-		tortoise := New(cdb, mockedBeacons(t),
+		tortoise, err := New(cdb, mockedBeacons(t),
 			WithConfig(defaultTestConfig()),
 			WithLogger(logtest.New(t)),
 		)
+		require.NoError(t, err)
 
 		hare := types.GetEffectiveGenesis().Add(1)
 		block := types.Block{InnerBlock: types.InnerBlock{LayerIndex: hare}}
@@ -2751,13 +2757,15 @@ func TestEncodeVotes(t *testing.T) {
 		atxid := types.ATXID{1}
 		atx := &types.ActivationTx{}
 		atx.NumUnits = 10
-		atx.SetID(&atxid)
-		atx.SetNodeID(&types.NodeID{1})
+		atx.SetID(atxid)
+		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vatx, err := atx.Verify(1, 1)
 		require.NoError(t, err)
-		require.NoError(t, atxs.Add(cdb, vatx, time.Now()))
+		require.NoError(t, atxs.Add(cdb, vatx))
 
-		ballot.EpochData = &types.EpochData{ActiveSet: []types.ATXID{atxid}}
+		ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}}
+		ballot.ActiveSet = []types.ATXID{atxid}
 		ballot.AtxID = atxid
 		ballot.Layer = lid
 		ballot.Votes.Support = []types.Vote{
@@ -2815,7 +2823,7 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 		cfg := defaultTestConfig()
 		s := sim.New(sim.WithLayerSize(cfg.LayerSize))
 		s.Setup()
-		tortoise := tortoiseFromSimState(
+		tortoise := tortoiseFromSimState(t,
 			s.GetState(0),
 			WithConfig(cfg),
 			WithLogger(logtest.New(t)),
@@ -2836,7 +2844,7 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 		cfg := defaultTestConfig()
 		s := sim.New(sim.WithLayerSize(cfg.LayerSize))
 		s.Setup()
-		tortoise := tortoiseFromSimState(
+		tortoise := tortoiseFromSimState(t,
 			s.GetState(0),
 			WithConfig(cfg),
 			WithLogger(logtest.New(t)),
@@ -2848,12 +2856,38 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 		tortoise.TallyVotes(ctx, last)
 		ballots, err := ballots.Layer(s.GetState(0).DB, last)
 		require.NoError(t, err)
-		ballot := types.NewExistingBallot(types.BallotID{1}, nil, types.NodeID{}, ballots[0].BallotMetadata)
+		ballot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, types.EmptyNodeID, ballots[0].BallotMetadata)
 		ballot.InnerBallot = ballots[0].InnerBallot
 		ballot.EligibilityProofs = ballots[0].EligibilityProofs
 		ballot.Votes.Base = ballots[1].ID()
 		_, err = tortoise.DecodeBallot(&ballot)
 		require.ErrorContains(t, err, "votes for ballot")
+	})
+}
+
+func TestMissingActiveSet(t *testing.T) {
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	tortoise := defaultAlgorithm(t, cdb)
+	epoch := types.EpochID(3)
+	aset := []types.ATXID{
+		types.ATXID(types.BytesToHash([]byte("first"))),
+		types.ATXID(types.BytesToHash([]byte("second"))),
+		types.ATXID(types.BytesToHash([]byte("third"))),
+	}
+	for _, atxid := range aset[:2] {
+		atx := &types.ActivationTxHeader{}
+		atx.ID = atxid
+		atx.PubLayerID = (epoch - 1).FirstLayer()
+		tortoise.OnAtx(atx)
+	}
+	t.Run("empty", func(t *testing.T) {
+		require.Equal(t, aset, tortoise.GetMissingActiveSet(epoch+1, aset))
+	})
+	t.Run("all available", func(t *testing.T) {
+		require.Empty(t, tortoise.GetMissingActiveSet(epoch, aset[:2]))
+	})
+	t.Run("some available", func(t *testing.T) {
+		require.Equal(t, []types.ATXID{aset[2]}, tortoise.GetMissingActiveSet(epoch, aset))
 	})
 }
 
@@ -2873,7 +2907,7 @@ func BenchmarkOnBallot(b *testing.B) {
 	cfg.LayerSize = layerSize
 	cfg.WindowSize = window
 
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(b)))
+	tortoise := tortoiseFromSimState(b, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(b)))
 	for i := 0; i < window; i++ {
 		tortoise.TallyVotes(ctx, s.Next())
 	}
@@ -2897,7 +2931,7 @@ func BenchmarkOnBallot(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			id := types.BallotID{}
 			binary.BigEndian.PutUint64(id[:], uint64(i)+1)
-			ballot := types.NewExistingBallot(id, nil, types.NodeID{}, modified.BallotMetadata)
+			ballot := types.NewExistingBallot(id, types.EmptyEdSignature, types.EmptyNodeID, modified.BallotMetadata)
 			ballot.InnerBallot = modified.InnerBallot
 			ballot.EligibilityProofs = modified.EligibilityProofs
 			tortoise.OnBallot(&ballot)

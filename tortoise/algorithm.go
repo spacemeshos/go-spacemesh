@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -21,10 +19,11 @@ type Config struct {
 	Zdist uint32 `mapstructure:"tortoise-zdist"` // hare result wait distance
 	// how long we are waiting for a switch from verifying to full. relevant during rerun.
 	WindowSize    uint32 `mapstructure:"tortoise-window-size"`    // size of the tortoise sliding window (in layers)
-	MaxExceptions int    `mapstructure:"tortoise-max-exceptions"` // if candidate for base block has more than max exceptions it will be ignored
+	MaxExceptions int    `mapstructure:"tortoise-max-exceptions"` // if candidate for base ballot has more than max exceptions it will be ignored
+	// number of layers to delay votes for blocks with bad beacon values during self-healing. ideally a full epoch.
+	BadBeaconVoteDelayLayers uint32 `mapstructure:"tortoise-delay-layers"`
 
-	LayerSize                uint32
-	BadBeaconVoteDelayLayers uint32 // number of layers to delay votes for blocks with bad beacon values during self-healing
+	LayerSize uint32
 }
 
 // DefaultConfig for Tortoise.
@@ -34,7 +33,7 @@ func DefaultConfig() Config {
 		Hdist:                    10,
 		Zdist:                    8,
 		WindowSize:               1000,
-		BadBeaconVoteDelayLayers: 6,
+		BadBeaconVoteDelayLayers: 0,
 		MaxExceptions:            30 * 100, // 100 layers of average size
 	}
 }
@@ -44,15 +43,6 @@ type Tortoise struct {
 	logger log.Log
 	ctx    context.Context
 	cfg    Config
-
-	eg     errgroup.Group
-	cancel context.CancelFunc
-
-	ready    chan error
-	readyErr struct {
-		sync.Mutex
-		err error
-	}
 
 	mu   sync.Mutex
 	trtl *turtle
@@ -83,12 +73,11 @@ func WithConfig(cfg Config) Opt {
 }
 
 // New creates Tortoise instance.
-func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, opts ...Opt) *Tortoise {
+func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, opts ...Opt) (*Tortoise, error) {
 	t := &Tortoise{
 		ctx:    context.Background(),
 		logger: log.NewNop(),
 		cfg:    DefaultConfig(),
-		ready:  make(chan error, 1),
 	}
 	for _, opt := range opts {
 		opt(t)
@@ -100,9 +89,6 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, opts ...Opt) *Tor
 			log.Uint32("zdist", t.cfg.Zdist),
 		)
 	}
-
-	ctx, cancel := context.WithCancel(t.ctx)
-	t.cancel = cancel
 
 	latest, err := ballots.LatestLayer(cdb)
 	if err != nil {
@@ -122,22 +108,16 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, opts ...Opt) *Tor
 		t.logger.With().Info("loading state from disk. make sure to wait until tortoise is ready",
 			log.Stringer("last layer", latest),
 		)
-		t.eg.Go(func() error {
-			for lid := types.GetEffectiveGenesis().Add(1); !lid.After(latest); lid = lid.Add(1) {
-				err := t.trtl.onLayer(ctx, lid)
-				if err != nil {
-					t.ready <- err
-					return err
-				}
+		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(latest); lid = lid.Add(1) {
+			err := t.trtl.onLayer(context.Background(), lid)
+			if err != nil {
+				return nil, err
 			}
-			close(t.ready)
-			return nil
-		})
+		}
 	} else {
 		t.logger.Info("no state on disk. initialized with genesis")
-		close(t.ready)
 	}
-	return t
+	return t, nil
 }
 
 // LatestComplete returns the latest verified layer.
@@ -300,23 +280,21 @@ func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
 	t.trtl.onHareOutput(lid, bid)
 }
 
-// WaitReady waits until state will be reloaded from disk.
-func (t *Tortoise) WaitReady(ctx context.Context) error {
-	select {
-	case err := <-t.ready:
-		t.readyErr.Lock()
-		defer t.readyErr.Unlock()
-		if err != nil {
-			t.readyErr.err = err
-		}
-		return t.readyErr.err
-	case <-ctx.Done():
-		return ctx.Err() //nolint
+// GetMissingActiveSet returns unknown atxs from the original list. It is done for a specific epoch
+// as active set atxs never cross epoch boundary.
+func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) []types.ATXID {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	edata, exists := t.trtl.epochs[epoch]
+	if !exists {
+		return atxs
 	}
-}
-
-// Stop background workers.
-func (t *Tortoise) Stop() {
-	t.cancel()
-	_ = t.eg.Wait()
+	var missing []types.ATXID
+	for _, atx := range atxs {
+		_, exists := edata.atxs[atx]
+		if !exists {
+			missing = append(missing, atx)
+		}
+	}
+	return missing
 }

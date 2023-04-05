@@ -15,9 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -39,18 +37,19 @@ func coinValueMock(tb testing.TB, value bool) coin {
 	coinMock.EXPECT().StartEpoch(
 		gomock.Any(),
 		gomock.AssignableToTypeOf(types.EpochID(0)),
-		gomock.AssignableToTypeOf(types.VRFPostIndex(0)),
-		gomock.AssignableToTypeOf(weakcoin.UnitAllowances{}),
 	).AnyTimes()
 	coinMock.EXPECT().FinishEpoch(gomock.Any(), gomock.AssignableToTypeOf(types.EpochID(0))).AnyTimes()
-	coinMock.EXPECT().StartRound(gomock.Any(), gomock.AssignableToTypeOf(types.RoundID(0))).
-		AnyTimes().Return(nil)
+	nonce := types.VRFPostIndex(0)
+	coinMock.EXPECT().StartRound(gomock.Any(),
+		gomock.AssignableToTypeOf(types.RoundID(0)),
+		gomock.AssignableToTypeOf(&nonce),
+	).AnyTimes()
 	coinMock.EXPECT().FinishRound(gomock.Any()).AnyTimes()
 	coinMock.EXPECT().Get(
 		gomock.Any(),
 		gomock.AssignableToTypeOf(types.EpochID(0)),
 		gomock.AssignableToTypeOf(types.RoundID(0)),
-	).AnyTimes().Return(value)
+	).AnyTimes().Return(value, nil)
 	return coinMock
 }
 
@@ -93,17 +92,17 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	}
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	extractor, err := signing.NewPubKeyExtractor()
+	edVerify, err := signing.NewEdVerifier()
 	require.NoError(tb, err)
 	minerID := edSgn.NodeID()
 	lg := logtest.New(tb).WithName(minerID.ShortString())
 
-	tpd.mSigner.EXPECT().Sign(gomock.Any()).AnyTimes().Return([]byte{})
+	tpd.mSigner.EXPECT().Sign(gomock.Any()).AnyTimes().Return(types.EmptyVrfSignature)
 	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
 	tpd.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).AnyTimes().Return(types.VRFPostIndex(1), nil)
 
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
-	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, tpd.mSigner, tpd.mVerifier, tpd.cdb, tpd.mClock,
+	tpd.ProtocolDriver = New(minerID, p, edSgn, edVerify, tpd.mSigner, tpd.mVerifier, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withWeakCoin(coinValueMock(tb, true)),
@@ -114,12 +113,10 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	return tpd
 }
 
-func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint32) {
-	nodeID := sig.NodeID()
+func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint32, received time.Time) types.ATXID {
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PubLayerID: lid},
-		&nodeID,
 		types.Address{},
 		nil,
 		numUnits,
@@ -127,17 +124,22 @@ func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *si
 		&nonce,
 	)
 
+	atx.SetEffectiveNumUnits(numUnits)
+	atx.SetReceived(received)
+	nodeID := sig.NodeID()
+	atx.NodeID = &nodeID
 	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(tb, err)
-	require.NoError(tb, atxs.Add(db, vAtx, time.Now().Add(-1*time.Second)))
+	require.NoError(tb, atxs.Add(db, vAtx))
+	return vAtx.ID()
 }
 
 func createRandomATXs(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, num int) {
 	for i := 0; i < num; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(tb, err)
-		createATX(tb, db, lid, sig, 1)
+		createATX(tb, db, lid, sig, 1, time.Now().Add(-1*time.Second))
 	}
 }
 
@@ -168,7 +170,7 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 			return nil
 		}).AnyTimes()
 
-	atxPublishLid := types.NewLayerID(types.GetLayersPerEpoch()*2 - 1)
+	atxPublishLid := types.LayerID(types.GetLayersPerEpoch()*2 - 1)
 	current := atxPublishLid.Add(1)
 	dbs := make([]*datastore.CachedDB, 0, numNodes)
 	cfg := NodeSimUnitTestConfig()
@@ -176,7 +178,7 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	for i := 0; i < numNodes; i++ {
 		node := newTestDriver(t, cfg, publisher)
 		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-		node.mClock.EXPECT().GetCurrentLayer().Return(current).AnyTimes()
+		node.mClock.EXPECT().CurrentLayer().Return(current).AnyTimes()
 		node.mClock.EXPECT().LayerToTime(current).Return(now).AnyTimes()
 		testNodes = append(testNodes, node)
 		dbs = append(dbs, node.cdb)
@@ -190,9 +192,13 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 		require.NoError(t, err)
 		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
 	}
-	for _, node := range testNodes {
+	for i, node := range testNodes {
+		if i == 0 {
+			// make the first node non-smeshing node
+			continue
+		}
 		for _, db := range dbs {
-			createATX(t, db, atxPublishLid, node.edSigner, 1)
+			createATX(t, db, atxPublishLid, node.edSigner, 1, time.Now().Add(-1*time.Second))
 		}
 	}
 	var wg sync.WaitGroup
@@ -212,6 +218,55 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 		beacons[got] = struct{}{}
 	}
 	require.Len(t, beacons, 1)
+}
+
+func TestBeacon_NoProposals(t *testing.T) {
+	numNodes := 5
+	testNodes := make([]*testProtocolDriver, 0, numNodes)
+	publisher := pubsubmocks.NewMockPublisher(gomock.NewController(t))
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	atxPublishLid := types.LayerID(types.GetLayersPerEpoch()*2 - 1)
+	current := atxPublishLid.Add(1)
+	dbs := make([]*datastore.CachedDB, 0, numNodes)
+	cfg := NodeSimUnitTestConfig()
+	now := time.Now()
+	for i := 0; i < numNodes; i++ {
+		node := newTestDriver(t, cfg, publisher)
+		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+		node.mClock.EXPECT().CurrentLayer().Return(current).AnyTimes()
+		node.mClock.EXPECT().LayerToTime(current).Return(now).AnyTimes()
+		testNodes = append(testNodes, node)
+		dbs = append(dbs, node.cdb)
+
+		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
+		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
+		got, err := node.GetBeacon(types.EpochID(1))
+		require.NoError(t, err)
+		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
+		got, err = node.GetBeacon(types.EpochID(2))
+		require.NoError(t, err)
+		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
+	}
+	for _, node := range testNodes {
+		for _, db := range dbs {
+			createATX(t, db, atxPublishLid, node.edSigner, 1, time.Now().Add(-1*time.Second))
+		}
+	}
+	var wg sync.WaitGroup
+	for _, node := range testNodes {
+		wg.Add(1)
+		go func(testNode *testProtocolDriver) {
+			require.NoError(t, testNode.onNewEpoch(context.Background(), types.EpochID(2)))
+			wg.Done()
+		}(node)
+	}
+	wg.Wait()
+	for _, node := range testNodes {
+		got, err := node.GetBeacon(types.EpochID(3))
+		require.Error(t, err)
+		require.Equal(t, types.EmptyBeacon, got)
+	}
 }
 
 func TestBeaconNotSynced(t *testing.T) {
@@ -236,7 +291,7 @@ func TestBeaconNotSynced_ReleaseMemory(t *testing.T) {
 	start := types.EpochID(2)
 	end := start + numEpochsToKeep + 10
 	for eid := start; eid <= end; eid++ {
-		b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+		b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
 			Layer: start.FirstLayer(),
 		})
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
@@ -252,9 +307,8 @@ func TestBeaconNoATXInPreviousEpoch(t *testing.T) {
 	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
 	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
-	lid := types.NewLayerID(types.GetLayersPerEpoch()*2 - 1)
-	createRandomATXs(t, tpd.cdb, lid, numATXs)
-	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(2)), sql.ErrNotFound)
+	tpd.mClock.EXPECT().LayerToTime(types.EpochID(2).FirstLayer()).Return(time.Now())
+	require.ErrorIs(t, errZeroEpochWeight, tpd.onNewEpoch(context.Background(), types.EpochID(2)))
 
 	got, err := tpd.GetBeacon(types.EpochID(2))
 	require.NoError(t, err)
@@ -269,33 +323,33 @@ func TestBeaconWithMetrics(t *testing.T) {
 	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 
 	gLayer := types.GetEffectiveGenesis()
-	tpd.mClock.EXPECT().Subscribe().Times(1)
-	tpd.mClock.EXPECT().GetCurrentLayer().Return(gLayer).Times(1)
-	tpd.mClock.EXPECT().LayerToTime((gLayer.GetEpoch() + 1).FirstLayer()).Return(time.Now()).Times(1)
+	tpd.mClock.EXPECT().CurrentLayer().Return(gLayer).Times(2)
+	tpd.mClock.EXPECT().AwaitLayer(gLayer.Add(1)).Return(nil).Times(1)
+	tpd.mClock.EXPECT().LayerToTime((gLayer.GetEpoch() + 1).FirstLayer()).Return(time.Now()).AnyTimes()
 	tpd.Start(context.Background())
 
 	epoch3Beacon := types.HexToBeacon("0xaf1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262")
 	epoch := types.EpochID(3)
 	for i := types.EpochID(2); i < epoch; i++ {
 		lid := i.FirstLayer().Sub(1)
-		createATX(t, tpd.cdb, lid, tpd.edSigner, 199)
+		createATX(t, tpd.cdb, lid, tpd.edSigner, 199, time.Now())
 		createRandomATXs(t, tpd.cdb, lid, numATXs-1)
 	}
-	finalLayer := types.NewLayerID(types.GetLayersPerEpoch() * uint32(epoch))
+	finalLayer := types.LayerID(types.GetLayersPerEpoch() * uint32(epoch))
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 	for layer := gLayer.Add(1); layer.Before(finalLayer); layer = layer.Add(1) {
-		tpd.mClock.EXPECT().GetCurrentLayer().Return(layer).AnyTimes()
+		tpd.mClock.EXPECT().CurrentLayer().Return(layer).AnyTimes()
 		if layer.FirstInEpoch() {
 			require.NoError(t, tpd.onNewEpoch(context.Background(), layer.GetEpoch()))
 		}
 		thisEpoch := layer.GetEpoch()
-		b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+		b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
 			Layer: thisEpoch.FirstLayer(),
 		})
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		tpd.recordBeacon(thisEpoch, &b, beacon1, fixed.New64(1))
-		b = types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+		b = types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
 			Layer: thisEpoch.FirstLayer(),
 		})
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
@@ -338,17 +392,11 @@ func TestBeaconWithMetrics(t *testing.T) {
 				}
 			}
 		}
-		if layer.OrdinalInEpoch() == 2 {
-			// there should be calculated beacon already by the last layer of the epoch
-			require.Equal(t, 1, numCalculated, layer)
-		} else {
-			require.LessOrEqual(t, numCalculated, 1, layer)
-		}
+		require.Equal(t, 0, numCalculated, layer)
 		require.Equal(t, 2, numObserved, layer)
 		require.Equal(t, 2, numObservedWeight, layer)
 	}
 
-	tpd.mClock.EXPECT().Unsubscribe(gomock.Any()).Times(1)
 	tpd.Close()
 }
 
@@ -430,7 +478,7 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 		e := epoch + types.EpochID(i)
 		err := pd.setBeacon(e, types.RandomBeacon())
 		require.NoError(t, err)
-		b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+		b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
 			Layer: e.FirstLayer(),
 		})
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
@@ -445,7 +493,7 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	epoch = epoch + numEpochsToKeep
 	err := pd.setBeacon(epoch, types.RandomBeacon())
 	require.NoError(t, err)
-	b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+	b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
 		Layer: epoch.FirstLayer(),
 	})
 	b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
@@ -535,7 +583,7 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 			epoch := types.EpochID(3)
 			for beacon, weights := range tc.beaconBallots {
 				for _, w := range weights {
-					b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+					b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
 						Layer: epoch.FirstLayer(),
 					})
 					b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
@@ -565,7 +613,7 @@ func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 
-	b1 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+	b1 := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
 		Layer: epoch.FirstLayer(),
 	})
 	b1.EligibilityProofs = []types.VotingEligibility{{J: 1}}
@@ -576,7 +624,7 @@ func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	require.Equal(t, errBeaconNotCalculated, err)
 	require.Equal(t, types.EmptyBeacon, got)
 
-	b2 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+	b2 := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
 		Layer: epoch.FirstLayer(),
 	})
 	b2.EligibilityProofs = []types.VotingEligibility{{J: 1}}
@@ -606,12 +654,12 @@ func TestBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, beacon, got)
 
-	b1 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+	b1 := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
 		Layer: epoch.FirstLayer(),
 	})
 	b1.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 	pd.ReportBeaconFromBallot(epoch, &b1, beaconFromBallots, fixed.New64(1))
-	b2 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.BallotMetadata{
+	b2 := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
 		Layer: epoch.FirstLayer(),
 	})
 	b2.EligibilityProofs = []types.VotingEligibility{{J: 1}}
@@ -632,19 +680,19 @@ func TestBeacon_findMajorityBeacon(t *testing.T) {
 
 	beaconFromBallots := map[types.Beacon]*beaconWeight{
 		beacon1: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 2,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 2,
 		},
 		beacon2: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(3),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(3),
+			numEligibility: 1,
 		},
 		beacon3: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 1,
 		},
 	}
 	epoch := types.EpochID(3)
@@ -668,19 +716,19 @@ func TestBeacon_findMajorityBeacon_plurality(t *testing.T) {
 
 	beaconFromBallots := map[types.Beacon]*beaconWeight{
 		beacon1: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 2,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 2,
 		},
 		beacon2: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.DivUint64(11, 10),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.DivUint64(11, 10),
+			numEligibility: 1,
 		},
 		beacon3: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 1,
 		},
 	}
 	epoch := types.EpochID(3)
@@ -704,19 +752,19 @@ func TestBeacon_findMajorityBeacon_NotEnoughBallots(t *testing.T) {
 
 	beaconFromBallots := map[types.Beacon]*beaconWeight{
 		beacon1: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 2,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 2,
 		},
 		beacon2: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(3),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(3),
+			numEligibility: 1,
 		},
 		beacon3: {
-			ballots:     map[types.BallotID]struct{}{types.RandomBallotID(): {}},
-			totalWeight: fixed.New64(1),
-			weightUnits: 1,
+			ballots:        map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			totalWeight:    fixed.New64(1),
+			numEligibility: 1,
 		},
 	}
 	epoch := types.EpochID(3)
@@ -745,7 +793,7 @@ func TestBeacon_findMajorityBeacon_NoBeacon(t *testing.T) {
 	require.Equal(t, types.EmptyBeacon, got)
 }
 
-func TestBeacon_persistBeacon(t *testing.T) {
+func TestBeacon_setBeacon(t *testing.T) {
 	t.Parallel()
 
 	tpd := setUpProtocolDriver(t)
@@ -754,9 +802,9 @@ func TestBeacon_persistBeacon(t *testing.T) {
 	require.NoError(t, tpd.setBeacon(epoch, beacon))
 
 	// saving it again won't cause error
-	require.NoError(t, tpd.persistBeacon(epoch, beacon))
+	require.NoError(t, tpd.setBeacon(epoch, beacon))
 	// but saving a different one will
-	require.ErrorIs(t, tpd.persistBeacon(epoch, types.RandomBeacon()), errDifferentBeacon)
+	require.ErrorIs(t, tpd.setBeacon(epoch, types.RandomBeacon()), errDifferentBeacon)
 }
 
 func TestBeacon_atxThresholdFraction(t *testing.T) {
@@ -842,20 +890,23 @@ func TestBeacon_atxThreshold(t *testing.T) {
 func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 	cfg := Config{Kappa: 40, Q: big.NewRat(1, 3)}
 	tt := []struct {
-		name string
-		w    int
+		name            string
+		wEarly, wOntime int
 	}{
 		{
-			name: "100K atxs",
-			w:    100_000,
+			name:    "100K atxs",
+			wEarly:  90_000,
+			wOntime: 100_000,
 		},
 		{
-			name: "10K atxs",
-			w:    10_000,
+			name:    "10K atxs",
+			wEarly:  9_000,
+			wOntime: 10_000,
 		},
 		{
-			name: "30 atxs",
-			w:    30,
+			name:    "30 atxs",
+			wEarly:  27,
+			wOntime: 30,
 		},
 	}
 
@@ -865,19 +916,24 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 			t.Parallel()
 
 			logger := logtest.New(t).WithName("proposal checker")
-			checker := createProposalChecker(logger, cfg, tc.w)
-			numEligible := 0
-			for i := 0; i < tc.w; i++ {
+			checker := createProposalChecker(logger, cfg, tc.wEarly, tc.wOntime)
+			var numEligible, numEligibleStrict int
+			for i := 0; i < tc.wEarly; i++ {
 				signer, err := signing.NewEdSigner()
 				require.NoError(t, err)
 				vrfSigner, err := signer.VRFSigner()
 				require.NoError(t, err)
 				proposal := buildSignedProposal(context.Background(), logtest.New(t), vrfSigner, 3, types.VRFPostIndex(1))
-				if checker.IsProposalEligible(proposal) {
+				if checker.PassThreshold(proposal) {
 					numEligible++
+				}
+				if checker.PassStrictThreshold(proposal) {
+					numEligibleStrict++
 				}
 			}
 			require.NotZero(t, numEligible)
+			require.NotZero(t, numEligibleStrict)
+			require.LessOrEqual(t, numEligibleStrict, numEligible)
 		})
 	}
 }
@@ -893,7 +949,7 @@ func TestBeacon_buildProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  13110,
-			result: string(util.Hex2Bytes("0404d9cc")),
+			result: string([]byte{0x04, 0x04, 0xd9, 0xcc}),
 		},
 	}
 
@@ -919,17 +975,17 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 	tt := []struct {
 		name   string
 		epoch  types.EpochID
-		result []byte
+		result types.VrfSignature
 	}{
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: vrfSigner.Sign(util.Hex2Bytes("040404")),
+			result: vrfSigner.Sign([]byte{0x04, 0x04, 0x04}),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: vrfSigner.Sign(util.Hex2Bytes("040408")),
+			result: vrfSigner.Sign([]byte{0x04, 0x04, 0x08}),
 		},
 	}
 
@@ -939,42 +995,20 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 			t.Parallel()
 
 			result := buildSignedProposal(context.Background(), logtest.New(t), vrfSigner, tc.epoch, types.VRFPostIndex(1))
-			require.Equal(t, string(tc.result), string(result))
+			require.Equal(t, tc.result, result)
 		})
 	}
 }
 
-func TestBeacon_signAndExtractED(t *testing.T) {
-	r := require.New(t)
-
-	signer, err := signing.NewEdSigner()
-	r.NoError(err)
-	extractor, err := signing.NewPubKeyExtractor()
-	r.NoError(err)
-
-	message := []byte{1, 2, 3, 4}
-
-	signature := signer.Sign(message)
-	extractedPK, err := extractor.Extract(message, signature)
-	r.NoError(err)
-
-	r.Equal(signer.PublicKey().String(), extractedPK.String())
-}
-
 func TestBeacon_calcBeacon(t *testing.T) {
-	votes := allVotes{
-		support: proposalSet{
-			"0x1": {},
-			"0x2": {},
-			"0x4": {},
-			"0x5": {},
-		},
-		against: proposalSet{
-			"0x3": {},
-			"0x6": {},
-		},
+	set := proposalSet{
+		Proposal{0x01}: {},
+		Proposal{0x02}: {},
+		Proposal{0x04}: {},
+		Proposal{0x05}: {},
 	}
-	beacon := calcBeacon(logtest.New(t), votes)
-	expected := types.HexToBeacon("0x98f88210")
+
+	beacon := calcBeacon(logtest.New(t), set)
+	expected := types.HexToBeacon("0xe69fd154")
 	require.EqualValues(t, expected, beacon)
 }

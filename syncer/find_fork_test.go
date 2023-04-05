@@ -2,6 +2,7 @@ package syncer_test
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -46,7 +47,7 @@ func newTestForkFinderWithDuration(t *testing.T, maxHashes uint32, d time.Durati
 
 func TestResynced(t *testing.T) {
 	tf := newTestForkFinderWithDuration(t, 5, 0, logtest.New(t))
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 	hash := types.RandomHash()
 	require.True(t, tf.NeedResync(lid, hash))
 	tf.AddResynced(lid, hash)
@@ -60,9 +61,9 @@ func TestResynced(t *testing.T) {
 func TestForkFinder_Purge(t *testing.T) {
 	tf := newTestForkFinder(t, 5)
 	numCached := 10
-	tf.UpdateAgreement(p2p.Peer(strconv.Itoa(0)), types.NewLayerID(uint32(1)), types.RandomHash(), time.Now().Add(-2*time.Hour))
+	tf.UpdateAgreement(p2p.Peer(strconv.Itoa(0)), types.LayerID(uint32(1)), types.RandomHash(), time.Now().Add(-2*time.Hour))
 	for i := 1; i < numCached; i++ {
-		tf.UpdateAgreement(p2p.Peer(strconv.Itoa(i)), types.NewLayerID(uint32(i+1)), types.RandomHash(), time.Now())
+		tf.UpdateAgreement(p2p.Peer(strconv.Itoa(i)), types.LayerID(uint32(i+1)), types.RandomHash(), time.Now())
 	}
 	tf.mFetcher.EXPECT().GetPeers().Return([]p2p.Peer{})
 	require.Equal(t, numCached, tf.NumPeersCached())
@@ -74,35 +75,33 @@ func TestForkFinder_Purge(t *testing.T) {
 	require.Equal(t, 0, tf.NumPeersCached())
 }
 
-func createPeerHashes(max uint32) []types.Hash32 {
-	peerHashes := make([]types.Hash32, max+1)
-	gLid := types.GetEffectiveGenesis()
-	for i := uint32(0); i <= max; i++ {
-		lid := types.NewLayerID(i)
-		if lid.Before(gLid) {
-			peerHashes[i] = types.Hash32{}
-		} else {
-			peerHashes[i] = types.RandomHash()
-		}
+func layerHash(layer int, good bool) types.Hash32 {
+	var h2 types.Hash32
+	h := h2[:0]
+	if good {
+		h = append(h, "good/"...)
+		binary.LittleEndian.AppendUint32(h, uint32(layer))
+	} else {
+		h = append(h, "bad/"...)
+		binary.LittleEndian.AppendUint32(h, uint32(layer))
 	}
-	return peerHashes
+	return h2
 }
 
-func storeNodeHashes(t *testing.T, db *sql.Database, peerHashes []types.Hash32, diverge types.LayerID) {
-	for i, hash := range peerHashes {
-		lid := types.NewLayerID(uint32(i))
-		if lid.Before(diverge) {
-			require.NoError(t, layers.SetMeshHash(db, lid, hash))
+func storeNodeHashes(t *testing.T, db *sql.Database, diverge, max int) {
+	for lid := 0; lid <= max; lid++ {
+		if lid < diverge {
+			require.NoError(t, layers.SetMeshHash(db, types.LayerID(uint32(lid)), layerHash(lid, true)))
 		} else {
-			require.NoError(t, layers.SetMeshHash(db, lid, types.RandomHash()))
+			require.NoError(t, layers.SetMeshHash(db, types.LayerID(uint32(lid)), layerHash(lid, false)))
 		}
 	}
 }
 
-func serveHashReq(t *testing.T, req *fetch.MeshHashRequest, peerHashes []types.Hash32) (*fetch.MeshHashes, error) {
+func serveHashReq(t *testing.T, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
 	var (
 		lids   = []types.LayerID{req.From}
-		hashes = []types.Hash32{peerHashes[req.From.Uint32()]}
+		hashes = []types.Hash32{layerHash(int(req.From.Uint32()), true)}
 		steps  uint32
 		lid    = req.From.Add(req.Delta)
 	)
@@ -110,12 +109,13 @@ func serveHashReq(t *testing.T, req *fetch.MeshHashRequest, peerHashes []types.H
 		steps++
 		if !lid.Before(req.To) {
 			lids = append(lids, req.To)
-			hashes = append(hashes, peerHashes[req.To.Uint32()])
+			hashes = append(hashes, layerHash(int(req.To.Uint32()), true))
 			break
 		}
 		lids = append(lids, lid)
-		hashes = append(hashes, peerHashes[lid.Uint32()])
+		hashes = append(hashes, layerHash(int(lid.Uint32()), true))
 	}
+	require.Equal(t, len(lids), len(hashes))
 	require.Equal(t, req.Steps, steps, fmt.Sprintf("exp: %v, got %v", req.Steps, steps))
 	mh := &fetch.MeshHashes{
 		Layers: lids,
@@ -126,27 +126,25 @@ func serveHashReq(t *testing.T, req *fetch.MeshHashRequest, peerHashes []types.H
 
 func TestForkFinder_FindFork_Permutation(t *testing.T) {
 	peer := p2p.Peer("grumpy")
-	max := uint32(173)
-	diverge := uint32(rand.Intn(int(max)))
+	max := 173
+	diverge := rand.Intn(max)
 	gLid := types.GetEffectiveGenesis()
-	if diverge < gLid.Uint32() {
-		diverge = gLid.Uint32() + 1
+	if diverge <= int(gLid.Uint32()) {
+		diverge = int(gLid.Uint32()) + 1
 	}
-	expected := types.NewLayerID(diverge - 1)
-	peerHashes := createPeerHashes(max)
-	maxLid := types.NewLayerID(max)
+	expected := diverge - 1
 	for maxHashes := uint32(30); maxHashes >= 5; maxHashes -= 3 {
-		for lid := maxLid; lid.After(expected); lid = lid.Sub(1) {
+		for lid := max; lid > expected; lid-- {
 			tf := newTestForkFinderWithDuration(t, maxHashes, time.Hour, logtest.New(t, zapcore.DebugLevel))
-			storeNodeHashes(t, tf.db, peerHashes, types.NewLayerID(diverge))
+			storeNodeHashes(t, tf.db, diverge, max)
 			tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
 				func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
-					return serveHashReq(t, req, peerHashes)
+					return serveHashReq(t, req)
 				}).AnyTimes()
 
-			fork, err := tf.FindFork(context.TODO(), peer, lid, peerHashes[lid.Uint32()])
+			fork, err := tf.FindFork(context.TODO(), peer, types.LayerID(uint32(lid)), layerHash(lid, true))
 			require.NoError(t, err)
-			require.Equal(t, expected, fork)
+			require.EqualValues(t, expected, fork.Uint32())
 		}
 	}
 }
@@ -154,7 +152,7 @@ func TestForkFinder_FindFork_Permutation(t *testing.T) {
 func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 	maxHashes := uint32(100)
 	peer := p2p.Peer("grumpy")
-	lastAgreedLid := types.NewLayerID(35)
+	lastAgreedLid := types.LayerID(35)
 	lastAgreedHash := types.RandomHash()
 
 	t.Run("peer mesh changed", func(t *testing.T) {
@@ -163,18 +161,18 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 		tf := newTestForkFinder(t, maxHashes)
 		require.NoError(t, layers.SetMeshHash(tf.db, lastAgreedLid, lastAgreedHash))
 		tf.UpdateAgreement(peer, lastAgreedLid, lastAgreedHash, time.Now())
-		tf.UpdateAgreement("shorty", types.NewLayerID(111), types.RandomHash(), time.Now())
+		tf.UpdateAgreement("shorty", types.LayerID(111), types.RandomHash(), time.Now())
 		require.Equal(t, tf.NumPeersCached(), 2)
 		tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
 				mh := &fetch.MeshHashes{
-					Layers: []types.LayerID{types.NewLayerID(35), types.NewLayerID(36), types.NewLayerID(37)},
+					Layers: []types.LayerID{types.LayerID(35), types.LayerID(36), types.LayerID(37)},
 					Hashes: []types.Hash32{types.RandomHash(), types.RandomHash(), types.RandomHash()},
 				}
 				return mh, nil
 			})
 
-		_, err := tf.FindFork(context.TODO(), peer, types.NewLayerID(37), types.RandomHash())
+		_, err := tf.FindFork(context.TODO(), peer, types.LayerID(37), types.RandomHash())
 		require.ErrorIs(t, err, syncer.ErrPeerMeshChangedMidSession)
 		require.Equal(t, tf.NumPeersCached(), 1)
 	})
@@ -185,14 +183,14 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 		tf := newTestForkFinder(t, maxHashes)
 		require.NoError(t, layers.SetMeshHash(tf.db, lastAgreedLid, lastAgreedHash))
 		tf.UpdateAgreement(peer, lastAgreedLid, lastAgreedHash, time.Now())
-		tf.UpdateAgreement("shorty", types.NewLayerID(111), types.RandomHash(), time.Now())
+		tf.UpdateAgreement("shorty", types.LayerID(111), types.RandomHash(), time.Now())
 		require.Equal(t, tf.NumPeersCached(), 2)
-		lastDiffLid := types.NewLayerID(37)
+		lastDiffLid := types.LayerID(37)
 		lastDiffHash := types.RandomHash()
 		tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
 				mh := &fetch.MeshHashes{
-					Layers: []types.LayerID{types.NewLayerID(35), types.NewLayerID(36), types.NewLayerID(37)},
+					Layers: []types.LayerID{types.LayerID(35), types.LayerID(36), types.LayerID(37)},
 					Hashes: []types.Hash32{lastAgreedHash, types.RandomHash(), lastDiffHash},
 				}
 				// changes the node's own hash for lastAgreedLid
@@ -209,28 +207,30 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 }
 
 func TestForkFinder_FindFork_Edges(t *testing.T) {
-	max := types.NewLayerID(20)
-	diverge := types.NewLayerID(12)
+	const (
+		max     = 20
+		diverge = 12
+	)
 	tt := []struct {
 		name               string
-		lastSame, lastDiff types.LayerID
+		lastSame, lastDiff int
 		expReqs            int
 	}{
 		{
 			name:     "no prior hash agreement",
-			lastDiff: types.NewLayerID(20),
+			lastDiff: 20,
 			expReqs:  2,
 		},
 		{
 			name:     "prior agreement",
-			lastDiff: types.NewLayerID(20),
-			lastSame: types.NewLayerID(8),
+			lastDiff: 20,
+			lastSame: 8,
 			expReqs:  2,
 		},
 		{
 			name:     "immediate detection",
-			lastDiff: types.NewLayerID(12),
-			lastSame: types.NewLayerID(11),
+			lastDiff: 12,
+			lastSame: 11,
 			expReqs:  0,
 		},
 	}
@@ -240,23 +240,22 @@ func TestForkFinder_FindFork_Edges(t *testing.T) {
 			t.Parallel()
 
 			maxHashes := uint32(5)
-			peerHashes := createPeerHashes(max.Uint32())
 			tf := newTestForkFinder(t, maxHashes)
-			storeNodeHashes(t, tf.db, peerHashes, diverge)
+			storeNodeHashes(t, tf.db, diverge, max)
 
 			peer := p2p.Peer("grumpy")
-			if tc.lastSame != (types.LayerID{}) {
-				tf.UpdateAgreement(peer, tc.lastSame, peerHashes[tc.lastSame.Uint32()], time.Now())
+			if tc.lastSame != 0 {
+				tf.UpdateAgreement(peer, types.LayerID(uint32(tc.lastSame)), layerHash(tc.lastSame, true), time.Now())
 			}
 
 			tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
 				func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
-					return serveHashReq(t, req, peerHashes)
+					return serveHashReq(t, req)
 				}).Times(tc.expReqs)
 
-			fork, err := tf.FindFork(context.TODO(), peer, tc.lastDiff, peerHashes[tc.lastDiff.Uint32()])
+			fork, err := tf.FindFork(context.TODO(), peer, types.LayerID(uint32(tc.lastDiff)), layerHash(tc.lastDiff, true))
 			require.NoError(t, err)
-			require.Equal(t, types.NewLayerID(11), fork)
+			require.Equal(t, types.LayerID(11), fork)
 		})
 	}
 }

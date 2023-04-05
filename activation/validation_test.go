@@ -9,6 +9,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
+	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -21,9 +22,8 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
-	postCfg.LabelsPerUnit = 1 << 15
+	postCfg.LabelsPerUnit = 128
 	meta := &types.PostMetadata{
-		BitsPerLabel:  postCfg.BitsPerLabel,
 		LabelsPerUnit: postCfg.LabelsPerUnit,
 	}
 
@@ -32,7 +32,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	initOpts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	nodeId := types.BytesToNodeID(make([]byte, 32))
-	commitmentAtxId := types.RandomATXID()
+	commitmentAtxId := types.EmptyATXID
 
 	init, err := initialization.NewInitializer(
 		initialization.WithNodeId(nodeId.Bytes()),
@@ -100,13 +100,13 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Indices: make([]byte, 10),
 		}
 
-		challenge := newChallenge(0, *types.EmptyATXID, posAtxId, types.NewLayerID(1012), &commitmentAtxId)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(1012), &commitmentAtxId)
 		challenge.InitialPostIndices = initialPost.Indices
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(888),
+				PubLayerID: types.LayerID(888),
 			},
 		}, nil)
 
@@ -123,7 +123,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Indices: make([]byte, 10),
 		}
 
-		challenge := newChallenge(0, *types.EmptyATXID, posAtxId, types.NewLayerID(2), &goldenATXID)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2), &goldenATXID)
 		challenge.InitialPostIndices = initialPost.Indices
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -146,7 +146,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		t.Parallel()
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(0, *types.EmptyATXID, posAtxId, types.NewLayerID(2), &goldenATXID)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2), &goldenATXID)
 
 		err := v.InitialNIPostChallenge(&challenge, nil, goldenATXID, nil)
 		require.EqualError(t, err, "no prevATX declared, but initial Post indices is not included in challenge")
@@ -161,7 +161,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Indices: make([]byte, 10),
 		}
 
-		challenge := newChallenge(0, *types.EmptyATXID, posAtxId, types.NewLayerID(2), &goldenATXID)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2), &goldenATXID)
 		challenge.InitialPostIndices = make([]byte, 10)
 		challenge.InitialPostIndices[0] = 1
 
@@ -178,7 +178,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Indices: make([]byte, 10),
 		}
 
-		challenge := newChallenge(0, *types.EmptyATXID, posAtxId, types.NewLayerID(2), nil)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2), nil)
 		challenge.InitialPostIndices = initialPost.Indices
 
 		err := v.InitialNIPostChallenge(&challenge, nil, goldenATXID, initialPost.Indices)
@@ -195,13 +195,13 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Indices: make([]byte, 10),
 		}
 
-		challenge := newChallenge(0, *types.EmptyATXID, posAtxId, types.NewLayerID(1012), &commitmentAtxId)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(1012), &commitmentAtxId)
 		challenge.InitialPostIndices = initialPost.Indices
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(1200),
+				PubLayerID: types.LayerID(1200),
 			},
 		}, nil)
 
@@ -231,12 +231,12 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.NewLayerID(1012), nil)
+		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012), nil)
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(888),
+				PubLayerID: types.LayerID(888),
 				Sequence:   9,
 			},
 			NodeID: nodeId,
@@ -254,7 +254,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.NewLayerID(1012), nil)
+		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012), nil)
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(nil, errors.New("not found"))
@@ -273,12 +273,12 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.NewLayerID(1012), nil)
+		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012), nil)
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(888),
+				PubLayerID: types.LayerID(888),
 				Sequence:   9,
 			},
 			NodeID: otherNodeId,
@@ -296,12 +296,12 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.NewLayerID(1012), nil)
+		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012), nil)
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(1200),
+				PubLayerID: types.LayerID(1200),
 				Sequence:   9,
 			},
 			NodeID: nodeId,
@@ -319,12 +319,12 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.NewLayerID(1012), nil)
+		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012), nil)
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(888),
+				PubLayerID: types.LayerID(888),
 				Sequence:   10,
 			},
 			NodeID: nodeId,
@@ -342,13 +342,13 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.NewLayerID(1012), nil)
+		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012), nil)
 		challenge.InitialPostIndices = make([]byte, 10)
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(888),
+				PubLayerID: types.LayerID(888),
 				Sequence:   9,
 			},
 			NodeID: nodeId,
@@ -366,13 +366,13 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.NewLayerID(1012), nil)
+		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012), nil)
 		challenge.CommitmentATX = &types.ATXID{9, 9, 9}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(888),
+				PubLayerID: types.LayerID(888),
 				Sequence:   9,
 			},
 			NodeID: nodeId,
@@ -405,12 +405,12 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(888),
+				PubLayerID: types.LayerID(888),
 				Sequence:   9,
 			},
 		}, nil)
 
-		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.NewLayerID(1012), layersPerEpochBig)
+		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.LayerID(1012), layersPerEpochBig)
 		require.NoError(t, err)
 	})
 
@@ -421,7 +421,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 
-		err := v.PositioningAtx(&goldenAtxId, atxProvider, goldenAtxId, types.NewLayerID(1012), layersPerEpochBig)
+		err := v.PositioningAtx(&goldenAtxId, atxProvider, goldenAtxId, types.LayerID(1012), layersPerEpochBig)
 		require.NoError(t, err)
 	})
 
@@ -432,7 +432,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 
-		err := v.PositioningAtx(&goldenAtxId, atxProvider, goldenAtxId, types.NewLayerID(2012), layersPerEpochBig)
+		err := v.PositioningAtx(&goldenAtxId, atxProvider, goldenAtxId, types.LayerID(2012), layersPerEpochBig)
 		require.EqualError(t, err, "golden atx used for positioning atx in epoch 2, but is only valid in epoch 1")
 	})
 
@@ -443,7 +443,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 
-		err := v.PositioningAtx(types.EmptyATXID, atxProvider, goldenAtxId, types.NewLayerID(1012), layersPerEpochBig)
+		err := v.PositioningAtx(&types.EmptyATXID, atxProvider, goldenAtxId, types.LayerID(1012), layersPerEpochBig)
 		require.EqualError(t, err, "empty positioning atx")
 	})
 
@@ -456,7 +456,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(nil, errors.New("db error"))
 
-		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.NewLayerID(1012), layersPerEpochBig)
+		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.LayerID(1012), layersPerEpochBig)
 		require.ErrorIs(t, err, &ErrAtxNotFound{Id: posAtxId})
 		require.ErrorContains(t, err, "db error")
 	})
@@ -470,12 +470,12 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(2000),
+				PubLayerID: types.LayerID(2000),
 				Sequence:   9,
 			},
 		}, nil)
 
-		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.NewLayerID(1012), layersPerEpochBig)
+		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.LayerID(1012), layersPerEpochBig)
 		require.EqualError(t, err, "positioning atx layer (2000) must be before 1012")
 	})
 
@@ -488,12 +488,12 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(888),
+				PubLayerID: types.LayerID(888),
 				Sequence:   9,
 			},
 		}, nil)
 
-		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.NewLayerID(2000), layersPerEpochBig)
+		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.LayerID(2000), layersPerEpochBig)
 		require.EqualError(t, err, "expected distance of one epoch (1000 layers) from positioning atx but found 1112")
 	})
 }
@@ -549,70 +549,22 @@ func Test_Validate_PostMetadata(t *testing.T) {
 		t.Parallel()
 
 		meta := &types.PostMetadata{
-			BitsPerLabel:  postCfg.BitsPerLabel,
 			LabelsPerUnit: postCfg.LabelsPerUnit,
-			K1:            postCfg.K1,
-			K2:            postCfg.K2,
 		}
 
 		err := v.PostMetadata(&postCfg, meta)
 		require.NoError(t, err)
 	})
 
-	t.Run("wrong bits per label", func(t *testing.T) {
-		t.Parallel()
-
-		meta := &types.PostMetadata{
-			BitsPerLabel:  postCfg.BitsPerLabel - 1,
-			LabelsPerUnit: postCfg.LabelsPerUnit,
-			K1:            postCfg.K1,
-			K2:            postCfg.K2,
-		}
-
-		err := v.PostMetadata(&postCfg, meta)
-		require.EqualError(t, err, fmt.Sprintf("invalid `BitsPerLabel`; expected: >=%d, given: %d", postCfg.BitsPerLabel, postCfg.BitsPerLabel-1))
-	})
-
 	t.Run("wrong labels per unit", func(t *testing.T) {
 		t.Parallel()
 
 		meta := &types.PostMetadata{
-			BitsPerLabel:  postCfg.BitsPerLabel,
 			LabelsPerUnit: postCfg.LabelsPerUnit - 1,
-			K1:            postCfg.K1,
-			K2:            postCfg.K2,
 		}
 
 		err := v.PostMetadata(&postCfg, meta)
 		require.EqualError(t, err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", postCfg.LabelsPerUnit, postCfg.LabelsPerUnit-1))
-	})
-
-	t.Run("wrong k1", func(t *testing.T) {
-		t.Parallel()
-
-		meta := &types.PostMetadata{
-			BitsPerLabel:  postCfg.BitsPerLabel,
-			LabelsPerUnit: postCfg.LabelsPerUnit,
-			K1:            postCfg.K1 + 1,
-			K2:            postCfg.K2,
-		}
-
-		err := v.PostMetadata(&postCfg, meta)
-		require.EqualError(t, err, fmt.Sprintf("invalid `K1`; expected: <=%d, given: %d", postCfg.K1, postCfg.K1+1))
-	})
-
-	t.Run("wrong k2", func(t *testing.T) {
-		t.Parallel()
-
-		meta := &types.PostMetadata{
-			BitsPerLabel:  postCfg.BitsPerLabel,
-			LabelsPerUnit: postCfg.LabelsPerUnit,
-			K1:            postCfg.K1,
-			K2:            postCfg.K2 - 1,
-		}
-
-		err := v.PostMetadata(&postCfg, meta)
-		require.EqualError(t, err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", postCfg.K2, postCfg.K2-1))
 	})
 }
 
@@ -620,64 +572,53 @@ func TestValidator_Validate(t *testing.T) {
 	t.Parallel()
 	r := require.New(t)
 
-	challenge := types.PoetChallenge{NIPostChallenge: &types.NIPostChallenge{
+	challenge := types.NIPostChallenge{
 		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),
-	}}
+	}
 	challengeHash := challenge.Hash()
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
-	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().Return(&types.PoetProof{Members: [][]byte{challengeHash.Bytes()}}, nil)
+	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().DoAndReturn(func(types.PoetProofRef) (*types.PoetProof, error) {
+		proof := &types.PoetProof{
+			Members: make([]types.Member, 1),
+		}
+		copy(proof.Members[0][:], challengeHash.Bytes())
+		return proof, nil
+	})
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 
-	postCfg := DefaultPostConfig()
-	nipost := buildNIPost(t, r, postCfg, challenge, poetDb)
-	numUnits := getPostSetupOpts(t).NumUnits
-	nodeID := types.NodeID{1}
-	goldenATXID := types.ATXID{2, 3, 4}
+	postProvider := newTestPostManager(t)
+	nipost := buildNIPost(t, postProvider, postProvider.cfg, challenge, poetDb)
 
-	err := validateNIPost(nodeID, goldenATXID, nipost, challengeHash, poetDb, postCfg, numUnits)
+	opts := []verifying.OptionFunc{verifying.WithLabelScryptParams(postProvider.opts.Scrypt)}
+	err := validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, poetDb, postProvider.cfg, postProvider.opts.NumUnits, opts...)
 	r.NoError(err)
 
-	err = validateNIPost(nodeID, goldenATXID, nipost, types.BytesToHash([]byte("lerner")), poetDb, postCfg, numUnits)
+	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, types.BytesToHash([]byte("lerner")), poetDb, postProvider.cfg, postProvider.opts.NumUnits, opts...)
 	r.Contains(err.Error(), "invalid `Challenge`")
 
 	newNIPost := *nipost
 	newNIPost.Post = &types.Post{}
-	err = validateNIPost(nodeID, goldenATXID, &newNIPost, challengeHash, poetDb, postCfg, numUnits)
+	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, &newNIPost, challengeHash, poetDb, postProvider.cfg, postProvider.opts.NumUnits, opts...)
 	r.Contains(err.Error(), "invalid Post")
 
-	newPostCfg := postCfg
-	newPostCfg.MinNumUnits = numUnits + 1
-	err = validateNIPost(nodeID, goldenATXID, nipost, challengeHash, poetDb, newPostCfg, numUnits)
-	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", newPostCfg.MinNumUnits, numUnits))
+	newPostCfg := postProvider.cfg
+	newPostCfg.MinNumUnits = postProvider.opts.NumUnits + 1
+	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, poetDb, newPostCfg, postProvider.opts.NumUnits, opts...)
+	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", newPostCfg.MinNumUnits, postProvider.opts.NumUnits))
 
-	newPostCfg = postCfg
-	newPostCfg.MaxNumUnits = numUnits - 1
-	err = validateNIPost(nodeID, goldenATXID, nipost, challengeHash, poetDb, newPostCfg, numUnits)
-	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", newPostCfg.MaxNumUnits, numUnits))
+	newPostCfg = postProvider.cfg
+	newPostCfg.MaxNumUnits = postProvider.opts.NumUnits - 1
+	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, poetDb, newPostCfg, postProvider.opts.NumUnits, opts...)
+	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", newPostCfg.MaxNumUnits, postProvider.opts.NumUnits))
 
-	newPostCfg = postCfg
+	newPostCfg = postProvider.cfg
 	newPostCfg.LabelsPerUnit = nipost.PostMetadata.LabelsPerUnit + 1
-	err = validateNIPost(nodeID, goldenATXID, nipost, challengeHash, poetDb, newPostCfg, numUnits)
+	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, poetDb, newPostCfg, postProvider.opts.NumUnits, opts...)
 	r.EqualError(err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", newPostCfg.LabelsPerUnit, nipost.PostMetadata.LabelsPerUnit))
-
-	newPostCfg = postCfg
-	newPostCfg.BitsPerLabel = nipost.PostMetadata.BitsPerLabel + 1
-	err = validateNIPost(nodeID, goldenATXID, nipost, challengeHash, poetDb, newPostCfg, numUnits)
-	r.EqualError(err, fmt.Sprintf("invalid `BitsPerLabel`; expected: >=%d, given: %d", newPostCfg.BitsPerLabel, nipost.PostMetadata.BitsPerLabel))
-
-	newPostCfg = postCfg
-	newPostCfg.K1 = nipost.PostMetadata.K2 - 1
-	err = validateNIPost(nodeID, goldenATXID, nipost, challengeHash, poetDb, newPostCfg, numUnits)
-	r.EqualError(err, fmt.Sprintf("invalid `K1`; expected: <=%d, given: %d", newPostCfg.K1, nipost.PostMetadata.K1))
-
-	newPostCfg = postCfg
-	newPostCfg.K2 = nipost.PostMetadata.K2 + 1
-	err = validateNIPost(nodeID, goldenATXID, nipost, challengeHash, poetDb, newPostCfg, numUnits)
-	r.EqualError(err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", newPostCfg.K2, nipost.PostMetadata.K2))
 }
 
-func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint32) error {
+func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint32, opts ...verifying.OptionFunc) error {
 	v := &Validator{poetDb, postCfg}
-	_, err := v.NIPost(minerID, commitmentAtx, nipost, challenge, numUnits)
+	_, err := v.NIPost(minerID, commitmentAtx, nipost, challenge, numUnits, opts...)
 	return err
 }

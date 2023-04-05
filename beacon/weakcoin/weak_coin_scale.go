@@ -24,21 +24,21 @@ func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact64(enc, uint64(t.Unit))
+		n, err := scale.EncodeCompact32(enc, uint32(t.Unit))
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.MinerPK)
+		n, err := scale.EncodeByteArray(enc, t.NodeID[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Signature)
+		n, err := scale.EncodeByteArray(enc, t.VrfSignature[:])
 		if err != nil {
 			return total, err
 		}
@@ -65,42 +65,33 @@ func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Round = types.RoundID(field)
 	}
 	{
-		field, n, err := scale.DecodeCompact64(dec)
+		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Unit = uint64(field)
+		t.Unit = uint32(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		n, err := scale.DecodeByteArray(dec, t.NodeID[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.MinerPK = field
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		n, err := scale.DecodeByteArray(dec, t.VrfSignature[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Signature = field
 	}
 	return total, nil
 }
 
-func (t *WeakCoinVrfMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *VrfMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeString(enc, string(t.Prefix))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.Epoch))
+		n, err := scale.EncodeCompact16(enc, uint16(t.Type))
 		if err != nil {
 			return total, err
 		}
@@ -114,6 +105,13 @@ func (t *WeakCoinVrfMessage) EncodeScale(enc *scale.Encoder) (total int, err err
 		total += n
 	}
 	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.Epoch))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeCompact32(enc, uint32(t.Round))
 		if err != nil {
 			return total, err
@@ -121,7 +119,7 @@ func (t *WeakCoinVrfMessage) EncodeScale(enc *scale.Encoder) (total int, err err
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact64(enc, uint64(t.Unit))
+		n, err := scale.EncodeCompact32(enc, uint32(t.Unit))
 		if err != nil {
 			return total, err
 		}
@@ -130,22 +128,14 @@ func (t *WeakCoinVrfMessage) EncodeScale(enc *scale.Encoder) (total int, err err
 	return total, nil
 }
 
-func (t *WeakCoinVrfMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *VrfMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeString(dec)
+		field, n, err := scale.DecodeCompact16(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Prefix = string(field)
-	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Epoch = types.EpochID(field)
+		t.Type = types.EligibilityType(field)
 	}
 	{
 		field, n, err := scale.DecodeCompact64(dec)
@@ -161,15 +151,23 @@ func (t *WeakCoinVrfMessage) DecodeScale(dec *scale.Decoder) (total int, err err
 			return total, err
 		}
 		total += n
-		t.Round = types.RoundID(field)
+		t.Epoch = types.EpochID(field)
 	}
 	{
-		field, n, err := scale.DecodeCompact64(dec)
+		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Unit = uint64(field)
+		t.Round = types.RoundID(field)
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Unit = uint32(field)
 	}
 	return total, nil
 }

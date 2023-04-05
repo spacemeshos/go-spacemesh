@@ -13,33 +13,33 @@ type requester interface {
 	Request(context.Context, p2p.Peer, []byte, func([]byte), func(error)) error
 }
 
-type malfeasanceHandler interface {
-	HandleSyncedMalfeasanceProof(context.Context, []byte) error
+type MalfeasanceValidator interface {
+	HandleSyncedMalfeasanceProof(context.Context, p2p.Peer, []byte) error
 }
 
-type atxHandler interface {
-	HandleAtxData(context.Context, []byte) error
+type AtxValidator interface {
+	HandleAtxData(context.Context, p2p.Peer, []byte) error
 }
 
-type blockHandler interface {
-	HandleSyncedBlock(context.Context, []byte) error
+type BlockValidator interface {
+	HandleSyncedBlock(context.Context, p2p.Peer, []byte) error
 }
 
-type ballotHandler interface {
-	HandleSyncedBallot(context.Context, []byte) error
+type BallotValidator interface {
+	HandleSyncedBallot(context.Context, p2p.Peer, []byte) error
 }
 
-type proposalHandler interface {
-	HandleSyncedProposal(context.Context, []byte) error
+type ProposalValidator interface {
+	HandleSyncedProposal(context.Context, p2p.Peer, []byte) error
 }
 
-type txHandler interface {
-	HandleBlockTransaction(context.Context, []byte) error
-	HandleProposalTransaction(context.Context, []byte) error
+type TxValidator interface {
+	HandleBlockTransaction(context.Context, p2p.Peer, []byte) error
+	HandleProposalTransaction(context.Context, p2p.Peer, []byte) error
 }
 
-type poetHandler interface {
-	ValidateAndStoreMsg(context.Context, []byte) error
+type PoetValidator interface {
+	ValidateAndStoreMsg(context.Context, p2p.Peer, []byte) error
 }
 
 type meshProvider interface {

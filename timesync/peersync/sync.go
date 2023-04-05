@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
 )
 
 const (
@@ -40,6 +39,10 @@ type systemTime struct{}
 
 func (s systemTime) Now() time.Time {
 	return time.Now()
+}
+
+type getPeers interface {
+	GetPeers() []p2p.Peer
 }
 
 //go:generate scalegen -types Request,Response
@@ -110,14 +113,14 @@ func WithConfig(config Config) Option {
 }
 
 // New creates Sync instance and returns pointer.
-func New(h host.Host, peers bootstrap.Waiter, opts ...Option) *Sync {
+func New(h host.Host, peers getPeers, opts ...Option) *Sync {
 	sync := &Sync{
-		log:          log.NewNop(),
-		ctx:          context.Background(),
-		time:         systemTime{},
-		h:            h,
-		config:       DefaultConfig(),
-		peersWatcher: peers,
+		log:    log.NewNop(),
+		ctx:    context.Background(),
+		time:   systemTime{},
+		h:      h,
+		config: DefaultConfig(),
+		peers:  peers,
 	}
 	for _, opt := range opts {
 		opt(sync)
@@ -131,11 +134,11 @@ func New(h host.Host, peers bootstrap.Waiter, opts ...Option) *Sync {
 type Sync struct {
 	errCnt uint32
 
-	config       Config
-	log          log.Log
-	time         Time
-	h            host.Host
-	peersWatcher bootstrap.Waiter
+	config Config
+	log    log.Log
+	time   Time
+	h      host.Host
+	peers  getPeers
 
 	eg     errgroup.Group
 	ctx    context.Context
@@ -191,47 +194,44 @@ func (s *Sync) run() error {
 	s.log.With().Debug("started sync background worker")
 	defer s.log.With().Debug("exiting sync background worker")
 	for {
-		prs, err := s.peersWatcher.WaitPeers(s.ctx, s.config.RequiredResponses)
-		if err != nil {
-			return fmt.Errorf("wait peers: %w", err)
-		}
-		s.log.With().Info("starting time sync round with peers",
-			log.Uint64("round", round),
-			log.Int("peers_count", len(prs)),
-			log.Uint32("errors_count", atomic.LoadUint32(&s.errCnt)),
-		)
-		ctx, cancel := context.WithTimeout(s.ctx, s.config.RoundTimeout)
-		offset, err := s.GetOffset(ctx, round, prs)
-		cancel()
-		var timeout time.Duration
-		if err == nil {
-			if offset > s.config.MaxClockOffset || (offset < 0 && -offset > s.config.MaxClockOffset) {
-				s.log.With().Error("peers offset is larger than max allowed clock difference",
-					log.Uint64("round", round),
-					log.Duration("offset", offset),
-					log.Duration("max_offset", s.config.MaxClockOffset),
-				)
-				if atomic.AddUint32(&s.errCnt, 1) == uint32(s.config.MaxOffsetErrors) {
-					return clockError{
-						err:     ErrPeersNotSynced,
-						details: clockErrorDetails{Drift: offset},
+		prs := s.peers.GetPeers()
+		timeout := s.config.RoundRetryInterval
+		if len(prs) >= s.config.RequiredResponses {
+			s.log.With().Info("starting time sync round with peers",
+				log.Uint64("round", round),
+				log.Int("peers_count", len(prs)),
+				log.Uint32("errors_count", atomic.LoadUint32(&s.errCnt)),
+			)
+			ctx, cancel := context.WithTimeout(s.ctx, s.config.RoundTimeout)
+			offset, err := s.GetOffset(ctx, round, prs)
+			cancel()
+			if err == nil {
+				if offset > s.config.MaxClockOffset || (offset < 0 && -offset > s.config.MaxClockOffset) {
+					s.log.With().Error("peers offset is larger than max allowed clock difference",
+						log.Uint64("round", round),
+						log.Duration("offset", offset),
+						log.Duration("max_offset", s.config.MaxClockOffset),
+					)
+					if atomic.AddUint32(&s.errCnt, 1) == uint32(s.config.MaxOffsetErrors) {
+						return clockError{
+							err:     ErrPeersNotSynced,
+							details: clockErrorDetails{Drift: offset},
+						}
 					}
+				} else {
+					s.log.With().Info("peers offset is within max allowed clock difference",
+						log.Uint64("round", round),
+						log.Duration("offset", offset),
+						log.Duration("max_offset", s.config.MaxClockOffset),
+					)
+					atomic.StoreUint32(&s.errCnt, 0)
 				}
+				timeout = s.config.RoundInterval
 			} else {
-				s.log.With().Info("peers offset is within max allowed clock difference",
-					log.Uint64("round", round),
-					log.Duration("offset", offset),
-					log.Duration("max_offset", s.config.MaxClockOffset),
-				)
-				atomic.StoreUint32(&s.errCnt, 0)
+				s.log.With().Error("failed to fetch offset from peers", log.Err(err))
 			}
-			timeout = s.config.RoundInterval
-		} else {
-			s.log.With().Error("failed to fetch offset from peers", log.Err(err))
-			timeout = s.config.RoundRetryInterval
+			round++
 		}
-
-		round++
 		if timer == nil {
 			timer = time.NewTimer(timeout)
 		} else {
@@ -239,7 +239,7 @@ func (s *Sync) run() error {
 		}
 		select {
 		case <-s.ctx.Done():
-			return fmt.Errorf("context done: %w", ctx.Err())
+			return fmt.Errorf("context done: %w", s.ctx.Err())
 		case <-timer.C:
 		}
 	}

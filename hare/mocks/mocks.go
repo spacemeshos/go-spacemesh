@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	sql "github.com/spacemeshos/go-spacemesh/sql"
 )
 
 // MocklayerPatrol is a mock of layerPatrol interface.
@@ -71,7 +72,7 @@ func (m *MockRolacle) EXPECT() *MockRolacleMockRecorder {
 }
 
 // CalcEligibility mocks base method.
-func (m *MockRolacle) CalcEligibility(arg0 context.Context, arg1 types.LayerID, arg2 uint32, arg3 int, arg4 types.NodeID, arg5 types.VRFPostIndex, arg6 []byte) (uint16, error) {
+func (m *MockRolacle) CalcEligibility(arg0 context.Context, arg1 types.LayerID, arg2 uint32, arg3 int, arg4 types.NodeID, arg5 types.VRFPostIndex, arg6 types.VrfSignature) (uint16, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CalcEligibility", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 	ret0, _ := ret[0].(uint16)
@@ -101,10 +102,10 @@ func (mr *MockRolacleMockRecorder) IsIdentityActiveOnConsensusView(arg0, arg1, a
 }
 
 // Proof mocks base method.
-func (m *MockRolacle) Proof(arg0 context.Context, arg1 types.VRFPostIndex, arg2 types.LayerID, arg3 uint32) ([]byte, error) {
+func (m *MockRolacle) Proof(arg0 context.Context, arg1 types.VRFPostIndex, arg2 types.LayerID, arg3 uint32) (types.VrfSignature, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Proof", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].(types.VrfSignature)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -116,7 +117,7 @@ func (mr *MockRolacleMockRecorder) Proof(arg0, arg1, arg2, arg3 interface{}) *go
 }
 
 // Validate mocks base method.
-func (m *MockRolacle) Validate(arg0 context.Context, arg1 types.LayerID, arg2 uint32, arg3 int, arg4 types.NodeID, arg5 []byte, arg6 uint16) (bool, error) {
+func (m *MockRolacle) Validate(arg0 context.Context, arg1 types.LayerID, arg2 uint32, arg3 int, arg4 types.NodeID, arg5 types.VrfSignature, arg6 uint16) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Validate", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 	ret0, _ := ret[0].(bool)
@@ -168,31 +169,149 @@ func (mr *MockstateQuerierMockRecorder) IsIdentityActiveOnConsensusView(arg0, ar
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsIdentityActiveOnConsensusView", reflect.TypeOf((*MockstateQuerier)(nil).IsIdentityActiveOnConsensusView), arg0, arg1, arg2)
 }
 
-// MocknonceFetcher is a mock of nonceFetcher interface.
-type MocknonceFetcher struct {
+// Mockmesh is a mock of mesh interface.
+type Mockmesh struct {
 	ctrl     *gomock.Controller
-	recorder *MocknonceFetcherMockRecorder
+	recorder *MockmeshMockRecorder
 }
 
-// MocknonceFetcherMockRecorder is the mock recorder for MocknonceFetcher.
-type MocknonceFetcherMockRecorder struct {
-	mock *MocknonceFetcher
+// MockmeshMockRecorder is the mock recorder for Mockmesh.
+type MockmeshMockRecorder struct {
+	mock *Mockmesh
 }
 
-// NewMocknonceFetcher creates a new mock instance.
-func NewMocknonceFetcher(ctrl *gomock.Controller) *MocknonceFetcher {
-	mock := &MocknonceFetcher{ctrl: ctrl}
-	mock.recorder = &MocknonceFetcherMockRecorder{mock}
+// NewMockmesh creates a new mock instance.
+func NewMockmesh(ctrl *gomock.Controller) *Mockmesh {
+	mock := &Mockmesh{ctrl: ctrl}
+	mock.recorder = &MockmeshMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocknonceFetcher) EXPECT() *MocknonceFetcherMockRecorder {
+func (m *Mockmesh) EXPECT() *MockmeshMockRecorder {
 	return m.recorder
 }
 
+// AddMalfeasanceProof mocks base method.
+func (m *Mockmesh) AddMalfeasanceProof(arg0 types.NodeID, arg1 *types.MalfeasanceProof, arg2 *sql.Tx) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddMalfeasanceProof", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddMalfeasanceProof indicates an expected call of AddMalfeasanceProof.
+func (mr *MockmeshMockRecorder) AddMalfeasanceProof(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMalfeasanceProof", reflect.TypeOf((*Mockmesh)(nil).AddMalfeasanceProof), arg0, arg1, arg2)
+}
+
+// Ballot mocks base method.
+func (m *Mockmesh) Ballot(arg0 types.BallotID) (*types.Ballot, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Ballot", arg0)
+	ret0, _ := ret[0].(*types.Ballot)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Ballot indicates an expected call of Ballot.
+func (mr *MockmeshMockRecorder) Ballot(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ballot", reflect.TypeOf((*Mockmesh)(nil).Ballot), arg0)
+}
+
+// GetAtxHeader mocks base method.
+func (m *Mockmesh) GetAtxHeader(arg0 types.ATXID) (*types.ActivationTxHeader, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAtxHeader", arg0)
+	ret0, _ := ret[0].(*types.ActivationTxHeader)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAtxHeader indicates an expected call of GetAtxHeader.
+func (mr *MockmeshMockRecorder) GetAtxHeader(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*Mockmesh)(nil).GetAtxHeader), arg0)
+}
+
+// GetEpochAtx mocks base method.
+func (m *Mockmesh) GetEpochAtx(arg0 types.EpochID, arg1 types.NodeID) (*types.ActivationTxHeader, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEpochAtx", arg0, arg1)
+	ret0, _ := ret[0].(*types.ActivationTxHeader)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetEpochAtx indicates an expected call of GetEpochAtx.
+func (mr *MockmeshMockRecorder) GetEpochAtx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpochAtx", reflect.TypeOf((*Mockmesh)(nil).GetEpochAtx), arg0, arg1)
+}
+
+// GetMalfeasanceProof mocks base method.
+func (m *Mockmesh) GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMalfeasanceProof", nodeID)
+	ret0, _ := ret[0].(*types.MalfeasanceProof)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMalfeasanceProof indicates an expected call of GetMalfeasanceProof.
+func (mr *MockmeshMockRecorder) GetMalfeasanceProof(nodeID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProof", reflect.TypeOf((*Mockmesh)(nil).GetMalfeasanceProof), nodeID)
+}
+
+// IsMalicious mocks base method.
+func (m *Mockmesh) IsMalicious(arg0 types.NodeID) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsMalicious", arg0)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IsMalicious indicates an expected call of IsMalicious.
+func (mr *MockmeshMockRecorder) IsMalicious(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsMalicious", reflect.TypeOf((*Mockmesh)(nil).IsMalicious), arg0)
+}
+
+// Proposals mocks base method.
+func (m *Mockmesh) Proposals(arg0 types.LayerID) ([]*types.Proposal, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Proposals", arg0)
+	ret0, _ := ret[0].([]*types.Proposal)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Proposals indicates an expected call of Proposals.
+func (mr *MockmeshMockRecorder) Proposals(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proposals", reflect.TypeOf((*Mockmesh)(nil).Proposals), arg0)
+}
+
+// SetWeakCoin mocks base method.
+func (m *Mockmesh) SetWeakCoin(arg0 types.LayerID, arg1 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetWeakCoin", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetWeakCoin indicates an expected call of SetWeakCoin.
+func (mr *MockmeshMockRecorder) SetWeakCoin(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetWeakCoin", reflect.TypeOf((*Mockmesh)(nil).SetWeakCoin), arg0, arg1)
+}
+
 // VRFNonce mocks base method.
-func (m *MocknonceFetcher) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (types.VRFPostIndex, error) {
+func (m *Mockmesh) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (types.VRFPostIndex, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "VRFNonce", arg0, arg1)
 	ret0, _ := ret[0].(types.VRFPostIndex)
@@ -201,7 +320,7 @@ func (m *MocknonceFetcher) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (type
 }
 
 // VRFNonce indicates an expected call of VRFNonce.
-func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockmeshMockRecorder) VRFNonce(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknonceFetcher)(nil).VRFNonce), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*Mockmesh)(nil).VRFNonce), arg0, arg1)
 }

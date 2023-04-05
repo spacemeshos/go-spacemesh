@@ -116,8 +116,8 @@ func requireEqualProposals(tb testing.TB, reference map[uint32][]*pb.Proposal, r
 		}
 		for layer, proposals := range reference {
 			require.Len(tb, included[layer], len(proposals), "client=%d layer=%d", i, layer)
-			for i := range proposals {
-				assert.Equal(tb, proposals[i].Id, included[layer][i].Id, "client=%d layer=%d", i, layer)
+			for j := range proposals {
+				assert.Equal(tb, proposals[j].Id, included[layer][j].Id, "client=%d layer=%d", i, layer)
 			}
 		}
 	}

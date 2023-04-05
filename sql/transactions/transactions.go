@@ -52,7 +52,7 @@ func AddToProposal(db sql.Executor, tid types.TransactionID, lid types.LayerID, 
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, pid.Bytes())
 			stmt.BindBytes(2, tid.Bytes())
-			stmt.BindInt64(3, int64(lid.Value))
+			stmt.BindInt64(3, int64(lid))
 		}, nil); err != nil {
 		return fmt.Errorf("add to proposal %s: %w", tid, err)
 	}
@@ -80,7 +80,7 @@ func AddToBlock(db sql.Executor, tid types.TransactionID, lid types.LayerID, bid
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, bid.Bytes())
 			stmt.BindBytes(2, tid.Bytes())
-			stmt.BindInt64(3, int64(lid.Value))
+			stmt.BindInt64(3, int64(lid))
 		}, nil); err != nil {
 		return fmt.Errorf("add to block %s: %w", tid, err)
 	}
@@ -106,14 +106,14 @@ func GetAppliedLayer(db sql.Executor, tid types.TransactionID) (types.LayerID, e
 	rows, err := db.Exec("select layer from transactions where id = ?1 and result is not null", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, tid[:])
 	}, func(stmt *sql.Statement) bool {
-		rst = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+		rst = types.LayerID(uint32(stmt.ColumnInt64(0)))
 		return false
 	})
 	if err != nil {
-		return types.LayerID{}, fmt.Errorf("failed to load applied layer for tx %s: %w", tid, err)
+		return 0, fmt.Errorf("failed to load applied layer for tx %s: %w", tid, err)
 	}
 	if rows == 0 {
-		return types.LayerID{}, fmt.Errorf("%w: tx %s is not applied", sql.ErrNotFound, tid)
+		return 0, fmt.Errorf("%w: tx %s is not applied", sql.ErrNotFound, tid)
 	}
 	return rst, nil
 }
@@ -123,7 +123,7 @@ func UndoLayers(db *sql.Tx, from types.LayerID) error {
 	_, err := db.Exec(`delete from transactions_results_addresses 
 		where tid in (select id from transactions where layer >= ?1);`,
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(from.Value))
+			stmt.BindInt64(1, int64(from))
 		}, nil)
 	if err != nil {
 		return fmt.Errorf("delete addresses mapping %w", err)
@@ -132,7 +132,7 @@ func UndoLayers(db *sql.Tx, from types.LayerID) error {
 		set layer = null, block = null, result = null 
 		where layer >= ?1`,
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(from.Value))
+			stmt.BindInt64(1, int64(from))
 		}, nil)
 	if err != nil {
 		return fmt.Errorf("undo layer %s: %w", from, err)
@@ -154,8 +154,8 @@ func decodeTransaction(id types.TransactionID, stmt *sql.Statement) (*types.Mesh
 	parsed.ID = id
 
 	state := types.PENDING
-	layer := types.NewLayerID(uint32(stmt.ColumnInt64(2)))
-	if layer.Value != 0 {
+	layer := types.LayerID(uint32(stmt.ColumnInt64(2)))
+	if layer != 0 {
 		state = types.APPLIED
 	} else if parsed.TxHeader != nil {
 		state = types.MEMPOOL
@@ -229,8 +229,8 @@ func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address
 		where principal = ?1 and (layer is null or layer between ?2 and ?3)`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address[:])
-			stmt.BindInt64(2, int64(from.Value))
-			stmt.BindInt64(3, int64(to.Value))
+			stmt.BindInt64(2, int64(from))
+			stmt.BindInt64(3, int64(to))
 		}, func(stmt *sql.Statement) bool {
 			var id types.TransactionID
 			stmt.ColumnBytes(5, id[:])
@@ -315,7 +315,7 @@ func AddResult(db *sql.Tx, id types.TransactionID, rst *types.TransactionResult)
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id[:])
 			stmt.BindBytes(2, buf)
-			stmt.BindInt64(3, int64(rst.Layer.Value))
+			stmt.BindInt64(3, int64(rst.Layer))
 			stmt.BindBytes(4, rst.Block[:])
 		},
 		func(stmt *sql.Statement) bool {
@@ -346,9 +346,9 @@ func TransactionInProposal(db sql.Executor, id types.TransactionID, after types.
 	rows, err := db.Exec("select layer from proposal_transactions where tid = ?1 and layer > ?2 order by layer asc limit 1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
-			stmt.BindInt64(2, int64(after.Value))
+			stmt.BindInt64(2, int64(after))
 		}, func(s *sql.Statement) bool {
-			rst = types.NewLayerID(uint32(s.ColumnInt64(0)))
+			rst = types.LayerID(uint32(s.ColumnInt64(0)))
 			return false
 		})
 	if rows == 0 {
@@ -369,9 +369,9 @@ func TransactionInBlock(db sql.Executor, id types.TransactionID, after types.Lay
 	rows, err := db.Exec("select layer, bid from block_transactions where tid = ?1 and layer > ?2 order by layer asc limit 1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
-			stmt.BindInt64(2, int64(after.Value))
+			stmt.BindInt64(2, int64(after))
 		}, func(s *sql.Statement) bool {
-			rst = types.NewLayerID(uint32(s.ColumnInt64(0)))
+			rst = types.LayerID(uint32(s.ColumnInt64(0)))
 			s.ColumnBytes(1, bid[:])
 			return false
 		})

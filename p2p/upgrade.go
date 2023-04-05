@@ -3,13 +3,14 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
-	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -58,16 +59,15 @@ type Host struct {
 	*pubsub.PubSub
 
 	nodeReporter func()
-	*bootstrap.Peers
 
 	discovery *peerexchange.Discovery
 	hs        *handshake.Handshake
-	bootstrap *bootstrap.Bootstrap
 }
 
+// TODO(dshulyak) IsBootnode should be a configuration option.
 func isBootnode(h host.Host, bootnodes []string) (bool, error) {
 	for _, raw := range bootnodes {
-		info, err := addressbook.ParseAddrInfo(raw)
+		info, err := peer.AddrInfoFromString(raw)
 		if err != nil {
 			return false, fmt.Errorf("failed to parse bootstrap node: %w", err)
 		}
@@ -101,38 +101,43 @@ func Upgrade(h host.Host, genesisID types.Hash20, opts ...Opt) (*Host, error) {
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
 	}
-	fh.Peers = bootstrap.StartPeers(h,
-		bootstrap.WithLog(fh.logger),
-		bootstrap.WithContext(fh.ctx),
-		bootstrap.WithNodeReporter(fh.nodeReporter),
-	)
 	if fh.discovery, err = peerexchange.New(fh.logger, h, peerexchange.Config{
-		DataDir:              cfg.DataDir,
-		Bootnodes:            cfg.Bootnodes,
-		CheckPeersNumber:     cfg.CheckPeersNumber,
-		CheckTimeout:         cfg.CheckTimeout,
-		CheckInterval:        cfg.CheckInterval,
-		CheckPeersUsedBefore: cfg.CheckPeersUsedBefore,
-		AdvertiseAddress:     cfg.AdvertiseAddress,
-		PeerExchange:         cfg.peerExchange,
+		DataDir:          cfg.DataDir,
+		Bootnodes:        cfg.Bootnodes,
+		AdvertiseAddress: cfg.AdvertiseAddress,
+		MinPeers:         cfg.MinPeers,
+		SlowCrawl:        10 * time.Minute,
+		FastCrawl:        10 * time.Second,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
 	}
-	if fh.bootstrap, err = bootstrap.NewBootstrap(fh.logger, bootstrap.Config{
-		TargetOutbound: cfg.TargetOutbound,
-		Timeout:        cfg.BootstrapTimeout,
-	}, fh, fh.discovery); err != nil {
-		return nil, fmt.Errorf("failed to initiliaze bootstrap: %w", err)
-	}
 	fh.hs = handshake.New(fh, genesisID, handshake.WithLog(fh.logger))
+	if fh.nodeReporter != nil {
+		fh.Network().Notify(&network.NotifyBundle{
+			ConnectedF: func(network.Network, network.Conn) {
+				fh.nodeReporter()
+			},
+			DisconnectedF: func(network.Network, network.Conn) {
+				fh.nodeReporter()
+			},
+		})
+	}
 	return fh, nil
+}
+
+// GetPeers returns connected peers.
+func (fh *Host) GetPeers() []Peer {
+	return fh.Host.Network().Peers()
+}
+
+// PeerCount returns number of connected peers.
+func (fh *Host) PeerCount() uint64 {
+	return uint64(len(fh.Host.Network().Peers()))
 }
 
 // Stop background workers and release external resources.
 func (fh *Host) Stop() error {
 	fh.discovery.Stop()
-	fh.bootstrap.Stop()
-	fh.Peers.Stop()
 	fh.hs.Stop()
 	if err := fh.Host.Close(); err != nil {
 		return fmt.Errorf("failed to close libp2p host: %w", err)

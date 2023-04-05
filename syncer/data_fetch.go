@@ -267,12 +267,12 @@ func fetchMalfeasanceProof(ctx context.Context, logger log.Log, ids idProvider, 
 		}
 	}
 	if len(idsToFetch) > 0 {
-		logger.With().Debug("fetching malfeasance proofs", log.Int("to_fetch", len(idsToFetch)))
+		logger.With().Info("fetching malfeasance proofs", log.Int("to_fetch", len(idsToFetch)))
 		if err := fetcher.GetMalfeasanceProofs(ctx, idsToFetch); err != nil {
 			logger.With().Warning("failed fetching malfeasance proofs",
 				log.Array("malicious_ids", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 					for _, nodeID := range idsToFetch {
-						encoder.AppendString(nodeID.ShortString())
+						encoder.AppendString(nodeID.String())
 					}
 					return nil
 				})),

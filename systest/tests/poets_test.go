@@ -121,6 +121,7 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 }
 
 func TestNodesUsingDifferentPoets(t *testing.T) {
+	t.Parallel()
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	if tctx.PoetSize < 2 {
 		t.Skip("Skipping test for using different poets - test configured with less then 2 poets")
@@ -193,7 +194,7 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 	}
 
 	firstEpochWithEligibility := uint32(math.Max(2.0, float64(first/layersPerEpoch)))
-	epochsInTest := (last/layersPerEpoch - firstEpochWithEligibility + 1)
+	epochsInTest := last/layersPerEpoch - firstEpochWithEligibility + 1
 	for id, eligibleEpochs := range smeshers {
 		assert.EqualValues(t, epochsInTest, len(eligibleEpochs), fmt.Sprintf("smesher ID: %v, its epochs: %v", hex.EncodeToString([]byte(id)), eligibleEpochs))
 	}

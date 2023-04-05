@@ -125,23 +125,23 @@ func createModifiedATXs(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerI
 	for i := 0; i < numATXs; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(tb, err)
-		nodeID := signer.NodeID()
 		signers = append(signers, signer)
 		address := types.GenerateAddress(signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(
 			types.NIPostChallenge{PubLayerID: lid},
-			&nodeID,
 			address,
 			nil,
 			numUnit,
 			nil,
 			nil,
 		)
+		atx.SetEffectiveNumUnits(numUnit)
+		atx.SetReceived(time.Now())
 		require.NoError(tb, activation.SignAndFinalizeAtx(signer, atx))
 		vAtx, err := onAtx(atx)
 		require.NoError(tb, err)
 
-		require.NoError(tb, atxs.Add(cdb, vAtx, time.Now()))
+		require.NoError(tb, atxs.Add(cdb, vAtx))
 		atxes = append(atxes, atx)
 	}
 	return signers, atxes
@@ -153,7 +153,7 @@ func createProposals(
 	layerID types.LayerID,
 	meshHash types.Hash32,
 	signers []*signing.EdSigner,
-	activeSet []types.ATXID,
+	activeSet types.ATXIDList,
 	txIDs []types.TransactionID,
 ) []*types.Proposal {
 	t.Helper()
@@ -162,17 +162,14 @@ func createProposals(
 	require.Zero(t, len(txIDs)%numProposals)
 	pieSize := len(txIDs) / numProposals
 	plist := make([]*types.Proposal, 0, numProposals)
-	epochData := &types.EpochData{
-		ActiveSet: activeSet,
-		Beacon:    types.RandomBeacon(),
-	}
 	for i := 0; i < numProposals; i++ {
 		from := i * pieSize
 		to := from + (2 * pieSize) // every adjacent proposal will overlap pieSize of TXs
 		if to > len(txIDs) {
 			to = len(txIDs)
 		}
-		p := createProposal(t, epochData, layerID, meshHash, activeSet[i], signers[i], txIDs[from:to], 1)
+		p := createProposal(t, activeSet, layerID, meshHash, activeSet[i], signers[i], txIDs[from:to], 1)
+		p.ActiveSet = activeSet
 		plist = append(plist, p)
 		require.NoError(t, proposals.Add(db, p))
 		require.NoError(t, ballots.Add(db, &p.Ballot))
@@ -182,7 +179,7 @@ func createProposals(
 
 func createProposal(
 	t *testing.T,
-	epochData *types.EpochData,
+	activeSet types.ATXIDList,
 	lid types.LayerID,
 	meshHash types.Hash32,
 	atxID types.ATXID,
@@ -199,16 +196,18 @@ func createProposal(
 				},
 				InnerBallot: types.InnerBallot{
 					AtxID:     atxID,
-					EpochData: epochData,
+					EpochData: &types.EpochData{Beacon: types.RandomBeacon()},
 				},
 				EligibilityProofs: make([]types.VotingEligibility, numEligibility),
+				ActiveSet:         activeSet,
 			},
 			TxIDs:    txIDs,
 			MeshHash: meshHash,
 		},
 	}
-	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(p.Bytes())
+	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
+	p.SetSmesherID(signer.NodeID())
 	require.NoError(t, p.Initialize())
 	return p
 }
@@ -216,10 +215,10 @@ func createProposal(
 func checkRewards(t *testing.T, atxs []*types.ActivationTx, expWeightPer *big.Rat, rewards []types.AnyReward) {
 	t.Helper()
 	sort.Slice(atxs, func(i, j int) bool {
-		return bytes.Compare(atxs[i].Coinbase.Bytes(), atxs[j].Coinbase.Bytes()) < 0
+		return bytes.Compare(atxs[i].ID().Bytes(), atxs[j].ID().Bytes()) < 0
 	})
 	for i, r := range rewards {
-		require.Equal(t, atxs[i].Coinbase, r.Coinbase)
+		require.Equal(t, atxs[i].ID(), r.AtxID)
 		got := r.Weight.ToBigRat()
 		require.Equal(t, expWeightPer, got)
 	}
@@ -241,7 +240,7 @@ func Test_SerialProcessing(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numLayers)
 	for i := uint32(1); i <= uint32(numLayers); i++ {
-		lid := types.NewLayerID(i)
+		lid := types.LayerID(i)
 		tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), lid, types.EmptyBlockID).Return(nil)
 		tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), lid, types.EmptyBlockID).Return(nil)
 		tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lid, types.EmptyBlockID, false).Do(
@@ -255,19 +254,19 @@ func Test_SerialProcessing(t *testing.T) {
 
 	tg.hareCh <- hare.LayerOutput{
 		Ctx:   context.Background(),
-		Layer: types.NewLayerID(3),
+		Layer: types.LayerID(3),
 	}
 	tg.hareCh <- hare.LayerOutput{
 		Ctx:   context.Background(),
-		Layer: types.NewLayerID(4),
+		Layer: types.LayerID(4),
 	}
 	tg.hareCh <- hare.LayerOutput{
 		Ctx:   context.Background(),
-		Layer: types.NewLayerID(2),
+		Layer: types.LayerID(2),
 	}
 	tg.hareCh <- hare.LayerOutput{
 		Ctx:   context.Background(),
-		Layer: types.NewLayerID(1),
+		Layer: types.LayerID(1),
 	}
 
 	wg.Wait()
@@ -489,13 +488,9 @@ func Test_generateBlock_bad_state(t *testing.T) {
 	layerID := types.GetEffectiveGenesis().Add(100)
 	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), 1)
 	activeSet := types.ToATXIDs(atxes)
-	epochData := &types.EpochData{
-		ActiveSet: activeSet,
-		Beacon:    types.RandomBeacon(),
-	}
 
 	t.Run("tx missing", func(t *testing.T) {
-		p := createProposal(t, epochData, layerID, types.Hash32{}, activeSet[0], signers[0], []types.TransactionID{types.RandomTransactionID()}, 1)
+		p := createProposal(t, activeSet, layerID, types.Hash32{}, activeSet[0], signers[0], []types.TransactionID{types.RandomTransactionID()}, 1)
 		block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, []*types.Proposal{p})
 		require.ErrorIs(t, err, errProposalTxMissing)
 		require.False(t, executed)
@@ -507,7 +502,7 @@ func Test_generateBlock_bad_state(t *testing.T) {
 			RawTx: types.NewRawTx([]byte{1, 1, 1}),
 		}
 		require.NoError(t, transactions.Add(tg.cdb, &tx, time.Now()))
-		p := createProposal(t, epochData, layerID, types.Hash32{}, activeSet[0], signers[0], []types.TransactionID{tx.ID}, 1)
+		p := createProposal(t, activeSet, layerID, types.Hash32{}, activeSet[0], signers[0], []types.TransactionID{tx.ID}, 1)
 		block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, []*types.Proposal{p})
 		require.ErrorIs(t, err, errProposalTxHdrMissing)
 		require.False(t, executed)
@@ -521,13 +516,9 @@ func Test_generateBlock_EmptyProposals(t *testing.T) {
 	lid := types.GetEffectiveGenesis().Add(20)
 	signers, atxes := createATXs(t, tg.cdb, (lid.GetEpoch() - 1).FirstLayer(), numProposals)
 	activeSet := types.ToATXIDs(atxes)
-	epochData := &types.EpochData{
-		ActiveSet: activeSet,
-		Beacon:    types.RandomBeacon(),
-	}
 	plist := make([]*types.Proposal, 0, numProposals)
 	for i := 0; i < numProposals; i++ {
-		p := createProposal(t, epochData, lid, types.Hash32{}, activeSet[i], signers[i], nil, 1)
+		p := createProposal(t, activeSet, lid, types.Hash32{}, activeSet[i], signers[i], nil, 1)
 		plist = append(plist, p)
 	}
 	block, executed, err := tg.generateBlock(context.Background(), tg.logger, lid, plist)
@@ -572,7 +563,7 @@ func Test_generateBlock_StableBlockID(t *testing.T) {
 	require.Equal(t, block.ID(), block2.ID())
 }
 
-func Test_generateBlock_SameCoinbase(t *testing.T) {
+func Test_generateBlock_SameATX(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	numTXs := 1000
@@ -580,26 +571,14 @@ func Test_generateBlock_SameCoinbase(t *testing.T) {
 	txIDs := createAndSaveTxs(t, numTXs, tg.cdb)
 	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
 	activeSet := types.ToATXIDs(atxes)
-	epochData := &types.EpochData{
-		ActiveSet: activeSet,
-		Beacon:    types.RandomBeacon(),
-	}
 	atxID := activeSet[0]
-	proposal1 := createProposal(t, epochData, layerID, types.Hash32{}, atxID, signers[0], txIDs[0:500], 1)
-	proposal2 := createProposal(t, epochData, layerID, types.Hash32{}, atxID, signers[0], txIDs[400:], 1)
+	proposal1 := createProposal(t, activeSet, layerID, types.Hash32{}, atxID, signers[0], txIDs[0:500], 1)
+	proposal2 := createProposal(t, activeSet, layerID, types.Hash32{}, atxID, signers[0], txIDs[400:], 1)
 	plist := []*types.Proposal{proposal1, proposal2}
 	block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, plist)
-	require.NoError(t, err)
+	require.ErrorIs(t, err, errDuplicateATX)
 	require.False(t, executed)
-	require.NotEqual(t, types.EmptyBlockID, block.ID())
-	require.Equal(t, layerID, block.LayerIndex)
-	require.Len(t, block.TxIDs, numTXs)
-
-	// numUnit is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1 eligibility
-	// the expected weight for each eligibility is `numUnit` * 1/3
-	// since there are two proposals for the same coinbase, the final weight is `numUnit` * 1/3 * 2
-	expWeight := new(big.Rat).SetInt64(numUnit * 1 / 3 * 2)
-	checkRewards(t, atxes[0:1], expWeight, block.Rewards)
+	require.Nil(t, block)
 }
 
 func Test_generateBlock_EmptyATXID(t *testing.T) {
@@ -614,7 +593,7 @@ func Test_generateBlock_EmptyATXID(t *testing.T) {
 	plist := createProposals(t, tg.cdb, layerID, types.Hash32{}, signers, activeSet, txIDs)
 	// set the last proposal ID to be empty
 	types.SortProposals(plist)
-	plist[numProposals-1].AtxID = *types.EmptyATXID
+	plist[numProposals-1].AtxID = types.EmptyATXID
 	block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, plist)
 	require.ErrorIs(t, err, errInvalidATXID)
 	require.False(t, executed)
@@ -627,14 +606,10 @@ func Test_generateBlock_MultipleEligibilities(t *testing.T) {
 	ids := createAndSaveTxs(t, 1000, tg.cdb)
 	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
-	epochData := &types.EpochData{
-		ActiveSet: activeSet,
-		Beacon:    types.RandomBeacon(),
-	}
 	plist := []*types.Proposal{
-		createProposal(t, epochData, layerID, types.Hash32{}, atxes[0].ID(), signers[0], ids, 2),
-		createProposal(t, epochData, layerID, types.Hash32{}, atxes[1].ID(), signers[1], ids, 1),
-		createProposal(t, epochData, layerID, types.Hash32{}, atxes[2].ID(), signers[2], ids, 5),
+		createProposal(t, activeSet, layerID, types.Hash32{}, atxes[0].ID(), signers[0], ids, 2),
+		createProposal(t, activeSet, layerID, types.Hash32{}, atxes[1].ID(), signers[1], ids, 1),
+		createProposal(t, activeSet, layerID, types.Hash32{}, atxes[2].ID(), signers[2], ids, 5),
 	}
 
 	block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, plist)
@@ -642,13 +617,11 @@ func Test_generateBlock_MultipleEligibilities(t *testing.T) {
 	require.False(t, executed)
 	require.Len(t, block.Rewards, len(plist))
 	sort.Slice(plist, func(i, j int) bool {
-		cbi := types.GenerateAddress(plist[i].SmesherID().Bytes())
-		cbj := types.GenerateAddress(plist[j].SmesherID().Bytes())
-		return bytes.Compare(cbi.Bytes(), cbj.Bytes()) < 0
+		return bytes.Compare(plist[i].AtxID.Bytes(), plist[j].AtxID.Bytes()) < 0
 	})
 	totalWeight := new(big.Rat)
 	for i, r := range block.Rewards {
-		require.Equal(t, types.GenerateAddress(plist[i].SmesherID().Bytes()), r.Coinbase)
+		require.Equal(t, plist[i].AtxID, r.AtxID)
 		got := r.Weight.ToBigRat()
 		// numUint is the ATX weight. eligible slots per epoch is 3 for each atx
 		// the expected weight for each eligibility is `numUnit` * 1/3

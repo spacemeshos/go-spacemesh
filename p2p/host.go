@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
@@ -16,25 +15,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
-	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
 )
 
 // DefaultConfig config.
 func DefaultConfig() Config {
 	return Config{
-		Listen:               "/ip4/0.0.0.0/tcp/7513",
-		Flood:                true,
-		TargetOutbound:       5,
-		LowPeers:             40,
-		HighPeers:            100,
-		GracePeersShutdown:   30 * time.Second,
-		BootstrapTimeout:     10 * time.Second,
-		MaxMessageSize:       2 << 20,
-		CheckInterval:        3 * time.Minute,
-		CheckTimeout:         30 * time.Second,
-		CheckPeersNumber:     10,
-		CheckPeersUsedBefore: 30 * time.Minute,
-		peerExchange:         peerexchange.DefaultPeerExchangeConfig(),
+		Listen:             "/ip4/0.0.0.0/tcp/7513",
+		Flood:              false,
+		MinPeers:           6,
+		LowPeers:           40,
+		HighPeers:          100,
+		GracePeersShutdown: 30 * time.Second,
+		MaxMessageSize:     2 << 20,
 	}
 }
 
@@ -43,25 +35,16 @@ type Config struct {
 	DataDir            string
 	LogLevel           log.Level
 	GracePeersShutdown time.Duration
-	BootstrapTimeout   time.Duration
 	MaxMessageSize     int
 
 	DisableNatPort   bool     `mapstructure:"disable-natport"`
 	Flood            bool     `mapstructure:"flood"`
 	Listen           string   `mapstructure:"listen"`
 	Bootnodes        []string `mapstructure:"bootnodes"`
-	TargetOutbound   int      `mapstructure:"target-outbound"`
+	MinPeers         int      `mapstructure:"min-peers"`
 	LowPeers         int      `mapstructure:"low-peers"`
 	HighPeers        int      `mapstructure:"high-peers"`
 	AdvertiseAddress string   `mapstructure:"advertise-address"`
-
-	// Discovery book check section.
-	CheckInterval        time.Duration
-	CheckTimeout         time.Duration
-	CheckPeersNumber     int
-	CheckPeersUsedBefore time.Duration
-
-	peerExchange peerexchange.PeerExchangeConfig `mapstructure:"peer-exchange"`
 }
 
 // New initializes libp2p host configured for spacemesh.
@@ -75,14 +58,6 @@ func New(_ context.Context, logger log.Log, cfg Config, genesisID types.Hash20, 
 	cm, err := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, connmgr.WithGracePeriod(cfg.GracePeersShutdown))
 	if err != nil {
 		return nil, fmt.Errorf("p2p create conn mgr: %w", err)
-	}
-	// TODO(dshulyak) remove this part
-	for _, p := range cfg.Bootnodes {
-		addr, err := peer.AddrInfoFromString(p)
-		if err != nil {
-			return nil, fmt.Errorf("can't create peer addr from %s: %w", p, err)
-		}
-		cm.Protect(addr.ID, peerexchange.BootNodeTag)
 	}
 	streamer := *yamux.DefaultTransport
 	ps, err := pstoremem.NewPeerstore()

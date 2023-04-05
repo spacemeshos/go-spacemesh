@@ -14,7 +14,7 @@ func TestAddGet(t *testing.T) {
 	db := sql.InMemory()
 	block := types.NewExistingBlock(
 		types.BlockID{1, 1},
-		types.InnerBlock{LayerIndex: types.NewLayerID(1)},
+		types.InnerBlock{LayerIndex: types.LayerID(1)},
 	)
 
 	require.NoError(t, Add(db, block))
@@ -51,7 +51,7 @@ func TestHas(t *testing.T) {
 
 func TestValidity(t *testing.T) {
 	db := sql.InMemory()
-	lid := types.NewLayerID(1)
+	lid := types.LayerID(1)
 	blocks := []*types.Block{
 		types.NewExistingBlock(
 			types.BlockID{1, 1},
@@ -85,7 +85,7 @@ func TestValidity(t *testing.T) {
 
 func TestLayerFilter(t *testing.T) {
 	db := sql.InMemory()
-	start := types.NewLayerID(1)
+	start := types.LayerID(1)
 	blocks := []*types.Block{
 		types.NewExistingBlock(
 			types.BlockID{1, 1},
@@ -121,7 +121,7 @@ func TestLayerFilter(t *testing.T) {
 
 func TestLayerOrdered(t *testing.T) {
 	db := sql.InMemory()
-	start := types.NewLayerID(1)
+	start := types.LayerID(1)
 	blocks := []*types.Block{
 		types.NewExistingBlock(
 			types.BlockID{1, 1},
@@ -152,7 +152,7 @@ func TestLayerOrdered(t *testing.T) {
 
 func TestContextualValidity(t *testing.T) {
 	db := sql.InMemory()
-	lid := types.NewLayerID(1)
+	lid := types.LayerID(1)
 	blocks := []*types.Block{
 		types.NewExistingBlock(
 			types.BlockID{1},
@@ -181,7 +181,6 @@ func TestContextualValidity(t *testing.T) {
 
 	for i, validity := range validities {
 		require.Equal(t, blocks[i].ID(), validity.ID)
-		require.Equal(t, lid, validity.Layer)
 		require.False(t, validity.Validity)
 		require.NoError(t, SetValid(db, validity.ID))
 	}
@@ -197,7 +196,7 @@ func TestContextualValidity(t *testing.T) {
 
 func TestGetLayer(t *testing.T) {
 	db := sql.InMemory()
-	lid1 := types.NewLayerID(11)
+	lid1 := types.LayerID(11)
 	block1 := types.NewExistingBlock(
 		types.BlockID{1, 1},
 		types.InnerBlock{LayerIndex: lid1},

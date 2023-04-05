@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
-	grpcmw "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
@@ -24,6 +23,7 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -69,7 +69,7 @@ const (
 
 // Logger names.
 const (
-	AppLogger              = "app"
+	ClockLogger            = "clock"
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
 	StateDbLogger          = "stateDbStore"
@@ -186,22 +186,10 @@ type Service interface {
 	Close()
 }
 
-// TickProvider is an interface to a global system clock that releases ticks on each layer.
-type TickProvider interface {
-	Subscribe() timesync.LayerTimer
-	Unsubscribe(timesync.LayerTimer)
-	GetCurrentLayer() types.LayerID
-	StartNotifying()
-	GetGenesisTime() time.Time
-	timesync.LayerConverter
-	Close()
-	AwaitLayer(types.LayerID) chan struct{}
-}
-
 func loadConfig(c *cobra.Command) (*config.Config, error) {
 	conf, err := LoadConfigFromFile()
 	if err != nil {
-		return nil, fmt.Errorf("loading config from file: %w", err)
+		return nil, err
 	}
 	if err := cmd.EnsureCLIFlags(c, conf); err != nil {
 		return nil, fmt.Errorf("mapping cli flags to config: %w", err)
@@ -211,17 +199,11 @@ func loadConfig(c *cobra.Command) (*config.Config, error) {
 
 // LoadConfigFromFile tries to load configuration file if the config parameter was specified.
 func LoadConfigFromFile() (*config.Config, error) {
-	fileLocation := viper.GetString("config")
-
 	// read in default config if passed as param using viper
-	if err := config.LoadConfig(fileLocation, viper.GetViper()); err != nil {
-		log.Error(fmt.Sprintf("couldn't load config file at location: %s switching to defaults \n error: %v.",
-			fileLocation, err))
-		// return err
+	if err := config.LoadConfig(viper.GetString("config"), viper.GetViper()); err != nil {
+		return nil, err
 	}
-
 	conf := config.DefaultConfig()
-
 	if name := viper.GetString("preset"); len(name) > 0 {
 		preset, err := presets.Get(name)
 		if err != nil {
@@ -292,7 +274,7 @@ type App struct {
 	proposalBuilder  *miner.ProposalBuilder
 	mesh             *mesh.Mesh
 	cachedDB         *datastore.CachedDB
-	clock            TickProvider
+	clock            *timesync.NodeClock
 	hare             *hare.Hare
 	blockGen         *blocks.Generator
 	certifier        *blocks.Certifier
@@ -301,6 +283,7 @@ type App struct {
 	atxHandler       *activation.Handler
 	validator        *activation.Validator
 	keyExtractor     *signing.PubKeyExtractor
+	edVerifier       *signing.EdVerifier
 	beaconProtocol   *beacon.ProtocolDriver
 	log              log.Log
 	svm              *vm.VM
@@ -463,7 +446,7 @@ func (app *App) initServices(
 	sgn *signing.EdSigner,
 	poetClients []activation.PoetProvingServiceClient,
 	vrfSigner *signing.VRFSigner,
-	clock TickProvider,
+	clock *timesync.NodeClock,
 ) error {
 	nodeID := sgn.NodeID()
 	layerSize := uint32(app.Config.LayerAvgSize)
@@ -501,7 +484,7 @@ func (app *App) initServices(
 	}
 
 	goldenATXID := types.ATXID(app.Config.Genesis.GenesisID().ToHash32())
-	if goldenATXID == *types.EmptyATXID {
+	if goldenATXID == types.EmptyATXID {
 		return errors.New("invalid golden atx id")
 	}
 
@@ -513,10 +496,13 @@ func (app *App) initServices(
 		return fmt.Errorf("failed to create key extractor: %w", err)
 	}
 
-	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
+	app.edVerifier, err = signing.NewEdVerifier(signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
+	if err != nil {
+		return fmt.Errorf("failed to create signature verifier: %w", err)
+	}
 
 	vrfVerifier := signing.NewVRFVerifier()
-	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifier, app.cachedDB, clock,
+	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.edVerifier, vrfSigner, vrfVerifier, app.cachedDB, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
@@ -524,21 +510,44 @@ func (app *App) initServices(
 
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
-	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
-	trtl := tortoise.New(app.cachedDB, beaconProtocol,
+	if trtlCfg.BadBeaconVoteDelayLayers == 0 {
+		trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
+	}
+	trtl, err := tortoise.New(app.cachedDB, beaconProtocol,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
 	)
+	if err != nil {
+		return fmt.Errorf("can't recover tortoise state: %w", err)
+	}
 
-	executor := mesh.NewExecutor(app.db, state, app.conState, app.addLogger(Executor, lg))
+	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(Executor, lg))
 	msh, err := mesh.NewMesh(app.cachedDB, clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
+	poetCfg := activation.PoetConfig{
+		PhaseShift:  app.Config.POET.PhaseShift,
+		CycleGap:    app.Config.POET.CycleGap,
+		GracePeriod: app.Config.POET.GracePeriod,
+	}
 	fetcherWrapped := &layerFetcher{}
-	atxHandler := activation.NewHandler(app.cachedDB, clock, app.host, fetcherWrapped, layersPerEpoch, app.Config.TickSize, goldenATXID, validator, trtl, app.addLogger(ATXHandlerLogger, lg))
+	atxHandler := activation.NewHandler(
+		app.cachedDB,
+		app.edVerifier,
+		clock,
+		app.host,
+		fetcherWrapped,
+		layersPerEpoch,
+		app.Config.TickSize,
+		goldenATXID,
+		validator,
+		[]activation.AtxReceiver{trtl, beaconProtocol},
+		app.addLogger(ATXHandlerLogger, lg),
+		poetCfg,
+	)
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
@@ -547,7 +556,7 @@ func (app *App) initServices(
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier,
+	proposalListener := proposals.NewHandler(app.cachedDB, app.keyExtractor, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, clock,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,
@@ -570,9 +579,9 @@ func (app *App) initServices(
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
-			CertifyThreshold: app.Config.HARE.F + 1,
-			WaitSigLayers:    app.Config.Tortoise.Zdist,
-			NumLayersToKeep:  app.Config.Tortoise.Zdist,
+			CertifyThreshold: app.Config.HARE.N/2 + 1,
+			LayerBuffer:      app.Config.Tortoise.Zdist,
+			NumLayersToKeep:  app.Config.Tortoise.Zdist * 2,
 		}),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
 	)
@@ -581,12 +590,6 @@ func (app *App) initServices(
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(app.addLogger(Fetcher, lg)),
-		fetch.WithATXHandler(atxHandler),
-		fetch.WithBallotHandler(proposalListener),
-		fetch.WithBlockHandler(blockHandler),
-		fetch.WithProposalHandler(proposalListener),
-		fetch.WithTXHandler(txHandler),
-		fetch.WithPoetHandler(poetDb),
 	)
 	fetcherWrapped.Fetcher = fetcher
 
@@ -647,7 +650,7 @@ func (app *App) initServices(
 		beaconProtocol,
 		newSyncer,
 		app.conState,
-		miner.WithMinerID(nodeID),
+		miner.WithNodeID(nodeID),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
@@ -659,11 +662,6 @@ func (app *App) initServices(
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	poetCfg := activation.PoetConfig{
-		PhaseShift:  app.Config.POET.PhaseShift,
-		CycleGap:    app.Config.POET.CycleGap,
-		GracePeriod: app.Config.POET.GracePeriod,
-	}
 	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, app.db, app.addLogger(NipostBuilderLogger, lg), sgn, poetCfg, clock)
 
 	var coinbaseAddr types.Address
@@ -686,6 +684,7 @@ func (app *App) initServices(
 		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(poetCfg),
+		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
 	)
 
 	malfeasanceHandler := malfeasance.NewHandler(
@@ -694,7 +693,9 @@ func (app *App) initServices(
 		app.host.ID(),
 		app.hare,
 		app.keyExtractor,
+		app.edVerifier,
 	)
+	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, txHandler, malfeasanceHandler)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
 		if newSyncer.ListenToGossip() {
@@ -748,7 +749,9 @@ func (app *App) initServices(
 }
 
 func (app *App) startServices(ctx context.Context) error {
-	app.fetcher.Start()
+	if err := app.fetcher.Start(); err != nil {
+		return fmt.Errorf("failed to start fetcher: %w", err)
+	}
 	go app.startSyncer(ctx)
 	app.beaconProtocol.Start(ctx)
 
@@ -773,7 +776,6 @@ func (app *App) startServices(ctx context.Context) error {
 		log.Info("smeshing not started, waiting to be triggered via smesher api")
 	}
 
-	app.clock.StartNotifying()
 	if app.ptimesync != nil {
 		app.ptimesync.Start()
 	}
@@ -797,12 +799,10 @@ func (app *App) startAPIServices(ctx context.Context) {
 			logger := app.addLogger(GRPCLogger, app.log).Zap()
 			grpczap.SetGrpcLoggerV2(grpclog, logger)
 			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
-				grpcmw.WithStreamServerChain(
-					grpctags.StreamServerInterceptor(),
-					grpczap.StreamServerInterceptor(logger)),
-				grpcmw.WithUnaryServerChain(
-					grpctags.UnaryServerInterceptor(),
-					grpczap.UnaryServerInterceptor(logger)),
+				grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger)),
+				grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger)),
+				grpc.MaxSendMsgSize(apiConf.GrpcSendMsgSize),
+				grpc.MaxRecvMsgSize(apiConf.GrpcRecvMsgSize),
 			)
 		}
 		services = append(services, svc)
@@ -812,10 +812,6 @@ func (app *App) startAPIServices(ctx context.Context) {
 	// Register the requested services one by one
 	if apiConf.StartDebugService {
 		registerService(grpcserver.NewDebugService(app.conState, app.host))
-	}
-	if apiConf.StartGatewayService {
-		verifier := activation.NewChallengeVerifier(app.cachedDB, app.keyExtractor, app.validator, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
-		registerService(grpcserver.NewGatewayService(verifier))
 	}
 	if apiConf.StartGlobalStateService {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
@@ -916,10 +912,6 @@ func (app *App) stopServices(ctx context.Context) {
 		app.ptimesync.Stop()
 		app.log.Debug("peer timesync stopped")
 	}
-	if app.tortoise != nil {
-		app.log.Info("stopping tortoise. if tortoise is in rerun it may take a while")
-		app.tortoise.Stop()
-	}
 
 	if app.host != nil {
 		if err := app.host.Stop(); err != nil {
@@ -982,11 +974,6 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 }
 
 func (app *App) startSyncer(ctx context.Context) {
-	app.log.Info("sync: waiting for tortoise to load state")
-	if err := app.tortoise.WaitReady(ctx); err != nil {
-		app.log.With().Error("sync: tortoise failed to load state", log.Err(err))
-		return
-	}
 	app.syncer.Start(ctx)
 }
 
@@ -995,7 +982,10 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
 
-	sqlDB, err := sql.Open("file:" + filepath.Join(dbPath, "state.sql"))
+	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, "state.sql"),
+		sql.WithConnections(app.Config.DatabaseConnections),
+		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
+	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
@@ -1065,11 +1055,14 @@ func (app *App) Start(ctx context.Context) error {
 
 	poetClients := make([]activation.PoetProvingServiceClient, 0, len(app.Config.PoETServers))
 	for _, address := range app.Config.PoETServers {
-		poetClients = append(poetClients, activation.NewHTTPPoetClient(address, app.Config.POET))
+		client, err := activation.NewHTTPPoetClient(address, app.Config.POET)
+		if err != nil {
+			return fmt.Errorf("cannot create poet client: %w", err)
+		}
+		poetClients = append(poetClients, client)
 	}
 
-	edPubkey := edSgn.PublicKey()
-	app.nodeID = types.BytesToNodeID(edPubkey.Bytes())
+	app.nodeID = edSgn.NodeID()
 
 	lg := logger.Named(app.nodeID.ShortString()).WithFields(app.nodeID)
 
@@ -1077,9 +1070,17 @@ func (app *App) Start(ctx context.Context) error {
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
 	if err != nil {
-		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.Genesis.GenesisTime, err)
+		return fmt.Errorf("cannot parse genesis time %s: %w", app.Config.Genesis.GenesisTime, err)
 	}
-	clock := timesync.NewClock(timesync.RealClock{}, app.Config.LayerDuration, gTime, lg.WithName("clock"))
+	clock, err := timesync.NewClock(
+		timesync.WithLayerDuration(app.Config.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(app.addLogger(ClockLogger, lg)),
+	)
+	if err != nil {
+		return fmt.Errorf("cannot create clock: %w", err)
+	}
 
 	lg.Info("initializing p2p services")
 
@@ -1105,7 +1106,6 @@ func (app *App) Start(ctx context.Context) error {
 		return fmt.Errorf("could not create vrf signer: %w", err)
 	}
 
-	app.log = app.addLogger(AppLogger, lg)
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 	err = app.initServices(
 		ctx,
@@ -1133,7 +1133,7 @@ func (app *App) Start(ctx context.Context) error {
 
 	app.startAPIServices(ctx)
 
-	events.SubscribeToLayers(clock.Subscribe())
+	events.SubscribeToLayers(clock)
 	logger.Info("app started")
 
 	// notify anyone who might be listening that the app has finished starting.

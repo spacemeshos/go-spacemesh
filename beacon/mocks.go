@@ -10,12 +10,9 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-	weakcoin "github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	pubsub "github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	signing "github.com/spacemeshos/go-spacemesh/signing"
-	timesync "github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 // Mockcoin is a mock of coin interface.
@@ -66,11 +63,12 @@ func (mr *MockcoinMockRecorder) FinishRound(arg0 interface{}) *gomock.Call {
 }
 
 // Get mocks base method.
-func (m *Mockcoin) Get(arg0 context.Context, arg1 types.EpochID, arg2 types.RoundID) bool {
+func (m *Mockcoin) Get(arg0 context.Context, arg1 types.EpochID, arg2 types.RoundID) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Get indicates an expected call of Get.
@@ -94,29 +92,27 @@ func (mr *MockcoinMockRecorder) HandleProposal(arg0, arg1, arg2 interface{}) *go
 }
 
 // StartEpoch mocks base method.
-func (m *Mockcoin) StartEpoch(arg0 context.Context, arg1 types.EpochID, arg2 types.VRFPostIndex, arg3 weakcoin.UnitAllowances) {
+func (m *Mockcoin) StartEpoch(arg0 context.Context, arg1 types.EpochID) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "StartEpoch", arg0, arg1, arg2, arg3)
+	m.ctrl.Call(m, "StartEpoch", arg0, arg1)
 }
 
 // StartEpoch indicates an expected call of StartEpoch.
-func (mr *MockcoinMockRecorder) StartEpoch(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockcoinMockRecorder) StartEpoch(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartEpoch", reflect.TypeOf((*Mockcoin)(nil).StartEpoch), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartEpoch", reflect.TypeOf((*Mockcoin)(nil).StartEpoch), arg0, arg1)
 }
 
 // StartRound mocks base method.
-func (m *Mockcoin) StartRound(arg0 context.Context, arg1 types.RoundID) error {
+func (m *Mockcoin) StartRound(arg0 context.Context, arg1 types.RoundID, arg2 *types.VRFPostIndex) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartRound", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
+	m.ctrl.Call(m, "StartRound", arg0, arg1, arg2)
 }
 
 // StartRound indicates an expected call of StartRound.
-func (mr *MockcoinMockRecorder) StartRound(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockcoinMockRecorder) StartRound(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartRound", reflect.TypeOf((*Mockcoin)(nil).StartRound), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartRound", reflect.TypeOf((*Mockcoin)(nil).StartRound), arg0, arg1, arg2)
 }
 
 // MockeligibilityChecker is a mock of eligibilityChecker interface.
@@ -142,18 +138,32 @@ func (m *MockeligibilityChecker) EXPECT() *MockeligibilityCheckerMockRecorder {
 	return m.recorder
 }
 
-// IsProposalEligible mocks base method.
-func (m *MockeligibilityChecker) IsProposalEligible(arg0 []byte) bool {
+// PassStrictThreshold mocks base method.
+func (m *MockeligibilityChecker) PassStrictThreshold(arg0 types.VrfSignature) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsProposalEligible", arg0)
+	ret := m.ctrl.Call(m, "PassStrictThreshold", arg0)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
-// IsProposalEligible indicates an expected call of IsProposalEligible.
-func (mr *MockeligibilityCheckerMockRecorder) IsProposalEligible(arg0 interface{}) *gomock.Call {
+// PassStrictThreshold indicates an expected call of PassStrictThreshold.
+func (mr *MockeligibilityCheckerMockRecorder) PassStrictThreshold(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsProposalEligible", reflect.TypeOf((*MockeligibilityChecker)(nil).IsProposalEligible), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PassStrictThreshold", reflect.TypeOf((*MockeligibilityChecker)(nil).PassStrictThreshold), arg0)
+}
+
+// PassThreshold mocks base method.
+func (m *MockeligibilityChecker) PassThreshold(arg0 types.VrfSignature) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PassThreshold", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// PassThreshold indicates an expected call of PassThreshold.
+func (mr *MockeligibilityCheckerMockRecorder) PassThreshold(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PassThreshold", reflect.TypeOf((*MockeligibilityChecker)(nil).PassThreshold), arg0)
 }
 
 // MocklayerClock is a mock of layerClock interface.
@@ -179,18 +189,32 @@ func (m *MocklayerClock) EXPECT() *MocklayerClockMockRecorder {
 	return m.recorder
 }
 
-// GetCurrentLayer mocks base method.
-func (m *MocklayerClock) GetCurrentLayer() types.LayerID {
+// AwaitLayer mocks base method.
+func (m *MocklayerClock) AwaitLayer(arg0 types.LayerID) chan struct{} {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCurrentLayer")
+	ret := m.ctrl.Call(m, "AwaitLayer", arg0)
+	ret0, _ := ret[0].(chan struct{})
+	return ret0
+}
+
+// AwaitLayer indicates an expected call of AwaitLayer.
+func (mr *MocklayerClockMockRecorder) AwaitLayer(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AwaitLayer", reflect.TypeOf((*MocklayerClock)(nil).AwaitLayer), arg0)
+}
+
+// CurrentLayer mocks base method.
+func (m *MocklayerClock) CurrentLayer() types.LayerID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CurrentLayer")
 	ret0, _ := ret[0].(types.LayerID)
 	return ret0
 }
 
-// GetCurrentLayer indicates an expected call of GetCurrentLayer.
-func (mr *MocklayerClockMockRecorder) GetCurrentLayer() *gomock.Call {
+// CurrentLayer indicates an expected call of CurrentLayer.
+func (mr *MocklayerClockMockRecorder) CurrentLayer() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentLayer", reflect.TypeOf((*MocklayerClock)(nil).GetCurrentLayer))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentLayer", reflect.TypeOf((*MocklayerClock)(nil).CurrentLayer))
 }
 
 // LayerToTime mocks base method.
@@ -205,32 +229,6 @@ func (m *MocklayerClock) LayerToTime(arg0 types.LayerID) time.Time {
 func (mr *MocklayerClockMockRecorder) LayerToTime(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerToTime", reflect.TypeOf((*MocklayerClock)(nil).LayerToTime), arg0)
-}
-
-// Subscribe mocks base method.
-func (m *MocklayerClock) Subscribe() timesync.LayerTimer {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Subscribe")
-	ret0, _ := ret[0].(timesync.LayerTimer)
-	return ret0
-}
-
-// Subscribe indicates an expected call of Subscribe.
-func (mr *MocklayerClockMockRecorder) Subscribe() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Subscribe", reflect.TypeOf((*MocklayerClock)(nil).Subscribe))
-}
-
-// Unsubscribe mocks base method.
-func (m *MocklayerClock) Unsubscribe(arg0 timesync.LayerTimer) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Unsubscribe", arg0)
-}
-
-// Unsubscribe indicates an expected call of Unsubscribe.
-func (mr *MocklayerClockMockRecorder) Unsubscribe(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unsubscribe", reflect.TypeOf((*MocklayerClock)(nil).Unsubscribe), arg0)
 }
 
 // MockvrfSigner is a mock of vrfSigner interface.
@@ -270,25 +268,25 @@ func (mr *MockvrfSignerMockRecorder) LittleEndian() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LittleEndian", reflect.TypeOf((*MockvrfSigner)(nil).LittleEndian))
 }
 
-// PublicKey mocks base method.
-func (m *MockvrfSigner) PublicKey() *signing.PublicKey {
+// NodeID mocks base method.
+func (m *MockvrfSigner) NodeID() types.NodeID {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PublicKey")
-	ret0, _ := ret[0].(*signing.PublicKey)
+	ret := m.ctrl.Call(m, "NodeID")
+	ret0, _ := ret[0].(types.NodeID)
 	return ret0
 }
 
-// PublicKey indicates an expected call of PublicKey.
-func (mr *MockvrfSignerMockRecorder) PublicKey() *gomock.Call {
+// NodeID indicates an expected call of NodeID.
+func (mr *MockvrfSignerMockRecorder) NodeID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublicKey", reflect.TypeOf((*MockvrfSigner)(nil).PublicKey))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NodeID", reflect.TypeOf((*MockvrfSigner)(nil).NodeID))
 }
 
 // Sign mocks base method.
-func (m *MockvrfSigner) Sign(msg []byte) []byte {
+func (m *MockvrfSigner) Sign(msg []byte) types.VrfSignature {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Sign", msg)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].(types.VrfSignature)
 	return ret0
 }
 
@@ -322,7 +320,7 @@ func (m *MockvrfVerifier) EXPECT() *MockvrfVerifierMockRecorder {
 }
 
 // Verify mocks base method.
-func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg, sig []byte) bool {
+func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Verify", nodeID, msg, sig)
 	ret0, _ := ret[0].(bool)

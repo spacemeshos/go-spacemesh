@@ -4,22 +4,24 @@ import (
 	"context"
 	"time"
 
+	"github.com/spacemeshos/post/verifying"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 //go:generate mockgen -package=activation -destination=./mocks.go -source=./interface.go
 
-type atxReceiver interface {
+type AtxReceiver interface {
 	OnAtx(*types.ActivationTxHeader)
 }
 
 type nipostValidator interface {
 	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID, expectedPostIndices []byte) error
 	NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error
-	NIPost(nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error)
+	NIPost(nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error)
 
 	NumUnits(cfg *PostConfig, numUnits uint32) error
-	Post(nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error
+	Post(nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...verifying.OptionFunc) error
 	PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error
 
 	VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error
@@ -28,27 +30,19 @@ type nipostValidator interface {
 
 type layerClock interface {
 	AwaitLayer(layerID types.LayerID) chan struct{}
-	GetCurrentLayer() types.LayerID
+	CurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
 }
 
 type nipostBuilder interface {
 	UpdatePoETProvers([]PoetProvingServiceClient)
-	BuildNIPost(ctx context.Context, challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error)
+	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, time.Duration, error)
 }
 
 type atxHandler interface {
 	GetPosAtxID() (types.ATXID, error)
 	AwaitAtx(id types.ATXID) chan struct{}
 	UnsubscribeAtx(id types.ATXID)
-}
-
-type signer interface {
-	Sign(m []byte) []byte
-}
-
-type keyExtractor interface {
-	ExtractNodeID(m, sig []byte) (types.NodeID, error)
 }
 
 type syncer interface {
@@ -64,10 +58,21 @@ type postSetupProvider interface {
 	Status() *PostSetupStatus
 	ComputeProviders() []PostSetupComputeProvider
 	Benchmark(p PostSetupComputeProvider) (int, error)
-	StartSession(context context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error
+	StartSession(context context.Context, opts PostSetupOpts) error
 	Reset() error
-	GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error)
+	GenerateProof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error)
+	CommitmentAtx() (types.ATXID, error)
 	VRFNonce() (*types.VRFPostIndex, error)
 	LastOpts() *PostSetupOpts
 	Config() PostConfig
+}
+
+// SmeshingProvider defines the functionality required for the node's Smesher API.
+type SmeshingProvider interface {
+	Smeshing() bool
+	StartSmeshing(types.Address, PostSetupOpts) error
+	StopSmeshing(bool) error
+	SmesherID() types.NodeID
+	Coinbase() types.Address
+	SetCoinbase(coinbase types.Address)
 }

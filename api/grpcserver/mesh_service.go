@@ -54,7 +54,7 @@ func NewMeshService(
 func (s MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.GenesisTimeResponse, error) {
 	log.Info("GRPC MeshService.GenesisTime")
 	return &pb.GenesisTimeResponse{Unixtime: &pb.SimpleInt{
-		Value: uint64(s.genTime.GetGenesisTime().Unix()),
+		Value: uint64(s.genTime.GenesisTime().Unix()),
 	}}, nil
 }
 
@@ -62,14 +62,14 @@ func (s MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.G
 func (s MeshService) CurrentLayer(context.Context, *pb.CurrentLayerRequest) (*pb.CurrentLayerResponse, error) {
 	log.Info("GRPC MeshService.CurrentLayer")
 	return &pb.CurrentLayerResponse{Layernum: &pb.LayerNumber{
-		Number: uint32(s.genTime.GetCurrentLayer().Uint32()),
+		Number: uint32(s.genTime.CurrentLayer().Uint32()),
 	}}, nil
 }
 
 // CurrentEpoch returns the current epoch number.
 func (s MeshService) CurrentEpoch(context.Context, *pb.CurrentEpochRequest) (*pb.CurrentEpochResponse, error) {
 	log.Info("GRPC MeshService.CurrentEpoch")
-	curLayer := s.genTime.GetCurrentLayer()
+	curLayer := s.genTime.CurrentLayer()
 	return &pb.CurrentEpochResponse{Epochnum: &pb.SimpleInt{
 		Value: uint64(curLayer.GetEpoch()),
 	}}, nil
@@ -127,8 +127,8 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
 		for _, b := range layer.Ballots() {
-			if b.EpochData != nil && b.EpochData.ActiveSet != nil {
-				atxids = append(atxids, b.EpochData.ActiveSet...)
+			if b.EpochData != nil && b.ActiveSet != nil {
+				atxids = append(atxids, b.ActiveSet...)
 			}
 		}
 	}
@@ -154,7 +154,7 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 
 	var startLayer types.LayerID
 	if in.MinLayer != nil {
-		startLayer = types.NewLayerID(in.MinLayer.Number)
+		startLayer = types.LayerID(in.MinLayer.Number)
 	}
 
 	if startLayer.After(s.mesh.LatestLayer()) {
@@ -278,7 +278,7 @@ func convertActivation(a *types.VerifiedActivationTx) *pb.Activation {
 	return &pb.Activation{
 		Id:        &pb.ActivationId{Id: a.ID().Bytes()},
 		Layer:     &pb.LayerNumber{Number: a.PubLayerID.Uint32()},
-		SmesherId: &pb.SmesherId{Id: a.NodeID().Bytes()},
+		SmesherId: &pb.SmesherId{Id: a.SmesherID.Bytes()},
 		Coinbase:  &pb.AccountId{Address: a.Coinbase.String()},
 		PrevAtx:   &pb.ActivationId{Id: a.PrevATXID.Bytes()},
 		NumUnits:  uint32(a.NumUnits),
@@ -330,8 +330,8 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	}
 
 	for _, b := range layer.Ballots() {
-		if b.EpochData != nil && b.EpochData.ActiveSet != nil {
-			activations = append(activations, b.EpochData.ActiveSet...)
+		if b.EpochData != nil && b.ActiveSet != nil {
+			activations = append(activations, b.ActiveSet...)
 		}
 	}
 
@@ -356,11 +356,19 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		log.With().Debug("no state root for layer",
 			layer, log.String("status", layerStatus.String()), log.Err(err))
 	}
+	hash, err := s.mesh.MeshHash(layerID)
+	if err != nil {
+		// This is expected. We can only retrieve state root for a layer that was applied to state,
+		// which only happens after it's approved/confirmed.
+		log.With().Debug("no mesh hash at layer",
+			layer, log.String("status", layerStatus.String()), log.Err(err))
+	}
 	return &pb.Layer{
 		Number:        &pb.LayerNumber{Number: layer.Index().Uint32()},
 		Status:        layerStatus,
 		Blocks:        blocks,
 		Activations:   pbActivations,
+		Hash:          hash.Bytes(),
 		RootStateHash: stateRoot.Bytes(),
 	}, nil
 }
@@ -371,10 +379,10 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 
 	var startLayer, endLayer types.LayerID
 	if in.StartLayer != nil {
-		startLayer = types.NewLayerID(in.StartLayer.Number)
+		startLayer = types.LayerID(in.StartLayer.Number)
 	}
 	if in.EndLayer != nil {
-		endLayer = types.NewLayerID(in.EndLayer.Number)
+		endLayer = types.LayerID(in.EndLayer.Number)
 	}
 
 	// Get the latest layers that passed both consensus engines.
@@ -558,4 +566,25 @@ func convertLayerStatus(in int) pb.Layer_LayerStatus {
 	default:
 		return pb.Layer_LAYER_STATUS_UNSPECIFIED
 	}
+}
+
+func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshService_EpochStreamServer) error {
+	epoch := types.EpochID(req.Epoch)
+	atxids, err := s.mesh.EpochAtxs(epoch)
+	if err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+	for _, id := range atxids {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		default:
+			var res pb.EpochStreamResponse
+			res.Id = &pb.ActivationId{Id: id.Bytes()}
+			if err = stream.Send(&res); err != nil {
+				return status.Error(codes.Internal, err.Error())
+			}
+		}
+	}
+	return nil
 }

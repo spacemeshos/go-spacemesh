@@ -17,8 +17,7 @@ func fastnet() config.Config {
 	conf.Address = types.DefaultTestAddressConfig()
 
 	conf.API.StartGrpcServices = []string{
-		"gateway", "node", "mesh", "globalstate",
-		"transaction", "smesher", "debug",
+		"node", "mesh", "globalstate", "transaction", "smesher", "debug",
 	}
 	if err := conf.API.ParseServicesList(); err != nil {
 		panic(err)
@@ -29,12 +28,11 @@ func fastnet() config.Config {
 	conf.HARE.N = 800
 	conf.HARE.ExpectedLeaders = 10
 	conf.HARE.LimitConcurrent = 5
-	conf.HARE.F = 399
 	conf.HARE.LimitIterations = 3
 	conf.HARE.RoundDuration = 2 * time.Second
 	conf.HARE.WakeupDelta = 3 * time.Second
 
-	conf.P2P.TargetOutbound = 10
+	conf.P2P.MinPeers = 10
 
 	conf.Genesis = &config.GenesisConfig{
 		ExtraData: "fastnet",
@@ -47,14 +45,15 @@ func fastnet() config.Config {
 
 	conf.Tortoise.Hdist = 4
 	conf.Tortoise.Zdist = 2
+	conf.Tortoise.BadBeaconVoteDelayLayers = 2
 
 	conf.HareEligibility.ConfidenceParam = 2 // half epoch
 	conf.HareEligibility.EpochOffset = 0
 
-	conf.POST.BitsPerLabel = 8
-	conf.POST.K1 = 2000
+	conf.POST.K1 = 12
 	conf.POST.K2 = 4
-	conf.POST.LabelsPerUnit = 32
+	conf.POST.K3 = 4
+	conf.POST.LabelsPerUnit = 128
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
 
@@ -72,7 +71,7 @@ func fastnet() config.Config {
 	conf.Beacon.VotingRoundDuration = 2 * time.Second
 	conf.Beacon.WeakCoinRoundDuration = 2 * time.Second
 	conf.Beacon.RoundsNumber = 4
-	conf.Beacon.BeaconSyncWeightUnits = 20
+	conf.Beacon.BeaconSyncWeightUnits = 10
 	conf.Beacon.VotesLimit = 100
 
 	return conf

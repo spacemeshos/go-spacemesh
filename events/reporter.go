@@ -11,7 +11,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 // Subscription is a subscription to events.
@@ -301,28 +300,37 @@ func SubscribeRewards() Subscription {
 
 // SubscribeToLayers is used to track and report automatically every time a
 // new layer is reached.
-func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
+func SubscribeToLayers(ticker LayerClock) {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	if reporter != nil {
-		// This will block, so run in a goroutine
-		go func() {
-			for {
-				mu.RLock()
-				stopChan := reporter.stopChan
-				mu.RUnlock()
-
-				select {
-				case layer := <-newLayerCh:
-					log.With().Debug("reporter got new layer", layer)
-					ReportNodeStatusUpdate()
-				case <-stopChan:
-					return
-				}
-			}
-		}()
+	if reporter == nil {
+		return
 	}
+
+	// This will block, so run in a goroutine
+	go func() {
+		next := ticker.CurrentLayer().Add(1)
+		for {
+			mu.RLock()
+			stopChan := reporter.stopChan
+			mu.RUnlock()
+
+			select {
+			case <-ticker.AwaitLayer(next):
+				current := ticker.CurrentLayer()
+				if current.Before(next) {
+					log.Info("time sync detected, realigning ProposalBuilder")
+					continue
+				}
+				next = current.Add(1)
+				log.With().Debug("reporter got new layer", current)
+				ReportNodeStatusUpdate()
+			case <-stopChan:
+				return
+			}
+		}
+	}()
 }
 
 // The status of a layer

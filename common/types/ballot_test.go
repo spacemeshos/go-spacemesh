@@ -12,7 +12,7 @@ import (
 
 func TestBallotIDUnaffectedByVotes(t *testing.T) {
 	meta := types.BallotMetadata{
-		Layer: types.NewLayerID(1),
+		Layer: types.LayerID(1),
 	}
 	inner := types.InnerBallot{
 		AtxID: types.ATXID{1, 2, 3},
@@ -29,8 +29,8 @@ func TestBallotIDUnaffectedByVotes(t *testing.T) {
 	ballot1.Votes.Support = []types.Vote{{ID: types.BlockID{2}}}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	ballot1.Signature = signer.Sign(ballot1.SignedBytes())
-	ballot2.Signature = signer.Sign(ballot2.SignedBytes())
+	ballot1.Signature = signer.Sign(signing.BALLOT, ballot1.SignedBytes())
+	ballot2.Signature = signer.Sign(signing.BALLOT, ballot2.SignedBytes())
 	ballot1.Initialize()
 	ballot2.Initialize()
 
@@ -47,32 +47,30 @@ func TestBallot_Initialize(t *testing.T) {
 	b := types.RandomBallot()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	b.Signature = signer.Sign(b.SignedBytes())
+	b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
 	require.NoError(t, b.Initialize())
 	require.NotEqual(t, types.EmptyBallotID, b.ID())
-	require.Equal(t, signer.PublicKey().Bytes(), b.SmesherID().Bytes())
 
 	err = b.Initialize()
 	require.EqualError(t, err, "ballot already initialized")
-}
-
-func TestBallot_Initialize_BadSignature(t *testing.T) {
-	b := types.RandomBallot()
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	b.Signature = signer.Sign(b.SignedBytes())[1:]
-	err = b.Initialize()
-	require.EqualError(t, err, "ballot extract key: ed25519: bad signature format")
 }
 
 func TestBallot_Initialize_BadMsgHash(t *testing.T) {
 	b := types.RandomBallot()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	b.Signature = signer.Sign(b.SignedBytes())
+	b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
 	b.MsgHash = types.RandomHash()
 	err = b.Initialize()
 	require.EqualError(t, err, "bad message hash")
+}
+
+func FuzzBallotIDConsistency(f *testing.F) {
+	tester.FuzzConsistency[types.BallotID](f)
+}
+
+func FuzzBallotIDSafety(f *testing.F) {
+	tester.FuzzSafety[types.BallotID](f)
 }
 
 func FuzzBallotConsistency(f *testing.F) {

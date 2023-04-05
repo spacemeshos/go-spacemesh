@@ -35,12 +35,12 @@ func TestFullBallotFilter(t *testing.T) {
 			desc: "BadFromRecent",
 			ballot: ballotInfo{
 				id:    types.BallotID{1},
-				layer: types.NewLayerID(10),
+				layer: types.LayerID(10),
 				conditions: conditions{
 					badBeacon: true,
 				},
 			},
-			last:     types.NewLayerID(11),
+			last:     types.LayerID(11),
 			distance: 2,
 			expect:   true,
 		},
@@ -48,12 +48,12 @@ func TestFullBallotFilter(t *testing.T) {
 			desc: "BadFromOld",
 			ballot: ballotInfo{
 				id:    types.BallotID{1},
-				layer: types.NewLayerID(8),
+				layer: types.LayerID(8),
 				conditions: conditions{
 					badBeacon: true,
 				},
 			},
-			last:     types.NewLayerID(11),
+			last:     types.LayerID(11),
 			distance: 2,
 			expect:   false,
 		},
@@ -334,11 +334,12 @@ func TestFullCountVotes(t *testing.T) {
 					NumUnits:        1,
 				}}
 				atxid := types.ATXID{byte(i + 1)}
-				atx.SetID(&atxid)
-				atx.SetNodeID(&types.NodeID{1})
+				atx.SetID(atxid)
+				atx.SetEffectiveNumUnits(atx.NumUnits)
+				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(tc.activeset[i].BaseHeight, tc.activeset[i].TickCount)
 				require.NoError(t, err)
-				require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+				require.NoError(t, atxs.Add(cdb, vAtx))
 				activeset = append(activeset, atxid)
 			}
 
@@ -378,7 +379,8 @@ func TestFullCountVotes(t *testing.T) {
 					ballot := &types.Ballot{}
 					ballot.EligibilityProofs = []types.VotingEligibility{{J: uint32(j)}}
 					ballot.AtxID = activeset[b.ATX]
-					ballot.EpochData = &types.EpochData{ActiveSet: activeset}
+					ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}}
+					ballot.ActiveSet = activeset
 					ballot.Layer = lid
 					// don't vote on genesis for simplicity,
 					// since we don't care about block goodness in this test
@@ -395,8 +397,9 @@ func TestFullCountVotes(t *testing.T) {
 						ballot.Votes.Base = ballotsList[b.Base[0]][b.Base[1]].ID()
 					}
 					ballot.OpinionHash = types.RandomHash() // fake opinion, only to make sure each ballot has a unique ID
-					ballot.Signature = signer.Sign(ballot.SignedBytes())
+					ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
 					require.NoError(t, ballot.Initialize())
+					ballot.SetSmesherID(signer.NodeID())
 					layerBallots = append(layerBallots, ballot)
 				}
 				ballotsList = append(ballotsList, layerBallots)

@@ -11,48 +11,35 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
+	"github.com/spacemeshos/go-scale"
 	"go.uber.org/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
+	"github.com/spacemeshos/go-spacemesh/p2p/book"
 )
 
 const (
 	protocolName = "/peerexchange/v1.0.0"
 	// messageTimeout is the timeout for the whole stream lifetime.
 	messageTimeout = 10 * time.Second
+	sharedPeers    = 10
 )
-
-// Peer Exchange protocol configuration.
-type PeerExchangeConfig struct {
-	// Peers that have not been successfully connected to for
-	// this time are considered stale and not shared with other peers
-	stalePeerTimeout time.Duration `mapstructure:"stale-peer-timeout"`
-}
-
-func DefaultPeerExchangeConfig() PeerExchangeConfig {
-	return PeerExchangeConfig{
-		stalePeerTimeout: time.Minute * 30,
-	}
-}
 
 type peerExchange struct {
 	advertise atomic.Pointer[ma.Multiaddr]
 
 	h      host.Host
-	book   *addressbook.AddrBook
+	book   *book.Book
 	logger log.Log
-	config PeerExchangeConfig
 }
 
 // newPeerExchange is a constructor for a protocol protocol provider.
-func newPeerExchange(h host.Host, rt *addressbook.AddrBook, advertise ma.Multiaddr, log log.Log, config PeerExchangeConfig) *peerExchange {
+func newPeerExchange(h host.Host, rt *book.Book, advertise ma.Multiaddr, log log.Log) *peerExchange {
 	pe := &peerExchange{
 		h:      h,
 		book:   rt,
 		logger: log,
-		config: config,
 	}
 	pe.UpdateAdvertisedAddress(advertise)
 	h.SetStreamHandler(protocolName, pe.handler)
@@ -96,26 +83,12 @@ func (p *peerExchange) handler(stream network.Stream) {
 		logger.Error("failed to create p2p component", log.Err(err))
 		return
 	}
-	addr = addr.Encapsulate(id)
-	info, err := addressbook.ParseAddrInfo(addr.String())
-	if err != nil {
-		logger.Debug("failed to parse address", log.Stringer("address", addr), log.Err(err))
-		return
-	}
-	p.book.AddAddress(info, info)
+	p.book.Add(book.SELF, stream.Conn().RemotePeer().String(), addr.Encapsulate(id))
 
-	results := p.book.GetKnownAddressesCache()
-	response := make([]string, 0, len(results))
-	now := time.Now()
-	for _, addr := range results {
-		if addr.Addr.ID == stream.Conn().RemotePeer() {
-			continue
-		}
-		// Filter out addresses that have not been connected for a while
-		// but optimistically keep addresses we have not tried yet.
-		if addr.LastAttempt.IsZero() || now.Sub(addr.LastSuccess) < p.config.stalePeerTimeout {
-			response = append(response, addr.Addr.RawAddr)
-		}
+	share := p.book.TakeShareable(stream.Conn().RemotePeer().String(), sharedPeers)
+	response := make([]string, 0, len(share))
+	for _, addr := range share {
+		response = append(response, addr.String())
 	}
 	// todo: limit results to message size
 	_ = stream.SetDeadline(time.Now().Add(messageTimeout))
@@ -145,7 +118,7 @@ func (p *peerExchange) AdvertisedAddress() ma.Multiaddr {
 }
 
 // Request addresses from a remote node, it will block and return the results returned from the node.
-func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addressbook.AddrInfo, error) {
+func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]string, error) {
 	logger := p.logger.WithContext(ctx).WithFields(
 		log.String("type", "getaddresses"),
 		log.String("to", pid.String())).With()
@@ -164,21 +137,10 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addressbook
 		return nil, fmt.Errorf("failed to send GetAddress request: %w", err)
 	}
 
-	addrs, _, err := codec.DecodeStringSlice(bufio.NewReader(stream))
+	dec := scale.NewDecoder(bufio.NewReader(stream))
+	addrs, _, err := scale.DecodeStringSliceWithLimit(dec, sharedPeers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read addresses in response: %w", err)
 	}
-
-	infos := make([]*addressbook.AddrInfo, 0, len(addrs))
-	for _, raw := range addrs {
-		info, err := addressbook.ParseAddrInfo(raw)
-		if err != nil {
-			return nil, fmt.Errorf("failed parsing: %w", err)
-		}
-		if info.ID == p.h.ID() {
-			return nil, fmt.Errorf("peer shouldn't reply with address for our id")
-		}
-		infos = append(infos, info)
-	}
-	return infos, nil
+	return addrs, nil
 }

@@ -68,7 +68,7 @@ func newTurtle(
 	t.verified = genesis
 	t.evicted = genesis.Sub(1)
 
-	t.epochs[genesis.GetEpoch()] = &epochInfo{}
+	t.epochs[genesis.GetEpoch()] = &epochInfo{atxs: map[types.ATXID]uint64{}}
 	t.layers[genesis] = &layerInfo{
 		lid:            genesis,
 		hareTerminated: true,
@@ -84,8 +84,8 @@ func newTurtle(
 
 func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
 	// prevent overflow/wraparound
-	if t.verified.Before(types.NewLayerID(t.WindowSize)) {
-		return types.NewLayerID(0), false
+	if t.verified.Before(types.LayerID(t.WindowSize)) {
+		return types.LayerID(0), false
 	}
 	return t.verified.Sub(t.WindowSize), true
 }
@@ -133,7 +133,7 @@ func (t *turtle) evict(ctx context.Context) {
 		ballot.votes.cutBefore(windowStart)
 	}
 	t.evicted = windowStart.Sub(1)
-	evictedLayer.Set(float64(t.evicted.Value))
+	evictedLayer.Set(float64(t.evicted))
 }
 
 // EncodeVotes by choosing base ballot and explicit votes.
@@ -165,7 +165,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 			var opinion *types.Opinion
 			opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
 			if err == nil {
-				metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last.Value - base.layer.Value))
+				metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last - base.layer))
 				logger.With().Info("encoded votes",
 					log.Stringer("base ballot", base.id),
 					log.Stringer("base layer", base.layer),
@@ -318,7 +318,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 	defer t.evict(ctx)
 	if last.After(t.last) {
 		t.last = last
-		lastLayer.Set(float64(t.last.Value))
+		lastLayer.Set(float64(t.last))
 	}
 	if err := t.drainRetriable(); err != nil {
 		return nil
@@ -338,7 +338,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 		prev := t.layer(process.Sub(1))
 		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(prev.verifying.goodUncounted)
 		t.processed = process
-		processedLayer.Set(float64(t.processed.Value))
+		processedLayer.Set(float64(t.processed))
 
 		if t.isFull {
 			t.full.countDelayed(t.logger, process)
@@ -369,7 +369,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 
 		// terminate layer that falls out of the zdist window and wasn't terminated
 		// by any other component
-		if process.After(types.NewLayerID(t.Zdist)) {
+		if process.After(types.LayerID(t.Zdist)) {
 			terminated := process.Sub(t.Zdist)
 			if terminated.After(t.evicted) && !t.layer(terminated).hareTerminated {
 				t.onHareOutput(terminated, types.EmptyBlockID)
@@ -416,11 +416,11 @@ func (t *turtle) verifyLayers() {
 		verified = maxLayer(t.evicted, types.GetEffectiveGenesis())
 	)
 
-	if t.changedOpinion.min.Value != 0 && !withinDistance(t.Hdist, t.changedOpinion.max, t.last) {
+	if t.changedOpinion.min != 0 && !withinDistance(t.Hdist, t.changedOpinion.max, t.last) {
 		logger.With().Debug("changed opinion outside hdist", log.Stringer("from", t.changedOpinion.min), log.Stringer("to", t.changedOpinion.max))
 		t.onOpinionChange(t.changedOpinion.min)
-		t.changedOpinion.min = types.LayerID{}
-		t.changedOpinion.max = types.LayerID{}
+		t.changedOpinion.min = types.LayerID(0)
+		t.changedOpinion.max = types.LayerID(0)
 	}
 
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
@@ -442,9 +442,6 @@ func (t *turtle) verifyLayers() {
 			success = t.full.verify(logger, target)
 		}
 		if !success {
-			logger.With().Info("verification terminated",
-				log.Stringer("old verified", t.verified),
-				log.Stringer("new verified", verified))
 			break
 		}
 		verified = target
@@ -458,7 +455,7 @@ func (t *turtle) verifyLayers() {
 				if target.After(t.changedOpinion.max) {
 					t.changedOpinion.max = target
 				}
-				if t.changedOpinion.min.Value == 0 || target.Before(t.changedOpinion.min) {
+				if t.changedOpinion.min == 0 || target.Before(t.changedOpinion.min) {
 					t.changedOpinion.min = target
 				}
 			}
@@ -481,7 +478,7 @@ func (t *turtle) verifyLayers() {
 		}
 	}
 	t.verified = verified
-	verifiedLayer.Set(float64(t.verified.Value))
+	verifiedLayer.Set(float64(t.verified))
 }
 
 // loadBlocksData loads blocks, hare output and contextual validity.
@@ -542,11 +539,6 @@ func (t *turtle) loadAtxs(epoch types.EpochID) error {
 	}
 	einfo := t.epoch(epoch)
 	einfo.height = getMedian(heights)
-	t.logger.With().Info("computed height and weight for epoch",
-		epoch,
-		log.Stringer("weight", einfo.weight),
-		log.Uint64("height", einfo.height),
-	)
 	return nil
 }
 
@@ -621,7 +613,7 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 		return
 	}
 	if !lid.After(t.processed) && withinDistance(t.Config.Hdist, lid, t.last) {
-		t.logger.With().Info("local opinion changed within hdist",
+		t.logger.With().Debug("local opinion changed within hdist",
 			lid,
 			log.Stringer("verified", t.verified),
 			log.Stringer("previous", previous),
@@ -682,7 +674,7 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 
 	t.logger.With().Debug("on ballot",
 		log.Inline(ballot),
-		log.Uint32("processed", t.processed.Value),
+		log.Uint32("processed", t.processed.Uint32()),
 	)
 
 	var (
@@ -759,7 +751,7 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 		ballot.ID(),
 		log.Stringer("weight", binfo.weight),
 		log.Uint64("height", refinfo.height),
-		log.Uint32("lid", ballot.Layer.Value),
+		log.Uint32("lid", ballot.Layer.Uint32()),
 	)
 
 	var err error
@@ -806,7 +798,7 @@ func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, layerID type
 		return false, err
 	}
 	if beacon != epochBeacon {
-		logger.With().Warning("ballot has different beacon",
+		logger.With().Debug("ballot has different beacon",
 			layerID,
 			bid,
 			log.String("ballot_beacon", beacon.ShortString()),

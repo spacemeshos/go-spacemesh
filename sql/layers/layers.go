@@ -13,7 +13,7 @@ func SetWeakCoin(db sql.Executor, lid types.LayerID, weakcoin bool) error {
 	if _, err := db.Exec(`insert into layers (id, weak_coin) values (?1, ?2) 
 					on conflict(id) do update set weak_coin=?2;`,
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(lid.Value))
+			stmt.BindInt64(1, int64(lid))
 			stmt.BindBool(2, weakcoin)
 		}, nil); err != nil {
 		return fmt.Errorf("set weak coin %s: %w", lid, err)
@@ -30,7 +30,7 @@ func GetWeakCoin(db sql.Executor, lid types.LayerID) (bool, error) {
 	)
 	if rows, err = db.Exec("select weak_coin from layers where id = ?1;",
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(lid.Value))
+			stmt.BindInt64(1, int64(lid))
 		},
 		func(stmt *sql.Statement) bool {
 			if stmt.ColumnLen(0) == 0 {
@@ -52,7 +52,7 @@ func SetApplied(db sql.Executor, lid types.LayerID, applied types.BlockID) error
 	if _, err := db.Exec(`insert into layers (id, applied_block) values (?1, ?2) 
 					on conflict(id) do update set applied_block=?2;`,
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(lid.Value))
+			stmt.BindInt64(1, int64(lid))
 			stmt.BindBytes(2, applied[:])
 		}, nil); err != nil {
 		return fmt.Errorf("set applied %s: %w", lid, err)
@@ -64,7 +64,7 @@ func SetApplied(db sql.Executor, lid types.LayerID, applied types.BlockID) error
 func UnsetAppliedFrom(db sql.Executor, lid types.LayerID) error {
 	if _, err := db.Exec("update layers set applied_block = null, state_hash = null, aggregated_hash = null where id >= ?1;",
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(lid.Value))
+			stmt.BindInt64(1, int64(lid))
 		}, nil); err != nil {
 		return fmt.Errorf("unset applied %s: %w", lid, err)
 	}
@@ -76,7 +76,7 @@ func UpdateStateHash(db sql.Executor, lid types.LayerID, hash types.Hash32) erro
 	if _, err := db.Exec(`insert into layers (id, state_hash) values (?1, ?2) 
 	on conflict(id) do update set state_hash=?2;`,
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(lid.Value))
+			stmt.BindInt64(1, int64(lid))
 			stmt.BindBytes(2, hash[:])
 		}, nil); err != nil {
 		return fmt.Errorf("set applied %s: %w", lid, err)
@@ -103,7 +103,7 @@ func GetLatestStateHash(db sql.Executor) (rst types.Hash32, err error) {
 func GetStateHash(db sql.Executor, lid types.LayerID) (rst types.Hash32, err error) {
 	if rows, err := db.Exec("select state_hash from layers where id = ?1;",
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(lid.Value))
+			stmt.BindInt64(1, int64(lid))
 		},
 		func(stmt *sql.Statement) bool {
 			if stmt.ColumnLen(0) == 0 {
@@ -124,7 +124,7 @@ func GetStateHash(db sql.Executor, lid types.LayerID) (rst types.Hash32, err err
 func GetApplied(db sql.Executor, lid types.LayerID) (rst types.BlockID, err error) {
 	if rows, err := db.Exec("select applied_block from layers where id = ?1;",
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(lid.Value))
+			stmt.BindInt64(1, int64(lid))
 		},
 		func(stmt *sql.Statement) bool {
 			if stmt.ColumnLen(0) == 0 {
@@ -146,7 +146,7 @@ func GetLastApplied(db sql.Executor) (types.LayerID, error) {
 	var lid types.LayerID
 	if _, err := db.Exec("select max(id) from layers where applied_block is not null", nil,
 		func(stmt *sql.Statement) bool {
-			lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+			lid = types.LayerID(uint32(stmt.ColumnInt64(0)))
 			return true
 		}); err != nil {
 		return lid, fmt.Errorf("last applied: %w", err)
@@ -173,7 +173,7 @@ func GetProcessed(db sql.Executor) (types.LayerID, error) {
 	if _, err := db.Exec("select max(id) from layers where processed = 1;",
 		nil,
 		func(stmt *sql.Statement) bool {
-			lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+			lid = types.LayerID(uint32(stmt.ColumnInt64(0)))
 			return true
 		}); err != nil {
 		return lid, fmt.Errorf("processed layer: %w", err)

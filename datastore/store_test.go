@@ -74,7 +74,7 @@ func TestMalfeasanceProof_Honest(t *testing.T) {
 
 	// but an add will update the cache
 	proof := &types.MalfeasanceProof{
-		Layer: types.NewLayerID(11),
+		Layer: types.LayerID(11),
 		Proof: types.Proof{
 			Type: types.MultipleBallots,
 			Data: &types.BallotProof{
@@ -99,7 +99,7 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 
 	// a bad guy
 	proof := &types.MalfeasanceProof{
-		Layer: types.NewLayerID(11),
+		Layer: types.LayerID(11),
 		Proof: types.Proof{
 			Type: types.MultipleBallots,
 			Data: &types.BallotProof{
@@ -159,53 +159,97 @@ func TestIdentityExists(t *testing.T) {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(22),
+				PubLayerID: types.LayerID(22),
 				Sequence:   11,
 			},
 			NumUnits: 11,
 		},
 	}
 	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
+	atx.SetReceived(time.Now())
+	atx.SetEffectiveNumUnits(atx.NumUnits)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+	require.NoError(t, atxs.Add(cdb, vAtx))
 
 	exists, err = cdb.IdentityExists(signer.NodeID())
 	require.NoError(t, err)
 	require.True(t, exists)
 }
 
-func TestBlobStore_GetATXBlob(t *testing.T) {
-	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+func TestStore_GetAtxByNodeID(t *testing.T) {
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	atx := &types.ActivationTx{
+	atx3 := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(22),
+				PubLayerID: types.EpochID(3).FirstLayer(),
 				Sequence:   11,
 			},
 			NumUnits: 11,
 		},
 	}
-	atx.Signature = signer.Sign(atx.SignedBytes())
-	require.NoError(t, atx.CalcAndSetID())
-	require.NoError(t, atx.CalcAndSetNodeID())
+	atx4 := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: types.EpochID(4).FirstLayer(),
+				Sequence:   12,
+			},
+			NumUnits: 11,
+		},
+	}
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	for _, atx := range []*types.ActivationTx{atx3, atx4} {
+		require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
+		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(cdb, vAtx))
+	}
+
+	got, err := cdb.GetEpochAtx(types.EpochID(3), signer.NodeID())
+	require.NoError(t, err)
+	require.Equal(t, atx3.ID(), got.ID)
+
+	got, err = cdb.GetLastAtx(signer.NodeID())
+	require.NoError(t, err)
+	require.Equal(t, atx4.ID(), got.ID)
+}
+
+func TestBlobStore_GetATXBlob(t *testing.T) {
+	db := sql.InMemory()
+	bs := datastore.NewBlobStore(db)
+
+	atx := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: types.LayerID(22),
+				Sequence:   11,
+			},
+			NumUnits: 11,
+		},
+	}
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
 
 	_, err = bs.Get(datastore.ATXDB, atx.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(db, vAtx, time.Now()))
+	require.NoError(t, atxs.Add(db, vAtx))
 	got, err := bs.Get(datastore.ATXDB, atx.ID().Bytes())
 	require.NoError(t, err)
 
 	var gotA types.ActivationTx
 	require.NoError(t, codec.Decode(got, &gotA))
-	require.NoError(t, gotA.CalcAndSetID())
-	require.NoError(t, gotA.CalcAndSetNodeID())
+	require.NoError(t, gotA.Initialize())
+	gotA.SetEffectiveNumUnits(gotA.NumUnits)
+	gotA.SetReceived(atx.Received())
 	require.Equal(t, *atx, gotA)
 
 	_, err = bs.Get(datastore.BallotDB, atx.ID().Bytes())
@@ -220,7 +264,8 @@ func TestBlobStore_GetBallotBlob(t *testing.T) {
 	require.NoError(t, err)
 
 	blt := types.RandomBallot()
-	blt.Signature = sig.Sign(blt.SignedBytes())
+	blt.Signature = sig.Sign(signing.BALLOT, blt.SignedBytes())
+	blt.SetSmesherID(sig.NodeID())
 	require.NoError(t, blt.Initialize())
 
 	_, err = bs.Get(datastore.BallotDB, blt.ID().Bytes())
@@ -230,6 +275,11 @@ func TestBlobStore_GetBallotBlob(t *testing.T) {
 	require.NoError(t, err)
 	var gotB types.Ballot
 	require.NoError(t, codec.Decode(got, &gotB))
+	extract, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
+	nodeID, err := extract.ExtractNodeID(signing.BALLOT, gotB.SignedBytes(), gotB.Signature)
+	require.NoError(t, err)
+	gotB.SetSmesherID(nodeID)
 	require.NoError(t, gotB.Initialize())
 	require.Equal(t, *blt, gotB)
 
@@ -243,7 +293,7 @@ func TestBlobStore_GetBlockBlob(t *testing.T) {
 
 	blk := types.Block{
 		InnerBlock: types.InnerBlock{
-			LayerIndex: types.NewLayerID(11),
+			LayerIndex: types.LayerID(11),
 			TxIDs:      types.RandomTXSet(3),
 		},
 	}
@@ -273,7 +323,9 @@ func TestBlobStore_GetPoetBlob(t *testing.T) {
 
 	_, err := bs.Get(datastore.POETDB, ref)
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.NoError(t, poets.Add(db, ref, poet, sid, rid))
+	var poetRef types.PoetProofRef
+	copy(poetRef[:], ref)
+	require.NoError(t, poets.Add(db, poetRef, poet, sid, rid))
 	got, err := bs.Get(datastore.POETDB, ref)
 	require.NoError(t, err)
 	require.True(t, bytes.Equal(poet, got))
@@ -289,14 +341,15 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	blt := types.RandomBallot()
-	blt.Signature = signer.Sign(blt.SignedBytes())
+	blt.Signature = signer.Sign(signing.BALLOT, blt.SignedBytes())
 	p := types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: *blt,
 			TxIDs:  types.RandomTXSet(11),
 		},
 	}
-	p.Signature = signer.Sign(p.Bytes())
+	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
+	p.SetSmesherID(signer.NodeID())
 	require.NoError(t, p.Initialize())
 
 	_, err = bs.Get(datastore.ProposalDB, p.ID().Bytes())
@@ -307,9 +360,13 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 	require.NoError(t, err)
 	var gotP types.Proposal
 	require.NoError(t, codec.Decode(got, &gotP))
+	extract, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
+	nodeID, err := extract.ExtractNodeID(signing.BALLOT, gotP.SignedBytes(), gotP.Signature)
+	require.NoError(t, err)
+	gotP.SetSmesherID(nodeID)
 	require.NoError(t, gotP.Initialize())
 	require.Equal(t, p, gotP)
-
 	_, err = bs.Get(datastore.BlockDB, p.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
@@ -338,7 +395,7 @@ func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
 	bs := datastore.NewBlobStore(db)
 
 	proof := &types.MalfeasanceProof{
-		Layer: types.NewLayerID(11),
+		Layer: types.LayerID(11),
 		Proof: types.Proof{
 			Type: types.HareEquivocation,
 			Data: &types.HareProof{

@@ -36,18 +36,6 @@ func (m *MockFetcher) EXPECT() *MockFetcherMockRecorder {
 	return m.recorder
 }
 
-// AddPeersFromHash mocks base method.
-func (m *MockFetcher) AddPeersFromHash(arg0 types.Hash32, arg1 []types.Hash32) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddPeersFromHash", arg0, arg1)
-}
-
-// AddPeersFromHash indicates an expected call of AddPeersFromHash.
-func (mr *MockFetcherMockRecorder) AddPeersFromHash(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPeersFromHash", reflect.TypeOf((*MockFetcher)(nil).AddPeersFromHash), arg0, arg1)
-}
-
 // GetAtxs mocks base method.
 func (m *MockFetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID) error {
 	m.ctrl.T.Helper()
@@ -415,18 +403,6 @@ func NewMockPeerTracker(ctrl *gomock.Controller) *MockPeerTracker {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockPeerTracker) EXPECT() *MockPeerTrackerMockRecorder {
 	return m.recorder
-}
-
-// AddPeersFromHash mocks base method.
-func (m *MockPeerTracker) AddPeersFromHash(arg0 types.Hash32, arg1 []types.Hash32) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddPeersFromHash", arg0, arg1)
-}
-
-// AddPeersFromHash indicates an expected call of AddPeersFromHash.
-func (mr *MockPeerTrackerMockRecorder) AddPeersFromHash(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPeersFromHash", reflect.TypeOf((*MockPeerTracker)(nil).AddPeersFromHash), arg0, arg1)
 }
 
 // RegisterPeerHashes mocks base method.

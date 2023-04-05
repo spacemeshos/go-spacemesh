@@ -108,10 +108,10 @@ func TestAvailable(t *testing.T) {
 			v := Vault{
 				TotalAmount:         tc.total,
 				InitialUnlockAmount: tc.initial,
-				VestingStart:        types.NewLayerID(tc.start),
-				VestingEnd:          types.NewLayerID(tc.end),
+				VestingStart:        types.LayerID(tc.start),
+				VestingEnd:          types.LayerID(tc.end),
 			}
-			available := v.Available(types.NewLayerID(tc.lid))
+			available := v.Available(types.LayerID(tc.lid))
 			require.Equal(t, int(tc.expect), int(available))
 		})
 	}

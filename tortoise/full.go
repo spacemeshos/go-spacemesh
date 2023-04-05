@@ -39,7 +39,7 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 	}
 	logger.With().Debug("counted votes from ballot",
 		log.Stringer("id", ballot.id),
-		log.Uint32("lid", ballot.layer.Value),
+		log.Uint32("lid", ballot.layer.Uint32()),
 	)
 	for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
 		if !lvote.lid.After(f.evicted) {
@@ -160,8 +160,8 @@ func (f *full) shouldBeDelayed(logger log.Log, ballot *ballotInfo) bool {
 	}
 	logger.With().Debug("ballot is delayed",
 		log.Stringer("id", ballot.id),
-		log.Uint32("ballot lid", ballot.layer.Value),
-		log.Uint32("counted at", delay.Value),
+		log.Uint32("ballot lid", ballot.layer.Uint32()),
+		log.Uint32("counted at", delay.Uint32()),
 	)
 	delayedBallots.Inc()
 	f.delayed[delay] = append(f.delayed[delay], ballot)

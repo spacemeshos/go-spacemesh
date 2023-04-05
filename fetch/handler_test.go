@@ -8,6 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -55,8 +56,9 @@ func createLayer(tb testing.TB, db *datastore.CachedDB, lid types.LayerID) ([]ty
 
 		b := types.RandomBallot()
 		b.Layer = lid
-		b.Signature = signer.Sign(b.SignedBytes())
+		b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
 		require.NoError(tb, b.Initialize())
+		b.SetSmesherID(signer.NodeID())
 		require.NoError(tb, ballots.Add(db, b))
 		blts = append(blts, b.ID())
 
@@ -98,11 +100,14 @@ func TestHandleLayerDataReq(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			lid := types.NewLayerID(111)
+			lid := types.LayerID(111)
 			th := createTestHandler(t)
 			blts, blks := createLayer(t, th.cdb, lid)
 
-			out, err := th.handleLayerDataReq(context.TODO(), lid.Bytes())
+			lidBytes, err := codec.Encode(&lid)
+			require.NoError(t, err)
+
+			out, err := th.handleLayerDataReq(context.Background(), lidBytes)
 			require.NoError(t, err)
 			var got LayerData
 			err = codec.Decode(out, &got)
@@ -137,7 +142,7 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 			t.Parallel()
 
 			th := createTestHandler(t)
-			lid := types.NewLayerID(111)
+			lid := types.LayerID(111)
 			certified, aggHash := createOpinions(t, th.cdb, lid, !tc.missingCert)
 			if tc.multipleCerts {
 				require.NoError(t, certificates.Add(th.cdb, lid, &types.Certificate{
@@ -145,7 +150,10 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 				}))
 			}
 
-			out, err := th.handleLayerOpinionsReq(context.TODO(), lid.Bytes())
+			lidBytes, err := codec.Encode(&lid)
+			require.NoError(t, err)
+
+			out, err := th.handleLayerOpinionsReq(context.Background(), lidBytes)
 			require.NoError(t, err)
 
 			var got LayerOpinion
@@ -203,8 +211,8 @@ func TestHandleMeshHashReq(t *testing.T) {
 
 			th := createTestHandler(t)
 			req := &MeshHashRequest{
-				From:  types.NewLayerID(tc.params[0]),
-				To:    types.NewLayerID(tc.params[1]),
+				From:  types.LayerID(tc.params[0]),
+				To:    types.LayerID(tc.params[1]),
 				Delta: tc.params[2],
 				Steps: tc.params[3],
 			}
@@ -243,7 +251,9 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	atx.Signature = signer.Sign(atx.SignedBytes())
+	activation.SignAndFinalizeAtx(signer, atx)
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
 	vatx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	return vatx
@@ -274,12 +284,15 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			if !tc.missingData {
 				for i := 0; i < 10; i++ {
 					vatx := newAtx(t, epoch)
-					require.NoError(t, atxs.Add(th.cdb, vatx, time.Now()))
+					require.NoError(t, atxs.Add(th.cdb, vatx))
 					expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
 				}
 			}
 
-			out, err := th.handleEpochInfoReq(context.TODO(), epoch.ToBytes())
+			epochBytes, err := codec.Encode(epoch)
+			require.NoError(t, err)
+
+			out, err := th.handleEpochInfoReq(context.Background(), epochBytes)
 			require.NoError(t, err)
 			var got EpochData
 			require.NoError(t, codec.Decode(out, &got))

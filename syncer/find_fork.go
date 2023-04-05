@@ -36,9 +36,9 @@ type boundary struct {
 
 func (b *boundary) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("from", b.from.layer.Uint32())
-	encoder.AddString("from_hash", b.from.hash.ShortString())
+	encoder.AddString("from_hash", b.from.hash.String())
 	encoder.AddUint32("to", b.to.layer.Uint32())
-	encoder.AddString("to_hash", b.to.hash.ShortString())
+	encoder.AddString("to_hash", b.to.hash.String())
 	return nil
 }
 
@@ -145,7 +145,7 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 
 	bnd, err := ff.setupBoundary(peer, &layerHash{layer: diffLid, hash: diffHash})
 	if err != nil {
-		return types.LayerID{}, err
+		return 0, err
 	}
 
 	numReqs := 0
@@ -165,13 +165,13 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 		numReqs++
 		if err != nil {
 			lg.With().Error("failed hash request", log.Err(err))
-			return types.LayerID{}, err
+			return 0, err
 		}
 
 		ownHashes, err := layers.GetAggHashes(ff.db, mh.Layers)
 		if err != nil {
 			lg.With().Error("failed own hashes lookup", log.Err(err))
-			return types.LayerID{}, err
+			return 0, err
 		}
 
 		var latestSame, oldestDiff *layerHash
@@ -198,11 +198,11 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 			// every layer hash is different/same from node's. this can only happen when
 			// the node's local hashes change while the mesh hash request is running
 			ff.Purge(true)
-			return types.LayerID{}, ErrNodeMeshChangedMidSession
+			return 0, ErrNodeMeshChangedMidSession
 		}
 		bnd, err = ff.setupBoundary(peer, oldestDiff)
 		if err != nil {
-			return types.LayerID{}, err
+			return 0, err
 		}
 	}
 }

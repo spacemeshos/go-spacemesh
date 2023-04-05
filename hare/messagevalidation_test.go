@@ -77,18 +77,18 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 	require.False(t, sv.validateCertificate(context.Background(), cert))
 
 	msgs = make([]Message, 0, sv.threshold)
-	identities := make(map[string]struct{})
+	identities := make(map[types.NodeID]struct{})
 	for i := 0; i < sv.threshold; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		m := BuildCommitMsg(signer, valueSet).Message
 		msgs = append(msgs, m)
-		identities[string(signer.PublicKey().Bytes())] = struct{}{}
+		identities[signer.NodeID()] = struct{}{}
 	}
 	cert.AggMsgs.Messages = msgs
 	require.True(t, sv.validateCertificate(context.Background(), cert))
 
-	sv.eTracker.ForEach(commitRound, func(s string, cred *Cred) {
+	sv.eTracker.ForEach(commitRound, func(s types.NodeID, cred *Cred) {
 		_, ok := identities[s]
 		require.True(t, ok)
 		require.True(t, cred.Honest)
@@ -104,8 +104,8 @@ func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), nil)
-	m.Layer = types.NewLayerID(111)
+	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.EmptyVrfSignature)
+	m.Layer = types.LayerID(111)
 	myErr := errors.New("my error")
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, myErr).Times(1)
@@ -121,8 +121,8 @@ func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), nil)
-	m.Layer = types.NewLayerID(111)
+	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.EmptyVrfSignature)
+	m.Layer = types.LayerID(111)
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil).Times(1)
 	res := ev.Validate(context.Background(), m)
@@ -137,8 +137,8 @@ func TestEligibilityValidator_validateRole_Success(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), nil)
-	m.Layer = types.NewLayerID(111)
+	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.EmptyVrfSignature)
+	m.Layer = types.LayerID(111)
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
 	res := ev.Validate(context.Background(), m)
@@ -152,9 +152,9 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 	require.NoError(t, err)
 
 	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), nil))
-	m := &Msg{Message: Message{}, PubKey: nil}
+	m := &Msg{Message: Message{}, NodeID: types.EmptyNodeID}
 	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), m))
-	m.PubKey = signer.PublicKey()
+	m.NodeID = signer.NodeID()
 	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), m))
 
 	// empty set is allowed now
@@ -174,7 +174,7 @@ func (m mockValidator) Validate(context.Context, *Msg) bool {
 	return m.res
 }
 
-func initPg(tb testing.TB, validator *syntaxContextValidator) (*pubGetter, []Message, Signer) {
+func initPg(tb testing.TB, validator *syntaxContextValidator) (*pubGetter, []Message, *signing.EdSigner) {
 	pg := newPubGetter()
 	msgs := make([]Message, validator.threshold)
 	var signer *signing.EdSigner
@@ -183,7 +183,7 @@ func initPg(tb testing.TB, validator *syntaxContextValidator) (*pubGetter, []Mes
 		signer, err = signing.NewEdSigner()
 		require.NoError(tb, err)
 		iMsg := BuildStatusMsg(signer, NewSetFromValues(types.ProposalID{1}))
-		validator.eTracker.Track(iMsg.PubKey.Bytes(), iMsg.Round, iMsg.Eligibility.Count, true)
+		validator.eTracker.Track(iMsg.NodeID, iMsg.Round, iMsg.Eligibility.Count, true)
 		msgs[i] = iMsg.Message
 		pg.Track(iMsg)
 	}
@@ -211,7 +211,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 
 	sv.validMsgsTracker = newPubGetter()
 	tmp := msgs[0].Signature
-	msgs[0].Signature = []byte{1}
+	msgs[0].Signature[types.EdSignatureSize-1] = 0xff
 	r.Error(sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
 	msgs[0].Signature = tmp
@@ -239,9 +239,9 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	require.NoError(t, err)
 
 	msgs[0] = BuildStatusMsg(signer, NewSetFromValues(types.ProposalID{1})).Message
-	r.Nil(pg.PublicKey(&msgs[0]))
+	r.Equal(types.EmptyNodeID, pg.NodeID(&msgs[0]))
 	require.NoError(t, sv.validateAggregatedMessage(context.Background(), agg, funcs))
-	r.NotNil(pg.PublicKey(&msgs[0]))
+	r.NotEqual(types.EmptyNodeID, pg.NodeID(&msgs[0]))
 }
 
 func TestMessageValidator_Aggregated_WithEquivocation(t *testing.T) {
@@ -260,7 +260,7 @@ func TestMessageValidator_Aggregated_WithEquivocation(t *testing.T) {
 	ke, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	sv.eTracker.Track(ke.PublicKey().Bytes(), msgs[0].Round, 1, false)
+	sv.eTracker.Track(ke.NodeID(), msgs[0].Round, 1, false)
 	r.NoError(sv.validateAggregatedMessage(context.Background(), agg, funcs))
 }
 
@@ -269,7 +269,7 @@ func TestSyntaxContextValidator_PreRoundContext(t *testing.T) {
 	validator := defaultValidator(t)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	pre := BuildPreRoundMsg(signer, NewDefaultEmptySet(), nil)
+	pre := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.EmptyVrfSignature)
 	for i := uint32(0); i < 10; i++ {
 		k := i * 4
 		pre.Round = k
@@ -284,7 +284,7 @@ func TestSyntaxContextValidator_ContextuallyValidateMessageForIteration(t *testi
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	set := NewDefaultEmptySet()
-	pre := BuildPreRoundMsg(signer, set, nil)
+	pre := BuildPreRoundMsg(signer, set, types.EmptyVrfSignature)
 	pre.Round = preRound
 	r.Nil(v.ContextuallyValidateMessage(context.Background(), pre, 1))
 
@@ -311,40 +311,40 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 	v := proc.validator
 	b, err := proc.initDefaultBuilder(proc.value)
 	require.Nil(t, err)
-	preround := b.SetType(pre).Sign(proc.signing).Build()
-	preround.PubKey = proc.signing.PublicKey()
+	preround := b.SetType(pre).Sign(proc.signer).Build()
+	preround.NodeID = proc.signer.NodeID()
 	require.True(t, v.SyntacticallyValidateMessage(context.Background(), preround))
 	e := v.ContextuallyValidateMessage(context.Background(), preround, 0)
 	require.Nil(t, e)
 	b, err = proc.initDefaultBuilder(proc.value)
 	require.Nil(t, err)
-	status := b.SetType(status).Sign(proc.signing).Build()
-	status.PubKey = proc.signing.PublicKey()
+	status := b.SetType(status).Sign(proc.signer).Build()
+	status.NodeID = proc.signer.NodeID()
 	e = v.ContextuallyValidateMessage(context.Background(), status, 0)
 	require.Nil(t, e)
 	require.True(t, v.SyntacticallyValidateMessage(context.Background(), status))
 }
 
 type pubGetter struct {
-	mp map[string]*signing.PublicKey
+	mp map[types.EdSignature]types.NodeID
 }
 
 func newPubGetter() *pubGetter {
-	return &pubGetter{make(map[string]*signing.PublicKey)}
+	return &pubGetter{make(map[types.EdSignature]types.NodeID)}
 }
 
 func (pg pubGetter) Track(m *Msg) {
-	pg.mp[string(m.Signature)] = m.PubKey
+	pg.mp[m.Signature] = m.NodeID
 }
 
-func (pg pubGetter) PublicKey(m *Message) *signing.PublicKey {
+func (pg pubGetter) NodeID(m *Message) types.NodeID {
 	if pg.mp == nil {
-		return nil
+		return types.EmptyNodeID
 	}
 
-	p, ok := pg.mp[string(m.Signature)]
+	p, ok := pg.mp[m.Signature]
 	if !ok {
-		return nil
+		return types.EmptyNodeID
 	}
 
 	return p
@@ -359,9 +359,9 @@ func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 	vfunc := func(m *Msg) bool { return true }
 
 	sv := newSyntaxContextValidator(signer, pke, 1, vfunc, nil, truer{}, newPubGetter(), et, logtest.New(t))
-	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), nil)
+	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.EmptyVrfSignature)
 	require.True(t, sv.SyntacticallyValidateMessage(context.Background(), m))
-	m = BuildPreRoundMsg(signer, NewSetFromValues(types.ProposalID{1}), nil)
+	m = BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
 	require.True(t, sv.SyntacticallyValidateMessage(context.Background(), m))
 }
 
@@ -369,7 +369,7 @@ func TestMessageValidator_validateSVPTypeA(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), []byte{})
+	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), types.EmptyVrfSignature)
 	s1 := NewSetFromValues(types.ProposalID{1})
 	s2 := NewSetFromValues(types.ProposalID{3})
 	s3 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{5})
@@ -386,7 +386,7 @@ func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), []byte{})
+	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), types.EmptyVrfSignature)
 	s1 := NewSetFromValues(types.ProposalID{1})
 	m.InnerMsg.Svp = buildSVP(preRound, s1)
 	m.InnerMsg.Values = NewSetFromValues(types.ProposalID{1}).ToSlice()
@@ -407,7 +407,7 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	et := NewEligibilityTracker(100)
 	vfunc := func(m *Msg) bool { return true }
 	sv := newSyntaxContextValidator(signer, pke, 1, vfunc, mockStateQ, truer{}, newPubGetter(), et, logtest.New(t))
-	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), []byte{})
+	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), types.EmptyVrfSignature)
 	s1 := NewSetFromValues(types.ProposalID{1})
 	m.InnerMsg.Svp = buildSVP(preRound, s1)
 	m.InnerMsg.Svp.Messages[0].InnerMsg.Type = commit

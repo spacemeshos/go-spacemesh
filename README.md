@@ -121,22 +121,36 @@ the `build/*target*` directory.
 
 ### Using `go build` and `go test` without `make`
 
-To build code without using `make` the `CGO_LDFLAGS` environment variable must be set
-appropriately. The required value can be obtained by running `make print-ldflags` or
-`make print-test-ldflags`.
+To build or test code without using `make` some golang environment variables
+must be set appropriately.
 
-This can be done in 3 ways:
+The environment variables can be printed by running either `make print-env` or
+`make print-test-env`.
 
-1. Setting the variable in the shell environment (e.g., in bash run `CGO_LDFLAGS=$(make print-ldflags)`).
-2. Prefixing the key and value to the `go` command (e.g., `CGO_LDFLAGS=$(make print-ldflags) go build`).
-3. Using `go env -w CGO_LDFLAGS=$(make print-ldflags)`, which persistently adds this value to Go's
-   environment for any future runs.
+They can be set in 3 ways:
 
-There's a handy shortcut for the 3rd method: `make go-env` or `make go-env-test`.
+_Note: we need to use eval to interpret the commands since there are spaces in
+the values of the variables so the shell can't correctly split them as
+arguments._
+
+1. Setting the variables on the same line as the `go` command (e.g., `eval $(make print-env) go build`). This affects the environment for that command invocation only.
+2. Exporting the variables in the shell's environment (e.g., `eval export $(make print-env)`). The variables will persist for the duration of that shell (and will be passed to subshells).
+3. Setting the variables in the go environment (e.g., `eval go env -w $(make print-env)`). Persistently adds these values to Go's environment for any future runs.
 
 ---
 
 ### Running
+
+_Note: go-spacemesh relies on a gpu setup dynamic library in order to run.
+`make install` puts this file in the build folder, so if you are running
+spacemesh from the build folder you don't need to take any extra action.
+However if you have built the binary using `go build` or moved the binary from
+the build folder you need to ensure that you have the gpu setup dynamic library
+(the exact name will vary based on your OS) accessible by the go-spacemesh
+binary. The simplest way to do this is just copy the library file to be in the
+same directory as the go-spacemesh binary. Alternatively you can modify your
+system's library search paths (e.g. LD_LIBRARY_PATH) to ensure that the
+library is found._
 
 go-spacemesh is p2p software which is designed to form a decentralized network by connecting to other instances of go-spacemesh running on remote computers.
 
@@ -176,13 +190,13 @@ You specify these parameters by providing go-spacemesh with a json config file. 
 3. Stop go-spacemesh and start it with the following params:
 
     ```bash
-    ./go-spacemesh --listen [a_multiaddr] --config [configFileLocation] -d [nodeDataFilesPath] --coinbase [coinbase_account] --start-mining --post-datadir [dir_for_post_data]
+    ./go-spacemesh --listen [a_multiaddr] --config [configFileLocation] -d [nodeDataFilesPath] --smeshing-coinbase [coinbase_account] --smeshing-start --smeshing-opts-datadir [dir_for_post_data]
     ```
 
     **Example:**
 
     ```bash
-    ./go-spacemesh --listen /ip4/0.0.0.0/tcp/7513 --config ./tn1.json -d ./sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-datadir ./post_data
+    ./go-spacemesh --listen /ip4/0.0.0.0/tcp/7513 --config ./tn1.json -d ./sm_data --smeshing-coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --smeshing-start --smeshing-opts-datadir ./post_data
     ```
 
 4. Use the CLI wallet to check your coinbase account balance and to transact

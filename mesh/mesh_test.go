@@ -2,7 +2,6 @@ package mesh
 
 import (
 	"context"
-	"math/big"
 	"testing"
 	"time"
 
@@ -105,17 +104,10 @@ func CreateAndSaveTxs(t testing.TB, db sql.Executor, numOfTxs int) []types.Trans
 func createBlock(t testing.TB, db sql.Executor, mesh *Mesh, layerID types.LayerID, nodeID types.NodeID) *types.Block {
 	t.Helper()
 	txIDs := CreateAndSaveTxs(t, db, numTXs)
-	weight := new(big.Rat).SetFloat64(312.13)
 	b := &types.Block{
 		InnerBlock: types.InnerBlock{
 			LayerIndex: layerID,
-			Rewards: []types.AnyReward{
-				{
-					Coinbase: types.GenerateAddress(nodeID[:]),
-					Weight:   types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
-				},
-			},
-			TxIDs: txIDs,
+			TxIDs:      txIDs,
 		},
 	}
 	b.Initialize()
@@ -139,7 +131,8 @@ func genLayerBallot(tb testing.TB, layerID types.LayerID) *types.Ballot {
 	b.Layer = layerID
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	b.Signature = sig.Sign(b.SignedBytes())
+	b.Signature = sig.Sign(signing.BALLOT, b.SignedBytes())
+	b.SetSmesherID(sig.NodeID())
 	require.NoError(tb, b.Initialize())
 	return b
 }
@@ -203,8 +196,8 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 
 func TestMesh_WakeUp(t *testing.T) {
 	tm := createTestMesh(t)
-	latest := types.NewLayerID(11)
-	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, []byte{}, types.NodeID{}, types.BallotMetadata{Layer: latest})
+	latest := types.LayerID(11)
+	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{Layer: latest})
 	require.NoError(t, ballots.Add(tm.cdb, &b))
 	require.NoError(t, layers.SetProcessed(tm.cdb, latest))
 	latestState := latest.Sub(1)
@@ -247,7 +240,7 @@ func TestMesh_LayerHashes(t *testing.T) {
 		blk := lyrBlocks[i]
 		var ineffective []types.Transaction
 		var executed []types.TransactionWithResult
-		tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), blk.Rewards).Return(ineffective, executed, nil)
+		tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(ineffective, executed, nil)
 		tm.mockState.EXPECT().UpdateCache(gomock.Any(), i, blk.ID(), executed, ineffective).Return(nil)
 		tm.mockVM.EXPECT().GetStateRoot()
 
@@ -326,7 +319,7 @@ func TestMesh_ProcessLayerPerHareOutput(t *testing.T) {
 				if !tc.executed {
 					var ineffective []types.Transaction
 					var executed []types.TransactionWithResult
-					tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), toApply.Rewards).Return(ineffective, executed, nil)
+					tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(ineffective, executed, nil)
 					tm.mockState.EXPECT().UpdateCache(gomock.Any(), i, toApply.ID(), executed, ineffective)
 					tm.mockVM.EXPECT().GetStateRoot()
 				}
@@ -518,7 +511,7 @@ func TestMesh_Revert(t *testing.T) {
 		applied := layerBlocks[i]
 		var ineffective []types.Transaction
 		var executed []types.TransactionWithResult
-		tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), applied.Rewards).Return(ineffective, executed, nil)
+		tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(ineffective, executed, nil)
 		tm.mockState.EXPECT().UpdateCache(gomock.Any(), i, applied.ID(), executed, ineffective)
 		tm.mockVM.EXPECT().GetStateRoot()
 	}
@@ -548,12 +541,12 @@ func TestMesh_Revert(t *testing.T) {
 func TestMesh_LatestKnownLayer(t *testing.T) {
 	tm := createTestMesh(t)
 	lg := logtest.New(t)
-	tm.setLatestLayer(lg, types.NewLayerID(3))
-	tm.setLatestLayer(lg, types.NewLayerID(7))
-	tm.setLatestLayer(lg, types.NewLayerID(10))
-	tm.setLatestLayer(lg, types.NewLayerID(1))
-	tm.setLatestLayer(lg, types.NewLayerID(2))
-	require.Equal(t, types.NewLayerID(10), tm.LatestLayer(), "wrong layer")
+	tm.setLatestLayer(lg, types.LayerID(3))
+	tm.setLatestLayer(lg, types.LayerID(7))
+	tm.setLatestLayer(lg, types.LayerID(10))
+	tm.setLatestLayer(lg, types.LayerID(1))
+	tm.setLatestLayer(lg, types.LayerID(2))
+	require.Equal(t, types.LayerID(10), tm.LatestLayer(), "wrong layer")
 }
 
 func TestMesh_pushLayersToState_verified(t *testing.T) {
@@ -579,7 +572,7 @@ func TestMesh_pushLayersToState_verified(t *testing.T) {
 	}
 	var ineffective []types.Transaction
 	var executed []types.TransactionWithResult
-	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), toApply.Rewards).Return(ineffective, executed, nil)
+	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(ineffective, executed, nil)
 	tm.mockState.EXPECT().UpdateCache(gomock.Any(), layerID, toApply.ID(), executed, ineffective)
 	tm.mockVM.EXPECT().GetStateRoot()
 	require.NoError(t, tm.pushLayersToState(context.Background(), tm.logger, layerID, layerID))
@@ -621,7 +614,7 @@ func TestMesh_ValidityOrder(t *testing.T) {
 				saveContextualValidity(t, tm.cdb, block.ID(), true)
 			}
 
-			tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), tc.blocks[tc.expected].Rewards).Return(nil, nil, nil)
+			tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil, nil)
 			tm.mockState.EXPECT().UpdateCache(gomock.Any(), lid, tc.blocks[tc.expected].ID(), nil, nil)
 			tm.mockVM.EXPECT().GetStateRoot()
 			require.NoError(t, tm.pushLayersToState(context.Background(), tm.logger, lid, lid))
@@ -645,7 +638,7 @@ func TestMesh_pushLayersToState_notVerified(t *testing.T) {
 
 	var ineffective []types.Transaction
 	var executed []types.TransactionWithResult
-	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), hareOutput.Rewards).Return(ineffective, executed, nil)
+	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(ineffective, executed, nil)
 	tm.mockState.EXPECT().UpdateCache(gomock.Any(), layerID, hareOutput.ID(), executed, ineffective)
 	tm.mockVM.EXPECT().GetStateRoot()
 	require.NoError(t, tm.pushLayersToState(context.Background(), tm.logger, layerID, layerID))
@@ -735,7 +728,7 @@ func TestMesh_ReverifyFailed(t *testing.T) {
 	saveContextualValidity(t, tm.cdb, block2.ID(), true)
 
 	last = last.Add(1)
-	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), block2.Rewards).Return(nil, nil, nil)
+	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil, nil)
 	tm.mockState.EXPECT().UpdateCache(gomock.Any(), last.Sub(1), block2.ID(), nil, nil)
 	tm.mockVM.EXPECT().Apply(gomock.Any(), nil, nil).Return(nil, nil, nil)
 	tm.mockState.EXPECT().UpdateCache(gomock.Any(), last, types.EmptyBlockID, nil, nil)
@@ -776,7 +769,7 @@ func TestMesh_MissingTransactionsFailure(t *testing.T) {
 func TestMesh_CallOnBlock(t *testing.T) {
 	tm := createTestMesh(t)
 	block := types.Block{}
-	block.LayerIndex = types.NewLayerID(10)
+	block.LayerIndex = types.LayerID(10)
 	block.Initialize()
 
 	tm.mockTortoise.EXPECT().OnBlock(&block)
@@ -786,13 +779,13 @@ func TestMesh_CallOnBlock(t *testing.T) {
 
 func TestMesh_MaliciousBallots(t *testing.T) {
 	tm := createTestMesh(t)
-	lid := types.NewLayerID(1)
+	lid := types.LayerID(1)
 	nodeID := types.BytesToNodeID([]byte{1, 1, 1})
 
 	blts := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{1}, []byte("signature 0"), nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{1}}),
-		types.NewExistingBallot(types.BallotID{2}, []byte("signature 1"), nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{2}}),
-		types.NewExistingBallot(types.BallotID{3}, []byte("signature 2"), nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{3}}),
+		types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{1}}),
+		types.NewExistingBallot(types.BallotID{2}, types.RandomEdSignature(), nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{2}}),
+		types.NewExistingBallot(types.BallotID{3}, types.RandomEdSignature(), nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{3}}),
 	}
 	malProof, err := tm.AddBallot(context.Background(), &blts[0])
 	require.NoError(t, err)
@@ -806,7 +799,7 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.Nil(t, saved)
 
 	// second one will create a MalfeasanceProof
-	tm.mockClock.EXPECT().GetCurrentLayer().Return(types.NewLayerID(11))
+	tm.mockClock.EXPECT().CurrentLayer().Return(types.LayerID(11))
 	malProof, err = tm.AddBallot(context.Background(), &blts[1])
 	require.NoError(t, err)
 	require.NotNil(t, malProof)

@@ -14,6 +14,10 @@ import (
 
 var cfg = config.DefaultConfig()
 
+func ResetConfig() {
+	cfg = config.DefaultConfig()
+}
+
 // AddCommands adds cobra commands to the app.
 func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringP("preset", "p", "",
@@ -45,14 +49,12 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&cfg.Genesis.ExtraData, "genesis-extra-data",
 		cfg.Genesis.ExtraData, "genesis extra-data will be committed to the genesis id")
 	cmd.PersistentFlags().DurationVar(&cfg.LayerDuration, "layer-duration",
-		cfg.LayerDuration, "Duration between layers in seconds")
+		cfg.LayerDuration, "Duration between layers")
 	cmd.PersistentFlags().Uint32Var(&cfg.LayerAvgSize, "layer-average-size",
 		cfg.LayerAvgSize, "Layer Avg size")
 	cmd.PersistentFlags().BoolVar(&cfg.PprofHTTPServer, "pprof-server",
 		cfg.PprofHTTPServer, "enable http pprof server")
 	cmd.PersistentFlags().Uint64Var(&cfg.TickSize, "tick-size", cfg.TickSize, "number of poet leaves in a single tick")
-	cmd.PersistentFlags().StringVar(&cfg.PublishEventsURL, "events-url",
-		cfg.PublishEventsURL, "publish events to this url; if no url specified no events will be published")
 	cmd.PersistentFlags().StringVar(&cfg.ProfilerURL, "profiler-url",
 		cfg.ProfilerURL, "send profiler data to certain url, if no url no profiling will be sent, format: http://<IP>:<PORT>")
 	cmd.PersistentFlags().StringVar(&cfg.ProfilerName, "profiler-name",
@@ -70,12 +72,16 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(cfg.Genesis.Accounts), "accounts", "a",
 		"List of prefunded accounts")
 
+	cmd.PersistentFlags().IntVar(&cfg.DatabaseConnections, "db-connections",
+		cfg.DatabaseConnections, "configure number of active connections to enable parallel read requests")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.Flood, "db-latency-metering",
+		cfg.DatabaseLatencyMetering, "if enabled collect latency histogram for every database query")
 	/** ======================== P2P Flags ========================== **/
 
 	cmd.PersistentFlags().StringVar(&cfg.P2P.Listen, "listen",
 		cfg.P2P.Listen, "address for listening")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.Flood, "flood",
-		cfg.P2P.Flood, "flood created messages to all peers (true by default. disable to lower traffic requirements)")
+		cfg.P2P.Flood, "flood created messages to all peers")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.DisableNatPort, "disable-natport",
 		cfg.P2P.DisableNatPort, "disable nat port-mapping (if enabled upnp protocol is used to negotiate external port with router)")
 	cmd.PersistentFlags().IntVar(&cfg.P2P.LowPeers, "low-peers",
@@ -83,8 +89,8 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&cfg.P2P.HighPeers, "high-peers",
 		cfg.P2P.HighPeers,
 		"high watermark for the number of connections; once reached, connections are pruned until low watermark remains")
-	cmd.PersistentFlags().IntVar(&cfg.P2P.TargetOutbound, "target-outbound",
-		cfg.P2P.TargetOutbound, "target outbound connections")
+	cmd.PersistentFlags().IntVar(&cfg.P2P.MinPeers, "min-peers",
+		cfg.P2P.MinPeers, "actively search for peers until you get this much")
 	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.Bootnodes, "bootnodes",
 		cfg.P2P.Bootnodes, "entrypoints into the network")
 	cmd.PersistentFlags().StringVar(&cfg.P2P.AdvertiseAddress, "advertise-address",
@@ -126,15 +132,16 @@ func AddCommands(cmd *cobra.Command) {
 	// GrpcServerInterface determines the interface the GRPC server listens on
 	cmd.PersistentFlags().StringVar(&cfg.API.GrpcServerInterface, "grpc-interface",
 		cfg.API.GrpcServerInterface, "GRPC api server interface")
+	cmd.PersistentFlags().IntVar(&cfg.API.GrpcRecvMsgSize, "grpc-recv-msg-size",
+		cfg.API.GrpcServerPort, "GRPC api recv message size")
+	cmd.PersistentFlags().IntVar(&cfg.API.GrpcSendMsgSize, "grpc-send-msg-size",
+		cfg.API.GrpcServerPort, "GRPC api send message size")
 
 	/**======================== Hare Flags ========================== **/
 
 	// N determines the size of the hare committee
 	cmd.PersistentFlags().IntVar(&cfg.HARE.N, "hare-committee-size",
 		cfg.HARE.N, "Size of Hare committee")
-	// F determines the max number of adversaries in the Hare committee
-	cmd.PersistentFlags().IntVar(&cfg.HARE.F, "hare-max-adversaries",
-		cfg.HARE.F, "Max number of adversaries in the Hare committee")
 	// RoundDuration determines the duration of a round in the Hare protocol
 	cmd.PersistentFlags().DurationVar(&cfg.HARE.RoundDuration, "hare-round-duration",
 		cfg.HARE.RoundDuration, "Duration of round in the Hare protocol")
@@ -181,12 +188,17 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**======================== Tortoise Flags ========================== **/
 	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.Hdist, "tortoise-hdist",
-		cfg.Tortoise.Hdist, "hdist")
+		cfg.Tortoise.Hdist, "the distance for tortoise to vote according to hare output")
+	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.Zdist, "tortoise-zdist",
+		cfg.Tortoise.Zdist, "the distance for tortoise to wait for hare output")
+	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.WindowSize, "tortoise-window-size",
+		cfg.Tortoise.WindowSize, "size of the tortoise sliding window in layers")
+	cmd.PersistentFlags().IntVar(&cfg.Tortoise.MaxExceptions, "tortoise-max-exceptions",
+		cfg.Tortoise.MaxExceptions, "number of exceptions tolerated for a base ballot")
+	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.BadBeaconVoteDelayLayers, "tortoise-delay-layers",
+		cfg.Tortoise.BadBeaconVoteDelayLayers, "number of layers to ignore a ballot with a different beacon")
 
 	// TODO(moshababo): add usage desc
-
-	cmd.PersistentFlags().Uint8Var(&cfg.POST.BitsPerLabel, "post-bits-per-label",
-		cfg.POST.BitsPerLabel, "")
 	cmd.PersistentFlags().Uint64Var(&cfg.POST.LabelsPerUnit, "post-labels-per-unit",
 		cfg.POST.LabelsPerUnit, "")
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.MinNumUnits, "post-min-numunits",
@@ -194,9 +206,15 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.MaxNumUnits, "post-max-numunits",
 		cfg.POST.MaxNumUnits, "")
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.K1, "post-k1",
-		cfg.POST.K1, "")
+		cfg.POST.K1, "difficulty factor for finding a good label when generating a proof")
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.K2, "post-k2",
-		cfg.POST.K2, "")
+		cfg.POST.K2, "number of labels to prove")
+	cmd.PersistentFlags().Uint32Var(&cfg.POST.K3, "post-k3",
+		cfg.POST.K3, "subset of labels to verify in a proof")
+	cmd.PersistentFlags().Uint64Var(&cfg.POST.K2PowDifficulty, "post-k2pow-difficulty",
+		cfg.POST.K2PowDifficulty, "difficulty of K2 proof of work")
+	cmd.PersistentFlags().Uint64Var(&cfg.POST.K3PowDifficulty, "post-k3pow-difficulty",
+		cfg.POST.K3PowDifficulty, "difficulty of K3 proof of work")
 
 	/**======================== Smeshing Flags ========================== **/
 

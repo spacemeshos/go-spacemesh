@@ -21,7 +21,7 @@ func TestRecoverState(t *testing.T) {
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
 	var last, verified types.LayerID
 	for i := 0; i < 50; i++ {
 		last = s.Next()
@@ -30,21 +30,11 @@ func TestRecoverState(t *testing.T) {
 	}
 	require.Equal(t, last.Sub(1), verified)
 
-	tortoise2 := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
-	initctx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-	for i := 0; i < 5; i++ {
-		// test that it won't block on multiple attempts
-		require.NoError(t, tortoise2.WaitReady(initctx))
-	}
+	tortoise2 := tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
 	tortoise2.TallyVotes(ctx, last)
 	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
-
-	tortoise3 := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
-	initctx, cancel = context.WithTimeout(ctx, time.Second)
-	defer cancel()
-	require.NoError(t, tortoise3.WaitReady(initctx))
+	tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
 	tortoise2.TallyVotes(ctx, last)
 	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
@@ -63,7 +53,7 @@ func TestRerunRevertNonverifiedLayers(t *testing.T) {
 	cfg.Hdist = good + 1
 	cfg.LayerSize = size
 
-	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
 	var last, verified types.LayerID
 	for _, last = range sim.GenLayers(s,
 		sim.WithSequence(good),
@@ -95,7 +85,7 @@ func testWindowCounting(tb testing.TB, maliciousLayers, windowSize int, expected
 	cfg.Zdist = 1
 	cfg.WindowSize = uint32(windowSize)
 
-	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(tb)), WithConfig(cfg))
+	tortoise := tortoiseFromSimState(tb, s.GetState(0), WithLogger(logtest.New(tb)), WithConfig(cfg))
 
 	const firstBatch = 2
 	misverified := genesis.Add(firstBatch)
@@ -166,7 +156,7 @@ func benchmarkTallyVotes(b *testing.B, size int, windowsize uint32, opts ...sim.
 	cfg.LayerSize = layerSize
 	cfg.WindowSize = windowsize
 
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(b)))
+	tortoise := tortoiseFromSimState(b, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(b)))
 
 	// generate info
 	start := time.Now()

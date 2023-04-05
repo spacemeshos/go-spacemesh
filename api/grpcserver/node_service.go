@@ -97,7 +97,7 @@ func (s NodeService) Status(ctx context.Context, _ *pb.StatusRequest) (*pb.Statu
 func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 	// We cannot get meaningful data from the mesh during the genesis epochs since there are no blocks in these
 	// epochs, so just return the current layer instead
-	curLayerObj := s.genTime.GetCurrentLayer()
+	curLayerObj := s.genTime.CurrentLayer()
 	curLayer = curLayerObj.Uint32()
 	if curLayerObj.GetEpoch().IsGenesis() {
 		latestLayer = s.mesh.LatestLayer().Uint32()
@@ -111,16 +111,11 @@ func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 
 // SyncStart requests that the node start syncing the mesh (if it isn't already syncing).
 func (s NodeService) SyncStart(context.Context, *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
-	log.Info("GRPC NodeService.SyncStart")
-	s.syncer.Start(s.appCtx)
-	return &pb.SyncStartResponse{
-		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
-	}, nil
+	return nil, status.Errorf(codes.Unimplemented, "UNIMPLEMENTED")
 }
 
 // Shutdown requests a graceful shutdown.
 func (s NodeService) Shutdown(context.Context, *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
-	log.Info("UNIMPLEMENTED GRPC NodeService.Shutdown")
 	return nil, status.Errorf(codes.Unimplemented, "UNIMPLEMENTED")
 }
 

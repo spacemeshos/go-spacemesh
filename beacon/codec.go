@@ -7,10 +7,10 @@ const (
 	down = uint(0)
 )
 
-func encodeVotes(currentRound allVotes, firstRound [][]byte) []byte {
+func encodeVotes(currentRound allVotes, firstRound proposalList) []byte {
 	var bits big.Int
 	for i, v := range firstRound {
-		if _, ok := currentRound.support[string(v)]; ok {
+		if _, ok := currentRound.support[v]; ok {
 			bits.SetBit(&bits, i, up)
 		}
 		// no need to set invalid votes as big.Int will have unset bits
@@ -19,7 +19,7 @@ func encodeVotes(currentRound allVotes, firstRound [][]byte) []byte {
 	return bits.Bytes()
 }
 
-func decodeVotes(votesBitVector []byte, firstRound [][]byte) allVotes {
+func decodeVotes(votesBitVector []byte, firstRound proposalList) allVotes {
 	result := allVotes{
 		support: make(proposalSet),
 		against: make(proposalSet),
@@ -27,9 +27,9 @@ func decodeVotes(votesBitVector []byte, firstRound [][]byte) allVotes {
 	bits := new(big.Int).SetBytes(votesBitVector)
 	for i, proposal := range firstRound {
 		if bits.Bit(i) == up {
-			result.support[string(proposal)] = struct{}{}
+			result.support[proposal] = struct{}{}
 		} else {
-			result.against[string(proposal)] = struct{}{}
+			result.against[proposal] = struct{}{}
 		}
 	}
 	return result

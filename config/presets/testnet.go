@@ -16,8 +16,7 @@ func testnet() config.Config {
 	conf.Address = types.DefaultTestAddressConfig()
 
 	conf.API.StartGrpcServices = []string{
-		"gateway", "node", "mesh", "globalstate",
-		"transaction", "smesher", "debug",
+		"node", "mesh", "globalstate", "transaction", "smesher", "debug",
 	}
 	if err := conf.API.ParseServicesList(); err != nil {
 		panic(err)
@@ -27,11 +26,10 @@ func testnet() config.Config {
 	conf.HARE.ExpectedLeaders = 10
 	conf.HARE.LimitConcurrent = 5
 	conf.HARE.LimitIterations = 10
-	conf.HARE.F = 399
 	conf.HARE.RoundDuration = 10 * time.Second
 	conf.HARE.WakeupDelta = 10 * time.Second
 
-	conf.P2P.TargetOutbound = 10
+	conf.P2P.MinPeers = 10
 
 	conf.Genesis = &config.GenesisConfig{
 		ExtraData: "testnet",
@@ -49,10 +47,14 @@ func testnet() config.Config {
 	conf.LayersPerEpoch = 60
 	conf.SyncRequestTimeout = 60_000
 
-	conf.POST.BitsPerLabel = 8
-	conf.POST.K1 = 2000
-	conf.POST.K2 = 1800
-	conf.POST.LabelsPerUnit = 1024
+	conf.Tortoise.Hdist = 60
+	conf.Tortoise.Zdist = 10
+	conf.Tortoise.BadBeaconVoteDelayLayers = 30
+
+	conf.POST.K1 = 273
+	conf.POST.K2 = 300
+	conf.POST.K3 = 100
+	conf.POST.LabelsPerUnit = 20 * 1024 / 16 // 20 kB units
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
 

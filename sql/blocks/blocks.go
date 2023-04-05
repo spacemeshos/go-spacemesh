@@ -35,7 +35,7 @@ func Add(db sql.Executor, block *types.Block) error {
 	if _, err := db.Exec("insert into blocks (id, layer, block) values (?1, ?2, ?3);",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, block.ID().Bytes())
-			stmt.BindInt64(2, int64(block.LayerIndex.Value))
+			stmt.BindInt64(2, int64(block.LayerIndex))
 			stmt.BindBytes(3, bytes) // this is actually should encode block
 		}, nil); err != nil {
 		return fmt.Errorf("insert %s: %w", block.ID(), err)
@@ -118,7 +118,7 @@ func GetLayer(db sql.Executor, id types.BlockID) (types.LayerID, error) {
 	if rows, err := db.Exec("select layer from blocks where id = ?1;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}, func(stmt *sql.Statement) bool {
-		lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+		lid = types.LayerID(uint32(stmt.ColumnInt64(0)))
 		return true
 	}); err != nil {
 		return lid, fmt.Errorf("get block layer %s: %w", id, err)
@@ -168,13 +168,12 @@ func IDsInLayer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
 // ContextualValidity returns tuples with block id and contextual validity for all blocks in the layer.
 func ContextualValidity(db sql.Executor, lid types.LayerID) ([]types.BlockContextualValidity, error) {
 	var rst []types.BlockContextualValidity
-	if _, err := db.Exec("select id, layer, validity from blocks where layer = ?1;", func(stmt *sql.Statement) {
+	if _, err := db.Exec("select id, validity from blocks where layer = ?1;", func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Uint32()))
 	}, func(stmt *sql.Statement) bool {
 		validity := types.BlockContextualValidity{}
 		stmt.ColumnBytes(0, validity.ID[:])
-		validity.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(1)))
-		validity.Validity = stmt.ColumnInt(2) == valid
+		validity.Validity = stmt.ColumnInt(1) == valid
 		rst = append(rst, validity)
 		return true
 	}); err != nil {

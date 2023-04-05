@@ -35,21 +35,6 @@ func (m *MockPoetProvingServiceClient) EXPECT() *MockPoetProvingServiceClientMoc
 	return m.recorder
 }
 
-// GetProof mocks base method.
-func (m *MockPoetProvingServiceClient) GetProof(ctx context.Context, roundID string) (*types.PoetProofMessage, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProof", ctx, roundID)
-	ret0, _ := ret[0].(*types.PoetProofMessage)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetProof indicates an expected call of GetProof.
-func (mr *MockPoetProvingServiceClientMockRecorder) GetProof(ctx, roundID interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProof", reflect.TypeOf((*MockPoetProvingServiceClient)(nil).GetProof), ctx, roundID)
-}
-
 // PoetServiceID mocks base method.
 func (m *MockPoetProvingServiceClient) PoetServiceID(arg0 context.Context) (types.PoetServiceID, error) {
 	m.ctrl.T.Helper()
@@ -65,19 +50,49 @@ func (mr *MockPoetProvingServiceClientMockRecorder) PoetServiceID(arg0 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PoetServiceID", reflect.TypeOf((*MockPoetProvingServiceClient)(nil).PoetServiceID), arg0)
 }
 
-// Submit mocks base method.
-func (m *MockPoetProvingServiceClient) Submit(ctx context.Context, challenge, signature []byte) (*types.PoetRound, error) {
+// PowParams mocks base method.
+func (m *MockPoetProvingServiceClient) PowParams(ctx context.Context) (*PoetPowParams, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Submit", ctx, challenge, signature)
+	ret := m.ctrl.Call(m, "PowParams", ctx)
+	ret0, _ := ret[0].(*PoetPowParams)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PowParams indicates an expected call of PowParams.
+func (mr *MockPoetProvingServiceClientMockRecorder) PowParams(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PowParams", reflect.TypeOf((*MockPoetProvingServiceClient)(nil).PowParams), ctx)
+}
+
+// Proof mocks base method.
+func (m *MockPoetProvingServiceClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Proof", ctx, roundID)
+	ret0, _ := ret[0].(*types.PoetProofMessage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Proof indicates an expected call of Proof.
+func (mr *MockPoetProvingServiceClientMockRecorder) Proof(ctx, roundID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MockPoetProvingServiceClient)(nil).Proof), ctx, roundID)
+}
+
+// Submit mocks base method.
+func (m *MockPoetProvingServiceClient) Submit(ctx context.Context, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Submit", ctx, prefix, challenge, signature, nodeID, pow)
 	ret0, _ := ret[0].(*types.PoetRound)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Submit indicates an expected call of Submit.
-func (mr *MockPoetProvingServiceClientMockRecorder) Submit(ctx, challenge, signature interface{}) *gomock.Call {
+func (mr *MockPoetProvingServiceClientMockRecorder) Submit(ctx, prefix, challenge, signature, nodeID, pow interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Submit", reflect.TypeOf((*MockPoetProvingServiceClient)(nil).Submit), ctx, challenge, signature)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Submit", reflect.TypeOf((*MockPoetProvingServiceClient)(nil).Submit), ctx, prefix, challenge, signature, nodeID, pow)
 }
 
 // MockpoetDbAPI is a mock of poetDbAPI interface.

@@ -42,10 +42,13 @@ func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 	}
 	cfg := tortoise.DefaultConfig()
 	cfg.LayerSize = layerSize
-	c.tortoise = tortoise.New(c.cdb, c.beacons,
+	c.tortoise, err = tortoise.New(c.cdb, c.beacons,
 		tortoise.WithLogger(logger.Named("trtl")),
 		tortoise.WithConfig(cfg),
 	)
+	if err != nil {
+		panic(err)
+	}
 	return c
 }
 
@@ -61,7 +64,7 @@ type core struct {
 
 	// generated on setup
 	units  uint32
-	signer signer
+	signer *signing.EdSigner
 
 	// set in the first layer of each epoch
 	refBallot     *types.BallotID
@@ -115,11 +118,13 @@ func (c *core) OnMessage(m Messenger, event Message) {
 				c.beacons.StoreBeacon(ev.LayerID.GetEpoch(), beacon)
 			}
 			ballot.EpochData = &types.EpochData{
-				ActiveSet: activeset,
-				Beacon:    beacon,
+				ActiveSetHash: types.Hash32{1, 2, 3},
+				Beacon:        beacon,
 			}
+			ballot.ActiveSet = activeset
 		}
-		ballot.Signature = c.signer.Sign(ballot.SignedBytes())
+		ballot.Signature = c.signer.Sign(signing.BALLOT, ballot.SignedBytes())
+		ballot.SetSmesherID(c.signer.NodeID())
 		ballot.Initialize()
 		if c.refBallot == nil {
 			id := ballot.ID()
@@ -140,11 +145,12 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			PubLayerID: ev.LayerID,
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
-		nodeID := c.signer.NodeID()
-		atx := types.NewActivationTx(nipost, &nodeID, addr, nil, c.units, nil, nil)
+		atx := types.NewActivationTx(nipost, addr, nil, c.units, nil, nil)
 		if err := activation.SignAndFinalizeAtx(c.signer, atx); err != nil {
 			c.logger.With().Fatal("failed to sign atx", log.Err(err))
 		}
+		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(1, 2)
 		if err != nil {
 			c.logger.With().Fatal("failed to verify atx", log.Err(err))
@@ -168,7 +174,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		if err != nil {
 			panic(err)
 		}
-		atxs.Add(c.cdb, vAtx, time.Now())
+		atxs.Add(c.cdb, vAtx)
 	case MessageBeacon:
 		c.beacons.StoreBeacon(ev.EpochID, ev.Beacon)
 	case MessageCoinflip:

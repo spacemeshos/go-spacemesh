@@ -79,12 +79,7 @@ func (h *Hash20) UnmarshalJSON(input []byte) error {
 
 // MarshalText returns the hex representation of h.
 func (h Hash20) MarshalText() ([]byte, error) {
-	data, err := util.Bytes(h[:]).MarshalText()
-	if err != nil {
-		return data, fmt.Errorf("marshal text: %w", err)
-	}
-
-	return data, nil
+	return util.Bytes(h[:]).MarshalText()
 }
 
 // SetBytes sets the hash to the value of b.
@@ -111,11 +106,6 @@ func CalcHash12(data []byte) (h Hash12) {
 	h32 := hash.Sum(data)
 	copy(h[:], h32[:])
 	return
-}
-
-// DecodeScale implements scale codec interface.
-func (h *Hash20) DecodeScale(d *scale.Decoder) (int, error) {
-	return scale.DecodeByteArray(d, h[:])
 }
 
 // CalcProposalsHash32 returns the 32-byte blake3 sum of the IDs, sorted in lexicographic order. The pre-image is
@@ -245,12 +235,7 @@ func (h *Hash32) UnmarshalJSON(input []byte) error {
 
 // MarshalText returns the hex representation of h.
 func (h Hash32) MarshalText() ([]byte, error) {
-	data, err := util.Bytes(h[:]).MarshalText()
-	if err != nil {
-		return data, fmt.Errorf("marshal text: %w", err)
-	}
-
-	return data, nil
+	return util.Bytes(h[:]).MarshalText()
 }
 
 // SetBytes sets the hash to the value of b.

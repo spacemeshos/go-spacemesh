@@ -1,12 +1,12 @@
 package beacon
 
-type proposalSet map[string]struct{}
+type proposalSet map[Proposal]struct{}
 
 func (vs proposalSet) list() proposalList {
 	votes := make(proposalList, 0)
 
 	for vote := range vs {
-		votes = append(votes, []byte(vote))
+		votes = append(votes, vote)
 	}
 
 	return votes

@@ -87,7 +87,7 @@ func (m *MockvrfVerifier) EXPECT() *MockvrfVerifierMockRecorder {
 }
 
 // Verify mocks base method.
-func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg, sig []byte) bool {
+func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Verify", nodeID, msg, sig)
 	ret0, _ := ret[0].(bool)

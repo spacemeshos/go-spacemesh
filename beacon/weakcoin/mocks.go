@@ -9,7 +9,6 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	signing "github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // MockvrfSigner is a mock of vrfSigner interface.
@@ -49,25 +48,25 @@ func (mr *MockvrfSignerMockRecorder) LittleEndian() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LittleEndian", reflect.TypeOf((*MockvrfSigner)(nil).LittleEndian))
 }
 
-// PublicKey mocks base method.
-func (m *MockvrfSigner) PublicKey() *signing.PublicKey {
+// NodeID mocks base method.
+func (m *MockvrfSigner) NodeID() types.NodeID {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PublicKey")
-	ret0, _ := ret[0].(*signing.PublicKey)
+	ret := m.ctrl.Call(m, "NodeID")
+	ret0, _ := ret[0].(types.NodeID)
 	return ret0
 }
 
-// PublicKey indicates an expected call of PublicKey.
-func (mr *MockvrfSignerMockRecorder) PublicKey() *gomock.Call {
+// NodeID indicates an expected call of NodeID.
+func (mr *MockvrfSignerMockRecorder) NodeID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublicKey", reflect.TypeOf((*MockvrfSigner)(nil).PublicKey))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NodeID", reflect.TypeOf((*MockvrfSigner)(nil).NodeID))
 }
 
 // Sign mocks base method.
-func (m *MockvrfSigner) Sign(msg []byte) []byte {
+func (m *MockvrfSigner) Sign(msg []byte) types.VrfSignature {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Sign", msg)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].(types.VrfSignature)
 	return ret0
 }
 
@@ -101,7 +100,7 @@ func (m *MockvrfVerifier) EXPECT() *MockvrfVerifierMockRecorder {
 }
 
 // Verify mocks base method.
-func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg, sig []byte) bool {
+func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Verify", nodeID, msg, sig)
 	ret0, _ := ret[0].(bool)
@@ -150,4 +149,41 @@ func (m *MocknonceFetcher) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (type
 func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknonceFetcher)(nil).VRFNonce), arg0, arg1)
+}
+
+// Mockallowance is a mock of allowance interface.
+type Mockallowance struct {
+	ctrl     *gomock.Controller
+	recorder *MockallowanceMockRecorder
+}
+
+// MockallowanceMockRecorder is the mock recorder for Mockallowance.
+type MockallowanceMockRecorder struct {
+	mock *Mockallowance
+}
+
+// NewMockallowance creates a new mock instance.
+func NewMockallowance(ctrl *gomock.Controller) *Mockallowance {
+	mock := &Mockallowance{ctrl: ctrl}
+	mock.recorder = &MockallowanceMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockallowance) EXPECT() *MockallowanceMockRecorder {
+	return m.recorder
+}
+
+// MinerAllowance mocks base method.
+func (m *Mockallowance) MinerAllowance(arg0 types.EpochID, arg1 types.NodeID) uint32 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MinerAllowance", arg0, arg1)
+	ret0, _ := ret[0].(uint32)
+	return ret0
+}
+
+// MinerAllowance indicates an expected call of MinerAllowance.
+func (mr *MockallowanceMockRecorder) MinerAllowance(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MinerAllowance", reflect.TypeOf((*Mockallowance)(nil).MinerAllowance), arg0, arg1)
 }

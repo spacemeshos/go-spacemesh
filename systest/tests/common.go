@@ -28,12 +28,8 @@ const (
 	layersPerEpoch = 4
 )
 
-func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.SugaredLogger, cl *cluster.Cluster, first, stop uint32) {
-	var (
-		receiver = types.GenerateAddress([]byte{11, 1, 1})
-		amount   = 100
-		batch    = 10
-	)
+func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.SugaredLogger, cl *cluster.Cluster, first, stop uint32, batch, amount int) {
+	receiver := types.GenerateAddress([]byte{11, 1, 1})
 	for i := 0; i < cl.Accounts(); i++ {
 		i := i
 		client := cl.Client(i % cl.Total())
@@ -150,9 +146,11 @@ func watchLayers(ctx context.Context, eg *errgroup.Group,
 	})
 }
 
+type layerCollector func(*pb.LayerStreamResponse) (bool, error)
+
 func layersStream(ctx context.Context,
 	node *cluster.NodeClient,
-	collector func(*pb.LayerStreamResponse) (bool, error),
+	collector layerCollector,
 ) error {
 	meshapi := pb.NewMeshServiceClient(node)
 	layers, err := meshapi.LayerStream(ctx, &pb.LayerStreamRequest{})

@@ -50,277 +50,277 @@ func (mr *MockrequesterMockRecorder) Request(arg0, arg1, arg2, arg3, arg4 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Request", reflect.TypeOf((*Mockrequester)(nil).Request), arg0, arg1, arg2, arg3, arg4)
 }
 
-// MockmalfeasanceHandler is a mock of malfeasanceHandler interface.
-type MockmalfeasanceHandler struct {
+// MockMalfeasanceValidator is a mock of MalfeasanceValidator interface.
+type MockMalfeasanceValidator struct {
 	ctrl     *gomock.Controller
-	recorder *MockmalfeasanceHandlerMockRecorder
+	recorder *MockMalfeasanceValidatorMockRecorder
 }
 
-// MockmalfeasanceHandlerMockRecorder is the mock recorder for MockmalfeasanceHandler.
-type MockmalfeasanceHandlerMockRecorder struct {
-	mock *MockmalfeasanceHandler
+// MockMalfeasanceValidatorMockRecorder is the mock recorder for MockMalfeasanceValidator.
+type MockMalfeasanceValidatorMockRecorder struct {
+	mock *MockMalfeasanceValidator
 }
 
-// NewMockmalfeasanceHandler creates a new mock instance.
-func NewMockmalfeasanceHandler(ctrl *gomock.Controller) *MockmalfeasanceHandler {
-	mock := &MockmalfeasanceHandler{ctrl: ctrl}
-	mock.recorder = &MockmalfeasanceHandlerMockRecorder{mock}
+// NewMockMalfeasanceValidator creates a new mock instance.
+func NewMockMalfeasanceValidator(ctrl *gomock.Controller) *MockMalfeasanceValidator {
+	mock := &MockMalfeasanceValidator{ctrl: ctrl}
+	mock.recorder = &MockMalfeasanceValidatorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockmalfeasanceHandler) EXPECT() *MockmalfeasanceHandlerMockRecorder {
+func (m *MockMalfeasanceValidator) EXPECT() *MockMalfeasanceValidatorMockRecorder {
 	return m.recorder
 }
 
 // HandleSyncedMalfeasanceProof mocks base method.
-func (m *MockmalfeasanceHandler) HandleSyncedMalfeasanceProof(arg0 context.Context, arg1 []byte) error {
+func (m *MockMalfeasanceValidator) HandleSyncedMalfeasanceProof(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleSyncedMalfeasanceProof", arg0, arg1)
+	ret := m.ctrl.Call(m, "HandleSyncedMalfeasanceProof", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleSyncedMalfeasanceProof indicates an expected call of HandleSyncedMalfeasanceProof.
-func (mr *MockmalfeasanceHandlerMockRecorder) HandleSyncedMalfeasanceProof(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockMalfeasanceValidatorMockRecorder) HandleSyncedMalfeasanceProof(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncedMalfeasanceProof", reflect.TypeOf((*MockmalfeasanceHandler)(nil).HandleSyncedMalfeasanceProof), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncedMalfeasanceProof", reflect.TypeOf((*MockMalfeasanceValidator)(nil).HandleSyncedMalfeasanceProof), arg0, arg1, arg2)
 }
 
-// MockatxHandler is a mock of atxHandler interface.
-type MockatxHandler struct {
+// MockAtxValidator is a mock of AtxValidator interface.
+type MockAtxValidator struct {
 	ctrl     *gomock.Controller
-	recorder *MockatxHandlerMockRecorder
+	recorder *MockAtxValidatorMockRecorder
 }
 
-// MockatxHandlerMockRecorder is the mock recorder for MockatxHandler.
-type MockatxHandlerMockRecorder struct {
-	mock *MockatxHandler
+// MockAtxValidatorMockRecorder is the mock recorder for MockAtxValidator.
+type MockAtxValidatorMockRecorder struct {
+	mock *MockAtxValidator
 }
 
-// NewMockatxHandler creates a new mock instance.
-func NewMockatxHandler(ctrl *gomock.Controller) *MockatxHandler {
-	mock := &MockatxHandler{ctrl: ctrl}
-	mock.recorder = &MockatxHandlerMockRecorder{mock}
+// NewMockAtxValidator creates a new mock instance.
+func NewMockAtxValidator(ctrl *gomock.Controller) *MockAtxValidator {
+	mock := &MockAtxValidator{ctrl: ctrl}
+	mock.recorder = &MockAtxValidatorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockatxHandler) EXPECT() *MockatxHandlerMockRecorder {
+func (m *MockAtxValidator) EXPECT() *MockAtxValidatorMockRecorder {
 	return m.recorder
 }
 
 // HandleAtxData mocks base method.
-func (m *MockatxHandler) HandleAtxData(arg0 context.Context, arg1 []byte) error {
+func (m *MockAtxValidator) HandleAtxData(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleAtxData", arg0, arg1)
+	ret := m.ctrl.Call(m, "HandleAtxData", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleAtxData indicates an expected call of HandleAtxData.
-func (mr *MockatxHandlerMockRecorder) HandleAtxData(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockAtxValidatorMockRecorder) HandleAtxData(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleAtxData", reflect.TypeOf((*MockatxHandler)(nil).HandleAtxData), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleAtxData", reflect.TypeOf((*MockAtxValidator)(nil).HandleAtxData), arg0, arg1, arg2)
 }
 
-// MockblockHandler is a mock of blockHandler interface.
-type MockblockHandler struct {
+// MockBlockValidator is a mock of BlockValidator interface.
+type MockBlockValidator struct {
 	ctrl     *gomock.Controller
-	recorder *MockblockHandlerMockRecorder
+	recorder *MockBlockValidatorMockRecorder
 }
 
-// MockblockHandlerMockRecorder is the mock recorder for MockblockHandler.
-type MockblockHandlerMockRecorder struct {
-	mock *MockblockHandler
+// MockBlockValidatorMockRecorder is the mock recorder for MockBlockValidator.
+type MockBlockValidatorMockRecorder struct {
+	mock *MockBlockValidator
 }
 
-// NewMockblockHandler creates a new mock instance.
-func NewMockblockHandler(ctrl *gomock.Controller) *MockblockHandler {
-	mock := &MockblockHandler{ctrl: ctrl}
-	mock.recorder = &MockblockHandlerMockRecorder{mock}
+// NewMockBlockValidator creates a new mock instance.
+func NewMockBlockValidator(ctrl *gomock.Controller) *MockBlockValidator {
+	mock := &MockBlockValidator{ctrl: ctrl}
+	mock.recorder = &MockBlockValidatorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockblockHandler) EXPECT() *MockblockHandlerMockRecorder {
+func (m *MockBlockValidator) EXPECT() *MockBlockValidatorMockRecorder {
 	return m.recorder
 }
 
 // HandleSyncedBlock mocks base method.
-func (m *MockblockHandler) HandleSyncedBlock(arg0 context.Context, arg1 []byte) error {
+func (m *MockBlockValidator) HandleSyncedBlock(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleSyncedBlock", arg0, arg1)
+	ret := m.ctrl.Call(m, "HandleSyncedBlock", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleSyncedBlock indicates an expected call of HandleSyncedBlock.
-func (mr *MockblockHandlerMockRecorder) HandleSyncedBlock(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockBlockValidatorMockRecorder) HandleSyncedBlock(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncedBlock", reflect.TypeOf((*MockblockHandler)(nil).HandleSyncedBlock), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncedBlock", reflect.TypeOf((*MockBlockValidator)(nil).HandleSyncedBlock), arg0, arg1, arg2)
 }
 
-// MockballotHandler is a mock of ballotHandler interface.
-type MockballotHandler struct {
+// MockBallotValidator is a mock of BallotValidator interface.
+type MockBallotValidator struct {
 	ctrl     *gomock.Controller
-	recorder *MockballotHandlerMockRecorder
+	recorder *MockBallotValidatorMockRecorder
 }
 
-// MockballotHandlerMockRecorder is the mock recorder for MockballotHandler.
-type MockballotHandlerMockRecorder struct {
-	mock *MockballotHandler
+// MockBallotValidatorMockRecorder is the mock recorder for MockBallotValidator.
+type MockBallotValidatorMockRecorder struct {
+	mock *MockBallotValidator
 }
 
-// NewMockballotHandler creates a new mock instance.
-func NewMockballotHandler(ctrl *gomock.Controller) *MockballotHandler {
-	mock := &MockballotHandler{ctrl: ctrl}
-	mock.recorder = &MockballotHandlerMockRecorder{mock}
+// NewMockBallotValidator creates a new mock instance.
+func NewMockBallotValidator(ctrl *gomock.Controller) *MockBallotValidator {
+	mock := &MockBallotValidator{ctrl: ctrl}
+	mock.recorder = &MockBallotValidatorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockballotHandler) EXPECT() *MockballotHandlerMockRecorder {
+func (m *MockBallotValidator) EXPECT() *MockBallotValidatorMockRecorder {
 	return m.recorder
 }
 
 // HandleSyncedBallot mocks base method.
-func (m *MockballotHandler) HandleSyncedBallot(arg0 context.Context, arg1 []byte) error {
+func (m *MockBallotValidator) HandleSyncedBallot(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleSyncedBallot", arg0, arg1)
+	ret := m.ctrl.Call(m, "HandleSyncedBallot", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleSyncedBallot indicates an expected call of HandleSyncedBallot.
-func (mr *MockballotHandlerMockRecorder) HandleSyncedBallot(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockBallotValidatorMockRecorder) HandleSyncedBallot(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncedBallot", reflect.TypeOf((*MockballotHandler)(nil).HandleSyncedBallot), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncedBallot", reflect.TypeOf((*MockBallotValidator)(nil).HandleSyncedBallot), arg0, arg1, arg2)
 }
 
-// MockproposalHandler is a mock of proposalHandler interface.
-type MockproposalHandler struct {
+// MockProposalValidator is a mock of ProposalValidator interface.
+type MockProposalValidator struct {
 	ctrl     *gomock.Controller
-	recorder *MockproposalHandlerMockRecorder
+	recorder *MockProposalValidatorMockRecorder
 }
 
-// MockproposalHandlerMockRecorder is the mock recorder for MockproposalHandler.
-type MockproposalHandlerMockRecorder struct {
-	mock *MockproposalHandler
+// MockProposalValidatorMockRecorder is the mock recorder for MockProposalValidator.
+type MockProposalValidatorMockRecorder struct {
+	mock *MockProposalValidator
 }
 
-// NewMockproposalHandler creates a new mock instance.
-func NewMockproposalHandler(ctrl *gomock.Controller) *MockproposalHandler {
-	mock := &MockproposalHandler{ctrl: ctrl}
-	mock.recorder = &MockproposalHandlerMockRecorder{mock}
+// NewMockProposalValidator creates a new mock instance.
+func NewMockProposalValidator(ctrl *gomock.Controller) *MockProposalValidator {
+	mock := &MockProposalValidator{ctrl: ctrl}
+	mock.recorder = &MockProposalValidatorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockproposalHandler) EXPECT() *MockproposalHandlerMockRecorder {
+func (m *MockProposalValidator) EXPECT() *MockProposalValidatorMockRecorder {
 	return m.recorder
 }
 
 // HandleSyncedProposal mocks base method.
-func (m *MockproposalHandler) HandleSyncedProposal(arg0 context.Context, arg1 []byte) error {
+func (m *MockProposalValidator) HandleSyncedProposal(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleSyncedProposal", arg0, arg1)
+	ret := m.ctrl.Call(m, "HandleSyncedProposal", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleSyncedProposal indicates an expected call of HandleSyncedProposal.
-func (mr *MockproposalHandlerMockRecorder) HandleSyncedProposal(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockProposalValidatorMockRecorder) HandleSyncedProposal(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncedProposal", reflect.TypeOf((*MockproposalHandler)(nil).HandleSyncedProposal), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncedProposal", reflect.TypeOf((*MockProposalValidator)(nil).HandleSyncedProposal), arg0, arg1, arg2)
 }
 
-// MocktxHandler is a mock of txHandler interface.
-type MocktxHandler struct {
+// MockTxValidator is a mock of TxValidator interface.
+type MockTxValidator struct {
 	ctrl     *gomock.Controller
-	recorder *MocktxHandlerMockRecorder
+	recorder *MockTxValidatorMockRecorder
 }
 
-// MocktxHandlerMockRecorder is the mock recorder for MocktxHandler.
-type MocktxHandlerMockRecorder struct {
-	mock *MocktxHandler
+// MockTxValidatorMockRecorder is the mock recorder for MockTxValidator.
+type MockTxValidatorMockRecorder struct {
+	mock *MockTxValidator
 }
 
-// NewMocktxHandler creates a new mock instance.
-func NewMocktxHandler(ctrl *gomock.Controller) *MocktxHandler {
-	mock := &MocktxHandler{ctrl: ctrl}
-	mock.recorder = &MocktxHandlerMockRecorder{mock}
+// NewMockTxValidator creates a new mock instance.
+func NewMockTxValidator(ctrl *gomock.Controller) *MockTxValidator {
+	mock := &MockTxValidator{ctrl: ctrl}
+	mock.recorder = &MockTxValidatorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocktxHandler) EXPECT() *MocktxHandlerMockRecorder {
+func (m *MockTxValidator) EXPECT() *MockTxValidatorMockRecorder {
 	return m.recorder
 }
 
 // HandleBlockTransaction mocks base method.
-func (m *MocktxHandler) HandleBlockTransaction(arg0 context.Context, arg1 []byte) error {
+func (m *MockTxValidator) HandleBlockTransaction(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleBlockTransaction", arg0, arg1)
+	ret := m.ctrl.Call(m, "HandleBlockTransaction", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleBlockTransaction indicates an expected call of HandleBlockTransaction.
-func (mr *MocktxHandlerMockRecorder) HandleBlockTransaction(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockTxValidatorMockRecorder) HandleBlockTransaction(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleBlockTransaction", reflect.TypeOf((*MocktxHandler)(nil).HandleBlockTransaction), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleBlockTransaction", reflect.TypeOf((*MockTxValidator)(nil).HandleBlockTransaction), arg0, arg1, arg2)
 }
 
 // HandleProposalTransaction mocks base method.
-func (m *MocktxHandler) HandleProposalTransaction(arg0 context.Context, arg1 []byte) error {
+func (m *MockTxValidator) HandleProposalTransaction(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleProposalTransaction", arg0, arg1)
+	ret := m.ctrl.Call(m, "HandleProposalTransaction", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleProposalTransaction indicates an expected call of HandleProposalTransaction.
-func (mr *MocktxHandlerMockRecorder) HandleProposalTransaction(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockTxValidatorMockRecorder) HandleProposalTransaction(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleProposalTransaction", reflect.TypeOf((*MocktxHandler)(nil).HandleProposalTransaction), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleProposalTransaction", reflect.TypeOf((*MockTxValidator)(nil).HandleProposalTransaction), arg0, arg1, arg2)
 }
 
-// MockpoetHandler is a mock of poetHandler interface.
-type MockpoetHandler struct {
+// MockPoetValidator is a mock of PoetValidator interface.
+type MockPoetValidator struct {
 	ctrl     *gomock.Controller
-	recorder *MockpoetHandlerMockRecorder
+	recorder *MockPoetValidatorMockRecorder
 }
 
-// MockpoetHandlerMockRecorder is the mock recorder for MockpoetHandler.
-type MockpoetHandlerMockRecorder struct {
-	mock *MockpoetHandler
+// MockPoetValidatorMockRecorder is the mock recorder for MockPoetValidator.
+type MockPoetValidatorMockRecorder struct {
+	mock *MockPoetValidator
 }
 
-// NewMockpoetHandler creates a new mock instance.
-func NewMockpoetHandler(ctrl *gomock.Controller) *MockpoetHandler {
-	mock := &MockpoetHandler{ctrl: ctrl}
-	mock.recorder = &MockpoetHandlerMockRecorder{mock}
+// NewMockPoetValidator creates a new mock instance.
+func NewMockPoetValidator(ctrl *gomock.Controller) *MockPoetValidator {
+	mock := &MockPoetValidator{ctrl: ctrl}
+	mock.recorder = &MockPoetValidatorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockpoetHandler) EXPECT() *MockpoetHandlerMockRecorder {
+func (m *MockPoetValidator) EXPECT() *MockPoetValidatorMockRecorder {
 	return m.recorder
 }
 
 // ValidateAndStoreMsg mocks base method.
-func (m *MockpoetHandler) ValidateAndStoreMsg(arg0 context.Context, arg1 []byte) error {
+func (m *MockPoetValidator) ValidateAndStoreMsg(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateAndStoreMsg", arg0, arg1)
+	ret := m.ctrl.Call(m, "ValidateAndStoreMsg", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ValidateAndStoreMsg indicates an expected call of ValidateAndStoreMsg.
-func (mr *MockpoetHandlerMockRecorder) ValidateAndStoreMsg(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockPoetValidatorMockRecorder) ValidateAndStoreMsg(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndStoreMsg", reflect.TypeOf((*MockpoetHandler)(nil).ValidateAndStoreMsg), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndStoreMsg", reflect.TypeOf((*MockPoetValidator)(nil).ValidateAndStoreMsg), arg0, arg1, arg2)
 }
 
 // MockmeshProvider is a mock of meshProvider interface.

@@ -12,6 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/multiformats/go-varint"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -51,8 +52,8 @@ type Handler func(context.Context, []byte) ([]byte, error)
 
 // Response is a server response.
 type Response struct {
-	Data  []byte
-	Error string
+	Data  []byte `scale:"max=10485760"` // 10 MiB
+	Error string `scale:"max=1024"`     // TODO(mafa): make error code instead of string
 }
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./server.go
@@ -98,7 +99,7 @@ func (s *Server) streamHandler(stream network.Stream) {
 	_ = stream.SetDeadline(time.Now().Add(s.timeout))
 	defer stream.SetDeadline(time.Time{})
 	rd := bufio.NewReader(stream)
-	size, err := binary.ReadUvarint(rd)
+	size, err := varint.ReadUvarint(rd)
 	if err != nil {
 		return
 	}

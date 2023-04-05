@@ -1,105 +1,397 @@
 package timesync
 
 import (
+	"context"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/benbjohnson/clock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
-const d50milli = 50 * time.Millisecond
+func Test_NodeClock_NewClock(t *testing.T) {
+	clock, err := NewClock(
+		WithGenesisTime(time.Now()),
+		WithTickInterval(time.Second),
+		WithLogger(logtest.New(t)),
+	)
+	require.ErrorContains(t, err, "layer duration is zero")
+	require.Nil(t, clock)
 
-func TestClock_StartClock(t *testing.T) {
-	tick := d50milli
-	c := RealClock{}
-	then := time.Now()
-	ts := NewClock(c, tick, c.Now(), logtest.New(t).WithName(t.Name()))
-	tk := ts.Subscribe()
-	ts.StartNotifying()
+	clock, err = NewClock(
+		WithLayerDuration(time.Second),
+		WithTickInterval(time.Second),
+		WithLogger(logtest.New(t)),
+	)
+	require.ErrorContains(t, err, "genesis time is zero")
+	require.Nil(t, clock)
+
+	clock, err = NewClock(
+		WithLayerDuration(time.Second),
+		WithTickInterval(time.Second),
+		WithGenesisTime(time.Now()),
+	)
+	require.ErrorContains(t, err, "logger is nil")
+	require.Nil(t, clock)
+
+	clock, err = NewClock(
+		WithLayerDuration(time.Second),
+		WithGenesisTime(time.Now()),
+		WithLogger(logtest.New(t)),
+	)
+	require.ErrorContains(t, err, "tick interval is zero")
+	require.Nil(t, clock)
+
+	clock, err = NewClock(
+		WithLayerDuration(time.Second),
+		WithTickInterval(2*time.Second),
+		WithGenesisTime(time.Now()),
+		WithLogger(logtest.New(t)),
+	)
+	require.ErrorContains(t, err, "tick interval must be between 0 and layer duration")
+	require.Nil(t, clock)
+}
+
+func Test_NodeClock_GenesisTime(t *testing.T) {
+	genesis := time.Now()
+
+	clock, err := NewClock(
+		WithLayerDuration(time.Second),
+		WithTickInterval(time.Second/10),
+		WithGenesisTime(genesis),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, clock)
+
+	require.Equal(t, genesis.Local(), clock.GenesisTime())
+}
+
+func Test_NodeClock_Close(t *testing.T) {
+	clock, err := NewClock(
+		WithLayerDuration(time.Second),
+		WithTickInterval(time.Second/10),
+		WithGenesisTime(time.Now()),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, clock)
+
+	var eg errgroup.Group
+	eg.Go(func() error {
+		if !assert.NotPanics(t, func() { clock.Close() }) {
+			return fmt.Errorf("panic on first close")
+		}
+		return nil
+	})
+	eg.Go(func() error {
+		if !assert.NotPanics(t, func() { clock.Close() }) {
+			return fmt.Errorf("panic on second close")
+		}
+		return nil
+	})
+
+	require.NoError(t, eg.Wait())
+}
+
+func Test_NodeClock_NoRaceOnTick(t *testing.T) {
+	clock, err := NewClock(
+		WithLayerDuration(time.Second),
+		WithTickInterval(time.Second/10),
+		WithGenesisTime(time.Now()),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, clock)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		for {
+			select {
+			case <-egCtx.Done():
+				return egCtx.Err()
+			case <-time.After(10 * time.Millisecond):
+				clock.tick()
+			}
+		}
+	})
+
+	eg.Go(func() error {
+		for {
+			select {
+			case <-egCtx.Done():
+				return egCtx.Err()
+			case <-time.After(11 * time.Millisecond):
+				clock.tick()
+			}
+		}
+	})
+
+	<-time.After(1 * time.Second)
+	cancel()
+	require.ErrorIs(t, eg.Wait(), context.Canceled)
+}
+
+func Test_NodeClock_Await_BeforeGenesis(t *testing.T) {
+	genesis := time.Now().Add(100 * time.Millisecond)
+	layerDuration := 100 * time.Millisecond
+	tickInterval := 10 * time.Millisecond
+
+	clock, err := NewClock(
+		WithLayerDuration(layerDuration),
+		WithTickInterval(tickInterval),
+		WithGenesisTime(genesis),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, clock)
 
 	select {
-	case <-tk:
-		dur := time.Since(then)
-		assert.True(t, tick <= dur)
-	case <-time.After(10 * tick):
-		assert.Fail(t, "no notification received")
+	case <-clock.AwaitLayer(types.LayerID(0)):
+		require.WithinRange(t, time.Now(), genesis, genesis.Add(tickInterval))
+	case <-time.After(1 * time.Second):
+		require.Fail(t, "timeout")
 	}
-	ts.Close()
 }
 
-func TestClock_StartClock_BeforeEpoch(t *testing.T) {
-	tick := d50milli
-	tmr := RealClock{}
+func Test_NodeClock_Await_PassedLayer(t *testing.T) {
+	genesis := time.Now().Add(-1 * time.Second)
+	layerDuration := 100 * time.Millisecond
+	tickInterval := 10 * time.Millisecond
 
-	waitTime := 2 * d50milli
-	then := time.Now()
-	ts := NewClock(tmr, tick, tmr.Now().Add(2*d50milli), logtest.New(t).WithName(t.Name()))
-	tk := ts.Subscribe()
-	ts.StartNotifying()
+	clock, err := NewClock(
+		WithLayerDuration(layerDuration),
+		WithTickInterval(tickInterval),
+		WithGenesisTime(genesis),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, clock)
 
 	select {
-	case <-tk:
-		dur := time.Since(then)
-		assert.True(t, waitTime < dur)
-	case <-time.After(10 * waitTime):
-		assert.Fail(t, "no notification received")
+	case <-clock.AwaitLayer(types.LayerID(4)):
+		require.Greater(t, time.Now(), genesis.Add(4*layerDuration))
+	default:
+		require.Fail(t, "await layer closed early")
+	}
+}
+
+func Test_NodeClock_Await_WithClockMovingBackwards(t *testing.T) {
+	now := time.Now()
+	genesis := now.Add(-1 * time.Second)
+	layerDuration := 100 * time.Millisecond
+	tickInterval := 10 * time.Millisecond
+
+	mClock := clock.NewMock()
+	mClock.Set(now)
+
+	clock, err := NewClock(
+		withClock(mClock),
+		WithLayerDuration(layerDuration),
+		WithTickInterval(tickInterval),
+		WithGenesisTime(genesis),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, clock)
+
+	// make the clock tick
+	clock.tick()
+
+	select {
+	case <-clock.AwaitLayer(types.LayerID(10)):
+		require.Greater(t, time.Now(), genesis.Add(10*layerDuration))
+	default:
+		require.Fail(t, "awaited layer didn't signal")
 	}
 
-	ts.Close()
+	// move the clock backwards by a layer
+	mClock.Set(now.Add(-2 * layerDuration))
+	ch := clock.AwaitLayer(types.LayerID(9))
+
+	select {
+	case <-ch:
+		require.Fail(t, "awaited layer shouldn't have signaled")
+	default:
+	}
+
+	// continue clock forward in time
+	mClock.Add(3 * layerDuration)
+
+	select {
+	case <-ch:
+		require.Greater(t, time.Now(), genesis.Add(9*layerDuration))
+	default:
+		require.Fail(t, "awaited layer didn't signal")
+	}
 }
 
-func TestClock_TickFutureGenesis(t *testing.T) {
-	tmr := &RealClock{}
-	ticker := NewClock(tmr, d50milli, tmr.Now().Add(2*d50milli), logtest.New(t).WithName(t.Name()))
-	assert.Equal(t, types.NewLayerID(0), ticker.lastTickedLayer) // check assumption that we are on genesis = 0
-	sub := ticker.Subscribe()
-	ticker.StartNotifying()
-	defer ticker.Close()
-	x := <-sub
-	assert.Equal(t, types.NewLayerID(0), x)
-	x = <-sub
-	assert.Equal(t, types.NewLayerID(1), x)
+func Test_NodeClock_NonMonotonicTick_Forward(t *testing.T) {
+	genesis := time.Now()
+	layerDuration := 100 * time.Millisecond
+	tickInterval := 10 * time.Millisecond
+
+	mClock := clock.NewMock()
+	mClock.Set(genesis.Add(5 * layerDuration))
+
+	clock, err := NewClock(
+		withClock(mClock),
+		WithLayerDuration(layerDuration),
+		WithTickInterval(tickInterval),
+		WithGenesisTime(genesis),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, clock)
+	ch := clock.AwaitLayer(types.LayerID(6))
+
+	select {
+	case <-ch:
+		require.Fail(t, "await layer closed early")
+	case <-time.After(10 * time.Millisecond):
+		// channel returned by AwaitLayer should not be closed yet and we should still be in layer 5
+		require.Equal(t, types.LayerID(5), clock.CurrentLayer())
+	}
+
+	// hibernate for 5 layers (clock jumps forward)
+	mClock.Add(5 * layerDuration)
+
+	select {
+	case <-ch:
+		// channel returned by AwaitLayer should be closed and we should be in the future layer 10
+		require.Equal(t, types.LayerID(10), clock.CurrentLayer())
+	case <-time.After(10 * time.Millisecond):
+		require.Fail(t, "await layer not closed")
+	}
 }
 
-func TestClock_TickPastGenesis(t *testing.T) {
-	tmr := &RealClock{}
-	start := time.Now()
-	ticker := NewClock(tmr, 2*d50milli, start.Add(-7*d50milli), logtest.New(t).WithName(t.Name()))
-	expectedTimeToTick := d50milli // tickInterval is 100ms and the genesis tick (layer 0) was 350ms ago
-	/*
-		T-350 -> layer 0
-		T-250 -> layer 1
-		T-150 -> layer 2
-		T-50  -> layer 3
-		T+50  -> layer 4
-	*/
-	sub := ticker.Subscribe()
-	ticker.StartNotifying()
-	defer ticker.Close()
-	x := <-sub
-	duration := time.Since(start)
-	assert.Equal(t, types.NewLayerID(4), x)
-	assert.True(t, duration >= expectedTimeToTick, "tick happened too soon (%v)", duration)
-	assert.True(t, duration < expectedTimeToTick+d50milli, "tick happened more than 50ms too late (%v)", duration)
+func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
+	genesis := time.Now()
+	layerDuration := 10 * time.Millisecond
+	tickInterval := 1 * time.Millisecond
+
+	mClock := clock.NewMock()
+	mClock.Set(genesis.Add(5 * layerDuration))
+
+	clock, err := NewClock(
+		withClock(mClock),
+		WithLayerDuration(layerDuration),
+		WithTickInterval(tickInterval),
+		WithGenesisTime(genesis),
+		WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, clock)
+
+	ch6 := clock.AwaitLayer(types.LayerID(6))
+	ch7 := clock.AwaitLayer(types.LayerID(7))
+
+	select {
+	case <-ch6:
+		require.Fail(t, "await layer 6 closed early")
+	case <-ch7:
+		require.Fail(t, "await layer 7 closed early")
+	case <-time.After(10 * time.Millisecond):
+		// channel returned by AwaitLayer should not be closed yet and we should still be in layer 5
+		require.Equal(t, types.LayerID(5), clock.CurrentLayer())
+	}
+
+	// simulate time passing
+	mClock.Add(1 * layerDuration)
+
+	select {
+	case <-ch6:
+		// channel returned by AwaitLayer should be closed and we should be in layer 6
+		require.Equal(t, types.LayerID(6), clock.CurrentLayer())
+	case <-time.After(100 * time.Millisecond):
+		require.Fail(t, "await layer 6 not closed")
+	}
+
+	select {
+	case <-ch7:
+		require.Fail(t, "await layer 7 closed early")
+	default:
+	}
+
+	// NTP corrects time backwards
+	mClock.Add(-1 * layerDuration)
+	ch6 = clock.AwaitLayer(types.LayerID(6))
+
+	select {
+	case <-ch6:
+		require.Fail(t, "await layer 6 closed early")
+	case <-ch7:
+		require.Fail(t, "await layer 7 closed early")
+	case <-time.After(10 * time.Millisecond):
+		// channel returned by AwaitLayer should not be closed yet and we should still be in layer 5
+		require.Equal(t, types.LayerID(5), clock.CurrentLayer())
+	}
+
+	// simulate time passing
+	mClock.Add(2 * layerDuration)
+
+	select {
+	case <-ch6:
+		// channel returned by AwaitLayer should be closed
+	case <-time.After(10 * time.Millisecond):
+		require.Fail(t, "await layer 6 not closed")
+	}
+
+	select {
+	case <-ch7:
+		// channel returned by AwaitLayer should be closed and we should be in layer 7
+		require.Equal(t, types.LayerID(7), clock.CurrentLayer())
+	case <-time.After(10 * time.Millisecond):
+		require.Fail(t, "await layer 7 not closed")
+	}
 }
 
-func TestClock_NewClock(t *testing.T) {
-	r := require.New(t)
-	tmr := &RealClock{}
-	ticker := NewClock(tmr, 100*time.Millisecond, tmr.Now().Add(-190*time.Millisecond), logtest.New(t).WithName(t.Name()))
-	defer ticker.Close()
+func Fuzz_NodeClock_CurrentLayer(f *testing.F) {
+	genesis, err := time.Parse(time.RFC3339, "2022-02-01T00:00:00Z")
+	require.NoError(f, err)
 
-	r.Equal(types.NewLayerID(1), ticker.lastTickedLayer)
-}
+	now, err := time.Parse(time.RFC3339, "2022-02-01T00:01:05Z")
+	require.NoError(f, err)
 
-func TestClock_CloseTwice(t *testing.T) {
-	ld := d50milli
-	clock := NewClock(RealClock{}, ld, time.Now(), logtest.New(t).WithName(t.Name()))
-	clock.StartNotifying()
-	clock.Close()
-	clock.Close()
+	f.Add(uint32(genesis.Unix()), uint32(now.Unix()), uint32(time.Minute.Seconds()))
+	f.Add(uint32(now.Unix()), uint32(genesis.Unix()), uint32(time.Minute.Seconds()))
+	f.Add(uint32(genesis.Unix()), uint32(now.Add(10*time.Hour).Unix()), uint32(time.Hour.Seconds()))
+	f.Fuzz(func(t *testing.T, genesis, now, layerSecs uint32) {
+		if layerSecs == 0 {
+			return
+		}
+
+		genesisTime := time.Unix(int64(genesis), 0)
+		nowTime := time.Unix(int64(now), 0)
+
+		layerTime := time.Duration(layerSecs) * time.Second
+		tickInterval := layerTime / 10
+
+		mClock := clock.NewMock()
+		mClock.Set(nowTime)
+
+		clock, err := NewClock(
+			withClock(mClock),
+			WithLayerDuration(layerTime),
+			WithTickInterval(tickInterval),
+			WithGenesisTime(genesisTime),
+			WithLogger(logtest.New(t)),
+		)
+		require.NoError(t, err)
+		require.NotNil(t, clock)
+
+		expectedLayer := uint32(0)
+		if nowTime.After(genesisTime) {
+			expectedLayer = (now - genesis) / layerSecs
+		}
+		layer := clock.CurrentLayer()
+		require.Equal(t, types.LayerID(expectedLayer), layer)
+	})
 }

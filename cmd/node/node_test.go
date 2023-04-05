@@ -19,7 +19,6 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
-	_ "github.com/nullstyle/go-xdr/xdr3" // without this TestSpacemeshApp_NodeService will fail to compile poet
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spf13/cobra"
@@ -520,14 +519,20 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	port := 1240
 	path := t.TempDir()
 
-	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), logtest.New(t))
+	clock, err := timesync.NewClock(
+		timesync.WithLayerDuration(1*time.Second),
+		timesync.WithTickInterval(100*time.Millisecond),
+		timesync.WithGenesisTime(time.Now()),
+		timesync.WithLogger(logtest.New(t)),
+	)
+	require.NoError(t, err)
 	mesh, err := mocknet.WithNPeers(1)
 	require.NoError(t, err)
 	cfg := getTestDefaultConfig()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	poetHarness, err := activation.NewHTTPPoetHarness(ctx, t.TempDir())
+	poetHarness, err := activation.NewHTTPPoetTestHarness(ctx, t.TempDir())
 	require.NoError(t, err)
 
 	edSgn, err := signing.NewEdSigner()
@@ -536,7 +541,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	require.NoError(t, err)
 	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
 		path, eligibility.New(logtest.New(t)),
-		poetHarness.HTTPPoetClient, clock, h, edSgn)
+		poetHarness.HTTPPoetClient, clock, h, edSgn,
+	)
 	require.NoError(t, err)
 
 	appCtx, appCancel := context.WithCancel(context.Background())
@@ -675,7 +681,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.P2P.Listen = "/ip4/127.0.0.1/tcp/7073"
 
 		// Avoid waiting for new connections.
-		app.Config.P2P.TargetOutbound = 0
+		app.Config.P2P.MinPeers = 0
 
 		// syncer will cause the node to go out of sync (and not listen to gossip)
 		// since we are testing single-node transaction service, we don't need the syncer to run
@@ -802,6 +808,7 @@ func TestConfig_Preset(t *testing.T) {
 
 		viper.Set("preset", name)
 		t.Cleanup(viper.Reset)
+		t.Cleanup(cmd.ResetConfig)
 		conf, err := loadConfig(c)
 		require.NoError(t, err)
 		require.Equal(t, preset, *conf)
@@ -818,6 +825,7 @@ func TestConfig_Preset(t *testing.T) {
 
 		viper.Set("preset", name)
 		t.Cleanup(viper.Reset)
+		t.Cleanup(cmd.ResetConfig)
 		conf, err := loadConfig(c)
 		require.NoError(t, err)
 		preset.P2P.LowPeers = lowPeers
@@ -839,6 +847,7 @@ func TestConfig_Preset(t *testing.T) {
 
 		viper.Set("preset", name)
 		t.Cleanup(viper.Reset)
+		t.Cleanup(cmd.ResetConfig)
 		conf, err := loadConfig(c)
 		require.NoError(t, err)
 		preset.P2P.LowPeers = lowPeers
@@ -859,6 +868,7 @@ func TestConfig_Preset(t *testing.T) {
 		require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
 
 		t.Cleanup(viper.Reset)
+		t.Cleanup(cmd.ResetConfig)
 
 		conf, err := loadConfig(c)
 		require.NoError(t, err)
@@ -867,10 +877,39 @@ func TestConfig_Preset(t *testing.T) {
 	})
 }
 
+func TestConfig_Load(t *testing.T) {
+	t.Run("invalid fails to load", func(t *testing.T) {
+		c := &cobra.Command{}
+		cmd.AddCommands(c)
+
+		path := filepath.Join(t.TempDir(), "config.json")
+		require.NoError(t, os.WriteFile(path, []byte("}"), 0o600))
+		require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
+
+		t.Cleanup(viper.Reset)
+		t.Cleanup(cmd.ResetConfig)
+
+		_, err := loadConfig(c)
+		require.ErrorContains(t, err, path)
+	})
+	t.Run("missing default doesn't fail", func(t *testing.T) {
+		c := &cobra.Command{}
+		cmd.AddCommands(c)
+		require.NoError(t, c.ParseFlags([]string{}))
+
+		t.Cleanup(viper.Reset)
+		t.Cleanup(cmd.ResetConfig)
+
+		_, err := loadConfig(c)
+		require.NoError(t, err)
+	})
+}
+
 func TestConfig_GenesisAccounts(t *testing.T) {
 	t.Run("OverwriteDefaults", func(t *testing.T) {
 		c := &cobra.Command{}
 		cmd.AddCommands(c)
+		t.Cleanup(cmd.ResetConfig)
 
 		const value = 100
 		keys := []string{"0x03", "0x04"}
@@ -958,13 +997,12 @@ func getTestDefaultConfig() *config.Config {
 		return nil
 	}
 	// is set to 0 to make sync start immediately when node starts
-	cfg.P2P.TargetOutbound = 0
+	cfg.P2P.MinPeers = 0
 
 	cfg.POST = activation.DefaultPostConfig()
 	cfg.POST.MinNumUnits = 2
 	cfg.POST.MaxNumUnits = 4
 	cfg.POST.LabelsPerUnit = 32
-	cfg.POST.BitsPerLabel = 8
 	cfg.POST.K2 = 4
 
 	cfg.SMESHING = config.DefaultSmeshingConfig()
@@ -976,7 +1014,6 @@ func getTestDefaultConfig() *config.Config {
 	cfg.HARE.RoundDuration = 2
 	cfg.HARE.WakeupDelta = 1
 	cfg.HARE.N = 5
-	cfg.HARE.F = 2
 	cfg.HARE.ExpectedLeaders = 5
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3
@@ -1007,7 +1044,7 @@ func getTestDefaultConfig() *config.Config {
 // initSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
 func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle,
-	poetClient *activation.HTTPPoetClient, clock TickProvider, host *p2p.Host, edSgn *signing.EdSigner,
+	poetClient *activation.HTTPPoetClient, clock *timesync.NodeClock, host *p2p.Host, edSgn *signing.EdSigner,
 ) (*App, error) {
 	smApp := New(WithLog(lg))
 	smApp.Config = &cfg

@@ -12,10 +12,10 @@ import (
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/proposals/util"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -34,7 +34,7 @@ func genActiveSet() types.ATXIDList {
 	return types.ATXIDList{types.RandomATXID(), types.RandomATXID(), types.RandomATXID(), types.RandomATXID()}
 }
 
-func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID) types.ATXIDList {
+func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, signer *signing.EdSigner) types.ATXIDList {
 	t.Helper()
 	activeset := types.ATXIDList{types.RandomATXID(), types.RandomATXID(), types.RandomATXID(), types.RandomATXID()}
 
@@ -46,25 +46,27 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 		NumUnits: testedATXUnit,
 		VRFNonce: &nonce,
 	}}
-	atx.SetID(&activeset[0])
-	atx.SetNodeID(&nid)
+	atx.SetID(activeset[0])
+	atx.SetEffectiveNumUnits(testedATXUnit)
+	atx.SetReceived(time.Now())
+	activation.SignAndFinalizeAtx(signer, atx)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+	require.NoError(t, atxs.Add(cdb, vAtx))
 
 	for _, id := range activeset[1:] {
-		nodeID := types.RandomNodeID()
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 			},
 			NumUnits: defaultATXUnit,
 		}}
-		atx.SetID(&id)
-		atx.SetNodeID(&nodeID)
+		atx.SetID(id)
+		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
-		require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+		require.NoError(t, atxs.Add(cdb, vAtx))
 	}
 	return activeset
 }
@@ -123,14 +125,17 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 		if isRef {
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{
-				ActiveSet: activeSet,
-				Beacon:    beacon,
+				ActiveSetHash:    activeSet.Hash(),
+				Beacon:           beacon,
+				EligibilityCount: eligibleSlots,
 			}
+			b.ActiveSet = activeSet
 		} else {
 			b.RefBallot = blts[0].ID()
 		}
 		b.EligibilityProofs = proofs
-		b.Signature = signer.Sign(b.SignedBytes())
+		b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
+		b.SetSmesherID(signer.NodeID())
 		require.NoError(tb, b.Initialize())
 		blts = append(blts, b)
 	}
@@ -192,7 +197,7 @@ func TestCheckEligibility_RefBallotEmptyActiveSet(t *testing.T) {
 
 	blts := createBallots(t, signer, genActiveSet(), types.Beacon{1, 1, 1})
 	rb := blts[0]
-	rb.EpochData.ActiveSet = nil
+	rb.ActiveSet = nil
 	require.NoError(t, ballots.Add(tv.cdb, rb))
 	eligible, err := tv.CheckEligibility(context.Background(), blts[1])
 	require.ErrorIs(t, err, errEmptyActiveSet)
@@ -222,12 +227,12 @@ func TestCheckEligibility_FailToGetBallotATXHeader(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
+	activeset := genActiveSetAndSave(t, tv.cdb, signer)
 
 	blts := createBallots(t, signer, activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
 	randomAtx := types.RandomATXID()
-	rb.EpochData.ActiveSet = append(rb.EpochData.ActiveSet, randomAtx)
+	rb.ActiveSet = append(rb.ActiveSet, randomAtx)
 	rb.AtxID = randomAtx
 	eligible, err := tv.CheckEligibility(context.Background(), rb)
 	require.ErrorIs(t, err, sql.ErrNotFound)
@@ -252,25 +257,26 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 		},
 		NumUnits: testedATXUnit,
 	}}
-	atx.SetID(&rb.EpochData.ActiveSet[0])
-	nodeID := signer.NodeID()
-	atx.SetNodeID(&nodeID)
+	atx.SetID(rb.ActiveSet[0])
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(tv.cdb, vAtx, time.Now()))
+	require.NoError(t, atxs.Add(tv.cdb, vAtx))
 
-	for _, id := range rb.EpochData.ActiveSet[1:] {
+	for _, id := range rb.ActiveSet[1:] {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 			},
 			NumUnits: defaultATXUnit,
 		}}
-		atx.SetID(&id)
-		atx.SetNodeID(&types.NodeID{})
+		atx.SetID(id)
+		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
-		require.NoError(t, atxs.Add(tv.cdb, vAtx, time.Now()))
+		require.NoError(t, atxs.Add(tv.cdb, vAtx))
 	}
 	eligible, err := tv.CheckEligibility(context.Background(), blts[1])
 	require.ErrorIs(t, err, errTargetEpochMismatch)
@@ -283,8 +289,12 @@ func TestCheckEligibility_KeyMismatch(t *testing.T) {
 		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
 	)
 	require.NoError(t, err)
+	signer2, err := signing.NewEdSigner(
+		signing.WithKeyFromRand(rand.New(rand.NewSource(1002))),
+	)
+	require.NoError(t, err)
 
-	activeset := genActiveSetAndSave(t, tv.cdb, types.NodeID{1})
+	activeset := genActiveSetAndSave(t, tv.cdb, signer2)
 	blts := createBallots(t, signer, activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
@@ -293,46 +303,21 @@ func TestCheckEligibility_KeyMismatch(t *testing.T) {
 	require.False(t, eligible)
 }
 
-func TestCheckEligibility_ZeroTotalWeight(t *testing.T) {
+func TestCheckEligibility_IncorrectEligibilityCount(t *testing.T) {
 	tv := createTestValidator(t)
 	signer, err := signing.NewEdSigner(
 		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
 	)
 	require.NoError(t, err)
 
-	blts := createBallots(t, signer, genActiveSet(), types.Beacon{1, 1, 1})
+	activeset := genActiveSetAndSave(t, tv.cdb, signer)
+	blts := createBallots(t, signer, activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
-	require.NoError(t, ballots.Add(tv.cdb, rb))
+	rb.EpochData.EligibilityCount = eligibleSlots - 1
 
-	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-		NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
-		},
-		NumUnits: 0,
-	}}
-	atx.SetID(&rb.EpochData.ActiveSet[0])
-	nodeID := signer.NodeID()
-	atx.SetNodeID(&nodeID)
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(tv.cdb, vAtx, time.Now()))
-
-	for _, id := range rb.EpochData.ActiveSet[1:] {
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
-			},
-			NumUnits: 0,
-		}}
-		atx.SetID(&id)
-		atx.SetNodeID(&types.NodeID{})
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(t, err)
-		require.NoError(t, atxs.Add(tv.cdb, vAtx, time.Now()))
-	}
-	eligible, err := tv.CheckEligibility(context.Background(), blts[1])
-	require.ErrorIs(t, err, util.ErrZeroTotalWeight)
-	require.False(t, eligible)
+	got, err := tv.CheckEligibility(context.Background(), rb)
+	require.ErrorIs(t, err, errIncorrectEligCount)
+	require.False(t, got)
 }
 
 func TestCheckEligibility_BadCounter(t *testing.T) {
@@ -342,7 +327,7 @@ func TestCheckEligibility_BadCounter(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
+	activeset := genActiveSetAndSave(t, tv.cdb, signer)
 	blts := createBallots(t, signer, activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
@@ -362,7 +347,7 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
+	activeset := genActiveSetAndSave(t, tv.cdb, signer)
 	blts := createBallots(t, signer, activeset, types.Beacon{10})
 	rb := blts[0]
 	require.Len(t, rb.EligibilityProofs, 2)
@@ -393,13 +378,13 @@ func TestCheckEligibility_BadVRFSignature(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
+	activeset := genActiveSetAndSave(t, tv.cdb, signer)
 	blts := createBallots(t, signer, activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
 
 	b := blts[1]
-	b.EligibilityProofs[0].Sig = b.EligibilityProofs[0].Sig[1:]
+	b.EligibilityProofs[0].Sig = types.RandomVrfSignature()
 	tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), b.EligibilityProofs[0].Sig).Return(false)
 	tv.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
 
@@ -415,13 +400,13 @@ func TestCheckEligibility_IncorrectLayerIndex(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
+	activeset := genActiveSetAndSave(t, tv.cdb, signer)
 	blts := createBallots(t, signer, activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
 
 	b := blts[1]
-	b.EligibilityProofs[0].Sig = b.EligibilityProofs[0].Sig[1:]
+	b.EligibilityProofs[0].Sig = types.RandomVrfSignature()
 	tv.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), b.EligibilityProofs[0].Sig).Return(false)
 	tv.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).Times(1)
 
@@ -445,7 +430,7 @@ func TestCheckEligibility(t *testing.T) {
 	require.NoError(t, err)
 
 	beacon := types.Beacon{1, 1, 1}
-	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
+	activeset := genActiveSetAndSave(t, tv.cdb, signer)
 	blts := createBallots(t, signer, activeset, beacon)
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
@@ -483,23 +468,33 @@ func TestCheckEligibility_AtxIdMismatch(t *testing.T) {
 func TestCheckEligibility_AtxNotIncluded(t *testing.T) {
 	tv := createTestValidator(t)
 
-	atx1 := &types.VerifiedActivationTx{ActivationTx: &types.ActivationTx{}}
-	atx1.SetID(&types.ATXID{1})
-	atx1.SetNodeID(&types.NodeID{})
-	atx2 := &types.VerifiedActivationTx{ActivationTx: &types.ActivationTx{}}
-	atx2.SetID(&types.ATXID{2})
-	atx2.SetNodeID(&types.NodeID{})
-	require.NoError(t, atxs.Add(tv.cdb, atx1, time.Time{}))
-	require.NoError(t, atxs.Add(tv.cdb, atx2, time.Time{}))
+	atx1 := &types.VerifiedActivationTx{ActivationTx: &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NumUnits: 2,
+		},
+	}}
+	atx1.SetID(types.ATXID{1})
+	atx1.SetEffectiveNumUnits(atx1.NumUnits)
+	atx2 := &types.VerifiedActivationTx{ActivationTx: &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NumUnits: 2,
+		},
+	}}
+	atx2.SetID(types.ATXID{2})
+	atx2.SetEffectiveNumUnits(atx2.NumUnits)
+	require.NoError(t, atxs.Add(tv.cdb, atx1))
+	require.NoError(t, atxs.Add(tv.cdb, atx2))
 
 	ballot := &types.Ballot{}
 	ballot.EligibilityProofs = []types.VotingEligibility{{}}
 	ballot.SetID(types.BallotID{1})
 	ballot.AtxID = types.ATXID{3}
+	activeSet := types.ATXIDList{atx1.ID(), atx2.ID()}
 	ballot.EpochData = &types.EpochData{
-		ActiveSet: []types.ATXID{atx1.ID(), atx2.ID()},
-		Beacon:    types.Beacon{1},
+		ActiveSetHash: activeSet.Hash(),
+		Beacon:        types.Beacon{1},
 	}
+	ballot.ActiveSet = activeSet
 	require.NoError(t, ballots.Add(tv.cdb, ballot))
 
 	eligibile, err := tv.CheckEligibility(context.Background(), ballot)

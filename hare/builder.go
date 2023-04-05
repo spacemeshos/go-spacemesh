@@ -1,7 +1,6 @@
 package hare
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -16,7 +15,7 @@ import (
 type Message struct {
 	types.HareMetadata
 	// signature over Metadata
-	Signature   []byte
+	Signature   types.EdSignature
 	InnerMsg    *InnerMessage
 	Eligibility types.HareEligibility
 }
@@ -35,11 +34,11 @@ func MessageFromBuffer(buf []byte) (Message, error) {
 }
 
 func (m *Message) MarshalLogObject(encoder log.ObjectEncoder) error {
-	_ = encoder.AddObject("inner_msg", m.InnerMsg)
-	encoder.AddUint32("layer_id", m.Layer.Value)
+	encoder.AddObject("inner_msg", m.InnerMsg)
+	encoder.AddUint32("layer_id", m.Layer.Uint32())
 	encoder.AddUint32("round", m.Round)
-	encoder.AddString("signature", hex.EncodeToString(m.Signature))
-	_ = encoder.AddObject("eligibility", &m.Eligibility)
+	encoder.AddString("signature", m.Signature.String())
+	encoder.AddObject("eligibility", &m.Eligibility)
 	return nil
 }
 
@@ -49,7 +48,7 @@ func (m *Message) Field() log.Field {
 }
 
 func (m *Message) SetMetadata() {
-	if m.Layer == (types.LayerID{}) {
+	if m.Layer == 0 {
 		log.Fatal("Message is missing layer")
 	}
 	m.MsgHash = types.BytesToHash(m.InnerMsg.HashBytes())
@@ -68,32 +67,32 @@ func (m *Message) SignedBytes() []byte {
 // Certificate is a collection of messages and the set of values.
 // Typically used as a collection of commit messages.
 type Certificate struct {
-	Values  []types.ProposalID // the committed set S
+	Values  []types.ProposalID `scale:"max=500"` // the committed set S - expected are 50 proposals per layer + safety margin
 	AggMsgs *AggregatedMessages
 }
 
 // AggregatedMessages is a collection of messages.
 type AggregatedMessages struct {
-	Messages []Message
+	Messages []Message `scale:"max=1000"` // limited by hare config parameter N with safety margin
 }
 
 // InnerMessage is the actual set of fields that describe a message in the Hare protocol.
 type InnerMessage struct {
 	Type           MessageType
 	CommittedRound uint32              // the round Values (S) is committed (Ki)
-	Values         []types.ProposalID  // the set S. optional for commit InnerMsg in a certificate
+	Values         []types.ProposalID  `scale:"max=500"` // the set S. optional for commit InnerMsg in a certificate - expected are 50 proposals per layer + safety margin
 	Svp            *AggregatedMessages // optional. only for proposal Messages
 	Cert           *Certificate        // optional
 }
 
 // HashBytes returns the message as bytes.
 func (im *InnerMessage) HashBytes() []byte {
-	hshr := hash.New()
-	_, err := codec.EncodeTo(hshr, im)
+	h := hash.New()
+	_, err := codec.EncodeTo(h, im)
 	if err != nil {
-		log.Fatal("failed to encode InnerMsg for hashing")
+		log.Fatal("failed to encode InnerMsg for hashing", log.Err(err))
 	}
-	return hshr.Sum(nil)
+	return h.Sum(nil)
 }
 
 func (im *InnerMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -112,7 +111,7 @@ type messageBuilder struct {
 // newMessageBuilder returns a new, empty message builder.
 // One should not assume any values are pre-set.
 func newMessageBuilder() *messageBuilder {
-	m := &messageBuilder{&Msg{Message: Message{}, PubKey: nil}, &InnerMessage{}}
+	m := &messageBuilder{&Msg{Message: Message{}, NodeID: types.EmptyNodeID}, &InnerMessage{}}
 	m.msg.InnerMsg = m.inner
 
 	return m
@@ -130,15 +129,15 @@ func (mb *messageBuilder) SetCertificate(certificate *Certificate) *messageBuild
 }
 
 // Sign calls the provided signer to calculate the signature and then set it accordingly.
-func (mb *messageBuilder) Sign(signing Signer) *messageBuilder {
-	mb.msg.Signature = signing.Sign(mb.msg.SignedBytes())
+func (mb *messageBuilder) Sign(signer *signing.EdSigner) *messageBuilder {
+	mb.msg.Signature = signer.Sign(signing.HARE, mb.msg.SignedBytes())
 	return mb
 }
 
 // SetPubKey sets the public key of the message.
 // Note: the message itself does not contain the public key. The builder returns the wrapper of the message which does.
-func (mb *messageBuilder) SetPubKey(pub *signing.PublicKey) *messageBuilder {
-	mb.msg.PubKey = pub
+func (mb *messageBuilder) SetNodeID(nodeID types.NodeID) *messageBuilder {
+	mb.msg.NodeID = nodeID
 	return mb
 }
 
@@ -173,7 +172,7 @@ func (mb *messageBuilder) SetValues(set *Set) *messageBuilder {
 }
 
 // SetRoleProof sets role proof.
-func (mb *messageBuilder) SetRoleProof(sig []byte) *messageBuilder {
+func (mb *messageBuilder) SetRoleProof(sig types.VrfSignature) *messageBuilder {
 	mb.msg.Eligibility.Proof = sig
 	return mb
 }

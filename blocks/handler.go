@@ -7,8 +7,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -54,7 +54,7 @@ func NewHandler(f system.Fetcher, db *sql.Database, m meshProvider, opts ...Opt)
 }
 
 // HandleSyncedBlock handles Block data from sync.
-func (h *Handler) HandleSyncedBlock(ctx context.Context, data []byte) error {
+func (h *Handler) HandleSyncedBlock(ctx context.Context, peer p2p.Peer, data []byte) error {
 	logger := h.logger.WithContext(ctx)
 
 	var b types.Block
@@ -65,7 +65,7 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, data []byte) error {
 	// set the block ID when received
 	b.Initialize()
 
-	if err := vm.ValidateRewards(b.Rewards); err != nil {
+	if err := ValidateRewards(b.Rewards); err != nil {
 		return fmt.Errorf("%w: %s", errInvalidRewards, err.Error())
 	}
 
@@ -79,7 +79,7 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, data []byte) error {
 	}
 	logger.With().Info("new block")
 
-	h.fetcher.AddPeersFromHash(b.ID().AsHash32(), types.TransactionIDsToHashes(b.TxIDs))
+	h.fetcher.RegisterPeerHashes(peer, types.TransactionIDsToHashes(b.TxIDs))
 	if err := h.checkTransactions(ctx, &b); err != nil {
 		logger.With().Warning("failed to fetch block TXs", log.Err(err))
 		return err
@@ -90,6 +90,24 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, data []byte) error {
 		return fmt.Errorf("save block: %w", err)
 	}
 
+	return nil
+}
+
+// ValidateRewards syntactically validates rewards.
+func ValidateRewards(rewards []types.AnyReward) error {
+	if len(rewards) == 0 {
+		return fmt.Errorf("empty rewards")
+	}
+	unique := map[types.ATXID]struct{}{}
+	for _, reward := range rewards {
+		if reward.Weight.Num == 0 || reward.Weight.Denom == 0 {
+			return fmt.Errorf("reward with invalid (zeroed) weight (%d/%d) included into the block for %v", reward.Weight.Num, reward.Weight.Denom, reward.AtxID)
+		}
+		if _, exists := unique[reward.AtxID]; exists {
+			return fmt.Errorf("multiple rewards for the same atx %v", reward.AtxID)
+		}
+		unique[reward.AtxID] = struct{}{}
+	}
 	return nil
 }
 

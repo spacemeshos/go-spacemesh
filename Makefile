@@ -1,10 +1,9 @@
+
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
-include Makefile-gpu.Inc
-# TODO(nkryuchkov): uncomment when go-svm is imported
-#include Makefile-svm.Inc
+include Makefile-libs.Inc
 
 DOCKER_HUB ?= spacemeshos
-UNIT_TESTS ?= $(shell go list ./...  | grep -v systest)
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests)
 
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
@@ -53,35 +52,32 @@ ifdef dump
     EXTRA_PARAMS:=$(EXTRA_PARAMS) --dump=$(dump)
 endif
 
+FUZZTIME ?= "10s"
+
 all: install build
 .PHONY: all
 
 install:
 	go run scripts/check-go-version.go --major 1 --minor 19
 	go mod download
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.50.0
-	go install github.com/spacemeshos/go-scale/scalegen@v1.1.1
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.52.0
+	go install github.com/spacemeshos/go-scale/scalegen@v1.1.6
 	go install github.com/golang/mock/mockgen
-	go install gotest.tools/gotestsum@v1.8.2
-	go install honnef.co/go/tools/cmd/staticcheck@latest
+	go install gotest.tools/gotestsum@v1.9.0
+	go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
 .PHONY: install
 
 build: go-spacemesh
 .PHONY: build
 
-# TODO(nkryuchkov): uncomment when go-svm is imported
-get-libs: get-gpu-setup #get-svm
+get-libs: get-gpu-setup get-postrs-lib
 .PHONY: get-libs
 
 gen-p2p-identity:
 	cd $@ ; go build -o $(BIN_DIR)$@$(EXE) .
-hare p2p: get-libs
-	cd $@ ; go build -o $(BIN_DIR)go-$@$(EXE) .
 go-spacemesh: get-libs
 	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
-harness: get-libs
-	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) .
-.PHONY: hare p2p harness go-spacemesh gen-p2p-identity
+.PHONY: go-spacemesh gen-p2p-identity
 
 tidy:
 	go mod tidy
@@ -95,7 +91,7 @@ endif
 
 # available only for linux host because CGO usage
 ifeq ($(HOST_OS),linux)
-docker-local-build: go-spacemesh hare p2p harness
+docker-local-build: go-spacemesh
 	cd build; DOCKER_BUILDKIT=1 docker build -f ../Dockerfile.prebuiltBinary -t $(DOCKER_IMAGE) .
 .PHONY: docker-local-build
 endif
@@ -154,7 +150,7 @@ lint-github-action: get-libs
 .PHONY: lint-github-action
 
 cover: get-libs
-	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -timeout 0 -p 1 $(UNIT_TESTS)
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -timeout 0 -p 1 -coverpkg=./... $(UNIT_TESTS)
 .PHONY: cover
 
 tag-and-build:
@@ -190,3 +186,7 @@ endif
 
 docker-local-push: docker-local-build dockerpush-only
 .PHONY: docker-local-push
+
+fuzz:
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" ./scripts/fuzz.sh $(FUZZTIME)
+.PHONY: fuzz

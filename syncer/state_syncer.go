@@ -28,12 +28,15 @@ func minLayer(a, b types.LayerID) types.LayerID {
 }
 
 func (s *Syncer) stateSynced() bool {
-	current := s.ticker.GetCurrentLayer()
+	current := s.ticker.CurrentLayer()
 	return current.Uint32() <= 1 || !s.mesh.ProcessedLayer().Before(current.Sub(1))
 }
 
 func (s *Syncer) processLayers(ctx context.Context) error {
 	ctx = log.WithNewSessionID(ctx)
+	if !s.ticker.CurrentLayer().After(types.GetEffectiveGenesis()) {
+		return nil
+	}
 	if !s.ListenToATXGossip() {
 		return errATXsNotSynced
 	}
@@ -67,12 +70,12 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		}
 
 		if s.patrol.IsHareInCharge(lid) {
-			lag := types.NewLayerID(0)
-			current := s.ticker.GetCurrentLayer()
+			lag := types.LayerID(0)
+			current := s.ticker.CurrentLayer()
 			if current.After(lid) {
 				lag = current.Sub(lid.Uint32())
 			}
-			if lag.Value < s.cfg.HareDelayLayers {
+			if lag.Uint32() < s.cfg.HareDelayLayers {
 				logger.Info("skip validating layer: hare still working")
 				return errHareInCharge
 			}

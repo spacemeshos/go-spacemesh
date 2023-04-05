@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -43,10 +44,14 @@ type Proposal struct {
 	// the content proposal for a given layer and the votes on the mesh history
 	InnerProposal
 	// smesher's signature on InnerProposal
-	Signature []byte
+	Signature EdSignature
 
 	// the following fields are kept private and from being serialized
 	proposalID ProposalID
+}
+
+func (p Proposal) Equal(other Proposal) bool {
+	return cmp.Equal(p.InnerProposal, other.InnerProposal) && p.Signature == other.Signature
 }
 
 // InnerProposal contains a smesher's content proposal for layer and its votes on the mesh history.
@@ -55,7 +60,7 @@ type InnerProposal struct {
 	// smesher's votes on the mesh history
 	Ballot
 	// smesher's content proposal for a layer
-	TxIDs []TransactionID
+	TxIDs []TransactionID `scale:"max=100000"`
 	// aggregated hash up to the layer before this proposal.
 	MeshHash Hash32
 	// TODO add this when a state commitment mechanism is implemented.
@@ -70,29 +75,18 @@ func (p *Proposal) Initialize() error {
 	if p.ID() != EmptyProposalID {
 		return fmt.Errorf("proposal already initialized")
 	}
-
 	if err := p.Ballot.Initialize(); err != nil {
 		return err
 	}
-
-	// check proposal signature consistent with ballot's
-	nodeId, err := ExtractNodeIDFromSig(p.Bytes(), p.Signature)
-	if err != nil {
-		return fmt.Errorf("proposal extract nodeId: %w", err)
-	}
-	if p.Ballot.SmesherID() != nodeId {
-		return fmt.Errorf("inconsistent smesher in proposal %v and ballot %v", nodeId.ShortString(), p.Ballot.SmesherID().ShortString())
-	}
-
 	p.proposalID = ProposalID(CalcObjectHash32(p).ToHash20())
 	return nil
 }
 
-// Bytes returns the serialization of the InnerProposal.
-func (p *Proposal) Bytes() []byte {
+// SignedBytes returns the serialization of the InnerProposal.
+func (p *Proposal) SignedBytes() []byte {
 	bytes, err := codec.Encode(&p.InnerProposal)
 	if err != nil {
-		log.Panic("failed to serialize proposal: %v", err)
+		log.With().Fatal("failed to serialize proposal", log.Err(err))
 	}
 	return bytes
 }

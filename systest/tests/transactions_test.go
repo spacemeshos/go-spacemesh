@@ -40,7 +40,7 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 	before := response.AccountWrapper.StateCurrent.Balance
 
 	eg, ctx := errgroup.WithContext(tctx)
-	sendTransactions(ctx, eg, tctx.Log, cl, first, stopSending)
+	sendTransactions(ctx, eg, tctx.Log, cl, first, stopSending, batch, amount)
 	txs := make([][]*pb.Transaction, cl.Total())
 
 	for i := 0; i < cl.Total(); i++ {

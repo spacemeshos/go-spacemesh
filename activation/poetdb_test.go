@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -34,12 +34,11 @@ func getPoetProof(t *testing.T) types.PoetProofMessage {
 
 		leaves, merkleProof, err := prover.GenerateProofWithoutPersistency(
 			context.Background(),
-			t.TempDir(),
+			prover.TreeConfig{Datadir: t.TempDir()},
 			poetHash.GenLabelHashFunc(challenge),
 			poetHash.GenMerkleHashFunc(challenge),
 			time.Now().Add(time.Millisecond*300),
 			shared.T,
-			prover.LowestMerkleMinMemoryLayer,
 		)
 		require.NoError(t, err)
 
@@ -55,12 +54,13 @@ func getPoetProof(t *testing.T) types.PoetProofMessage {
 		proof = &types.PoetProofMessage{
 			PoetProof: types.PoetProof{
 				MerkleProof: *merkleProof,
-				Members:     members,
+				Members:     make([]types.Member, 1),
 				LeafCount:   leaves,
 			},
 			PoetServiceID: []byte("poet_id_123456"),
 			RoundID:       "1337",
 		}
+		copy(proof.PoetProof.Members[0][:], memberHash)
 	})
 	return *proof
 }
@@ -70,16 +70,16 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	msg := getPoetProof(t)
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 
-	r.NoError(poetDb.Validate(msg.PoetProof, msg.PoetServiceID, msg.RoundID, nil))
+	r.NoError(poetDb.Validate(msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature))
 	ref, err := msg.Ref()
 	r.NoError(err)
 
 	proofBytes, err := codec.Encode(&msg.PoetProof)
 	r.NoError(err)
-	expectedRef := hash.Sum(proofBytes)
-	r.Equal(types.PoetProofRef(types.CalcHash32(expectedRef[:]).Bytes()), ref)
+	expectedRef := types.CalcHash32(proofBytes)
+	r.Equal(types.PoetProofRef(expectedRef), ref)
 
-	r.NoError(poetDb.StoreProof(context.TODO(), ref, &msg))
+	r.NoError(poetDb.StoreProof(context.Background(), ref, &msg))
 	got, err := poetDb.GetProofRef(msg.PoetServiceID, msg.RoundID)
 	r.NoError(err)
 	r.Equal(ref, got)
@@ -98,7 +98,7 @@ func TestPoetDbPoetProofNoMembers(t *testing.T) {
 	poetProof.Root = []byte("some other root")
 	poetProof.Members = nil
 
-	err := poetDb.Validate(poetProof.PoetProof, poetProof.PoetServiceID, poetProof.RoundID, nil)
+	err := poetDb.Validate(poetProof.PoetProof, poetProof.PoetServiceID, poetProof.RoundID, types.EmptyEdSignature)
 	r.NoError(err)
 }
 
@@ -108,10 +108,10 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 	msg.PoetProof.Root = []byte("some other root")
 
-	err := poetDb.Validate(msg.PoetProof, msg.PoetServiceID, msg.RoundID, nil)
-	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid",
-		msg.PoetServiceID[:5]))
-	r.False(types.IsProcessingError(err))
+	err := poetDb.Validate(msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
+	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid", msg.PoetServiceID[:5]))
+	var pErr types.ProcessingError
+	r.False(errors.As(err, &pErr))
 }
 
 func TestPoetDbNonExistingKeys(t *testing.T) {
@@ -122,7 +122,7 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 	_, err := poetDb.GetProofRef(msg.PoetServiceID, "0")
 	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for poet ID %x in round %v: get value: database: not found", msg.PoetServiceID[:5], "0"))
 
-	ref := []byte("abcde")
+	ref := types.PoetProofRef{0xab, 0xcd, 0xef}
 	_, err = poetDb.GetMembershipMap(ref)
 	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for ref %x: get proof from store: get value: database: not found", ref[:5]))
 }

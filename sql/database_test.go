@@ -18,7 +18,11 @@ func testTables(db Executor) error {
 }
 
 func TestTransactionIsolation(t *testing.T) {
-	db := InMemory(WithMigrations(testTables))
+	db := InMemory(
+		WithMigrations(testTables),
+		WithConnections(10),
+		WithLatencyMetering(true),
+	)
 
 	tx, err := db.Tx(context.TODO())
 	require.NoError(t, err)

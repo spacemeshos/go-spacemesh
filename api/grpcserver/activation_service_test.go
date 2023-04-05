@@ -65,7 +65,7 @@ func TestGet_HappyPath(t *testing.T) {
 				NIPostChallenge: types.NIPostChallenge{
 					Sequence:           rand.Uint64(),
 					PrevATXID:          types.RandomATXID(),
-					PubLayerID:         types.LayerID{},
+					PubLayerID:         0,
 					PositioningATX:     types.RandomATXID(),
 					InitialPostIndices: types.RandomBytes(7),
 				},
@@ -74,17 +74,15 @@ func TestGet_HappyPath(t *testing.T) {
 			},
 		},
 	}
-	atx.SetID(&id)
-	nodeId := types.BytesToNodeID(types.RandomBytes(32))
-	atx.SetNodeID(&nodeId)
+	atx.SetID(id)
 	atxProvider.EXPECT().GetFullAtx(id).Return(&atx, nil)
 
 	response, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
 	require.NoError(t, err)
 
 	require.Equal(t, atx.ID().Bytes(), response.Atx.Id.Id)
-	require.Equal(t, atx.PubLayerID.Value, response.Atx.Layer.Number)
-	require.Equal(t, atx.NodeID().Bytes(), response.Atx.SmesherId.Id)
+	require.Equal(t, atx.PubLayerID.Uint32(), response.Atx.Layer.Number)
+	require.Equal(t, atx.SmesherID.Bytes(), response.Atx.SmesherId.Id)
 	require.Equal(t, atx.Coinbase.String(), response.Atx.Coinbase.Address)
 	require.Equal(t, atx.PrevATXID.Bytes(), response.Atx.PrevAtx.Id)
 	require.Equal(t, atx.NumUnits, response.Atx.NumUnits)

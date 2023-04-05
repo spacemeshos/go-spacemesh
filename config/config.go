@@ -13,20 +13,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
 const (
-	defaultConfigFileName = "./config.toml"
-	defaultDataDirName    = "spacemesh"
+	defaultDataDirName = "spacemesh"
 	// NewBlockProtocol indicates the protocol name for new blocks arriving.
 )
 
@@ -58,6 +57,7 @@ type Config struct {
 	SMESHING        SmeshingConfig        `mapstructure:"smeshing"`
 	LOGGING         LoggerConfig          `mapstructure:"logging"`
 	FETCH           fetch.Config          `mapstructure:"fetch"`
+	Bootstrap       bootstrap.Config      `mapstructure:"bootstrap"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -104,6 +104,9 @@ type BaseConfig struct {
 	// then we optimistically filter out infeasible transactions before constructing the block.
 	OptFilterThreshold int    `mapstructure:"optimistic-filtering-threshold"`
 	TickSize           uint64 `mapstructure:"tick-size"`
+
+	DatabaseConnections     int  `mapstructure:"db-connections"`
+	DatabaseLatencyMetering bool `mapstructure:"db-latency-metering"`
 }
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
@@ -132,6 +135,7 @@ func DefaultConfig() Config {
 		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           fetch.DefaultConfig(),
 		LOGGING:         defaultLoggingConfig(),
+		Bootstrap:       bootstrap.DefaultConfig(),
 	}
 }
 
@@ -149,7 +153,6 @@ func DefaultTestConfig() Config {
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		DataDirParent:       defaultDataDir,
-		ConfigFile:          defaultConfigFileName,
 		CollectMetrics:      false,
 		MetricsPort:         1010,
 		MetricsPush:         "", // "" = doesn't push
@@ -167,6 +170,7 @@ func defaultBaseConfig() BaseConfig {
 		BlockGasLimit:       math.MaxUint64,
 		OptFilterThreshold:  90,
 		TickSize:            100,
+		DatabaseConnections: 16,
 	}
 }
 
@@ -186,30 +190,13 @@ func defaultTestConfig() BaseConfig {
 }
 
 // LoadConfig load the config file.
-func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
-	if fileLocation == "" {
-		fileLocation = defaultConfigFileName
+func LoadConfig(config string, vip *viper.Viper) error {
+	if config == "" {
+		return nil
 	}
-
-	vip.SetConfigFile(fileLocation)
-	err = vip.ReadInConfig()
-
-	if err != nil {
-		if fileLocation != defaultConfigFileName {
-			log.Warning("failed loading config from %v trying %v. error %v", fileLocation, defaultConfigFileName, err)
-			vip.SetConfigFile(defaultConfigFileName)
-			err = vip.ReadInConfig()
-		}
-		// we change err so check again
-		if err != nil {
-			return fmt.Errorf("failed to read config file %v", err)
-		}
+	vip.SetConfigFile(config)
+	if err := vip.ReadInConfig(); err != nil {
+		return fmt.Errorf("can't load config at %s: %w", config, err)
 	}
-
 	return nil
-}
-
-// SetConfigFile overrides the default config file path.
-func (cfg *BaseConfig) SetConfigFile(file string) {
-	cfg.ConfigFile = file
 }

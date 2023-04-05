@@ -3,6 +3,7 @@ package sim
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // DefaultNumBlocks is a number of blocks in a layer by default.
@@ -162,6 +163,9 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		miners[miner]++
 	}
 	for miner, maxj := range miners {
+		if maxj == 0 {
+			continue
+		}
 		voting := cfg.VoteGen(g.rng, g.layers, miner)
 		atxid := g.activations[miner]
 		signer := g.keys[miner]
@@ -180,17 +184,20 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 			InnerBallot: types.InnerBallot{
 				AtxID: atxid,
 				EpochData: &types.EpochData{
-					ActiveSet: activeset,
-					Beacon:    beacon,
+					ActiveSetHash: types.Hash32{1, 2, 3},
+					Beacon:        beacon,
 				},
 			},
 			Votes:             voting,
 			EligibilityProofs: proofs,
+			ActiveSet:         activeset,
 		}
-		ballot.Signature = signer.Sign(ballot.SignedBytes())
+		ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
+		ballot.SetSmesherID(signer.NodeID())
 		if err = ballot.Initialize(); err != nil {
 			g.logger.With().Panic("failed to init ballot", log.Err(err))
 		}
+		ballot.SetSmesherID(signer.NodeID())
 		for _, state := range g.states {
 			state.OnBallot(ballot)
 		}

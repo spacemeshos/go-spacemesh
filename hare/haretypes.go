@@ -38,15 +38,15 @@ const defaultSetSize = 200
 func (mType MessageType) String() string {
 	switch mType {
 	case status:
-		return "Status"
+		return "status"
 	case proposal:
-		return "Proposal"
+		return "proposal"
 	case commit:
-		return "Commit"
+		return "commit"
 	case notify:
-		return "Notify"
+		return "notify"
 	case pre:
-		return "PreRound"
+		return "preround"
 	default:
 		return "Unknown message type"
 	}
@@ -204,7 +204,7 @@ func (s *Set) String() string {
 	defer s.mu.RUnlock()
 
 	var sb strings.Builder
-	idx := len(s.values) - 1
+	idx := len(s.values)
 	for v := range s.values {
 		idx--
 		sb.WriteString(v.String())

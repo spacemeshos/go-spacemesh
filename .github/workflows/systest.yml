@@ -1,5 +1,6 @@
 name: System tests
 on:
+  # Allow manually triggering this workflow
   workflow_dispatch:
   push:
     branches:
@@ -27,6 +28,10 @@ env:
   CI_REGION_NAME: ${{ secrets.CI_REGION_NAME }}
   USE_GKE_GCLOUD_AUTH_PLUGIN: True
 
+concurrency:
+  group: ${{ github.base_ref == 'staging' && 'smci-staging' || format('smci-{0}-{1}', github.workflow, github.ref) }}
+  cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
+
 jobs:
   filter-changes:
     runs-on: ubuntu-latest
@@ -46,10 +51,7 @@ jobs:
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
       - filter-changes
-    timeout-minutes: 90
-    concurrency:
-      group: ${{ github.base_ref == 'staging' && format('{0}-staging', github.workflow) || format('{0}-{1}', github.workflow, github.ref) }}
-      cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@v3
 
@@ -96,32 +98,19 @@ jobs:
         run: make -C systest push
 
       - name: set up go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
 
-      - name: Run tests I
-        timeout-minutes: 55
+      - name: Run tests
+        timeout-minutes: 60
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           label: sanity
           storage: premium-rwo=10Gi
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 50
-          bootstrap: 10m
-          level: info
-          clusters: 4
-        run: make -C systest run test_name=.
-
-      - name: Run tests II
-        timeout-minutes: 30
-        env:
-          test_id: systest-${{ steps.vars.outputs.sha_short }}
-          label: destructive
-          storage: premium-rwo=10Gi
-          node_selector: cloud.google.com/gke-nodepool=gha
-          size: 30
-          bootstrap: 10m
+          bootstrap: 4m
           level: info
           clusters: 4
         run: make -C systest run test_name=.

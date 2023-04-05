@@ -31,8 +31,12 @@ const (
 	cacheSize = 1000
 )
 
-// errExceedMaxRetries is returned when MaxRetriesForRequest attempts has been made to fetch data for a hash and failed.
-var errExceedMaxRetries = errors.New("fetch failed after max retries for request")
+var (
+	// errExceedMaxRetries is returned when MaxRetriesForRequest attempts has been made to fetch data for a hash and failed.
+	errExceedMaxRetries = errors.New("fetch failed after max retries for request")
+
+	errValidatorsNotSet = errors.New("validators not set")
+)
 
 // request contains all relevant Data for a single request for a specified hash.
 type request struct {
@@ -95,7 +99,7 @@ func DefaultConfig() Config {
 // randomPeer returns a random peer from current peer list.
 func randomPeer(peers []p2p.Peer) p2p.Peer {
 	if len(peers) == 0 {
-		log.Panic("cannot send fetch: no peers found")
+		log.Fatal("cannot send fetch: no peers found")
 	}
 	return peers[rand.Intn(len(peers))]
 }
@@ -124,55 +128,6 @@ func WithLogger(log log.Log) Option {
 	}
 }
 
-// WithMalfeasanceHandler configures the malfeasance handler of the fetcher.
-func WithMalfeasanceHandler(h malfeasanceHandler) Option {
-	return func(f *Fetch) {
-		f.malHandler = h
-	}
-}
-
-// WithATXHandler configures the ATX handler of the fetcher.
-func WithATXHandler(h atxHandler) Option {
-	return func(f *Fetch) {
-		f.atxHandler = h
-	}
-}
-
-// WithBallotHandler configures the Ballot handler of the fetcher.
-func WithBallotHandler(h ballotHandler) Option {
-	return func(f *Fetch) {
-		f.ballotHandler = h
-	}
-}
-
-// WithBlockHandler configures the Block handler of the fetcher.
-func WithBlockHandler(h blockHandler) Option {
-	return func(f *Fetch) {
-		f.blockHandler = h
-	}
-}
-
-// WithProposalHandler configures the Proposal handler of the fetcher.
-func WithProposalHandler(h proposalHandler) Option {
-	return func(f *Fetch) {
-		f.proposalHandler = h
-	}
-}
-
-// WithTXHandler configures the TX handler of the fetcher.
-func WithTXHandler(h txHandler) Option {
-	return func(f *Fetch) {
-		f.txHandler = h
-	}
-}
-
-// WithPoetHandler configures the PoET handler of the fetcher.
-func WithPoetHandler(h poetHandler) Option {
-	return func(f *Fetch) {
-		f.poetHandler = h
-	}
-}
-
 func withServers(s map[string]requester) Option {
 	return func(f *Fetch) {
 		f.servers = s
@@ -192,14 +147,8 @@ type Fetch struct {
 	bs     *datastore.BlobStore
 	host   host
 
-	servers         map[string]requester
-	poetHandler     poetHandler
-	malHandler      malfeasanceHandler
-	atxHandler      atxHandler
-	ballotHandler   ballotHandler
-	blockHandler    blockHandler
-	proposalHandler proposalHandler
-	txHandler       txHandler
+	servers    map[string]requester
+	validators *dataValidators
 
 	// unprocessed contains requests that are not processed
 	unprocessed map[types.Hash32]*request
@@ -252,14 +201,49 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, 
 	return f
 }
 
+type dataValidators struct {
+	atx         AtxValidator
+	poet        PoetValidator
+	ballot      BallotValidator
+	block       BlockValidator
+	proposal    ProposalValidator
+	tx          TxValidator
+	malfeasance MalfeasanceValidator
+}
+
+// SetValidators sets the handlers to validate various mesh data fetched from peers.
+func (f *Fetch) SetValidators(
+	atx AtxValidator,
+	poet PoetValidator,
+	ballot BallotValidator,
+	block BlockValidator,
+	prop ProposalValidator,
+	tx TxValidator,
+	mal MalfeasanceValidator,
+) {
+	f.validators = &dataValidators{
+		atx:         atx,
+		poet:        poet,
+		ballot:      ballot,
+		block:       block,
+		proposal:    prop,
+		tx:          tx,
+		malfeasance: mal,
+	}
+}
+
 // Start starts handling fetch requests.
-func (f *Fetch) Start() {
+func (f *Fetch) Start() error {
+	if f.validators == nil {
+		return errValidatorsNotSet
+	}
 	f.onlyOnce.Do(func() {
 		f.eg.Go(func() error {
 			f.loop()
 			return nil
 		})
 	})
+	return nil
 }
 
 // Stop stops handling fetch requests.
@@ -354,7 +338,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 		rsp := resp
 		f.eg.Go(func() error {
 			// validation fetch data recursively. offload to another goroutine
-			f.hashValidationDone(rsp.Hash, req.validator(req.ctx, rsp.Data))
+			f.hashValidationDone(rsp.Hash, req.validator(req.ctx, batch.peer, rsp.Data))
 			return nil
 		})
 		delete(batchMap, resp.Hash)
@@ -629,11 +613,6 @@ func (f *Fetch) getHash(ctx context.Context, hash types.Hash32, h datastore.Hint
 // RegisterPeerHashes registers provided peer for a list of hashes.
 func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 	f.hashToPeers.RegisterPeerHashes(peer, hashes)
-}
-
-// AddPeersFromHash adds peers from one hash to others.
-func (f *Fetch) AddPeersFromHash(fromHash types.Hash32, toHashes []types.Hash32) {
-	f.hashToPeers.AddPeersFromHash(fromHash, toHashes)
 }
 
 func (f *Fetch) GetPeers() []p2p.Peer {

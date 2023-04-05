@@ -2,6 +2,7 @@ package sim
 
 import (
 	"math/rand"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -224,13 +225,12 @@ func (g *Generator) generateAtxs() {
 		if err != nil {
 			panic(err)
 		}
-		nodeID := sig.NodeID()
 		address := types.GenerateAddress(sig.PublicKey().Bytes())
 
 		nipost := types.NIPostChallenge{
 			PubLayerID: g.nextLayer.Sub(1),
 		}
-		atx := types.NewActivationTx(nipost, &nodeID, address, nil, units, nil, nil)
+		atx := types.NewActivationTx(nipost, address, nil, units, nil, nil)
 		var ticks uint64
 		if g.ticks != nil {
 			ticks = g.ticks[i]
@@ -240,6 +240,8 @@ func (g *Generator) generateAtxs() {
 		if err := activation.SignAndFinalizeAtx(sig, atx); err != nil {
 			panic(err)
 		}
+		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
 		vAtx, err := atx.Verify(g.prevHeight[i], ticks)
 		if err != nil {
 			panic(err)

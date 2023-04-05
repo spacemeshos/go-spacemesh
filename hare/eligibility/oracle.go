@@ -101,7 +101,11 @@ type defaultFetcher struct {
 }
 
 func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	return atxs.VRFNonce(f.cdb, nodeID, epoch)
+	nonce, err := f.cdb.VRFNonce(nodeID, epoch)
+	if err != nil {
+		return types.VRFPostIndex(0), fmt.Errorf("get vrf nonce: %w", err)
+	}
+	return nonce, nil
 }
 
 // Opt for configuring Validator.
@@ -207,14 +211,14 @@ func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.
 	return w, nil
 }
 
-func calcVrfFrac(vrfSig []byte) fixed.Fixed {
+func calcVrfFrac(vrfSig types.VrfSignature) fixed.Fixed {
 	return fixed.FracFromBytes(vrfSig[:8])
 }
 
-func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, nonce types.VRFPostIndex, vrfSig []byte) (n int, p, vrfFrac fixed.Fixed, done bool, err error) {
+func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, nonce types.VRFPostIndex, vrfSig types.VrfSignature) (n int, p, vrfFrac fixed.Fixed, done bool, err error) {
 	logger := o.WithContext(ctx).WithFields(
 		layer,
-		log.Stringer("sender_id", id),
+		log.Stringer("smesher", id),
 		log.Uint32("round", round),
 		log.Int("committee_size", committeeSize),
 	)
@@ -290,11 +294,11 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 
 // Validate validates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is the role
 // proof and assuming commSize as the expected committee size.
-func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
+func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig types.VrfSignature, eligibilityCount uint16) (bool, error) {
 	nonce, err := o.nonceFetcher.VRFNonce(id, layer.GetEpoch())
 	if err != nil {
 		o.Log.WithContext(ctx).With().Warning("failed to find nonce for node",
-			log.String("sender_id", id.ShortString()),
+			log.Stringer("smesher", id),
 			log.Err(err),
 		)
 		return false, fmt.Errorf("nonce not found for node %s: %w", id, err)
@@ -337,7 +341,7 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32
 // CalcEligibility calculates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is
 // the role proof and assuming commSize as the expected committee size.
 func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int,
-	id types.NodeID, nonce types.VRFPostIndex, vrfSig []byte,
+	id types.NodeID, nonce types.VRFPostIndex, vrfSig types.VrfSignature,
 ) (uint16, error) {
 	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, nonce, vrfSig)
 	if done {
@@ -374,10 +378,10 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 }
 
 // Proof returns the role proof for the current Layer & Round.
-func (o *Oracle) Proof(ctx context.Context, nonce types.VRFPostIndex, layer types.LayerID, round uint32) ([]byte, error) {
+func (o *Oracle) Proof(ctx context.Context, nonce types.VRFPostIndex, layer types.LayerID, round uint32) (types.VrfSignature, error) {
 	msg, err := o.buildVRFMessage(ctx, nonce, layer, round)
 	if err != nil {
-		return nil, err
+		return types.EmptyVrfSignature, err
 	}
 	return o.vrfSigner.Sign(msg), nil
 }
@@ -390,11 +394,8 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 	)
 	logger.Debug("hare oracle getting active set")
 
-	// lock until any return
-	// note: no need to lock per safeEp - we do not expect many concurrent requests per safeEp (max two)
 	o.lock.Lock()
 	defer o.lock.Unlock()
-
 	// we first try to get the hare active set for a range of safe layers
 	safeLayerStart, safeLayerEnd := safeLayerRange(
 		targetLayer, o.cfg.ConfidenceParam, o.layersPerEpoch, o.cfg.EpochOffset)
@@ -408,19 +409,23 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 		log.Uint64("layers_per_epoch", uint64(o.layersPerEpoch)),
 		log.FieldNamed("effective_genesis", types.GetEffectiveGenesis()))
 
+	if value, exists := o.activesCache.Get(safeLayerStart.GetEpoch()); exists {
+		return value.(map[types.NodeID]uint64), nil
+	}
+	activeSet, err := o.computeActiveSet(logger, targetLayer, safeLayerStart, safeLayerEnd)
+	if err != nil {
+		return nil, err
+	}
+	o.activesCache.Add(safeLayerStart.GetEpoch(), activeSet)
+	return activeSet, nil
+}
+
+func (o *Oracle) computeActiveSet(logger log.Log, targetLayer, safeLayerStart, safeLayerEnd types.LayerID) (map[types.NodeID]uint64, error) {
 	// check cache first
 	// as long as epochOffset < layersPerEpoch, we expect safeLayerStart and safeLayerEnd to be in the same epoch.
 	// if not, don't attempt to cache on the basis of a single epoch since the safe layer range will span multiple
 	// epochs.
 	if safeLayerStart.GetEpoch() == safeLayerEnd.GetEpoch() {
-		if val, exist := o.activesCache.Get(safeLayerStart.GetEpoch()); exist {
-			activeMap := val.(map[types.NodeID]uint64)
-			logger.With().Debug("found value in cache for safe layer start epoch",
-				log.FieldNamed("safe_layer_start", safeLayerStart),
-				log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()),
-				log.Int("count", len(activeMap)))
-			return activeMap, nil
-		}
 		logger.With().Debug("no value in cache for safe layer start epoch",
 			log.FieldNamed("safe_layer_start", safeLayerStart),
 			log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()))
@@ -487,7 +492,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 				log.String("epoch_beacon", beacon.ShortString()))
 			continue
 		}
-		for _, id := range ballot.EpochData.ActiveSet {
+		for _, id := range ballot.ActiveSet {
 			if _, exist := seenATXIDs[id]; exist {
 				continue
 			}
@@ -511,9 +516,9 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 	}
 
 	if len(hareActiveSet) > 0 {
-		logger.With().Debug("successfully got hare active set for layer range",
+		logger.With().Info("successfully got hare active set for layer range",
+			log.Uint32("layer_range_epoch", uint32(safeLayerStart.GetEpoch())),
 			log.Int("count", len(hareActiveSet)))
-		o.activesCache.Add(safeLayerStart.GetEpoch(), hareActiveSet)
 		return hareActiveSet, nil
 	}
 

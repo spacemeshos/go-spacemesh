@@ -17,6 +17,8 @@ env:
 
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:
+  # Allow manually triggering this workflow
+  workflow_dispatch:
   # run for all pull requests and pushes to certain branches
   pull_request:
   push:
@@ -25,7 +27,7 @@ on:
       - trying
 
 concurrency:
-  group: ${{ github.base_ref == 'staging' && format('{0}-staging', github.workflow) || format('{0}-{1}', github.workflow, github.ref) }}
+  group: ${{ github.base_ref == 'staging' && 'smci-staging' || format('smci-{0}-{1}', github.workflow, github.ref) }}
   cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
 
 jobs:
@@ -53,23 +55,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    # should not take more than 2-3 mins
-    timeout-minutes: 5
+    # should not take more than 4-5 mins
+    timeout-minutes: 7
     steps:
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: fmt, tidy, generate
         run: |
           make install
@@ -89,17 +83,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
         run: make install
       - name: lint
@@ -117,18 +103,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-build-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-build-
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
         run: make install
       - name: build
@@ -158,18 +135,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-unittests-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-unittests-
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
         run: make install
       - name: Clear test cache
@@ -218,18 +186,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-unittests-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-unittests-
-            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
         run: make install
       - name: Clear test cache

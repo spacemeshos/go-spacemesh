@@ -1,7 +1,6 @@
 package proposals
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -23,6 +21,7 @@ var (
 	errInvalidProofsOrder  = errors.New("proofs are out of order")
 	errIncorrectVRFSig     = errors.New("proof contains incorrect VRF signature")
 	errIncorrectLayerIndex = errors.New("ballot has incorrect layer index")
+	errIncorrectEligCount  = errors.New("ballot has incorrect eligibility count")
 )
 
 // Validator validates the eligibility of a Ballot.
@@ -43,7 +42,11 @@ type defaultFetcher struct {
 }
 
 func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	return atxs.VRFNonce(f.cdb, nodeID, epoch)
+	nonce, err := f.cdb.VRFNonce(nodeID, epoch)
+	if err != nil {
+		return types.VRFPostIndex(0), fmt.Errorf("get vrf nonce: %w", err)
+	}
+	return nonce, nil
 }
 
 // ValidatorOpt for configuring Validator.
@@ -108,7 +111,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		return false, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, refBallot.ID())
 	}
 
-	activeSets := refBallot.EpochData.ActiveSet
+	activeSets := refBallot.ActiveSet
 	if len(activeSets) == 0 {
 		return false, fmt.Errorf("%w: ref ballot %v", errEmptyActiveSet, refBallot.ID())
 	}
@@ -132,8 +135,8 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		return false, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
 			errTargetEpochMismatch, targetEpoch, epoch)
 	}
-	if pub := ballot.SmesherID(); !bytes.Equal(owned.NodeID.Bytes(), pub.Bytes()) {
-		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), owned.NodeID)
+	if ballot.SmesherID() != owned.NodeID {
+		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, ballot.SmesherID().String(), owned.NodeID)
 	}
 
 	atxWeight = owned.GetWeight()
@@ -141,6 +144,9 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	numEligibleSlots, err := GetNumEligibleSlots(atxWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
 	if err != nil {
 		return false, err
+	}
+	if ballot.EpochData != nil && ballot.EpochData.EligibilityCount != numEligibleSlots {
+		return false, fmt.Errorf("%w: expected %v, got: %v", errIncorrectEligCount, numEligibleSlots, ballot.EpochData.EligibilityCount)
 	}
 
 	var (
@@ -173,8 +179,9 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 
 		beaconStr := beacon.ShortString()
 		if !v.vrfVerifier.Verify(owned.NodeID, message, vrfSig) {
-			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
-				errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
+			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %s",
+				errIncorrectVRFSig, beaconStr, epoch, counter, vrfSig,
+			)
 		}
 
 		eligibleLayer := CalcEligibleLayer(epoch, v.layersPerEpoch, vrfSig)

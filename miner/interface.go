@@ -11,7 +11,7 @@ import (
 //go:generate mockgen -package=miner -destination=./mocks.go -source=./interface.go
 
 type proposalOracle interface {
-	GetProposalEligibility(types.LayerID, types.Beacon, types.VRFPostIndex) (types.ATXID, []types.ATXID, []types.VotingEligibility, error)
+	GetProposalEligibility(types.LayerID, types.Beacon, types.VRFPostIndex) (*EpochEligibility, error)
 }
 
 type conservativeState interface {
@@ -30,6 +30,6 @@ type nonceFetcher interface {
 
 type layerClock interface {
 	AwaitLayer(layerID types.LayerID) chan struct{}
-	GetCurrentLayer() types.LayerID
+	CurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
 }
