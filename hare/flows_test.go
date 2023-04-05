@@ -23,73 +23,12 @@ import (
 // a layer starts before the last layer has converged.
 func Test_multipleCPs(t *testing.T) {
 	logtest.SetupGlobal(t)
-
-	r := require.New(t)
-	totalCp := uint32(3)
-	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
-	test := newHareWrapper(totalCp)
 	totalNodes := 10
-	// RoundDuration is not used because we override the newRoundClock function
-	// of Hare to provide our own clock which progresses rounds when all nodes
-	// are ready. WakeupDelta does not affect round wakeup time since that is
-	// hardcoded to be instant in the shared round clock but it does control
-	// how late a consensus process can start a layer and not skip it, as such
-	// we set it to a huge value to prevent nodes accidentally skipping layers.
-	cfg := config.Config{N: totalNodes, WakeupDelta: time.Hour, RoundDuration: 0, ExpectedLeaders: totalNodes/2 + 1, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(totalNodes)
-	require.NoError(t, err)
-	defer func() {
-		err := mesh.Close()
-		require.NoError(t, err)
-	}()
-
-	test.initialSets = make([]*Set, totalNodes)
-
-	pList := make(map[types.LayerID][]*types.Proposal)
-	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
-		for i := uint64(0); i < 20; i++ {
-			p := genLayerProposal(j, []types.TransactionID{})
-			p.EpochData = &types.EpochData{
-				Beacon: types.EmptyBeacon,
-			}
-			pList[j] = append(pList[j], p)
-		}
-	}
-	meshes := make([]*mocks.Mockmesh, 0, totalNodes)
-	ctrl, ctx := gomock.WithContext(ctx, t)
-	for i := 0; i < totalNodes; i++ {
-		mockMesh := mocks.NewMockmesh(ctrl)
-		mockMesh.EXPECT().GetEpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
-		mockMesh.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
-		mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
-		mockMesh.EXPECT().SetWeakCoin(gomock.Any(), gomock.Any()).AnyTimes()
-		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(finalLyr); lid = lid.Add(1) {
-			mockMesh.EXPECT().Proposals(lid).Return(pList[lid], nil)
-			for _, p := range pList[lid] {
-				mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
-				mockMesh.EXPECT().Ballot(p.Ballot.ID()).Return(&p.Ballot, nil).AnyTimes()
-			}
-		}
-		mockMesh.EXPECT().Proposals(gomock.Any()).Return([]*types.Proposal{}, nil).AnyTimes()
-		meshes = append(meshes, mockMesh)
-	}
 
 	// setup roundClocks to progress a layer only when all nodes have received messages from all nodes.
 	roundClocks := newSharedRoundClocks(totalNodes*totalNodes, 200*time.Millisecond)
-	var pubsubs []*pubsub.PubSub
-	outputs := make([]map[types.LayerID]LayerOutput, totalNodes)
-	var outputsWaitGroup sync.WaitGroup
-	for i := 0; i < totalNodes; i++ {
-		host := mesh.Hosts()[i]
-		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
-		require.NoError(t, err)
-		pubsubs = append(pubsubs, ps)
-		// We wrap the pubsub system to notify round clocks whenever a message
-		// is received.
-		testPs := &testPublisherSubscriber{
+	wrapPubSub := func(ps pubsub.PublishSubsciber) pubsub.PublishSubsciber {
+		return &testPublisherSubscriber{
 			inner: ps,
 			register: func(protocol string, handler pubsub.GossipHandler) {
 				ps.Register(protocol, func(ctx context.Context, peer peer.ID, message []byte) pubsub.ValidationResult {
@@ -101,77 +40,9 @@ func Test_multipleCPs(t *testing.T) {
 				})
 			},
 		}
-		h := createTestHare(t, meshes[i], cfg, test.clock, testPs, t.Name())
-		// override the round clocks method to use our shared round clocks
-		h.newRoundClock = roundClocks.roundClock
-		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(types.EmptyVrfSignature, nil).AnyTimes()
-		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
-		h.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-		outputsWaitGroup.Add(1)
-		go func(idx int) {
-			defer outputsWaitGroup.Done()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case out, ok := <-h.blockGenCh:
-					if !ok {
-						return
-					}
-					if outputs[idx] == nil {
-						outputs[idx] = make(map[types.LayerID]LayerOutput)
-					}
-					outputs[idx][out.Layer] = out
-				}
-			}
-		}(i)
-		test.hare = append(test.hare, h.Hare)
-		e := h.Start(ctx)
-		r.NoError(e)
 	}
-	require.NoError(t, mesh.ConnectAllButSelf())
-	require.Eventually(t, func() bool {
-		for _, ps := range pubsubs {
-			if len(ps.ProtocolPeers(pubsub.HareProtocol)) != len(mesh.Hosts())-1 {
-				return false
-			}
-		}
-		return true
-	}, 5*time.Second, 10*time.Millisecond)
-
-	ahead := 0
-	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
-		if ahead > 1 {
-			// Since the broker keeps early messages only for the subsequent
-			// layer to the most recent layer we need to ensure that the
-			// difference between the most recent layer at two nodes is no more
-			// than one. Otherwise if nodes get too far ahead the trailing
-			// nodes will discard their messages. We do this by waiting for the
-			// end of the first round of the layer prior to the one to be
-			// started, which because the shared round clock only progresses
-			// rounds when all nodes have received messages from all nodes,
-			// ensures that all nodes have at least started the prior layer.
-			<-roundClocks.roundClock(j.Sub(1)).AwaitEndOfRound(preRound)
-			ahead--
-		}
-		test.clock.advanceLayer()
-		ahead++
-	}
-
-	test.WaitForTimedTermination(t, time.Minute)
-	// We close hare here so that the blockGenCh is closed which allows for the
-	// outputsWaitGroup to complete.
-	for _, h := range test.hare {
-		h.Close()
-	}
-	outputsWaitGroup.Wait()
-	for _, out := range outputs {
-		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(finalLyr); lid = lid.Add(1) {
-			require.NotNil(t, out[lid])
-			require.ElementsMatch(t, types.ToProposalIDs(pList[lid]), out[lid].Proposals)
-		}
-	}
+	totalCp := uint32(3)
+	runTest(t, totalNodes, totalCp, roundClocks, wrapPubSub)
 }
 
 // Test running multiple consensus processes in parallel. This can happen when
@@ -179,79 +50,20 @@ func Test_multipleCPs(t *testing.T) {
 // this test is manipulated into running more than one iteration.
 func Test_multipleCPsAndIterations(t *testing.T) {
 	logtest.SetupGlobal(t)
-
-	r := require.New(t)
-	totalCp := uint32(4)
-	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
-	test := newHareWrapper(totalCp)
 	totalNodes := 10
-	// RoundDuration is not used because we override the newRoundClock function
-	// of Hare to provide our own clock which progresses rounds when all nodes
-	// are ready. WakeupDelta does not affect round wakeup time since that is
-	// hardcoded to be instant in the shared round clock but it does control
-	// how late a consensus process can start a layer and not skip it, as such
-	// we set it to a huge value to prevent nodes accidentally skipping layers.
-	cfg := config.Config{N: totalNodes, WakeupDelta: time.Hour, RoundDuration: 0, ExpectedLeaders: totalNodes/2 + 1, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(totalNodes)
-	require.NoError(t, err)
-	defer func() {
-		err := mesh.Close()
-		require.NoError(t, err)
-	}()
-
-	test.initialSets = make([]*Set, totalNodes)
-
-	pList := make(map[types.LayerID][]*types.Proposal)
-	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
-		for i := uint64(0); i < 20; i++ {
-			p := genLayerProposal(j, []types.TransactionID{})
-			p.EpochData = &types.EpochData{
-				Beacon: types.EmptyBeacon,
-			}
-			pList[j] = append(pList[j], p)
-		}
-	}
-
-	meshes := make([]*mocks.Mockmesh, 0, totalNodes)
-	ctrl, ctx := gomock.WithContext(ctx, t)
-	for i := 0; i < totalNodes; i++ {
-		mockMesh := mocks.NewMockmesh(ctrl)
-		mockMesh.EXPECT().GetEpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
-		mockMesh.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
-		mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
-		mockMesh.EXPECT().SetWeakCoin(gomock.Any(), gomock.Any()).AnyTimes()
-		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(finalLyr); lid = lid.Add(1) {
-			mockMesh.EXPECT().Proposals(lid).Return(pList[lid], nil)
-			for _, p := range pList[lid] {
-				mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
-				mockMesh.EXPECT().Ballot(p.Ballot.ID()).Return(&p.Ballot, nil).AnyTimes()
-			}
-		}
-		mockMesh.EXPECT().Proposals(gomock.Any()).Return([]*types.Proposal{}, nil).AnyTimes()
-		meshes = append(meshes, mockMesh)
-	}
 
 	// setup roundClocks to progress a layer only when all nodes have received messages from all nodes.
 	roundClocks := newSharedRoundClocks(totalNodes*totalNodes, 200*time.Millisecond)
-	var pubsubs []*pubsub.PubSub
-	outputs := make([]map[types.LayerID]LayerOutput, totalNodes)
-	var outputsWaitGroup sync.WaitGroup
-	var stalledLayerCount int
-	var notifyMutex sync.Mutex
+
+	var stalledLayerMessageCount int
+	var stalledLayerMu sync.Mutex
 	// lets us wait so that all nodes start unstalled rounds in sync
 	var targetLayerWg sync.WaitGroup
 	targetLayerWg.Add(totalNodes)
 	stalledLayer := types.GetEffectiveGenesis().Add(1)
 	maxStalledRound := 7
-	for i := 0; i < totalNodes; i++ {
-		host := mesh.Hosts()[i]
-		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
-		require.NoError(t, err)
-
-		testPs := &testPublisherSubscriber{
+	wrapPubSub := func(ps pubsub.PublishSubsciber) pubsub.PublishSubsciber {
+		return &testPublisherSubscriber{
 			inner: ps,
 			publish: func(ctx context.Context, topic string, message []byte) error {
 				// drop messages from rounds 0 - 7 for stalled layer but not for preRound.
@@ -276,8 +88,8 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 					res := handler(ctx, peer, message)
 
 					// Now we will ensure the round clock is progressed properly.
-					notifyMutex.Lock()
-					defer notifyMutex.Unlock()
+					stalledLayerMu.Lock()
+					defer stalledLayerMu.Unlock()
 					m, err := MessageFromBuffer(message)
 					if err != nil {
 						panic(err)
@@ -293,8 +105,8 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 					// incMessages.
 					if m.Layer == stalledLayer && m.Round == preRound {
 						// Keep track of received preRound messages
-						stalledLayerCount += int(m.Eligibility.Count)
-						if stalledLayerCount == totalNodes*totalNodes {
+						stalledLayerMessageCount += int(m.Eligibility.Count)
+						if stalledLayerMessageCount == totalNodes*totalNodes {
 							// Once all preRound messages have been received wait for the preRound to complete.
 							<-roundClocks.clock(m.Layer).AwaitEndOfRound(preRound)
 							roundClocks.clock(m.Layer).advanceToRound(uint32(maxStalledRound + 1))
@@ -304,6 +116,72 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 				})
 			},
 		}
+	}
+	totalCp := uint32(4)
+	runTest(t, totalNodes, totalCp, roundClocks, wrapPubSub)
+}
+
+func runTest(t *testing.T, totalNodes int, totalCp uint32, roundClocks *sharedRoundClocks, wrapPubSub func(pubsub.PublishSubsciber) pubsub.PublishSubsciber) {
+	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
+	require.NoError(t, err)
+	defer func() {
+		err := mesh.Close()
+		require.NoError(t, err)
+	}()
+
+	test := newHareWrapper(totalCp)
+	test.initialSets = make([]*Set, totalNodes)
+
+	pList := make(map[types.LayerID][]*types.Proposal)
+	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
+		for i := uint64(0); i < 20; i++ {
+			p := genLayerProposal(j, []types.TransactionID{})
+			p.EpochData = &types.EpochData{
+				Beacon: types.EmptyBeacon,
+			}
+			pList[j] = append(pList[j], p)
+		}
+	}
+
+	meshes := make([]*mocks.Mockmesh, 0, totalNodes)
+	ctrl, ctx := gomock.WithContext(ctx, t)
+	for i := 0; i < totalNodes; i++ {
+		mockMesh := mocks.NewMockmesh(ctrl)
+		mockMesh.EXPECT().GetEpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
+		mockMesh.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
+		mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
+		mockMesh.EXPECT().SetWeakCoin(gomock.Any(), gomock.Any()).AnyTimes()
+		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(finalLyr); lid = lid.Add(1) {
+			mockMesh.EXPECT().Proposals(lid).Return(pList[lid], nil)
+			for _, p := range pList[lid] {
+				mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
+				mockMesh.EXPECT().Ballot(p.Ballot.ID()).Return(&p.Ballot, nil).AnyTimes()
+			}
+		}
+		mockMesh.EXPECT().Proposals(gomock.Any()).Return([]*types.Proposal{}, nil).AnyTimes()
+		meshes = append(meshes, mockMesh)
+	}
+	// RoundDuration is not used because we override the newRoundClock function
+	// of Hare to provide our own clock which progresses rounds when all nodes
+	// are ready. WakeupDelta does not affect round wakeup time since that is
+	// hardcoded to be instant in the shared round clock but it does control
+	// how late a consensus process can start a layer and not skip it, as such
+	// we set it to a huge value to prevent nodes accidentally skipping layers.
+	cfg := config.Config{N: totalNodes, WakeupDelta: time.Hour, RoundDuration: 0, ExpectedLeaders: totalNodes/2 + 1, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
+
+	var pubsubs []*pubsub.PubSub
+	outputs := make([]map[types.LayerID]LayerOutput, totalNodes)
+	var outputsWaitGroup sync.WaitGroup
+	for i := 0; i < totalNodes; i++ {
+		host := mesh.Hosts()[i]
+		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
+		require.NoError(t, err)
+
+		testPs := wrapPubSub(ps)
 		h := createTestHare(t, meshes[i], cfg, test.clock, testPs, t.Name())
 		// override the round clocks method to use our shared round clocks
 		h.newRoundClock = roundClocks.roundClock
@@ -331,7 +209,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		}(i)
 		test.hare = append(test.hare, h.Hare)
 		e := h.Start(ctx)
-		r.NoError(e)
+		require.NoError(t, e)
 	}
 	require.NoError(t, mesh.ConnectAllButSelf())
 	require.Eventually(t, func() bool {
@@ -342,6 +220,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		}
 		return true
 	}, 5*time.Second, 10*time.Millisecond)
+
 	ahead := 0
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
 		if ahead > 1 {
