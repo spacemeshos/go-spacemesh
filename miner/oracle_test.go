@@ -77,10 +77,10 @@ func genBallotWithEligibility(
 		InnerBallot: types.InnerBallot{
 			AtxID: ee.Atx,
 			EpochData: &types.EpochData{
-				ActiveSetHash: ee.ActiveSet.Hash(),
-				Beacon:        beacon,
+				ActiveSetHash:    ee.ActiveSet.Hash(),
+				Beacon:           beacon,
+				EligibilityCount: ee.Slots,
 			},
-			EligibilityCount: ee.Slots,
 		},
 		ActiveSet:         ee.ActiveSet,
 		EligibilityProofs: ee.Proofs[lid],

@@ -195,7 +195,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 			require.NotNil(t, p.EpochData)
 			require.Equal(t, activeSet, types.ATXIDList(p.ActiveSet))
 			require.Equal(t, beacon, p.EpochData.Beacon)
-			require.Equal(t, ee.Slots, p.EligibilityCount)
+			require.Equal(t, ee.Slots, p.EpochData.EligibilityCount)
 			require.Equal(t, []types.TransactionID{tx1.ID}, p.TxIDs)
 			require.Equal(t, proofs, p.EligibilityProofs)
 			require.Equal(t, meshHash, p.MeshHash)
@@ -261,7 +261,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 			require.Equal(t, atxID, p.AtxID)
 			require.Equal(t, p.Layer, layerID)
 			require.NotNil(t, p.EpochData)
-			require.Equal(t, ee.Slots, p.EligibilityCount)
+			require.Equal(t, ee.Slots, p.EpochData.EligibilityCount)
 			require.Equal(t, activeSet, types.ATXIDList(p.ActiveSet))
 			require.Equal(t, beacon, p.EpochData.Beacon)
 			require.Equal(t, []types.TransactionID{tx.ID}, p.TxIDs)
@@ -388,9 +388,9 @@ func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 			var got types.Proposal
 			require.NoError(t, codec.Decode(data, &got))
 			require.Equal(t, types.EmptyBallotID, got.RefBallot)
-			require.Equal(t, types.EpochData{ActiveSetHash: activeSet.Hash(), Beacon: beacon}, *got.EpochData)
+			require.Equal(t, types.EpochData{ActiveSetHash: activeSet.Hash(), Beacon: beacon, EligibilityCount: ee.Slots}, *got.EpochData)
 			require.Equal(t, activeSet, types.ATXIDList(got.ActiveSet))
-			require.Equal(t, ee.Slots, got.EligibilityCount)
+			require.Equal(t, ee.Slots, got.EpochData.EligibilityCount)
 			return nil
 		})
 
@@ -431,7 +431,6 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 			require.NoError(t, codec.Decode(data, &got))
 			require.Equal(t, refBallot.ID(), got.RefBallot)
 			require.Nil(t, got.EpochData)
-			require.Equal(t, ee.Slots, got.EligibilityCount)
 			return nil
 		})
 
