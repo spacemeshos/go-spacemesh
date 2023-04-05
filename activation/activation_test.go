@@ -401,38 +401,6 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	require.Equal(t, atx1.TargetEpoch()+1, atx2.TargetEpoch())
 }
 
-// TestBuilder_PublishActivationTx_StaleChallenge checks if
-// Builder::PublishActivationTx properly detects that a challenge it constructed
-// is stale and the poet round has already started.
-func TestBuilder_PublishActivationTx_StaleChallenge(t *testing.T) {
-	// Arrange
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	posAtxLayer := postGenesisEpoch.FirstLayer()
-	// current layer is too late to be able to build a nipost on time
-	currLayer := (postGenesisEpoch + 1).FirstLayer()
-	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posAtxLayer, nil)
-	nipost := newNIPostWithChallenge(types.HexToHash32("55555"), []byte("66666"))
-	prevAtx := newAtx(t, tab.sig, challenge, nipost, 2, types.Address{})
-	SignAndFinalizeAtx(tab.sig, prevAtx)
-	vPrevAtx, err := prevAtx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx))
-
-	tab.mhdlr.EXPECT().GetPosAtxID().Return(prevAtx.ID(), nil)
-	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
-	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
-		func(got types.LayerID) time.Time {
-			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got))
-		}).AnyTimes()
-
-	// Act & Verify
-	err = tab.PublishActivationTx(context.Background())
-	require.ErrorIs(t, err, ErrATXChallengeExpired)
-	require.ErrorContains(t, err, "poet round has already started")
-}
-
 // TestBuilder_Loop_WaitsOnStaleChallenge checks if loop waits between attempts
 // failing with ErrATXChallengeExpired.
 func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
@@ -457,6 +425,7 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).Return(nil, time.Duration(0), ErrATXChallengeExpired)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
