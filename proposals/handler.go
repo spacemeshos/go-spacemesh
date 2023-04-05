@@ -30,7 +30,6 @@ var (
 	errMalformedData         = errors.New("malformed data")
 	errInitialize            = errors.New("failed to initialize")
 	errInvalidATXID          = errors.New("ballot has invalid ATXID")
-	errMissingCount          = errors.New("missing eligibility count")
 	errMissingEpochData      = errors.New("epoch data is missing in ref ballot")
 	errUnexpectedEpochData   = errors.New("non-ref ballot declares epoch data")
 	errEmptyActiveSet        = errors.New("ref ballot declares empty active set")
@@ -406,10 +405,6 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.L
 func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
 	if b.AtxID == types.EmptyATXID || b.AtxID == h.cfg.GoldenATXID {
 		return errInvalidATXID
-	}
-
-	if b.EligibilityCount == 0 {
-		return errMissingCount
 	}
 
 	if b.RefBallot == types.EmptyBallotID {

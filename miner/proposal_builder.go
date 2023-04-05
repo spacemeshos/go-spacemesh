@@ -214,9 +214,8 @@ func (pb *ProposalBuilder) createProposal(
 	}
 
 	ib := &types.InnerBallot{
-		AtxID:            epochEligibility.Atx,
-		OpinionHash:      opinion.Hash,
-		EligibilityCount: epochEligibility.Slots,
+		AtxID:       epochEligibility.Atx,
+		OpinionHash: opinion.Hash,
 	}
 
 	epoch := layerID.GetEpoch()
@@ -231,8 +230,9 @@ func (pb *ProposalBuilder) createProposal(
 			log.Int("active_set_size", len(epochEligibility.ActiveSet)))
 		ib.RefBallot = types.EmptyBallotID
 		ib.EpochData = &types.EpochData{
-			ActiveSetHash: epochEligibility.ActiveSet.Hash(),
-			Beacon:        beacon,
+			ActiveSetHash:    epochEligibility.ActiveSet.Hash(),
+			Beacon:           beacon,
+			EligibilityCount: epochEligibility.Slots,
 		}
 	} else {
 		logger.With().Debug("creating ballot with reference ballot (no active set)",

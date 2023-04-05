@@ -502,7 +502,7 @@ func (app *App) initServices(
 	}
 
 	vrfVerifier := signing.NewVRFVerifier()
-	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifier, app.cachedDB, clock,
+	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.edVerifier, vrfSigner, vrfVerifier, app.cachedDB, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),

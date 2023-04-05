@@ -145,8 +145,8 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	if err != nil {
 		return false, err
 	}
-	if ballot.EligibilityCount != numEligibleSlots {
-		return false, fmt.Errorf("%w: expected %v, got: %v", errIncorrectEligCount, numEligibleSlots, ballot.EligibilityCount)
+	if ballot.EpochData != nil && ballot.EpochData.EligibilityCount != numEligibleSlots {
+		return false, fmt.Errorf("%w: expected %v, got: %v", errIncorrectEligCount, numEligibleSlots, ballot.EpochData.EligibilityCount)
 	}
 
 	var (

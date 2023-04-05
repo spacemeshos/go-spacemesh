@@ -128,7 +128,7 @@ func (es *EdSigner) Sign(d domain, m []byte) types.EdSignature {
 	msg = append(msg, m...)
 
 	switch d {
-	case ATX, BALLOT:
+	case ATX, BALLOT, BEACON:
 		return *(*[types.EdSignatureSize]byte)(ed25519.Sign(es.priv, msg))
 	default:
 		return *(*[types.EdSignatureSize]byte)(sm_ed25519.Sign(es.priv, msg))
