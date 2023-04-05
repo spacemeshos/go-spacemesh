@@ -85,7 +85,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 
 	membership, err := poetDb.GetMembershipMap(ref)
 	r.NoError(err)
-	r.True(membership[types.BytesToHash(memberHash)])
+	r.True(membership[memberHash])
 	r.False(membership[types.BytesToHash([]byte("5"))])
 }
 
