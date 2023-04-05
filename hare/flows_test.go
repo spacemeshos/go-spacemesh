@@ -19,7 +19,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
-// Test - run multiple CPs simultaneously.
+// Test running multiple consensus processes in parallel. This can happen when
+// a layer starts before the last layer has converged.
 func Test_multipleCPs(t *testing.T) {
 	logtest.SetupGlobal(t)
 
@@ -28,10 +29,12 @@ func Test_multipleCPs(t *testing.T) {
 	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
 	test := newHareWrapper(totalCp)
 	totalNodes := 10
-	// RoundDuration is not used because we override the newRoundClock
-	// function, wakeupDelta controls whether a consensus process will skip a
-	// layer, if the layer tick arrives after wakeup delta then the process
-	// skips the layer.
+	// RoundDuration is not used because we override the newRoundClock function
+	// of Hare to provide our own clock which progresses rounds when all nodes
+	// are ready. WakeupDelta does not affect round wakeup time since that is
+	// hardcoded to be instant in the shared round clock but it does control
+	// how late a consensus process can start a layer and not skip it, as such
+	// we set it to a huge value to prevent nodes accidentally skipping layers.
 	cfg := config.Config{N: totalNodes, WakeupDelta: time.Hour, RoundDuration: 0, ExpectedLeaders: totalNodes/2 + 1, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -140,12 +143,15 @@ func Test_multipleCPs(t *testing.T) {
 	ahead := 0
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
 		if ahead > 1 {
-			// We can't allow layers to progress more than 1 ahead of the latest layer
-			// that all nodes have started, otherwise we can end up losing messages
-			// when a node from a future layer sends messages to a node that has not
-			// started that layer. E.g A node that has started layer 8 receives a
-			// message for layer 10, its broker will reject it because the broker only
-			// allows messages one layer ahead not two.
+			// Since the broker keeps early messages only for the subsequent
+			// layer to the most recent layer we need to ensure that the
+			// difference between the most recent layer at two nodes is no more
+			// than one. Otherwise if nodes get too far ahead the trailing
+			// nodes will discard their messages. We do this by waiting for the
+			// end of the first round of the layer prior to the one to be
+			// started, which because the shared round clock only progresses
+			// rounds when all nodes have received messages from all nodes,
+			// ensures that all nodes have at least started the prior layer.
 			<-roundClocks.roundClock(j.Sub(1)).AwaitEndOfRound(preRound)
 			ahead--
 		}
@@ -168,7 +174,9 @@ func Test_multipleCPs(t *testing.T) {
 	}
 }
 
-// Test - run multiple CPs where one of them runs more than one iteration.
+// Test running multiple consensus processes in parallel. This can happen when
+// a layer starts before the last layer has converged. One of the layers in
+// this test is manipulated into running more than one iteration.
 func Test_multipleCPsAndIterations(t *testing.T) {
 	logtest.SetupGlobal(t)
 
@@ -177,10 +185,12 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
 	test := newHareWrapper(totalCp)
 	totalNodes := 10
-	// RoundDuration is not used because we override the newRoundClock
-	// function, wakeupDelta controls whether a consensus process will skip a
-	// layer, if the layer tick arrives after wakeup delta then the process
-	// skips the layer.
+	// RoundDuration is not used because we override the newRoundClock function
+	// of Hare to provide our own clock which progresses rounds when all nodes
+	// are ready. WakeupDelta does not affect round wakeup time since that is
+	// hardcoded to be instant in the shared round clock but it does control
+	// how late a consensus process can start a layer and not skip it, as such
+	// we set it to a huge value to prevent nodes accidentally skipping layers.
 	cfg := config.Config{N: totalNodes, WakeupDelta: time.Hour, RoundDuration: 0, ExpectedLeaders: totalNodes/2 + 1, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -273,7 +283,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 						panic(err)
 					}
 
-					// Incremente message count.
+					// Increment message count.
 					roundClocks.clock(m.Layer).incMessages(int(m.Eligibility.Count))
 
 					// The stalled layer blocks messages from being published,
@@ -335,12 +345,15 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	ahead := 0
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
 		if ahead > 1 {
-			// We can't allow layers to progress more than 1 ahead of the latest layer
-			// that all nodes have started, otherwise we can end up losing messages
-			// when a node from a future layer sends messages to a node that has not
-			// started that layer. E.g A node that has started layer 8 receives a
-			// message for layer 10, its broker will reject it because the broker only
-			// allows messages one layer ahead not two.
+			// Since the broker keeps early messages only for the subsequent
+			// layer to the most recent layer we need to ensure that the
+			// difference between the most recent layer at two nodes is no more
+			// than one. Otherwise if nodes get too far ahead the trailing
+			// nodes will discard their messages. We do this by waiting for the
+			// end of the first round of the layer prior to the one to be
+			// started, which because the shared round clock only progresses
+			// rounds when all nodes have received messages from all nodes,
+			// ensures that all nodes have at least started the prior layer.
 			<-roundClocks.roundClock(j.Sub(1)).AwaitEndOfRound(preRound)
 			ahead--
 		}
@@ -348,10 +361,9 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		ahead++
 	}
 
-	// There are 5 rounds per layer and totalCPs layers and we double to allow
-	// for the for good measure. Also one layer in this test will run 2
-	// iterations so we increase the layer count by 1.
 	test.WaitForTimedTermination(t, time.Minute)
+	// We close hare here so that the blockGenCh is closed which allows for the
+	// outputsWaitGroup to complete.
 	for _, h := range test.hare {
 		h.Close()
 	}
