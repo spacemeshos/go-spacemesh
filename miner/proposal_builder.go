@@ -258,8 +258,8 @@ func (pb *ProposalBuilder) createProposal(
 		p.ActiveSet = epochEligibility.ActiveSet
 	}
 	p.Ballot.Signature = pb.signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
-	p.Signature = pb.signer.Sign(signing.BALLOT, p.SignedBytes())
 	p.SmesherID = pb.signer.NodeID()
+	p.Signature = pb.signer.Sign(signing.BALLOT, p.SignedBytes())
 	if err := p.Initialize(); err != nil {
 		logger.With().Fatal("proposal failed to initialize", log.Err(err))
 	}
