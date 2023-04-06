@@ -265,7 +265,7 @@ func TestStatusTracker_Equivocate_Pass(t *testing.T) {
 				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{
 						{
-							InnerMsg:  types.HareMetadata{
+							InnerMsg: types.HareMetadata{
 								Layer:   m1.Layer,
 								Round:   m1.Round,
 								MsgHash: types.BytesToHash(m1.HashBytes()),
@@ -273,7 +273,7 @@ func TestStatusTracker_Equivocate_Pass(t *testing.T) {
 							Signature: m1.Signature,
 						},
 						{
-							InnerMsg:  types.HareMetadata{
+							InnerMsg: types.HareMetadata{
 								Layer:   m2.Layer,
 								Round:   m2.Round,
 								MsgHash: types.BytesToHash(m2.HashBytes()),
