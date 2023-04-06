@@ -264,41 +264,12 @@ func (t *ActivationTx) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	return total, nil
 }
 
-func (t *ATXSigMsg) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeByteArray(enc, t.ID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.PublishEpoch))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
+func (t *ATXMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	return
 }
 
-func (t *ATXSigMsg) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := scale.DecodeByteArray(dec, t.ID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.PublishEpoch = EpochID(field)
-	}
-	return total, nil
+func (t *ATXMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	return
 }
 
 func (t *NIPost) EncodeScale(enc *scale.Encoder) (total int, err error) {

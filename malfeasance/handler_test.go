@@ -60,15 +60,15 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	atxProof := types.AtxProof{
 		Messages: [2]types.AtxProofMsg{
 			{
-				InnerMsg: types.ATXSigMsg{
-					ID:           types.RandomATXID(),
+				InnerMsg: types.ATXMetadata{
 					PublishEpoch: types.EpochID(3),
+					Hash:         types.RandomHash(),
 				},
 			},
 			{
-				InnerMsg: types.ATXSigMsg{
-					ID:           types.RandomATXID(),
+				InnerMsg: types.ATXMetadata{
 					PublishEpoch: types.EpochID(3),
+					Hash:         types.RandomHash(),
 				},
 			},
 		},
@@ -100,11 +100,11 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 
 	createIdentity(t, db, sig)
 
-	t.Run("same ATXID", func(t *testing.T) {
-		atxID := types.RandomATXID()
+	t.Run("same ATX hash", func(t *testing.T) {
+		atxHash := types.RandomHash()
 		ap := atxProof
-		ap.Messages[0].InnerMsg.ID = atxID
-		ap.Messages[1].InnerMsg.ID = atxID
+		ap.Messages[0].InnerMsg.Hash = atxHash
+		ap.Messages[1].InnerMsg.Hash = atxHash
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 		gossip := &types.MalfeasanceGossip{

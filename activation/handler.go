@@ -368,9 +368,9 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				var atxProof types.AtxProof
 				for i, a := range []*types.VerifiedActivationTx{prev, atx} {
 					atxProof.Messages[i] = types.AtxProofMsg{
-						InnerMsg: types.ATXSigMsg{
-							ID:           a.ID(),
+						InnerMsg: types.ATXMetadata{
 							PublishEpoch: a.PublishEpoch(),
+							Hash:         types.BytesToHash(a.HashInnerBytes()),
 						},
 						SmesherID: a.SmesherID,
 						Signature: a.Signature,

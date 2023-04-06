@@ -174,15 +174,16 @@ func NewActivationTx(
 	return atx
 }
 
-// ATXSigMsg is the data of ActivationTx that is signed.
-type ATXSigMsg struct {
-	ID           ATXID
+// ATXMetadata is the data of ActivationTx that is signed.
+// It is also used for Malfeasance proofs.
+type ATXMetadata struct {
 	PublishEpoch EpochID
+	Hash         Hash32
 }
 
-func (m *ATXSigMsg) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddString("id", m.ID.ShortString())
+func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("epoch", uint32(m.PublishEpoch))
+	encoder.AddString("hash", m.Hash.ShortString())
 	return nil
 }
 
@@ -194,9 +195,9 @@ func (atx *ActivationTx) SignedBytes() []byte {
 		}
 	}
 
-	data, err := codec.Encode(&ATXSigMsg{
-		ID:           atx.id,
+	data, err := codec.Encode(&ATXMetadata{
 		PublishEpoch: atx.PublishEpoch(),
+		Hash:         BytesToHash(atx.HashInnerBytes()),
 	})
 	if err != nil {
 		log.With().Fatal("failed to encode InnerActivationTx", log.Err(err))

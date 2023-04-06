@@ -30,9 +30,9 @@ func TestCodec_MultipleATXs(t *testing.T) {
 		a.Signature = types.RandomEdSignature()
 		a.SmesherID = types.RandomNodeID()
 		atxProof.Messages[i] = types.AtxProofMsg{
-			InnerMsg: types.ATXSigMsg{
-				ID:           a.ID(),
+			InnerMsg: types.ATXMetadata{
 				PublishEpoch: a.PublishEpoch(),
+				Hash:         types.BytesToHash(a.HashInnerBytes()),
 			},
 			SmesherID: a.SmesherID,
 			Signature: a.Signature,

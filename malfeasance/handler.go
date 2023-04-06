@@ -236,7 +236,7 @@ func (h *Handler) validateMultipleATXs(logger log.Log, proof *types.MalfeasanceP
 			firstMsg = msg
 		} else if msg.SmesherID == firstNid {
 			if msg.InnerMsg.PublishEpoch == firstMsg.InnerMsg.PublishEpoch &&
-				msg.InnerMsg.ID != firstMsg.InnerMsg.ID {
+				msg.InnerMsg.Hash != firstMsg.InnerMsg.Hash {
 				return msg.SmesherID, nil
 			}
 		}
