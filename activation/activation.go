@@ -662,5 +662,5 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.EpochID, error) {
 func SignAndFinalizeAtx(signer *signing.EdSigner, atx *types.ActivationTx) error {
 	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
 	atx.SmesherID = signer.NodeID()
-	return nil
+	return atx.Initialize()
 }
