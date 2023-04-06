@@ -141,9 +141,9 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 	}
 	h.log.WithContext(ctx).With().Info("processing atx",
 		atx.ID(),
-		atx.PublishEpoch(),
+		atx.PublishEpoch,
 		log.FieldNamed("smesher", atx.SmesherID),
-		atx.PubLayerID,
+		atx.PublishEpoch,
 	)
 	if err := h.ContextuallyValidateAtx(atx); err != nil {
 		h.log.WithContext(ctx).With().Warning("atx failed contextual validation",
@@ -195,7 +195,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		}
 	}
 
-	if err := h.nipostValidator.PositioningAtx(&atx.PositioningATX, h.cdb, h.goldenATXID, atx.PubLayerID, h.layersPerEpoch); err != nil {
+	if err := h.nipostValidator.PositioningAtx(&atx.PositioningATX, h.cdb, h.goldenATXID, atx.PublishEpoch, h.layersPerEpoch); err != nil {
 		return nil, err
 	}
 
@@ -359,7 +359,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	var proof *types.MalfeasanceProof
 	if err = h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		if !malicious {
-			prev, err := atxs.GetByEpochAndNodeID(dbtx, atx.PublishEpoch(), atx.SmesherID)
+			prev, err := atxs.GetByEpochAndNodeID(dbtx, atx.PublishEpoch, atx.SmesherID)
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
 				return err
 			}
@@ -404,7 +404,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		delete(h.atxChannels, atx.ID())
 	}
 
-	h.log.WithContext(ctx).With().Info("finished storing atx in epoch", atx.ID(), atx.PublishEpoch())
+	h.log.WithContext(ctx).With().Info("finished storing atx in epoch", atx.ID(), atx.PublishEpoch)
 
 	// broadcast malfeasance proof last as the verification of the proof will take place
 	// in the same goroutine
@@ -489,7 +489,7 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 		return errMalformedData
 	}
 
-	epochStart := h.clock.LayerToTime(atx.PublishEpoch().FirstLayer())
+	epochStart := h.clock.LayerToTime(atx.PublishEpoch.FirstLayer())
 	poetRoundEnd := epochStart.Add(h.poetCfg.PhaseShift - h.poetCfg.CycleGap)
 	latency := receivedTime.Sub(poetRoundEnd)
 	metrics.ReportMessageLatency(pubsub.AtxProtocol, pubsub.AtxProtocol, latency)

@@ -242,8 +242,8 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: published.FirstLayer(),
-				PrevATXID:  types.RandomATXID(),
+				PublishEpoch: published,
+				PrevATXID:    types.RandomATXID(),
 			},
 			NumUnits: 2,
 		},

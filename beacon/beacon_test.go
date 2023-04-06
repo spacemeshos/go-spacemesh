@@ -116,7 +116,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint32, received time.Time) types.ATXID {
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
-		types.NIPostChallenge{PubLayerID: lid},
+		types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
 		types.Address{},
 		nil,
 		numUnits,
