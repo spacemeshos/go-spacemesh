@@ -62,13 +62,13 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 			{
 				InnerMsg: types.ATXMetadata{
 					PublishEpoch: types.EpochID(3),
-					Hash:         types.RandomHash(),
+					MsgHash:      types.RandomHash(),
 				},
 			},
 			{
 				InnerMsg: types.ATXMetadata{
 					PublishEpoch: types.EpochID(3),
-					Hash:         types.RandomHash(),
+					MsgHash:      types.RandomHash(),
 				},
 			},
 		},
@@ -103,8 +103,8 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	t.Run("same ATX hash", func(t *testing.T) {
 		atxHash := types.RandomHash()
 		ap := atxProof
-		ap.Messages[0].InnerMsg.Hash = atxHash
-		ap.Messages[1].InnerMsg.Hash = atxHash
+		ap.Messages[0].InnerMsg.MsgHash = atxHash
+		ap.Messages[1].InnerMsg.MsgHash = atxHash
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 		gossip := &types.MalfeasanceGossip{
@@ -782,7 +782,7 @@ func TestHandler_CrossDomain(t *testing.T) {
 	m2 := types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.EpochID(target).FirstLayer(),
+				PublishEpoch: types.EpochID(target),
 			},
 		},
 	}

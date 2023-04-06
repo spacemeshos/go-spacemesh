@@ -118,6 +118,19 @@ func (challenge *NIPostChallenge) TargetEpoch() EpochID {
 	return challenge.PublishEpoch + 1
 }
 
+// ATXMetadata is the data of ActivationTx that is signed.
+// It is also used for Malfeasance proofs.
+type ATXMetadata struct {
+	PublishEpoch EpochID
+	MsgHash      Hash32
+}
+
+func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("epoch", uint32(m.PublishEpoch))
+	encoder.AddString("hash", m.MsgHash.ShortString())
+	return nil
+}
+
 // InnerActivationTx is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
 // structure is serialized and signed. It includes the header fields, as well as the larger fields that are only used
 // for validation: the NIPost and the initial Post.
@@ -169,19 +182,6 @@ func NewActivationTx(
 	return atx
 }
 
-// ATXMetadata is the data of ActivationTx that is signed.
-// It is also used for Malfeasance proofs.
-type ATXMetadata struct {
-	PublishEpoch EpochID
-	Hash         Hash32
-}
-
-func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddUint32("epoch", uint32(m.PublishEpoch))
-	encoder.AddString("hash", m.Hash.ShortString())
-	return nil
-}
-
 // SignedBytes returns a signed data of the ActivationTx.
 func (atx *ActivationTx) SignedBytes() []byte {
 	if atx.id == EmptyATXID {
@@ -191,8 +191,8 @@ func (atx *ActivationTx) SignedBytes() []byte {
 	}
 
 	data, err := codec.Encode(&ATXMetadata{
-		PublishEpoch: atx.PublishEpoch(),
-		Hash:         BytesToHash(atx.HashInnerBytes()),
+		PublishEpoch: atx.PublishEpoch,
+		MsgHash:      BytesToHash(atx.HashInnerBytes()),
 	})
 	if err != nil {
 		log.With().Fatal("failed to encode InnerActivationTx", log.Err(err))

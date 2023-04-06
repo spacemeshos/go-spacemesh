@@ -369,8 +369,8 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				for i, a := range []*types.VerifiedActivationTx{prev, atx} {
 					atxProof.Messages[i] = types.AtxProofMsg{
 						InnerMsg: types.ATXMetadata{
-							PublishEpoch: a.PublishEpoch(),
-							Hash:         types.BytesToHash(a.HashInnerBytes()),
+							PublishEpoch: a.PublishEpoch,
+							MsgHash:      types.BytesToHash(a.HashInnerBytes()),
 						},
 						SmesherID: a.SmesherID,
 						Signature: a.Signature,
@@ -384,7 +384,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 					},
 				}
 				if err = h.cdb.AddMalfeasanceProof(atx.SmesherID, proof, dbtx); err != nil {
-					return fmt.Errorf("adding malfeasense proof: %w", err)
+					return fmt.Errorf("adding malfeasance proof: %w", err)
 				}
 				h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
 					log.Stringer("smesher", atx.SmesherID),
