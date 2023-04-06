@@ -11,9 +11,13 @@ import (
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
 type EpochID uint32
 
+func (e EpochID) Uint32() uint32 {
+	return uint32(e)
+}
+
 // EncodeScale implements scale codec interface.
-func (l EpochID) EncodeScale(e *scale.Encoder) (int, error) {
-	n, err := scale.EncodeCompact32(e, uint32(l))
+func (e EpochID) EncodeScale(enc *scale.Encoder) (int, error) {
+	n, err := scale.EncodeCompact32(enc, uint32(e))
 	if err != nil {
 		return 0, err
 	}
@@ -21,39 +25,39 @@ func (l EpochID) EncodeScale(e *scale.Encoder) (int, error) {
 }
 
 // DecodeScale implements scale codec interface.
-func (l *EpochID) DecodeScale(d *scale.Decoder) (int, error) {
-	value, n, err := scale.DecodeCompact32(d)
+func (e *EpochID) DecodeScale(dec *scale.Decoder) (int, error) {
+	value, n, err := scale.DecodeCompact32(dec)
 	if err != nil {
 		return 0, err
 	}
-	*l = EpochID(value)
+	*e = EpochID(value)
 	return n, nil
 }
 
 // IsGenesis returns true if this epoch is in genesis. The first two epochs are considered genesis epochs.
-func (l EpochID) IsGenesis() bool {
-	return l < 2
+func (e EpochID) IsGenesis() bool {
+	return e < 2
 }
 
 // FirstLayer returns the layer ID of the first layer in the epoch.
-func (l EpochID) FirstLayer() LayerID {
-	return LayerID(uint32(l)).Mul(GetLayersPerEpoch())
+func (e EpochID) FirstLayer() LayerID {
+	return LayerID(uint32(e)).Mul(GetLayersPerEpoch())
 }
 
 // Add Epochs to the EpochID. Panics on wraparound.
-func (l EpochID) Add(epochs uint32) EpochID {
-	nl := uint32(l) + epochs
-	if nl < uint32(l) {
+func (e EpochID) Add(epochs uint32) EpochID {
+	nl := uint32(e) + epochs
+	if nl < uint32(e) {
 		panic("epoch_id wraparound")
 	}
-	l = EpochID(nl)
-	return l
+	e = EpochID(nl)
+	return e
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (l EpochID) Field() log.Field { return log.Uint32("epoch_id", uint32(l)) }
+func (e EpochID) Field() log.Field { return log.Uint32("epoch_id", uint32(e)) }
 
 // String returns string representation of the epoch id numeric value.
-func (l EpochID) String() string {
-	return strconv.FormatUint(uint64(l), 10)
+func (e EpochID) String() string {
+	return strconv.FormatUint(uint64(e), 10)
 }

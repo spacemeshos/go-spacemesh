@@ -65,7 +65,7 @@ func TestGet_HappyPath(t *testing.T) {
 				NIPostChallenge: types.NIPostChallenge{
 					Sequence:           rand.Uint64(),
 					PrevATXID:          types.RandomATXID(),
-					PubLayerID:         0,
+					PublishEpoch:       0,
 					PositioningATX:     types.RandomATXID(),
 					InitialPostIndices: types.RandomBytes(7),
 				},
@@ -81,7 +81,7 @@ func TestGet_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, atx.ID().Bytes(), response.Atx.Id.Id)
-	require.Equal(t, atx.PubLayerID.Uint32(), response.Atx.Layer.Number)
+	require.Equal(t, atx.PublishEpoch.Uint32(), response.Atx.Layer.Number)
 	require.Equal(t, atx.SmesherID.Bytes(), response.Atx.SmesherId.Id)
 	require.Equal(t, atx.Coinbase.String(), response.Atx.Coinbase.Address)
 	require.Equal(t, atx.PrevATXID.Bytes(), response.Atx.PrevAtx.Id)

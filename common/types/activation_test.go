@@ -2,13 +2,16 @@ package types_test
 
 import (
 	"bytes"
+	"math/rand"
 	"testing"
 	"time"
 
+	fuzz "github.com/google/gofuzz"
 	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -26,12 +29,23 @@ func TestRoundEndSerialization(t *testing.T) {
 }
 
 func TestActivationEncoding(t *testing.T) {
-	types.CheckLayerFirstEncoding(t, func(object types.ActivationTx) types.LayerID { return object.PubLayerID })
+	var object types.ActivationTx
+	f := fuzz.NewWithSeed(1001)
+	f.Fuzz(&object)
+
+	buf := bytes.NewBuffer(nil)
+	enc := scale.NewEncoder(buf)
+	_, err := object.EncodeScale(enc)
+	require.NoError(t, err)
+
+	epoch := types.EpochID(rand.Uint32())
+	require.NoError(t, codec.Decode(buf.Bytes(), &epoch))
+	require.Equal(t, object.PublishEpoch, epoch)
 }
 
 func TestActivation_BadMsgHash(t *testing.T) {
 	challenge := types.NIPostChallenge{
-		PubLayerID: types.LayerID(11),
+		PublishEpoch: types.EpochID(11),
 	}
 	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil, nil)
 	atx.Signature = types.RandomEdSignature()

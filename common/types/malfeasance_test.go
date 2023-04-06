@@ -20,10 +20,10 @@ func TestMain(m *testing.M) {
 }
 
 func TestCodec_MultipleATXs(t *testing.T) {
-	lid := types.LayerID(11)
+	epoch := types.EpochID(11)
 
-	a1 := types.NewActivationTx(types.NIPostChallenge{PubLayerID: lid}, types.Address{1, 2, 3}, nil, 10, nil, nil)
-	a2 := types.NewActivationTx(types.NIPostChallenge{PubLayerID: lid}, types.Address{3, 2, 1}, nil, 11, nil, nil)
+	a1 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{1, 2, 3}, nil, 10, nil, nil)
+	a2 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{3, 2, 1}, nil, 11, nil, nil)
 
 	var atxProof types.AtxProof
 	for i, a := range []*types.ActivationTx{a1, a2} {
@@ -37,7 +37,7 @@ func TestCodec_MultipleATXs(t *testing.T) {
 		}
 	}
 	proof := &types.MalfeasanceProof{
-		Layer: lid,
+		Layer: epoch.FirstLayer(),
 		Proof: types.Proof{
 			Type: types.MultipleATXs,
 			Data: &atxProof,

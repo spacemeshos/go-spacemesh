@@ -165,8 +165,8 @@ func (*Validator) InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs 
 		if err != nil {
 			return &ErrAtxNotFound{Id: *challenge.CommitmentATX, source: err}
 		}
-		if !challenge.PubLayerID.After(commitmentAtx.PubLayerID) {
-			return fmt.Errorf("challenge publayer (%v) must be after commitment atx publayer (%v)", challenge.PubLayerID, commitmentAtx.PubLayerID)
+		if challenge.PublishEpoch <= commitmentAtx.PublishEpoch {
+			return fmt.Errorf("challenge pubepoch (%v) must be after commitment atx pubepoch (%v)", challenge.PublishEpoch, commitmentAtx.PublishEpoch)
 		}
 	}
 	return nil
@@ -185,10 +185,10 @@ func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProv
 		)
 	}
 
-	if prevATX.PublishEpoch() >= challenge.PublishEpoch() {
+	if prevATX.PublishEpoch >= challenge.PublishEpoch {
 		return fmt.Errorf(
-			"prevAtx epoch (%v, layer %v) isn't older than current atx epoch (%v, layer %v)",
-			prevATX.PublishEpoch(), prevATX.PubLayerID, challenge.PublishEpoch(), challenge.PubLayerID,
+			"prevAtx epoch (%d) isn't older than current atx epoch (%d)",
+			prevATX.PublishEpoch, challenge.PublishEpoch,
 		)
 	}
 
@@ -207,27 +207,17 @@ func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProv
 	return nil
 }
 
-func (*Validator) PositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, publayer types.LayerID, layersPerEpoch uint32) error {
+func (*Validator) PositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID, layersPerEpoch uint32) error {
 	if *id == types.EmptyATXID {
 		return fmt.Errorf("empty positioning atx")
-	}
-
-	if *id == goldenATXID && !publayer.GetEpoch().IsGenesis() {
-		return fmt.Errorf("golden atx used for positioning atx in epoch %d, but is only valid in epoch 1", publayer.GetEpoch())
-	}
-
-	if *id != goldenATXID {
+	} else if *id != goldenATXID {
 		posAtx, err := atxs.GetAtxHeader(*id)
 		if err != nil {
 			return &ErrAtxNotFound{Id: *id, source: err}
 		}
-		if !posAtx.PubLayerID.Before(publayer) {
-			return fmt.Errorf("positioning atx layer (%v) must be before %v", posAtx.PubLayerID, publayer)
-		}
-		if d := publayer.Difference(posAtx.PubLayerID); d > layersPerEpoch {
-			return fmt.Errorf("expected distance of one epoch (%v layers) from positioning atx but found %v", layersPerEpoch, d)
+		if posAtx.PublishEpoch >= pubepoch {
+			return fmt.Errorf("positioning atx epoch (%v) must be before %v", posAtx.PublishEpoch, pubepoch)
 		}
 	}
-
 	return nil
 }

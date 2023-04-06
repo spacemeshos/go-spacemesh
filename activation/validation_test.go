@@ -100,13 +100,13 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Indices: make([]byte, 10),
 		}
 
-		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(1012), &commitmentAtxId)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, 2, &commitmentAtxId)
 		challenge.InitialPostIndices = initialPost.Indices
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.LayerID(888),
+				PublishEpoch: 1,
 			},
 		}, nil)
 
@@ -123,7 +123,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Indices: make([]byte, 10),
 		}
 
-		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2), &goldenATXID)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2).GetEpoch(), &goldenATXID)
 		challenge.InitialPostIndices = initialPost.Indices
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -146,7 +146,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		t.Parallel()
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2), &goldenATXID)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2).GetEpoch(), &goldenATXID)
 
 		err := v.InitialNIPostChallenge(&challenge, nil, goldenATXID, nil)
 		require.EqualError(t, err, "no prevATX declared, but initial Post indices is not included in challenge")
@@ -161,7 +161,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Indices: make([]byte, 10),
 		}
 
-		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2), &goldenATXID)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2).GetEpoch(), &goldenATXID)
 		challenge.InitialPostIndices = make([]byte, 10)
 		challenge.InitialPostIndices[0] = 1
 
@@ -178,7 +178,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Indices: make([]byte, 10),
 		}
 
-		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2), nil)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2).GetEpoch(), nil)
 		challenge.InitialPostIndices = initialPost.Indices
 
 		err := v.InitialNIPostChallenge(&challenge, nil, goldenATXID, initialPost.Indices)
@@ -195,18 +195,18 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			Indices: make([]byte, 10),
 		}
 
-		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(1012), &commitmentAtxId)
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, 1, &commitmentAtxId)
 		challenge.InitialPostIndices = initialPost.Indices
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.LayerID(1200),
+				PublishEpoch: 2,
 			},
 		}, nil)
 
 		err := v.InitialNIPostChallenge(&challenge, atxProvider, goldenATXID, initialPost.Indices)
-		require.EqualError(t, err, "challenge publayer (1012) must be after commitment atx publayer (1200)")
+		require.EqualError(t, err, "challenge pubepoch (1) must be after commitment atx pubepoch (2)")
 	})
 }
 
@@ -231,13 +231,13 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012), nil)
+		challenge := newChallenge(10, prevAtxId, posAtxId, 2, nil)
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.LayerID(888),
-				Sequence:   9,
+				PublishEpoch: 1,
+				Sequence:     9,
 			},
 			NodeID: nodeId,
 		}, nil)
@@ -254,7 +254,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012), nil)
+		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012).GetEpoch(), nil)
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(nil, errors.New("not found"))
@@ -273,13 +273,13 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012), nil)
+		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012).GetEpoch(), nil)
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.LayerID(888),
-				Sequence:   9,
+				PublishEpoch: types.EpochID(888),
+				Sequence:     9,
 			},
 			NodeID: otherNodeId,
 		}, nil)
@@ -288,7 +288,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		require.ErrorContains(t, err, "previous atx belongs to different miner")
 	})
 
-	t.Run("prev atx from wrong publication layer", func(t *testing.T) {
+	t.Run("prev atx from wrong publication epoch", func(t *testing.T) {
 		t.Parallel()
 
 		nodeId := types.RandomNodeID()
@@ -296,19 +296,19 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012), nil)
+		challenge := newChallenge(10, prevAtxId, posAtxId, 2, nil)
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.LayerID(1200),
-				Sequence:   9,
+				PublishEpoch: 3,
+				Sequence:     9,
 			},
 			NodeID: nodeId,
 		}, nil)
 
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
-		require.EqualError(t, err, "prevAtx epoch (1, layer 1200) isn't older than current atx epoch (1, layer 1012)")
+		require.EqualError(t, err, "prevAtx epoch (3) isn't older than current atx epoch (2)")
 	})
 
 	t.Run("prev atx sequence not lower than current", func(t *testing.T) {
@@ -319,13 +319,13 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012), nil)
+		challenge := newChallenge(10, prevAtxId, posAtxId, 2, nil)
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.LayerID(888),
-				Sequence:   10,
+				PublishEpoch: 1,
+				Sequence:     10,
 			},
 			NodeID: nodeId,
 		}, nil)
@@ -342,14 +342,14 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012), nil)
+		challenge := newChallenge(10, prevAtxId, posAtxId, 2, nil)
 		challenge.InitialPostIndices = make([]byte, 10)
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.LayerID(888),
-				Sequence:   9,
+				PublishEpoch: 1,
+				Sequence:     9,
 			},
 			NodeID: nodeId,
 		}, nil)
@@ -366,14 +366,14 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012), nil)
+		challenge := newChallenge(10, prevAtxId, posAtxId, 2, nil)
 		challenge.CommitmentATX = &types.ATXID{9, 9, 9}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.LayerID(888),
-				Sequence:   9,
+				PublishEpoch: 1,
+				Sequence:     9,
 			},
 			NodeID: nodeId,
 		}, nil)
@@ -405,12 +405,12 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.LayerID(888),
-				Sequence:   9,
+				PublishEpoch: 1,
+				Sequence:     9,
 			},
 		}, nil)
 
-		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.LayerID(1012), layersPerEpochBig)
+		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, 2, layersPerEpochBig)
 		require.NoError(t, err)
 	})
 
@@ -421,19 +421,19 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 
-		err := v.PositioningAtx(&goldenAtxId, atxProvider, goldenAtxId, types.LayerID(1012), layersPerEpochBig)
+		err := v.PositioningAtx(&goldenAtxId, atxProvider, goldenAtxId, types.LayerID(1012).GetEpoch(), layersPerEpochBig)
 		require.NoError(t, err)
 	})
 
-	t.Run("golden ATX is not allowed as positioning atx in non-genesis epoch", func(t *testing.T) {
+	t.Run("golden ATX is allowed as positioning atx in non-genesis epoch", func(t *testing.T) {
 		t.Parallel()
 
 		goldenAtxId := types.ATXID{9, 9, 9}
 
 		atxProvider := NewMockatxProvider(ctrl)
 
-		err := v.PositioningAtx(&goldenAtxId, atxProvider, goldenAtxId, types.LayerID(2012), layersPerEpochBig)
-		require.EqualError(t, err, "golden atx used for positioning atx in epoch 2, but is only valid in epoch 1")
+		err := v.PositioningAtx(&goldenAtxId, atxProvider, goldenAtxId, 5, layersPerEpochBig)
+		require.NoError(t, err)
 	})
 
 	t.Run("fail at empty positioning atx", func(t *testing.T) {
@@ -443,7 +443,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 
-		err := v.PositioningAtx(&types.EmptyATXID, atxProvider, goldenAtxId, types.LayerID(1012), layersPerEpochBig)
+		err := v.PositioningAtx(&types.EmptyATXID, atxProvider, goldenAtxId, types.LayerID(1012).GetEpoch(), layersPerEpochBig)
 		require.EqualError(t, err, "empty positioning atx")
 	})
 
@@ -456,12 +456,12 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(nil, errors.New("db error"))
 
-		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.LayerID(1012), layersPerEpochBig)
+		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.LayerID(1012).GetEpoch(), layersPerEpochBig)
 		require.ErrorIs(t, err, &ErrAtxNotFound{Id: posAtxId})
 		require.ErrorContains(t, err, "db error")
 	})
 
-	t.Run("positioning atx published in higher layer than expected", func(t *testing.T) {
+	t.Run("positioning atx published in higher epoch than expected", func(t *testing.T) {
 		t.Parallel()
 
 		posAtxId := types.ATXID{1, 2, 3}
@@ -470,16 +470,16 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.LayerID(2000),
-				Sequence:   9,
+				PublishEpoch: 5,
+				Sequence:     9,
 			},
 		}, nil)
 
-		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.LayerID(1012), layersPerEpochBig)
-		require.EqualError(t, err, "positioning atx layer (2000) must be before 1012")
+		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, 3, layersPerEpochBig)
+		require.EqualError(t, err, "positioning atx epoch (5) must be before 3")
 	})
 
-	t.Run("positioning atx with larger distance than expected", func(t *testing.T) {
+	t.Run("any distance to positioning atx is valid", func(t *testing.T) {
 		t.Parallel()
 
 		posAtxId := types.ATXID{1, 2, 3}
@@ -488,13 +488,13 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.LayerID(888),
-				Sequence:   9,
+				PublishEpoch: 1,
+				Sequence:     9,
 			},
 		}, nil)
 
-		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.LayerID(2000), layersPerEpochBig)
-		require.EqualError(t, err, "expected distance of one epoch (1000 layers) from positioning atx but found 1112")
+		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, 10, layersPerEpochBig)
+		require.NoError(t, err)
 	})
 }
 
@@ -573,7 +573,7 @@ func TestValidator_Validate(t *testing.T) {
 	r := require.New(t)
 
 	challenge := types.NIPostChallenge{
-		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),
+		PublishEpoch: postGenesisEpoch + 2,
 	}
 	challengeHash := challenge.Hash()
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))

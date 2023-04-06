@@ -156,7 +156,7 @@ func TestReferenceHeight(t *testing.T) {
 			for i, height := range tc.heights {
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 					NIPostChallenge: types.NIPostChallenge{
-						PubLayerID: (types.EpochID(tc.epoch) - 1).FirstLayer(),
+						PublishEpoch: types.EpochID(tc.epoch) - 1,
 					},
 					NumUnits: 2,
 				}}
