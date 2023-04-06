@@ -157,7 +157,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	nipost := nb.state.NIPost
 
 	// Phase 0: Submit challenge to PoET services.
-	if nb.state.PoetRequests == nil {
+	if len(nb.state.PoetRequests) == 0 {
 		now := time.Now()
 		if poetRoundStart.Before(now) {
 			return nil, 0, fmt.Errorf("%w: poet round has already started at %s (now: %s)", ErrATXChallengeExpired, poetRoundStart, now)
