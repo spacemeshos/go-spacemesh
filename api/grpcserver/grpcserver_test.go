@@ -71,13 +71,13 @@ const (
 )
 
 var (
-	txReturnLayer         = types.LayerID(1)
-	layerFirst            = types.LayerID(0)
-	layerVerified         = types.LayerID(8)
-	layerLatest           = types.LayerID(10)
-	layerCurrent          = types.LayerID(12)
-	postGenesisEpochLayer = types.LayerID(22)
-	genesisID             = types.Hash20{}
+	txReturnLayer    = types.LayerID(1)
+	layerFirst       = types.LayerID(0)
+	layerVerified    = types.LayerID(8)
+	layerLatest      = types.LayerID(10)
+	layerCurrent     = types.LayerID(12)
+	postGenesisEpoch = types.EpochID(2)
+	genesisID        = types.Hash20{}
 
 	networkMock = NetworkMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
@@ -87,7 +87,7 @@ var (
 	chlng       = types.HexToHash32("55555")
 	poetRef     = []byte("66666")
 	nipost      = newNIPostWithChallenge(&chlng, poetRef)
-	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
 	globalAtx   *types.VerifiedActivationTx
 	globalAtx2  *types.VerifiedActivationTx
 	signer      *signing.EdSigner
@@ -421,11 +421,11 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 	return &tx
 }
 
-func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, lid types.LayerID) types.NIPostChallenge {
+func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, epoch types.EpochID) types.NIPostChallenge {
 	return types.NIPostChallenge{
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
-		PublishEpoch:   lid.GetEpoch(),
+		PublishEpoch:   epoch,
 		PositioningATX: posAtxID,
 	}
 }
