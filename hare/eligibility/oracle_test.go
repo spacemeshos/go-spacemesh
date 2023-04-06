@@ -92,7 +92,7 @@ func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 	for i, id := range activeSet {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: lid,
+				PublishEpoch: lid.GetEpoch(),
 			},
 			NumUnits: uint32(i + 1),
 		}}
@@ -418,7 +418,7 @@ func Test_VrfSignVerify(t *testing.T) {
 
 	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: prevEpoch.FirstLayer(),
+			PublishEpoch: prevEpoch,
 		},
 		NumUnits: 1 * 1024,
 	}}
@@ -435,7 +435,7 @@ func Test_VrfSignVerify(t *testing.T) {
 
 	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: prevEpoch.FirstLayer(),
+			PublishEpoch: prevEpoch,
 		},
 		NumUnits: 9 * 1024,
 	}}
@@ -525,7 +525,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	require.NoError(t, err)
 	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: prevEpoch.FirstLayer(),
+			PublishEpoch: prevEpoch,
 		},
 		NumUnits: 1 * 1024,
 	}}
@@ -541,7 +541,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	require.NoError(t, err)
 	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: prevEpoch.FirstLayer(),
+			PublishEpoch: prevEpoch,
 		},
 		NumUnits: 9 * 1024,
 	}}
@@ -808,7 +808,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	for i, id := range activeSet {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: prevEpoch.FirstLayer(),
+				PublishEpoch: prevEpoch,
 			},
 			NumUnits: uint32(i + 1),
 		}}
@@ -829,7 +829,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	for i, id := range activeSet {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: prevEpoch.FirstLayer(),
+				PublishEpoch: prevEpoch,
 			},
 			NumUnits: uint32(numMiners + i + 1),
 		}}

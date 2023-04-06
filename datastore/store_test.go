@@ -159,8 +159,8 @@ func TestIdentityExists(t *testing.T) {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.LayerID(22),
-				Sequence:   11,
+				PublishEpoch: types.EpochID(22),
+				Sequence:     11,
 			},
 			NumUnits: 11,
 		},
@@ -183,8 +183,8 @@ func TestStore_GetAtxByNodeID(t *testing.T) {
 	atx3 := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.EpochID(3).FirstLayer(),
-				Sequence:   11,
+				PublishEpoch: types.EpochID(3),
+				Sequence:     11,
 			},
 			NumUnits: 11,
 		},
@@ -192,8 +192,8 @@ func TestStore_GetAtxByNodeID(t *testing.T) {
 	atx4 := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.EpochID(4).FirstLayer(),
-				Sequence:   12,
+				PublishEpoch: types.EpochID(4),
+				Sequence:     12,
 			},
 			NumUnits: 11,
 		},
@@ -225,8 +225,8 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.LayerID(22),
-				Sequence:   11,
+				PublishEpoch: types.EpochID(22),
+				Sequence:     11,
 			},
 			NumUnits: 11,
 		},

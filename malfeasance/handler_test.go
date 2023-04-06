@@ -32,7 +32,7 @@ func TestMain(m *testing.M) {
 
 func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
 	challenge := types.NIPostChallenge{
-		PubLayerID: types.LayerID(1),
+		PublishEpoch: types.EpochID(1),
 	}
 	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil, nil)
 	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))

@@ -382,8 +382,8 @@ func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedAct
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: layerID,
-				PrevATXID:  types.RandomATXID(),
+				PublishEpoch: layerID.GetEpoch(),
+				PrevATXID:    types.RandomATXID(),
 			},
 			NumUnits: 2,
 		},
@@ -433,7 +433,7 @@ func TestPositioningID(t *testing.T) {
 				full := &types.ActivationTx{
 					InnerActivationTx: types.InnerActivationTx{
 						NIPostChallenge: types.NIPostChallenge{
-							PubLayerID: atx.epoch.FirstLayer(),
+							PublishEpoch: atx.epoch,
 						},
 						Coinbase: atx.coinbase,
 						NumUnits: 2,

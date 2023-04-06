@@ -68,7 +68,7 @@ func createATX(t testing.TB, db sql.Executor, cb types.Address) types.ATXID {
 	require.NoError(t, err)
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
-		types.NIPostChallenge{PubLayerID: types.LayerID(11)},
+		types.NIPostChallenge{PublishEpoch: types.EpochID(11)},
 		cb,
 		nil,
 		11,

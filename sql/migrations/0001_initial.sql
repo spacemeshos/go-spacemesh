@@ -101,7 +101,6 @@ CREATE TABLE beacons
 CREATE TABLE atxs
 (
     id                  CHAR(32) PRIMARY KEY,
-    layer               INT NOT NULL,
     epoch               INT NOT NULL,
     effective_num_units INT NOT NULL,
     nonce               UNSIGNED LONG INT,

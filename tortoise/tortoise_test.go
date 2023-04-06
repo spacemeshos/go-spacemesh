@@ -476,7 +476,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 				eid := first + types.EpochID(i)
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 					NIPostChallenge: types.NIPostChallenge{
-						PubLayerID: (eid - 1).FirstLayer(),
+						PublishEpoch: eid - 1,
 					},
 					NumUnits: uint32(weight),
 				}}
@@ -1518,12 +1518,11 @@ func TestComputeBallotWeight(t *testing.T) {
 			trtl, err := New(cdb, nil, WithLogger(logtest.New(t)), WithConfig(cfg))
 			require.NoError(t, err)
 			lid := types.LayerID(111)
-			atxLid := lid.GetEpoch().FirstLayer().Sub(1)
 			for _, weight := range tc.atxs {
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 					NumUnits: uint32(weight),
 				}}
-				atx.PubLayerID = atxLid
+				atx.PublishEpoch = lid.GetEpoch() - 1
 				atxID := types.RandomATXID()
 				atx.SetID(atxID)
 				atx.SetEffectiveNumUnits(atx.NumUnits)
@@ -2280,7 +2279,7 @@ func TestSwitchMode(t *testing.T) {
 
 		// add an atx to increase optimistic threshold in verifying tortoise to trigger a switch
 		header := &types.ActivationTxHeader{ID: types.ATXID{1}, EffectiveNumUnits: 1, TickCount: 200}
-		header.PubLayerID = types.EpochID(1).FirstLayer()
+		header.PublishEpoch = types.EpochID(1)
 		tortoise.OnAtx(header)
 		// feed ballots that vote against previously validated layer
 		// without the fix they would be ignored
@@ -2877,7 +2876,7 @@ func TestMissingActiveSet(t *testing.T) {
 	for _, atxid := range aset[:2] {
 		atx := &types.ActivationTxHeader{}
 		atx.ID = atxid
-		atx.PubLayerID = (epoch - 1).FirstLayer()
+		atx.PublishEpoch = epoch - 1
 		tortoise.OnAtx(atx)
 	}
 	t.Run("empty", func(t *testing.T) {
