@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -24,10 +25,18 @@ type GenesisConfig struct {
 
 // GenesisID computes genesis id from GenesisTime and ExtraData.
 func (g *GenesisConfig) GenesisID() types.Hash20 {
+	return g.GoldenATX().ToHash20()
+}
+
+func (g *GenesisConfig) GoldenATX() types.Hash32 {
 	hh := hash.New()
-	hh.Write([]byte(g.GenesisTime))
+	parsed, err := time.Parse(time.RFC3339, g.GenesisTime)
+	if err != nil {
+		panic("code should have run Validate before this method")
+	}
+	hh.Write([]byte(strconv.FormatInt(parsed.Unix(), 10)))
 	hh.Write([]byte(g.ExtraData))
-	return types.BytesToHash(hh.Sum(nil)).ToHash20()
+	return types.BytesToHash(hh.Sum(nil))
 }
 
 // Validate GenesisConfig.
