@@ -214,6 +214,7 @@ func (pb *ProposalBuilder) createProposal(
 	}
 
 	ib := &types.InnerBallot{
+		Layer:       layerID,
 		AtxID:       epochEligibility.Atx,
 		OpinionHash: opinion.Hash,
 	}
@@ -243,9 +244,6 @@ func (pb *ProposalBuilder) createProposal(
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
-				BallotMetadata: types.BallotMetadata{
-					Layer: layerID,
-				},
 				InnerBallot:       *ib,
 				Votes:             opinion.Votes,
 				EligibilityProofs: epochEligibility.Proofs[layerID],
