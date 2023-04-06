@@ -135,7 +135,7 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 		}
 		b.EligibilityProofs = proofs
 		b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
-		b.SetSmesherID(signer.NodeID())
+		b.SmesherID = signer.NodeID()
 		require.NoError(tb, b.Initialize())
 		blts = append(blts, b)
 	}

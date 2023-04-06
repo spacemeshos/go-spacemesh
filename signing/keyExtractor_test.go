@@ -52,7 +52,7 @@ func TestPubKeyExtractor_WithPrefix(t *testing.T) {
 		extractor, err := signing.NewPubKeyExtractor(signing.WithExtractorPrefix([]byte("one")))
 		require.NoError(t, err)
 		msg := []byte("test")
-		sig := signer.Sign(signing.BALLOT, msg)
+		sig := signer.Sign(signing.POET, msg)
 
 		pub, err := extractor.Extract(signing.HARE, msg, sig)
 		require.NoError(t, err)
