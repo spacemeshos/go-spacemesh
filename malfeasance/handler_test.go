@@ -100,11 +100,11 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 
 	createIdentity(t, db, sig)
 
-	t.Run("same ATX hash", func(t *testing.T) {
-		atxHash := types.RandomHash()
+	t.Run("same msg hash", func(t *testing.T) {
+		msgHash := types.RandomHash()
 		ap := atxProof
-		ap.Messages[0].InnerMsg.MsgHash = atxHash
-		ap.Messages[1].InnerMsg.MsgHash = atxHash
+		ap.Messages[0].InnerMsg.MsgHash = msgHash
+		ap.Messages[1].InnerMsg.MsgHash = msgHash
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 		gossip := &types.MalfeasanceGossip{
@@ -779,15 +779,13 @@ func TestHandler_CrossDomain(t *testing.T) {
 		Layer:   types.LayerID(uint32(target)),
 		MsgHash: types.Hash32{1, 1, 1},
 	}
-	m2 := types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: types.EpochID(target),
-			},
-		},
+	m2 := types.ATXMetadata{
+		PublishEpoch: types.EpochID(target),
+		MsgHash:      types.Hash32{2, 2, 2},
 	}
-	m2.SetID(types.ATXID{2, 2, 2})
 	m1buf, err := codec.Encode(&m1)
+	require.NoError(t, err)
+	m2buf, err := codec.Encode(&m2)
 	require.NoError(t, err)
 
 	msg, err := codec.Encode(&types.MalfeasanceGossip{
@@ -803,7 +801,7 @@ func TestHandler_CrossDomain(t *testing.T) {
 						},
 						{
 							InnerMsg:  *(*types.BallotMetadata)(unsafe.Pointer(&m2)),
-							Signature: sig.Sign(signing.ATX, m2.SignedBytes()),
+							Signature: sig.Sign(signing.ATX, m2buf),
 							SmesherID: sig.NodeID(),
 						},
 					},

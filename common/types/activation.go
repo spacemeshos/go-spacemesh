@@ -118,19 +118,6 @@ func (challenge *NIPostChallenge) TargetEpoch() EpochID {
 	return challenge.PublishEpoch + 1
 }
 
-// ATXMetadata is the data of ActivationTx that is signed.
-// It is also used for Malfeasance proofs.
-type ATXMetadata struct {
-	PublishEpoch EpochID
-	MsgHash      Hash32
-}
-
-func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddUint32("epoch", uint32(m.PublishEpoch))
-	encoder.AddString("hash", m.MsgHash.ShortString())
-	return nil
-}
-
 // InnerActivationTx is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
 // structure is serialized and signed. It includes the header fields, as well as the larger fields that are only used
 // for validation: the NIPost and the initial Post.
@@ -148,6 +135,19 @@ type InnerActivationTx struct {
 	id                ATXID     // non-exported cache of the ATXID
 	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
 	received          time.Time // time received by node, gossiped or synced
+}
+
+// ATXMetadata is the data of ActivationTx that is signed.
+// It is also used for Malfeasance proofs.
+type ATXMetadata struct {
+	PublishEpoch EpochID
+	MsgHash      Hash32 // Hash of InnerActivationTx (returned by HashInnerBytes)
+}
+
+func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("epoch", uint32(m.PublishEpoch))
+	encoder.AddString("hash", m.MsgHash.ShortString())
+	return nil
 }
 
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
@@ -184,18 +184,12 @@ func NewActivationTx(
 
 // SignedBytes returns a signed data of the ActivationTx.
 func (atx *ActivationTx) SignedBytes() []byte {
-	if atx.id == EmptyATXID {
-		if err := atx.Initialize(); err != nil {
-			log.With().Fatal("failed to initialize ATX", log.Err(err))
-		}
-	}
-
 	data, err := codec.Encode(&ATXMetadata{
 		PublishEpoch: atx.PublishEpoch,
 		MsgHash:      BytesToHash(atx.HashInnerBytes()),
 	})
 	if err != nil {
-		log.With().Fatal("failed to encode InnerActivationTx", log.Err(err))
+		log.With().Fatal("failed to serialize ATXMetadata", log.Err(err))
 	}
 	return data
 }
