@@ -132,7 +132,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	//                           WAITING FOR POET        DEADLINE
 	//                               PROOFS
 
-	pubEpoch := challenge.PublishEpoch()
+	pubEpoch := challenge.PublishEpoch
 	poetRoundStart := nb.layerClock.LayerToTime((pubEpoch - 1).FirstLayer()).Add(nb.poetCfg.PhaseShift)
 	nextPoetRoundStart := nb.layerClock.LayerToTime(pubEpoch.FirstLayer()).Add(nb.poetCfg.PhaseShift)
 	poetRoundEnd := nextPoetRoundStart.Add(-nb.poetCfg.CycleGap)

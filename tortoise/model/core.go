@@ -124,7 +124,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			ballot.ActiveSet = activeset
 		}
 		ballot.Signature = c.signer.Sign(signing.BALLOT, ballot.SignedBytes())
-		ballot.SetSmesherID(c.signer.NodeID())
+		ballot.SmesherID = c.signer.NodeID()
 		ballot.Initialize()
 		if c.refBallot == nil {
 			id := ballot.ID()
@@ -142,7 +142,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		}
 
 		nipost := types.NIPostChallenge{
-			PubLayerID: ev.LayerID,
+			PublishEpoch: ev.LayerID.GetEpoch(),
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(nipost, addr, nil, c.units, nil, nil)

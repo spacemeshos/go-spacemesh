@@ -275,7 +275,7 @@ func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 		return false
 	}
 	if prev, err := b.cdb.GetLastAtx(b.nodeID); err == nil {
-		if prev.PublishEpoch() == currEpoch {
+		if prev.PublishEpoch == currEpoch {
 			// miner has published in the current epoch
 			return false
 		}
@@ -404,13 +404,13 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 	case <-b.syncer.RegisterForATXSynced():
 	}
 
-	atxID, pubLayerID, err := b.GetPositioningAtxInfo()
+	atxID, pubEpoch, err := b.GetPositioningAtxInfo()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
 	}
 	challenge := &types.NIPostChallenge{
+		PublishEpoch:   pubEpoch + 1,
 		PositioningATX: atxID,
-		PubLayerID:     pubLayerID.Add(b.layersPerEpoch),
 	}
 	if challenge.TargetEpoch() < b.currentEpoch() {
 		b.discardChallenge()
@@ -491,7 +491,7 @@ func (b *Builder) loadChallenge() (*types.NIPostChallenge, error) {
 	if nipost.TargetEpoch() < b.currentEpoch() {
 		b.log.With().Info("atx nipost challenge is stale - discarding it",
 			log.FieldNamed("target_epoch", nipost.TargetEpoch()),
-			log.FieldNamed("publish_epoch", nipost.PublishEpoch()),
+			log.FieldNamed("publish_epoch", nipost.PublishEpoch),
 			log.FieldNamed("current_epoch", b.currentEpoch()),
 		)
 		b.discardChallenge()
@@ -516,7 +516,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 
 	logger.With().Info("atx challenge is ready",
 		log.FieldNamed("current_epoch", b.currentEpoch()),
-		log.FieldNamed("publish_epoch", challenge.PublishEpoch()),
+		log.FieldNamed("publish_epoch", challenge.PublishEpoch),
 		log.FieldNamed("target_epoch", challenge.TargetEpoch()),
 	)
 
@@ -552,7 +552,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 }
 
 func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChallenge) (*types.ActivationTx, error) {
-	pubEpoch := challenge.PublishEpoch()
+	pubEpoch := challenge.PublishEpoch
 	nextPoetRoundStart := b.layerClock.LayerToTime(pubEpoch.FirstLayer()).Add(b.poetCfg.PhaseShift)
 
 	// NiPoST must be ready before start of the next poet round.
@@ -642,12 +642,12 @@ func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, 
 }
 
 // GetPositioningAtxInfo returns id and publication layer from the best observed atx.
-func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
+func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.EpochID, error) {
 	id, err := b.atxHandler.GetPosAtxID()
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
 			b.log.With().Info("using golden atx as positioning atx", b.goldenATXID)
-			return b.goldenATXID, types.LayerID(0), nil
+			return b.goldenATXID, 0, nil
 		}
 		return types.ATXID{}, 0, fmt.Errorf("cannot find pos atx: %w", err)
 	}
@@ -655,7 +655,7 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 	if err != nil {
 		return types.ATXID{}, 0, fmt.Errorf("inconsistent state: failed to get atx header: %w", err)
 	}
-	return id, atx.PubLayerID, nil
+	return id, atx.PublishEpoch, nil
 }
 
 // SignAndFinalizeAtx signs the atx with specified signer and calculates the ID of the ATX.

@@ -100,7 +100,7 @@ func castEventProposal(ev *events.EventProposal) *pb.Proposal {
 		Id:      ev.Proposal.ID().Bytes(),
 		Epoch:   &pb.SimpleInt{Value: uint64(ev.Proposal.Layer.GetEpoch())},
 		Layer:   convertLayerID(ev.Proposal.Layer),
-		Smesher: &pb.SmesherId{Id: ev.Proposal.SmesherID().Bytes()},
+		Smesher: &pb.SmesherId{Id: ev.Proposal.SmesherID.Bytes()},
 		Ballot:  ev.Proposal.Ballot.ID().Bytes(),
 	}
 	if ev.Proposal.EpochData != nil {

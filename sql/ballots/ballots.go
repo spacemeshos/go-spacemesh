@@ -29,7 +29,7 @@ func decodeBallot(id types.BallotID, pubkey, body *bytes.Reader, malicious bool)
 		return nil, errors.New("ballot data missing")
 	}
 	ballot.SetID(id)
-	ballot.SetSmesherID(nodeID)
+	ballot.SmesherID = nodeID
 	if malicious {
 		ballot.SetMalicious()
 	}
@@ -48,7 +48,7 @@ func Add(db sql.Executor, ballot *types.Ballot) error {
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, ballot.ID().Bytes())
 			stmt.BindInt64(2, int64(ballot.Layer))
-			stmt.BindBytes(4, ballot.SmesherID().Bytes())
+			stmt.BindBytes(4, ballot.SmesherID.Bytes())
 			stmt.BindBytes(5, bytes)
 		}, nil); err != nil {
 		return fmt.Errorf("insert ballot %s: %w", ballot.ID(), err)
@@ -170,7 +170,7 @@ func LayerBallotByNodeID(db sql.Executor, lid types.LayerID, nodeID types.NodeID
 			return false
 		}
 		ballot.SetID(bid)
-		ballot.SetSmesherID(nodeID)
+		ballot.SmesherID = nodeID
 		return true
 	}
 	if rows, err := db.Exec(`

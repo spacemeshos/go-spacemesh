@@ -71,13 +71,13 @@ const (
 )
 
 var (
-	txReturnLayer         = types.LayerID(1)
-	layerFirst            = types.LayerID(0)
-	layerVerified         = types.LayerID(8)
-	layerLatest           = types.LayerID(10)
-	layerCurrent          = types.LayerID(12)
-	postGenesisEpochLayer = types.LayerID(22)
-	genesisID             = types.Hash20{}
+	txReturnLayer    = types.LayerID(1)
+	layerFirst       = types.LayerID(0)
+	layerVerified    = types.LayerID(8)
+	layerLatest      = types.LayerID(10)
+	layerCurrent     = types.LayerID(12)
+	postGenesisEpoch = types.EpochID(2)
+	genesisID        = types.Hash20{}
 
 	networkMock = NetworkMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
@@ -87,7 +87,7 @@ var (
 	chlng       = types.HexToHash32("55555")
 	poetRef     = []byte("66666")
 	nipost      = newNIPostWithChallenge(&chlng, poetRef)
-	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
 	globalAtx   *types.VerifiedActivationTx
 	globalAtx2  *types.VerifiedActivationTx
 	signer      *signing.EdSigner
@@ -116,7 +116,7 @@ func genLayerBallot(layerID types.LayerID) *types.Ballot {
 	b.Layer = layerID
 	signer, _ := signing.NewEdSigner()
 	b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
-	b.SetSmesherID(signer.NodeID())
+	b.SmesherID = signer.NodeID()
 	b.Initialize()
 	return b
 }
@@ -421,11 +421,11 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 	return &tx
 }
 
-func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
+func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, epoch types.EpochID) types.NIPostChallenge {
 	return types.NIPostChallenge{
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
-		PubLayerID:     pubLayerID,
+		PublishEpoch:   epoch,
 		PositioningATX: posAtxID,
 	}
 }
@@ -2047,7 +2047,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Condition(t, func() bool {
 		for _, a := range l.Activations {
 			// Compare the two element by element
-			if a.Layer.Number != globalAtx.PubLayerID.Uint32() {
+			if a.Layer.Number != globalAtx.PublishEpoch.Uint32() {
 				continue
 			}
 			if !bytes.Equal(a.Id.Id, globalAtx.ID().Bytes()) {
@@ -2345,7 +2345,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem any) {
 	require.IsType(t, &pb.AccountMeshData_Activation{}, dataItem)
 	x := dataItem.(*pb.AccountMeshData_Activation)
 	require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
-	require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
+	require.Equal(t, globalAtx.PublishEpoch.Uint32(), x.Activation.Layer.Number)
 	require.Equal(t, globalAtx.SmesherID.Bytes(), x.Activation.SmesherId.Id)
 	require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
 	require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)

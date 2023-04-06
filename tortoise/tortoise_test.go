@@ -476,7 +476,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 				eid := first + types.EpochID(i)
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 					NIPostChallenge: types.NIPostChallenge{
-						PubLayerID: (eid - 1).FirstLayer(),
+						PublishEpoch: eid - 1,
 					},
 					NumUnits: uint32(weight),
 				}}
@@ -784,7 +784,7 @@ func randomRefBallot(tb testing.TB, lyrID types.LayerID, beacon types.Beacon) *t
 	}
 	ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
 	require.NoError(tb, ballot.Initialize())
-	ballot.SetSmesherID(signer.NodeID())
+	ballot.SmesherID = signer.NodeID()
 	return ballot
 }
 
@@ -1518,12 +1518,11 @@ func TestComputeBallotWeight(t *testing.T) {
 			trtl, err := New(cdb, nil, WithLogger(logtest.New(t)), WithConfig(cfg))
 			require.NoError(t, err)
 			lid := types.LayerID(111)
-			atxLid := lid.GetEpoch().FirstLayer().Sub(1)
 			for _, weight := range tc.atxs {
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 					NumUnits: uint32(weight),
 				}}
-				atx.PubLayerID = atxLid
+				atx.PublishEpoch = lid.GetEpoch() - 1
 				atxID := types.RandomATXID()
 				atx.SetID(atxID)
 				atx.SetEffectiveNumUnits(atx.NumUnits)
@@ -1563,7 +1562,7 @@ func TestComputeBallotWeight(t *testing.T) {
 
 				ballot.Signature = sig.Sign(signing.BALLOT, ballot.SignedBytes())
 				require.NoError(t, ballot.Initialize())
-				ballot.SetSmesherID(sig.NodeID())
+				ballot.SmesherID = sig.NodeID()
 				blts = append(blts, ballot)
 
 				trtl.OnBallot(ballot)
@@ -1820,7 +1819,7 @@ func TestLateBaseBallot(t *testing.T) {
 	require.NoError(t, codec.Decode(buf, &base))
 	base.EligibilityProofs[0].J++
 	require.NoError(t, base.Initialize())
-	base.SetSmesherID(blts[0].SmesherID())
+	base.SmesherID = blts[0].SmesherID
 	tortoise.OnBallot(&base)
 
 	for _, last = range sim.GenLayers(s,
@@ -1895,7 +1894,7 @@ func TestMaliciousBallotsAreIgnored(t *testing.T) {
 	blts, err := ballots.Layer(s.GetState(0).DB, last)
 	require.NoError(t, err)
 	for _, ballot := range blts {
-		require.NoError(t, identities.SetMalicious(s.GetState(0).DB, ballot.SmesherID(), []byte("proof")))
+		require.NoError(t, identities.SetMalicious(s.GetState(0).DB, ballot.SmesherID, []byte("proof")))
 	}
 
 	tortoise.TallyVotes(ctx, s.Next())
@@ -2280,7 +2279,7 @@ func TestSwitchMode(t *testing.T) {
 
 		// add an atx to increase optimistic threshold in verifying tortoise to trigger a switch
 		header := &types.ActivationTxHeader{ID: types.ATXID{1}, EffectiveNumUnits: 1, TickCount: 200}
-		header.PubLayerID = types.EpochID(1).FirstLayer()
+		header.PublishEpoch = types.EpochID(1)
 		tortoise.OnAtx(header)
 		// feed ballots that vote against previously validated layer
 		// without the fix they would be ignored
@@ -2877,7 +2876,7 @@ func TestMissingActiveSet(t *testing.T) {
 	for _, atxid := range aset[:2] {
 		atx := &types.ActivationTxHeader{}
 		atx.ID = atxid
-		atx.PubLayerID = (epoch - 1).FirstLayer()
+		atx.PublishEpoch = epoch - 1
 		tortoise.OnAtx(atx)
 	}
 	t.Run("empty", func(t *testing.T) {

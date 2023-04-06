@@ -45,7 +45,7 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 	t.Parallel()
 
 	challenge := types.NIPostChallenge{
-		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),
+		PublishEpoch: postGenesisEpoch + 2,
 	}
 
 	ctrl := gomock.NewController(t)
@@ -80,7 +80,7 @@ func TestPostSetup(t *testing.T) {
 	postProvider := newTestPostManager(t)
 
 	challenge := types.NIPostChallenge{
-		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),
+		PublishEpoch: postGenesisEpoch + 2,
 	}
 
 	poetProvider := defaultPoetServiceMock(t, []byte("poet"))
@@ -111,7 +111,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	r := require.New(t)
 
 	challenge := types.NIPostChallenge{
-		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),
+		PublishEpoch: postGenesisEpoch + 2,
 	}
 
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
@@ -191,7 +191,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	r := require.New(t)
 
 	challenge := types.NIPostChallenge{
-		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),
+		PublishEpoch: postGenesisEpoch + 2,
 	}
 
 	postProvider := newTestPostManager(t)
@@ -240,11 +240,11 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete}).AnyTimes()
 
 	challenge := types.NIPostChallenge{
-		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),
+		PublishEpoch: postGenesisEpoch + 2,
 	}
 	challenge2 := types.NIPostChallenge{
-		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),
-		Sequence:   1,
+		PublishEpoch: postGenesisEpoch + 2,
+		Sequence:     1,
 	}
 
 	poetProver := defaultPoetServiceMock(t, []byte("poet"))
@@ -315,7 +315,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	// Arrange
 	req := require.New(t)
 	challenge := types.NIPostChallenge{
-		PubLayerID: (postGenesisEpoch + 1).FirstLayer(),
+		PublishEpoch: postGenesisEpoch + 1,
 	}
 
 	proof := &types.PoetProofMessage{
@@ -382,7 +382,7 @@ func TestNIPostBuilder_ManyPoETs_WaitingForProof_DeadlineReached(t *testing.T) {
 	// Arrange
 	req := require.New(t)
 	challenge := types.NIPostChallenge{
-		PubLayerID: (postGenesisEpoch + 1).FirstLayer(),
+		PublishEpoch: postGenesisEpoch + 1,
 	}
 
 	proof := &types.PoetProofMessage{
@@ -446,7 +446,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	req := require.New(t)
 
 	challenge := types.NIPostChallenge{
-		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),
+		PublishEpoch: postGenesisEpoch + 2,
 	}
 
 	proofWorse := &types.PoetProofMessage{
@@ -512,7 +512,7 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	poetProver := spawnPoet(t, WithGenesis(time.Now()), WithEpochDuration(time.Second))
 	poetDb := NewMockpoetDbAPI(ctrl)
 	challenge := types.NIPostChallenge{
-		PubLayerID: (postGenesisEpoch + 2).FirstLayer(),
+		PublishEpoch: postGenesisEpoch + 2,
 	}
 	mclock := defaultLayerClockMock(t)
 
@@ -531,7 +531,7 @@ func TestNIPostBuilder_Close(t *testing.T) {
 func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 	t.Parallel()
 	challenge := types.NIPostChallenge{
-		PubLayerID: (postGenesisEpoch + 1).FirstLayer(),
+		PublishEpoch: postGenesisEpoch + 1,
 	}
 	poetCfg := PoetConfig{PhaseShift: layerDuration}
 
@@ -638,7 +638,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 
 	currLayer := types.EpochID(10).FirstLayer()
 	genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
-	challenge := types.NIPostChallenge{PubLayerID: currLayer}
+	challenge := types.NIPostChallenge{PublishEpoch: types.EpochID(10)}
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -672,7 +672,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	// Arrange
 	req := require.New(t)
 	challenge := types.NIPostChallenge{
-		PubLayerID: (postGenesisEpoch + 1).FirstLayer(),
+		PublishEpoch: postGenesisEpoch + 1,
 	}
 
 	proof := &types.PoetProofMessage{

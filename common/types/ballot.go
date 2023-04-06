@@ -44,6 +44,8 @@ type Ballot struct {
 	InnerBallot
 	// smeshers signature on InnerBallot
 	Signature EdSignature
+	// the public key of the smesher that produced this ballot.
+	SmesherID NodeID
 	// Votes field is not signed.
 	Votes Votes
 	// the proof of the smeshers eligibility to vote and propose block content in this epoch.
@@ -56,8 +58,6 @@ type Ballot struct {
 
 	// the following fields are kept private and from being serialized
 	ballotID BallotID
-	// the public key of the smesher used
-	smesherID NodeID
 	// malicious is set to true if smesher that produced this ballot is known to be malicious.
 	malicious bool
 }
@@ -234,22 +234,13 @@ func (b *Ballot) Initialize() error {
 	if b.ID() != EmptyBallotID {
 		return fmt.Errorf("ballot already initialized")
 	}
-	if b.Signature == EmptyEdSignature {
-		return fmt.Errorf("cannot calculate Ballot ID: signature is nil")
-	}
 
 	if b.MsgHash != BytesToHash(b.HashInnerBytes()) {
 		return fmt.Errorf("bad message hash")
 	}
 
-	h := hash.New()
-	if _, err := h.Write(b.MsgHash[:]); err != nil {
-		return fmt.Errorf("failed to write to hash")
-	}
-	if _, err := scale.EncodeByteSlice(scale.NewEncoder(h), b.Signature[:]); err != nil {
-		return fmt.Errorf("failed to encode signature")
-	}
-	b.ballotID = BallotID(BytesToHash(h.Sum(nil)).ToHash20())
+	h := hash.Sum(b.SignedBytes())
+	b.ballotID = BallotID(Hash32(h).ToHash20())
 	return nil
 }
 
@@ -291,16 +282,6 @@ func (b *Ballot) ID() BallotID {
 	return b.ballotID
 }
 
-// SetSmesherID from stored data.
-func (b *Ballot) SetSmesherID(id NodeID) {
-	b.smesherID = id
-}
-
-// SmesherID returns the smesher's Edwards public key.
-func (b *Ballot) SmesherID() NodeID {
-	return b.smesherID
-}
-
 // SetMalicious sets ballot as malicious.
 func (b *Ballot) SetMalicious() {
 	b.malicious = true
@@ -326,7 +307,7 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("ballot_id", b.ID().String())
 	encoder.AddUint32("layer_id", b.Layer.Uint32())
 	encoder.AddUint32("epoch_id", uint32(b.Layer.GetEpoch()))
-	encoder.AddString("smesher", b.SmesherID().String())
+	encoder.AddString("smesher", b.SmesherID.String())
 	encoder.AddString("opinion hash", b.OpinionHash.String())
 	encoder.AddString("base_ballot", b.Votes.Base.String())
 	encoder.AddInt("support", len(b.Votes.Support))
@@ -388,7 +369,7 @@ func NewExistingBallot(id BallotID, sig EdSignature, nodeId NodeID, meta BallotM
 	return Ballot{
 		ballotID:       id,
 		Signature:      sig,
-		smesherID:      nodeId,
+		SmesherID:      nodeId,
 		BallotMetadata: meta,
 	}
 }

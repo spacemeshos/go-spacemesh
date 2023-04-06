@@ -41,7 +41,7 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, signer *signing.
 	nonce := types.VRFPostIndex(1)
 	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
+			PublishEpoch: epoch - 1,
 		},
 		NumUnits: testedATXUnit,
 		VRFNonce: &nonce,
@@ -57,7 +57,7 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, signer *signing.
 	for _, id := range activeset[1:] {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
+				PublishEpoch: epoch - 1,
 			},
 			NumUnits: defaultATXUnit,
 		}}
@@ -135,7 +135,7 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 		}
 		b.EligibilityProofs = proofs
 		b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
-		b.SetSmesherID(signer.NodeID())
+		b.SmesherID = signer.NodeID()
 		require.NoError(tb, b.Initialize())
 		blts = append(blts, b)
 	}
@@ -253,7 +253,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 
 	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: epoch.FirstLayer(),
+			PublishEpoch: epoch,
 		},
 		NumUnits: testedATXUnit,
 	}}
@@ -267,7 +267,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 	for _, id := range rb.ActiveSet[1:] {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
+				PublishEpoch: epoch - 1,
 			},
 			NumUnits: defaultATXUnit,
 		}}
