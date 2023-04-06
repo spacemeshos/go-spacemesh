@@ -123,11 +123,11 @@ func describe(name string, size int, ops ...op) tx {
 var txs = []tx{
 	describe("singlesig/selfspawn", 150, store(48), edverify(1), spawn()),
 	describe("singlesig/spend", 120, load(48), load(8), update(16), update(8), edverify(1)),
-	describe("singlesig/spawn", 150, store(48), load(16), update(16), edverify(1), spawn()),
+	describe("singlesig/spawn", 150, store(48), update(16), edverify(1), spawn()),
 	describe("multisig/3/5/selfspawn", 410, store(176), edverify(3), spawn()),
-	describe("multisig/3/5/spend", 250, load(176), load(16), update(16), update(8), edverify(3)),
+	describe("multisig/3/5/spend", 250, load(176), load(8), update(16), update(8), edverify(3)),
 	describe("multisig/3/10/selfspawn", 568, store(337), edverify(3), spawn()),
-	describe("multisig/3/10/spend", 250, load(337), load(16), update(16), update(16), edverify(3)),
+	describe("multisig/3/10/spend", 250, load(337), load(8), update(16), update(8), edverify(3)),
 }
 
 const price = 8.3e-08
