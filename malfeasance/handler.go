@@ -203,10 +203,10 @@ func (h *Handler) validateHareEquivocation(logger log.Log, proof *types.Malfeasa
 		}
 	}
 	logger.With().Warning("received invalid hare malfeasance proof",
-		log.Stringer("smesher", firstNid),
-		log.Stringer("smesher", nid),
-		log.Object("first", &firstMsg.InnerMsg),
-		log.Object("second", &msg.InnerMsg),
+		log.Stringer("first_smesher", firstNid),
+		log.Object("first_proof", &firstMsg.InnerMsg),
+		log.Stringer("second_smesher", nid),
+		log.Object("second_proof", &msg.InnerMsg),
 	)
 	numInvalidProofsHare.Inc()
 	return types.EmptyNodeID, errors.New("invalid hare malfeasance proof")
@@ -282,10 +282,10 @@ func (h *Handler) validateMultipleBallots(logger log.Log, proof *types.Malfeasan
 		}
 	}
 	logger.With().Warning("received invalid ballot malfeasance proof",
-		log.Stringer("smesher", bp.Messages[0].SmesherID),
-		log.Stringer("smesher", bp.Messages[1].SmesherID),
-		log.Object("first", &bp.Messages[0].InnerMsg),
-		log.Object("second", &bp.Messages[1].InnerMsg),
+		log.Stringer("first_smesher", bp.Messages[0].SmesherID),
+		log.Object("first_proof", &bp.Messages[0].InnerMsg),
+		log.Stringer("second_smesher", bp.Messages[1].SmesherID),
+		log.Object("second_proof", &bp.Messages[1].InnerMsg),
 	)
 	numInvalidProofsBallot.Inc()
 	return types.EmptyNodeID, errors.New("invalid ballot malfeasance proof")
