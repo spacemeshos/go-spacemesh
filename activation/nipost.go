@@ -157,23 +157,28 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	nipost := nb.state.NIPost
 
 	// Phase 0: Submit challenge to PoET services.
-	if nb.state.PoetRequests == nil {
+	if len(nb.state.PoetRequests) == 0 {
+		now := time.Now()
+		if poetRoundStart.Before(now) {
+			return nil, 0, fmt.Errorf("%w: poet round has already started at %s (now: %s)", ErrATXChallengeExpired, poetRoundStart, now)
+		}
+
 		signature := nb.signer.Sign(signing.POET, challengeHash.Bytes())
 		prefix := bytes.Join([][]byte{nb.signer.Prefix(), {byte(signing.POET)}}, nil)
 		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
 		defer cancel()
 		poetRequests := nb.submitPoetChallenges(submitCtx, prefix, challengeHash.Bytes(), signature, nb.signer.NodeID())
-		if err := ctx.Err(); err != nil {
-			return nil, 0, fmt.Errorf("submitting challenges: %w", err)
+		if len(poetRequests) == 0 {
+			return nil, 0, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: ctx.Err()}
 		}
 
-		if len(poetRequests) == 0 {
-			return nil, 0, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET"}
-		}
 		nipost.Challenge = &challengeHash
 		nb.state.Challenge = challengeHash
 		nb.state.PoetRequests = poetRequests
 		nb.persist()
+		if err := ctx.Err(); err != nil {
+			return nil, 0, fmt.Errorf("submitting challenges: %w", err)
+		}
 	}
 
 	// Phase 1: query PoET services for proofs

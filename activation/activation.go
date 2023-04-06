@@ -553,14 +553,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 
 func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChallenge) (*types.ActivationTx, error) {
 	pubEpoch := challenge.PublishEpoch
-	poetRoundStart := b.layerClock.LayerToTime((pubEpoch - 1).FirstLayer()).Add(b.poetCfg.PhaseShift)
 	nextPoetRoundStart := b.layerClock.LayerToTime(pubEpoch.FirstLayer()).Add(b.poetCfg.PhaseShift)
-
-	now := time.Now()
-	if poetRoundStart.Before(now) {
-		b.discardChallenge()
-		return nil, fmt.Errorf("%w: poet round has already started at %s (now: %s)", ErrATXChallengeExpired, poetRoundStart, now)
-	}
 
 	// NiPoST must be ready before start of the next poet round.
 	buildingNipostCtx, cancel := context.WithDeadline(ctx, nextPoetRoundStart)
