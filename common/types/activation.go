@@ -223,7 +223,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddUint64("vrf_nonce", uint64(*atx.VRFNonce))
 	}
 	encoder.AddString("coinbase", atx.Coinbase.String())
-	encoder.AddUint32("epoch", uint32(atx.PublishEpoch))
+	encoder.AddUint32("epoch", atx.PublishEpoch.Uint32())
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
 	if atx.effectiveNumUnits != 0 {
 		encoder.AddUint64("effective_num_units", uint64(atx.effectiveNumUnits))

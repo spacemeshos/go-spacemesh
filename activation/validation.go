@@ -210,14 +210,16 @@ func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProv
 func (*Validator) PositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID, layersPerEpoch uint32) error {
 	if *id == types.EmptyATXID {
 		return fmt.Errorf("empty positioning atx")
-	} else if *id != goldenATXID {
-		posAtx, err := atxs.GetAtxHeader(*id)
-		if err != nil {
-			return &ErrAtxNotFound{Id: *id, source: err}
-		}
-		if posAtx.PublishEpoch >= pubepoch {
-			return fmt.Errorf("positioning atx epoch (%v) must be before %v", posAtx.PublishEpoch, pubepoch)
-		}
+	}
+	if *id == goldenATXID {
+		return nil
+	}
+	posAtx, err := atxs.GetAtxHeader(*id)
+	if err != nil {
+		return &ErrAtxNotFound{Id: *id, source: err}
+	}
+	if posAtx.PublishEpoch >= pubepoch {
+		return fmt.Errorf("positioning atx epoch (%v) must be before %v", posAtx.PublishEpoch, pubepoch)
 	}
 	return nil
 }

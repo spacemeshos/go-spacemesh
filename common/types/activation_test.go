@@ -2,7 +2,6 @@ package types_test
 
 import (
 	"bytes"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -38,7 +37,7 @@ func TestActivationEncoding(t *testing.T) {
 	_, err := object.EncodeScale(enc)
 	require.NoError(t, err)
 
-	epoch := types.EpochID(rand.Uint32())
+	var epoch types.EpochID
 	require.NoError(t, codec.Decode(buf.Bytes(), &epoch))
 	require.Equal(t, object.PublishEpoch, epoch)
 }

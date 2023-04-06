@@ -17,18 +17,14 @@ func (e EpochID) Uint32() uint32 {
 
 // EncodeScale implements scale codec interface.
 func (e EpochID) EncodeScale(enc *scale.Encoder) (int, error) {
-	n, err := scale.EncodeCompact32(enc, uint32(e))
-	if err != nil {
-		return 0, err
-	}
-	return n, nil
+	return scale.EncodeCompact32(enc, e.Uint32())
 }
 
 // DecodeScale implements scale codec interface.
 func (e *EpochID) DecodeScale(dec *scale.Decoder) (int, error) {
 	value, n, err := scale.DecodeCompact32(dec)
 	if err != nil {
-		return 0, err
+		return n, err
 	}
 	*e = EpochID(value)
 	return n, nil

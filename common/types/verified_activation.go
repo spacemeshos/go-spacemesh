@@ -48,8 +48,7 @@ func (vatx *VerifiedActivationTx) MarshalLogObject(encoder log.ObjectEncoder) er
 		encoder.AddUint64("vrf_nonce", uint64(*vatx.VRFNonce))
 	}
 	encoder.AddString("coinbase", vatx.Coinbase.String())
-	encoder.AddUint32("pub_layer_id", vatx.PublishEpoch.Uint32())
-	encoder.AddUint32("epoch", uint32(vatx.PublishEpoch))
+	encoder.AddUint32("epoch", vatx.PublishEpoch.Uint32())
 	encoder.AddUint64("num_units", uint64(vatx.NumUnits))
 	if vatx.effectiveNumUnits != 0 {
 		encoder.AddUint64("effective_num_units", uint64(vatx.effectiveNumUnits))
