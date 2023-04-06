@@ -137,16 +137,16 @@ type InnerActivationTx struct {
 	received          time.Time // time received by node, gossiped or synced
 }
 
-// ATXMetadata is the signed data of ActivationTx.
+// ATXMetadata is the data of ActivationTx that is signed.
+// It is also used for Malfeasance proofs.
 type ATXMetadata struct {
-	Target EpochID
-	// hash of InnerActivationTx
-	MsgHash Hash32
+	PublishEpoch EpochID
+	MsgHash      Hash32 // Hash of InnerActivationTx (returned by HashInnerBytes)
 }
 
 func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddUint32("epoch", uint32(m.Target))
-	encoder.AddString("msgHash", m.MsgHash.String())
+	encoder.AddUint32("epoch", uint32(m.PublishEpoch))
+	encoder.AddString("hash", m.MsgHash.ShortString())
 	return nil
 }
 
@@ -154,7 +154,6 @@ func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
 	InnerActivationTx
-	ATXMetadata // TODO(mafa): remove ATXMetadata from ActivationTx (only use it for signature calculation)
 
 	SmesherID NodeID
 	Signature EdSignature
@@ -183,18 +182,14 @@ func NewActivationTx(
 	return atx
 }
 
-// SetMetadata sets ATXMetadata.
-func (atx *ActivationTx) SetMetadata() {
-	atx.Target = atx.TargetEpoch()
-	atx.MsgHash = BytesToHash(atx.HashInnerBytes())
-}
-
 // SignedBytes returns a signed data of the ActivationTx.
 func (atx *ActivationTx) SignedBytes() []byte {
-	atx.SetMetadata()
-	data, err := codec.Encode(&atx.ATXMetadata)
+	data, err := codec.Encode(&ATXMetadata{
+		PublishEpoch: atx.PublishEpoch,
+		MsgHash:      BytesToHash(atx.HashInnerBytes()),
+	})
 	if err != nil {
-		log.With().Fatal("failed to encode InnerActivationTx", log.Err(err))
+		log.With().Fatal("failed to serialize ATXMetadata", log.Err(err))
 	}
 	return data
 }
@@ -238,11 +233,7 @@ func (atx *ActivationTx) Initialize() error {
 		return fmt.Errorf("ATX already initialized")
 	}
 
-	// TODO(mafa): replace atx.MsgHash with atx.ID()
-	if atx.MsgHash != BytesToHash(atx.HashInnerBytes()) {
-		return fmt.Errorf("bad message hash")
-	}
-	atx.id = ATXID(atx.MsgHash)
+	atx.id = ATXID(BytesToHash(atx.HashInnerBytes()))
 	return nil
 }
 

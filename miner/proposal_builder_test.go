@@ -410,7 +410,7 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 	b := createBuilder(t)
 
 	layerID := types.LayerID(layersPerEpoch * 3).Add(1)
-	refBallot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, b.ProposalBuilder.signer.NodeID(), types.BallotMetadata{Layer: layerID.Sub(1)})
+	refBallot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, b.ProposalBuilder.signer.NodeID(), layerID.Sub(1))
 	require.NoError(t, ballots.Add(b.cdb, &refBallot))
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
@@ -658,12 +658,7 @@ func TestBuilder_HandleLayer_Duplicate(t *testing.T) {
 	layerID := types.LayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 
-	ballot := types.NewExistingBallot(
-		types.BallotID{1},
-		types.EmptyEdSignature,
-		b.signer.NodeID(),
-		types.BallotMetadata{Layer: layerID},
-	)
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, b.signer.NodeID(), layerID)
 	require.NoError(t, ballots.Add(b.cdb, &ballot))
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
