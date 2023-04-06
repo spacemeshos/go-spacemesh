@@ -592,8 +592,7 @@ github.com/spacemeshos/merkle-tree v0.2.1 h1:BSs/zt1n3ceZcpWdcqNFRvTeAWDlc0W+bql
 github.com/spacemeshos/merkle-tree v0.2.1/go.mod h1:IsrdlW6AHZ4HSi89H7G94ravFCMFZLGnm6To0tQ0SPY=
 github.com/spacemeshos/poet v0.8.0 h1:OLsmNchKmZhU0R5Dpu9L8jAoW0xyd7SmTt5Un09FrEU=
 github.com/spacemeshos/poet v0.8.0/go.mod h1:tIm/BNgojkYx1A2DUNDLSpsEXGxs/4IcSKE9lf7z4rs=
-github.com/spacemeshos/post v0.5.3 h1:VpdKTRDgVExDCdKncZS/pt2v05OHvBwpm0X2pK1hrrQ=
-github.com/spacemeshos/post v0.5.3/go.mod h1:MPjn9h2FdgKkYUZrFWAcHyRqRrbRfMFR52+YFA+EMSk=
+github.com/spacemeshos/post v0.5.4 h1:jtg+nPAUSwaVwHMXNmr67EokGzVKofnSbVTS7EoqIyE=
 github.com/spacemeshos/post v0.5.4/go.mod h1:MPjn9h2FdgKkYUZrFWAcHyRqRrbRfMFR52+YFA+EMSk=
 github.com/spacemeshos/sha256-simd v0.1.0 h1:G7Mfu5RYdQiuE+wu4ZyJ7I0TI74uqLhFnKblEnSpjYI=
 github.com/spacemeshos/sha256-simd v0.1.0/go.mod h1:O8CClVIilId7RtuCMV2+YzMj6qjVn75JsxOxaE8vcfM=
