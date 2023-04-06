@@ -10,7 +10,7 @@ import (
 
 func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := t.HareMetadata.EncodeScale(enc)
+		n, err := scale.EncodeOption(enc, t.InnerMessage)
 		if err != nil {
 			return total, err
 		}
@@ -18,13 +18,6 @@ func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	}
 	{
 		n, err := scale.EncodeByteArray(enc, t.Signature[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeOption(enc, t.InnerMsg)
 		if err != nil {
 			return total, err
 		}
@@ -42,11 +35,12 @@ func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := t.HareMetadata.DecodeScale(dec)
+		field, n, err := scale.DecodeOption[InnerMessage](dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
+		t.InnerMessage = field
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.Signature[:])
@@ -54,14 +48,6 @@ func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-	}
-	{
-		field, n, err := scale.DecodeOption[InnerMessage](dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.InnerMsg = field
 	}
 	{
 		n, err := t.Eligibility.DecodeScale(dec)
@@ -136,6 +122,20 @@ func (t *AggregatedMessages) DecodeScale(dec *scale.Decoder) (total int, err err
 
 func (t *InnerMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.Layer))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.Round))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeCompact8(enc, uint8(t.Type))
 		if err != nil {
 			return total, err
@@ -174,6 +174,22 @@ func (t *InnerMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 }
 
 func (t *InnerMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Layer = types.LayerID(field)
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Round = uint32(field)
+	}
 	{
 		field, n, err := scale.DecodeCompact8(dec)
 		if err != nil {

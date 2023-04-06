@@ -192,11 +192,19 @@ func TestStatusTracker_Equivocate_Fail(t *testing.T) {
 				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{
 						{
-							InnerMsg:  m1.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   m1.Layer,
+								Round:   m1.Round,
+								MsgHash: types.BytesToHash(m1.HashBytes()),
+							},
 							Signature: m1.Signature,
 						},
 						{
-							InnerMsg:  m2.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   m2.Layer,
+								Round:   m2.Round,
+								MsgHash: types.BytesToHash(m2.HashBytes()),
+							},
 							Signature: m2.Signature,
 						},
 					},
@@ -257,11 +265,19 @@ func TestStatusTracker_Equivocate_Pass(t *testing.T) {
 				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{
 						{
-							InnerMsg:  m1.HareMetadata,
+							InnerMsg:  types.HareMetadata{
+								Layer:   m1.Layer,
+								Round:   m1.Round,
+								MsgHash: types.BytesToHash(m1.HashBytes()),
+							},
 							Signature: m1.Signature,
 						},
 						{
-							InnerMsg:  m2.HareMetadata,
+							InnerMsg:  types.HareMetadata{
+								Layer:   m2.Layer,
+								Round:   m2.Round,
+								MsgHash: types.BytesToHash(m2.HashBytes()),
+							},
 							Signature: m2.Signature,
 						},
 					},

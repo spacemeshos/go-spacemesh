@@ -36,35 +36,48 @@ func newStatusTracker(logger log.Log, round uint32, mch chan<- *types.Malfeasanc
 
 // RecordStatus records the given status message.
 func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
+	metadata := types.HareMetadata{
+		Layer:   msg.Layer,
+		Round:   msg.Round,
+		MsgHash: types.BytesToHash(msg.HashBytes()),
+	}
 	if prev, exist := st.statuses[msg.NodeID]; exist { // already handled this sender's status msg
-		if prev.Layer == msg.Layer &&
-			prev.Round == msg.Round &&
-			prev.MsgHash != msg.MsgHash {
-			st.logger.WithContext(ctx).With().Warning("equivocation detected in status round",
-				log.Stringer("smesher", msg.NodeID),
-				log.Object("prev", prev),
-				log.Object("curr", &msg.HareMetadata),
-			)
-			st.eTracker.Track(msg.NodeID, msg.Round, msg.Eligibility.Count, false)
-			old := &types.HareProofMsg{
-				InnerMsg:  prev.HareMetadata,
-				Signature: prev.Signature,
-			}
-			this := &types.HareProofMsg{
-				InnerMsg:  msg.HareMetadata,
-				Signature: msg.Signature,
-			}
-			if err := reportEquivocation(ctx, msg.NodeID, old, this, &msg.Eligibility, st.malCh); err != nil {
-				st.logger.WithContext(ctx).With().Warning("failed to report equivocation in status round",
-					log.Stringer("smesher", msg.NodeID),
-					log.Err(err),
-				)
-				return
-			}
-		}
 		st.logger.WithContext(ctx).With().Warning("duplicate status message detected",
 			log.Stringer("smesher", msg.NodeID),
 		)
+		prevMetadata := types.HareMetadata{
+			Layer:   prev.Layer,
+			Round:   prev.Round,
+			MsgHash: types.BytesToHash(prev.HashBytes()),
+		}
+		if prev.Layer != msg.Layer || prev.Round != msg.Round {
+			return
+		}
+		if prevMetadata.MsgHash == metadata.MsgHash {
+			return
+		}
+
+		st.logger.WithContext(ctx).With().Warning("equivocation detected in status round",
+			log.Stringer("smesher", msg.NodeID),
+			log.Object("prev", prev),
+			log.Object("curr", &metadata),
+		)
+		st.eTracker.Track(msg.NodeID, msg.Round, msg.Eligibility.Count, false)
+		old := &types.HareProofMsg{
+			InnerMsg:  prevMetadata,
+			Signature: prev.Signature,
+		}
+		this := &types.HareProofMsg{
+			InnerMsg:  metadata,
+			Signature: msg.Signature,
+		}
+		if err := reportEquivocation(ctx, msg.NodeID, old, this, &msg.Eligibility, st.malCh); err != nil {
+			st.logger.WithContext(ctx).With().Warning("failed to report equivocation in status round",
+				log.Stringer("smesher", msg.NodeID),
+				log.Err(err),
+			)
+			return
+		}
 		return
 	}
 
@@ -77,9 +90,9 @@ func (st *statusTracker) AnalyzeStatusMessages(isValid func(m *Msg) bool) {
 		if !isValid(m) { // only keep valid Messages
 			delete(st.statuses, key)
 		} else {
-			if m.InnerMsg.CommittedRound >= st.maxCommittedRound || st.maxCommittedRound == preRound { // track max Ki & matching raw set
-				st.maxCommittedRound = m.InnerMsg.CommittedRound
-				st.maxSet = NewSet(m.InnerMsg.Values)
+			if m.CommittedRound >= st.maxCommittedRound || st.maxCommittedRound == preRound { // track max Ki & matching raw set
+				st.maxCommittedRound = m.CommittedRound
+				st.maxSet = NewSet(m.Values)
 			}
 		}
 	}
@@ -129,7 +142,7 @@ func (st *statusTracker) ProposalSet(expectedSize int) *Set {
 func (st *statusTracker) buildUnionSet(expectedSize int) *Set {
 	unionSet := NewEmptySet(expectedSize)
 	for _, m := range st.statuses {
-		for _, v := range NewSet(m.InnerMsg.Values).ToSlice() {
+		for _, v := range NewSet(m.Values).ToSlice() {
 			unionSet.Add(v) // assuming add is unique
 		}
 	}

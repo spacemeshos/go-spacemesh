@@ -45,7 +45,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	logger.With().Debug("received preround message",
 		msg.NodeID,
 		log.Stringer("smesher", msg.NodeID),
-		log.Int("num_values", len(msg.InnerMsg.Values)),
+		log.Int("num_values", len(msg.Values)),
 		log.Stringer("proposal_vrf", msg.Eligibility.Proof),
 		log.Stringer("previous_vrf", pre.bestVRF),
 	)
@@ -60,21 +60,27 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		)
 	}
 
-	sToTrack := NewSet(msg.InnerMsg.Values) // assume track all Values
-	alreadyTracked := NewDefaultEmptySet()  // assume nothing tracked so far
+	sToTrack := NewSet(msg.Values)         // assume track all Values
+	alreadyTracked := NewDefaultEmptySet() // assume nothing tracked so far
 
+	msgHash := types.BytesToHash(msg.HashBytes())
+	metadata := types.HareMetadata{
+		Layer:   msg.Layer,
+		Round:   msg.Round,
+		MsgHash: msgHash,
+	}
 	if prev, exist := pre.preRound[msg.NodeID]; exist { // not first pre-round msg from this sender
 		if prev.InnerMsg.Layer == msg.Layer &&
 			prev.InnerMsg.Round == msg.Round &&
-			prev.InnerMsg.MsgHash != msg.MsgHash {
+			prev.InnerMsg.MsgHash != msgHash {
 			pre.logger.WithContext(ctx).With().Warning("equivocation detected in preround",
 				log.Stringer("smesher", msg.NodeID),
 				log.Object("prev", &prev.InnerMsg),
-				log.Object("curr", &msg.HareMetadata),
+				log.Object("curr", &metadata),
 			)
 			pre.eTracker.Track(msg.NodeID, msg.Round, msg.Eligibility.Count, false)
 			this := &types.HareProofMsg{
-				InnerMsg:  msg.HareMetadata,
+				InnerMsg:  metadata,
 				Signature: msg.Signature,
 			}
 			if err := reportEquivocation(ctx, msg.NodeID, prev.HareProofMsg, this, &msg.Eligibility, pre.malCh); err != nil {
@@ -100,7 +106,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	// update the union to include new Values
 	pre.preRound[msg.NodeID].Set = alreadyTracked.Union(sToTrack)
 	pre.preRound[msg.NodeID].HareProofMsg = &types.HareProofMsg{
-		InnerMsg:  msg.HareMetadata,
+		InnerMsg:  metadata,
 		Signature: msg.Signature,
 	}
 }
