@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -43,7 +44,7 @@ func (id *ProposalID) DecodeScale(d *scale.Decoder) (int, error) {
 type Proposal struct {
 	// the content proposal for a given layer and the votes on the mesh history
 	InnerProposal
-	// smesher's signature on InnerProposal
+	// the smesher's signature on the InnerProposal
 	Signature EdSignature
 
 	// the following fields are kept private and from being serialized
@@ -72,13 +73,15 @@ type InnerProposal struct {
 // Initialize calculates and sets the Proposal's cached proposalID.
 // this should be called once all the other fields of the Proposal are set.
 func (p *Proposal) Initialize() error {
-	if p.ID() != EmptyProposalID {
+	if p.proposalID != EmptyProposalID {
 		return fmt.Errorf("proposal already initialized")
 	}
 	if err := p.Ballot.Initialize(); err != nil {
 		return err
 	}
-	p.proposalID = ProposalID(CalcObjectHash32(p).ToHash20())
+
+	h := hash.Sum(p.SignedBytes())
+	p.proposalID = ProposalID(Hash32(h).ToHash20())
 	return nil
 }
 

@@ -502,7 +502,7 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 		return fmt.Errorf("failed to derive ID from atx: %w", err)
 	}
 
-	if ok := h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature); !ok {
+	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
 		return fmt.Errorf("failed to verify atx signature: %w", errMalformedData)
 	}
 

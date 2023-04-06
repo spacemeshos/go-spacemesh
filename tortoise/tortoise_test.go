@@ -784,7 +784,7 @@ func randomRefBallot(tb testing.TB, lyrID types.LayerID, beacon types.Beacon) *t
 	}
 	ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
 	require.NoError(tb, ballot.Initialize())
-	ballot.SetSmesherID(signer.NodeID())
+	ballot.SmesherID = signer.NodeID()
 	return ballot
 }
 
@@ -1563,7 +1563,7 @@ func TestComputeBallotWeight(t *testing.T) {
 
 				ballot.Signature = sig.Sign(signing.BALLOT, ballot.SignedBytes())
 				require.NoError(t, ballot.Initialize())
-				ballot.SetSmesherID(sig.NodeID())
+				ballot.SmesherID = sig.NodeID()
 				blts = append(blts, ballot)
 
 				trtl.OnBallot(ballot)
@@ -1820,7 +1820,7 @@ func TestLateBaseBallot(t *testing.T) {
 	require.NoError(t, codec.Decode(buf, &base))
 	base.EligibilityProofs[0].J++
 	require.NoError(t, base.Initialize())
-	base.SetSmesherID(blts[0].SmesherID())
+	base.SmesherID = blts[0].SmesherID
 	tortoise.OnBallot(&base)
 
 	for _, last = range sim.GenLayers(s,
@@ -1895,7 +1895,7 @@ func TestMaliciousBallotsAreIgnored(t *testing.T) {
 	blts, err := ballots.Layer(s.GetState(0).DB, last)
 	require.NoError(t, err)
 	for _, ballot := range blts {
-		require.NoError(t, identities.SetMalicious(s.GetState(0).DB, ballot.SmesherID(), []byte("proof")))
+		require.NoError(t, identities.SetMalicious(s.GetState(0).DB, ballot.SmesherID, []byte("proof")))
 	}
 
 	tortoise.TallyVotes(ctx, s.Next())

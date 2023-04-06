@@ -66,6 +66,7 @@ func TestCodec_MultipleBallot(t *testing.T) {
 		b.Signature = types.RandomEdSignature()
 		ballotProof.Messages[i] = types.BallotProofMsg{
 			InnerMsg:  b.BallotMetadata,
+			SmesherID: b.SmesherID,
 			Signature: b.Signature,
 		}
 	}

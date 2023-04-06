@@ -186,6 +186,7 @@ func (m *AtxProofMsg) SignedBytes() []byte {
 
 type BallotProofMsg struct {
 	InnerMsg  BallotMetadata
+	SmesherID NodeID
 	Signature EdSignature
 }
 

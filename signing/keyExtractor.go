@@ -43,7 +43,7 @@ func NewPubKeyExtractor(opts ...ExtractorOptionFunc) (*PubKeyExtractor, error) {
 // Extract public key from a signature.
 func (e PubKeyExtractor) Extract(d domain, m []byte, sig types.EdSignature) (*PublicKey, error) {
 	switch d {
-	case ATX:
+	case ATX, BALLOT:
 		panic("not supported any more")
 	default:
 	}
