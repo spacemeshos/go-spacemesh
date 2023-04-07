@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/hash"
-
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
 func TestGenesisID(t *testing.T) {
