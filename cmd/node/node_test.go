@@ -4,7 +4,9 @@ package node
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -90,6 +92,43 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r.NoError(err)
 	r.Len(infos, 2)
 	r.NotEqual(signer1.PublicKey(), signer3.PublicKey())
+
+	t.Run("bad length", func(t *testing.T) {
+		testLoadOrCreateEdSigner(t,
+			bytes.Repeat([]byte("ab"), signing.PrivateKeySize-1),
+			"invalid key size 63/64",
+		)
+	})
+	t.Run("bad hex", func(t *testing.T) {
+		testLoadOrCreateEdSigner(t,
+			bytes.Repeat([]byte("CV"), signing.PrivateKeySize),
+			"bad hex: encoding/hex: invalid byte",
+		)
+	})
+	t.Run("good key", func(t *testing.T) {
+		_, priv, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+		testLoadOrCreateEdSigner(t,
+			[]byte(hex.EncodeToString(priv)),
+			"",
+		)
+	})
+}
+
+func testLoadOrCreateEdSigner(t *testing.T, data []byte, expect string) {
+	tempdir := t.TempDir()
+	app := New(WithLog(logtest.New(t)))
+	app.Config.SMESHING.Opts.DataDir = tempdir
+	keyfile := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
+	require.NoError(t, os.WriteFile(keyfile, data, 0o600))
+	signer, err := app.LoadOrCreateEdSigner()
+	if len(expect) > 0 {
+		require.ErrorContains(t, err, expect)
+		require.Nil(t, signer)
+	} else {
+		require.NoError(t, err)
+		require.NotEmpty(t, signer)
+	}
 }
 
 func newLogger(buf *bytes.Buffer) log.Log {
