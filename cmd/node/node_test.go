@@ -102,7 +102,7 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	t.Run("bad hex", func(t *testing.T) {
 		testLoadOrCreateEdSigner(t,
 			bytes.Repeat([]byte("CV"), signing.PrivateKeySize),
-			"bad hex: encoding/hex: invalid byte",
+			"decoding private key: encoding/hex: invalid byte",
 		)
 	})
 	t.Run("good key", func(t *testing.T) {

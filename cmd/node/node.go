@@ -965,7 +965,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	dst := make([]byte, signing.PrivateKeySize)
 	n, err := hex.Decode(dst, data)
 	if err != nil {
-		return nil, fmt.Errorf("bad hex: %w", err)
+		return nil, fmt.Errorf("decoding private key: %w", err)
 	}
 	if n != signing.PrivateKeySize {
 		return nil, fmt.Errorf("invalid key size %d/%d", n, signing.PrivateKeySize)
