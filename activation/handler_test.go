@@ -569,7 +569,6 @@ func TestHandler_ProcessAtx(t *testing.T) {
 
 	// another atx for the same epoch is considered malicious
 	atx2 := newActivationTx(t, sig, 1, atx1.ID(), atx1.ID(), nil, types.LayerID(layersPerEpoch+1).GetEpoch(), 0, 100, coinbase, 100, &types.NIPost{})
-	mclock.EXPECT().CurrentLayer().Return(atx2.PublishEpoch.FirstLayer())
 	var got types.MalfeasanceGossip
 	mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
@@ -580,6 +579,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	proof, err = identities.GetMalfeasanceProof(cdb, sig.NodeID())
 	require.NoError(t, err)
 	require.Equal(t, got.MalfeasanceProof, *proof)
+	require.Equal(t, atx2.PublishEpoch.FirstLayer(), got.MalfeasanceProof.Layer)
 }
 
 func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
