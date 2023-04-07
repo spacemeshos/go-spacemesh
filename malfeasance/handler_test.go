@@ -32,7 +32,7 @@ func TestMain(m *testing.M) {
 
 func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
 	challenge := types.NIPostChallenge{
-		PubLayerID: types.LayerID(1),
+		PublishEpoch: types.EpochID(1),
 	}
 	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil, nil)
 	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
@@ -61,14 +61,14 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		Messages: [2]types.AtxProofMsg{
 			{
 				InnerMsg: types.ATXMetadata{
-					Target:  types.EpochID(3),
-					MsgHash: types.RandomHash(),
+					PublishEpoch: types.EpochID(3),
+					MsgHash:      types.RandomHash(),
 				},
 			},
 			{
 				InnerMsg: types.ATXMetadata{
-					Target:  types.EpochID(3),
-					MsgHash: types.RandomHash(),
+					PublishEpoch: types.EpochID(3),
+					MsgHash:      types.RandomHash(),
 				},
 			},
 		},
@@ -127,7 +127,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 
 	t.Run("different epoch", func(t *testing.T) {
 		ap := atxProof
-		ap.Messages[0].InnerMsg.Target = ap.Messages[1].InnerMsg.Target + 1
+		ap.Messages[0].InnerMsg.PublishEpoch = ap.Messages[1].InnerMsg.PublishEpoch + 1
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 		gossip := &types.MalfeasanceGossip{
@@ -780,8 +780,8 @@ func TestHandler_CrossDomain(t *testing.T) {
 		MsgHash: types.Hash32{1, 1, 1},
 	}
 	m2 := types.ATXMetadata{
-		Target:  types.EpochID(target),
-		MsgHash: types.Hash32{2, 2, 2},
+		PublishEpoch: types.EpochID(target),
+		MsgHash:      types.Hash32{2, 2, 2},
 	}
 	m1buf, err := codec.Encode(&m1)
 	require.NoError(t, err)

@@ -25,9 +25,9 @@ func TestEdSigner_Sign(t *testing.T) {
 
 	m := make([]byte, 4)
 	rand.Read(m)
-	sig := ed.Sign(POET, m)
+	sig := ed.Sign(HARE, m)
 	signed := make([]byte, len(m)+1)
-	signed[0] = byte(POET)
+	signed[0] = byte(HARE)
 	copy(signed[1:], m)
 
 	ok := ed25519.Verify(ed.PublicKey().Bytes(), signed, sig[:])

@@ -228,7 +228,7 @@ func (g *Generator) generateAtxs() {
 		address := types.GenerateAddress(sig.PublicKey().Bytes())
 
 		nipost := types.NIPostChallenge{
-			PubLayerID: g.nextLayer.Sub(1),
+			PublishEpoch: g.nextLayer.Sub(1).GetEpoch(),
 		}
 		atx := types.NewActivationTx(nipost, address, nil, units, nil, nil)
 		var ticks uint64

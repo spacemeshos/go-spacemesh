@@ -703,7 +703,10 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 				var ballotProof types.BallotProof
 				for i, b := range []*types.Ballot{prev, ballot} {
 					ballotProof.Messages[i] = types.BallotProofMsg{
-						InnerMsg:  b.BallotMetadata,
+						InnerMsg: types.BallotMetadata{
+							Layer:   b.Layer,
+							MsgHash: types.BytesToHash(b.HashInnerBytes()),
+						},
 						Signature: b.Signature,
 						SmesherID: b.SmesherID,
 					}

@@ -142,7 +142,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		}
 
 		nipost := types.NIPostChallenge{
-			PubLayerID: ev.LayerID,
+			PublishEpoch: ev.LayerID.GetEpoch(),
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(nipost, addr, nil, c.units, nil, nil)
