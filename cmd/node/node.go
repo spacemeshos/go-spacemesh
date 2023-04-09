@@ -771,9 +771,11 @@ func (app *App) listenToUpdates(ctx context.Context) {
 			case <-ctx.Done():
 				return nil
 			default:
-				for _, epochData := range update.Data {
-					app.beaconProtocol.UpdateBeacon(epochData.Epoch, epochData.Beacon)
-					app.hOracle.UpdateActiveSet(epochData.Epoch, epochData.ActiveSet)
+				if update.Data.Beacon != types.EmptyBeacon {
+					app.beaconProtocol.UpdateBeacon(update.Data.Epoch, update.Data.Beacon)
+				}
+				if len(update.Data.ActiveSet) > 0 {
+					app.hOracle.UpdateActiveSet(update.Data.Epoch, update.Data.ActiveSet)
 				}
 			}
 		}

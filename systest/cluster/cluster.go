@@ -74,6 +74,12 @@ func WithKeys(n int) Opt {
 	}
 }
 
+func WithBootstrapperFlag(flag DeploymentFlag) Opt {
+	return func(c *Cluster) {
+		c.addBootstrapperFlag(flag)
+	}
+}
+
 // Reuse will try to recover cluster from the given namespace, if not found
 // it will create a new one.
 func Reuse(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
@@ -120,9 +126,6 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 
 	cluster.addPoetFlag(genesis)
 	cluster.addPoetFlag(PoetRestListen(poetPort))
-
-	cluster.addBootstrapperFlag(genesis)
-	cluster.addBootstrapperFlag(BootstrapperPort(bootstrapperPort))
 
 	for _, opt := range opts {
 		opt(cluster)
@@ -242,7 +245,6 @@ func (c *Cluster) recoverFlags(ctx *testcontext.Context) error {
 	if err != nil {
 		return err
 	}
-	c.bootstrapperFlags[genesisTimeFlag] = bflags[genesisTimeFlag]
 	if !reflect.DeepEqual(c.bootstrapperFlags, bflags) {
 		return fmt.Errorf("bootstrapper configuration doesn't match %+v != %+v", c.bootstrapperFlags, bflags)
 	}
@@ -306,7 +308,9 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 
 func (c *Cluster) AddBootstrappers(cctx *testcontext.Context) error {
 	for i := 0; i < cctx.BootstrapperSize; i++ {
-		c.AddBootstrapper(cctx, i)
+		if err := c.AddBootstrapper(cctx, i); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -314,7 +318,9 @@ func (c *Cluster) AddBootstrappers(cctx *testcontext.Context) error {
 // AddPoets spawns poets up to configured number of poets.
 func (c *Cluster) AddPoets(cctx *testcontext.Context) error {
 	for i := 0; i < cctx.PoetSize; i++ {
-		c.AddPoet(cctx)
+		if err := c.AddPoet(cctx); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -424,19 +430,6 @@ func (c *Cluster) AddBootstrapper(cctx *testcontext.Context, i int) error {
 		Name:  "--node-endpoint",
 		Value: fmt.Sprintf("dns:///%s:9092", c.clients[0].Name),
 	})
-	flags = append(flags, DeploymentFlag{
-		Name:  "--layer-duration",
-		Value: testcontext.LayerDuration.Get(cctx.Parameters).String(),
-	})
-	flags = append(flags, DeploymentFlag{
-		Name:  "--layers-per-epoch",
-		Value: fmt.Sprintf("%d", testcontext.LayersPerEpoch.Get(cctx.Parameters)),
-	})
-	flags = append(flags, DeploymentFlag{
-		Name:  "--epoch-offset",
-		Value: "1",
-	})
-
 	bs, err := deployBootstrapper(cctx, fmt.Sprintf("%s-%d", bootstrapperApp, i), flags...)
 	if err != nil {
 		return err

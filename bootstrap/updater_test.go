@@ -2,6 +2,7 @@ package bootstrap_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -22,20 +23,14 @@ const (
 {
   "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
   "data": {
-    "id": 1,
-    "epochs": [
-      {
-        "epoch": 0,
-        "beacon": "6fe7c971"
-      },
-      {
-        "epoch": 1,
+    "id": 1681092086,
+    "epoch": {
+        "number": 2,
         "beacon": "6fe7c971",
 		"activeSet": [
 		  "85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210",
 		  "65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64"]
-      }
-    ]
+    }
   }
 }
 `
@@ -44,23 +39,14 @@ const (
 {
   "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
   "data": {
-    "id": 2,
-    "epochs": [
-      {
-        "epoch": 1,
-        "beacon": "6fe7c971",
-        "activeSet": [
-		  "85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210",
-		  "65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64"]
-      },
-      {
-        "epoch": 2,
-        "beacon": "f70cf90b",
-        "activeSet": [
-		  "0575fc4083eb5b5c4422063c87071eb5123d4db6fee7bc1ecb02e52e97916aef",
-		  "23716e2667034edc62595a6d1628ff5c323cf099f2cc161e5653a96c9fd2bd55"]
-      }
-    ]
+    "id": 2681092086,
+    "epoch": {
+        "number": 2,
+        "beacon": "00000000",
+		"activeSet": [
+		  "e46b23d64140357b16d18eace600b28ab767bfd7b51c8e9977a342b71c3a23dd",
+		  "39125fbda7aac3edcef469b2ad9e6465af4350d28f3d953c6c6660e379546988"]
+    }
   }
 }
 `
@@ -69,24 +55,29 @@ const (
 {
   "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
   "data": {
-    "id": 3,
-    "epochs": [
-      {
-        "epoch": 2,
-        "beacon": "f70cf90b",
-        "activeSet": [
-          "0575fc4083eb5b5c4422063c87071eb5123d4db6fee7bc1ecb02e52e97916aef",
-          "23716e2667034edc62595a6d1628ff5c323cf099f2cc161e5653a96c9fd2bd55"]
-      },
-      {
-        "epoch": 3,
-        "beacon": "9ef76b65",
-        "activeSet": [
-          "65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64",
-          "e46b23d64140357b16d18eace600b28ab767bfd7b51c8e9977a342b71c3a23dd",
-          "85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210"]
-      }
-    ]
+    "id": 3681092086,
+    "epoch": {
+	  "number": 3,
+      "beacon": "f70cf90b",
+	  "activeSet": null
+	}
+  }
+}
+`
+
+	update4 = `
+{
+  "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
+  "data": {
+    "id": 4681092086,
+    "epoch": {
+      "number": 3,
+      "beacon": "00000000",
+      "activeSet": [
+        "65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64",
+        "e46b23d64140357b16d18eace600b28ab767bfd7b51c8e9977a342b71c3a23dd",
+        "85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210"]
+    }
   }
 }
 `
@@ -100,47 +91,38 @@ func TestMain(m *testing.M) {
 }
 
 func checkUpdate1(t *testing.T, got *bootstrap.VerifiedUpdate) {
-	require.EqualValues(t, 1, got.ID)
-	require.Len(t, got.Data, 2)
-	require.EqualValues(t, got.Data[0].Epoch, 0)
-	require.EqualValues(t, "0x6fe7c971", got.Data[0].Beacon.String())
-	require.Empty(t, got.Data[0].ActiveSet)
-	require.EqualValues(t, got.Data[1].Epoch, 1)
-	require.EqualValues(t, "0x6fe7c971", got.Data[1].Beacon.String())
-	require.Len(t, got.Data[1].ActiveSet, 2)
-	require.Equal(t, types.HexToHash32("85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210"), got.Data[1].ActiveSet[0].Hash32())
-	require.Equal(t, types.HexToHash32("65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64"), got.Data[1].ActiveSet[1].Hash32())
+	require.EqualValues(t, 1681092086, got.UpdateId)
+	require.EqualValues(t, 2, got.Data.Epoch)
+	require.EqualValues(t, "0x6fe7c971", got.Data.Beacon.String())
+	require.Len(t, got.Data.ActiveSet, 2)
+	require.Equal(t, types.HexToHash32("85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210"), got.Data.ActiveSet[0].Hash32())
+	require.Equal(t, types.HexToHash32("65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64"), got.Data.ActiveSet[1].Hash32())
 }
 
 func checkUpdate2(t *testing.T, got *bootstrap.VerifiedUpdate) {
-	require.EqualValues(t, 2, got.ID)
-	require.Len(t, got.Data, 2)
-	require.EqualValues(t, got.Data[0].Epoch, 1)
-	require.EqualValues(t, "0x6fe7c971", got.Data[0].Beacon.String())
-	require.Len(t, got.Data[0].ActiveSet, 2)
-	require.Equal(t, types.HexToHash32("85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210"), got.Data[0].ActiveSet[0].Hash32())
-	require.Equal(t, types.HexToHash32("65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64"), got.Data[0].ActiveSet[1].Hash32())
-	require.EqualValues(t, got.Data[1].Epoch, 2)
-	require.EqualValues(t, "0xf70cf90b", got.Data[1].Beacon.String())
-	require.Len(t, got.Data[1].ActiveSet, 2)
-	require.Equal(t, types.HexToHash32("0575fc4083eb5b5c4422063c87071eb5123d4db6fee7bc1ecb02e52e97916aef"), got.Data[1].ActiveSet[0].Hash32())
-	require.Equal(t, types.HexToHash32("23716e2667034edc62595a6d1628ff5c323cf099f2cc161e5653a96c9fd2bd55"), got.Data[1].ActiveSet[1].Hash32())
+	require.EqualValues(t, 2681092086, got.UpdateId)
+	require.EqualValues(t, 2, got.Data.Epoch)
+	require.Equal(t, types.EmptyBeacon, got.Data.Beacon)
+	require.Len(t, got.Data.ActiveSet, 2)
+	require.Equal(t, types.HexToHash32("e46b23d64140357b16d18eace600b28ab767bfd7b51c8e9977a342b71c3a23dd"), got.Data.ActiveSet[0].Hash32())
+	require.Equal(t, types.HexToHash32("39125fbda7aac3edcef469b2ad9e6465af4350d28f3d953c6c6660e379546988"), got.Data.ActiveSet[1].Hash32())
 }
 
 func checkUpdate3(t *testing.T, got *bootstrap.VerifiedUpdate) {
-	require.EqualValues(t, 3, got.ID)
-	require.Len(t, got.Data, 2)
-	require.EqualValues(t, got.Data[0].Epoch, 2)
-	require.EqualValues(t, "0xf70cf90b", got.Data[0].Beacon.String())
-	require.Len(t, got.Data[0].ActiveSet, 2)
-	require.Equal(t, types.HexToHash32("0575fc4083eb5b5c4422063c87071eb5123d4db6fee7bc1ecb02e52e97916aef"), got.Data[0].ActiveSet[0].Hash32())
-	require.Equal(t, types.HexToHash32("23716e2667034edc62595a6d1628ff5c323cf099f2cc161e5653a96c9fd2bd55"), got.Data[0].ActiveSet[1].Hash32())
-	require.EqualValues(t, got.Data[1].Epoch, 3)
-	require.EqualValues(t, "0x9ef76b65", got.Data[1].Beacon.String())
-	require.Len(t, got.Data[1].ActiveSet, 3)
-	require.Equal(t, types.HexToHash32("65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64"), got.Data[1].ActiveSet[0].Hash32())
-	require.Equal(t, types.HexToHash32("e46b23d64140357b16d18eace600b28ab767bfd7b51c8e9977a342b71c3a23dd"), got.Data[1].ActiveSet[1].Hash32())
-	require.Equal(t, types.HexToHash32("85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210"), got.Data[1].ActiveSet[2].Hash32())
+	require.EqualValues(t, 3681092086, got.UpdateId)
+	require.EqualValues(t, 3, got.Data.Epoch)
+	require.EqualValues(t, "0xf70cf90b", got.Data.Beacon.String())
+	require.Nil(t, got.Data.ActiveSet)
+}
+
+func checkUpdate4(t *testing.T, got *bootstrap.VerifiedUpdate) {
+	require.EqualValues(t, 4681092086, got.UpdateId)
+	require.EqualValues(t, 3, got.Data.Epoch)
+	require.Equal(t, types.EmptyBeacon, got.Data.Beacon)
+	require.Len(t, got.Data.ActiveSet, 3)
+	require.Equal(t, types.HexToHash32("65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64"), got.Data.ActiveSet[0].Hash32())
+	require.Equal(t, types.HexToHash32("e46b23d64140357b16d18eace600b28ab767bfd7b51c8e9977a342b71c3a23dd"), got.Data.ActiveSet[1].Hash32())
+	require.Equal(t, types.HexToHash32("85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210"), got.Data.ActiveSet[2].Hash32())
 }
 
 type checkFunc func(*testing.T, *bootstrap.VerifiedUpdate)
@@ -157,16 +139,16 @@ func TestLoad(t *testing.T) {
 		{
 			desc: "recovery one",
 			persisted: map[string]string{
-				"00001-2023-03-18T22-26-13": update1,
+				"1681094134-2023-03-18T22-26-13": update1,
 			},
 			resultFunc: checkUpdate1,
 		},
 		{
 			desc: "recovery latest",
 			persisted: map[string]string{
-				"00014-2023-04-18T22-26-11": update3,
-				"00001-2023-03-18T22-26-13": update1,
-				"00002-2023-04-18T22-26-13": update2,
+				"3681094134-2023-04-18T22-26-11": update3,
+				"1681094134-2023-03-18T22-26-13": update1,
+				"2681094134-2023-04-18T22-26-13": update2,
 			},
 			resultFunc: checkUpdate3,
 		},
@@ -204,7 +186,8 @@ func TestStartClose(t *testing.T) {
 	cfg := bootstrap.DefaultConfig()
 	fs := afero.NewMemMapFs()
 	persistDir := filepath.Join(cfg.DataDir, bootstrap.DirName)
-	require.NoError(t, afero.WriteFile(fs, bootstrap.PersistFilename(persistDir, uint32(1)), []byte(update1), 0o400))
+	fmt.Println(bootstrap.PersistFilename(persistDir, time.Now().Unix()))
+	require.NoError(t, afero.WriteFile(fs, bootstrap.PersistFilename(persistDir, time.Now().Unix()), []byte(update1), 0o400))
 	updater := bootstrap.New(
 		bootstrap.WithConfig(cfg),
 		bootstrap.WithLogger(logtest.New(t)),
@@ -234,8 +217,9 @@ func TestPrune(t *testing.T) {
 	cfg.NumToKeep = 2
 	fs := afero.NewMemMapFs()
 	persistDir := filepath.Join(cfg.DataDir, bootstrap.DirName)
-	require.NoError(t, afero.WriteFile(fs, bootstrap.PersistFilename(persistDir, uint32(1)), []byte(update1), 0o400))
-	require.NoError(t, afero.WriteFile(fs, bootstrap.PersistFilename(persistDir, uint32(2)), []byte(update2), 0o400))
+	now := time.Now()
+	require.NoError(t, afero.WriteFile(fs, bootstrap.PersistFilename(persistDir, time.Now().Add(-1*time.Hour).Unix()), []byte(update1), 0o400))
+	require.NoError(t, afero.WriteFile(fs, bootstrap.PersistFilename(persistDir, now.Unix()), []byte(update2), 0o400))
 	files, err := afero.ReadDir(fs, persistDir)
 	require.NoError(t, err)
 	require.Len(t, files, cfg.NumToKeep)
@@ -266,8 +250,8 @@ func TestManyUpdates(t *testing.T) {
 	}{
 		{
 			desc:     "in order",
-			updates:  []string{update1, update2, update3},
-			checkers: []checkFunc{checkUpdate1, checkUpdate2, checkUpdate3},
+			updates:  []string{update1, update2, update3, update4},
+			checkers: []checkFunc{checkUpdate1, checkUpdate2, checkUpdate3, checkUpdate4},
 		},
 		{
 			desc:     "old update number",
@@ -354,46 +338,17 @@ func TestGetInvalidUpdate(t *testing.T) {
 			err:  bootstrap.ErrWrongVersion,
 			update: `
 {
- "version": "https://spacemesh.io/bootstrap.schema.json.1.1",
- "data": {
-   "id": 2,
-   "epochs": [{
-       "epoch": 2,
-       "beacon": "f70cf90b",
-       "activeSet": [
-			"0575fc4083eb5b5c4422063c87071eb5123d4db6fee7bc1ecb02e52e97916aef",
-			"23716e2667034edc62595a6d1628ff5c323cf099f2cc161e5653a96c9fd2bd55"]
-     }
-   ]
- }
-}
-`,
-		},
-		{
-			desc: "epoch out of order",
-			err:  bootstrap.ErrEpochOutOfOrder,
-			update: `
-{
- "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
- "data": {
-   "id": 2,
-   "epochs": [
-     {
-       "epoch": 3,
-       "beacon": "6fe7c971",
-       "activeSet": [
-		  "85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210",
-		  "65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64"]
-     },
-     {
-       "epoch": 2,
-       "beacon": "f70cf90b",
-       "activeSet": [
-		  "0575fc4083eb5b5c4422063c87071eb5123d4db6fee7bc1ecb02e52e97916aef",
-		  "23716e2667034edc62595a6d1628ff5c323cf099f2cc161e5653a96c9fd2bd55"]
-     }
-   ]
- }
+  "version": "https://spacemesh.io/bootstrap.schema.json.1.1",
+  "data": {
+    "id": 2681092086,
+    "epoch": {
+	  "number": 2,
+      "beacon": "f70cf90b",
+      "activeSet": [
+	    "0575fc4083eb5b5c4422063c87071eb5123d4db6fee7bc1ecb02e52e97916aef",
+	    "23716e2667034edc62595a6d1628ff5c323cf099f2cc161e5653a96c9fd2bd55"]
+    }
+  }
 }
 `,
 		},
@@ -402,17 +357,16 @@ func TestGetInvalidUpdate(t *testing.T) {
 			err:  bootstrap.ErrInvalidBeacon,
 			update: `
 {
- "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
- "data": {
-   "id": 2,
-   "epochs": [{
-       "epoch": 2,
-       "activeSet": [
-			"0575fc4083eb5b5c4422063c87071eb5123d4db6fee7bc1ecb02e52e97916aef",
-			"23716e2667034edc62595a6d1628ff5c323cf099f2cc161e5653a96c9fd2bd55"]
-     }
-   ]
- }
+  "version": "https://spacemesh.io/bootstrap.schema.json.1.0",
+  "data": {
+    "id": 2681092086,
+    "epoch": {
+	  "number": 2,
+      "activeSet": [
+	    "0575fc4083eb5b5c4422063c87071eb5123d4db6fee7bc1ecb02e52e97916aef",
+	    "23716e2667034edc62595a6d1628ff5c323cf099f2cc161e5653a96c9fd2bd55"]
+    }
+  }
 }
 `,
 		},

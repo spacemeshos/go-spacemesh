@@ -11,20 +11,20 @@ type Update struct {
 }
 
 type InnerData struct {
-	ID     uint32      `json:"id"`
-	Epochs []EpochData `json:"epochs"`
+	UpdateId int64     `json:"id"`
+	Epoch    EpochData `json:"epoch"`
 }
 
 type EpochData struct {
-	Epoch     uint32   `json:"epoch"`
+	ID        uint32   `json:"number"`
 	Beacon    string   `json:"beacon"`
 	ActiveSet []string `json:"activeSet"`
 }
 
 type VerifiedUpdate struct {
+	UpdateId  int64
+	Data      *EpochOverride
 	Persisted string
-	ID        uint32
-	Data      []*EpochOverride
 }
 
 type EpochOverride struct {
@@ -35,15 +35,14 @@ type EpochOverride struct {
 
 func (vd *VerifiedUpdate) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("persisted", vd.Persisted)
-	for _, epoch := range vd.Data {
-		encoder.AddString("beacon", epoch.Beacon.String())
-		encoder.AddInt("activeset_size", len(epoch.ActiveSet))
-		encoder.AddArray("activeset", log.ArrayMarshalerFunc(func(aencoder log.ArrayEncoder) error {
-			for _, atx := range epoch.ActiveSet {
-				aencoder.AppendString(atx.String())
-			}
-			return nil
-		}))
-	}
+	encoder.AddString("epoch", vd.Data.Epoch.String())
+	encoder.AddString("beacon", vd.Data.Beacon.String())
+	encoder.AddInt("activeset_size", len(vd.Data.ActiveSet))
+	encoder.AddArray("activeset", log.ArrayMarshalerFunc(func(aencoder log.ArrayEncoder) error {
+		for _, atx := range vd.Data.ActiveSet {
+			aencoder.AppendString(atx.String())
+		}
+		return nil
+	}))
 	return nil
 }

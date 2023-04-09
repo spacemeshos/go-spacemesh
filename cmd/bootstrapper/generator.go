@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -29,22 +29,16 @@ const (
 	timeout       = 5 * time.Second
 )
 
-func persistDir() string {
-	return filepath.Clean(dataDir)
-}
-
-func epochFile(epoch types.EpochID) string {
-	return filepath.Join(persistDir(), fmt.Sprintf("epoch-update-%05d", epoch))
+func PersistedFilename() string {
+	return filepath.Join(dataDir, "spacemesh-update")
 }
 
 type Generator struct {
-	logger       log.Log
-	clock        LayerClock
-	fs           afero.Fs
-	client       *http.Client
-	offset       uint32
-	bitcoinUrl   string
-	nodeEndpoint string
+	logger      log.Log
+	fs          afero.Fs
+	client      *http.Client
+	btcEndpoint string
+	smEndpoint  string
 }
 
 type Opt func(*Generator)
@@ -67,15 +61,13 @@ func WithHttpClient(c *http.Client) Opt {
 	}
 }
 
-func NewGenerator(clock LayerClock, offset uint32, btcUrl string, endpoint string, opts ...Opt) *Generator {
+func NewGenerator(btcEndpoint string, smEndpoint string, opts ...Opt) *Generator {
 	g := &Generator{
-		logger:       log.NewNop(),
-		fs:           afero.NewOsFs(),
-		client:       &http.Client{},
-		clock:        clock,
-		offset:       offset,
-		bitcoinUrl:   btcUrl,
-		nodeEndpoint: endpoint,
+		logger:      log.NewNop(),
+		fs:          afero.NewOsFs(),
+		client:      &http.Client{},
+		btcEndpoint: btcEndpoint,
+		smEndpoint:  smEndpoint,
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -83,65 +75,40 @@ func NewGenerator(clock LayerClock, offset uint32, btcUrl string, endpoint strin
 	return g
 }
 
-func (g *Generator) Run(ctx context.Context) error {
-	if err := g.fs.MkdirAll(persistDir(), 0o700); err != nil {
-		return err
+func (g *Generator) Generate(ctx context.Context, targetEpoch types.EpochID, genBeacon, genActiveSet bool) error {
+	if err := g.fs.MkdirAll(dataDir, 0o700); err != nil {
+		return fmt.Errorf("create persist dir %v: %w", dataDir, err)
 	}
-
-	current := g.clock.CurrentLayer().GetEpoch()
-	g.generateIfAbsent(ctx, current)
-
-	from := current
-	if from == 0 {
-		from = types.EpochID(1)
-	}
-	for epoch := from; ; epoch = epoch + 1 {
-		updateLayer := (epoch + 1).FirstLayer().Sub(g.offset)
-		g.logger.With().Info("waiting for layer", updateLayer)
-		select {
-		case <-g.clock.AwaitLayer(updateLayer):
-			g.generateIfAbsent(ctx, epoch+1)
-		case <-ctx.Done():
-			return nil
+	var (
+		beacon    types.Beacon
+		activeSet []types.ATXID
+		err       error
+	)
+	if genBeacon {
+		beacon, err = g.genBeacon(ctx, g.logger, targetEpoch)
+		if err != nil {
+			return err
 		}
 	}
+	if genActiveSet {
+		activeSet, err = getActiveSet(ctx, g.smEndpoint, targetEpoch-1)
+		if err != nil {
+			return err
+		}
+	}
+	return g.genUpdate(targetEpoch, beacon, activeSet)
 }
 
-func (g *Generator) generateIfAbsent(ctx context.Context, targetEpoch types.EpochID) {
-	if targetEpoch.IsGenesis() {
-		return
-	}
-
-	logger := g.logger.WithContext(ctx).WithFields(g.clock.CurrentLayer(), log.Stringer("target_epoch", targetEpoch))
-	filename := epochFile(targetEpoch)
-	exists, err := afero.Exists(g.fs, filename)
-	if err != nil {
-		logger.With().Error("failed to stat epoch update",
-			log.String("filename", filename),
-			log.Err(err),
-		)
-		return
-	}
-	if exists {
-		return
-	}
-	logger.Info("epoch update not yet generated")
-	if err = g.generate(ctx, logger, targetEpoch); err != nil {
-		logger.With().Error("failed to generate epoch update", log.Err(err))
-	}
+func (g *Generator) GenBootstrap(ctx context.Context, epoch types.EpochID) error {
+	return g.Generate(ctx, epoch, true, true)
 }
 
-func (g *Generator) generate(ctx context.Context, logger log.Log, epoch types.EpochID) error {
-	beacon, err := g.genBeacon(ctx, logger)
-	if err != nil {
-		return err
-	}
-	activeSet, err := getActiveSet(ctx, logger, g.nodeEndpoint, epoch-1)
-	if err != nil {
-		return err
-	}
-	_, err = genUpdate(logger, g.fs, epoch, beacon, activeSet)
-	return err
+func (g *Generator) GenFallbackBeacon(ctx context.Context, epoch types.EpochID) error {
+	return g.Generate(ctx, epoch, true, false)
+}
+
+func (g *Generator) GenFallbackActiveSet(ctx context.Context, epoch types.EpochID) error {
+	return g.Generate(ctx, epoch, false, true)
 }
 
 // BitcoinResponse captures the only fields we care about from a bitcoin block.
@@ -150,19 +117,16 @@ type BitcoinResponse struct {
 	Hash   string `json:"hash"`
 }
 
-func (g *Generator) genBeacon(ctx context.Context, logger log.Log) (types.Beacon, error) {
-	if g.bitcoinUrl == "" {
+func (g *Generator) genBeacon(ctx context.Context, logger log.Log, epoch types.EpochID) (types.Beacon, error) {
+	if g.btcEndpoint == "" {
 		b := make([]byte, types.BeaconSize)
-		_, err := rand.Read(b)
-		if err != nil {
-			return types.EmptyBeacon, err
-		}
+		binary.LittleEndian.PutUint32(b, uint32(epoch))
 		return types.BytesToBeacon(b), nil
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	br, err := bitcoinHash(ctx, logger, g.client, g.bitcoinUrl)
+	br, err := bitcoinHash(ctx, logger, g.client, g.btcEndpoint)
 	if err != nil {
 		return types.EmptyBeacon, err
 	}
@@ -170,13 +134,14 @@ func (g *Generator) genBeacon(ctx context.Context, logger log.Log) (types.Beacon
 	if err != nil {
 		return types.EmptyBeacon, fmt.Errorf("decode bitcoin hash: %w", err)
 	}
+	// bitcoin hash started with leading zero. we want to grab 4 LSB
 	offset := len(decoded) - types.BeaconSize
 	beacon := types.BytesToBeacon(decoded[offset:])
 	return beacon, nil
 }
 
 func bitcoinHash(ctx context.Context, logger log.Log, client *http.Client, targetUrl string) (*BitcoinResponse, error) {
-	latest, err := queryBitcoin(ctx, logger, client, targetUrl)
+	latest, err := queryBitcoin(ctx, client, targetUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +152,7 @@ func bitcoinHash(ctx context.Context, logger log.Log, client *http.Client, targe
 	height := latest.Height - confirmation
 
 	blockUrl := fmt.Sprintf("%s/blocks/%d", targetUrl, height)
-	confirmed, err := queryBitcoin(ctx, logger, client, blockUrl)
+	confirmed, err := queryBitcoin(ctx, client, blockUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +163,7 @@ func bitcoinHash(ctx context.Context, logger log.Log, client *http.Client, targe
 	return confirmed, nil
 }
 
-func queryBitcoin(ctx context.Context, logger log.Log, client *http.Client, targetUrl string) (*BitcoinResponse, error) {
+func queryBitcoin(ctx context.Context, client *http.Client, targetUrl string) (*BitcoinResponse, error) {
 	resource, err := url.Parse(targetUrl)
 	if err != nil {
 		return nil, fmt.Errorf("parse btc url: %w", err)
@@ -217,7 +182,6 @@ func queryBitcoin(ctx context.Context, logger log.Log, client *http.Client, targ
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap read resonse: %w", err)
 	}
-	logger.With().Debug("bitcoin block", log.String("content", string(data)))
 	var br BitcoinResponse
 	err = json.Unmarshal(data, &br)
 	if err != nil {
@@ -226,7 +190,7 @@ func queryBitcoin(ctx context.Context, logger log.Log, client *http.Client, targ
 	return &br, nil
 }
 
-func getActiveSet(ctx context.Context, logger log.Log, endpoint string, epoch types.EpochID) ([]types.ATXID, error) {
+func getActiveSet(ctx context.Context, endpoint string, epoch types.EpochID) ([]types.ATXID, error) {
 	conn, err := grpc.DialContext(ctx, endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
@@ -247,49 +211,43 @@ func getActiveSet(ctx context.Context, logger log.Log, endpoint string, epoch ty
 		}
 		activeSet = append(activeSet, types.ATXID(types.BytesToHash(resp.GetId().GetId())))
 	}
-	logger.With().Info("received active set", log.Int("size", len(activeSet)))
 	return activeSet, nil
 }
 
-func genUpdate(
-	logger log.Log,
-	fs afero.Fs,
-	epoch types.EpochID,
-	beacon types.Beacon,
-	activeSet []types.ATXID,
-) (string, error) {
+func (g *Generator) genUpdate(epoch types.EpochID, beacon types.Beacon, activeSet []types.ATXID) error {
 	as := make([]string, 0, len(activeSet))
 	for _, atx := range activeSet {
 		as = append(as, hex.EncodeToString(atx.Hash32().Bytes())) // no leading 0x
 	}
 	var update bootstrap.Update
 	update.Version = SchemaVersion
+	edata := bootstrap.EpochData{
+		ID:     uint32(epoch),
+		Beacon: hex.EncodeToString(beacon.Bytes()), // no leading 0x
+	}
+	if len(activeSet) > 0 {
+		edata.ActiveSet = as
+	}
 	update.Data = bootstrap.InnerData{
-		ID: uint32(epoch),
-		Epochs: []bootstrap.EpochData{
-			{
-				Epoch:     uint32(epoch),
-				Beacon:    hex.EncodeToString(beacon.Bytes()), // no leading 0x
-				ActiveSet: as,
-			},
-		},
+		UpdateId: time.Now().Unix(),
+		Epoch:    edata,
 	}
 	data, err := json.Marshal(update)
 	if err != nil {
-		return "", fmt.Errorf("marshal data %v: %w", string(data), err)
+		return fmt.Errorf("marshal data %v: %w", string(data), err)
 	}
 	// make sure the data is valid
 	if err = bootstrap.ValidateSchema(data); err != nil {
-		return "", fmt.Errorf("invalid data %v: %w", string(data), err)
+		return fmt.Errorf("invalid data %v: %w", string(data), err)
 	}
-	filename := epochFile(epoch)
-	err = afero.WriteFile(fs, filename, data, 0o400)
+	filename := PersistedFilename()
+	err = afero.WriteFile(g.fs, filename, data, 0o600)
 	if err != nil {
-		return "", fmt.Errorf("persist epoch update %v: %w", filename, err)
+		return fmt.Errorf("persist epoch update %v: %w", filename, err)
 	}
-	logger.With().Info("generated update",
+	g.logger.With().Info("generated update",
 		log.String("update", string(data)),
 		log.String("filename", filename),
 	)
-	return filename, nil
+	return nil
 }

@@ -503,6 +503,8 @@ func deployBootstrapperD(ctx *testcontext.Context, id string, flags ...Deploymen
 		"/bin/go-bootstrapper",
 		"--serve-update",
 		"--data-dir=/data/bootstrapper",
+		"--epoch-offset=1",
+		"--port=" + strconv.Itoa(bootstrapperPort),
 		// empty so it generates local random beacon instead of making http queries to bitcoin explorer
 		"--bitcoin-url=",
 	}
@@ -668,6 +670,6 @@ func StartSmeshing(start bool) DeploymentFlag {
 	return DeploymentFlag{Name: "--smeshing-start", Value: fmt.Sprintf("%v", start)}
 }
 
-func BootstrapperPort(port int) DeploymentFlag {
-	return DeploymentFlag{Name: "--port", Value: fmt.Sprintf("%v", port)}
+func GenerateFallback() DeploymentFlag {
+	return DeploymentFlag{Name: "--fallback", Value: fmt.Sprintf("%v", true)}
 }
