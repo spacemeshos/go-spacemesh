@@ -2070,7 +2070,6 @@ func getMultisigTemplate(k int) types.Address {
 
 func BenchmarkTransactions(b *testing.B) {
 	bench := func(b *testing.B, tt *tester, txs []types.Transaction) {
-		b.Log("size=", len(txs[0].Raw))
 		lid := types.GetEffectiveGenesis().Add(2)
 		for i := 0; i < b.N; i++ {
 			b.StartTimer()

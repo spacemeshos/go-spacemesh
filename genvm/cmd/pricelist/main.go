@@ -2,7 +2,7 @@ package main
 
 import "fmt"
 
-const word = 32
+const word = 8
 
 type charge struct {
 	name string
@@ -10,18 +10,14 @@ type charge struct {
 	desc string
 }
 
-func (c charge) spacemesh() int {
-	return c.eth / 256
-}
-
 var (
-	chargeTXDATA   = charge{"txdata", 512, "charged for storing transaction data (per 32 bytes)"}
-	chargeSTORE    = charge{"store", 20000, "charged for changing active state from zero to non-zero (per 32 bytes)"}
-	chargeUPDATE   = charge{"update", 2900, "charged for updating active state (per 32 bytes)"}
-	chargeLOAD     = charge{"load", 800, "charged for loading active state (per 32 bytes)"}
-	chargeEDVERIFY = charge{"edverify", 3000, "charged for ed25519 verification (per signature)"}
-	chargeSPAWN    = charge{"spawn", 32000, "charged for every spawn transaction"}
-	chargeTX       = charge{"tx", 21000, "charged for every transaction"}
+	chargeTXDATA   = charge{"txdata (per 8)", 128, "charged for storing transaction data"}
+	chargeSTORE    = charge{"store (per 8)", 5000, "charged for changing active state from zero to non-zero"}
+	chargeUPDATE   = charge{"update (per 8)", 725, "charged for updating active state"}
+	chargeLOAD     = charge{"load (per 8)", 182, "charged for loading active state"}
+	chargeEDVERIFY = charge{"edverify (per sig)", 3000, "charged for ed25519 verification"}
+	chargeSPAWN    = charge{"spawn", 30000, "charged for every spawn transaction"}
+	chargeTX       = charge{"tx", 20000, "charged for every transaction"}
 )
 
 var charges = []charge{
@@ -38,10 +34,6 @@ type costFn func(charge) int
 
 func eth(c charge) int {
 	return c.eth
-}
-
-func spacemesh(c charge) int {
-	return c.spacemesh()
 }
 
 const (
@@ -120,30 +112,48 @@ func describe(name string, size int, ops ...op) tx {
 	return tx{name: name, size: size, ops: ops}
 }
 
-var txs = []tx{
-	describe("singlesig/selfspawn", 150, store(48), edverify(1), spawn()),
-	describe("singlesig/spend", 120, load(48), load(8), update(16), update(8), edverify(1)),
-	describe("singlesig/spawn", 150, store(48), update(16), edverify(1), spawn()),
-	describe("multisig/3/5/selfspawn", 410, store(176), edverify(3), spawn()),
-	describe("multisig/3/5/spend", 250, load(176), load(8), update(16), update(8), edverify(3)),
-	describe("multisig/3/10/selfspawn", 568, store(337), edverify(3), spawn()),
-	describe("multisig/3/10/spend", 250, load(337), load(8), update(16), update(8), edverify(3)),
-	describe("vesting/spawnvault", 282, load(176), store(80), edverify(3), spawn()),
-	describe("vesting/drain", 273, load(176), load(72), edverify(3), update(16), update(16)),
+const (
+	sizeSpawn = 64
+	sizeSpend = 56
+)
+
+func txs() []tx {
+	txs := []tx{
+		describe("singlesig/selfspawn", sizeSpawn+32+64, store(48), edverify(1), spawn()),
+		describe("singlesig/spawn", sizeSpawn+32+64, load(48), store(48), update(16), edverify(1), spawn()),
+		describe("singlesig/spend", sizeSpend+64, load(48), load(8), update(16), update(8), edverify(1)),
+	}
+	for n := 1; n <= 3; n++ {
+		for k := 1; k <= 10; k++ {
+			if n > k {
+				continue
+			}
+			sigs := n * 64
+			pubs := k * 32
+			txs = append(txs,
+				describe(fmt.Sprintf("multisig/%d/%d/selfspawn", n, k), sizeSpawn+sigs+pubs, store(16+pubs), edverify(n), spawn()),
+				describe(fmt.Sprintf("multisig/%d/%d/spawn", n, k), sizeSpawn+sigs+pubs, load(16+pubs), store(16+pubs), update(16), edverify(n), spawn()),
+				describe(fmt.Sprintf("multisig/%d/%d/spend", n, k), sizeSpend+sigs, load(16+pubs), load(8), update(16), update(8), edverify(n)),
+				describe(fmt.Sprintf("vesting/%d/%d/spawnvault", n, k), sizeSpawn+sigs+56, load(sizeSpawn+sigs), store(80), update(16), edverify(n), spawn()),
+				describe(fmt.Sprintf("vesting/%d/%d/drain", n, k), sizeSpend+24+sigs, load(16+pubs), load(80), edverify(n), update(16), update(16)),
+			)
+		}
+	}
+	return txs
 }
 
 const price = 8.3e-08
 
 func main() {
-	fmt.Println("| name | eth | spacemesh | description |")
+	fmt.Println("| name | eth | description |")
 	fmt.Println("| - | - | - | - |")
 	for _, charge := range charges {
-		fmt.Printf("| %s | %d | %d | %s | \n", charge.name, charge.eth, charge.spacemesh(), charge.desc)
+		fmt.Printf("| %s | %d | %s | \n", charge.name, charge.eth, charge.desc)
 	}
 	fmt.Println("------")
-	fmt.Println("| name | gas (eth) | gas (spacemesh) | usd (eth) |")
+	fmt.Println("| name | gas (eth) | usd (eth) |")
 	fmt.Println("| - | - | - | - | ")
-	for _, tx := range txs {
-		fmt.Printf("| %s | %d | %d | %0.4f |\n", tx.name, tx.cost(eth), tx.cost(spacemesh), float64(tx.cost(eth))*price)
+	for _, tx := range txs() {
+		fmt.Printf("| %s | %d | %0.4f |\n", tx.name, tx.cost(eth), float64(tx.cost(eth))*price)
 	}
 }
