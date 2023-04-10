@@ -39,8 +39,6 @@ func (id *BallotID) DecodeScale(d *scale.Decoder) (int, error) {
 
 // Ballot contains the smeshers signed vote on the mesh history.
 type Ballot struct {
-	// BallotMetadata is the signed part of the ballot.
-	BallotMetadata
 	InnerBallot
 	// smeshers signature on InnerBallot
 	Signature EdSignature
@@ -63,9 +61,6 @@ type Ballot struct {
 }
 
 func (b Ballot) Equal(other Ballot) bool {
-	if !cmp.Equal(other.BallotMetadata, b.BallotMetadata) {
-		return false
-	}
 	if !cmp.Equal(other.InnerBallot, b.InnerBallot, cmpopts.EquateEmpty()) {
 		return false
 	}
@@ -83,10 +78,8 @@ func (b Ballot) Equal(other Ballot) bool {
 
 // BallotMetadata is the signed part of Ballot.
 type BallotMetadata struct {
-	// the layer ID in which this ballot is eligible for. this will be validated via EligibilityProof
-	Layer LayerID
-	// hash of InnerBallot
-	MsgHash Hash32
+	Layer   LayerID // the layer ID in which this ballot is eligible for. this will be validated via EligibilityProof
+	MsgHash Hash32  // Hash of InnerBallot (returned by HashInnerBytes)
 }
 
 func (m *BallotMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -98,6 +91,7 @@ func (m *BallotMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 // InnerBallot contains all info about a smeshers votes on the mesh history. this structure is
 // serialized and signed to produce the signature in Ballot.
 type InnerBallot struct {
+	Layer LayerID
 	// the smeshers ATX in the epoch this ballot is cast.
 	AtxID ATXID
 	// OpinionHash is a aggregated opinion on all previous layers.
@@ -235,27 +229,16 @@ func (b *Ballot) Initialize() error {
 		return fmt.Errorf("ballot already initialized")
 	}
 
-	if b.MsgHash != BytesToHash(b.HashInnerBytes()) {
-		return fmt.Errorf("bad message hash")
-	}
-
-	h := hash.Sum(b.SignedBytes())
-	b.ballotID = BallotID(Hash32(h).ToHash20())
+	b.ballotID = BallotID(BytesToHash(b.HashInnerBytes()).ToHash20())
 	return nil
-}
-
-// SetMetadata sets BallotMetadata.
-func (b *Ballot) SetMetadata() {
-	if b.Layer == 0 {
-		log.Fatal("ballot is missing layer")
-	}
-	b.MsgHash = BytesToHash(b.HashInnerBytes())
 }
 
 // SignedBytes returns the serialization of the BallotMetadata for signing.
 func (b *Ballot) SignedBytes() []byte {
-	b.SetMetadata()
-	data, err := codec.Encode(&b.BallotMetadata)
+	data, err := codec.Encode(&BallotMetadata{
+		Layer:   b.Layer,
+		MsgHash: BytesToHash(b.HashInnerBytes()),
+	})
 	if err != nil {
 		log.With().Fatal("failed to serialize BallotMetadata", log.Err(err))
 	}
@@ -365,11 +348,13 @@ func BallotIDsToHashes(ids []BallotID) []Hash32 {
 }
 
 // NewExistingBallot creates ballot from stored data.
-func NewExistingBallot(id BallotID, sig EdSignature, nodeId NodeID, meta BallotMetadata) Ballot {
+func NewExistingBallot(id BallotID, sig EdSignature, nodeId NodeID, layer LayerID) Ballot {
 	return Ballot{
-		ballotID:       id,
-		Signature:      sig,
-		SmesherID:      nodeId,
-		BallotMetadata: meta,
+		InnerBallot: InnerBallot{
+			Layer: layer,
+		},
+		ballotID:  id,
+		Signature: sig,
+		SmesherID: nodeId,
 	}
 }

@@ -253,10 +253,8 @@ func genLayerProposal(tb testing.TB, layerID types.LayerID, txs []types.Transact
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
-				BallotMetadata: types.BallotMetadata{
-					Layer: layerID,
-				},
 				InnerBallot: types.InnerBallot{
+					Layer: layerID,
 					AtxID: types.RandomATXID(),
 					EpochData: &types.EpochData{
 						Beacon: types.RandomBeacon(),

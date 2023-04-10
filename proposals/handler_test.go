@@ -214,8 +214,8 @@ func signAndInit(tb testing.TB, b *types.Ballot) *types.Ballot {
 	tb.Helper()
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	b.Signature = sig.Sign(signing.BALLOT, b.SignedBytes())
 	b.SmesherID = sig.NodeID()
+	b.Signature = sig.Sign(signing.BALLOT, b.SignedBytes())
 	require.NoError(tb, b.Initialize())
 	return b
 }

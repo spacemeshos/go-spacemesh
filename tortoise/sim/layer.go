@@ -178,10 +178,8 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 			g.logger.With().Panic("failed to get a beacon", log.Err(err))
 		}
 		ballot := &types.Ballot{
-			BallotMetadata: types.BallotMetadata{
-				Layer: g.nextLayer,
-			},
 			InnerBallot: types.InnerBallot{
+				Layer: g.nextLayer,
 				AtxID: atxid,
 				EpochData: &types.EpochData{
 					ActiveSetHash: types.Hash32{1, 2, 3},

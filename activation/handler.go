@@ -368,20 +368,23 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				var atxProof types.AtxProof
 				for i, a := range []*types.VerifiedActivationTx{prev, atx} {
 					atxProof.Messages[i] = types.AtxProofMsg{
-						InnerMsg:  a.ATXMetadata,
+						InnerMsg: types.ATXMetadata{
+							PublishEpoch: a.PublishEpoch,
+							MsgHash:      types.BytesToHash(a.HashInnerBytes()),
+						},
 						SmesherID: a.SmesherID,
 						Signature: a.Signature,
 					}
 				}
 				proof = &types.MalfeasanceProof{
-					Layer: h.clock.CurrentLayer(),
+					Layer: atx.PublishEpoch.FirstLayer(),
 					Proof: types.Proof{
 						Type: types.MultipleATXs,
 						Data: &atxProof,
 					},
 				}
 				if err = h.cdb.AddMalfeasanceProof(atx.SmesherID, proof, dbtx); err != nil {
-					return fmt.Errorf("adding malfeasense proof: %w", err)
+					return fmt.Errorf("adding malfeasance proof: %w", err)
 				}
 				h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
 					log.Stringer("smesher", atx.SmesherID),
@@ -495,13 +498,12 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 	metrics.ReportMessageLatency(pubsub.AtxProtocol, pubsub.AtxProtocol, latency)
 
 	atx.SetReceived(receivedTime.Local())
+	if err := atx.Initialize(); err != nil {
+		return fmt.Errorf("failed to derive ID from atx: %w", err)
+	}
 
 	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
 		return fmt.Errorf("failed to verify atx signature: %w", errMalformedData)
-	}
-
-	if err := atx.Initialize(); err != nil {
-		return fmt.Errorf("failed to derive ID from atx: %w", err)
 	}
 
 	logger := h.log.WithContext(ctx).WithFields(atx.ID())

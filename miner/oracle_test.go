@@ -71,10 +71,8 @@ func genBallotWithEligibility(
 ) *types.Ballot {
 	tb.Helper()
 	ballot := &types.Ballot{
-		BallotMetadata: types.BallotMetadata{
-			Layer: lid,
-		},
 		InnerBallot: types.InnerBallot{
+			Layer: lid,
 			AtxID: ee.Atx,
 			EpochData: &types.EpochData{
 				ActiveSetHash:    ee.ActiveSet.Hash(),

@@ -3,6 +3,7 @@ package node
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -483,7 +484,7 @@ func (app *App) initServices(
 		}
 	}
 
-	goldenATXID := types.ATXID(app.Config.Genesis.GenesisID().ToHash32())
+	goldenATXID := types.ATXID(app.Config.Genesis.GoldenATX())
 	if goldenATXID == types.EmptyATXID {
 		return errors.New("invalid golden atx id")
 	}
@@ -952,7 +953,8 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
 		}
-		err = os.WriteFile(filename, edSgn.PrivateKey(), 0o600)
+
+		err = os.WriteFile(filename, []byte(hex.EncodeToString(edSgn.PrivateKey())), 0o600)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write identity file: %w", err)
 		}
@@ -960,8 +962,16 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		log.With().Info("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
+	dst := make([]byte, signing.PrivateKeySize)
+	n, err := hex.Decode(dst, data)
+	if err != nil {
+		return nil, fmt.Errorf("decoding private key: %w", err)
+	}
+	if n != signing.PrivateKeySize {
+		return nil, fmt.Errorf("invalid key size %d/%d", n, signing.PrivateKeySize)
+	}
 	edSgn, err := signing.NewEdSigner(
-		signing.WithPrivateKey(data),
+		signing.WithPrivateKey(dst),
 		signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
 	)
 	if err != nil {

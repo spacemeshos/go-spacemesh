@@ -191,10 +191,8 @@ func createProposal(
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
-				BallotMetadata: types.BallotMetadata{
-					Layer: lid,
-				},
 				InnerBallot: types.InnerBallot{
+					Layer:     lid,
 					AtxID:     atxID,
 					EpochData: &types.EpochData{Beacon: types.RandomBeacon()},
 				},
