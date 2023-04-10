@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -135,8 +136,12 @@ type Cluster struct {
 
 // GenesisID computes id from the configuration.
 func (c *Cluster) GenesisID() types.Hash20 {
+	parsed, err := time.Parse(time.RFC3339, c.smesherFlags[genesisTimeFlag].Value)
+	if err != nil {
+		panic("invalid genesis time")
+	}
 	return types.Hash32(hash.Sum(
-		[]byte(c.smesherFlags[genesisTimeFlag].Value),
+		[]byte(strconv.FormatInt(parsed.UnixNano(), 10)),
 		[]byte(c.smesherFlags[genesisExtraData].Value),
 	)).ToHash20()
 }
