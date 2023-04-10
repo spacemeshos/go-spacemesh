@@ -146,13 +146,13 @@ const price = 8.3e-08
 
 func main() {
 	fmt.Println("| name | eth | description |")
-	fmt.Println("| - | - | - | - |")
+	fmt.Println("| --- | --- | --- | ")
 	for _, charge := range charges {
 		fmt.Printf("| %s | %d | %s | \n", charge.name, charge.eth, charge.desc)
 	}
 	fmt.Println("------")
 	fmt.Println("| name | gas (eth) | usd (eth) |")
-	fmt.Println("| - | - | - | - | ")
+	fmt.Println("| --- | --- | --- | ")
 	for _, tx := range txs() {
 		fmt.Printf("| %s | %d | %0.4f |\n", tx.name, tx.cost(eth), float64(tx.cost(eth))*price)
 	}
