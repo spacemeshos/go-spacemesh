@@ -9,13 +9,6 @@ import (
 
 func (t *Ballot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := t.BallotMetadata.EncodeScale(enc)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := t.InnerBallot.EncodeScale(enc)
 		if err != nil {
 			return total, err
@@ -24,6 +17,13 @@ func (t *Ballot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	}
 	{
 		n, err := scale.EncodeByteArray(enc, t.Signature[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.SmesherID[:])
 		if err != nil {
 			return total, err
 		}
@@ -55,13 +55,6 @@ func (t *Ballot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *Ballot) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := t.BallotMetadata.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := t.InnerBallot.DecodeScale(dec)
 		if err != nil {
 			return total, err
@@ -70,6 +63,13 @@ func (t *Ballot) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.Signature[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
 		if err != nil {
 			return total, err
 		}
@@ -140,6 +140,13 @@ func (t *BallotMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) 
 
 func (t *InnerBallot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.Layer))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeByteArray(enc, t.AtxID[:])
 		if err != nil {
 			return total, err
@@ -171,6 +178,14 @@ func (t *InnerBallot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 }
 
 func (t *InnerBallot) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Layer = LayerID(field)
+	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.AtxID[:])
 		if err != nil {

@@ -398,8 +398,8 @@ func TestFullCountVotes(t *testing.T) {
 					}
 					ballot.OpinionHash = types.RandomHash() // fake opinion, only to make sure each ballot has a unique ID
 					ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
+					ballot.SmesherID = signer.NodeID()
 					require.NoError(t, ballot.Initialize())
-					ballot.SetSmesherID(signer.NodeID())
 					layerBallots = append(layerBallots, ballot)
 				}
 				ballotsList = append(ballotsList, layerBallots)

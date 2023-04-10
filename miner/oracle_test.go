@@ -48,7 +48,7 @@ func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *s
 func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publishLayer types.LayerID, signer *signing.EdSigner) *types.VerifiedActivationTx {
 	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: publishLayer,
+			PublishEpoch: publishLayer.GetEpoch(),
 		},
 		NumUnits: defaultAtxWeight,
 	}}
@@ -71,10 +71,8 @@ func genBallotWithEligibility(
 ) *types.Ballot {
 	tb.Helper()
 	ballot := &types.Ballot{
-		BallotMetadata: types.BallotMetadata{
-			Layer: lid,
-		},
 		InnerBallot: types.InnerBallot{
+			Layer: lid,
 			AtxID: ee.Atx,
 			EpochData: &types.EpochData{
 				ActiveSetHash:    ee.ActiveSet.Hash(),
@@ -86,7 +84,7 @@ func genBallotWithEligibility(
 		EligibilityProofs: ee.Proofs[lid],
 	}
 	ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
-	ballot.SetSmesherID(signer.NodeID())
+	ballot.SmesherID = signer.NodeID()
 	require.NoError(tb, ballot.Initialize())
 	return ballot
 }
@@ -172,9 +170,9 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 
 		for _, proof := range ee.Proofs[layer] {
 			b := genBallotWithEligibility(t, o.edSigner, info.beacon, layer, ee)
-			b.SetSmesherID(o.edSigner.NodeID())
+			b.SmesherID = o.edSigner.NodeID()
 			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b, info.beacon, gomock.Any()).Times(1)
-			nonceFetcher.EXPECT().VRFNonce(b.SmesherID(), layer.GetEpoch()).Return(nonce, nil).Times(1)
+			nonceFetcher.EXPECT().VRFNonce(b.SmesherID, layer.GetEpoch()).Return(nonce, nil).Times(1)
 			eligible, err := validator.CheckEligibility(context.Background(), b)
 			require.NoError(t, err, "at layer %d, with layersPerEpoch %d", layer, layersPerEpoch)
 			require.True(t, eligible, "should be eligible at layer %d, but isn't", layer)

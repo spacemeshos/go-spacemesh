@@ -102,10 +102,8 @@ func RandomTransactionID() TransactionID {
 // RandomBallot generates a Ballot with random content for testing.
 func RandomBallot() *Ballot {
 	return &Ballot{
-		BallotMetadata: BallotMetadata{
-			Layer: LayerID(10),
-		},
 		InnerBallot: InnerBallot{
+			Layer:     LayerID(10),
 			AtxID:     RandomATXID(),
 			RefBallot: RandomBallotID(),
 		},

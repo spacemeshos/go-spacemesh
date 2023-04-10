@@ -128,7 +128,7 @@ func createModifiedATXs(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerI
 		signers = append(signers, signer)
 		address := types.GenerateAddress(signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(
-			types.NIPostChallenge{PubLayerID: lid},
+			types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
 			address,
 			nil,
 			numUnit,
@@ -191,10 +191,8 @@ func createProposal(
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
-				BallotMetadata: types.BallotMetadata{
-					Layer: lid,
-				},
 				InnerBallot: types.InnerBallot{
+					Layer:     lid,
 					AtxID:     atxID,
 					EpochData: &types.EpochData{Beacon: types.RandomBeacon()},
 				},
@@ -207,7 +205,7 @@ func createProposal(
 	}
 	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
-	p.SetSmesherID(signer.NodeID())
+	p.SmesherID = signer.NodeID()
 	require.NoError(t, p.Initialize())
 	return p
 }

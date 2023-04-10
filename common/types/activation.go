@@ -64,7 +64,7 @@ var EmptyATXID = ATXID{}
 // the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
 // the first ATX in the sequence also the commitment Merkle root.
 type NIPostChallenge struct {
-	PubLayerID LayerID
+	PublishEpoch EpochID
 	// Sequence number counts the number of ancestors of the ATX. It sequentially increases for each ATX in the chain.
 	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against that miner.
 	Sequence       uint64
@@ -80,10 +80,10 @@ func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if c == nil {
 		return nil
 	}
-	encoder.AddUint32("PubLayerID", c.PubLayerID.Uint32())
+	encoder.AddUint32("PublishEpoch", c.PublishEpoch.Uint32())
 	encoder.AddUint64("Sequence", c.Sequence)
 	encoder.AddString("PrevATXID", c.PrevATXID.String())
-	encoder.AddUint32("PubLayerID", c.PubLayerID.Uint32())
+	encoder.AddUint32("PublishEpoch", c.PublishEpoch.Uint32())
 	encoder.AddString("PositioningATX", c.PositioningATX.String())
 	if c.CommitmentATX != nil {
 		encoder.AddString("CommitmentATX", c.CommitmentATX.String())
@@ -104,10 +104,10 @@ func (challenge *NIPostChallenge) Hash() Hash32 {
 // String returns a string representation of the NIPostChallenge, for logging purposes.
 // It implements the Stringer interface.
 func (challenge *NIPostChallenge) String() string {
-	return fmt.Sprintf("<seq: %v, prevATX: %v, PubLayer: %v, posATX: %s>",
+	return fmt.Sprintf("<seq: %v, prevATX: %v, publish epoch: %v, posATX: %s>",
 		challenge.Sequence,
 		challenge.PrevATXID.ShortString(),
-		challenge.PubLayerID,
+		challenge.PublishEpoch,
 		challenge.PositioningATX.ShortString(),
 	)
 }
@@ -115,12 +115,7 @@ func (challenge *NIPostChallenge) String() string {
 // TargetEpoch returns the target epoch of the NIPostChallenge. This is the epoch in which the miner is eligible
 // to participate thanks to the ATX.
 func (challenge *NIPostChallenge) TargetEpoch() EpochID {
-	return challenge.PubLayerID.GetEpoch() + 1
-}
-
-// PublishEpoch returns the publishing epoch of the NIPostChallenge.
-func (challenge *NIPostChallenge) PublishEpoch() EpochID {
-	return challenge.PubLayerID.GetEpoch()
+	return challenge.PublishEpoch + 1
 }
 
 // InnerActivationTx is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
@@ -142,16 +137,16 @@ type InnerActivationTx struct {
 	received          time.Time // time received by node, gossiped or synced
 }
 
-// ATXMetadata is the signed data of ActivationTx.
+// ATXMetadata is the data of ActivationTx that is signed.
+// It is also used for Malfeasance proofs.
 type ATXMetadata struct {
-	Target EpochID
-	// hash of InnerActivationTx
-	MsgHash Hash32
+	PublishEpoch EpochID
+	MsgHash      Hash32 // Hash of InnerActivationTx (returned by HashInnerBytes)
 }
 
 func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddUint32("epoch", uint32(m.Target))
-	encoder.AddString("msgHash", m.MsgHash.String())
+	encoder.AddUint32("epoch", uint32(m.PublishEpoch))
+	encoder.AddString("hash", m.MsgHash.ShortString())
 	return nil
 }
 
@@ -159,7 +154,6 @@ func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
 	InnerActivationTx
-	ATXMetadata // TODO(mafa): remove ATXMetadata from ActivationTx (only use it for signature calculation)
 
 	SmesherID NodeID
 	Signature EdSignature
@@ -188,18 +182,14 @@ func NewActivationTx(
 	return atx
 }
 
-// SetMetadata sets ATXMetadata.
-func (atx *ActivationTx) SetMetadata() {
-	atx.Target = atx.TargetEpoch()
-	atx.MsgHash = BytesToHash(atx.HashInnerBytes())
-}
-
 // SignedBytes returns a signed data of the ActivationTx.
 func (atx *ActivationTx) SignedBytes() []byte {
-	atx.SetMetadata()
-	data, err := codec.Encode(&atx.ATXMetadata)
+	data, err := codec.Encode(&ATXMetadata{
+		PublishEpoch: atx.PublishEpoch,
+		MsgHash:      BytesToHash(atx.HashInnerBytes()),
+	})
 	if err != nil {
-		log.With().Fatal("failed to encode InnerActivationTx", log.Err(err))
+		log.With().Fatal("failed to serialize ATXMetadata", log.Err(err))
 	}
 	return data
 }
@@ -228,8 +218,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddUint64("vrf_nonce", uint64(*atx.VRFNonce))
 	}
 	encoder.AddString("coinbase", atx.Coinbase.String())
-	encoder.AddUint32("pub_layer_id", atx.PubLayerID.Uint32())
-	encoder.AddUint32("epoch", uint32(atx.PublishEpoch()))
+	encoder.AddUint32("epoch", atx.PublishEpoch.Uint32())
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
 	if atx.effectiveNumUnits != 0 {
 		encoder.AddUint64("effective_num_units", uint64(atx.effectiveNumUnits))
@@ -244,11 +233,7 @@ func (atx *ActivationTx) Initialize() error {
 		return fmt.Errorf("ATX already initialized")
 	}
 
-	// TODO(mafa): replace atx.MsgHash with atx.ID()
-	if atx.MsgHash != BytesToHash(atx.HashInnerBytes()) {
-		return fmt.Errorf("bad message hash")
-	}
-	atx.id = ATXID(atx.MsgHash)
+	atx.id = ATXID(BytesToHash(atx.HashInnerBytes()))
 	return nil
 }
 

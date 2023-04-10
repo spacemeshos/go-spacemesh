@@ -116,7 +116,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint32, received time.Time) types.ATXID {
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
-		types.NIPostChallenge{PubLayerID: lid},
+		types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
 		types.Address{},
 		nil,
 		numUnits,
@@ -291,9 +291,7 @@ func TestBeaconNotSynced_ReleaseMemory(t *testing.T) {
 	start := types.EpochID(2)
 	end := start + numEpochsToKeep + 10
 	for eid := start; eid <= end; eid++ {
-		b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
-			Layer: start.FirstLayer(),
-		})
+		b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, start.FirstLayer())
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		tpd.ReportBeaconFromBallot(eid, &b, types.RandomBeacon(), fixed.New64(1))
 		require.ErrorIs(t, tpd.onNewEpoch(context.Background(), eid), errNodeNotSynced)
@@ -344,14 +342,10 @@ func TestBeaconWithMetrics(t *testing.T) {
 			require.NoError(t, tpd.onNewEpoch(context.Background(), layer.GetEpoch()))
 		}
 		thisEpoch := layer.GetEpoch()
-		b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
-			Layer: thisEpoch.FirstLayer(),
-		})
+		b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, thisEpoch.FirstLayer())
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		tpd.recordBeacon(thisEpoch, &b, beacon1, fixed.New64(1))
-		b = types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
-			Layer: thisEpoch.FirstLayer(),
-		})
+		b = types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, thisEpoch.FirstLayer())
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		tpd.recordBeacon(thisEpoch, &b, beacon2, fixed.New64(1))
 
@@ -478,9 +472,7 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 		e := epoch + types.EpochID(i)
 		err := pd.setBeacon(e, types.RandomBeacon())
 		require.NoError(t, err)
-		b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
-			Layer: e.FirstLayer(),
-		})
+		b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, e.FirstLayer())
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		pd.ReportBeaconFromBallot(e, &b, types.RandomBeacon(), fixed.New64(1))
 		pd.cleanupEpoch(e)
@@ -493,9 +485,7 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	epoch = epoch + numEpochsToKeep
 	err := pd.setBeacon(epoch, types.RandomBeacon())
 	require.NoError(t, err)
-	b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
-		Layer: epoch.FirstLayer(),
-	})
+	b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, epoch.FirstLayer())
 	b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 	pd.recordBeacon(epoch, &b, types.RandomBeacon(), fixed.New64(1))
 	require.Equal(t, numEpochsToKeep+1, len(pd.beacons))
@@ -583,9 +573,7 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 			epoch := types.EpochID(3)
 			for beacon, weights := range tc.beaconBallots {
 				for _, w := range weights {
-					b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
-						Layer: epoch.FirstLayer(),
-					})
+					b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, epoch.FirstLayer())
 					b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 					pd.ReportBeaconFromBallot(epoch, &b, beacon, w)
 				}
@@ -613,9 +601,7 @@ func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 
-	b1 := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
-		Layer: epoch.FirstLayer(),
-	})
+	b1 := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, epoch.FirstLayer())
 	b1.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 	pd.ReportBeaconFromBallot(epoch, &b1, beacon1, fixed.New64(1))
 	pd.ReportBeaconFromBallot(epoch, &b1, beacon1, fixed.New64(1))
@@ -624,9 +610,7 @@ func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	require.Equal(t, errBeaconNotCalculated, err)
 	require.Equal(t, types.EmptyBeacon, got)
 
-	b2 := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
-		Layer: epoch.FirstLayer(),
-	})
+	b2 := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, epoch.FirstLayer())
 	b2.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 	pd.ReportBeaconFromBallot(epoch, &b2, beacon2, fixed.New64(2))
 	got, err = pd.GetBeacon(epoch)
@@ -654,14 +638,10 @@ func TestBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, beacon, got)
 
-	b1 := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
-		Layer: epoch.FirstLayer(),
-	})
+	b1 := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, epoch.FirstLayer())
 	b1.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 	pd.ReportBeaconFromBallot(epoch, &b1, beaconFromBallots, fixed.New64(1))
-	b2 := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{
-		Layer: epoch.FirstLayer(),
-	})
+	b2 := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, epoch.FirstLayer())
 	b2.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 	pd.ReportBeaconFromBallot(epoch, &b2, beaconFromBallots, fixed.New64(1))
 

@@ -683,7 +683,7 @@ func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, 
 
 // AddBallot to the mesh.
 func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.MalfeasanceProof, error) {
-	malicious, err := msh.cdb.IsMalicious(ballot.SmesherID())
+	malicious, err := msh.cdb.IsMalicious(ballot.SmesherID)
 	if err != nil {
 		return nil, err
 	}
@@ -695,7 +695,7 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 	// otherwise concurrent ballots.Add from the same smesher may not be noticed
 	if err = msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		if !malicious {
-			prev, err := ballots.LayerBallotByNodeID(dbtx, ballot.Layer, ballot.SmesherID())
+			prev, err := ballots.LayerBallotByNodeID(dbtx, ballot.Layer, ballot.SmesherID)
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
 				return err
 			}
@@ -703,23 +703,27 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 				var ballotProof types.BallotProof
 				for i, b := range []*types.Ballot{prev, ballot} {
 					ballotProof.Messages[i] = types.BallotProofMsg{
-						InnerMsg:  b.BallotMetadata,
+						InnerMsg: types.BallotMetadata{
+							Layer:   b.Layer,
+							MsgHash: types.BytesToHash(b.HashInnerBytes()),
+						},
 						Signature: b.Signature,
+						SmesherID: b.SmesherID,
 					}
 				}
 				proof = &types.MalfeasanceProof{
-					Layer: msh.clock.CurrentLayer(),
+					Layer: ballot.Layer,
 					Proof: types.Proof{
 						Type: types.MultipleBallots,
 						Data: &ballotProof,
 					},
 				}
-				if err = msh.cdb.AddMalfeasanceProof(ballot.SmesherID(), proof, dbtx); err != nil {
+				if err = msh.cdb.AddMalfeasanceProof(ballot.SmesherID, proof, dbtx); err != nil {
 					return err
 				}
 				ballot.SetMalicious()
 				msh.logger.With().Warning("smesher produced more than one ballot in the same layer",
-					log.Stringer("smesher", ballot.SmesherID()),
+					log.Stringer("smesher", ballot.SmesherID),
 					log.Object("prev", prev),
 					log.Object("curr", ballot),
 				)

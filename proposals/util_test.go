@@ -33,7 +33,7 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 	for _, id := range rb.ActiveSet {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
+				PublishEpoch: epoch - 1,
 			},
 			NumUnits: defaultATXUnit,
 		}}

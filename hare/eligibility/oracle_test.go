@@ -78,7 +78,7 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 			b.EpochData = &types.EpochData{Beacon: beacon}
 			b.ActiveSet = activeSet
 			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
-			b.SetSmesherID(signer.NodeID())
+			b.SmesherID = signer.NodeID()
 			require.NoError(tb, b.Initialize())
 			require.NoError(tb, ballots.Add(cdb, b))
 		}
@@ -92,7 +92,7 @@ func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 	for i, id := range activeSet {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: lid,
+				PublishEpoch: lid.GetEpoch(),
 			},
 			NumUnits: uint32(i + 1),
 		}}
@@ -180,7 +180,7 @@ func TestCalcEligibility_EmptyActiveSet(t *testing.T) {
 		b.ActiveSet = activeSet
 		b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
 		require.NoError(t, b.Initialize())
-		b.SetSmesherID(signer.NodeID())
+		b.SmesherID = signer.NodeID()
 		require.NoError(t, ballots.Add(o.cdb, b))
 	}
 	res, err := o.CalcEligibility(context.Background(), layer, 1, 1, nid, nonce, types.EmptyVrfSignature)
@@ -409,7 +409,7 @@ func Test_VrfSignVerify(t *testing.T) {
 			b.EpochData = &types.EpochData{Beacon: beacon}
 			b.ActiveSet = activeSet
 			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
-			b.SetSmesherID(signer.NodeID())
+			b.SmesherID = signer.NodeID()
 			require.NoError(t, b.Initialize())
 			require.NoError(t, ballots.Add(o.cdb, b))
 		}
@@ -418,7 +418,7 @@ func Test_VrfSignVerify(t *testing.T) {
 
 	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: prevEpoch.FirstLayer(),
+			PublishEpoch: prevEpoch,
 		},
 		NumUnits: 1 * 1024,
 	}}
@@ -435,7 +435,7 @@ func Test_VrfSignVerify(t *testing.T) {
 
 	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: prevEpoch.FirstLayer(),
+			PublishEpoch: prevEpoch,
 		},
 		NumUnits: 9 * 1024,
 	}}
@@ -516,7 +516,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 		b.ActiveSet = activeSet
 		b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
 		require.NoError(t, b.Initialize())
-		b.SetSmesherID(signer.NodeID())
+		b.SmesherID = signer.NodeID()
 		require.NoError(t, ballots.Add(o.cdb, b))
 	}
 	prevEpoch := layer.GetEpoch() - 1
@@ -525,7 +525,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	require.NoError(t, err)
 	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: prevEpoch.FirstLayer(),
+			PublishEpoch: prevEpoch,
 		},
 		NumUnits: 1 * 1024,
 	}}
@@ -541,7 +541,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	require.NoError(t, err)
 	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: prevEpoch.FirstLayer(),
+			PublishEpoch: prevEpoch,
 		},
 		NumUnits: 9 * 1024,
 	}}
@@ -704,7 +704,7 @@ func TestActives_HareActiveSetDifferentBeacon(t *testing.T) {
 			}
 			b.ActiveSet = atxIDs
 			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
-			b.SetSmesherID(signer.NodeID())
+			b.SmesherID = signer.NodeID()
 			require.NoError(t, b.Initialize())
 			require.NoError(t, ballots.Add(o.cdb, b))
 		}
@@ -743,7 +743,7 @@ func TestActives_HareActiveSetMultipleLayers(t *testing.T) {
 			b.ActiveSet = atxIDs
 			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
 			require.NoError(t, b.Initialize())
-			b.SetSmesherID(signer.NodeID())
+			b.SmesherID = signer.NodeID()
 			require.NoError(t, ballots.Add(o.cdb, b))
 		}
 	}
@@ -808,7 +808,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	for i, id := range activeSet {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: prevEpoch.FirstLayer(),
+				PublishEpoch: prevEpoch,
 			},
 			NumUnits: uint32(i + 1),
 		}}
@@ -829,7 +829,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	for i, id := range activeSet {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: prevEpoch.FirstLayer(),
+				PublishEpoch: prevEpoch,
 			},
 			NumUnits: uint32(numMiners + i + 1),
 		}}

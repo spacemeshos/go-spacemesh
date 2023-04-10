@@ -182,6 +182,8 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 		require.NoError(t, certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID))
 	}
 	meshHash := types.RandomHash()
+	edVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
 	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), meshHash))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
@@ -199,6 +201,8 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 			require.Equal(t, []types.TransactionID{tx1.ID}, p.TxIDs)
 			require.Equal(t, proofs, p.EligibilityProofs)
 			require.Equal(t, meshHash, p.MeshHash)
+			require.Equal(t, b.signer.NodeID(), p.SmesherID)
+			require.True(t, edVerifier.Verify(signing.BALLOT, p.SmesherID, p.SignedBytes(), p.Signature))
 			return nil
 		})
 
@@ -250,6 +254,8 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 		require.NoError(t, certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID))
 	}
 	meshHash := types.RandomHash()
+	edVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
 	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), meshHash))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
@@ -266,6 +272,8 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 			require.Equal(t, beacon, p.EpochData.Beacon)
 			require.Equal(t, []types.TransactionID{tx.ID}, p.TxIDs)
 			require.Equal(t, meshHash, p.MeshHash)
+			require.Equal(t, b.signer.NodeID(), p.SmesherID)
+			require.True(t, edVerifier.Verify(signing.BALLOT, p.SmesherID, p.SignedBytes(), p.Signature))
 			return nil
 		})
 
@@ -402,7 +410,7 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 	b := createBuilder(t)
 
 	layerID := types.LayerID(layersPerEpoch * 3).Add(1)
-	refBallot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, b.ProposalBuilder.signer.NodeID(), types.BallotMetadata{Layer: layerID.Sub(1)})
+	refBallot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, b.ProposalBuilder.signer.NodeID(), layerID.Sub(1))
 	require.NoError(t, ballots.Add(b.cdb, &refBallot))
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
@@ -650,12 +658,7 @@ func TestBuilder_HandleLayer_Duplicate(t *testing.T) {
 	layerID := types.LayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 
-	ballot := types.NewExistingBallot(
-		types.BallotID{1},
-		types.EmptyEdSignature,
-		b.signer.NodeID(),
-		types.BallotMetadata{Layer: layerID},
-	)
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, b.signer.NodeID(), layerID)
 	require.NoError(t, ballots.Add(b.cdb, &ballot))
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
