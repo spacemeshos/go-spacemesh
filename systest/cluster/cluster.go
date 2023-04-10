@@ -141,7 +141,7 @@ func (c *Cluster) GenesisID() types.Hash20 {
 		panic("invalid genesis time")
 	}
 	return types.Hash32(hash.Sum(
-		[]byte(strconv.FormatInt(parsed.UnixNano(), 10)),
+		[]byte(strconv.FormatInt(parsed.Unix(), 10)),
 		[]byte(c.smesherFlags[genesisExtraData].Value),
 	)).ToHash20()
 }
