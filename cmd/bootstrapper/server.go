@@ -71,7 +71,7 @@ func (s *Server) Start(ctx context.Context, errCh chan error, params *NetworkPar
 }
 
 func (s *Server) loop(ctx context.Context, errCh chan error, params *NetworkParam) {
-	wait := params.updateBeaconTime(bootstrapEpoch).Sub(time.Now())
+	wait := time.Until(params.updateBeaconTime(bootstrapEpoch))
 	select {
 	case <-time.After(wait):
 		if err := s.gen.GenBootstrap(ctx, 2); err != nil {
@@ -107,7 +107,7 @@ func (s *Server) genDataLoop(
 	genFunc func(context.Context, types.EpochID) error,
 ) {
 	for epoch := start; ; epoch++ {
-		wait := timeFunc(epoch).Sub(time.Now())
+		wait := time.Until(timeFunc(epoch))
 		select {
 		case <-time.After(wait):
 			if err := genFunc(ctx, epoch); err != nil {
