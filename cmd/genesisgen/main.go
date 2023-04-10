@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -11,27 +13,44 @@ import (
 )
 
 var (
-	key   = flag.String("key", "", "ed25519 keyfile")
 	extra = flag.String("extra", "", "genesis extra data")
 	time  = flag.String("time", "", "genesis time")
+	n     = flag.Int("n", 10, "number of keys")
 )
+
+type output struct {
+	N          int    `json:"n"`
+	Key        string `json:"private"`
+	ID         string `json:"id"`
+	Commitment string `json:"commitment"`
+}
 
 func main() {
 	flag.Parse()
 
 	conf := config.GenesisConfig{GenesisTime: *time, ExtraData: *extra}
-	key, err := ioutil.ReadFile(*key)
-	if err != nil {
-		pkey, err := signing.NewEdSigner()
-		if err != nil {
-			panic(err)
-		}
-		key = pkey.PrivateKey()
-		fmt.Printf("key is not found. i generated one for you:\n%x\n", key)
+	if err := conf.Validate(); err != nil {
+		fmt.Printf("invalid config values: %s\n", err)
+		os.Exit(1)
 	}
 
-	id := types.BytesToNodeID(signing.Public(signing.PrivateKey(key)))
-	fmt.Println("---")
-	fmt.Println("values below can be passed to post")
-	fmt.Printf("id %v\ngolden %x\n", id.String(), conf.GenesisID().ToHash32())
+	encoder := json.NewEncoder(os.Stdout)
+	for i := 0; i < *n; i++ {
+		pkey, err := signing.NewEdSigner()
+		if err != nil {
+			fmt.Printf("invalid key: %s\n", err)
+			os.Exit(1)
+		}
+		key := pkey.PrivateKey()
+		id := types.BytesToNodeID(signing.Public(signing.PrivateKey(key)))
+		if err := encoder.Encode(output{
+			N:          i,
+			Key:        hex.EncodeToString(key),
+			ID:         hex.EncodeToString(id[:]),
+			Commitment: hex.EncodeToString(conf.GoldenATX().Bytes()),
+		}); err != nil {
+			fmt.Printf("failed to encode output %s\n", err)
+			os.Exit(1)
+		}
+	}
 }
