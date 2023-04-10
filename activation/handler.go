@@ -377,7 +377,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 					}
 				}
 				proof = &types.MalfeasanceProof{
-					Layer: h.clock.CurrentLayer(),
+					Layer: atx.PublishEpoch.FirstLayer(),
 					Proof: types.Proof{
 						Type: types.MultipleATXs,
 						Data: &atxProof,
