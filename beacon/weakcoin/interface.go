@@ -7,13 +7,13 @@ import (
 //go:generate mockgen -package=weakcoin -destination=./mocks.go -source=./interface.go
 
 type vrfSigner interface {
-	Sign(msg []byte) []byte
+	Sign(msg []byte) types.VrfSignature
 	NodeID() types.NodeID
 	LittleEndian() bool
 }
 
 type vrfVerifier interface {
-	Verify(nodeID types.NodeID, msg, sig []byte) bool
+	Verify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool
 }
 
 type nonceFetcher interface {

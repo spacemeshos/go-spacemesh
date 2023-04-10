@@ -32,10 +32,9 @@ func TestMain(m *testing.M) {
 
 func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
 	challenge := types.NIPostChallenge{
-		PubLayerID: types.NewLayerID(1),
+		PublishEpoch: types.EpochID(1),
 	}
-	nodeID := sig.NodeID()
-	atx := types.NewActivationTx(challenge, &nodeID, types.Address{}, nil, 1, nil, nil)
+	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil, nil)
 	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
@@ -50,24 +49,26 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
+	sigVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke, sigVerifier)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 
 	atxProof := types.AtxProof{
 		Messages: [2]types.AtxProofMsg{
 			{
 				InnerMsg: types.ATXMetadata{
-					Target:  types.EpochID(3),
-					MsgHash: types.RandomHash(),
+					PublishEpoch: types.EpochID(3),
+					MsgHash:      types.RandomHash(),
 				},
 			},
 			{
 				InnerMsg: types.ATXMetadata{
-					Target:  types.EpochID(3),
-					MsgHash: types.RandomHash(),
+					PublishEpoch: types.EpochID(3),
+					MsgHash:      types.RandomHash(),
 				},
 			},
 		},
@@ -76,7 +77,9 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	t.Run("unknown identity", func(t *testing.T) {
 		ap := atxProof
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
+		ap.Messages[0].SmesherID = sig.NodeID()
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
+		ap.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -124,7 +127,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 
 	t.Run("different epoch", func(t *testing.T) {
 		ap := atxProof
-		ap.Messages[0].InnerMsg.Target = ap.Messages[1].InnerMsg.Target + 1
+		ap.Messages[0].InnerMsg.PublishEpoch = ap.Messages[1].InnerMsg.PublishEpoch + 1
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 		gossip := &types.MalfeasanceGossip{
@@ -193,7 +196,9 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		ap := atxProof
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
+		ap.Messages[0].SmesherID = sig.NodeID()
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
+		ap.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -213,9 +218,12 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	})
 
 	t.Run("proof equivalence", func(t *testing.T) {
+		// FIXME(mafa): this test relies on the previous test to pass (database needs to contain malfeasance proof)
 		ap := atxProof
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
+		ap.Messages[0].SmesherID = sig.NodeID()
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
+		ap.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid.Add(11),
@@ -245,11 +253,13 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
+	sigVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke, sigVerifier)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 
 	ballotProof := types.BallotProof{
 		Messages: [2]types.BallotProofMsg{
@@ -271,7 +281,9 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	t.Run("unknown identity", func(t *testing.T) {
 		bp := ballotProof
 		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
+		bp.Messages[0].SmesherID = sig.NodeID()
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
+		bp.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -298,7 +310,9 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		bp.Messages[0].InnerMsg.MsgHash = msgHash
 		bp.Messages[1].InnerMsg.MsgHash = msgHash
 		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
+		bp.Messages[0].SmesherID = sig.NodeID()
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
+		bp.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -321,7 +335,9 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		bp := ballotProof
 		bp.Messages[1].InnerMsg.Layer = lid.Sub(1)
 		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
+		bp.Messages[0].SmesherID = sig.NodeID()
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
+		bp.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -343,9 +359,11 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	t.Run("different signer", func(t *testing.T) {
 		bp := ballotProof
 		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
+		bp.Messages[0].SmesherID = sig.NodeID()
 		sig2, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		bp.Messages[1].Signature = sig2.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
+		bp.Messages[1].SmesherID = sig2.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -367,7 +385,9 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	t.Run("invalid hare eligibility", func(t *testing.T) {
 		bp := ballotProof
 		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
+		bp.Messages[0].SmesherID = sig.NodeID()
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
+		bp.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -388,7 +408,9 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		bp := ballotProof
 		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
+		bp.Messages[0].SmesherID = sig.NodeID()
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
+		bp.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -410,7 +432,9 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	t.Run("proof equivalence", func(t *testing.T) {
 		bp := ballotProof
 		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
+		bp.Messages[0].SmesherID = sig.NodeID()
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
+		bp.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid.Add(11),
@@ -440,11 +464,13 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
+	sigVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke, sigVerifier)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 
 	hareProof := types.HareProof{
 		Messages: [2]types.HareProofMsg{
@@ -660,14 +686,16 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
+	sigVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke, sigVerifier)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 	round := uint32(11)
-	proofByte := types.RandomBytes(64)
+	proofByte := types.RandomVrfSignature()
 	eCount := uint16(3)
 
 	bp := types.BallotProof{
@@ -687,7 +715,9 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 		},
 	}
 	bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
+	bp.Messages[0].SmesherID = sig.NodeID()
 	bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
+	bp.Messages[1].SmesherID = sig.NodeID()
 	gossip := &types.MalfeasanceGossip{
 		MalfeasanceProof: types.MalfeasanceProof{
 			Layer: lid,
@@ -736,20 +766,22 @@ func TestHandler_CrossDomain(t *testing.T) {
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
 	pke, err := signing.NewPubKeyExtractor()
 	require.NoError(t, err)
+	sigVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke, sigVerifier)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
 
 	target := 10
 	m1 := types.BallotMetadata{
-		Layer:   types.NewLayerID(uint32(target)),
+		Layer:   types.LayerID(uint32(target)),
 		MsgHash: types.Hash32{1, 1, 1},
 	}
 	m2 := types.ATXMetadata{
-		Target:  types.EpochID(target),
-		MsgHash: types.Hash32{2, 2, 2},
+		PublishEpoch: types.EpochID(target),
+		MsgHash:      types.Hash32{2, 2, 2},
 	}
 	m1buf, err := codec.Encode(&m1)
 	require.NoError(t, err)
@@ -762,8 +794,16 @@ func TestHandler_CrossDomain(t *testing.T) {
 				Type: types.MultipleBallots,
 				Data: &types.BallotProof{
 					Messages: [2]types.BallotProofMsg{
-						{InnerMsg: m1, Signature: sig.Sign(signing.BALLOT, m1buf)},
-						{InnerMsg: *(*types.BallotMetadata)(unsafe.Pointer(&m2)), Signature: sig.Sign(signing.ATX, m2buf)},
+						{
+							InnerMsg:  m1,
+							Signature: sig.Sign(signing.BALLOT, m1buf),
+							SmesherID: sig.NodeID(),
+						},
+						{
+							InnerMsg:  *(*types.BallotMetadata)(unsafe.Pointer(&m2)),
+							Signature: sig.Sign(signing.ATX, m2buf),
+							SmesherID: sig.NodeID(),
+						},
 					},
 				},
 			},

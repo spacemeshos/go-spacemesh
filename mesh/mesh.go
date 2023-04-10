@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
@@ -63,23 +64,23 @@ func NewMesh(cdb *datastore.CachedDB, c layerClock, trtl system.Tortoise, exec *
 		conState:            state,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
 	}
-	msh.latestLayer.Store(types.LayerID{})
-	msh.latestLayerInState.Store(types.LayerID{})
-	msh.processedLayer.Store(types.LayerID{})
+	msh.latestLayer.Store(types.LayerID(0))
+	msh.latestLayerInState.Store(types.LayerID(0))
+	msh.processedLayer.Store(types.LayerID(0))
 
 	lid, err := ballots.LatestLayer(cdb)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, fmt.Errorf("get latest layer %w", err)
 	}
 
-	if err == nil && lid != (types.LayerID{}) {
+	if err == nil && lid != 0 {
 		msh.recoverFromDB(lid)
 		return msh, nil
 	}
 
 	gLid := types.GetEffectiveGenesis()
 	if err = cdb.WithTx(context.Background(), func(dbtx *sql.Tx) error {
-		for i := types.NewLayerID(1); !i.After(gLid); i = i.Add(1) {
+		for i := types.LayerID(1); !i.After(gLid); i = i.Add(1) {
 			if err = layers.SetProcessed(dbtx, i); err != nil {
 				return fmt.Errorf("mesh init: %w", err)
 			}
@@ -147,7 +148,7 @@ func (msh *Mesh) MeshHash(lid types.LayerID) (types.Hash32, error) {
 func (msh *Mesh) MissingLayer() types.LayerID {
 	value := msh.missingLayer.Load()
 	if value == nil {
-		return types.LayerID{}
+		return 0
 	}
 	return value.(types.LayerID)
 }
@@ -286,13 +287,13 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, upd
 			logger.With().Info("incorrect block applied",
 				log.Stringer("expected", bid),
 				log.Stringer("applied", applied))
-			if minChanged == (types.LayerID{}) || lid.Before(minChanged) {
+			if minChanged == 0 || lid.Before(minChanged) {
 				minChanged = lid
 			}
 		}
 	}
 
-	if minChanged != (types.LayerID{}) {
+	if minChanged != 0 {
 		revertTo := minChanged.Sub(1)
 		logger := logger.WithFields(log.Stringer("revert_to", revertTo))
 		logger.Info("reverting state")
@@ -423,7 +424,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, logger log.Log, from, to
 			return err
 		}
 		if layerID == missing {
-			msh.missingLayer.Store(types.LayerID{})
+			msh.missingLayer.Store(types.LayerID(0))
 		}
 	}
 
@@ -682,7 +683,7 @@ func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, 
 
 // AddBallot to the mesh.
 func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.MalfeasanceProof, error) {
-	malicious, err := msh.cdb.IsMalicious(ballot.SmesherID())
+	malicious, err := msh.cdb.IsMalicious(ballot.SmesherID)
 	if err != nil {
 		return nil, err
 	}
@@ -694,7 +695,7 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 	// otherwise concurrent ballots.Add from the same smesher may not be noticed
 	if err = msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		if !malicious {
-			prev, err := ballots.LayerBallotByNodeID(dbtx, ballot.Layer, ballot.SmesherID())
+			prev, err := ballots.LayerBallotByNodeID(dbtx, ballot.Layer, ballot.SmesherID)
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
 				return err
 			}
@@ -702,23 +703,27 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 				var ballotProof types.BallotProof
 				for i, b := range []*types.Ballot{prev, ballot} {
 					ballotProof.Messages[i] = types.BallotProofMsg{
-						InnerMsg:  b.BallotMetadata,
+						InnerMsg: types.BallotMetadata{
+							Layer:   b.Layer,
+							MsgHash: types.BytesToHash(b.HashInnerBytes()),
+						},
 						Signature: b.Signature,
+						SmesherID: b.SmesherID,
 					}
 				}
 				proof = &types.MalfeasanceProof{
-					Layer: msh.clock.CurrentLayer(),
+					Layer: ballot.Layer,
 					Proof: types.Proof{
 						Type: types.MultipleBallots,
 						Data: &ballotProof,
 					},
 				}
-				if err = msh.cdb.AddMalfeasanceProof(ballot.SmesherID(), proof, dbtx); err != nil {
+				if err = msh.cdb.AddMalfeasanceProof(ballot.SmesherID, proof, dbtx); err != nil {
 					return err
 				}
 				ballot.SetMalicious()
 				msh.logger.With().Warning("smesher produced more than one ballot in the same layer",
-					log.Stringer("smesher", ballot.SmesherID()),
+					log.Stringer("smesher", ballot.SmesherID),
 					log.Object("prev", prev),
 					log.Object("curr", ballot),
 				)
@@ -766,6 +771,10 @@ func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.A
 		}
 	}
 	return atxs, mIds
+}
+
+func (msh *Mesh) EpochAtxs(epoch types.EpochID) ([]types.ATXID, error) {
+	return atxs.GetIDsByEpoch(msh.cdb, epoch)
 }
 
 // GetRewards retrieves account's rewards by the coinbase address.

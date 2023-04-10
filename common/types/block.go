@@ -126,7 +126,7 @@ func (b *Block) ToVote() Vote {
 // MarshalLogObject implements logging encoder for Block.
 func (b *Block) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("block_id", b.ID().String())
-	encoder.AddUint32("layer_id", b.LayerIndex.Value)
+	encoder.AddUint32("layer_id", b.LayerIndex.Uint32())
 	encoder.AddUint64("tick_height", b.TickHeight)
 	encoder.AddInt("num_tx", len(b.TxIDs))
 	encoder.AddInt("num_rewards", len(b.Rewards))
@@ -222,7 +222,7 @@ type CertifyContent struct {
 	// as a hare output certifier.
 	EligibilityCnt uint16
 	// Proof is the role proof for being a hare output certifier on the given Layer.
-	Proof []byte `scale:"max=80"`
+	Proof VrfSignature
 }
 
 // Bytes returns the actual data being signed in a CertifyMessage.

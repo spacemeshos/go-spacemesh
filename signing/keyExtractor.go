@@ -42,6 +42,13 @@ func NewPubKeyExtractor(opts ...ExtractorOptionFunc) (*PubKeyExtractor, error) {
 
 // Extract public key from a signature.
 func (e PubKeyExtractor) Extract(d domain, m []byte, sig types.EdSignature) (*PublicKey, error) {
+	switch d {
+	case HARE:
+		// all good
+	default:
+		panic("not supported any more")
+	}
+
 	msg := make([]byte, 0, len(e.prefix)+1+len(m))
 	msg = append(msg, e.prefix...)
 	msg = append(msg, byte(d))

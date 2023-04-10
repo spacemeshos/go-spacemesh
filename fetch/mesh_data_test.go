@@ -114,9 +114,9 @@ func generateLayerContent(t *testing.T) []byte {
 
 func TestFetch_getHashes(t *testing.T) {
 	blks := []*types.Block{
-		genLayerBlock(types.NewLayerID(10), types.RandomTXSet(10)),
-		genLayerBlock(types.NewLayerID(11), types.RandomTXSet(10)),
-		genLayerBlock(types.NewLayerID(20), types.RandomTXSet(10)),
+		genLayerBlock(types.LayerID(10), types.RandomTXSet(10)),
+		genLayerBlock(types.LayerID(11), types.RandomTXSet(10)),
+		genLayerBlock(types.LayerID(20), types.RandomTXSet(10)),
 	}
 	blockIDs := types.ToBlockIDs(blks)
 	hashes := types.BlockIDsToHashes(blockIDs)
@@ -214,8 +214,8 @@ func TestFetch_GetMalfeasanceProofs(t *testing.T) {
 
 func TestFetch_GetBlocks(t *testing.T) {
 	blks := []*types.Block{
-		genLayerBlock(types.NewLayerID(10), types.RandomTXSet(10)),
-		genLayerBlock(types.NewLayerID(20), types.RandomTXSet(10)),
+		genLayerBlock(types.LayerID(10), types.RandomTXSet(10)),
+		genLayerBlock(types.LayerID(20), types.RandomTXSet(10)),
 	}
 	blockIDs := types.ToBlockIDs(blks)
 	f := createFetch(t)
@@ -232,8 +232,8 @@ func TestFetch_GetBlocks(t *testing.T) {
 
 func TestFetch_GetBallots(t *testing.T) {
 	blts := []*types.Ballot{
-		genLayerBallot(t, types.NewLayerID(10)),
-		genLayerBallot(t, types.NewLayerID(20)),
+		genLayerBallot(t, types.LayerID(10)),
+		genLayerBallot(t, types.LayerID(20)),
 	}
 	ballotIDs := types.ToBallotIDs(blts)
 	f := createFetch(t)
@@ -253,14 +253,11 @@ func genLayerProposal(tb testing.TB, layerID types.LayerID, txs []types.Transact
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
-				BallotMetadata: types.BallotMetadata{
-					Layer: layerID,
-				},
 				InnerBallot: types.InnerBallot{
+					Layer: layerID,
 					AtxID: types.RandomATXID(),
 					EpochData: &types.EpochData{
-						ActiveSet: types.RandomActiveSet(10),
-						Beacon:    types.RandomBeacon(),
+						Beacon: types.RandomBeacon(),
 					},
 				},
 			},
@@ -271,7 +268,7 @@ func genLayerProposal(tb testing.TB, layerID types.LayerID, txs []types.Transact
 	require.NoError(tb, err)
 	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
-	p.SetSmesherID(signer.NodeID())
+	p.SmesherID = signer.NodeID()
 	p.Initialize()
 	return p
 }
@@ -282,7 +279,7 @@ func genLayerBallot(tb testing.TB, layerID types.LayerID) *types.Ballot {
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
-	b.SetSmesherID(signer.NodeID())
+	b.SmesherID = signer.NodeID()
 	b.Initialize()
 	return b
 }
@@ -300,8 +297,8 @@ func genLayerBlock(layerID types.LayerID, txs []types.TransactionID) *types.Bloc
 
 func TestFetch_GetProposals(t *testing.T) {
 	proposals := []*types.Proposal{
-		genLayerProposal(t, types.NewLayerID(10), nil),
-		genLayerProposal(t, types.NewLayerID(20), nil),
+		genLayerProposal(t, types.LayerID(10), nil),
+		genLayerProposal(t, types.LayerID(20), nil),
 	}
 	proposalIDs := types.ToProposalIDs(proposals)
 	f := createFetch(t)
@@ -380,10 +377,9 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 	tb.Helper()
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	nodeID := sig.NodeID()
 	atxs := make([]*types.ActivationTx, 0, num)
 	for i := uint32(0); i < num; i++ {
-		atx := types.NewActivationTx(types.NIPostChallenge{}, &nodeID, types.Address{1, 2, 3}, &types.NIPost{}, i, nil, nil)
+		atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{1, 2, 3}, &types.NIPost{}, i, nil, nil)
 		require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
 		atxs = append(atxs, atx)
 	}
@@ -392,15 +388,15 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 
 func TestGetATXs(t *testing.T) {
 	atxs := genATXs(t, 2)
-	atxIDs := types.ToATXIDs(atxs)
 	f := createFetch(t)
-	f.mAtxH.EXPECT().HandleAtxData(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(atxIDs))
+	f.mAtxH.EXPECT().HandleAtxData(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(atxs))
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.GetAtxs(context.TODO(), atxIDs))
+	atxIDs := types.ToATXIDs(atxs)
+	require.NoError(t, f.GetAtxs(context.Background(), atxIDs))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }
@@ -535,7 +531,7 @@ func TestFetch_GetLayerData(t *testing.T) {
 						return nil
 					})
 			}
-			require.NoError(t, f.GetLayerData(context.TODO(), peers, types.NewLayerID(111), okFunc, errFunc))
+			require.NoError(t, f.GetLayerData(context.TODO(), peers, types.LayerID(111), okFunc, errFunc))
 			wg.Wait()
 			require.Len(t, oks, expOk)
 			require.Len(t, errs, expErr)
@@ -597,7 +593,7 @@ func TestFetch_GetLayerOpinions(t *testing.T) {
 						return nil
 					})
 			}
-			require.NoError(t, f.GetLayerOpinions(context.TODO(), peers, types.NewLayerID(111), okFunc, errFunc))
+			require.NoError(t, f.GetLayerOpinions(context.TODO(), peers, types.LayerID(111), okFunc, errFunc))
 			wg.Wait()
 			require.Len(t, oks, expOk)
 			require.Len(t, errs, expErr)
@@ -671,11 +667,11 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 			name:   "success",
 			params: [4]uint32{7, 23, 5, 4},
 			expected: []types.LayerID{
-				types.NewLayerID(7),
-				types.NewLayerID(12),
-				types.NewLayerID(17),
-				types.NewLayerID(22),
-				types.NewLayerID(23),
+				types.LayerID(7),
+				types.LayerID(12),
+				types.LayerID(17),
+				types.LayerID(22),
+				types.LayerID(23),
 			},
 		},
 		{
@@ -692,8 +688,8 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 
 			f := createFetch(t)
 			req := &MeshHashRequest{
-				From:  types.NewLayerID(tc.params[0]),
-				To:    types.NewLayerID(tc.params[1]),
+				From:  types.LayerID(tc.params[0]),
+				To:    types.LayerID(tc.params[1]),
 				Delta: tc.params[2],
 				Steps: tc.params[3],
 			}

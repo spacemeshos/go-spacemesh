@@ -13,6 +13,8 @@ const (
 	MethodSpend = 16
 )
 
+const TxSizeLimit = 1024
+
 type (
 	// PublicKey is an alias to Hash32.
 	PublicKey = types.Hash32
@@ -22,8 +24,8 @@ type (
 	Hash20 = types.Hash20
 	// Address is an alias to types.Address.
 	Address = types.Address
-	// Signature is an alias to types.Bytes64.
-	Signature = types.Bytes64
+	// Signature is an alias to types.EdSignature.
+	Signature = types.EdSignature
 
 	// Account is an alis to types.Account.
 	Account = types.Account

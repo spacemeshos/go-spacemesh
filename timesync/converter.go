@@ -15,9 +15,9 @@ type LayerConverter struct {
 // TimeToLayer returns the layer of the provided time.
 func (lc LayerConverter) TimeToLayer(t time.Time) types.LayerID {
 	if t.Before(lc.genesis) { // the genesis is in the future
-		return types.LayerID{}
+		return 0
 	}
-	return types.NewLayerID(uint32(t.Sub(lc.genesis) / lc.duration))
+	return types.LayerID(uint32(t.Sub(lc.genesis) / lc.duration))
 }
 
 // LayerToTime returns the time of the provided layer.

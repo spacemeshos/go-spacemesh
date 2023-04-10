@@ -106,7 +106,7 @@ func New(
 	nodeID types.NodeID,
 	publisher pubsub.Publisher,
 	edSigner *signing.EdSigner,
-	pubKeyExtractor *signing.PubKeyExtractor,
+	edVerifier *signing.EdVerifier,
 	vrfSigner vrfSigner,
 	vrfVerifier vrfVerifier,
 	cdb *datastore.CachedDB,
@@ -114,20 +114,20 @@ func New(
 	opts ...Opt,
 ) *ProtocolDriver {
 	pd := &ProtocolDriver{
-		ctx:             context.Background(),
-		logger:          log.NewNop(),
-		config:          DefaultConfig(),
-		nodeID:          nodeID,
-		publisher:       publisher,
-		edSigner:        edSigner,
-		pubKeyExtractor: pubKeyExtractor,
-		vrfSigner:       vrfSigner,
-		vrfVerifier:     vrfVerifier,
-		cdb:             cdb,
-		clock:           clock,
-		beacons:         make(map[types.EpochID]types.Beacon),
-		ballotsBeacons:  make(map[types.EpochID]map[types.Beacon]*beaconWeight),
-		states:          make(map[types.EpochID]*state),
+		ctx:            context.Background(),
+		logger:         log.NewNop(),
+		config:         DefaultConfig(),
+		nodeID:         nodeID,
+		publisher:      publisher,
+		edSigner:       edSigner,
+		edVerifier:     edVerifier,
+		vrfSigner:      vrfSigner,
+		vrfVerifier:    vrfVerifier,
+		cdb:            cdb,
+		clock:          clock,
+		beacons:        make(map[types.EpochID]types.Beacon),
+		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
+		states:         make(map[types.EpochID]*state),
 	}
 	for _, opt := range opts {
 		opt(pd)
@@ -164,17 +164,17 @@ type ProtocolDriver struct {
 	cancel     context.CancelFunc
 	startOnce  sync.Once
 
-	config          Config
-	nodeID          types.NodeID
-	sync            system.SyncStateProvider
-	publisher       pubsub.Publisher
-	edSigner        *signing.EdSigner
-	pubKeyExtractor *signing.PubKeyExtractor
-	vrfSigner       vrfSigner
-	vrfVerifier     vrfVerifier
-	nonceFetcher    nonceFetcher
-	weakCoin        coin
-	theta           *big.Float
+	config       Config
+	nodeID       types.NodeID
+	sync         system.SyncStateProvider
+	publisher    pubsub.Publisher
+	edSigner     *signing.EdSigner
+	edVerifier   *signing.EdVerifier
+	vrfSigner    vrfSigner
+	vrfVerifier  vrfVerifier
+	nonceFetcher nonceFetcher
+	weakCoin     coin
+	theta        *big.Float
 
 	clock    layerClock
 	msgTimes *messageTimes
@@ -781,7 +781,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	vrfSig := buildSignedProposal(ctx, pd.logger, pd.vrfSigner, epoch, nonce)
-	proposal := cropData(vrfSig)
+	proposal := ProposalFromVrf(vrfSig)
 	m := ProposalMessage{
 		EpochID:      epoch,
 		NodeID:       pd.nodeID,
@@ -935,6 +935,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 
 	m := FirstVotingMessage{
 		FirstVotingMessageBody: mb,
+		SmesherID:              pd.edSigner.NodeID(),
 		Signature:              sig,
 	}
 
@@ -981,6 +982,7 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 
 	m := FollowingVotingMessage{
 		FollowingVotingMessageBody: mb,
+		SmesherID:                  pd.edSigner.NodeID(),
 		Signature:                  sig,
 	}
 
@@ -1016,13 +1018,13 @@ func createProposalChecker(logger log.Log, conf Config, numEarlyATXs, numATXs in
 	return &proposalChecker{threshold: high, thresholdStrict: low}
 }
 
-func (pc *proposalChecker) PassStrictThreshold(proposal []byte) bool {
-	proposalInt := new(big.Int).SetBytes(proposal)
+func (pc *proposalChecker) PassStrictThreshold(proposal types.VrfSignature) bool {
+	proposalInt := new(big.Int).SetBytes(proposal[:])
 	return proposalInt.Cmp(pc.thresholdStrict) == -1
 }
 
-func (pc *proposalChecker) PassThreshold(proposal []byte) bool {
-	proposalInt := new(big.Int).SetBytes(proposal)
+func (pc *proposalChecker) PassThreshold(proposal types.VrfSignature) bool {
+	proposalInt := new(big.Int).SetBytes(proposal[:])
 	return proposalInt.Cmp(pc.threshold) == -1
 }
 
@@ -1079,10 +1081,10 @@ func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 	return threshold
 }
 
-func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, epoch types.EpochID, nonce types.VRFPostIndex) []byte {
+func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, epoch types.EpochID, nonce types.VRFPostIndex) types.VrfSignature {
 	p := buildProposal(logger, epoch, nonce)
 	vrfSig := signer.Sign(p)
-	proposal := cropData(vrfSig)
+	proposal := ProposalFromVrf(vrfSig)
 	logger.WithContext(ctx).With().Debug("calculated beacon proposal",
 		epoch,
 		nonce,

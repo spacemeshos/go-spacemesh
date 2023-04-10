@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/ed25519-recovery"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -295,16 +295,10 @@ func (c *Cluster) firstFreePoetId() int {
 // AddPoet spawns a single poet with the first available id.
 // Id is of form "poet-N", where N ∈ [0, ∞).
 func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
-	if c.bootnodes == 0 {
-		return fmt.Errorf("bootnodes are used as a gateways. create at least one before adding a poet server")
-	}
 	if err := c.persist(cctx); err != nil {
 		return err
 	}
 	flags := maps.Values(c.poetFlags)
-	for _, bootnode := range c.clients[:c.bootnodes] {
-		flags = append(flags, Gateway(fmt.Sprintf("dns:///%s:9092", bootnode.Name)))
-	}
 
 	id := createPoetIdentifier(c.firstFreePoetId())
 	cctx.Log.Debugw("deploying poet", "id", id)

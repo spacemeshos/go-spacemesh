@@ -20,23 +20,26 @@ func TestMain(m *testing.M) {
 }
 
 func TestCodec_MultipleATXs(t *testing.T) {
-	nodeID := types.BytesToNodeID([]byte{1, 1, 1})
-	lid := types.NewLayerID(11)
+	epoch := types.EpochID(11)
 
-	a1 := types.NewActivationTx(types.NIPostChallenge{PubLayerID: lid}, &nodeID, types.Address{1, 2, 3}, nil, 10, nil, nil)
-	a2 := types.NewActivationTx(types.NIPostChallenge{PubLayerID: lid}, &nodeID, types.Address{3, 2, 1}, nil, 11, nil, nil)
+	a1 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{1, 2, 3}, nil, 10, nil, nil)
+	a2 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{3, 2, 1}, nil, 11, nil, nil)
 
 	var atxProof types.AtxProof
 	for i, a := range []*types.ActivationTx{a1, a2} {
-		a.SetMetadata()
 		a.Signature = types.RandomEdSignature()
+		a.SmesherID = types.RandomNodeID()
 		atxProof.Messages[i] = types.AtxProofMsg{
-			InnerMsg:  a.ATXMetadata,
+			InnerMsg: types.ATXMetadata{
+				PublishEpoch: a.PublishEpoch,
+				MsgHash:      types.BytesToHash(a.HashInnerBytes()),
+			},
+			SmesherID: a.SmesherID,
 			Signature: a.Signature,
 		}
 	}
 	proof := &types.MalfeasanceProof{
-		Layer: lid,
+		Layer: epoch.FirstLayer(),
 		Proof: types.Proof{
 			Type: types.MultipleATXs,
 			Data: &atxProof,
@@ -52,17 +55,20 @@ func TestCodec_MultipleATXs(t *testing.T) {
 
 func TestCodec_MultipleBallot(t *testing.T) {
 	nodeID := types.BytesToNodeID([]byte{1, 1, 1})
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 
-	b1 := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, nodeID, types.BallotMetadata{Layer: lid})
-	b2 := types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, nodeID, types.BallotMetadata{Layer: lid})
+	b1 := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, nodeID, lid)
+	b2 := types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, nodeID, lid)
 
 	var ballotProof types.BallotProof
 	for i, b := range []types.Ballot{b1, b2} {
-		b.SetMetadata()
 		b.Signature = types.RandomEdSignature()
 		ballotProof.Messages[i] = types.BallotProofMsg{
-			InnerMsg:  b.BallotMetadata,
+			InnerMsg: types.BallotMetadata{
+				Layer:   b.Layer,
+				MsgHash: types.BytesToHash(b.HashInnerBytes()),
+			},
+			SmesherID: b.SmesherID,
 			Signature: b.Signature,
 		}
 	}
@@ -82,7 +88,7 @@ func TestCodec_MultipleBallot(t *testing.T) {
 }
 
 func TestCodec_HareEquivocation(t *testing.T) {
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 	round := uint32(3)
 
 	hm1 := types.HareMetadata{Layer: lid, Round: round, MsgHash: types.RandomHash()}
@@ -111,7 +117,7 @@ func TestCodec_HareEquivocation(t *testing.T) {
 }
 
 func TestCodec_MalfeasanceGossip(t *testing.T) {
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 	round := uint32(3)
 
 	hm1 := types.HareMetadata{Layer: lid, Round: round, MsgHash: types.RandomHash()}
@@ -145,7 +151,7 @@ func TestCodec_MalfeasanceGossip(t *testing.T) {
 		Round:  round,
 		NodeID: types.RandomNodeID(),
 		Eligibility: types.HareEligibility{
-			Proof: []byte{1, 2, 3},
+			Proof: types.RandomVrfSignature(),
 			Count: 12,
 		},
 	}

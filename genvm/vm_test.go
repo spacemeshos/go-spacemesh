@@ -1625,6 +1625,11 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			tx:   tt.spawn(1, 0),
 			err:  core.ErrNotSpawned,
 		},
+		{
+			desc: "OverflowsLimit",
+			tx:   types.NewRawTx(make([]byte, core.TxSizeLimit+1)),
+			err:  core.ErrTxLimit,
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			req := tt.Validation(tc.tx)
@@ -1990,7 +1995,7 @@ func TestValidation(t *testing.T) {
 func TestVaultValidation(t *testing.T) {
 	tt := newTester(t).
 		addVesting(1, 1, 2, vesting.TemplateAddress1).
-		addVault(2, 100, 10, types.NewLayerID(1), types.NewLayerID(10)).
+		addVault(2, 100, 10, types.LayerID(1), types.LayerID(10)).
 		applyGenesis()
 	_, _, err := tt.Apply(ApplyContext{Layer: types.GetEffectiveGenesis()},
 		notVerified(tt.selfSpawn(0), tt.spawn(0, 1)), nil)
@@ -2234,7 +2239,7 @@ func BenchmarkTransactions(b *testing.B) {
 
 func BenchmarkValidation(b *testing.B) {
 	tt := newTester(b).addSingleSig(2).applyGenesis()
-	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(3)},
+	skipped, _, err := tt.Apply(ApplyContext{Layer: types.LayerID(3)},
 		notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
@@ -2319,7 +2324,7 @@ func BenchmarkWallet(b *testing.B) {
 func benchmarkWallet(b *testing.B, accounts, n int) {
 	tt := newTester(b).persistent().
 		addSingleSig(accounts).applyGenesis().withSeed(101)
-	lid := types.NewLayerID(3)
+	lid := types.LayerID(3)
 	skipped, _, err := tt.Apply(ApplyContext{Layer: lid},
 		notVerified(tt.spawnAll()...), nil)
 	require.NoError(tt, err)

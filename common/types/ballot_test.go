@@ -11,19 +11,15 @@ import (
 )
 
 func TestBallotIDUnaffectedByVotes(t *testing.T) {
-	meta := types.BallotMetadata{
-		Layer: types.NewLayerID(1),
-	}
 	inner := types.InnerBallot{
+		Layer: types.LayerID(1),
 		AtxID: types.ATXID{1, 2, 3},
 	}
 	ballot1 := types.Ballot{
-		BallotMetadata: meta,
-		InnerBallot:    inner,
+		InnerBallot: inner,
 	}
 	ballot2 := types.Ballot{
-		BallotMetadata: meta,
-		InnerBallot:    inner,
+		InnerBallot: inner,
 	}
 	ballot1.Votes.Support = []types.Vote{{ID: types.BlockID{1}}}
 	ballot1.Votes.Support = []types.Vote{{ID: types.BlockID{2}}}
@@ -48,21 +44,12 @@ func TestBallot_Initialize(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
+	b.SmesherID = signer.NodeID()
 	require.NoError(t, b.Initialize())
 	require.NotEqual(t, types.EmptyBallotID, b.ID())
 
 	err = b.Initialize()
 	require.EqualError(t, err, "ballot already initialized")
-}
-
-func TestBallot_Initialize_BadMsgHash(t *testing.T) {
-	b := types.RandomBallot()
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
-	b.MsgHash = types.RandomHash()
-	err = b.Initialize()
-	require.EqualError(t, err, "bad message hash")
 }
 
 func FuzzBallotIDConsistency(f *testing.F) {

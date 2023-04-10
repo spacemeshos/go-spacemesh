@@ -49,6 +49,7 @@ type ConservativeState interface {
 
 // MeshAPI is an api for getting mesh status about layers/blocks/rewards.
 type MeshAPI interface {
+	EpochAtxs(types.EpochID) ([]types.ATXID, error)
 	GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
 	GetRewards(types.Address) ([]*types.Reward, error)
@@ -59,7 +60,7 @@ type MeshAPI interface {
 }
 
 // NOTE that mockgen doesn't use source-mode to avoid generating mocks for all interfaces in this file.
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go . NetworkIdentity,AtxProvider,PostSetupProvider,ChallengeVerifier
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go . NetworkIdentity,AtxProvider,PostSetupProvider
 
 // NetworkIdentity interface.
 type NetworkIdentity interface {
@@ -87,5 +88,3 @@ type ActivationAPI interface {
 type AtxProvider interface {
 	GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error)
 }
-
-type ChallengeVerifier = activation.ChallengeVerifier

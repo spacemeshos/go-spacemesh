@@ -77,13 +77,13 @@ func (his *HareWrapper) waitForTermination() {
 func (his *HareWrapper) WaitForTimedTermination(t *testing.T, timeout time.Duration) {
 	timer := time.After(timeout)
 	go his.waitForTermination()
-	total := types.NewLayerID(his.totalCP)
+	total := types.LayerID(his.totalCP)
 	select {
 	case <-timer:
 		t.Fatal("Timeout")
 		return
 	case <-his.termination:
-		for i := types.NewLayerID(1); !i.After(total); i = i.Add(1) {
+		for i := types.LayerID(1); !i.After(total); i = i.Add(1) {
 			his.checkResult(t, i)
 		}
 		return
@@ -293,7 +293,7 @@ func Test_multipleCPs(t *testing.T) {
 		pubsubs = append(pubsubs, ps)
 		h := createTestHare(t, meshes[i], cfg, test.clock, ps, t.Name())
 		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 80), nil).AnyTimes()
+		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(types.EmptyVrfSignature, nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
 		h.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 		outputsWaitGroup.Add(1)
@@ -416,7 +416,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.GetEffectiveGenesis().Add(1), err: errors.New("fake err")}
 		h := createTestHare(t, meshes[i], cfg, test.clock, mp2p, t.Name())
 		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 80), nil).AnyTimes()
+		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(types.EmptyVrfSignature, nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
 		h.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 		outputsWaitGroup.Add(1)

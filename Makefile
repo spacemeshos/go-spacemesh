@@ -60,10 +60,10 @@ all: install build
 install:
 	go run scripts/check-go-version.go --major 1 --minor 19
 	go mod download
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.50.0
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.52.0
 	go install github.com/spacemeshos/go-scale/scalegen@v1.1.6
 	go install github.com/golang/mock/mockgen
-	go install gotest.tools/gotestsum@v1.8.2
+	go install gotest.tools/gotestsum@v1.9.0
 	go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
 .PHONY: install
 
@@ -75,13 +75,9 @@ get-libs: get-gpu-setup get-postrs-lib
 
 gen-p2p-identity:
 	cd $@ ; go build -o $(BIN_DIR)$@$(EXE) .
-hare p2p: get-libs
-	cd $@ ; go build -o $(BIN_DIR)go-$@$(EXE) .
 go-spacemesh: get-libs
 	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
-harness: get-libs
-	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) .
-.PHONY: hare p2p harness go-spacemesh gen-p2p-identity
+.PHONY: go-spacemesh gen-p2p-identity
 
 tidy:
 	go mod tidy
@@ -95,7 +91,7 @@ endif
 
 # available only for linux host because CGO usage
 ifeq ($(HOST_OS),linux)
-docker-local-build: go-spacemesh hare p2p harness
+docker-local-build: go-spacemesh
 	cd build; DOCKER_BUILDKIT=1 docker build -f ../Dockerfile.prebuiltBinary -t $(DOCKER_IMAGE) .
 .PHONY: docker-local-build
 endif

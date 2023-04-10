@@ -56,7 +56,6 @@ COPY . .
 
 # And compile the project
 RUN --mount=type=cache,id=build,target=/root/.cache/go-build make build
-RUN --mount=type=cache,id=build,target=/root/.cache/go-build make harness
 RUN --mount=type=cache,id=build,target=/root/.cache/go-build make gen-p2p-identity
 
 #In this last stage, we start from a fresh Alpine image, to reduce the image size and not ship the Go compiler in our production artifacts.
@@ -64,12 +63,11 @@ FROM linux AS spacemesh
 
 # Finally we copy the statically compiled Go binary.
 COPY --from=builder /src/build/go-spacemesh /bin/
-COPY --from=builder /src/build/go-harness /bin/
 COPY --from=builder /src/build/libgpu-setup.so /bin/
 COPY --from=builder /src/build/libpost.so /bin/
 COPY --from=builder /src/build/gen-p2p-identity /bin/
 
-ENTRYPOINT ["/bin/go-harness"]
+ENTRYPOINT ["/bin/go-spacemesh"]
 EXPOSE 7513
 
 # profiling port

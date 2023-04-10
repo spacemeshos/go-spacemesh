@@ -29,7 +29,7 @@ func decodeBallot(id types.BallotID, pubkey, body *bytes.Reader, malicious bool)
 		return nil, errors.New("ballot data missing")
 	}
 	ballot.SetID(id)
-	ballot.SetSmesherID(nodeID)
+	ballot.SmesherID = nodeID
 	if malicious {
 		ballot.SetMalicious()
 	}
@@ -47,8 +47,8 @@ func Add(db sql.Executor, ballot *types.Ballot) error {
 		values (?1, ?2, ?4, ?5);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, ballot.ID().Bytes())
-			stmt.BindInt64(2, int64(ballot.Layer.Value))
-			stmt.BindBytes(4, ballot.SmesherID().Bytes())
+			stmt.BindInt64(2, int64(ballot.Layer))
+			stmt.BindBytes(4, ballot.SmesherID.Bytes())
 			stmt.BindBytes(5, bytes)
 		}, nil); err != nil {
 		return fmt.Errorf("insert ballot %s: %w", ballot.ID(), err)
@@ -96,7 +96,7 @@ func Layer(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) 
 	if _, err = db.Exec(`select id, pubkey, ballot, length(identities.proof)
 		from ballots left join identities using(pubkey)
 		where layer = ?1;`, func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(lid.Value))
+		stmt.BindInt64(1, int64(lid))
 	}, func(stmt *sql.Statement) bool {
 		id := types.BallotID{}
 		stmt.ColumnBytes(0, id[:])
@@ -135,7 +135,7 @@ func IDsInLayer(db sql.Executor, lid types.LayerID) (rst []types.BallotID, err e
 // CountByPubkeyLayer counts number of ballots in the layer for the nodeID.
 func CountByPubkeyLayer(db sql.Executor, lid types.LayerID, nodeID types.NodeID) (int, error) {
 	rows, err := db.Exec("select 1 from ballots where layer = ?1 and pubkey = ?2;", func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(lid.Value))
+		stmt.BindInt64(1, int64(lid))
 		stmt.BindBytes(2, nodeID.Bytes())
 	}, nil)
 	if err != nil {
@@ -151,7 +151,7 @@ func LayerBallotByNodeID(db sql.Executor, lid types.LayerID, nodeID types.NodeID
 		err    error
 	)
 	enc := func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(lid.Value))
+		stmt.BindInt64(1, int64(lid))
 		stmt.BindBytes(2, nodeID.Bytes())
 	}
 	dec := func(stmt *sql.Statement) bool {
@@ -170,7 +170,7 @@ func LayerBallotByNodeID(db sql.Executor, lid types.LayerID, nodeID types.NodeID
 			return false
 		}
 		ballot.SetID(bid)
-		ballot.SetSmesherID(nodeID)
+		ballot.SmesherID = nodeID
 		return true
 	}
 	if rows, err := db.Exec(`
@@ -194,8 +194,8 @@ func GetRefBallot(db sql.Executor, epochID types.EpochID, nodeID types.NodeID) (
 		order by layer
 		limit 1;`,
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(firstLayer.Value))
-			stmt.BindInt64(2, int64(lastLayer.Value))
+			stmt.BindInt64(1, int64(firstLayer))
+			stmt.BindInt64(2, int64(lastLayer))
 			stmt.BindBytes(3, nodeID.Bytes())
 		}, func(stmt *sql.Statement) bool {
 			stmt.ColumnBytes(0, ballotID[:])
@@ -215,7 +215,7 @@ func LatestLayer(db sql.Executor) (types.LayerID, error) {
 	if _, err := db.Exec("select max(layer) from ballots;",
 		nil,
 		func(stmt *sql.Statement) bool {
-			lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+			lid = types.LayerID(uint32(stmt.ColumnInt64(0)))
 			return true
 		}); err != nil {
 		return lid, fmt.Errorf("latest layer: %w", err)

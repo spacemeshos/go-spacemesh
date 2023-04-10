@@ -132,7 +132,7 @@ func genLayerBallot(tb testing.TB, layerID types.LayerID) *types.Ballot {
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	b.Signature = sig.Sign(signing.BALLOT, b.SignedBytes())
-	b.SetSmesherID(sig.NodeID())
+	b.SmesherID = sig.NodeID()
 	require.NoError(tb, b.Initialize())
 	return b
 }
@@ -196,8 +196,8 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 
 func TestMesh_WakeUp(t *testing.T) {
 	tm := createTestMesh(t)
-	latest := types.NewLayerID(11)
-	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, types.EmptyEdSignature, types.NodeID{}, types.BallotMetadata{Layer: latest})
+	latest := types.LayerID(11)
+	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, types.EmptyEdSignature, types.EmptyNodeID, latest)
 	require.NoError(t, ballots.Add(tm.cdb, &b))
 	require.NoError(t, layers.SetProcessed(tm.cdb, latest))
 	latestState := latest.Sub(1)
@@ -541,12 +541,12 @@ func TestMesh_Revert(t *testing.T) {
 func TestMesh_LatestKnownLayer(t *testing.T) {
 	tm := createTestMesh(t)
 	lg := logtest.New(t)
-	tm.setLatestLayer(lg, types.NewLayerID(3))
-	tm.setLatestLayer(lg, types.NewLayerID(7))
-	tm.setLatestLayer(lg, types.NewLayerID(10))
-	tm.setLatestLayer(lg, types.NewLayerID(1))
-	tm.setLatestLayer(lg, types.NewLayerID(2))
-	require.Equal(t, types.NewLayerID(10), tm.LatestLayer(), "wrong layer")
+	tm.setLatestLayer(lg, types.LayerID(3))
+	tm.setLatestLayer(lg, types.LayerID(7))
+	tm.setLatestLayer(lg, types.LayerID(10))
+	tm.setLatestLayer(lg, types.LayerID(1))
+	tm.setLatestLayer(lg, types.LayerID(2))
+	require.Equal(t, types.LayerID(10), tm.LatestLayer(), "wrong layer")
 }
 
 func TestMesh_pushLayersToState_verified(t *testing.T) {
@@ -769,7 +769,7 @@ func TestMesh_MissingTransactionsFailure(t *testing.T) {
 func TestMesh_CallOnBlock(t *testing.T) {
 	tm := createTestMesh(t)
 	block := types.Block{}
-	block.LayerIndex = types.NewLayerID(10)
+	block.LayerIndex = types.LayerID(10)
 	block.Initialize()
 
 	tm.mockTortoise.EXPECT().OnBlock(&block)
@@ -779,13 +779,13 @@ func TestMesh_CallOnBlock(t *testing.T) {
 
 func TestMesh_MaliciousBallots(t *testing.T) {
 	tm := createTestMesh(t)
-	lid := types.NewLayerID(1)
+	lid := types.LayerID(1)
 	nodeID := types.BytesToNodeID([]byte{1, 1, 1})
 
 	blts := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{1}}),
-		types.NewExistingBallot(types.BallotID{2}, types.RandomEdSignature(), nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{2}}),
-		types.NewExistingBallot(types.BallotID{3}, types.RandomEdSignature(), nodeID, types.BallotMetadata{Layer: lid, MsgHash: types.Hash32{3}}),
+		types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, lid),
+		types.NewExistingBallot(types.BallotID{2}, types.RandomEdSignature(), nodeID, lid),
+		types.NewExistingBallot(types.BallotID{3}, types.RandomEdSignature(), nodeID, lid),
 	}
 	malProof, err := tm.AddBallot(context.Background(), &blts[0])
 	require.NoError(t, err)
@@ -799,7 +799,6 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.Nil(t, saved)
 
 	// second one will create a MalfeasanceProof
-	tm.mockClock.EXPECT().CurrentLayer().Return(types.NewLayerID(11))
 	malProof, err = tm.AddBallot(context.Background(), &blts[1])
 	require.NoError(t, err)
 	require.NotNil(t, malProof)
@@ -807,10 +806,14 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.EqualValues(t, types.MultipleBallots, malProof.Proof.Type)
 	proof, ok := malProof.Proof.Data.(*types.BallotProof)
 	require.True(t, ok)
-	require.Equal(t, blts[0].BallotMetadata, proof.Messages[0].InnerMsg)
+	require.Equal(t, blts[0].Layer, proof.Messages[0].InnerMsg.Layer)
+	require.Equal(t, blts[0].HashInnerBytes(), proof.Messages[0].InnerMsg.MsgHash.Bytes())
 	require.Equal(t, blts[0].Signature, proof.Messages[0].Signature)
-	require.Equal(t, blts[1].BallotMetadata, proof.Messages[1].InnerMsg)
+	require.Equal(t, blts[0].SmesherID, proof.Messages[0].SmesherID)
+	require.Equal(t, blts[1].Layer, proof.Messages[0].InnerMsg.Layer)
+	require.Equal(t, blts[1].HashInnerBytes(), proof.Messages[0].InnerMsg.MsgHash.Bytes())
 	require.Equal(t, blts[1].Signature, proof.Messages[1].Signature)
+	require.Equal(t, blts[1].SmesherID, proof.Messages[1].SmesherID)
 	mal, err = identities.IsMalicious(tm.cdb, nodeID)
 	require.NoError(t, err)
 	require.True(t, mal)

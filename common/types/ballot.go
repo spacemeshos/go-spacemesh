@@ -39,29 +39,28 @@ func (id *BallotID) DecodeScale(d *scale.Decoder) (int, error) {
 
 // Ballot contains the smeshers signed vote on the mesh history.
 type Ballot struct {
-	// BallotMetadata is the signed part of the ballot.
-	BallotMetadata
 	InnerBallot
 	// smeshers signature on InnerBallot
 	Signature EdSignature
+	// the public key of the smesher that produced this ballot.
+	SmesherID NodeID
 	// Votes field is not signed.
 	Votes Votes
 	// the proof of the smeshers eligibility to vote and propose block content in this epoch.
 	// Eligibilities must be produced in the ascending order.
+	// the proofs are vrf signatures and need not be included in the ballot's signature.
 	EligibilityProofs []VotingEligibility `scale:"max=500"` // according to protocol there are 50 per layer, the rest is safety margin
+	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
+	// only present in smesher's first ballot of the epoch
+	ActiveSet []ATXID `scale:"max=100000"`
 
 	// the following fields are kept private and from being serialized
 	ballotID BallotID
-	// the public key of the smesher used
-	smesherID NodeID
 	// malicious is set to true if smesher that produced this ballot is known to be malicious.
 	malicious bool
 }
 
 func (b Ballot) Equal(other Ballot) bool {
-	if !cmp.Equal(other.BallotMetadata, b.BallotMetadata) {
-		return false
-	}
 	if !cmp.Equal(other.InnerBallot, b.InnerBallot, cmpopts.EquateEmpty()) {
 		return false
 	}
@@ -79,14 +78,12 @@ func (b Ballot) Equal(other Ballot) bool {
 
 // BallotMetadata is the signed part of Ballot.
 type BallotMetadata struct {
-	// the layer ID in which this ballot is eligible for. this will be validated via EligibilityProof
-	Layer LayerID
-	// hash of InnerBallot
-	MsgHash Hash32
+	Layer   LayerID // the layer ID in which this ballot is eligible for. this will be validated via EligibilityProof
+	MsgHash Hash32  // Hash of InnerBallot (returned by HashInnerBytes)
 }
 
 func (m *BallotMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddUint32("layer", m.Layer.Value)
+	encoder.AddUint32("layer", m.Layer.Uint32())
 	encoder.AddString("msgHash", m.MsgHash.String())
 	return nil
 }
@@ -94,6 +91,7 @@ func (m *BallotMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 // InnerBallot contains all info about a smeshers votes on the mesh history. this structure is
 // serialized and signed to produce the signature in Ballot.
 type InnerBallot struct {
+	Layer LayerID
 	// the smeshers ATX in the epoch this ballot is cast.
 	AtxID ATXID
 	// OpinionHash is a aggregated opinion on all previous layers.
@@ -198,7 +196,7 @@ type Vote struct {
 // MarshalLogObject implements logging interface.
 func (s *Vote) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("id", s.ID.String())
-	encoder.AddUint32("layer", s.LayerID.Value)
+	encoder.AddUint32("layer", s.LayerID.Uint32())
 	encoder.AddUint64("height", s.Height)
 	return nil
 }
@@ -217,10 +215,11 @@ func (o *Opinion) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 // EpochData contains information that cannot be changed mid-epoch.
 type EpochData struct {
-	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
-	ActiveSet []ATXID `scale:"max=100000"`
+	ActiveSetHash Hash32
 	// the beacon value the smesher recorded for this epoch
 	Beacon Beacon
+	// total number of ballots the smesher is eligible in this epoch.
+	EligibilityCount uint32
 }
 
 // Initialize calculates and sets the Ballot's cached ballotID and smesherID.
@@ -229,39 +228,17 @@ func (b *Ballot) Initialize() error {
 	if b.ID() != EmptyBallotID {
 		return fmt.Errorf("ballot already initialized")
 	}
-	if b.Signature == EmptyEdSignature {
-		return fmt.Errorf("cannot calculate Ballot ID: signature is nil")
-	}
 
-	if b.MsgHash != BytesToHash(b.HashInnerBytes()) {
-		return fmt.Errorf("bad message hash")
-	}
-
-	h := hash.New()
-	_, err := codec.EncodeTo(h, &b.InnerBallot)
-	if err != nil {
-		return fmt.Errorf("failed to encode inner ballot for hashing")
-	}
-	_, err = scale.EncodeByteSlice(scale.NewEncoder(h), b.Signature[:])
-	if err != nil {
-		return fmt.Errorf("failed to encode byte slice")
-	}
-	b.ballotID = BallotID(BytesToHash(h.Sum(nil)).ToHash20())
+	b.ballotID = BallotID(BytesToHash(b.HashInnerBytes()).ToHash20())
 	return nil
-}
-
-// SetMetadata sets BallotMetadata.
-func (b *Ballot) SetMetadata() {
-	if b.Layer == (LayerID{}) {
-		log.Fatal("ballot is missing layer")
-	}
-	b.MsgHash = BytesToHash(b.HashInnerBytes())
 }
 
 // SignedBytes returns the serialization of the BallotMetadata for signing.
 func (b *Ballot) SignedBytes() []byte {
-	b.SetMetadata()
-	data, err := codec.Encode(&b.BallotMetadata)
+	data, err := codec.Encode(&BallotMetadata{
+		Layer:   b.Layer,
+		MsgHash: BytesToHash(b.HashInnerBytes()),
+	})
 	if err != nil {
 		log.With().Fatal("failed to serialize BallotMetadata", log.Err(err))
 	}
@@ -288,16 +265,6 @@ func (b *Ballot) ID() BallotID {
 	return b.ballotID
 }
 
-// SetSmesherID from stored data.
-func (b *Ballot) SetSmesherID(id NodeID) {
-	b.smesherID = id
-}
-
-// SmesherID returns the smesher's Edwards public key.
-func (b *Ballot) SmesherID() NodeID {
-	return b.smesherID
-}
-
 // SetMalicious sets ballot as malicious.
 func (b *Ballot) SetMalicious() {
 	b.malicious = true
@@ -316,14 +283,14 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	)
 
 	if b.EpochData != nil {
-		activeSetSize = len(b.EpochData.ActiveSet)
+		activeSetSize = len(b.ActiveSet)
 		beacon = b.EpochData.Beacon
 	}
 
 	encoder.AddString("ballot_id", b.ID().String())
-	encoder.AddUint32("layer_id", b.Layer.Value)
+	encoder.AddUint32("layer_id", b.Layer.Uint32())
 	encoder.AddUint32("epoch_id", uint32(b.Layer.GetEpoch()))
-	encoder.AddString("smesher", b.SmesherID().String())
+	encoder.AddString("smesher", b.SmesherID.String())
 	encoder.AddString("opinion hash", b.OpinionHash.String())
 	encoder.AddString("base_ballot", b.Votes.Base.String())
 	encoder.AddInt("support", len(b.Votes.Support))
@@ -381,11 +348,13 @@ func BallotIDsToHashes(ids []BallotID) []Hash32 {
 }
 
 // NewExistingBallot creates ballot from stored data.
-func NewExistingBallot(id BallotID, sig EdSignature, nodeId NodeID, meta BallotMetadata) Ballot {
+func NewExistingBallot(id BallotID, sig EdSignature, nodeId NodeID, layer LayerID) Ballot {
 	return Ballot{
-		ballotID:       id,
-		Signature:      sig,
-		smesherID:      nodeId,
-		BallotMetadata: meta,
+		InnerBallot: InnerBallot{
+			Layer: layer,
+		},
+		ballotID:  id,
+		Signature: sig,
+		SmesherID: nodeId,
 	}
 }

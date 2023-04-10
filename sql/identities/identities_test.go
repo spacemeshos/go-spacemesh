@@ -22,14 +22,15 @@ func TestMalicious(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		ballotProof.Messages[i] = types.BallotProofMsg{
 			InnerMsg: types.BallotMetadata{
-				Layer:   types.NewLayerID(9),
+				Layer:   types.LayerID(9),
 				MsgHash: types.RandomHash(),
 			},
 			Signature: types.RandomEdSignature(),
+			SmesherID: nodeID,
 		}
 	}
 	proof := &types.MalfeasanceProof{
-		Layer: types.NewLayerID(11),
+		Layer: types.LayerID(11),
 		Proof: types.Proof{
 			Type: types.MultipleBallots,
 			Data: &ballotProof,

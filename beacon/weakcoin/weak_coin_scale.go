@@ -38,7 +38,7 @@ func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.VrfSignature, 80)
+		n, err := scale.EncodeByteArray(enc, t.VrfSignature[:])
 		if err != nil {
 			return total, err
 		}
@@ -80,12 +80,11 @@ func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 80)
+		n, err := scale.DecodeByteArray(dec, t.VrfSignature[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.VrfSignature = field
 	}
 	return total, nil
 }

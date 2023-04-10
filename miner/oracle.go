@@ -1,6 +1,7 @@
 package miner
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"sort"
@@ -21,11 +22,12 @@ var (
 	errEmptyActiveSet               = errors.New("empty active set for epoch")
 )
 
-type oracleCache struct {
-	epoch     types.EpochID
-	atx       *types.ActivationTxHeader
-	activeSet []types.ATXID
-	proofs    map[types.LayerID][]types.VotingEligibility
+type EpochEligibility struct {
+	Epoch     types.EpochID
+	Atx       types.ATXID
+	ActiveSet types.ATXIDList
+	Proofs    map[types.LayerID][]types.VotingEligibility
+	Slots     uint32
 }
 
 // Oracle provides proposal eligibility proofs for the miner.
@@ -39,7 +41,7 @@ type Oracle struct {
 	log       log.Log
 
 	mu    sync.Mutex
-	cache oracleCache
+	cache *EpochEligibility
 }
 
 func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, nodeID types.NodeID, log log.Log) *Oracle {
@@ -50,19 +52,20 @@ func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, v
 		vrfSigner:      vrfSigner,
 		nodeID:         nodeID,
 		log:            log,
+		cache:          &EpochEligibility{},
 	}
 }
 
 // GetProposalEligibility returns the miner's ATXID and the active set for the layer's epoch, along with the list of eligibility
 // proofs for that layer.
-func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon, nonce types.VRFPostIndex) (types.ATXID, []types.ATXID, []types.VotingEligibility, error) {
+func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon, nonce types.VRFPostIndex) (*EpochEligibility, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
 	epoch := lid.GetEpoch()
 	logger := o.log.WithFields(lid,
 		log.Named("requested_epoch", epoch),
-		log.Named("cached_epoch", o.cache.epoch))
+		log.Named("cached_epoch", o.cache.Epoch))
 
 	if epoch.IsGenesis() {
 		logger.With().Panic("eligibility should not be queried during genesis", lid, epoch)
@@ -71,57 +74,33 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon, 
 	logger.Info("asked for proposal eligibility")
 
 	var layerProofs []types.VotingEligibility
-	if o.cache.epoch == epoch { // use the cached value
-		layerProofs = o.cache.proofs[lid]
+	if o.cache.Epoch == epoch { // use the cached value
+		layerProofs = o.cache.Proofs[lid]
 		logger.With().Info("got cached eligibility", log.Int("num_proposals", len(layerProofs)))
-		return o.cache.atx.ID, o.cache.activeSet, layerProofs, nil
+		return o.cache, nil
 	}
 
 	// calculate the proof
 	atx, err := o.getOwnEpochATX(epoch)
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
-			return *types.EmptyATXID, nil, nil, errMinerHasNoATXInPreviousEpoch
+			return nil, errMinerHasNoATXInPreviousEpoch
 		}
-		return *types.EmptyATXID, nil, nil, fmt.Errorf("failed to get valid atx for node for target epoch %d: %w", epoch, err)
+		return nil, fmt.Errorf("failed to get valid atx for node for target epoch %d: %w", epoch, err)
 	}
 
-	newProofs, activeSet, err := o.calcEligibilityProofs(atx.GetWeight(), epoch, beacon, nonce)
-	if err != nil {
-		logger.With().Error("failed to calculate eligibility proofs", log.Err(err))
-		return *types.EmptyATXID, nil, nil, err
-	}
-
-	o.cache = oracleCache{
-		epoch:     epoch,
-		atx:       atx,
-		activeSet: activeSet,
-		proofs:    newProofs,
-	}
-
-	layerProofs = o.cache.proofs[lid]
-	logger.With().Info("got eligibility for proposals", log.Int("num_proposals", len(layerProofs)))
-
-	return o.cache.atx.ID, o.cache.activeSet, layerProofs, nil
+	return o.calcEligibilityProofs(atx, epoch, beacon, nonce)
 }
 
 func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxHeader, error) {
 	publishEpoch := targetEpoch - 1
 	atxID, err := atxs.GetIDByEpochAndNodeID(o.cdb, publishEpoch, o.nodeID)
 	if err != nil {
-		o.log.With().Warning("failed to find ATX ID for node",
-			log.Named("publish_epoch", publishEpoch),
-			log.Named("smesher", o.nodeID),
-			log.Err(err))
 		return nil, fmt.Errorf("get ATX ID: %w", err)
 	}
 
 	atx, err := o.cdb.GetAtxHeader(atxID)
 	if err != nil {
-		o.log.With().Error("failed to get ATX header",
-			log.Named("publish_epoch", publishEpoch),
-			log.Named("smesher", o.nodeID),
-			log.Err(err))
 		return nil, fmt.Errorf("get ATX header: %w", err)
 	}
 	return atx, nil
@@ -129,19 +108,20 @@ func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxH
 
 // calcEligibilityProofs calculates the eligibility proofs of proposals for the miner in the given epoch
 // and returns the proofs along with the epoch's active set.
-func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beacon types.Beacon, nonce types.VRFPostIndex) (map[types.LayerID][]types.VotingEligibility, []types.ATXID, error) {
+func (o *Oracle) calcEligibilityProofs(atx *types.ActivationTxHeader, epoch types.EpochID, beacon types.Beacon, nonce types.VRFPostIndex) (*EpochEligibility, error) {
+	weight := atx.GetWeight()
 	logger := o.log.WithFields(epoch, beacon, log.Uint64("weight", weight))
 
 	// get the previous epoch's total weight
 	totalWeight, activeSet, err := o.cdb.GetEpochWeight(epoch)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get epoch %v weight: %w", epoch, err)
+		return nil, fmt.Errorf("failed to get epoch %v weight: %w", epoch, err)
 	}
 	if totalWeight == 0 {
-		return nil, nil, errZeroEpochWeight
+		return nil, errZeroEpochWeight
 	}
 	if len(activeSet) == 0 {
-		return nil, nil, errEmptyActiveSet
+		return nil, errEmptyActiveSet
 	}
 
 	logger = logger.WithFields(log.Uint64("total_weight", totalWeight))
@@ -149,8 +129,7 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 
 	numEligibleSlots, err := proposals.GetNumEligibleSlots(weight, totalWeight, o.avgLayerSize, o.layersPerEpoch)
 	if err != nil {
-		logger.With().Error("failed to get number of eligible proposals", log.Err(err))
-		return nil, nil, fmt.Errorf("oracle get num slots: %w", err)
+		return nil, fmt.Errorf("oracle get num slots: %w", err)
 	}
 
 	eligibilityProofs := map[types.LayerID][]types.VotingEligibility{}
@@ -165,8 +144,9 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 			J:   counter,
 			Sig: vrfSig,
 		})
-		logger.Debug("signed vrf message, counter: %v, vrfSig: %v, layer: %v",
-			counter, types.BytesToHash(vrfSig).ShortString(), eligibleLayer)
+		logger.Debug("signed vrf message, counter: %v, vrfSig: %s, layer: %v",
+			counter, vrfSig, eligibleLayer,
+		)
 	}
 
 	logger.With().Info("proposal eligibility calculated",
@@ -190,5 +170,14 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 			}
 			return nil
 		})))
-	return eligibilityProofs, activeSet, nil
+	sort.Slice(activeSet, func(i, j int) bool {
+		return bytes.Compare(activeSet[i].Bytes(), activeSet[j].Bytes()) < 0
+	})
+	return &EpochEligibility{
+		Epoch:     epoch,
+		Atx:       atx.ID,
+		ActiveSet: activeSet,
+		Proofs:    eligibilityProofs,
+		Slots:     numEligibleSlots,
+	}, nil
 }

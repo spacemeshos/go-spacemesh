@@ -47,7 +47,7 @@ func NewValidator(poetDb poetDbAPI, cfg PostConfig) *Validator {
 // Some of the Post metadata fields validation values is ought to eventually be derived from
 // consensus instead of local configuration. If so, their validation should be removed to contextual validation,
 // while still syntactically-validate them here according to locally configured min/max values.
-func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error) {
+func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error) {
 	if !bytes.Equal(nipost.Challenge[:], expectedChallenge[:]) {
 		return 0, fmt.Errorf("invalid `Challenge`; expected: %x, given: %x", expectedChallenge, nipost.Challenge)
 	}
@@ -71,7 +71,7 @@ func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nip
 		return 0, fmt.Errorf("challenge is not included in the proof %x", nipost.PostMetadata.Challenge)
 	}
 
-	if err := v.Post(nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits); err != nil {
+	if err := v.Post(nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
 		return 0, fmt.Errorf("invalid Post: %v", err)
 	}
 
@@ -89,7 +89,7 @@ func contains(proof *types.PoetProof, member []byte) bool {
 
 // Post validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
 // validation failed.
-func (v *Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
+func (v *Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...verifying.OptionFunc) error {
 	p := (*shared.Proof)(PoST)
 
 	m := &shared.ProofMetadata{
@@ -100,7 +100,7 @@ func (v *Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST 
 		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
 	}
 
-	if err := verifying.Verify(p, m, (config.Config)(v.cfg)); err != nil {
+	if err := verifying.Verify(p, m, (config.Config)(v.cfg), opts...); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
 	}
 
@@ -165,8 +165,8 @@ func (*Validator) InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs 
 		if err != nil {
 			return &ErrAtxNotFound{Id: *challenge.CommitmentATX, source: err}
 		}
-		if !challenge.PubLayerID.After(commitmentAtx.PubLayerID) {
-			return fmt.Errorf("challenge publayer (%v) must be after commitment atx publayer (%v)", challenge.PubLayerID, commitmentAtx.PubLayerID)
+		if challenge.PublishEpoch <= commitmentAtx.PublishEpoch {
+			return fmt.Errorf("challenge pubepoch (%v) must be after commitment atx pubepoch (%v)", challenge.PublishEpoch, commitmentAtx.PublishEpoch)
 		}
 	}
 	return nil
@@ -185,10 +185,10 @@ func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProv
 		)
 	}
 
-	if prevATX.PublishEpoch() >= challenge.PublishEpoch() {
+	if prevATX.PublishEpoch >= challenge.PublishEpoch {
 		return fmt.Errorf(
-			"prevAtx epoch (%v, layer %v) isn't older than current atx epoch (%v, layer %v)",
-			prevATX.PublishEpoch(), prevATX.PubLayerID, challenge.PublishEpoch(), challenge.PubLayerID,
+			"prevAtx epoch (%d) isn't older than current atx epoch (%d)",
+			prevATX.PublishEpoch, challenge.PublishEpoch,
 		)
 	}
 
@@ -207,27 +207,19 @@ func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProv
 	return nil
 }
 
-func (*Validator) PositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, publayer types.LayerID, layersPerEpoch uint32) error {
-	if *id == *types.EmptyATXID {
+func (*Validator) PositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID, layersPerEpoch uint32) error {
+	if *id == types.EmptyATXID {
 		return fmt.Errorf("empty positioning atx")
 	}
-
-	if *id == goldenATXID && !publayer.GetEpoch().IsGenesis() {
-		return fmt.Errorf("golden atx used for positioning atx in epoch %d, but is only valid in epoch 1", publayer.GetEpoch())
+	if *id == goldenATXID {
+		return nil
 	}
-
-	if *id != goldenATXID {
-		posAtx, err := atxs.GetAtxHeader(*id)
-		if err != nil {
-			return &ErrAtxNotFound{Id: *id, source: err}
-		}
-		if !posAtx.PubLayerID.Before(publayer) {
-			return fmt.Errorf("positioning atx layer (%v) must be before %v", posAtx.PubLayerID, publayer)
-		}
-		if d := publayer.Difference(posAtx.PubLayerID); d > layersPerEpoch {
-			return fmt.Errorf("expected distance of one epoch (%v layers) from positioning atx but found %v", layersPerEpoch, d)
-		}
+	posAtx, err := atxs.GetAtxHeader(*id)
+	if err != nil {
+		return &ErrAtxNotFound{Id: *id, source: err}
 	}
-
+	if posAtx.PublishEpoch >= pubepoch {
+		return fmt.Errorf("positioning atx epoch (%v) must be before %v", posAtx.PublishEpoch, pubepoch)
+	}
 	return nil
 }

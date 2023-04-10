@@ -57,8 +57,8 @@ func createLayer(tb testing.TB, db *datastore.CachedDB, lid types.LayerID) ([]ty
 		b := types.RandomBallot()
 		b.Layer = lid
 		b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
+		b.SmesherID = signer.NodeID()
 		require.NoError(tb, b.Initialize())
-		b.SetSmesherID(signer.NodeID())
 		require.NoError(tb, ballots.Add(db, b))
 		blts = append(blts, b.ID())
 
@@ -100,7 +100,7 @@ func TestHandleLayerDataReq(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			lid := types.NewLayerID(111)
+			lid := types.LayerID(111)
 			th := createTestHandler(t)
 			blts, blks := createLayer(t, th.cdb, lid)
 
@@ -142,7 +142,7 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 			t.Parallel()
 
 			th := createTestHandler(t)
-			lid := types.NewLayerID(111)
+			lid := types.LayerID(111)
 			certified, aggHash := createOpinions(t, th.cdb, lid, !tc.missingCert)
 			if tc.multipleCerts {
 				require.NoError(t, certificates.Add(th.cdb, lid, &types.Certificate{
@@ -211,8 +211,8 @@ func TestHandleMeshHashReq(t *testing.T) {
 
 			th := createTestHandler(t)
 			req := &MeshHashRequest{
-				From:  types.NewLayerID(tc.params[0]),
-				To:    types.NewLayerID(tc.params[1]),
+				From:  types.LayerID(tc.params[0]),
+				To:    types.LayerID(tc.params[1]),
 				Delta: tc.params[2],
 				Steps: tc.params[3],
 			}
@@ -242,8 +242,8 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: published.FirstLayer(),
-				PrevATXID:  types.RandomATXID(),
+				PublishEpoch: published,
+				PrevATXID:    types.RandomATXID(),
 			},
 			NumUnits: 2,
 		},
@@ -252,8 +252,6 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	activation.SignAndFinalizeAtx(signer, atx)
-	nodeID := signer.NodeID()
-	atx.SetNodeID(&nodeID)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
 	vatx, err := atx.Verify(0, 1)

@@ -3,6 +3,7 @@ package node
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -283,6 +284,7 @@ type App struct {
 	atxHandler       *activation.Handler
 	validator        *activation.Validator
 	keyExtractor     *signing.PubKeyExtractor
+	edVerifier       *signing.EdVerifier
 	beaconProtocol   *beacon.ProtocolDriver
 	log              log.Log
 	svm              *vm.VM
@@ -483,7 +485,7 @@ func (app *App) initServices(
 	}
 
 	goldenATXID := types.ATXID(app.Config.Genesis.GenesisID().ToHash32())
-	if goldenATXID == *types.EmptyATXID {
+	if goldenATXID == types.EmptyATXID {
 		return errors.New("invalid golden atx id")
 	}
 
@@ -495,8 +497,13 @@ func (app *App) initServices(
 		return fmt.Errorf("failed to create key extractor: %w", err)
 	}
 
+	app.edVerifier, err = signing.NewEdVerifier(signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
+	if err != nil {
+		return fmt.Errorf("failed to create signature verifier: %w", err)
+	}
+
 	vrfVerifier := signing.NewVRFVerifier()
-	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifier, app.cachedDB, clock,
+	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.edVerifier, vrfSigner, vrfVerifier, app.cachedDB, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
@@ -530,7 +537,7 @@ func (app *App) initServices(
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
 		app.cachedDB,
-		app.keyExtractor,
+		app.edVerifier,
 		clock,
 		app.host,
 		fetcherWrapped,
@@ -550,7 +557,7 @@ func (app *App) initServices(
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.keyExtractor, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, clock,
+	proposalListener := proposals.NewHandler(app.cachedDB, app.edVerifier, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, clock,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,
@@ -687,6 +694,7 @@ func (app *App) initServices(
 		app.host.ID(),
 		app.hare,
 		app.keyExtractor,
+		app.edVerifier,
 	)
 	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, txHandler, malfeasanceHandler)
 
@@ -805,10 +813,6 @@ func (app *App) startAPIServices(ctx context.Context) {
 	// Register the requested services one by one
 	if apiConf.StartDebugService {
 		registerService(grpcserver.NewDebugService(app.conState, app.host))
-	}
-	if apiConf.StartGatewayService {
-		verifier := activation.NewChallengeVerifier(app.cachedDB, app.keyExtractor, app.validator, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
-		registerService(grpcserver.NewGatewayService(verifier))
 	}
 	if apiConf.StartGlobalStateService {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
@@ -949,7 +953,8 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
 		}
-		err = os.WriteFile(filename, edSgn.PrivateKey(), 0o600)
+
+		err = os.WriteFile(filename, []byte(hex.EncodeToString(edSgn.PrivateKey())), 0o600)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write identity file: %w", err)
 		}
@@ -957,8 +962,16 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		log.With().Info("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
+	dst := make([]byte, signing.PrivateKeySize)
+	n, err := hex.Decode(dst, data)
+	if err != nil {
+		return nil, fmt.Errorf("decoding private key: %w", err)
+	}
+	if n != signing.PrivateKeySize {
+		return nil, fmt.Errorf("invalid key size %d/%d", n, signing.PrivateKeySize)
+	}
 	edSgn, err := signing.NewEdSigner(
-		signing.WithPrivateKey(data),
+		signing.WithPrivateKey(dst),
 		signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
 	)
 	if err != nil {

@@ -14,3 +14,10 @@ var PostDuration = metrics.NewGauge(
 	"duration of last PoST in nanoseconds",
 	[]string{},
 ).WithLabelValues()
+
+var PoetPowDuration = metrics.NewGauge(
+	"poet_pow_duration",
+	namespace,
+	"duration of last PoET Proof of Work in nanoseconds",
+	[]string{},
+).WithLabelValues()

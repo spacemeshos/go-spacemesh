@@ -1,8 +1,6 @@
 package types
 
 import (
-	"encoding/hex"
-
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -25,11 +23,11 @@ type HareEligibilityGossip struct {
 }
 
 func (hg *HareEligibilityGossip) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddUint32("layer", hg.Layer.Value)
+	encoder.AddUint32("layer", hg.Layer.Uint32())
 	encoder.AddUint32("round", hg.Round)
 	encoder.AddString("smesher", hg.NodeID.String())
 	encoder.AddUint16("count", hg.Eligibility.Count)
-	encoder.AddString("proof", hex.EncodeToString(hg.Eligibility.Proof))
+	encoder.AddString("proof", hg.Eligibility.Proof.String())
 	return nil
 }
 
@@ -37,7 +35,7 @@ func (hg *HareEligibilityGossip) MarshalLogObject(encoder log.ObjectEncoder) err
 // allow non-interactive eligibility validation for hare round participation.
 type HareEligibility struct {
 	// VRF signature of EligibilityType, beacon, layer, round
-	Proof []byte `scale:"max=80"`
+	Proof VrfSignature
 	// the eligibility count for this layer, round
 	Count uint16
 }
@@ -45,7 +43,7 @@ type HareEligibility struct {
 // MarshalLogObject implements logging interface.
 func (e *HareEligibility) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint16("count", e.Count)
-	encoder.AddString("proof", hex.EncodeToString(e.Proof))
+	encoder.AddString("proof", e.Proof.String())
 	return nil
 }
 
@@ -57,12 +55,12 @@ type VotingEligibility struct {
 	// eligibility proof of the 3rd ballot/proposal in the epoch.
 	J uint32
 	// the VRF signature of some epoch specific data and J. one can derive a Ballot's layerID from this signature.
-	Sig []byte `scale:"max=80"`
+	Sig VrfSignature
 }
 
 // MarshalLogObject implements logging interface.
 func (v *VotingEligibility) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("j", v.J)
-	encoder.AddString("sig", hex.EncodeToString(v.Sig))
+	encoder.AddString("sig", v.Sig.String())
 	return nil
 }

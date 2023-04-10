@@ -520,10 +520,6 @@ func MinPeers(target int) DeploymentFlag {
 	return DeploymentFlag{Name: "--min-peers", Value: strconv.Itoa(target)}
 }
 
-func Gateway(address string) DeploymentFlag {
-	return DeploymentFlag{Name: "--gateway", Value: address}
-}
-
 const (
 	genesisTimeFlag  = "--genesis-time"
 	genesisExtraData = "--genesis-extra-data"
