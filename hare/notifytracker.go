@@ -42,18 +42,14 @@ func newNotifyTracker(
 // OnNotify tracks the provided notification message.
 // Returns true if the InnerMsg didn't affect the state, false otherwise.
 func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Msg) bool {
-	msgHash := types.BytesToHash(msg.HashBytes())
 	metadata := types.HareMetadata{
 		Layer:   msg.Layer,
 		Round:   msg.Round,
-		MsgHash: msgHash,
+		MsgHash: types.BytesToHash(msg.HashBytes()),
 	}
 
 	if prev, exist := nt.notifies[msg.NodeID]; exist { // already seenSenders
-		if prev.InnerMsg.Layer != msg.Layer || prev.InnerMsg.Round != msg.Round {
-			return true // ignored
-		}
-		if prev.InnerMsg.MsgHash == msgHash {
+		if !prev.InnerMsg.Equivocation(&metadata) {
 			return true // ignored
 		}
 

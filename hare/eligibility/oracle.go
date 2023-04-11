@@ -268,14 +268,15 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		log.Uint64("miner_weight", minerWeight),
 		log.Uint64("total_weight", totalWeight),
 	)
+
 	// ensure miner weight fits in int
 	n := int(minerWeight)
-	if uint64(n) != minerWeight { // TODO(mafa): why not [if minerWeight > maxSupportedN] and then cast if check passed?
+	if uint64(n) != minerWeight { // TODO(mafa): why not [if minerWeight > maxSupportedN]? leave n uint64 and cast to int (and check for overflow) before returning?
 		logger.Fatal(fmt.Sprintf("minerWeight overflows int (%d)", minerWeight))
 	}
 
 	// calc p
-	if committeeSize > int(totalWeight) {
+	if committeeSize > int(totalWeight) { // TODO(mafa): why not [uint64(committeeSize) > totalWeight]? can totalWeight overflow here?
 		logger.With().Warning("committee size is greater than total weight",
 			log.Int("committee_size", committeeSize),
 			log.Uint64("total_weight", totalWeight),
@@ -286,11 +287,9 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	p := fixed.DivUint64(uint64(committeeSize), totalWeight)
 
 	if n > maxSupportedN {
-		return 0, fixed.Fixed{}, fixed.Fixed{}, false,
-			fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, max: %d",
-				id, minerWeight, maxSupportedN)
+		return 0, fixed.Fixed{}, fixed.Fixed{}, false, fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, max: %d", id, minerWeight, maxSupportedN)
 	}
-	return int(n), p, calcVrfFrac(vrfSig), false, nil
+	return n, p, calcVrfFrac(vrfSig), false, nil
 }
 
 // Validate validates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is the role

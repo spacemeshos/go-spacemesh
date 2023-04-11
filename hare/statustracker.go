@@ -50,10 +50,7 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 			Round:   prev.Round,
 			MsgHash: types.BytesToHash(prev.HashBytes()),
 		}
-		if prev.Layer != msg.Layer || prev.Round != msg.Round {
-			return
-		}
-		if prevMetadata.MsgHash == metadata.MsgHash {
+		if !prevMetadata.Equivocation(&metadata) {
 			return
 		}
 

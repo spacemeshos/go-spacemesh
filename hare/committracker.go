@@ -59,17 +59,13 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
 		return
 	}
 
-	msgHash := types.BytesToHash(msg.Message.HashBytes())
 	metadata := types.HareMetadata{
 		Layer:   msg.Layer,
 		Round:   msg.Round,
-		MsgHash: msgHash,
+		MsgHash: types.BytesToHash(msg.Message.HashBytes()),
 	}
 	if prev, ok := ct.seenSenders[msg.NodeID]; ok {
-		if prev.InnerMsg.Layer != msg.Layer || prev.InnerMsg.Round != msg.Round {
-			return
-		}
-		if prev.InnerMsg.MsgHash == msgHash {
+		if !prev.InnerMsg.Equivocation(&metadata) {
 			return
 		}
 

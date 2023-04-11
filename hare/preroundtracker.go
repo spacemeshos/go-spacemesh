@@ -70,9 +70,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		MsgHash: msgHash,
 	}
 	if prev, exist := pre.preRound[msg.NodeID]; exist { // not first pre-round msg from this sender
-		if prev.InnerMsg.Layer == msg.Layer &&
-			prev.InnerMsg.Round == msg.Round &&
-			prev.InnerMsg.MsgHash != msgHash {
+		if prev.InnerMsg.Equivocation(&metadata) {
 			pre.logger.WithContext(ctx).With().Warning("equivocation detected in preround",
 				log.Stringer("smesher", msg.NodeID),
 				log.Object("prev", &prev.InnerMsg),
