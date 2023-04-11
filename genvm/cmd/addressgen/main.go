@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	hrp = flag.String("hrp", "smtest", "network human readable prefix")
+	hrp = flag.String("hrp", "stest", "network human readable prefix")
 )
 
 func main() {
