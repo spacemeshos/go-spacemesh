@@ -59,7 +59,7 @@ func Test_HandleBlock(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			cstate := NewMockconservativeState(ctrl)
-			th := NewTxHandler(cstate, logtest.New(t))
+			th := NewTxHandler(cstate, "", logtest.New(t))
 
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
@@ -89,7 +89,7 @@ func Test_HandleBlock(t *testing.T) {
 func gossipExpectations(t *testing.T, fee uint64, hasErr, parseErr, addErr error, has, verify, noheader bool) (*TxHandler, *types.Transaction) {
 	ctrl := gomock.NewController(t)
 	cstate := NewMockconservativeState(ctrl)
-	th := NewTxHandler(cstate, logtest.New(t))
+	th := NewTxHandler(cstate, "", logtest.New(t))
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -193,6 +193,22 @@ func Test_HandleGossip(t *testing.T) {
 		})
 	}
 }
+
+// func Test_HandleInvalidGossipTransaction(t *testing.T) {
+// 	ctrl := gomock.NewController(t)
+// 	cstate := NewMockconservativeState(ctrl)
+// 	th := NewTxHandler(cstate, logtest.New(t))
+
+// 	signer, err := signing.NewEdSigner()
+// 	require.NoError(t, err)
+// 	tx := newTx(t, 3, 10, 1, signer)
+// 	cstate.EXPECT().GetMeshTransaction(tx.ID).Return(nil, nil).Times(1)
+// 	cstate.EXPECT().Validation(tx.RawTx).Times(1).Return(nil)
+// 	require.Equal(t,
+// 		pubsub.ValidationIgnore,
+// 		th.HandleGossipTransaction(context.Background(), "peer", tx.Raw),
+// 	)
+// }
 
 func Test_HandleProposal(t *testing.T) {
 	for _, tc := range []struct {

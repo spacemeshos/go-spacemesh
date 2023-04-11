@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
+	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 // TransactionService exposes transaction data, and a submit tx endpoint.
@@ -30,6 +31,7 @@ type TransactionService struct {
 	mesh      api.MeshAPI   // Mesh
 	conState  api.ConservativeState
 	syncer    api.Syncer
+	txHandler *txs.TxHandler
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -44,6 +46,7 @@ func NewTransactionService(
 	msh api.MeshAPI,
 	conState api.ConservativeState,
 	syncer api.Syncer,
+	txHandler *txs.TxHandler,
 ) *TransactionService {
 	return &TransactionService{
 		db:        db,
@@ -51,6 +54,7 @@ func NewTransactionService(
 		mesh:      msh,
 		conState:  conState,
 		syncer:    syncer,
+		txHandler: txHandler,
 	}
 }
 
@@ -63,16 +67,20 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 	}
 
 	if !s.syncer.IsSynced(ctx) {
-		return nil, status.Error(codes.FailedPrecondition,
-			"Cannot submit transaction, node is not in sync yet, try again later")
+		return nil, status.Error(codes.FailedPrecondition, "Cannot submit transaction, node is not in sync yet, try again later")
+	}
+
+	if err := s.txHandler.HandleTransaction(ctx, in.Transaction); err != nil {
+		log.Error("error verifying incoming tx: %v", err)
+		return nil, status.Error(codes.Internal, "Failed to verify transaction")
 	}
 
 	if err := s.publisher.Publish(ctx, pubsub.TxProtocol, in.Transaction); err != nil {
 		log.Error("error broadcasting incoming tx: %v", err)
 		return nil, status.Error(codes.Internal, "Failed to publish transaction")
 	}
-	raw := types.NewRawTx(in.Transaction)
 
+	raw := types.NewRawTx(in.Transaction)
 	return &pb.SubmitTransactionResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 		Txstate: &pb.TransactionState{

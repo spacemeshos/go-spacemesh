@@ -68,7 +68,7 @@ type testConState struct {
 }
 
 func (t *testConState) handler() *TxHandler {
-	return NewTxHandler(t, t.logger)
+	return NewTxHandler(t, "", t.logger)
 }
 
 func createTestState(t *testing.T, gasLimit uint64) *testConState {

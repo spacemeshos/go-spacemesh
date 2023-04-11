@@ -1655,7 +1655,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer)
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, nil)
 	shutDown := launchServer(t, cfg, grpcService)
 	defer shutDown()
 
@@ -1697,7 +1697,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 		n++
 		return nil
 	})
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer)
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, nil)
 	shutDown := launchServer(t, cfg, grpcService)
 	defer shutDown()
 
@@ -1726,7 +1726,7 @@ func TestTransactionService(t *testing.T) {
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer)
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, nil)
 	shutDown := launchServer(t, cfg, grpcService)
 	defer shutDown()
 
@@ -2541,7 +2541,7 @@ func TestEventsReceived(t *testing.T) {
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	txService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer)
+	txService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, nil)
 	gsService := NewGlobalStateService(meshAPI, conStateAPI)
 	shutDown := launchServer(t, cfg, txService, gsService)
 	defer shutDown()
