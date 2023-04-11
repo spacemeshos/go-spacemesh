@@ -3,6 +3,7 @@ package node
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -23,12 +24,14 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
+	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -94,8 +97,9 @@ const (
 	VMLogger               = "vm"
 	GRPCLogger             = "grpc"
 	ConStateLogger         = "conState"
-	Executor               = "executor"
-	Malfeasance            = "malfeasance"
+	ExecutorLogger         = "executor"
+	MalfeasanceLogger      = "malfeasance"
+	BootstrapLogger        = "bootstrap"
 )
 
 func GetCommand() *cobra.Command {
@@ -250,6 +254,7 @@ func New(opts ...Option) *App {
 		log:     appLog,
 		loggers: make(map[string]*zap.AtomicLevel),
 		started: make(chan struct{}),
+		eg:      &errgroup.Group{},
 	}
 	for _, opt := range opts {
 		opt(app)
@@ -276,6 +281,7 @@ type App struct {
 	cachedDB         *datastore.CachedDB
 	clock            *timesync.NodeClock
 	hare             *hare.Hare
+	hOracle          *eligibility.Oracle
 	blockGen         *blocks.Generator
 	certifier        *blocks.Certifier
 	postSetupMgr     *activation.PostSetupManager
@@ -291,11 +297,13 @@ type App struct {
 	fetcher          *fetch.Fetch
 	ptimesync        *peersync.Sync
 	tortoise         *tortoise.Tortoise
+	updater          *bootstrap.Updater
 
 	host *p2p.Host
 
 	loggers map[string]*zap.AtomicLevel
 	started chan struct{} // this channel is closed once the app has finished starting
+	eg      *errgroup.Group
 }
 
 func (app *App) Started() chan struct{} {
@@ -449,7 +457,7 @@ func (app *App) initServices(
 	clock *timesync.NodeClock,
 ) error {
 	nodeID := sgn.NodeID()
-	layerSize := uint32(app.Config.LayerAvgSize)
+	layerSize := app.Config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log.Named(nodeID.ShortString()).WithFields(nodeID)
 
@@ -483,7 +491,7 @@ func (app *App) initServices(
 		}
 	}
 
-	goldenATXID := types.ATXID(app.Config.Genesis.GenesisID().ToHash32())
+	goldenATXID := types.ATXID(app.Config.Genesis.GoldenATX())
 	if goldenATXID == types.EmptyATXID {
 		return errors.New("invalid golden atx id")
 	}
@@ -522,7 +530,7 @@ func (app *App) initServices(
 		return fmt.Errorf("can't recover tortoise state: %w", err)
 	}
 
-	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(Executor, lg))
+	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(ExecutorLogger, lg))
 	msh, err := mesh.NewMesh(app.cachedDB, clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
@@ -572,10 +580,17 @@ func (app *App) initServices(
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
 
-	hOracle := eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+	app.hOracle = eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
-	app.certifier = blocks.NewCertifier(app.cachedDB, hOracle, nodeID, sgn, app.keyExtractor, app.host, clock, beaconProtocol, trtl,
+	app.Config.Bootstrap.DataDir = app.Config.DataDir()
+	app.Config.Bootstrap.Interval = app.Config.LayerDuration / 10
+	//app.updater = bootstrap.New(
+	//	bootstrap.WithConfig(app.Config.Bootstrap),
+	//	bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
+	//)
+
+	app.certifier = blocks.NewCertifier(app.cachedDB, app.hOracle, nodeID, sgn, app.keyExtractor, app.host, clock, beaconProtocol, trtl,
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
@@ -632,9 +647,9 @@ func (app *App) initServices(
 		hareOutputCh,
 		newSyncer,
 		beaconProtocol,
-		hOracle,
+		app.hOracle,
 		patrol,
-		hOracle,
+		app.hOracle,
 		clock,
 		app.addLogger(HareLogger, lg),
 	)
@@ -689,7 +704,7 @@ func (app *App) initServices(
 
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
-		app.addLogger(Malfeasance, lg),
+		app.addLogger(MalfeasanceLogger, lg),
 		app.host.ID(),
 		app.hare,
 		app.keyExtractor,
@@ -748,6 +763,27 @@ func (app *App) initServices(
 	return nil
 }
 
+func (app *App) listenToUpdates(ctx context.Context) {
+	app.eg.Go(func() error {
+		ch := app.updater.Subscribe()
+		app.updater.Start(ctx)
+		for update := range ch {
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				if update.Data.Beacon != types.EmptyBeacon {
+					app.beaconProtocol.UpdateBeacon(update.Data.Epoch, update.Data.Beacon)
+				}
+				if len(update.Data.ActiveSet) > 0 {
+					app.hOracle.UpdateActiveSet(update.Data.Epoch, update.Data.ActiveSet)
+				}
+			}
+		}
+		return nil
+	})
+}
+
 func (app *App) startServices(ctx context.Context) error {
 	if err := app.fetcher.Start(); err != nil {
 		return fmt.Errorf("failed to start fetcher: %w", err)
@@ -778,6 +814,10 @@ func (app *App) startServices(ctx context.Context) error {
 
 	if app.ptimesync != nil {
 		app.ptimesync.Start()
+	}
+
+	if app.updater != nil {
+		app.listenToUpdates(ctx)
 	}
 	return nil
 }
@@ -851,60 +891,53 @@ func (app *App) startAPIServices(ctx context.Context) {
 
 func (app *App) stopServices(ctx context.Context) {
 	if app.jsonAPIService != nil {
-		log.Info("stopping json gateway service")
 		if err := app.jsonAPIService.Shutdown(ctx); err != nil {
 			log.With().Error("error stopping json gateway server", log.Err(err))
 		}
 	}
 
 	if app.grpcAPIService != nil {
-		log.Info("stopping grpc service")
 		// does not return any errors
 		_ = app.grpcAPIService.Close()
 	}
 
+	if app.updater != nil {
+		app.updater.Close()
+	}
+
 	if app.proposalBuilder != nil {
-		app.log.Info("closing proposal builder")
 		app.proposalBuilder.Close()
 	}
 
 	if app.clock != nil {
-		app.log.Info("closing clock")
 		app.clock.Close()
 	}
 
 	if app.beaconProtocol != nil {
-		app.log.Info("stopping beacon")
 		app.beaconProtocol.Close()
 	}
 
 	if app.atxBuilder != nil {
-		app.log.Info("closing atx builder")
 		_ = app.atxBuilder.StopSmeshing(false)
 	}
 
 	if app.hare != nil {
-		app.log.Info("closing hare")
 		app.hare.Close()
 	}
 
 	if app.blockGen != nil {
-		app.log.Info("stopping blockGen")
 		app.blockGen.Stop()
 	}
 
 	if app.certifier != nil {
-		app.log.Info("stopping certifier")
 		app.certifier.Stop()
 	}
 
 	if app.fetcher != nil {
-		app.log.Info("closing layerFetch")
 		app.fetcher.Stop()
 	}
 
 	if app.syncer != nil {
-		app.log.Info("closing sync")
 		app.syncer.Close()
 	}
 
@@ -928,6 +961,8 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	events.CloseEventReporter()
+
+	_ = app.eg.Wait()
 }
 
 // LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists.
@@ -952,7 +987,8 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
 		}
-		err = os.WriteFile(filename, edSgn.PrivateKey(), 0o600)
+
+		err = os.WriteFile(filename, []byte(hex.EncodeToString(edSgn.PrivateKey())), 0o600)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write identity file: %w", err)
 		}
@@ -960,8 +996,16 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		log.With().Info("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
+	dst := make([]byte, signing.PrivateKeySize)
+	n, err := hex.Decode(dst, data)
+	if err != nil {
+		return nil, fmt.Errorf("decoding private key: %w", err)
+	}
+	if n != signing.PrivateKeySize {
+		return nil, fmt.Errorf("invalid key size %d/%d", n, signing.PrivateKeySize)
+	}
 	edSgn, err := signing.NewEdSigner(
-		signing.WithPrivateKey(data),
+		signing.WithPrivateKey(dst),
 		signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
 	)
 	if err != nil {
