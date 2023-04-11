@@ -126,13 +126,7 @@ func (mb *messageBuilder) SetCertificate(certificate *Certificate) *messageBuild
 // Sign calls the provided signer to calculate the signature and then set it accordingly.
 func (mb *messageBuilder) Sign(signer *signing.EdSigner) *messageBuilder {
 	mb.msg.Signature = signer.Sign(signing.HARE, mb.msg.SignedBytes())
-	return mb
-}
-
-// SetPubKey sets the public key of the message.
-// Note: the message itself does not contain the public key. The builder returns the wrapper of the message which does.
-func (mb *messageBuilder) SetNodeID(nodeID types.NodeID) *messageBuilder {
-	mb.msg.SmesherID = nodeID
+	mb.msg.SmesherID = signer.NodeID()
 	return mb
 }
 

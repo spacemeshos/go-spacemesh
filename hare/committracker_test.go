@@ -15,7 +15,7 @@ func BuildCommitMsg(signer *signing.EdSigner, s *Set) *Msg {
 	builder := newMessageBuilder()
 	builder.SetType(commit).SetLayer(instanceID1).SetRoundCounter(commitRound).SetCommittedRound(ki).SetValues(s)
 	builder.SetEligibilityCount(1)
-	builder = builder.SetNodeID(signer.NodeID()).Sign(signer)
+	builder = builder.Sign(signer)
 	return builder.Build()
 }
 

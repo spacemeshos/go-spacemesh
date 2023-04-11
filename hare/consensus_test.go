@@ -587,6 +587,7 @@ func (eps *equivocatePubSub) Publish(ctx context.Context, protocol string, data 
 	if msg.Type == pre {
 		msg.Values = []types.ProposalID{types.RandomProposalID()}
 		msg.Signature = eps.sig.Sign(signing.HARE, msg.SignedBytes())
+		msg.SmesherID = eps.sig.NodeID()
 		encoded, err := codec.Encode(&msg)
 		if err != nil {
 			log.With().Fatal("failed to encode equivocation data", log.Err(err))

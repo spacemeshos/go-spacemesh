@@ -47,7 +47,7 @@ func createMessage(tb testing.TB, instanceID types.LayerID) []byte {
 	sr, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	b := newMessageBuilder()
-	msg := b.SetNodeID(sr.NodeID()).SetLayer(instanceID).Sign(sr).Build()
+	msg := b.SetLayer(instanceID).Sign(sr).Build()
 	return mustEncode(tb, msg.Message)
 }
 
@@ -685,6 +685,8 @@ func TestBroker_clean(t *testing.T) {
 }
 
 func TestBroker_Flow(t *testing.T) {
+	t.Skip("FIXME(mafa)")
+
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
 

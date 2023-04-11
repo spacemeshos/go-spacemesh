@@ -15,7 +15,7 @@ func buildStatusMsg(sig *signing.EdSigner, s *Set, ki uint32) *Msg {
 	builder := newMessageBuilder()
 	builder.SetType(status).SetLayer(instanceID1).SetRoundCounter(statusRound).SetCommittedRound(ki).SetValues(s)
 	builder.SetEligibilityCount(1)
-	return builder.SetNodeID(sig.NodeID()).Sign(sig).Build()
+	return builder.Sign(sig).Build()
 }
 
 func BuildStatusMsg(sig *signing.EdSigner, s *Set) *Msg {

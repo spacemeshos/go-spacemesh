@@ -20,7 +20,7 @@ func BuildNotifyMsg(signing *signing.EdSigner, s *Set) *Msg {
 	cert.AggMsgs.Messages = []Message{BuildCommitMsg(signing, s).Message}
 	builder.SetCertificate(cert)
 	builder.SetEligibilityCount(1)
-	return builder.SetNodeID(signing.NodeID()).Sign(signing).Build()
+	return builder.Sign(signing).Build()
 }
 
 func TestNotifyTracker_OnNotify(t *testing.T) {

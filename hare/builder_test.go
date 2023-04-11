@@ -26,7 +26,7 @@ func TestBuilder_TestBuild(t *testing.T) {
 	b := newMessageBuilder()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	msg := b.SetNodeID(signer.NodeID()).SetLayer(instanceID1).Sign(signer).Build()
+	msg := b.SetLayer(instanceID1).Sign(signer).Build()
 
 	m := marshallUnmarshall(t, &msg.Message)
 	assert.Equal(t, m, &msg.Message)
@@ -63,7 +63,7 @@ func TestMessageFromBuffer(t *testing.T) {
 	b := newMessageBuilder()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	msg := b.SetNodeID(signer.NodeID()).SetLayer(instanceID1).Sign(signer).Build().Message
+	msg := b.SetLayer(instanceID1).Sign(signer).Build().Message
 
 	buf, err := codec.Encode(&msg)
 	require.NoError(t, err)
