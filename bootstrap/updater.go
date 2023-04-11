@@ -46,9 +46,8 @@ const (
 )
 
 var (
-	ErrEpochOutOfOrder = errors.New("epoch out of order")
-	ErrWrongVersion    = errors.New("wrong schema version")
-	ErrInvalidBeacon   = errors.New("invalid beacon")
+	ErrWrongVersion  = errors.New("wrong schema version")
+	ErrInvalidBeacon = errors.New("invalid beacon")
 )
 
 type Config struct {
