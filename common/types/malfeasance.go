@@ -214,6 +214,12 @@ func (hm *HareMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
+// Equivocation detects if two messages form an equivocation, based on their HareMetadata.
+// It returns true if the two messages are from the same layer and round, but have different hashes.
+func (hm *HareMetadata) Equivocation(other *HareMetadata) bool {
+	return hm.Layer == other.Layer && hm.Round == other.Round && hm.MsgHash != other.MsgHash
+}
+
 type HareProofMsg struct {
 	InnerMsg  HareMetadata
 	Signature EdSignature

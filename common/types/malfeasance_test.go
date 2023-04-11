@@ -162,6 +162,25 @@ func TestCodec_MalfeasanceGossip(t *testing.T) {
 	require.Equal(t, *gossip, decoded)
 }
 
+func Test_HareMetadata_Equivocation(t *testing.T) {
+	// Same layer and round, different message hash -> equivocation
+	hm1 := types.HareMetadata{Layer: 1, Round: 1, MsgHash: types.RandomHash()}
+	hm2 := types.HareMetadata{Layer: 1, Round: 1, MsgHash: types.RandomHash()}
+	require.True(t, hm1.Equivocation(&hm2))
+
+	// Different round -> no equivocation
+	hm2 = types.HareMetadata{Layer: 1, Round: 2, MsgHash: types.RandomHash()}
+	require.False(t, hm1.Equivocation(&hm2))
+
+	// Different layer -> no equivocation
+	hm2 = types.HareMetadata{Layer: 2, Round: 1, MsgHash: types.RandomHash()}
+	require.False(t, hm1.Equivocation(&hm2))
+
+	// Same layer and round, same message hash -> no equivocation
+	hm2 = types.HareMetadata{Layer: 1, Round: 1, MsgHash: hm1.MsgHash}
+	require.False(t, hm1.Equivocation(&hm2))
+}
+
 func FuzzProofConsistency(f *testing.F) {
 	tester.FuzzConsistency[types.Proof](f, func(p *types.Proof, c fuzz.Continue) {
 		switch c.Intn(3) {

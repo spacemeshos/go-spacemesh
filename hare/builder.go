@@ -13,10 +13,9 @@ import (
 //go:generate scalegen -types Message,Certificate,AggregatedMessages,InnerMessage
 
 type Message struct {
-	types.HareMetadata
-	// signature over Metadata
-	Signature   types.EdSignature
-	InnerMsg    *InnerMessage
+	*InnerMessage
+	Signature types.EdSignature
+
 	Eligibility types.HareEligibility
 }
 
@@ -27,14 +26,11 @@ func MessageFromBuffer(buf []byte) (Message, error) {
 	if err := codec.Decode(buf, &msg); err != nil {
 		return msg, fmt.Errorf("serialize: %w", err)
 	}
-	if msg.MsgHash != types.BytesToHash(msg.InnerMsg.HashBytes()) {
-		return Message{}, fmt.Errorf("bad message hash")
-	}
 	return msg, nil
 }
 
 func (m *Message) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddObject("inner_msg", m.InnerMsg)
+	encoder.AddObject("inner_msg", m.InnerMessage)
 	encoder.AddUint32("layer_id", m.Layer.Uint32())
 	encoder.AddUint32("round", m.Round)
 	encoder.AddString("signature", m.Signature.String())
@@ -47,17 +43,13 @@ func (m *Message) Field() log.Field {
 	return log.Object("hare_msg", m)
 }
 
-func (m *Message) SetMetadata() {
-	if m.Layer == 0 {
-		log.Fatal("Message is missing layer")
-	}
-	m.MsgHash = types.BytesToHash(m.InnerMsg.HashBytes())
-}
-
 // SignedBytes returns the signed data for hare message.
 func (m *Message) SignedBytes() []byte {
-	m.SetMetadata()
-	buf, err := codec.Encode(&m.HareMetadata)
+	buf, err := codec.Encode(&types.HareMetadata{
+		Layer:   m.Layer,
+		Round:   m.Round,
+		MsgHash: types.BytesToHash(m.InnerMessage.HashBytes()),
+	})
 	if err != nil {
 		log.With().Fatal("failed to encode HareMetadata", log.Err(err))
 	}
@@ -78,6 +70,8 @@ type AggregatedMessages struct {
 
 // InnerMessage is the actual set of fields that describe a message in the Hare protocol.
 type InnerMessage struct {
+	Layer          types.LayerID
+	Round          uint32 // the round counter (K)
 	Type           MessageType
 	CommittedRound uint32              // the round Values (S) is committed (Ki)
 	Values         []types.ProposalID  `scale:"max=500"` // the set S. optional for commit InnerMsg in a certificate - expected are 50 proposals per layer + safety margin
@@ -112,8 +106,7 @@ type messageBuilder struct {
 // One should not assume any values are pre-set.
 func newMessageBuilder() *messageBuilder {
 	m := &messageBuilder{&Msg{Message: Message{}, NodeID: types.EmptyNodeID}, &InnerMessage{}}
-	m.msg.InnerMsg = m.inner
-
+	m.msg.InnerMessage = m.inner
 	return m
 }
 

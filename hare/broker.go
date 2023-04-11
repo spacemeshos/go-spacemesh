@@ -119,7 +119,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	}
 	logger = logger.WithFields(log.Inline(&hareMsg))
 
-	if hareMsg.InnerMsg == nil {
+	if hareMsg.InnerMessage == nil {
 		logger.With().Warning("hare msg missing inner msg", log.Err(errNilInner))
 		return errNilInner
 	}

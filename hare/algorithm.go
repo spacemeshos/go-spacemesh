@@ -106,7 +106,8 @@ func newMsg(ctx context.Context, logger log.Log, nodeId types.NodeID, hareMsg Me
 			log.Stringer("smesher", nodeId),
 			log.Err(err),
 			hareMsg.Layer,
-			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
+			log.String("msg_type", hareMsg.Type.String()),
+		)
 		return nil, fmt.Errorf("check active identity: %w", err)
 	}
 
@@ -115,7 +116,8 @@ func newMsg(ctx context.Context, logger log.Log, nodeId types.NodeID, hareMsg Me
 		logger.With().Warning("identity is not active",
 			log.Stringer("smesher", nodeId),
 			hareMsg.Layer,
-			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
+			log.String("msg_type", hareMsg.Type.String()),
+		)
 		return nil, errors.New("inactive identity")
 	}
 
@@ -422,7 +424,7 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 		return
 	}
 
-	if m.Message.InnerMsg == nil {
+	if m.Message.InnerMessage == nil {
 		logger.Error("onEarlyMessage called with nil inner message")
 		return
 	}
@@ -445,7 +447,7 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 // the very first step of handling a message.
 func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	logger := proc.WithContext(ctx).WithFields(
-		log.String("msg_type", m.InnerMsg.Type.String()),
+		log.String("msg_type", m.Type.String()),
 		log.Stringer("smesher", m.NodeID),
 		log.Uint32("current_round", proc.getRound()),
 		log.Uint32("msg_round", m.Round),
@@ -485,7 +487,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	}
 
 	// warn on late pre-round msgs
-	if m.InnerMsg.Type == pre && proc.getRound() != preRound {
+	if m.Type == pre && proc.getRound() != preRound {
 		logger.Warning("encountered late preround message")
 	}
 
@@ -497,13 +499,14 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 	proc.WithContext(ctx).With().Debug("processing message",
 		proc.layer,
-		log.String("msg_type", m.InnerMsg.Type.String()),
-		log.Int("num_values", len(m.InnerMsg.Values)))
+		log.String("msg_type", m.Type.String()),
+		log.Int("num_values", len(m.Values)),
+	)
 
 	// Report the latency since the beginning of the round
 	latency := time.Since(proc.clock.RoundEnd(m.Round - 1))
-	metrics.ReportMessageLatency(pubsub.HareProtocol, m.InnerMsg.Type.String(), latency)
-	switch m.InnerMsg.Type {
+	metrics.ReportMessageLatency(pubsub.HareProtocol, m.Type.String(), latency)
+	switch m.Type {
 	case pre:
 		proc.processPreRoundMsg(ctx, m)
 	case status: // end of round 1
@@ -517,7 +520,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 	default:
 		proc.WithContext(ctx).With().Warning("unknown message type",
 			proc.layer,
-			log.String("msg_type", m.InnerMsg.Type.String()),
+			log.String("msg_type", m.Type.String()),
 			log.Stringer("smesher", m.NodeID),
 		)
 	}
@@ -536,7 +539,7 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 	ctx = log.WithNewRequestID(ctx,
 		proc.layer,
 		log.Uint32("msg_round", msg.Round),
-		log.String("msg_type", msg.InnerMsg.Type.String()),
+		log.String("msg_type", msg.Type.String()),
 		log.Int("eligibility_count", int(msg.Eligibility.Count)),
 		log.String("current_set", proc.value.String()),
 		log.Uint32("current_round", proc.getRound()),
@@ -823,7 +826,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 		return
 	}
 
-	s := NewSet(msg.InnerMsg.Values)
+	s := NewSet(msg.Values)
 
 	if ignored := proc.notifyTracker.OnNotify(ctx, msg); ignored {
 		proc.WithContext(ctx).With().Warning("ignoring notification",
@@ -834,10 +837,10 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 
 	if proc.currentRound() == notifyRound { // not necessary to update otherwise
 		// we assume that this expression was checked before
-		if msg.InnerMsg.Cert.AggMsgs.Messages[0].Round >= proc.committedRound { // update state iff K >= Ki
+		if msg.Cert.AggMsgs.Messages[0].Round >= proc.committedRound { // update state iff K >= Ki
 			proc.value = s
-			proc.certificate = msg.InnerMsg.Cert
-			proc.committedRound = msg.InnerMsg.CommittedRound
+			proc.certificate = msg.Cert
+			proc.committedRound = msg.CommittedRound
 		}
 	}
 
@@ -876,12 +879,12 @@ func (proc *consensusProcess) currentRound() uint32 {
 // returns a function to validate status messages.
 func (proc *consensusProcess) statusValidator() func(m *Msg) bool {
 	validate := func(m *Msg) bool {
-		s := NewSet(m.InnerMsg.Values)
-		if m.InnerMsg.CommittedRound == preRound { // no certificates, validate by pre-round msgs
+		s := NewSet(m.Values)
+		if m.CommittedRound == preRound { // no certificates, validate by pre-round msgs
 			if proc.preRoundTracker.CanProveSet(s) { // can prove s
 				return true
 			}
-		} else if proc.notifyTracker.HasCertificate(m.InnerMsg.CommittedRound, s) { // can prove s
+		} else if proc.notifyTracker.HasCertificate(m.CommittedRound, s) { // can prove s
 			// if CommittedRound (Ki) >= 0, we should have received a certificate for that set
 			return true
 		}
