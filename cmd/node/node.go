@@ -283,6 +283,7 @@ type App struct {
 	cachedDB           *datastore.CachedDB
 	clock              *timesync.NodeClock
 	hare               *hare.Hare
+	hOracle            *eligibility.Oracle
 	blockGen           *blocks.Generator
 	certifier          *blocks.Certifier
 	postSetupMgr       *activation.PostSetupManager
@@ -290,6 +291,7 @@ type App struct {
 	atxHandler         *activation.Handler
 	validator          *activation.Validator
 	keyExtractor       *signing.PubKeyExtractor
+	edVerifier         *signing.EdVerifier
 	beaconProtocol     *beacon.ProtocolDriver
 	log                log.Log
 	svm                *vm.VM
@@ -297,6 +299,7 @@ type App struct {
 	fetcher            *fetch.Fetch
 	ptimesync          *peersync.Sync
 	tortoise           *tortoise.Tortoise
+	updater            *bootstrap.Updater
 
 	host *p2p.Host
 
@@ -825,9 +828,6 @@ func (app *App) initService(ctx context.Context, svc apiconf.Service) (grpcserve
 	switch svc {
 	case apiconf.Debug:
 		return grpcserver.NewDebugService(app.conState, app.host), nil
-	case apiconf.Gateway:
-		verifier := activation.NewChallengeVerifier(app.cachedDB, app.keyExtractor, app.validator, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
-		return grpcserver.NewGatewayService(verifier), nil
 	case apiconf.GlobalState:
 		return grpcserver.NewGlobalStateService(app.mesh, app.conState), nil
 	case apiconf.Mesh:

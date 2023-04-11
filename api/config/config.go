@@ -21,7 +21,6 @@ type Service = string
 
 const (
 	Debug       Service = "debug"
-	Gateway     Service = "gateway"
 	GlobalState Service = "global"
 	Mesh        Service = "mesh"
 	Transaction Service = "transaction"
@@ -33,7 +32,7 @@ const (
 // DefaultConfig defines the default configuration options for api.
 func DefaultConfig() Config {
 	return Config{
-		PublicServices:        []Service{Debug, Gateway, GlobalState, Mesh, Transaction, Node},
+		PublicServices:        []Service{Debug, GlobalState, Mesh, Transaction, Node},
 		PublicListener:        "0.0.0.0:9092",
 		PrivateServices:       []Service{Smesher},
 		PrivateListener:       "127.0.0.1:9093",
