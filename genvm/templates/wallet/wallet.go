@@ -64,8 +64,9 @@ func (s *Wallet) FixedGas(method uint8) uint64 {
 		gas += core.SizeGas(core.STORE, 48)
 	case core.MethodSpend:
 		gas += core.SizeGas(core.LOAD, 48)
+		gas += core.SizeGas(core.LOAD, 8)
 		gas += core.SizeGas(core.UPDATE, 16)
 		gas += core.SizeGas(core.UPDATE, 8)
 	}
-	return FixedGas
+	return gas
 }
