@@ -43,9 +43,8 @@ const (
 )
 
 const (
-	activesCacheSize = 5          // we don't expect to handle more than two layers concurrently
-	maxSupportedN    = 1073741824 // higher values result in an overflow
-	// TODO(mafa): why (MaxUint32 + 1)/4?
+	activesCacheSize = 5                       // we don't expect to handle more than two layers concurrently
+	maxSupportedN    = (math.MaxInt32 + 1) / 2 // higher values result in an overflow
 )
 
 var (
@@ -245,26 +244,26 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	)
 
 	// ensure miner weight fits in int
-	n := int(minerWeight)
-	if uint64(n) != minerWeight { // TODO(mafa): why not [if minerWeight > maxSupportedN]? leave n uint64 and cast to int (and check for overflow) before returning?
+	n := minerWeight
+	if n > maxSupportedN {
 		logger.Fatal(fmt.Sprintf("minerWeight overflows int (%d)", minerWeight))
 	}
 
 	// calc p
-	if committeeSize > int(totalWeight) { // TODO(mafa): why not [uint64(committeeSize) > totalWeight]? can totalWeight overflow here?
+	if uint64(committeeSize) > totalWeight {
 		logger.With().Warning("committee size is greater than total weight",
 			log.Int("committee_size", committeeSize),
 			log.Uint64("total_weight", totalWeight),
 		)
 		totalWeight *= uint64(committeeSize)
-		n *= committeeSize
+		n *= uint64(committeeSize)
 	}
-	p := fixed.DivUint64(uint64(committeeSize), totalWeight)
-
 	if n > maxSupportedN {
 		return 0, fixed.Fixed{}, fixed.Fixed{}, false, fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, max: %d", id, minerWeight, maxSupportedN)
 	}
-	return n, p, calcVrfFrac(vrfSig), false, nil
+
+	p := fixed.DivUint64(uint64(committeeSize), totalWeight)
+	return int(n), p, calcVrfFrac(vrfSig), false, nil
 }
 
 // Validate validates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is the role
