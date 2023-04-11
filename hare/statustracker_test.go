@@ -13,8 +13,13 @@ import (
 
 func buildStatusMsg(sig *signing.EdSigner, s *Set, ki uint32) *Msg {
 	builder := newMessageBuilder()
-	builder.SetType(status).SetLayer(instanceID1).SetRoundCounter(statusRound).SetCommittedRound(ki).SetValues(s)
-	builder.SetEligibilityCount(1)
+	builder.
+		SetType(status).
+		SetLayer(instanceID1).
+		SetRoundCounter(statusRound).
+		SetCommittedRound(ki).
+		SetValues(s).
+		SetEligibilityCount(1)
 	return builder.Sign(sig).Build()
 }
 

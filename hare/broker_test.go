@@ -685,8 +685,6 @@ func TestBroker_clean(t *testing.T) {
 }
 
 func TestBroker_Flow(t *testing.T) {
-	t.Skip("FIXME(mafa)")
-
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
 
@@ -699,9 +697,16 @@ func TestBroker_Flow(t *testing.T) {
 
 	signer1, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildStatusMsg(signer1, NewDefaultEmptySet())
-	m.Layer = instanceID1
-	b.HandleMessage(context.Background(), "", mustEncode(t, m.Message))
+	builder := newMessageBuilder()
+	builder.
+		SetType(status).
+		SetLayer(instanceID1).
+		SetRoundCounter(statusRound).
+		SetCommittedRound(preRound).
+		SetValues(NewDefaultEmptySet()).
+		SetEligibilityCount(1)
+	m1 := builder.Sign(signer1).Build()
+	b.HandleMessage(context.Background(), "", mustEncode(t, m1.Message))
 
 	ch1, e := b.Register(context.Background(), instanceID1)
 	r.NoError(e)
@@ -709,12 +714,19 @@ func TestBroker_Flow(t *testing.T) {
 
 	signer2, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m2 := BuildStatusMsg(signer2, NewDefaultEmptySet())
-	m2.Layer = instanceID2
+	builder = newMessageBuilder()
+	builder.
+		SetType(status).
+		SetLayer(instanceID2).
+		SetRoundCounter(statusRound).
+		SetCommittedRound(preRound).
+		SetValues(NewDefaultEmptySet()).
+		SetEligibilityCount(1)
+	m2 := builder.Sign(signer2).Build()
 	ch2, e := b.Register(context.Background(), instanceID2)
 	r.NoError(e)
 
-	b.HandleMessage(context.Background(), "", mustEncode(t, m.Message))
+	b.HandleMessage(context.Background(), "", mustEncode(t, m1.Message))
 	b.HandleMessage(context.Background(), "", mustEncode(t, m2.Message))
 
 	<-ch2
@@ -726,7 +738,7 @@ func TestBroker_Flow(t *testing.T) {
 	r.Equal(instanceID0, b.minDeleted)
 
 	// check still receiving msgs on ch1
-	b.HandleMessage(context.Background(), "", mustEncode(t, m.Message))
+	b.HandleMessage(context.Background(), "", mustEncode(t, m1.Message))
 	<-ch1
 
 	b.Unregister(context.Background(), instanceID1)
