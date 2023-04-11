@@ -155,10 +155,10 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
 	mockMesh := mocks.NewMockmesh(ctrl)
 	mch := make(chan *types.MalfeasanceGossip, 1)
-	pke, err := signing.NewPubKeyExtractor()
+	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(tb, err)
 	return &testBroker{
-		Broker: newBroker(mockMesh, pke, &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
+		Broker: newBroker(mockMesh, edVerifier, &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
 			mch, limit, logtest.New(tb).WithName(testName)),
 		mockMesh:   mockMesh,
 		mockSyncS:  mockSyncS,
@@ -312,7 +312,7 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config, inbox 
 	oracle := eligibility.New(logger)
 	edSigner, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	pke, err := signing.NewPubKeyExtractor()
+	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(tb, err)
 	edPubkey := edSigner.PublicKey()
 	nid := types.BytesToNodeID(edPubkey.Bytes())
@@ -335,7 +335,7 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config, inbox 
 		oracle,
 		sq,
 		edSigner,
-		pke,
+		edVerifier,
 		types.BytesToNodeID(edPubkey.Bytes()),
 		&nonce,
 		noopPubSub(tb),

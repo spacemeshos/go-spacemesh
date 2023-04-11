@@ -14,6 +14,8 @@ import (
 
 type Message struct {
 	*InnerMessage
+
+	SmesherID types.NodeID
 	Signature types.EdSignature
 
 	Eligibility types.HareEligibility

@@ -227,7 +227,7 @@ func newConsensusProcess(
 	oracle Rolacle,
 	stateQuerier stateQuerier,
 	signing *signing.EdSigner,
-	pubKeyExtractor *signing.PubKeyExtractor,
+	edVerifier *signing.EdVerifier,
 	nid types.NodeID,
 	nonce *types.VRFPostIndex,
 	p2p pubsub.Publisher,
@@ -258,7 +258,7 @@ func newConsensusProcess(
 	}
 	proc.ctx, proc.cancel = context.WithCancel(ctx)
 	proc.preRoundTracker = newPreRoundTracker(logger.WithContext(proc.ctx).WithFields(proc.layer), comm.mchOut, proc.eTracker, cfg.N/2+1, cfg.N)
-	proc.validator = newSyntaxContextValidator(signing, pubKeyExtractor, cfg.N/2+1, proc.statusValidator(), stateQuerier, ev, proc.mTracker, proc.eTracker, logger)
+	proc.validator = newSyntaxContextValidator(signing, edVerifier, cfg.N/2+1, proc.statusValidator(), stateQuerier, ev, proc.mTracker, proc.eTracker, logger)
 
 	return proc
 }

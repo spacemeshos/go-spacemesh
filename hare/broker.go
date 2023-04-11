@@ -28,17 +28,17 @@ type Broker struct {
 	log.Log
 	mu sync.RWMutex
 
-	msh             mesh
-	pubKeyExtractor *signing.PubKeyExtractor
-	roleValidator   validator                // provides eligibility validation
-	stateQuerier    stateQuerier             // provides activeness check
-	nodeSyncState   system.SyncStateProvider // provider function to check if the node is currently synced
-	mchOut          chan<- *types.MalfeasanceGossip
-	outbox          map[types.LayerID]chan any
-	pending         map[types.LayerID][]any // the buffer of pending early messages for the next layer
-	latestLayer     types.LayerID           // the latest layer to attempt register (successfully or unsuccessfully)
-	minDeleted      types.LayerID
-	limit           int // max number of simultaneous consensus processes
+	msh           mesh
+	edVerifier    *signing.EdVerifier
+	roleValidator validator                // provides eligibility validation
+	stateQuerier  stateQuerier             // provides activeness check
+	nodeSyncState system.SyncStateProvider // provider function to check if the node is currently synced
+	mchOut        chan<- *types.MalfeasanceGossip
+	outbox        map[types.LayerID]chan any
+	pending       map[types.LayerID][]any // the buffer of pending early messages for the next layer
+	latestLayer   types.LayerID           // the latest layer to attempt register (successfully or unsuccessfully)
+	minDeleted    types.LayerID
+	limit         int // max number of simultaneous consensus processes
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -47,7 +47,7 @@ type Broker struct {
 
 func newBroker(
 	msh mesh,
-	pubKeyExtractor *signing.PubKeyExtractor,
+	edVerifier *signing.EdVerifier,
 	roleValidator validator,
 	stateQuerier stateQuerier,
 	syncState system.SyncStateProvider,
@@ -56,18 +56,18 @@ func newBroker(
 	log log.Log,
 ) *Broker {
 	b := &Broker{
-		Log:             log,
-		msh:             msh,
-		pubKeyExtractor: pubKeyExtractor,
-		roleValidator:   roleValidator,
-		stateQuerier:    stateQuerier,
-		nodeSyncState:   syncState,
-		mchOut:          mch,
-		outbox:          make(map[types.LayerID]chan any),
-		pending:         make(map[types.LayerID][]any),
-		latestLayer:     types.GetEffectiveGenesis(),
-		limit:           limit,
-		minDeleted:      types.GetEffectiveGenesis(),
+		Log:           log,
+		msh:           msh,
+		edVerifier:    edVerifier,
+		roleValidator: roleValidator,
+		stateQuerier:  stateQuerier,
+		nodeSyncState: syncState,
+		mchOut:        mch,
+		outbox:        make(map[types.LayerID]chan any),
+		pending:       make(map[types.LayerID][]any),
+		latestLayer:   types.GetEffectiveGenesis(),
+		limit:         limit,
+		minDeleted:    types.GetEffectiveGenesis(),
 	}
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 	return b
@@ -159,7 +159,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	}
 
 	isEarly := false
-	if err = b.validateTiming(ctx, &hareMsg); err != nil {
+	if err := b.validateTiming(ctx, &hareMsg); err != nil {
 		if !errors.Is(err, errEarlyMsg) {
 			// not early, validation failed
 			logger.With().Debug("broker received a message to a consensus process that is not registered",
@@ -171,15 +171,14 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		isEarly = true
 	}
 
-	nodeId, err := b.pubKeyExtractor.ExtractNodeID(signing.HARE, hareMsg.SignedBytes(), hareMsg.Signature)
-	if err != nil {
-		logger.With().Error("failed to extract public key",
-			log.Err(err),
-			log.Int("sig_len", len(hareMsg.Signature)))
-		return fmt.Errorf("extract ed25519 pubkey: %w", err)
+	if !b.edVerifier.Verify(signing.HARE, hareMsg.SmesherID, hareMsg.SignedBytes(), hareMsg.Signature) {
+		logger.With().Error("failed to verify signature",
+			log.Int("sig_len", len(hareMsg.Signature)),
+		)
+		return fmt.Errorf("verify ed25519 signature")
 	}
 	// create msg
-	iMsg, err := newMsg(ctx, b.Log, nodeId, hareMsg, b.stateQuerier)
+	iMsg, err := newMsg(ctx, b.Log, hareMsg.SmesherID, hareMsg, b.stateQuerier)
 	if err != nil {
 		logger.With().Warning("message validation failed: could not construct msg", log.Err(err))
 		return err

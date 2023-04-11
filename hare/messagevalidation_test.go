@@ -30,10 +30,10 @@ func defaultValidator(tb testing.TB) *syntaxContextValidator {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	pke, err := signing.NewPubKeyExtractor()
+	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(tb, err)
 
-	return newSyntaxContextValidator(signer, pke, lowThresh10, trueValidator,
+	return newSyntaxContextValidator(signer, edVerifier, lowThresh10, trueValidator,
 		sq, truer{}, newPubGetter(), NewEligibilityTracker(lowThresh10), logtest.New(tb),
 	)
 }
@@ -342,12 +342,12 @@ func (pg pubGetter) NodeID(m *Message) types.NodeID {
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	pke, err := signing.NewPubKeyExtractor()
+	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 	et := NewEligibilityTracker(100)
 	vfunc := func(m *Msg) bool { return true }
 
-	sv := newSyntaxContextValidator(signer, pke, 1, vfunc, nil, truer{}, newPubGetter(), et, logtest.New(t))
+	sv := newSyntaxContextValidator(signer, edVerifier, 1, vfunc, nil, truer{}, newPubGetter(), et, logtest.New(t))
 	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.EmptyVrfSignature)
 	require.True(t, sv.SyntacticallyValidateMessage(context.Background(), m))
 	m = BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
@@ -387,7 +387,7 @@ func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 func TestMessageValidator_validateSVP(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	pke, err := signing.NewPubKeyExtractor()
+	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
 	ctrl := gomock.NewController(t)
@@ -395,7 +395,7 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	et := NewEligibilityTracker(100)
 	vfunc := func(m *Msg) bool { return true }
-	sv := newSyntaxContextValidator(signer, pke, 1, vfunc, mockStateQ, truer{}, newPubGetter(), et, logtest.New(t))
+	sv := newSyntaxContextValidator(signer, edVerifier, 1, vfunc, mockStateQ, truer{}, newPubGetter(), et, logtest.New(t))
 	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), types.EmptyVrfSignature)
 	s1 := NewSetFromValues(types.ProposalID{1})
 	m.Svp = buildSVP(preRound, s1)

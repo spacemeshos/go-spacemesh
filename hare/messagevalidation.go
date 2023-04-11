@@ -84,7 +84,7 @@ type pubKeyGetter interface {
 
 type syntaxContextValidator struct {
 	signing          *signing.EdSigner
-	pubKeyExtractor  *signing.PubKeyExtractor
+	edVerifier       *signing.EdVerifier
 	threshold        int
 	statusValidator  func(m *Msg) bool // used to validate status Messages in SVP
 	stateQuerier     stateQuerier
@@ -96,7 +96,7 @@ type syntaxContextValidator struct {
 
 func newSyntaxContextValidator(
 	sgr *signing.EdSigner,
-	pubKeyExtractor *signing.PubKeyExtractor,
+	edVerifier *signing.EdVerifier,
 	threshold int,
 	validator func(m *Msg) bool,
 	stateQuerier stateQuerier,
@@ -107,7 +107,7 @@ func newSyntaxContextValidator(
 ) *syntaxContextValidator {
 	return &syntaxContextValidator{
 		signing:          sgr,
-		pubKeyExtractor:  pubKeyExtractor,
+		edVerifier:       edVerifier,
 		threshold:        threshold,
 		statusValidator:  validator,
 		stateQuerier:     stateQuerier,
@@ -310,18 +310,17 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 		}
 
 		// extract public key
-		nodeId, err := v.pubKeyExtractor.ExtractNodeID(signing.HARE, innerMsg.SignedBytes(), innerMsg.Signature)
-		if err != nil {
-			return fmt.Errorf("extract ed25519 pubkey: %w", err)
+		if !v.edVerifier.Verify(signing.HARE, innerMsg.SmesherID, innerMsg.SignedBytes(), innerMsg.Signature) {
+			return fmt.Errorf("failed to verify signature")
 		}
 
 		// validate unique sender
-		if _, exist := senders[nodeId]; exist { // pub already exist
+		if _, exist := senders[innerMsg.SmesherID]; exist { // pub already exist
 			return errDupSender
 		}
-		senders[nodeId] = struct{}{} // mark sender as exist
+		senders[innerMsg.SmesherID] = struct{}{} // mark sender as exist
 
-		iMsg, err := newMsg(ctx, v.Log, nodeId, innerMsg, v.stateQuerier)
+		iMsg, err := newMsg(ctx, v.Log, innerMsg.SmesherID, innerMsg, v.stateQuerier)
 		if err != nil {
 			return fmt.Errorf("new message: %w", err)
 		}
