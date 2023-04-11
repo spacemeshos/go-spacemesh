@@ -171,7 +171,7 @@ func runTest(t *testing.T, totalNodes int, totalCp uint32, roundClocks *sharedRo
 	// hardcoded to be instant in the shared round clock but it does control
 	// how late a consensus process can start a layer and not skip it, as such
 	// we set it to a huge value to prevent nodes accidentally skipping layers.
-	cfg := config.Config{N: totalNodes, WakeupDelta: time.Hour, RoundDuration: 0, ExpectedLeaders: totalNodes/2 + 1, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
+	cfg := config.Config{N: totalNodes, WakeupDelta: time.Hour, RoundDuration: 0, ExpectedLeaders: totalNodes / 4, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
 
 	var pubsubs []*pubsub.PubSub
 	outputs := make([]map[types.LayerID]LayerOutput, totalNodes)
