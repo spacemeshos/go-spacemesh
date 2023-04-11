@@ -47,7 +47,7 @@ func init() {
 	// options specific to one-time execution
 	cmd.PersistentFlags().BoolVar(&genBeacon, "beacon", false, "generate beacon")
 	cmd.PersistentFlags().BoolVar(&genActiveSet, "actives", false, "generate active set")
-	cmd.PersistentFlags().StringVar(&out, "out", "gs://bucket/spacemesh-fallback", "gs URI for upload")
+	cmd.PersistentFlags().StringVar(&out, "out", "gs://my-bucket/spacemesh-fallback", "gs URI for upload")
 	cmd.PersistentFlags().StringVar(&creds, "creds", "", "path to gcloud credential file")
 
 	// for systests only
@@ -87,6 +87,7 @@ var cmd = &cobra.Command{
 			return runServer(ctx, logger, g)
 		}
 
+		// one-time execution
 		if len(args) == 0 {
 			return fmt.Errorf("epoch not specfiied")
 		}
@@ -102,9 +103,6 @@ var cmd = &cobra.Command{
 		}
 		if genActiveSet && len(spacemeshEndpoint) == 0 {
 			return fmt.Errorf("missing spacemesh endpoint for active set generation")
-		}
-		if len(out) == 0 {
-			return fmt.Errorf("output path not specified")
 		}
 		bucket, path, err := parseToGsBucket(out)
 		if err != nil {
@@ -132,11 +130,13 @@ func upload(ctx context.Context, bucket, path string) error {
 		return fmt.Errorf("create gs client: %w", err)
 	}
 	w := client.Bucket(bucket).Object(path).NewWriter(ctx)
-	_, err = io.Copy(w, r)
-	if err != nil {
-		return err
+	if _, err = io.Copy(w, r); err != nil {
+		return fmt.Errorf("copy to gs object (%v): %w", out, err)
 	}
-	return w.Close()
+	if err = w.Close(); err != nil {
+		return fmt.Errorf("complete upload (%v): %w", out, err)
+	}
+	return nil
 }
 
 func parseToGsBucket(gsPath string) (bucket, path string, err error) {
@@ -144,7 +144,6 @@ func parseToGsBucket(gsPath string) (bucket, path string, err error) {
 	if err != nil {
 		return "", "", err
 	}
-
 	if parsed.Scheme != "gs" {
 		return "", "", fmt.Errorf("path %s must have 'gs' scheme", gsPath)
 	}
@@ -154,7 +153,6 @@ func parseToGsBucket(gsPath string) (bucket, path string, err error) {
 	if parsed.Path == "" {
 		return parsed.Host, "", nil
 	}
-
 	// remove leading "/" in URL path
 	return parsed.Host, parsed.Path[1:], nil
 }
