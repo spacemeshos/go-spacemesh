@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	apiconf "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -223,10 +224,16 @@ func LoadConfigFromFile() (*config.Config, error) {
 	)
 
 	// load config if it was loaded to the viper
-	if err := viper.Unmarshal(&conf, viper.DecodeHook(hook)); err != nil {
+	if err := viper.Unmarshal(&conf, viper.DecodeHook(hook), withZeroFields()); err != nil {
 		return nil, fmt.Errorf("unmarshal viper: %w", err)
 	}
 	return &conf, nil
+}
+
+func withZeroFields() viper.DecoderConfigOption {
+	return func(cfg *mapstructure.DecoderConfig) {
+		cfg.ZeroFields = true
+	}
 }
 
 // Option to modify an App instance.
@@ -267,37 +274,38 @@ func New(opts ...Option) *App {
 // App is the cli app singleton.
 type App struct {
 	*cobra.Command
-	fileLock         *flock.Flock
-	nodeID           types.NodeID
-	Config           *config.Config
-	db               *sql.Database
-	dbMetrics        *dbmetrics.DBMetricsCollector
-	grpcAPIService   *grpcserver.Server
-	jsonAPIService   *grpcserver.JSONHTTPServer
-	syncer           *syncer.Syncer
-	proposalListener *proposals.Handler
-	proposalBuilder  *miner.ProposalBuilder
-	mesh             *mesh.Mesh
-	cachedDB         *datastore.CachedDB
-	clock            *timesync.NodeClock
-	hare             *hare.Hare
-	hOracle          *eligibility.Oracle
-	blockGen         *blocks.Generator
-	certifier        *blocks.Certifier
-	postSetupMgr     *activation.PostSetupManager
-	atxBuilder       *activation.Builder
-	atxHandler       *activation.Handler
-	validator        *activation.Validator
-	keyExtractor     *signing.PubKeyExtractor
-	edVerifier       *signing.EdVerifier
-	beaconProtocol   *beacon.ProtocolDriver
-	log              log.Log
-	svm              *vm.VM
-	conState         *txs.ConservativeState
-	fetcher          *fetch.Fetch
-	ptimesync        *peersync.Sync
-	tortoise         *tortoise.Tortoise
-	updater          *bootstrap.Updater
+	fileLock           *flock.Flock
+	nodeID             types.NodeID
+	Config             *config.Config
+	db                 *sql.Database
+	dbMetrics          *dbmetrics.DBMetricsCollector
+	grpcPublicService  *grpcserver.Server
+	grpcPrivateService *grpcserver.Server
+	jsonAPIService     *grpcserver.JSONHTTPServer
+	syncer             *syncer.Syncer
+	proposalListener   *proposals.Handler
+	proposalBuilder    *miner.ProposalBuilder
+	mesh               *mesh.Mesh
+	cachedDB           *datastore.CachedDB
+	clock              *timesync.NodeClock
+	hare               *hare.Hare
+	hOracle            *eligibility.Oracle
+	blockGen           *blocks.Generator
+	certifier          *blocks.Certifier
+	postSetupMgr       *activation.PostSetupManager
+	atxBuilder         *activation.Builder
+	atxHandler         *activation.Handler
+	validator          *activation.Validator
+	keyExtractor       *signing.PubKeyExtractor
+	edVerifier         *signing.EdVerifier
+	beaconProtocol     *beacon.ProtocolDriver
+	log                log.Log
+	svm                *vm.VM
+	conState           *txs.ConservativeState
+	fetcher            *fetch.Fetch
+	ptimesync          *peersync.Sync
+	tortoise           *tortoise.Tortoise
+	updater            *bootstrap.Updater
 
 	host *p2p.Host
 
@@ -822,71 +830,85 @@ func (app *App) startServices(ctx context.Context) error {
 	return nil
 }
 
-func (app *App) startAPIServices(ctx context.Context) {
-	apiConf := &app.Config.API
-	layerDuration := app.Config.LayerDuration
+func (app *App) initService(ctx context.Context, svc apiconf.Service) (grpcserver.ServiceAPI, error) {
+	switch svc {
+	case apiconf.Debug:
+		return grpcserver.NewDebugService(app.conState, app.host), nil
+	case apiconf.GlobalState:
+		return grpcserver.NewGlobalStateService(app.mesh, app.conState), nil
+	case apiconf.Mesh:
+		return grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal)), nil
+	case apiconf.Node:
+		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer), nil
+	case apiconf.Smesher:
+		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval), nil
+	case apiconf.Transaction:
+		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer), nil
+	case apiconf.Activation:
+		return grpcserver.NewActivationService(app.cachedDB), nil
+	}
+	return nil, fmt.Errorf("unknown service %s", svc)
+}
 
-	// API SERVICES
-	// Since we have multiple GRPC services, we cannot automatically enable them if
-	// the gateway server is enabled (since we don't know which ones to enable), so
-	// it's an error if the gateway server is enabled without enabling at least one
-	// GRPC service.
+func (app *App) newGrpc(logger *zap.Logger, endpoint string) *grpcserver.Server {
+	return grpcserver.New(endpoint,
+		grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger)),
+		grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger)),
+		grpc.MaxSendMsgSize(app.Config.API.GrpcSendMsgSize),
+		grpc.MaxRecvMsgSize(app.Config.API.GrpcRecvMsgSize),
+	)
+}
 
-	// Make sure we only create the server once.
-	var services []grpcserver.ServiceAPI
-	registerService := func(svc grpcserver.ServiceAPI) {
-		if app.grpcAPIService == nil {
-			logger := app.addLogger(GRPCLogger, app.log).Zap()
-			grpczap.SetGrpcLoggerV2(grpclog, logger)
-			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
-				grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger)),
-				grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger)),
-				grpc.MaxSendMsgSize(apiConf.GrpcSendMsgSize),
-				grpc.MaxRecvMsgSize(apiConf.GrpcRecvMsgSize),
-			)
+func (app *App) startAPIServices(ctx context.Context) error {
+	logger := app.addLogger(GRPCLogger, app.log).Zap()
+	grpczap.SetGrpcLoggerV2(grpclog, logger)
+	var (
+		unique = map[apiconf.Service]struct{}{}
+		public []grpcserver.ServiceAPI
+	)
+	if len(app.Config.API.PublicServices) > 0 {
+		app.grpcPublicService = app.newGrpc(logger, app.Config.API.PublicListener)
+	}
+	if len(app.Config.API.PrivateServices) > 0 {
+		app.grpcPrivateService = app.newGrpc(logger, app.Config.API.PrivateListener)
+	}
+	for _, svc := range app.Config.API.PublicServices {
+		if _, exists := unique[svc]; exists {
+			return fmt.Errorf("can't start more than one %s", svc)
 		}
-		services = append(services, svc)
-		svc.RegisterService(app.grpcAPIService)
-	}
-
-	// Register the requested services one by one
-	if apiConf.StartDebugService {
-		registerService(grpcserver.NewDebugService(app.conState, app.host))
-	}
-	if apiConf.StartGlobalStateService {
-		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
-	}
-	if apiConf.StartMeshService {
-		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), layerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal)))
-	}
-	if apiConf.StartNodeService {
-		nodeService := grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer, app.atxBuilder)
-		registerService(nodeService)
-	}
-	if apiConf.StartSmesherService {
-		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, apiConf.SmesherStreamInterval))
-	}
-	if apiConf.StartTransactionService {
-		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))
-	}
-	if apiConf.StartActivationService {
-		registerService(grpcserver.NewActivationService(app.cachedDB))
-	}
-
-	// Now that the services are registered, start the server.
-	if app.grpcAPIService != nil {
-		app.grpcAPIService.Start()
-	}
-
-	if apiConf.StartJSONServer {
-		if app.grpcAPIService == nil {
-			// This panics because it should not happen.
-			// It should be caught inside apiConf.
-			log.Fatal("one or more new grpc services must be enabled with new json gateway server")
+		gsvc, err := app.initService(ctx, svc)
+		if err != nil {
+			return err
 		}
-		app.jsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort)
-		app.jsonAPIService.StartService(ctx, services...)
+		gsvc.RegisterService(app.grpcPublicService)
+		public = append(public, gsvc)
+		unique[svc] = struct{}{}
 	}
+	for _, svc := range app.Config.API.PrivateServices {
+		if _, exists := unique[svc]; exists {
+			return fmt.Errorf("can't start more than one %s", svc)
+		}
+		gsvc, err := app.initService(ctx, svc)
+		if err != nil {
+			return err
+		}
+		gsvc.RegisterService(app.grpcPrivateService)
+		unique[svc] = struct{}{}
+	}
+	if len(app.Config.API.JSONListener) > 0 {
+		if len(public) == 0 {
+			return fmt.Errorf("can't start json server without public services")
+		}
+		app.jsonAPIService = grpcserver.NewJSONHTTPServer(app.Config.API.JSONListener)
+		app.jsonAPIService.StartService(ctx, public...)
+	}
+	if app.grpcPublicService != nil {
+		app.grpcPublicService.Start()
+	}
+	if app.grpcPrivateService != nil {
+		app.grpcPrivateService.Start()
+	}
+	return nil
 }
 
 func (app *App) stopServices(ctx context.Context) {
@@ -896,9 +918,15 @@ func (app *App) stopServices(ctx context.Context) {
 		}
 	}
 
-	if app.grpcAPIService != nil {
+	if app.grpcPublicService != nil {
+		log.Info("stopping public grpc service")
 		// does not return any errors
-		_ = app.grpcAPIService.Close()
+		_ = app.grpcPublicService.Close()
+	}
+	if app.grpcPrivateService != nil {
+		log.Info("stopping private grpc service")
+		// does not return any errors
+		_ = app.grpcPrivateService.Close()
 	}
 
 	if app.updater != nil {
@@ -1172,10 +1200,12 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	if err := app.startServices(ctx); err != nil {
-		return fmt.Errorf("error starting services: %w", err)
+		return err
 	}
 
-	app.startAPIServices(ctx)
+	if err := app.startAPIServices(ctx); err != nil {
+		return err
+	}
 
 	events.SubscribeToLayers(clock)
 	logger.Info("app started")
