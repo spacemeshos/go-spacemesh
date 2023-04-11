@@ -49,7 +49,7 @@ func RandomATXID() ATXID {
 	var b [ATXIDSize]byte
 	_, err := rand.Read(b[:])
 	if err != nil {
-		return *EmptyATXID
+		return EmptyATXID
 	}
 	return ATXID(b)
 }
@@ -102,10 +102,8 @@ func RandomTransactionID() TransactionID {
 // RandomBallot generates a Ballot with random content for testing.
 func RandomBallot() *Ballot {
 	return &Ballot{
-		BallotMetadata: BallotMetadata{
-			Layer: NewLayerID(10),
-		},
 		InnerBallot: InnerBallot{
+			Layer:     LayerID(10),
 			AtxID:     RandomATXID(),
 			RefBallot: RandomBallotID(),
 		},

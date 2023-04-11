@@ -2,12 +2,13 @@ package signing
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"io"
 
 	oasis "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
-	"github.com/spacemeshos/ed25519-recovery"
+	sm_ed25519 "github.com/spacemeshos/ed25519-recovery"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -22,6 +23,24 @@ const (
 	HARE
 	POET
 )
+
+// String returns the string representation of a domain.
+func (d domain) String() string {
+	switch d {
+	case ATX:
+		return "ATX"
+	case BEACON:
+		return "BEACON"
+	case BALLOT:
+		return "BALLOT"
+	case HARE:
+		return "HARE"
+	case POET:
+		return "POET"
+	default:
+		return "UNKNOWN"
+	}
+}
 
 type edSignerOption struct {
 	priv   PrivateKey
@@ -42,12 +61,12 @@ func WithPrefix(prefix []byte) EdSignerOptionFunc {
 // WithPrivateKey sets the private key used by EdSigner.
 func WithPrivateKey(priv PrivateKey) EdSignerOptionFunc {
 	return func(opt *edSignerOption) error {
-		if len(priv) != ed25519.PrivateKeySize {
+		if len(priv) != sm_ed25519.PrivateKeySize {
 			return errors.New("could not create EdSigner from the provided key: too small")
 		}
 
-		keyPair := ed25519.NewKeyFromSeed(priv[:32])
-		if !bytes.Equal(keyPair[32:], priv.Public().(ed25519.PublicKey)) {
+		keyPair := sm_ed25519.NewKeyFromSeed(priv[:32])
+		if !bytes.Equal(keyPair[32:], priv.Public().(sm_ed25519.PublicKey)) {
 			log.Error("Public key and private key do not match")
 			return errors.New("private and public do not match")
 		}
@@ -60,7 +79,7 @@ func WithPrivateKey(priv PrivateKey) EdSignerOptionFunc {
 // WithKeyFromRand sets the private key used by EdSigner using predictable randomness source.
 func WithKeyFromRand(rand io.Reader) EdSignerOptionFunc {
 	return func(opt *edSignerOption) error {
-		_, priv, err := ed25519.GenerateKey(rand)
+		_, priv, err := sm_ed25519.GenerateKey(rand)
 		if err != nil {
 			return fmt.Errorf("could not generate key pair: %w", err)
 		}
@@ -88,7 +107,7 @@ func NewEdSigner(opts ...EdSignerOptionFunc) (*EdSigner, error) {
 	}
 
 	if cfg.priv == nil {
-		_, priv, err := ed25519.GenerateKey(nil)
+		_, priv, err := sm_ed25519.GenerateKey(nil)
 		if err != nil {
 			return nil, fmt.Errorf("could not generate key pair: %w", err)
 		}
@@ -107,7 +126,13 @@ func (es *EdSigner) Sign(d domain, m []byte) types.EdSignature {
 	msg = append(msg, es.prefix...)
 	msg = append(msg, byte(d))
 	msg = append(msg, m...)
-	return *(*[types.EdSignatureSize]byte)(ed25519.Sign(es.priv, msg))
+
+	switch d {
+	case HARE:
+		return *(*[types.EdSignatureSize]byte)(sm_ed25519.Sign(es.priv, msg))
+	default:
+		return *(*[types.EdSignatureSize]byte)(ed25519.Sign(es.priv, msg))
+	}
 }
 
 // NodeID returns the node ID of the signer.
@@ -117,7 +142,7 @@ func (es *EdSigner) NodeID() types.NodeID {
 
 // PublicKey returns the public key of the signer.
 func (es *EdSigner) PublicKey() *PublicKey {
-	return NewPublicKey(es.priv.Public().(ed25519.PublicKey))
+	return NewPublicKey(es.priv.Public().(sm_ed25519.PublicKey))
 }
 
 // PrivateKey returns private key.
@@ -131,4 +156,8 @@ func (es *EdSigner) VRFSigner() (*VRFSigner, error) {
 		privateKey: oasis.PrivateKey(es.priv),
 		nodeID:     es.NodeID(),
 	}, nil
+}
+
+func (es *EdSigner) Prefix() []byte {
+	return es.prefix
 }

@@ -18,12 +18,6 @@ type HTTPPoetTestHarness struct {
 
 type HTTPPoetOpt func(*config.Config)
 
-func WithGateway(endpoint string) HTTPPoetOpt {
-	return func(cfg *config.Config) {
-		cfg.Service.GatewayAddresses = []string{endpoint}
-	}
-}
-
 func WithGenesis(genesis time.Time) HTTPPoetOpt {
 	return func(cfg *config.Config) {
 		cfg.Service.Genesis = genesis.Format(time.RFC3339)

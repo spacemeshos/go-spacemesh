@@ -21,11 +21,8 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err 
 			atx, err = nil, fmt.Errorf("decode %w", decodeErr)
 			return true
 		}
-		v.SetID(&id)
-
-		nodeID := types.NodeID{}
-		stmt.ColumnBytes(3, nodeID[:])
-		v.SetNodeID(&nodeID)
+		v.SetID(id)
+		stmt.ColumnBytes(3, v.SmesherID[:])
 
 		effectiveNumUnits := uint32(stmt.ColumnInt32(4))
 		v.SetEffectiveNumUnits(effectiveNumUnits)
@@ -154,8 +151,8 @@ func GetByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.Node
 			err = fmt.Errorf("atx data missing epoch %v nodeID %v", epoch, nodeID)
 			return false
 		}
-		v.SetID(&id)
-		v.SetNodeID(&nodeID)
+		v.SetID(id)
+		v.SmesherID = nodeID
 		v.SetEffectiveNumUnits(uint32(stmt.ColumnInt32(4)))
 		v.SetReceived(time.Unix(0, stmt.ColumnInt64(5)).Local())
 		baseTickHeight := uint64(stmt.ColumnInt64(2))
@@ -246,22 +243,21 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.ID().Bytes())
-		stmt.BindInt64(2, int64(atx.PubLayerID.Uint32()))
-		stmt.BindInt64(3, int64(atx.PublishEpoch()))
-		stmt.BindInt64(4, int64(atx.EffectiveNumUnits()))
+		stmt.BindInt64(2, int64(atx.PublishEpoch))
+		stmt.BindInt64(3, int64(atx.EffectiveNumUnits()))
 		if atx.VRFNonce != nil {
-			stmt.BindInt64(5, int64(*atx.VRFNonce))
+			stmt.BindInt64(4, int64(*atx.VRFNonce))
 		}
-		stmt.BindBytes(6, atx.NodeID().Bytes())
-		stmt.BindBytes(7, buf)
-		stmt.BindInt64(8, atx.Received().UnixNano())
-		stmt.BindInt64(9, int64(atx.BaseTickHeight()))
-		stmt.BindInt64(10, int64(atx.TickCount()))
+		stmt.BindBytes(5, atx.SmesherID.Bytes())
+		stmt.BindBytes(6, buf)
+		stmt.BindInt64(7, atx.Received().UnixNano())
+		stmt.BindInt64(8, int64(atx.BaseTickHeight()))
+		stmt.BindInt64(9, int64(atx.TickCount()))
 	}
 
 	_, err = db.Exec(`
-		insert into atxs (id, layer, epoch, effective_num_units, nonce, smesher, atx, received, base_tick_height, tick_count) 
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);`, enc, nil)
+		insert into atxs (id, epoch, effective_num_units, nonce, smesher, atx, received, base_tick_height, tick_count) 
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}

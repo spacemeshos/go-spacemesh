@@ -47,7 +47,7 @@ func newTestForkFinderWithDuration(t *testing.T, maxHashes uint32, d time.Durati
 
 func TestResynced(t *testing.T) {
 	tf := newTestForkFinderWithDuration(t, 5, 0, logtest.New(t))
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 	hash := types.RandomHash()
 	require.True(t, tf.NeedResync(lid, hash))
 	tf.AddResynced(lid, hash)
@@ -61,9 +61,9 @@ func TestResynced(t *testing.T) {
 func TestForkFinder_Purge(t *testing.T) {
 	tf := newTestForkFinder(t, 5)
 	numCached := 10
-	tf.UpdateAgreement(p2p.Peer(strconv.Itoa(0)), types.NewLayerID(uint32(1)), types.RandomHash(), time.Now().Add(-2*time.Hour))
+	tf.UpdateAgreement(p2p.Peer(strconv.Itoa(0)), types.LayerID(uint32(1)), types.RandomHash(), time.Now().Add(-2*time.Hour))
 	for i := 1; i < numCached; i++ {
-		tf.UpdateAgreement(p2p.Peer(strconv.Itoa(i)), types.NewLayerID(uint32(i+1)), types.RandomHash(), time.Now())
+		tf.UpdateAgreement(p2p.Peer(strconv.Itoa(i)), types.LayerID(uint32(i+1)), types.RandomHash(), time.Now())
 	}
 	tf.mFetcher.EXPECT().GetPeers().Return([]p2p.Peer{})
 	require.Equal(t, numCached, tf.NumPeersCached())
@@ -91,9 +91,9 @@ func layerHash(layer int, good bool) types.Hash32 {
 func storeNodeHashes(t *testing.T, db *sql.Database, diverge, max int) {
 	for lid := 0; lid <= max; lid++ {
 		if lid < diverge {
-			require.NoError(t, layers.SetMeshHash(db, types.NewLayerID(uint32(lid)), layerHash(lid, true)))
+			require.NoError(t, layers.SetMeshHash(db, types.LayerID(uint32(lid)), layerHash(lid, true)))
 		} else {
-			require.NoError(t, layers.SetMeshHash(db, types.NewLayerID(uint32(lid)), layerHash(lid, false)))
+			require.NoError(t, layers.SetMeshHash(db, types.LayerID(uint32(lid)), layerHash(lid, false)))
 		}
 	}
 }
@@ -142,7 +142,7 @@ func TestForkFinder_FindFork_Permutation(t *testing.T) {
 					return serveHashReq(t, req)
 				}).AnyTimes()
 
-			fork, err := tf.FindFork(context.TODO(), peer, types.NewLayerID(uint32(lid)), layerHash(lid, true))
+			fork, err := tf.FindFork(context.TODO(), peer, types.LayerID(uint32(lid)), layerHash(lid, true))
 			require.NoError(t, err)
 			require.EqualValues(t, expected, fork.Uint32())
 		}
@@ -152,7 +152,7 @@ func TestForkFinder_FindFork_Permutation(t *testing.T) {
 func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 	maxHashes := uint32(100)
 	peer := p2p.Peer("grumpy")
-	lastAgreedLid := types.NewLayerID(35)
+	lastAgreedLid := types.LayerID(35)
 	lastAgreedHash := types.RandomHash()
 
 	t.Run("peer mesh changed", func(t *testing.T) {
@@ -161,18 +161,18 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 		tf := newTestForkFinder(t, maxHashes)
 		require.NoError(t, layers.SetMeshHash(tf.db, lastAgreedLid, lastAgreedHash))
 		tf.UpdateAgreement(peer, lastAgreedLid, lastAgreedHash, time.Now())
-		tf.UpdateAgreement("shorty", types.NewLayerID(111), types.RandomHash(), time.Now())
+		tf.UpdateAgreement("shorty", types.LayerID(111), types.RandomHash(), time.Now())
 		require.Equal(t, tf.NumPeersCached(), 2)
 		tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
 				mh := &fetch.MeshHashes{
-					Layers: []types.LayerID{types.NewLayerID(35), types.NewLayerID(36), types.NewLayerID(37)},
+					Layers: []types.LayerID{types.LayerID(35), types.LayerID(36), types.LayerID(37)},
 					Hashes: []types.Hash32{types.RandomHash(), types.RandomHash(), types.RandomHash()},
 				}
 				return mh, nil
 			})
 
-		_, err := tf.FindFork(context.TODO(), peer, types.NewLayerID(37), types.RandomHash())
+		_, err := tf.FindFork(context.TODO(), peer, types.LayerID(37), types.RandomHash())
 		require.ErrorIs(t, err, syncer.ErrPeerMeshChangedMidSession)
 		require.Equal(t, tf.NumPeersCached(), 1)
 	})
@@ -183,14 +183,14 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 		tf := newTestForkFinder(t, maxHashes)
 		require.NoError(t, layers.SetMeshHash(tf.db, lastAgreedLid, lastAgreedHash))
 		tf.UpdateAgreement(peer, lastAgreedLid, lastAgreedHash, time.Now())
-		tf.UpdateAgreement("shorty", types.NewLayerID(111), types.RandomHash(), time.Now())
+		tf.UpdateAgreement("shorty", types.LayerID(111), types.RandomHash(), time.Now())
 		require.Equal(t, tf.NumPeersCached(), 2)
-		lastDiffLid := types.NewLayerID(37)
+		lastDiffLid := types.LayerID(37)
 		lastDiffHash := types.RandomHash()
 		tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
 				mh := &fetch.MeshHashes{
-					Layers: []types.LayerID{types.NewLayerID(35), types.NewLayerID(36), types.NewLayerID(37)},
+					Layers: []types.LayerID{types.LayerID(35), types.LayerID(36), types.LayerID(37)},
 					Hashes: []types.Hash32{lastAgreedHash, types.RandomHash(), lastDiffHash},
 				}
 				// changes the node's own hash for lastAgreedLid
@@ -245,7 +245,7 @@ func TestForkFinder_FindFork_Edges(t *testing.T) {
 
 			peer := p2p.Peer("grumpy")
 			if tc.lastSame != 0 {
-				tf.UpdateAgreement(peer, types.NewLayerID(uint32(tc.lastSame)), layerHash(tc.lastSame, true), time.Now())
+				tf.UpdateAgreement(peer, types.LayerID(uint32(tc.lastSame)), layerHash(tc.lastSame, true), time.Now())
 			}
 
 			tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
@@ -253,9 +253,9 @@ func TestForkFinder_FindFork_Edges(t *testing.T) {
 					return serveHashReq(t, req)
 				}).Times(tc.expReqs)
 
-			fork, err := tf.FindFork(context.TODO(), peer, types.NewLayerID(uint32(tc.lastDiff)), layerHash(tc.lastDiff, true))
+			fork, err := tf.FindFork(context.TODO(), peer, types.LayerID(uint32(tc.lastDiff)), layerHash(tc.lastDiff, true))
 			require.NoError(t, err)
-			require.Equal(t, types.NewLayerID(11), fork)
+			require.Equal(t, types.LayerID(11), fork)
 		})
 	}
 }

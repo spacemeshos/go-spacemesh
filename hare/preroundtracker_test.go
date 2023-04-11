@@ -22,14 +22,11 @@ func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.P
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
-				BallotMetadata: types.BallotMetadata{
-					Layer: layerID,
-				},
 				InnerBallot: types.InnerBallot{
+					Layer: layerID,
 					AtxID: types.RandomATXID(),
 					EpochData: &types.EpochData{
-						ActiveSet: types.RandomActiveSet(10),
-						Beacon:    types.RandomBeacon(),
+						Beacon: types.RandomBeacon(),
 					},
 				},
 			},

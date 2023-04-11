@@ -34,9 +34,9 @@ type Broker struct {
 	stateQuerier    stateQuerier             // provides activeness check
 	nodeSyncState   system.SyncStateProvider // provider function to check if the node is currently synced
 	mchOut          chan<- *types.MalfeasanceGossip
-	outbox          map[uint32]chan any
-	pending         map[uint32][]any // the buffer of pending early messages for the next layer
-	latestLayer     types.LayerID    // the latest layer to attempt register (successfully or unsuccessfully)
+	outbox          map[types.LayerID]chan any
+	pending         map[types.LayerID][]any // the buffer of pending early messages for the next layer
+	latestLayer     types.LayerID           // the latest layer to attempt register (successfully or unsuccessfully)
 	minDeleted      types.LayerID
 	limit           int // max number of simultaneous consensus processes
 
@@ -63,8 +63,8 @@ func newBroker(
 		stateQuerier:    stateQuerier,
 		nodeSyncState:   syncState,
 		mchOut:          mch,
-		outbox:          make(map[uint32]chan any),
-		pending:         make(map[uint32][]any),
+		outbox:          make(map[types.LayerID]chan any),
+		pending:         make(map[types.LayerID][]any),
 		latestLayer:     types.GetEffectiveGenesis(),
 		limit:           limit,
 		minDeleted:      types.GetEffectiveGenesis(),
@@ -330,7 +330,7 @@ func (b *Broker) HandleEligibility(ctx context.Context, em *types.HareEligibilit
 func (b *Broker) getInbox(id types.LayerID) chan any {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	out, exist := b.outbox[id.Uint32()]
+	out, exist := b.outbox[id]
 	if !exist {
 		return nil
 	}
@@ -340,20 +340,19 @@ func (b *Broker) getInbox(id types.LayerID) chan any {
 func (b *Broker) handleEarlyMessage(logger log.Log, layer types.LayerID, nodeID types.NodeID, msg any) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	layerNum := layer.Uint32()
-	if _, exist := b.pending[layerNum]; !exist { // create buffer if first msg
-		b.pending[layerNum] = make([]any, 0, inboxCapacity)
+	if _, exist := b.pending[layer]; !exist { // create buffer if first msg
+		b.pending[layer] = make([]any, 0, inboxCapacity)
 	}
 
 	// we want to write all buffered messages to a chan with InboxCapacity len
 	// hence, we limit the buffer for pending messages
-	if len(b.pending[layerNum]) == inboxCapacity {
+	if len(b.pending[layer]) == inboxCapacity {
 		logger.With().Warning("too many pending messages, ignoring message",
 			log.Int("inbox_capacity", inboxCapacity),
 			log.Stringer("smesher", nodeID))
 		return nil
 	}
-	b.pending[layerNum] = append(b.pending[layerNum], msg)
+	b.pending[layer] = append(b.pending[layer], msg)
 	return nil
 }
 
@@ -362,7 +361,7 @@ func (b *Broker) cleanOldLayers() {
 	defer b.mu.Unlock()
 
 	for i := b.minDeleted.Add(1); i.Before(b.latestLayer); i = i.Add(1) {
-		_, exist := b.outbox[i.Uint32()]
+		_, exist := b.outbox[i]
 
 		if !exist { // unregistered
 			b.minDeleted = b.minDeleted.Add(1)
@@ -392,23 +391,23 @@ func (b *Broker) createNewInbox(id types.LayerID) chan any {
 		// unregister the earliest layer to make space for the new layer
 		// cannot call unregister here because unregister blocks and this would cause a deadlock
 		instance := b.minDeleted.Add(1)
-		delete(b.outbox, instance.Uint32())
+		delete(b.outbox, instance)
 		b.minDeleted = instance
 		b.With().Info("unregistered layer due to maximum concurrent processes", instance)
 	}
 	outboxCh := make(chan any, inboxCapacity)
-	b.outbox[id.Uint32()] = outboxCh
-	for _, mOut := range b.pending[id.Uint32()] {
+	b.outbox[id] = outboxCh
+	for _, mOut := range b.pending[id] {
 		outboxCh <- mOut
 	}
-	delete(b.pending, id.Uint32())
+	delete(b.pending, id)
 	return outboxCh
 }
 
 func (b *Broker) cleanupInstance(id types.LayerID) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	delete(b.outbox, id.Uint32())
+	delete(b.outbox, id)
 }
 
 // Unregister a layer from receiving messages.

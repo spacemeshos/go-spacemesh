@@ -52,6 +52,21 @@ var (
 		},
 		toResources,
 	)
+	bootstrapperResources = parameters.NewParameter(
+		"bootstrapper_resources",
+		"requests and limits for bootstrapper container",
+		&apiv1.ResourceRequirements{
+			Requests: apiv1.ResourceList{
+				apiv1.ResourceCPU:    resource.MustParse("0.1"),
+				apiv1.ResourceMemory: resource.MustParse("100Mi"),
+			},
+			Limits: apiv1.ResourceList{
+				apiv1.ResourceCPU:    resource.MustParse("0.1"),
+				apiv1.ResourceMemory: resource.MustParse("100Mi"),
+			},
+		},
+		toResources,
+	)
 	poetResources = parameters.NewParameter(
 		"poet_resources",
 		"requests and limits for poet container",
@@ -80,7 +95,6 @@ func toResources(value string) (*apiv1.ResourceRequirements, error) {
 const (
 	configDir = "/etc/config/"
 
-	persistentVolumeName  = "data"
 	attachedPoetConfig    = "poet.conf"
 	attachedSmesherConfig = "smesher.json"
 
@@ -211,6 +225,10 @@ func createPoetIdentifier(id int) string {
 	return fmt.Sprintf("%s-%d", poetApp, id)
 }
 
+func createBootstrapperIdentifier(id int) string {
+	return fmt.Sprintf("%s-%d", bootstrapperApp, id)
+}
+
 func decodePoetIdentifier(id string) int {
 	parts := strings.Split(id, "-")
 	if len(parts) != 2 {
@@ -327,6 +345,11 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, flags []De
 		copy(finalFlags, flags)
 		for idx := 0; idx < ctx.PoetSize; idx++ {
 			finalFlags = append(finalFlags, PoetEndpoint(MakePoetEndpoint(idx)))
+		}
+		if ctx.BootstrapperSize > 1 {
+			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(i%ctx.BootstrapperSize)))
+		} else {
+			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(0)))
 		}
 		eg.Go(func() error {
 			id := fmt.Sprintf("%s-%d", kind, i)
@@ -447,6 +470,85 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 	return nil
 }
 
+func deployBootstrapper(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
+	if _, err := deployBootstrapperSvc(ctx, id); err != nil {
+		return nil, fmt.Errorf("apply poet service: %w", err)
+	}
+
+	node, err := deployBootstrapperD(ctx, id, flags...)
+	if err != nil {
+		return nil, err
+	}
+
+	return node, nil
+}
+
+func deployBootstrapperSvc(ctx *testcontext.Context, id string) (*apiv1.Service, error) {
+	ctx.Log.Debugw("deploying bootstrapper service", "id", id)
+	labels := nodeLabels(bootstrapperApp, id)
+	svc := corev1.Service(id, ctx.Namespace).
+		WithLabels(labels).
+		WithSpec(corev1.ServiceSpec().
+			WithSelector(labels).
+			WithPorts(
+				corev1.ServicePort().WithName("rest").WithProtocol("TCP").WithPort(bootstrapperPort),
+			),
+		)
+
+	return ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
+}
+
+func deployBootstrapperD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
+	cmd := []string{
+		"/bin/go-bootstrapper",
+		"--serve-update",
+		"--data-dir=/data/bootstrapper",
+		"--epoch-offset=1",
+		"--port=" + strconv.Itoa(bootstrapperPort),
+		// empty so it generates local random beacon instead of making http queries to bitcoin explorer
+		"--bitcoin-endpoint=",
+	}
+	for _, flag := range flags {
+		cmd = append(cmd, flag.Flag())
+	}
+
+	ctx.Log.Debugw("deploying bootstrapper pod", "id", id, "cmd", cmd, "image", ctx.BootstrapperImage)
+
+	labels := nodeLabels(bootstrapperApp, id)
+	deployment := appsv1.Deployment(id, ctx.Namespace).
+		WithLabels(labels).
+		WithSpec(appsv1.DeploymentSpec().
+			WithSelector(metav1.LabelSelector().WithMatchLabels(labels)).
+			WithReplicas(1).
+			WithTemplate(corev1.PodTemplateSpec().
+				WithLabels(labels).
+				WithSpec(corev1.PodSpec().
+					WithNodeSelector(ctx.NodeSelector).
+					WithContainers(corev1.Container().
+						WithName("bootstrapper").
+						WithImage(ctx.BootstrapperImage).
+						WithPorts(
+							corev1.ContainerPort().WithName("rest").WithProtocol("TCP").WithContainerPort(bootstrapperPort),
+						).
+						WithResources(corev1.ResourceRequirements().
+							WithRequests(bootstrapperResources.Get(ctx.Parameters).Requests).
+							WithLimits(bootstrapperResources.Get(ctx.Parameters).Limits),
+						).
+						WithCommand(cmd...),
+					),
+				)))
+
+	_, err := ctx.Client.AppsV1().Deployments(ctx.Namespace).Apply(ctx, deployment, apimetav1.ApplyOptions{FieldManager: "test"})
+	if err != nil {
+		return nil, fmt.Errorf("create bootstrapper: %w", err)
+	}
+	bpod, err := waitNode(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return bpod, nil
+}
+
 func waitNode(tctx *testcontext.Context, id string) (*NodeClient, error) {
 	attempt := func() (*NodeClient, error) {
 		pod, err := waitPod(tctx, id)
@@ -456,7 +558,7 @@ func waitNode(tctx *testcontext.Context, id string) (*NodeClient, error) {
 		if pod == nil {
 			return nil, nil
 		}
-		if strings.Contains(id, poetApp) {
+		if strings.Contains(id, poetApp) || strings.Contains(id, bootstrapperApp) {
 			return &NodeClient{
 				Node: Node{
 					Name: id,
@@ -520,8 +622,8 @@ func MinPeers(target int) DeploymentFlag {
 	return DeploymentFlag{Name: "--min-peers", Value: strconv.Itoa(target)}
 }
 
-func Gateway(address string) DeploymentFlag {
-	return DeploymentFlag{Name: "--gateway", Value: address}
+func BootstrapperUrl(endpoint string) DeploymentFlag {
+	return DeploymentFlag{Name: "--bootstrap-url", Value: endpoint}
 }
 
 const (
@@ -566,4 +668,8 @@ func PoetRestListen(port int) DeploymentFlag {
 
 func StartSmeshing(start bool) DeploymentFlag {
 	return DeploymentFlag{Name: "--smeshing-start", Value: fmt.Sprintf("%v", start)}
+}
+
+func GenerateFallback() DeploymentFlag {
+	return DeploymentFlag{Name: "--fallback", Value: fmt.Sprintf("%v", true)}
 }

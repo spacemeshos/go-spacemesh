@@ -145,7 +145,7 @@ func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPos
 // GetAtxHeader returns the ATX header by the given ID. This function is thread safe and will return an error if the ID
 // is not found in the ATX DB.
 func (db *CachedDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
-	if id == *types.EmptyATXID {
+	if id == types.EmptyATXID {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
 
@@ -159,7 +159,7 @@ func (db *CachedDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, err
 // GetFullAtx returns the full atx struct of the given atxId id, it returns an error if the full atx cannot be found
 // in all databases.
 func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error) {
-	if id == *types.EmptyATXID {
+	if id == types.EmptyATXID {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
 
@@ -330,7 +330,7 @@ func getHeader(vatx *types.VerifiedActivationTx) *types.ActivationTxHeader {
 		Received:          vatx.Received(),
 
 		ID:     vatx.ID(),
-		NodeID: vatx.NodeID(),
+		NodeID: vatx.SmesherID,
 
 		BaseTickHeight: vatx.BaseTickHeight(),
 		TickCount:      vatx.TickCount(),

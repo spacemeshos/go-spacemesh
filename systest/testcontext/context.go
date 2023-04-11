@@ -29,6 +29,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/parameters"
 )
 
+const (
+	ParamLayersPerEpoch = "layers-per-epoch"
+	ParamLayerDuration  = "layer-duration"
+)
+
 var (
 	configname  = flag.String("configname", "", "config map name. if not empty parameters will be loaded from specified configmap")
 	clusters    = flag.Int("clusters", 1, "controls tests parallelization by creating multiple spacemesh clusters at the same time")
@@ -51,12 +56,17 @@ var (
 	imageFlag = parameters.String(
 		"image",
 		"go-spacemesh image",
-		"spacemeshos/go-spacemesh-dev:proposal-events",
+		"spacemeshos/go-spacemesh-dev:2beaf443f",
+	)
+	bsImage = parameters.String(
+		"bs-image",
+		"bootstrapper image",
+		"spacemeshos/spacemesh-dev-bs:2beaf443f",
 	)
 	poetImage = parameters.String(
 		"poet-image",
-		"spacemeshos/poet:87608eda8307b44984c191afc65cdbcec0d8d1c4",
 		"poet server image",
+		"spacemeshos/poet:87608eda8307b44984c191afc65cdbcec0d8d1c4",
 	)
 	namespaceFlag = parameters.String(
 		"namespace",
@@ -76,6 +86,9 @@ var (
 	poetSize = parameters.Int(
 		"poet-size", "size of the poet servers", 1,
 	)
+	bsSize = parameters.Int(
+		"bs-size", "size of bootstrappers", 1,
+	)
 	storage = parameters.String(
 		"storage", "<class>=<size> for the storage", "standard=1Gi",
 	)
@@ -92,6 +105,12 @@ var (
 			}
 			return rst, nil
 		},
+	)
+	LayerDuration = parameters.Duration(
+		ParamLayerDuration, "layer duration in seconds", 5*time.Second,
+	)
+	LayersPerEpoch = parameters.Int(
+		ParamLayersPerEpoch, "number of layers in an epoch", 4,
 	)
 )
 
@@ -121,11 +140,13 @@ type Context struct {
 	BootstrapDuration time.Duration
 	ClusterSize       int
 	PoetSize          int
+	BootstrapperSize  int
 	Generic           client.Client
 	TestID            string
 	Keep              bool
 	Namespace         string
 	Image             string
+	BootstrapperImage string
 	PoetImage         string
 	Storage           struct {
 		Size  string
@@ -311,7 +332,9 @@ func New(t *testing.T, opts ...Opt) *Context {
 		Keep:              keep.Get(p),
 		ClusterSize:       clusterSize.Get(p),
 		PoetSize:          poetSize.Get(p),
+		BootstrapperSize:  bsSize.Get(p),
 		Image:             imageFlag.Get(p),
+		BootstrapperImage: bsImage.Get(p),
 		PoetImage:         poetImage.Get(p),
 		NodeSelector:      nodeSelector.Get(p),
 		Log:               zaptest.NewLogger(t, zaptest.Level(logLevel)).Sugar().Named(t.Name()),

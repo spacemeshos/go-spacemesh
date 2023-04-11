@@ -3,6 +3,7 @@ package vm
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"math/big"
 	"math/rand"
 	"os"
@@ -41,8 +42,11 @@ func testContext(lid types.LayerID) ApplyContext {
 
 func newTester(tb testing.TB) *tester {
 	return &tester{
-		TB:  tb,
-		VM:  New(sql.InMemory(), WithLogger(logtest.New(tb))),
+		TB: tb,
+		VM: New(sql.InMemory(),
+			WithLogger(logtest.New(tb)),
+			WithConfig(Config{GasLimit: math.MaxUint64, StorageCostFactor: 2}),
+		),
 		rng: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
@@ -293,7 +297,8 @@ func (t *tester) persistent() *tester {
 	db, err := sql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	require.NoError(t, err)
-	t.VM = New(db, WithLogger(logtest.New(t)))
+	t.VM = New(db, WithLogger(logtest.New(t)),
+		WithConfig(Config{StorageCostFactor: 2, GasLimit: math.MaxUint64}))
 	return t
 }
 
@@ -1620,6 +1625,11 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			tx:   tt.spawn(1, 0),
 			err:  core.ErrNotSpawned,
 		},
+		{
+			desc: "OverflowsLimit",
+			tx:   types.NewRawTx(make([]byte, core.TxSizeLimit+1)),
+			err:  core.ErrTxLimit,
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			req := tt.Validation(tc.tx)
@@ -1985,7 +1995,7 @@ func TestValidation(t *testing.T) {
 func TestVaultValidation(t *testing.T) {
 	tt := newTester(t).
 		addVesting(1, 1, 2, vesting.TemplateAddress1).
-		addVault(2, 100, 10, types.NewLayerID(1), types.NewLayerID(10)).
+		addVault(2, 100, 10, types.LayerID(1), types.LayerID(10)).
 		applyGenesis()
 	_, _, err := tt.Apply(ApplyContext{Layer: types.GetEffectiveGenesis()},
 		notVerified(tt.selfSpawn(0), tt.spawn(0, 1)), nil)
@@ -2046,9 +2056,190 @@ func FuzzParse(f *testing.F) {
 	})
 }
 
+func getMultisigTemplate(k int) types.Address {
+	switch k {
+	case 1:
+		return multisig.TemplateAddress1
+	case 2:
+		return multisig.TemplateAddress2
+	case 3:
+		return multisig.TemplateAddress3
+	}
+	panic(fmt.Sprintf("unknown k %d", k))
+}
+
+func BenchmarkTransactions(b *testing.B) {
+	bench := func(b *testing.B, tt *tester, txs []types.Transaction) {
+		lid := types.GetEffectiveGenesis().Add(2)
+		for i := 0; i < b.N; i++ {
+			b.StartTimer()
+			ineffective, txs, err := tt.Apply(ApplyContext{Layer: lid}, txs, nil)
+			b.StopTimer()
+			require.NoError(b, err)
+			require.Empty(b, ineffective)
+			for _, tx := range txs {
+				require.Equal(b, types.TransactionSuccess, tx.Status)
+			}
+			require.NoError(b, tt.Revert(lid.Sub(1)))
+		}
+	}
+	const n = 10
+	b.Logf("n=%d", n)
+	// benchmarks below will have overhead beside the transaction itself.
+	// they are useful mainly to collect execution profiles and make estimations based on them.
+	b.Run("singlesig/selfspawn", func(b *testing.B) {
+		tt := newTester(b).persistent().addSingleSig(n).applyGenesis()
+		txs := make([]types.Transaction, n)
+		for i := range txs {
+			tx := &selfSpawnTx{principal: i}
+			txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+		}
+		bench(b, tt, txs)
+	})
+	b.Run("singlesig/spawn", func(b *testing.B) {
+		tt := newTester(b).persistent().addSingleSig(n).applyGenesis()
+		ineffective, _, err := tt.Apply(
+			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
+			notVerified(tt.spawnAll()...),
+			nil,
+		)
+		tt = tt.addSingleSig(n)
+
+		require.NoError(b, err)
+		require.Empty(b, ineffective)
+		txs := make([]types.Transaction, n)
+		for i := range txs {
+			tx := &spawnTx{principal: i, target: i + n}
+			txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+		}
+		bench(b, tt, txs)
+	})
+	b.Run("singlesig/spend", func(b *testing.B) {
+		tt := newTester(b).persistent().addSingleSig(n).applyGenesis()
+		ineffective, _, err := tt.Apply(
+			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
+			notVerified(tt.spawnAll()...),
+			nil,
+		)
+		tt = tt.addSingleSig(n)
+
+		require.NoError(b, err)
+		require.Empty(b, ineffective)
+		txs := make([]types.Transaction, n)
+		for i := range txs {
+			tx := &spendTx{from: i, to: i + n, amount: 10}
+			txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+		}
+		bench(b, tt, txs)
+	})
+	type variant struct {
+		k, n int
+	}
+	for _, v := range []variant{
+		{1, 1},
+		{1, 2},
+		{2, 3},
+		{3, 5},
+		{3, 10},
+	} {
+		b.Run(fmt.Sprintf("multisig/k=%d/n=%d/selfspawn", v.k, v.n), func(b *testing.B) {
+			tt := newTester(b).persistent().addMultisig(n, v.k, v.n, getMultisigTemplate(v.k)).applyGenesis()
+			txs := make([]types.Transaction, n)
+			for i := range txs {
+				tx := &selfSpawnTx{principal: i}
+				txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+			}
+			bench(b, tt, txs)
+		})
+		b.Run(fmt.Sprintf("multisig/k=%d/n=%d/spawn", v.k, v.n), func(b *testing.B) {
+			tt := newTester(b).persistent().addMultisig(n, v.k, v.n, getMultisigTemplate(v.k)).applyGenesis()
+			ineffective, _, err := tt.Apply(
+				ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
+				notVerified(tt.spawnAll()...),
+				nil,
+			)
+			tt = tt.addMultisig(n, v.k, v.n, getMultisigTemplate(v.k))
+
+			require.NoError(b, err)
+			require.Empty(b, ineffective)
+			txs := make([]types.Transaction, n)
+			for i := range txs {
+				tx := &spawnTx{principal: i, target: i + n}
+				txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+			}
+			bench(b, tt, txs)
+		})
+		b.Run(fmt.Sprintf("multisig/k=%d/n=%d/spend", v.k, v.n), func(b *testing.B) {
+			tt := newTester(b).persistent().addMultisig(n, v.k, v.n, getMultisigTemplate(v.k)).applyGenesis()
+			ineffective, _, err := tt.Apply(
+				ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
+				notVerified(tt.spawnAll()...),
+				nil,
+			)
+			tt = tt.addMultisig(n, 3, 5, multisig.TemplateAddress3)
+
+			require.NoError(b, err)
+			require.Empty(b, ineffective)
+			txs := make([]types.Transaction, n)
+			for i := range txs {
+				tx := &spendTx{from: i, to: i + n, amount: 10}
+				txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+			}
+			bench(b, tt, txs)
+		})
+	}
+	b.Run("vesting/spawnvault", func(b *testing.B) {
+		tt := newTester(b).persistent().
+			addVesting(n, 3, 5, vesting.TemplateAddress3).
+			applyGenesis()
+		ineffective, _, err := tt.Apply(
+			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
+			notVerified(tt.spawnAll()...),
+			nil,
+		)
+		tt = tt.addVault(n, 200000, 100000, types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(100))
+		require.NoError(b, err)
+		require.Empty(b, ineffective)
+
+		txs := make([]types.Transaction, n)
+		for i := range txs {
+			tx := &spawnTx{principal: i, target: i + n}
+			txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+		}
+		bench(b, tt, txs)
+	})
+	b.Run("vesting/drain", func(b *testing.B) {
+		tt := newTester(b).persistent().
+			addVesting(n, 3, 5, vesting.TemplateAddress3).
+			addVault(n, 200000, 100000, types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(100)).
+			applyGenesis()
+		var txs []types.Transaction
+		for i := 0; i < n; i++ {
+			tx := &selfSpawnTx{principal: i}
+			txs = append(txs, types.Transaction{RawTx: tx.gen(tt)})
+			spawn := &spawnTx{principal: i, target: i + n}
+			txs = append(txs, types.Transaction{RawTx: spawn.gen(tt)})
+		}
+		ineffective, _, err := tt.Apply(
+			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
+			txs,
+			nil,
+		)
+		require.NoError(b, err)
+		require.Empty(b, ineffective)
+
+		txs = make([]types.Transaction, n)
+		for i := range txs {
+			tx := &drainVault{owner: i, vault: i + n, recipient: i, amount: 100}
+			txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+		}
+		bench(b, tt, txs)
+	})
+}
+
 func BenchmarkValidation(b *testing.B) {
 	tt := newTester(b).addSingleSig(2).applyGenesis()
-	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)},
+	skipped, _, err := tt.Apply(ApplyContext{Layer: types.LayerID(3)},
 		notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
@@ -2133,8 +2324,8 @@ func BenchmarkWallet(b *testing.B) {
 func benchmarkWallet(b *testing.B, accounts, n int) {
 	tt := newTester(b).persistent().
 		addSingleSig(accounts).applyGenesis().withSeed(101)
-	lid := types.NewLayerID(1)
-	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)},
+	lid := types.LayerID(3)
+	skipped, _, err := tt.Apply(ApplyContext{Layer: lid},
 		notVerified(tt.spawnAll()...), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)

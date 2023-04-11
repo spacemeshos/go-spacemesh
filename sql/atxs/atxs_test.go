@@ -31,7 +31,7 @@ func TestGetATXByID(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		atx, err := newAtx(sig, types.NewLayerID(uint32(i)))
+		atx, err := newAtx(sig, types.LayerID(uint32(i)))
 		require.NoError(t, err)
 		atxList = append(atxList, atx)
 	}
@@ -57,7 +57,7 @@ func TestHasID(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		atx, err := newAtx(sig, types.NewLayerID(uint32(i)))
+		atx, err := newAtx(sig, types.LayerID(uint32(i)))
 		require.NoError(t, err)
 		atxList = append(atxList, atx)
 	}
@@ -89,25 +89,21 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 
 	// Arrange
 
-	atx1, err := newAtx(sig1, types.NewLayerID(uint32(1*layersPerEpoch)))
+	atx1, err := newAtx(sig1, types.LayerID(uint32(1*layersPerEpoch)))
 	require.NoError(t, err)
-	require.NoError(t, atx1.CalcAndSetID())
 
-	atx2, err := newAtx(sig1, types.NewLayerID(uint32(2*layersPerEpoch)))
+	atx2, err := newAtx(sig1, types.LayerID(uint32(2*layersPerEpoch)))
 	require.NoError(t, err)
 	atx2.Sequence = atx1.Sequence + 1
 	atx2.Signature = sig1.Sign(signing.ATX, atx2.SignedBytes())
-	require.NoError(t, atx2.CalcAndSetID())
 
-	atx3, err := newAtx(sig2, types.NewLayerID(uint32(3*layersPerEpoch)))
+	atx3, err := newAtx(sig2, types.LayerID(uint32(3*layersPerEpoch)))
 	require.NoError(t, err)
-	require.NoError(t, atx3.CalcAndSetID())
 
-	atx4, err := newAtx(sig2, types.NewLayerID(uint32(4*layersPerEpoch)))
+	atx4, err := newAtx(sig2, types.LayerID(uint32(4*layersPerEpoch)))
 	require.NoError(t, err)
 	atx4.Sequence = atx3.Sequence + 1
 	atx4.Signature = sig2.Sign(signing.ATX, atx4.SignedBytes())
-	require.NoError(t, atx4.CalcAndSetID())
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, atxs.Add(db, atx))
@@ -135,13 +131,11 @@ func TestGetByEpochAndNodeID(t *testing.T) {
 	sig2, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	atx1, err := newAtx(sig1, types.NewLayerID(uint32(1*layersPerEpoch)))
+	atx1, err := newAtx(sig1, types.LayerID(uint32(1*layersPerEpoch)))
 	require.NoError(t, err)
-	require.NoError(t, atx1.CalcAndSetID())
 
-	atx2, err := newAtx(sig2, types.NewLayerID(uint32(2*layersPerEpoch)))
+	atx2, err := newAtx(sig2, types.LayerID(uint32(2*layersPerEpoch)))
 	require.NoError(t, err)
-	require.NoError(t, atx2.CalcAndSetID())
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2} {
 		require.NoError(t, atxs.Add(db, atx))
@@ -178,25 +172,21 @@ func TestGetLastIDByNodeID(t *testing.T) {
 
 	// Arrange
 
-	atx1, err := newAtx(sig1, types.NewLayerID(uint32(1*layersPerEpoch)))
+	atx1, err := newAtx(sig1, types.LayerID(uint32(1*layersPerEpoch)))
 	require.NoError(t, err)
-	require.NoError(t, atx1.CalcAndSetID())
 
-	atx2, err := newAtx(sig1, types.NewLayerID(uint32(2*layersPerEpoch)))
+	atx2, err := newAtx(sig1, types.LayerID(uint32(2*layersPerEpoch)))
 	require.NoError(t, err)
 	atx2.Sequence = atx1.Sequence + 1
 	atx2.Signature = sig1.Sign(signing.ATX, atx2.SignedBytes())
-	require.NoError(t, atx2.CalcAndSetID())
 
-	atx3, err := newAtx(sig2, types.NewLayerID(uint32(3*layersPerEpoch)))
+	atx3, err := newAtx(sig2, types.LayerID(uint32(3*layersPerEpoch)))
 	require.NoError(t, err)
-	require.NoError(t, atx3.CalcAndSetID())
 
-	atx4, err := newAtx(sig2, types.NewLayerID(uint32(3*layersPerEpoch)))
+	atx4, err := newAtx(sig2, types.LayerID(uint32(3*layersPerEpoch)))
 	require.NoError(t, err)
 	atx4.Sequence = atx3.Sequence + 1
 	atx4.Signature = sig2.Sign(signing.ATX, atx4.SignedBytes())
-	require.NoError(t, atx4.CalcAndSetID())
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, atxs.Add(db, atx))
@@ -224,9 +214,9 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 	sig2, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	l1 := types.NewLayerID(uint32(1 * layersPerEpoch))
-	l2 := types.NewLayerID(uint32(2 * layersPerEpoch))
-	l3 := types.NewLayerID(uint32(3 * layersPerEpoch))
+	l1 := types.LayerID(uint32(1 * layersPerEpoch))
+	l2 := types.LayerID(uint32(2 * layersPerEpoch))
+	l3 := types.LayerID(uint32(3 * layersPerEpoch))
 
 	atx1, err := newAtx(sig1, l1)
 	require.NoError(t, err)
@@ -272,9 +262,9 @@ func TestGetIDsByEpoch(t *testing.T) {
 	sig2, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	l1 := types.NewLayerID(uint32(1 * layersPerEpoch))
-	l2 := types.NewLayerID(uint32(2 * layersPerEpoch))
-	l3 := types.NewLayerID(uint32(3 * layersPerEpoch))
+	l1 := types.LayerID(uint32(1 * layersPerEpoch))
+	l2 := types.LayerID(uint32(2 * layersPerEpoch))
+	l3 := types.LayerID(uint32(3 * layersPerEpoch))
 
 	atx1, err := newAtx(sig1, l1)
 	require.NoError(t, err)
@@ -357,7 +347,7 @@ func TestGetBlob(t *testing.T) {
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	atx, err := newAtx(sig, types.NewLayerID(uint32(1)))
+	atx, err := newAtx(sig, types.LayerID(uint32(1)))
 	require.NoError(t, err)
 
 	require.NoError(t, atxs.Add(db, atx))
@@ -377,7 +367,7 @@ func TestAdd(t *testing.T) {
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	atx, err := newAtx(sig, types.NewLayerID(uint32(1)))
+	atx, err := newAtx(sig, types.LayerID(uint32(1)))
 	require.NoError(t, err)
 
 	require.NoError(t, atxs.Add(db, atx))
@@ -392,16 +382,14 @@ func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedAct
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: layerID,
-				PrevATXID:  types.RandomATXID(),
+				PublishEpoch: layerID.GetEpoch(),
+				PrevATXID:    types.RandomATXID(),
 			},
 			NumUnits: 2,
 		},
 	}
 
 	activation.SignAndFinalizeAtx(signer, atx)
-	nodeID := signer.NodeID()
-	atx.SetNodeID(&nodeID)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 	return atx.Verify(0, 1)
@@ -445,7 +433,7 @@ func TestPositioningID(t *testing.T) {
 				full := &types.ActivationTx{
 					InnerActivationTx: types.InnerActivationTx{
 						NIPostChallenge: types.NIPostChallenge{
-							PubLayerID: atx.epoch.FirstLayer(),
+							PublishEpoch: atx.epoch,
 						},
 						Coinbase: atx.coinbase,
 						NumUnits: 2,
@@ -455,8 +443,6 @@ func TestPositioningID(t *testing.T) {
 				sig, err := signing.NewEdSigner()
 				require.NoError(t, err)
 				require.NoError(t, activation.SignAndFinalizeAtx(sig, full))
-				nodeID := sig.NodeID()
-				full.SetNodeID(&nodeID)
 
 				full.SetEffectiveNumUnits(full.NumUnits)
 				full.SetReceived(time.Now())

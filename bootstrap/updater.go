@@ -46,13 +46,12 @@ const (
 )
 
 var (
-	ErrEpochOutOfOrder = errors.New("epoch out of order")
-	ErrWrongVersion    = errors.New("wrong schema version")
-	ErrInvalidBeacon   = errors.New("invalid beacon")
+	ErrWrongVersion  = errors.New("wrong schema version")
+	ErrInvalidBeacon = errors.New("invalid beacon")
 )
 
 type Config struct {
-	URL     string `mapstructure:"bootstrap-uri"`
+	URL     string `mapstructure:"bootstrap-url"`
 	Version string `mapstructure:"bootstrap-version"`
 
 	DataDir   string
@@ -78,9 +77,9 @@ type Updater struct {
 	once   sync.Once
 	eg     errgroup.Group
 
-	mu          sync.Mutex
-	subscribers []chan *VerifiedUpdate
-	latest      *VerifiedUpdate
+	mu           sync.Mutex
+	subscribers  []chan *VerifiedUpdate
+	lastUpdateId int64 // ID (unix timestamp) of the last update
 }
 
 type Opt func(*Updater)
@@ -150,6 +149,7 @@ func (u *Updater) Start(ctx context.Context) {
 				return err
 			}
 			wait := time.Duration(0)
+			u.logger.With().Info("start listening to update", log.String("source", u.cfg.URL))
 			for {
 				select {
 				case <-ctx.Done():
@@ -175,13 +175,10 @@ func (u *Updater) Close() {
 	_ = u.eg.Wait()
 }
 
-func (u *Updater) latestUpdateId() uint32 {
+func (u *Updater) latestUpdateId() int64 {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	if u.latest != nil {
-		return u.latest.ID
-	}
-	return 0
+	return u.lastUpdateId
 }
 
 func (u *Updater) DoIt(ctx context.Context) error {
@@ -193,7 +190,7 @@ func (u *Updater) DoIt(ctx context.Context) error {
 	if verified == nil { // no new update
 		return nil
 	}
-	verified.Persisted, err = persist(logger, u.fs, u.cfg, verified.ID, data)
+	verified.Persisted, err = persist(logger, u.fs, u.cfg, verified.UpdateId, data)
 	if err != nil {
 		return err
 	}
@@ -207,7 +204,7 @@ func (u *Updater) DoIt(ctx context.Context) error {
 func (u *Updater) updateAndNotify(ctx context.Context, verified *VerifiedUpdate) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	u.latest = verified
+	u.lastUpdateId = verified.UpdateId
 	notifyCtx, cancel := context.WithTimeout(ctx, notifyTimeout)
 	defer cancel()
 	for _, ch := range u.subscribers {
@@ -220,7 +217,7 @@ func (u *Updater) updateAndNotify(ctx context.Context, verified *VerifiedUpdate)
 	return nil
 }
 
-func get(ctx context.Context, client *http.Client, cfg Config, lastId uint32) (*VerifiedUpdate, []byte, error) {
+func get(ctx context.Context, client *http.Client, cfg Config, lastUpdateId int64) (*VerifiedUpdate, []byte, error) {
 	resource, err := url.Parse(cfg.URL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse bootstrap uri: %w", err)
@@ -238,7 +235,7 @@ func get(ctx context.Context, client *http.Client, cfg Config, lastId uint32) (*
 	if len(data) == 0 { // no update data
 		return nil, nil, nil
 	}
-	verified, err := validate(cfg, resource.String(), data, lastId)
+	verified, err := validate(cfg, resource.String(), data, lastUpdateId)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -263,8 +260,8 @@ func query(ctx context.Context, client *http.Client, resource *url.URL) ([]byte,
 	return data, nil
 }
 
-func validate(cfg Config, source string, data []byte, lastId uint32) (*VerifiedUpdate, error) {
-	if err := validateSchema(data); err != nil {
+func validate(cfg Config, source string, data []byte, lastUpdateId int64) (*VerifiedUpdate, error) {
+	if err := ValidateSchema(data); err != nil {
 		return nil, err
 	}
 
@@ -273,15 +270,15 @@ func validate(cfg Config, source string, data []byte, lastId uint32) (*VerifiedU
 		return nil, fmt.Errorf("unmarshal %s: %w", source, err)
 	}
 
-	verified, err := validateData(cfg, update, lastId)
+	verified, err := validateData(cfg, update, lastUpdateId)
 	if err != nil {
 		return nil, err
 	}
 	return verified, nil
 }
 
-func validateSchema(data []byte) error {
-	sch, err := jsonschema.Compile(schemaFile)
+func ValidateSchema(data []byte) error {
+	sch, err := jsonschema.CompileString(schemaFile, Schema)
 	if err != nil {
 		return fmt.Errorf("compile bootstrap json schema: %w", err)
 	}
@@ -295,41 +292,32 @@ func validateSchema(data []byte) error {
 	return nil
 }
 
-func validateData(cfg Config, update *Update, lastId uint32) (*VerifiedUpdate, error) {
+func validateData(cfg Config, update *Update, lastUpdateId int64) (*VerifiedUpdate, error) {
 	if update.Version != cfg.Version {
 		return nil, fmt.Errorf("%w: expected %v, got %v", ErrWrongVersion, cfg.Version, update.Version)
 	}
-	if update.Data.ID <= lastId {
+	if update.Data.UpdateId <= lastUpdateId {
 		return nil, nil
 	}
-
 	verified := &VerifiedUpdate{
-		ID: update.Data.ID,
+		UpdateId: update.Data.UpdateId,
+		Data: &EpochOverride{
+			Epoch: types.EpochID(update.Data.Epoch.ID),
+		},
 	}
-	var last uint32
-	for _, epochData := range update.Data.Epochs {
-		if last == 0 {
-			last = epochData.Epoch
-		} else if epochData.Epoch <= last {
-			return nil, fmt.Errorf("%w: last %v current %v", ErrEpochOutOfOrder, last, epochData.Epoch)
-		}
+	beaconByte, err := hex.DecodeString(update.Data.Epoch.Beacon)
+	if err != nil || len(beaconByte) < types.BeaconSize {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidBeacon, update.Data.Epoch.Beacon)
+	}
+	verified.Data.Beacon = types.BytesToBeacon(beaconByte)
 
-		beaconByte, err := hex.DecodeString(epochData.Beacon)
-		if err != nil || len(beaconByte) < types.BeaconSize {
-			return nil, fmt.Errorf("%w: %v", ErrInvalidBeacon, epochData.Beacon)
-		}
-		beacon := types.BytesToBeacon(beaconByte)
-
+	if len(update.Data.Epoch.ActiveSet) > 0 {
 		// json schema guarantees the active set has unique members
-		activeSet := make([]types.ATXID, 0, len(epochData.ActiveSet))
-		for _, atx := range epochData.ActiveSet {
+		activeSet := make([]types.ATXID, 0, len(update.Data.Epoch.ActiveSet))
+		for _, atx := range update.Data.Epoch.ActiveSet {
 			activeSet = append(activeSet, types.ATXID(types.HexToHash32(atx)))
 		}
-		verified.Data = append(verified.Data, &EpochOverride{
-			Epoch:     types.EpochID(epochData.Epoch),
-			Beacon:    beacon,
-			ActiveSet: activeSet,
-		})
+		verified.Data.ActiveSet = activeSet
 	}
 	return verified, nil
 }
@@ -359,7 +347,7 @@ func load(fs afero.Fs, cfg Config) (*VerifiedUpdate, error) {
 	return verified, nil
 }
 
-func persist(logger log.Log, fs afero.Fs, cfg Config, id uint32, data []byte) (string, error) {
+func persist(logger log.Log, fs afero.Fs, cfg Config, id int64, data []byte) (string, error) {
 	if len(cfg.DataDir) == 0 {
 		return "", nil
 	}
@@ -402,6 +390,6 @@ func bootstrapDir(fs afero.Fs, dataDir string) (string, error) {
 	return dir, nil
 }
 
-func PersistFilename(dir string, id uint32) string {
-	return filepath.Join(dir, fmt.Sprintf("%05d-%v", id, time.Now().UTC().Format(format)))
+func PersistFilename(dir string, id int64) string {
+	return filepath.Join(dir, fmt.Sprintf("%10d-%v", id, time.Now().UTC().Format(format)))
 }

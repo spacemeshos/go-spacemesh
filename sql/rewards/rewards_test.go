@@ -18,7 +18,7 @@ func TestRewards(t *testing.T) {
 	coinbase1 := types.Address{1}
 	coinbase2 := types.Address{2}
 
-	lid1 := types.NewLayerID(1)
+	lid1 := types.LayerID(1)
 	rewards1 := []types.Reward{
 		{
 			Layer:       lid1,

@@ -60,7 +60,7 @@ type MeshAPI interface {
 }
 
 // NOTE that mockgen doesn't use source-mode to avoid generating mocks for all interfaces in this file.
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go . NetworkIdentity,AtxProvider,PostSetupProvider,ChallengeVerifier
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go . NetworkIdentity,AtxProvider,PostSetupProvider
 
 // NetworkIdentity interface.
 type NetworkIdentity interface {
@@ -83,5 +83,3 @@ type PostSetupProvider interface {
 type AtxProvider interface {
 	GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error)
 }
-
-type ChallengeVerifier = activation.ChallengeVerifier

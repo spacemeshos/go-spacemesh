@@ -50,6 +50,8 @@ type FirstVotingMessageBody struct {
 // FirstVotingMessage is a message type which is used when sending first voting messages.
 type FirstVotingMessage struct {
 	FirstVotingMessageBody
+
+	SmesherID types.NodeID
 	Signature types.EdSignature
 }
 
@@ -63,5 +65,7 @@ type FollowingVotingMessageBody struct {
 // FollowingVotingMessage is a message type which is used when sending following voting messages.
 type FollowingVotingMessage struct {
 	FollowingVotingMessageBody
+
+	SmesherID types.NodeID
 	Signature types.EdSignature
 }

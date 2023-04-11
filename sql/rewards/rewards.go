@@ -45,7 +45,7 @@ func List(db sql.Executor, coinbase types.Address) (rst []*types.Reward, err err
 		}, func(stmt *sql.Statement) bool {
 			reward := &types.Reward{
 				Coinbase:    coinbase,
-				Layer:       types.NewLayerID(uint32(stmt.ColumnInt64(0))),
+				Layer:       types.LayerID(uint32(stmt.ColumnInt64(0))),
 				TotalReward: uint64(stmt.ColumnInt64(1)),
 				LayerReward: uint64(stmt.ColumnInt64(2)),
 			}

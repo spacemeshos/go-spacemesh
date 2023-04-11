@@ -12,11 +12,11 @@ import (
 
 func TestLayer(t *testing.T) {
 	db := sql.InMemory()
-	start := types.NewLayerID(1)
+	start := types.LayerID(1)
 	pub := types.BytesToNodeID([]byte{1, 1, 1})
 	ballots := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, pub, types.BallotMetadata{Layer: start}),
-		types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, pub, types.BallotMetadata{Layer: start}),
+		types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, pub, start),
+		types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, pub, start),
 	}
 	for _, ballot := range ballots {
 		require.NoError(t, Add(db, &ballot))
@@ -45,7 +45,7 @@ func TestLayer(t *testing.T) {
 func TestAdd(t *testing.T) {
 	db := sql.InMemory()
 	nodeID := types.RandomNodeID()
-	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.BallotMetadata{})
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
 	_, err := Get(db, ballot.ID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
@@ -64,7 +64,7 @@ func TestAdd(t *testing.T) {
 
 func TestHas(t *testing.T) {
 	db := sql.InMemory()
-	ballot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{})
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, types.EmptyNodeID, types.LayerID(0))
 
 	exists, err := Has(db, ballot.ID())
 	require.NoError(t, err)
@@ -80,15 +80,15 @@ func TestLatest(t *testing.T) {
 	db := sql.InMemory()
 	latest, err := LatestLayer(db)
 	require.NoError(t, err)
-	require.Equal(t, types.LayerID{}, latest)
+	require.Equal(t, types.LayerID(0), latest)
 
-	ballot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{Layer: types.NewLayerID(11)})
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, types.EmptyNodeID, types.LayerID(11))
 	require.NoError(t, Add(db, &ballot))
 	latest, err = LatestLayer(db)
 	require.NoError(t, err)
 	require.Equal(t, ballot.Layer, latest)
 
-	newBallot := types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, types.EmptyNodeID, types.BallotMetadata{Layer: types.NewLayerID(12)})
+	newBallot := types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, types.EmptyNodeID, types.LayerID(12))
 	require.NoError(t, Add(db, &newBallot))
 	latest, err = LatestLayer(db)
 	require.NoError(t, err)
@@ -97,14 +97,14 @@ func TestLatest(t *testing.T) {
 
 func TestCountByPubkeyLayer(t *testing.T) {
 	db := sql.InMemory()
-	lid := types.NewLayerID(1)
+	lid := types.LayerID(1)
 	nodeID1 := types.RandomNodeID()
 	nodeID2 := types.RandomNodeID()
 	ballots := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, nodeID1, types.BallotMetadata{Layer: lid}),
-		types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, nodeID1, types.BallotMetadata{Layer: lid.Add(1)}),
-		types.NewExistingBallot(types.BallotID{3}, types.EmptyEdSignature, nodeID2, types.BallotMetadata{Layer: lid}),
-		types.NewExistingBallot(types.BallotID{4}, types.EmptyEdSignature, nodeID2, types.BallotMetadata{Layer: lid}),
+		types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, nodeID1, lid),
+		types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, nodeID1, lid.Add(1)),
+		types.NewExistingBallot(types.BallotID{3}, types.EmptyEdSignature, nodeID2, lid),
+		types.NewExistingBallot(types.BallotID{4}, types.EmptyEdSignature, nodeID2, lid),
 	}
 	for _, ballot := range ballots {
 		require.NoError(t, Add(db, &ballot))
@@ -120,12 +120,12 @@ func TestCountByPubkeyLayer(t *testing.T) {
 
 func TestLayerBallotBySmesher(t *testing.T) {
 	db := sql.InMemory()
-	lid := types.NewLayerID(1)
+	lid := types.LayerID(1)
 	nodeID1 := types.RandomNodeID()
 	nodeID2 := types.RandomNodeID()
 	ballots := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, nodeID1, types.BallotMetadata{Layer: lid.Add(1)}),
-		types.NewExistingBallot(types.BallotID{3}, types.EmptyEdSignature, nodeID2, types.BallotMetadata{Layer: lid}),
+		types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, nodeID1, lid.Add(1)),
+		types.NewExistingBallot(types.BallotID{3}, types.EmptyEdSignature, nodeID2, lid),
 	}
 	for _, ballot := range ballots {
 		require.NoError(t, Add(db, &ballot))
@@ -143,22 +143,22 @@ func TestLayerBallotBySmesher(t *testing.T) {
 func TestGetRefBallot(t *testing.T) {
 	types.SetLayersPerEpoch(3)
 	db := sql.InMemory()
-	lid2 := types.NewLayerID(2)
-	lid3 := types.NewLayerID(3)
-	lid4 := types.NewLayerID(4)
-	lid5 := types.NewLayerID(5)
-	lid6 := types.NewLayerID(6)
+	lid2 := types.LayerID(2)
+	lid3 := types.LayerID(3)
+	lid4 := types.LayerID(4)
+	lid5 := types.LayerID(5)
+	lid6 := types.LayerID(6)
 	nodeID1 := types.RandomNodeID()
 	nodeID2 := types.RandomNodeID()
 	nodeID3 := types.RandomNodeID()
 	nodeID4 := types.RandomNodeID()
 	ballots := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, nodeID1, types.BallotMetadata{Layer: lid2}),
-		types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, nodeID1, types.BallotMetadata{Layer: lid3}),
-		types.NewExistingBallot(types.BallotID{3}, types.EmptyEdSignature, nodeID2, types.BallotMetadata{Layer: lid3}),
-		types.NewExistingBallot(types.BallotID{4}, types.EmptyEdSignature, nodeID2, types.BallotMetadata{Layer: lid4}),
-		types.NewExistingBallot(types.BallotID{5}, types.EmptyEdSignature, nodeID3, types.BallotMetadata{Layer: lid5}),
-		types.NewExistingBallot(types.BallotID{6}, types.EmptyEdSignature, nodeID4, types.BallotMetadata{Layer: lid6}),
+		types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, nodeID1, lid2),
+		types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, nodeID1, lid3),
+		types.NewExistingBallot(types.BallotID{3}, types.EmptyEdSignature, nodeID2, lid3),
+		types.NewExistingBallot(types.BallotID{4}, types.EmptyEdSignature, nodeID2, lid4),
+		types.NewExistingBallot(types.BallotID{5}, types.EmptyEdSignature, nodeID3, lid5),
+		types.NewExistingBallot(types.BallotID{6}, types.EmptyEdSignature, nodeID4, lid6),
 	}
 	for _, ballot := range ballots {
 		require.NoError(t, Add(db, &ballot))

@@ -105,7 +105,7 @@ func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 	require.NoError(t, err)
 
 	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.EmptyVrfSignature)
-	m.Layer = types.NewLayerID(111)
+	m.Layer = types.LayerID(111)
 	myErr := errors.New("my error")
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, myErr).Times(1)
@@ -122,7 +122,7 @@ func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
 	require.NoError(t, err)
 
 	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.EmptyVrfSignature)
-	m.Layer = types.NewLayerID(111)
+	m.Layer = types.LayerID(111)
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil).Times(1)
 	res := ev.Validate(context.Background(), m)
@@ -138,7 +138,7 @@ func TestEligibilityValidator_validateRole_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.EmptyVrfSignature)
-	m.Layer = types.NewLayerID(111)
+	m.Layer = types.LayerID(111)
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
 	res := ev.Validate(context.Background(), m)

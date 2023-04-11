@@ -1,6 +1,7 @@
 package proposals
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -32,13 +33,14 @@ var (
 	errMissingEpochData      = errors.New("epoch data is missing in ref ballot")
 	errUnexpectedEpochData   = errors.New("non-ref ballot declares epoch data")
 	errEmptyActiveSet        = errors.New("ref ballot declares empty active set")
+	errActiveSetNotSorted    = errors.New("active set not sorted")
+	errBadActiveSetHash      = errors.New("incorrect active set hash")
 	errMissingBeacon         = errors.New("beacon is missing in ref ballot")
 	errNotEligible           = errors.New("ballot not eligible")
 	errDoubleVoting          = errors.New("ballot doubly-voted in same layer")
 	errConflictingExceptions = errors.New("conflicting exceptions")
 	errExceptionsOverflow    = errors.New("too many exceptions")
 	errDuplicateTX           = errors.New("duplicate TxID in proposal")
-	errDuplicateATX          = errors.New("duplicate ATXID in active set")
 	errKnownProposal         = errors.New("known proposal")
 	errKnownBallot           = errors.New("known ballot")
 	errInvalidVote           = errors.New("invalid layer/height in the vote")
@@ -50,14 +52,14 @@ type Handler struct {
 	logger log.Log
 	cfg    Config
 
-	cdb       *datastore.CachedDB
-	extractor *signing.PubKeyExtractor
-	publisher pubsub.Publisher
-	fetcher   system.Fetcher
-	mesh      meshProvider
-	validator eligibilityValidator
-	decoder   ballotDecoder
-	clock     *timesync.NodeClock
+	cdb        *datastore.CachedDB
+	edVerifier *signing.EdVerifier
+	publisher  pubsub.Publisher
+	fetcher    system.Fetcher
+	mesh       meshProvider
+	validator  eligibilityValidator
+	decoder    ballotDecoder
+	clock      *timesync.NodeClock
 }
 
 // Config defines configuration for the handler.
@@ -103,7 +105,7 @@ func WithConfig(cfg Config) Opt {
 // NewHandler creates new Handler.
 func NewHandler(
 	cdb *datastore.CachedDB,
-	extractor *signing.PubKeyExtractor,
+	edVerifier *signing.EdVerifier,
 	p pubsub.Publisher,
 	f system.Fetcher,
 	bc system.BeaconCollector,
@@ -114,15 +116,15 @@ func NewHandler(
 	opts ...Opt,
 ) *Handler {
 	b := &Handler{
-		logger:    log.NewNop(),
-		cfg:       defaultConfig(),
-		cdb:       cdb,
-		extractor: extractor,
-		publisher: p,
-		fetcher:   f,
-		mesh:      m,
-		decoder:   decoder,
-		clock:     clock,
+		logger:     log.NewNop(),
+		cfg:        defaultConfig(),
+		cdb:        cdb,
+		edVerifier: edVerifier,
+		publisher:  p,
+		fetcher:    f,
+		mesh:       m,
+		decoder:    decoder,
+		clock:      clock,
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -160,11 +162,9 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []
 		return errMalformedData
 	}
 
-	smesher, err := h.extractor.ExtractNodeID(signing.BALLOT, b.SignedBytes(), b.Signature)
-	if err != nil {
-		return fmt.Errorf("ballot extract key: %w", err)
+	if !h.edVerifier.Verify(signing.BALLOT, b.SmesherID, b.SignedBytes(), b.Signature) {
+		return fmt.Errorf("failed to verify ballot signature")
 	}
-	b.SetSmesherID(smesher)
 
 	// set the ballot and smesher ID when received
 	if err := b.Initialize(); err != nil {
@@ -230,18 +230,12 @@ func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []
 	latency := receivedTime.Sub(h.clock.LayerToTime(p.Layer))
 	metrics.ReportMessageLatency(pubsub.ProposalProtocol, pubsub.ProposalProtocol, latency)
 
-	smesher, err := h.extractor.ExtractNodeID(signing.BALLOT, p.SignedBytes(), p.Signature)
-	if err != nil {
-		return fmt.Errorf("proposal extract key: %w", err)
+	if !h.edVerifier.Verify(signing.BALLOT, p.SmesherID, p.SignedBytes(), p.Signature) {
+		return fmt.Errorf("failed to verify proposal signature")
 	}
-	bSmesher, err := h.extractor.ExtractNodeID(signing.BALLOT, p.Ballot.SignedBytes(), p.Ballot.Signature)
-	if err != nil {
-		return fmt.Errorf("ballot extract key: %w", err)
+	if !h.edVerifier.Verify(signing.BALLOT, p.Ballot.SmesherID, p.Ballot.SignedBytes(), p.Ballot.Signature) {
+		return fmt.Errorf("failed to verify ballot signature")
 	}
-	if smesher != bSmesher {
-		return fmt.Errorf("inconsistent smesher in proposal %v and ballot %v", smesher, bSmesher)
-	}
-	p.SetSmesherID(smesher)
 
 	// set the proposal ID when received
 	if err := p.Initialize(); err != nil {
@@ -405,7 +399,7 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.L
 }
 
 func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
-	if b.AtxID == *types.EmptyATXID || b.AtxID == h.cfg.GoldenATXID {
+	if b.AtxID == types.EmptyATXID || b.AtxID == h.cfg.GoldenATXID {
 		return errInvalidATXID
 	}
 
@@ -417,16 +411,17 @@ func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
 		if b.EpochData.Beacon == types.EmptyBeacon {
 			return errMissingBeacon
 		}
-		if len(b.EpochData.ActiveSet) == 0 {
+		if len(b.ActiveSet) == 0 {
 			return errEmptyActiveSet
 		}
-		// check for duplicate ATXIDs in active set
-		set := make(map[types.ATXID]struct{}, len(b.EpochData.ActiveSet))
-		for _, atx := range b.EpochData.ActiveSet {
-			if _, exist := set[atx]; exist {
-				return errDuplicateATX
+		for i := 0; i < len(b.ActiveSet)-1; i++ {
+			if bytes.Compare(b.ActiveSet[i].Bytes(), b.ActiveSet[i+1].Bytes()) >= 0 {
+				return errActiveSetNotSorted
 			}
-			set[atx] = struct{}{}
+		}
+		activeSetHash := types.ATXIDList(b.ActiveSet).Hash()
+		if activeSetHash != b.EpochData.ActiveSetHash {
+			return errBadActiveSetHash
 		}
 	} else if b.EpochData != nil {
 		return errUnexpectedEpochData
@@ -456,10 +451,11 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 				h.logger.WithContext(ctx).With().Warning("ballot doubly voted within hdist, set smesher malicious",
 					b.ID(),
 					b.Layer,
-					log.Stringer("smesher", b.SmesherID()),
+					log.Stringer("smesher", b.SmesherID),
 					log.Stringer("voted_bid", voted),
 					log.Stringer("voted_bid", vote.ID),
-					log.Uint32("hdist", h.cfg.Hdist))
+					log.Uint32("hdist", h.cfg.Hdist),
+				)
 				return errDoubleVoting
 			}
 		} else {
@@ -545,7 +541,7 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 func (h *Handler) fetchReferencedATXs(ctx context.Context, b *types.Ballot) error {
 	atxs := []types.ATXID{b.AtxID}
 	if b.EpochData != nil {
-		atxs = append(atxs, b.EpochData.ActiveSet...)
+		atxs = append(atxs, b.ActiveSet...)
 	}
 	if err := h.fetcher.GetAtxs(ctx, h.decoder.GetMissingActiveSet(b.Layer.GetEpoch(), atxs)); err != nil {
 		return fmt.Errorf("proposal get ATXs: %w", err)

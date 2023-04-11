@@ -152,7 +152,7 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 		return nil, err
 	}
 	ballot.SetID(ballotID)
-	ballot.SetSmesherID(nodeID)
+	ballot.SmesherID = nodeID
 	if stmt.ColumnInt(2) > 0 {
 		ballot.SetMalicious()
 	}
@@ -182,8 +182,6 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 		},
 		Signature: signature,
 	}
-
 	proposal.SetID(proposalID)
-
 	return proposal, nil
 }

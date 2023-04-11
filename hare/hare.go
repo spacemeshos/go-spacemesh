@@ -221,7 +221,7 @@ func (h *Hare) getLastLayer() types.LayerID {
 }
 
 func (h *Hare) setLastLayer(layerID types.LayerID) {
-	if layerID == (types.LayerID{}) {
+	if layerID == 0 {
 		// layers starts from 0. nothing to do here.
 		return
 	}
@@ -237,7 +237,7 @@ func (h *Hare) setLastLayer(layerID types.LayerID) {
 // checks if the provided id is too late/old to be requested.
 func (h *Hare) outOfBufferRange(id types.LayerID) bool {
 	last := h.getLastLayer()
-	if !last.After(types.NewLayerID(h.config.Hdist)) {
+	if !last.After(types.LayerID(h.config.Hdist)) {
 		return false
 	}
 	if id.Before(last.Sub(h.config.Hdist)) { // bufferSize>=0
@@ -255,7 +255,7 @@ func (h *Hare) oldestResultInBuffer() types.LayerID {
 func (h *Hare) oldestResultInBufferLocked() types.LayerID {
 	// buffer is usually quite small so its cheap to iterate.
 	// TODO: if it gets bigger change `outputs` to array.
-	lyr := types.NewLayerID(math.MaxUint32)
+	lyr := types.LayerID(math.MaxUint32)
 	for k := range h.outputs {
 		if k.Before(lyr) {
 			lyr = k

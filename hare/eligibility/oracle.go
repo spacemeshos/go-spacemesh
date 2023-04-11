@@ -492,7 +492,7 @@ func (o *Oracle) computeActiveSet(logger log.Log, targetLayer, safeLayerStart, s
 				log.String("epoch_beacon", beacon.ShortString()))
 			continue
 		}
-		for _, id := range ballot.EpochData.ActiveSet {
+		for _, id := range ballot.ActiveSet {
 			if _, exist := seenATXIDs[id]; exist {
 				continue
 			}
@@ -565,4 +565,16 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID types
 	}
 	_, exist := actives[edID]
 	return exist, nil
+}
+
+func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
+	// TODO: implement
+	o.Log.With().Info("received activeset update",
+		epoch,
+		log.Array("activeset", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+			for _, atxid := range activeSet {
+				encoder.AppendString(atxid.String())
+			}
+			return nil
+		})))
 }

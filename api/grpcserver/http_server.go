@@ -76,8 +76,6 @@ func (s *JSONHTTPServer) startInternal(
 	for _, svc := range services {
 		var err error
 		switch typed := svc.(type) {
-		case *GatewayService:
-			err = pb.RegisterGatewayServiceHandlerServer(ctx, mux, typed)
 		case *GlobalStateService:
 			err = pb.RegisterGlobalStateServiceHandlerServer(ctx, mux, typed)
 		case *MeshService:

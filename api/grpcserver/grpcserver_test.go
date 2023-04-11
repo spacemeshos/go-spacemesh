@@ -25,7 +25,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/ed25519-recovery"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
@@ -72,13 +71,13 @@ const (
 )
 
 var (
-	txReturnLayer         = types.NewLayerID(1)
-	layerFirst            = types.NewLayerID(0)
-	layerVerified         = types.NewLayerID(8)
-	layerLatest           = types.NewLayerID(10)
-	layerCurrent          = types.NewLayerID(12)
-	postGenesisEpochLayer = types.NewLayerID(22)
-	genesisID             = types.Hash20{}
+	txReturnLayer    = types.LayerID(1)
+	layerFirst       = types.LayerID(0)
+	layerVerified    = types.LayerID(8)
+	layerLatest      = types.LayerID(10)
+	layerCurrent     = types.LayerID(12)
+	postGenesisEpoch = types.EpochID(2)
+	genesisID        = types.Hash20{}
 
 	networkMock = NetworkMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
@@ -88,7 +87,7 @@ var (
 	chlng       = types.HexToHash32("55555")
 	poetRef     = []byte("66666")
 	nipost      = newNIPostWithChallenge(&chlng, poetRef)
-	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
 	globalAtx   *types.VerifiedActivationTx
 	globalAtx2  *types.VerifiedActivationTx
 	signer      *signing.EdSigner
@@ -96,10 +95,10 @@ var (
 	signer2     *signing.EdSigner
 	globalTx    *types.Transaction
 	globalTx2   *types.Transaction
-	ballot1     = genLayerBallot(types.NewLayerID(11))
-	block1      = genLayerBlock(types.NewLayerID(11), nil)
-	block2      = genLayerBlock(types.NewLayerID(11), nil)
-	block3      = genLayerBlock(types.NewLayerID(11), nil)
+	ballot1     = genLayerBallot(types.LayerID(11))
+	block1      = genLayerBlock(types.LayerID(11), nil)
+	block2      = genLayerBlock(types.LayerID(11), nil)
+	block3      = genLayerBlock(types.LayerID(11), nil)
 	meshAPI     = &MeshAPIMock{}
 	conStateAPI = &ConStateAPIMock{
 		returnTx:      make(map[types.TransactionID]*types.Transaction),
@@ -117,7 +116,7 @@ func genLayerBallot(layerID types.LayerID) *types.Ballot {
 	b.Layer = layerID
 	signer, _ := signing.NewEdSigner()
 	b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
-	b.SetSmesherID(signer.NodeID())
+	b.SmesherID = signer.NodeID()
 	b.Initialize()
 	return b
 }
@@ -170,7 +169,6 @@ func TestMain(m *testing.M) {
 		log.Println("failed to create signer:", err)
 		os.Exit(1)
 	}
-	nodeID := signer.NodeID()
 	signer1, err = signing.NewEdSigner()
 	if err != nil {
 		log.Println("failed to create signer:", err)
@@ -185,7 +183,7 @@ func TestMain(m *testing.M) {
 	addr1 = wallet.Address(signer1.PublicKey().Bytes())
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
-	atx := types.NewActivationTx(challenge, &nodeID, addr1, nipost, numUnits, nil, nil)
+	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil, nil)
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx); err != nil {
@@ -198,7 +196,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	atx2 := types.NewActivationTx(challenge, &nodeID, addr2, nipost, numUnits, nil, nil)
+	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil, nil)
 	atx2.SetEffectiveNumUnits(numUnits)
 	atx2.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx2); err != nil {
@@ -214,7 +212,8 @@ func TestMain(m *testing.M) {
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
 	ballot1.AtxID = globalAtx.ID()
-	ballot1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
+	ballot1.EpochData = &types.EpochData{}
+	ballot1.ActiveSet = []types.ATXID{globalAtx.ID(), globalAtx2.ID()}
 
 	globalTx = NewTx(0, addr1, signer1)
 	globalTx2 = NewTx(1, addr2, signer2)
@@ -327,7 +326,7 @@ type ConStateAPIMock struct {
 func (t *ConStateAPIMock) Put(id types.TransactionID, tx *types.Transaction) {
 	t.poolByTxId[id] = tx
 	t.poolByAddress[tx.Principal] = id
-	events.ReportNewTx(types.LayerID{}, tx)
+	events.ReportNewTx(0, tx)
 }
 
 // Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
@@ -423,11 +422,11 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 	return &tx
 }
 
-func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
+func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, epoch types.EpochID) types.NIPostChallenge {
 	return types.NIPostChallenge{
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
-		PubLayerID:     pubLayerID,
+		PublishEpoch:   epoch,
 		PositioningATX: posAtxID,
 	}
 }
@@ -672,7 +671,7 @@ func TestNodeService(t *testing.T) {
 			// First do a mock checking during a genesis layer
 			// During genesis all layers should be set to current layer
 			oldCurLayer := layerCurrent
-			layerCurrent = types.NewLayerID(layersPerEpoch) // end of first epoch
+			layerCurrent = types.LayerID(layersPerEpoch) // end of first epoch
 			req := &pb.StatusRequest{}
 			res, err := c.Status(context.Background(), req)
 			require.NoError(t, err)
@@ -1837,7 +1836,7 @@ func TestTransactionService(t *testing.T) {
 			// Give the server-side time to subscribe to events
 			time.Sleep(time.Millisecond * 50)
 
-			events.ReportNewTx(types.LayerID{}, globalTx)
+			events.ReportNewTx(0, globalTx)
 			res, err := stream.Recv()
 			require.NoError(t, err)
 			require.Nil(t, res.Transaction)
@@ -1863,7 +1862,7 @@ func TestTransactionService(t *testing.T) {
 			// Give the server-side time to subscribe to events
 			time.Sleep(time.Millisecond * 50)
 
-			events.ReportNewTx(types.LayerID{}, globalTx)
+			events.ReportNewTx(0, globalTx)
 
 			// Verify
 			res, err := stream.Recv()
@@ -1959,7 +1958,7 @@ func TestTransactionService(t *testing.T) {
 
 			// TODO send header after stream has subscribed
 
-			events.ReportNewTx(types.LayerID{}, globalTx)
+			events.ReportNewTx(0, globalTx)
 
 			for _, stream := range streams {
 				res, err := stream.Recv()
@@ -1990,7 +1989,7 @@ func TestTransactionService(t *testing.T) {
 			time.Sleep(time.Millisecond * 50)
 
 			for i := 0; i < subscriptionChanBufSize*2; i++ {
-				events.ReportNewTx(types.LayerID{}, globalTx)
+				events.ReportNewTx(0, globalTx)
 			}
 
 			for i := 0; i < subscriptionChanBufSize; i++ {
@@ -2032,13 +2031,13 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Condition(t, func() bool {
 		for _, a := range l.Activations {
 			// Compare the two element by element
-			if a.Layer.Number != globalAtx.PubLayerID.Uint32() {
+			if a.Layer.Number != globalAtx.PublishEpoch.Uint32() {
 				continue
 			}
 			if !bytes.Equal(a.Id.Id, globalAtx.ID().Bytes()) {
 				continue
 			}
-			if !bytes.Equal(a.SmesherId.Id, globalAtx.NodeID().Bytes()) {
+			if !bytes.Equal(a.SmesherId.Id, globalAtx.SmesherID.Bytes()) {
 				continue
 			}
 			if a.Coinbase.Address != globalAtx.Coinbase.String() {
@@ -2105,7 +2104,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	time.Sleep(time.Millisecond * 50)
 
 	// publish a tx
-	events.ReportNewTx(types.LayerID{}, globalTx)
+	events.ReportNewTx(0, globalTx)
 	res, err := stream.Recv()
 	require.NoError(t, err, "got error from stream")
 	checkAccountMeshDataItemTx(t, res.Datum.Datum)
@@ -2118,7 +2117,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	// test streaming a tx and an atx that are filtered out
 	// these should not be received
-	events.ReportNewTx(types.LayerID{}, globalTx2)
+	events.ReportNewTx(0, globalTx2)
 	events.ReportNewActivation(globalAtx2)
 
 	_, err = stream.Recv()
@@ -2330,8 +2329,8 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem any) {
 	require.IsType(t, &pb.AccountMeshData_Activation{}, dataItem)
 	x := dataItem.(*pb.AccountMeshData_Activation)
 	require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
-	require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
-	require.Equal(t, globalAtx.NodeID().Bytes(), x.Activation.SmesherId.Id)
+	require.Equal(t, globalAtx.PublishEpoch.Uint32(), x.Activation.Layer.Number)
+	require.Equal(t, globalAtx.SmesherID.Bytes(), x.Activation.SmesherId.Id)
 	require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
 	require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
 	require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
@@ -2522,6 +2521,7 @@ func TestDebugService(t *testing.T) {
 	})
 }
 
+<<<<<<< HEAD
 func TestGatewayService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	ctrl := gomock.NewController(t)
@@ -2544,6 +2544,8 @@ func TestGatewayService(t *testing.T) {
 	require.Equal(t, codes.OK, s.Code())
 }
 
+=======
+>>>>>>> develop
 func TestEventsReceived(t *testing.T) {
 	logtest.SetupGlobal(t)
 	events.CloseEventReporter()
@@ -2661,7 +2663,7 @@ func TestTransactionsRewards(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 
 		svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
-		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.NewLayerID(17)}, []types.Transaction{*globalTx}, rewards)
+		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
 		data, err := stream.Recv()
@@ -2682,7 +2684,7 @@ func TestTransactionsRewards(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 
 		svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
-		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.NewLayerID(17)}, []types.Transaction{*globalTx}, rewards)
+		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
 		data, err := stream.Recv()
@@ -2707,23 +2709,23 @@ func TestVMAccountUpdates(t *testing.T) {
 	svm := vm.New(db, vm.WithLogger(logtest.New(t)))
 	t.Cleanup(launchServer(t, cfg, NewGlobalStateService(nil, txs.NewConservativeState(svm, db))))
 
-	keys := make([]ed25519.PrivateKey, 10)
+	keys := make([]*signing.EdSigner, 10)
 	accounts := make([]types.Account, len(keys))
 	const initial = 100_000_000
 	for i := range keys {
-		pub, pk, err := ed25519.GenerateKey(nil)
+		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		keys[i] = pk
+		keys[i] = signer
 		accounts[i] = types.Account{
-			Address: wallet.Address(pub),
+			Address: wallet.Address(signer.NodeID().Bytes()),
 			Balance: initial,
 		}
 	}
 	require.NoError(t, svm.ApplyGenesis(accounts))
 	spawns := []types.Transaction{}
-	for _, pk := range keys {
+	for _, key := range keys {
 		spawns = append(spawns, types.Transaction{
-			RawTx: types.NewRawTx(wallet.SelfSpawn(pk, 0)),
+			RawTx: types.NewRawTx(wallet.SelfSpawn(key.PrivateKey(), 0)),
 		})
 	}
 	lid := types.GetEffectiveGenesis().Add(1)
@@ -2757,10 +2759,10 @@ func TestVMAccountUpdates(t *testing.T) {
 
 	spends := []types.Transaction{}
 	const amount = 100_000
-	for _, pk := range keys {
+	for _, key := range keys {
 		spends = append(spends, types.Transaction{
 			RawTx: types.NewRawTx(wallet.Spend(
-				pk, types.Address{1}, amount, 1,
+				key.PrivateKey(), types.Address{1}, amount, 1,
 			)),
 		})
 	}

@@ -14,7 +14,7 @@ import (
 func TestAdd(t *testing.T) {
 	db := sql.InMemory()
 	nodeID := types.RandomNodeID()
-	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.BallotMetadata{})
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
 
 	require.NoError(t, ballots.Add(db, &ballot))
 	require.NoError(t, identities.SetMalicious(db, nodeID, []byte("proof")))
@@ -35,7 +35,7 @@ func TestAdd(t *testing.T) {
 func TestHas(t *testing.T) {
 	db := sql.InMemory()
 	nodeID := types.RandomNodeID()
-	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.BallotMetadata{})
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
 
 	require.NoError(t, ballots.Add(db, &ballot))
 	require.NoError(t, identities.SetMalicious(db, nodeID, []byte("proof")))
@@ -60,7 +60,7 @@ func TestGet(t *testing.T) {
 	db := sql.InMemory()
 
 	nodeID := types.RandomNodeID()
-	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.BallotMetadata{})
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
 
 	require.NoError(t, ballots.Add(db, &ballot))
 	require.NoError(t, identities.SetMalicious(db, nodeID, []byte("proof")))

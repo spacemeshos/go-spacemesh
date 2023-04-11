@@ -1,9 +1,11 @@
 package miner
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"math/rand"
+	"sort"
 	"testing"
 	"time"
 
@@ -90,12 +92,15 @@ func genTX(tb testing.TB, nonce uint64, recipient types.Address, signer *signing
 	return &tx
 }
 
-func genActiveSet(tb testing.TB) []types.ATXID {
+func genActiveSet(tb testing.TB) types.ATXIDList {
 	tb.Helper()
 	activeSet := make([]types.ATXID, 0, activeSetSize)
 	for i := 0; i < activeSetSize; i++ {
 		activeSet = append(activeSet, types.RandomATXID())
 	}
+	sort.Slice(activeSet, func(i, j int) bool {
+		return bytes.Compare(activeSet[i].Bytes(), activeSet[j].Bytes()) < 0
+	})
 	return activeSet
 }
 
@@ -111,7 +116,7 @@ func genProofs(tb testing.TB, size int) []types.VotingEligibility {
 func TestBuilder_StartAndClose(t *testing.T) {
 	b := createBuilder(t)
 
-	current := types.NewLayerID(layersPerEpoch * 3)
+	current := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(current)
 	b.mClock.EXPECT().AwaitLayer(current.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		ch := make(chan struct{})
@@ -137,7 +142,7 @@ func TestBuilder_StartAndClose(t *testing.T) {
 func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		return make(chan struct{})
@@ -159,7 +164,13 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(atxID, activeSet, proofs, nil)
+	ee := &EpochEligibility{
+		Atx:       atxID,
+		ActiveSet: activeSet,
+		Proofs:    map[types.LayerID][]types.VotingEligibility{layerID: proofs},
+		Slots:     4,
+	}
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(ee, nil)
 
 	// for 1st proposal, containing the ref ballot of this epoch
 	b.mCState.EXPECT().SelectProposalTXs(layerID, len(proofs)).Return([]types.TransactionID{tx1.ID})
@@ -171,6 +182,8 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 		require.NoError(t, certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID))
 	}
 	meshHash := types.RandomHash()
+	edVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
 	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), meshHash))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
@@ -182,11 +195,14 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 			require.Equal(t, atxID, p.AtxID)
 			require.Equal(t, p.Layer, layerID)
 			require.NotNil(t, p.EpochData)
-			require.Equal(t, activeSet, p.EpochData.ActiveSet)
+			require.Equal(t, activeSet, types.ATXIDList(p.ActiveSet))
 			require.Equal(t, beacon, p.EpochData.Beacon)
+			require.Equal(t, ee.Slots, p.EpochData.EligibilityCount)
 			require.Equal(t, []types.TransactionID{tx1.ID}, p.TxIDs)
 			require.Equal(t, proofs, p.EligibilityProofs)
 			require.Equal(t, meshHash, p.MeshHash)
+			require.Equal(t, b.signer.NodeID(), p.SmesherID)
+			require.True(t, edVerifier.Verify(signing.BALLOT, p.SmesherID, p.SignedBytes(), p.Signature))
 			return nil
 		})
 
@@ -198,7 +214,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		return make(chan struct{})
@@ -219,7 +235,13 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(atxID, activeSet, proofs, nil)
+	ee := &EpochEligibility{
+		Atx:       atxID,
+		ActiveSet: activeSet,
+		Proofs:    map[types.LayerID][]types.VotingEligibility{layerID: proofs},
+		Slots:     4,
+	}
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(ee, nil)
 
 	// for 1st proposal, containing the ref ballot of this epoch
 	b.mCState.EXPECT().SelectProposalTXs(layerID, len(proofs)).Return([]types.TransactionID{tx.ID})
@@ -232,6 +254,8 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 		require.NoError(t, certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID))
 	}
 	meshHash := types.RandomHash()
+	edVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
 	require.NoError(t, layers.SetMeshHash(b.cdb, layerID.Sub(1), meshHash))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
@@ -243,10 +267,13 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 			require.Equal(t, atxID, p.AtxID)
 			require.Equal(t, p.Layer, layerID)
 			require.NotNil(t, p.EpochData)
-			require.Equal(t, activeSet, p.EpochData.ActiveSet)
+			require.Equal(t, ee.Slots, p.EpochData.EligibilityCount)
+			require.Equal(t, activeSet, types.ATXIDList(p.ActiveSet))
 			require.Equal(t, beacon, p.EpochData.Beacon)
 			require.Equal(t, []types.TransactionID{tx.ID}, p.TxIDs)
 			require.Equal(t, meshHash, p.MeshHash)
+			require.Equal(t, b.signer.NodeID(), p.SmesherID)
+			require.True(t, edVerifier.Verify(signing.BALLOT, p.SmesherID, p.SignedBytes(), p.Signature))
 			return nil
 		})
 
@@ -258,14 +285,14 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 func TestBuilder_HandleLayer_Genesis(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch)
+	layerID := types.LayerID(layersPerEpoch)
 	require.ErrorIs(t, b.handleLayer(context.Background(), layerID), errGenesis)
 }
 
 func TestBuilder_HandleLayer_NotSynced(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(false)
 
 	require.ErrorIs(t, b.handleLayer(context.Background(), layerID), errNotSynced)
@@ -274,7 +301,7 @@ func TestBuilder_HandleLayer_NotSynced(t *testing.T) {
 func TestBuilder_HandleLayer_NoBeacon(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, errors.New("unknown"))
 
@@ -284,14 +311,14 @@ func TestBuilder_HandleLayer_NoBeacon(t *testing.T) {
 func TestBuilder_HandleLayer_EligibilityError(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	nonce := types.VRFPostIndex(rand.Uint64())
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	errUnknown := errors.New("unknown")
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(*types.EmptyATXID, nil, nil, errUnknown)
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(&EpochEligibility{}, errUnknown)
 
 	require.ErrorIs(t, b.handleLayer(context.Background(), layerID), errUnknown)
 }
@@ -301,12 +328,16 @@ func TestBuilder_HandleLayer_NotEligible(t *testing.T) {
 
 	nonce := types.VRFPostIndex(rand.Uint64())
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(types.RandomATXID(), genActiveSet(t), []types.VotingEligibility{}, nil)
+	ee := &EpochEligibility{
+		Atx:       types.RandomATXID(),
+		ActiveSet: genActiveSet(t),
+	}
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(ee, nil)
 
 	require.NoError(t, b.handleLayer(context.Background(), layerID))
 }
@@ -314,14 +345,19 @@ func TestBuilder_HandleLayer_NotEligible(t *testing.T) {
 func TestBuilder_HandleLayer_BaseBlockError(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	nonce := types.VRFPostIndex(rand.Uint64())
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil)
+	ee := &EpochEligibility{
+		Atx:       types.RandomATXID(),
+		ActiveSet: genActiveSet(t),
+		Proofs:    map[types.LayerID][]types.VotingEligibility{layerID: genProofs(t, 1)},
+	}
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(ee, nil)
 	errUnknown := errors.New("unknown")
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(nil, errUnknown)
@@ -332,7 +368,7 @@ func TestBuilder_HandleLayer_BaseBlockError(t *testing.T) {
 func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	activeSet := genActiveSet(t)
 	sig, err := signing.NewEdSigner()
@@ -343,7 +379,13 @@ func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(types.RandomATXID(), activeSet, genProofs(t, 1), nil)
+	ee := &EpochEligibility{
+		Atx:       types.RandomATXID(),
+		ActiveSet: activeSet,
+		Proofs:    map[types.LayerID][]types.VotingEligibility{layerID: genProofs(t, 1)},
+		Slots:     4,
+	}
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(ee, nil)
 	b.mCState.EXPECT().SelectProposalTXs(layerID, 1).Return([]types.TransactionID{tx.ID})
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Opinion{Votes: types.Votes{Base: types.RandomBallotID()}}, nil)
@@ -354,7 +396,9 @@ func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 			var got types.Proposal
 			require.NoError(t, codec.Decode(data, &got))
 			require.Equal(t, types.EmptyBallotID, got.RefBallot)
-			require.Equal(t, types.EpochData{ActiveSet: activeSet, Beacon: beacon}, *got.EpochData)
+			require.Equal(t, types.EpochData{ActiveSetHash: activeSet.Hash(), Beacon: beacon, EligibilityCount: ee.Slots}, *got.EpochData)
+			require.Equal(t, activeSet, types.ATXIDList(got.ActiveSet))
+			require.Equal(t, ee.Slots, got.EpochData.EligibilityCount)
 			return nil
 		})
 
@@ -365,8 +409,8 @@ func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3).Add(1)
-	refBallot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, b.ProposalBuilder.signer.NodeID(), types.BallotMetadata{Layer: layerID.Sub(1)})
+	layerID := types.LayerID(layersPerEpoch * 3).Add(1)
+	refBallot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, b.ProposalBuilder.signer.NodeID(), layerID.Sub(1))
 	require.NoError(t, ballots.Add(b.cdb, &refBallot))
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
@@ -377,7 +421,13 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil)
+	ee := &EpochEligibility{
+		Atx:       types.RandomATXID(),
+		ActiveSet: genActiveSet(t),
+		Proofs:    map[types.LayerID][]types.VotingEligibility{layerID: genProofs(t, 1)},
+		Slots:     4,
+	}
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(ee, nil)
 	b.mCState.EXPECT().SelectProposalTXs(layerID, 1).Return([]types.TransactionID{tx.ID})
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Opinion{Votes: types.Votes{Base: types.RandomBallotID()}}, nil)
@@ -399,7 +449,7 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		return make(chan struct{})
@@ -415,7 +465,12 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil)
+	ee := &EpochEligibility{
+		Atx:       types.RandomATXID(),
+		ActiveSet: genActiveSet(t),
+		Proofs:    map[types.LayerID][]types.VotingEligibility{layerID: genProofs(t, 1)},
+	}
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(ee, nil)
 	b.mCState.EXPECT().SelectProposalTXs(layerID, 1).Return([]types.TransactionID{tx.ID})
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Opinion{Votes: types.Votes{Base: types.RandomBallotID()}}, nil)
@@ -429,7 +484,7 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		return make(chan struct{})
@@ -445,7 +500,12 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil)
+	ee := &EpochEligibility{
+		Atx:       types.RandomATXID(),
+		ActiveSet: genActiveSet(t),
+		Proofs:    map[types.LayerID][]types.VotingEligibility{layerID: genProofs(t, 1)},
+	}
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(ee, nil)
 	b.mCState.EXPECT().SelectProposalTXs(layerID, 1).Return([]types.TransactionID{tx.ID})
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Opinion{Votes: types.Votes{Base: types.RandomBallotID()}}, nil)
@@ -461,7 +521,7 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		return make(chan struct{})
@@ -477,7 +537,12 @@ func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil)
+	ee := &EpochEligibility{
+		Atx:       types.RandomATXID(),
+		ActiveSet: genActiveSet(t),
+		Proofs:    map[types.LayerID][]types.VotingEligibility{layerID: genProofs(t, 1)},
+	}
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(ee, nil)
 	b.mCState.EXPECT().SelectProposalTXs(layerID, 1).Return([]types.TransactionID{tx.ID})
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Opinion{Votes: types.Votes{Base: types.RandomBallotID()}}, nil)
@@ -501,7 +566,7 @@ func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 5)
+	layerID := types.LayerID(layersPerEpoch * 5)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		return make(chan struct{})
@@ -517,7 +582,12 @@ func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil)
+	ee := &EpochEligibility{
+		Atx:       types.RandomATXID(),
+		ActiveSet: genActiveSet(t),
+		Proofs:    map[types.LayerID][]types.VotingEligibility{layerID: genProofs(t, 1)},
+	}
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(ee, nil)
 	b.mCState.EXPECT().SelectProposalTXs(layerID, 1).Return([]types.TransactionID{tx.ID})
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Opinion{Votes: types.Votes{Base: types.RandomBallotID()}}, nil)
@@ -541,7 +611,7 @@ func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 	b := createBuilder(t)
 
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
 	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
 		return make(chan struct{})
@@ -557,7 +627,12 @@ func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil)
+	ee := &EpochEligibility{
+		Atx:       types.RandomATXID(),
+		ActiveSet: genActiveSet(t),
+		Proofs:    map[types.LayerID][]types.VotingEligibility{layerID: genProofs(t, 1)},
+	}
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon, nonce).Return(ee, nil)
 	b.mCState.EXPECT().SelectProposalTXs(layerID, 1).Return([]types.TransactionID{tx.ID})
 	b.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any())
 	b.mTortoise.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Opinion{Votes: types.Votes{Base: types.RandomBallotID()}}, nil)
@@ -580,15 +655,10 @@ func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 
 func TestBuilder_HandleLayer_Duplicate(t *testing.T) {
 	b := createBuilder(t)
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 
-	ballot := types.NewExistingBallot(
-		types.BallotID{1},
-		types.EmptyEdSignature,
-		b.signer.NodeID(),
-		types.BallotMetadata{Layer: layerID},
-	)
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, b.signer.NodeID(), layerID)
 	require.NoError(t, ballots.Add(b.cdb, &ballot))
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
@@ -596,7 +666,7 @@ func TestBuilder_HandleLayer_Duplicate(t *testing.T) {
 }
 
 func TestBuilder_UniqueBlockID(t *testing.T) {
-	layerID := types.NewLayerID(layersPerEpoch * 3)
+	layerID := types.LayerID(layersPerEpoch * 3)
 
 	builder1 := createBuilder(t)
 	builder2 := createBuilder(t)
@@ -608,12 +678,12 @@ func TestBuilder_UniqueBlockID(t *testing.T) {
 
 	builder1.mTortoise.EXPECT().LatestComplete().Return(layerID.Sub(1))
 	require.NoError(t, layers.SetMeshHash(builder1.cdb, layerID.Sub(1), meshHash))
-	b1, err := builder1.createProposal(context.Background(), layerID, nil, atxID1, activeSet, beacon, nil, types.Opinion{})
+	b1, err := builder1.createProposal(context.Background(), layerID, &EpochEligibility{Atx: atxID1, ActiveSet: activeSet}, beacon, nil, types.Opinion{})
 	require.NoError(t, err)
 
 	builder2.mTortoise.EXPECT().LatestComplete().Return(layerID.Sub(1))
 	require.NoError(t, layers.SetMeshHash(builder2.cdb, layerID.Sub(1), meshHash))
-	b2, err := builder2.createProposal(context.Background(), layerID, nil, atxID2, activeSet, beacon, nil, types.Opinion{})
+	b2, err := builder2.createProposal(context.Background(), layerID, &EpochEligibility{Atx: atxID2, ActiveSet: activeSet}, beacon, nil, types.Opinion{})
 	require.NoError(t, err)
 
 	require.NotEqual(t, b1.ID(), b2.ID())

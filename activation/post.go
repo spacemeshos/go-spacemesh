@@ -43,6 +43,7 @@ type PostSetupOpts struct {
 	ComputeProviderID int                 `mapstructure:"smeshing-opts-provider"`
 	Throttle          bool                `mapstructure:"smeshing-opts-throttle"`
 	Scrypt            config.ScryptParams `mapstructure:"smeshing-opts-scrypt"`
+	ComputeBatchSize  uint64              `mapstructure:"smeshing-opts-compute-batch-size"`
 }
 
 // PostSetupStatus represents a status snapshot of the Post setup.
@@ -260,10 +261,10 @@ func (mgr *PostSetupManager) CommitmentAtx() (types.ATXID, error) {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 
-	if mgr.commitmentAtxId != *types.EmptyATXID {
+	if mgr.commitmentAtxId != types.EmptyATXID {
 		return mgr.commitmentAtxId, nil
 	}
-	return *types.EmptyATXID, errNotStarted
+	return types.EmptyATXID, errNotStarted
 }
 
 func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) (types.ATXID, error) {
@@ -277,7 +278,7 @@ func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) 
 		if err == nil {
 			atx, err := atxs.Get(mgr.db, atxId)
 			if err != nil {
-				return *types.EmptyATXID, err
+				return types.EmptyATXID, err
 			}
 			return *atx.CommitmentATX, nil
 		}
@@ -285,7 +286,7 @@ func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) 
 		// if this node has not published an ATX select the best ATX with `findCommitmentAtx`
 		return mgr.findCommitmentAtx(ctx)
 	default:
-		return *types.EmptyATXID, fmt.Errorf("load metadata: %w", err)
+		return types.EmptyATXID, fmt.Errorf("load metadata: %w", err)
 	}
 }
 
@@ -299,7 +300,7 @@ func (mgr *PostSetupManager) findCommitmentAtx(ctx context.Context) (types.ATXID
 		mgr.logger.With().Info("using golden atx as commitment atx")
 		return mgr.goldenATXID, nil
 	case err != nil:
-		return *types.EmptyATXID, fmt.Errorf("get commitment atx: %w", err)
+		return types.EmptyATXID, fmt.Errorf("get commitment atx: %w", err)
 	default:
 		return atx, nil
 	}

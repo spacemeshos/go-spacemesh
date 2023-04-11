@@ -24,7 +24,7 @@ func CheckLayerFirstEncoding[T any, H scale.TypePtr[T]](t *testing.T, getLayerID
 		_, err := H(&object).EncodeScale(enc)
 		require.NoError(t, err)
 
-		lid := NewLayerID(rand.Uint32())
+		lid := LayerID(rand.Uint32())
 		require.NoError(t, codec.Decode(buf.Bytes(), &lid))
 		require.Equal(t, getLayerID(object), lid)
 	})
@@ -32,7 +32,7 @@ func CheckLayerFirstEncoding[T any, H scale.TypePtr[T]](t *testing.T, getLayerID
 
 func TestLayerIDWraparound(t *testing.T) {
 	var (
-		max  = NewLayerID(math.MaxUint32)
+		max  = LayerID(math.MaxUint32)
 		zero LayerID
 	)
 	t.Run("Add", func(t *testing.T) {
@@ -41,7 +41,7 @@ func TestLayerIDWraparound(t *testing.T) {
 			max.Add(1)
 		})
 		require.Panics(t, func() {
-			LayerID{}.Add(math.MaxUint32 - 2).Add(math.MaxUint32 - 3)
+			LayerID(math.MaxUint32 - 2).Add(math.MaxUint32 - 3)
 		})
 	})
 	t.Run("Sub", func(t *testing.T) {
@@ -50,51 +50,51 @@ func TestLayerIDWraparound(t *testing.T) {
 			zero.Sub(1)
 		})
 		require.Panics(t, func() {
-			LayerID{}.Add(math.MaxUint32 - 2).Sub(math.MaxUint32 - 1)
+			LayerID(math.MaxUint32 - 2).Sub(math.MaxUint32 - 1)
 		})
 	})
 	t.Run("Mul", func(t *testing.T) {
 		require.EqualValues(t, 0, zero.Mul(1).Uint32())
-		require.EqualValues(t, 0, LayerID{}.Add(1).Mul(0).Uint32())
-		require.EqualValues(t, 4, LayerID{}.Add(2).Mul(2).Uint32())
+		require.EqualValues(t, 0, LayerID(1).Mul(0).Uint32())
+		require.EqualValues(t, 4, LayerID(2).Mul(2).Uint32())
 		require.Panics(t, func() {
 			max.Mul(2)
 		})
 	})
 	t.Run("Duration", func(t *testing.T) {
-		require.EqualValues(t, 1, NewLayerID(2).Difference(NewLayerID(1)))
+		require.EqualValues(t, 1, LayerID(2).Difference(LayerID(1)))
 		require.Panics(t, func() {
-			NewLayerID(10).Difference(NewLayerID(20))
+			LayerID(10).Difference(LayerID(20))
 		})
 	})
 }
 
 func TestLayerIDComparison(t *testing.T) {
 	t.Run("After", func(t *testing.T) {
-		require.True(t, NewLayerID(10).After(NewLayerID(5)))
-		require.True(t, !NewLayerID(10).After(NewLayerID(10)))
-		require.True(t, !NewLayerID(10).After(NewLayerID(20)))
+		require.True(t, LayerID(10).After(LayerID(5)))
+		require.True(t, !LayerID(10).After(LayerID(10)))
+		require.True(t, !LayerID(10).After(LayerID(20)))
 	})
 	t.Run("Before", func(t *testing.T) {
-		require.True(t, NewLayerID(5).Before(NewLayerID(10)))
-		require.True(t, !NewLayerID(5).Before(NewLayerID(5)))
-		require.True(t, !NewLayerID(5).Before(NewLayerID(3)))
+		require.True(t, LayerID(5).Before(LayerID(10)))
+		require.True(t, !LayerID(5).Before(LayerID(5)))
+		require.True(t, !LayerID(5).Before(LayerID(3)))
 	})
 	t.Run("Equal", func(t *testing.T) {
-		require.Equal(t, NewLayerID(1), NewLayerID(1))
-		require.NotEqual(t, NewLayerID(1), NewLayerID(10))
+		require.Equal(t, LayerID(1), LayerID(1))
+		require.NotEqual(t, LayerID(1), LayerID(10))
 	})
 }
 
 func TestLayerIDString(t *testing.T) {
-	require.Equal(t, "10", NewLayerID(10).String())
+	require.Equal(t, "10", LayerID(10).String())
 }
 
 func TestLayerIDBinaryEncoding(t *testing.T) {
-	lid := NewLayerID(100)
+	lid := LayerID(100)
 	buf, err := codec.Encode(&lid)
 	require.NoError(t, err)
-	decoded := LayerID{}
+	decoded := LayerID(0)
 	require.NoError(t, codec.Decode(buf, &decoded))
 	require.Equal(t, lid, decoded)
 }
@@ -160,7 +160,7 @@ func TestLayerID_GetEpoch(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			SetLayersPerEpoch(tc.layersPerEpoch)
-			require.EqualValues(t, tc.epoch, NewLayerID(tc.layer).GetEpoch())
+			require.EqualValues(t, tc.epoch, LayerID(tc.layer).GetEpoch())
 		})
 	}
 }
@@ -226,7 +226,7 @@ func TestLayerID_OrdinalInEpoch(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			SetLayersPerEpoch(tc.layersPerEpoch)
-			require.EqualValues(t, tc.ordinal, NewLayerID(tc.layer).OrdinalInEpoch())
+			require.EqualValues(t, tc.ordinal, LayerID(tc.layer).OrdinalInEpoch())
 		})
 	}
 }
@@ -292,7 +292,7 @@ func TestLayerID_FirstInEpoch(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			SetLayersPerEpoch(tc.layersPerEpoch)
-			require.EqualValues(t, tc.isFirst, NewLayerID(tc.layer).FirstInEpoch())
+			require.EqualValues(t, tc.isFirst, LayerID(tc.layer).FirstInEpoch())
 		})
 	}
 }
