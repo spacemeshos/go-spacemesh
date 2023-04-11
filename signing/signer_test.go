@@ -1,9 +1,9 @@
 package signing
 
 import (
+	"crypto/ed25519"
 	"testing"
 
-	"github.com/spacemeshos/ed25519-recovery"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/rand"
