@@ -10,7 +10,7 @@
     },
     "api": {
         "grpc-public-services": [
-            "debug", "gateway", "global", "mesh", "node",
+            "debug", "global", "mesh", "node",
             "transaction", "activation"
         ],
         "grpc-private-services": []
