@@ -14,7 +14,9 @@ func TestDecodeMaxKeys(t *testing.T) {
 	keys := make([]core.PublicKey, 11)
 	buf := bytes.NewBuffer(nil)
 	enc := scale.NewEncoder(buf)
-	_, err := scale.EncodeStructSlice(enc, keys)
+	_, err := scale.EncodeCompact8(enc, 3)
+	require.NoError(t, err)
+	_, err = scale.EncodeStructSlice(enc, keys)
 	require.NoError(t, err)
 
 	args := SpawnArguments{}
