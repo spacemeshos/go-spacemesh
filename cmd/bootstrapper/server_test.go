@@ -70,9 +70,10 @@ func TestServer(t *testing.T) {
 		_, err := fs.Stat(PersistedFilename())
 		return err == nil
 	}, 5*time.Second, 100*time.Millisecond)
+	require.Empty(t, ch)
 
 	data := query(t, ctx)
 	verifyUpdate(t, data, types.EpochID(2), expectedBeacon, activeSetSize)
 	cancel()
-	require.NoError(t, srv.Stop(ctx))
+	srv.Stop(ctx)
 }

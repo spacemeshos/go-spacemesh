@@ -124,6 +124,7 @@ func (s *Server) startHttp(ch chan error) {
 	ln, err := net.Listen("tcp", s.Addr)
 	if err != nil {
 		ch <- err
+		return
 	}
 	http.HandleFunc("/", s.handle)
 	s.logger.With().Info("server starts serving", log.String("addr", ln.Addr().String()))
@@ -132,12 +133,9 @@ func (s *Server) startHttp(ch chan error) {
 	}
 }
 
-func (s *Server) Stop(ctx context.Context) error {
-	if err := s.Shutdown(ctx); err != nil {
-		return err
-	}
+func (s *Server) Stop(ctx context.Context) {
+	_ = s.Shutdown(ctx)
 	_ = s.eg.Wait()
-	return nil
 }
 
 func (s *Server) handle(w http.ResponseWriter, _ *http.Request) {

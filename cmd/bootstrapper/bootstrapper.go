@@ -175,7 +175,7 @@ func runServer(ctx context.Context, logger log.Log, gen *Generator) error {
 
 	shutdownCxt, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
-	_ = srv.Stop(shutdownCxt)
+	srv.Stop(shutdownCxt)
 	return err
 }
 
