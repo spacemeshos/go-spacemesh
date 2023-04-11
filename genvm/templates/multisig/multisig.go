@@ -36,7 +36,7 @@ func (ms *MultiSig) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool 
 	if err != nil {
 		return false
 	}
-	hash := core.Hash(host.GetGenesisID().Bytes(), raw[:len(raw)-n])
+	body := core.SigningBody(host.GetGenesisID().Bytes(), raw[:len(raw)-n])
 	batch := ed25519.NewBatchVerifierWithCapacity(int(ms.k))
 	last := uint8(0)
 	for i, part := range sig {
@@ -47,7 +47,7 @@ func (ms *MultiSig) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool 
 			return false
 		}
 		last = part.Ref
-		batch.Add(ms.PublicKeys[part.Ref][:], hash[:], part.Sig[:])
+		batch.Add(ms.PublicKeys[part.Ref][:], body, part.Sig[:])
 	}
 	verified, _ := batch.Verify(nil)
 	return verified
