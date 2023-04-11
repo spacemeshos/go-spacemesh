@@ -456,6 +456,7 @@ func TestBroker_Register2(t *testing.T) {
 
 	m.Layer = instanceID2
 	msg = newMockGossipMsg(m).Message
+	msg.Signature = signer.Sign(signing.HARE, msg.SignedBytes())
 	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(context.Background(), "", mustEncode(t, msg)))
 }
 
@@ -511,7 +512,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 		case msg := <-inbox:
 			inMsg, ok := msg.(*Msg)
 			require.True(t, ok)
-			assert.Equal(t, signer.NodeID(), inMsg.NodeID)
+			assert.Equal(t, signer.NodeID(), inMsg.SmesherID)
 			return
 		case <-tm.C:
 			t.Error("Timeout")
@@ -532,7 +533,7 @@ func Test_newMsg(t *testing.T) {
 	sq := mocks.NewMockstateQuerier(ctrl)
 	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
 
-	_, e := newMsg(context.Background(), logtest.New(t), signer.NodeID(), m, sq)
+	_, e := newMsg(context.Background(), logtest.New(t), m, sq)
 	assert.NoError(t, e)
 }
 
@@ -619,11 +620,13 @@ func TestBroker_eventLoop(t *testing.T) {
 	// early message
 	m.Layer = instanceID2
 	msg = newMockGossipMsg(m).Message
+	msg.Signature = signer.Sign(signing.HARE, msg.SignedBytes())
 	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.Background(), "", mustEncode(t, msg)))
 
 	// future message
 	m.Layer = instanceID3
 	msg = newMockGossipMsg(m).Message
+	msg.Signature = signer.Sign(signing.HARE, msg.SignedBytes())
 	r.Equal(pubsub.ValidationIgnore, b.HandleMessage(context.Background(), "", mustEncode(t, msg)))
 
 	c, e = b.Register(context.Background(), instanceID3)
@@ -699,7 +702,7 @@ func TestBroker_Flow(t *testing.T) {
 	b.HandleMessage(context.Background(), "", mustEncode(t, m.Message))
 
 	ch1, e := b.Register(context.Background(), instanceID1)
-	r.Nil(e)
+	r.NoError(e)
 	<-ch1
 
 	signer2, err := signing.NewEdSigner()
@@ -707,10 +710,9 @@ func TestBroker_Flow(t *testing.T) {
 	m2 := BuildStatusMsg(signer2, NewDefaultEmptySet())
 	m2.Layer = instanceID2
 	ch2, e := b.Register(context.Background(), instanceID2)
-	r.Nil(e)
+	r.NoError(e)
 
 	b.HandleMessage(context.Background(), "", mustEncode(t, m.Message))
-
 	b.HandleMessage(context.Background(), "", mustEncode(t, m2.Message))
 
 	<-ch2

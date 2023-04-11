@@ -107,7 +107,7 @@ type messageBuilder struct {
 // newMessageBuilder returns a new, empty message builder.
 // One should not assume any values are pre-set.
 func newMessageBuilder() *messageBuilder {
-	m := &messageBuilder{&Msg{Message: Message{}, NodeID: types.EmptyNodeID}, &InnerMessage{}}
+	m := &messageBuilder{&Msg{Message: Message{}}, &InnerMessage{}}
 	m.msg.InnerMessage = m.inner
 	return m
 }
@@ -132,7 +132,7 @@ func (mb *messageBuilder) Sign(signer *signing.EdSigner) *messageBuilder {
 // SetPubKey sets the public key of the message.
 // Note: the message itself does not contain the public key. The builder returns the wrapper of the message which does.
 func (mb *messageBuilder) SetNodeID(nodeID types.NodeID) *messageBuilder {
-	mb.msg.NodeID = nodeID
+	mb.msg.SmesherID = nodeID
 	return mb
 }
 

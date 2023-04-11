@@ -9,7 +9,7 @@ type msgsTracker struct {
 }
 
 func (mt *msgsTracker) Track(m *Msg) {
-	mt.sigToPub[m.Signature] = m.NodeID
+	mt.sigToPub[m.Signature] = m.SmesherID
 }
 
 func (mt *msgsTracker) NodeID(m *Message) types.NodeID {

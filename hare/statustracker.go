@@ -41,9 +41,9 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 		Round:   msg.Round,
 		MsgHash: types.BytesToHash(msg.HashBytes()),
 	}
-	if prev, exist := st.statuses[msg.NodeID]; exist { // already handled this sender's status msg
+	if prev, exist := st.statuses[msg.SmesherID]; exist { // already handled this sender's status msg
 		st.logger.WithContext(ctx).With().Warning("duplicate status message detected",
-			log.Stringer("smesher", msg.NodeID),
+			log.Stringer("smesher", msg.SmesherID),
 		)
 		prevMetadata := types.HareMetadata{
 			Layer:   prev.Layer,
@@ -55,11 +55,11 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 		}
 
 		st.logger.WithContext(ctx).With().Warning("equivocation detected in status round",
-			log.Stringer("smesher", msg.NodeID),
+			log.Stringer("smesher", msg.SmesherID),
 			log.Object("prev", prev),
 			log.Object("curr", &metadata),
 		)
-		st.eTracker.Track(msg.NodeID, msg.Round, msg.Eligibility.Count, false)
+		st.eTracker.Track(msg.SmesherID, msg.Round, msg.Eligibility.Count, false)
 		old := &types.HareProofMsg{
 			InnerMsg:  prevMetadata,
 			Signature: prev.Signature,
@@ -68,9 +68,9 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 			InnerMsg:  metadata,
 			Signature: msg.Signature,
 		}
-		if err := reportEquivocation(ctx, msg.NodeID, old, this, &msg.Eligibility, st.malCh); err != nil {
+		if err := reportEquivocation(ctx, msg.SmesherID, old, this, &msg.Eligibility, st.malCh); err != nil {
 			st.logger.WithContext(ctx).With().Warning("failed to report equivocation in status round",
-				log.Stringer("smesher", msg.NodeID),
+				log.Stringer("smesher", msg.SmesherID),
 				log.Err(err),
 			)
 			return
@@ -78,7 +78,7 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 		return
 	}
 
-	st.statuses[msg.NodeID] = msg
+	st.statuses[msg.SmesherID] = msg
 }
 
 // AnalyzeStatusMessages analyzes the recorded status messages by the validation function.

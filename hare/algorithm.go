@@ -80,7 +80,6 @@ type State struct {
 // Messages are sent as type Message. Upon receiving, the NodeID is added to this wrapper (public key extraction).
 type Msg struct {
 	Message
-	NodeID types.NodeID
 }
 
 // Bytes returns the message as bytes (without the public key).
@@ -96,14 +95,14 @@ func (m *Msg) Bytes() []byte {
 // Upon receiving a protocol message, we try to build the full message.
 // The full message consists of the original message and the extracted public key.
 // An extracted public key is considered valid if it represents an active identity for a consensus view.
-func newMsg(ctx context.Context, logger log.Log, nodeId types.NodeID, hareMsg Message, querier stateQuerier) (*Msg, error) {
+func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQuerier) (*Msg, error) {
 	logger = logger.WithContext(ctx)
 
 	// query if identity is active
-	res, err := querier.IsIdentityActiveOnConsensusView(ctx, nodeId, hareMsg.Layer)
+	res, err := querier.IsIdentityActiveOnConsensusView(ctx, hareMsg.SmesherID, hareMsg.Layer)
 	if err != nil {
 		logger.With().Error("failed to check if identity is active",
-			log.Stringer("smesher", nodeId),
+			log.Stringer("smesher", hareMsg.SmesherID),
 			log.Err(err),
 			hareMsg.Layer,
 			log.String("msg_type", hareMsg.Type.String()),
@@ -114,14 +113,14 @@ func newMsg(ctx context.Context, logger log.Log, nodeId types.NodeID, hareMsg Me
 	// check query result
 	if !res {
 		logger.With().Warning("identity is not active",
-			log.Stringer("smesher", nodeId),
+			log.Stringer("smesher", hareMsg.SmesherID),
 			hareMsg.Layer,
 			log.String("msg_type", hareMsg.Type.String()),
 		)
 		return nil, errors.New("inactive identity")
 	}
 
-	msg := &Msg{Message: hareMsg, NodeID: nodeId}
+	msg := &Msg{Message: hareMsg}
 
 	return msg, nil
 }
@@ -429,26 +428,26 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 		return
 	}
 
-	if m.NodeID == types.EmptyNodeID {
+	if m.SmesherID == types.EmptyNodeID {
 		logger.Error("onEarlyMessage called with nil pub key")
 		return
 	}
 
-	if _, exist := proc.pending[m.NodeID]; exist { // ignore, already received
+	if _, exist := proc.pending[m.SmesherID]; exist { // ignore, already received
 		logger.With().Warning("already received message from sender",
-			log.Stringer("smesher", m.NodeID),
+			log.Stringer("smesher", m.SmesherID),
 		)
 		return
 	}
 
-	proc.pending[m.NodeID] = m
+	proc.pending[m.SmesherID] = m
 }
 
 // the very first step of handling a message.
 func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	logger := proc.WithContext(ctx).WithFields(
 		log.String("msg_type", m.Type.String()),
-		log.Stringer("smesher", m.NodeID),
+		log.Stringer("smesher", m.SmesherID),
 		log.Uint32("current_round", proc.getRound()),
 		log.Uint32("msg_round", m.Round),
 		proc.layer,
@@ -457,7 +456,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	// Note: instanceID is already verified by the broker
 	logger.Debug("consensus process received message")
 	// broker already validated the eligibility of this message
-	proc.eTracker.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
+	proc.eTracker.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 
 	// validate context
 	if err := proc.validator.ContextuallyValidateMessage(ctx, m, proc.getRound()); err != nil {
@@ -521,7 +520,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 		proc.WithContext(ctx).With().Warning("unknown message type",
 			proc.layer,
 			log.String("msg_type", m.Type.String()),
-			log.Stringer("smesher", m.NodeID),
+			log.Stringer("smesher", m.SmesherID),
 		)
 	}
 }
@@ -830,7 +829,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 
 	if ignored := proc.notifyTracker.OnNotify(ctx, msg); ignored {
 		proc.WithContext(ctx).With().Warning("ignoring notification",
-			log.Stringer("smesher", msg.NodeID),
+			log.Stringer("smesher", msg.SmesherID),
 		)
 		return
 	}

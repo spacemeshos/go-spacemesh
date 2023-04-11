@@ -141,9 +141,9 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 	require.NoError(t, err)
 
 	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), nil))
-	m := &Msg{Message: Message{}, NodeID: types.EmptyNodeID}
+	m := &Msg{}
 	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), m))
-	m.NodeID = signer.NodeID()
+	m.SmesherID = signer.NodeID()
 	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), m))
 
 	// empty set is allowed now
@@ -172,7 +172,7 @@ func initPg(tb testing.TB, validator *syntaxContextValidator) (*pubGetter, []Mes
 		signer, err = signing.NewEdSigner()
 		require.NoError(tb, err)
 		iMsg := BuildStatusMsg(signer, NewSetFromValues(types.ProposalID{1}))
-		validator.eTracker.Track(iMsg.NodeID, iMsg.Round, iMsg.Eligibility.Count, true)
+		validator.eTracker.Track(iMsg.SmesherID, iMsg.Round, iMsg.Eligibility.Count, true)
 		msgs[i] = iMsg.Message
 		pg.Track(iMsg)
 	}
@@ -301,14 +301,14 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 	b, err := proc.initDefaultBuilder(proc.value)
 	require.Nil(t, err)
 	preround := b.SetType(pre).Sign(proc.signer).Build()
-	preround.NodeID = proc.signer.NodeID()
+	preround.SmesherID = proc.signer.NodeID()
 	require.True(t, v.SyntacticallyValidateMessage(context.Background(), preround))
 	e := v.ContextuallyValidateMessage(context.Background(), preround, 0)
 	require.Nil(t, e)
 	b, err = proc.initDefaultBuilder(proc.value)
 	require.Nil(t, err)
 	status := b.SetType(status).Sign(proc.signer).Build()
-	status.NodeID = proc.signer.NodeID()
+	status.SmesherID = proc.signer.NodeID()
 	e = v.ContextuallyValidateMessage(context.Background(), status, 0)
 	require.Nil(t, e)
 	require.True(t, v.SyntacticallyValidateMessage(context.Background(), status))
@@ -323,7 +323,7 @@ func newPubGetter() *pubGetter {
 }
 
 func (pg pubGetter) Track(m *Msg) {
-	pg.mp[m.Signature] = m.NodeID
+	pg.mp[m.Signature] = m.SmesherID
 }
 
 func (pg pubGetter) NodeID(m *Message) types.NodeID {

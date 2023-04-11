@@ -178,7 +178,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		return fmt.Errorf("verify ed25519 signature")
 	}
 	// create msg
-	iMsg, err := newMsg(ctx, b.Log, hareMsg.SmesherID, hareMsg, b.stateQuerier)
+	iMsg, err := newMsg(ctx, b.Log, hareMsg, b.stateQuerier)
 	if err != nil {
 		logger.With().Warning("message validation failed: could not construct msg", log.Err(err))
 		return err
@@ -193,9 +193,9 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	// validation passed, report
 	logger.With().Debug("broker reported hare message as valid")
 
-	if proof, err := b.msh.GetMalfeasanceProof(iMsg.NodeID); err != nil && !errors.Is(err, sql.ErrNotFound) {
+	if proof, err := b.msh.GetMalfeasanceProof(iMsg.SmesherID); err != nil && !errors.Is(err, sql.ErrNotFound) {
 		logger.With().Error("failed to check malicious identity",
-			log.Stringer("smesher", iMsg.NodeID),
+			log.Stringer("smesher", iMsg.SmesherID),
 			log.Err(err),
 		)
 		return err
@@ -204,14 +204,14 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		// - gossip its malfeasance + eligibility proofs to the network
 		// - relay the eligibility proof to the consensus process
 		// - return error so the node don't relay messages from malicious parties
-		if err := b.handleMaliciousHareMessage(ctx, logger, iMsg.NodeID, proof, iMsg, isEarly); err != nil {
+		if err := b.handleMaliciousHareMessage(ctx, logger, iMsg.SmesherID, proof, iMsg, isEarly); err != nil {
 			return err
 		}
-		return fmt.Errorf("known malicious %v", iMsg.NodeID.String())
+		return fmt.Errorf("known malicious %v", iMsg.SmesherID.String())
 	}
 
 	if isEarly {
-		return b.handleEarlyMessage(logger, msgLayer, iMsg.NodeID, iMsg)
+		return b.handleEarlyMessage(logger, msgLayer, iMsg.SmesherID, iMsg)
 	}
 
 	// has instance, just send
@@ -245,7 +245,7 @@ func (b *Broker) handleMaliciousHareMessage(
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       msg.Layer,
 			Round:       msg.Round,
-			NodeID:      msg.NodeID,
+			NodeID:      msg.SmesherID,
 			Eligibility: msg.Eligibility,
 		},
 	}

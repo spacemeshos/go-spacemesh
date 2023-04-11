@@ -50,11 +50,11 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 		ev.Log.Fatal("invalid Msg")
 	}
 
-	res, err := ev.validateRole(ctx, m.NodeID, m.Layer, m.Round, m.Eligibility.Proof, m.Eligibility.Count)
+	res, err := ev.validateRole(ctx, m.SmesherID, m.Layer, m.Round, m.Eligibility.Proof, m.Eligibility.Count)
 	if err != nil {
 		ev.WithContext(ctx).With().Error("failed to validate role",
 			log.Err(err),
-			log.Stringer("smesher", m.NodeID),
+			log.Stringer("smesher", m.SmesherID),
 			m.Layer,
 			log.String("msg_type", m.Type.String()),
 		)
@@ -63,7 +63,7 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 
 	if !res {
 		ev.WithContext(ctx).With().Warning("validate message failed: role is invalid",
-			log.Stringer("smesher", m.NodeID),
+			log.Stringer("smesher", m.SmesherID),
 			m.Layer,
 			log.String("msg_type", m.Type.String()),
 		)
@@ -238,14 +238,14 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(ctx context.Contex
 		return false
 	}
 
-	if m.NodeID == types.EmptyNodeID {
+	if m.SmesherID == types.EmptyNodeID {
 		logger.Warning("syntax validation failed: missing public key")
 		return false
 	}
 
 	if m.InnerMessage == nil {
 		logger.With().Warning("syntax validation failed: inner message is nil",
-			log.Stringer("smesher", m.NodeID),
+			log.Stringer("smesher", m.SmesherID),
 		)
 		return false
 	}
@@ -320,7 +320,7 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 		}
 		senders[innerMsg.SmesherID] = struct{}{} // mark sender as exist
 
-		iMsg, err := newMsg(ctx, v.Log, innerMsg.SmesherID, innerMsg, v.stateQuerier)
+		iMsg, err := newMsg(ctx, v.Log, innerMsg, v.stateQuerier)
 		if err != nil {
 			return fmt.Errorf("new message: %w", err)
 		}
@@ -340,7 +340,7 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 		if !v.roleValidator.Validate(ctx, iMsg) {
 			return errInnerEligibility
 		}
-		v.eTracker.Track(iMsg.NodeID, iMsg.Round, iMsg.Eligibility.Count, true)
+		v.eTracker.Track(iMsg.SmesherID, iMsg.Round, iMsg.Eligibility.Count, true)
 
 		// the message is valid, track it
 		v.validMsgsTracker.Track(iMsg)
@@ -383,7 +383,7 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 		statusIter := inferIteration(m.Round)
 		if proposalIter != statusIter { // not same iteration
 			logger.With().Warning("proposal validation failed: not same iteration",
-				log.Stringer("smesher", m.NodeID),
+				log.Stringer("smesher", m.SmesherID),
 				m.Layer,
 				log.Uint32("expected", proposalIter),
 				log.Uint32("actual", statusIter))
@@ -392,7 +392,7 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 
 		return true
 	}
-	logger = logger.WithFields(log.Stringer("smesher", msg.NodeID), msg.Layer)
+	logger = logger.WithFields(log.Stringer("smesher", msg.SmesherID), msg.Layer)
 	validators := []func(m *Msg) bool{validateStatusType, validateSameIteration, v.statusValidator}
 	if err := v.validateAggregatedMessage(ctx, msg.Svp, validators); err != nil {
 		logger.With().Warning("invalid proposal", log.Err(err))
