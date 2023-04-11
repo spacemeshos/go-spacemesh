@@ -96,7 +96,8 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 	if err := th.state.AddToCache(ctx, &types.Transaction{RawTx: raw, TxHeader: header}); err != nil {
 		th.logger.WithContext(ctx).With().Warning("failed to add tx to conservative cache",
 			raw.ID,
-			log.Err(err))
+			log.Err(err),
+		)
 		return err
 	}
 	return nil

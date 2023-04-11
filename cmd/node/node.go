@@ -725,12 +725,9 @@ func (app *App) initServices(
 	}
 
 	app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
-	app.host.Register(pubsub.BeaconProposalProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal))
-	app.host.Register(pubsub.BeaconFirstVotesProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes))
-	app.host.Register(pubsub.BeaconFollowingVotesProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
+	app.host.Register(pubsub.BeaconProposalProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal))
+	app.host.Register(pubsub.BeaconFirstVotesProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes))
+	app.host.Register(pubsub.BeaconFollowingVotesProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
 	app.host.Register(pubsub.ProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
 	app.host.Register(pubsub.AtxProtocol, pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx))
 	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))

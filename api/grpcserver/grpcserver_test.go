@@ -532,14 +532,6 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 
 var cfg = config.DefaultTestConfig()
 
-type SyncerMock struct {
-	startCalled bool
-	isSynced    bool
-}
-
-func (s *SyncerMock) IsSynced(context.Context) bool { return s.isSynced }
-func (s *SyncerMock) Start(context.Context)         { s.startCalled = true }
-
 func launchServer(tb testing.TB, cfg config.Config, services ...ServiceAPI) func() {
 	grpcService := New(cfg.PublicListener)
 	jsonService := NewJSONHTTPServer(cfg.JSONListener)
@@ -611,12 +603,14 @@ func TestNewServersConfig(t *testing.T) {
 
 func TestNodeService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	syncer := SyncerMock{}
+	ctrl := gomock.NewController(t)
+	syncer := mocks.NewMockSyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	grpcService := NewNodeService(ctx, &networkMock, meshAPI, &genTime, &syncer)
+	grpcService := NewNodeService(ctx, &networkMock, meshAPI, &genTime, syncer)
 	shutDown := launchServer(t, cfg, grpcService)
 	defer shutDown()
 
@@ -1654,8 +1648,10 @@ func TestMeshService(t *testing.T) {
 func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	logtest.SetupGlobal(t)
 	req := require.New(t)
-	syncer := &SyncerMock{}
+
 	ctrl := gomock.NewController(t)
+	syncer := mocks.NewMockSyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(false)
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
@@ -1677,7 +1673,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	req.EqualError(err, "rpc error: code = FailedPrecondition desc = Cannot submit transaction, node is not in sync yet, try again later")
 	req.Nil(res)
 
-	syncer.isSynced = true
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(true)
 
 	// This time, we expect no error, since isSynced is now true
 	_, err = c.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{Transaction: serializedTx})
@@ -1691,6 +1687,8 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	logtest.SetupGlobal(t)
 
 	ctrl := gomock.NewController(t)
+	syncer := mocks.NewMockSyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 
 	expected := 20
@@ -1699,7 +1697,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 		n++
 		return nil
 	})
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer)
 	shutDown := launchServer(t, cfg, grpcService)
 	defer shutDown()
 
@@ -1723,10 +1721,12 @@ func TestTransactionService(t *testing.T) {
 	logtest.SetupGlobal(t)
 
 	ctrl := gomock.NewController(t)
+	syncer := mocks.NewMockSyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer)
 	shutDown := launchServer(t, cfg, grpcService)
 	defer shutDown()
 
@@ -2392,7 +2392,11 @@ func TestMultiService(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	svc1 := NewNodeService(ctx, &networkMock, meshAPI, &genTime, &SyncerMock{})
+	ctrl, ctx := gomock.WithContext(ctx, t)
+	syncer := mocks.NewMockSyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
+
+	svc1 := NewNodeService(ctx, &networkMock, meshAPI, &genTime, syncer)
 	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, cfg, svc1, svc2)
 	defer shutDown()
@@ -2440,7 +2444,11 @@ func TestJsonApi(t *testing.T) {
 	shutDown()
 
 	// enable services and try again
-	svc1 := NewNodeService(context.Background(), &networkMock, meshAPI, &genTime, &SyncerMock{})
+	ctrl := gomock.NewController(t)
+	syncer := mocks.NewMockSyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
+
+	svc1 := NewNodeService(context.Background(), &networkMock, meshAPI, &genTime, syncer)
 	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	shutDown = launchServer(t, cfg, svc1, svc2)
 	defer shutDown()
@@ -2528,12 +2536,12 @@ func TestEventsReceived(t *testing.T) {
 	t.Cleanup(events.CloseEventReporter)
 
 	ctrl := gomock.NewController(t)
+	syncer := mocks.NewMockSyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
-	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
-		return nil
-	})
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	txService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
+	txService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer)
 	gsService := NewGlobalStateService(meshAPI, conStateAPI)
 	shutDown := launchServer(t, cfg, txService, gsService)
 	defer shutDown()
