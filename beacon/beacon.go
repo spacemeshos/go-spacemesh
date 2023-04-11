@@ -242,6 +242,11 @@ func (pd *ProtocolDriver) Start(ctx context.Context) {
 	})
 }
 
+func (pd *ProtocolDriver) UpdateBeacon(epoch types.EpochID, beacon types.Beacon) {
+	// TODO: implement
+	pd.logger.With().Info("received beacon update", epoch, beacon)
+}
+
 // Close closes ProtocolDriver.
 func (pd *ProtocolDriver) Close() {
 	pd.logger.Info("closing beacon protocol")

@@ -1,4 +1,3 @@
-
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 include Makefile-libs.Inc
 
@@ -38,6 +37,7 @@ else
 endif
 
 DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
+DOCKER_BS_IMAGE = $(DOCKER_IMAGE_REPO)-bs:$(SHA)
 
 # setting extra command line params for the CI tests pytest commands
 ifdef namespace
@@ -78,6 +78,9 @@ gen-p2p-identity:
 go-spacemesh: get-libs
 	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
 .PHONY: go-spacemesh gen-p2p-identity
+bootstrapper:
+	echo $(BIN_DIR) ; cd cmd/bootstrapper ;  go build -o $(BIN_DIR)go-$@$(EXE) .
+.PHONY: bootstrapper
 
 tidy:
 	go mod tidy
@@ -186,6 +189,21 @@ endif
 
 docker-local-push: docker-local-build dockerpush-only
 .PHONY: docker-local-push
+
+dockerbuild-bs:
+	DOCKER_BUILDKIT=1 docker build -t $(DOCKER_BS_IMAGE) -f ./bootstrap.Dockerfile .
+.PHONY: dockerbuild-bs
+
+dockerpush-bs: dockerbuild-bs dockerpush-bs-only
+.PHONY: dockerpush-bs
+
+dockerpush-bs-only:
+ifneq ($(DOCKER_USERNAME):$(DOCKER_PASSWORD),:)
+	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+endif
+	docker tag $(DOCKER_BS_IMAGE) $(DOCKER_HUB)/$(DOCKER_BS_IMAGE)
+	docker push $(DOCKER_HUB)/$(DOCKER_BS_IMAGE)
+.PHONY: dockerpush-bs-only
 
 fuzz:
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" ./scripts/fuzz.sh $(FUZZTIME)
