@@ -93,11 +93,11 @@ func (a *singlesigAccount) spawnArgs() scale.Encodable {
 }
 
 func (a *singlesigAccount) spendGas() int {
-	return wallet.BaseGas + wallet.FixedGasSpend
+	return wallet.BaseGas + wallet.FixedGas
 }
 
 func (a *singlesigAccount) spawnGas() int {
-	return wallet.BaseGas + wallet.FixedGasSpawn
+	return a.spendGas()
 }
 
 type multisigAccount struct {
@@ -131,7 +131,7 @@ func (a *multisigAccount) selfSpawn(nonce core.Nonce, opts ...sdk.Opt) []byte {
 	}
 	var agg *sdkmultisig.Aggregator
 	for i := 0; i < a.k; i++ {
-		part := sdkmultisig.SelfSpawn(uint8(i), a.pks[i], a.template, pubs, nonce, opts...)
+		part := sdkmultisig.SelfSpawn(uint8(i), a.pks[i], a.template, uint8(a.k), pubs, nonce, opts...)
 		if agg == nil {
 			agg = part
 		} else {
@@ -152,6 +152,7 @@ func (a *multisigAccount) spawn(template core.Address, args scale.Encodable, non
 
 func (a *multisigAccount) spawnArgs() scale.Encodable {
 	args := multisig.SpawnArguments{
+		Required:   uint8(a.k),
 		PublicKeys: make([]core.PublicKey, len(a.pks)),
 	}
 	for i, pk := range a.pks {
@@ -161,27 +162,11 @@ func (a *multisigAccount) spawnArgs() scale.Encodable {
 }
 
 func (a *multisigAccount) spendGas() int {
-	switch a.template {
-	case multisig.TemplateAddress1:
-		return multisig.BaseGas1 + multisig.FixedGasSpend1
-	case multisig.TemplateAddress2:
-		return multisig.BaseGas2 + multisig.FixedGasSpend2
-	case multisig.TemplateAddress3:
-		return multisig.BaseGas3 + multisig.FixedGasSpend3
-	}
-	panic("unknown template")
+	return int(vesting.BaseGas*uint64(a.k) + vesting.FixedGas*uint64(a.k))
 }
 
 func (a *multisigAccount) spawnGas() int {
-	switch a.template {
-	case multisig.TemplateAddress1:
-		return multisig.BaseGas1 + multisig.FixedGasSpawn1
-	case multisig.TemplateAddress2:
-		return multisig.BaseGas2 + multisig.FixedGasSpawn2
-	case multisig.TemplateAddress3:
-		return multisig.BaseGas3 + multisig.FixedGasSpawn3
-	}
-	panic("unknown template")
+	return a.spendGas()
 }
 
 type vestingAccount struct {
@@ -198,39 +183,15 @@ func (a *vestingAccount) drainVault(vault, recipient core.Address, amount uint64
 }
 
 func (a *vestingAccount) spendGas() int {
-	switch a.template {
-	case vesting.TemplateAddress1:
-		return vesting.BaseGas1 + vesting.FixedGasSpend1
-	case vesting.TemplateAddress2:
-		return vesting.BaseGas2 + vesting.FixedGasSpend2
-	case vesting.TemplateAddress3:
-		return vesting.BaseGas3 + vesting.FixedGasSpend3
-	}
-	panic("unknown template")
+	return int(vesting.BaseGas*uint64(a.k) + vesting.FixedGas*uint64(a.k))
 }
 
 func (a *vestingAccount) spawnGas() int {
-	switch a.template {
-	case vesting.TemplateAddress1:
-		return vesting.BaseGas1 + vesting.FixedGasSpawn1
-	case vesting.TemplateAddress2:
-		return vesting.BaseGas2 + vesting.FixedGasSpawn2
-	case vesting.TemplateAddress3:
-		return vesting.BaseGas3 + vesting.FixedGasSpawn3
-	}
-	panic("unknown template")
+	return a.spendGas()
 }
 
 func (a *vestingAccount) drainGas() int {
-	switch a.template {
-	case vesting.TemplateAddress1:
-		return vesting.FixedGasDrainVault1
-	case vesting.TemplateAddress2:
-		return vesting.FixedGasDrainVault2
-	case vesting.TemplateAddress3:
-		return vesting.FixedGasDrainVault3
-	}
-	panic("unknown template")
+	return a.spendGas()
 }
 
 type vaultAccount struct {
@@ -328,21 +289,21 @@ func (t *tester) createMultisig(k, n int, template core.Address) *multisigAccoun
 	return &multisigAccount{
 		k:        k,
 		pks:      pks,
-		address:  sdkmultisig.Address(template, pubs...),
+		address:  sdkmultisig.Address(template, uint8(k), pubs...),
 		template: template,
 	}
 }
 
-func (t *tester) addMultisig(total, k, n int, template core.Address) *tester {
+func (t *tester) addMultisig(total, k, n int) *tester {
 	for i := 0; i < total; i++ {
-		t.addAccount(t.createMultisig(k, n, template))
+		t.addAccount(t.createMultisig(k, n, multisig.TemplateAddress))
 	}
 	return t
 }
 
-func (t *tester) addVesting(total int, k, n int, template core.Address) *tester {
+func (t *tester) addVesting(total int, k, n int) *tester {
 	for i := 0; i < total; i++ {
-		ms := t.createMultisig(k, n, template)
+		ms := t.createMultisig(k, n, vesting.TemplateAddress)
 		t.addAccount(&vestingAccount{*ms})
 	}
 	return t
@@ -1458,56 +1419,56 @@ func TestWallets(t *testing.T) {
 	})
 	t.Run("MultiSig13", func(t *testing.T) {
 		const n = 3
-		testWallet(t, defaultGasPrice, multisig.TemplateAddress1, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(funded, 1, n, multisig.TemplateAddress1).
+				addMultisig(funded, 1, n).
 				applyGenesisWithBalance(balance).
-				addMultisig(total-funded, 1, n, multisig.TemplateAddress1)
+				addMultisig(total-funded, 1, n)
 		})
 	})
 	t.Run("MultiSig25", func(t *testing.T) {
 		const n = 5
-		testWallet(t, defaultGasPrice, multisig.TemplateAddress2, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(funded, 2, n, multisig.TemplateAddress2).
+				addMultisig(funded, 2, n).
 				applyGenesisWithBalance(balance).
-				addMultisig(total-funded, 2, n, multisig.TemplateAddress2)
+				addMultisig(total-funded, 2, n)
 		})
 	})
 	t.Run("MultiSig310", func(t *testing.T) {
 		const n = 10
-		testWallet(t, defaultGasPrice, multisig.TemplateAddress3, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(funded, 3, n, multisig.TemplateAddress3).
+				addMultisig(funded, 3, n).
 				applyGenesisWithBalance(balance).
-				addMultisig(total-funded, 3, n, multisig.TemplateAddress3)
+				addMultisig(total-funded, 3, n)
 		})
 	})
 	t.Run("Vesting13", func(t *testing.T) {
 		const n = 3
-		testWallet(t, defaultGasPrice, vesting.TemplateAddress1, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, vesting.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
-				addVesting(funded, 1, n, vesting.TemplateAddress1).
+				addVesting(funded, 1, n).
 				applyGenesisWithBalance(balance).
-				addVesting(total-funded, 1, n, vesting.TemplateAddress1)
+				addVesting(total-funded, 1, n)
 		})
 	})
 	t.Run("Vesting25", func(t *testing.T) {
 		const n = 5
-		testWallet(t, defaultGasPrice, vesting.TemplateAddress2, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, vesting.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
-				addVesting(funded, 2, n, vesting.TemplateAddress2).
+				addVesting(funded, 2, n).
 				applyGenesisWithBalance(balance).
-				addVesting(total-funded, 2, n, vesting.TemplateAddress2)
+				addVesting(total-funded, 2, n)
 		})
 	})
 	t.Run("Vesting310", func(t *testing.T) {
 		const n = 10
-		testWallet(t, defaultGasPrice, vesting.TemplateAddress3, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, vesting.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
-				addVesting(funded, 3, n, vesting.TemplateAddress3).
+				addVesting(funded, 3, n).
 				applyGenesisWithBalance(balance).
-				addVesting(total-funded, 3, n, vesting.TemplateAddress3)
+				addVesting(total-funded, 3, n)
 		})
 	})
 }
@@ -1515,9 +1476,9 @@ func TestWallets(t *testing.T) {
 func TestRandomTransfers(t *testing.T) {
 	tt := newTester(t).withSeed(101).
 		addSingleSig(10).
-		addMultisig(10, 1, 3, multisig.TemplateAddress1).
-		addMultisig(10, 2, 5, multisig.TemplateAddress2).
-		addMultisig(10, 3, 10, multisig.TemplateAddress3).
+		addMultisig(10, 1, 3).
+		addMultisig(10, 2, 5).
+		addMultisig(10, 3, 10).
 		applyGenesis()
 
 	skipped, _, err := tt.Apply(testContext(types.GetEffectiveGenesis()),
@@ -1677,7 +1638,7 @@ func TestSpawnOtherTemplate(t *testing.T) {
 		testSpawnOther(t, func(t *testing.T) *tester {
 			return newTester(t).
 				addSingleSig(1).
-				addMultisig(1, 1, 3, multisig.TemplateAddress1).
+				addMultisig(1, 1, 3).
 				applyGenesis()
 		})
 	})
@@ -1685,7 +1646,7 @@ func TestSpawnOtherTemplate(t *testing.T) {
 		testSpawnOther(t, func(t *testing.T) *tester {
 			return newTester(t).
 				addSingleSig(1).
-				addMultisig(1, 2, 5, multisig.TemplateAddress2).
+				addMultisig(1, 2, 5).
 				applyGenesis()
 		})
 	})
@@ -1693,31 +1654,31 @@ func TestSpawnOtherTemplate(t *testing.T) {
 		testSpawnOther(t, func(t *testing.T) *tester {
 			return newTester(t).
 				addSingleSig(1).
-				addMultisig(1, 3, 7, multisig.TemplateAddress3).
+				addMultisig(1, 3, 7).
 				applyGenesis()
 		})
 	})
 	t.Run("MultiSig13/Multisig25", func(t *testing.T) {
 		testSpawnOther(t, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(1, 1, 3, multisig.TemplateAddress1).
-				addMultisig(1, 2, 5, multisig.TemplateAddress2).
+				addMultisig(1, 1, 3).
+				addMultisig(1, 2, 5).
 				applyGenesis()
 		})
 	})
 	t.Run("MultiSig13/Multisig37", func(t *testing.T) {
 		testSpawnOther(t, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(1, 1, 3, multisig.TemplateAddress1).
-				addMultisig(1, 3, 7, multisig.TemplateAddress3).
+				addMultisig(1, 1, 3).
+				addMultisig(1, 3, 7).
 				applyGenesis()
 		})
 	})
 	t.Run("MultiSig25/Multisig37", func(t *testing.T) {
 		testSpawnOther(t, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(1, 2, 5, multisig.TemplateAddress2).
-				addMultisig(1, 3, 7, multisig.TemplateAddress3).
+				addMultisig(1, 2, 5).
+				addMultisig(1, 3, 7).
 				applyGenesis()
 		})
 	})
@@ -1739,13 +1700,13 @@ func TestVestingWithVault(t *testing.T) {
 		// vault accounts:      [20 : 30)
 	)
 	var (
-		vestingTemplate = vesting.TemplateAddress1
+		vestingTemplate = vesting.TemplateAddress
 		vaultTemplate   = vault.TemplateAddress
 	)
 
 	genTester := func(t *testing.T) *tester {
 		return newTester(t).
-			addVesting(vestingAccounts, 1, 2, vestingTemplate).
+			addVesting(vestingAccounts, 1, 2).
 			addVault(10, total, initial, types.GetEffectiveGenesis().Add(start-1), types.GetEffectiveGenesis().Add(end-1)).
 			applyGenesis()
 	}
@@ -1945,51 +1906,51 @@ func TestValidation(t *testing.T) {
 	})
 	t.Run("MultiSig13", func(t *testing.T) {
 		tt := newTester(t).
-			addMultisig(1, 1, 3, multisig.TemplateAddress1).
+			addMultisig(1, 1, 3).
 			applyGenesis().
-			addMultisig(1, 1, 3, multisig.TemplateAddress1)
-		testValidation(t, tt, multisig.TemplateAddress1)
+			addMultisig(1, 1, 3)
+		testValidation(t, tt, multisig.TemplateAddress)
 	})
 	t.Run("MultiSig25", func(t *testing.T) {
 		tt := newTester(t).
-			addMultisig(1, 2, 5, multisig.TemplateAddress2).
+			addMultisig(1, 2, 5).
 			applyGenesis().
-			addMultisig(1, 2, 5, multisig.TemplateAddress2)
-		testValidation(t, tt, multisig.TemplateAddress2)
+			addMultisig(1, 2, 5)
+		testValidation(t, tt, multisig.TemplateAddress)
 	})
 	t.Run("MultiSig310", func(t *testing.T) {
 		tt := newTester(t).
-			addMultisig(1, 3, 10, multisig.TemplateAddress3).
+			addMultisig(1, 3, 10).
 			applyGenesis().
-			addMultisig(1, 3, 10, multisig.TemplateAddress3)
-		testValidation(t, tt, multisig.TemplateAddress3)
+			addMultisig(1, 3, 10)
+		testValidation(t, tt, multisig.TemplateAddress)
 	})
 	t.Run("Vesting13", func(t *testing.T) {
 		tt := newTester(t).
-			addVesting(1, 1, 3, vesting.TemplateAddress1).
+			addVesting(1, 1, 3).
 			applyGenesis().
-			addVesting(1, 1, 3, vesting.TemplateAddress1)
-		testValidation(t, tt, vesting.TemplateAddress1)
+			addVesting(1, 1, 3)
+		testValidation(t, tt, vesting.TemplateAddress)
 	})
 	t.Run("Vesting25", func(t *testing.T) {
 		tt := newTester(t).
-			addVesting(1, 2, 5, vesting.TemplateAddress2).
+			addVesting(1, 2, 5).
 			applyGenesis().
-			addVesting(1, 2, 5, vesting.TemplateAddress2)
-		testValidation(t, tt, vesting.TemplateAddress2)
+			addVesting(1, 2, 5)
+		testValidation(t, tt, vesting.TemplateAddress)
 	})
 	t.Run("Vesting310", func(t *testing.T) {
 		tt := newTester(t).
-			addVesting(1, 3, 10, vesting.TemplateAddress3).
+			addVesting(1, 3, 10).
 			applyGenesis().
-			addVesting(1, 3, 10, vesting.TemplateAddress3)
-		testValidation(t, tt, vesting.TemplateAddress3)
+			addVesting(1, 3, 10)
+		testValidation(t, tt, vesting.TemplateAddress)
 	})
 }
 
 func TestVaultValidation(t *testing.T) {
 	tt := newTester(t).
-		addVesting(1, 1, 2, vesting.TemplateAddress1).
+		addVesting(1, 1, 2).
 		addVault(2, 100, 10, types.LayerID(1), types.LayerID(10)).
 		applyGenesis()
 	_, _, err := tt.Apply(ApplyContext{Layer: types.GetEffectiveGenesis()},

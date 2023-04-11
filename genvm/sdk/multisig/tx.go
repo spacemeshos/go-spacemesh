@@ -71,8 +71,8 @@ func (tx *Aggregator) Raw() []byte {
 }
 
 // SelfSpawn returns accumulator for self-spawn transaction.
-func SelfSpawn(ref uint8, pk ed25519.PrivateKey, template types.Address, pubs []ed25519.PublicKey, nonce core.Nonce, opts ...sdk.Opt) *Aggregator {
-	args := multisig.SpawnArguments{}
+func SelfSpawn(ref uint8, pk ed25519.PrivateKey, template types.Address, required uint8, pubs []ed25519.PublicKey, nonce core.Nonce, opts ...sdk.Opt) *Aggregator {
+	args := multisig.SpawnArguments{Required: required}
 	args.PublicKeys = make([]core.PublicKey, len(pubs))
 	for i := range pubs {
 		copy(args.PublicKeys[i][:], pubs[i])
