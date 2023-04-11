@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -259,4 +260,19 @@ func statusToPbStatus(status *activation.PostSetupStatus) *pb.PostSetupStatus {
 	}
 
 	return pbStatus
+}
+
+// UpdatePoetServers update server that is used for generating PoETs.
+func (s SmesherService) UpdatePoetServers(ctx context.Context, req *pb.UpdatePoetServersRequest) (*pb.UpdatePoetServersResponse, error) {
+	err := s.smeshingProvider.UpdatePoETServers(ctx, req.Urls)
+	if err == nil {
+		return &pb.UpdatePoetServersResponse{
+			Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
+		}, nil
+	}
+	switch {
+	case errors.Is(err, activation.ErrPoetServiceUnstable):
+		return nil, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", err)
+	}
+	return nil, status.Errorf(codes.Internal, "failed to update poet server")
 }

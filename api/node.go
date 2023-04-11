@@ -79,11 +79,6 @@ type PostSetupProvider interface {
 	Config() activation.PostConfig
 }
 
-// ActivationAPI is an API for activation module.
-type ActivationAPI interface {
-	UpdatePoETServers(ctx context.Context, endpoints []string) error
-}
-
 // AtxProvider is used by ActivationService to get ATXes.
 type AtxProvider interface {
 	GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error)
