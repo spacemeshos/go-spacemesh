@@ -403,22 +403,23 @@ func (t *tester) estimateSpawnGas(principal, target int) int {
 	args := t.accounts[target].spawnArgs()
 	tx := t.accounts[principal].spawn(t.accounts[target].getTemplate(), args, 0)
 	return t.accounts[principal].baseGas() + t.accounts[target].fixedGas() +
-		len(tx)*int(t.VM.cfg.StorageCostFactor)
+		int(core.TxDataGas(len(tx)))
 }
 
 func (t *tester) estimateSpendGas(principal, to, amount int, nonce core.Nonce) int {
-	return t.accounts[principal].baseGas() + t.accounts[principal].fixedGas() + len(t.accounts[principal].spend(t.accounts[to].getAddress(), uint64(amount), nonce))*int(t.VM.cfg.StorageCostFactor)
+	tx := t.accounts[principal].spend(t.accounts[to].getAddress(), uint64(amount), nonce)
+	return t.accounts[principal].baseGas() + t.accounts[principal].fixedGas() + int(core.TxDataGas(len(tx)))
 }
 
 func (t *tester) estimateDrainGas(principal, vault, to, amount int, nonce core.Nonce) int {
 	require.IsType(t, t.accounts[principal], &vestingAccount{})
 	vestacc := t.accounts[principal].(*vestingAccount)
-	return vestacc.baseGas() + vestacc.fixedGas() + len(vestacc.drainVault(
+	tx := vestacc.drainVault(
 		t.accounts[vault].getAddress(),
 		t.accounts[to].getAddress(),
 		uint64(amount),
-		nonce),
-	)*int(t.VM.cfg.StorageCostFactor)
+		nonce)
+	return vestacc.baseGas() + vestacc.fixedGas() + int(core.TxDataGas(len(tx)))
 }
 
 func encodeFields(tb testing.TB, fields ...scale.Encodable) types.RawTx {

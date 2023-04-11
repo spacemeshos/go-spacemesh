@@ -39,16 +39,14 @@ func WithLogger(logger log.Log) Opt {
 
 // Config defines the configuration options for vm.
 type Config struct {
-	GasLimit          uint64
-	GenesisID         types.Hash20
-	StorageCostFactor uint64 `mapstructure:"vm-storage-cost-factor"`
+	GasLimit  uint64
+	GenesisID types.Hash20
 }
 
 // DefaultConfig returns the default RewardConfig.
 func DefaultConfig() Config {
 	return Config{
-		GasLimit:          100_000_000,
-		StorageCostFactor: 2,
+		GasLimit: 100_000_000,
 	}
 }
 
@@ -331,7 +329,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 			invalidTxCount.Inc()
 			continue
 		}
-		if intrinsic := core.ComputeIntrinsicGasCost(ctx.Gas.BaseGas, tx.GetRaw().Raw, v.cfg.StorageCostFactor); ctx.PrincipalAccount.Balance < intrinsic {
+		if intrinsic := core.ComputeIntrinsicGasCost(ctx.Gas.BaseGas, tx.GetRaw().Raw); ctx.PrincipalAccount.Balance < intrinsic {
 			logger.With().Warning("ineffective transaction. intrinstic gas not covered",
 				log.Object("header", header),
 				log.Object("account", &ctx.PrincipalAccount),
@@ -574,7 +572,7 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 	ctx.Header.Principal = principal
 	ctx.Header.TemplateAddress = *templateAddress
 	ctx.Header.Method = method
-	ctx.Header.MaxGas = core.ComputeGasCost(ctx.Gas.BaseGas, ctx.Gas.FixedGas, raw, cfg.StorageCostFactor)
+	ctx.Header.MaxGas = core.ComputeGasCost(ctx.Gas.BaseGas, ctx.Gas.FixedGas, raw)
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce
 

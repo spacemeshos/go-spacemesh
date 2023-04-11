@@ -50,9 +50,22 @@ func (s *Wallet) Spend(host core.Host, args *SpendArguments) error {
 }
 
 func (s *Wallet) BaseGas(method uint8) uint64 {
-	return BaseGas
+	gas := core.TX + core.EDVERIFY
+	if method == core.MethodSpawn {
+		gas += core.SPAWN
+	}
+	return gas
 }
 
 func (s *Wallet) FixedGas(method uint8) uint64 {
+	gas := uint64(0)
+	switch method {
+	case core.MethodSpawn:
+		gas += core.SizeGas(core.STORE, 48)
+	case core.MethodSpend:
+		gas += core.SizeGas(core.LOAD, 48)
+		gas += core.SizeGas(core.UPDATE, 16)
+		gas += core.SizeGas(core.UPDATE, 8)
+	}
 	return FixedGas
 }
