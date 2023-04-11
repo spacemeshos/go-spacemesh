@@ -158,11 +158,19 @@ func TestCommitTracker_OnCommitEquivocate(t *testing.T) {
 				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{
 						{
-							InnerMsg:  msg1.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   msg1.Layer,
+								Round:   msg1.Round,
+								MsgHash: types.BytesToHash(msg1.InnerMessage.HashBytes()),
+							},
 							Signature: msg1.Signature,
 						},
 						{
-							InnerMsg:  msg2.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   msg2.Layer,
+								Round:   msg2.Round,
+								MsgHash: types.BytesToHash(msg2.InnerMessage.HashBytes()),
+							},
 							Signature: msg2.Signature,
 						},
 					},
@@ -283,6 +291,6 @@ func TestCommitTracker_BuildCertificate(t *testing.T) {
 	cert := tracker.BuildCertificate()
 	require.NotNil(t, cert)
 	require.Equal(t, 2, len(cert.AggMsgs.Messages))
-	require.Nil(t, cert.AggMsgs.Messages[0].InnerMsg.Values)
-	require.Nil(t, cert.AggMsgs.Messages[1].InnerMsg.Values)
+	require.Nil(t, cert.AggMsgs.Messages[0].Values)
+	require.Nil(t, cert.AggMsgs.Messages[1].Values)
 }

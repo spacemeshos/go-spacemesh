@@ -132,8 +132,9 @@ func TestCalcEligibility_BeaconFailure(t *testing.T) {
 	nid := types.NodeID{1, 1}
 	nonce := types.VRFPostIndex(1)
 	layer := types.LayerID(50)
+	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	errUnknown := errors.New("unknown")
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
+	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
 
 	res, err := o.CalcEligibility(context.Background(), layer, 0, 1, nid, nonce, types.EmptyVrfSignature)
 	require.ErrorIs(t, err, errUnknown)
@@ -145,6 +146,9 @@ func TestCalcEligibility_VerifyFailure(t *testing.T) {
 	nid := types.NodeID{1, 1}
 	nonce := types.VRFPostIndex(1)
 	layer := types.LayerID(50)
+	mc := NewMockcache(gomock.NewController(t))
+	mc.EXPECT().Get(gomock.Any()).Return(map[types.NodeID]uint64{nid: 5}, true).Times(1)
+	o.activesCache = mc
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
 	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(false).Times(1)
 
@@ -165,9 +169,7 @@ func TestCalcEligibility_EmptyActiveSet(t *testing.T) {
 	require.NoError(t, err)
 
 	beacon := types.RandomBeacon()
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
-	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).Times(1)
 
 	numMiners := 5
 	activeSet := types.RandomActiveSet(numMiners)
