@@ -1603,8 +1603,9 @@ func testSpawnOther(t *testing.T, genTester func(t *testing.T) *tester) {
 						&spawnTx{i, j},
 					},
 					expected: map[int]change{
-						i: spawned{template: ref.accounts[i].getTemplate(),
-							change: spent{amount: ref.estimateSpawnGas(i, i) + ref.estimateSpawnGas(i, j)},
+						i: spawned{
+							template: ref.accounts[i].getTemplate(),
+							change:   spent{amount: ref.estimateSpawnGas(i, i) + ref.estimateSpawnGas(i, j)},
 						},
 						j: spawned{template: ref.accounts[j].getTemplate()},
 					},

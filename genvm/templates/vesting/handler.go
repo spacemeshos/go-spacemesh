@@ -9,9 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
 )
 
-var (
-	TemplateAddress core.Address
-)
+var TemplateAddress core.Address
 
 func init() {
 	TemplateAddress[len(TemplateAddress)-1] = 3
