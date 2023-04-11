@@ -432,7 +432,7 @@ func (c *Cluster) AddBootstrapper(cctx *testcontext.Context, i int) error {
 		flags = append(flags, flag)
 	}
 	flags = append(flags, DeploymentFlag{
-		Name:  "--node-endpoint",
+		Name:  "--spacemesh-endpoint",
 		Value: fmt.Sprintf("dns:///%s:9092", c.clients[0].Name),
 	})
 	bs, err := deployBootstrapper(cctx, fmt.Sprintf("%s-%d", bootstrapperApp, i), flags...)

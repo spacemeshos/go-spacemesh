@@ -40,9 +40,9 @@ var (
 )
 
 func init() {
-	cmd.PersistentFlags().StringVar(&bitcoinEndpoint, "bitcoin-url",
+	cmd.PersistentFlags().StringVar(&bitcoinEndpoint, "bitcoin-endpoint",
 		"https://api.blockcypher.com/v1/btc/main", "URL to get bitcoin block hash")
-	cmd.PersistentFlags().StringVar(&spacemeshEndpoint, "node-endpoint", "", "grpc endpoint for a spacemesh node")
+	cmd.PersistentFlags().StringVar(&spacemeshEndpoint, "spacemesh-endpoint", "", "grpc endpoint for a spacemesh node")
 
 	// options specific to one-time execution
 	cmd.PersistentFlags().BoolVar(&genBeacon, "beacon", false, "generate beacon")

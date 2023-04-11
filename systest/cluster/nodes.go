@@ -506,7 +506,7 @@ func deployBootstrapperD(ctx *testcontext.Context, id string, flags ...Deploymen
 		"--epoch-offset=1",
 		"--port=" + strconv.Itoa(bootstrapperPort),
 		// empty so it generates local random beacon instead of making http queries to bitcoin explorer
-		"--bitcoin-url=",
+		"--bitcoin-endpoint=",
 	}
 	for _, flag := range flags {
 		cmd = append(cmd, flag.Flag())
