@@ -69,25 +69,13 @@ func decodeKeys(dir string) []core.PublicKey {
 	return keys
 }
 
-func getTemplate(k int) core.Address {
-	switch k {
-	case 1:
-		return vesting.TemplateAddress1
-	case 2:
-		return vesting.TemplateAddress2
-	case 3:
-		return vesting.TemplateAddress3
-	}
-	must(fmt.Errorf("no support for %d signature-vesting account", k))
-	return core.Address{}
-}
-
 func main() {
 	flag.Parse()
 	vestingArgs := &multisig.SpawnArguments{
+		Required:   uint8(*k),
 		PublicKeys: decodeKeys(*dir),
 	}
-	vestingAddress := core.ComputePrincipal(getTemplate(*k), vestingArgs)
+	vestingAddress := core.ComputePrincipal(vesting.TemplateAddress, vestingArgs)
 	vaultArgs := &vault.SpawnArguments{
 		Owner:               vestingAddress,
 		TotalAmount:         uint64(*total),

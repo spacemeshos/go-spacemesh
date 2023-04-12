@@ -14,7 +14,7 @@ import (
 var TemplateAddress core.Address
 
 func init() {
-	TemplateAddress[len(TemplateAddress)-1] = 9
+	TemplateAddress[len(TemplateAddress)-1] = 4
 }
 
 // Register vault template.
