@@ -195,8 +195,6 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 		)
 	}
 	t1 := time.Now()
-
-	t2 := time.Now()
 	blockDurationWait.Observe(float64(time.Since(t1)))
 
 	ss := core.NewStagedCache(core.DBLoader{Executor: v.db})
@@ -204,16 +202,16 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 	if err != nil {
 		return nil, nil, err
 	}
-	t3 := time.Now()
-	blockDurationTxs.Observe(float64(time.Since(t2)))
+	t2 := time.Now()
+	blockDurationTxs.Observe(float64(time.Since(t1)))
 
 	rewardsResult, err := v.addRewards(lctx, ss, fees, blockRewards)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	t4 := time.Now()
-	blockDurationRewards.Observe(float64(time.Since(t3)))
+	t3 := time.Now()
+	blockDurationRewards.Observe(float64(time.Since(t2)))
 
 	hasher := hash.New()
 	encoder := scale.NewEncoder(hasher)
@@ -268,7 +266,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 		})
 	}
 
-	blockDurationPersist.Observe(float64(time.Since(t4)))
+	blockDurationPersist.Observe(float64(time.Since(t3)))
 	blockDuration.Observe(float64(time.Since(t1)))
 	transactionsPerBlock.Observe(float64(len(txs)))
 	appliedLayer.Set(float64(lctx.Layer))

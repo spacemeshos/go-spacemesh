@@ -50,30 +50,13 @@ func (s *Wallet) Spend(host core.Host, args *SpendArguments) error {
 }
 
 func (s *Wallet) BaseGas(method uint8) uint64 {
-	gas := core.TX + core.EDVERIFY
-	if method == core.MethodSpawn {
-		gas += core.SPAWN
-	}
-	return gas
+	return BaseGas(method)
 }
 
 func (s *Wallet) LoadGas() uint64 {
-	gas := core.ACCOUNT_ACCESS
-	gas += core.SizeGas(core.LOAD, 48)
-	return gas
+	return LoadGas()
 }
 
 func (s *Wallet) ExecGas(method uint8) uint64 {
-	switch method {
-	case core.MethodSpawn:
-		return core.SizeGas(core.STORE, 48)
-	case core.MethodSpend:
-		gas := core.ACCOUNT_ACCESS
-		gas += core.SizeGas(core.LOAD, 8)
-		gas += core.SizeGas(core.UPDATE, 16)
-		gas += core.SizeGas(core.UPDATE, 8)
-		return gas
-	default:
-		panic(fmt.Sprintf("unknown method %d", method))
-	}
+	return ExecGas(method)
 }
