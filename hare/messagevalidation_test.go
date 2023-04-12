@@ -66,17 +66,6 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 	require.False(t, sv.validateCertificate(context.Background(), cert))
 
 	msgs = make([]Message, 0, sv.threshold)
-	for i := 0; i < sv.threshold; i++ {
-		signer, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		// wrong set value
-		m := BuildCommitMsg(signer, NewDefaultEmptySet()).Message
-		msgs = append(msgs, m)
-	}
-	cert.AggMsgs.Messages = msgs
-	require.False(t, sv.validateCertificate(context.Background(), cert))
-
-	msgs = make([]Message, 0, sv.threshold)
 	identities := make(map[types.NodeID]struct{})
 	for i := 0; i < sv.threshold; i++ {
 		signer, err := signing.NewEdSigner()
@@ -158,11 +147,11 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), m))
 
 	// empty set is allowed now
-	m.InnerMsg = &InnerMessage{}
+	m.InnerMessage = &InnerMessage{}
 	require.True(t, sv.SyntacticallyValidateMessage(context.Background(), m))
-	m.InnerMsg.Values = nil
+	m.Values = nil
 	require.True(t, sv.SyntacticallyValidateMessage(context.Background(), m))
-	m.InnerMsg.Values = []types.ProposalID{}
+	m.Values = []types.ProposalID{}
 	require.True(t, sv.SyntacticallyValidateMessage(context.Background(), m))
 }
 
@@ -215,8 +204,8 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	r.Error(sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
 	msgs[0].Signature = tmp
-	inner := msgs[0].InnerMsg.Values
-	msgs[0].InnerMsg.Values = inner
+	inner := msgs[0].Values
+	msgs[0].Values = inner
 	sv.roleValidator = &mockValidator{}
 	r.Equal(errInnerEligibility, sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
@@ -375,10 +364,10 @@ func TestMessageValidator_validateSVPTypeA(t *testing.T) {
 	s3 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{5})
 	s4 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{4})
 	v := defaultValidator(t)
-	m.InnerMsg.Svp = buildSVP(preRound, s1, s2, s3, s4)
+	m.Svp = buildSVP(preRound, s1, s2, s3, s4)
 	require.False(t, v.validateSVPTypeA(context.Background(), m))
 	s3 = NewSetFromValues(types.ProposalID{2})
-	m.InnerMsg.Svp = buildSVP(preRound, s1, s2, s3)
+	m.Svp = buildSVP(preRound, s1, s2, s3)
 	require.True(t, v.validateSVPTypeA(context.Background(), m))
 }
 
@@ -388,8 +377,8 @@ func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 
 	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), types.EmptyVrfSignature)
 	s1 := NewSetFromValues(types.ProposalID{1})
-	m.InnerMsg.Svp = buildSVP(preRound, s1)
-	m.InnerMsg.Values = NewSetFromValues(types.ProposalID{1}).ToSlice()
+	m.Svp = buildSVP(preRound, s1)
+	m.Values = NewSetFromValues(types.ProposalID{1}).ToSlice()
 	v := defaultValidator(t)
 	require.False(t, v.validateSVPTypeB(context.Background(), m, NewSetFromValues(types.ProposalID{5})))
 	require.True(t, v.validateSVPTypeB(context.Background(), m, NewSetFromValues(types.ProposalID{1})))
@@ -409,20 +398,20 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	sv := newSyntaxContextValidator(signer, pke, 1, vfunc, mockStateQ, truer{}, newPubGetter(), et, logtest.New(t))
 	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), types.EmptyVrfSignature)
 	s1 := NewSetFromValues(types.ProposalID{1})
-	m.InnerMsg.Svp = buildSVP(preRound, s1)
-	m.InnerMsg.Svp.Messages[0].InnerMsg.Type = commit
+	m.Svp = buildSVP(preRound, s1)
+	m.Svp.Messages[0].Type = commit
 	require.False(t, sv.validateSVP(context.Background(), m))
-	m.InnerMsg.Svp = buildSVP(preRound, s1)
-	m.InnerMsg.Svp.Messages[0].Round = 4
+	m.Svp = buildSVP(preRound, s1)
+	m.Svp.Messages[0].Round = 4
 	require.False(t, sv.validateSVP(context.Background(), m))
-	m.InnerMsg.Svp = buildSVP(preRound, s1)
+	m.Svp = buildSVP(preRound, s1)
 	require.False(t, sv.validateSVP(context.Background(), m))
 	s2 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3})
-	m.InnerMsg.Svp = buildSVP(preRound, s2)
+	m.Svp = buildSVP(preRound, s2)
 	require.True(t, sv.validateSVP(context.Background(), m))
-	m.InnerMsg.Svp = buildSVP(0, s1)
+	m.Svp = buildSVP(0, s1)
 	require.False(t, sv.validateSVP(context.Background(), m))
-	m.InnerMsg.Svp = buildSVP(0, s2)
+	m.Svp = buildSVP(0, s2)
 	require.True(t, sv.validateSVP(context.Background(), m))
 }
 

@@ -39,9 +39,9 @@ func TestTransactionService_StreamResults(t *testing.T) {
 	}))
 
 	svc := NewTransactionService(db, nil, nil, nil, nil)
-	t.Cleanup(launchServer(t, svc))
+	t.Cleanup(launchServer(t, cfg, svc))
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	client := pb.NewTransactionServiceClient(conn)
 
 	t.Run("All", func(t *testing.T) {
@@ -154,9 +154,9 @@ func BenchmarkStreamResults(b *testing.B) {
 	require.NoError(b, tx.Commit())
 	require.NoError(b, tx.Release())
 	svc := NewTransactionService(db, nil, nil, nil, nil)
-	b.Cleanup(launchServer(b, svc))
+	b.Cleanup(launchServer(b, cfg, svc))
 
-	conn := dialGrpc(ctx, b, cfg)
+	conn := dialGrpc(ctx, b, cfg.PublicListener)
 	client := pb.NewTransactionServiceClient(conn)
 
 	b.Logf("setup took %s", time.Since(start))

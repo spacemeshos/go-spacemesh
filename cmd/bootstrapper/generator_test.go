@@ -115,8 +115,8 @@ func (m *MeshAPIMock) EpochAtxs(types.EpochID) ([]types.ATXID, error) {
 }
 
 func launchServer(tb testing.TB) func() {
-	grpcService := grpcserver.NewServerWithInterface(grpcPort, target)
-	jsonService := grpcserver.NewJSONHTTPServer(jsonport)
+	grpcService := grpcserver.New(fmt.Sprintf("127.0.0.1:%d", grpcPort))
+	jsonService := grpcserver.NewJSONHTTPServer(fmt.Sprintf("127.0.0.1:%d", jsonport))
 	s := grpcserver.NewMeshService(&MeshAPIMock{}, nil, nil, 0, types.Hash20{}, 0, 0, 0)
 
 	pb.RegisterMeshServiceServer(grpcService.GrpcServer, s)

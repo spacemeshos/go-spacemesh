@@ -1,7 +1,6 @@
 package grpcserver
 
 import (
-	"fmt"
 	"net"
 	"time"
 
@@ -19,25 +18,29 @@ type ServiceAPI interface {
 
 // Server is a very basic grpc server.
 type Server struct {
-	Port       int
-	Interface  string
+	Listener   string
 	GrpcServer *grpc.Server
 }
 
-// NewServerWithInterface creates and returns a new Server with port and interface.
-func NewServerWithInterface(port int, intfce string, opts ...grpc.ServerOption) *Server {
+// New creates and returns a new Server with port and interface.
+func New(listener string, opts ...grpc.ServerOption) *Server {
 	opts = append(opts, ServerOptions...)
 	return &Server{
-		Port:       port,
-		Interface:  intfce,
+		Listener:   listener,
 		GrpcServer: grpc.NewServer(opts...),
 	}
 }
 
 // Start starts the server.
 func (s *Server) Start() <-chan struct{} {
-	numServices := len(s.GrpcServer.GetServiceInfo())
-	log.Info("starting new grpc server with %d registered service(s)", numServices)
+	log.With().Info("starting grpc server",
+		log.String("address", s.Listener),
+		log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+			for svc := range s.GrpcServer.GetServiceInfo() {
+				encoder.AppendString(svc)
+			}
+			return nil
+		})))
 
 	started := make(chan struct{})
 	go s.startInternal(started)
@@ -47,20 +50,14 @@ func (s *Server) Start() <-chan struct{} {
 
 // Blocking, should be called in a goroutine.
 func (s *Server) startInternal(started chan<- struct{}) {
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", s.Interface, s.Port))
+	lis, err := net.Listen("tcp", s.Listener)
 	if err != nil {
 		log.Error("error listening: %v", err)
 		return
 	}
-
-	// SubscribeOnNewConnections reflection service on gRPC server
 	reflection.Register(s.GrpcServer)
-
-	// start serving - this blocks until err or server is stopped
-	log.Info("starting new grpc server on %s:%d", s.Interface, s.Port)
-
+	log.Info("starting new grpc server on %s", s.Listener)
 	close(started)
-
 	if err := s.GrpcServer.Serve(lis); err != nil {
 		log.Error("error stopping grpc server: %v", err)
 	}

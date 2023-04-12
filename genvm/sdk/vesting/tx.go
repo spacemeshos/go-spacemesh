@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/multisig"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
-	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
 type Aggregator = multisig.Aggregator
@@ -41,8 +40,7 @@ func DrainVault(ref uint8, pk ed25519.PrivateKey, principal, vault, receiver typ
 
 	method := scale.U8(vesting.MethodDrainVault)
 	tx := sdk.Encode(&sdk.TxVersion, &principal, &method, &payload, &args)
-	hh := hash.Sum(options.GenesisID[:], tx)
-	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
 	aggregator := NewAggregator(tx)
 	part := vesting.Part{Ref: ref}
 	copy(part.Sig[:], sig)

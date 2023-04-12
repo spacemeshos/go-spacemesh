@@ -37,8 +37,8 @@ func TestMessageBuilder_SetValues(t *testing.T) {
 	msg := newMessageBuilder().SetValues(s).Build().Message
 
 	m := marshallUnmarshall(t, &msg)
-	s1 := NewSet(m.InnerMsg.Values)
-	s2 := NewSet(msg.InnerMsg.Values)
+	s1 := NewSet(m.Values)
+	s2 := NewSet(msg.Values)
 	assert.True(t, s1.Equals(s2))
 }
 
@@ -55,7 +55,7 @@ func TestMessageBuilder_SetCertificate(t *testing.T) {
 	cert := tr.BuildCertificate()
 	assert.NotNil(t, cert)
 	c := newMessageBuilder().SetCertificate(cert).Build().Message
-	cert2 := marshallUnmarshall(t, &c).InnerMsg.Cert
+	cert2 := marshallUnmarshall(t, &c).Cert
 	assert.Equal(t, cert.Values, cert2.Values)
 }
 
@@ -71,18 +71,4 @@ func TestMessageFromBuffer(t *testing.T) {
 	got, err := MessageFromBuffer(buf)
 	require.NoError(t, err)
 	require.Equal(t, msg, got)
-}
-
-func TestMessageFromBuffer_BadMsgHash(t *testing.T) {
-	b := newMessageBuilder()
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	msg := b.SetNodeID(signer.NodeID()).SetLayer(instanceID1).Sign(signer).Build().Message
-	msg.MsgHash = types.RandomHash()
-
-	buf, err := codec.Encode(&msg)
-	require.NoError(t, err)
-
-	_, err = MessageFromBuffer(buf)
-	require.Error(t, err)
 }

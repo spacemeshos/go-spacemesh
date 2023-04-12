@@ -42,6 +42,7 @@ const (
 const (
 	activesCacheSize = 5          // we don't expect to handle more than two layers concurrently
 	maxSupportedN    = 1073741824 // higher values result in an overflow
+	// TODO(mafa): why (MaxUint32 + 1)/4?
 )
 
 var (
@@ -215,7 +216,7 @@ func calcVrfFrac(vrfSig types.VrfSignature) fixed.Fixed {
 	return fixed.FracFromBytes(vrfSig[:8])
 }
 
-func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, nonce types.VRFPostIndex, vrfSig types.VrfSignature) (n int, p, vrfFrac fixed.Fixed, done bool, err error) {
+func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, nonce types.VRFPostIndex, vrfSig types.VrfSignature) (int, fixed.Fixed, fixed.Fixed, bool, error) {
 	logger := o.WithContext(ctx).WithFields(
 		layer,
 		log.Stringer("smesher", id),
@@ -226,6 +227,14 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	if committeeSize < 1 {
 		logger.With().Error("committee size must be positive", log.Int("committee_size", committeeSize))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, errZeroCommitteeSize
+	}
+
+	// calc hash & check threshold
+	// this is cheap in case the node is not eligible
+	minerWeight, err := o.minerWeight(ctx, layer, id)
+	if err != nil {
+		logger.With().Error("failed to get miner weight", log.Err(err))
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
 	msg, err := o.buildVRFMessage(ctx, nonce, layer, round)
@@ -255,26 +264,19 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, errZeroTotalWeight
 	}
 
-	// calc hash & check threshold
-	minerWeight, err := o.minerWeight(ctx, layer, id)
-	if err != nil {
-		logger.With().Error("failed to get miner weight", log.Err(err))
-		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
-	}
-
 	logger.With().Debug("preparing eligibility check",
 		log.Uint64("miner_weight", minerWeight),
 		log.Uint64("total_weight", totalWeight),
 	)
-	n = int(minerWeight)
 
 	// ensure miner weight fits in int
-	if uint64(n) != minerWeight {
+	n := int(minerWeight)
+	if uint64(n) != minerWeight { // TODO(mafa): why not [if minerWeight > maxSupportedN]? leave n uint64 and cast to int (and check for overflow) before returning?
 		logger.Fatal(fmt.Sprintf("minerWeight overflows int (%d)", minerWeight))
 	}
 
 	// calc p
-	if committeeSize > int(totalWeight) {
+	if committeeSize > int(totalWeight) { // TODO(mafa): why not [uint64(committeeSize) > totalWeight]? can totalWeight overflow here?
 		logger.With().Warning("committee size is greater than total weight",
 			log.Int("committee_size", committeeSize),
 			log.Uint64("total_weight", totalWeight),
@@ -282,12 +284,10 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		totalWeight *= uint64(committeeSize)
 		n *= committeeSize
 	}
-	p = fixed.DivUint64(uint64(committeeSize), totalWeight)
+	p := fixed.DivUint64(uint64(committeeSize), totalWeight)
 
-	if minerWeight > maxSupportedN {
-		return 0, fixed.Fixed{}, fixed.Fixed{}, false,
-			fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, max: %d",
-				id, minerWeight, maxSupportedN)
+	if n > maxSupportedN {
+		return 0, fixed.Fixed{}, fixed.Fixed{}, false, fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, max: %d", id, minerWeight, maxSupportedN)
 	}
 	return n, p, calcVrfFrac(vrfSig), false, nil
 }
@@ -397,8 +397,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 	o.lock.Lock()
 	defer o.lock.Unlock()
 	// we first try to get the hare active set for a range of safe layers
-	safeLayerStart, safeLayerEnd := safeLayerRange(
-		targetLayer, o.cfg.ConfidenceParam, o.layersPerEpoch, o.cfg.EpochOffset)
+	safeLayerStart, safeLayerEnd := safeLayerRange(targetLayer, o.cfg.ConfidenceParam, o.layersPerEpoch, o.cfg.EpochOffset)
 	logger.With().Debug("safe layer range",
 		log.FieldNamed("safe_layer_start", safeLayerStart),
 		log.FieldNamed("safe_layer_end", safeLayerEnd),
@@ -407,7 +406,8 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 		log.Uint32("confidence_param", o.cfg.ConfidenceParam),
 		log.Uint32("epoch_offset", o.cfg.EpochOffset),
 		log.Uint64("layers_per_epoch", uint64(o.layersPerEpoch)),
-		log.FieldNamed("effective_genesis", types.GetEffectiveGenesis()))
+		log.FieldNamed("effective_genesis", types.GetEffectiveGenesis()),
+	)
 
 	if value, exists := o.activesCache.Get(safeLayerStart.GetEpoch()); exists {
 		return value.(map[types.NodeID]uint64), nil

@@ -46,7 +46,7 @@ func (ev *eligibilityValidator) ValidateEligibilityGossip(ctx context.Context, e
 
 // Validate the eligibility of the provided message.
 func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
-	if m == nil || m.InnerMsg == nil {
+	if m == nil || m.InnerMessage == nil {
 		ev.Log.Fatal("invalid Msg")
 	}
 
@@ -56,7 +56,8 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 			log.Err(err),
 			log.Stringer("smesher", m.NodeID),
 			m.Layer,
-			log.String("msg_type", m.InnerMsg.Type.String()))
+			log.String("msg_type", m.Type.String()),
+		)
 		return false
 	}
 
@@ -64,7 +65,8 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 		ev.WithContext(ctx).With().Warning("validate message failed: role is invalid",
 			log.Stringer("smesher", m.NodeID),
 			m.Layer,
-			log.String("msg_type", m.InnerMsg.Type.String()))
+			log.String("msg_type", m.Type.String()),
+		)
 		return false
 	}
 
@@ -132,7 +134,7 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 	if m == nil {
 		return errNilMsg
 	}
-	if m.InnerMsg == nil {
+	if m.InnerMessage == nil {
 		return errNilInner
 	}
 
@@ -143,7 +145,7 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 	sameIter := currentIteration == msgIteration
 
 	// first validate pre-round and notify
-	switch m.InnerMsg.Type {
+	switch m.Type {
 	case pre:
 		return nil
 	case notify:
@@ -172,7 +174,7 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 	}
 
 	// check status, proposal & commit types
-	switch m.InnerMsg.Type {
+	switch m.Type {
 	case status:
 		if currentK == preRound && msgIteration != 0 {
 			return errInvalidIter
@@ -241,7 +243,7 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(ctx context.Contex
 		return false
 	}
 
-	if m.InnerMsg == nil {
+	if m.InnerMessage == nil {
 		logger.With().Warning("syntax validation failed: inner message is nil",
 			log.Stringer("smesher", m.NodeID),
 		)
@@ -249,7 +251,7 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(ctx context.Contex
 	}
 
 	claimedRound := m.Round % RoundsPerIteration
-	switch m.InnerMsg.Type {
+	switch m.Type {
 	case pre:
 		return true
 	case status:
@@ -259,10 +261,11 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(ctx context.Contex
 	case commit:
 		return claimedRound == commitRound
 	case notify:
-		return v.validateCertificate(ctx, m.InnerMsg.Cert)
+		return v.validateCertificate(ctx, m.Cert)
 	default:
 		logger.With().Warning("unknown message type encountered during syntactic validation",
-			log.String("msg_type", m.InnerMsg.Type.String()))
+			log.String("msg_type", m.Type.String()),
+		)
 		return false
 	}
 }
@@ -304,11 +307,6 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 
 			// passed validation, continue to next message
 			continue
-		}
-
-		// check if the message hash matches with the signed data
-		if innerMsg.MsgHash != types.BytesToHash(innerMsg.InnerMsg.HashBytes()) {
-			return fmt.Errorf("wrong hash")
 		}
 
 		// extract public key
@@ -397,18 +395,18 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 	}
 	logger = logger.WithFields(log.Stringer("smesher", msg.NodeID), msg.Layer)
 	validators := []func(m *Msg) bool{validateStatusType, validateSameIteration, v.statusValidator}
-	if err := v.validateAggregatedMessage(ctx, msg.InnerMsg.Svp, validators); err != nil {
+	if err := v.validateAggregatedMessage(ctx, msg.Svp, validators); err != nil {
 		logger.With().Warning("invalid proposal", log.Err(err))
 		return false
 	}
 
 	maxCommittedRound := preRound
 	var maxSet []types.ProposalID
-	for _, status := range msg.InnerMsg.Svp.Messages {
+	for _, status := range msg.Svp.Messages {
 		// track max
-		if status.InnerMsg.CommittedRound > maxCommittedRound || maxCommittedRound == preRound {
-			maxCommittedRound = status.InnerMsg.CommittedRound
-			maxSet = status.InnerMsg.Values
+		if status.CommittedRound > maxCommittedRound || maxCommittedRound == preRound {
+			maxCommittedRound = status.CommittedRound
+			maxSet = status.Values
 		}
 	}
 
@@ -447,13 +445,13 @@ func (v *syntaxContextValidator) validateCertificate(ctx context.Context, cert *
 
 	// refill Values
 	for _, commit := range cert.AggMsgs.Messages {
-		if commit.InnerMsg == nil {
+		if commit.InnerMessage == nil {
 			logger.Warning("certificate validation failed: inner commit message is nil")
 			return false
 		}
 
 		// the values were removed to reduce data volume
-		commit.InnerMsg.Values = cert.Values
+		commit.Values = cert.Values
 	}
 
 	// Note: no need to validate notify.Values=commits.Values because we refill the InnerMsg with notify.Values
@@ -468,19 +466,19 @@ func (v *syntaxContextValidator) validateCertificate(ctx context.Context, cert *
 }
 
 func validateCommitType(m *Msg) bool {
-	return m.InnerMsg.Type == commit
+	return m.Type == commit
 }
 
 func validateStatusType(m *Msg) bool {
-	return m.InnerMsg.Type == status
+	return m.Type == status
 }
 
 // validate SVP for type A (where all Ki=-1).
 func (v *syntaxContextValidator) validateSVPTypeA(ctx context.Context, m *Msg) bool {
-	s := NewSet(m.InnerMsg.Values)
-	unionSet := NewEmptySet(len(m.InnerMsg.Values))
-	for _, status := range m.InnerMsg.Svp.Messages {
-		statusSet := NewSet(status.InnerMsg.Values)
+	s := NewSet(m.Values)
+	unionSet := NewEmptySet(len(m.Values))
+	for _, status := range m.Svp.Messages {
+		statusSet := NewSet(status.Values)
 		// build union
 		for _, val := range statusSet.ToSlice() {
 			unionSet.Add(val) // assuming add is unique
@@ -490,7 +488,8 @@ func (v *syntaxContextValidator) validateSVPTypeA(ctx context.Context, m *Msg) b
 	if !unionSet.Equals(s) { // s should be the union of all statuses
 		v.WithContext(ctx).With().Warning("proposal type a validation failed: not a union",
 			log.String("expected", s.String()),
-			log.String("actual", unionSet.String()))
+			log.String("actual", unionSet.String()),
+		)
 		return false
 	}
 
@@ -500,11 +499,12 @@ func (v *syntaxContextValidator) validateSVPTypeA(ctx context.Context, m *Msg) b
 // validate SVP for type B (where exist Ki>=0).
 func (v *syntaxContextValidator) validateSVPTypeB(ctx context.Context, msg *Msg, maxSet *Set) bool {
 	// max set should be equal to the claimed set
-	s := NewSet(msg.InnerMsg.Values)
+	s := NewSet(msg.Values)
 	if !s.Equals(maxSet) {
 		v.WithContext(ctx).With().Warning("proposal type b validation failed: max set not equal to proposed set",
 			log.String("expected", s.String()),
-			log.String("actual", maxSet.String()))
+			log.String("actual", maxSet.String()),
+		)
 		return false
 	}
 

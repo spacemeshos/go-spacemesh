@@ -584,8 +584,8 @@ func (eps *equivocatePubSub) Publish(ctx context.Context, protocol string, data 
 	if err != nil {
 		return fmt.Errorf("decode published data: %w", err)
 	}
-	if msg.InnerMsg.Type == pre {
-		msg.InnerMsg.Values = []types.ProposalID{types.RandomProposalID()}
+	if msg.Type == pre {
+		msg.Values = []types.ProposalID{types.RandomProposalID()}
 		msg.Signature = eps.sig.Sign(signing.HARE, msg.SignedBytes())
 		encoded, err := codec.Encode(&msg)
 		if err != nil {

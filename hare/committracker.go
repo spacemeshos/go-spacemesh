@@ -59,35 +59,41 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
 		return
 	}
 
+	metadata := types.HareMetadata{
+		Layer:   msg.Layer,
+		Round:   msg.Round,
+		MsgHash: types.BytesToHash(msg.Message.HashBytes()),
+	}
 	if prev, ok := ct.seenSenders[msg.NodeID]; ok {
-		if prev.InnerMsg.Layer == msg.Layer &&
-			prev.InnerMsg.Round == msg.Round &&
-			prev.InnerMsg.MsgHash != msg.MsgHash {
-			ct.logger.WithContext(ctx).With().Warning("equivocation detected in commit round",
+		if !prev.InnerMsg.Equivocation(&metadata) {
+			return
+		}
+
+		ct.logger.WithContext(ctx).With().Warning("equivocation detected in commit round",
+			log.Stringer("smesher", msg.NodeID),
+			log.Object("prev", &prev.InnerMsg),
+			log.Object("curr", &metadata),
+		)
+		ct.eTracker.Track(msg.NodeID, msg.Round, msg.Eligibility.Count, false)
+		this := &types.HareProofMsg{
+			InnerMsg:  metadata,
+			Signature: msg.Signature,
+		}
+		if err := reportEquivocation(ctx, msg.NodeID, prev, this, &msg.Eligibility, ct.malCh); err != nil {
+			ct.logger.WithContext(ctx).With().Warning("failed to report equivocation in commit round",
 				log.Stringer("smesher", msg.NodeID),
-				log.Object("prev", &prev.InnerMsg),
-				log.Object("curr", &msg.HareMetadata),
+				log.Err(err),
 			)
-			ct.eTracker.Track(msg.NodeID, msg.Round, msg.Eligibility.Count, false)
-			this := &types.HareProofMsg{
-				InnerMsg:  msg.HareMetadata,
-				Signature: msg.Signature,
-			}
-			if err := reportEquivocation(ctx, msg.NodeID, prev, this, &msg.Eligibility, ct.malCh); err != nil {
-				ct.logger.WithContext(ctx).With().Warning("failed to report equivocation in commit round",
-					log.Stringer("smesher", msg.NodeID),
-					log.Err(err))
-				return
-			}
+			return
 		}
 		return
 	}
 	ct.seenSenders[msg.NodeID] = &types.HareProofMsg{
-		InnerMsg:  msg.HareMetadata,
+		InnerMsg:  metadata,
 		Signature: msg.Signature,
 	}
 
-	s := NewSet(msg.InnerMsg.Values)
+	s := NewSet(msg.Values)
 	if !ct.proposedSet.Equals(s) { // ignore commit on different set
 		return
 	}
@@ -155,7 +161,7 @@ func (ct *commitTracker) BuildCertificate() *Certificate {
 
 	// optimize msg size by setting Values to nil
 	for _, commit := range c.AggMsgs.Messages {
-		commit.InnerMsg.Values = nil
+		commit.Values = nil
 	}
 
 	// TODO: set c.AggMsgs.AggSig
