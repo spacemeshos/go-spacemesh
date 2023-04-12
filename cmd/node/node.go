@@ -833,7 +833,7 @@ func (app *App) startServices(ctx context.Context) error {
 func (app *App) initService(ctx context.Context, svc apiconf.Service) (grpcserver.ServiceAPI, error) {
 	switch svc {
 	case apiconf.Debug:
-		return grpcserver.NewDebugService(app.conState, app.host), nil
+		return grpcserver.NewDebugService(app.conState, app.host, app.hOracle), nil
 	case apiconf.GlobalState:
 		return grpcserver.NewGlobalStateService(app.mesh, app.conState), nil
 	case apiconf.Mesh:

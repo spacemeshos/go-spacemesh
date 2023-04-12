@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -20,6 +21,7 @@ import (
 type DebugService struct {
 	conState api.ConservativeState
 	identity api.NetworkIdentity
+	oracle   api.Oracle
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -28,10 +30,11 @@ func (d DebugService) RegisterService(server *Server) {
 }
 
 // NewDebugService creates a new grpc service using config data.
-func NewDebugService(conState api.ConservativeState, host api.NetworkIdentity) *DebugService {
+func NewDebugService(conState api.ConservativeState, host api.NetworkIdentity, oracle api.Oracle) *DebugService {
 	return &DebugService{
 		conState: conState,
 		identity: host,
+		oracle:   oracle,
 	}
 }
 
@@ -67,6 +70,20 @@ func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.Accounts
 // NetworkInfo query provides NetworkInfoResponse.
 func (d DebugService) NetworkInfo(ctx context.Context, _ *empty.Empty) (*pb.NetworkInfoResponse, error) {
 	return &pb.NetworkInfoResponse{Id: d.identity.ID().String()}, nil
+}
+
+// ActiveSet query provides hare active set for the specified epoch.
+func (d DebugService) ActiveSet(ctx context.Context, req *pb.ActiveSetRequest) (*pb.ActiveSetResponse, error) {
+	actives, err := d.oracle.ActiveSet(ctx, types.EpochID(req.Epoch))
+	if err != nil {
+		log.With().Error("failed to get active set", log.Uint32("epoch", req.Epoch), log.Err(err))
+		return nil, status.Errorf(codes.Internal, "error getting active set")
+	}
+	resp := &pb.ActiveSetResponse{}
+	for _, atxid := range actives {
+		resp.Ids = append(resp.Ids, &pb.ActivationId{Id: atxid.Bytes()})
+	}
+	return resp, nil
 }
 
 // ProposalsStream streams all proposals confirmed by hare.

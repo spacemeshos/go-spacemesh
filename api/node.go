@@ -60,7 +60,7 @@ type MeshAPI interface {
 }
 
 // NOTE that mockgen doesn't use source-mode to avoid generating mocks for all interfaces in this file.
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go . NetworkIdentity,AtxProvider,PostSetupProvider
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go . NetworkIdentity,AtxProvider,PostSetupProvider,Oracle
 
 // NetworkIdentity interface.
 type NetworkIdentity interface {
@@ -82,4 +82,8 @@ type PostSetupProvider interface {
 // AtxProvider is used by ActivationService to get ATXes.
 type AtxProvider interface {
 	GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error)
+}
+
+type Oracle interface {
+	ActiveSet(context.Context, types.EpochID) ([]types.ATXID, error)
 }

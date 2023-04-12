@@ -420,6 +420,22 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 	return activeSet, nil
 }
 
+func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]types.ATXID, error) {
+	activeWeights, err := o.actives(ctx, targetEpoch.FirstLayer().Add(o.cfg.ConfidenceParam))
+	if err != nil {
+		return nil, err
+	}
+	activeSet := make([]types.ATXID, 0, 10_000)
+	for nodeID := range activeWeights {
+		hdr, err := o.cdb.GetEpochAtx(targetEpoch-1, nodeID)
+		if err != nil {
+			return nil, err
+		}
+		activeSet = append(activeSet, hdr.ID)
+	}
+	return activeSet, nil
+}
+
 func (o *Oracle) computeActiveSet(logger log.Log, targetLayer, safeLayerStart, safeLayerEnd types.LayerID) (map[types.NodeID]uint64, error) {
 	// check cache first
 	// as long as epochOffset < layersPerEpoch, we expect safeLayerStart and safeLayerEnd to be in the same epoch.
