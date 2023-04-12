@@ -118,14 +118,18 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 	return w
 }
 
+// Test_HarePreRoundEmptySet runs nodes for some number of layers without creating any
+// proposals, and checks that after some timeout all nodes produced an output
+// for each layer.
 func Test_HarePreRoundEmptySet(t *testing.T) {
 	const nodes = 5
 	const layers = 2
 
-	var mu sync.RWMutex
+	success := make(chan struct{})
+	var mu sync.Mutex
 	m := [layers][nodes]int{}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	w := runNodesFor(t, ctx, nodes, 2, layers, 2, false,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, sig types.VrfSignature, hare *testHare) (uint16, error) {
@@ -137,23 +141,37 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 
+			// Mark node as having produced output for layer l
 			mu.Lock()
+			defer mu.Unlock()
 			m[l][hare.N] = 1
-			mu.Unlock()
+
+			// Check to see that we have all the outputs
+			for x := range m {
+				for y := range m[x] {
+					if m[x][y] != 1 {
+						return
+					}
+				}
+			}
+			// If we have all the outputs then we can progress.
+			close(success)
 		})
 
 	w.LayerTicker(100 * time.Millisecond)
-	time.Sleep(time.Second * 6)
+	// Wait for test completion
+	select {
+	case <-ctx.Done():
+	case <-success:
+	}
 
-	cancel()
-
-	mu.RLock()
-	defer mu.RUnlock()
-
+	mu.Lock()
+	defer mu.Unlock()
+	// Check that all nodes produced output for all layers
 	for x := range m {
 		for y := range m[x] {
 			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
+				t.Errorf("at layer %v node %v did not produce a result", x, y)
 			}
 		}
 	}
