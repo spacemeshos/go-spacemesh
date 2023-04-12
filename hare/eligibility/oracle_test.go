@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"math/rand"
+	"os"
 	"strconv"
 	"sync"
 	"testing"
@@ -16,7 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
@@ -25,14 +25,22 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 const (
 	defLayersPerEpoch uint32 = 10
-	confidenceParam   uint32 = 25
-	epochOffset       uint32 = 3
+	confidenceParam   uint32 = 3
+	ballotsPerLayer          = 50
 )
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(defLayersPerEpoch)
+	res := m.Run()
+	os.Exit(res)
+}
 
 type testOracle struct {
 	*Oracle
@@ -42,7 +50,6 @@ type testOracle struct {
 }
 
 func defaultOracle(t testing.TB) *testOracle {
-	types.SetLayersPerEpoch(defLayersPerEpoch)
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 
@@ -52,7 +59,7 @@ func defaultOracle(t testing.TB) *testOracle {
 	nonceFetcher := NewMocknonceFetcher(ctrl)
 
 	to := &testOracle{
-		Oracle: New(mb, cdb, verifier, nil, defLayersPerEpoch, config.Config{ConfidenceParam: confidenceParam, EpochOffset: epochOffset}, lg,
+		Oracle: New(mb, cdb, verifier, nil, defLayersPerEpoch, config.Config{ConfidenceParam: confidenceParam}, lg,
 			withNonceFetcher(nonceFetcher),
 		),
 		mBeacon:       mb,
@@ -62,34 +69,58 @@ func defaultOracle(t testing.TB) *testOracle {
 	return to
 }
 
-func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, beacon types.Beacon, numMiners int) {
+func createBallots(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, activeSet []types.ATXID, miners []types.NodeID) []*types.Ballot {
 	tb.Helper()
-	signer, err := signing.NewEdSigner()
-	require.NoError(tb, err)
-
-	activeSet := types.RandomActiveSet(numMiners)
-	start, end := safeLayerRange(lid, confidenceParam, defLayersPerEpoch, epochOffset)
-	for lyr := start; !lyr.After(end); lyr = lyr.Add(1) {
-		for _, atx := range activeSet {
-			b := types.RandomBallot()
-			b.Layer = lyr
-			b.AtxID = atx
-			b.RefBallot = types.EmptyBallotID
-			b.EpochData = &types.EpochData{Beacon: beacon}
-			b.ActiveSet = activeSet
-			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
-			b.SmesherID = signer.NodeID()
-			require.NoError(tb, b.Initialize())
-			require.NoError(tb, ballots.Add(cdb, b))
-		}
+	numBallots := ballotsPerLayer
+	if len(activeSet) < numBallots {
+		numBallots = len(activeSet)
 	}
-
-	prevEpoch := lid.GetEpoch() - 1
-	createActiveSet(tb, cdb, prevEpoch.FirstLayer(), activeSet)
+	var result []*types.Ballot
+	for i := 0; i < numBallots; i++ {
+		b := types.RandomBallot()
+		b.Layer = lid
+		b.AtxID = activeSet[i]
+		b.RefBallot = types.EmptyBallotID
+		b.EpochData = &types.EpochData{}
+		b.ActiveSet = activeSet
+		b.Signature = types.RandomEdSignature()
+		b.SmesherID = miners[i]
+		require.NoError(tb, b.Initialize())
+		require.NoError(tb, ballots.Add(cdb, b))
+		result = append(result, b)
+	}
+	return result
 }
 
-func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, activeSet []types.ATXID) {
+func createBlock(tb testing.TB, cdb *datastore.CachedDB, blts []*types.Ballot) {
+	tb.Helper()
+	block := &types.Block{
+		InnerBlock: types.InnerBlock{
+			LayerIndex: blts[0].Layer,
+		},
+	}
+	for _, b := range blts {
+		block.Rewards = append(block.Rewards, types.AnyReward{AtxID: b.AtxID})
+	}
+	block.Initialize()
+	require.NoError(tb, blocks.Add(cdb, block))
+	require.NoError(tb, certificates.SetHareOutput(cdb, blts[0].Layer, block.ID()))
+}
+
+func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, numMiners int) []types.NodeID {
+	tb.Helper()
+	activeSet := types.RandomActiveSet(numMiners)
+	miners := createActiveSet(tb, cdb, lid.GetEpoch().FirstLayer().Sub(1), activeSet)
+	blts := createBallots(tb, cdb, lid, activeSet, miners)
+	createBlock(tb, cdb, blts)
+	return miners
+}
+
+func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, activeSet []types.ATXID) []types.NodeID {
+	var miners []types.NodeID
 	for i, id := range activeSet {
+		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))
+		miners = append(miners, nodeID)
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PublishEpoch: lid.GetEpoch(),
@@ -104,10 +135,7 @@ func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 		require.NoError(tb, err)
 		require.NoError(tb, atxs.Add(cdb, vAtx))
 	}
-}
-
-func beaconWithValOne() types.Beacon {
-	return types.Beacon{1, 0, 0, 0}
+	return miners
 }
 
 func createMapWithSize(n int) map[types.NodeID]uint64 {
@@ -118,249 +146,171 @@ func createMapWithSize(n int) map[types.NodeID]uint64 {
 	return m
 }
 
-func TestCalcEligibility_ZeroCommittee(t *testing.T) {
-	o := defaultOracle(t)
+func TestCalcEligibility(t *testing.T) {
 	nid := types.NodeID{1, 1}
 	nonce := types.VRFPostIndex(1)
-	res, err := o.CalcEligibility(context.Background(), types.LayerID(50), 1, 0, nid, nonce, types.EmptyVrfSignature)
-	require.ErrorIs(t, err, errZeroCommitteeSize)
-	require.Equal(t, 0, int(res))
-}
 
-func TestCalcEligibility_BeaconFailure(t *testing.T) {
-	o := defaultOracle(t)
-	nid := types.NodeID{1, 1}
-	nonce := types.VRFPostIndex(1)
-	layer := types.LayerID(50)
-	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	errUnknown := errors.New("unknown")
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
+	t.Run("zero committee", func(t *testing.T) {
+		o := defaultOracle(t)
+		res, err := o.CalcEligibility(context.Background(), types.LayerID(50), 1, 0, nid, nonce, types.EmptyVrfSignature)
+		require.ErrorIs(t, err, errZeroCommitteeSize)
+		require.Equal(t, 0, int(res))
+	})
 
-	res, err := o.CalcEligibility(context.Background(), layer, 0, 1, nid, nonce, types.EmptyVrfSignature)
-	require.ErrorIs(t, err, errUnknown)
-	require.Equal(t, 0, int(res))
-}
+	t.Run("empty active set", func(t *testing.T) {
+		o := defaultOracle(t)
+		lid := types.EpochID(5).FirstLayer()
+		res, err := o.CalcEligibility(context.Background(), lid, 1, 1, nid, nonce, types.EmptyVrfSignature)
+		require.ErrorIs(t, err, errEmptyActiveSet)
+		require.Equal(t, 0, int(res))
+	})
 
-func TestCalcEligibility_VerifyFailure(t *testing.T) {
-	o := defaultOracle(t)
-	nid := types.NodeID{1, 1}
-	nonce := types.VRFPostIndex(1)
-	layer := types.LayerID(50)
-	mc := NewMockcache(gomock.NewController(t))
-	mc.EXPECT().Get(gomock.Any()).Return(map[types.NodeID]uint64{nid: 5}, true).Times(1)
-	o.activesCache = mc
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
-	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(false).Times(1)
+	t.Run("miner not active", func(t *testing.T) {
+		o := defaultOracle(t)
+		lid := types.EpochID(5).FirstLayer()
+		createLayerData(t, o.cdb, lid.Sub(defLayersPerEpoch), 11)
+		res, err := o.CalcEligibility(context.Background(), lid, 1, 1, nid, nonce, types.EmptyVrfSignature)
+		require.ErrorIs(t, err, errMinerNotActive)
+		require.Equal(t, 0, int(res))
+	})
 
-	res, err := o.CalcEligibility(context.Background(), layer, 0, 1, nid, nonce, types.EmptyVrfSignature)
-	require.NoError(t, err)
-	require.Equal(t, 0, int(res))
-}
+	t.Run("beacon failure", func(t *testing.T) {
+		o := defaultOracle(t)
+		layer := types.EpochID(5).FirstLayer()
+		miners := createLayerData(t, o.cdb, layer.Sub(defLayersPerEpoch), 5)
+		errUnknown := errors.New("unknown")
+		o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
 
-func TestCalcEligibility_EmptyActiveSet(t *testing.T) {
-	o := defaultOracle(t)
-	nid := types.NodeID{1, 1}
-	nonce := types.VRFPostIndex(1)
-	layer := types.LayerID(40)
-	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	require.Equal(t, start, end)
+		res, err := o.CalcEligibility(context.Background(), layer, 0, 1, miners[0], nonce, types.EmptyVrfSignature)
+		require.ErrorIs(t, err, errUnknown)
+		require.Equal(t, 0, int(res))
+	})
 
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
+	t.Run("verify failure", func(t *testing.T) {
+		o := defaultOracle(t)
+		layer := types.EpochID(5).FirstLayer()
+		miners := createLayerData(t, o.cdb, layer.Sub(defLayersPerEpoch), 5)
+		o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
+		o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(false).Times(1)
 
-	beacon := types.RandomBeacon()
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
-
-	numMiners := 5
-	activeSet := types.RandomActiveSet(numMiners)
-
-	for _, atx := range activeSet {
-		b := types.RandomBallot()
-		b.AtxID = atx
-		b.RefBallot = types.EmptyBallotID
-		b.EpochData = &types.EpochData{Beacon: beacon}
-		b.ActiveSet = activeSet
-		b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
-		require.NoError(t, b.Initialize())
-		b.SmesherID = signer.NodeID()
-		require.NoError(t, ballots.Add(o.cdb, b))
-	}
-	res, err := o.CalcEligibility(context.Background(), layer, 1, 1, nid, nonce, types.EmptyVrfSignature)
-	require.ErrorIs(t, err, errEmptyActiveSet)
-	require.Equal(t, 0, int(res))
-}
-
-func TestCalcEligibility_EligibleFromHareActiveSet(t *testing.T) {
-	o := defaultOracle(t)
-	layer := types.LayerID(50)
-	beacon := beaconWithValOne()
-	createLayerData(t, o.cdb, layer, beacon, 5)
-
-	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
-
-	sigs := map[string]uint16{
-		"0516a574aef37257d6811ea53ef55d4cbb0e14674900a0d5165bd6742513840d02442d979fdabc7059645d1e8f8a0f44d0db2aa90f23374dd74a3636d4ecdab7": 1,
-		"73929b4b69090bb6133e2f8cd73989b35228e7e6d8c6745e4100d9c5eb48ca2624ee2889e55124195a130f74ea56e53a73a1c4dee60baa13ad3b1c0ed4f80d9c": 0,
-		"e2c27ad65b752b763173b588518764b6c1e42896d57e0eabef9bcac68e07b87729a4ef9e5f17d8c1cb34ffd0d65ee9a7e63e63b77a7bcab1140a76fc04c271de": 0,
-		"384460966938c87644987fe00c0f9d4f9a5e2dcd4bdc08392ed94203895ba325036725a22346e35aa707993babef716aa1b6b3dfc653a44cb23ac8f743cbbc3d": 1,
-		"15c5f565a75888970059b070bfaed1998a9d423ddac9f6af83da51db02149044ea6aeb86294341c7a950ac5de2855bbebc11cc28b02c08bc903e4cf41439717d": 1,
-	}
-	for s, exp := range sigs {
-		sig, err := hex.DecodeString(s)
+		res, err := o.CalcEligibility(context.Background(), layer, 0, 1, miners[0], nonce, types.EmptyVrfSignature)
 		require.NoError(t, err)
+		require.Equal(t, 0, int(res))
+	})
 
-		var vrfSig types.VrfSignature
-		copy(vrfSig[:], sig)
+	t.Run("empty active with fallback", func(t *testing.T) {
+		o := defaultOracle(t)
+		lid := types.EpochID(5).FirstLayer().Add(o.cfg.ConfidenceParam)
+		res, err := o.CalcEligibility(context.Background(), lid, 1, 1, nid, nonce, types.EmptyVrfSignature)
+		require.ErrorIs(t, err, errEmptyActiveSet)
+		require.Equal(t, 0, int(res))
 
-		nid := types.BytesToNodeID([]byte("0"))
-		nonce := types.VRFPostIndex(1)
-		o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
-		o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).Times(1)
-		res, err := o.CalcEligibility(context.Background(), layer, 1, 10, nid, nonce, vrfSig)
-		require.NoError(t, err, s)
-		require.Equal(t, exp, res, s)
-	}
-}
-
-func TestCalcEligibility_EligibleFromTortoiseActiveSet(t *testing.T) {
-	o := defaultOracle(t)
-	layer := types.LayerID(40)
-	beacon := beaconWithValOne()
-	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	require.Equal(t, start, end)
-
-	sigs := map[string]uint16{
-		"0516a574aef37257d6811ea53ef55d4cbb0e14674900a0d5165bd6742513840d02442d979fdabc7059645d1e8f8a0f44d0db2aa90f23374dd74a3636d4ecdab7": 1,
-		"73929b4b69090bb6133e2f8cd73989b35228e7e6d8c6745e4100d9c5eb48ca2624ee2889e55124195a130f74ea56e53a73a1c4dee60baa13ad3b1c0ed4f80d9c": 0,
-		"e2c27ad65b752b763173b588518764b6c1e42896d57e0eabef9bcac68e07b87729a4ef9e5f17d8c1cb34ffd0d65ee9a7e63e63b77a7bcab1140a76fc04c271de": 0,
-		"384460966938c87644987fe00c0f9d4f9a5e2dcd4bdc08392ed94203895ba325036725a22346e35aa707993babef716aa1b6b3dfc653a44cb23ac8f743cbbc3d": 1,
-		"15c5f565a75888970059b070bfaed1998a9d423ddac9f6af83da51db02149044ea6aeb86294341c7a950ac5de2855bbebc11cc28b02c08bc903e4cf41439717d": 1,
-	}
-	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-
-	numMiners := 5
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(numMiners)
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
-	activeSet := types.RandomActiveSet(numMiners)
-	// there is no cache for tortoise active set. so each signature will cause 2 calls to GetEpochAtxs() and 2*numMiners calls to GetAtxHeader()
-	prevEpoch := layer.GetEpoch() - 1
-	createActiveSet(t, o.cdb, prevEpoch.FirstLayer(), activeSet)
-	for s, exp := range sigs {
-		sig, err := hex.DecodeString(s)
+		activeSet := types.RandomActiveSet(111)
+		miners := createActiveSet(t, o.cdb, types.EpochID(4).FirstLayer(), activeSet)
+		o.UpdateActiveSet(5, activeSet)
+		o.mBeacon.EXPECT().GetBeacon(lid.GetEpoch()).Return(types.RandomBeacon(), nil)
+		o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true)
+		_, err = o.CalcEligibility(context.Background(), lid, 1, 1, miners[0], nonce, types.EmptyVrfSignature)
 		require.NoError(t, err)
+	})
 
-		var vrfSig types.VrfSignature
-		copy(vrfSig[:], sig)
+	t.Run("miner active", func(t *testing.T) {
+		o := defaultOracle(t)
+		lid := types.EpochID(5).FirstLayer()
+		beacon := types.Beacon{1, 0, 0, 0}
+		miners := createLayerData(t, o.cdb, lid.Sub(defLayersPerEpoch), 5)
+		sigs := map[string]uint16{
+			"0516a574aef37257d6811ea53ef55d4cbb0e14674900a0d5165bd6742513840d02442d979fdabc7059645d1e8f8a0f44d0db2aa90f23374dd74a3636d4ecdab7": 1,
+			"73929b4b69090bb6133e2f8cd73989b35228e7e6d8c6745e4100d9c5eb48ca2624ee2889e55124195a130f74ea56e53a73a1c4dee60baa13ad3b1c0ed4f80d9c": 0,
+			"e2c27ad65b752b763173b588518764b6c1e42896d57e0eabef9bcac68e07b87729a4ef9e5f17d8c1cb34ffd0d65ee9a7e63e63b77a7bcab1140a76fc04c271de": 0,
+			"384460966938c87644987fe00c0f9d4f9a5e2dcd4bdc08392ed94203895ba325036725a22346e35aa707993babef716aa1b6b3dfc653a44cb23ac8f743cbbc3d": 1,
+			"15c5f565a75888970059b070bfaed1998a9d423ddac9f6af83da51db02149044ea6aeb86294341c7a950ac5de2855bbebc11cc28b02c08bc903e4cf41439717d": 1,
+		}
+		for vrf, exp := range sigs {
+			sig, err := hex.DecodeString(vrf)
+			require.NoError(t, err)
 
-		nid := types.BytesToNodeID([]byte("0"))
-		nonce := types.VRFPostIndex(1)
-		res, err := o.CalcEligibility(context.Background(), layer, 1, 10, nid, nonce, vrfSig)
-		require.NoError(t, err, s)
-		require.Equal(t, exp, res, s)
-	}
+			var vrfSig types.VrfSignature
+			copy(vrfSig[:], sig)
+
+			nonce := types.VRFPostIndex(1)
+			o.mBeacon.EXPECT().GetBeacon(lid.GetEpoch()).Return(beacon, nil).Times(1)
+			o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).Times(1)
+			res, err := o.CalcEligibility(context.Background(), lid, 1, 10, miners[0], nonce, vrfSig)
+			require.NoError(t, err, vrf)
+			require.Equal(t, exp, res, vrf)
+		}
+	})
 }
 
-func TestCalcEligibility_WithSpaceUnits(t *testing.T) {
-	r := require.New(t)
-	numOfMiners := 50
-	committeeSize := 800
-
-	o := defaultOracle(t)
-	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-
-	layer := types.LayerID(50)
-	beacon := beaconWithValOne()
-	createLayerData(t, o.cdb, layer, beacon, numOfMiners)
-	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
-
-	var eligibilityCount uint16
-	for nodeID := range createMapWithSize(numOfMiners) {
-		sig := types.RandomVrfSignature()
-
-		nonce := types.VRFPostIndex(rand.Uint64())
-		o.mNonceFetcher.EXPECT().VRFNonce(nodeID, layer.GetEpoch()).Return(nonce, nil).Times(1)
-		o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(2)
-		res, err := o.CalcEligibility(context.Background(), layer, 1, committeeSize, nodeID, nonce, sig)
-		r.NoError(err)
-
-		valid, err := o.Validate(context.Background(), layer, 1, committeeSize, nodeID, sig, res)
-		r.NoError(err)
-		r.True(valid)
-
-		eligibilityCount += res
+func TestCalcEligibilityWithSpaceUnit(t *testing.T) {
+	const committeeSize = 800
+	tcs := []struct {
+		desc      string
+		numMiners int
+	}{
+		{
+			desc:      "small network",
+			numMiners: 50,
+		},
+		{
+			desc:      "large network",
+			numMiners: 2000,
+		},
 	}
+	for _, tc := range tcs {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			o := defaultOracle(t)
+			o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
-	diff := committeeSize - int(eligibilityCount)
-	if diff < 0 {
-		diff = -diff
+			lid := types.EpochID(5).FirstLayer()
+			beacon := types.Beacon{1, 0, 0, 0}
+			miners := createLayerData(t, o.cdb, lid.Sub(defLayersPerEpoch), tc.numMiners)
+
+			var eligibilityCount uint16
+			for _, nodeID := range miners {
+				sig := types.RandomVrfSignature()
+
+				nonce := types.VRFPostIndex(rand.Uint64())
+				o.mNonceFetcher.EXPECT().VRFNonce(nodeID, lid.GetEpoch()).Return(nonce, nil).Times(1)
+				o.mBeacon.EXPECT().GetBeacon(lid.GetEpoch()).Return(beacon, nil).Times(2)
+				res, err := o.CalcEligibility(context.Background(), lid, 1, committeeSize, nodeID, nonce, sig)
+				require.NoError(t, err)
+
+				valid, err := o.Validate(context.Background(), lid, 1, committeeSize, nodeID, sig, res)
+				require.NoError(t, err)
+				require.True(t, valid)
+
+				eligibilityCount += res
+			}
+
+			diff := committeeSize - int(eligibilityCount)
+			if diff < 0 {
+				diff = -diff
+			}
+			t.Logf("diff=%d (%g%% of committeeSize)", diff, 100*float64(diff)/float64(committeeSize))
+			require.Less(t, diff, committeeSize/10) // up to 10% difference
+			// While it's theoretically possible to get a result higher than 10%, I've run this many times and haven't seen
+			// anything higher than 6% and it's usually under 3%.
+		})
 	}
-	t.Logf("diff=%d (%g%% of committeeSize)", diff, 100*float64(diff)/float64(committeeSize))
-	r.Less(diff, committeeSize/10) // up to 10% difference
-	// While it's theoretically possible to get a result higher than 10%, I've run this many times and haven't seen
-	// anything higher than 6% and it's usually under 3%.
-}
-
-func Test_CalcEligibility_MainnetParams(t *testing.T) {
-	r := require.New(t)
-	numOfMiners := 2000
-	committeeSize := 800
-	rng := rand.New(rand.NewSource(999))
-
-	o := defaultOracle(t)
-	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-
-	layer := types.LayerID(50)
-	beacon := types.RandomBeacon()
-	createLayerData(t, o.cdb, layer, beacon, numOfMiners)
-	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
-
-	var eligibilityCount uint16
-	for i := 0; i < numOfMiners; i++ {
-		sig := types.RandomVrfSignature()
-		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))
-		nonce := types.VRFPostIndex(rng.Uint64())
-		o.mNonceFetcher.EXPECT().VRFNonce(nodeID, layer.GetEpoch()).Return(nonce, nil).Times(1)
-		o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(2)
-
-		res, err := o.CalcEligibility(context.Background(), layer, 1, committeeSize, nodeID, nonce, sig)
-		r.NoError(err)
-
-		valid, err := o.Validate(context.Background(), layer, 1, committeeSize, nodeID, sig, res)
-		r.NoError(err)
-		r.True(valid)
-
-		eligibilityCount += res
-	}
-
-	diff := committeeSize - int(eligibilityCount)
-	if diff < 0 {
-		diff = -diff
-	}
-	t.Logf("diff=%d (%g%% of committeeSize)", diff, 100*float64(diff)/float64(committeeSize))
-	r.Less(diff, committeeSize/10) // up to 10% difference
-	// While it's theoretically possible to get a result higher than 10%, I've run this many times and haven't seen
-	// anything higher than 6% and it's usually under 3%.
 }
 
 func BenchmarkOracle_CalcEligibility(b *testing.B) {
 	r := require.New(b)
 
 	o := defaultOracle(b)
+	o.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
+	o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+	o.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(1), nil).AnyTimes()
 	numOfMiners := 2000
 	committeeSize := 800
 
-	layer := types.LayerID(50)
-	beacon := types.RandomBeacon()
-	createLayerData(b, o.cdb, layer, beacon, numOfMiners)
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
-	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
+	lid := types.EpochID(5).FirstLayer()
+	createLayerData(b, o.cdb, lid, numOfMiners)
 
 	var eligibilityCount uint16
-
 	var nodeIDs []types.NodeID
 	for pubkey := range createMapWithSize(b.N) {
 		nodeIDs = append(nodeIDs, pubkey)
@@ -368,10 +318,10 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 	b.ResetTimer()
 	for _, nodeID := range nodeIDs {
 		nonce := types.VRFPostIndex(rand.Uint64())
-		res, err := o.CalcEligibility(context.Background(), layer, 1, committeeSize, nodeID, nonce, types.EmptyVrfSignature)
+		res, err := o.CalcEligibility(context.Background(), lid, 1, committeeSize, nodeID, nonce, types.EmptyVrfSignature)
 
 		if err == nil {
-			valid, err := o.Validate(context.Background(), layer, 1, committeeSize, nodeID, types.EmptyVrfSignature, res)
+			valid, err := o.Validate(context.Background(), lid, 1, committeeSize, nodeID, types.EmptyVrfSignature, res)
 			r.NoError(err)
 			r.True(valid)
 		}
@@ -393,31 +343,13 @@ func Test_VrfSignVerify(t *testing.T) {
 	nid := signer.NodeID()
 	nonce := types.VRFPostIndex(1)
 
-	layer := types.LayerID(50)
-	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beaconWithValOne(), nil).Times(int(end.Difference(start)))
-	o.mNonceFetcher.EXPECT().VRFNonce(nid, layer.GetEpoch()).Return(nonce, nil).Times(1)
-	beacon := types.RandomBeacon()
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
+	lid := types.EpochID(5).FirstLayer()
+	prevEpoch := lid.GetEpoch() - 1
+	o.mBeacon.EXPECT().GetBeacon(lid.GetEpoch()).Return(types.Beacon{1, 0, 0, 0}, nil).AnyTimes()
+	o.mNonceFetcher.EXPECT().VRFNonce(nid, lid.GetEpoch()).Return(nonce, nil).Times(1)
 
 	numMiners := 2
 	activeSet := types.RandomActiveSet(numMiners)
-	for lyr := start; !lyr.After(end); lyr = lyr.Add(1) {
-		for _, atx := range activeSet {
-			b := types.RandomBallot()
-			b.Layer = lyr
-			b.AtxID = atx
-			b.RefBallot = types.EmptyBallotID
-			b.EpochData = &types.EpochData{Beacon: beacon}
-			b.ActiveSet = activeSet
-			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
-			b.SmesherID = signer.NodeID()
-			require.NoError(t, b.Initialize())
-			require.NoError(t, ballots.Add(o.cdb, b))
-		}
-	}
-	prevEpoch := layer.GetEpoch() - 1
-
 	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
 			PublishEpoch: prevEpoch,
@@ -427,7 +359,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	atx1.SetID(activeSet[0])
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	atx1.SetReceived(time.Now())
-	activation.SignAndFinalizeAtx(signer, atx1)
+	atx1.SmesherID = signer.NodeID()
 	vAtx1, err := atx1.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx1))
@@ -444,21 +376,23 @@ func Test_VrfSignVerify(t *testing.T) {
 	atx2.SetID(activeSet[1])
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	atx2.SetReceived(time.Now())
-	activation.SignAndFinalizeAtx(signer2, atx1)
+	atx2.SmesherID = signer2.NodeID()
 	vAtx2, err := atx2.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx2))
+	miners := []types.NodeID{atx1.SmesherID, atx2.SmesherID}
+	createBlock(t, o.cdb, createBallots(t, o.cdb, lid.Sub(defLayersPerEpoch), activeSet, miners))
 
 	o.vrfVerifier = signing.NewVRFVerifier()
 
-	proof, err := o.Proof(context.Background(), nonce, layer, 1)
+	proof, err := o.Proof(context.Background(), nonce, lid, 1)
 	require.NoError(t, err)
 
-	res, err := o.CalcEligibility(context.Background(), layer, 1, 10, nid, nonce, proof)
+	res, err := o.CalcEligibility(context.Background(), lid, 1, 10, nid, nonce, proof)
 	require.NoError(t, err)
 	require.Equal(t, 1, int(res))
 
-	valid, err := o.Validate(context.Background(), layer, 1, 10, nid, proof, 1)
+	valid, err := o.Validate(context.Background(), lid, 1, 10, nid, proof, 1)
 	require.NoError(t, err)
 	require.True(t, valid)
 }
@@ -482,7 +416,7 @@ func Test_Proof_BeaconError(t *testing.T) {
 func Test_Proof(t *testing.T) {
 	o := defaultOracle(t)
 	layer := types.LayerID(2)
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beaconWithValOne(), nil).Times(1)
+	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.Beacon{1, 0, 0, 0}, nil)
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -497,66 +431,11 @@ func Test_Proof(t *testing.T) {
 
 func TestOracle_IsIdentityActive(t *testing.T) {
 	o := defaultOracle(t)
-	layer := types.LayerID(40)
-	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	require.Equal(t, start, end)
-
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	beacon := types.RandomBeacon()
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
-
+	layer := types.LayerID(defLayersPerEpoch * 4)
 	numMiners := 2
-	activeSet := types.RandomActiveSet(numMiners)
-	for _, atx := range activeSet {
-		b := types.RandomBallot()
-		b.Layer = start
-		b.AtxID = atx
-		b.RefBallot = types.EmptyBallotID
-		b.EpochData = &types.EpochData{Beacon: beacon}
-		b.ActiveSet = activeSet
-		b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
-		require.NoError(t, b.Initialize())
-		b.SmesherID = signer.NodeID()
-		require.NoError(t, ballots.Add(o.cdb, b))
-	}
-	prevEpoch := layer.GetEpoch() - 1
-
-	signer1, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-		NIPostChallenge: types.NIPostChallenge{
-			PublishEpoch: prevEpoch,
-		},
-		NumUnits: 1 * 1024,
-	}}
-	atx1.SetID(activeSet[0])
-	atx1.SetEffectiveNumUnits(atx1.NumUnits)
-	atx1.SetReceived(time.Now())
-	activation.SignAndFinalizeAtx(signer1, atx1)
-	vAtx1, err := atx1.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(o.cdb, vAtx1))
-
-	signer2, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-		NIPostChallenge: types.NIPostChallenge{
-			PublishEpoch: prevEpoch,
-		},
-		NumUnits: 9 * 1024,
-	}}
-	atx2.SetID(activeSet[1])
-	atx2.SetEffectiveNumUnits(atx2.NumUnits)
-	atx2.SetReceived(time.Now())
-	activation.SignAndFinalizeAtx(signer2, atx2)
-	vAtx2, err := atx2.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(o.cdb, vAtx2))
-
-	for _, edID := range []types.NodeID{signer1.NodeID(), signer2.NodeID()} {
-		v, err := o.IsIdentityActiveOnConsensusView(context.Background(), edID, layer)
+	miners := createLayerData(t, o.cdb, layer.Sub(defLayersPerEpoch), numMiners)
+	for _, nodeID := range miners {
+		v, err := o.IsIdentityActiveOnConsensusView(context.Background(), nodeID, layer)
 		require.NoError(t, err)
 		require.True(t, v)
 	}
@@ -623,242 +502,98 @@ func TestBuildVRFMessage_Concurrency(t *testing.T) {
 	wg.Wait()
 }
 
-func TestSafeLayerRange(t *testing.T) {
-	types.SetLayersPerEpoch(defLayersPerEpoch)
-	safetyParam := uint32(10)
-	effGenesis := types.GetEffectiveGenesis()
-	testCases := []struct {
-		// input
-		targetLayer    types.LayerID
-		safetyParam    uint32
-		layersPerEpoch uint32
-		epochOffset    uint32
-		// expected output
-		safeLayerStart types.LayerID
-		safeLayerEnd   types.LayerID
-	}{
-		// a target layer prior to effective genesis returns effective genesis
-		{types.LayerID(0), safetyParam, defLayersPerEpoch, 1, effGenesis, effGenesis},
-		// large safety param also returns effective genesis
-		{types.LayerID(100), 100, defLayersPerEpoch, 1, effGenesis, effGenesis},
-		// safe layer in first safetyParam + epochOffset layers of epoch, rewinds one epoch further (two prior to target)
-		{types.LayerID(100), safetyParam, defLayersPerEpoch, 1, types.LayerID(80), types.LayerID(81)},
-		// zero offset
-		{types.LayerID(100), safetyParam, defLayersPerEpoch, 0, types.LayerID(90), types.LayerID(90)},
-		// safetyParam < layersPerEpoch means only look back one epoch
-		{types.LayerID(100), safetyParam - 1, defLayersPerEpoch, 1, types.LayerID(90), types.LayerID(91)},
-		// larger epochOffset looks back further
-		{types.LayerID(100), safetyParam, defLayersPerEpoch, 5, types.LayerID(80), types.LayerID(85)},
-		// smaller safety param returns one epoch prior
-		{types.LayerID(100), 5, defLayersPerEpoch, 5, types.LayerID(90), types.LayerID(95)},
-		// targetLayer within safetyParam returns one epoch prior
-		{types.LayerID(105), 5, defLayersPerEpoch, 5, types.LayerID(90), types.LayerID(95)},
-		// targetLayer after safetyParam+epochOffset returns start of same epoch
-		{types.LayerID(105), 2, defLayersPerEpoch, 2, types.LayerID(100), types.LayerID(102)},
-	}
-	for _, testCase := range testCases {
-		sls, sle := safeLayerRange(testCase.targetLayer, testCase.safetyParam, testCase.layersPerEpoch, testCase.epochOffset)
-		require.Equal(t, testCase.safeLayerStart, sls, "got incorrect safeLayerStart")
-		require.Equal(t, testCase.safeLayerEnd, sle, "got incorrect safeLayerEnd")
-	}
-}
-
-func TestActives_HareActiveSet(t *testing.T) {
-	o := defaultOracle(t)
+func TestActiveSet(t *testing.T) {
 	numMiners := 5
-	layer := types.LayerID(50)
-	beacon := types.RandomBeacon()
-	createLayerData(t, o.cdb, layer, beacon, numMiners)
-	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
+	o := defaultOracle(t)
+	targetEpoch := types.EpochID(5)
+	layer := targetEpoch.FirstLayer().Add(o.cfg.ConfidenceParam)
+	createLayerData(t, o.cdb, targetEpoch.FirstLayer(), numMiners)
 
 	activeSet, err := o.actives(context.Background(), layer)
 	require.NoError(t, err)
 	require.Equal(t, createMapWithSize(numMiners), activeSet)
+
+	got, err := o.ActiveSet(context.Background(), targetEpoch)
+	require.NoError(t, err)
+	require.Len(t, got, len(activeSet))
+	for _, id := range got {
+		atx, err := o.cdb.GetAtxHeader(id)
+		require.NoError(t, err)
+		require.Contains(t, activeSet, atx.NodeID)
+		delete(activeSet, atx.NodeID)
+	}
 }
 
-func TestActives_HareActiveSetDifferentBeacon(t *testing.T) {
-	o := defaultOracle(t)
-	layer := types.LayerID(50)
-	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	beacon := types.RandomBeacon()
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
+func TestActives(t *testing.T) {
 	numMiners := 5
-	atxIDs := types.RandomActiveSet(numMiners)
-	badBeacon := types.RandomBeacon()
-	badBeaconATX := atxIDs[len(atxIDs)-1]
-	for lyr := start; !lyr.After(end); lyr = lyr.Add(1) {
-		for _, atx := range atxIDs {
-			b := types.RandomBallot()
-			b.Layer = lyr
-			b.AtxID = atx
-			b.RefBallot = types.EmptyBallotID
-			if atx == badBeaconATX {
-				b.EpochData = &types.EpochData{Beacon: badBeacon}
-				b.ActiveSet = atxIDs
-			} else {
-				b.EpochData = &types.EpochData{Beacon: beacon}
-				b.ActiveSet = atxIDs
-			}
-			b.ActiveSet = atxIDs
-			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
-			b.SmesherID = signer.NodeID()
-			require.NoError(t, b.Initialize())
-			require.NoError(t, ballots.Add(o.cdb, b))
+	t.Run("genesis bootstrap", func(t *testing.T) {
+		o := defaultOracle(t)
+		first := types.GetEffectiveGenesis().Add(1)
+		bootstrap := types.RandomActiveSet(numMiners)
+		createActiveSet(t, o.cdb, types.EpochID(1).FirstLayer(), bootstrap)
+		o.UpdateActiveSet(types.GetEffectiveGenesis().GetEpoch()+1, bootstrap)
+
+		for lid := types.LayerID(0); lid.Before(first); lid = lid.Add(1) {
+			activeSet, err := o.actives(context.Background(), lid)
+			require.ErrorIs(t, err, errEmptyActiveSet)
+			require.Nil(t, activeSet)
 		}
-	}
-	prevEpoch := layer.GetEpoch() - 1
-	createActiveSet(t, o.cdb, prevEpoch.FirstLayer(), atxIDs)
-	activeSet, err := o.actives(context.Background(), layer)
-	require.NoError(t, err)
-	require.Equal(t, createMapWithSize(numMiners-1), activeSet)
-}
+		activeSet, err := o.actives(context.Background(), first)
+		require.NoError(t, err)
+		require.Equal(t, createMapWithSize(numMiners), activeSet)
+	})
+	t.Run("steady state", func(t *testing.T) {
+		numMiners++
+		o := defaultOracle(t)
+		layer := types.EpochID(4).FirstLayer()
+		createLayerData(t, o.cdb, layer, numMiners)
 
-func TestActives_HareActiveSetMultipleLayers(t *testing.T) {
-	o := defaultOracle(t)
-	layer := types.LayerID(100)
-	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	require.NotEqual(t, start, end)
+		start := layer.Add(o.cfg.ConfidenceParam)
+		activeSet, err := o.actives(context.Background(), start)
+		require.NoError(t, err)
+		require.Equal(t, createMapWithSize(numMiners), activeSet)
+		end := (layer.GetEpoch() + 1).FirstLayer().Add(o.cfg.ConfidenceParam)
 
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	beacon := types.RandomBeacon()
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
-	numMiners := 5
-	atxIDs := types.RandomActiveSet(numMiners)
-
-	// add a miner for each layer
-	extraMiners := 0
-	for lyr := start; !lyr.After(end); lyr = lyr.Add(1) {
-		atxIDs = append(atxIDs, types.RandomATXID())
-		extraMiners++
-		for _, atx := range atxIDs {
-			b := types.RandomBallot()
-			b.AtxID = atx
-			b.RefBallot = types.EmptyBallotID
-			b.EpochData = &types.EpochData{ActiveSetHash: types.ATXIDList(atxIDs).Hash()}
-			b.ActiveSet = atxIDs
-			b.Signature = signer.Sign(signing.HARE, b.SignedBytes())
-			require.NoError(t, b.Initialize())
-			b.SmesherID = signer.NodeID()
-			require.NoError(t, ballots.Add(o.cdb, b))
+		for lid := start.Add(1); lid.Before(end); lid = lid.Add(1) {
+			got, err := o.actives(context.Background(), lid)
+			require.NoError(t, err)
+			// cached
+			require.Equal(t, &activeSet, &got)
 		}
-	}
-	prevEpoch := layer.GetEpoch() - 1
-	createActiveSet(t, o.cdb, prevEpoch.FirstLayer(), atxIDs)
-	activeSet, err := o.actives(context.Background(), layer)
-	require.NoError(t, err)
-	require.Equal(t, createMapWithSize(numMiners+extraMiners), activeSet)
-}
+		got, err := o.actives(context.Background(), end)
+		require.ErrorIs(t, err, errEmptyActiveSet)
+		require.Nil(t, got)
+	})
+	t.Run("use fallback despite block", func(t *testing.T) {
+		numMiners++
+		o := defaultOracle(t)
+		layer := types.EpochID(4).FirstLayer()
+		end := layer.Add(o.cfg.ConfidenceParam)
+		createLayerData(t, o.cdb, layer, numMiners)
+		fallback := types.RandomActiveSet(numMiners + 1)
+		createActiveSet(t, o.cdb, types.EpochID(3).FirstLayer(), fallback)
+		o.UpdateActiveSet(end.GetEpoch(), fallback)
 
-func TestActives_HareActiveSetCached(t *testing.T) {
-	o := defaultOracle(t)
-	numMiners := 5
-	layer := types.LayerID(38) // manually calculated. first layer of the safe layer range
-	beacon := types.RandomBeacon()
-	createLayerData(t, o.cdb, layer, beacon, numMiners)
-	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
-
-	oldActiveSet, err := o.actives(context.Background(), layer)
-	require.NoError(t, err)
-	require.Equal(t, createMapWithSize(numMiners), oldActiveSet)
-
-	// should get cached hare active sets for the same safe layer range
-	for lyr := layer; lyr.Before(layer.Add(defLayersPerEpoch)); lyr = lyr.Add(1) {
-		weights, err := o.actives(context.Background(), lyr)
+		for lid := layer; lid.Before(end); lid = lid.Add(1) {
+			got, err := o.actives(context.Background(), lid)
+			require.ErrorIs(t, err, errEmptyActiveSet)
+			require.Nil(t, got)
+		}
+		got, err := o.actives(context.Background(), end)
 		require.NoError(t, err)
-		require.Equal(t, oldActiveSet, weights)
-	}
-
-	// double the miners
-	newLayer := layer.Add(defLayersPerEpoch)
-	newBeacon := types.RandomBeacon()
-	start, _ = safeLayerRange(newLayer, confidenceParam, defLayersPerEpoch, epochOffset)
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(newBeacon, nil).Times(1)
-	createLayerData(t, o.cdb, newLayer, newBeacon, numMiners*2)
-	newActiveSet, err := o.actives(context.Background(), layer.Add(defLayersPerEpoch))
-	require.NoError(t, err)
-	require.Equal(t, createMapWithSize(numMiners*2), newActiveSet)
-	require.NotEqual(t, oldActiveSet, newActiveSet)
-}
-
-func TestActives_EmptyTortoiseActiveSet(t *testing.T) {
-	o := defaultOracle(t)
-	layer := types.LayerID(40)
-	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
-	activeSet, err := o.actives(context.Background(), layer)
-	require.ErrorIs(t, err, errEmptyActiveSet)
-	require.Empty(t, activeSet)
-}
-
-func TestActives_TortoiseActiveSet(t *testing.T) {
-	o := defaultOracle(t)
-	layer := types.LayerID(40)
-	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
-
-	numMiners := 5
-	activeSet := types.RandomActiveSet(numMiners)
-	prevEpoch := layer.GetEpoch() - 1
-	for i, id := range activeSet {
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: prevEpoch,
-			},
-			NumUnits: uint32(i + 1),
-		}}
-		atx.SetID(id)
-		atx.SetEffectiveNumUnits(atx.NumUnits)
-		atx.SetReceived(time.Now())
-		atx.SmesherID = types.BytesToNodeID([]byte(strconv.Itoa(i)))
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(t, err)
-		require.NoError(t, atxs.Add(o.cdb, vAtx))
-	}
-	oldActiveSet, err := o.actives(context.Background(), layer)
-	require.NoError(t, err)
-	require.Equal(t, createMapWithSize(numMiners), oldActiveSet)
-
-	// tortoise active set is cached. it will have to be bootstrapped to guarantee consensus.
-	activeSet = types.RandomActiveSet(numMiners)
-	for i, id := range activeSet {
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: prevEpoch,
-			},
-			NumUnits: uint32(numMiners + i + 1),
-		}}
-		atx.SetID(id)
-		atx.SetEffectiveNumUnits(atx.NumUnits)
-		atx.SetReceived(time.Now())
-		atx.SmesherID = types.BytesToNodeID([]byte(strconv.Itoa(numMiners + i)))
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(t, err)
-		require.NoError(t, atxs.Add(o.cdb, vAtx))
-	}
-	newActiveSet, err := o.actives(context.Background(), layer)
-	require.NoError(t, err)
-	require.Equal(t, oldActiveSet, newActiveSet)
+		require.Equal(t, createMapWithSize(numMiners+1), got)
+	})
 }
 
 func TestActives_ConcurrentCalls(t *testing.T) {
 	r := require.New(t)
 	o := defaultOracle(t)
 	layer := types.LayerID(100)
-	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
-	beacon := types.RandomBeacon()
-	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
+	createLayerData(t, o.cdb, layer.Sub(defLayersPerEpoch), 5)
 
 	mc := NewMockcache(gomock.NewController(t))
 	firstCall := true
-	mc.EXPECT().Get(start.GetEpoch()).DoAndReturn(
+	mc.EXPECT().Get(layer.GetEpoch() - 1).DoAndReturn(
 		func(key any) (any, bool) {
 			if firstCall {
 				firstCall = false
@@ -866,14 +601,13 @@ func TestActives_ConcurrentCalls(t *testing.T) {
 			}
 			return createMapWithSize(5), true
 		}).Times(102)
-	mc.EXPECT().Add(start.GetEpoch(), gomock.Any()).Times(1)
+	mc.EXPECT().Add(layer.GetEpoch()-1, gomock.Any())
 	o.activesCache = mc
-	createLayerData(t, o.cdb, layer, beacon, 5)
 
 	var wg sync.WaitGroup
 	wg.Add(102)
 	runFn := func() {
-		_, err := o.actives(context.Background(), types.LayerID(100))
+		_, err := o.actives(context.Background(), layer)
 		r.NoError(err)
 		wg.Done()
 	}

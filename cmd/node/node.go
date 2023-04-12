@@ -567,9 +567,9 @@ func (app *App) initServices(
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
-	if app.Config.HareEligibility.EpochOffset >= app.Config.BaseConfig.LayersPerEpoch {
-		return fmt.Errorf("epoch offset cannot be greater than or equal to the number of layers per epoch. epoch_offset: %d. layers_per_epoch: %d",
-			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
+	if app.Config.HareEligibility.ConfidenceParam >= app.Config.BaseConfig.LayersPerEpoch {
+		return fmt.Errorf("confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. layers-per-epoch: %d",
+			app.Config.HareEligibility.ConfidenceParam, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
 	proposalListener := proposals.NewHandler(app.cachedDB, app.edVerifier, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, clock,
@@ -593,10 +593,10 @@ func (app *App) initServices(
 
 	app.Config.Bootstrap.DataDir = app.Config.DataDir()
 	app.Config.Bootstrap.Interval = app.Config.LayerDuration / 10
-	//app.updater = bootstrap.New(
-	//	bootstrap.WithConfig(app.Config.Bootstrap),
-	//	bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
-	//)
+	app.updater = bootstrap.New(
+		bootstrap.WithConfig(app.Config.Bootstrap),
+		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
+	)
 
 	app.certifier = blocks.NewCertifier(app.cachedDB, app.hOracle, nodeID, sgn, app.keyExtractor, app.host, clock, beaconProtocol, trtl,
 		blocks.WithCertContext(ctx),

@@ -34,7 +34,7 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err 
 		return err == nil
 	}
 
-	if rows, err := db.Exec("select atx, base_tick_height, tick_count, smesher, effective_num_units, received from atxs where id = ?1;", enc, dec); err != nil {
+	if rows, err := db.Exec("select atx, base_tick_height, tick_count, pubkey, effective_num_units, received from atxs where id = ?1;", enc, dec); err != nil {
 		return nil, fmt.Errorf("exec id %v: %w", id, err)
 	} else if rows == 0 {
 		return nil, fmt.Errorf("exec id %v: %w", id, sql.ErrNotFound)
@@ -68,7 +68,7 @@ func GetFirstIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, e
 
 	if rows, err := db.Exec(`
 		select id from atxs 
-		where smesher = ?1
+		where pubkey = ?1
 		order by epoch asc
 		limit 1;`, enc, dec); err != nil {
 		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
@@ -91,7 +91,7 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 
 	if rows, err := db.Exec(`
 		select id from atxs 
-		where smesher = ?1
+		where pubkey = ?1
 		order by epoch desc, received desc
 		limit 1;`, enc, dec); err != nil {
 		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
@@ -115,7 +115,7 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 
 	if rows, err := db.Exec(`
 		select id from atxs 
-		where epoch = ?1 and smesher = ?2 
+		where epoch = ?1 and pubkey = ?2
 		limit 1;`, enc, dec); err != nil {
 		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
@@ -163,7 +163,7 @@ func GetByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.Node
 
 	if rows, err := db.Exec(`
 		select id, atx, base_tick_height, tick_count, effective_num_units, received from atxs
-		where epoch = ?1 and smesher = ?2
+		where epoch = ?1 and pubkey = ?2
 		limit 1;`, enc, dec); err != nil {
 		return nil, fmt.Errorf("atx by epoch %v nodeID %v: %w", epoch, nodeID, err)
 	} else if rows == 0 {
@@ -206,7 +206,7 @@ func VRFNonce(db sql.Executor, id types.NodeID, epoch types.EpochID) (nonce type
 
 	if rows, err := db.Exec(`
 		select nonce from atxs
-		where smesher = ?1 and epoch < ?2 and nonce is not null
+		where pubkey = ?1 and epoch < ?2 and nonce is not null
 		order by epoch desc
 		limit 1;`, enc, dec); err != nil {
 		return types.VRFPostIndex(0), fmt.Errorf("exec id %v, epoch %d: %w", id, epoch, err)
@@ -256,7 +256,7 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 	}
 
 	_, err = db.Exec(`
-		insert into atxs (id, epoch, effective_num_units, nonce, smesher, atx, received, base_tick_height, tick_count) 
+		insert into atxs (id, epoch, effective_num_units, nonce, pubkey, atx, received, base_tick_height, tick_count)
 		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)

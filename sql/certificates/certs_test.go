@@ -1,6 +1,7 @@
 package certificates
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -8,6 +9,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
+
+const layersPerEpoch = 5
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+
+	res := m.Run()
+	os.Exit(res)
+}
 
 func makeCert(lid types.LayerID, bid types.BlockID) *types.Certificate {
 	return &types.Certificate{
@@ -119,4 +129,36 @@ func TestHareOutput(t *testing.T) {
 	ho, err = GetHareOutput(db, lid)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Equal(t, types.EmptyBlockID, ho)
+}
+
+func TestFirstInEpoch(t *testing.T) {
+	db := sql.InMemory()
+
+	lyrBlocks := map[types.LayerID]types.BlockID{
+		types.LayerID(layersPerEpoch - 1):   {1}, // epoch 0
+		types.LayerID(layersPerEpoch + 1):   {2}, // 2nd layer of epoch 1
+		types.LayerID(layersPerEpoch + 2):   {3}, // 3d layer of epoch 1
+		types.LayerID(2*layersPerEpoch - 1): {4}, // last layer of epoch 1
+		// epoch 2 has no hare output
+		types.LayerID(3 * layersPerEpoch): {5}, // first layer of epoch 3
+	}
+	for lid, bid := range lyrBlocks {
+		require.NoError(t, SetHareOutput(db, lid, bid))
+	}
+
+	got, err := FirstInEpoch(db, types.EpochID(0))
+	require.NoError(t, err)
+	require.Equal(t, types.BlockID{1}, got)
+
+	got, err = FirstInEpoch(db, types.EpochID(1))
+	require.NoError(t, err)
+	require.Equal(t, types.BlockID{2}, got)
+
+	got, err = FirstInEpoch(db, types.EpochID(2))
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Equal(t, types.EmptyBlockID, got)
+
+	got, err = FirstInEpoch(db, types.EpochID(3))
+	require.NoError(t, err)
+	require.Equal(t, types.BlockID{5}, got)
 }

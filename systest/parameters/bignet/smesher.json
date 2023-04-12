@@ -20,7 +20,7 @@
         "hare-committee-size": 200
     },
     "hare-eligibility": {
-        "eligibility-confidence-param": 10
+        "eligibility-confidence-param": 5
     },
     "beacon": {
         "beacon-grace-period-duration": "1m",

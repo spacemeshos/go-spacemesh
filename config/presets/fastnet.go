@@ -40,8 +40,7 @@ func fastnet() config.Config {
 	conf.Tortoise.Zdist = 2
 	conf.Tortoise.BadBeaconVoteDelayLayers = 2
 
-	conf.HareEligibility.ConfidenceParam = 2 // half epoch
-	conf.HareEligibility.EpochOffset = 0
+	conf.HareEligibility.ConfidenceParam = 2
 
 	conf.POST.K1 = 12
 	conf.POST.K2 = 4
@@ -59,7 +58,7 @@ func fastnet() config.Config {
 	conf.Beacon.Kappa = 40
 	conf.Beacon.Theta = big.NewRat(1, 4)
 	conf.Beacon.FirstVotingRoundDuration = 10 * time.Second
-	conf.Beacon.GracePeriodDuration = 2 * time.Second
+	conf.Beacon.GracePeriodDuration = 30 * time.Second
 	conf.Beacon.ProposalDuration = 2 * time.Second
 	conf.Beacon.VotingRoundDuration = 2 * time.Second
 	conf.Beacon.WeakCoinRoundDuration = 2 * time.Second
