@@ -18,11 +18,33 @@ type MultiSig struct {
 }
 
 func (ms *MultiSig) BaseGas(method uint8) uint64 {
-	return BaseGas * uint64(ms.Required)
+	gas := core.TX + uint64(ms.Required)*core.EDVERIFY
+	if method == core.MethodSpawn {
+		gas += core.SPAWN
+	}
+	return gas
 }
 
-func (ms *MultiSig) FixedGas(method uint8) uint64 {
-	return FixedGas * uint64(ms.Required)
+func (ms *MultiSig) LoadGas() uint64 {
+	gas := core.ACCOUNT_ACCESS
+	gas += core.SizeGas(core.LOAD, len(ms.PublicKeys)*32+16)
+	gas += core.SizeGas(core.LOAD, 8)
+	return gas
+}
+
+func (ms *MultiSig) ExecGas(method uint8) uint64 {
+	switch method {
+	case core.MethodSpawn:
+		return core.SizeGas(core.STORE, len(ms.PublicKeys)*32+16)
+	case core.MethodSpend:
+		gas := core.ACCOUNT_ACCESS
+		gas += core.SizeGas(core.LOAD, 8)
+		gas += core.SizeGas(core.UPDATE, 16)
+		gas += core.SizeGas(core.UPDATE, 8)
+		return gas
+	default:
+		panic(fmt.Sprintf("unknown method %d", method))
+	}
 }
 
 // MaxSpend returns amount specified in the SpendArguments.

@@ -10,16 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 )
 
-const (
-	// BaseGas is a cost of Parse and Verify methods.
-	BaseGas = 100
-	// FixedGas is a cost to execute transaction.
-	FixedGas = 100
-
-	// StorageLimit is a limit of keys that can be used when multisig is spawned.
-	StorageLimit = 10
-)
-
 func init() {
 	TemplateAddress[len(TemplateAddress)-1] = 2
 }
@@ -65,9 +55,6 @@ func (h *handler) New(args any) (core.Template, error) {
 	}
 	if len(spawn.PublicKeys) < int(spawn.Required) {
 		return nil, fmt.Errorf("multisig requires atleast %d keys", spawn.Required)
-	}
-	if len(spawn.PublicKeys) > StorageLimit {
-		return nil, fmt.Errorf("multisig supports atmost %d keys", StorageLimit)
 	}
 	return &MultiSig{
 		PublicKeys: spawn.PublicKeys,

@@ -66,11 +66,15 @@ func (v *Vault) MaxSpend(uint8, any) (uint64, error) {
 	return 0, nil
 }
 
-func (v *Vault) BaseGas(method uint8) uint64 {
+func (v *Vault) BaseGas(uint8) uint64 {
 	return 0
 }
 
-func (v *Vault) FixedGas(method uint8) uint64 {
+func (v *Vault) LoadGas() uint64 {
+	return 0
+}
+
+func (v *Vault) ExecGas(uint8) uint64 {
 	return 0
 }
 

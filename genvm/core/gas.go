@@ -1,13 +1,13 @@
 package core
 
-// ComputeIntrinsicGasCost computes intrinsic gas from base gas and storage cost.
-func ComputeIntrinsicGasCost(baseGas uint64, tx []byte) uint64 {
+// IntrinsicGas computes intrinsic gas from base gas and storage cost.
+func IntrinsicGas(baseGas uint64, tx []byte) uint64 {
 	return baseGas + TxDataGas(len(tx))
 }
 
-// ComputeGasCost computes total gas cost by adding fixed gas to intrinsic gas cost.
-func ComputeGasCost(baseGas, fixedGas uint64, tx []byte) uint64 {
-	return ComputeIntrinsicGasCost(baseGas, tx) + fixedGas
+// MaxGas computes total gas cost by adding fixed gas to intrinsic gas cost.
+func MaxGas(baseGas, fixedGas uint64, tx []byte) uint64 {
+	return IntrinsicGas(baseGas, tx) + fixedGas
 }
 
 const (
@@ -23,6 +23,8 @@ const (
 	UPDATE uint64 = 725
 	// LOAD is a cost for loading immutable and mutable state from disk.
 	LOAD uint64 = 182
+	// ACCOUNT_ACCESS is a cost of the account access.
+	ACCOUNT_ACCESS uint64 = 2500
 	// EDVERIFY is a cost for running ed25519 single signature verification.
 	EDVERIFY uint64 = 3000
 )

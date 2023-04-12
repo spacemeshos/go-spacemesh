@@ -329,7 +329,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 			invalidTxCount.Inc()
 			continue
 		}
-		if intrinsic := core.ComputeIntrinsicGasCost(ctx.Gas.BaseGas, tx.GetRaw().Raw); ctx.PrincipalAccount.Balance < intrinsic {
+		if intrinsic := core.IntrinsicGas(ctx.Gas.BaseGas, tx.GetRaw().Raw); ctx.PrincipalAccount.Balance < intrinsic {
 			logger.With().Warning("ineffective transaction. intrinstic gas not covered",
 				log.Object("header", header),
 				log.Object("account", &ctx.PrincipalAccount),
@@ -552,7 +552,7 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			ctx.Gas.FixedGas = ctx.PrincipalTemplate.FixedGas(ctx.Header.Method)
+			ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas(ctx.Header.Method)
 		} else if account.TemplateAddress == nil {
 			return nil, nil, nil, fmt.Errorf("%w: account can't spawn until it is spawned itself", core.ErrNotSpawned)
 		} else {
@@ -560,10 +560,12 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			ctx.Gas.FixedGas = target.FixedGas(ctx.Header.Method)
+			ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
+			ctx.Gas.FixedGas += target.ExecGas(ctx.Header.Method)
 		}
 	} else {
-		ctx.Gas.FixedGas = ctx.PrincipalTemplate.BaseGas(ctx.Header.Method)
+		ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
+		ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas(ctx.Header.Method)
 	}
 	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas(ctx.Header.Method)
 
@@ -572,7 +574,7 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 	ctx.Header.Principal = principal
 	ctx.Header.TemplateAddress = *templateAddress
 	ctx.Header.Method = method
-	ctx.Header.MaxGas = core.ComputeGasCost(ctx.Gas.BaseGas, ctx.Gas.FixedGas, raw)
+	ctx.Header.MaxGas = core.MaxGas(ctx.Gas.BaseGas, ctx.Gas.FixedGas, raw)
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce
 

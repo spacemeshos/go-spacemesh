@@ -57,16 +57,23 @@ func (s *Wallet) BaseGas(method uint8) uint64 {
 	return gas
 }
 
-func (s *Wallet) FixedGas(method uint8) uint64 {
-	gas := uint64(0)
+func (s *Wallet) LoadGas() uint64 {
+	gas := core.ACCOUNT_ACCESS
+	gas += core.SizeGas(core.LOAD, 48)
+	return gas
+}
+
+func (s *Wallet) ExecGas(method uint8) uint64 {
 	switch method {
 	case core.MethodSpawn:
-		gas += core.SizeGas(core.STORE, 48)
+		return core.SizeGas(core.STORE, 48)
 	case core.MethodSpend:
-		gas += core.SizeGas(core.LOAD, 48)
+		gas := core.ACCOUNT_ACCESS
 		gas += core.SizeGas(core.LOAD, 8)
 		gas += core.SizeGas(core.UPDATE, 16)
 		gas += core.SizeGas(core.UPDATE, 8)
+		return gas
+	default:
+		panic(fmt.Sprintf("unknown method %d", method))
 	}
-	return gas
 }

@@ -1,6 +1,7 @@
 package vesting
 
 import (
+	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
 )
 
@@ -15,4 +16,15 @@ func (v *Vesting) MaxSpend(method uint8, args any) (uint64, error) {
 		return 0, nil
 	}
 	return v.MultiSig.MaxSpend(method, args)
+}
+
+func (v *Vesting) ExecGas(method uint8) uint64 {
+	if method == MethodDrainVault {
+		gas := core.ACCOUNT_ACCESS
+		gas += core.SizeGas(core.LOAD, 64)
+		gas += core.SizeGas(core.UPDATE, 16)
+		gas += core.SizeGas(core.UPDATE, 16)
+		return gas
+	}
+	return v.MultiSig.ExecGas(method)
 }
