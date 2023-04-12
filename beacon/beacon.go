@@ -243,8 +243,13 @@ func (pd *ProtocolDriver) Start(ctx context.Context) {
 }
 
 func (pd *ProtocolDriver) UpdateBeacon(epoch types.EpochID, beacon types.Beacon) {
-	// TODO: implement
-	pd.logger.With().Info("received beacon update", epoch, beacon)
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+	if err := beacons.AddOverwrite(pd.cdb, epoch, beacon); err != nil {
+		pd.logger.With().Error("failed to persist fallback beacon", epoch, beacon, log.Err(err))
+	}
+	pd.beacons[epoch] = beacon
+	pd.logger.With().Info("using fallback beacon", epoch, beacon)
 }
 
 // Close closes ProtocolDriver.
@@ -426,14 +431,6 @@ func (pd *ProtocolDriver) findMajorityBeacon(epoch types.EpochID) types.Beacon {
 
 // GetBeacon returns the beacon for the specified epoch or an error if it doesn't exist.
 func (pd *ProtocolDriver) GetBeacon(targetEpoch types.EpochID) (types.Beacon, error) {
-	// Returns empty beacon up to epoch 2:
-	// epoch 0 - no ATXs
-	// epoch 1 - ATXs, no beacon protocol, only genesis ballot needs to set the beacon value
-	// epoch 2 - ATXs, proposals/blocks, beacon protocol (but targeting for epoch 3)
-	if targetEpoch <= types.EpochID(2) {
-		return types.HexToBeacon(types.BootstrapBeacon), nil
-	}
-
 	beacon := pd.getBeacon(targetEpoch)
 	if beacon != types.EmptyBeacon {
 		return beacon, nil
@@ -1177,7 +1174,7 @@ func (mt *messageTimes) followupVoteSendTime(epoch types.EpochID, round types.Ro
 	return mt.firstVoteSendTime(epoch).Add(mt.conf.FirstVotingRoundDuration).Add(subsequentRoundDuration * time.Duration(round-1))
 }
 
-// weakCoinProposalSendTime returns the time at which the weak coin proposals are sent for an epoch and round.
+// WeakCoinProposalSendTime returns the time at which the weak coin proposals are sent for an epoch and round.
 func (mt *messageTimes) WeakCoinProposalSendTime(epoch types.EpochID, round types.RoundID) time.Time {
 	subsequentRoundDuration := mt.conf.VotingRoundDuration + mt.conf.WeakCoinRoundDuration
 	return mt.firstVoteSendTime(epoch).Add(mt.conf.FirstVotingRoundDuration + mt.conf.VotingRoundDuration).Add(subsequentRoundDuration * time.Duration(round-1))
