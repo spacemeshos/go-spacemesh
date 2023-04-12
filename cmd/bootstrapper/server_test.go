@@ -2,11 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -31,27 +30,13 @@ func query(t *testing.T, ctx context.Context) []byte {
 
 func TestServer(t *testing.T) {
 	t.Cleanup(launchServer(t))
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-		w.WriteHeader(http.StatusOK)
-		var content string
-		if strings.HasSuffix(r.URL.String(), "/blocks/782685") {
-			content = bitcoinResponse2
-		} else {
-			content = bitcoinResponse1
-		}
-		_, err := w.Write([]byte(content))
-		require.NoError(t, err)
-	}))
-	defer ts.Close()
 
 	fs := afero.NewMemMapFs()
 	g := NewGenerator(
-		ts.URL,
+		"",
 		fmt.Sprintf("%s:%d", target, grpcPort),
 		WithLogger(logtest.New(t)),
 		WithFilesystem(fs),
-		WithHttpClient(ts.Client()),
 	)
 
 	srv := NewServer(fs, g, false, port, logtest.New(t))
@@ -73,7 +58,8 @@ func TestServer(t *testing.T) {
 	require.Empty(t, ch)
 
 	data := query(t, ctx)
-	verifyUpdate(t, data, types.EpochID(2), expectedBeacon, activeSetSize)
+	epoch := types.EpochID(2)
+	verifyUpdate(t, data, epoch, hex.EncodeToString(epochBeacon(epoch).Bytes()), activeSetSize*3/4)
 	cancel()
 	srv.Stop(ctx)
 }
