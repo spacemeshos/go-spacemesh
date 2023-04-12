@@ -345,7 +345,7 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any,
 		return nil, errInstanceNotSynced
 	}
 	// Delete old outbox beyond the limit
-	if len(b.outbox) >= b.limit {
+	if len(b.outbox) > b.limit {
 		// unregister the earliest layer to make space for the new layer
 		// cannot call unregister here because unregister blocks and this would cause a deadlock
 		instance := b.minDeleted.Add(1)
