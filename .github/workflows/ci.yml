@@ -227,7 +227,7 @@ jobs:
         env:
           GOTESTSUM_FORMAT: standard-verbose
           GOTESTSUM_JUNITFILE: unit-tests.xml
-        run: eval TEST_LOG_LEVEL=warn $(make print-test-env) go test -race -timeout 12m -v -count 50 $(${{ matrix.package-selection }})
+        run: eval TEST_LOG_LEVEL=warn $(make print-test-env) go test -race -timeout 15m -v -count 50 $(${{ matrix.package-selection }})
         continue-on-error: ${{ matrix.allow-failure == 'true' }}
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v3

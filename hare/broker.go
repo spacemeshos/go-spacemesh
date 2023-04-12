@@ -361,6 +361,8 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any,
 		outboxCh = make(chan any, inboxCapacity)
 		b.outbox[id] = outboxCh
 	}
+
+	b.WithContext(ctx).With().Warning("hare broker registered layer", id)
 	return outboxCh, nil
 }
 
@@ -370,7 +372,7 @@ func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 	defer b.mu.Unlock()
 	delete(b.outbox, id)
 	b.cleanOldLayers()
-	b.WithContext(ctx).With().Debug("hare broker unregistered layer", id)
+	b.WithContext(ctx).With().Warning("hare broker unregistered layer", id)
 }
 
 // Synced returns true if the given layer is synced, false otherwise.
