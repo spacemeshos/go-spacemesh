@@ -497,7 +497,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 
 // process the message by its type.
 func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
-	proc.WithContext(ctx).With().Debug("processing message",
+	proc.WithContext(ctx).With().Warning("processing message",
 		proc.layer,
 		log.String("msg_type", m.Type.String()),
 		log.Int("num_values", len(m.Values)),
