@@ -2009,18 +2009,6 @@ func FuzzParse(f *testing.F) {
 	})
 }
 
-func getMultisigTemplate(k int) types.Address {
-	switch k {
-	case 1:
-		return multisig.TemplateAddress1
-	case 2:
-		return multisig.TemplateAddress2
-	case 3:
-		return multisig.TemplateAddress3
-	}
-	panic(fmt.Sprintf("unknown k %d", k))
-}
-
 func BenchmarkTransactions(b *testing.B) {
 	bench := func(b *testing.B, tt *tester, txs []types.Transaction) {
 		lid := types.GetEffectiveGenesis().Add(2)
@@ -2096,7 +2084,7 @@ func BenchmarkTransactions(b *testing.B) {
 		{3, 10},
 	} {
 		b.Run(fmt.Sprintf("multisig/k=%d/n=%d/selfspawn", v.k, v.n), func(b *testing.B) {
-			tt := newTester(b).persistent().addMultisig(n, v.k, v.n, getMultisigTemplate(v.k)).applyGenesis()
+			tt := newTester(b).persistent().addMultisig(n, v.k, v.n).applyGenesis()
 			txs := make([]types.Transaction, n)
 			for i := range txs {
 				tx := &selfSpawnTx{principal: i}
@@ -2105,13 +2093,13 @@ func BenchmarkTransactions(b *testing.B) {
 			bench(b, tt, txs)
 		})
 		b.Run(fmt.Sprintf("multisig/k=%d/n=%d/spawn", v.k, v.n), func(b *testing.B) {
-			tt := newTester(b).persistent().addMultisig(n, v.k, v.n, getMultisigTemplate(v.k)).applyGenesis()
+			tt := newTester(b).persistent().addMultisig(n, v.k, v.n).applyGenesis()
 			ineffective, _, err := tt.Apply(
 				ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
 				notVerified(tt.spawnAll()...),
 				nil,
 			)
-			tt = tt.addMultisig(n, v.k, v.n, getMultisigTemplate(v.k))
+			tt = tt.addMultisig(n, v.k, v.n)
 
 			require.NoError(b, err)
 			require.Empty(b, ineffective)
@@ -2123,13 +2111,13 @@ func BenchmarkTransactions(b *testing.B) {
 			bench(b, tt, txs)
 		})
 		b.Run(fmt.Sprintf("multisig/k=%d/n=%d/spend", v.k, v.n), func(b *testing.B) {
-			tt := newTester(b).persistent().addMultisig(n, v.k, v.n, getMultisigTemplate(v.k)).applyGenesis()
+			tt := newTester(b).persistent().addMultisig(n, v.k, v.n).applyGenesis()
 			ineffective, _, err := tt.Apply(
 				ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
 				notVerified(tt.spawnAll()...),
 				nil,
 			)
-			tt = tt.addMultisig(n, 3, 5, multisig.TemplateAddress3)
+			tt = tt.addMultisig(n, 3, 5)
 
 			require.NoError(b, err)
 			require.Empty(b, ineffective)
@@ -2143,7 +2131,7 @@ func BenchmarkTransactions(b *testing.B) {
 	}
 	b.Run("vesting/spawnvault", func(b *testing.B) {
 		tt := newTester(b).persistent().
-			addVesting(n, 3, 5, vesting.TemplateAddress3).
+			addVesting(n, 3, 5).
 			applyGenesis()
 		ineffective, _, err := tt.Apply(
 			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
@@ -2163,7 +2151,7 @@ func BenchmarkTransactions(b *testing.B) {
 	})
 	b.Run("vesting/drain", func(b *testing.B) {
 		tt := newTester(b).persistent().
-			addVesting(n, 3, 5, vesting.TemplateAddress3).
+			addVesting(n, 3, 5).
 			addVault(n, 200000, 100000, types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(100)).
 			applyGenesis()
 		var txs []types.Transaction
