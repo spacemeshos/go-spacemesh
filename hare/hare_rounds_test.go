@@ -158,6 +158,7 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 			close(success)
 		})
 
+	defer w.Close()
 	w.LayerTicker(100 * time.Millisecond)
 	// Wait for test completion
 	select {

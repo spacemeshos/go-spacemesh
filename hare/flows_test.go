@@ -241,11 +241,9 @@ func runTest(t *testing.T, totalNodes int, totalCp uint32, roundClocks *sharedRo
 	}
 
 	test.WaitForTimedTermination(t, time.Minute)
-	// We close hare here so that the blockGenCh is closed which allows for the
-	// outputsWaitGroup to complete.
-	for _, h := range test.hare {
-		h.Close()
-	}
+	// We close hare instances here so that the blockGenCh is closed which
+	// allows for the outputsWaitGroup to complete.
+	test.Close()
 	outputsWaitGroup.Wait()
 	for _, out := range outputs {
 		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(finalLyr); lid = lid.Add(1) {

@@ -98,6 +98,12 @@ func (his *HareWrapper) checkResult(t *testing.T, id types.LayerID) {
 	}
 }
 
+func (his *HareWrapper) Close() {
+	for _, h := range his.hare {
+		h.Close()
+	}
+}
+
 type hareWithMocks struct {
 	*Hare
 	mockRoracle *mocks.MockRolacle
