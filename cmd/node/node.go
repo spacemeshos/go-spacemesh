@@ -716,6 +716,7 @@ func (app *App) initServices(
 		if newSyncer.ListenToGossip() {
 			return pubsub.ValidationAccept
 		}
+		println("not synced validation ignore")
 		return pubsub.ValidationIgnore
 	}
 	atxSyncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {

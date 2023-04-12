@@ -98,6 +98,11 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubs
 		return pubsub.ValidationIgnore
 	default:
 		if err := b.handleMessage(ctx, msg); err != nil {
+			b.mu.Lock()
+			logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.latestLayer))
+			logger.Warning("broker handle message failed: %v", err)
+			b.mu.Unlock()
+
 			return pubsub.ValidationIgnore
 		}
 	}
