@@ -18,12 +18,11 @@ var errMalformedData = errors.New("malformed data")
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
 type Handler struct {
-	logger          log.Log
-	cdb             *datastore.CachedDB
-	self            p2p.Peer
-	cp              consensusProtocol
-	pubKeyExtractor *signing.PubKeyExtractor
-	edVerifier      *signing.EdVerifier
+	logger     log.Log
+	cdb        *datastore.CachedDB
+	self       p2p.Peer
+	cp         consensusProtocol
+	edVerifier *signing.EdVerifier
 }
 
 func NewHandler(
@@ -31,16 +30,14 @@ func NewHandler(
 	lg log.Log,
 	self p2p.Peer,
 	cp consensusProtocol,
-	pubKeyExtractor *signing.PubKeyExtractor,
 	edVerifier *signing.EdVerifier,
 ) *Handler {
 	return &Handler{
-		logger:          lg,
-		cdb:             cdb,
-		self:            self,
-		cp:              cp,
-		pubKeyExtractor: pubKeyExtractor,
-		edVerifier:      edVerifier,
+		logger:     lg,
+		cdb:        cdb,
+		self:       self,
+		cp:         cp,
+		edVerifier: edVerifier,
 	}
 }
 
@@ -175,38 +172,36 @@ func (h *Handler) validateHareEquivocation(logger log.Log, proof *types.Malfeasa
 		return types.EmptyNodeID, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.HareEquivocation, proof.Proof.Type)
 	}
 	var (
-		firstNid, nid types.NodeID
-		firstMsg, msg types.HareProofMsg
-		err           error
+		firstNid types.NodeID
+		firstMsg types.HareProofMsg
 	)
 	hp, ok := proof.Proof.Data.(*types.HareProof)
 	if !ok {
 		return types.EmptyNodeID, errors.New("wrong message type for hare equivocation")
 	}
-	for _, msg = range hp.Messages {
-		nid, err = h.pubKeyExtractor.ExtractNodeID(signing.HARE, msg.SignedBytes(), msg.Signature)
-		if err != nil {
-			return types.EmptyNodeID, err
+	for _, msg := range hp.Messages {
+		if !h.edVerifier.Verify(signing.HARE, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
+			return types.EmptyNodeID, errors.New("invalid signature")
 		}
-		if err = checkIdentityExists(h.cdb, nid); err != nil {
-			return types.EmptyNodeID, fmt.Errorf("check identity in hare malfeasance %v: %w", nid, err)
+		if err := checkIdentityExists(h.cdb, msg.SmesherID); err != nil {
+			return types.EmptyNodeID, fmt.Errorf("check identity in hare malfeasance %v: %w", msg.SmesherID, err)
 		}
 		if firstNid == types.EmptyNodeID {
-			firstNid = nid
+			firstNid = msg.SmesherID
 			firstMsg = msg
-		} else if nid == firstNid {
+		} else if msg.SmesherID == firstNid {
 			if msg.InnerMsg.Layer == firstMsg.InnerMsg.Layer &&
 				msg.InnerMsg.Round == firstMsg.InnerMsg.Round &&
 				msg.InnerMsg.MsgHash != firstMsg.InnerMsg.MsgHash {
-				return nid, nil
+				return msg.SmesherID, nil
 			}
 		}
 	}
 	logger.With().Warning("received invalid hare malfeasance proof",
-		log.Stringer("first_smesher", firstNid),
-		log.Object("first_proof", &firstMsg.InnerMsg),
-		log.Stringer("second_smesher", nid),
-		log.Object("second_proof", &msg.InnerMsg),
+		log.Stringer("first_smesher", hp.Messages[0].SmesherID),
+		log.Object("first_proof", &hp.Messages[0].InnerMsg),
+		log.Stringer("second_smesher", hp.Messages[1].SmesherID),
+		log.Object("second_proof", &hp.Messages[1].InnerMsg),
 	)
 	numInvalidProofsHare.Inc()
 	return types.EmptyNodeID, errors.New("invalid hare malfeasance proof")

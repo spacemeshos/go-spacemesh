@@ -38,13 +38,13 @@ func newPreRoundTracker(logger log.Log, mch chan<- *types.MalfeasanceGossip, et 
 }
 
 // OnPreRound tracks pre-round messages.
-func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
+func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Message) {
 	logger := pre.logger.WithContext(ctx)
 
 	// check for winning VRF
 	logger.With().Debug("received preround message",
-		msg.NodeID,
-		log.Stringer("smesher", msg.NodeID),
+		msg.SmesherID,
+		log.Stringer("smesher", msg.SmesherID),
 		log.Int("num_values", len(msg.Values)),
 		log.Stringer("proposal_vrf", msg.Eligibility.Proof),
 		log.Stringer("previous_vrf", pre.bestVRF),
@@ -54,7 +54,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		// store lowest-order bit as coin toss value
 		pre.coinflip = msg.Eligibility.Proof.LSB()&byte(1) == byte(1)
 		pre.logger.With().Debug("got new best vrf value",
-			log.Stringer("smesher", msg.NodeID),
+			log.Stringer("smesher", msg.SmesherID),
 			log.Stringer("vrf", msg.Eligibility.Proof),
 			log.Bool("weak_coin", pre.coinflip),
 		)
@@ -69,41 +69,41 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		Round:   msg.Round,
 		MsgHash: msgHash,
 	}
-	if prev, exist := pre.preRound[msg.NodeID]; exist { // not first pre-round msg from this sender
+	if prev, exist := pre.preRound[msg.SmesherID]; exist { // not first pre-round msg from this sender
 		if prev.InnerMsg.Equivocation(&metadata) {
 			pre.logger.WithContext(ctx).With().Warning("equivocation detected in preround",
-				log.Stringer("smesher", msg.NodeID),
+				log.Stringer("smesher", msg.SmesherID),
 				log.Object("prev", &prev.InnerMsg),
 				log.Object("curr", &metadata),
 			)
-			pre.eTracker.Track(msg.NodeID, msg.Round, msg.Eligibility.Count, false)
+			pre.eTracker.Track(msg.SmesherID, msg.Round, msg.Eligibility.Count, false)
 			this := &types.HareProofMsg{
 				InnerMsg:  metadata,
 				Signature: msg.Signature,
 			}
-			if err := reportEquivocation(ctx, msg.NodeID, prev.HareProofMsg, this, &msg.Eligibility, pre.malCh); err != nil {
+			if err := reportEquivocation(ctx, msg.SmesherID, prev.HareProofMsg, this, &msg.Eligibility, pre.malCh); err != nil {
 				pre.logger.WithContext(ctx).With().Warning("failed to report equivocation in preround",
-					log.Stringer("smesher", msg.NodeID),
+					log.Stringer("smesher", msg.SmesherID),
 					log.Err(err),
 				)
 				return
 			}
 		}
-		logger.With().Debug("duplicate preround msg sender", log.Stringer("smesher", msg.NodeID))
+		logger.With().Debug("duplicate preround msg sender", log.Stringer("smesher", msg.SmesherID))
 		alreadyTracked = prev.Set         // update already tracked Values
 		sToTrack.Subtract(alreadyTracked) // subtract the already tracked Values
 	} else {
-		pre.preRound[msg.NodeID] = &preroundData{}
+		pre.preRound[msg.SmesherID] = &preroundData{}
 	}
 
 	// record Values
 	for _, v := range sToTrack.ToSlice() {
-		pre.tracker.Track(v, msg.NodeID)
+		pre.tracker.Track(v, msg.SmesherID)
 	}
 
 	// update the union to include new Values
-	pre.preRound[msg.NodeID].Set = alreadyTracked.Union(sToTrack)
-	pre.preRound[msg.NodeID].HareProofMsg = &types.HareProofMsg{
+	pre.preRound[msg.SmesherID].Set = alreadyTracked.Union(sToTrack)
+	pre.preRound[msg.SmesherID].HareProofMsg = &types.HareProofMsg{
 		InnerMsg:  metadata,
 		Signature: msg.Signature,
 	}

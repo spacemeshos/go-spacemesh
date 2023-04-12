@@ -25,8 +25,12 @@ type Context struct {
 	PrincipalAccount  Account
 
 	ParseOutput ParseOutput
-	Header      Header
-	Args        scale.Encodable
+	Gas         struct {
+		BaseGas  uint64
+		FixedGas uint64
+	}
+	Header Header
+	Args   scale.Encodable
 
 	// consumed is in gas units and will be used
 	consumed uint64

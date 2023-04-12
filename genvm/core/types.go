@@ -65,6 +65,10 @@ type Template interface {
 	// MaxSpend decodes MaxSpend value for the transaction. Transaction will fail
 	// if it spends more than that.
 	MaxSpend(uint8, any) (uint64, error)
+	// BaseGas to cover the cost and verification.
+	BaseGas(uint8) uint64
+	// FixedGas to cover the cost of execution.
+	FixedGas(uint8) uint64
 	// Verify security of the transaction.
 	Verify(Host, []byte, *scale.Decoder) bool
 }
@@ -85,8 +89,6 @@ type AccountUpdater interface {
 type ParseOutput struct {
 	Nonce    Nonce
 	GasPrice uint64
-	BaseGas  uint64
-	FixedGas uint64
 }
 
 // HandlerRegistry stores handlers for templates.

@@ -68,7 +68,7 @@ func TestVerifier_WithPrefix(t *testing.T) {
 		sig := signer.Sign(signing.ATX, msg)
 
 		// Verification panics if the domain is not supported by the verifier.
-		require.Panics(t, func() { verifier.Verify(signing.HARE, signer.NodeID(), msg, sig) })
+		require.False(t, verifier.Verify(signing.HARE, signer.NodeID(), msg, sig))
 	})
 }
 

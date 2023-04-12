@@ -296,7 +296,6 @@ type App struct {
 	atxBuilder         *activation.Builder
 	atxHandler         *activation.Handler
 	validator          *activation.Validator
-	keyExtractor       *signing.PubKeyExtractor
 	edVerifier         *signing.EdVerifier
 	beaconProtocol     *beacon.ProtocolDriver
 	log                log.Log
@@ -505,13 +504,6 @@ func (app *App) initServices(
 	}
 
 	var err error
-	app.keyExtractor, err = signing.NewPubKeyExtractor(
-		signing.WithExtractorPrefix(app.Config.Genesis.GenesisID().Bytes()),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create key extractor: %w", err)
-	}
-
 	app.edVerifier, err = signing.NewEdVerifier(signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
 	if err != nil {
 		return fmt.Errorf("failed to create signature verifier: %w", err)
@@ -598,7 +590,7 @@ func (app *App) initServices(
 		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
 	)
 
-	app.certifier = blocks.NewCertifier(app.cachedDB, app.hOracle, nodeID, sgn, app.keyExtractor, app.host, clock, beaconProtocol, trtl,
+	app.certifier = blocks.NewCertifier(app.cachedDB, app.hOracle, nodeID, sgn, app.edVerifier, app.host, clock, beaconProtocol, trtl,
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
@@ -650,7 +642,7 @@ func (app *App) initServices(
 		hareCfg,
 		app.host,
 		sgn,
-		app.keyExtractor,
+		app.edVerifier,
 		nodeID,
 		hareOutputCh,
 		newSyncer,
@@ -715,7 +707,6 @@ func (app *App) initServices(
 		app.addLogger(MalfeasanceLogger, lg),
 		app.host.ID(),
 		app.hare,
-		app.keyExtractor,
 		app.edVerifier,
 	)
 	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, txHandler, malfeasanceHandler)
