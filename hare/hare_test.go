@@ -134,7 +134,7 @@ func TestHare_New(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	pke, err := signing.NewPubKeyExtractor()
+	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
 	logger := logtest.New(t).WithName(t.Name())
@@ -144,7 +144,7 @@ func TestHare_New(t *testing.T) {
 		cfg,
 		noopPubSub(t),
 		signer,
-		pke,
+		edVerifier,
 		signer.NodeID(),
 		make(chan LayerOutput, 1),
 		smocks.NewMockSyncStateProvider(ctrl), smocks.NewMockBeaconGetter(ctrl),

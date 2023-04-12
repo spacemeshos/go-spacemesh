@@ -20,6 +20,9 @@ func TestBlock_IDSize(t *testing.T) {
 }
 
 func Test_CertifyMessage(t *testing.T) {
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
 	msg := types.CertifyMessage{
 		CertifyContent: types.CertifyContent{
 			LayerID:        types.LayerID(11),
@@ -27,9 +30,9 @@ func Test_CertifyMessage(t *testing.T) {
 			EligibilityCnt: 2,
 			Proof:          types.RandomVrfSignature(),
 		},
+		SmesherID: signer.NodeID(),
 	}
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
+
 	msg.Signature = signer.Sign(signing.HARE, msg.Bytes())
 	data, err := codec.Encode(&msg)
 	require.NoError(t, err)
@@ -37,11 +40,11 @@ func Test_CertifyMessage(t *testing.T) {
 	var decoded types.CertifyMessage
 	require.NoError(t, codec.Decode(data, &decoded))
 	require.Equal(t, msg, decoded)
-	pke, err := signing.NewPubKeyExtractor()
+
+	pke, err := signing.NewEdVerifier()
 	require.NoError(t, err)
-	nodeId, err := pke.ExtractNodeID(signing.HARE, decoded.Bytes(), decoded.Signature)
-	require.NoError(t, err)
-	require.Equal(t, signer.NodeID(), nodeId)
+	ok := pke.Verify(signing.HARE, decoded.SmesherID, msg.Bytes(), decoded.Signature)
+	require.True(t, ok)
 }
 
 func Test_BlockIDsToHashes(t *testing.T) {

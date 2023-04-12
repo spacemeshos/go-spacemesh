@@ -104,16 +104,16 @@ type Certifier struct {
 	ctx    context.Context
 	cancel func()
 
-	db              *datastore.CachedDB
-	oracle          hare.Rolacle
-	nodeID          types.NodeID
-	signer          *signing.EdSigner
-	nonceFetcher    nonceFetcher
-	pubKeyExtractor *signing.PubKeyExtractor
-	publisher       pubsub.Publisher
-	layerClock      layerClock
-	beacon          system.BeaconGetter
-	tortoise        system.Tortoise
+	db           *datastore.CachedDB
+	oracle       hare.Rolacle
+	nodeID       types.NodeID
+	signer       *signing.EdSigner
+	nonceFetcher nonceFetcher
+	edVerifier   *signing.EdVerifier
+	publisher    pubsub.Publisher
+	layerClock   layerClock
+	beacon       system.BeaconGetter
+	tortoise     system.Tortoise
 
 	mu          sync.Mutex
 	certifyMsgs map[types.LayerID]map[types.BlockID]*certInfo
@@ -125,7 +125,7 @@ func NewCertifier(
 	o hare.Rolacle,
 	n types.NodeID,
 	s *signing.EdSigner,
-	pke *signing.PubKeyExtractor,
+	v *signing.EdVerifier,
 	p pubsub.Publisher,
 	lc layerClock,
 	b system.BeaconGetter,
@@ -133,19 +133,19 @@ func NewCertifier(
 	opts ...CertifierOpt,
 ) *Certifier {
 	c := &Certifier{
-		logger:          log.NewNop(),
-		cfg:             defaultCertConfig(),
-		ctx:             context.Background(),
-		db:              db,
-		oracle:          o,
-		nodeID:          n,
-		signer:          s,
-		pubKeyExtractor: pke,
-		publisher:       p,
-		layerClock:      lc,
-		beacon:          b,
-		tortoise:        tortoise,
-		certifyMsgs:     make(map[types.LayerID]map[types.BlockID]*certInfo),
+		logger:      log.NewNop(),
+		cfg:         defaultCertConfig(),
+		ctx:         context.Background(),
+		db:          db,
+		oracle:      o,
+		nodeID:      n,
+		signer:      s,
+		edVerifier:  v,
+		publisher:   p,
+		layerClock:  lc,
+		beacon:      b,
+		tortoise:    tortoise,
+		certifyMsgs: make(map[types.LayerID]map[types.BlockID]*certInfo),
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -273,6 +273,7 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 			EligibilityCnt: eligibilityCount,
 			Proof:          proof,
 		},
+		SmesherID: c.nodeID,
 	}
 	msg.Signature = c.signer.Sign(signing.HARE, msg.Bytes())
 	data, err := codec.Encode(&msg)
@@ -403,18 +404,16 @@ func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error 
 }
 
 func (c *Certifier) validate(ctx context.Context, logger log.Log, msg types.CertifyMessage) error {
-	// extract public key from signature
-	nodeId, err := c.pubKeyExtractor.ExtractNodeID(signing.HARE, msg.Bytes(), msg.Signature)
-	if err != nil {
-		return fmt.Errorf("%w: cert msg extract key: %v", errMalformedData, err.Error())
+	if !c.edVerifier.Verify(signing.HARE, msg.SmesherID, msg.Bytes(), msg.Signature) {
+		return fmt.Errorf("%w: failed to verify signature", errMalformedData)
 	}
-	valid, err := c.oracle.Validate(ctx, msg.LayerID, eligibility.CertifyRound, c.cfg.CommitteeSize, nodeId, msg.Proof, msg.EligibilityCnt)
+	valid, err := c.oracle.Validate(ctx, msg.LayerID, eligibility.CertifyRound, c.cfg.CommitteeSize, msg.SmesherID, msg.Proof, msg.EligibilityCnt)
 	if err != nil {
 		logger.With().Warning("failed to validate cert msg", log.Err(err))
 		return err
 	}
 	if !valid {
-		logger.With().Warning("oracle deemed cert msg invalid", log.Stringer("smesher", nodeId))
+		logger.With().Warning("oracle deemed cert msg invalid", log.Stringer("smesher", msg.SmesherID))
 		return errInvalidCertMsg
 	}
 	return nil

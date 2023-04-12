@@ -46,7 +46,7 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	pke, err := signing.NewPubKeyExtractor()
+	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 	nid := signer.NodeID()
 	ctrl := gomock.NewController(t)
@@ -56,7 +56,7 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	mtortoise := smocks.NewMockTortoise(ctrl)
 	mNonceFetcher := mocks.NewMocknonceFetcher(ctrl)
-	c := NewCertifier(db, mo, nid, signer, pke, mp, mc, mb, mtortoise,
+	c := NewCertifier(db, mo, nid, signer, edVerifier, mp, mc, mb, mtortoise,
 		WithCertifierLogger(logtest.New(t)),
 		withNonceFetcher(mNonceFetcher),
 	)
@@ -94,6 +94,7 @@ func genCertifyMsg(tb testing.TB, lid types.LayerID, bid types.BlockID, cnt uint
 			EligibilityCnt: cnt,
 			Proof:          types.RandomVrfSignature(),
 		},
+		SmesherID: signer.NodeID(),
 	}
 	msg.Signature = signer.Sign(signing.HARE, msg.Bytes())
 	return signer.NodeID(), msg
@@ -595,7 +596,7 @@ func Test_CertifyIfEligible(t *testing.T) {
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 	proof := types.RandomVrfSignature()
 
-	extractor, err := signing.NewPubKeyExtractor()
+	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
 	nonce := types.VRFPostIndex(rand.Uint64())
@@ -607,9 +608,8 @@ func Test_CertifyIfEligible(t *testing.T) {
 			var msg types.CertifyMessage
 			require.NoError(t, codec.Decode(got, &msg))
 
-			nodeId, err := extractor.ExtractNodeID(signing.HARE, msg.Bytes(), msg.Signature)
-			require.NoError(t, err)
-			require.Equal(t, tc.nodeID, nodeId)
+			ok := edVerifier.Verify(signing.HARE, msg.SmesherID, msg.Bytes(), msg.Signature)
+			require.True(t, ok)
 			require.Equal(t, b.LayerIndex, msg.LayerID)
 			require.Equal(t, b.ID(), msg.BlockID)
 			require.Equal(t, proof, msg.Proof)

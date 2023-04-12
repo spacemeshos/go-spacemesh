@@ -13,11 +13,11 @@ type statusTracker struct {
 	logger            log.Log
 	round             uint32
 	malCh             chan<- *types.MalfeasanceGossip
-	statuses          map[types.NodeID]*Msg // maps PubKey->StatusMsg
-	threshold         int                   // threshold to indicate a set can be proved
-	maxCommittedRound uint32                // tracks max committed round (Ki) value in tracked status Messages
-	maxSet            *Set                  // tracks the max raw set in the tracked status Messages
-	analyzed          bool                  // indicates if the Messages have already been analyzed
+	statuses          map[types.NodeID]*Message // maps PubKey->StatusMsg
+	threshold         int                       // threshold to indicate a set can be proved
+	maxCommittedRound uint32                    // tracks max committed round (Ki) value in tracked status Messages
+	maxSet            *Set                      // tracks the max raw set in the tracked status Messages
+	analyzed          bool                      // indicates if the Messages have already been analyzed
 	eTracker          *EligibilityTracker
 	tally             *CountInfo
 }
@@ -27,7 +27,7 @@ func newStatusTracker(logger log.Log, round uint32, mch chan<- *types.Malfeasanc
 		logger:            logger,
 		malCh:             mch,
 		round:             round,
-		statuses:          make(map[types.NodeID]*Msg, expectedSize),
+		statuses:          make(map[types.NodeID]*Message, expectedSize),
 		threshold:         threshold,
 		maxCommittedRound: preRound,
 		eTracker:          et,
@@ -35,15 +35,15 @@ func newStatusTracker(logger log.Log, round uint32, mch chan<- *types.Malfeasanc
 }
 
 // RecordStatus records the given status message.
-func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
+func (st *statusTracker) RecordStatus(ctx context.Context, msg *Message) {
 	metadata := types.HareMetadata{
 		Layer:   msg.Layer,
 		Round:   msg.Round,
 		MsgHash: types.BytesToHash(msg.HashBytes()),
 	}
-	if prev, exist := st.statuses[msg.NodeID]; exist { // already handled this sender's status msg
+	if prev, exist := st.statuses[msg.SmesherID]; exist { // already handled this sender's status msg
 		st.logger.WithContext(ctx).With().Warning("duplicate status message detected",
-			log.Stringer("smesher", msg.NodeID),
+			log.Stringer("smesher", msg.SmesherID),
 		)
 		prevMetadata := types.HareMetadata{
 			Layer:   prev.Layer,
@@ -55,11 +55,11 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 		}
 
 		st.logger.WithContext(ctx).With().Warning("equivocation detected in status round",
-			log.Stringer("smesher", msg.NodeID),
+			log.Stringer("smesher", msg.SmesherID),
 			log.Object("prev", prev),
 			log.Object("curr", &metadata),
 		)
-		st.eTracker.Track(msg.NodeID, msg.Round, msg.Eligibility.Count, false)
+		st.eTracker.Track(msg.SmesherID, msg.Round, msg.Eligibility.Count, false)
 		old := &types.HareProofMsg{
 			InnerMsg:  prevMetadata,
 			Signature: prev.Signature,
@@ -68,9 +68,9 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 			InnerMsg:  metadata,
 			Signature: msg.Signature,
 		}
-		if err := reportEquivocation(ctx, msg.NodeID, old, this, &msg.Eligibility, st.malCh); err != nil {
+		if err := reportEquivocation(ctx, msg.SmesherID, old, this, &msg.Eligibility, st.malCh); err != nil {
 			st.logger.WithContext(ctx).With().Warning("failed to report equivocation in status round",
-				log.Stringer("smesher", msg.NodeID),
+				log.Stringer("smesher", msg.SmesherID),
 				log.Err(err),
 			)
 			return
@@ -78,11 +78,11 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 		return
 	}
 
-	st.statuses[msg.NodeID] = msg
+	st.statuses[msg.SmesherID] = msg
 }
 
 // AnalyzeStatusMessages analyzes the recorded status messages by the validation function.
-func (st *statusTracker) AnalyzeStatusMessages(isValid func(m *Msg) bool) {
+func (st *statusTracker) AnalyzeStatusMessages(isValid func(m *Message) bool) {
 	for key, m := range st.statuses {
 		if !isValid(m) { // only keep valid Messages
 			delete(st.statuses, key)
@@ -155,7 +155,7 @@ func (st *statusTracker) BuildSVP() *AggregatedMessages {
 
 	svp := &AggregatedMessages{}
 	for _, m := range st.statuses {
-		svp.Messages = append(svp.Messages, m.Message)
+		svp.Messages = append(svp.Messages, *m)
 	}
 
 	// TODO: set aggregated signature
