@@ -171,7 +171,7 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 	for x := range m {
 		for y := range m[x] {
 			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v did not produce a result", x, y)
+				t.Fatalf("at layer %v node %v did not produce a result", x, y)
 			}
 		}
 	}
