@@ -8,7 +8,7 @@ type msgsTracker struct {
 	sigToPub map[types.EdSignature]types.NodeID
 }
 
-func (mt *msgsTracker) Track(m *Msg) {
+func (mt *msgsTracker) Track(m *Message) {
 	mt.sigToPub[m.Signature] = m.SmesherID
 }
 

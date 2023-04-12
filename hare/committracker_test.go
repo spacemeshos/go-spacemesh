@@ -11,7 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-func BuildCommitMsg(signer *signing.EdSigner, s *Set) *Msg {
+func BuildCommitMsg(signer *signing.EdSigner, s *Set) *Message {
 	builder := newMessageBuilder()
 	builder.SetType(commit).SetLayer(instanceID1).SetRoundCounter(commitRound).SetCommittedRound(ki).SetValues(s)
 	builder.SetEligibilityCount(1)

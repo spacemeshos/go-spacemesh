@@ -16,12 +16,12 @@ import (
 
 type truer struct{}
 
-func (truer) Validate(context.Context, *Msg) bool {
+func (truer) Validate(context.Context, *Message) bool {
 	return true
 }
 
 func defaultValidator(tb testing.TB) *syntaxContextValidator {
-	trueValidator := func(m *Msg) bool {
+	trueValidator := func(m *Message) bool {
 		return true
 	}
 	ctrl := gomock.NewController(tb)
@@ -70,8 +70,8 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 	for i := 0; i < sv.threshold; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		m := BuildCommitMsg(signer, valueSet).Message
-		msgs = append(msgs, m)
+		m := BuildCommitMsg(signer, valueSet)
+		msgs = append(msgs, *m)
 		identities[signer.NodeID()] = struct{}{}
 	}
 	cert.AggMsgs.Messages = msgs
@@ -141,7 +141,7 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 	require.NoError(t, err)
 
 	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), nil))
-	m := &Msg{}
+	m := &Message{}
 	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), m))
 	m.SmesherID = signer.NodeID()
 	require.False(t, sv.SyntacticallyValidateMessage(context.Background(), m))
@@ -159,7 +159,7 @@ type mockValidator struct {
 	res bool
 }
 
-func (m mockValidator) Validate(context.Context, *Msg) bool {
+func (m mockValidator) Validate(context.Context, *Message) bool {
 	return m.res
 }
 
@@ -173,7 +173,7 @@ func initPg(tb testing.TB, validator *syntaxContextValidator) (*pubGetter, []Mes
 		require.NoError(tb, err)
 		iMsg := BuildStatusMsg(signer, NewSetFromValues(types.ProposalID{1}))
 		validator.eTracker.Track(iMsg.SmesherID, iMsg.Round, iMsg.Eligibility.Count, true)
-		msgs[i] = iMsg.Message
+		msgs[i] = *iMsg
 		pg.Track(iMsg)
 	}
 	return pg, msgs, signer
@@ -183,7 +183,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	r := require.New(t)
 	sv := defaultValidator(t)
 	r.Equal(errNilValidators, sv.validateAggregatedMessage(context.Background(), nil, nil))
-	funcs := make([]func(m *Msg) bool, 0)
+	funcs := make([]func(m *Message) bool, 0)
 	r.Equal(errNilAggMsgs, sv.validateAggregatedMessage(context.Background(), nil, funcs))
 
 	agg := &AggregatedMessages{}
@@ -210,13 +210,13 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	r.Equal(errInnerEligibility, sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
 	sv.roleValidator = &mockValidator{true}
-	funcs = make([]func(m *Msg) bool, 1)
-	funcs[0] = func(m *Msg) bool { return false }
+	funcs = make([]func(m *Message) bool, 1)
+	funcs[0] = func(m *Message) bool { return false }
 	r.Equal(errInnerFunc, sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
-	funcs[0] = func(m *Msg) bool { return true }
+	funcs[0] = func(m *Message) bool { return true }
 	m0 := msgs[0]
-	msgs[0] = BuildStatusMsg(sgn, NewSetFromValues(types.ProposalID{1})).Message
+	msgs[0] = *BuildStatusMsg(sgn, NewSetFromValues(types.ProposalID{1}))
 	r.Equal(errDupSender, sv.validateAggregatedMessage(context.Background(), agg, funcs))
 
 	sv.validMsgsTracker = pg
@@ -227,7 +227,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	msgs[0] = BuildStatusMsg(signer, NewSetFromValues(types.ProposalID{1})).Message
+	msgs[0] = *BuildStatusMsg(signer, NewSetFromValues(types.ProposalID{1}))
 	r.Equal(types.EmptyNodeID, pg.NodeID(&msgs[0]))
 	require.NoError(t, sv.validateAggregatedMessage(context.Background(), agg, funcs))
 	r.NotEqual(types.EmptyNodeID, pg.NodeID(&msgs[0]))
@@ -236,7 +236,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 func TestMessageValidator_Aggregated_WithEquivocation(t *testing.T) {
 	r := require.New(t)
 	sv := defaultValidator(t)
-	funcs := make([]func(m *Msg) bool, 0)
+	funcs := make([]func(m *Message) bool, 0)
 
 	pg, msgs, _ := initPg(t, sv)
 
@@ -322,7 +322,7 @@ func newPubGetter() *pubGetter {
 	return &pubGetter{make(map[types.EdSignature]types.NodeID)}
 }
 
-func (pg pubGetter) Track(m *Msg) {
+func (pg pubGetter) Track(m *Message) {
 	pg.mp[m.Signature] = m.SmesherID
 }
 
@@ -345,7 +345,7 @@ func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 	et := NewEligibilityTracker(100)
-	vfunc := func(m *Msg) bool { return true }
+	vfunc := func(m *Message) bool { return true }
 
 	sv := newSyntaxContextValidator(signer, edVerifier, 1, vfunc, nil, truer{}, newPubGetter(), et, logtest.New(t))
 	m := BuildPreRoundMsg(signer, NewDefaultEmptySet(), types.EmptyVrfSignature)
@@ -394,7 +394,7 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	mockStateQ := mocks.NewMockstateQuerier(ctrl)
 	mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	et := NewEligibilityTracker(100)
-	vfunc := func(m *Msg) bool { return true }
+	vfunc := func(m *Message) bool { return true }
 	sv := newSyntaxContextValidator(signer, edVerifier, 1, vfunc, mockStateQ, truer{}, newPubGetter(), et, logtest.New(t))
 	m := buildProposalMsg(signer, NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}), types.EmptyVrfSignature)
 	s1 := NewSetFromValues(types.ProposalID{1})
@@ -419,7 +419,7 @@ func buildSVP(ki uint32, S ...*Set) *AggregatedMessages {
 	msgs := make([]Message, 0, len(S))
 	for _, s := range S {
 		signer, _ := signing.NewEdSigner()
-		msgs = append(msgs, buildStatusMsg(signer, s, ki).Message)
+		msgs = append(msgs, *buildStatusMsg(signer, s, ki))
 	}
 
 	svp := &AggregatedMessages{}
@@ -434,7 +434,7 @@ func validateMatrix(tb testing.TB, mType MessageType, msgK uint32, exp []error) 
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	set := NewEmptySet(1)
-	var m *Msg
+	var m *Message
 	switch mType {
 	case status:
 		m = BuildStatusMsg(signer, set)

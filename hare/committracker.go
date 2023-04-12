@@ -8,7 +8,7 @@ import (
 )
 
 type commitTrackerProvider interface {
-	OnCommit(context.Context, *Msg)
+	OnCommit(context.Context, *Message)
 	HasEnoughCommits() bool
 	BuildCertificate() *Certificate
 	CommitCount() *CountInfo
@@ -50,7 +50,7 @@ func newCommitTracker(
 }
 
 // OnCommit tracks the given commit message.
-func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
+func (ct *commitTracker) OnCommit(ctx context.Context, msg *Message) {
 	if ct.proposedSet == nil { // no valid proposed set
 		return
 	}
@@ -62,7 +62,7 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
 	metadata := types.HareMetadata{
 		Layer:   msg.Layer,
 		Round:   msg.Round,
-		MsgHash: types.BytesToHash(msg.Message.HashBytes()),
+		MsgHash: types.BytesToHash(msg.HashBytes()),
 	}
 	if prev, ok := ct.seenSenders[msg.SmesherID]; ok {
 		if !prev.InnerMsg.Equivocation(&metadata) {
@@ -99,7 +99,7 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
 	}
 
 	// add msg
-	ct.commits = append(ct.commits, msg.Message)
+	ct.commits = append(ct.commits, *msg)
 	ct.committed[msg.SmesherID] = struct{}{}
 }
 

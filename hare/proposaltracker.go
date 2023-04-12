@@ -9,8 +9,8 @@ import (
 )
 
 type proposalTrackerProvider interface {
-	OnProposal(context.Context, *Msg)
-	OnLateProposal(context.Context, *Msg)
+	OnProposal(context.Context, *Message)
+	OnLateProposal(context.Context, *Message)
 	IsConflicting() bool
 	ProposedSet() *Set
 }
@@ -19,7 +19,7 @@ type proposalTrackerProvider interface {
 type proposalTracker struct {
 	logger        log.Log
 	malCh         chan<- *types.MalfeasanceGossip
-	proposal      *Msg
+	proposal      *Message
 	isConflicting bool
 	eTracker      *EligibilityTracker
 }
@@ -34,7 +34,7 @@ func newProposalTracker(log log.Log, mch chan<- *types.MalfeasanceGossip, et *El
 
 // OnProposal tracks the provided proposal message.
 // It assumes the proposal message is syntactically valid and that it was received on the proposal round.
-func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Msg) {
+func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Message) {
 	if pt.proposal == nil { // first leader
 		pt.proposal = msg // just update
 		return
@@ -92,7 +92,7 @@ func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Msg) {
 
 // OnLateProposal tracks the given proposal message.
 // It assumes the proposal message is syntactically valid and that it was not received on the proposal round (late).
-func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Msg) {
+func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Message) {
 	if pt.proposal == nil {
 		return
 	}

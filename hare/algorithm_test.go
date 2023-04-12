@@ -33,12 +33,12 @@ type mockMessageValidator struct {
 	countContext int
 }
 
-func (mmv *mockMessageValidator) SyntacticallyValidateMessage(context.Context, *Msg) bool {
+func (mmv *mockMessageValidator) SyntacticallyValidateMessage(context.Context, *Message) bool {
 	mmv.countSyntax++
 	return mmv.syntaxValid
 }
 
-func (mmv *mockMessageValidator) ContextuallyValidateMessage(context.Context, *Msg, uint32) error {
+func (mmv *mockMessageValidator) ContextuallyValidateMessage(context.Context, *Message, uint32) error {
 	mmv.countContext++
 	return mmv.contextValid
 }
@@ -90,11 +90,11 @@ type mockProposalTracker struct {
 	countProposedSet    int
 }
 
-func (mpt *mockProposalTracker) OnProposal(context.Context, *Msg) {
+func (mpt *mockProposalTracker) OnProposal(context.Context, *Message) {
 	mpt.countOnProposal++
 }
 
-func (mpt *mockProposalTracker) OnLateProposal(context.Context, *Msg) {
+func (mpt *mockProposalTracker) OnLateProposal(context.Context, *Message) {
 	mpt.countOnLateProposal++
 }
 
@@ -120,7 +120,7 @@ func (mct *mockCommitTracker) CommitCount() *CountInfo {
 	return &CountInfo{}
 }
 
-func (mct *mockCommitTracker) OnCommit(context.Context, *Msg) {
+func (mct *mockCommitTracker) OnCommit(context.Context, *Message) {
 	mct.countOnCommit++
 }
 
@@ -132,10 +132,6 @@ func (mct *mockCommitTracker) HasEnoughCommits() bool {
 func (mct *mockCommitTracker) BuildCertificate() *Certificate {
 	mct.countBuildCertificate++
 	return mct.certificate
-}
-
-func buildMessage(msg Message) *Msg {
-	return &Msg{Message: msg}
 }
 
 type testBroker struct {
@@ -170,7 +166,7 @@ type mockEligibilityValidator struct {
 	valid int32
 }
 
-func (mev *mockEligibilityValidator) Validate(ctx context.Context, msg *Msg) bool {
+func (mev *mockEligibilityValidator) Validate(ctx context.Context, msg *Message) bool {
 	return atomic.LoadInt32(&mev.valid) != 0
 }
 
@@ -469,7 +465,7 @@ func TestConsensusProcess_procStatus(t *testing.T) {
 func TestConsensusProcess_procProposal(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.validator.(*syntaxContextValidator).threshold = 1
-	proc.validator.(*syntaxContextValidator).statusValidator = func(m *Msg) bool {
+	proc.validator.(*syntaxContextValidator).statusValidator = func(m *Message) bool {
 		return true
 	}
 	proc.advanceToNextRound(context.Background())
@@ -559,7 +555,7 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	require.NoError(t, err)
 	m := BuildPreRoundMsg(signer1, NewDefaultEmptySet(), types.EmptyVrfSignature)
 	proc.advanceToNextRound(context.Background())
-	proc.onEarlyMessage(context.Background(), buildMessage(Message{}))
+	proc.onEarlyMessage(context.Background(), &Message{})
 	r.Len(proc.pending, 0)
 	proc.onEarlyMessage(context.Background(), m)
 	r.Len(proc.pending, 1)
@@ -647,7 +643,7 @@ func TestConsensusProcess_beginProposalRound(t *testing.T) {
 	m := BuildStatusMsg(signer, s)
 	proc.eTracker.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 	statusTracker.RecordStatus(context.Background(), m)
-	statusTracker.AnalyzeStatusMessages(func(*Msg) bool { return true })
+	statusTracker.AnalyzeStatusMessages(func(*Message) bool { return true })
 	proc.statusesTracker = statusTracker
 
 	proc.beginProposalRound(context.Background())
@@ -699,7 +695,7 @@ func (m *mockNet) Publish(ctx context.Context, protocol string, payload []byte) 
 func TestConsensusProcess_handlePending(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	const count = 5
-	pending := make(map[types.NodeID]*Msg)
+	pending := make(map[types.NodeID]*Message)
 	for i := 0; i < count; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)

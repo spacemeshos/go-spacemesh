@@ -30,9 +30,9 @@ var (
 	instanceID6 types.LayerID
 )
 
-func mustEncode(tb testing.TB, msg Message) []byte {
+func mustEncode(tb testing.TB, msg *Message) []byte {
 	tb.Helper()
-	buf, err := codec.Encode(&msg)
+	buf, err := codec.Encode(msg)
 	require.NoError(tb, err)
 	return buf
 }
@@ -48,7 +48,7 @@ func createMessage(tb testing.TB, instanceID types.LayerID) []byte {
 	require.NoError(tb, err)
 	b := newMessageBuilder()
 	msg := b.SetLayer(instanceID).Sign(sr).Build()
-	return mustEncode(tb, msg.Message)
+	return mustEncode(tb, msg)
 }
 
 // test that a InnerMsg to a specific set ID is delivered by the broker.
@@ -148,7 +148,7 @@ func waitForMessages(t *testing.T, inbox chan any, instanceID types.LayerID, msg
 		for {
 			select {
 			case msg := <-inbox:
-				x, ok := msg.(*Msg)
+				x, ok := msg.(*Message)
 				require.True(t, ok)
 				assert.True(t, x.Layer == instanceID)
 				i++
@@ -230,10 +230,6 @@ func TestBroker_RegisterUnregister(t *testing.T) {
 	broker.mu.RUnlock()
 }
 
-func newMockGossipMsg(msg Message) *Msg {
-	return &Msg{Message: msg}
-}
-
 func TestBroker_Send(t *testing.T) {
 	ctx := context.Background()
 	broker := buildBroker(t, t.Name())
@@ -250,7 +246,7 @@ func TestBroker_Send(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature).Message
+	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
 	msg.Layer = instanceID2
 	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
 
@@ -281,13 +277,13 @@ func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
-	data := mustEncode(t, m.Message)
+	data := mustEncode(t, m)
 
 	broker.mockMesh.EXPECT().GetMalfeasanceProof(signer.NodeID())
 	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(ctx, "", data))
 	require.Len(t, inbox, 1)
 	got := <-inbox
-	msg, ok := got.(*Msg)
+	msg, ok := got.(*Message)
 	require.True(t, ok)
 	require.EqualValues(t, m, msg)
 
@@ -448,16 +444,15 @@ func TestBroker_Register2(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature).Message
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
 	m.Layer = instanceID1
 
-	msg := newMockGossipMsg(m).Message
-	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(context.Background(), "", mustEncode(t, msg)))
+	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(context.Background(), "", mustEncode(t, m)))
 
 	m.Layer = instanceID2
-	msg = newMockGossipMsg(m).Message
-	msg.Signature = signer.Sign(signing.HARE, msg.SignedBytes())
-	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(context.Background(), "", mustEncode(t, msg)))
+	m.Signature = signer.Sign(signing.HARE, m.SignedBytes())
+	m.SmesherID = signer.NodeID()
+	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(context.Background(), "", mustEncode(t, m)))
 }
 
 func TestBroker_Register3(t *testing.T) {
@@ -471,7 +466,7 @@ func TestBroker_Register3(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature).Message
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
 	m.Layer = instanceID1
 
 	broker.HandleMessage(context.Background(), "", mustEncode(t, m))
@@ -501,7 +496,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature).Message
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
 	m.Layer = instanceID1
 
 	broker.HandleMessage(context.Background(), "", mustEncode(t, m))
@@ -510,7 +505,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 	for {
 		select {
 		case msg := <-inbox:
-			inMsg, ok := msg.(*Msg)
+			inMsg, ok := msg.(*Message)
 			require.True(t, ok)
 			assert.Equal(t, signer.NodeID(), inMsg.SmesherID)
 			return
@@ -525,7 +520,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 func Test_newMsg(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature).Message
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
 	// TODO: remove this comment when ready
 	//_, e := newMsg(m, MockStateQuerier{false, errors.New("my err")})
 	//assert.NotNil(t, e)
@@ -533,8 +528,7 @@ func Test_newMsg(t *testing.T) {
 	sq := mocks.NewMockstateQuerier(ctrl)
 	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
 
-	_, e := newMsg(context.Background(), logtest.New(t), m, sq)
-	assert.NoError(t, e)
+	assert.NoError(t, checkIdentity(context.Background(), logtest.New(t), m, sq))
 }
 
 func TestBroker_updateInstance(t *testing.T) {
@@ -594,13 +588,12 @@ func TestBroker_eventLoop(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature).Message
+	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
 
 	// not synced
 	m.Layer = instanceID1
-	msg := newMockGossipMsg(m).Message
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
-	r.Equal(pubsub.ValidationIgnore, b.HandleMessage(context.Background(), "", mustEncode(t, msg)))
+	r.Equal(pubsub.ValidationIgnore, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
 	_, e := b.Register(context.Background(), instanceID1)
@@ -611,31 +604,31 @@ func TestBroker_eventLoop(t *testing.T) {
 	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	c, e := b.Register(context.Background(), instanceID1)
 	r.Nil(e)
-	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.Background(), "", mustEncode(t, msg)))
+	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 	recM := <-c
-	rec, ok := recM.(*Msg)
+	rec, ok := recM.(*Message)
 	r.True(ok)
-	r.Equal(msg, rec.Message)
+	r.Equal(m, rec)
 
 	// early message
 	m.Layer = instanceID2
-	msg = newMockGossipMsg(m).Message
-	msg.Signature = signer.Sign(signing.HARE, msg.SignedBytes())
-	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.Background(), "", mustEncode(t, msg)))
+	m.Signature = signer.Sign(signing.HARE, m.SignedBytes())
+	m.SmesherID = signer.NodeID()
+	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 
 	// future message
 	m.Layer = instanceID3
-	msg = newMockGossipMsg(m).Message
-	msg.Signature = signer.Sign(signing.HARE, msg.SignedBytes())
-	r.Equal(pubsub.ValidationIgnore, b.HandleMessage(context.Background(), "", mustEncode(t, msg)))
+	m.Signature = signer.Sign(signing.HARE, m.SignedBytes())
+	m.SmesherID = signer.NodeID()
+	r.Equal(pubsub.ValidationIgnore, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 
 	c, e = b.Register(context.Background(), instanceID3)
 	r.Nil(e)
-	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.Background(), "", mustEncode(t, msg)))
+	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 	recM = <-c
-	rec, ok = recM.(*Msg)
+	rec, ok = recM.(*Message)
 	r.True(ok)
-	r.Equal(msg, rec.Message)
+	r.Equal(m, rec)
 }
 
 func Test_validate(t *testing.T) {
@@ -647,19 +640,19 @@ func Test_validate(t *testing.T) {
 	m := BuildStatusMsg(signer, NewDefaultEmptySet())
 	m.Layer = instanceID1
 	b.setLatestLayer(context.Background(), instanceID2)
-	e := b.validateTiming(context.Background(), &m.Message)
+	e := b.validateTiming(context.Background(), m)
 	r.ErrorIs(e, errUnregistered)
 
 	m.Layer = instanceID2
-	e = b.validateTiming(context.Background(), &m.Message)
+	e = b.validateTiming(context.Background(), m)
 	r.ErrorIs(e, errRegistration)
 
 	m.Layer = instanceID3
-	e = b.validateTiming(context.Background(), &m.Message)
+	e = b.validateTiming(context.Background(), m)
 	r.ErrorIs(e, errEarlyMsg)
 
 	m.Layer = instanceID4
-	e = b.validateTiming(context.Background(), &m.Message)
+	e = b.validateTiming(context.Background(), m)
 	r.ErrorIs(e, errFutureMsg)
 }
 
@@ -706,7 +699,7 @@ func TestBroker_Flow(t *testing.T) {
 		SetValues(NewDefaultEmptySet()).
 		SetEligibilityCount(1)
 	m1 := builder.Sign(signer1).Build()
-	b.HandleMessage(context.Background(), "", mustEncode(t, m1.Message))
+	b.HandleMessage(context.Background(), "", mustEncode(t, m1))
 
 	ch1, e := b.Register(context.Background(), instanceID1)
 	r.NoError(e)
@@ -726,8 +719,8 @@ func TestBroker_Flow(t *testing.T) {
 	ch2, e := b.Register(context.Background(), instanceID2)
 	r.NoError(e)
 
-	b.HandleMessage(context.Background(), "", mustEncode(t, m1.Message))
-	b.HandleMessage(context.Background(), "", mustEncode(t, m2.Message))
+	b.HandleMessage(context.Background(), "", mustEncode(t, m1))
+	b.HandleMessage(context.Background(), "", mustEncode(t, m2))
 
 	<-ch2
 	<-ch1
@@ -738,7 +731,7 @@ func TestBroker_Flow(t *testing.T) {
 	r.Equal(instanceID0, b.minDeleted)
 
 	// check still receiving msgs on ch1
-	b.HandleMessage(context.Background(), "", mustEncode(t, m1.Message))
+	b.HandleMessage(context.Background(), "", mustEncode(t, m1))
 	<-ch1
 
 	b.Unregister(context.Background(), instanceID1)

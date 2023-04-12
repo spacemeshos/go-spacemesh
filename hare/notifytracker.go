@@ -41,7 +41,7 @@ func newNotifyTracker(
 
 // OnNotify tracks the provided notification message.
 // Returns true if the InnerMsg didn't affect the state, false otherwise.
-func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Msg) bool {
+func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Message) bool {
 	metadata := types.HareMetadata{
 		Layer:   msg.Layer,
 		Round:   msg.Round,

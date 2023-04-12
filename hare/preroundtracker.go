@@ -38,7 +38,7 @@ func newPreRoundTracker(logger log.Log, mch chan<- *types.MalfeasanceGossip, et 
 }
 
 // OnPreRound tracks pre-round messages.
-func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
+func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Message) {
 	logger := pre.logger.WithContext(ctx)
 
 	// check for winning VRF

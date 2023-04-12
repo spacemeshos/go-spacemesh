@@ -40,7 +40,7 @@ func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.P
 	return p
 }
 
-func BuildPreRoundMsg(sig *signing.EdSigner, s *Set, roleProof types.VrfSignature) *Msg {
+func BuildPreRoundMsg(sig *signing.EdSigner, s *Set, roleProof types.VrfSignature) *Message {
 	builder := newMessageBuilder()
 	builder.SetType(pre).SetLayer(instanceID1).SetRoundCounter(preRound).SetCommittedRound(ki).SetValues(s).SetRoleProof(roleProof)
 	builder.SetEligibilityCount(1)

@@ -11,14 +11,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-func buildProposalMsg(sig *signing.EdSigner, s *Set, signature types.VrfSignature) *Msg {
+func buildProposalMsg(sig *signing.EdSigner, s *Set, signature types.VrfSignature) *Message {
 	builder := newMessageBuilder().SetRoleProof(signature)
 	builder.SetType(proposal).SetLayer(instanceID1).SetRoundCounter(proposalRound).SetCommittedRound(ki).SetValues(s).SetSVP(buildSVP(ki, NewSetFromValues(types.ProposalID{1})))
 	builder.SetEligibilityCount(1)
 	return builder.Sign(sig).Build()
 }
 
-func BuildProposalMsg(sig *signing.EdSigner, s *Set) *Msg {
+func BuildProposalMsg(sig *signing.EdSigner, s *Set) *Message {
 	return buildProposalMsg(sig, s, types.EmptyVrfSignature)
 }
 

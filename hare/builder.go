@@ -23,9 +23,9 @@ type Message struct {
 
 // MessageFromBuffer builds an Hare message from the provided bytes buffer.
 // It returns an error if unmarshal of the provided byte slice failed.
-func MessageFromBuffer(buf []byte) (Message, error) {
-	msg := Message{}
-	if err := codec.Decode(buf, &msg); err != nil {
+func MessageFromBuffer(buf []byte) (*Message, error) {
+	msg := &Message{}
+	if err := codec.Decode(buf, msg); err != nil {
 		return msg, fmt.Errorf("serialize: %w", err)
 	}
 	return msg, nil
@@ -43,6 +43,16 @@ func (m *Message) MarshalLogObject(encoder log.ObjectEncoder) error {
 // Field returns a log field. Implements the LoggableField interface.
 func (m *Message) Field() log.Field {
 	return log.Object("hare_msg", m)
+}
+
+// Bytes returns the message as bytes.
+// It panics if the message errored on unmarshal.
+func (m *Message) Bytes() []byte {
+	buf, err := codec.Encode(m)
+	if err != nil {
+		log.With().Fatal("failed to encode Message", log.Err(err))
+	}
+	return buf
 }
 
 // SignedBytes returns the signed data for hare message.
@@ -100,20 +110,20 @@ func (im *InnerMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
 // messageBuilder is the impl of the builder DP.
 // It allows the user to set the different fields of the builder and eventually Build the message.
 type messageBuilder struct {
-	msg   *Msg
+	msg   *Message
 	inner *InnerMessage
 }
 
 // newMessageBuilder returns a new, empty message builder.
 // One should not assume any values are pre-set.
 func newMessageBuilder() *messageBuilder {
-	m := &messageBuilder{&Msg{Message: Message{}}, &InnerMessage{}}
+	m := &messageBuilder{&Message{}, &InnerMessage{}}
 	m.msg.InnerMessage = m.inner
 	return m
 }
 
 // Build returns the protocol message as type Msg.
-func (mb *messageBuilder) Build() *Msg {
+func (mb *messageBuilder) Build() *Message {
 	return mb.msg
 }
 

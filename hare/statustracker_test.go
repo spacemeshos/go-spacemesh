@@ -11,7 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-func buildStatusMsg(sig *signing.EdSigner, s *Set, ki uint32) *Msg {
+func buildStatusMsg(sig *signing.EdSigner, s *Set, ki uint32) *Message {
 	builder := newMessageBuilder()
 	builder.
 		SetType(status).
@@ -23,7 +23,7 @@ func buildStatusMsg(sig *signing.EdSigner, s *Set, ki uint32) *Msg {
 	return builder.Sign(sig).Build()
 }
 
-func BuildStatusMsg(sig *signing.EdSigner, s *Set) *Msg {
+func BuildStatusMsg(sig *signing.EdSigner, s *Set) *Message {
 	return buildStatusMsg(sig, s, preRound)
 }
 
@@ -46,7 +46,7 @@ func TestStatusTracker_RecordStatus(t *testing.T) {
 		require.False(t, tracker.IsSVPReady())
 	}
 
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	require.True(t, tracker.IsSVPReady())
 	require.Empty(t, mch)
 }
@@ -94,7 +94,7 @@ func TestStatusTracker_IsSVPReady(t *testing.T) {
 	m := BuildStatusMsg(sig, s)
 	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), BuildStatusMsg(sig, s))
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	require.True(t, tracker.IsSVPReady())
 	require.Empty(t, mch)
 }
@@ -115,7 +115,7 @@ func TestStatusTracker_BuildSVP(t *testing.T) {
 	m2 := BuildStatusMsg(sig2, s)
 	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m2)
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	svp := tracker.BuildSVP()
 	require.Equal(t, 2, len(svp.Messages))
 	require.Empty(t, mch)
@@ -162,7 +162,7 @@ func TestStatusTracker_ProposalSetTypeB(t *testing.T) {
 	m2 := buildStatusMsg(sig2, s2, 2)
 	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m2)
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	proposedSet := tracker.ProposalSet(2)
 	require.NotNil(t, proposedSet)
 	require.True(t, proposedSet.Equals(s2))
@@ -184,7 +184,7 @@ func TestStatusTracker_Equivocate_Fail(t *testing.T) {
 	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m1)
 	tracker.RecordStatus(context.Background(), m2)
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	proposedSet := tracker.ProposalSet(2)
 	require.NotNil(t, proposedSet)
 	require.True(t, proposedSet.Equals(s1), proposedSet)
@@ -257,7 +257,7 @@ func TestStatusTracker_Equivocate_Pass(t *testing.T) {
 		tracker.RecordStatus(context.Background(), m)
 	}
 
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	proposedSet := tracker.ProposalSet(2)
 	require.NotNil(t, proposedSet)
 	require.True(t, proposedSet.Equals(s1), proposedSet)
@@ -325,7 +325,7 @@ func TestStatusTracker_WithKnownEquivocator(t *testing.T) {
 	// received a gossiped eligibility for this round
 	et.Track(sigBad.NodeID(), statusRound, 1, false)
 
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	proposedSet := tracker.ProposalSet(2)
 	require.NotNil(t, proposedSet)
 	require.True(t, proposedSet.Equals(s1), proposedSet)
@@ -353,7 +353,7 @@ func TestStatusTracker_NotEnoughKnownEquivocators(t *testing.T) {
 	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m)
 
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	proposedSet := tracker.ProposalSet(2)
 	require.NotNil(t, proposedSet)
 	require.True(t, proposedSet.Equals(s), proposedSet)
@@ -380,7 +380,7 @@ func TestStatusTracker_NotEnoughHonestVote(t *testing.T) {
 	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, false)
 	tracker.RecordStatus(context.Background(), m)
 
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	proposedSet := tracker.ProposalSet(2)
 	require.NotNil(t, proposedSet)
 	require.True(t, proposedSet.Equals(s), proposedSet)
@@ -407,7 +407,7 @@ func TestStatusTracker_JustEnough(t *testing.T) {
 	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m)
 
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	proposedSet := tracker.ProposalSet(2)
 	require.NotNil(t, proposedSet)
 	require.True(t, proposedSet.Equals(s), proposedSet)
@@ -439,7 +439,7 @@ func TestStatusTracker_AnalyzeStatuses(t *testing.T) {
 	tracker.RecordStatus(context.Background(), m1)
 	tracker.RecordStatus(context.Background(), m2)
 	tracker.RecordStatus(context.Background(), m3)
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	require.True(t, tracker.IsSVPReady())
 	require.NotNil(t, tracker.tally)
 	expected := CountInfo{hCount: 3, numHonest: 3}

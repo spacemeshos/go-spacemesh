@@ -11,7 +11,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -76,26 +75,10 @@ type State struct {
 	certificate    *Certificate // the certificate
 }
 
-// Msg is the wrapper of the protocol's message.
-// Messages are sent as type Message. Upon receiving, the NodeID is added to this wrapper (public key extraction).
-type Msg struct {
-	Message
-}
-
-// Bytes returns the message as bytes (without the public key).
-// It panics if the message erred on unmarshal.
-func (m *Msg) Bytes() []byte {
-	buf, err := codec.Encode(&m.Message)
-	if err != nil {
-		log.With().Fatal("failed to encode Message", log.Err(err))
-	}
-	return buf
-}
-
 // Upon receiving a protocol message, we try to build the full message.
 // The full message consists of the original message and the extracted public key.
 // An extracted public key is considered valid if it represents an active identity for a consensus view.
-func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQuerier) (*Msg, error) {
+func checkIdentity(ctx context.Context, logger log.Log, hareMsg *Message, querier stateQuerier) error {
 	logger = logger.WithContext(ctx)
 
 	// query if identity is active
@@ -107,7 +90,7 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQ
 			hareMsg.Layer,
 			log.String("msg_type", hareMsg.Type.String()),
 		)
-		return nil, fmt.Errorf("check active identity: %w", err)
+		return fmt.Errorf("check active identity: %w", err)
 	}
 
 	// check query result
@@ -117,12 +100,10 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQ
 			hareMsg.Layer,
 			log.String("msg_type", hareMsg.Type.String()),
 		)
-		return nil, errors.New("inactive identity")
+		return errors.New("inactive identity")
 	}
 
-	msg := &Msg{Message: hareMsg}
-
-	return msg, nil
+	return nil
 }
 
 type CountInfo struct {
@@ -209,9 +190,9 @@ type consensusProcess struct {
 	commitTracker    commitTrackerProvider
 	notifyTracker    *notifyTracker
 	cfg              config.Config
-	pending          map[types.NodeID]*Msg // buffer for early messages that are pending process
-	mTracker         *msgsTracker          // tracks valid messages
-	eTracker         *EligibilityTracker   // tracks eligible identities by rounds
+	pending          map[types.NodeID]*Message // buffer for early messages that are pending process
+	mTracker         *msgsTracker              // tracks valid messages
+	eTracker         *EligibilityTracker       // tracks eligible identities by rounds
 	eligibilityCount uint16
 	clock            RoundClock
 	once             sync.Once
@@ -249,7 +230,7 @@ func newConsensusProcess(
 		publisher: p2p,
 		cfg:       cfg,
 		comm:      comm,
-		pending:   make(map[types.NodeID]*Msg, cfg.N),
+		pending:   make(map[types.NodeID]*Message, cfg.N),
 		Log:       logger,
 		mTracker:  newMsgsTracker(),
 		eTracker:  NewEligibilityTracker(cfg.N),
@@ -338,7 +319,7 @@ PreRound:
 		select {
 		// listen to pre-round Messages
 		case msg := <-proc.comm.inbox:
-			if hmsg, ok := msg.(*Msg); ok {
+			if hmsg, ok := msg.(*Message); ok {
 				proc.handleMessage(ctx, hmsg)
 			} else if emsg, ok := msg.(*types.HareEligibilityGossip); ok {
 				proc.onMalfeasance(emsg)
@@ -374,7 +355,7 @@ PreRound:
 			if proc.terminating() {
 				return
 			}
-			if hmsg, ok := msg.(*Msg); ok {
+			if hmsg, ok := msg.(*Message); ok {
 				proc.handleMessage(ctx, hmsg)
 			} else if emsg, ok := msg.(*types.HareEligibilityGossip); ok {
 				proc.onMalfeasance(emsg)
@@ -415,7 +396,7 @@ func (proc *consensusProcess) onMalfeasance(msg *types.HareEligibilityGossip) {
 }
 
 // handles a message that has arrived early.
-func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
+func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Message) {
 	logger := proc.WithContext(ctx)
 
 	if m == nil {
@@ -423,7 +404,7 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 		return
 	}
 
-	if m.Message.InnerMessage == nil {
+	if m.InnerMessage == nil {
 		logger.Error("onEarlyMessage called with nil inner message")
 		return
 	}
@@ -444,7 +425,7 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 }
 
 // the very first step of handling a message.
-func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
+func (proc *consensusProcess) handleMessage(ctx context.Context, m *Message) {
 	logger := proc.WithContext(ctx).WithFields(
 		log.String("msg_type", m.Type.String()),
 		log.Stringer("smesher", m.SmesherID),
@@ -495,7 +476,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 }
 
 // process the message by its type.
-func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
+func (proc *consensusProcess) processMsg(ctx context.Context, m *Message) {
 	proc.WithContext(ctx).With().Debug("processing message",
 		proc.layer,
 		log.String("msg_type", m.Type.String()),
@@ -527,7 +508,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 
 // sends a message to the network.
 // Returns true if the message is assumed to be sent, false otherwise.
-func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
+func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Message) bool {
 	// invalid msg
 	if msg == nil {
 		proc.WithContext(ctx).Error("sendMessage was called with nil")
@@ -735,7 +716,7 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 }
 
 // passes all pending messages to the inbox of the process so they will be handled.
-func (proc *consensusProcess) handlePending(pending map[types.NodeID]*Msg) {
+func (proc *consensusProcess) handlePending(pending map[types.NodeID]*Message) {
 	for _, m := range pending {
 		select {
 		case <-proc.ctx.Done():
@@ -768,7 +749,7 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 
 	// handle pending messages
 	pendingProcess := proc.pending
-	proc.pending = make(map[types.NodeID]*Msg, proc.cfg.N)
+	proc.pending = make(map[types.NodeID]*Message, proc.cfg.N)
 	proc.eg.Go(func() error {
 		proc.handlePending(pendingProcess)
 		return nil
@@ -791,16 +772,16 @@ func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error
 	return builder, nil
 }
 
-func (proc *consensusProcess) processPreRoundMsg(ctx context.Context, msg *Msg) {
+func (proc *consensusProcess) processPreRoundMsg(ctx context.Context, msg *Message) {
 	proc.preRoundTracker.OnPreRound(ctx, msg)
 }
 
-func (proc *consensusProcess) processStatusMsg(ctx context.Context, msg *Msg) {
+func (proc *consensusProcess) processStatusMsg(ctx context.Context, msg *Message) {
 	// record status
 	proc.statusesTracker.RecordStatus(ctx, msg)
 }
 
-func (proc *consensusProcess) processProposalMsg(ctx context.Context, msg *Msg) {
+func (proc *consensusProcess) processProposalMsg(ctx context.Context, msg *Message) {
 	currRnd := proc.currentRound()
 
 	if currRnd == proposalRound { // regular proposal
@@ -814,12 +795,12 @@ func (proc *consensusProcess) processProposalMsg(ctx context.Context, msg *Msg) 
 	}
 }
 
-func (proc *consensusProcess) processCommitMsg(ctx context.Context, msg *Msg) {
+func (proc *consensusProcess) processCommitMsg(ctx context.Context, msg *Message) {
 	proc.mTracker.Track(msg) // a commit msg passed for processing is assumed to be valid
 	proc.commitTracker.OnCommit(ctx, msg)
 }
 
-func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
+func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Message) {
 	if proc.notifyTracker == nil {
 		proc.WithContext(ctx).Error("notify tracker is nil")
 		return
@@ -876,8 +857,8 @@ func (proc *consensusProcess) currentRound() uint32 {
 }
 
 // returns a function to validate status messages.
-func (proc *consensusProcess) statusValidator() func(m *Msg) bool {
-	validate := func(m *Msg) bool {
+func (proc *consensusProcess) statusValidator() func(m *Message) bool {
+	validate := func(m *Message) bool {
 		s := NewSet(m.Values)
 		if m.CommittedRound == preRound { // no certificates, validate by pre-round msgs
 			if proc.preRoundTracker.CanProveSet(s) { // can prove s
@@ -896,7 +877,7 @@ func (proc *consensusProcess) statusValidator() func(m *Msg) bool {
 func (proc *consensusProcess) endOfStatusRound() {
 	// validate and track wrapper for validation func
 	valid := proc.statusValidator()
-	vtFunc := func(m *Msg) bool {
+	vtFunc := func(m *Message) bool {
 		if valid(m) {
 			proc.mTracker.Track(m)
 			return true

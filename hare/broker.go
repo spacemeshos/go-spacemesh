@@ -18,7 +18,7 @@ import (
 const inboxCapacity = 1024 // inbox size per instance
 
 type validator interface {
-	Validate(context.Context, *Msg) bool
+	Validate(context.Context, *Message) bool
 	ValidateEligibilityGossip(context.Context, *types.HareEligibilityGossip) bool
 }
 
@@ -144,7 +144,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		logger.With().Error("failed to build message", h, log.Err(err))
 		return err
 	}
-	logger = logger.WithFields(log.Inline(&hareMsg))
+	logger = logger.WithFields(log.Inline(hareMsg))
 
 	if hareMsg.InnerMessage == nil {
 		logger.With().Warning("hare msg missing inner msg", log.Err(errNilInner))
@@ -159,7 +159,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	}
 
 	isEarly := false
-	if err := b.validateTiming(ctx, &hareMsg); err != nil {
+	if err := b.validateTiming(ctx, hareMsg); err != nil {
 		if !errors.Is(err, errEarlyMsg) {
 			// not early, validation failed
 			logger.With().Debug("broker received a message to a consensus process that is not registered",
@@ -178,14 +178,13 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		return fmt.Errorf("verify ed25519 signature")
 	}
 	// create msg
-	iMsg, err := newMsg(ctx, b.Log, hareMsg, b.stateQuerier)
-	if err != nil {
+	if err := checkIdentity(ctx, b.Log, hareMsg, b.stateQuerier); err != nil {
 		logger.With().Warning("message validation failed: could not construct msg", log.Err(err))
 		return err
 	}
 
 	// validate msg
-	if !b.roleValidator.Validate(ctx, iMsg) {
+	if !b.roleValidator.Validate(ctx, hareMsg) {
 		logger.Warning("message validation failed: eligibility validator returned false")
 		return errors.New("not eligible")
 	}
@@ -193,9 +192,9 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	// validation passed, report
 	logger.With().Debug("broker reported hare message as valid")
 
-	if proof, err := b.msh.GetMalfeasanceProof(iMsg.SmesherID); err != nil && !errors.Is(err, sql.ErrNotFound) {
+	if proof, err := b.msh.GetMalfeasanceProof(hareMsg.SmesherID); err != nil && !errors.Is(err, sql.ErrNotFound) {
 		logger.With().Error("failed to check malicious identity",
-			log.Stringer("smesher", iMsg.SmesherID),
+			log.Stringer("smesher", hareMsg.SmesherID),
 			log.Err(err),
 		)
 		return err
@@ -204,14 +203,14 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		// - gossip its malfeasance + eligibility proofs to the network
 		// - relay the eligibility proof to the consensus process
 		// - return error so the node don't relay messages from malicious parties
-		if err := b.handleMaliciousHareMessage(ctx, logger, iMsg.SmesherID, proof, iMsg, isEarly); err != nil {
+		if err := b.handleMaliciousHareMessage(ctx, logger, hareMsg.SmesherID, proof, hareMsg, isEarly); err != nil {
 			return err
 		}
-		return fmt.Errorf("known malicious %v", iMsg.SmesherID.String())
+		return fmt.Errorf("known malicious %v", hareMsg.SmesherID.String())
 	}
 
 	if isEarly {
-		return b.handleEarlyMessage(logger, msgLayer, iMsg.SmesherID, iMsg)
+		return b.handleEarlyMessage(logger, msgLayer, hareMsg.SmesherID, hareMsg)
 	}
 
 	// has instance, just send
@@ -223,7 +222,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	logger.With().Debug("broker forwarding message to outbox",
 		log.Int("queue_size", len(out)))
 	select {
-	case out <- iMsg:
+	case out <- hareMsg:
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-b.ctx.Done():
@@ -237,7 +236,7 @@ func (b *Broker) handleMaliciousHareMessage(
 	logger log.Log,
 	nodeID types.NodeID,
 	proof *types.MalfeasanceProof,
-	msg *Msg,
+	msg *Message,
 	early bool,
 ) error {
 	gossip := &types.MalfeasanceGossip{

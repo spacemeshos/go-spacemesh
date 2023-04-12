@@ -28,15 +28,15 @@ func TestBuilder_TestBuild(t *testing.T) {
 	require.NoError(t, err)
 	msg := b.SetLayer(instanceID1).Sign(signer).Build()
 
-	m := marshallUnmarshall(t, &msg.Message)
-	assert.Equal(t, m, &msg.Message)
+	m := marshallUnmarshall(t, msg)
+	assert.Equal(t, m, msg)
 }
 
 func TestMessageBuilder_SetValues(t *testing.T) {
 	s := NewSetFromValues(types.ProposalID{5})
-	msg := newMessageBuilder().SetValues(s).Build().Message
+	msg := newMessageBuilder().SetValues(s).Build()
 
-	m := marshallUnmarshall(t, &msg)
+	m := marshallUnmarshall(t, msg)
 	s1 := NewSet(m.Values)
 	s2 := NewSet(msg.Values)
 	assert.True(t, s1.Equals(s2))
@@ -54,8 +54,8 @@ func TestMessageBuilder_SetCertificate(t *testing.T) {
 	tr.OnCommit(context.Background(), m)
 	cert := tr.BuildCertificate()
 	assert.NotNil(t, cert)
-	c := newMessageBuilder().SetCertificate(cert).Build().Message
-	cert2 := marshallUnmarshall(t, &c).Cert
+	c := newMessageBuilder().SetCertificate(cert).Build()
+	cert2 := marshallUnmarshall(t, c).Cert
 	assert.Equal(t, cert.Values, cert2.Values)
 }
 
@@ -63,9 +63,9 @@ func TestMessageFromBuffer(t *testing.T) {
 	b := newMessageBuilder()
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	msg := b.SetLayer(instanceID1).Sign(signer).Build().Message
+	msg := b.SetLayer(instanceID1).Sign(signer).Build()
 
-	buf, err := codec.Encode(&msg)
+	buf, err := codec.Encode(msg)
 	require.NoError(t, err)
 
 	got, err := MessageFromBuffer(buf)

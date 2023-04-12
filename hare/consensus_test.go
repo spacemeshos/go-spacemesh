@@ -13,11 +13,9 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -588,11 +586,7 @@ func (eps *equivocatePubSub) Publish(ctx context.Context, protocol string, data 
 		msg.Values = []types.ProposalID{types.RandomProposalID()}
 		msg.Signature = eps.sig.Sign(signing.HARE, msg.SignedBytes())
 		msg.SmesherID = eps.sig.NodeID()
-		encoded, err := codec.Encode(&msg)
-		if err != nil {
-			log.With().Fatal("failed to encode equivocation data", log.Err(err))
-		}
-		if err = eps.ps.Publish(ctx, protocol, encoded); err != nil {
+		if err = eps.ps.Publish(ctx, protocol, msg.Bytes()); err != nil {
 			return fmt.Errorf("publish equivocate message: %w", err)
 		}
 	}

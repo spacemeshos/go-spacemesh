@@ -11,13 +11,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-func BuildNotifyMsg(signing *signing.EdSigner, s *Set) *Msg {
+func BuildNotifyMsg(signing *signing.EdSigner, s *Set) *Message {
 	builder := newMessageBuilder()
 	builder.SetType(notify).SetLayer(instanceID1).SetRoundCounter(notifyRound).SetCommittedRound(ki).SetValues(s)
 	cert := &Certificate{}
 	cert.Values = NewSetFromValues(types.ProposalID{1}).ToSlice()
 	cert.AggMsgs = &AggregatedMessages{}
-	cert.AggMsgs.Messages = []Message{BuildCommitMsg(signing, s).Message}
+	cert.AggMsgs.Messages = []Message{*BuildCommitMsg(signing, s)}
 	builder.SetCertificate(cert)
 	builder.SetEligibilityCount(1)
 	return builder.Sign(signing).Build()
