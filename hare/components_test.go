@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -27,6 +28,7 @@ type HareWrapper struct {
 	//lint:ignore U1000 pending https://github.com/spacemeshos/go-spacemesh/issues/4001
 	initialSets []*Set
 	outputs     map[types.LayerID][]*Set
+	mesh        mocknet.Mocknet
 }
 
 func newHareWrapper(totalCp uint32) *HareWrapper {
@@ -99,6 +101,7 @@ func (his *HareWrapper) checkResult(t *testing.T, id types.LayerID) {
 }
 
 func (his *HareWrapper) Close() {
+	his.mesh.Close()
 	for _, h := range his.hare {
 		h.Close()
 	}

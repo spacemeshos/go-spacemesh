@@ -128,13 +128,10 @@ func runTest(t *testing.T, totalNodes int, totalCp uint32, roundClocks *sharedRo
 	defer cancel()
 	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
-	defer func() {
-		err := mesh.Close()
-		require.NoError(t, err)
-	}()
 
 	test := newHareWrapper(totalCp)
 	test.initialSets = make([]*Set, totalNodes)
+	test.mesh = mesh
 
 	pList := make(map[types.LayerID][]*types.Proposal)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {

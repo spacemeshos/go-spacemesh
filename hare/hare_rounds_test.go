@@ -73,6 +73,7 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 
 	mesh, err := mocknet.FullMeshLinked(nodes)
 	require.NoError(t, err)
+	w.mesh = mesh
 
 	mockMesh := mocks.NewMockmesh(gomock.NewController(t))
 	if createProposal {
