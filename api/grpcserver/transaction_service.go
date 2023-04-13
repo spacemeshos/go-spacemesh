@@ -21,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
-	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 // TransactionService exposes transaction data, and a submit tx endpoint.
@@ -31,7 +30,7 @@ type TransactionService struct {
 	mesh      api.MeshAPI   // Mesh
 	conState  api.ConservativeState
 	syncer    api.Syncer
-	txHandler *txs.TxHandler
+	txHandler txValidator
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -46,7 +45,7 @@ func NewTransactionService(
 	msh api.MeshAPI,
 	conState api.ConservativeState,
 	syncer api.Syncer,
-	txHandler *txs.TxHandler,
+	txHandler txValidator,
 ) *TransactionService {
 	return &TransactionService{
 		db:        db,
@@ -70,7 +69,7 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 		return nil, status.Error(codes.FailedPrecondition, "Cannot submit transaction, node is not in sync yet, try again later")
 	}
 
-	if err := s.txHandler.HandleTransaction(ctx, in.Transaction); err != nil {
+	if err := s.txHandler.VerifyAndCacheTx(ctx, in.Transaction); err != nil {
 		log.Error("error verifying incoming tx: %v", err)
 		return nil, status.Error(codes.Internal, "Failed to verify transaction")
 	}
@@ -114,8 +113,7 @@ func (s TransactionService) TransactionsState(_ context.Context, in *pb.Transact
 	log.Info("GRPC TransactionService.TransactionsState")
 
 	if in.TransactionId == nil || len(in.TransactionId) == 0 {
-		return nil, status.Error(codes.InvalidArgument,
-			"`TransactionId` must include one or more transaction IDs")
+		return nil, status.Error(codes.InvalidArgument, "`TransactionId` must include one or more transaction IDs")
 	}
 
 	res := &pb.TransactionsStateResponse{}

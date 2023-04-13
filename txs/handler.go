@@ -60,7 +60,7 @@ func (th *TxHandler) HandleGossipTransaction(ctx context.Context, peer p2p.Peer,
 		return pubsub.ValidationAccept
 	}
 
-	err := th.HandleTransaction(ctx, msg)
+	err := th.VerifyAndCacheTx(ctx, msg)
 	updateMetrics(err, gossipTxCount)
 	if err != nil {
 		th.logger.WithContext(ctx).With().Warning("failed to handle tx", log.Err(err))
@@ -71,7 +71,7 @@ func (th *TxHandler) HandleGossipTransaction(ctx context.Context, peer p2p.Peer,
 
 // HandleProposalTransaction handles data received on the transactions synced as a part of proposal.
 func (th *TxHandler) HandleProposalTransaction(ctx context.Context, _ p2p.Peer, msg []byte) error {
-	err := th.HandleTransaction(ctx, msg)
+	err := th.VerifyAndCacheTx(ctx, msg)
 	updateMetrics(err, proposalTxCount)
 	if errors.Is(err, errDuplicateTX) {
 		return nil
@@ -79,7 +79,7 @@ func (th *TxHandler) HandleProposalTransaction(ctx context.Context, _ p2p.Peer, 
 	return err
 }
 
-func (th *TxHandler) HandleTransaction(ctx context.Context, msg []byte) error {
+func (th *TxHandler) VerifyAndCacheTx(ctx context.Context, msg []byte) error {
 	raw := types.NewRawTx(msg)
 	tx, err := th.state.GetMeshTransaction(raw.ID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {

@@ -1653,9 +1653,11 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	syncer := mocks.NewMockSyncer(ctrl)
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(false)
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
-	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	txHandler := NewMocktxValidator(ctrl)
+	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil)
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, nil)
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, txHandler)
 	shutDown := launchServer(t, cfg, grpcService)
 	defer shutDown()
 
@@ -1686,18 +1688,17 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	logtest.SetupGlobal(t)
 
+	numTxs := 20
+
 	ctrl := gomock.NewController(t)
 	syncer := mocks.NewMockSyncer(ctrl)
-	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).Times(numTxs)
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(numTxs)
+	txHandler := NewMocktxValidator(ctrl)
+	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).Times(numTxs)
 
-	expected := 20
-	n := 0
-	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
-		n++
-		return nil
-	})
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, nil)
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, txHandler)
 	shutDown := launchServer(t, cfg, grpcService)
 	defer shutDown()
 
@@ -1705,7 +1706,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	defer cancel()
 	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	c := pb.NewTransactionServiceClient(conn)
-	for i := 0; i < expected; i++ {
+	for i := 0; i < numTxs; i++ {
 		res, err := c.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{
 			Transaction: globalTx.Raw,
 		})
@@ -1714,7 +1715,6 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 		require.Equal(t, globalTx.ID.Bytes(), res.Txstate.Id.Id)
 		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
 	}
-	require.Equal(t, expected, n)
 }
 
 func TestTransactionService(t *testing.T) {
@@ -1724,9 +1724,11 @@ func TestTransactionService(t *testing.T) {
 	syncer := mocks.NewMockSyncer(ctrl)
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
-
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, nil)
+	txHandler := NewMocktxValidator(ctrl)
+	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, txHandler)
 	shutDown := launchServer(t, cfg, grpcService)
 	defer shutDown()
 
