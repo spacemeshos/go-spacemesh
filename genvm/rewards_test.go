@@ -14,7 +14,7 @@ func TestRewards(t *testing.T) {
 			applyGenesis()
 	}
 	ref := genTester(t)
-	const spawnFee = 496
+	const spawnFee = 85432
 	require.Equal(t, int(spawnFee), ref.estimateSpawnGas(0, 0))
 	// this is hardcoded so that you can see which number is divided without reminder
 	// and pick correct fractions for tests

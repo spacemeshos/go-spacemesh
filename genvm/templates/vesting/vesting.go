@@ -17,6 +17,10 @@ func (v *Vesting) MaxSpend(method uint8, args any) (uint64, error) {
 	return v.MultiSig.MaxSpend(method, args)
 }
 
+func (v *Vesting) BaseGas(method uint8) uint64 {
+	return BaseGas(method, int(v.MultiSig.Required))
+}
+
 func (v *Vesting) ExecGas(method uint8) uint64 {
 	return ExecGas(method, len(v.MultiSig.PublicKeys))
 }

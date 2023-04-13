@@ -19,7 +19,7 @@ const (
 	SPAWN uint64 = 30000
 	// STORE is a cost for storing new data, in precompiles charged only for SPAWN.
 	STORE uint64 = 5000
-	// UPDATE is a cost of updating mutable state (nonce, amount of coins, precompile specific state)
+	// UPDATE is a cost of updating mutable state (nonce, amount of coins, precompile specific state).
 	UPDATE uint64 = 725
 	// LOAD is a cost for loading immutable and mutable state from disk.
 	LOAD uint64 = 182

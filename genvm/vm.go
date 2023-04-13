@@ -550,7 +550,7 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas(ctx.Header.Method)
+			ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas(method)
 		} else if account.TemplateAddress == nil {
 			return nil, nil, nil, fmt.Errorf("%w: account can't spawn until it is spawned itself", core.ErrNotSpawned)
 		} else {
@@ -559,13 +559,13 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 				return nil, nil, nil, err
 			}
 			ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
-			ctx.Gas.FixedGas += target.ExecGas(ctx.Header.Method)
+			ctx.Gas.FixedGas += target.ExecGas(method)
 		}
 	} else {
 		ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
-		ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas(ctx.Header.Method)
+		ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas(method)
 	}
-	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas(ctx.Header.Method)
+	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas(method)
 
 	ctx.ParseOutput = output
 
@@ -575,7 +575,6 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 	ctx.Header.MaxGas = core.MaxGas(ctx.Gas.BaseGas, ctx.Gas.FixedGas, raw)
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce
-
 	ctx.Args = args
 
 	maxspend, err := ctx.PrincipalTemplate.MaxSpend(ctx.Header.Method, args)
