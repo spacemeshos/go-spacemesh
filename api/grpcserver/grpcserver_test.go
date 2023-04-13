@@ -1692,9 +1692,9 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	syncer := mocks.NewMockSyncer(ctrl)
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(true)
-	publisher := pubsubmocks.NewMockPublisher(ctrl)
+	publisher := pubsubmocks.NewMockPublisher(ctrl) // publish is not called
 	txHandler := NewMocktxValidator(ctrl)
-	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(errors.New("bla"))
+	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(errors.New("failed validation"))
 
 	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, txHandler)
 	t.Cleanup(launchServer(t, cfg, grpcService))
@@ -2562,13 +2562,7 @@ func TestEventsReceived(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	ctrl := gomock.NewController(t)
-	syncer := mocks.NewMockSyncer(ctrl)
-	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	publisher := pubsubmocks.NewMockPublisher(ctrl)
-	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-
-	txService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, nil)
+	txService := NewTransactionService(sql.InMemory(), nil, meshAPI, conStateAPI, nil, nil)
 	gsService := NewGlobalStateService(meshAPI, conStateAPI)
 	t.Cleanup(launchServer(t, cfg, txService, gsService))
 
