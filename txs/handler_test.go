@@ -92,7 +92,7 @@ func Test_HandleBlock(t *testing.T) {
 	}
 }
 
-func gossipExpectations(t *testing.T, fee uint64, hasErr, parseErr, addErr error, has, verify, noheader bool) (*TxHandler, *types.Transaction) {
+func gossipExpectations(t *testing.T, fee uint64, hasErr, parseErr, addErr error, has, verify, noHeader bool) (*TxHandler, *types.Transaction) {
 	ctrl := gomock.NewController(t)
 	cstate := NewMockconservativeState(ctrl)
 	_, pub, err := crypto.GenerateEd25519Key(nil)
@@ -107,7 +107,7 @@ func gossipExpectations(t *testing.T, fee uint64, hasErr, parseErr, addErr error
 	var rst *types.MeshTransaction
 	if has {
 		rst = &types.MeshTransaction{Transaction: *tx}
-		if noheader {
+		if noHeader {
 			rst.TxHeader = nil
 		}
 	}
@@ -134,7 +134,6 @@ func gossipExpectations(t *testing.T, fee uint64, hasErr, parseErr, addErr error
 func Test_HandleGossip(t *testing.T) {
 	for _, tc := range []struct {
 		desc                     string
-		sender                   peer.ID
 		fee                      uint64
 		has                      bool
 		noHeader                 bool
@@ -199,7 +198,7 @@ func Test_HandleGossip(t *testing.T) {
 			)
 			require.Equal(t,
 				tc.expect,
-				th.HandleGossipTransaction(context.Background(), tc.sender, tx.Raw),
+				th.HandleGossipTransaction(context.Background(), p2p.NoPeer, tx.Raw),
 			)
 		})
 	}
