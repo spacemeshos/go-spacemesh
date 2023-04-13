@@ -24,6 +24,7 @@ import (
 	pubsubmock "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
@@ -201,6 +202,22 @@ func encodeProposal(t *testing.T, p *types.Proposal) []byte {
 	return data
 }
 
+func createAtx(t *testing.T, db *sql.Database, epoch types.EpochID, atxID types.ATXID, nodeID types.NodeID) {
+	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+		NIPostChallenge: types.NIPostChallenge{
+			PublishEpoch: epoch,
+		},
+		NumUnits: 1,
+	}}
+	atx.SetID(atxID)
+	atx.SetEffectiveNumUnits(1)
+	atx.SetReceived(time.Now())
+	atx.SmesherID = nodeID
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(db, vAtx))
+}
+
 func createBallot(t *testing.T, opts ...createBallotOpt) *types.Ballot {
 	t.Helper()
 	b := types.RandomBallot()
@@ -271,6 +288,7 @@ func TestBallot_BadSignature(t *testing.T) {
 func TestBallot_KnownBallot(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	require.NoError(t, ballots.Add(th.cdb, b))
 	data := encodeBallot(t, b)
 	peer := p2p.Peer("buddy")
@@ -284,9 +302,7 @@ func TestBallot_EmptyATXID(t *testing.T) {
 	b.AtxID = types.EmptyATXID
 	b = signAndInit(t, b)
 	data := encodeBallot(t, b)
-	peer := p2p.Peer("buddy")
-	th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
-	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), peer, data), errInvalidATXID)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), "", data), errInvalidATXID)
 }
 
 func TestBallot_GoldenATXID(t *testing.T) {
@@ -295,9 +311,7 @@ func TestBallot_GoldenATXID(t *testing.T) {
 	b.AtxID = genGoldenATXID()
 	b = signAndInit(t, b)
 	data := encodeBallot(t, b)
-	peer := p2p.Peer("buddy")
-	th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
-	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), peer, data), errInvalidATXID)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), "", data), errInvalidATXID)
 }
 
 func TestBallot_RefBallotMissingEpochData(t *testing.T) {
@@ -305,6 +319,7 @@ func TestBallot_RefBallotMissingEpochData(t *testing.T) {
 	b := createRefBallot(t)
 	b.EpochData = nil
 	signAndInit(t, b)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	data := encodeBallot(t, b)
 	peer := p2p.Peer("buddy")
 	th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
@@ -316,6 +331,7 @@ func TestBallot_RefBallotMissingBeacon(t *testing.T) {
 	b := createRefBallot(t)
 	b.EpochData.Beacon = types.EmptyBeacon
 	signAndInit(t, b)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	data := encodeBallot(t, b)
 	peer := p2p.Peer("buddy")
 	th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
@@ -328,6 +344,7 @@ func TestBallot_RefBallotEmptyActiveSet(t *testing.T) {
 	b.ActiveSet = nil
 	signAndInit(t, b)
 	data := encodeBallot(t, b)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	peer := p2p.Peer("buddy")
 	th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
 	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), peer, data), errEmptyActiveSet)
@@ -338,6 +355,7 @@ func TestBallot_RefBallotDuplicateInActiveSet(t *testing.T) {
 	b := createRefBallot(t)
 	b.ActiveSet = append(b.ActiveSet, b.ActiveSet[0])
 	signAndInit(t, b)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	data := encodeBallot(t, b)
 	peer := p2p.Peer("buddy")
 	th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
@@ -352,6 +370,7 @@ func TestBallot_RefBallotActiveSetNotSorted(t *testing.T) {
 		return bytes.Compare(b.ActiveSet[i].Bytes(), b.ActiveSet[j].Bytes()) > 0
 	})
 	signAndInit(t, b)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	data := encodeBallot(t, b)
 	peer := p2p.Peer("buddy")
 	th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
@@ -363,6 +382,7 @@ func TestBallot_RefBallotBadActiveSetHash(t *testing.T) {
 	b := createRefBallot(t)
 	b.EpochData.ActiveSetHash = types.Hash32{}
 	signAndInit(t, b)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	data := encodeBallot(t, b)
 	peer := p2p.Peer("buddy")
 	th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
@@ -374,6 +394,7 @@ func TestBallot_NotRefBallotButHasEpochData(t *testing.T) {
 	b := types.RandomBallot()
 	b.EpochData = &types.EpochData{}
 	b = signAndInit(t, b)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	data := encodeBallot(t, b)
 	peer := p2p.Peer("buddy")
 	th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
@@ -392,6 +413,7 @@ func TestBallot_BallotDoubleVotedWithinHdist(t *testing.T) {
 		withLayer(lid),
 		withSupportBlocks(supported...),
 	)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	for _, blk := range supported {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
@@ -417,6 +439,7 @@ func TestBallot_BallotDoubleVotedWithinHdist_LyrBfrHdist(t *testing.T) {
 		withLayer(lid),
 		withSupportBlocks(supported...),
 	)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	for _, blk := range supported {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
@@ -443,6 +466,7 @@ func TestBallot_BallotDoubleVotedOutsideHdist(t *testing.T) {
 		withLayer(lid),
 		withSupportBlocks(supported...),
 	)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	for _, blk := range supported {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
@@ -475,6 +499,7 @@ func TestBallot_ConflictingForAndAgainst(t *testing.T) {
 		withSupportBlocks(supported...),
 		withAgainstBlocks(supported...),
 	)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	for _, blk := range supported {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
@@ -500,6 +525,7 @@ func TestBallot_ConflictingForAndAbstain(t *testing.T) {
 		withSupportBlocks(supported...),
 		withAbstain(lid.Sub(1)),
 	)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	for _, blk := range supported {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
@@ -526,6 +552,7 @@ func TestBallot_ConflictingAgainstAndAbstain(t *testing.T) {
 		withAgainstBlocks(against...),
 		withAbstain(lid.Sub(1)),
 	)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	for _, blk := range against {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
@@ -552,6 +579,7 @@ func TestBallot_ExceedMaxExceptions(t *testing.T) {
 		withLayer(lid),
 		withSupportBlocks(supported...),
 	)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	for _, blk := range supported {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
@@ -568,6 +596,7 @@ func TestBallot_ExceedMaxExceptions(t *testing.T) {
 func TestBallot_BallotsNotAvailable(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	data := encodeBallot(t, b)
 
 	errUnknown := errors.New("unknown")
@@ -577,9 +606,20 @@ func TestBallot_BallotsNotAvailable(t *testing.T) {
 	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), peer, data), errUnknown)
 }
 
+func TestBallot_AtxFromDifferentSmesher(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	b := createBallot(t)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, types.NodeID{1, 2, 3})
+	data := encodeBallot(t, b)
+
+	peer := p2p.Peer("buddy")
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), peer, data), errWrongSmesherID)
+}
+
 func TestBallot_ATXsNotAvailable(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	data := encodeBallot(t, b)
 	peer := p2p.Peer("buddy")
 	th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
@@ -600,6 +640,7 @@ func TestBallot_BlocksNotAvailable(t *testing.T) {
 		withLayer(lid),
 		withSupportBlocks(supported...),
 	)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	for _, blk := range supported {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
@@ -625,6 +666,7 @@ func TestBallot_ErrorCheckingEligible(t *testing.T) {
 		withLayer(lid),
 		withSupportBlocks(supported...),
 	)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	for _, blk := range supported {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
@@ -654,6 +696,7 @@ func TestBallot_NotEligible(t *testing.T) {
 		withLayer(lid),
 		withSupportBlocks(supported...),
 	)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	for _, blk := range supported {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
@@ -707,6 +750,7 @@ func TestBallot_InvalidVote(t *testing.T) {
 				require.NoError(t, blocks.Add(th.cdb, &blk))
 			}
 			b := createBallot(t, tc.opts...)
+			createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 			data := encodeBallot(t, b)
 			peer := p2p.Peer("buddy")
 			th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
@@ -731,6 +775,7 @@ func TestBallot_Success(t *testing.T) {
 		withLayer(lid),
 		withSupportBlocks(supported...),
 	)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	for _, blk := range supported {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
@@ -764,6 +809,7 @@ func TestBallot_MaliciousProofIgnoredInSyncFlow(t *testing.T) {
 		withLayer(lid),
 		withSupportBlocks(supported...),
 	)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	for _, blk := range supported {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
@@ -798,6 +844,7 @@ func TestBallot_RefBallot(t *testing.T) {
 		withSupportBlocks(supported...),
 		withAnyRefData(),
 	)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	for _, blk := range supported {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
@@ -822,6 +869,7 @@ func TestBallot_RefBallot(t *testing.T) {
 func TestBallot_DecodeBeforeVotesConsistency(t *testing.T) {
 	th := createTestHandler(t)
 	b := createBallot(t)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	b.Votes.Against = b.Votes.Support
 	for _, bid := range b.Votes.Support {
 		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: b.Layer.Sub(1)})
@@ -845,6 +893,7 @@ func TestBallot_DecodeBeforeVotesConsistency(t *testing.T) {
 func TestBallot_DecodedStoreFailure(t *testing.T) {
 	th := createTestHandler(t)
 	b := createBallot(t)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	b.Votes.Support = nil // just to avoid creating blocks
 	expected := errors.New("test")
 
@@ -885,6 +934,18 @@ func TestProposal_BadSignature(t *testing.T) {
 	checkProposal(t, th.cdb, p, false)
 }
 
+func TestProposal_AtxFromDifferentSmesher(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	p := createProposal(t)
+	createAtx(t, th.cdb.Database, p.Layer.GetEpoch()-1, p.AtxID, types.NodeID{1, 2, 3})
+	data := encodeProposal(t, p)
+	got := th.HandleSyncedProposal(context.Background(), "", data)
+	require.ErrorIs(t, got, errWrongSmesherID)
+
+	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
+	checkProposal(t, th.cdb, p, false)
+}
+
 func TestProposal_InconsistentSmeshers(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	p := &types.Proposal{
@@ -902,8 +963,7 @@ func TestProposal_InconsistentSmeshers(t *testing.T) {
 	p.Signature = signer2.Sign(signing.BALLOT, p.SignedBytes())
 	p.SmesherID = signer2.NodeID()
 
-	data, err := codec.Encode(p)
-	require.NoError(t, err)
+	data := encodeProposal(t, p)
 	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
 	require.ErrorContains(t, got, "failed to verify proposal signature")
 
@@ -914,6 +974,7 @@ func TestProposal_InconsistentSmeshers(t *testing.T) {
 func TestProposal_KnownProposal(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
+	createAtx(t, th.cdb.Database, p.Layer.GetEpoch()-1, p.AtxID, p.SmesherID)
 	require.NoError(t, ballots.Add(th.cdb, &p.Ballot))
 	require.NoError(t, proposals.Add(th.cdb, p))
 	data := encodeProposal(t, p)
@@ -935,6 +996,7 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 		withSupportBlocks(supported...),
 		withTransactions(tid, tid),
 	)
+	createAtx(t, th.cdb.Database, p.Layer.GetEpoch()-1, p.AtxID, p.SmesherID)
 	for _, block := range supported {
 		require.NoError(t, blocks.Add(th.cdb, block))
 	}
@@ -970,6 +1032,7 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 		withLayer(lid),
 		withSupportBlocks(supported...),
 	)
+	createAtx(t, th.cdb.Database, p.Layer.GetEpoch()-1, p.AtxID, p.SmesherID)
 	for _, block := range supported {
 		require.NoError(t, blocks.Add(th.cdb, block))
 	}
@@ -1008,6 +1071,7 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 		withLayer(lid),
 		withSupportBlocks(supported...),
 	)
+	createAtx(t, th.cdb.Database, p.Layer.GetEpoch()-1, p.AtxID, p.SmesherID)
 	for _, block := range supported {
 		require.NoError(t, blocks.Add(th.cdb, block))
 	}
@@ -1046,6 +1110,7 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 		withLayer(lid),
 		withSupportBlocks(supported...),
 	)
+	createAtx(t, th.cdb.Database, p.Layer.GetEpoch()-1, p.AtxID, p.SmesherID)
 	for _, block := range supported {
 		require.NoError(t, blocks.Add(th.cdb, block))
 	}
@@ -1095,6 +1160,7 @@ func TestProposal_BroadcastMaliciousGossip(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	lid := types.LayerID(100)
 	p := createProposal(t, withLayer(lid))
+	createAtx(t, th.cdb.Database, p.Layer.GetEpoch()-1, p.AtxID, p.SmesherID)
 	require.NoError(t, ballots.Add(th.cdb, &p.Ballot))
 	require.NoError(t, proposals.Add(th.cdb, p))
 	checkProposal(t, th.cdb, p, true)
@@ -1107,6 +1173,7 @@ func TestProposal_BroadcastMaliciousGossip(t *testing.T) {
 		withLayer(lid),
 		withSupportBlocks(supported...),
 	)
+	createAtx(t, th.cdb.Database, pMal.Layer.GetEpoch()-1, pMal.AtxID, pMal.SmesherID)
 	for _, block := range supported {
 		require.NoError(t, blocks.Add(th.cdb, block))
 	}
@@ -1179,6 +1246,7 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 				withLayer(lid),
 				withSupportBlocks(supported...),
 			)
+			createAtx(t, th.cdb.Database, p.Layer.GetEpoch()-1, p.AtxID, p.SmesherID)
 			for _, block := range supported {
 				require.NoError(t, blocks.Add(th.cdb, block))
 			}
@@ -1227,6 +1295,7 @@ func TestProposal_ValidProposal(t *testing.T) {
 		withLayer(lid),
 		withSupportBlocks(blks...),
 	)
+	createAtx(t, th.cdb.Database, p.Layer.GetEpoch()-1, p.AtxID, p.SmesherID)
 	for _, block := range blks {
 		require.NoError(t, blocks.Add(th.cdb, block))
 	}
@@ -1264,6 +1333,7 @@ func TestMetrics(t *testing.T) {
 		withLayer(lid),
 		withSupportBlocks(supported...),
 	)
+	createAtx(t, th.cdb.Database, p.Layer.GetEpoch()-1, p.AtxID, p.SmesherID)
 	for _, block := range supported {
 		require.NoError(t, blocks.Add(th.cdb, block))
 	}

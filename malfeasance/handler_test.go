@@ -47,12 +47,10 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
-	pke, err := signing.NewPubKeyExtractor()
-	require.NoError(t, err)
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke, sigVerifier)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.LayerID(11)
@@ -251,12 +249,10 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
-	pke, err := signing.NewPubKeyExtractor()
-	require.NoError(t, err)
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke, sigVerifier)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.LayerID(11)
@@ -462,12 +458,10 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
-	pke, err := signing.NewPubKeyExtractor()
-	require.NoError(t, err)
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke, sigVerifier)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.LayerID(11)
@@ -634,7 +628,9 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		hp := hareProof
 		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
+		hp.Messages[0].SmesherID = sig.NodeID()
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
+		hp.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -656,7 +652,9 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 	t.Run("proof equivalence", func(t *testing.T) {
 		hp := hareProof
 		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
+		hp.Messages[0].SmesherID = sig.NodeID()
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
+		hp.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid.Add(11),
@@ -684,12 +682,10 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
-	pke, err := signing.NewPubKeyExtractor()
-	require.NoError(t, err)
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke, sigVerifier)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -764,12 +760,10 @@ func TestHandler_CrossDomain(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
 	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
-	pke, err := signing.NewPubKeyExtractor()
-	require.NoError(t, err)
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, pke, sigVerifier)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)

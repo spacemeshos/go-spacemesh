@@ -11,14 +11,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-func buildProposalMsg(sig *signing.EdSigner, s *Set, signature types.VrfSignature) *Msg {
+func buildProposalMsg(sig *signing.EdSigner, s *Set, signature types.VrfSignature) *Message {
 	builder := newMessageBuilder().SetRoleProof(signature)
 	builder.SetType(proposal).SetLayer(instanceID1).SetRoundCounter(proposalRound).SetCommittedRound(ki).SetValues(s).SetSVP(buildSVP(ki, NewSetFromValues(types.ProposalID{1})))
 	builder.SetEligibilityCount(1)
-	return builder.SetNodeID(sig.NodeID()).Sign(sig).Build()
+	return builder.Sign(sig).Build()
 }
 
-func BuildProposalMsg(sig *signing.EdSigner, s *Set) *Msg {
+func BuildProposalMsg(sig *signing.EdSigner, s *Set) *Message {
 	return buildProposalMsg(sig, s, types.EmptyVrfSignature)
 }
 
@@ -68,14 +68,14 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			NodeID:      m2.NodeID,
+			NodeID:      m2.SmesherID,
 			Eligibility: m2.Eligibility,
 		},
 	}
 	gossip := <-mch
 	require.Equal(t, expected, *gossip)
 	tracker.eTracker.ForEach(proposalRound, func(s types.NodeID, cred *Cred) {
-		require.Equal(t, m1.NodeID, s)
+		require.Equal(t, m1.SmesherID, s)
 		require.False(t, cred.Honest)
 		require.EqualValues(t, 1, cred.Count)
 	})
@@ -143,14 +143,14 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			NodeID:      m2.NodeID,
+			NodeID:      m2.SmesherID,
 			Eligibility: m2.Eligibility,
 		},
 	}
 	gossip := <-mch
 	require.Equal(t, expected, *gossip)
 	tracker.eTracker.ForEach(proposalRound, func(s types.NodeID, cred *Cred) {
-		require.Equal(t, m1.NodeID, s)
+		require.Equal(t, m1.SmesherID, s)
 		require.False(t, cred.Honest)
 		require.EqualValues(t, 1, cred.Count)
 	})
@@ -217,14 +217,14 @@ func TestProposalTracker_ProposedSet(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			NodeID:      m2.NodeID,
+			NodeID:      m2.SmesherID,
 			Eligibility: m2.Eligibility,
 		},
 	}
 	gossip := <-mch
 	require.Equal(t, expected, *gossip)
 	tracker.eTracker.ForEach(proposalRound, func(s types.NodeID, cred *Cred) {
-		require.Equal(t, m1.NodeID, s)
+		require.Equal(t, m1.SmesherID, s)
 		require.False(t, cred.Honest)
 		require.EqualValues(t, 1, cred.Count)
 	})
