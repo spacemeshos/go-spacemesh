@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
-	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
 func encode(fields ...scale.Encodable) []byte {
@@ -93,8 +92,7 @@ func Spawn(ref uint8, pk ed25519.PrivateKey, principal, template types.Address, 
 	payload.GasPrice = options.GasPrice
 
 	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpawn, &template, &payload, args)
-	hh := hash.Sum(options.GenesisID[:], tx)
-	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
 	aggregator := &Aggregator{unsigned: tx, parts: map[uint8]multisig.Part{}}
 	part := multisig.Part{Ref: ref}
 	copy(part.Sig[:], sig)
@@ -118,8 +116,7 @@ func Spend(ref uint8, pk ed25519.PrivateKey, principal, to types.Address, amount
 	args.Amount = amount
 
 	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpend, &payload, &args)
-	hh := hash.Sum(options.GenesisID[:], tx)
-	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
 	aggregator := &Aggregator{unsigned: tx, parts: map[uint8]multisig.Part{}}
 	part := multisig.Part{Ref: ref}
 	copy(part.Sig[:], sig)

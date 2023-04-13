@@ -178,10 +178,9 @@ func pullWithDups(k int) (rst []int) {
 func prepSigFromKeys(tb testing.TB, message []byte, privates []ed25519.PrivateKey, refs ...int) []byte {
 	tb.Helper()
 	sigs := Signatures{}
-	hash := core.Hash(message)
 	for _, ref := range refs {
 		sig := core.Signature{}
-		copy(sig[:], ed25519.Sign(privates[ref], hash[:]))
+		copy(sig[:], ed25519.Sign(privates[ref], message))
 		sigs = append(sigs, Part{Ref: uint8(ref), Sig: sig})
 	}
 	buf := bytes.NewBuffer(nil)

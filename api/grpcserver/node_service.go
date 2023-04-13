@@ -2,19 +2,15 @@ package grpcserver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap/zapcore"
-	"google.golang.org/genproto/googleapis/rpc/code"
-	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -30,7 +26,6 @@ type NodeService struct {
 	genTime     api.GenesisTimeAPI
 	peerCounter api.PeerCounter
 	syncer      api.Syncer
-	atxAPI      api.ActivationAPI
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -40,7 +35,7 @@ func (s NodeService) RegisterService(server *Server) {
 
 // NewNodeService creates a new grpc service using config data.
 func NewNodeService(
-	appCtx context.Context, peers api.PeerCounter, msh api.MeshAPI, genTime api.GenesisTimeAPI, syncer api.Syncer, atxapi api.ActivationAPI,
+	appCtx context.Context, peers api.PeerCounter, msh api.MeshAPI, genTime api.GenesisTimeAPI, syncer api.Syncer,
 ) *NodeService {
 	return &NodeService{
 		appCtx:      appCtx,
@@ -48,7 +43,6 @@ func NewNodeService(
 		genTime:     genTime,
 		peerCounter: peers,
 		syncer:      syncer,
-		atxAPI:      atxapi,
 	}
 }
 
@@ -107,31 +101,6 @@ func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 		verifiedLayer = s.mesh.LatestLayerInState().Uint32()
 	}
 	return
-}
-
-// SyncStart requests that the node start syncing the mesh (if it isn't already syncing).
-func (s NodeService) SyncStart(context.Context, *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "UNIMPLEMENTED")
-}
-
-// Shutdown requests a graceful shutdown.
-func (s NodeService) Shutdown(context.Context, *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "UNIMPLEMENTED")
-}
-
-// UpdatePoetServers update server that is used for generating PoETs.
-func (s NodeService) UpdatePoetServers(ctx context.Context, req *pb.UpdatePoetServersRequest) (*pb.UpdatePoetServersResponse, error) {
-	err := s.atxAPI.UpdatePoETServers(ctx, req.Urls)
-	if err == nil {
-		return &pb.UpdatePoetServersResponse{
-			Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
-		}, nil
-	}
-	switch {
-	case errors.Is(err, activation.ErrPoetServiceUnstable):
-		return nil, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", err)
-	}
-	return nil, status.Errorf(codes.Internal, "failed to update poet server")
 }
 
 // STREAMS

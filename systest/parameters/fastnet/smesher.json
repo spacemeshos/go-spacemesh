@@ -7,5 +7,12 @@
     },
     "logging": {
         "trtl": "debug"
+    },
+    "api": {
+        "grpc-public-services": [
+            "debug", "global", "mesh", "node",
+            "transaction", "activation", "smesher"
+        ],
+        "grpc-private-services": []
     }
 }
