@@ -120,3 +120,7 @@ func castEventProposal(ev *events.EventProposal) *pb.Proposal {
 	}
 	return proposal
 }
+
+func (d DebugService) ActiveSet(ctx context.Context, req *pb.ActiveSetRequest) (*pb.ActiveSetResponse, error) {
+	panic("NOT IMPLEMENTED")
+}

@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // Publisher interface for publishing messages.
@@ -45,6 +46,7 @@ type ConservativeState interface {
 	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 	GetMeshTransactions([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})
 	GetTransactionsByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
+	Validation(raw types.RawTx) system.ValidationRequest
 }
 
 // MeshAPI is an api for getting mesh status about layers/blocks/rewards.
