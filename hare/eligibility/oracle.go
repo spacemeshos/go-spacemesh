@@ -220,7 +220,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 
 	// validate message
 	if !o.vrfVerifier.Verify(id, msg, vrfSig) {
-		logger.With().Warning("eligibility: a node did not pass vrf signature verification",
+		logger.With().Debug("eligibility: a node did not pass vrf signature verification",
 			log.FieldNamed("sender_vrf_nonce", nonce),
 		)
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, nil
