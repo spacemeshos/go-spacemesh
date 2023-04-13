@@ -71,7 +71,7 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 
 	if err := s.txHandler.VerifyAndCacheTx(ctx, in.Transaction); err != nil {
 		log.Error("error verifying incoming tx: %v", err)
-		return nil, status.Error(codes.Internal, "Failed to verify transaction")
+		return nil, status.Error(codes.InvalidArgument, "Failed to verify transaction")
 	}
 
 	if err := s.publisher.Publish(ctx, pubsub.TxProtocol, in.Transaction); err != nil {

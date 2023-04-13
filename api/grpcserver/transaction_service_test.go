@@ -186,32 +186,3 @@ func BenchmarkStreamResults(b *testing.B) {
 		require.Equal(b, maxcount, n)
 	}
 }
-
-// func Test_TransactionService_SubmitTransaction(t *testing.T) {
-// 	// Arrange
-// 	db := sql.InMemory()
-
-// 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-// 	defer cancel()
-
-// 	ctrl, ctx := gomock.WithContext(ctx, t)
-// 	syncer := mocks.NewMockSyncer(ctrl)
-// 	syncer.EXPECT().IsSynced(gomock.Any()).Return(true)
-
-// 	svc := NewTransactionService(db, nil, nil, nil, syncer)
-// 	t.Cleanup(launchServer(t, svc))
-
-// 	conn := dialGrpc(ctx, t, cfg)
-// 	client := pb.NewTransactionServiceClient(conn)
-
-// 	req := &pb.SubmitTransactionRequest{}
-// 	err := json.Unmarshal([]byte(`{
-// 		"transaction": "AAAAAACAuTo3d7O7ZNiSePx57217lBYfzQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAQEBVJ+wdOdEg4jRtwMbQWhqDEMz0eU87uFQM/zTFwOXyNaJMITgwtDY00Q0eBb139ZEO+I5SRRtbU+24rCFZ7NDMJZi5ovNzhAfKDQr6A105iXhtL1Nf9Z7fb5/ONwYwI="
-// 	  }`), req)
-// 	require.NoError(t, err)
-
-// 	res, err := client.SubmitTransaction(ctx, req)
-// 	require.NoError(t, err)
-
-// 	t.Log(res)
-// }

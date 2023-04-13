@@ -633,14 +633,18 @@ func TestNodeService(t *testing.T) {
 
 			// now try sending bad payloads
 			_, err = c.Echo(context.Background(), &pb.EchoRequest{Msg: nil})
-			require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
+			require.Error(t, err)
+			grpcStatus, ok := status.FromError(err)
+			require.True(t, ok)
+			require.Equal(t, codes.InvalidArgument, grpcStatus.Code())
+			require.Equal(t, "Must include `Msg`", grpcStatus.Message())
 
 			_, err = c.Echo(context.Background(), &pb.EchoRequest{})
-			require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
-			statusCode = status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
+			require.Error(t, err)
+			grpcStatus, ok = status.FromError(err)
+			require.True(t, ok)
+			require.Equal(t, codes.InvalidArgument, grpcStatus.Code())
+			require.Equal(t, "Must include `Msg`", grpcStatus.Message())
 		}},
 		{"Version", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -1672,7 +1676,11 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	// This time, we expect an error, since isSynced is false (by default)
 	// The node should not allow tx submission when not synced
 	res, err := c.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{Transaction: serializedTx})
-	req.EqualError(err, "rpc error: code = FailedPrecondition desc = Cannot submit transaction, node is not in sync yet, try again later")
+	req.Error(err)
+	grpcStatus, ok := status.FromError(err)
+	req.True(ok)
+	req.Equal(codes.FailedPrecondition, grpcStatus.Code())
+	req.Equal("Cannot submit transaction, node is not in sync yet, try again later", grpcStatus.Message())
 	req.Nil(res)
 
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(true)
@@ -1680,9 +1688,39 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	// This time, we expect no error, since isSynced is now true
 	_, err = c.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{Transaction: serializedTx})
 	req.NoError(err)
-	// TODO: randomly got an error here, should investigate. Added specific error check above, as this error should have
-	//  happened there first.
-	//  Received unexpected error: "rpc error: code = Unimplemented desc = unknown service spacemesh.v1.TransactionService"
+}
+
+func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
+	logtest.SetupGlobal(t)
+	req := require.New(t)
+
+	ctrl := gomock.NewController(t)
+	syncer := mocks.NewMockSyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(true)
+	publisher := pubsubmocks.NewMockPublisher(ctrl)
+	txHandler := NewMocktxValidator(ctrl)
+	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(errors.New("bla"))
+
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, txHandler)
+	shutDown := launchServer(t, cfg, grpcService)
+	defer shutDown()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	c := pb.NewTransactionServiceClient(conn)
+
+	serializedTx, err := codec.Encode(globalTx)
+	req.NoError(err, "error serializing tx")
+
+	// When verifying and caching the transaction fails we expect an error
+	res, err := c.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{Transaction: serializedTx})
+	req.Error(err)
+	grpcStatus, ok := status.FromError(err)
+	req.True(ok)
+	req.Equal(codes.InvalidArgument, grpcStatus.Code())
+	req.Equal("Failed to verify transaction", grpcStatus.Message())
+	req.Nil(res)
 }
 
 func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
