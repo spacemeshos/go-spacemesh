@@ -981,7 +981,7 @@ func TestGlobalStateService(t *testing.T) {
 func TestSmesherService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	smeshingAPI := &SmeshingAPIMock{}
-	svc := NewSmesherService(&PostAPIMock{}, smeshingAPI, 10*time.Millisecond)
+	svc := NewSmesherService(&PostAPIMock{}, smeshingAPI, 10*time.Millisecond, activation.DefaultPostSetupOpts())
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)

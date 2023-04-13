@@ -26,6 +26,7 @@ type SmesherService struct {
 	smeshingProvider  api.SmeshingAPI
 
 	streamInterval time.Duration
+	postOpts       activation.PostSetupOpts
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -34,8 +35,8 @@ func (s SmesherService) RegisterService(server *Server) {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(post api.PostSetupProvider, smeshing api.SmeshingAPI, streamInterval time.Duration) *SmesherService {
-	return &SmesherService{post, smeshing, streamInterval}
+func NewSmesherService(post api.PostSetupProvider, smeshing api.SmeshingAPI, streamInterval time.Duration, postOpts activation.PostSetupOpts) *SmesherService {
+	return &SmesherService{post, smeshing, streamInterval, postOpts}
 }
 
 // IsSmeshing reports whether the node is smeshing.
@@ -68,20 +69,20 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		return nil, status.Error(codes.InvalidArgument, "`Opts.MaxFileSize` must be provided")
 	}
 
-	opts := activation.PostSetupOpts{
-		DataDir:           in.Opts.DataDir,
-		NumUnits:          in.Opts.NumUnits,
-		MaxFileSize:       in.Opts.MaxFileSize,
-		ComputeProviderID: int(in.Opts.ComputeProviderId),
-		Throttle:          in.Opts.Throttle,
-		Scrypt:            config.DefaultLabelParams(),
-	}
+	// Copy provided post opts
+	optsCopy := s.postOpts
+	// Overlay api provided opts
+	optsCopy.DataDir = in.Opts.DataDir
+	optsCopy.NumUnits = in.Opts.NumUnits
+	optsCopy.MaxFileSize = in.Opts.MaxFileSize
+	optsCopy.ComputeProviderID = int(in.Opts.ComputeProviderId)
+	optsCopy.Throttle = in.Opts.Throttle
 
 	coinbaseAddr, err := types.StringToAddress(in.Coinbase.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse in.Coinbase.Address `%s`: %w", in.Coinbase.Address, err)
 	}
-	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, opts); err != nil {
+	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, optsCopy); err != nil {
 		err := fmt.Sprintf("failed to start smeshing: %v", err)
 		log.Error(err)
 		return nil, status.Error(codes.Internal, err)
