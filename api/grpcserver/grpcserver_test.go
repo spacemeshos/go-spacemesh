@@ -611,8 +611,7 @@ func TestNodeService(t *testing.T) {
 	defer cancel()
 
 	grpcService := NewNodeService(ctx, &networkMock, meshAPI, &genTime, syncer)
-	shutDown := launchServer(t, cfg, grpcService)
-	defer shutDown()
+	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	c := pb.NewNodeServiceClient(conn)
@@ -700,8 +699,7 @@ func TestNodeService(t *testing.T) {
 func TestGlobalStateService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	svc := NewGlobalStateService(meshAPI, conStateAPI)
-	shutDown := launchServer(t, cfg, svc)
-	defer shutDown()
+	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -984,8 +982,7 @@ func TestSmesherService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	smeshingAPI := &SmeshingAPIMock{}
 	svc := NewSmesherService(&PostAPIMock{}, smeshingAPI, 10*time.Millisecond)
-	shutDown := launchServer(t, cfg, svc)
-	defer shutDown()
+	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -1124,8 +1121,7 @@ func TestSmesherService(t *testing.T) {
 func TestMeshService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
-	shutDown := launchServer(t, cfg, grpcService)
-	t.Cleanup(func() { shutDown() })
+	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -1662,8 +1658,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil)
 
 	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, txHandler)
-	shutDown := launchServer(t, cfg, grpcService)
-	defer shutDown()
+	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -1702,8 +1697,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(errors.New("bla"))
 
 	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, txHandler)
-	shutDown := launchServer(t, cfg, grpcService)
-	defer shutDown()
+	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -1737,8 +1731,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).Times(numTxs)
 
 	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, txHandler)
-	shutDown := launchServer(t, cfg, grpcService)
-	defer shutDown()
+	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1767,8 +1760,7 @@ func TestTransactionService(t *testing.T) {
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, txHandler)
-	shutDown := launchServer(t, cfg, grpcService)
-	defer shutDown()
+	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -2118,8 +2110,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	t.Cleanup(events.CloseEventReporter)
 
 	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
-	shutDown := launchServer(t, cfg, grpcService)
-	defer shutDown()
+	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -2175,8 +2166,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	t.Cleanup(events.CloseEventReporter)
 
 	svc := NewGlobalStateService(meshAPI, conStateAPI)
-	shutDown := launchServer(t, cfg, svc)
-	t.Cleanup(shutDown)
+	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -2235,8 +2225,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	t.Cleanup(events.CloseEventReporter)
 
 	svc := NewGlobalStateService(meshAPI, conStateAPI)
-	shutDown := launchServer(t, cfg, svc)
-	defer shutDown()
+	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -2296,8 +2285,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	t.Cleanup(events.CloseEventReporter)
 
 	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
-	shutDown := launchServer(t, cfg, grpcService)
-	defer shutDown()
+	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -2439,7 +2427,7 @@ func TestMultiService(t *testing.T) {
 	svc1 := NewNodeService(ctx, &networkMock, meshAPI, &genTime, syncer)
 	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, cfg, svc1, svc2)
-	defer shutDown()
+	t.Cleanup(shutDown)
 
 	c1 := pb.NewNodeServiceClient(dialGrpc(ctx, t, cfg.PublicListener))
 	c2 := pb.NewMeshServiceClient(dialGrpc(ctx, t, cfg.PublicListener))
@@ -2477,6 +2465,7 @@ func TestJsonApi(t *testing.T) {
 
 	// we cannot start the gateway service without enabling at least one service
 	shutDown := launchServer(t, cfg)
+	t.Cleanup(shutDown)
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 	url := fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/node/echo")
 	_, err := http.Post(url, "application/json", strings.NewReader(payload))
@@ -2490,8 +2479,7 @@ func TestJsonApi(t *testing.T) {
 
 	svc1 := NewNodeService(context.Background(), &networkMock, meshAPI, &genTime, syncer)
 	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
-	shutDown = launchServer(t, cfg, svc1, svc2)
-	defer shutDown()
+	t.Cleanup(launchServer(t, cfg, svc1, svc2))
 	time.Sleep(time.Second)
 
 	// generate request payload (api input params)
@@ -2515,8 +2503,7 @@ func TestDebugService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	identity := mocks.NewMockNetworkIdentity(ctrl)
 	svc := NewDebugService(conStateAPI, identity)
-	shutDown := launchServer(t, cfg, svc)
-	defer shutDown()
+	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -2583,8 +2570,7 @@ func TestEventsReceived(t *testing.T) {
 
 	txService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, nil)
 	gsService := NewGlobalStateService(meshAPI, conStateAPI)
-	shutDown := launchServer(t, cfg, txService, gsService)
-	defer shutDown()
+	t.Cleanup(launchServer(t, cfg, txService, gsService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -2662,8 +2648,7 @@ func TestTransactionsRewards(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	shutDown := launchServer(t, cfg, NewGlobalStateService(meshAPI, conStateAPI))
-	t.Cleanup(shutDown)
+	t.Cleanup(launchServer(t, cfg, NewGlobalStateService(meshAPI, conStateAPI)))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
