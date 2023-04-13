@@ -95,7 +95,8 @@ func createTestState(t *testing.T, gasLimit uint64) *testConState {
 	return &testConState{
 		ConservativeState: NewConservativeState(mvm, db,
 			WithCSConfig(cfg),
-			WithLogger(logger)),
+			WithLogger(logger),
+		),
 		logger: logger,
 		db:     db,
 		mvm:    mvm,
