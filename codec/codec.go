@@ -71,7 +71,7 @@ func Decode(buf []byte, value Decodable) error {
 	return nil
 }
 
-// Decode value from a byte buffer.
+// DecodeSome value from a byte buffer without checking for full consumption.
 func DecodeSome(buf []byte, value Decodable) error {
 	if _, err := DecodeFrom(bytes.NewBuffer(buf), value); err != nil {
 		return fmt.Errorf("decode from buffer: %w", err)
