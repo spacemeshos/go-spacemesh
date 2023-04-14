@@ -245,8 +245,6 @@ func (b *Builder) run(ctx context.Context) {
 		return
 	case <-b.layerClock.AwaitLayer(types.LayerID(0)):
 	}
-
-	b.waitForFirstATX(ctx)
 	b.loop(ctx)
 }
 
@@ -266,69 +264,6 @@ func (b *Builder) generateProof(ctx context.Context) error {
 	return nil
 }
 
-// waitForFirstATX waits until the first ATX can be published. The return value indicates
-// if the function waited or not (for testing).
-func (b *Builder) waitForFirstATX(ctx context.Context) bool {
-	currentLayer := b.layerClock.CurrentLayer()
-	currEpoch := currentLayer.GetEpoch()
-	if currEpoch == 0 { // genesis miner
-		return false
-	}
-	if prev, err := b.cdb.GetLastAtx(b.nodeID); err == nil {
-		if prev.PublishEpoch == currEpoch {
-			// miner has published in the current epoch
-			return false
-		}
-	}
-
-	// miner didn't publish ATX that targets current epoch.
-	// This estimate work if the majority of the nodes use poet servers that are configured the same way.
-	// TODO: do better when nodes use poet services with different phase shifts.
-	// We must wait till an ATX from other nodes arrives.
-	// To calculate the needed time we find the Poet round end
-	// and add twice network grace plus average PoST duration time.
-	// The first grace time is for poet proof propagation, The second one - for the ATX.
-	// Max wait time depicts an estimated safe moment to still be able to
-	// submit a poet challenge with the obtained ATX.
-	//
-	//                 Grace ──────┐
-	//                 Period      │  ┌─ATX arrives
-	//                     │  PoST │  │   ┌ wait deadline
-	//                     │ ┌───► │  │   │   ┌ Next round start
-	//   ┌────────────────┬┴─►   └─┴─►│   │   ▼───────
-	//   │  POET ROUND N  │           │   │   │ ROUND N+1
-	// ──┴────────────┬───┴───────────▼───▼───┴───────►time
-	//     EPOCH N    │      EPOCH N+1
-	// ───────────────┴───────────────────────────────
-	averagePostTime := time.Second // TODO should probably come up with a reasonable average value.
-	poetRoundEndOffset := b.poetCfg.PhaseShift - b.poetCfg.CycleGap
-	atxArrivalOffset := poetRoundEndOffset + 2*b.poetCfg.GracePeriod + averagePostTime
-	waitDeadline := b.layerClock.LayerToTime(currEpoch.FirstLayer()).Add(b.poetCfg.PhaseShift).Add(-b.poetCfg.GracePeriod)
-
-	var expectedAtxArrivalTime time.Time
-	if time.Now().After(waitDeadline) {
-		b.log.WithContext(ctx).With().Info("missed the window to submit a poet challenge. Will wait for next epoch.")
-		expectedAtxArrivalTime = b.layerClock.LayerToTime((currEpoch + 1).FirstLayer()).Add(atxArrivalOffset)
-	} else {
-		expectedAtxArrivalTime = b.layerClock.LayerToTime(currEpoch.FirstLayer()).Add(atxArrivalOffset)
-	}
-
-	waitTime := time.Until(expectedAtxArrivalTime)
-	timer := time.NewTimer(waitTime)
-	defer timer.Stop()
-
-	b.log.WithContext(ctx).With().Info("waiting for the first ATX", log.Duration("wait", waitTime))
-	select {
-	case <-ctx.Done():
-		return false
-	case <-timer.C:
-	}
-	b.log.WithContext(ctx).With().Info("ready to build first atx",
-		log.Stringer("current_layer", b.layerClock.CurrentLayer()),
-		log.Stringer("current_epoch", b.layerClock.CurrentLayer().GetEpoch()))
-	return true
-}
-
 func (b *Builder) receivePendingPoetClients() *[]PoetProvingServiceClient {
 	return b.pendingPoetClients.Swap(nil)
 }
@@ -345,22 +280,12 @@ func (b *Builder) loop(ctx context.Context) {
 		ctx := log.WithNewSessionID(ctx)
 		err := b.PublishActivationTx(ctx)
 		if err == nil {
-			b.log.WithContext(ctx).With().Info("waiting for atx to propagate before building the next challenge",
-				log.Duration("wait", b.poetRetryInterval),
-			)
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(b.poetRetryInterval):
-			}
 			continue
-		}
-
-		if errors.Is(err, context.Canceled) {
+		} else if errors.Is(err, context.Canceled) {
 			return
 		}
 
-		b.log.WithContext(ctx).With().Error("error attempting to publish atx",
+		b.log.WithContext(ctx).With().Warning("failed to publish atx",
 			b.layerClock.CurrentLayer(),
 			b.currentEpoch(),
 			log.Err(err),
@@ -403,18 +328,32 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		return nil, ctx.Err()
 	case <-b.syncer.RegisterForATXSynced():
 	}
+	current := b.currentEpoch()
+	if until := time.Until(b.poetRoundStart(current)); until > b.poetCfg.GracePeriod {
+		wait := until - b.poetCfg.GracePeriod
+		b.log.WithContext(ctx).With().Debug("waiting for fresh atxs",
+			log.Duration("till poet round", until),
+			log.Uint32("current epoch", current.Uint32()),
+			log.Duration("wait", wait),
+		)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(wait):
+		}
+	} else if until <= 0 {
+		return nil, fmt.Errorf("%w: builder doesn't have time to submit in epoch %d. poet round already started %v ago",
+			ErrATXChallengeExpired, current, -until)
+	}
 
-	atxID, pubEpoch, err := b.GetPositioningAtxInfo()
+	posAtx, err := b.GetPositioningAtx()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
 	}
+
 	challenge := &types.NIPostChallenge{
-		PublishEpoch:   pubEpoch + 1,
-		PositioningATX: atxID,
-	}
-	if challenge.TargetEpoch() < b.currentEpoch() {
-		b.discardChallenge()
-		return nil, fmt.Errorf("%w: selected outdated positioning ATX", ErrATXChallengeExpired)
+		PublishEpoch:   current + 1,
+		PositioningATX: posAtx,
 	}
 
 	if prevAtx, err := b.cdb.GetLastAtx(b.nodeID); err != nil {
@@ -506,11 +445,13 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 
 	challenge, err := b.loadChallenge()
 	if err != nil {
-		logger.With().Info("challenge not loaded", log.Err(err))
-		logger.With().Info("building new atx challenge", log.Stringer("current_epoch", b.currentEpoch()))
+		logger.With().Info("building new atx challenge",
+			log.Stringer("current_epoch", b.currentEpoch()),
+			log.Err(err),
+		)
 		challenge, err = b.buildNIPostChallenge(ctx)
 		if err != nil {
-			return fmt.Errorf("build new atx challenge: %w", err)
+			return err
 		}
 	}
 
@@ -551,9 +492,13 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	return nil
 }
 
+func (b *Builder) poetRoundStart(epoch types.EpochID) time.Time {
+	return b.layerClock.LayerToTime(epoch.FirstLayer()).Add(b.poetCfg.PhaseShift)
+}
+
 func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChallenge) (*types.ActivationTx, error) {
 	pubEpoch := challenge.PublishEpoch
-	nextPoetRoundStart := b.layerClock.LayerToTime(pubEpoch.FirstLayer()).Add(b.poetCfg.PhaseShift)
+	nextPoetRoundStart := b.poetRoundStart(pubEpoch)
 
 	// NiPoST must be ready before start of the next poet round.
 	buildingNipostCtx, cancel := context.WithDeadline(ctx, nextPoetRoundStart)
@@ -571,10 +516,10 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	)
 	select {
 	case <-ctx.Done():
-		return nil, fmt.Errorf("wait for publication epoch: %w", err)
+		return nil, fmt.Errorf("wait for publication epoch: %w", ctx.Err())
 	case <-b.layerClock.AwaitLayer(pubEpoch.FirstLayer()):
 	}
-	b.log.Info("publication epoch has arrived!")
+	b.log.Debug("publication epoch has arrived!")
 
 	if challenge.TargetEpoch() < b.currentEpoch() {
 		b.discardChallenge()
@@ -641,21 +586,17 @@ func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, 
 	return len(buf), nil
 }
 
-// GetPositioningAtxInfo returns id and publication layer from the best observed atx.
-func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.EpochID, error) {
+// GetPositioningAtx returns atx id from the newest epoch with the highest tick height.
+func (b *Builder) GetPositioningAtx() (types.ATXID, error) {
 	id, err := b.atxHandler.GetPosAtxID()
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
 			b.log.With().Info("using golden atx as positioning atx", b.goldenATXID)
-			return b.goldenATXID, 0, nil
+			return b.goldenATXID, nil
 		}
-		return types.ATXID{}, 0, fmt.Errorf("cannot find pos atx: %w", err)
+		return types.ATXID{}, fmt.Errorf("cannot find pos atx: %w", err)
 	}
-	atx, err := b.cdb.GetAtxHeader(id)
-	if err != nil {
-		return types.ATXID{}, 0, fmt.Errorf("inconsistent state: failed to get atx header: %w", err)
-	}
-	return id, atx.PublishEpoch, nil
+	return id, nil
 }
 
 // SignAndFinalizeAtx signs the atx with specified signer and calculates the ID of the ATX.
