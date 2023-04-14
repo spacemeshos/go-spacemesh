@@ -1,5 +1,5 @@
 // Package config provides configuration for GRPC and HTTP api servers
-package config
+package grpcserver
 
 import (
 	"time"

@@ -34,9 +34,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/mocks"
-	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -530,9 +528,9 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 	return buf.String()
 }
 
-var cfg = config.DefaultTestConfig()
+var cfg = DefaultTestConfig()
 
-func launchServer(tb testing.TB, cfg config.Config, services ...ServiceAPI) func() {
+func launchServer(tb testing.TB, cfg Config, services ...ServiceAPI) func() {
 	grpcService := New(cfg.PublicListener)
 	jsonService := NewJSONHTTPServer(cfg.JSONListener)
 
@@ -610,7 +608,9 @@ func TestNodeService(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	grpcService := NewNodeService(ctx, &networkMock, meshAPI, &genTime, syncer)
+	version := "v0.0.0"
+	build := "cafebabe"
+	grpcService := NewNodeService(ctx, &networkMock, meshAPI, &genTime, syncer, version, build)
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	conn := dialGrpc(ctx, t, cfg.PublicListener)
@@ -647,18 +647,12 @@ func TestNodeService(t *testing.T) {
 		}},
 		{"Version", func(t *testing.T) {
 			logtest.SetupGlobal(t)
-			// must set this manually as it's set up in main() when running
-			version := "abc123"
-			cmd.Version = version
 			res, err := c.Version(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, version, res.VersionString.Value)
 		}},
 		{"Build", func(t *testing.T) {
 			logtest.SetupGlobal(t)
-			// must set this manually as it's set up in main() when running
-			build := "abc123"
-			cmd.Commit = build
 			res, err := c.Build(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, build, res.BuildString.Value)
@@ -2424,7 +2418,7 @@ func TestMultiService(t *testing.T) {
 	syncer := mocks.NewMockSyncer(ctrl)
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
 
-	svc1 := NewNodeService(ctx, &networkMock, meshAPI, &genTime, syncer)
+	svc1 := NewNodeService(ctx, &networkMock, meshAPI, &genTime, syncer, "v0.0.0", "cafebabe")
 	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, cfg, svc1, svc2)
 	t.Cleanup(shutDown)
@@ -2477,7 +2471,7 @@ func TestJsonApi(t *testing.T) {
 	syncer := mocks.NewMockSyncer(ctrl)
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
 
-	svc1 := NewNodeService(context.Background(), &networkMock, meshAPI, &genTime, syncer)
+	svc1 := NewNodeService(context.Background(), &networkMock, meshAPI, &genTime, syncer, "v0.0.0", "cafebabe")
 	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	t.Cleanup(launchServer(t, cfg, svc1, svc2))
 	time.Sleep(time.Second)

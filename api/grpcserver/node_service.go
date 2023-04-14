@@ -12,7 +12,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/api"
-	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -26,6 +25,8 @@ type NodeService struct {
 	genTime     api.GenesisTimeAPI
 	peerCounter api.PeerCounter
 	syncer      api.Syncer
+	appVersion  string
+	appCommit   string
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -35,7 +36,13 @@ func (s NodeService) RegisterService(server *Server) {
 
 // NewNodeService creates a new grpc service using config data.
 func NewNodeService(
-	appCtx context.Context, peers api.PeerCounter, msh api.MeshAPI, genTime api.GenesisTimeAPI, syncer api.Syncer,
+	appCtx context.Context,
+	peers api.PeerCounter,
+	msh api.MeshAPI,
+	genTime api.GenesisTimeAPI,
+	syncer api.Syncer,
+	appVersion string,
+	appCommit string,
 ) *NodeService {
 	return &NodeService{
 		appCtx:      appCtx,
@@ -43,6 +50,8 @@ func NewNodeService(
 		genTime:     genTime,
 		peerCounter: peers,
 		syncer:      syncer,
+		appVersion:  appVersion,
+		appCommit:   appCommit,
 	}
 }
 
@@ -59,7 +68,7 @@ func (s NodeService) Echo(_ context.Context, in *pb.EchoRequest) (*pb.EchoRespon
 func (s NodeService) Version(context.Context, *empty.Empty) (*pb.VersionResponse, error) {
 	log.Info("GRPC NodeService.Version")
 	return &pb.VersionResponse{
-		VersionString: &pb.SimpleString{Value: cmd.Version},
+		VersionString: &pb.SimpleString{Value: s.appVersion},
 	}, nil
 }
 
@@ -67,7 +76,7 @@ func (s NodeService) Version(context.Context, *empty.Empty) (*pb.VersionResponse
 func (s NodeService) Build(context.Context, *empty.Empty) (*pb.BuildResponse, error) {
 	log.Info("GRPC NodeService.Build")
 	return &pb.BuildResponse{
-		BuildString: &pb.SimpleString{Value: cmd.Commit},
+		BuildString: &pb.SimpleString{Value: s.appCommit},
 	}, nil
 }
 

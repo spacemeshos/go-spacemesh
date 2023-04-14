@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -46,7 +46,7 @@ type Config struct {
 	Genesis         *GenesisConfig        `mapstructure:"genesis"`
 	Tortoise        tortoise.Config       `mapstructure:"tortoise"`
 	P2P             p2p.Config            `mapstructure:"p2p"`
-	API             apiConfig.Config      `mapstructure:"api"`
+	API             grpcserver.Config     `mapstructure:"api"`
 	HARE            hareConfig.Config     `mapstructure:"hare"`
 	HareEligibility eligConfig.Config     `mapstructure:"hare-eligibility"`
 	Beacon          beacon.Config         `mapstructure:"beacon"`
@@ -124,7 +124,7 @@ func DefaultConfig() Config {
 		Genesis:         DefaultGenesisConfig(),
 		Tortoise:        tortoise.DefaultConfig(),
 		P2P:             p2p.DefaultConfig(),
-		API:             apiConfig.DefaultConfig(),
+		API:             grpcserver.DefaultConfig(),
 		HARE:            hareConfig.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
 		Beacon:          beacon.DefaultConfig(),
@@ -144,7 +144,7 @@ func DefaultTestConfig() Config {
 	conf := DefaultConfig()
 	conf.BaseConfig = defaultTestConfig()
 	conf.P2P = p2p.DefaultConfig()
-	conf.API = apiConfig.DefaultTestConfig()
+	conf.API = grpcserver.DefaultTestConfig()
 	conf.Address = types.DefaultTestAddressConfig()
 	return conf
 }
