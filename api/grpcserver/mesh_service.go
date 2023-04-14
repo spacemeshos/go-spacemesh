@@ -9,7 +9,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -17,9 +16,9 @@ import (
 
 // MeshService exposes mesh data such as accounts, blocks, and transactions.
 type MeshService struct {
-	mesh           api.MeshAPI // Mesh
-	conState       api.ConservativeState
-	genTime        api.GenesisTimeAPI
+	mesh           meshAPI // Mesh
+	conState       conservativeState
+	genTime        genesisTimeAPI
 	layersPerEpoch uint32
 	genesisID      types.Hash20
 	layerDuration  time.Duration
@@ -34,7 +33,7 @@ func (s MeshService) RegisterService(server *Server) {
 
 // NewMeshService creates a new service using config data.
 func NewMeshService(
-	msh api.MeshAPI, cstate api.ConservativeState, genTime api.GenesisTimeAPI,
+	msh meshAPI, cstate conservativeState, genTime genesisTimeAPI,
 	layersPerEpoch uint32, genesisID types.Hash20, layerDuration time.Duration,
 	layerAvgSize uint32, txsPerProposal uint32,
 ) *MeshService {

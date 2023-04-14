@@ -14,7 +14,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -26,11 +25,11 @@ import (
 // TransactionService exposes transaction data, and a submit tx endpoint.
 type TransactionService struct {
 	db        *sql.Database
-	publisher api.Publisher // P2P Swarm
-	mesh      api.MeshAPI   // Mesh
-	conState  api.ConservativeState
-	syncer    api.Syncer
-	txHandler api.TxValidator
+	publisher pubsub.Publisher // P2P Swarm
+	mesh      meshAPI          // Mesh
+	conState  conservativeState
+	syncer    syncer
+	txHandler txValidator
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -41,11 +40,11 @@ func (s TransactionService) RegisterService(server *Server) {
 // NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
 	db *sql.Database,
-	publisher api.Publisher,
-	msh api.MeshAPI,
-	conState api.ConservativeState,
-	syncer api.Syncer,
-	txHandler api.TxValidator,
+	publisher pubsub.Publisher,
+	msh meshAPI,
+	conState conservativeState,
+	syncer syncer,
+	txHandler txValidator,
 ) *TransactionService {
 	return &TransactionService{
 		db:        db,
