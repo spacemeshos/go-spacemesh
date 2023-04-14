@@ -70,8 +70,7 @@ type testConState struct {
 	db     *sql.Database
 	mvm    *MockvmState
 
-	key crypto.PrivKey
-	id  peer.ID
+	id peer.ID
 }
 
 func (t *testConState) handler() *TxHandler {
@@ -87,7 +86,7 @@ func createTestState(t *testing.T, gasLimit uint64) *testConState {
 		NumTXsPerProposal: numTXsInProposal,
 	}
 	logger := logtest.New(t)
-	priv, pub, err := crypto.GenerateEd25519Key(nil)
+	_, pub, err := crypto.GenerateEd25519Key(nil)
 	require.NoError(t, err)
 	id, err := peer.IDFromPublicKey(pub)
 	require.NoError(t, err)
@@ -100,7 +99,6 @@ func createTestState(t *testing.T, gasLimit uint64) *testConState {
 		logger: logger,
 		db:     db,
 		mvm:    mvm,
-		key:    priv,
 		id:     id,
 	}
 }

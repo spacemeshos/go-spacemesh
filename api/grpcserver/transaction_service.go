@@ -30,7 +30,7 @@ type TransactionService struct {
 	mesh      api.MeshAPI   // Mesh
 	conState  api.ConservativeState
 	syncer    api.Syncer
-	txHandler txValidator
+	txHandler api.TxValidator
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -45,7 +45,7 @@ func NewTransactionService(
 	msh api.MeshAPI,
 	conState api.ConservativeState,
 	syncer api.Syncer,
-	txHandler txValidator,
+	txHandler api.TxValidator,
 ) *TransactionService {
 	return &TransactionService{
 		db:        db,
@@ -70,12 +70,10 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 	}
 
 	if err := s.txHandler.VerifyAndCacheTx(ctx, in.Transaction); err != nil {
-		log.Error("error verifying incoming tx: %v", err)
 		return nil, status.Error(codes.InvalidArgument, "Failed to verify transaction")
 	}
 
 	if err := s.publisher.Publish(ctx, pubsub.TxProtocol, in.Transaction); err != nil {
-		log.Error("error broadcasting incoming tx: %v", err)
 		return nil, status.Error(codes.Internal, "Failed to publish transaction")
 	}
 

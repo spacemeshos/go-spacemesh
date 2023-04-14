@@ -22,9 +22,9 @@ type GenesisTimeAPI interface {
 	CurrentLayer() types.LayerID
 }
 
-// LoggingAPI is an API to system loggers.
-type LoggingAPI interface {
-	SetLogLevel(loggerName, severity string) error
+// TxValidator is an API to validate and cache transactions.
+type TxValidator interface {
+	VerifyAndCacheTx(context.Context, []byte) error
 }
 
 // Syncer is the API to get sync status and to start sync.
@@ -60,7 +60,7 @@ type MeshAPI interface {
 }
 
 // NOTE that mockgen doesn't use source-mode to avoid generating mocks for all interfaces in this file.
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go . NetworkIdentity,AtxProvider,PostSetupProvider,Syncer
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go . NetworkIdentity,AtxProvider,PostSetupProvider,Syncer,TxValidator
 
 // NetworkIdentity interface.
 type NetworkIdentity interface {

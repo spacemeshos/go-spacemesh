@@ -1654,7 +1654,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(false)
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	txHandler := NewMocktxValidator(ctrl)
+	txHandler := mocks.NewMockTxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil)
 
 	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, txHandler)
@@ -1693,7 +1693,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	syncer := mocks.NewMockSyncer(ctrl)
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(true)
 	publisher := pubsubmocks.NewMockPublisher(ctrl) // publish is not called
-	txHandler := NewMocktxValidator(ctrl)
+	txHandler := mocks.NewMockTxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(errors.New("failed validation"))
 
 	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, txHandler)
@@ -1727,7 +1727,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).Times(numTxs)
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(numTxs)
-	txHandler := NewMocktxValidator(ctrl)
+	txHandler := mocks.NewMockTxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).Times(numTxs)
 
 	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, txHandler)
@@ -1756,7 +1756,7 @@ func TestTransactionService(t *testing.T) {
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	txHandler := NewMocktxValidator(ctrl)
+	txHandler := mocks.NewMockTxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer, txHandler)
