@@ -25,7 +25,7 @@ func CheckLayerFirstEncoding[T any, H scale.TypePtr[T]](t *testing.T, getLayerID
 		require.NoError(t, err)
 
 		lid := LayerID(rand.Uint32())
-		require.NoError(t, codec.Decode(buf.Bytes(), &lid))
+		require.NoError(t, codec.DecodeSome(buf.Bytes(), &lid))
 		require.Equal(t, getLayerID(object), lid)
 	})
 }

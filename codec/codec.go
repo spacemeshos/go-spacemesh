@@ -61,6 +61,18 @@ func Encode(value Encodable) ([]byte, error) {
 
 // Decode value from a byte buffer.
 func Decode(buf []byte, value Decodable) error {
+	n, err := DecodeFrom(bytes.NewBuffer(buf), value)
+	if err != nil {
+		return fmt.Errorf("decode from buffer: %w", err)
+	}
+	if n != len(buf) {
+		return fmt.Errorf("decode from buffer: not all bytes were consumed")
+	}
+	return nil
+}
+
+// Decode value from a byte buffer.
+func DecodeSome(buf []byte, value Decodable) error {
 	if _, err := DecodeFrom(bytes.NewBuffer(buf), value); err != nil {
 		return fmt.Errorf("decode from buffer: %w", err)
 	}

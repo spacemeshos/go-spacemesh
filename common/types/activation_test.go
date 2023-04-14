@@ -38,7 +38,7 @@ func TestActivationEncoding(t *testing.T) {
 	require.NoError(t, err)
 
 	var epoch types.EpochID
-	require.NoError(t, codec.Decode(buf.Bytes(), &epoch))
+	require.NoError(t, codec.DecodeSome(buf.Bytes(), &epoch))
 	require.Equal(t, object.PublishEpoch, epoch)
 }
 
