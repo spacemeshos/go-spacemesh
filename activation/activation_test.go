@@ -1079,3 +1079,51 @@ func TestBuilder_UpdatePoetsUnstable(t *testing.T) {
 	r.ErrorIs(err, ErrPoetServiceUnstable)
 	r.Nil(tab.receivePendingPoetClients())
 }
+
+func TestWaitPositioningAtx(t *testing.T) {
+	genesis := time.Now()
+	for _, tc := range []struct {
+		desc         string
+		shift, grace time.Duration
+
+		expect string
+	}{
+		{"no wait", 10 * time.Millisecond, 10 * time.Millisecond, ""},
+		{"wait", 10 * time.Millisecond, 0, ""},
+		{"round started", 0, 0, "poet round already started"},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			tab := newTestBuilder(t, WithPoetConfig(PoetConfig{
+				PhaseShift:  tc.shift,
+				GracePeriod: tc.grace,
+			}))
+			tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
+			tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(func(lid types.LayerID) time.Time {
+				return genesis.Add(time.Duration(lid) * layerDuration)
+			}).AnyTimes()
+
+			// everything else are stubs that are irrelevant for the test
+			tab.mhdlr.EXPECT().GetPosAtxID().Return(tab.goldenATXID, nil).AnyTimes()
+			tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
+			tab.mpost.EXPECT().CommitmentAtx().Return(tab.goldenATXID, nil).AnyTimes()
+			index := types.VRFPostIndex(0)
+			tab.mpost.EXPECT().VRFNonce().Return(&index, nil).AnyTimes()
+			tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).Return(&types.NIPost{}, time.Duration(0), nil).AnyTimes()
+			closed := make(chan struct{})
+			close(closed)
+			tab.mclock.EXPECT().AwaitLayer(types.EpochID(1).FirstLayer()).Return(closed).AnyTimes()
+			tab.mclock.EXPECT().AwaitLayer(types.EpochID(3).FirstLayer()).Return(make(chan struct{})).AnyTimes()
+			tab.mpub.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			tab.mhdlr.EXPECT().AwaitAtx(gomock.Any()).Return(closed).AnyTimes()
+			tab.mhdlr.EXPECT().UnsubscribeAtx(gomock.Any()).AnyTimes()
+
+			err := tab.PublishActivationTx(context.Background())
+			if len(tc.expect) > 0 {
+				require.ErrorContains(t, err, tc.expect)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
