@@ -534,9 +534,7 @@ func TestNodeService(t *testing.T) {
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
 	peerCounter := NewMockpeerCounter(ctrl)
 	peerCounter.EXPECT().PeerCount().Return(uint64(0)).AnyTimes()
-
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	genTime.EXPECT().GenesisTime().Return(time.Unix(genTimeUnix, 0)).AnyTimes()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -597,7 +595,6 @@ func TestNodeService(t *testing.T) {
 
 			layerCurrent := types.LayerID(layersPerEpoch) // end of first epoch
 			genTime.EXPECT().CurrentLayer().Return(layerCurrent)
-
 			req := &pb.StatusRequest{}
 			res, err := c.Status(context.Background(), req)
 			require.NoError(t, err)
@@ -610,7 +607,6 @@ func TestNodeService(t *testing.T) {
 			// Now do a mock check post-genesis
 			layerCurrent = types.LayerID(12)
 			genTime.EXPECT().CurrentLayer().Return(layerCurrent)
-
 			res, err = c.Status(context.Background(), req)
 			require.NoError(t, err)
 			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
@@ -917,7 +913,6 @@ func TestSmesherService(t *testing.T) {
 	postProvider.EXPECT().Config().Return(activation.DefaultPostConfig()).AnyTimes()
 	postProvider.EXPECT().Status().Return(&activation.PostSetupStatus{}).AnyTimes()
 	postProvider.EXPECT().ComputeProviders().Return(nil).AnyTimes()
-
 	smeshingAPI := &SmeshingAPIMock{}
 	svc := NewSmesherService(postProvider, smeshingAPI, 10*time.Millisecond)
 	t.Cleanup(launchServer(t, cfg, svc))
@@ -1060,9 +1055,9 @@ func TestMeshService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	genTime.EXPECT().GenesisTime().Return(time.Unix(genTimeUnix, 0)).AnyTimes()
+	genesis := time.Unix(genTimeUnix, 0)
+	genTime.EXPECT().GenesisTime().Return(genesis)
 	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
-
 	grpcService := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
@@ -1080,19 +1075,19 @@ func TestMeshService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(genTime.GenesisTime().Unix()), response.Unixtime.Value)
+			require.Equal(t, uint64(genesis.Unix()), response.Unixtime.Value)
 		}},
 		{"CurrentLayer", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.CurrentLayer(context.Background(), &pb.CurrentLayerRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint32(12), response.Layernum.Number)
+			require.Equal(t, layerCurrent.Uint32(), response.Layernum.Number)
 		}},
 		{"CurrentEpoch", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.CurrentEpoch(context.Background(), &pb.CurrentEpochRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(2), response.Epochnum.Value)
+			require.Equal(t, uint64(layerCurrent.GetEpoch()), response.Epochnum.Value)
 		}},
 		{"GenesisID", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -2054,9 +2049,6 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	genTime.EXPECT().GenesisTime().Return(time.Unix(genTimeUnix, 0)).AnyTimes()
-	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
-
 	grpcService := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
@@ -2234,9 +2226,6 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	genTime.EXPECT().GenesisTime().Return(time.Unix(genTimeUnix, 0)).AnyTimes()
-	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
-
 	grpcService := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
@@ -2378,9 +2367,8 @@ func TestMultiService(t *testing.T) {
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
 	peerCounter := NewMockpeerCounter(ctrl)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	genTime.EXPECT().GenesisTime().Return(time.Unix(genTimeUnix, 0)).AnyTimes()
-	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
-
+	genesis := time.Unix(genTimeUnix, 0)
+	genTime.EXPECT().GenesisTime().Return(genesis)
 	svc1 := NewNodeService(ctx, peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
 	svc2 := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, cfg, svc1, svc2)
@@ -2398,7 +2386,7 @@ func TestMultiService(t *testing.T) {
 	require.Equal(t, message, res1.Msg.Value)
 	res2, err2 := c2.GenesisTime(ctx, &pb.GenesisTimeRequest{})
 	require.NoError(t, err2)
-	require.Equal(t, uint64(genTime.GenesisTime().Unix()), res2.Unixtime.Value)
+	require.Equal(t, uint64(genesis.Unix()), res2.Unixtime.Value)
 
 	// Make sure that shutting down the grpc service shuts them both down
 	shutDown()
@@ -2435,9 +2423,8 @@ func TestJsonApi(t *testing.T) {
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
 	peerCounter := NewMockpeerCounter(ctrl)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	genTime.EXPECT().GenesisTime().Return(time.Unix(genTimeUnix, 0)).AnyTimes()
-	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
-
+	genesis := time.Unix(genTimeUnix, 0)
+	genTime.EXPECT().GenesisTime().Return(genesis)
 	svc1 := NewNodeService(context.Background(), peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
 	svc2 := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	t.Cleanup(launchServer(t, cfg, svc1, svc2))
@@ -2456,7 +2443,7 @@ func TestJsonApi(t *testing.T) {
 	require.Equal(t, http.StatusOK, respStatus2)
 	var msg2 pb.GenesisTimeResponse
 	require.NoError(t, jsonpb.UnmarshalString(respBody2, &msg2))
-	require.Equal(t, uint64(genTime.GenesisTime().Unix()), msg2.Unixtime.Value)
+	require.Equal(t, uint64(genesis.Unix()), msg2.Unixtime.Value)
 }
 
 func TestDebugService(t *testing.T) {
@@ -2747,9 +2734,6 @@ func TestMeshService_EpochStream(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	// genTime.EXPECT().GenesisTime().Return(time.Unix(genTimeUnix, 0)).AnyTimes()
-	// genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
-
 	srv := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	t.Cleanup(launchServer(t, cfg, srv))
 
