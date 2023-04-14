@@ -287,6 +287,7 @@ type App struct {
 	postSetupMgr     *activation.PostSetupManager
 	atxBuilder       *activation.Builder
 	atxHandler       *activation.Handler
+	txHandler        *txs.TxHandler
 	validator        *activation.Validator
 	keyExtractor     *signing.PubKeyExtractor
 	edVerifier       *signing.EdVerifier
@@ -578,7 +579,11 @@ func (app *App) initServices(
 	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
 
-	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
+	app.txHandler = txs.NewTxHandler(
+		app.conState,
+		app.host.ID(),
+		app.addLogger(TxHandlerLogger, lg),
+	)
 
 	app.hOracle = eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
@@ -710,7 +715,7 @@ func (app *App) initServices(
 		app.keyExtractor,
 		app.edVerifier,
 	)
-	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, txHandler, malfeasanceHandler)
+	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, app.txHandler, malfeasanceHandler)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
 		if newSyncer.ListenToGossip() {
@@ -726,15 +731,12 @@ func (app *App) initServices(
 	}
 
 	app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
-	app.host.Register(pubsub.BeaconProposalProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal))
-	app.host.Register(pubsub.BeaconFirstVotesProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes))
-	app.host.Register(pubsub.BeaconFollowingVotesProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
+	app.host.Register(pubsub.BeaconProposalProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal))
+	app.host.Register(pubsub.BeaconFirstVotesProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes))
+	app.host.Register(pubsub.BeaconFollowingVotesProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
 	app.host.Register(pubsub.ProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
 	app.host.Register(pubsub.AtxProtocol, pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx))
-	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
+	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, app.txHandler.HandleGossipTransaction))
 	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()))
 	app.host.Register(pubsub.BlockCertify, pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage))
 	app.host.Register(pubsub.MalfeasanceProof, pubsub.ChainGossipHandler(atxSyncHandler, malfeasanceHandler.HandleMalfeasanceProof))
@@ -867,7 +869,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, apiConf.SmesherStreamInterval, app.Config.SMESHING.Opts))
 	}
 	if apiConf.StartTransactionService {
-		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))
+		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler))
 	}
 	if apiConf.StartActivationService {
 		registerService(grpcserver.NewActivationService(app.cachedDB))
