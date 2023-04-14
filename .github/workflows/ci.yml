@@ -121,9 +121,21 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
+        # We use a matrix to split packages into 2 parts to halve the testing time.
+        packages:
+          - part1
+          - part2
         include:
           - os: ubuntu-latest
             allow-failure: "false"
+          - packages: part1
+            package-selection: "go list ./hare/... ./activation/... ./beacon/..."
+          - packages: part2
+            package-selection: "go list ./...  \
+              | grep -v github.com/spacemeshos/go-spacemesh/systest/tests \
+              | grep -v github.com/spacemeshos/go-spacemesh/hare \
+              | grep -v github.com/spacemeshos/go-spacemesh/activation \
+              | grep -v github.com/spacemeshos/go-spacemesh/beacon"
     steps:
       # as we use some request to localhost, sometimes it gives us flaky tests. try to disable tcp offloading for fix it
       # https://github.com/actions/virtual-environments/issues/1187
@@ -139,7 +151,7 @@ jobs:
         with:
           go-version: ${{ env.go-version }}
       - name: setup env
-        run: make install
+        run: make install && make get-libs
       - name: Clear test cache
         run: make clear-test-cache
       - name: unit tests
@@ -147,7 +159,7 @@ jobs:
         env:
           GOTESTSUM_FORMAT: standard-verbose
           GOTESTSUM_JUNITFILE: unit-tests.xml
-        run: make test
+        run: eval $(make print-test-env) gotestsum -- -p 1 -race -timeout 5m $(${{ matrix.package-selection }})
         continue-on-error: ${{ matrix.allow-failure == 'true' }}
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v3
@@ -168,11 +180,23 @@ jobs:
         os:
           - macos-latest
           - windows-latest
+        # We use a matrix to split packages into 2 parts to halve the testing time.
+        packages:
+          - part1
+          - part2
         include:
           - os: macos-latest
             allow-failure: "true"
           - os: windows-latest
             allow-failure: "true"
+          - packages: part1
+            package-selection: "go list ./hare/... ./activation/... ./beacon/..."
+          - packages: part2
+            package-selection: "go list ./...  \
+              | grep -v github.com/spacemeshos/go-spacemesh/systest/tests \
+              | grep -v github.com/spacemeshos/go-spacemesh/hare \
+              | grep -v github.com/spacemeshos/go-spacemesh/activation \
+              | grep -v github.com/spacemeshos/go-spacemesh/beacon"
     steps:
       - name: disable TCP/UDP offload
         if: ${{ matrix.os == 'macos-latest' }}
@@ -190,7 +214,7 @@ jobs:
         with:
           go-version: ${{ env.go-version }}
       - name: setup env
-        run: make install
+        run: make install && make get-libs
       - name: Clear test cache
         run: make clear-test-cache
       - name: unit tests
@@ -198,7 +222,7 @@ jobs:
         env:
           GOTESTSUM_FORMAT: standard-verbose
           GOTESTSUM_JUNITFILE: unit-tests.xml
-        run: make test
+        run: eval $(make print-test-env) gotestsum -- -p 1 -race -timeout 5m $(${{ matrix.package-selection }})
         continue-on-error: ${{ matrix.allow-failure == 'true' }}
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v3
