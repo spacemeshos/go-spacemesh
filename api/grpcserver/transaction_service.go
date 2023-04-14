@@ -30,6 +30,7 @@ type TransactionService struct {
 	mesh      api.MeshAPI   // Mesh
 	conState  api.ConservativeState
 	syncer    api.Syncer
+	txHandler api.TxValidator
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -44,6 +45,7 @@ func NewTransactionService(
 	msh api.MeshAPI,
 	conState api.ConservativeState,
 	syncer api.Syncer,
+	txHandler api.TxValidator,
 ) *TransactionService {
 	return &TransactionService{
 		db:        db,
@@ -51,6 +53,7 @@ func NewTransactionService(
 		mesh:      msh,
 		conState:  conState,
 		syncer:    syncer,
+		txHandler: txHandler,
 	}
 }
 
@@ -63,16 +66,18 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 	}
 
 	if !s.syncer.IsSynced(ctx) {
-		return nil, status.Error(codes.FailedPrecondition,
-			"Cannot submit transaction, node is not in sync yet, try again later")
+		return nil, status.Error(codes.FailedPrecondition, "Cannot submit transaction, node is not in sync yet, try again later")
+	}
+
+	if err := s.txHandler.VerifyAndCacheTx(ctx, in.Transaction); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "Failed to verify transaction")
 	}
 
 	if err := s.publisher.Publish(ctx, pubsub.TxProtocol, in.Transaction); err != nil {
-		log.Error("error broadcasting incoming tx: %v", err)
 		return nil, status.Error(codes.Internal, "Failed to publish transaction")
 	}
-	raw := types.NewRawTx(in.Transaction)
 
+	raw := types.NewRawTx(in.Transaction)
 	return &pb.SubmitTransactionResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 		Txstate: &pb.TransactionState{
@@ -106,8 +111,7 @@ func (s TransactionService) TransactionsState(_ context.Context, in *pb.Transact
 	log.Info("GRPC TransactionService.TransactionsState")
 
 	if in.TransactionId == nil || len(in.TransactionId) == 0 {
-		return nil, status.Error(codes.InvalidArgument,
-			"`TransactionId` must include one or more transaction IDs")
+		return nil, status.Error(codes.InvalidArgument, "`TransactionId` must include one or more transaction IDs")
 	}
 
 	res := &pb.TransactionsStateResponse{}
