@@ -49,7 +49,7 @@ func TestAdd(t *testing.T) {
 	require.Equal(t, beacon, got)
 }
 
-func TestAddOverwrite(t *testing.T) {
+func TestSet(t *testing.T) {
 	db := sql.InMemory()
 
 	_, err := Get(db, types.EpochID(baseEpoch))
