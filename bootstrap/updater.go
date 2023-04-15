@@ -231,11 +231,13 @@ func get(ctx context.Context, client *http.Client, cfg Config, lastUpdateId int6
 
 	ctx, cancel := context.WithTimeout(ctx, httpTimeout)
 	defer cancel()
+	t0 := time.Now()
 	data, err := query(ctx, client, resource)
 	if err != nil {
 		queryFailureCount.Add(1)
 		return nil, nil, err
 	}
+	queryDuration.WithLabelValues(labelQuery).Observe(float64(time.Since(t0)))
 	queryOkCount.Add(1)
 	if len(data) == 0 { // no update data
 		return nil, nil, nil

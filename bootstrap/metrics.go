@@ -1,15 +1,18 @@
 package bootstrap
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
 const (
 	namespace = "bootstrap"
 
-	// labels for hare consensus output.
 	success = "ok"
 	failure = "fail"
+
+	labelQuery = "query"
 )
 
 var (
@@ -30,4 +33,12 @@ var (
 	)
 	updateOkCount      = updateCount.WithLabelValues(success)
 	updateFailureCount = updateCount.WithLabelValues(failure)
+
+	queryDuration = metrics.NewHistogramWithBuckets(
+		"query_duration",
+		namespace,
+		"duration in ns for querying update",
+		[]string{"step"},
+		prometheus.ExponentialBuckets(1_000_000, 4, 10),
+	)
 )
