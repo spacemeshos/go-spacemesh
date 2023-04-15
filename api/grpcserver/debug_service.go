@@ -76,8 +76,7 @@ func (d DebugService) NetworkInfo(ctx context.Context, _ *empty.Empty) (*pb.Netw
 func (d DebugService) ActiveSet(ctx context.Context, req *pb.ActiveSetRequest) (*pb.ActiveSetResponse, error) {
 	actives, err := d.oracle.ActiveSet(ctx, types.EpochID(req.Epoch))
 	if err != nil {
-		log.With().Error("failed to get active set", log.Uint32("epoch", req.Epoch), log.Err(err))
-		return nil, status.Errorf(codes.Internal, "error getting active set")
+		return nil, status.Errorf(codes.Internal, fmt.Sprintf("active set for epoch %d: %s", req.Epoch, err.Error()))
 	}
 	resp := &pb.ActiveSetResponse{}
 	for _, atxid := range actives {
