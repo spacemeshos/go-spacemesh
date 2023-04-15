@@ -64,7 +64,7 @@ func TestAddOverwrite(t *testing.T) {
 	require.Equal(t, beacon, got)
 
 	fallbackBeacon := types.HexToBeacon("0x2")
-	require.NoError(t, AddOverwrite(db, baseEpoch, fallbackBeacon))
+	require.NoError(t, Set(db, baseEpoch, fallbackBeacon))
 	got, err = Get(db, baseEpoch)
 	require.NoError(t, err)
 	require.Equal(t, fallbackBeacon, got)

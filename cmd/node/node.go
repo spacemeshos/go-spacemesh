@@ -138,6 +138,7 @@ func GetCommand() *cobra.Command {
 				// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
 				go func() {
 					app.Cleanup(cleanupCtx)
+					_ = app.eg.Wait()
 					close(done)
 				}()
 				select {
@@ -762,7 +763,7 @@ func (app *App) initServices(
 	return nil
 }
 
-func (app *App) listenToUpdates(ctx context.Context) {
+func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 	app.eg.Go(func() error {
 		ch := app.updater.Subscribe()
 		app.updater.Start(ctx)
@@ -772,7 +773,10 @@ func (app *App) listenToUpdates(ctx context.Context) {
 				return nil
 			default:
 				if update.Data.Beacon != types.EmptyBeacon {
-					app.beaconProtocol.UpdateBeacon(update.Data.Epoch, update.Data.Beacon)
+					if err := app.beaconProtocol.UpdateBeacon(update.Data.Epoch, update.Data.Beacon); err != nil {
+						appErr <- err
+						return nil
+					}
 				}
 				if len(update.Data.ActiveSet) > 0 {
 					app.hOracle.UpdateActiveSet(update.Data.Epoch, update.Data.ActiveSet)
@@ -783,11 +787,14 @@ func (app *App) listenToUpdates(ctx context.Context) {
 	})
 }
 
-func (app *App) startServices(ctx context.Context) error {
+func (app *App) startServices(ctx context.Context, appErr chan error) error {
 	if err := app.fetcher.Start(); err != nil {
 		return fmt.Errorf("failed to start fetcher: %w", err)
 	}
-	go app.startSyncer(ctx)
+	app.eg.Go(func() error {
+		app.startSyncer(ctx)
+		return nil
+	})
 	app.beaconProtocol.Start(ctx)
 
 	app.blockGen.Start()
@@ -816,7 +823,7 @@ func (app *App) startServices(ctx context.Context) error {
 	}
 
 	if app.updater != nil {
-		app.listenToUpdates(ctx)
+		app.listenToUpdates(ctx, appErr)
 	}
 	return nil
 }
@@ -980,8 +987,6 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	events.CloseEventReporter()
-
-	_ = app.eg.Wait()
 }
 
 // LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists.
@@ -1083,16 +1088,17 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	/* Setup monitoring */
-	pprofErr := make(chan error, 1)
+	appErr := make(chan error, 100)
 	if app.Config.PprofHTTPServer {
 		logger.Info("starting pprof server")
 		srv := &http.Server{Addr: ":6060"}
 		defer srv.Shutdown(ctx)
-		go func() {
+		app.eg.Go(func() error {
 			if err := srv.ListenAndServe(); err != nil {
-				pprofErr <- fmt.Errorf("cannot start pprof http server: %w", err)
+				appErr <- fmt.Errorf("cannot start pprof http server: %w", err)
 			}
-		}()
+			return nil
+		})
 	}
 
 	if app.Config.ProfilerURL != "" {
@@ -1190,7 +1196,7 @@ func (app *App) Start(ctx context.Context) error {
 			app.host.ID().String(), app.Config.Genesis.GenesisID().ShortString())
 	}
 
-	if err := app.startServices(ctx); err != nil {
+	if err := app.startServices(ctx, appErr); err != nil {
 		return err
 	}
 
@@ -1209,20 +1215,19 @@ func (app *App) Start(ctx context.Context) error {
 		Msg:   "node is shutting down",
 		Level: zapcore.InfoLevel,
 	})
-	syncErr := make(chan error, 1)
+	// TODO: pass app.eg to components and wait for them collectively
 	if app.ptimesync != nil {
-		go func() {
-			syncErr <- app.ptimesync.Wait()
-		}()
+		app.eg.Go(func() error {
+			appErr <- app.ptimesync.Wait()
+			return nil
+		})
 	}
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	select {
 	case <-ctx.Done():
 		return nil
-	case err := <-pprofErr:
-		return err
-	case err := <-syncErr:
+	case err = <-appErr:
 		return err
 	}
 }

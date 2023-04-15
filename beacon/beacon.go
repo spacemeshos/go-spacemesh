@@ -242,14 +242,15 @@ func (pd *ProtocolDriver) Start(ctx context.Context) {
 	})
 }
 
-func (pd *ProtocolDriver) UpdateBeacon(epoch types.EpochID, beacon types.Beacon) {
+func (pd *ProtocolDriver) UpdateBeacon(epoch types.EpochID, beacon types.Beacon) error {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	if err := beacons.AddOverwrite(pd.cdb, epoch, beacon); err != nil {
-		pd.logger.With().Error("failed to persist fallback beacon", epoch, beacon, log.Err(err))
+	if err := beacons.Set(pd.cdb, epoch, beacon); err != nil {
+		return fmt.Errorf("persist fallback beacon epoch %v, beacon %v: %w", epoch, beacon, err)
 	}
 	pd.beacons[epoch] = beacon
 	pd.logger.With().Info("using fallback beacon", epoch, beacon)
+	return nil
 }
 
 // Close closes ProtocolDriver.

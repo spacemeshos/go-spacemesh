@@ -42,7 +42,7 @@ func Add(db sql.Executor, epoch types.EpochID, beacon types.Beacon) error {
 	return nil
 }
 
-func AddOverwrite(db sql.Executor, epoch types.EpochID, beacon types.Beacon) error {
+func Set(db sql.Executor, epoch types.EpochID, beacon types.Beacon) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(epoch))
 		stmt.BindBytes(2, beacon.Bytes())

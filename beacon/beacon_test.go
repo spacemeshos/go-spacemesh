@@ -178,7 +178,7 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	now := time.Now()
 	for i := 0; i < numNodes; i++ {
 		node := newTestDriver(t, cfg, publisher)
-		node.UpdateBeacon(types.EpochID(2), bootstrap)
+		require.NoError(t, node.UpdateBeacon(types.EpochID(2), bootstrap))
 		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 		node.mClock.EXPECT().CurrentLayer().Return(current).AnyTimes()
 		node.mClock.EXPECT().LayerToTime(current).Return(now).AnyTimes()
@@ -233,7 +233,7 @@ func TestBeacon_NoProposals(t *testing.T) {
 	bootstrap := types.Beacon{1, 2, 3, 4}
 	for i := 0; i < numNodes; i++ {
 		node := newTestDriver(t, cfg, publisher)
-		node.UpdateBeacon(types.EpochID(2), bootstrap)
+		require.NoError(t, node.UpdateBeacon(types.EpochID(2), bootstrap))
 		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 		node.mClock.EXPECT().CurrentLayer().Return(current).AnyTimes()
 		node.mClock.EXPECT().LayerToTime(current).Return(now).AnyTimes()
@@ -279,7 +279,7 @@ func TestBeaconNotSynced(t *testing.T) {
 	require.Equal(t, types.EmptyBeacon, got)
 
 	bootstrap := types.Beacon{1, 2, 3, 4}
-	tpd.UpdateBeacon(types.EpochID(2), bootstrap)
+	require.NoError(t, tpd.UpdateBeacon(types.EpochID(2), bootstrap))
 	got, err = tpd.GetBeacon(types.EpochID(2))
 	require.NoError(t, err)
 	require.Equal(t, bootstrap, got)
