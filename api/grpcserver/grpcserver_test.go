@@ -1092,7 +1092,7 @@ func TestMeshService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.CurrentEpoch(context.Background(), &pb.CurrentEpochRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(layerCurrent.GetEpoch()), response.Epochnum.Value)
+			require.Equal(t, layerCurrent.GetEpoch().Uint32(), response.Epochnum.Number)
 		}},
 		{"GenesisID", func(t *testing.T) {
 			logtest.SetupGlobal(t)
