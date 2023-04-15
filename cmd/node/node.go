@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	apiconf "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -823,21 +822,21 @@ func (app *App) startServices(ctx context.Context) error {
 	return nil
 }
 
-func (app *App) initService(ctx context.Context, svc apiconf.Service) (grpcserver.ServiceAPI, error) {
+func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcserver.ServiceAPI, error) {
 	switch svc {
-	case apiconf.Debug:
+	case grpcserver.Debug:
 		return grpcserver.NewDebugService(app.conState, app.host), nil
-	case apiconf.GlobalState:
+	case grpcserver.GlobalState:
 		return grpcserver.NewGlobalStateService(app.mesh, app.conState), nil
-	case apiconf.Mesh:
+	case grpcserver.Mesh:
 		return grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal)), nil
-	case apiconf.Node:
-		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer), nil
-	case apiconf.Smesher:
+	case grpcserver.Node:
+		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
+	case grpcserver.Smesher:
 		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval), nil
-	case apiconf.Transaction:
+	case grpcserver.Transaction:
 		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
-	case apiconf.Activation:
+	case grpcserver.Activation:
 		return grpcserver.NewActivationService(app.cachedDB), nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
@@ -856,7 +855,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 	logger := app.addLogger(GRPCLogger, app.log).Zap()
 	grpczap.SetGrpcLoggerV2(grpclog, logger)
 	var (
-		unique = map[apiconf.Service]struct{}{}
+		unique = map[grpcserver.Service]struct{}{}
 		public []grpcserver.ServiceAPI
 	)
 	if len(app.Config.API.PublicServices) > 0 {

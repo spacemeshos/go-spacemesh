@@ -49,6 +49,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second)
 
+	types.DefaultTestAddressConfig()
 	addr, err := types.StringToAddress("stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5")
 	require.NoError(t, err)
 	smeshingProvider.EXPECT().StartSmeshing(addr, activation.PostSetupOpts{
