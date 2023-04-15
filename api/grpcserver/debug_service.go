@@ -11,7 +11,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -19,9 +18,9 @@ import (
 
 // DebugService exposes global state data, output from the STF.
 type DebugService struct {
-	conState api.ConservativeState
-	identity api.NetworkIdentity
-	oracle   api.Oracle
+	conState conservativeState
+	identity networkIdentity
+	oracle   oracle
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -30,7 +29,7 @@ func (d DebugService) RegisterService(server *Server) {
 }
 
 // NewDebugService creates a new grpc service using config data.
-func NewDebugService(conState api.ConservativeState, host api.NetworkIdentity, oracle api.Oracle) *DebugService {
+func NewDebugService(conState conservativeState, host networkIdentity, oracle oracle) *DebugService {
 	return &DebugService{
 		conState: conState,
 		identity: host,

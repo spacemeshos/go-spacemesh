@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	apiconf "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -296,6 +295,7 @@ type App struct {
 	postSetupMgr       *activation.PostSetupManager
 	atxBuilder         *activation.Builder
 	atxHandler         *activation.Handler
+	txHandler          *txs.TxHandler
 	validator          *activation.Validator
 	edVerifier         *signing.EdVerifier
 	beaconProtocol     *beacon.ProtocolDriver
@@ -579,7 +579,11 @@ func (app *App) initServices(
 	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
 
-	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
+	app.txHandler = txs.NewTxHandler(
+		app.conState,
+		app.host.ID(),
+		app.addLogger(TxHandlerLogger, lg),
+	)
 
 	app.hOracle = eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
@@ -710,7 +714,7 @@ func (app *App) initServices(
 		app.hare,
 		app.edVerifier,
 	)
-	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, txHandler, malfeasanceHandler)
+	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, app.txHandler, malfeasanceHandler)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
 		if newSyncer.ListenToGossip() {
@@ -726,15 +730,12 @@ func (app *App) initServices(
 	}
 
 	app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
-	app.host.Register(pubsub.BeaconProposalProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal))
-	app.host.Register(pubsub.BeaconFirstVotesProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes))
-	app.host.Register(pubsub.BeaconFollowingVotesProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
+	app.host.Register(pubsub.BeaconProposalProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal))
+	app.host.Register(pubsub.BeaconFirstVotesProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes))
+	app.host.Register(pubsub.BeaconFollowingVotesProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
 	app.host.Register(pubsub.ProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
 	app.host.Register(pubsub.AtxProtocol, pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx))
-	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
+	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, app.txHandler.HandleGossipTransaction))
 	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()))
 	app.host.Register(pubsub.BlockCertify, pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage))
 	app.host.Register(pubsub.MalfeasanceProof, pubsub.ChainGossipHandler(atxSyncHandler, malfeasanceHandler.HandleMalfeasanceProof))
@@ -828,21 +829,21 @@ func (app *App) startServices(ctx context.Context, appErr chan error) error {
 	return nil
 }
 
-func (app *App) initService(ctx context.Context, svc apiconf.Service) (grpcserver.ServiceAPI, error) {
+func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcserver.ServiceAPI, error) {
 	switch svc {
-	case apiconf.Debug:
+	case grpcserver.Debug:
 		return grpcserver.NewDebugService(app.conState, app.host, app.hOracle), nil
-	case apiconf.GlobalState:
+	case grpcserver.GlobalState:
 		return grpcserver.NewGlobalStateService(app.mesh, app.conState), nil
-	case apiconf.Mesh:
+	case grpcserver.Mesh:
 		return grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal)), nil
-	case apiconf.Node:
-		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer), nil
-	case apiconf.Smesher:
+	case grpcserver.Node:
+		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
+	case grpcserver.Smesher:
 		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval), nil
-	case apiconf.Transaction:
-		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer), nil
-	case apiconf.Activation:
+	case grpcserver.Transaction:
+		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
+	case grpcserver.Activation:
 		return grpcserver.NewActivationService(app.cachedDB), nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
@@ -861,7 +862,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 	logger := app.addLogger(GRPCLogger, app.log).Zap()
 	grpczap.SetGrpcLoggerV2(grpclog, logger)
 	var (
-		unique = map[apiconf.Service]struct{}{}
+		unique = map[grpcserver.Service]struct{}{}
 		public []grpcserver.ServiceAPI
 	)
 	if len(app.Config.API.PublicServices) > 0 {

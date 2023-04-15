@@ -9,7 +9,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -17,8 +16,8 @@ import (
 
 // GlobalStateService exposes global state data, output from the STF.
 type GlobalStateService struct {
-	mesh     api.MeshAPI
-	conState api.ConservativeState
+	mesh     meshAPI
+	conState conservativeState
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -27,7 +26,7 @@ func (s GlobalStateService) RegisterService(server *Server) {
 }
 
 // NewGlobalStateService creates a new grpc service using config data.
-func NewGlobalStateService(msh api.MeshAPI, conState api.ConservativeState) *GlobalStateService {
+func NewGlobalStateService(msh meshAPI, conState conservativeState) *GlobalStateService {
 	return &GlobalStateService{
 		mesh:     msh,
 		conState: conState,
