@@ -141,10 +141,14 @@ func TestFirstInEpoch(t *testing.T) {
 		types.LayerID(2*layersPerEpoch - 1): {4}, // last layer of epoch 1
 		// epoch 2 has no hare output
 		types.LayerID(3 * layersPerEpoch): {5}, // first layer of epoch 3
+		// epoch 4 has hare output but no cert
 	}
 	for lid, bid := range lyrBlocks {
-		require.NoError(t, SetHareOutput(db, lid, bid))
+		require.NoError(t, Add(db, lid, &types.Certificate{
+			BlockID: bid,
+		}))
 	}
+	require.NoError(t, SetHareOutput(db, types.EpochID(4).FirstLayer(), types.BlockID{1, 2, 3}))
 
 	got, err := FirstInEpoch(db, types.EpochID(0))
 	require.NoError(t, err)
@@ -161,4 +165,8 @@ func TestFirstInEpoch(t *testing.T) {
 	got, err = FirstInEpoch(db, types.EpochID(3))
 	require.NoError(t, err)
 	require.Equal(t, types.BlockID{5}, got)
+
+	got, err = FirstInEpoch(db, types.EpochID(4))
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Equal(t, types.EmptyBlockID, got)
 }

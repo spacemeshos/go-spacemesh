@@ -39,9 +39,6 @@ type Generator struct {
 
 	hareCh      chan hare.LayerOutput
 	hareOutputs map[types.LayerID]hare.LayerOutput
-
-	stats     stats
-	collector *collector
 }
 
 // Config is the config for Generator.
@@ -61,29 +58,6 @@ func defaultConfig() Config {
 		BlockGasLimit:      math.MaxUint64,
 		OptFilterThreshold: 90,
 	}
-}
-
-type stats struct {
-	lock       sync.Mutex
-	blockCount map[types.EpochID]int
-}
-
-func (s *stats) Add(block *types.Block) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	epoch := block.LayerIndex.GetEpoch()
-	s.blockCount[epoch]++
-	delete(s.blockCount, epoch-2)
-}
-
-func (s *stats) Get() map[types.EpochID]int {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	result := make(map[types.EpochID]int)
-	for epoch, count := range s.blockCount {
-		result[epoch] = count
-	}
-	return result
 }
 
 // GeneratorOpt for configuring Generator.
@@ -138,7 +112,6 @@ func NewGenerator(
 		cert:        c,
 		patrol:      p,
 		hareOutputs: map[types.LayerID]hare.LayerOutput{},
-		stats:       stats{blockCount: map[types.EpochID]int{}},
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -151,7 +124,6 @@ func NewGenerator(
 func (g *Generator) Start() {
 	g.once.Do(func() {
 		g.eg.Go(func() error {
-			g.collector = newCollector(g)
 			return g.run()
 		})
 	})
@@ -164,10 +136,6 @@ func (g *Generator) Stop() {
 	if err != nil && !errors.Is(err, context.Canceled) {
 		g.logger.With().Error("blockGen task failure", log.Err(err))
 	}
-}
-
-func (g *Generator) BlockCounts() map[types.EpochID]int {
-	return g.stats.Get()
 }
 
 func (g *Generator) run() error {
@@ -260,7 +228,6 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) error {
 		} else {
 			blockOkCnt.Inc()
 			hareOutput = block.ID()
-			g.stats.Add(block)
 		}
 	} else {
 		emptyOutputCnt.Inc()

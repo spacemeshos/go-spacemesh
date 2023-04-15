@@ -59,7 +59,7 @@ func FirstInEpoch(db sql.Executor, epoch types.EpochID) (types.BlockID, error) {
 		rows   int
 	)
 	if rows, err = db.Exec(`
-		select block from certificates where layer between ?1 and ?2 and valid = 1
+		select block from certificates where layer between ?1 and ?2 and valid = 1 and cert is not null
 		order by layer asc limit 1;`, func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(epoch.FirstLayer()))
 		stmt.BindInt64(2, int64((epoch+1).FirstLayer()-1))

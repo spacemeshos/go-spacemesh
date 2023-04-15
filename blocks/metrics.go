@@ -33,18 +33,16 @@ var (
 )
 
 type collector struct {
-	*Generator
-	reg           *prometheus.Registry
-	epochBlockCnt *prometheus.Desc
+	*Certifier
+	epochCertCount *prometheus.Desc
 }
 
-func newCollector(g *Generator) *collector {
+func newCollector(certifier *Certifier) *collector {
 	c := &collector{
-		Generator: g,
-		reg:       prometheus.NewRegistry(),
-		epochBlockCnt: prometheus.NewDesc(
-			prometheus.BuildFQName(metrics.Namespace, namespace, "block_counts"),
-			"number of blocks created in each epoch",
+		Certifier: certifier,
+		epochCertCount: prometheus.NewDesc(
+			prometheus.BuildFQName(metrics.Namespace, namespace, "cert_count"),
+			"number of certificate created/synced in each epoch",
 			[]string{labelEpoch},
 			nil,
 		),
@@ -63,11 +61,11 @@ func (c *collector) Stop() {
 }
 
 func (c *collector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.epochBlockCnt
+	ch <- c.epochCertCount
 }
 
 func (c *collector) Collect(ch chan<- prometheus.Metric) {
-	for epoch, cnt := range c.BlockCounts() {
-		ch <- prometheus.MustNewConstMetric(c.epochBlockCnt, prometheus.CounterValue, float64(cnt), epoch.String())
+	for epoch, cnt := range c.CertCount() {
+		ch <- prometheus.MustNewConstMetric(c.epochCertCount, prometheus.CounterValue, float64(cnt), epoch.String())
 	}
 }

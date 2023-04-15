@@ -174,6 +174,7 @@ func Test_HandleSyncedCertificate(t *testing.T) {
 	tc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 	require.NoError(t, tc.HandleSyncedCertificate(context.Background(), b.LayerIndex, cert))
 	verifyCerts(t, tc.db, b.LayerIndex, map[types.BlockID]bool{b.ID(): true})
+	require.Equal(t, map[types.EpochID]int{b.LayerIndex.GetEpoch(): 1}, tc.CertCount())
 }
 
 func Test_HandleSyncedCertificate_HareOutputTrumped(t *testing.T) {
@@ -196,6 +197,7 @@ func Test_HandleSyncedCertificate_HareOutputTrumped(t *testing.T) {
 	tc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 	require.NoError(t, tc.HandleSyncedCertificate(context.Background(), b.LayerIndex, cert))
 	verifyCerts(t, tc.db, b.LayerIndex, map[types.BlockID]bool{b.ID(): true, ho: false})
+	require.Equal(t, map[types.EpochID]int{b.LayerIndex.GetEpoch(): 1}, tc.CertCount())
 }
 
 func Test_HandleSyncedCertificate_MultipleCertificates(t *testing.T) {
@@ -265,9 +267,11 @@ func Test_HandleSyncedCertificate_MultipleCertificates(t *testing.T) {
 					expected[b.ID()] = true
 					expected[bid] = false
 				}
+				require.Equal(t, map[types.EpochID]int{b.LayerIndex.GetEpoch(): 1}, tcc.CertCount())
 			} else {
 				expected[b.ID()] = true
 				expected[bid] = true
+				require.Empty(t, tcc.CertCount())
 			}
 			verifyCerts(t, tcc.db, b.LayerIndex, expected)
 		})
@@ -291,6 +295,7 @@ func Test_HandleSyncedCertificate_NotEnoughEligibility(t *testing.T) {
 		Signatures: sigs,
 	}
 	require.ErrorIs(t, tc.HandleSyncedCertificate(context.Background(), b.LayerIndex, cert), errInvalidCert)
+	require.Empty(t, tc.CertCount())
 }
 
 func Test_HandleCertifyMessage(t *testing.T) {
@@ -355,6 +360,7 @@ func Test_HandleCertifyMessage(t *testing.T) {
 			}
 			res := testCert.HandleCertifyMessage(context.Background(), "peer", encoded)
 			require.Equal(t, tc.expected, res)
+			require.Empty(t, testCert.CertCount())
 		})
 	}
 }
@@ -410,6 +416,7 @@ func Test_HandleCertifyMessage_Certified(t *testing.T) {
 			}
 			wg.Wait()
 			verifyCerts(t, tcc.db, b.LayerIndex, map[types.BlockID]bool{b.ID(): true, ho: false})
+			require.Equal(t, map[types.EpochID]int{b.LayerIndex.GetEpoch(): 1}, tcc.CertCount())
 		})
 	}
 }
@@ -481,9 +488,11 @@ func Test_HandleCertifyMessage_MultipleCertificates(t *testing.T) {
 					expected[b.ID()] = true
 					expected[bid] = false
 				}
+				require.Equal(t, map[types.EpochID]int{b.LayerIndex.GetEpoch(): 1}, tcc.CertCount())
 			} else {
 				expected[b.ID()] = true
 				expected[bid] = true
+				require.Empty(t, tcc.CertCount())
 			}
 			verifyCerts(t, tcc.db, b.LayerIndex, expected)
 		})
@@ -505,6 +514,7 @@ func Test_HandleCertifyMessage_NotRegistered(t *testing.T) {
 		require.Equal(t, pubsub.ValidationAccept, res)
 	}
 	verifyCerts(t, tc.db, b.LayerIndex, nil)
+	require.Empty(t, tc.CertCount())
 }
 
 func Test_HandleCertifyMessage_Stopped(t *testing.T) {

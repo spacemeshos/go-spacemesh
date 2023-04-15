@@ -364,7 +364,6 @@ func Test_processHareOutput(t *testing.T) {
 					return nil
 				})
 			require.NoError(t, tg.processHareOutput(hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}))
-			require.Equal(t, map[types.EpochID]int{layerID.GetEpoch(): 1}, tg.BlockCounts())
 		})
 	}
 }
