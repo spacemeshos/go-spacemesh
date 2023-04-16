@@ -104,7 +104,7 @@ func createBlock(tb testing.TB, cdb *datastore.CachedDB, blts []*types.Ballot) {
 	}
 	block.Initialize()
 	require.NoError(tb, blocks.Add(cdb, block))
-	require.NoError(tb, certificates.SetHareOutput(cdb, blts[0].Layer, block.ID()))
+	require.NoError(tb, certificates.Add(cdb, blts[0].Layer, &types.Certificate{BlockID: block.ID()}))
 }
 
 func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, numMiners int) []types.NodeID {
