@@ -11,15 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-const (
-	// LayerIDSize in bytes.
-	LayerIDSize = 4
-
-	// BootstrapBeacon is the hex value of the beacon used during genesis.
-	// TODO: make this a config.
-	BootstrapBeacon = "0x333c04dd151a2a6831c039cb9a651df29198be8a04e16ce861d4b6a34a11c954" // sha256("bootstrap")
-)
-
 var (
 	layersPerEpoch uint32
 	// effectiveGenesis marks when actual proposals would start being created in the network. It takes into account

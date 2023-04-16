@@ -2450,7 +2450,8 @@ func TestDebugService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	ctrl := gomock.NewController(t)
 	identity := NewMocknetworkIdentity(ctrl)
-	svc := NewDebugService(conStateAPI, identity)
+	mOracle := NewMockoracle(ctrl)
+	svc := NewDebugService(conStateAPI, identity, mOracle)
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -2479,6 +2480,22 @@ func TestDebugService(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.Equal(t, id.String(), response.Id)
+	})
+	t.Run("ActiveSet", func(t *testing.T) {
+		epoch := types.EpochID(3)
+		activeSet := types.RandomActiveSet(11)
+		mOracle.EXPECT().ActiveSet(gomock.Any(), epoch).Return(activeSet, nil)
+		res, err := c.ActiveSet(context.Background(), &pb.ActiveSetRequest{
+			Epoch: epoch.Uint32(),
+		})
+		require.NoError(t, err)
+		require.Equal(t, len(activeSet), len(res.GetIds()))
+
+		var ids []types.ATXID
+		for _, a := range res.GetIds() {
+			ids = append(ids, types.ATXID(types.BytesToHash(a.GetId())))
+		}
+		require.ElementsMatch(t, activeSet, ids)
 	})
 	t.Run("ProposalsStream", func(t *testing.T) {
 		events.InitializeReporter()

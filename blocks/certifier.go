@@ -117,6 +117,9 @@ type Certifier struct {
 
 	mu          sync.Mutex
 	certifyMsgs map[types.LayerID]map[types.BlockID]*certInfo
+	certCount   map[types.EpochID]int
+
+	collector *collector
 }
 
 // NewCertifier creates new block certifier.
@@ -146,6 +149,7 @@ func NewCertifier(
 		beacon:      b,
 		tortoise:    tortoise,
 		certifyMsgs: make(map[types.LayerID]map[types.BlockID]*certInfo),
+		certCount:   map[types.EpochID]int{},
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -153,6 +157,7 @@ func NewCertifier(
 	if c.nonceFetcher == nil {
 		c.nonceFetcher = defaultFetcher{cdb: db}
 	}
+	c.collector = newCollector(c)
 
 	c.ctx, c.cancel = context.WithCancel(c.ctx)
 	return c
@@ -513,8 +518,24 @@ func (c *Certifier) checkAndSave(ctx context.Context, logger log.Log, lid types.
 		c.tortoise.OnHareOutput(lid, types.EmptyBlockID)
 		return errMultipleCerts
 	}
+	c.addCertCount(lid.GetEpoch())
 	c.tortoise.OnHareOutput(lid, cert.BlockID)
 	return nil
+}
+
+func (c *Certifier) addCertCount(epoch types.EpochID) {
+	c.certCount[epoch]++
+	delete(c.certCount, epoch-2)
+}
+
+func (c *Certifier) CertCount() map[types.EpochID]int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	result := map[types.EpochID]int{}
+	for epoch, count := range c.certCount {
+		result[epoch] = count
+	}
+	return result
 }
 
 func (c *Certifier) save(ctx context.Context, lid types.LayerID, cert *types.Certificate, valid, invalid []types.BlockID) error {

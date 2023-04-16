@@ -918,8 +918,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.Tortoise.Zdist = 5
 
 	cfg.LayerDuration = 20 * time.Second
-	cfg.HareEligibility.ConfidenceParam = 4
-	cfg.HareEligibility.EpochOffset = 0
+	cfg.HareEligibility.ConfidenceParam = 1
 	cfg.SyncRequestTimeout = 500
 	cfg.SyncInterval = 2
 

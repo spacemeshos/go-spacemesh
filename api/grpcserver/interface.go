@@ -73,3 +73,7 @@ type meshAPI interface {
 	ProcessedLayer() types.LayerID
 	MeshHash(types.LayerID) (types.Hash32, error)
 }
+
+type oracle interface {
+	ActiveSet(context.Context, types.EpochID) ([]types.ATXID, error)
+}

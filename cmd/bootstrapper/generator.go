@@ -1,8 +1,8 @@
 package main
 
 import (
+	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"sort"
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -75,6 +76,10 @@ func NewGenerator(btcEndpoint string, smEndpoint string, opts ...Opt) *Generator
 	return g
 }
 
+func (g *Generator) SmEndpoint() string {
+	return g.smEndpoint
+}
+
 func (g *Generator) Generate(ctx context.Context, targetEpoch types.EpochID, genBeacon, genActiveSet bool) error {
 	if err := g.fs.MkdirAll(dataDir, 0o700); err != nil {
 		return fmt.Errorf("create persist dir %v: %w", dataDir, err)
@@ -85,7 +90,7 @@ func (g *Generator) Generate(ctx context.Context, targetEpoch types.EpochID, gen
 		err       error
 	)
 	if genBeacon {
-		beacon, err = g.genBeacon(ctx, g.logger, targetEpoch)
+		beacon, err = g.genBeacon(ctx, g.logger)
 		if err != nil {
 			return err
 		}
@@ -96,19 +101,7 @@ func (g *Generator) Generate(ctx context.Context, targetEpoch types.EpochID, gen
 			return err
 		}
 	}
-	return g.genUpdate(targetEpoch, beacon, activeSet)
-}
-
-func (g *Generator) GenBootstrap(ctx context.Context, epoch types.EpochID) error {
-	return g.Generate(ctx, epoch, true, true)
-}
-
-func (g *Generator) GenFallbackBeacon(ctx context.Context, epoch types.EpochID) error {
-	return g.Generate(ctx, epoch, true, false)
-}
-
-func (g *Generator) GenFallbackActiveSet(ctx context.Context, epoch types.EpochID) error {
-	return g.Generate(ctx, epoch, false, true)
+	return g.GenUpdate(targetEpoch, beacon, activeSet)
 }
 
 // BitcoinResponse captures the only fields we care about from a bitcoin block.
@@ -117,13 +110,7 @@ type BitcoinResponse struct {
 	Hash   string `json:"hash"`
 }
 
-func (g *Generator) genBeacon(ctx context.Context, logger log.Log, epoch types.EpochID) (types.Beacon, error) {
-	if g.btcEndpoint == "" {
-		b := make([]byte, types.BeaconSize)
-		binary.LittleEndian.PutUint32(b, uint32(epoch))
-		return types.BytesToBeacon(b), nil
-	}
-
+func (g *Generator) genBeacon(ctx context.Context, logger log.Log) (types.Beacon, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	br, err := bitcoinHash(ctx, logger, g.client, g.btcEndpoint)
@@ -211,10 +198,13 @@ func getActiveSet(ctx context.Context, endpoint string, epoch types.EpochID) ([]
 		}
 		activeSet = append(activeSet, types.ATXID(types.BytesToHash(resp.GetId().GetId())))
 	}
+	sort.Slice(activeSet, func(i, j int) bool {
+		return bytes.Compare(activeSet[i].Bytes(), activeSet[j].Bytes()) < 0
+	})
 	return activeSet, nil
 }
 
-func (g *Generator) genUpdate(epoch types.EpochID, beacon types.Beacon, activeSet []types.ATXID) error {
+func (g *Generator) GenUpdate(epoch types.EpochID, beacon types.Beacon, activeSet []types.ATXID) error {
 	as := make([]string, 0, len(activeSet))
 	for _, atx := range activeSet {
 		as = append(as, hex.EncodeToString(atx.Hash32().Bytes())) // no leading 0x

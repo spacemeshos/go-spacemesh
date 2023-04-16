@@ -629,3 +629,41 @@ func (mr *MockmeshAPIMockRecorder) ProcessedLayer() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessedLayer", reflect.TypeOf((*MockmeshAPI)(nil).ProcessedLayer))
 }
+
+// Mockoracle is a mock of oracle interface.
+type Mockoracle struct {
+	ctrl     *gomock.Controller
+	recorder *MockoracleMockRecorder
+}
+
+// MockoracleMockRecorder is the mock recorder for Mockoracle.
+type MockoracleMockRecorder struct {
+	mock *Mockoracle
+}
+
+// NewMockoracle creates a new mock instance.
+func NewMockoracle(ctrl *gomock.Controller) *Mockoracle {
+	mock := &Mockoracle{ctrl: ctrl}
+	mock.recorder = &MockoracleMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockoracle) EXPECT() *MockoracleMockRecorder {
+	return m.recorder
+}
+
+// ActiveSet mocks base method.
+func (m *Mockoracle) ActiveSet(arg0 context.Context, arg1 types.EpochID) ([]types.ATXID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ActiveSet", arg0, arg1)
+	ret0, _ := ret[0].([]types.ATXID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ActiveSet indicates an expected call of ActiveSet.
+func (mr *MockoracleMockRecorder) ActiveSet(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ActiveSet", reflect.TypeOf((*Mockoracle)(nil).ActiveSet), arg0, arg1)
+}

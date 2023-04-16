@@ -64,9 +64,9 @@ func Get(db sql.Executor, id types.BlockID) (rst *types.Block, err error) {
 		rst, err = decodeBlock(stmt.ColumnReader(0), id)
 		return true
 	}); err != nil {
-		return nil, fmt.Errorf("get %s: %w", id, err)
+		return nil, fmt.Errorf("get block %s: %w", id, err)
 	} else if rows == 0 {
-		return nil, fmt.Errorf("%w block %s", sql.ErrNotFound, id)
+		return nil, fmt.Errorf("get block %s: %w", id, sql.ErrNotFound)
 	}
 	return rst, err
 }
