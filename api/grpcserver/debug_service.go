@@ -113,7 +113,7 @@ func (d DebugService) ProposalsStream(_ *emptypb.Empty, stream pb.DebugService_P
 func castEventProposal(ev *events.EventProposal) *pb.Proposal {
 	proposal := &pb.Proposal{
 		Id:      ev.Proposal.ID().Bytes(),
-		Epoch:   &pb.SimpleInt{Value: uint64(ev.Proposal.Layer.GetEpoch())},
+		Epoch:   &pb.EpochNumber{Number: ev.Proposal.Layer.GetEpoch().Uint32()},
 		Layer:   convertLayerID(ev.Proposal.Layer),
 		Smesher: &pb.SmesherId{Id: ev.Proposal.SmesherID.Bytes()},
 		Ballot:  ev.Proposal.Ballot.ID().Bytes(),

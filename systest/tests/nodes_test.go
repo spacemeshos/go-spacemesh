@@ -65,14 +65,14 @@ func TestAddNodes(t *testing.T) {
 		i := i
 		client := cl.Client(i)
 		watchProposals(tctx, &eg, cl.Client(i), func(proposal *pb.Proposal) (bool, error) {
-			if proposal.Epoch.Value > lastEpoch {
+			if proposal.Epoch.Number > lastEpoch {
 				return false, nil
 			}
 			if proposal.Status == pb.Proposal_Created {
 				tctx.Log.Debugw("received proposal event",
 					"client", client.Name,
 					"layer", proposal.Layer.Number,
-					"epoch", proposal.Epoch.Value,
+					"epoch", proposal.Epoch.Number,
 					"smesher", prettyHex(proposal.Smesher.Id),
 					"eligibilities", len(proposal.Eligibilities),
 					"status", pb.Proposal_Status_name[int32(proposal.Status)],
@@ -83,25 +83,25 @@ func TestAddNodes(t *testing.T) {
 		})
 	}
 	require.NoError(t, eg.Wait())
-	unique := map[uint64]map[string]struct{}{}
+	unique := map[uint32]map[string]struct{}{}
 	for _, proposals := range created {
 		for _, proposal := range proposals {
-			if _, exist := unique[proposal.Epoch.Value]; !exist {
-				unique[proposal.Epoch.Value] = map[string]struct{}{}
+			if _, exist := unique[proposal.Epoch.Number]; !exist {
+				unique[proposal.Epoch.Number] = map[string]struct{}{}
 			}
-			unique[proposal.Epoch.Value][prettyHex(proposal.Smesher.Id)] = struct{}{}
+			unique[proposal.Epoch.Number][prettyHex(proposal.Smesher.Id)] = struct{}{}
 		}
 	}
 	smeshers := cl.Total() - cl.Bootnodes()
-	for epoch := uint64(4); epoch <= epochBeforeJoin; epoch++ {
+	for epoch := uint32(4); epoch <= epochBeforeJoin; epoch++ {
 		require.GreaterOrEqual(t, len(unique[epoch]), smeshers-addedLater, "epoch=%d", epoch)
 	}
 	// condition is so that test waits until the first epoch where all smeshers participated.
 	// and if it finds such epoch, starting from that epoch all smeshers should consistently
 	// participate.
 	// test should fail if such epoch wasn't found.
-	var joined uint64
-	for epoch := uint64(epochBeforeJoin) + 1; epoch <= lastEpoch; epoch++ {
+	var joined uint32
+	for epoch := uint32(epochBeforeJoin) + 1; epoch <= lastEpoch; epoch++ {
 		if len(unique[epoch]) == smeshers {
 			joined = epoch
 		}

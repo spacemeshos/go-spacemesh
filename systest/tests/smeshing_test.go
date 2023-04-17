@@ -80,15 +80,15 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	close(createdch)
 
 	created := map[uint32][]*pb.Proposal{}
-	beacons := map[uint64]map[string]struct{}{}
+	beacons := map[uint32]map[string]struct{}{}
 	beaconSet := map[string]struct{}{}
 	for proposal := range createdch {
 		created[proposal.Layer.Number] = append(created[proposal.Layer.Number], proposal)
 		if edata := proposal.GetData(); edata != nil {
-			if _, exist := beacons[proposal.Epoch.Value]; !exist {
-				beacons[proposal.Epoch.Value] = map[string]struct{}{}
+			if _, exist := beacons[proposal.Epoch.Number]; !exist {
+				beacons[proposal.Epoch.Number] = map[string]struct{}{}
 			}
-			beacons[proposal.Epoch.Value][prettyHex(edata.Beacon)] = struct{}{}
+			beacons[proposal.Epoch.Number][prettyHex(edata.Beacon)] = struct{}{}
 			beaconSet[prettyHex(edata.Beacon)] = struct{}{}
 		}
 	}

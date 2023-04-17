@@ -69,8 +69,8 @@ func (s MeshService) CurrentLayer(context.Context, *pb.CurrentLayerRequest) (*pb
 func (s MeshService) CurrentEpoch(context.Context, *pb.CurrentEpochRequest) (*pb.CurrentEpochResponse, error) {
 	log.Info("GRPC MeshService.CurrentEpoch")
 	curLayer := s.genTime.CurrentLayer()
-	return &pb.CurrentEpochResponse{Epochnum: &pb.SimpleInt{
-		Value: uint64(curLayer.GetEpoch()),
+	return &pb.CurrentEpochResponse{Epochnum: &pb.EpochNumber{
+		Number: curLayer.GetEpoch().Uint32(),
 	}}, nil
 }
 
@@ -83,8 +83,8 @@ func (s MeshService) GenesisID(context.Context, *pb.GenesisIDRequest) (*pb.Genes
 // EpochNumLayers returns the number of layers per epoch (a network parameter).
 func (s MeshService) EpochNumLayers(context.Context, *pb.EpochNumLayersRequest) (*pb.EpochNumLayersResponse, error) {
 	log.Info("GRPC MeshService.EpochNumLayers")
-	return &pb.EpochNumLayersResponse{Numlayers: &pb.SimpleInt{
-		Value: uint64(s.layersPerEpoch),
+	return &pb.EpochNumLayersResponse{Numlayers: &pb.LayerNumber{
+		Number: s.layersPerEpoch,
 	}}, nil
 }
 
