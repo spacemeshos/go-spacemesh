@@ -20,7 +20,7 @@ var bootstrapEpoch = types.EpochID(2)
 
 type NetworkParam struct {
 	Genesis      time.Time
-	LyrsPerEpoch uint64
+	LyrsPerEpoch uint32
 	LyrDuration  time.Duration
 	Offset       uint32
 }

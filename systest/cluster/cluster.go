@@ -705,11 +705,11 @@ func fillNetworkConfig(ctx *testcontext.Context, node *NodeClient) error {
 	if err != nil {
 		return fmt.Errorf("query layers duration from %v: %w", node.Name, err)
 	}
-	ctx.Log.Debugw("queried layers per epoch", "layers", resp1.Numlayers.Value)
+	ctx.Log.Debugw("queried layers per epoch", "layers", resp1.Numlayers.Number)
 	ctx.Log.Debugw("queried layer duration", "duration", resp2.Duration.Value)
 	parameters.New()
 	configs := map[string]string{}
-	configs[testcontext.ParamLayersPerEpoch] = fmt.Sprintf("%d", resp1.Numlayers.Value)
+	configs[testcontext.ParamLayersPerEpoch] = fmt.Sprintf("%d", resp1.Numlayers.Number)
 	configs[testcontext.ParamLayerDuration] = fmt.Sprintf("%ds", resp2.Duration.Value)
 	ctx.Parameters.Update(configs)
 	ctx.Log.Debugw("updated param layers per epoch", "layers", testcontext.LayersPerEpoch.Get(ctx.Parameters))
