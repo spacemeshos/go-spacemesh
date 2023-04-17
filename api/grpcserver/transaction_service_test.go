@@ -219,7 +219,7 @@ func TestParseTransactions(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
 	vminst := vm.New(db)
-	t.Cleanup(launchServer(t, cfg, NewTransactionService(db, nil, nil, txs.NewConservativeState(vminst, db), nil)))
+	t.Cleanup(launchServer(t, cfg, NewTransactionService(db, nil, nil, txs.NewConservativeState(vminst, db), nil, nil)))
 	var (
 		conn     = dialGrpc(ctx, t, cfg.PublicListener)
 		client   = pb.NewTransactionServiceClient(conn)
