@@ -43,8 +43,8 @@ const (
 )
 
 const (
-	activesCacheSize = 5                 // we don't expect to handle more than two layers concurrently
-	maxSupportedN    = math.MaxInt32 / 2 // higher values result in an overflow
+	activesCacheSize = 5                       // we don't expect to handle more than two layers concurrently
+	maxSupportedN    = (math.MaxInt32 / 2) + 1 // higher values result in an overflow when calculating CDF
 )
 
 var (
