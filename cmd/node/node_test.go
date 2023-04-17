@@ -37,7 +37,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	apiconf "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -570,7 +570,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 		// GRPC configuration
 		app.Config.API.PublicListener = listener
-		app.Config.API.PublicServices = []apiconf.Service{apiconf.Transaction}
+		app.Config.API.PublicServices = []grpcserver.Service{grpcserver.Transaction}
 		app.Config.API.PrivateServices = nil
 
 		// Prevent obnoxious warning in macOS
@@ -918,8 +918,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.Tortoise.Zdist = 5
 
 	cfg.LayerDuration = 20 * time.Second
-	cfg.HareEligibility.ConfidenceParam = 4
-	cfg.HareEligibility.EpochOffset = 0
+	cfg.HareEligibility.ConfidenceParam = 1
 	cfg.SyncRequestTimeout = 500
 	cfg.SyncInterval = 2
 

@@ -44,7 +44,9 @@ func (ps *PubSub) Register(topic string, handler GossipHandler) {
 	_, err = topich.Relay()
 	if err != nil {
 		ps.logger.With().Panic("failed to enable relay for topic",
-			log.String("topic", topic), log.Err(err))
+			log.String("topic", topic),
+			log.Err(err),
+		)
 	}
 }
 

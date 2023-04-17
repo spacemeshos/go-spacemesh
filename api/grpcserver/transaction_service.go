@@ -14,7 +14,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
@@ -27,10 +26,11 @@ import (
 // TransactionService exposes transaction data, and a submit tx endpoint.
 type TransactionService struct {
 	db        *sql.Database
-	publisher api.Publisher // P2P Swarm
-	mesh      api.MeshAPI   // Mesh
-	conState  api.ConservativeState
-	syncer    api.Syncer
+	publisher pubsub.Publisher // P2P Swarm
+	mesh      meshAPI          // Mesh
+	conState  conservativeState
+	syncer    syncer
+	txHandler txValidator
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -41,10 +41,11 @@ func (s TransactionService) RegisterService(server *Server) {
 // NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
 	db *sql.Database,
-	publisher api.Publisher,
-	msh api.MeshAPI,
-	conState api.ConservativeState,
-	syncer api.Syncer,
+	publisher pubsub.Publisher,
+	msh meshAPI,
+	conState conservativeState,
+	syncer syncer,
+	txHandler txValidator,
 ) *TransactionService {
 	return &TransactionService{
 		db:        db,
@@ -52,6 +53,7 @@ func NewTransactionService(
 		mesh:      msh,
 		conState:  conState,
 		syncer:    syncer,
+		txHandler: txHandler,
 	}
 }
 
@@ -83,16 +85,18 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 	}
 
 	if !s.syncer.IsSynced(ctx) {
-		return nil, status.Error(codes.FailedPrecondition,
-			"Cannot submit transaction, node is not in sync yet, try again later")
+		return nil, status.Error(codes.FailedPrecondition, "Cannot submit transaction, node is not in sync yet, try again later")
+	}
+
+	if err := s.txHandler.VerifyAndCacheTx(ctx, in.Transaction); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "Failed to verify transaction")
 	}
 
 	if err := s.publisher.Publish(ctx, pubsub.TxProtocol, in.Transaction); err != nil {
-		log.Error("error broadcasting incoming tx: %v", err)
 		return nil, status.Error(codes.Internal, "Failed to publish transaction")
 	}
-	raw := types.NewRawTx(in.Transaction)
 
+	raw := types.NewRawTx(in.Transaction)
 	return &pb.SubmitTransactionResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 		Txstate: &pb.TransactionState{
@@ -124,8 +128,7 @@ func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (*
 // TransactionsState returns current tx data for one or more txs.
 func (s TransactionService) TransactionsState(_ context.Context, in *pb.TransactionsStateRequest) (*pb.TransactionsStateResponse, error) {
 	if in.TransactionId == nil || len(in.TransactionId) == 0 {
-		return nil, status.Error(codes.InvalidArgument,
-			"`TransactionId` must include one or more transaction IDs")
+		return nil, status.Error(codes.InvalidArgument, "`TransactionId` must include one or more transaction IDs")
 	}
 
 	res := &pb.TransactionsStateResponse{}

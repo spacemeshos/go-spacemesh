@@ -8,16 +8,15 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type activationService struct {
-	atxProvider api.AtxProvider
+	atxProvider atxProvider
 }
 
-func NewActivationService(atxProvider api.AtxProvider) *activationService {
+func NewActivationService(atxProvider atxProvider) *activationService {
 	return &activationService{
 		atxProvider: atxProvider,
 	}

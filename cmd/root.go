@@ -149,8 +149,6 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().Uint32Var(&cfg.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
 		cfg.HareEligibility.ConfidenceParam, "The relative layer (with respect to the current layer) we are confident to have consensus about")
-	cmd.PersistentFlags().Uint32Var(&cfg.HareEligibility.EpochOffset, "eligibility-epoch-offset",
-		cfg.HareEligibility.EpochOffset, "The constant layer (within an epoch) for which we traverse its view for the purpose of counting consensus active set")
 
 	/**======================== Beacon Flags ========================== **/
 
