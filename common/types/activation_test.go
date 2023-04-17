@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -38,7 +37,8 @@ func TestActivationEncoding(t *testing.T) {
 	require.NoError(t, err)
 
 	var epoch types.EpochID
-	require.NoError(t, codec.DecodeSome(buf.Bytes(), &epoch))
+	_, err = epoch.DecodeScale(scale.NewDecoder(buf))
+	require.NoError(t, err)
 	require.Equal(t, object.PublishEpoch, epoch)
 }
 
