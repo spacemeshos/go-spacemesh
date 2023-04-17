@@ -46,6 +46,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
@@ -385,6 +386,10 @@ func (t *ConStateAPIMock) GetBalance(addr types.Address) (uint64, error) {
 
 func (t *ConStateAPIMock) GetNonce(addr types.Address) (types.Nonce, error) {
 	return t.nonces[addr], nil
+}
+
+func (t *ConStateAPIMock) Validation(raw types.RawTx) system.ValidationRequest {
+	panic("dont use this")
 }
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {

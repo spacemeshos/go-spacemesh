@@ -188,7 +188,7 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 			res.Data = append(res.Data, &pb.AccountMeshData{
 				Datum: &pb.AccountMeshData_MeshTransaction{
 					MeshTransaction: &pb.MeshTransaction{
-						Transaction: convertTransaction(&t.Transaction),
+						Transaction: castTransaction(&t.Transaction),
 						LayerId:     &pb.LayerNumber{Number: t.LayerID.Uint32()},
 					},
 				},
@@ -246,7 +246,7 @@ func convertLayerID(l types.LayerID) *pb.LayerNumber {
 	return nil
 }
 
-func convertTransaction(t *types.Transaction) *pb.Transaction {
+func castTransaction(t *types.Transaction) *pb.Transaction {
 	tx := &pb.Transaction{
 		Id:  t.ID[:],
 		Raw: t.Raw,
@@ -320,7 +320,7 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 
 		pbTxs := make([]*pb.Transaction, 0, len(mtxs))
 		for _, t := range mtxs {
-			pbTxs = append(pbTxs, convertTransaction(&t.Transaction))
+			pbTxs = append(pbTxs, castTransaction(&t.Transaction))
 		}
 		blocks = append(blocks, &pb.Block{
 			Id:           types.Hash20(b.ID()).Bytes(),
@@ -495,7 +495,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_MeshTransaction{
 							MeshTransaction: &pb.MeshTransaction{
-								Transaction: convertTransaction(tx.Transaction),
+								Transaction: castTransaction(tx.Transaction),
 								LayerId:     convertLayerID(tx.LayerID),
 							},
 						},

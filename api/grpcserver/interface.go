@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 //go:generate mockgen -package=grpcserver -destination=./mocks.go -source=./interface.go
@@ -27,6 +28,7 @@ type conservativeState interface {
 	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 	GetMeshTransactions([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})
 	GetTransactionsByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
+	Validation(raw types.RawTx) system.ValidationRequest
 }
 
 // syncer is the API to get sync status.
