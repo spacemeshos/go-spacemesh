@@ -329,7 +329,11 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 	case <-b.syncer.RegisterForATXSynced():
 	}
 	current := b.currentEpoch()
-	if until := time.Until(b.poetRoundStart(current)); until > b.poetCfg.GracePeriod {
+	until := time.Until(b.poetRoundStart(current))
+	if until > 0 {
+		metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
+	}
+	if until > b.poetCfg.GracePeriod {
 		wait := until - b.poetCfg.GracePeriod
 		b.log.WithContext(ctx).With().Debug("waiting for fresh atxs",
 			log.Duration("till poet round", until),
@@ -342,6 +346,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		case <-time.After(wait):
 		}
 	} else if until <= 0 {
+		metrics.PublishLateWindowLatency.Observe(-until.Seconds())
 		return nil, fmt.Errorf("%w: builder doesn't have time to submit in epoch %d. poet round already started %v ago",
 			ErrATXChallengeExpired, current, -until)
 	}
