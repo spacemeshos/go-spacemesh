@@ -43,8 +43,8 @@ const (
 )
 
 const (
-	activesCacheSize = 5                       // we don't expect to handle more than two layers concurrently
-	maxSupportedN    = (math.MaxInt32 + 1) / 2 // higher values result in an overflow
+	activesCacheSize = 5                 // we don't expect to handle more than two layers concurrently
+	maxSupportedN    = math.MaxInt32 / 2 // higher values result in an overflow
 )
 
 var (
@@ -243,11 +243,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		log.Uint64("total_weight", totalWeight),
 	)
 
-	// ensure miner weight fits in int
 	n := minerWeight
-	if n > maxSupportedN {
-		logger.Fatal(fmt.Sprintf("minerWeight overflows int (%d)", minerWeight))
-	}
 
 	// calc p
 	if uint64(committeeSize) > totalWeight {
