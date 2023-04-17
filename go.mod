@@ -36,7 +36,7 @@ require (
 	github.com/spacemeshos/api/release/go v1.8.1-0.20230417051650-d4cb54e6c592
 	github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
-	github.com/spacemeshos/go-scale v1.1.8-0.20230414162212-bc708740c191
+	github.com/spacemeshos/go-scale v1.1.8
 	github.com/spacemeshos/merkle-tree v0.2.1
 	github.com/spacemeshos/poet v0.8.1
 	github.com/spacemeshos/post v0.5.4
