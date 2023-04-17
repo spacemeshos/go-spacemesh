@@ -527,10 +527,10 @@ type votesTracker struct {
 }
 
 func (v *votesTracker) register(round types.RoundID) bool {
-	if uint32(round) > wordSize*uint32(len(v.words)) {
+	word := uint64(round) / wordSize
+	if word >= uint64(len(v.words)) {
 		return false
 	}
-	word := uint64(round) / wordSize
 	position := uint64(1) << (uint64(round) % wordSize)
 	if v.words[word]&position > 0 {
 		return false
@@ -541,6 +541,9 @@ func (v *votesTracker) register(round types.RoundID) bool {
 
 func (v *votesTracker) voted(round types.RoundID) bool {
 	word := uint64(round) / wordSize
+	if word >= uint64(len(v.words)) {
+		return false
+	}
 	position := uint64(1) << (uint64(round) % wordSize)
 	return v.words[word]&position > 0
 }

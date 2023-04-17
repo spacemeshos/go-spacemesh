@@ -135,7 +135,7 @@ func checkVoted(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, signer *s
 	require.NotNil(t, pd.states[epoch])
 	tracker, exists := pd.states[epoch].hasVoted[signer.NodeID()]
 	if !exists {
-		require.Equal(t, voted, !exists)
+		require.Equal(t, voted, exists)
 	} else {
 		require.Equal(t, voted, tracker.voted(round))
 	}
