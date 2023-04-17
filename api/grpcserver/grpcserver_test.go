@@ -1016,7 +1016,7 @@ func TestGlobalStateService(t *testing.T) {
 
 func TestSmesherService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	svc := NewSmesherService(&PostAPIMock{}, &SmeshingAPIMock{}, 10*time.Millisecond)
+	svc := NewSmesherService(&PostAPIMock{}, &SmeshingAPIMock{}, 10*time.Millisecond, activation.DefaultPostSetupOpts())
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
