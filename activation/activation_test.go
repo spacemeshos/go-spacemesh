@@ -1087,8 +1087,8 @@ func TestWaitPositioningAtx(t *testing.T) {
 
 		expect string
 	}{
-		{"no wait", 10 * time.Millisecond, 10 * time.Millisecond, ""},
-		{"wait", 10 * time.Millisecond, 0, ""},
+		{"no wait", 100 * time.Millisecond, 100 * time.Millisecond, ""},
+		{"wait", 100 * time.Millisecond, 0, ""},
 		{"round started", 0, 0, "poet round already started"},
 	} {
 		tc := tc
