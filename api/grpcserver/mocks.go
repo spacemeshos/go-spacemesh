@@ -13,6 +13,7 @@ import (
 	activation "github.com/spacemeshos/go-spacemesh/activation"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
+	system "github.com/spacemeshos/go-spacemesh/system"
 )
 
 // MocknetworkIdentity is a mock of networkIdentity interface.
@@ -208,6 +209,20 @@ func (m *MockconservativeState) GetTransactionsByAddress(arg0, arg1 types.LayerI
 func (mr *MockconservativeStateMockRecorder) GetTransactionsByAddress(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactionsByAddress", reflect.TypeOf((*MockconservativeState)(nil).GetTransactionsByAddress), arg0, arg1, arg2)
+}
+
+// Validation mocks base method.
+func (m *MockconservativeState) Validation(raw types.RawTx) system.ValidationRequest {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Validation", raw)
+	ret0, _ := ret[0].(system.ValidationRequest)
+	return ret0
+}
+
+// Validation indicates an expected call of Validation.
+func (mr *MockconservativeStateMockRecorder) Validation(raw interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validation", reflect.TypeOf((*MockconservativeState)(nil).Validation), raw)
 }
 
 // Mocksyncer is a mock of syncer interface.
