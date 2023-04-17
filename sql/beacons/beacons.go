@@ -41,3 +41,17 @@ func Add(db sql.Executor, epoch types.EpochID, beacon types.Beacon) error {
 
 	return nil
 }
+
+func Set(db sql.Executor, epoch types.EpochID, beacon types.Beacon) error {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(epoch))
+		stmt.BindBytes(2, beacon.Bytes())
+	}
+	_, err := db.Exec(`insert into beacons (epoch, beacon) values (?1, ?2)
+		on conflict do update set beacon = ?2;`, enc, nil)
+	if err != nil {
+		return fmt.Errorf("insert epoch %v, beacon %v: %w", epoch, beacon, err)
+	}
+
+	return nil
+}

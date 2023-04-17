@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	apiconf "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -138,6 +137,7 @@ func GetCommand() *cobra.Command {
 				// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
 				go func() {
 					app.Cleanup(cleanupCtx)
+					_ = app.eg.Wait()
 					close(done)
 				}()
 				select {
@@ -560,9 +560,9 @@ func (app *App) initServices(
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
-	if app.Config.HareEligibility.EpochOffset >= app.Config.BaseConfig.LayersPerEpoch {
-		return fmt.Errorf("epoch offset cannot be greater than or equal to the number of layers per epoch. epoch_offset: %d. layers_per_epoch: %d",
-			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
+	if app.Config.HareEligibility.ConfidenceParam >= app.Config.BaseConfig.LayersPerEpoch {
+		return fmt.Errorf("confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. layers-per-epoch: %d",
+			app.Config.HareEligibility.ConfidenceParam, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
 	proposalListener := proposals.NewHandler(app.cachedDB, app.edVerifier, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, clock,
@@ -590,10 +590,10 @@ func (app *App) initServices(
 
 	app.Config.Bootstrap.DataDir = app.Config.DataDir()
 	app.Config.Bootstrap.Interval = app.Config.LayerDuration / 10
-	//app.updater = bootstrap.New(
-	//	bootstrap.WithConfig(app.Config.Bootstrap),
-	//	bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
-	//)
+	app.updater = bootstrap.New(
+		bootstrap.WithConfig(app.Config.Bootstrap),
+		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
+	)
 
 	app.certifier = blocks.NewCertifier(app.cachedDB, app.hOracle, nodeID, sgn, app.edVerifier, app.host, clock, beaconProtocol, trtl,
 		blocks.WithCertContext(ctx),
@@ -764,7 +764,7 @@ func (app *App) initServices(
 	return nil
 }
 
-func (app *App) listenToUpdates(ctx context.Context) {
+func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 	app.eg.Go(func() error {
 		ch := app.updater.Subscribe()
 		app.updater.Start(ctx)
@@ -774,7 +774,10 @@ func (app *App) listenToUpdates(ctx context.Context) {
 				return nil
 			default:
 				if update.Data.Beacon != types.EmptyBeacon {
-					app.beaconProtocol.UpdateBeacon(update.Data.Epoch, update.Data.Beacon)
+					if err := app.beaconProtocol.UpdateBeacon(update.Data.Epoch, update.Data.Beacon); err != nil {
+						appErr <- err
+						return nil
+					}
 				}
 				if len(update.Data.ActiveSet) > 0 {
 					app.hOracle.UpdateActiveSet(update.Data.Epoch, update.Data.ActiveSet)
@@ -785,11 +788,14 @@ func (app *App) listenToUpdates(ctx context.Context) {
 	})
 }
 
-func (app *App) startServices(ctx context.Context) error {
+func (app *App) startServices(ctx context.Context, appErr chan error) error {
 	if err := app.fetcher.Start(); err != nil {
 		return fmt.Errorf("failed to start fetcher: %w", err)
 	}
-	go app.startSyncer(ctx)
+	app.eg.Go(func() error {
+		app.startSyncer(ctx)
+		return nil
+	})
 	app.beaconProtocol.Start(ctx)
 
 	app.blockGen.Start()
@@ -818,26 +824,26 @@ func (app *App) startServices(ctx context.Context) error {
 	}
 
 	if app.updater != nil {
-		app.listenToUpdates(ctx)
+		app.listenToUpdates(ctx, appErr)
 	}
 	return nil
 }
 
-func (app *App) initService(ctx context.Context, svc apiconf.Service) (grpcserver.ServiceAPI, error) {
+func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcserver.ServiceAPI, error) {
 	switch svc {
-	case apiconf.Debug:
-		return grpcserver.NewDebugService(app.conState, app.host), nil
-	case apiconf.GlobalState:
+	case grpcserver.Debug:
+		return grpcserver.NewDebugService(app.conState, app.host, app.hOracle), nil
+	case grpcserver.GlobalState:
 		return grpcserver.NewGlobalStateService(app.mesh, app.conState), nil
-	case apiconf.Mesh:
+	case grpcserver.Mesh:
 		return grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal)), nil
-	case apiconf.Node:
-		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer), nil
-	case apiconf.Smesher:
+	case grpcserver.Node:
+		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
+	case grpcserver.Smesher:
 		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
-	case apiconf.Transaction:
+	case grpcserver.Transaction:
 		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
-	case apiconf.Activation:
+	case grpcserver.Activation:
 		return grpcserver.NewActivationService(app.cachedDB), nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
@@ -856,7 +862,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 	logger := app.addLogger(GRPCLogger, app.log).Zap()
 	grpczap.SetGrpcLoggerV2(grpclog, logger)
 	var (
-		unique = map[apiconf.Service]struct{}{}
+		unique = map[grpcserver.Service]struct{}{}
 		public []grpcserver.ServiceAPI
 	)
 	if len(app.Config.API.PublicServices) > 0 {
@@ -982,8 +988,6 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	events.CloseEventReporter()
-
-	_ = app.eg.Wait()
 }
 
 // LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists.
@@ -1085,16 +1089,17 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	/* Setup monitoring */
-	pprofErr := make(chan error, 1)
+	appErr := make(chan error, 100)
 	if app.Config.PprofHTTPServer {
 		logger.Info("starting pprof server")
 		srv := &http.Server{Addr: ":6060"}
 		defer srv.Shutdown(ctx)
-		go func() {
+		app.eg.Go(func() error {
 			if err := srv.ListenAndServe(); err != nil {
-				pprofErr <- fmt.Errorf("cannot start pprof http server: %w", err)
+				appErr <- fmt.Errorf("cannot start pprof http server: %w", err)
 			}
-		}()
+			return nil
+		})
 	}
 
 	if app.Config.ProfilerURL != "" {
@@ -1192,7 +1197,7 @@ func (app *App) Start(ctx context.Context) error {
 			app.host.ID().String(), app.Config.Genesis.GenesisID().ShortString())
 	}
 
-	if err := app.startServices(ctx); err != nil {
+	if err := app.startServices(ctx, appErr); err != nil {
 		return err
 	}
 
@@ -1211,20 +1216,19 @@ func (app *App) Start(ctx context.Context) error {
 		Msg:   "node is shutting down",
 		Level: zapcore.InfoLevel,
 	})
-	syncErr := make(chan error, 1)
+	// TODO: pass app.eg to components and wait for them collectively
 	if app.ptimesync != nil {
-		go func() {
-			syncErr <- app.ptimesync.Wait()
-		}()
+		app.eg.Go(func() error {
+			appErr <- app.ptimesync.Wait()
+			return nil
+		})
 	}
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	select {
 	case <-ctx.Done():
 		return nil
-	case err := <-pprofErr:
-		return err
-	case err := <-syncErr:
+	case err = <-appErr:
 		return err
 	}
 }

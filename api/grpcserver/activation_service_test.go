@@ -13,13 +13,12 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
-	"github.com/spacemeshos/go-spacemesh/api/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestGet_RejectInvalidAtxID(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := mocks.NewMockAtxProvider(ctrl)
+	atxProvider := grpcserver.NewMockatxProvider(ctrl)
 	activationService := grpcserver.NewActivationService(atxProvider)
 
 	_, err := activationService.Get(context.Background(), &pb.GetRequest{})
@@ -29,7 +28,7 @@ func TestGet_RejectInvalidAtxID(t *testing.T) {
 
 func TestGet_AtxNotPresent(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := mocks.NewMockAtxProvider(ctrl)
+	atxProvider := grpcserver.NewMockatxProvider(ctrl)
 	activationService := grpcserver.NewActivationService(atxProvider)
 
 	id := types.RandomATXID()
@@ -42,7 +41,7 @@ func TestGet_AtxNotPresent(t *testing.T) {
 
 func TestGet_AtxProviderReturnsFailure(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := mocks.NewMockAtxProvider(ctrl)
+	atxProvider := grpcserver.NewMockatxProvider(ctrl)
 	activationService := grpcserver.NewActivationService(atxProvider)
 
 	id := types.RandomATXID()
@@ -55,7 +54,7 @@ func TestGet_AtxProviderReturnsFailure(t *testing.T) {
 
 func TestGet_HappyPath(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := mocks.NewMockAtxProvider(ctrl)
+	atxProvider := grpcserver.NewMockatxProvider(ctrl)
 	activationService := grpcserver.NewActivationService(atxProvider)
 
 	id := types.RandomATXID()

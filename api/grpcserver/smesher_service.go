@@ -15,15 +15,14 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // SmesherService exposes endpoints to manage smeshing.
 type SmesherService struct {
-	postSetupProvider api.PostSetupProvider
-	smeshingProvider  api.SmeshingAPI
+	postSetupProvider postSetupProvider
+	smeshingProvider  activation.SmeshingProvider
 
 	streamInterval time.Duration
 	postOpts       activation.PostSetupOpts
@@ -35,7 +34,7 @@ func (s SmesherService) RegisterService(server *Server) {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(post api.PostSetupProvider, smeshing api.SmeshingAPI, streamInterval time.Duration, postOpts activation.PostSetupOpts) *SmesherService {
+func NewSmesherService(post postSetupProvider, smeshing activation.SmeshingProvider, streamInterval time.Duration, postOpts activation.PostSetupOpts) *SmesherService {
 	return &SmesherService{post, smeshing, streamInterval, postOpts}
 }
 

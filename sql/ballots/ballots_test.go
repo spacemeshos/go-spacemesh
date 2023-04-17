@@ -1,14 +1,27 @@
 package ballots
 
 import (
+	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
+
+const layersPerEpoch = 3
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+
+	res := m.Run()
+	os.Exit(res)
+}
 
 func TestLayer(t *testing.T) {
 	db := sql.InMemory()
@@ -141,7 +154,6 @@ func TestLayerBallotBySmesher(t *testing.T) {
 }
 
 func TestGetRefBallot(t *testing.T) {
-	types.SetLayersPerEpoch(3)
 	db := sql.InMemory()
 	lid2 := types.LayerID(2)
 	lid3 := types.LayerID(3)
@@ -178,4 +190,52 @@ func TestGetRefBallot(t *testing.T) {
 
 	_, err = GetRefBallot(db, 1, nodeID4)
 	require.ErrorIs(t, err, sql.ErrNotFound)
+}
+
+func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActivationTx, error) {
+	atx := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PublishEpoch: layerID.GetEpoch(),
+				PrevATXID:    types.RandomATXID(),
+			},
+			NumUnits: 2,
+		},
+	}
+
+	nodeID := signer.NodeID()
+	atx.SetID(types.ATXID{1, 2, 3})
+	atx.SmesherID = nodeID
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now().Local())
+	return atx.Verify(0, 1)
+}
+
+func TestFirstInEpoch(t *testing.T) {
+	db := sql.InMemory()
+	lid := types.LayerID(layersPerEpoch * 2)
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	atx, err := newAtx(sig, lid)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(db, atx))
+
+	got, err := FirstInEpoch(db, atx.ID(), 2)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, got)
+
+	b1 := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, sig.NodeID(), lid)
+	b1.AtxID = atx.ID()
+	require.NoError(t, Add(db, &b1))
+	b2 := types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, sig.NodeID(), lid)
+	b2.AtxID = atx.ID()
+	require.NoError(t, Add(db, &b2))
+	b3 := types.NewExistingBallot(types.BallotID{3}, types.EmptyEdSignature, sig.NodeID(), lid.Add(1))
+	b3.AtxID = atx.ID()
+	require.NoError(t, Add(db, &b3))
+
+	got, err = FirstInEpoch(db, atx.ID(), 2)
+	require.NoError(t, err)
+	require.Equal(t, got.AtxID, atx.ID())
+	require.Equal(t, got.ID(), b1.ID())
 }
