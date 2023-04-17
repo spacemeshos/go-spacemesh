@@ -343,7 +343,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
 	}
 	if until > b.poetCfg.GracePeriod {
-		wait := until - 2*b.poetCfg.GracePeriod
+		wait := until - b.poetCfg.GracePeriod
 		b.log.WithContext(ctx).With().Debug("waiting for fresh atxs",
 			log.Duration("till poet round", until),
 			log.Uint32("current epoch", current.Uint32()),

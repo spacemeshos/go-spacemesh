@@ -3,7 +3,7 @@
     "poet": {
         "phase-shift": "20s",
         "cycle-gap": "20s",
-        "grace-period": "5s"
+        "grace-period": "10s"
     },
     "logging": {
         "trtl": "debug"
