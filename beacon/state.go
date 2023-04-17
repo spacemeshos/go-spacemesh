@@ -13,6 +13,7 @@ import (
 // state does the data management for epoch specific data for the protocol.
 // not thread-safe. it relies on ProtocolDriver's thread-safety mechanism.
 type state struct {
+	cfg         Config
 	logger      log.Log
 	nonce       *types.VRFPostIndex
 	epochWeight uint64
@@ -24,7 +25,7 @@ type state struct {
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
 	votesMargin               map[Proposal]*big.Int
 	hasProposed               map[types.NodeID]struct{}
-	hasVoted                  []map[types.NodeID]struct{}
+	hasVoted                  map[types.NodeID]*votesTracker
 	proposalPhaseFinishedTime time.Time
 	proposalChecker           eligibilityChecker
 	minerAtxs                 map[types.NodeID]types.ATXID
@@ -39,6 +40,7 @@ func newState(
 	checker eligibilityChecker,
 ) *state {
 	return &state{
+		cfg:                     cfg,
 		logger:                  logger,
 		epochWeight:             epochWeight,
 		nonce:                   nonce,
@@ -46,7 +48,7 @@ func newState(
 		firstRoundIncomingVotes: make(map[types.NodeID]proposalList),
 		votesMargin:             map[Proposal]*big.Int{},
 		hasProposed:             make(map[types.NodeID]struct{}),
-		hasVoted:                make([]map[types.NodeID]struct{}, cfg.RoundsNumber),
+		hasVoted:                make(map[types.NodeID]*votesTracker),
 		proposalChecker:         checker,
 	}
 }
@@ -106,25 +108,14 @@ func (s *state) registerProposed(logger log.Log, nodeID types.NodeID) error {
 	return nil
 }
 
-func (s *state) registerVoted(logger log.Log, nodeID types.NodeID, round types.RoundID) error {
-	if s.hasVoted[round] == nil {
-		s.hasVoted[round] = make(map[types.NodeID]struct{})
+func (s *state) registerVoted(nodeID types.NodeID, round types.RoundID) error {
+	tracker, exists := s.hasVoted[nodeID]
+	if !exists {
+		tracker = newVotesTracker(uint32(s.cfg.RoundsNumber))
+		s.hasVoted[nodeID] = tracker
 	}
-
-	// TODO(nkryuchkov): consider having a separate table for an epoch with one bit in it if atx/miner is voted already
-	if _, ok := s.hasVoted[round][nodeID]; ok {
-		logger.Warning("already received vote from miner for this round")
-
-		// TODO(nkryuchkov): report this miner through gossip
-		// TODO(nkryuchkov): store evidence, generate malfeasance proof: union of two whole voting messages
-		// TODO(nkryuchkov): handle malfeasance proof: we have a blacklist, on receiving, add to blacklist
-		// TODO(nkryuchkov): blacklist format: key is epoch when blacklisting started, value is link to proof (union of messages)
-		// TODO(nkryuchkov): ban id forever globally across packages since this epoch
-		// TODO(nkryuchkov): (not specific to beacon) do the same for ATXs
-
+	if !tracker.register(round) {
 		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, nodeID.ShortString(), errAlreadyVoted)
 	}
-
-	s.hasVoted[round][nodeID] = struct{}{}
 	return nil
 }
