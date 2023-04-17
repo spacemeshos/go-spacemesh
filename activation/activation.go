@@ -329,12 +329,21 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 	case <-b.syncer.RegisterForATXSynced():
 	}
 	current := b.currentEpoch()
+	prev, err := b.cdb.GetLastAtx(b.nodeID)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNotFound) {
+			return nil, err
+		}
+	} else if prev.PublishEpoch == current+1 {
+		current += 1
+	}
+
 	until := time.Until(b.poetRoundStart(current))
 	if until > 0 {
 		metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
 	}
 	if until > b.poetCfg.GracePeriod {
-		wait := until - b.poetCfg.GracePeriod
+		wait := until - 2*b.poetCfg.GracePeriod
 		b.log.WithContext(ctx).With().Debug("waiting for fresh atxs",
 			log.Duration("till poet round", until),
 			log.Uint32("current epoch", current.Uint32()),
@@ -366,7 +375,6 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		if err != nil {
 			return nil, fmt.Errorf("failed to get commitment ATX: %w", err)
 		}
-
 		challenge.CommitmentATX = &commitmentAtx
 		challenge.InitialPostIndices = b.initialPost.Indices
 	} else {

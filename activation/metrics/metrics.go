@@ -29,7 +29,7 @@ var (
 		"publish_window_seconds",
 		namespace,
 		"how much time in seconds you have before window for poet registrations closes",
-		[]string{"condition1"},
+		[]string{"condition"},
 		prometheus.ExponentialBuckets(1, 2, 10),
 	)
 	PublishOntimeWindowLatency = publishWindowLatency.WithLabelValues("ontime")
