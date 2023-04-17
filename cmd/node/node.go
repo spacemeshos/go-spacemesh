@@ -840,7 +840,7 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 	case grpcserver.Node:
 		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
 	case grpcserver.Smesher:
-		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval), nil
+		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
 	case grpcserver.Transaction:
 		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
 	case grpcserver.Activation:

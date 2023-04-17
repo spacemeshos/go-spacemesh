@@ -25,6 +25,7 @@ type SmesherService struct {
 	smeshingProvider  activation.SmeshingProvider
 
 	streamInterval time.Duration
+	postOpts       activation.PostSetupOpts
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -33,8 +34,8 @@ func (s SmesherService) RegisterService(server *Server) {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(post postSetupProvider, smeshing activation.SmeshingProvider, streamInterval time.Duration) *SmesherService {
-	return &SmesherService{post, smeshing, streamInterval}
+func NewSmesherService(post postSetupProvider, smeshing activation.SmeshingProvider, streamInterval time.Duration, postOpts activation.PostSetupOpts) *SmesherService {
+	return &SmesherService{post, smeshing, streamInterval, postOpts}
 }
 
 // IsSmeshing reports whether the node is smeshing.
@@ -67,14 +68,14 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		return nil, status.Error(codes.InvalidArgument, "`Opts.MaxFileSize` must be provided")
 	}
 
-	opts := activation.PostSetupOpts{
-		DataDir:           in.Opts.DataDir,
-		NumUnits:          in.Opts.NumUnits,
-		MaxFileSize:       in.Opts.MaxFileSize,
-		ComputeProviderID: int(in.Opts.ComputeProviderId),
-		Throttle:          in.Opts.Throttle,
-		Scrypt:            config.DefaultLabelParams(),
-	}
+	// Copy provided post opts
+	opts := s.postOpts
+	// Overlay api provided opts
+	opts.DataDir = in.Opts.DataDir
+	opts.NumUnits = in.Opts.NumUnits
+	opts.MaxFileSize = in.Opts.MaxFileSize
+	opts.ComputeProviderID = int(in.Opts.ComputeProviderId)
+	opts.Throttle = in.Opts.Throttle
 
 	coinbaseAddr, err := types.StringToAddress(in.Coinbase.Address)
 	if err != nil {
