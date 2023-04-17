@@ -70,19 +70,19 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 	}
 
 	// Copy provided post opts
-	optsCopy := s.postOpts
+	opts := s.postOpts
 	// Overlay api provided opts
-	optsCopy.DataDir = in.Opts.DataDir
-	optsCopy.NumUnits = in.Opts.NumUnits
-	optsCopy.MaxFileSize = in.Opts.MaxFileSize
-	optsCopy.ComputeProviderID = int(in.Opts.ComputeProviderId)
-	optsCopy.Throttle = in.Opts.Throttle
+	opts.DataDir = in.Opts.DataDir
+	opts.NumUnits = in.Opts.NumUnits
+	opts.MaxFileSize = in.Opts.MaxFileSize
+	opts.ComputeProviderID = int(in.Opts.ComputeProviderId)
+	opts.Throttle = in.Opts.Throttle
 
 	coinbaseAddr, err := types.StringToAddress(in.Coinbase.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse in.Coinbase.Address `%s`: %w", in.Coinbase.Address, err)
 	}
-	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, optsCopy); err != nil {
+	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, opts); err != nil {
 		err := fmt.Sprintf("failed to start smeshing: %v", err)
 		log.Error(err)
 		return nil, status.Error(codes.Internal, err)
