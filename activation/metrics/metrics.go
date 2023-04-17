@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
@@ -28,7 +29,7 @@ var (
 		"publish_window_seconds",
 		namespace,
 		"how much time in seconds you have before window for poet registrations closes",
-		[]string{"condition"},
+		[]string{"condition1"},
 		prometheus.ExponentialBuckets(1, 2, 10),
 	)
 	PublishOntimeWindowLatency = publishWindowLatency.WithLabelValues("ontime")
