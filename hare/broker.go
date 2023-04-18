@@ -340,11 +340,13 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any,
 	if !b.Synced(ctx, id) {
 		return nil, errInstanceNotSynced
 	}
+
 	// Delete old outbox beyond the limit
 	if len(b.outbox) > b.limit {
 		// unregister the earliest layer to make space for the new layer
 		// cannot call unregister here because unregister blocks and this would cause a deadlock
 		instance := b.minDeleted.Add(1)
+		b.Warning("unregistered layer due to maximum concurrent deleted: %v, latest: %v originalOutboxLen: %v", instance, b.latestLayer, len(b.outbox))
 		delete(b.outbox, instance)
 		b.minDeleted = instance
 		b.With().Info("unregistered layer due to maximum concurrent processes", instance)
