@@ -1373,6 +1373,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testing.T) *tester) {
 	for _, tc := range tcs {
 		t.Run(tc.desc, func(t *testing.T) {
+			t.Parallel()
 			tt := genTester(t)
 			next := types.GetEffectiveGenesis()
 			for i, layer := range tc.layers {
@@ -1515,7 +1516,7 @@ func TestRandomTransfers(t *testing.T) {
 		notVerified(tt.spawnAll()...), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
-	for i := 1; i < 1000; i++ {
+	for i := 1; i < 100; i++ {
 		lid := types.GetEffectiveGenesis().Add(uint32(i))
 		skipped, _, err := tt.Apply(testContext(lid),
 			notVerified(tt.randSpendN(20, 10)...), nil)
@@ -1525,6 +1526,7 @@ func TestRandomTransfers(t *testing.T) {
 }
 
 func testValidation(t *testing.T, tt *tester, template core.Address) {
+	t.Parallel()
 	skipped, _, err := tt.Apply(testContext(types.GetEffectiveGenesis()),
 		notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)

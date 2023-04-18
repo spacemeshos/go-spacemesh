@@ -3,6 +3,7 @@ package vesting
 import (
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
 )
 
 func BaseGas(method uint8, signatures int) uint64 {
@@ -15,9 +16,9 @@ func BaseGas(method uint8, signatures int) uint64 {
 func ExecGas(method uint8, keys int) uint64 {
 	if method == MethodDrainVault {
 		gas := core.ACCOUNT_ACCESS
-		gas += core.SizeGas(core.LOAD, 64)   // vault state
-		gas += core.SizeGas(core.UPDATE, 16) // update nonce + amount
-		gas += core.SizeGas(core.UPDATE, 16) // update amount + mutable vault state
+		gas += core.SizeGas(core.LOAD, vault.VAULT_STATE_SIZE)
+		gas += core.SizeGas(core.UPDATE, core.ACCOUNT_HEADER_SIZE)
+		gas += core.SizeGas(core.UPDATE, core.ACCOUNT_BALANCE_SIZE+vault.DRAINED_SIZE)
 		return gas
 	}
 	return multisig.ExecGas(method, keys)

@@ -29,6 +29,12 @@ const (
 	EDVERIFY uint64 = 3000
 )
 
+const (
+	PUBLIC_KEY_SIZE      = 32
+	ACCOUNT_HEADER_SIZE  = 36 // includes balance (8), nonce (8) and template address (24)
+	ACCOUNT_BALANCE_SIZE = 8
+)
+
 // SizeGas computes total gas cost for a value of the specific size.
 // Gas is charged for every 8 bytes, rounded up.
 func SizeGas(gas uint64, size int) uint64 {

@@ -16,6 +16,11 @@ var (
 	ErrAmountNotAvailable = errors.New("vault: amount not available")
 )
 
+const (
+	VAULT_STATE_SIZE = core.ACCOUNT_HEADER_SIZE + 56
+	DRAINED_SIZE     = 8
+)
+
 //go:generate scalegen
 
 type Vault struct {
