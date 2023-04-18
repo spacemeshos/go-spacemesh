@@ -299,7 +299,7 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32
 		log.Uint32("round", round),
 		log.Int("committee_size", committeeSize),
 		id,
-		log.Uint64("eligibility_count", uint64(eligibilityCount)),
+		log.Uint16("eligibility_count", eligibilityCount),
 		log.Int("n", n),
 		log.String("p", p.String()),
 		log.String("vrf_frac", vrfFrac.String()),
@@ -351,9 +351,12 @@ func (o *Oracle) CalcEligibility(
 
 	for x := 0; x < n; x++ {
 		if fixed.BinCDF(n, p, x).GreaterThan(vrfFrac) {
+			// even with large N and large P x will be << 2^16, so this cast is safe
 			return uint16(x), nil
 		}
 	}
+
+	// since BinCDF(n, p, n) is 1 for any p this code is only reached if n << 2^16
 	return uint16(n), nil
 }
 
