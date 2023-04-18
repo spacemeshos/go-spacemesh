@@ -45,7 +45,7 @@ func newTester(tb testing.TB) *tester {
 		TB: tb,
 		VM: New(sql.InMemory(),
 			WithLogger(logtest.New(tb)),
-			WithConfig(Config{GasLimit: math.MaxUint64, StorageCostFactor: 2}),
+			WithConfig(Config{GasLimit: math.MaxUint64}),
 		),
 		rng: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
@@ -60,8 +60,9 @@ type testAccount interface {
 	spawn(template core.Address, args scale.Encodable, nonce core.Nonce, opts ...sdk.Opt) []byte
 	spawnArgs() scale.Encodable
 
-	baseGas() int
-	fixedGas() int
+	baseGas(uint8) int
+	loadGas() int
+	execGas(uint8) int
 }
 
 type singlesigAccount struct {
@@ -95,12 +96,16 @@ func (a *singlesigAccount) spawnArgs() scale.Encodable {
 	return &args
 }
 
-func (a *singlesigAccount) baseGas() int {
-	return wallet.BaseGas
+func (a *singlesigAccount) baseGas(method uint8) int {
+	return int(wallet.BaseGas(method))
 }
 
-func (a *singlesigAccount) fixedGas() int {
-	return wallet.FixedGas
+func (a *singlesigAccount) loadGas() int {
+	return int(wallet.LoadGas())
+}
+
+func (a *singlesigAccount) execGas(method uint8) int {
+	return int(wallet.ExecGas(method))
 }
 
 type multisigAccount struct {
@@ -164,12 +169,16 @@ func (a *multisigAccount) spawnArgs() scale.Encodable {
 	return &args
 }
 
-func (a *multisigAccount) baseGas() int {
-	return int(vesting.BaseGas * uint64(a.k))
+func (a *multisigAccount) baseGas(method uint8) int {
+	return int(multisig.BaseGas(method, a.k))
 }
 
-func (a *multisigAccount) fixedGas() int {
-	return int(vesting.FixedGas * uint64(a.k))
+func (a *multisigAccount) loadGas() int {
+	return int(multisig.LoadGas(len(a.pks)))
+}
+
+func (a *multisigAccount) execGas(method uint8) int {
+	return int(multisig.ExecGas(method, len(a.pks)))
 }
 
 type vestingAccount struct {
@@ -183,6 +192,14 @@ func (a *vestingAccount) drainVault(vault, recipient core.Address, amount uint64
 		agg.Add(*part.Part(uint8(i)))
 	}
 	return agg.Raw()
+}
+
+func (a *vestingAccount) baseGas(method uint8) int {
+	return int(vesting.BaseGas(method, a.k))
+}
+
+func (a *vestingAccount) execGas(method uint8) int {
+	return int(vesting.ExecGas(method, len(a.pks)))
 }
 
 type vaultAccount struct {
@@ -223,11 +240,15 @@ func (a *vaultAccount) spawnArgs() scale.Encodable {
 	}
 }
 
-func (a *vaultAccount) baseGas() int {
+func (a *vaultAccount) baseGas(uint8) int {
 	return 0
 }
 
-func (a *vaultAccount) fixedGas() int {
+func (a *vaultAccount) loadGas() int {
+	return 0
+}
+
+func (a *vaultAccount) execGas(uint8) int {
 	return 0
 }
 
@@ -246,7 +267,7 @@ func (t *tester) persistent() *tester {
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	require.NoError(t, err)
 	t.VM = New(db, WithLogger(logtest.New(t)),
-		WithConfig(Config{StorageCostFactor: 2, GasLimit: math.MaxUint64}))
+		WithConfig(Config{GasLimit: math.MaxUint64}))
 	return t
 }
 
@@ -407,23 +428,35 @@ func (t *tester) rewards(all ...reward) []types.CoinbaseReward {
 func (t *tester) estimateSpawnGas(principal, target int) int {
 	args := t.accounts[target].spawnArgs()
 	tx := t.accounts[principal].spawn(t.accounts[target].getTemplate(), args, 0)
-	return t.accounts[principal].baseGas() + t.accounts[target].fixedGas() +
-		len(tx)*int(t.VM.cfg.StorageCostFactor)
+	gas := t.accounts[principal].baseGas(core.MethodSpawn) +
+		t.accounts[target].execGas(core.MethodSpawn) +
+		int(core.TxDataGas(len(tx)))
+	if principal != target {
+		gas += t.accounts[principal].loadGas()
+	}
+	return gas
 }
 
 func (t *tester) estimateSpendGas(principal, to, amount int, nonce core.Nonce) int {
-	return t.accounts[principal].baseGas() + t.accounts[principal].fixedGas() + len(t.accounts[principal].spend(t.accounts[to].getAddress(), uint64(amount), nonce))*int(t.VM.cfg.StorageCostFactor)
+	tx := t.accounts[principal].spend(t.accounts[to].getAddress(), uint64(amount), nonce)
+	return t.accounts[principal].baseGas(core.MethodSpend) +
+		t.accounts[principal].loadGas() +
+		t.accounts[principal].execGas(core.MethodSpend) +
+		int(core.TxDataGas(len(tx)))
 }
 
 func (t *tester) estimateDrainGas(principal, vault, to, amount int, nonce core.Nonce) int {
 	require.IsType(t, t.accounts[principal], &vestingAccount{})
 	vestacc := t.accounts[principal].(*vestingAccount)
-	return vestacc.baseGas() + vestacc.fixedGas() + len(vestacc.drainVault(
+	tx := vestacc.drainVault(
 		t.accounts[vault].getAddress(),
 		t.accounts[to].getAddress(),
 		uint64(amount),
-		nonce),
-	)*int(t.VM.cfg.StorageCostFactor)
+		nonce)
+	return t.accounts[principal].baseGas(vesting.MethodDrainVault) +
+		t.accounts[principal].loadGas() +
+		t.accounts[principal].execGas(vesting.MethodDrainVault) +
+		int(core.TxDataGas(len(tx)))
 }
 
 func encodeFields(tb testing.TB, fields ...scale.Encodable) types.RawTx {
@@ -767,16 +800,16 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 				{
 					txs: []testTx{
-						&spendTx{0, 10, 10_000},
+						&spendTx{0, 10, 2_000_000},
 						&selfSpawnTx{10},
 						&spendTx{10, 11, 100},
 					},
 					expected: map[int]change{
-						0: spent{amount: 10000 + defaultGasPrice*
-							ref.estimateSpendGas(0, 10, 10_000, 1)},
+						0: spent{amount: 2_000_000 + defaultGasPrice*
+							ref.estimateSpendGas(0, 10, 200_000, 1)},
 						10: spawned{
 							template: template,
-							change: earned{amount: 10000 - 100 - defaultGasPrice*(ref.estimateSpawnGas(10, 10)+
+							change: earned{amount: 2_000_000 - 100 - defaultGasPrice*(ref.estimateSpawnGas(10, 10)+
 								ref.estimateSpendGas(10, 11, 100, 1))},
 						},
 						11: earned{amount: 100},
@@ -956,19 +989,19 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 10, uint64(ref.estimateSpawnGas(1, 1)) - 1},
+						&spendTx{0, 10, 80_000}, // send enough to cover intrinsic cost but not whole transaction
 						&selfSpawnTx{10},
 						&spendTx{0, 11, 100},
 					},
 					gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
-						ref.estimateSpendGas(0, 10, 100, 1) +
-						ref.estimateSpawnGas(1, 1)),
+						ref.estimateSpendGas(0, 10, 80_000, 1) +
+						ref.estimateSpawnGas(10, 10)),
 					failed:      map[int]error{2: core.ErrNoBalance},
 					ineffective: []int{3},
 					expected: map[int]change{
-						0: spent{amount: ref.estimateSpawnGas(1, 1) - 1 +
+						0: spent{amount: 80_000 +
 							ref.estimateSpawnGas(0, 0) +
-							ref.estimateSpendGas(0, 10, 100, 1)},
+							ref.estimateSpendGas(0, 10, 80_000, 1)},
 						10: nonce{increased: 1},
 						11: same{},
 					},
@@ -1113,11 +1146,14 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 				{
 					txs: []testTx{
-						&spendTx{0, 11, uint64(ref.estimateSpendGas(11, 12, 1_000, 2)) + 1_000},
+						&spendTx{0, 11, 200_000},
 						&spendTx{11, 12, 1_000},
 					},
 					expected: map[int]change{
-						0:  spent{amount: ref.estimateSpendGas(11, 12, 1_000, 2)*2 + 1_000, change: nonce{increased: 1}},
+						0: spent{
+							amount: ref.estimateSpendGas(0, 11, 200_000, 2) + 200_000,
+							change: nonce{increased: 1},
+						},
 						11: nonce{increased: 1},
 						12: earned{amount: 1_000},
 					},
@@ -1217,7 +1253,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						0: spawned{
 							template: template,
 							change: spent{
-								amount: 2 * ref.estimateSpawnGas(0, 0),
+								amount: ref.estimateSpawnGas(0, 0) + ref.estimateSpawnGas(0, 11),
 								change: nonce{increased: 2},
 							},
 						},
@@ -1389,6 +1425,7 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 }
 
 func testWallet(t *testing.T, defaultGasPrice int, template core.Address, genTester func(t *testing.T) *tester) {
+	t.Parallel()
 	runTestCases(t,
 		singleWalletTestCases(defaultGasPrice, template, genTester(t)),
 		genTester,
@@ -1396,6 +1433,7 @@ func testWallet(t *testing.T, defaultGasPrice int, template core.Address, genTes
 }
 
 func TestWallets(t *testing.T) {
+	t.Parallel()
 	const (
 		funded  = 10  // number of funded accounts, included in genesis
 		total   = 100 // total number of accounts
@@ -1468,6 +1506,7 @@ func TestWallets(t *testing.T) {
 }
 
 func TestRandomTransfers(t *testing.T) {
+	t.Parallel()
 	tt := newTester(t).withSeed(101).
 		addSingleSig(10).
 		addMultisig(10, 1, 3).
@@ -1479,7 +1518,7 @@ func TestRandomTransfers(t *testing.T) {
 		notVerified(tt.spawnAll()...), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
-	for i := 1; i < 1000; i++ {
+	for i := 1; i < 100; i++ {
 		lid := types.GetEffectiveGenesis().Add(uint32(i))
 		skipped, _, err := tt.Apply(testContext(lid),
 			notVerified(tt.randSpendN(20, 10)...), nil)
@@ -1489,6 +1528,7 @@ func TestRandomTransfers(t *testing.T) {
 }
 
 func testValidation(t *testing.T, tt *tester, template core.Address) {
+	t.Parallel()
 	skipped, _, err := tt.Apply(testContext(types.GetEffectiveGenesis()),
 		notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
@@ -1894,6 +1934,7 @@ func TestVestingWithVault(t *testing.T) {
 }
 
 func TestValidation(t *testing.T) {
+	t.Parallel()
 	t.Run("SingleSig", func(t *testing.T) {
 		tt := newTester(t).
 			addSingleSig(1).

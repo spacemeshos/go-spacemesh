@@ -18,11 +18,15 @@ type MultiSig struct {
 }
 
 func (ms *MultiSig) BaseGas(method uint8) uint64 {
-	return BaseGas * uint64(ms.Required)
+	return BaseGas(method, int(ms.Required))
 }
 
-func (ms *MultiSig) FixedGas(method uint8) uint64 {
-	return FixedGas * uint64(ms.Required)
+func (ms *MultiSig) LoadGas() uint64 {
+	return LoadGas(len(ms.PublicKeys))
+}
+
+func (ms *MultiSig) ExecGas(method uint8) uint64 {
+	return ExecGas(method, len(ms.PublicKeys))
 }
 
 // MaxSpend returns amount specified in the SpendArguments.

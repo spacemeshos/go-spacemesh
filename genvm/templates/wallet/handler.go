@@ -10,11 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 )
 
-const (
-	BaseGas  = 100
-	FixedGas = 100
-)
-
 func init() {
 	TemplateAddress[len(TemplateAddress)-1] = 1
 }

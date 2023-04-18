@@ -53,9 +53,13 @@ func (s *Wallet) Spend(host core.Host, args *SpendArguments) error {
 }
 
 func (s *Wallet) BaseGas(method uint8) uint64 {
-	return BaseGas
+	return BaseGas(method)
 }
 
-func (s *Wallet) FixedGas(method uint8) uint64 {
-	return FixedGas
+func (s *Wallet) LoadGas() uint64 {
+	return LoadGas()
+}
+
+func (s *Wallet) ExecGas(method uint8) uint64 {
+	return ExecGas(method)
 }
