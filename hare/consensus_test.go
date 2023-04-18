@@ -126,7 +126,9 @@ type ConsensusTest struct {
 	*HareSuite
 }
 
-func newConsensusTest() *ConsensusTest {
+func newConsensusTest(t *testing.T) *ConsensusTest {
+	t.Parallel()
+
 	ct := new(ConsensusTest)
 	ct.HareSuite = newHareSuite()
 
@@ -214,7 +216,7 @@ func createConsensusProcess(
 
 // Test - runs a single CP for more than one iteration.
 func TestConsensus_MultipleIterations(t *testing.T) {
-	test := newConsensusTest()
+	test := newConsensusTest(t)
 
 	totalNodes := 15
 	cfg := config.Config{N: totalNodes, WakeupDelta: time.Second, RoundDuration: time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100, Hdist: 20}
@@ -249,7 +251,7 @@ func TestConsensus_MultipleIterations(t *testing.T) {
 }
 
 func TestConsensusFixedOracle(t *testing.T) {
-	test := newConsensusTest()
+	test := newConsensusTest(t)
 	cfg := config.Config{N: 16, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 
 	totalNodes := 20
@@ -281,7 +283,7 @@ func TestConsensusFixedOracle(t *testing.T) {
 }
 
 func TestSingleValueForHonestSet(t *testing.T) {
-	test := newConsensusTest()
+	test := newConsensusTest(t)
 
 	// Larger values may trigger race detector failures because of 8128 goroutines limit.
 	cfg := config.Config{N: 10, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
@@ -315,7 +317,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 }
 
 func TestAllDifferentSet(t *testing.T) {
-	test := newConsensusTest()
+	test := newConsensusTest(t)
 
 	cfg := config.Config{N: 10, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 	totalNodes := 10
@@ -361,7 +363,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 		t.Skip()
 	}
 
-	test := newConsensusTest()
+	test := newConsensusTest(t)
 
 	cfg := config.Config{N: 16, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 	totalNodes := 20
@@ -419,7 +421,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 		t.Skip()
 	}
 
-	test := newConsensusTest()
+	test := newConsensusTest(t)
 
 	cfg := config.Config{N: 16, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 	totalNodes := 20
@@ -514,7 +516,7 @@ func TestEquivocation(t *testing.T) {
 		t.Skip()
 	}
 
-	test := newConsensusTest()
+	test := newConsensusTest(t)
 
 	cfg := config.Config{N: 16, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
 	totalNodes := 20

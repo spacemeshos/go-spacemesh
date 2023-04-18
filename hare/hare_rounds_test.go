@@ -120,6 +120,8 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 }
 
 func Test_HarePreRoundEmptySet(t *testing.T) {
+	t.Parallel()
+
 	const nodes = 5
 	const layers = 2
 

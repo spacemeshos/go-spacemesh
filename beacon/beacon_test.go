@@ -151,6 +151,8 @@ func TestMain(m *testing.M) {
 }
 
 func TestBeacon_MultipleNodes(t *testing.T) {
+	t.Parallel()
+
 	numNodes := 5
 	testNodes := make([]*testProtocolDriver, 0, numNodes)
 	publisher := pubsubmocks.NewMockPublisher(gomock.NewController(t))
@@ -220,6 +222,8 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 }
 
 func TestBeacon_NoProposals(t *testing.T) {
+	t.Parallel()
+
 	numNodes := 5
 	testNodes := make([]*testProtocolDriver, 0, numNodes)
 	publisher := pubsubmocks.NewMockPublisher(gomock.NewController(t))
@@ -866,6 +870,8 @@ func TestBeacon_atxThreshold(t *testing.T) {
 }
 
 func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
+	t.Parallel()
+
 	cfg := Config{Kappa: 40, Q: big.NewRat(1, 3)}
 	tt := []struct {
 		name            string
