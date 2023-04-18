@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
@@ -19,7 +20,7 @@ var bootstrapEpoch = types.EpochID(2)
 
 type NetworkParam struct {
 	Genesis      time.Time
-	LyrsPerEpoch uint64
+	LyrsPerEpoch uint32
 	LyrDuration  time.Duration
 	Offset       uint32
 }
@@ -57,6 +58,9 @@ func NewServer(fs afero.Fs, gen *Generator, fallback bool, port int, lg log.Log)
 }
 
 func (s *Server) Start(ctx context.Context, errCh chan error, params *NetworkParam) {
+	if err := s.fs.MkdirAll(dataDir, 0o700); err != nil {
+		errCh <- fmt.Errorf("create persist dir %v: %w", dataDir, err)
+	}
 	s.eg.Go(func() error {
 		s.startHttp(errCh)
 		return nil
@@ -74,7 +78,7 @@ func (s *Server) loop(ctx context.Context, errCh chan error, params *NetworkPara
 	wait := time.Until(params.updateBeaconTime(bootstrapEpoch))
 	select {
 	case <-time.After(wait):
-		if err := s.gen.GenBootstrap(ctx, 2); err != nil {
+		if err := s.GenBootstrap(ctx, 2); err != nil {
 			errCh <- err
 			return
 		}
@@ -89,14 +93,54 @@ func (s *Server) loop(ctx context.Context, errCh chan error, params *NetworkPara
 	// start generating fallback data
 	s.eg.Go(
 		func() error {
-			s.genDataLoop(ctx, errCh, bootstrapEpoch, params.updateActiveSetTime, s.gen.GenFallbackActiveSet)
+			s.genDataLoop(ctx, errCh, bootstrapEpoch, params.updateActiveSetTime, s.GenFallbackActiveSet)
 			return nil
 		})
 	s.eg.Go(
 		func() error {
-			s.genDataLoop(ctx, errCh, bootstrapEpoch+1, params.updateBeaconTime, s.gen.GenFallbackBeacon)
+			s.genDataLoop(ctx, errCh, bootstrapEpoch+1, params.updateBeaconTime, s.GenFallbackBeacon)
 			return nil
 		})
+}
+
+// in systests, we want to be sure the nodes use the fallback data unconditionally.
+// use a fixed known value for beacon to be sure that fallback is used during testing.
+func epochBeacon(epoch types.EpochID) types.Beacon {
+	b := make([]byte, types.BeaconSize)
+	binary.LittleEndian.PutUint32(b, uint32(epoch))
+	return types.BytesToBeacon(b)
+}
+
+func (s *Server) GenBootstrap(ctx context.Context, epoch types.EpochID) error {
+	actives, err := getPartialActiveSet(ctx, epoch, s.gen.SmEndpoint())
+	if err != nil {
+		return err
+	}
+	return s.gen.GenUpdate(epoch, epochBeacon(epoch), actives)
+}
+
+func (s *Server) GenFallbackBeacon(_ context.Context, epoch types.EpochID) error {
+	return s.gen.GenUpdate(epoch, epochBeacon(epoch), nil)
+}
+
+func (s *Server) GenFallbackActiveSet(ctx context.Context, epoch types.EpochID) error {
+	actives, err := getPartialActiveSet(ctx, epoch, s.gen.SmEndpoint())
+	if err != nil {
+		return err
+	}
+	return s.gen.GenUpdate(epoch, types.EmptyBeacon, actives)
+}
+
+// in systests, we want to be sure the nodes use the fallback data unconditionally
+// we only use half of the active set as fallback value, so we can be sure that fallback is used during testing.
+func getPartialActiveSet(ctx context.Context, targetEpoch types.EpochID, smEndpoint string) ([]types.ATXID, error) {
+	actives, err := getActiveSet(ctx, smEndpoint, targetEpoch-1)
+	if err != nil {
+		return nil, err
+	}
+	// enough to allow hare to pass
+	cutoff := len(actives) * 3 / 4
+	return actives[:cutoff], nil
 }
 
 func (s *Server) genDataLoop(

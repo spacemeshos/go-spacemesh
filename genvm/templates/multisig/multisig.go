@@ -13,8 +13,20 @@ import (
 
 // MultiSig K/N template.
 type MultiSig struct {
-	k          uint8
+	Required   uint8
 	PublicKeys []core.PublicKey `scale:"max=10"`
+}
+
+func (ms *MultiSig) BaseGas(method uint8) uint64 {
+	return BaseGas(method, int(ms.Required))
+}
+
+func (ms *MultiSig) LoadGas() uint64 {
+	return LoadGas(len(ms.PublicKeys))
+}
+
+func (ms *MultiSig) ExecGas(method uint8) uint64 {
+	return ExecGas(method, len(ms.PublicKeys))
 }
 
 // MaxSpend returns amount specified in the SpendArguments.
@@ -31,13 +43,13 @@ func (ms *MultiSig) MaxSpend(method uint8, args any) (uint64, error) {
 
 // Verify that transaction is signed has k valid signatures.
 func (ms *MultiSig) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool {
-	sig := make(Signatures, ms.k)
+	sig := make(Signatures, ms.Required)
 	n, err := scale.DecodeStructArray(dec, sig)
 	if err != nil {
 		return false
 	}
 	body := core.SigningBody(host.GetGenesisID().Bytes(), raw[:len(raw)-n])
-	batch := ed25519.NewBatchVerifierWithCapacity(int(ms.k))
+	batch := ed25519.NewBatchVerifierWithCapacity(int(ms.Required))
 	last := uint8(0)
 	for i, part := range sig {
 		if part.Ref >= uint8(len(ms.PublicKeys)) {

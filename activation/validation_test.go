@@ -65,7 +65,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	t.Run("wrong commitmentAtxId", func(t *testing.T) {
 		t.Parallel()
 
-		commitmentAtxId := types.RandomATXID()
+		commitmentAtxId := types.ATXID{1, 2, 3}
 		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits))
 	})
 

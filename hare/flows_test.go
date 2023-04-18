@@ -19,8 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
-// Test running multiple consensus processes in parallel. This can happen when
-// a layer starts before the last layer has converged.
 func Test_multipleCPs(t *testing.T) {
 	logtest.SetupGlobal(t)
 	totalNodes := 10

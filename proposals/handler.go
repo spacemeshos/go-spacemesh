@@ -45,6 +45,7 @@ var (
 	errKnownBallot           = errors.New("known ballot")
 	errInvalidVote           = errors.New("invalid layer/height in the vote")
 	errMaliciousBallot       = errors.New("malicious ballot")
+	errWrongSmesherID        = errors.New("ballot atx from a different smesher")
 )
 
 // Handler processes Proposal from gossip and, if deems it valid, propagates it to peers.
@@ -171,6 +172,15 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []
 		logger.With().Error("failed to initialize ballot", log.Err(err))
 		return errInitialize
 	}
+
+	if b.AtxID == types.EmptyATXID || b.AtxID == h.cfg.GoldenATXID {
+		return errInvalidATXID
+	}
+	if hdr, err := h.cdb.GetAtxHeader(b.AtxID); err != nil {
+		return fmt.Errorf("ballot atx hdr %w", err)
+	} else if hdr.NodeID != b.SmesherID {
+		return fmt.Errorf("%w: expected %v, got %v", errWrongSmesherID, b.SmesherID, hdr.NodeID)
+	}
 	ballotDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
 
 	t1 := time.Now()
@@ -241,6 +251,15 @@ func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []
 	if err := p.Initialize(); err != nil {
 		logger.With().Warning("failed to initialize proposal", log.Err(err))
 		return errInitialize
+	}
+
+	if p.AtxID == types.EmptyATXID || p.AtxID == h.cfg.GoldenATXID {
+		return errInvalidATXID
+	}
+	if hdr, err := h.cdb.GetAtxHeader(p.AtxID); err != nil {
+		return fmt.Errorf("proposal atx hdr %w", err)
+	} else if hdr.NodeID != p.SmesherID {
+		return fmt.Errorf("%w: expected %v, got %v", errWrongSmesherID, p.SmesherID, hdr.NodeID)
 	}
 	proposalDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
 
@@ -399,10 +418,6 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.L
 }
 
 func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
-	if b.AtxID == types.EmptyATXID || b.AtxID == h.cfg.GoldenATXID {
-		return errInvalidATXID
-	}
-
 	if b.RefBallot == types.EmptyBallotID {
 		// this is the smesher's first Ballot in this epoch, should contain EpochData
 		if b.EpochData == nil {

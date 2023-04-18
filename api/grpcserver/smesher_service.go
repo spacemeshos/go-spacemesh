@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -14,17 +15,17 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // SmesherService exposes endpoints to manage smeshing.
 type SmesherService struct {
-	postSetupProvider api.PostSetupProvider
-	smeshingProvider  api.SmeshingAPI
+	postSetupProvider postSetupProvider
+	smeshingProvider  activation.SmeshingProvider
 
 	streamInterval time.Duration
+	postOpts       activation.PostSetupOpts
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -33,8 +34,8 @@ func (s SmesherService) RegisterService(server *Server) {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(post api.PostSetupProvider, smeshing api.SmeshingAPI, streamInterval time.Duration) *SmesherService {
-	return &SmesherService{post, smeshing, streamInterval}
+func NewSmesherService(post postSetupProvider, smeshing activation.SmeshingProvider, streamInterval time.Duration, postOpts activation.PostSetupOpts) *SmesherService {
+	return &SmesherService{post, smeshing, streamInterval, postOpts}
 }
 
 // IsSmeshing reports whether the node is smeshing.
@@ -67,14 +68,14 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		return nil, status.Error(codes.InvalidArgument, "`Opts.MaxFileSize` must be provided")
 	}
 
-	opts := activation.PostSetupOpts{
-		DataDir:           in.Opts.DataDir,
-		NumUnits:          in.Opts.NumUnits,
-		MaxFileSize:       in.Opts.MaxFileSize,
-		ComputeProviderID: int(in.Opts.ComputeProviderId),
-		Throttle:          in.Opts.Throttle,
-		Scrypt:            config.DefaultLabelParams(),
-	}
+	// Copy provided post opts
+	opts := s.postOpts
+	// Overlay api provided opts
+	opts.DataDir = in.Opts.DataDir
+	opts.NumUnits = in.Opts.NumUnits
+	opts.MaxFileSize = in.Opts.MaxFileSize
+	opts.ComputeProviderID = int(in.Opts.ComputeProviderId)
+	opts.Throttle = in.Opts.Throttle
 
 	coinbaseAddr, err := types.StringToAddress(in.Coinbase.Address)
 	if err != nil {
@@ -259,4 +260,19 @@ func statusToPbStatus(status *activation.PostSetupStatus) *pb.PostSetupStatus {
 	}
 
 	return pbStatus
+}
+
+// UpdatePoetServers update server that is used for generating PoETs.
+func (s SmesherService) UpdatePoetServers(ctx context.Context, req *pb.UpdatePoetServersRequest) (*pb.UpdatePoetServersResponse, error) {
+	err := s.smeshingProvider.UpdatePoETServers(ctx, req.Urls)
+	if err == nil {
+		return &pb.UpdatePoetServersResponse{
+			Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
+		}, nil
+	}
+	switch {
+	case errors.Is(err, activation.ErrPoetServiceUnstable):
+		return nil, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", err)
+	}
+	return nil, status.Errorf(codes.Internal, "failed to update poet server")
 }

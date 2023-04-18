@@ -18,7 +18,7 @@ import (
 const inboxCapacity = 1024 // inbox size per instance
 
 type validator interface {
-	Validate(context.Context, *Msg) bool
+	Validate(context.Context, *Message) bool
 	ValidateEligibilityGossip(context.Context, *types.HareEligibilityGossip) bool
 }
 
@@ -28,16 +28,16 @@ type Broker struct {
 	log.Log
 	mu sync.RWMutex
 
-	msh             mesh
-	pubKeyExtractor *signing.PubKeyExtractor
-	roleValidator   validator                // provides eligibility validation
-	stateQuerier    stateQuerier             // provides activeness check
-	nodeSyncState   system.SyncStateProvider // provider function to check if the node is currently synced
-	mchOut          chan<- *types.MalfeasanceGossip
-	outbox          map[types.LayerID]chan any
-	latestLayer     types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
-	minDeleted      types.LayerID
-	limit           int // max number of simultaneous consensus processes
+	msh           mesh
+	edVerifier    *signing.EdVerifier
+	roleValidator validator                // provides eligibility validation
+	stateQuerier  stateQuerier             // provides activeness check
+	nodeSyncState system.SyncStateProvider // provider function to check if the node is currently synced
+	mchOut        chan<- *types.MalfeasanceGossip
+	outbox        map[types.LayerID]chan any
+	latestLayer   types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
+	minDeleted    types.LayerID
+	limit         int // max number of simultaneous consensus processes
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -46,7 +46,7 @@ type Broker struct {
 
 func newBroker(
 	msh mesh,
-	pubKeyExtractor *signing.PubKeyExtractor,
+	edVerifier *signing.EdVerifier,
 	roleValidator validator,
 	stateQuerier stateQuerier,
 	syncState system.SyncStateProvider,
@@ -55,17 +55,17 @@ func newBroker(
 	log log.Log,
 ) *Broker {
 	b := &Broker{
-		Log:             log,
-		msh:             msh,
-		pubKeyExtractor: pubKeyExtractor,
-		roleValidator:   roleValidator,
-		stateQuerier:    stateQuerier,
-		nodeSyncState:   syncState,
-		mchOut:          mch,
-		outbox:          make(map[types.LayerID]chan any),
-		latestLayer:     types.GetEffectiveGenesis(),
-		limit:           limit,
-		minDeleted:      types.GetEffectiveGenesis(),
+		Log:           log,
+		msh:           msh,
+		edVerifier:    edVerifier,
+		roleValidator: roleValidator,
+		stateQuerier:  stateQuerier,
+		nodeSyncState: syncState,
+		mchOut:        mch,
+		outbox:        make(map[types.LayerID]chan any),
+		latestLayer:   types.GetEffectiveGenesis(),
+		limit:         limit,
+		minDeleted:    types.GetEffectiveGenesis(),
 	}
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 	return b
@@ -122,7 +122,7 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		logger.With().Error("failed to build message", h, log.Err(err))
 		return err
 	}
-	logger = logger.WithFields(log.Inline(&hareMsg))
+	logger = logger.WithFields(log.Inline(hareMsg))
 
 	if hareMsg.InnerMessage == nil {
 		logger.With().Warning("hare msg missing inner msg", log.Err(errNilInner))
@@ -141,24 +141,20 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		return err
 	}
 
-	b.Log.WithContext(ctx).With().Debug("instance exists", msgLayer)
-
-	nodeId, err := b.pubKeyExtractor.ExtractNodeID(signing.HARE, hareMsg.SignedBytes(), hareMsg.Signature)
-	if err != nil {
-		logger.With().Error("failed to extract public key",
-			log.Err(err),
-			log.Int("sig_len", len(hareMsg.Signature)))
-		return fmt.Errorf("extract ed25519 pubkey: %w", err)
+	if !b.edVerifier.Verify(signing.HARE, hareMsg.SmesherID, hareMsg.SignedBytes(), hareMsg.Signature) {
+		logger.With().Error("failed to verify signature",
+			log.Int("sig_len", len(hareMsg.Signature)),
+		)
+		return fmt.Errorf("verify ed25519 signature")
 	}
 	// create msg
-	iMsg, err := newMsg(ctx, b.Log, nodeId, hareMsg, b.stateQuerier)
-	if err != nil {
+	if err := checkIdentity(ctx, b.Log, hareMsg, b.stateQuerier); err != nil {
 		logger.With().Warning("message validation failed: could not construct msg", log.Err(err))
 		return err
 	}
 
 	// validate msg
-	if !b.roleValidator.Validate(ctx, iMsg) {
+	if !b.roleValidator.Validate(ctx, hareMsg) {
 		logger.Warning("message validation failed: eligibility validator returned false")
 		return errors.New("not eligible")
 	}
@@ -166,9 +162,9 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	// validation passed, report
 	logger.With().Debug("broker reported hare message as valid")
 
-	if proof, err := b.msh.GetMalfeasanceProof(iMsg.NodeID); err != nil && !errors.Is(err, sql.ErrNotFound) {
+	if proof, err := b.msh.GetMalfeasanceProof(hareMsg.SmesherID); err != nil && !errors.Is(err, sql.ErrNotFound) {
 		logger.With().Error("failed to check malicious identity",
-			log.Stringer("smesher", iMsg.NodeID),
+			log.Stringer("smesher", hareMsg.SmesherID),
 			log.Err(err),
 		)
 		return err
@@ -177,16 +173,16 @@ func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 		// - gossip its malfeasance + eligibility proofs to the network
 		// - relay the eligibility proof to the consensus process
 		// - return error so the node don't relay messages from malicious parties
-		if err := b.handleMaliciousHareMessage(ctx, logger, iMsg.NodeID, proof, iMsg, out); err != nil {
+		if err := b.handleMaliciousHareMessage(ctx, logger, hareMsg.SmesherID, proof, hareMsg, out); err != nil {
 			return err
 		}
-		return fmt.Errorf("known malicious %v", iMsg.NodeID.String())
+		return fmt.Errorf("known malicious %v", hareMsg.SmesherID.String())
 	}
 
 	logger.With().Debug("broker forwarding message to outbox",
 		log.Int("queue_size", len(out)))
 	select {
-	case out <- iMsg:
+	case out <- hareMsg:
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-b.ctx.Done():
@@ -231,7 +227,7 @@ func (b *Broker) handleMaliciousHareMessage(
 	logger log.Log,
 	nodeID types.NodeID,
 	proof *types.MalfeasanceProof,
-	msg *Msg,
+	msg *Message,
 	out chan any,
 ) error {
 	gossip := &types.MalfeasanceGossip{
@@ -239,7 +235,7 @@ func (b *Broker) handleMaliciousHareMessage(
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       msg.Layer,
 			Round:       msg.Round,
-			NodeID:      msg.NodeID,
+			NodeID:      msg.SmesherID,
 			Eligibility: msg.Eligibility,
 		},
 	}

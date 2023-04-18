@@ -16,6 +16,11 @@ var (
 	ErrAmountNotAvailable = errors.New("vault: amount not available")
 )
 
+const (
+	VAULT_STATE_SIZE = core.ACCOUNT_HEADER_SIZE + 56
+	DRAINED_SIZE     = 8
+)
+
 //go:generate scalegen
 
 type Vault struct {
@@ -64,6 +69,18 @@ func (v *Vault) Spend(host core.Host, to core.Address, amount uint64) error {
 // MaxSpend is noop for this template type, principal of this account type can't submit transactions.
 func (v *Vault) MaxSpend(uint8, any) (uint64, error) {
 	return 0, nil
+}
+
+func (v *Vault) BaseGas(uint8) uint64 {
+	return 0
+}
+
+func (v *Vault) LoadGas() uint64 {
+	return 0
+}
+
+func (v *Vault) ExecGas(uint8) uint64 {
+	return 0
 }
 
 // Verify always returns false.

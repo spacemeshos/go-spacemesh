@@ -202,7 +202,7 @@ func queryNetworkParams(ctx context.Context, endpoint string) (*NetworkParam, er
 	}
 	return &NetworkParam{
 		Genesis:      time.Unix(int64(genResp.Unixtime.Value), 0),
-		LyrsPerEpoch: lyrResp.Numlayers.Value,
+		LyrsPerEpoch: lyrResp.Numlayers.Number,
 		LyrDuration:  time.Second * time.Duration(durResp.Duration.Value),
 		Offset:       epochOffset,
 	}, nil

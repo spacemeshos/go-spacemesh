@@ -185,7 +185,8 @@ func (m *AtxProofMsg) SignedBytes() []byte {
 }
 
 type BallotProofMsg struct {
-	InnerMsg  BallotMetadata
+	InnerMsg BallotMetadata
+
 	SmesherID NodeID
 	Signature EdSignature
 }
@@ -221,7 +222,9 @@ func (hm *HareMetadata) Equivocation(other *HareMetadata) bool {
 }
 
 type HareProofMsg struct {
-	InnerMsg  HareMetadata
+	InnerMsg HareMetadata
+
+	SmesherID NodeID
 	Signature EdSignature
 }
 

@@ -15,13 +15,6 @@ func testnet() config.Config {
 	conf := config.DefaultConfig()
 	conf.Address = types.DefaultTestAddressConfig()
 
-	conf.API.StartGrpcServices = []string{
-		"node", "mesh", "globalstate", "transaction", "smesher", "debug",
-	}
-	if err := conf.API.ParseServicesList(); err != nil {
-		panic(err)
-	}
-
 	conf.HARE.N = 800
 	conf.HARE.ExpectedLeaders = 10
 	conf.HARE.LimitConcurrent = 5

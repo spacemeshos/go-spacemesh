@@ -51,3 +51,15 @@ func (s *Wallet) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool {
 func (s *Wallet) Spend(host core.Host, args *SpendArguments) error {
 	return host.Transfer(args.Destination, args.Amount)
 }
+
+func (s *Wallet) BaseGas(method uint8) uint64 {
+	return BaseGas(method)
+}
+
+func (s *Wallet) LoadGas() uint64 {
+	return LoadGas()
+}
+
+func (s *Wallet) ExecGas(method uint8) uint64 {
+	return ExecGas(method)
+}

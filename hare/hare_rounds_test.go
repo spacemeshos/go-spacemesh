@@ -9,6 +9,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -172,9 +173,7 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 	// Check that all nodes produced output for all layers
 	for x := range m {
 		for y := range m[x] {
-			if m[x][y] != 1 {
-				t.Fatalf("at layer %v node %v did not produce a result", x, y)
-			}
+			assert.Equal(t, 1, m[x][y], "at layer %v node %v did not produce a result", x, y)
 		}
 	}
 }
@@ -208,9 +207,7 @@ func Test_HareNotEnoughStatuses(t *testing.T) {
 
 	for x := range m {
 		for y := range m[x] {
-			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
-			}
+			assert.Equal(t, 1, m[x][y], "at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
 		}
 	}
 }
@@ -242,9 +239,7 @@ func Test_HareNotEnoughLeaders(t *testing.T) {
 
 	for x := range m {
 		for y := range m[x] {
-			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
-			}
+			assert.Equal(t, 1, m[x][y], "at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
 		}
 	}
 }
@@ -277,9 +272,7 @@ func Test_HareNotEnoughCommits(t *testing.T) {
 
 	for x := range m {
 		for y := range m[x] {
-			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
-			}
+			assert.Equal(t, 1, m[x][y], "at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
 		}
 	}
 }
@@ -312,9 +305,7 @@ func Test_HareNotEnoughNotifications(t *testing.T) {
 
 	for x := range m {
 		for y := range m[x] {
-			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
-			}
+			assert.Equal(t, 1, m[x][y], "at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
 		}
 	}
 }
@@ -344,9 +335,7 @@ func Test_HareComplete(t *testing.T) {
 
 	for x := range m {
 		for y := range m[x] {
-			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has emty set in result", x, y)
-			}
+			assert.Equal(t, 1, m[x][y], "at layer %v node %v has empty set in result", x, y)
 		}
 	}
 }

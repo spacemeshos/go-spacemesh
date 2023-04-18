@@ -21,7 +21,8 @@ func TestPostConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	postSetupProvider := activation.NewMockpostSetupProvider(ctrl)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second)
+
+	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts())
 
 	postConfig := activation.PostConfig{
 		MinNumUnits:   rand.Uint32(),
@@ -46,8 +47,9 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	postSetupProvider := activation.NewMockpostSetupProvider(ctrl)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second)
+	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts())
 
+	types.DefaultTestAddressConfig()
 	addr, err := types.StringToAddress("stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5")
 	require.NoError(t, err)
 	smeshingProvider.EXPECT().StartSmeshing(addr, activation.PostSetupOpts{
@@ -57,6 +59,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 		ComputeProviderID: 7,
 		Throttle:          true,
 		Scrypt:            config.DefaultLabelParams(),
+		ComputeBatchSize:  config.DefaultComputeBatchSize,
 	}).Return(nil)
 
 	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{

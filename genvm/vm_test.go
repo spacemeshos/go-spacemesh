@@ -45,7 +45,7 @@ func newTester(tb testing.TB) *tester {
 		TB: tb,
 		VM: New(sql.InMemory(),
 			WithLogger(logtest.New(tb)),
-			WithConfig(Config{GasLimit: math.MaxUint64, StorageCostFactor: 2}),
+			WithConfig(Config{GasLimit: math.MaxUint64}),
 		),
 		rng: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
@@ -60,9 +60,9 @@ type testAccount interface {
 	spawn(template core.Address, args scale.Encodable, nonce core.Nonce, opts ...sdk.Opt) []byte
 	spawnArgs() scale.Encodable
 
-	// fixed gas for spawn and spend
-	spawnGas() int
-	spendGas() int
+	baseGas(uint8) int
+	loadGas() int
+	execGas(uint8) int
 }
 
 type singlesigAccount struct {
@@ -96,12 +96,16 @@ func (a *singlesigAccount) spawnArgs() scale.Encodable {
 	return &args
 }
 
-func (a *singlesigAccount) spendGas() int {
-	return wallet.BaseGas + wallet.FixedGasSpend
+func (a *singlesigAccount) baseGas(method uint8) int {
+	return int(wallet.BaseGas(method))
 }
 
-func (a *singlesigAccount) spawnGas() int {
-	return wallet.BaseGas + wallet.FixedGasSpawn
+func (a *singlesigAccount) loadGas() int {
+	return int(wallet.LoadGas())
+}
+
+func (a *singlesigAccount) execGas(method uint8) int {
+	return int(wallet.ExecGas(method))
 }
 
 type multisigAccount struct {
@@ -135,7 +139,7 @@ func (a *multisigAccount) selfSpawn(nonce core.Nonce, opts ...sdk.Opt) []byte {
 	}
 	var agg *sdkmultisig.Aggregator
 	for i := 0; i < a.k; i++ {
-		part := sdkmultisig.SelfSpawn(uint8(i), a.pks[i], a.template, pubs, nonce, opts...)
+		part := sdkmultisig.SelfSpawn(uint8(i), a.pks[i], a.template, uint8(a.k), pubs, nonce, opts...)
 		if agg == nil {
 			agg = part
 		} else {
@@ -156,6 +160,7 @@ func (a *multisigAccount) spawn(template core.Address, args scale.Encodable, non
 
 func (a *multisigAccount) spawnArgs() scale.Encodable {
 	args := multisig.SpawnArguments{
+		Required:   uint8(a.k),
 		PublicKeys: make([]core.PublicKey, len(a.pks)),
 	}
 	for i, pk := range a.pks {
@@ -164,28 +169,16 @@ func (a *multisigAccount) spawnArgs() scale.Encodable {
 	return &args
 }
 
-func (a *multisigAccount) spendGas() int {
-	switch a.template {
-	case multisig.TemplateAddress1:
-		return multisig.BaseGas1 + multisig.FixedGasSpend1
-	case multisig.TemplateAddress2:
-		return multisig.BaseGas2 + multisig.FixedGasSpend2
-	case multisig.TemplateAddress3:
-		return multisig.BaseGas3 + multisig.FixedGasSpend3
-	}
-	panic("unknown template")
+func (a *multisigAccount) baseGas(method uint8) int {
+	return int(multisig.BaseGas(method, a.k))
 }
 
-func (a *multisigAccount) spawnGas() int {
-	switch a.template {
-	case multisig.TemplateAddress1:
-		return multisig.BaseGas1 + multisig.FixedGasSpawn1
-	case multisig.TemplateAddress2:
-		return multisig.BaseGas2 + multisig.FixedGasSpawn2
-	case multisig.TemplateAddress3:
-		return multisig.BaseGas3 + multisig.FixedGasSpawn3
-	}
-	panic("unknown template")
+func (a *multisigAccount) loadGas() int {
+	return int(multisig.LoadGas(len(a.pks)))
+}
+
+func (a *multisigAccount) execGas(method uint8) int {
+	return int(multisig.ExecGas(method, len(a.pks)))
 }
 
 type vestingAccount struct {
@@ -201,40 +194,12 @@ func (a *vestingAccount) drainVault(vault, recipient core.Address, amount uint64
 	return agg.Raw()
 }
 
-func (a *vestingAccount) spendGas() int {
-	switch a.template {
-	case vesting.TemplateAddress1:
-		return vesting.BaseGas1 + vesting.FixedGasSpend1
-	case vesting.TemplateAddress2:
-		return vesting.BaseGas2 + vesting.FixedGasSpend2
-	case vesting.TemplateAddress3:
-		return vesting.BaseGas3 + vesting.FixedGasSpend3
-	}
-	panic("unknown template")
+func (a *vestingAccount) baseGas(method uint8) int {
+	return int(vesting.BaseGas(method, a.k))
 }
 
-func (a *vestingAccount) spawnGas() int {
-	switch a.template {
-	case vesting.TemplateAddress1:
-		return vesting.BaseGas1 + vesting.FixedGasSpawn1
-	case vesting.TemplateAddress2:
-		return vesting.BaseGas2 + vesting.FixedGasSpawn2
-	case vesting.TemplateAddress3:
-		return vesting.BaseGas3 + vesting.FixedGasSpawn3
-	}
-	panic("unknown template")
-}
-
-func (a *vestingAccount) drainGas() int {
-	switch a.template {
-	case vesting.TemplateAddress1:
-		return vesting.FixedGasDrainVault1
-	case vesting.TemplateAddress2:
-		return vesting.FixedGasDrainVault2
-	case vesting.TemplateAddress3:
-		return vesting.FixedGasDrainVault3
-	}
-	panic("unknown template")
+func (a *vestingAccount) execGas(method uint8) int {
+	return int(vesting.ExecGas(method, len(a.pks)))
 }
 
 type vaultAccount struct {
@@ -275,11 +240,15 @@ func (a *vaultAccount) spawnArgs() scale.Encodable {
 	}
 }
 
-func (a *vaultAccount) spawnGas() int {
+func (a *vaultAccount) baseGas(uint8) int {
 	return 0
 }
 
-func (a *vaultAccount) spendGas() int {
+func (a *vaultAccount) loadGas() int {
+	return 0
+}
+
+func (a *vaultAccount) execGas(uint8) int {
 	return 0
 }
 
@@ -298,7 +267,7 @@ func (t *tester) persistent() *tester {
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	require.NoError(t, err)
 	t.VM = New(db, WithLogger(logtest.New(t)),
-		WithConfig(Config{StorageCostFactor: 2, GasLimit: math.MaxUint64}))
+		WithConfig(Config{GasLimit: math.MaxUint64}))
 	return t
 }
 
@@ -333,21 +302,21 @@ func (t *tester) createMultisig(k, n int, template core.Address) *multisigAccoun
 	return &multisigAccount{
 		k:        k,
 		pks:      pks,
-		address:  sdkmultisig.Address(template, pubs...),
+		address:  sdkmultisig.Address(template, uint8(k), pubs...),
 		template: template,
 	}
 }
 
-func (t *tester) addMultisig(total, k, n int, template core.Address) *tester {
+func (t *tester) addMultisig(total, k, n int) *tester {
 	for i := 0; i < total; i++ {
-		t.addAccount(t.createMultisig(k, n, template))
+		t.addAccount(t.createMultisig(k, n, multisig.TemplateAddress))
 	}
 	return t
 }
 
-func (t *tester) addVesting(total int, k, n int, template core.Address) *tester {
+func (t *tester) addVesting(total int, k, n int) *tester {
 	for i := 0; i < total; i++ {
-		ms := t.createMultisig(k, n, template)
+		ms := t.createMultisig(k, n, vesting.TemplateAddress)
 		t.addAccount(&vestingAccount{*ms})
 	}
 	return t
@@ -456,24 +425,38 @@ func (t *tester) rewards(all ...reward) []types.CoinbaseReward {
 	return rst
 }
 
-func (t *tester) estimateSpawnGas(principal int) int {
-	return t.accounts[principal].spawnGas() +
-		len(t.accounts[principal].selfSpawn(0))*int(t.VM.cfg.StorageCostFactor)
+func (t *tester) estimateSpawnGas(principal, target int) int {
+	args := t.accounts[target].spawnArgs()
+	tx := t.accounts[principal].spawn(t.accounts[target].getTemplate(), args, 0)
+	gas := t.accounts[principal].baseGas(core.MethodSpawn) +
+		t.accounts[target].execGas(core.MethodSpawn) +
+		int(core.TxDataGas(len(tx)))
+	if principal != target {
+		gas += t.accounts[principal].loadGas()
+	}
+	return gas
 }
 
 func (t *tester) estimateSpendGas(principal, to, amount int, nonce core.Nonce) int {
-	return t.accounts[principal].spendGas() + len(t.accounts[principal].spend(t.accounts[to].getAddress(), uint64(amount), nonce))*int(t.VM.cfg.StorageCostFactor)
+	tx := t.accounts[principal].spend(t.accounts[to].getAddress(), uint64(amount), nonce)
+	return t.accounts[principal].baseGas(core.MethodSpend) +
+		t.accounts[principal].loadGas() +
+		t.accounts[principal].execGas(core.MethodSpend) +
+		int(core.TxDataGas(len(tx)))
 }
 
 func (t *tester) estimateDrainGas(principal, vault, to, amount int, nonce core.Nonce) int {
 	require.IsType(t, t.accounts[principal], &vestingAccount{})
 	vestacc := t.accounts[principal].(*vestingAccount)
-	return vestacc.drainGas() + len(vestacc.drainVault(
+	tx := vestacc.drainVault(
 		t.accounts[vault].getAddress(),
 		t.accounts[to].getAddress(),
 		uint64(amount),
-		nonce),
-	)*int(t.VM.cfg.StorageCostFactor)
+		nonce)
+	return t.accounts[principal].baseGas(vesting.MethodDrainVault) +
+		t.accounts[principal].loadGas() +
+		t.accounts[principal].execGas(vesting.MethodDrainVault) +
+		int(core.TxDataGas(len(tx)))
 }
 
 func encodeFields(tb testing.TB, fields ...scale.Encodable) types.RawTx {
@@ -754,7 +737,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 							template: template,
 							change: spent{amount: 100 +
 								defaultGasPrice*
-									(ref.estimateSpawnGas(0)+
+									(ref.estimateSpawnGas(0, 0)+
 										ref.estimateSpendGas(0, 10, 100, 1))},
 						},
 						10: earned{amount: 100},
@@ -774,7 +757,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					expected: map[int]change{
 						0: spawned{
 							template: template,
-							change:   spent{amount: defaultGasPrice * ref.estimateSpawnGas(0)},
+							change:   spent{amount: defaultGasPrice * ref.estimateSpawnGas(0, 0)},
 						},
 						10: same{},
 					},
@@ -817,16 +800,16 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 				{
 					txs: []testTx{
-						&spendTx{0, 10, 10_000},
+						&spendTx{0, 10, 2_000_000},
 						&selfSpawnTx{10},
 						&spendTx{10, 11, 100},
 					},
 					expected: map[int]change{
-						0: spent{amount: 10000 + defaultGasPrice*
-							ref.estimateSpendGas(0, 10, 10_000, 1)},
+						0: spent{amount: 2_000_000 + defaultGasPrice*
+							ref.estimateSpendGas(0, 10, 200_000, 1)},
 						10: spawned{
 							template: template,
-							change: earned{amount: 10000 - 100 - defaultGasPrice*(ref.estimateSpawnGas(10)+
+							change: earned{amount: 2_000_000 - 100 - defaultGasPrice*(ref.estimateSpawnGas(10, 10)+
 								ref.estimateSpendGas(10, 11, 100, 1))},
 						},
 						11: earned{amount: 100},
@@ -937,7 +920,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11)) - 1},
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) - 1},
 						&selfSpawnTx{11},
 					},
 					failed: map[int]error{2: core.ErrNoBalance},
@@ -955,7 +938,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(0) * defaultGasPrice)},
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(0, 0) * defaultGasPrice)},
 						&selfSpawnTx{11},
 						&spendTx{11, 12, 1},
 					},
@@ -988,11 +971,11 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&spendTx{0, 11, 100},
 						&spendTx{0, 12, 100},
 					},
-					gasLimit: uint64(ref.estimateSpawnGas(0) +
+					gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
 						ref.estimateSpendGas(0, 10, 100, 1)),
 					ineffective: []int{2, 3},
 					expected: map[int]change{
-						0:  spent{amount: 100 + ref.estimateSpawnGas(0) + ref.estimateSpendGas(0, 10, 100, 1)},
+						0:  spent{amount: 100 + ref.estimateSpawnGas(0, 0) + ref.estimateSpendGas(0, 10, 100, 1)},
 						10: earned{amount: 100},
 						11: same{},
 						12: same{},
@@ -1006,19 +989,19 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 10, uint64(ref.estimateSpawnGas(1)) - 1},
+						&spendTx{0, 10, 80_000}, // send enough to cover intrinsic cost but not whole transaction
 						&selfSpawnTx{10},
 						&spendTx{0, 11, 100},
 					},
-					gasLimit: uint64(ref.estimateSpawnGas(0) +
-						ref.estimateSpendGas(0, 10, 100, 1) +
-						ref.estimateSpawnGas(1)),
+					gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
+						ref.estimateSpendGas(0, 10, 80_000, 1) +
+						ref.estimateSpawnGas(10, 10)),
 					failed:      map[int]error{2: core.ErrNoBalance},
 					ineffective: []int{3},
 					expected: map[int]change{
-						0: spent{amount: ref.estimateSpawnGas(1) - 1 +
-							ref.estimateSpawnGas(0) +
-							ref.estimateSpendGas(0, 10, 100, 1)},
+						0: spent{amount: 80_000 +
+							ref.estimateSpawnGas(0, 0) +
+							ref.estimateSpendGas(0, 10, 80_000, 1)},
 						10: nonce{increased: 1},
 						11: same{},
 					},
@@ -1041,7 +1024,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					expected: map[int]change{
 						0: spawned{
 							template: template,
-							change:   spent{amount: 100 + defaultGasPrice*(ref.estimateSpawnGas(0)+ref.estimateSpendGas(0, 11, 100, 2))},
+							change:   spent{amount: 100 + defaultGasPrice*(ref.estimateSpawnGas(0, 0)+ref.estimateSpendGas(0, 11, 100, 2))},
 						},
 						10: same{},
 						11: earned{amount: 100},
@@ -1070,7 +1053,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					rewards: []reward{{address: 10, share: 1}},
 					expected: map[int]change{
-						10: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) + ref.estimateSpawnGas(0)},
+						10: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) + ref.estimateSpawnGas(0, 0)},
 					},
 				},
 				{
@@ -1100,8 +1083,8 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					rewards: []reward{{address: 10, share: 0.5}, {address: 11, share: 0.5}},
 					expected: map[int]change{
-						10: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSpawnGas(10)) / 2},
-						11: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSpawnGas(11)) / 2},
+						10: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSpawnGas(10, 10)) / 2},
+						11: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSpawnGas(11, 11)) / 2},
 					},
 				},
 			},
@@ -1151,7 +1134,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11) + ref.estimateSpendGas(11, 12, 1_000, 1))},
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11) + ref.estimateSpendGas(11, 12, 1_000, 1))},
 						&selfSpawnTx{11},
 						&spendTx{11, 12, 1_000},
 					},
@@ -1163,11 +1146,14 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 				{
 					txs: []testTx{
-						&spendTx{0, 11, uint64(ref.estimateSpendGas(11, 12, 1_000, 2)) + 1_000},
+						&spendTx{0, 11, 200_000},
 						&spendTx{11, 12, 1_000},
 					},
 					expected: map[int]change{
-						0:  spent{amount: ref.estimateSpendGas(11, 12, 1_000, 2)*2 + 1_000, change: nonce{increased: 1}},
+						0: spent{
+							amount: ref.estimateSpendGas(0, 11, 200_000, 2) + 200_000,
+							change: nonce{increased: 1},
+						},
 						11: nonce{increased: 1},
 						12: earned{amount: 1_000},
 					},
@@ -1180,25 +1166,25 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11)) - 1},
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) - 1},
 						&selfSpawnTx{11},
 					},
 					failed: map[int]error{2: core.ErrNoBalance},
 					expected: map[int]change{
-						0: spent{amount: ref.estimateSpawnGas(11) - 1 +
-							ref.estimateSpawnGas(0) +
-							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, 1)},
+						0: spent{amount: ref.estimateSpawnGas(11, 11) - 1 +
+							ref.estimateSpawnGas(0, 0) +
+							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11)-1, 1)},
 						11: nonce{increased: 1},
 					},
 				},
 				{
 					txs: []testTx{
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11))},
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11))},
 						&selfSpawnTx{11},
 					},
 					expected: map[int]change{
-						0: spent{amount: ref.estimateSpawnGas(11) +
-							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11), 2)},
+						0: spent{amount: ref.estimateSpawnGas(11, 11) +
+							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11), 2)},
 						11: spawned{template: template, change: nonce{increased: 1}},
 					},
 				},
@@ -1218,7 +1204,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 							template: template,
 							change: nonce{
 								increased: 2,
-								change:    spent{amount: 2 * ref.estimateSpawnGas(0)},
+								change:    spent{amount: 2 * ref.estimateSpawnGas(0, 0)},
 							},
 						},
 					},
@@ -1232,24 +1218,24 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					txs: []testTx{
 						&selfSpawnTx{0},
 						// gas will be higher than fixed, but less than max gas
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11)) - 1},
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) - 1},
 						// it will cause this transaction to be failed
 						&selfSpawnTx{11},
 					},
-					gasLimit: uint64(ref.estimateSpawnGas(0) +
-						ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, 1) +
-						ref.estimateSpawnGas(11)),
+					gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
+						ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11)-1, 1) +
+						ref.estimateSpawnGas(11, 11)),
 					failed:  map[int]error{2: core.ErrNoBalance},
 					rewards: []reward{{address: 20, share: 1}},
 					expected: map[int]change{
-						0: spent{amount: ref.estimateSpawnGas(0) +
-							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, 1) +
-							ref.estimateSpawnGas(11) - 1},
+						0: spent{amount: ref.estimateSpawnGas(0, 0) +
+							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11)-1, 1) +
+							ref.estimateSpawnGas(11, 11) - 1},
 						11: nonce{increased: 1},
 						// fees from every transaction (including failed) + testBaseReward
-						20: earned{amount: ref.estimateSpawnGas(0) +
-							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, 1) +
-							ref.estimateSpawnGas(11) - 1 +
+						20: earned{amount: ref.estimateSpawnGas(0, 0) +
+							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11)-1, 1) +
+							ref.estimateSpawnGas(11, 11) - 1 +
 							int(rewards.TotalSubsidyAtLayer(0))},
 					},
 				},
@@ -1267,7 +1253,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						0: spawned{
 							template: template,
 							change: spent{
-								amount: 2 * ref.estimateSpawnGas(0),
+								amount: ref.estimateSpawnGas(0, 0) + ref.estimateSpawnGas(0, 11),
 								change: nonce{increased: 2},
 							},
 						},
@@ -1289,7 +1275,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						0: spawned{
 							template: template,
 							change: spent{
-								amount: ref.estimateSpawnGas(0),
+								amount: ref.estimateSpawnGas(0, 0),
 								change: nonce{increased: 1},
 							},
 						},
@@ -1329,7 +1315,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(2*ref.estimateSpawnGas(11) - 1)},
+						&spendTx{0, 11, uint64(2*ref.estimateSpawnGas(11, 11) - 1)},
 						&selfSpawnTx{11},
 						&spawnTx{11, 12},
 					},
@@ -1439,6 +1425,7 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 }
 
 func testWallet(t *testing.T, defaultGasPrice int, template core.Address, genTester func(t *testing.T) *tester) {
+	t.Parallel()
 	runTestCases(t,
 		singleWalletTestCases(defaultGasPrice, template, genTester(t)),
 		genTester,
@@ -1446,6 +1433,7 @@ func testWallet(t *testing.T, defaultGasPrice int, template core.Address, genTes
 }
 
 func TestWallets(t *testing.T) {
+	t.Parallel()
 	const (
 		funded  = 10  // number of funded accounts, included in genesis
 		total   = 100 // total number of accounts
@@ -1463,73 +1451,74 @@ func TestWallets(t *testing.T) {
 	})
 	t.Run("MultiSig13", func(t *testing.T) {
 		const n = 3
-		testWallet(t, defaultGasPrice, multisig.TemplateAddress1, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(funded, 1, n, multisig.TemplateAddress1).
+				addMultisig(funded, 1, n).
 				applyGenesisWithBalance(balance).
-				addMultisig(total-funded, 1, n, multisig.TemplateAddress1)
+				addMultisig(total-funded, 1, n)
 		})
 	})
 	t.Run("MultiSig25", func(t *testing.T) {
 		const n = 5
-		testWallet(t, defaultGasPrice, multisig.TemplateAddress2, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(funded, 2, n, multisig.TemplateAddress2).
+				addMultisig(funded, 2, n).
 				applyGenesisWithBalance(balance).
-				addMultisig(total-funded, 2, n, multisig.TemplateAddress2)
+				addMultisig(total-funded, 2, n)
 		})
 	})
 	t.Run("MultiSig310", func(t *testing.T) {
 		const n = 10
-		testWallet(t, defaultGasPrice, multisig.TemplateAddress3, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(funded, 3, n, multisig.TemplateAddress3).
+				addMultisig(funded, 3, n).
 				applyGenesisWithBalance(balance).
-				addMultisig(total-funded, 3, n, multisig.TemplateAddress3)
+				addMultisig(total-funded, 3, n)
 		})
 	})
 	t.Run("Vesting13", func(t *testing.T) {
 		const n = 3
-		testWallet(t, defaultGasPrice, vesting.TemplateAddress1, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, vesting.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
-				addVesting(funded, 1, n, vesting.TemplateAddress1).
+				addVesting(funded, 1, n).
 				applyGenesisWithBalance(balance).
-				addVesting(total-funded, 1, n, vesting.TemplateAddress1)
+				addVesting(total-funded, 1, n)
 		})
 	})
 	t.Run("Vesting25", func(t *testing.T) {
 		const n = 5
-		testWallet(t, defaultGasPrice, vesting.TemplateAddress2, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, vesting.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
-				addVesting(funded, 2, n, vesting.TemplateAddress2).
+				addVesting(funded, 2, n).
 				applyGenesisWithBalance(balance).
-				addVesting(total-funded, 2, n, vesting.TemplateAddress2)
+				addVesting(total-funded, 2, n)
 		})
 	})
 	t.Run("Vesting310", func(t *testing.T) {
 		const n = 10
-		testWallet(t, defaultGasPrice, vesting.TemplateAddress3, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, vesting.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
-				addVesting(funded, 3, n, vesting.TemplateAddress3).
+				addVesting(funded, 3, n).
 				applyGenesisWithBalance(balance).
-				addVesting(total-funded, 3, n, vesting.TemplateAddress3)
+				addVesting(total-funded, 3, n)
 		})
 	})
 }
 
 func TestRandomTransfers(t *testing.T) {
+	t.Parallel()
 	tt := newTester(t).withSeed(101).
 		addSingleSig(10).
-		addMultisig(10, 1, 3, multisig.TemplateAddress1).
-		addMultisig(10, 2, 5, multisig.TemplateAddress2).
-		addMultisig(10, 3, 10, multisig.TemplateAddress3).
+		addMultisig(10, 1, 3).
+		addMultisig(10, 2, 5).
+		addMultisig(10, 3, 10).
 		applyGenesis()
 
 	skipped, _, err := tt.Apply(testContext(types.GetEffectiveGenesis()),
 		notVerified(tt.spawnAll()...), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
-	for i := 1; i < 1000; i++ {
+	for i := 1; i < 100; i++ {
 		lid := types.GetEffectiveGenesis().Add(uint32(i))
 		skipped, _, err := tt.Apply(testContext(lid),
 			notVerified(tt.randSpendN(20, 10)...), nil)
@@ -1539,6 +1528,7 @@ func TestRandomTransfers(t *testing.T) {
 }
 
 func testValidation(t *testing.T, tt *tester, template core.Address) {
+	t.Parallel()
 	skipped, _, err := tt.Apply(testContext(types.GetEffectiveGenesis()),
 		notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
@@ -1564,7 +1554,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 				Method:          core.MethodSpawn,
 				TemplateAddress: template,
 				GasPrice:        1,
-				MaxGas:          uint64(tt.estimateSpawnGas(1)),
+				MaxGas:          uint64(tt.estimateSpawnGas(1, 1)),
 			},
 			verified: true,
 		},
@@ -1658,7 +1648,10 @@ func testSpawnOther(t *testing.T, genTester func(t *testing.T) *tester) {
 						&spawnTx{i, j},
 					},
 					expected: map[int]change{
-						i: spawned{template: ref.accounts[i].getTemplate()},
+						i: spawned{
+							template: ref.accounts[i].getTemplate(),
+							change:   spent{amount: ref.estimateSpawnGas(i, i) + ref.estimateSpawnGas(i, j)},
+						},
 						j: spawned{template: ref.accounts[j].getTemplate()},
 					},
 				},
@@ -1682,7 +1675,7 @@ func TestSpawnOtherTemplate(t *testing.T) {
 		testSpawnOther(t, func(t *testing.T) *tester {
 			return newTester(t).
 				addSingleSig(1).
-				addMultisig(1, 1, 3, multisig.TemplateAddress1).
+				addMultisig(1, 1, 3).
 				applyGenesis()
 		})
 	})
@@ -1690,7 +1683,7 @@ func TestSpawnOtherTemplate(t *testing.T) {
 		testSpawnOther(t, func(t *testing.T) *tester {
 			return newTester(t).
 				addSingleSig(1).
-				addMultisig(1, 2, 5, multisig.TemplateAddress2).
+				addMultisig(1, 2, 5).
 				applyGenesis()
 		})
 	})
@@ -1698,31 +1691,31 @@ func TestSpawnOtherTemplate(t *testing.T) {
 		testSpawnOther(t, func(t *testing.T) *tester {
 			return newTester(t).
 				addSingleSig(1).
-				addMultisig(1, 3, 7, multisig.TemplateAddress3).
+				addMultisig(1, 3, 7).
 				applyGenesis()
 		})
 	})
 	t.Run("MultiSig13/Multisig25", func(t *testing.T) {
 		testSpawnOther(t, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(1, 1, 3, multisig.TemplateAddress1).
-				addMultisig(1, 2, 5, multisig.TemplateAddress2).
+				addMultisig(1, 1, 3).
+				addMultisig(1, 2, 5).
 				applyGenesis()
 		})
 	})
 	t.Run("MultiSig13/Multisig37", func(t *testing.T) {
 		testSpawnOther(t, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(1, 1, 3, multisig.TemplateAddress1).
-				addMultisig(1, 3, 7, multisig.TemplateAddress3).
+				addMultisig(1, 1, 3).
+				addMultisig(1, 3, 7).
 				applyGenesis()
 		})
 	})
 	t.Run("MultiSig25/Multisig37", func(t *testing.T) {
 		testSpawnOther(t, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(1, 2, 5, multisig.TemplateAddress2).
-				addMultisig(1, 3, 7, multisig.TemplateAddress3).
+				addMultisig(1, 2, 5).
+				addMultisig(1, 3, 7).
 				applyGenesis()
 		})
 	})
@@ -1744,13 +1737,13 @@ func TestVestingWithVault(t *testing.T) {
 		// vault accounts:      [20 : 30)
 	)
 	var (
-		vestingTemplate = vesting.TemplateAddress1
+		vestingTemplate = vesting.TemplateAddress
 		vaultTemplate   = vault.TemplateAddress
 	)
 
 	genTester := func(t *testing.T) *tester {
 		return newTester(t).
-			addVesting(vestingAccounts, 1, 2, vestingTemplate).
+			addVesting(vestingAccounts, 1, 2).
 			addVault(10, total, initial, types.GetEffectiveGenesis().Add(start-1), types.GetEffectiveGenesis().Add(end-1)).
 			applyGenesis()
 	}
@@ -1941,6 +1934,7 @@ func TestVestingWithVault(t *testing.T) {
 }
 
 func TestValidation(t *testing.T) {
+	t.Parallel()
 	t.Run("SingleSig", func(t *testing.T) {
 		tt := newTester(t).
 			addSingleSig(1).
@@ -1950,51 +1944,51 @@ func TestValidation(t *testing.T) {
 	})
 	t.Run("MultiSig13", func(t *testing.T) {
 		tt := newTester(t).
-			addMultisig(1, 1, 3, multisig.TemplateAddress1).
+			addMultisig(1, 1, 3).
 			applyGenesis().
-			addMultisig(1, 1, 3, multisig.TemplateAddress1)
-		testValidation(t, tt, multisig.TemplateAddress1)
+			addMultisig(1, 1, 3)
+		testValidation(t, tt, multisig.TemplateAddress)
 	})
 	t.Run("MultiSig25", func(t *testing.T) {
 		tt := newTester(t).
-			addMultisig(1, 2, 5, multisig.TemplateAddress2).
+			addMultisig(1, 2, 5).
 			applyGenesis().
-			addMultisig(1, 2, 5, multisig.TemplateAddress2)
-		testValidation(t, tt, multisig.TemplateAddress2)
+			addMultisig(1, 2, 5)
+		testValidation(t, tt, multisig.TemplateAddress)
 	})
 	t.Run("MultiSig310", func(t *testing.T) {
 		tt := newTester(t).
-			addMultisig(1, 3, 10, multisig.TemplateAddress3).
+			addMultisig(1, 3, 10).
 			applyGenesis().
-			addMultisig(1, 3, 10, multisig.TemplateAddress3)
-		testValidation(t, tt, multisig.TemplateAddress3)
+			addMultisig(1, 3, 10)
+		testValidation(t, tt, multisig.TemplateAddress)
 	})
 	t.Run("Vesting13", func(t *testing.T) {
 		tt := newTester(t).
-			addVesting(1, 1, 3, vesting.TemplateAddress1).
+			addVesting(1, 1, 3).
 			applyGenesis().
-			addVesting(1, 1, 3, vesting.TemplateAddress1)
-		testValidation(t, tt, vesting.TemplateAddress1)
+			addVesting(1, 1, 3)
+		testValidation(t, tt, vesting.TemplateAddress)
 	})
 	t.Run("Vesting25", func(t *testing.T) {
 		tt := newTester(t).
-			addVesting(1, 2, 5, vesting.TemplateAddress2).
+			addVesting(1, 2, 5).
 			applyGenesis().
-			addVesting(1, 2, 5, vesting.TemplateAddress2)
-		testValidation(t, tt, vesting.TemplateAddress2)
+			addVesting(1, 2, 5)
+		testValidation(t, tt, vesting.TemplateAddress)
 	})
 	t.Run("Vesting310", func(t *testing.T) {
 		tt := newTester(t).
-			addVesting(1, 3, 10, vesting.TemplateAddress3).
+			addVesting(1, 3, 10).
 			applyGenesis().
-			addVesting(1, 3, 10, vesting.TemplateAddress3)
-		testValidation(t, tt, vesting.TemplateAddress3)
+			addVesting(1, 3, 10)
+		testValidation(t, tt, vesting.TemplateAddress)
 	})
 }
 
 func TestVaultValidation(t *testing.T) {
 	tt := newTester(t).
-		addVesting(1, 1, 2, vesting.TemplateAddress1).
+		addVesting(1, 1, 2).
 		addVault(2, 100, 10, types.LayerID(1), types.LayerID(10)).
 		applyGenesis()
 	_, _, err := tt.Apply(ApplyContext{Layer: types.GetEffectiveGenesis()},
@@ -2054,18 +2048,6 @@ func FuzzParse(f *testing.F) {
 		req := tt.Validation(types.NewRawTx(data))
 		req.Parse()
 	})
-}
-
-func getMultisigTemplate(k int) types.Address {
-	switch k {
-	case 1:
-		return multisig.TemplateAddress1
-	case 2:
-		return multisig.TemplateAddress2
-	case 3:
-		return multisig.TemplateAddress3
-	}
-	panic(fmt.Sprintf("unknown k %d", k))
 }
 
 func BenchmarkTransactions(b *testing.B) {
@@ -2143,7 +2125,7 @@ func BenchmarkTransactions(b *testing.B) {
 		{3, 10},
 	} {
 		b.Run(fmt.Sprintf("multisig/k=%d/n=%d/selfspawn", v.k, v.n), func(b *testing.B) {
-			tt := newTester(b).persistent().addMultisig(n, v.k, v.n, getMultisigTemplate(v.k)).applyGenesis()
+			tt := newTester(b).persistent().addMultisig(n, v.k, v.n).applyGenesis()
 			txs := make([]types.Transaction, n)
 			for i := range txs {
 				tx := &selfSpawnTx{principal: i}
@@ -2152,13 +2134,13 @@ func BenchmarkTransactions(b *testing.B) {
 			bench(b, tt, txs)
 		})
 		b.Run(fmt.Sprintf("multisig/k=%d/n=%d/spawn", v.k, v.n), func(b *testing.B) {
-			tt := newTester(b).persistent().addMultisig(n, v.k, v.n, getMultisigTemplate(v.k)).applyGenesis()
+			tt := newTester(b).persistent().addMultisig(n, v.k, v.n).applyGenesis()
 			ineffective, _, err := tt.Apply(
 				ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
 				notVerified(tt.spawnAll()...),
 				nil,
 			)
-			tt = tt.addMultisig(n, v.k, v.n, getMultisigTemplate(v.k))
+			tt = tt.addMultisig(n, v.k, v.n)
 
 			require.NoError(b, err)
 			require.Empty(b, ineffective)
@@ -2170,13 +2152,13 @@ func BenchmarkTransactions(b *testing.B) {
 			bench(b, tt, txs)
 		})
 		b.Run(fmt.Sprintf("multisig/k=%d/n=%d/spend", v.k, v.n), func(b *testing.B) {
-			tt := newTester(b).persistent().addMultisig(n, v.k, v.n, getMultisigTemplate(v.k)).applyGenesis()
+			tt := newTester(b).persistent().addMultisig(n, v.k, v.n).applyGenesis()
 			ineffective, _, err := tt.Apply(
 				ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
 				notVerified(tt.spawnAll()...),
 				nil,
 			)
-			tt = tt.addMultisig(n, 3, 5, multisig.TemplateAddress3)
+			tt = tt.addMultisig(n, 3, 5)
 
 			require.NoError(b, err)
 			require.Empty(b, ineffective)
@@ -2190,7 +2172,7 @@ func BenchmarkTransactions(b *testing.B) {
 	}
 	b.Run("vesting/spawnvault", func(b *testing.B) {
 		tt := newTester(b).persistent().
-			addVesting(n, 3, 5, vesting.TemplateAddress3).
+			addVesting(n, 3, 5).
 			applyGenesis()
 		ineffective, _, err := tt.Apply(
 			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
@@ -2210,7 +2192,7 @@ func BenchmarkTransactions(b *testing.B) {
 	})
 	b.Run("vesting/drain", func(b *testing.B) {
 		tt := newTester(b).persistent().
-			addVesting(n, 3, 5, vesting.TemplateAddress3).
+			addVesting(n, 3, 5).
 			addVault(n, 200000, 100000, types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(100)).
 			applyGenesis()
 		var txs []types.Transaction

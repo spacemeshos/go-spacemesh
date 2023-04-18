@@ -137,6 +137,7 @@ func GetCommand() *cobra.Command {
 				// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
 				go func() {
 					app.Cleanup(cleanupCtx)
+					_ = app.eg.Wait()
 					close(done)
 				}()
 				select {
@@ -223,10 +224,16 @@ func LoadConfigFromFile() (*config.Config, error) {
 	)
 
 	// load config if it was loaded to the viper
-	if err := viper.Unmarshal(&conf, viper.DecodeHook(hook)); err != nil {
+	if err := viper.Unmarshal(&conf, viper.DecodeHook(hook), withZeroFields()); err != nil {
 		return nil, fmt.Errorf("unmarshal viper: %w", err)
 	}
 	return &conf, nil
+}
+
+func withZeroFields() viper.DecoderConfigOption {
+	return func(cfg *mapstructure.DecoderConfig) {
+		cfg.ZeroFields = true
+	}
 }
 
 // Option to modify an App instance.
@@ -267,37 +274,38 @@ func New(opts ...Option) *App {
 // App is the cli app singleton.
 type App struct {
 	*cobra.Command
-	fileLock         *flock.Flock
-	nodeID           types.NodeID
-	Config           *config.Config
-	db               *sql.Database
-	dbMetrics        *dbmetrics.DBMetricsCollector
-	grpcAPIService   *grpcserver.Server
-	jsonAPIService   *grpcserver.JSONHTTPServer
-	syncer           *syncer.Syncer
-	proposalListener *proposals.Handler
-	proposalBuilder  *miner.ProposalBuilder
-	mesh             *mesh.Mesh
-	cachedDB         *datastore.CachedDB
-	clock            *timesync.NodeClock
-	hare             *hare.Hare
-	hOracle          *eligibility.Oracle
-	blockGen         *blocks.Generator
-	certifier        *blocks.Certifier
-	postSetupMgr     *activation.PostSetupManager
-	atxBuilder       *activation.Builder
-	atxHandler       *activation.Handler
-	validator        *activation.Validator
-	keyExtractor     *signing.PubKeyExtractor
-	edVerifier       *signing.EdVerifier
-	beaconProtocol   *beacon.ProtocolDriver
-	log              log.Log
-	svm              *vm.VM
-	conState         *txs.ConservativeState
-	fetcher          *fetch.Fetch
-	ptimesync        *peersync.Sync
-	tortoise         *tortoise.Tortoise
-	updater          *bootstrap.Updater
+	fileLock           *flock.Flock
+	nodeID             types.NodeID
+	Config             *config.Config
+	db                 *sql.Database
+	dbMetrics          *dbmetrics.DBMetricsCollector
+	grpcPublicService  *grpcserver.Server
+	grpcPrivateService *grpcserver.Server
+	jsonAPIService     *grpcserver.JSONHTTPServer
+	syncer             *syncer.Syncer
+	proposalListener   *proposals.Handler
+	proposalBuilder    *miner.ProposalBuilder
+	mesh               *mesh.Mesh
+	cachedDB           *datastore.CachedDB
+	clock              *timesync.NodeClock
+	hare               *hare.Hare
+	hOracle            *eligibility.Oracle
+	blockGen           *blocks.Generator
+	certifier          *blocks.Certifier
+	postSetupMgr       *activation.PostSetupManager
+	atxBuilder         *activation.Builder
+	atxHandler         *activation.Handler
+	txHandler          *txs.TxHandler
+	validator          *activation.Validator
+	edVerifier         *signing.EdVerifier
+	beaconProtocol     *beacon.ProtocolDriver
+	log                log.Log
+	svm                *vm.VM
+	conState           *txs.ConservativeState
+	fetcher            *fetch.Fetch
+	ptimesync          *peersync.Sync
+	tortoise           *tortoise.Tortoise
+	updater            *bootstrap.Updater
 
 	host *p2p.Host
 
@@ -497,13 +505,6 @@ func (app *App) initServices(
 	}
 
 	var err error
-	app.keyExtractor, err = signing.NewPubKeyExtractor(
-		signing.WithExtractorPrefix(app.Config.Genesis.GenesisID().Bytes()),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create key extractor: %w", err)
-	}
-
 	app.edVerifier, err = signing.NewEdVerifier(signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
 	if err != nil {
 		return fmt.Errorf("failed to create signature verifier: %w", err)
@@ -559,9 +560,9 @@ func (app *App) initServices(
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
-	if app.Config.HareEligibility.EpochOffset >= app.Config.BaseConfig.LayersPerEpoch {
-		return fmt.Errorf("epoch offset cannot be greater than or equal to the number of layers per epoch. epoch_offset: %d. layers_per_epoch: %d",
-			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
+	if app.Config.HareEligibility.ConfidenceParam >= app.Config.BaseConfig.LayersPerEpoch {
+		return fmt.Errorf("confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. layers-per-epoch: %d",
+			app.Config.HareEligibility.ConfidenceParam, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
 	proposalListener := proposals.NewHandler(app.cachedDB, app.edVerifier, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, clock,
@@ -578,19 +579,23 @@ func (app *App) initServices(
 	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
 
-	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
+	app.txHandler = txs.NewTxHandler(
+		app.conState,
+		app.host.ID(),
+		app.addLogger(TxHandlerLogger, lg),
+	)
 
 	app.hOracle = eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
 	app.Config.Bootstrap.DataDir = app.Config.DataDir()
 	app.Config.Bootstrap.Interval = app.Config.LayerDuration / 10
-	//app.updater = bootstrap.New(
-	//	bootstrap.WithConfig(app.Config.Bootstrap),
-	//	bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
-	//)
+	app.updater = bootstrap.New(
+		bootstrap.WithConfig(app.Config.Bootstrap),
+		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
+	)
 
-	app.certifier = blocks.NewCertifier(app.cachedDB, app.hOracle, nodeID, sgn, app.keyExtractor, app.host, clock, beaconProtocol, trtl,
+	app.certifier = blocks.NewCertifier(app.cachedDB, app.hOracle, nodeID, sgn, app.edVerifier, app.host, clock, beaconProtocol, trtl,
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
@@ -642,7 +647,7 @@ func (app *App) initServices(
 		hareCfg,
 		app.host,
 		sgn,
-		app.keyExtractor,
+		app.edVerifier,
 		nodeID,
 		hareOutputCh,
 		newSyncer,
@@ -707,10 +712,9 @@ func (app *App) initServices(
 		app.addLogger(MalfeasanceLogger, lg),
 		app.host.ID(),
 		app.hare,
-		app.keyExtractor,
 		app.edVerifier,
 	)
-	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, txHandler, malfeasanceHandler)
+	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, app.txHandler, malfeasanceHandler)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
 		if newSyncer.ListenToGossip() {
@@ -727,15 +731,12 @@ func (app *App) initServices(
 	}
 
 	app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
-	app.host.Register(pubsub.BeaconProposalProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal))
-	app.host.Register(pubsub.BeaconFirstVotesProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes))
-	app.host.Register(pubsub.BeaconFollowingVotesProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
+	app.host.Register(pubsub.BeaconProposalProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal))
+	app.host.Register(pubsub.BeaconFirstVotesProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes))
+	app.host.Register(pubsub.BeaconFollowingVotesProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
 	app.host.Register(pubsub.ProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
 	app.host.Register(pubsub.AtxProtocol, pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx))
-	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
+	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, app.txHandler.HandleGossipTransaction))
 	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()))
 	app.host.Register(pubsub.BlockCertify, pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage))
 	app.host.Register(pubsub.MalfeasanceProof, pubsub.ChainGossipHandler(atxSyncHandler, malfeasanceHandler.HandleMalfeasanceProof))
@@ -764,7 +765,7 @@ func (app *App) initServices(
 	return nil
 }
 
-func (app *App) listenToUpdates(ctx context.Context) {
+func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 	app.eg.Go(func() error {
 		ch := app.updater.Subscribe()
 		app.updater.Start(ctx)
@@ -774,7 +775,10 @@ func (app *App) listenToUpdates(ctx context.Context) {
 				return nil
 			default:
 				if update.Data.Beacon != types.EmptyBeacon {
-					app.beaconProtocol.UpdateBeacon(update.Data.Epoch, update.Data.Beacon)
+					if err := app.beaconProtocol.UpdateBeacon(update.Data.Epoch, update.Data.Beacon); err != nil {
+						appErr <- err
+						return nil
+					}
 				}
 				if len(update.Data.ActiveSet) > 0 {
 					app.hOracle.UpdateActiveSet(update.Data.Epoch, update.Data.ActiveSet)
@@ -785,11 +789,14 @@ func (app *App) listenToUpdates(ctx context.Context) {
 	})
 }
 
-func (app *App) startServices(ctx context.Context) error {
+func (app *App) startServices(ctx context.Context, appErr chan error) error {
 	if err := app.fetcher.Start(); err != nil {
 		return fmt.Errorf("failed to start fetcher: %w", err)
 	}
-	go app.startSyncer(ctx)
+	app.eg.Go(func() error {
+		app.startSyncer(ctx)
+		return nil
+	})
 	app.beaconProtocol.Start(ctx)
 
 	app.blockGen.Start()
@@ -818,76 +825,90 @@ func (app *App) startServices(ctx context.Context) error {
 	}
 
 	if app.updater != nil {
-		app.listenToUpdates(ctx)
+		app.listenToUpdates(ctx, appErr)
 	}
 	return nil
 }
 
-func (app *App) startAPIServices(ctx context.Context) {
-	apiConf := &app.Config.API
-	layerDuration := app.Config.LayerDuration
+func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcserver.ServiceAPI, error) {
+	switch svc {
+	case grpcserver.Debug:
+		return grpcserver.NewDebugService(app.conState, app.host, app.hOracle), nil
+	case grpcserver.GlobalState:
+		return grpcserver.NewGlobalStateService(app.mesh, app.conState), nil
+	case grpcserver.Mesh:
+		return grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal)), nil
+	case grpcserver.Node:
+		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
+	case grpcserver.Smesher:
+		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
+	case grpcserver.Transaction:
+		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
+	case grpcserver.Activation:
+		return grpcserver.NewActivationService(app.cachedDB), nil
+	}
+	return nil, fmt.Errorf("unknown service %s", svc)
+}
 
-	// API SERVICES
-	// Since we have multiple GRPC services, we cannot automatically enable them if
-	// the gateway server is enabled (since we don't know which ones to enable), so
-	// it's an error if the gateway server is enabled without enabling at least one
-	// GRPC service.
+func (app *App) newGrpc(logger *zap.Logger, endpoint string) *grpcserver.Server {
+	return grpcserver.New(endpoint,
+		grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger)),
+		grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger)),
+		grpc.MaxSendMsgSize(app.Config.API.GrpcSendMsgSize),
+		grpc.MaxRecvMsgSize(app.Config.API.GrpcRecvMsgSize),
+	)
+}
 
-	// Make sure we only create the server once.
-	var services []grpcserver.ServiceAPI
-	registerService := func(svc grpcserver.ServiceAPI) {
-		if app.grpcAPIService == nil {
-			logger := app.addLogger(GRPCLogger, app.log).Zap()
-			grpczap.SetGrpcLoggerV2(grpclog, logger)
-			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
-				grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger)),
-				grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger)),
-				grpc.MaxSendMsgSize(apiConf.GrpcSendMsgSize),
-				grpc.MaxRecvMsgSize(apiConf.GrpcRecvMsgSize),
-			)
+func (app *App) startAPIServices(ctx context.Context) error {
+	logger := app.addLogger(GRPCLogger, app.log).Zap()
+	grpczap.SetGrpcLoggerV2(grpclog, logger)
+	var (
+		unique = map[grpcserver.Service]struct{}{}
+		public []grpcserver.ServiceAPI
+	)
+	if len(app.Config.API.PublicServices) > 0 {
+		app.grpcPublicService = app.newGrpc(logger, app.Config.API.PublicListener)
+	}
+	if len(app.Config.API.PrivateServices) > 0 {
+		app.grpcPrivateService = app.newGrpc(logger, app.Config.API.PrivateListener)
+	}
+	for _, svc := range app.Config.API.PublicServices {
+		if _, exists := unique[svc]; exists {
+			return fmt.Errorf("can't start more than one %s", svc)
 		}
-		services = append(services, svc)
-		svc.RegisterService(app.grpcAPIService)
-	}
-
-	// Register the requested services one by one
-	if apiConf.StartDebugService {
-		registerService(grpcserver.NewDebugService(app.conState, app.host))
-	}
-	if apiConf.StartGlobalStateService {
-		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
-	}
-	if apiConf.StartMeshService {
-		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), layerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal)))
-	}
-	if apiConf.StartNodeService {
-		nodeService := grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer, app.atxBuilder)
-		registerService(nodeService)
-	}
-	if apiConf.StartSmesherService {
-		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, apiConf.SmesherStreamInterval))
-	}
-	if apiConf.StartTransactionService {
-		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))
-	}
-	if apiConf.StartActivationService {
-		registerService(grpcserver.NewActivationService(app.cachedDB))
-	}
-
-	// Now that the services are registered, start the server.
-	if app.grpcAPIService != nil {
-		app.grpcAPIService.Start()
-	}
-
-	if apiConf.StartJSONServer {
-		if app.grpcAPIService == nil {
-			// This panics because it should not happen.
-			// It should be caught inside apiConf.
-			log.Fatal("one or more new grpc services must be enabled with new json gateway server")
+		gsvc, err := app.initService(ctx, svc)
+		if err != nil {
+			return err
 		}
-		app.jsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort)
-		app.jsonAPIService.StartService(ctx, services...)
+		gsvc.RegisterService(app.grpcPublicService)
+		public = append(public, gsvc)
+		unique[svc] = struct{}{}
 	}
+	for _, svc := range app.Config.API.PrivateServices {
+		if _, exists := unique[svc]; exists {
+			return fmt.Errorf("can't start more than one %s", svc)
+		}
+		gsvc, err := app.initService(ctx, svc)
+		if err != nil {
+			return err
+		}
+		gsvc.RegisterService(app.grpcPrivateService)
+		unique[svc] = struct{}{}
+	}
+	if len(app.Config.API.JSONListener) > 0 {
+		if len(public) == 0 {
+			return fmt.Errorf("can't start json server without public services")
+		}
+		app.jsonAPIService = grpcserver.NewJSONHTTPServer(app.Config.API.JSONListener)
+		app.jsonAPIService.StartService(ctx, public...)
+	}
+	if app.grpcPublicService != nil {
+		app.grpcPublicService.Start()
+	}
+	if app.grpcPrivateService != nil {
+		app.grpcPrivateService.Start()
+	}
+	return nil
 }
 
 func (app *App) stopServices(ctx context.Context) {
@@ -897,9 +918,15 @@ func (app *App) stopServices(ctx context.Context) {
 		}
 	}
 
-	if app.grpcAPIService != nil {
+	if app.grpcPublicService != nil {
+		log.Info("stopping public grpc service")
 		// does not return any errors
-		_ = app.grpcAPIService.Close()
+		_ = app.grpcPublicService.Close()
+	}
+	if app.grpcPrivateService != nil {
+		log.Info("stopping private grpc service")
+		// does not return any errors
+		_ = app.grpcPrivateService.Close()
 	}
 
 	if app.updater != nil {
@@ -962,8 +989,6 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	events.CloseEventReporter()
-
-	_ = app.eg.Wait()
 }
 
 // LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists.
@@ -1065,16 +1090,17 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	/* Setup monitoring */
-	pprofErr := make(chan error, 1)
+	appErr := make(chan error, 100)
 	if app.Config.PprofHTTPServer {
 		logger.Info("starting pprof server")
 		srv := &http.Server{Addr: ":6060"}
 		defer srv.Shutdown(ctx)
-		go func() {
+		app.eg.Go(func() error {
 			if err := srv.ListenAndServe(); err != nil {
-				pprofErr <- fmt.Errorf("cannot start pprof http server: %w", err)
+				appErr <- fmt.Errorf("cannot start pprof http server: %w", err)
 			}
-		}()
+			return nil
+		})
 	}
 
 	if app.Config.ProfilerURL != "" {
@@ -1172,11 +1198,13 @@ func (app *App) Start(ctx context.Context) error {
 			app.host.ID().String(), app.Config.Genesis.GenesisID().ShortString())
 	}
 
-	if err := app.startServices(ctx); err != nil {
-		return fmt.Errorf("error starting services: %w", err)
+	if err := app.startServices(ctx, appErr); err != nil {
+		return err
 	}
 
-	app.startAPIServices(ctx)
+	if err := app.startAPIServices(ctx); err != nil {
+		return err
+	}
 
 	events.SubscribeToLayers(clock)
 	logger.Info("app started")
@@ -1189,20 +1217,19 @@ func (app *App) Start(ctx context.Context) error {
 		Msg:   "node is shutting down",
 		Level: zapcore.InfoLevel,
 	})
-	syncErr := make(chan error, 1)
+	// TODO: pass app.eg to components and wait for them collectively
 	if app.ptimesync != nil {
-		go func() {
-			syncErr <- app.ptimesync.Wait()
-		}()
+		app.eg.Go(func() error {
+			appErr <- app.ptimesync.Wait()
+			return nil
+		})
 	}
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	select {
 	case <-ctx.Done():
 		return nil
-	case err := <-pprofErr:
-		return err
-	case err := <-syncErr:
+	case err = <-appErr:
 		return err
 	}
 }
