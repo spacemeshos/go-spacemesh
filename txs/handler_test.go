@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -59,7 +61,11 @@ func Test_HandleBlock(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			cstate := NewMockconservativeState(ctrl)
-			th := NewTxHandler(cstate, logtest.New(t))
+			_, pub, err := crypto.GenerateEd25519Key(nil)
+			require.NoError(t, err)
+			id, err := peer.IDFromPublicKey(pub)
+			require.NoError(t, err)
+			th := NewTxHandler(cstate, id, logtest.New(t))
 
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
@@ -86,10 +92,14 @@ func Test_HandleBlock(t *testing.T) {
 	}
 }
 
-func gossipExpectations(t *testing.T, fee uint64, hasErr, parseErr, addErr error, has, verify, noheader bool) (*TxHandler, *types.Transaction) {
+func gossipExpectations(t *testing.T, fee uint64, hasErr, parseErr, addErr error, has, verify, noHeader bool) (*TxHandler, *types.Transaction) {
 	ctrl := gomock.NewController(t)
 	cstate := NewMockconservativeState(ctrl)
-	th := NewTxHandler(cstate, logtest.New(t))
+	_, pub, err := crypto.GenerateEd25519Key(nil)
+	require.NoError(t, err)
+	id, err := peer.IDFromPublicKey(pub)
+	require.NoError(t, err)
+	th := NewTxHandler(cstate, id, logtest.New(t))
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -97,7 +107,7 @@ func gossipExpectations(t *testing.T, fee uint64, hasErr, parseErr, addErr error
 	var rst *types.MeshTransaction
 	if has {
 		rst = &types.MeshTransaction{Transaction: *tx}
-		if noheader {
+		if noHeader {
 			rst.TxHeader = nil
 		}
 	}
@@ -126,7 +136,7 @@ func Test_HandleGossip(t *testing.T) {
 		desc                     string
 		fee                      uint64
 		has                      bool
-		noheader                 bool
+		noHeader                 bool
 		hasErr, addErr, parseErr error
 		verify                   bool
 		expect                   pubsub.ValidationResult
@@ -140,7 +150,7 @@ func Test_HandleGossip(t *testing.T) {
 		{
 			desc:     "SuccessNoHeader",
 			fee:      1,
-			noheader: true,
+			noHeader: true,
 			verify:   true,
 			expect:   pubsub.ValidationAccept,
 		},
@@ -184,14 +194,34 @@ func Test_HandleGossip(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			th, tx := gossipExpectations(t, tc.fee,
 				tc.hasErr, tc.parseErr, tc.addErr,
-				tc.has, tc.verify, tc.noheader,
+				tc.has, tc.verify, tc.noHeader,
 			)
 			require.Equal(t,
 				tc.expect,
-				th.HandleGossipTransaction(context.Background(), "peer", tx.Raw),
+				th.HandleGossipTransaction(context.Background(), p2p.NoPeer, tx.Raw),
 			)
 		})
 	}
+}
+
+func Test_HandleOwnGossip(t *testing.T) {
+	_, pub, err := crypto.GenerateEd25519Key(nil)
+	require.NoError(t, err)
+	id, err := peer.IDFromPublicKey(pub)
+	require.NoError(t, err)
+
+	ctrl := gomock.NewController(t)
+	cstate := NewMockconservativeState(ctrl) // no calls on conservative state but still returns accepted
+	th := NewTxHandler(cstate, id, logtest.New(t))
+
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	tx := newTx(t, 3, 10, 1, signer)
+
+	require.Equal(t,
+		pubsub.ValidationAccept,
+		th.HandleGossipTransaction(context.Background(), id, tx.Raw),
+	)
 }
 
 func Test_HandleProposal(t *testing.T) {
@@ -199,7 +229,7 @@ func Test_HandleProposal(t *testing.T) {
 		desc                     string
 		fee                      uint64
 		has                      bool
-		noheader                 bool
+		noHeader                 bool
 		hasErr, addErr, parseErr error
 		verify                   bool
 		fail                     bool
@@ -212,7 +242,7 @@ func Test_HandleProposal(t *testing.T) {
 		{
 			desc:     "SuccessNoHeader",
 			fee:      1,
-			noheader: true,
+			noHeader: true,
 			verify:   true,
 		},
 		{
@@ -253,7 +283,7 @@ func Test_HandleProposal(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			th, tx := gossipExpectations(t, tc.fee,
 				tc.hasErr, tc.parseErr, tc.addErr,
-				tc.has, tc.verify, tc.noheader,
+				tc.has, tc.verify, tc.noHeader,
 			)
 			err := th.HandleProposalTransaction(context.Background(), p2p.NoPeer, tx.Raw)
 			if tc.fail {

@@ -38,7 +38,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 		return nil
 	}))
 
-	svc := NewTransactionService(db, nil, nil, nil, nil)
+	svc := NewTransactionService(db, nil, nil, nil, nil, nil)
 	t.Cleanup(launchServer(t, svc))
 
 	conn := dialGrpc(ctx, t, cfg)
@@ -153,7 +153,7 @@ func BenchmarkStreamResults(b *testing.B) {
 	}
 	require.NoError(b, tx.Commit())
 	require.NoError(b, tx.Release())
-	svc := NewTransactionService(db, nil, nil, nil, nil)
+	svc := NewTransactionService(db, nil, nil, nil, nil, nil)
 	b.Cleanup(launchServer(b, svc))
 
 	conn := dialGrpc(ctx, b, cfg)
