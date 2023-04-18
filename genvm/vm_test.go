@@ -1373,7 +1373,6 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testing.T) *tester) {
 	for _, tc := range tcs {
 		t.Run(tc.desc, func(t *testing.T) {
-			t.Parallel()
 			tt := genTester(t)
 			next := types.GetEffectiveGenesis()
 			for i, layer := range tc.layers {
@@ -1426,6 +1425,7 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 }
 
 func testWallet(t *testing.T, defaultGasPrice int, template core.Address, genTester func(t *testing.T) *tester) {
+	t.Parallel()
 	runTestCases(t,
 		singleWalletTestCases(defaultGasPrice, template, genTester(t)),
 		genTester,
@@ -1433,6 +1433,7 @@ func testWallet(t *testing.T, defaultGasPrice int, template core.Address, genTes
 }
 
 func TestWallets(t *testing.T) {
+	t.Parallel()
 	const (
 		funded  = 10  // number of funded accounts, included in genesis
 		total   = 100 // total number of accounts
@@ -1505,6 +1506,7 @@ func TestWallets(t *testing.T) {
 }
 
 func TestRandomTransfers(t *testing.T) {
+	t.Parallel()
 	tt := newTester(t).withSeed(101).
 		addSingleSig(10).
 		addMultisig(10, 1, 3).
@@ -1932,6 +1934,7 @@ func TestVestingWithVault(t *testing.T) {
 }
 
 func TestValidation(t *testing.T) {
+	t.Parallel()
 	t.Run("SingleSig", func(t *testing.T) {
 		tt := newTester(t).
 			addSingleSig(1).

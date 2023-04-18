@@ -8,6 +8,7 @@ import (
 )
 
 func TestRewards(t *testing.T) {
+	t.Parallel()
 	genTester := func(t *testing.T) *tester {
 		return newTester(t).
 			addSingleSig(10).
