@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
+	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -100,10 +102,11 @@ func (v *Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST 
 		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
 	}
 
+	start := time.Now()
 	if err := verifying.Verify(p, m, (config.Config)(v.cfg), opts...); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
 	}
-
+	metrics.PostVerificationLatency.Observe(time.Since(start).Seconds())
 	return nil
 }
 
