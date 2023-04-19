@@ -175,7 +175,11 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 //
 // Ensure that before calling this method, the node is ATX synced.
 func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts) error {
-	if err := mgr.prepareInitializer(ctx, opts); err != nil {
+	if err := mgr.PrepareInitializer(ctx, opts); err != nil {
+		return err
+	}
+
+	if err := mgr.checkAndSetInProgress(); err != nil {
 		return err
 	}
 
@@ -215,13 +219,19 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	return nil
 }
 
-func (mgr *PostSetupManager) prepareInitializer(ctx context.Context, opts PostSetupOpts) error {
+func (mgr *PostSetupManager) checkAndSetInProgress() error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
-
 	if mgr.state == PostSetupStateInProgress {
 		return fmt.Errorf("post setup session in progress")
 	}
+	mgr.state = PostSetupStateInProgress
+	return nil
+}
+
+func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
 
 	if opts.ComputeProviderID == config.BestProviderID {
 		p, err := mgr.BestProvider()
@@ -251,7 +261,6 @@ func (mgr *PostSetupManager) prepareInitializer(ctx context.Context, opts PostSe
 		return fmt.Errorf("new initializer: %w", err)
 	}
 
-	mgr.state = PostSetupStateInProgress
 	mgr.init = newInit
 	mgr.lastOpts = &opts
 	return nil

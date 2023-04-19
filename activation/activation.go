@@ -163,17 +163,23 @@ func (b *Builder) Smeshing() bool {
 	return b.started.Load()
 }
 
-// StartSmeshing is the main entry point of the atx builder.
-// It runs the main loop of the builder and shouldn't be called more than once.
-// If the post data is incomplete or missing, data creation
-// session will be preceded. Changing of the post potions (e.g., number of labels),
-// after initial setup, is supported.
+// StartSmeshing is the main entry point of the atx builder. It runs the main
+// loop of the builder in a new go-routine and shouldn't be called more than
+// once. If the post data is incomplete or missing, data creation session will
+// be preceded. Changing of the post potions (e.g., number of labels), after
+// initial setup, is supported. If data creation fails for any reason then the
+// go-routine will panic.
 func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) error {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
 
 	if !b.started.CompareAndSwap(false, true) {
 		return errors.New("already started")
+	}
+
+	err := b.postSetupProvider.PrepareInitializer(b.parentCtx, opts)
+	if err != nil {
+		return fmt.Errorf("failed to prepare post initializer: %w", err)
 	}
 
 	b.coinbaseAccount = coinbase
@@ -190,8 +196,10 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 			// ensure we are ATX synced before starting the PoST Session
 		}
 
-		if err := b.postSetupProvider.StartSession(ctx, opts); err != nil {
-			return err
+		// If start session returns any error other than context.Canceled
+		// (which is how we signal it to stop) then we panic.
+		if err := b.postSetupProvider.StartSession(ctx, opts); err != nil && !errors.Is(err, context.Canceled) {
+			panic(fmt.Sprintf("initialization failed: %v", err))
 		}
 
 		b.run(ctx)

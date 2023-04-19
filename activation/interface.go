@@ -58,6 +58,12 @@ type postSetupProvider interface {
 	Status() *PostSetupStatus
 	ComputeProviders() []PostSetupComputeProvider
 	Benchmark(p PostSetupComputeProvider) (int, error)
+	// PrepareInitializer can be called before StartSession to verify if the
+	// given opts are valid. It is not necessary since StartSession also calls
+	// PrepareInitializer, but it provides a means to understand if the post
+	// configuration is valid before kicking off a very long running task
+	// (StartSession can take hours to complete)
+	PrepareInitializer(ctx context.Context, opts PostSetupOpts) error
 	StartSession(context context.Context, opts PostSetupOpts) error
 	Reset() error
 	GenerateProof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error)
