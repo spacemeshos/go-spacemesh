@@ -163,7 +163,7 @@ func runServer(ctx context.Context, logger log.Log, gen *Generator) error {
 		return fmt.Errorf("query network params %v: %w", spacemeshEndpoint, err)
 	}
 	if time.Now().After(params.Genesis) {
-		return fmt.Errorf("missed genesis %v", params.Genesis)
+		logger.With().Warning("missed genesis", log.Time("genesis", params.Genesis))
 	}
 	srv := NewServer(afero.NewOsFs(), gen, genFallback, port, logger.WithName("server"))
 	ch := make(chan error, 100)
