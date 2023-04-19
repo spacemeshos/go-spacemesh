@@ -1,11 +1,13 @@
 package cluster
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -15,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/watch"
 	appsv1 "k8s.io/client-go/applyconfigurations/apps/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
@@ -114,26 +115,74 @@ const (
 // Node ...
 type Node struct {
 	Name      string
-	IP        string
 	P2P, GRPC uint16
-
-	Restarted time.Time
-}
-
-// GRPCEndpoint returns grpc endpoint for the Node.
-func (n Node) GRPCEndpoint() string {
-	return fmt.Sprintf("%s:%d", n.IP, n.GRPC)
 }
 
 // P2PEndpoint returns full p2p endpoint, including identity.
 func p2pEndpoint(n Node, id string) string {
-	return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", n.IP, n.P2P, id)
+	return fmt.Sprintf("/dns4/%s/tcp/%d/p2p/%s", n.Name, n.P2P, id)
 }
 
 // NodeClient is a Node with attached grpc connection.
 type NodeClient struct {
+	session *testcontext.Context
 	Node
-	*grpc.ClientConn
+
+	mu   sync.Mutex
+	conn *grpc.ClientConn
+}
+
+func (n *NodeClient) ensureConn(ctx context.Context) (*grpc.ClientConn, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.conn != nil {
+		return n.conn, nil
+	}
+	pod, err := waitPod(n.session, n.Name)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := grpc.DialContext(ctx, fmt.Sprintf("%s:%d", pod.Status.PodIP, n.GRPC),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	n.conn = conn
+	return n.conn, nil
+}
+
+func (n *NodeClient) resetConn(conn *grpc.ClientConn) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.conn != nil && n.conn == conn {
+		n.conn.Close()
+		n.conn = nil
+	}
+}
+
+func (n *NodeClient) Invoke(ctx context.Context, method string, args interface{}, reply interface{}, opts ...grpc.CallOption) error {
+	conn, err := n.ensureConn(ctx)
+	if err != nil {
+		return err
+	}
+	err = conn.Invoke(ctx, method, args, reply, opts...)
+	if err != nil {
+		n.resetConn(conn)
+	}
+	return err
+}
+
+func (n *NodeClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, method string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	conn, err := n.ensureConn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	stream, err := n.conn.NewStream(ctx, desc, method, opts...)
+	if err != nil {
+		n.resetConn(conn)
+	}
+	return stream, err
 }
 
 func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
@@ -181,11 +230,12 @@ func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (
 	if err != nil {
 		return nil, fmt.Errorf("create poet: %w", err)
 	}
-	ppod, err := waitNode(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	return ppod, nil
+	return &NodeClient{
+		session: ctx,
+		Node: Node{
+			Name: id,
+		},
+	}, nil
 }
 
 func deployBootnodeSvc(ctx *testcontext.Context, id string) error {
@@ -304,16 +354,8 @@ func waitPod(ctx *testcontext.Context, id string) (*apiv1.Pod, error) {
 			if !open {
 				return nil, fmt.Errorf("watcher is terminated while waiting for pod with id %v", id)
 			}
-			if ev.Type == watch.Deleted {
-				return nil, nil
-			}
 			pod = ev.Object.(*apiv1.Pod)
-		}
-		switch pod.Status.Phase {
-		case apiv1.PodFailed:
-			return nil, fmt.Errorf("pod with id failed %s", id)
-		case apiv1.PodRunning:
-			if areContainersReady(pod) {
+			if pod.Status.Phase == apiv1.PodRunning && areContainersReady(pod) {
 				return pod, nil
 			}
 		}
@@ -358,14 +400,14 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, flags []De
 			if err := deployNode(ctx, id, labels, finalFlags); err != nil {
 				return err
 			}
-			node, err := waitNode(ctx, id)
-			if err != nil {
-				return err
+			clients <- &NodeClient{
+				session: ctx,
+				Node: Node{
+					Name: id,
+					P2P:  7513,
+					GRPC: 9092,
+				},
 			}
-			if node == nil {
-				return fmt.Errorf("pod was deleted %s", id)
-			}
-			clients <- node
 			return nil
 		})
 	}
@@ -542,64 +584,12 @@ func deployBootstrapperD(ctx *testcontext.Context, id string, flags ...Deploymen
 	if err != nil {
 		return nil, fmt.Errorf("create bootstrapper: %w", err)
 	}
-	bpod, err := waitNode(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	return bpod, nil
-}
-
-func waitNode(tctx *testcontext.Context, id string) (*NodeClient, error) {
-	attempt := func() (*NodeClient, error) {
-		pod, err := waitPod(tctx, id)
-		if err != nil {
-			return nil, err
-		}
-		if pod == nil {
-			return nil, nil
-		}
-		if strings.Contains(id, poetApp) || strings.Contains(id, bootstrapperApp) {
-			return &NodeClient{
-				Node: Node{
-					Name: id,
-				},
-			}, nil
-		}
-		node := Node{
-			Name:      id,
-			IP:        pod.Status.PodIP,
-			P2P:       7513,
-			GRPC:      9092,
-			Restarted: pod.CreationTimestamp.Time,
-		}
-		// don't block connection, it is expected that some nodes are unavailable during test
-		conn, err := grpc.DialContext(tctx, node.GRPCEndpoint(),
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		)
-		if err != nil {
-			return nil, err
-		}
-		return &NodeClient{
-			Node:       node,
-			ClientConn: conn,
-		}, nil
-	}
-	const attempts = 10
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-	for i := 1; i <= attempts; i++ {
-		if nc, err := attempt(); err != nil && i == attempts {
-			return nil, err
-		} else if err == nil {
-			return nc, nil
-		}
-		select {
-		case <-tctx.Done():
-			return nil, tctx.Err()
-		case <-ticker.C:
-		}
-	}
-	panic("unreachable")
+	return &NodeClient{
+		session: ctx,
+		Node: Node{
+			Name: id,
+		},
+	}, nil
 }
 
 // DeploymentFlag allows to configure specific flags for application binaries.

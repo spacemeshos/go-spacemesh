@@ -91,6 +91,12 @@ func Reuse(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 		}
 		return nil, err
 	}
+	if cl.Total() < cctx.ClusterSize {
+		cctx.Log.Infow("scaling cluster", "total", cl.Total(), "target", cctx.ClusterSize)
+		if err := cl.AddSmeshers(cctx, cctx.ClusterSize-cl.Total()); err != nil {
+			return nil, err
+		}
+	}
 	return cl, nil
 }
 
@@ -512,23 +518,10 @@ func (c *Cluster) Client(i int) *NodeClient {
 	return c.clients[i]
 }
 
-// CloseClients closes connections to clients.
-func (c *Cluster) CloseClients() error {
-	var eg errgroup.Group
-	for _, client := range c.clients {
-		eg.Go(client.Close)
-	}
-	return eg.Wait()
-}
-
 // Wait for i-th client to be up.
 func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
-	nc, err := waitNode(tctx, c.Client(i).Name)
-	if err != nil {
-		return err
-	}
-	c.clients[i] = nc
-	return nil
+	_, err := waitPod(tctx, c.Client(i).Name)
+	return err
 }
 
 // Account contains address and private key.
