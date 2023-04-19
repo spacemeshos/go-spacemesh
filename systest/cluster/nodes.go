@@ -246,6 +246,7 @@ func deployBootnodeSvc(ctx *testcontext.Context, id string) error {
 			WithSelector(labels).
 			WithPorts(
 				corev1.ServicePort().WithName("grpc").WithPort(9092).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("p2p").WithPort(7513).WithProtocol("TCP"),
 			).
 			WithClusterIP("None"),
 		)
