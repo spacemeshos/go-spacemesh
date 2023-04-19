@@ -177,14 +177,14 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 		return errors.New("already started")
 	}
 
+	b.coinbaseAccount = coinbase
+	ctx, stop := context.WithCancel(b.parentCtx)
+	b.stop = stop
+
 	err := b.postSetupProvider.PrepareInitializer(b.parentCtx, opts)
 	if err != nil {
 		return fmt.Errorf("failed to prepare post initializer: %w", err)
 	}
-
-	b.coinbaseAccount = coinbase
-	ctx, stop := context.WithCancel(b.parentCtx)
-	b.stop = stop
 
 	b.eg.Go(func() error {
 		defer b.started.Store(false)
