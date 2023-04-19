@@ -42,7 +42,7 @@ const (
 )
 
 func defaultBootnodes(size int) int {
-	bsize := (size / 1000) * 2
+	bsize := (size / 1000) * 4
 	if bsize == 0 {
 		return 2
 	}
@@ -636,12 +636,16 @@ func extractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]stri
 		i := i
 		n := nodes[i]
 		eg.Go(func() error {
+			ip, err := n.Resolve(ctx)
+			if err != nil {
+				return err
+			}
 			dbg := pb.NewDebugServiceClient(n)
 			info, err := dbg.NetworkInfo(ctx, &emptypb.Empty{})
 			if err != nil {
 				return err
 			}
-			rst[i] = p2pEndpoint(n.Node, info.Id)
+			rst[i] = p2pEndpoint(n.Node, ip, info.Id)
 			return nil
 		})
 	}

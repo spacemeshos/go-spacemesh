@@ -119,8 +119,8 @@ type Node struct {
 }
 
 // P2PEndpoint returns full p2p endpoint, including identity.
-func p2pEndpoint(n Node, id string) string {
-	return fmt.Sprintf("/dns4/%s/tcp/%d/p2p/%s", n.Name, n.P2P, id)
+func p2pEndpoint(n Node, ip, id string) string {
+	return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", ip, n.P2P, id)
 }
 
 // NodeClient is a Node with attached grpc connection.
@@ -130,6 +130,14 @@ type NodeClient struct {
 
 	mu   sync.Mutex
 	conn *grpc.ClientConn
+}
+
+func (n *NodeClient) Resolve(ctx context.Context) (string, error) {
+	pod, err := waitPod(n.session, n.Name)
+	if err != nil {
+		return "", err
+	}
+	return pod.Status.PodIP, nil
 }
 
 func (n *NodeClient) ensureConn(ctx context.Context) (*grpc.ClientConn, error) {
