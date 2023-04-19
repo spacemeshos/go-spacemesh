@@ -561,6 +561,20 @@ func (mr *MockpostSetupProviderMockRecorder) LastOpts() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastOpts", reflect.TypeOf((*MockpostSetupProvider)(nil).LastOpts))
 }
 
+// PrepareInitializer mocks base method.
+func (m *MockpostSetupProvider) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PrepareInitializer", ctx, opts)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PrepareInitializer indicates an expected call of PrepareInitializer.
+func (mr *MockpostSetupProviderMockRecorder) PrepareInitializer(ctx, opts interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareInitializer", reflect.TypeOf((*MockpostSetupProvider)(nil).PrepareInitializer), ctx, opts)
+}
+
 // Reset mocks base method.
 func (m *MockpostSetupProvider) Reset() error {
 	m.ctrl.T.Helper()
