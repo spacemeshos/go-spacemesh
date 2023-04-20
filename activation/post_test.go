@@ -49,6 +49,7 @@ func TestPostSetupManager(t *testing.T) {
 	})
 
 	// Create data.
+	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
 	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
 	cancel()
 	_ = eg.Wait()
@@ -107,7 +108,7 @@ func TestPostSetupManager_StateError(t *testing.T) {
 
 	mgr := newTestPostManager(t)
 	mgr.opts.NumUnits = 0
-	req.Error(mgr.StartSession(context.Background(), mgr.opts))
+	req.Error(mgr.PrepareInitializer(context.Background(), mgr.opts))
 	// Verify Status returns StateError
 	req.Equal(PostSetupStateError, mgr.Status().State)
 }
@@ -123,6 +124,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req.Zero(status.NumLabelsWritten)
 
 	// Create data.
+	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
 	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
@@ -146,6 +148,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.EqualError(err, errNotComplete.Error())
 
 	// Create data.
+	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
 	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
 
 	// Generate proof.
@@ -188,6 +191,7 @@ func TestPostSetupManager_VRFNonce(t *testing.T) {
 	req.ErrorIs(err, errNotComplete)
 
 	// Create data.
+	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
 	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
 
 	// Get nonce.
@@ -214,6 +218,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 	req.Zero(status.NumLabelsWritten)
 
 	// Create data.
+	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
 	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
 
 	// Verify state.
@@ -226,6 +231,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 	req.Equal(PostSetupStateNotStarted, mgr.Status().State)
 
 	// Create data again.
+	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
 	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
 
 	// Verify state.
@@ -239,6 +245,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	mgr.opts.MaxFileSize = 4096
 
 	// Create data.
+	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
 	ctx, cancel := context.WithCancel(context.Background())
 	var eg errgroup.Group
 	eg.Go(func() error {
@@ -261,6 +268,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	req.LessOrEqual(status.NumLabelsWritten, uint64(mgr.opts.NumUnits)*mgr.cfg.LabelsPerUnit)
 
 	// Continue to create data.
+	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
 	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
 
 	// Verify status.
