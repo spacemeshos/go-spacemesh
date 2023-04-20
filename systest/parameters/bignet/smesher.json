@@ -1,11 +1,11 @@
 {
     "preset": "fastnet",
     "main": {
-        "layers-per-epoch": 50,
-        "layer-duration": "5m"
+        "layers-per-epoch": 200,
+        "layer-duration": "3m"
     },
     "poet": {
-        "phase-shift": "100m",
+        "phase-shift": "300m",
         "cycle-gap": "40m",
         "grace-period": "10m"
     },
@@ -14,8 +14,8 @@
         "tortoise-hdist": 10
     },
     "hare": {
-        "hare-wakeup-delta": "30s",
-        "hare-round-duration": "30s",
+        "hare-wakeup-delta": "25s",
+        "hare-round-duration": "25s",
         "hare-limit-iterations": 4,
         "hare-committee-size": 200
     },
