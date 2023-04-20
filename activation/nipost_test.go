@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
 
 func defaultPoetServiceMock(tb testing.TB, id []byte) *MockPoetProvingServiceClient {
@@ -648,21 +649,44 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 	mclock := NewMocklayerClock(ctrl)
 	poetProver := NewMockPoetProvingServiceClient(ctrl)
 	postProver := NewMockpostSetupProvider(ctrl)
-	postProver.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
-
-	mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
-		func(got types.LayerID) time.Time {
-			return genesis.Add(layerDuration * time.Duration(got))
-		}).AnyTimes()
-
-	nb := NewNIPostBuilder(types.NodeID{1}, postProver, []PoetProvingServiceClient{poetProver},
-		poetDb, sql.InMemory(), logtest.New(t), sig, PoetConfig{}, mclock)
 
 	// Act & Verify
-	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
-	require.ErrorIs(t, err, ErrATXChallengeExpired)
-	require.ErrorContains(t, err, "poet round has already started")
-	require.Nil(t, nipost)
+	t.Run("not requests poet round started", func(t *testing.T) {
+		postProver.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
+		mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
+			func(got types.LayerID) time.Time {
+				return genesis.Add(layerDuration * time.Duration(got))
+			}).AnyTimes()
+
+		db := sql.InMemory()
+		nb := NewNIPostBuilder(types.NodeID{1}, postProver, []PoetProvingServiceClient{poetProver},
+			poetDb, db, logtest.New(t), sig, PoetConfig{}, mclock)
+		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
+		require.ErrorIs(t, err, ErrATXChallengeExpired)
+		require.ErrorContains(t, err, "poet round has already started")
+		require.Nil(t, nipost)
+	})
+	t.Run("no response before deadline", func(t *testing.T) {
+		postProver.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
+		mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
+			func(got types.LayerID) time.Time {
+				return genesis.Add(layerDuration * time.Duration(got))
+			}).AnyTimes()
+
+		db := sql.InMemory()
+		nb := NewNIPostBuilder(types.NodeID{1}, postProver, []PoetProvingServiceClient{poetProver},
+			poetDb, db, logtest.New(t), sig, PoetConfig{}, mclock)
+		state := types.NIPostBuilderState{
+			Challenge:    challenge.Hash(),
+			PoetRequests: []types.PoetRequest{{}},
+		}
+		require.NoError(t, kvstore.AddNIPostBuilderState(db, &state))
+
+		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
+		require.ErrorIs(t, err, ErrATXChallengeExpired)
+		require.ErrorContains(t, err, "poet proof for pub epoch")
+		require.Nil(t, nipost)
+	})
 }
 
 // Test if the NIPoSTBuilder continues after being interrupted just after
