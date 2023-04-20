@@ -54,6 +54,21 @@ type SessionConfig struct {
 	commitmentAtxId types.ATXID
 }
 
+// PostProvingOpts are the options controlling POST proving process.
+type PostProvingOpts struct {
+	// Number of threads used in POST proving process.
+	Threads uint `mapstructure:"smeshing-opts-proving-threads"`
+	// Number of nonces tried in parallel in POST proving process.
+	Nonces uint `mapstructure:"smeshing-opts-proving-nonces"`
+}
+
+func DefaultPostProvingOpts() PostProvingOpts {
+	return PostProvingOpts{
+		Threads: 1,
+		Nonces:  20,
+	}
+}
+
 // PostSetupStatus represents a status snapshot of the Post setup.
 type PostSetupStatus struct {
 	State            PostSetupState
@@ -96,14 +111,15 @@ type PostSetupManager struct {
 	db          *datastore.CachedDB
 	goldenATXID types.ATXID
 
-	mu       sync.Mutex                  // mu protects setting the values below.
-	lastOpts *PostSetupOpts              // the last options used to initiate a Post setup session.
-	state    PostSetupState              // state is the current state of the Post setup.
-	init     *initialization.Initializer // init is the current initializer instance.
+	mu          sync.Mutex                  // mu protects setting the values below.
+	lastOpts    *PostSetupOpts              // the last options used to initiate a Post setup session.
+	state       PostSetupState              // state is the current state of the Post setup.
+	init        *initialization.Initializer // init is the current initializer instance.
+	provingOpts PostProvingOpts
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
-func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger log.Log, db *datastore.CachedDB, goldenATXID types.ATXID) (*PostSetupManager, error) {
+func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger log.Log, db *datastore.CachedDB, goldenATXID types.ATXID, provingOpts PostProvingOpts) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
 		id:          id,
 		cfg:         cfg,
@@ -111,6 +127,7 @@ func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger log.Log, db *da
 		db:          db,
 		goldenATXID: goldenATXID,
 		state:       PostSetupStateNotStarted,
+		provingOpts: provingOpts,
 	}
 
 	return mgr, nil
@@ -348,6 +365,8 @@ func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte
 
 	proof, proofMetadata, err := proving.Generate(ctx, challenge, config.Config(mgr.cfg), mgr.logger,
 		proving.WithDataSource(config.Config(mgr.cfg), mgr.id.Bytes(), mgr.commitmentAtxId.Bytes(), mgr.lastOpts.DataDir),
+		proving.WithNonces(mgr.provingOpts.Nonces),
+		proving.WithThreads(mgr.provingOpts.Threads),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate proof: %w", err)

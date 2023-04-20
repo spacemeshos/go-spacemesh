@@ -66,12 +66,10 @@ func (s *Server) Start(ctx context.Context, errCh chan error, params *NetworkPar
 		return nil
 	})
 
-	if s.gen != nil {
-		s.eg.Go(func() error {
-			s.loop(ctx, errCh, params)
-			return nil
-		})
-	}
+	s.eg.Go(func() error {
+		s.loop(ctx, errCh, params)
+		return nil
+	})
 }
 
 func (s *Server) loop(ctx context.Context, errCh chan error, params *NetworkParam) {
