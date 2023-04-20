@@ -17,6 +17,7 @@ RUN --mount=type=cache,id=build,target=/root/.cache/go-build make bootstrapper
 # start from a fresh image with just the built binary
 FROM ubuntu:22.04
 
+RUN apt-get update && apt-get install curl -y
 COPY --from=builder /src/build/go-bootstrapper /bin/
 
 ENTRYPOINT ["/bin/go-bootstrapper"]
