@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/gpu"
@@ -45,6 +44,14 @@ type PostSetupOpts struct {
 	Throttle          bool                `mapstructure:"smeshing-opts-throttle"`
 	Scrypt            config.ScryptParams `mapstructure:"smeshing-opts-scrypt"`
 	ComputeBatchSize  uint64              `mapstructure:"smeshing-opts-compute-batch-size"`
+}
+
+// SessionOpts serves as a holder for config generated in PrepareInitializer to
+// be passed to StartSession. It is not intended to be user configurable.
+type SessionConfig struct {
+	init            *initialization.Initializer
+	opts            PostSetupOpts
+	commitmentAtxId types.ATXID
 }
 
 // PostSetupStatus represents a status snapshot of the Post setup.
@@ -89,11 +96,10 @@ type PostSetupManager struct {
 	db          *datastore.CachedDB
 	goldenATXID types.ATXID
 
-	mu           sync.Mutex                  // mu protects setting the values below.
-	lastOpts     *PostSetupOpts              // the last options used to initiate a Post setup session.
-	state        PostSetupState              // state is the current state of the Post setup.
-	init         *initialization.Initializer // init is the current initializer instance.
-	initializing atomic.Bool                 // keeps track of when initialisation is ocurring.
+	mu       sync.Mutex                  // mu protects setting the values below.
+	lastOpts *PostSetupOpts              // the last options used to initiate a Post setup session.
+	state    PostSetupState              // state is the current state of the Post setup.
+	init     *initialization.Initializer // init is the current initializer instance.
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
@@ -172,26 +178,39 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 	return score, nil
 }
 
-// StartSession starts (or continues) a PoST session. It supports resuming a previously started
-// session, and will return an error if a session is already in progress.
+// StartSession starts (or continues) a PoST session. It supports resuming a
+// previously started session, and will return an error if a session is already
+// in progress. PrepareInitializer should be called prior to calling
+// StartSession in order to retrieve the SessionConfig.
 //
 // Insure that before calling this method, the node is ATX synced.
-func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts) error {
-	// Ensure only one goroutine can execute initialization at a time.
-	if !mgr.initializing.CompareAndSwap(false, true) {
-		return fmt.Errorf("post setup session in progress")
+func (mgr *PostSetupManager) StartSession(ctx context.Context, cfg *SessionConfig) error {
+	err := func() error {
+		mgr.mu.Lock()
+		defer mgr.mu.Unlock()
+		if mgr.state == PostSetupStateInProgress {
+			return fmt.Errorf("post setup session in progress")
+		}
+		mgr.state = PostSetupStateInProgress
+		mgr.commitmentAtxId = cfg.commitmentAtxId
+		mgr.init = cfg.init
+		mgr.lastOpts = &cfg.opts
+		return nil
+	}()
+	if err != nil {
+		return err
 	}
-	defer mgr.initializing.Store(false)
+
 	mgr.logger.With().Info("post setup session starting",
 		log.String("node_id", mgr.id.String()),
 		log.String("commitment_atx", mgr.commitmentAtxId.String()),
-		log.String("data_dir", opts.DataDir),
-		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
+		log.String("data_dir", cfg.opts.DataDir),
+		log.String("num_units", fmt.Sprintf("%d", cfg.opts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
+		log.String("provider", fmt.Sprintf("%d", cfg.opts.ComputeProviderID)),
 	)
 
-	err := mgr.init.Initialize(ctx)
+	err = mgr.init.Initialize(ctx)
 
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
@@ -209,56 +228,47 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	mgr.logger.With().Info("post setup completed",
 		log.String("node_id", mgr.id.String()),
 		log.String("commitment_atx", mgr.commitmentAtxId.String()),
-		log.String("data_dir", opts.DataDir),
-		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
+		log.String("data_dir", cfg.opts.DataDir),
+		log.String("num_units", fmt.Sprintf("%d", cfg.opts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
+		log.String("provider", fmt.Sprintf("%d", cfg.opts.ComputeProviderID)),
 	)
 	mgr.state = PostSetupStateComplete
 	return nil
 }
 
-// PrepareInitializer prepares the initializer to begin the initialization
-// process, it needs to be called before making calls to StartSession.
-func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
+// PrepareInitializer constructs the config required to start a session with
+// the given opts, it doesn't modify the state of the PostSetupManager.
+func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSetupOpts) (*SessionConfig, error) {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
-	if mgr.state == PostSetupStateInProgress {
-		return fmt.Errorf("post setup session in progress")
-	}
+	cfg := &SessionConfig{}
+	cfg.opts = opts
 
-	if opts.ComputeProviderID == config.BestProviderID {
+	if cfg.opts.ComputeProviderID == config.BestProviderID {
 		p, err := mgr.BestProvider()
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		mgr.logger.Info("found best compute provider: id: %d, model: %v, computeAPI: %v", p.ID, p.Model, p.ComputeAPI)
-		opts.ComputeProviderID = int(p.ID)
+		cfg.opts.ComputeProviderID = int(p.ID)
 	}
 
 	var err error
-	mgr.commitmentAtxId, err = mgr.commitmentAtx(ctx, opts.DataDir)
+	cfg.commitmentAtxId, err = mgr.commitmentAtx(ctx, cfg.opts.DataDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	newInit, err := initialization.NewInitializer(
+	cfg.init, err = initialization.NewInitializer(
 		initialization.WithNodeId(mgr.id.Bytes()),
-		initialization.WithCommitmentAtxId(mgr.commitmentAtxId.Bytes()),
+		initialization.WithCommitmentAtxId(cfg.commitmentAtxId.Bytes()),
 		initialization.WithConfig(config.Config(mgr.cfg)),
-		initialization.WithInitOpts(config.InitOpts(opts)),
+		initialization.WithInitOpts(config.InitOpts(cfg.opts)),
 		initialization.WithLogger(mgr.logger),
 	)
-	if err != nil {
-		mgr.state = PostSetupStateError
-		return fmt.Errorf("new initializer: %w", err)
-	}
-
-	mgr.state = PostSetupStateInProgress
-	mgr.init = newInit
-	mgr.lastOpts = &opts
-	return nil
+	return cfg, err
 }
 
 func (mgr *PostSetupManager) CommitmentAtx() (types.ATXID, error) {

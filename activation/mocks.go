@@ -562,11 +562,12 @@ func (mr *MockpostSetupProviderMockRecorder) LastOpts() *gomock.Call {
 }
 
 // PrepareInitializer mocks base method.
-func (m *MockpostSetupProvider) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
+func (m *MockpostSetupProvider) PrepareInitializer(ctx context.Context, opts PostSetupOpts) (*SessionConfig, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PrepareInitializer", ctx, opts)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(*SessionConfig)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // PrepareInitializer indicates an expected call of PrepareInitializer.
@@ -590,17 +591,17 @@ func (mr *MockpostSetupProviderMockRecorder) Reset() *gomock.Call {
 }
 
 // StartSession mocks base method.
-func (m *MockpostSetupProvider) StartSession(context context.Context, opts PostSetupOpts) error {
+func (m *MockpostSetupProvider) StartSession(context context.Context, cfg *SessionConfig) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSession", context, opts)
+	ret := m.ctrl.Call(m, "StartSession", context, cfg)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // StartSession indicates an expected call of StartSession.
-func (mr *MockpostSetupProviderMockRecorder) StartSession(context, opts interface{}) *gomock.Call {
+func (mr *MockpostSetupProviderMockRecorder) StartSession(context, cfg interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockpostSetupProvider)(nil).StartSession), context, opts)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockpostSetupProvider)(nil).StartSession), context, cfg)
 }
 
 // Status mocks base method.

@@ -181,7 +181,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	ctx, stop := context.WithCancel(b.parentCtx)
 	b.stop = stop
 
-	err := b.postSetupProvider.PrepareInitializer(b.parentCtx, opts)
+	cfg, err := b.postSetupProvider.PrepareInitializer(b.parentCtx, opts)
 	if err != nil {
 		return fmt.Errorf("failed to prepare post initializer: %w", err)
 	}
@@ -198,7 +198,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 
 		// If start session returns any error other than context.Canceled
 		// (which is how we signal it to stop) then we panic.
-		if err := b.postSetupProvider.StartSession(ctx, opts); err != nil && !errors.Is(err, context.Canceled) {
+		if err := b.postSetupProvider.StartSession(ctx, cfg); err != nil && !errors.Is(err, context.Canceled) {
 			panic(fmt.Sprintf("initialization failed: %v", err))
 		}
 

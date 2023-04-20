@@ -63,8 +63,8 @@ type postSetupProvider interface {
 	// PrepareInitializer, but it provides a means to understand if the post
 	// configuration is valid before kicking off a very long running task
 	// (StartSession can take hours to complete)
-	PrepareInitializer(ctx context.Context, opts PostSetupOpts) error
-	StartSession(context context.Context, opts PostSetupOpts) error
+	PrepareInitializer(ctx context.Context, opts PostSetupOpts) (*SessionConfig, error)
+	StartSession(context context.Context, cfg *SessionConfig) error
 	Reset() error
 	GenerateProof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error)
 	CommitmentAtx() (types.ATXID, error)
