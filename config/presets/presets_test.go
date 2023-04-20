@@ -34,7 +34,7 @@ func TestCanGeneratePOST(t *testing.T) {
 			)
 			req.NoError(err)
 
-			cfg, err := mgr.InitializerConfig(context.Background(), activation.DefaultPostSetupOpts())
+			cfg, err := mgr.InitializerConfig(context.Background(), opts)
 			req.NoError(err)
 			req.NoError(mgr.StartSession(context.Background(), cfg))
 
