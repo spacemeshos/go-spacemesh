@@ -98,6 +98,7 @@ func TestPostSetup(t *testing.T) {
 	nb := NewNIPostBuilder(postProvider.id, postProvider, []PoetProvingServiceClient{poetProvider},
 		poetDb, sql.InMemory(), logtest.New(t), postProvider.signer, PoetConfig{}, mclock)
 
+	r.NoError(postProvider.PrepareInitializer(context.Background(), postProvider.opts))
 	r.NoError(postProvider.StartSession(context.Background(), postProvider.opts))
 	t.Cleanup(func() { assert.NoError(t, postProvider.Reset()) })
 
@@ -162,6 +163,7 @@ func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetClient {
 }
 
 func buildNIPost(tb testing.TB, postProvider *testPostManager, postCfg PostConfig, nipostChallenge types.NIPostChallenge, poetDb poetDbAPI) *types.NIPost {
+	require.NoError(tb, postProvider.PrepareInitializer(context.Background(), postProvider.opts))
 	require.NoError(tb, postProvider.StartSession(context.Background(), postProvider.opts))
 	mclock := defaultLayerClockMock(tb)
 
@@ -215,6 +217,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	r.EqualError(err, "post setup not complete")
 	r.Nil(nipost)
 
+	r.NoError(postProvider.PrepareInitializer(context.Background(), postProvider.opts))
 	r.NoError(postProvider.StartSession(context.Background(), postProvider.opts))
 
 	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge)

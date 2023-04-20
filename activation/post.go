@@ -72,6 +72,7 @@ type PostSetupState int32
 
 const (
 	PostSetupStateNotStarted PostSetupState = 1 + iota
+	PostSetupStatePrepared
 	PostSetupStateInProgress
 	PostSetupStateStopped
 	PostSetupStateComplete
@@ -187,19 +188,24 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 	return score, nil
 }
 
-// StartSession starts (or continues) a PoST session. It supports resuming a previously started
-// session, and will return an error if a session is already in progress.
-//
-// Ensure that before calling this method, the node is ATX synced.
+// StartSession starts (or continues) a PoST session. It supports resuming a
+// previously started session, and will return an error if a session is already
+// in progress. It must be ensured that PrepareInitializer is called once
+// before each call to StartSession and that the node is ATX synced.
 func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts) error {
-	if err := mgr.PrepareInitializer(ctx, opts); err != nil {
+	// Ensure only one goroutine can execute initialization at a time.
+	err := func() error {
+		mgr.mu.Lock()
+		defer mgr.mu.Unlock()
+		if mgr.state != PostSetupStatePrepared {
+			return fmt.Errorf("post session not prepared")
+		}
+		mgr.state = PostSetupStateInProgress
+		return nil
+	}()
+	if err != nil {
 		return err
 	}
-
-	if err := mgr.checkAndSetInProgress(); err != nil {
-		return err
-	}
-
 	mgr.logger.With().Info("post setup session starting",
 		log.String("node_id", mgr.id.String()),
 		log.String("commitment_atx", mgr.commitmentAtxId.String()),
@@ -209,7 +215,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
 	)
 
-	err := mgr.init.Initialize(ctx)
+	err = mgr.init.Initialize(ctx)
 
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
@@ -236,19 +242,19 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	return nil
 }
 
-func (mgr *PostSetupManager) checkAndSetInProgress() error {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-	if mgr.state == PostSetupStateInProgress {
-		return fmt.Errorf("post setup session in progress")
-	}
-	mgr.state = PostSetupStateInProgress
-	return nil
-}
-
+// PrepareInitializer prepares the initializer to begin the initialization
+// process, it needs to be called before each call to StartSession. Having this
+// function be separate from StartSession provides a means to understand if the
+// post configuration is valid before kicking off a very long running task
+// (StartSession can take days to complete). After the first call to this
+// method subseqeunt calls to this method will return an error until
+// StartSession has completed execution.
 func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
+	if mgr.state == PostSetupStatePrepared || mgr.state == PostSetupStateInProgress {
+		return fmt.Errorf("post setup session in progress")
+	}
 
 	if opts.ComputeProviderID == config.BestProviderID {
 		p, err := mgr.BestProvider()
@@ -278,6 +284,7 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 		return fmt.Errorf("new initializer: %w", err)
 	}
 
+	mgr.state = PostSetupStatePrepared
 	mgr.init = newInit
 	mgr.lastOpts = &opts
 	return nil
