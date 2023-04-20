@@ -548,10 +548,10 @@ func (mr *MockpostSetupProviderMockRecorder) GenerateProof(ctx, challenge interf
 }
 
 // InitializerConfig mocks base method.
-func (m *MockpostSetupProvider) InitializerConfig(ctx context.Context, opts PostSetupOpts) (*SessionConfig, error) {
+func (m *MockpostSetupProvider) InitializerConfig(ctx context.Context, opts PostSetupOpts) (*InitializationConfig, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InitializerConfig", ctx, opts)
-	ret0, _ := ret[0].(*SessionConfig)
+	ret0, _ := ret[0].(*InitializationConfig)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -591,7 +591,7 @@ func (mr *MockpostSetupProviderMockRecorder) Reset() *gomock.Call {
 }
 
 // StartSession mocks base method.
-func (m *MockpostSetupProvider) StartSession(context context.Context, cfg *SessionConfig) error {
+func (m *MockpostSetupProvider) StartSession(context context.Context, cfg *InitializationConfig) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "StartSession", context, cfg)
 	ret0, _ := ret[0].(error)

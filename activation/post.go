@@ -46,9 +46,10 @@ type PostSetupOpts struct {
 	ComputeBatchSize  uint64              `mapstructure:"smeshing-opts-compute-batch-size"`
 }
 
-// SessionOpts serves as a holder for config generated in PrepareInitializer to
-// be passed to StartSession. It is not intended to be user configurable.
-type SessionConfig struct {
+// InitializationConfig serves as a holder for config generated in
+// InitializerConfig to be passed to StartSession. It is not intended to be
+// user configurable.
+type InitializationConfig struct {
 	init            *initialization.Initializer
 	opts            PostSetupOpts
 	commitmentAtxId types.ATXID
@@ -201,7 +202,7 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 // StartSession in order to retrieve the SessionConfig.
 //
 // Insure that before calling this method, the node is ATX synced.
-func (mgr *PostSetupManager) StartSession(ctx context.Context, cfg *SessionConfig) error {
+func (mgr *PostSetupManager) StartSession(ctx context.Context, cfg *InitializationConfig) error {
 	err := func() error {
 		mgr.mu.Lock()
 		defer mgr.mu.Unlock()
@@ -258,10 +259,10 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, cfg *SessionConfi
 // StartSession. Having this function be separate from StartSession provides a
 // means to understand if the post configuration is valid before kicking off a
 // very long running task (StartSession can take hours to complete).
-func (mgr *PostSetupManager) InitializerConfig(ctx context.Context, opts PostSetupOpts) (*SessionConfig, error) {
+func (mgr *PostSetupManager) InitializerConfig(ctx context.Context, opts PostSetupOpts) (*InitializationConfig, error) {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
-	cfg := &SessionConfig{}
+	cfg := &InitializationConfig{}
 	cfg.opts = opts
 
 	if cfg.opts.ComputeProviderID == config.BestProviderID {

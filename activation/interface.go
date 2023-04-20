@@ -62,8 +62,8 @@ type postSetupProvider interface {
 	// StartSession. Having this function be separate from StartSession provides a
 	// means to understand if the post configuration is valid before kicking off a
 	// very long running task (StartSession can take hours to complete).
-	InitializerConfig(ctx context.Context, opts PostSetupOpts) (*SessionConfig, error)
-	StartSession(context context.Context, cfg *SessionConfig) error
+	InitializerConfig(ctx context.Context, opts PostSetupOpts) (*InitializationConfig, error)
+	StartSession(context context.Context, cfg *InitializationConfig) error
 	Reset() error
 	GenerateProof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error)
 	CommitmentAtx() (types.ATXID, error)

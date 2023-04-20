@@ -252,7 +252,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	tab := newTestBuilder(t)
 	coinbase := types.Address{1, 1, 1}
 	postSetupOpts := PostSetupOpts{}
-	cfg := &SessionConfig{}
+	cfg := &InitializationConfig{}
 
 	tab.mpost.EXPECT().InitializerConfig(gomock.Any(), gomock.Any()).Return(cfg, nil).AnyTimes()
 	tab.mpost.EXPECT().StartSession(gomock.Any(), cfg).AnyTimes()
