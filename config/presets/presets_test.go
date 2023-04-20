@@ -28,7 +28,7 @@ func TestCanGeneratePOST(t *testing.T) {
 			mgr, err := activation.NewPostSetupManager(types.EmptyNodeID, params.POST, logtest.New(t), cdb, goldenATXID)
 			req.NoError(err)
 
-			cfg, err := mgr.PrepareInitializer(context.Background(), activation.DefaultPostSetupOpts())
+			cfg, err := mgr.InitializerConfig(context.Background(), activation.DefaultPostSetupOpts())
 			req.NoError(err)
 			req.NoError(mgr.StartSession(context.Background(), cfg))
 

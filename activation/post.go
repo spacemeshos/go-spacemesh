@@ -237,9 +237,11 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, cfg *SessionConfi
 	return nil
 }
 
-// PrepareInitializer constructs the config required to start a session with
-// the given opts, it doesn't modify the state of the PostSetupManager.
-func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSetupOpts) (*SessionConfig, error) {
+// InitializerConfig builds the config to be used by initialization in calls to
+// StartSession. Having this function be separate from StartSession provides a
+// means to understand if the post configuration is valid before kicking off a
+// very long running task (StartSession can take hours to complete).
+func (mgr *PostSetupManager) InitializerConfig(ctx context.Context, opts PostSetupOpts) (*SessionConfig, error) {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 	cfg := &SessionConfig{}

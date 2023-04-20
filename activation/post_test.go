@@ -49,7 +49,7 @@ func TestPostSetupManager(t *testing.T) {
 	})
 
 	// Create data.
-	cfg, err := mgr.PrepareInitializer(context.Background(), mgr.opts)
+	cfg, err := mgr.InitializerConfig(context.Background(), mgr.opts)
 	req.NoError(err)
 	req.NoError(mgr.StartSession(context.Background(), cfg))
 	cancel()
@@ -68,10 +68,10 @@ func TestPostSetupManager(t *testing.T) {
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
 }
 
-// Checks that PrepareInitializer returns an error when invalid opts are given.
+// Checks that InitializerConfig returns an error when invalid opts are given.
 // It's not exhaustive since this validation occurs in the post repo codebase
 // and should be fully tested there.
-func TestPostSetupManager_PrepareInitializer(t *testing.T) {
+func TestPostSetupManager_InitializerConfig(t *testing.T) {
 	req := require.New(t)
 
 	mgr := newTestPostManager(t)
@@ -80,7 +80,7 @@ func TestPostSetupManager_PrepareInitializer(t *testing.T) {
 	defer cancel()
 
 	// check no error with good options.
-	_, err := mgr.PrepareInitializer(ctx, mgr.opts)
+	_, err := mgr.InitializerConfig(ctx, mgr.opts)
 	req.NoError(err)
 
 	cfg := config.DefaultConfig()
@@ -88,7 +88,7 @@ func TestPostSetupManager_PrepareInitializer(t *testing.T) {
 	// Check that invalid options return errors
 	opts := mgr.opts
 	opts.NumUnits = cfg.MaxNumUnits + 1
-	_, err = mgr.PrepareInitializer(ctx, opts)
+	_, err = mgr.InitializerConfig(ctx, opts)
 	req.Error(err)
 }
 
@@ -103,7 +103,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req.Zero(status.NumLabelsWritten)
 
 	// Create data.
-	cfg, err := mgr.PrepareInitializer(context.Background(), mgr.opts)
+	cfg, err := mgr.InitializerConfig(context.Background(), mgr.opts)
 	req.NoError(err)
 	req.NoError(mgr.StartSession(context.Background(), cfg))
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
@@ -128,7 +128,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.EqualError(err, errNotComplete.Error())
 
 	// Create data.
-	cfg, err := mgr.PrepareInitializer(context.Background(), mgr.opts)
+	cfg, err := mgr.InitializerConfig(context.Background(), mgr.opts)
 	req.NoError(err)
 	req.NoError(mgr.StartSession(context.Background(), cfg))
 
@@ -172,7 +172,7 @@ func TestPostSetupManager_VRFNonce(t *testing.T) {
 	req.ErrorIs(err, errNotComplete)
 
 	// Create data.
-	cfg, err := mgr.PrepareInitializer(context.Background(), mgr.opts)
+	cfg, err := mgr.InitializerConfig(context.Background(), mgr.opts)
 	req.NoError(err)
 	req.NoError(mgr.StartSession(context.Background(), cfg))
 
@@ -200,7 +200,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 	req.Zero(status.NumLabelsWritten)
 
 	// Create data.
-	cfg, err := mgr.PrepareInitializer(context.Background(), mgr.opts)
+	cfg, err := mgr.InitializerConfig(context.Background(), mgr.opts)
 	req.NoError(err)
 	req.NoError(mgr.StartSession(context.Background(), cfg))
 
@@ -226,7 +226,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	mgr := newTestPostManager(t)
 	mgr.opts.MaxFileSize = 4096
 
-	cfg, err := mgr.PrepareInitializer(context.Background(), mgr.opts)
+	cfg, err := mgr.InitializerConfig(context.Background(), mgr.opts)
 	req.NoError(err)
 	// Create data.
 	ctx, cancel := context.WithCancel(context.Background())

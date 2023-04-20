@@ -254,7 +254,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	postSetupOpts := PostSetupOpts{}
 	cfg := &SessionConfig{}
 
-	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).Return(cfg, nil).AnyTimes()
+	tab.mpost.EXPECT().InitializerConfig(gomock.Any(), gomock.Any()).Return(cfg, nil).AnyTimes()
 	tab.mpost.EXPECT().StartSession(gomock.Any(), cfg).AnyTimes()
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
@@ -272,7 +272,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	now := time.Now()
 	getBuilder := func(t *testing.T) *Builder {
 		tab := newTestBuilder(t)
-		tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
+		tab.mpost.EXPECT().InitializerConfig(gomock.Any(), gomock.Any()).AnyTimes()
 		tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any()).AnyTimes()
 		tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes()
 		tab.mpost.EXPECT().Reset().AnyTimes()
@@ -321,7 +321,7 @@ func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
 
 func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	tab := newTestBuilder(t)
-	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
+	tab.mpost.EXPECT().InitializerConfig(gomock.Any(), gomock.Any()).AnyTimes()
 	tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).Return(nil, nil, nil).AnyTimes()
 	ch := make(chan struct{})
