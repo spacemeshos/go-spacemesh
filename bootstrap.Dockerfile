@@ -15,8 +15,7 @@ COPY . .
 RUN --mount=type=cache,id=build,target=/root/.cache/go-build make bootstrapper
 
 # start from a fresh image with just the built binary
-FROM ubuntu:22.04
-
+FROM alpine:3.17.3
+RUN apk update && apk --no-cache add ca-certificates
 COPY --from=builder /src/build/go-bootstrapper /bin/
-
 ENTRYPOINT ["/bin/go-bootstrapper"]
