@@ -201,7 +201,7 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 // in progress. PrepareInitializer should be called prior to calling
 // StartSession in order to retrieve the SessionConfig.
 //
-// Insure that before calling this method, the node is ATX synced.
+// Ensure that before calling this method, the node is ATX synced.
 func (mgr *PostSetupManager) StartSession(ctx context.Context, cfg *InitializationConfig) error {
 	err := func() error {
 		mgr.mu.Lock()
