@@ -157,8 +157,8 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	nipost := nb.state.NIPost
 
 	// Phase 0: Submit challenge to PoET services.
+	now := time.Now()
 	if len(nb.state.PoetRequests) == 0 {
-		now := time.Now()
 		if poetRoundStart.Before(now) {
 			return nil, 0, fmt.Errorf("%w: poet round has already started at %s (now: %s)", ErrATXChallengeExpired, poetRoundStart, now)
 		}
@@ -183,6 +183,9 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 
 	// Phase 1: query PoET services for proofs
 	if nb.state.PoetProofRef == types.EmptyPoetProofRef {
+		if poetProofDeadline.Before(now) {
+			return nil, 0, fmt.Errorf("%w: poet proof for pub epoch %d must be available by now (%s)", ErrATXChallengeExpired, challenge.PublishEpoch, now)
+		}
 		getProofsCtx, cancel := context.WithDeadline(ctx, poetProofDeadline)
 		defer cancel()
 		poetProofRef, err := nb.getBestProof(getProofsCtx, &nb.state.Challenge)
