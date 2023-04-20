@@ -66,6 +66,42 @@ func TestPostSetupManager(t *testing.T) {
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
 }
 
+// Checks that PrepareInitializer returns an error when invalid opts are given.
+// It's not exhaustive since this validation occurs in the post repo codebase
+// and should be fully tested there but we check a few cases to be sure that
+// PrepareInitializer will return errors when the opts don't validate.
+func TestPostSetupManager_PrepareInitializer(t *testing.T) {
+	req := require.New(t)
+
+	mgr := newTestPostManager(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+
+	// check no error with good options.
+	req.NoError(mgr.PrepareInitializer(ctx, mgr.opts))
+
+	dedfault := config.DefaultConfig()
+
+	// Check that invalid options return errors
+	opts := mgr.opts
+	opts.ComputeBatchSize = 3
+	req.Error(mgr.PrepareInitializer(ctx, opts))
+
+	opts = mgr.opts
+	opts.NumUnits = dedfault.MaxNumUnits + 1
+	req.Error(mgr.PrepareInitializer(ctx, opts))
+
+	opts = mgr.opts
+	opts.NumUnits = dedfault.MinNumUnits - 1
+	req.Error(mgr.PrepareInitializer(ctx, opts))
+
+	opts = mgr.opts
+	opts.Scrypt.N = 0
+	req.Error(opts.Scrypt.Validate())
+	req.Error(mgr.PrepareInitializer(ctx, opts))
+}
+
 func TestPostSetupManager_StateError(t *testing.T) {
 	req := require.New(t)
 
