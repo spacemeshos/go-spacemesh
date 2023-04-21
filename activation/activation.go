@@ -441,9 +441,9 @@ func (b *Builder) loadChallenge() (*types.NIPostChallenge, error) {
 	}
 	if nipost.TargetEpoch() < b.currentEpoch() {
 		b.log.With().Info("atx nipost challenge is stale - discarding it",
-			log.FieldNamed("target_epoch", nipost.TargetEpoch()),
-			log.FieldNamed("publish_epoch", nipost.PublishEpoch),
-			log.FieldNamed("current_epoch", b.currentEpoch()),
+			log.Stringer("target_epoch", nipost.TargetEpoch()),
+			log.Stringer("publish_epoch", nipost.PublishEpoch),
+			log.Stringer("current_epoch", b.currentEpoch()),
 		)
 		b.discardChallenge()
 		return nil, errors.New("atx nipost challenge is stale")
@@ -468,9 +468,9 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	}
 
 	logger.With().Info("atx challenge is ready",
-		log.FieldNamed("current_epoch", b.currentEpoch()),
-		log.FieldNamed("publish_epoch", challenge.PublishEpoch),
-		log.FieldNamed("target_epoch", challenge.TargetEpoch()),
+		log.Stringer("current_epoch", b.currentEpoch()),
+		log.Stringer("publish_epoch", challenge.PublishEpoch),
+		log.Stringer("target_epoch", challenge.TargetEpoch()),
 	)
 
 	if b.pendingATX == nil {
@@ -522,9 +522,9 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	metrics.PostDuration.Set(float64(postDuration.Nanoseconds()))
 
 	b.log.With().Info("awaiting atx publication epoch",
-		log.FieldNamed("pub_epoch", pubEpoch),
-		log.FieldNamed("pub_epoch_first_layer", pubEpoch.FirstLayer()),
-		log.FieldNamed("current_layer", b.layerClock.CurrentLayer()),
+		log.Stringer("pub_epoch", pubEpoch),
+		log.Stringer("pub_epoch_first_layer", pubEpoch.FirstLayer()),
+		log.Stringer("current_layer", b.layerClock.CurrentLayer()),
 	)
 	select {
 	case <-ctx.Done():
