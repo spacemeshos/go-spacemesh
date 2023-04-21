@@ -294,6 +294,9 @@ func (t *turtle) encodeVotes(
 // outside of hdist. if opinion is undecided according to the votes it will use coinflip recorded
 // in the current layer.
 func (t *turtle) getFullVote(verified, current types.LayerID, block *blockInfo) (sign, voteReason, error) {
+	if !block.data {
+		return against, reasonMissingData, nil
+	}
 	vote, reason := getLocalVote(t.Config, verified, current, block)
 	if !(vote == abstain && reason == reasonValidity) {
 		return vote, reason, nil
@@ -853,17 +856,11 @@ func decodeVotes(blid types.LayerID, base *ballotInfo, exceptions types.Votes) (
 		if exist && len(layerdiff) == 0 {
 			lvote.vote = abstain
 		} else if exist && len(layerdiff) > 0 {
-
 			for id, vote := range layerdiff {
 				if vote != support {
 					continue
 				}
-			}
-			for _, block := range layer.blocks {
-				vote, exist := layerdiff[block.id]
-				if exist && vote == support {
-					lvote.supported = append(lvote.supported, block)
-				}
+				lvote.supported = append(lvote.supported, &blockInfo{id: id})
 			}
 		}
 		decoded.append(&lvote)

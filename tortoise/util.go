@@ -41,6 +41,7 @@ const (
 	reasonValidity       voteReason = "validity"
 	reasonLocalThreshold voteReason = "local_threshold"
 	reasonCoinflip       voteReason = "coinflip"
+	reasonMissingData    voteReason = "missing data"
 )
 
 func maxLayer(i, j types.LayerID) types.LayerID {
