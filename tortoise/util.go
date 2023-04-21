@@ -30,14 +30,6 @@ func (a sign) String() string {
 	}
 }
 
-func iterateLayers(from, to types.LayerID, callback func(types.LayerID) bool) {
-	for lid := from; !lid.After(to); lid = lid.Add(1) {
-		if !callback(lid) {
-			return
-		}
-	}
-}
-
 type voteReason string
 
 func (v voteReason) String() string {

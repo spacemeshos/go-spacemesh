@@ -202,7 +202,7 @@ func (t *Tortoise) OnBlock(block *types.Block) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	if err := t.trtl.onBlock(block.LayerIndex, block); err != nil {
+	if err := t.trtl.onBlock(block.Header()); err != nil {
 		errorsCounter.Inc()
 		t.logger.With().Error("failed to add block to the state", block.ID(), log.Err(err))
 	}

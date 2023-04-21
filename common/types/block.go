@@ -43,11 +43,32 @@ func (id *BlockID) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, id[:])
 }
 
+type BlockHeader struct {
+	ID     BlockID
+	Layer  LayerID
+	Height uint64
+}
+
+func (h *BlockHeader) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("block_id", h.ID.String())
+	encoder.AddUint32("layer_id", h.Layer.Uint32())
+	encoder.AddUint64("tick_height", h.Height)
+	return nil
+}
+
 // Block contains the content of a layer on the mesh history.
 type Block struct {
 	InnerBlock
 	// the following fields are kept private and from being serialized
 	blockID BlockID
+}
+
+func (b Block) Header() BlockHeader {
+	return BlockHeader{
+		ID:     b.ID(),
+		Layer:  b.LayerIndex,
+		Height: b.TickHeight,
+	}
 }
 
 func (b Block) Equal(other Block) bool {

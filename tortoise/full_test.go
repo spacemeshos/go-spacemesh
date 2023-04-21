@@ -366,7 +366,7 @@ func TestFullCountVotes(t *testing.T) {
 					height: localHeight,
 				}
 				for _, block := range layerBlocks {
-					consensus.onBlock(lid, &block)
+					consensus.onBlock(block.Header())
 				}
 				blocks = append(blocks, layerBlocks)
 			}

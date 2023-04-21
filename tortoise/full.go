@@ -48,8 +48,9 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 		if lvote.vote == abstain {
 			continue
 		}
+		layer := f.layer(lvote.lid)
 		empty := true
-		for _, block := range lvote.blocks {
+		for _, block := range layer.blocks {
 			if block.height > ballot.reference.height {
 				continue
 			}
@@ -62,9 +63,9 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 			}
 		}
 		if empty {
-			lvote.empty = lvote.empty.Add(ballot.weight)
+			layer.empty = layer.empty.Add(ballot.weight)
 		} else {
-			lvote.empty = lvote.empty.Sub(ballot.weight)
+			layer.empty = layer.empty.Sub(ballot.weight)
 		}
 	}
 	fcountBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))

@@ -117,9 +117,8 @@ func (t *turtle) evict(ctx context.Context) {
 			ballotsNumber.Dec()
 			delete(t.ballotRefs, ballot.id)
 		}
-		for _, block := range t.layers[lid].blocks {
+		for range t.layers[lid].blocks {
 			blocksNumber.Dec()
-			delete(t.blockRefs, block.id)
 		}
 		layersNumber.Dec()
 		delete(t.layers, lid)
@@ -206,15 +205,16 @@ func (t *turtle) encodeVotes(
 		if lvote.lid.Before(start) {
 			break
 		}
-		if lvote.vote == abstain && lvote.hareTerminated {
+		layer := t.layer(lvote.lid)
+		if lvote.vote == abstain && layer.hareTerminated {
 			return nil, fmt.Errorf("ballot %s can't be used as a base ballot", base.id)
 		}
-		if lvote.vote != abstain && !lvote.hareTerminated {
+		if lvote.vote != abstain && !layer.hareTerminated {
 			logger.With().Debug("voting abstain on the layer", lvote.lid)
 			votes.Abstain = append(votes.Abstain, lvote.lid)
 			continue
 		}
-		for _, block := range lvote.blocks {
+		for _, block := range layer.blocks {
 			vote, reason, err := t.getFullVote(t.verified, current, block)
 			if err != nil {
 				return nil, err
@@ -280,7 +280,7 @@ func (t *turtle) encodeVotes(
 	if explen := len(votes.Support) + len(votes.Against); explen > t.MaxExceptions {
 		return nil, fmt.Errorf("too many exceptions (%v)", explen)
 	}
-	decoded, err := t.decodeExceptions(current, base, votes)
+	decoded, err := decodeVotes(current, base, votes)
 	if err != nil {
 		return nil, err
 	}
@@ -488,7 +488,7 @@ func (t *turtle) loadBlocksData(lid types.LayerID) error {
 		return fmt.Errorf("read blocks for layer %s: %w", lid, err)
 	}
 	for _, block := range blocks {
-		t.onBlock(lid, block)
+		t.onBlock(block.Header())
 	}
 	if err := t.loadHare(lid); err != nil {
 		return err
@@ -556,27 +556,31 @@ func (t *turtle) loadBallots(lid types.LayerID) error {
 	return nil
 }
 
-func (t *turtle) onBlock(lid types.LayerID, block *types.Block) error {
+func (t *turtle) onBlock(header types.BlockHeader) error {
 	start := time.Now()
-	if !lid.After(t.evicted) {
+	if !header.Layer.After(t.evicted) {
 		return nil
 	}
-	if _, exist := t.state.blockRefs[block.ID()]; exist {
+
+	if binfo := t.state.getBlock(header); binfo != nil {
+		binfo.data = true
 		return nil
 	}
-	t.logger.With().Debug("on block", log.Inline(block))
+	t.logger.With().Debug("on data block", log.Inline(&header))
+
 	binfo := &blockInfo{
-		id:     block.ID(),
-		layer:  block.LayerIndex,
+		id:     header.ID,
+		layer:  header.Layer,
+		height: header.Height,
 		hare:   neutral,
-		height: block.TickHeight,
+		data:   true,
 	}
-	if t.layer(block.LayerIndex).hareTerminated {
+	if t.layer(binfo.layer).hareTerminated {
 		binfo.hare = against
 	}
 	t.addBlock(binfo)
-	addBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	t.full.countForLateBlock(binfo)
+	addBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	if !binfo.layer.After(t.processed) {
 		if err := t.updateRefHeight(t.layer(binfo.layer), binfo); err != nil {
 			return err
@@ -722,7 +726,7 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 			return nil, nil
 		}
 		if ref.reference == nil {
-			return nil, fmt.Errorf("invalid ballot use as a reference %s", ballot.RefBallot)
+			return nil, fmt.Errorf("ballot %s is not a reference ballot", ballot.RefBallot)
 		}
 		refinfo = ref.reference
 	}
@@ -744,7 +748,7 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 		).Mul(fixed.New(len(ballot.EligibilityProofs)))
 	} else {
 		binfo.malicious = true
-		t.logger.With().Warning("malicious ballot with zeroed weight", ballot.Layer, ballot.ID())
+		t.logger.With().Warning("ballot from malicious identity will have zeroed weight", ballot.Layer, ballot.ID())
 	}
 
 	t.logger.With().Debug("computed weight and height for ballot",
@@ -755,7 +759,7 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 	)
 
 	var err error
-	binfo.votes, err = t.decodeExceptions(binfo.layer, base, ballot.Votes)
+	binfo.votes, err = decodeVotes(binfo.layer, base, ballot.Votes)
 	if err != nil {
 		return nil, err
 	}
@@ -808,43 +812,29 @@ func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, layerID type
 	return false, nil
 }
 
-func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, exceptions types.Votes) (votes, error) {
+func decodeVotes(blid types.LayerID, base *ballotInfo, exceptions types.Votes) (votes, error) {
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]sign{}
 	for _, svote := range exceptions.Support {
-		block, exist := t.blockRefs[svote.ID]
-		if !exist {
-			return votes{}, fmt.Errorf("block %s not in state", svote.ID)
-		}
-		if block.layer.Before(from) {
-			from = block.layer
-		}
-		layerdiff, exist := diff[block.layer]
+		from = minLayer(from, svote.LayerID)
+		layerdiff, exist := diff[svote.LayerID]
 		if !exist {
 			layerdiff = map[types.BlockID]sign{}
-			diff[block.layer] = layerdiff
+			diff[svote.LayerID] = layerdiff
 		}
-		layerdiff[block.id] = support
+		layerdiff[svote.ID] = support
 	}
 	for _, avote := range exceptions.Against {
-		block, exist := t.blockRefs[avote.ID]
-		if !exist {
-			return votes{}, fmt.Errorf("block %s not in state", avote.ID)
-		}
-		if block.layer.Before(from) {
-			from = block.layer
-		}
-		layerdiff, exist := diff[block.layer]
+		from = minLayer(from, avote.LayerID)
+		layerdiff, exist := diff[avote.LayerID]
 		if !exist {
 			layerdiff = map[types.BlockID]sign{}
-			diff[block.layer] = layerdiff
+			diff[avote.LayerID] = layerdiff
 		}
-		layerdiff[block.id] = against
+		layerdiff[avote.ID] = against
 	}
 	for _, lid := range exceptions.Abstain {
-		if lid.Before(from) {
-			from = lid
-		}
+		from = minLayer(from, lid)
 		_, exist := diff[lid]
 		if !exist {
 			diff[lid] = map[types.BlockID]sign{}
@@ -855,15 +845,20 @@ func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, exceptio
 	decoded := base.votes.update(from, diff)
 	// add new opinions after the base layer
 	for lid := base.layer; lid.Before(blid); lid = lid.Add(1) {
-		layer := t.layer(lid)
 		lvote := layerVote{
-			layerInfo: layer,
-			vote:      against,
+			lid:  lid,
+			vote: against,
 		}
 		layerdiff, exist := diff[lid]
 		if exist && len(layerdiff) == 0 {
 			lvote.vote = abstain
 		} else if exist && len(layerdiff) > 0 {
+
+			for id, vote := range layerdiff {
+				if vote != support {
+					continue
+				}
+			}
 			for _, block := range layer.blocks {
 				vote, exist := layerdiff[block.id]
 				if exist && vote == support {
@@ -917,4 +912,11 @@ func getLocalVote(config Config, verified, last types.LayerID, block *blockInfo)
 		return abstain, reasonValidity
 	}
 	return block.validity, reasonValidity
+}
+
+func minLayer(i, j types.LayerID) types.LayerID {
+	if i < j {
+		return i
+	}
+	return j
 }

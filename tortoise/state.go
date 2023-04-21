@@ -40,8 +40,9 @@ type (
 		margin weight
 
 		validity sign
-		// emitted validity
-		emitted sign
+		emitted  sign // same as validity field if event was emitted
+
+		data bool // set to true if block is available locally
 	}
 
 	state struct {
@@ -74,8 +75,6 @@ type (
 
 		// to efficiently find base and reference ballots
 		ballotRefs map[types.BallotID]*ballotInfo
-		// to efficiently decode exceptions
-		blockRefs map[types.BlockID]*blockInfo
 	}
 )
 
@@ -85,7 +84,6 @@ func newState() *state {
 		layers:     map[types.LayerID]*layerInfo{},
 		ballots:    map[types.LayerID][]*ballotInfo{},
 		ballotRefs: map[types.BallotID]*ballotInfo{},
-		blockRefs:  map[types.BlockID]*blockInfo{},
 	}
 }
 
@@ -130,8 +128,17 @@ func (s *state) addBlock(block *blockInfo) {
 	layer.blocks = append(layer.blocks, block)
 	sortBlocks(layer.blocks)
 
-	s.blockRefs[block.id] = block
 	s.updateRefHeight(layer, block)
+}
+
+func (s *state) getBlock(header types.BlockHeader) *blockInfo {
+	layer := s.layer(header.Layer)
+	for _, block := range layer.blocks {
+		if block.id == header.ID && block.height == header.Height {
+			return block
+		}
+	}
+	return nil
 }
 
 func (s *state) findRefHeightBelow(lid types.LayerID) uint64 {
@@ -277,7 +284,7 @@ func (v *votes) opinion() types.Hash32 {
 }
 
 type layerVote struct {
-	*layerInfo
+	lid       types.LayerID
 	opinion   types.Hash32
 	vote      sign
 	supported []*blockInfo
@@ -296,7 +303,7 @@ func (l *layerVote) getVote(bid types.BlockID) sign {
 
 func (l *layerVote) copy() *layerVote {
 	return &layerVote{
-		layerInfo: l.layerInfo,
+		lid:       l.lid,
 		vote:      l.vote,
 		supported: l.supported,
 		prev:      l.prev,
