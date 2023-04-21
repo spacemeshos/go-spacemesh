@@ -307,7 +307,7 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 	goldenATXID := types.ATXID{2, 3, 4}
 
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := NewPostSetupManager(id, cfg, logtest.New(tb), cdb, goldenATXID)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(tb), cdb, goldenATXID, DefaultPostProvingOpts())
 	require.NoError(tb, err)
 
 	return &testPostManager{

@@ -158,7 +158,7 @@ func (u *Updater) Start(ctx context.Context) {
 					ctx := log.WithNewSessionID(ctx)
 					if err := u.DoIt(ctx); err != nil {
 						updateFailureCount.Add(1)
-						u.logger.With().Error("failed to get bootstrap update", log.Err(err))
+						u.logger.With().Debug("failed to get bootstrap update", log.Err(err))
 					} else {
 						updateOkCount.Add(1)
 					}

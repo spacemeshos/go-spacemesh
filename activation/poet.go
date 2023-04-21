@@ -69,8 +69,8 @@ func withCustomHttpClient(client *http.Client) PoetClientOpts {
 func NewHTTPPoetClient(baseUrl string, cfg PoetConfig, opts ...PoetClientOpts) (*HTTPPoetClient, error) {
 	client := &retryablehttp.Client{
 		RetryMax:     10,
-		RetryWaitMin: cfg.CycleGap / 100,
-		RetryWaitMax: cfg.CycleGap / 10,
+		RetryWaitMin: cfg.GracePeriod / 100,
+		RetryWaitMax: cfg.GracePeriod / 10,
 		Backoff:      retryablehttp.LinearJitterBackoff,
 		CheckRetry:   checkRetry,
 	}
