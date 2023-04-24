@@ -798,30 +798,30 @@ func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, layerID type
 
 func decodeVotes(blid types.LayerID, base *ballotInfo, exceptions types.Votes) (votes, types.LayerID) {
 	from := base.layer
-	diff := map[types.LayerID]map[types.BlockHeader]sign{}
+	diff := map[types.LayerID]map[types.BlockID]headerWithSign{}
 	for _, header := range exceptions.Support {
 		from = minLayer(from, header.Layer)
 		layerdiff, exist := diff[header.Layer]
 		if !exist {
-			layerdiff = map[types.BlockHeader]sign{}
+			layerdiff = map[types.BlockID]headerWithSign{}
 			diff[header.Layer] = layerdiff
 		}
-		layerdiff[header] = support
+		layerdiff[header.ID] = headerWithSign{header, support}
 	}
 	for _, header := range exceptions.Against {
 		from = minLayer(from, header.Layer)
 		layerdiff, exist := diff[header.Layer]
 		if !exist {
-			layerdiff = map[types.BlockHeader]sign{}
+			layerdiff = map[types.BlockID]headerWithSign{}
 			diff[header.Layer] = layerdiff
 		}
-		layerdiff[header] = against
+		layerdiff[header.ID] = headerWithSign{header, against}
 	}
 	for _, lid := range exceptions.Abstain {
 		from = minLayer(from, lid)
 		_, exist := diff[lid]
 		if !exist {
-			diff[lid] = map[types.BlockHeader]sign{}
+			diff[lid] = map[types.BlockID]headerWithSign{}
 		}
 	}
 
@@ -837,11 +837,11 @@ func decodeVotes(blid types.LayerID, base *ballotInfo, exceptions types.Votes) (
 		if exist && len(layerdiff) == 0 {
 			lvote.vote = abstain
 		} else if exist && len(layerdiff) > 0 {
-			for header, vote := range layerdiff {
-				if vote != support {
+			for _, vote := range layerdiff {
+				if vote.sign != support {
 					continue
 				}
-				lvote.supported = append(lvote.supported, newBlockInfo(header))
+				lvote.supported = append(lvote.supported, newBlockInfo(vote.header))
 			}
 		}
 		decoded.append(&lvote)

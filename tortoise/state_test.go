@@ -48,13 +48,13 @@ func TestVotesUpdate(t *testing.T) {
 	t.Run("update abstain", func(t *testing.T) {
 		original := votes{}
 		const last = 10
-		update := map[types.LayerID]map[types.BlockHeader]sign{}
+		update := map[types.LayerID]map[types.BlockID]headerWithSign{}
 		for i := 0; i < last; i++ {
 			original.append(&layerVote{
 				vote: against,
 				lid:  types.LayerID(uint32(i)),
 			})
-			update[types.LayerID(uint32(i))] = map[types.BlockHeader]sign{}
+			update[types.LayerID(uint32(i))] = map[types.BlockID]headerWithSign{}
 		}
 		cp := original.update(types.LayerID(0), update)
 		for c := original.tail; c != nil; c = c.prev {
@@ -67,13 +67,13 @@ func TestVotesUpdate(t *testing.T) {
 	t.Run("update blocks", func(t *testing.T) {
 		original := votes{}
 		const last = 10
-		update := map[types.LayerID]map[types.BlockHeader]sign{}
+		update := map[types.LayerID]map[types.BlockID]headerWithSign{}
 		for i := 0; i < last; i++ {
 			original.append(&layerVote{
 				lid: types.LayerID(uint32(i)),
 			})
-			update[types.LayerID(uint32(i))] = map[types.BlockHeader]sign{
-				{ID: types.BlockID{byte(i)}}: support,
+			update[types.LayerID(uint32(i))] = map[types.BlockID]headerWithSign{
+				{byte(i)}: {types.BlockHeader{ID: types.BlockID{byte(i)}}, support},
 			}
 		}
 		cp := original.update(types.LayerID(0), update)
@@ -174,8 +174,8 @@ func TestComputeOpinion(t *testing.T) {
 			vote:      against,
 			supported: []*blockInfo{blocks[1]},
 		})
-		v := original.update(updated, map[types.LayerID]map[types.BlockHeader]sign{
-			updated: {blocks[0].header(): against},
+		v := original.update(updated, map[types.LayerID]map[types.BlockID]headerWithSign{
+			updated: {blocks[0].id: headerWithSign{blocks[0].header(), against}},
 		})
 		hh := opinionhash.New()
 		rst := types.Hash32{}

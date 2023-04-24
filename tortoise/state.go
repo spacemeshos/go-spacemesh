@@ -240,7 +240,7 @@ func (v *votes) append(lv *layerVote) {
 	v.tail.computeOpinion()
 }
 
-func (v *votes) update(from types.LayerID, diff map[types.LayerID]map[types.BlockHeader]sign) votes {
+func (v *votes) update(from types.LayerID, diff map[types.LayerID]map[types.BlockID]headerWithSign) votes {
 	if v.tail == nil {
 		return votes{}
 	}
@@ -301,7 +301,7 @@ func (l *layerVote) append(lv *layerVote) *layerVote {
 	return lv
 }
 
-func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.BlockHeader]sign) *layerVote {
+func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.BlockID]headerWithSign) *layerVote {
 	if l.lid.Before(from) {
 		return l
 	}
@@ -317,20 +317,20 @@ func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.
 		var supported []*blockInfo
 		for _, block := range l.supported {
 			header := block.header()
-			vote, exist := layerdiff[header]
-			if exist && vote == against {
+			vote, exist := layerdiff[header.ID]
+			if exist && (vote.sign == against || vote.header != header) {
 				continue
 			}
 			supported = append(supported, block)
 			if exist {
-				delete(layerdiff, header)
+				delete(layerdiff, header.ID)
 			}
 		}
-		for header, vote := range layerdiff {
-			if vote == against {
+		for _, vote := range layerdiff {
+			if vote.sign == against {
 				continue
 			}
-			supported = append(supported, newBlockInfo(header))
+			supported = append(supported, newBlockInfo(vote.header))
 		}
 		copied.supported = supported
 		copied.sortSupported()
@@ -391,4 +391,9 @@ type blockInfo struct {
 
 func (b *blockInfo) header() types.BlockHeader {
 	return types.BlockHeader{ID: b.id, Layer: b.layer, Height: b.height}
+}
+
+type headerWithSign struct {
+	header types.BlockHeader
+	sign   sign
 }
