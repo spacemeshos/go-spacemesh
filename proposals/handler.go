@@ -457,12 +457,12 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 			h.logger.WithContext(ctx).With().Error("failed to get block layer", log.Err(err))
 			return fmt.Errorf("check exception get block layer: %w", err)
 		}
-		if block.ToVote() != vote {
-			return fmt.Errorf("%w: encoded vote %+v doesn't match actual %+v", errInvalidVote, vote, block.ToVote())
+		if block.Header() != vote {
+			return fmt.Errorf("%w: encoded vote %+v doesn't match actual %+v", errInvalidVote, vote, block.Header())
 		}
-		if voted, ok := layers[vote.LayerID]; ok {
+		if voted, ok := layers[vote.Layer]; ok {
 			// already voted for a block in this layer
-			if voted != vote.ID && vote.LayerID.Add(h.cfg.Hdist).After(b.Layer) {
+			if voted != vote.ID && vote.Layer.Add(h.cfg.Hdist).After(b.Layer) {
 				h.logger.WithContext(ctx).With().Warning("ballot doubly voted within hdist, set smesher malicious",
 					b.ID(),
 					b.Layer,
@@ -474,7 +474,7 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 				return errDoubleVoting
 			}
 		} else {
-			layers[vote.LayerID] = vote.ID
+			layers[vote.Layer] = vote.ID
 		}
 	}
 	// a ballot should not vote support and against on the same block.
@@ -489,11 +489,11 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 			h.logger.WithContext(ctx).With().Error("failed to get block layer", log.Err(err))
 			return fmt.Errorf("check exception get block layer: %w", err)
 		}
-		if block.ToVote() != vote {
+		if block.Header() != vote {
 			return fmt.Errorf("%w encoded vote %+v doesn't match actual %+v",
-				errInvalidVote, vote, block.ToVote())
+				errInvalidVote, vote, block.Header())
 		}
-		layers[vote.LayerID] = vote.ID
+		layers[vote.Layer] = vote.ID
 	}
 	if len(exceptions) > h.cfg.MaxExceptions {
 		h.logger.WithContext(ctx).With().Warning("exceptions exceed limits",

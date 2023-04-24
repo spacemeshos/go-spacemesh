@@ -119,7 +119,7 @@ func withSupportBlocks(blocks ...*types.Block) createBallotOpt {
 	return func(b *types.Ballot) {
 		b.Votes.Support = nil
 		for _, block := range blocks {
-			b.Votes.Support = append(b.Votes.Support, block.ToVote())
+			b.Votes.Support = append(b.Votes.Support, block.Header())
 		}
 	}
 }
@@ -128,7 +128,7 @@ func withAgainstBlocks(blocks ...*types.Block) createBallotOpt {
 	return func(b *types.Ballot) {
 		b.Votes.Against = nil
 		for _, block := range blocks {
-			b.Votes.Against = append(b.Votes.Against, block.ToVote())
+			b.Votes.Against = append(b.Votes.Against, block.Header())
 		}
 	}
 }
@@ -1381,7 +1381,7 @@ func TestCollectHashes(t *testing.T) {
 	require.ElementsMatch(t, expected, collectHashes(*p))
 }
 
-func toIds(votes []types.Vote) (rst []types.BlockID) {
+func toIds(votes []types.BlockHeader) (rst []types.BlockID) {
 	for _, vote := range votes {
 		rst = append(rst, vote.ID)
 	}
