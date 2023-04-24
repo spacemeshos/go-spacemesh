@@ -319,9 +319,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 		}
 		layer := t.layer(process)
 		for _, block := range layer.blocks {
-			if err := t.updateRefHeight(layer, block); err != nil {
-				return err
-			}
+			t.updateRefHeight(layer, block)
 		}
 		prev := t.layer(process.Sub(1))
 		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(prev.verifying.goodUncounted)
@@ -544,37 +542,27 @@ func (t *turtle) loadBallots(lid types.LayerID) error {
 	return nil
 }
 
-func (t *turtle) onBlock(header types.BlockHeader) error {
-	start := time.Now()
+func (t *turtle) onBlock(header types.BlockHeader) {
 	if !header.Layer.After(t.evicted) {
-		return nil
+		return
 	}
 
 	if binfo := t.state.getBlock(header); binfo != nil {
 		binfo.data = true
-		return nil
+		return
 	}
 	t.logger.With().Debug("on data block", log.Inline(&header))
 
-	binfo := &blockInfo{
-		id:     header.ID,
-		layer:  header.Layer,
-		height: header.Height,
-		hare:   neutral,
-		data:   true,
-	}
-	if t.layer(binfo.layer).hareTerminated {
-		binfo.hare = against
-	}
+	binfo := newBlockInfo(header)
+	binfo.data = true
 	t.addBlock(binfo)
+}
+
+func (t *turtle) addBlock(binfo *blockInfo) {
+	start := time.Now()
+	t.state.addBlock(binfo)
 	t.full.countForLateBlock(binfo)
 	addBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	if !binfo.layer.After(t.processed) {
-		if err := t.updateRefHeight(t.layer(binfo.layer), binfo); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {

@@ -1,7 +1,6 @@
 package tortoise
 
 import (
-	"fmt"
 	"math/big"
 	"sort"
 
@@ -110,11 +109,12 @@ func (s *state) addBallot(ballot *ballotInfo) {
 
 func (s *state) addBlock(block *blockInfo) {
 	blocksNumber.Inc()
-
 	layer := s.layer(block.layer)
+	if layer.hareTerminated {
+		block.hare = against
+	}
 	layer.blocks = append(layer.blocks, block)
 	sortBlocks(layer.blocks)
-
 	s.updateRefHeight(layer, block)
 }
 
@@ -139,10 +139,10 @@ func (s *state) findRefHeightBelow(lid types.LayerID) uint64 {
 	return 0
 }
 
-func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) error {
+func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) {
 	epoch, exist := s.epochs[block.layer.GetEpoch()]
 	if !exist {
-		return fmt.Errorf("reference height for epoch %v wasn't computed", block.layer.GetEpoch())
+		return
 	}
 	if layer.verifying.referenceHeight == 0 && layer.lid.After(s.evicted) {
 		layer.verifying.referenceHeight = s.findRefHeightBelow(layer.lid)
@@ -151,7 +151,6 @@ func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) error {
 		block.height > layer.verifying.referenceHeight {
 		layer.verifying.referenceHeight = block.height
 	}
-	return nil
 }
 
 type layerInfo struct {
@@ -373,6 +372,7 @@ func newBlockInfo(header types.BlockHeader) *blockInfo {
 		id:     header.ID,
 		layer:  header.Layer,
 		height: header.Height,
+		hare:   neutral,
 	}
 }
 
