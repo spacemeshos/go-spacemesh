@@ -296,3 +296,43 @@ func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) 
 	}
 	return missing
 }
+
+// Results returns layers that crossed threshold in range (from, verified].
+func (t *Tortoise) Results(from types.LayerID) ([]ResultLayer, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if from <= t.trtl.evicted {
+		return nil, fmt.Errorf("requested layer %d is before evicted %d", from, t.trtl.evicted)
+	}
+	if from > t.trtl.processed {
+		return nil, fmt.Errorf("request layer %d is not yet added to the state (processed %d)", from, t.trtl.processed)
+	}
+	rst := make([]ResultLayer, 0, t.trtl.verified-from)
+	for lid := from + 1; lid <= t.trtl.verified; lid++ {
+		layer := t.trtl.layer(lid)
+		blocks := make([]ResultBlock, 0, len(layer.blocks))
+		for _, block := range layer.blocks {
+			blocks = append(blocks, ResultBlock{
+				Header: block.header(),
+				Data:   block.data,
+				Valid:  block.validity == support,
+			})
+		}
+		rst = append(rst, ResultLayer{
+			Layer:  lid,
+			Blocks: blocks,
+		})
+	}
+	return rst, nil
+}
+
+type ResultLayer struct {
+	Layer  types.LayerID
+	Blocks []ResultBlock
+}
+
+type ResultBlock struct {
+	Header types.BlockHeader
+	Valid  bool
+	Data   bool
+}

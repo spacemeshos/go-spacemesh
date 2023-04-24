@@ -2945,3 +2945,53 @@ func BenchmarkOnBallot(b *testing.B) {
 		bench(b)
 	})
 }
+
+func TestMultipleTargets(t *testing.T) {
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	const size = 10
+	cfg.LayerSize = size
+	cfg.Hdist = 2
+	cfg.Zdist = 1
+	s := sim.New(sim.WithLayerSize(cfg.LayerSize))
+	s.Setup()
+	tortoise := tortoiseFromSimState(t,
+		s.GetState(0),
+		WithConfig(cfg),
+		WithLogger(logtest.New(t)),
+	)
+	heights := []uint64{1, 2}
+	id := types.BlockID{'t'}
+	multi := func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
+		prev := layers[len(layers)-1]
+		require.NotEmpty(t, prev.BallotIDs())
+		return sim.Voting{
+			Base: prev.BallotIDs()[0],
+			Support: []types.BlockHeader{
+				{
+					ID:     id,
+					Height: heights[i%len(heights)],
+					Layer:  prev.Index(),
+				},
+			},
+		}
+	}
+	confirmFirst := func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
+		prev := layers[len(layers)-1]
+		require.NotEmpty(t, prev.BallotIDs())
+		return sim.Voting{
+			Base: prev.BallotIDs()[0],
+		}
+	}
+	s.Next(sim.WithNumBlocks(0))
+	s.Next(sim.WithNumBlocks(0), sim.WithVoteGenerator(multi))
+	last := s.Next(sim.WithNumBlocks(0), sim.WithVoteGenerator(confirmFirst))
+	tortoise.TallyVotes(ctx, last)
+
+	rst, err := tortoise.Results(types.GetEffectiveGenesis())
+	require.NoError(t, err)
+	require.Len(t, rst, 2)
+	require.Equal(t, rst[0].Blocks[0].Header.Height, heights[0])
+	require.True(t, rst[0].Blocks[0].Valid)
+	require.False(t, rst[0].Blocks[0].Data)
+}
