@@ -351,6 +351,7 @@ func TestFullCountVotes(t *testing.T) {
 			}
 
 			var blocks [][]types.Block
+			refs := map[types.BlockID]types.BlockHeader{}
 			for i, layer := range tc.layerBlocks {
 				var layerBlocks []types.Block
 				lid := genesis.Add(uint32(i) + 1)
@@ -361,6 +362,7 @@ func TestFullCountVotes(t *testing.T) {
 					b.TxIDs = types.RandomTXSet(j)
 					b.Initialize()
 					layerBlocks = append(layerBlocks, b)
+					refs[b.ID()] = b.Header()
 				}
 				consensus.epochs[lid.GetEpoch()] = &epochInfo{
 					height: localHeight,
@@ -386,10 +388,10 @@ func TestFullCountVotes(t *testing.T) {
 					// since we don't care about block goodness in this test
 					if i > 0 {
 						for _, support := range getDiff(blocks, b.Support) {
-							ballot.Votes.Support = append(ballot.Votes.Support, types.BlockHeader{ID: support})
+							ballot.Votes.Support = append(ballot.Votes.Support, refs[support])
 						}
 						for _, against := range getDiff(blocks, b.Against) {
-							ballot.Votes.Against = append(ballot.Votes.Against, types.BlockHeader{ID: against})
+							ballot.Votes.Against = append(ballot.Votes.Against, refs[against])
 						}
 						for _, layerNumber := range b.Abstain {
 							ballot.Votes.Abstain = append(ballot.Votes.Abstain, genesis.Add(uint32(layerNumber)+1))
@@ -409,7 +411,6 @@ func TestFullCountVotes(t *testing.T) {
 				for _, ballot := range layerBallots {
 					require.NoError(t, consensus.onBallot(ballot))
 				}
-
 				consensus.full.countVotes(logger)
 			}
 			block := blocks[tc.target[0]][tc.target[1]]
@@ -467,7 +468,7 @@ func TestFullVerify(t *testing.T) {
 				{margin: neutral, height: 30},
 				{margin: positive, height: 20},
 			},
-			validity: []sign{against, support},
+			validity: []sign{support, against},
 		},
 		{
 			desc: "abstained same height",

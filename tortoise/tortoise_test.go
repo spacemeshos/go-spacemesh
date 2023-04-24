@@ -891,9 +891,13 @@ func TestDecodeVotes(t *testing.T) {
 		ballot := types.NewExistingBallot(types.BallotID{3, 3, 3}, types.EmptyEdSignature, types.EmptyNodeID, ballots[0].Layer)
 		ballot.InnerBallot = ballots[0].InnerBallot
 		ballot.ActiveSet = ballots[0].ActiveSet
-		ballot.Votes.Support = []types.BlockHeader{{ID: types.BlockID{2, 2, 2}}}
+		hasher := opinionhash.New()
+		supported := types.BlockID{2, 2, 2}
+		hasher.WriteSupport(supported, 0)
+		ballot.OpinionHash = hasher.Hash()
+		ballot.Votes.Support = []types.BlockHeader{{ID: supported, Layer: ballot.Layer - 1}}
 		_, err = tortoise.DecodeBallot(&ballot)
-		require.ErrorContains(t, err, "not in state")
+		require.NoError(t, err)
 	})
 }
 

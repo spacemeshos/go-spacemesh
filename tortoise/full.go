@@ -54,7 +54,7 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 			if block.height > ballot.reference.height {
 				continue
 			}
-			switch lvote.getVote(block.id) {
+			switch lvote.getVote(block) {
 			case support:
 				empty = false
 				block.margin = block.margin.Add(ballot.weight)

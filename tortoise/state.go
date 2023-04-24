@@ -278,9 +278,9 @@ type layerVote struct {
 	prev *layerVote
 }
 
-func (l *layerVote) getVote(bid types.BlockID) sign {
+func (l *layerVote) getVote(binfo *blockInfo) sign {
 	for _, block := range l.supported {
-		if block.id == bid {
+		if block == binfo {
 			return support
 		}
 	}

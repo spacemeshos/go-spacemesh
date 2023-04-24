@@ -220,7 +220,7 @@ func (t *turtle) encodeVotes(
 				return nil, err
 			}
 			// ballot vote is consistent with local opinion, exception is not necessary
-			bvote := lvote.getVote(block.id)
+			bvote := lvote.getVote(block)
 			if vote == bvote {
 				continue
 			}

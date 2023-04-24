@@ -82,7 +82,7 @@ func TestVotesUpdate(t *testing.T) {
 		}
 		for c := cp.tail; c != nil; c = c.prev {
 			require.Len(t, c.supported, 1)
-			require.Equal(t, support, c.getVote(c.supported[0].id))
+			require.Equal(t, support, c.getVote(c.supported[0]))
 		}
 	})
 }
