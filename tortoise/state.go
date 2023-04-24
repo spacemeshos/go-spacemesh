@@ -32,19 +32,6 @@ type (
 		height uint64
 	}
 
-	blockInfo struct {
-		id     types.BlockID
-		layer  types.LayerID
-		height uint64
-		hare   sign
-		margin weight
-
-		validity sign
-		emitted  sign // same as validity field if event was emitted
-
-		data bool // set to true if block is available locally
-	}
-
 	state struct {
 		// last received layer
 		// TODO should be last layer according to the clock
@@ -254,7 +241,7 @@ func (v *votes) append(lv *layerVote) {
 	v.tail.computeOpinion()
 }
 
-func (v *votes) update(from types.LayerID, diff map[types.LayerID]map[types.BlockID]sign) votes {
+func (v *votes) update(from types.LayerID, diff map[types.LayerID]map[types.BlockHeader]sign) votes {
 	if v.tail == nil {
 		return votes{}
 	}
@@ -315,7 +302,7 @@ func (l *layerVote) append(lv *layerVote) *layerVote {
 	return lv
 }
 
-func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.BlockID]sign) *layerVote {
+func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.BlockHeader]sign) *layerVote {
 	if l.lid.Before(from) {
 		return l
 	}
@@ -329,14 +316,22 @@ func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.
 		copied.supported = nil
 	} else if exist && len(layerdiff) > 0 {
 		var supported []*blockInfo
-		for _, block := range copied.blocks {
-			vote, exist := layerdiff[block.id]
+		for _, block := range l.supported {
+			header := block.header()
+			vote, exist := layerdiff[header]
 			if exist && vote == against {
 				continue
 			}
-			if (exist && vote == support) || l.getVote(block.id) == support {
-				supported = append(supported, block)
+			supported = append(supported, block)
+			if exist {
+				delete(layerdiff, header)
 			}
+		}
+		for header, vote := range layerdiff {
+			if vote == against {
+				continue
+			}
+			supported = append(supported, newBlockInfo(header))
 		}
 		copied.supported = supported
 		copied.sortSupported()
@@ -371,4 +366,29 @@ func sortBlocks(blocks []*blockInfo) {
 		}
 		return blocks[i].id.Compare(blocks[j].id)
 	})
+}
+
+func newBlockInfo(header types.BlockHeader) *blockInfo {
+	return &blockInfo{
+		id:     header.ID,
+		layer:  header.Layer,
+		height: header.Height,
+	}
+}
+
+type blockInfo struct {
+	id     types.BlockID
+	layer  types.LayerID
+	height uint64
+	hare   sign
+	margin weight
+
+	validity sign
+	emitted  sign // same as validity field if event was emitted
+
+	data bool // set to true if block is available locally
+}
+
+func (b *blockInfo) header() types.BlockHeader {
+	return types.BlockHeader{ID: b.id, Layer: b.layer, Height: b.height}
 }

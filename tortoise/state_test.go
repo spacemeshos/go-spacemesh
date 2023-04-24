@@ -14,7 +14,7 @@ func TestVotesUpdate(t *testing.T) {
 		original := votes{}
 		const last = 10
 		for i := 0; i < last; i++ {
-			original.append(&layerVote{layerInfo: &layerInfo{lid: types.LayerID(uint32(i))}})
+			original.append(&layerVote{lid: types.LayerID(uint32(i))})
 		}
 		cp := original.update(types.LayerID(last), nil)
 		c1 := original.tail
@@ -29,7 +29,7 @@ func TestVotesUpdate(t *testing.T) {
 		original := votes{}
 		const last = 10
 		for i := 0; i < last; i++ {
-			original.append(&layerVote{layerInfo: &layerInfo{lid: types.LayerID(uint32(i))}})
+			original.append(&layerVote{lid: types.LayerID(uint32(i))})
 		}
 		const modified = last - 2
 		cp := original.update(types.LayerID(modified), nil)
@@ -48,13 +48,13 @@ func TestVotesUpdate(t *testing.T) {
 	t.Run("update abstain", func(t *testing.T) {
 		original := votes{}
 		const last = 10
-		update := map[types.LayerID]map[types.BlockID]sign{}
+		update := map[types.LayerID]map[types.BlockHeader]sign{}
 		for i := 0; i < last; i++ {
 			original.append(&layerVote{
-				vote:      against,
-				layerInfo: &layerInfo{lid: types.LayerID(uint32(i))},
+				vote: against,
+				lid:  types.LayerID(uint32(i)),
 			})
-			update[types.LayerID(uint32(i))] = map[types.BlockID]sign{}
+			update[types.LayerID(uint32(i))] = map[types.BlockHeader]sign{}
 		}
 		cp := original.update(types.LayerID(0), update)
 		for c := original.tail; c != nil; c = c.prev {
@@ -67,18 +67,13 @@ func TestVotesUpdate(t *testing.T) {
 	t.Run("update blocks", func(t *testing.T) {
 		original := votes{}
 		const last = 10
-		update := map[types.LayerID]map[types.BlockID]sign{}
+		update := map[types.LayerID]map[types.BlockHeader]sign{}
 		for i := 0; i < last; i++ {
 			original.append(&layerVote{
-				layerInfo: &layerInfo{
-					lid: types.LayerID(uint32(i)),
-					blocks: []*blockInfo{{
-						id: types.BlockID{byte(i)},
-					}},
-				},
+				lid: types.LayerID(uint32(i)),
 			})
-			update[types.LayerID(uint32(i))] = map[types.BlockID]sign{
-				{byte(i)}: support,
+			update[types.LayerID(uint32(i))] = map[types.BlockHeader]sign{
+				{ID: types.BlockID{byte(i)}}: support,
 			}
 		}
 		cp := original.update(types.LayerID(0), update)
@@ -123,12 +118,12 @@ func TestComputeOpinion(t *testing.T) {
 			{id: types.BlockID{2}},
 		}
 		v.append(&layerVote{
+			lid:       0,
 			supported: []*blockInfo{blocks[0]},
-			layerInfo: &layerInfo{lid: types.LayerID(0)},
 		})
 		v.append(&layerVote{
+			lid:       1,
 			supported: []*blockInfo{blocks[1]},
-			layerInfo: &layerInfo{lid: types.LayerID(1)},
 		})
 
 		hh := opinionhash.New()
@@ -146,12 +141,12 @@ func TestComputeOpinion(t *testing.T) {
 			{id: types.BlockID{1}},
 		}
 		v.append(&layerVote{
+			lid:       0,
 			supported: []*blockInfo{blocks[0]},
-			layerInfo: &layerInfo{lid: types.LayerID(0)},
 		})
 		v.append(&layerVote{
-			vote:      against,
-			layerInfo: &layerInfo{lid: types.LayerID(1)},
+			lid:  1,
+			vote: against,
 		})
 
 		hh := opinionhash.New()
@@ -170,17 +165,17 @@ func TestComputeOpinion(t *testing.T) {
 		}
 		updated := types.LayerID(0)
 		original.append(&layerVote{
+			lid:       updated,
 			vote:      against,
 			supported: []*blockInfo{blocks[0]},
-			layerInfo: &layerInfo{lid: updated},
 		})
 		original.append(&layerVote{
+			lid:       updated.Add(1),
 			vote:      against,
 			supported: []*blockInfo{blocks[1]},
-			layerInfo: &layerInfo{lid: updated.Add(1)},
 		})
-		v := original.update(updated, map[types.LayerID]map[types.BlockID]sign{
-			updated: {blocks[0].id: against},
+		v := original.update(updated, map[types.LayerID]map[types.BlockHeader]sign{
+			updated: {blocks[0].header(): against},
 		})
 		hh := opinionhash.New()
 		rst := types.Hash32{}

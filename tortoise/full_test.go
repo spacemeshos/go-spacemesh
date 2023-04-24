@@ -386,10 +386,10 @@ func TestFullCountVotes(t *testing.T) {
 					// since we don't care about block goodness in this test
 					if i > 0 {
 						for _, support := range getDiff(blocks, b.Support) {
-							ballot.Votes.Support = append(ballot.Votes.Support, types.Vote{ID: support})
+							ballot.Votes.Support = append(ballot.Votes.Support, types.BlockHeader{ID: support})
 						}
 						for _, against := range getDiff(blocks, b.Against) {
-							ballot.Votes.Against = append(ballot.Votes.Against, types.Vote{ID: against})
+							ballot.Votes.Against = append(ballot.Votes.Against, types.BlockHeader{ID: against})
 						}
 						for _, layerNumber := range b.Abstain {
 							ballot.Votes.Abstain = append(ballot.Votes.Abstain, genesis.Add(uint32(layerNumber)+1))
@@ -551,13 +551,11 @@ func TestFullVerify(t *testing.T) {
 					margin: fixed.From(float64(block.margin)),
 				}
 				layer.blocks = append(layer.blocks, block)
-				full.state.blockRefs[block.id] = block
 			}
 			require.Equal(t, tc.validity != nil, full.verify(logtest.New(t), target))
 			if tc.validity != nil {
 				for i, expect := range tc.validity {
-					id := types.BlockID{uint8(i) + 1}
-					require.Equal(t, expect, full.state.blockRefs[id].validity)
+					require.Equal(t, expect, layer.blocks[i].validity)
 				}
 			}
 		})

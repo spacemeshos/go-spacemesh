@@ -223,6 +223,10 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 type DecodedBallot struct {
 	*types.Ballot
 	info *ballotInfo
+	// after validation is finished we need to add new vote targets
+	// for tortoise from the decoded votes. minHint identifies the boundary
+	// until which we have to scan.
+	minHint types.LayerID
 }
 
 // DecodeBallot decodes ballot if it wasn't processed earlier.
@@ -231,7 +235,7 @@ func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	info, err := t.trtl.decodeBallot(ballot)
+	info, min, err := t.trtl.decodeBallot(ballot)
 	if err != nil {
 		errorsCounter.Inc()
 		return nil, err
@@ -247,7 +251,7 @@ func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 			info.opinion().ShortString(), ballot.OpinionHash.ShortString(), ballot.ID(),
 		)
 	}
-	return &DecodedBallot{Ballot: ballot, info: info}, nil
+	return &DecodedBallot{Ballot: ballot, info: info, minHint: min}, nil
 }
 
 // StoreBallot stores previously decoded ballot.
@@ -259,10 +263,7 @@ func (t *Tortoise) StoreBallot(decoded *DecodedBallot) error {
 	if decoded.IsMalicious() {
 		decoded.info.malicious = true
 	}
-	if err := t.trtl.storeBallot(decoded.info); err != nil {
-		errorsCounter.Inc()
-		return err
-	}
+	t.trtl.storeBallot(decoded.info, decoded.minHint)
 	return nil
 }
 

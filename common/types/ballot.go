@@ -154,9 +154,9 @@ type Votes struct {
 	// Base ballot.
 	Base BallotID
 	// Support block id at a particular layer and height.
-	Support []Vote `scale:"max=10000"` // sliding vote window size is 10k layers, vote for one block per layer
+	Support []BlockHeader `scale:"max=10000"` // sliding vote window size is 10k layers, vote for one block per layer
 	// Against previously supported block.
-	Against []Vote `scale:"max=10000"` // sliding vote window size is 10k layers, vote for one block per layer
+	Against []BlockHeader `scale:"max=10000"` // sliding vote window size is 10k layers, vote for one block per layer
 	// Abstain on layers until they are terminated.
 	Abstain []LayerID `scale:"max=10000"` // sliding vote window size is 10k layers, vote to abstain on any layer
 }
@@ -182,22 +182,6 @@ func (v *Votes) MarshalLogObject(encoder log.ObjectEncoder) error {
 		}
 		return nil
 	}))
-	return nil
-}
-
-// Vote additionally carries layer id and height
-// in order for the tortoise to count votes without downloading block body.
-type Vote struct {
-	ID      BlockID
-	LayerID LayerID
-	Height  uint64
-}
-
-// MarshalLogObject implements logging interface.
-func (s *Vote) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddString("id", s.ID.String())
-	encoder.AddUint32("layer", s.LayerID.Uint32())
-	encoder.AddUint64("height", s.Height)
 	return nil
 }
 
