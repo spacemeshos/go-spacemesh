@@ -198,8 +198,8 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 
 // StartSession starts (or continues) a PoST session. It supports resuming a
 // previously started session, and will return an error if a session is already
-// in progress. PrepareInitializer should be called prior to calling
-// StartSession in order to retrieve the SessionConfig.
+// in progress. InitializerConfig should be called prior to calling
+// StartSession in order to retrieve the InitializationConfig.
 //
 // Ensure that before calling this method, the node is ATX synced.
 func (mgr *PostSetupManager) StartSession(ctx context.Context, cfg *InitializationConfig) error {
