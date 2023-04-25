@@ -105,6 +105,31 @@ func TestPostSetupManager_PrepareInitializer(t *testing.T) {
 	req.Error(mgr.PrepareInitializer(ctx, opts))
 }
 
+// Checks that the sequence of calls for initialization (first
+// PrepareInitializer and then StartSession) is enforced.
+func TestPostSetupManager_InitializationCallSequence(t *testing.T) {
+	req := require.New(t)
+
+	mgr := newTestPostManager(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+
+	// Should fail since we have not prepared.
+	req.Error(mgr.StartSession(ctx))
+
+	req.NoError(mgr.PrepareInitializer(ctx, mgr.opts))
+
+	// Should fail since we need to call StartSession after PrepareInitializer.
+	req.Error(mgr.PrepareInitializer(ctx, mgr.opts))
+
+	req.NoError(mgr.StartSession(ctx))
+
+	// Should fali since it is required to call PrepareInitializer before each
+	// call to StartSession.
+	req.Error(mgr.StartSession(ctx))
+}
+
 func TestPostSetupManager_StateError(t *testing.T) {
 	req := require.New(t)
 
