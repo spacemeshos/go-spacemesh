@@ -351,12 +351,13 @@ func (o *Oracle) CalcEligibility(
 
 	for x := 0; x < n; x++ {
 		if fixed.BinCDF(n, p, x).GreaterThan(vrfFrac) {
-			// even with large N and large P x will be << 2^16, so this cast is safe
+			// even with large N and large P, x will be << 2^16, so this cast is safe
 			return uint16(x), nil
 		}
 	}
 
-	// since BinCDF(n, p, n) is 1 for any p this code is only reached if n << 2^16
+	// BinCDF(n, p, n) is 1 for any p, this code can only be reached if n much smaller
+	// than 2^16 (so that BinCDF(n, p, n-1) is still lower than vrfFrac)
 	return uint16(n), nil
 }
 
