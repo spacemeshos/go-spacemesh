@@ -346,7 +346,8 @@ func (c *Certifier) validateCert(ctx context.Context, logger log.Log, cert *type
 		logger.With().Warning("certificate not meeting threshold",
 			log.Int("num_msgs", len(cert.Signatures)),
 			log.Int("threshold", c.cfg.CertifyThreshold),
-			log.Uint16("eligibility_count", eligibilityCnt))
+			log.Uint16("eligibility_count", eligibilityCnt),
+		)
 		return errInvalidCert
 	}
 	return nil
@@ -436,7 +437,8 @@ func (c *Certifier) saveMessage(ctx context.Context, logger log.Log, msg types.C
 	c.certifyMsgs[lid][bid].totalEligibility += msg.EligibilityCnt
 	logger.With().Debug("saved certify msg",
 		log.Uint16("eligibility_count", c.certifyMsgs[lid][bid].totalEligibility),
-		log.Int("num_msg", len(c.certifyMsgs[lid][bid].signatures)))
+		log.Int("num_msg", len(c.certifyMsgs[lid][bid].signatures)),
+	)
 
 	if c.certifyMsgs[lid][bid].registered {
 		return c.tryGenCert(ctx, logger, lid, bid)
@@ -465,7 +467,8 @@ func (c *Certifier) tryGenCert(ctx context.Context, logger log.Log, lid types.La
 
 	logger.With().Info("generating certificate",
 		log.Uint16("eligibility_count", c.certifyMsgs[lid][bid].totalEligibility),
-		log.Int("num_msg", len(c.certifyMsgs[lid][bid].signatures)))
+		log.Int("num_msg", len(c.certifyMsgs[lid][bid].signatures)),
+	)
 	cert := &types.Certificate{
 		BlockID:    bid,
 		Signatures: c.certifyMsgs[lid][bid].signatures,
