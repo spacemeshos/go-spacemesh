@@ -50,9 +50,9 @@ type BlockHeader struct {
 }
 
 func (h *BlockHeader) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddString("block_id", h.ID.String())
-	encoder.AddUint32("layer_id", h.Layer.Uint32())
-	encoder.AddUint64("tick_height", h.Height)
+	encoder.AddString("block", h.ID.String())
+	encoder.AddUint32("layer", h.Layer.Uint32())
+	encoder.AddUint64("height", h.Height)
 	return nil
 }
 

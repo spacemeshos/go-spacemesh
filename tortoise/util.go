@@ -104,6 +104,7 @@ func verifyLayer(logger log.Log, blocks []*blockInfo, getDecision func(*blockInf
 							encoder.AddString("id", blocks[i].id.String())
 							encoder.AddString("weight", blocks[i].margin.String())
 							encoder.AddUint64("height", blocks[i].height)
+							encoder.AddBool("data", blocks[i].data)
 							return nil
 						}))
 					}

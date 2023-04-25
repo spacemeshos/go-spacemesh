@@ -2949,12 +2949,12 @@ func BenchmarkOnBallot(b *testing.B) {
 func TestMultipleTargets(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultTestConfig()
-	const size = 10
+	const size = 4
 	cfg.LayerSize = size
 	cfg.Hdist = 2
 	cfg.Zdist = 1
 	s := sim.New(sim.WithLayerSize(cfg.LayerSize))
-	s.Setup()
+	s.Setup(sim.WithSetupMinerRange(size, size))
 	tortoise := tortoiseFromSimState(t,
 		s.GetState(0),
 		WithConfig(cfg),
@@ -2976,7 +2976,7 @@ func TestMultipleTargets(t *testing.T) {
 			},
 		}
 	}
-	confirmFirst := func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
+	upvote := func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
 		prev := layers[len(layers)-1]
 		require.NotEmpty(t, prev.BallotIDs())
 		return sim.Voting{
@@ -2985,13 +2985,25 @@ func TestMultipleTargets(t *testing.T) {
 	}
 	s.Next(sim.WithNumBlocks(0))
 	s.Next(sim.WithNumBlocks(0), sim.WithVoteGenerator(multi))
-	last := s.Next(sim.WithNumBlocks(0), sim.WithVoteGenerator(confirmFirst))
+	last := s.Next(sim.WithNumBlocks(0), sim.WithVoteGenerator(upvote))
 	tortoise.TallyVotes(ctx, last)
 
 	rst, err := tortoise.Results(types.GetEffectiveGenesis())
 	require.NoError(t, err)
 	require.Len(t, rst, 2)
-	require.Equal(t, rst[0].Blocks[0].Header.Height, heights[0])
-	require.True(t, rst[0].Blocks[0].Valid)
-	require.False(t, rst[0].Blocks[0].Data)
+	block := rst[0].Blocks[0]
+	require.Equal(t, block.Header.Height, heights[0])
+	require.True(t, block.Valid)
+	require.False(t, block.Data)
+	votes, err := tortoise.EncodeVotes(ctx)
+	require.NoError(t, err)
+	require.Len(t, votes.Against, 1)
+	require.Equal(t, votes.Against[0], block.Header)
+	tortoise.OnBlock(types.NewExistingBlock(block.Header.ID, types.InnerBlock{
+		LayerIndex: block.Header.Layer,
+		TickHeight: block.Header.Height,
+	}))
+	votes, err = tortoise.EncodeVotes(ctx)
+	require.NoError(t, err)
+	require.Empty(t, votes.Against)
 }

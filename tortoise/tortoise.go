@@ -226,14 +226,14 @@ func (t *turtle) encodeVotes(
 			}
 			switch vote {
 			case support:
-				logger.With().Debug("support before base ballot", block.id, block.layer)
+				logger.With().Debug("support before base ballot", log.Inline(block))
 				votes.Support = append(votes.Support, block.header())
 			case against:
-				logger.With().Debug("explicit against overwrites base ballot opinion", block.id, block.layer)
+				logger.With().Debug("explicit against overwrites base ballot opinion", log.Inline(block))
 				votes.Against = append(votes.Against, block.header())
 			case abstain:
 				logger.With().Error("layers that are not terminated should have been encoded earlier",
-					block.id, block.layer, log.Stringer("reason", reason),
+					log.Inline(block), log.Stringer("reason", reason),
 				)
 			}
 		}
@@ -253,13 +253,13 @@ func (t *turtle) encodeVotes(
 			}
 			switch vote {
 			case support:
-				logger.With().Debug("support after base ballot", block.id, block.layer, log.Stringer("reason", reason))
+				logger.With().Debug("support after base ballot", log.Inline(block), log.Stringer("reason", reason))
 				votes.Support = append(votes.Support, block.header())
 			case against:
-				logger.With().Debug("implicit against after base ballot", block.id, block.layer, log.Stringer("reason", reason))
+				logger.With().Debug("implicit against after base ballot", log.Inline(block), log.Stringer("reason", reason))
 			case abstain:
 				logger.With().Error("layers that are not terminated should have been encoded earlier",
-					block.id, lid, log.Stringer("reason", reason),
+					log.Inline(block), log.Stringer("reason", reason),
 				)
 			}
 		}
@@ -268,7 +268,10 @@ func (t *turtle) encodeVotes(
 	if explen := len(votes.Support) + len(votes.Against); explen > t.MaxExceptions {
 		return nil, fmt.Errorf("too many exceptions (%v)", explen)
 	}
-	decoded, _ := decodeVotes(current, base, votes)
+	decoded, _, err := decodeVotes(t.evicted, current, base, votes)
+	if err != nil {
+		return nil, err
+	}
 	return &types.Opinion{
 		Hash:  decoded.opinion(),
 		Votes: votes,
@@ -734,7 +737,10 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, types.LayerID,
 		log.Uint32("lid", ballot.Layer.Uint32()),
 	)
 
-	votes, min := decodeVotes(binfo.layer, base, ballot.Votes)
+	votes, min, err := decodeVotes(t.evicted, binfo.layer, base, ballot.Votes)
+	if err != nil {
+		return nil, 0, err
+	}
 	binfo.votes = votes
 	t.logger.With().Debug("decoded exceptions",
 		binfo.id, binfo.layer,
@@ -794,59 +800,6 @@ func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, layerID type
 		return true, nil
 	}
 	return false, nil
-}
-
-func decodeVotes(blid types.LayerID, base *ballotInfo, exceptions types.Votes) (votes, types.LayerID) {
-	from := base.layer
-	diff := map[types.LayerID]map[types.BlockID]headerWithSign{}
-	for _, header := range exceptions.Support {
-		from = minLayer(from, header.Layer)
-		layerdiff, exist := diff[header.Layer]
-		if !exist {
-			layerdiff = map[types.BlockID]headerWithSign{}
-			diff[header.Layer] = layerdiff
-		}
-		layerdiff[header.ID] = headerWithSign{header, support}
-	}
-	for _, header := range exceptions.Against {
-		from = minLayer(from, header.Layer)
-		layerdiff, exist := diff[header.Layer]
-		if !exist {
-			layerdiff = map[types.BlockID]headerWithSign{}
-			diff[header.Layer] = layerdiff
-		}
-		layerdiff[header.ID] = headerWithSign{header, against}
-	}
-	for _, lid := range exceptions.Abstain {
-		from = minLayer(from, lid)
-		_, exist := diff[lid]
-		if !exist {
-			diff[lid] = map[types.BlockID]headerWithSign{}
-		}
-	}
-
-	// inherit opinion from the base ballot by copying votes
-	decoded := base.votes.update(from, diff)
-	// add new opinions after the base layer
-	for lid := base.layer; lid.Before(blid); lid = lid.Add(1) {
-		lvote := layerVote{
-			lid:  lid,
-			vote: against,
-		}
-		layerdiff, exist := diff[lid]
-		if exist && len(layerdiff) == 0 {
-			lvote.vote = abstain
-		} else if exist && len(layerdiff) > 0 {
-			for _, vote := range layerdiff {
-				if vote.sign != support {
-					continue
-				}
-				lvote.supported = append(lvote.supported, newBlockInfo(vote.header))
-			}
-		}
-		decoded.append(&lvote)
-	}
-	return decoded, from
 }
 
 func (t *turtle) retryLater(ballot *ballotInfo) {
