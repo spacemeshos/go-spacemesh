@@ -356,7 +356,7 @@ func (o *Oracle) CalcEligibility(
 		}
 	}
 
-	// BinCDF(n, p, n) is 1 for any p, this code can only be reached if n much smaller
+	// since BinCDF(n, p, n) is 1 for any p, this code can only be reached if n is much smaller
 	// than 2^16 (so that BinCDF(n, p, n-1) is still lower than vrfFrac)
 	return uint16(n), nil
 }
