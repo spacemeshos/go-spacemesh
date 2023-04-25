@@ -192,7 +192,7 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 // previously started session, and will return an error if a session is already
 // in progress. It must be ensured that PrepareInitializer is called once
 // before each call to StartSession and that the node is ATX synced.
-func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts) error {
+func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 	// Ensure only one goroutine can execute initialization at a time.
 	err := func() error {
 		mgr.mu.Lock()
@@ -209,10 +209,10 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	mgr.logger.With().Info("post setup session starting",
 		log.String("node_id", mgr.id.String()),
 		log.String("commitment_atx", mgr.commitmentAtxId.String()),
-		log.String("data_dir", opts.DataDir),
-		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
+		log.String("data_dir", mgr.lastOpts.DataDir),
+		log.String("num_units", fmt.Sprintf("%d", mgr.lastOpts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
+		log.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ComputeProviderID)),
 	)
 
 	err = mgr.init.Initialize(ctx)
@@ -233,10 +233,10 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	mgr.logger.With().Info("post setup completed",
 		log.String("node_id", mgr.id.String()),
 		log.String("commitment_atx", mgr.commitmentAtxId.String()),
-		log.String("data_dir", opts.DataDir),
-		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
+		log.String("data_dir", mgr.lastOpts.DataDir),
+		log.String("num_units", fmt.Sprintf("%d", mgr.lastOpts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
+		log.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ComputeProviderID)),
 	)
 	mgr.state = PostSetupStateComplete
 	return nil

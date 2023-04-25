@@ -50,7 +50,7 @@ func TestPostSetupManager(t *testing.T) {
 
 	// Create data.
 	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
-	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
+	req.NoError(mgr.StartSession(context.Background()))
 	cancel()
 	_ = eg.Wait()
 
@@ -58,14 +58,14 @@ func TestPostSetupManager(t *testing.T) {
 
 	// Create data (same opts).
 	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
-	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
+	req.NoError(mgr.StartSession(context.Background()))
 
 	// Cleanup.
 	req.NoError(mgr.Reset())
 
 	// Create data (same opts, after deletion).
 	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
-	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
+	req.NoError(mgr.StartSession(context.Background()))
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
 }
 
@@ -127,7 +127,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 
 	// Create data.
 	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
-	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
+	req.NoError(mgr.StartSession(context.Background()))
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
 	// Re-instantiate `PostSetupManager`.
@@ -151,7 +151,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 
 	// Create data.
 	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
-	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
+	req.NoError(mgr.StartSession(context.Background()))
 
 	// Generate proof.
 	p, m, err := mgr.GenerateProof(context.Background(), ch)
@@ -194,7 +194,7 @@ func TestPostSetupManager_VRFNonce(t *testing.T) {
 
 	// Create data.
 	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
-	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
+	req.NoError(mgr.StartSession(context.Background()))
 
 	// Get nonce.
 	nonce, err := mgr.VRFNonce()
@@ -221,7 +221,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 
 	// Create data.
 	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
-	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
+	req.NoError(mgr.StartSession(context.Background()))
 
 	// Verify state.
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
@@ -234,7 +234,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 
 	// Create data again.
 	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
-	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
+	req.NoError(mgr.StartSession(context.Background()))
 
 	// Verify state.
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
@@ -251,7 +251,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var eg errgroup.Group
 	eg.Go(func() error {
-		return mgr.StartSession(ctx, mgr.opts)
+		return mgr.StartSession(ctx)
 	})
 
 	// Verify the intermediate status.
@@ -271,7 +271,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 
 	// Continue to create data.
 	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
-	req.NoError(mgr.StartSession(context.Background(), mgr.opts))
+	req.NoError(mgr.StartSession(context.Background()))
 
 	// Verify status.
 	status = mgr.Status()

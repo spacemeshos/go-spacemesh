@@ -590,17 +590,17 @@ func (mr *MockpostSetupProviderMockRecorder) Reset() *gomock.Call {
 }
 
 // StartSession mocks base method.
-func (m *MockpostSetupProvider) StartSession(context context.Context, opts PostSetupOpts) error {
+func (m *MockpostSetupProvider) StartSession(context context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSession", context, opts)
+	ret := m.ctrl.Call(m, "StartSession", context)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // StartSession indicates an expected call of StartSession.
-func (mr *MockpostSetupProviderMockRecorder) StartSession(context, opts interface{}) *gomock.Call {
+func (mr *MockpostSetupProviderMockRecorder) StartSession(context interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockpostSetupProvider)(nil).StartSession), context, opts)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockpostSetupProvider)(nil).StartSession), context)
 }
 
 // Status mocks base method.

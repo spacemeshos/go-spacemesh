@@ -198,7 +198,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 
 		// If start session returns any error other than context.Canceled
 		// (which is how we signal it to stop) then we panic.
-		if err := b.postSetupProvider.StartSession(ctx, opts); err != nil && !errors.Is(err, context.Canceled) {
+		if err := b.postSetupProvider.StartSession(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			panic(fmt.Sprintf("initialization failed: %v", err))
 		}
 
