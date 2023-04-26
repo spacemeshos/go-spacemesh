@@ -120,8 +120,8 @@ func (s *state) addBlock(block *blockInfo) {
 	s.updateRefHeight(layer, block)
 }
 
-func (s *state) getBlock(header types.BlockHeader) *blockInfo {
-	layer := s.layer(header.Layer)
+func (s *state) getBlock(header types.Vote) *blockInfo {
+	layer := s.layer(header.LayerID)
 	for _, block := range layer.blocks {
 		if block.id == header.ID && block.height == header.Height {
 			return block
@@ -374,10 +374,10 @@ func sortBlocks(blocks []*blockInfo) {
 	})
 }
 
-func newBlockInfo(header types.BlockHeader) *blockInfo {
+func newBlockInfo(header types.Vote) *blockInfo {
 	return &blockInfo{
 		id:     header.ID,
-		layer:  header.Layer,
+		layer:  header.LayerID,
 		height: header.Height,
 		hare:   neutral,
 	}
@@ -403,12 +403,12 @@ func (b *blockInfo) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-func (b *blockInfo) header() types.BlockHeader {
-	return types.BlockHeader{ID: b.id, Layer: b.layer, Height: b.height}
+func (b *blockInfo) header() types.Vote {
+	return types.Vote{ID: b.id, LayerID: b.layer, Height: b.height}
 }
 
 type headerWithSign struct {
-	header types.BlockHeader
+	header types.Vote
 	sign   sign
 }
 
@@ -416,11 +416,11 @@ func decodeVotes(evicted types.LayerID, blid types.LayerID, base *ballotInfo, ex
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]headerWithSign{}
 	for _, header := range exceptions.Against {
-		from = minLayer(from, header.Layer)
-		layerdiff, exist := diff[header.Layer]
+		from = minLayer(from, header.LayerID)
+		layerdiff, exist := diff[header.LayerID]
 		if !exist {
 			layerdiff = map[types.BlockID]headerWithSign{}
-			diff[header.Layer] = layerdiff
+			diff[header.LayerID] = layerdiff
 		}
 		existing, exist := layerdiff[header.ID]
 		if exist {
@@ -429,11 +429,11 @@ func decodeVotes(evicted types.LayerID, blid types.LayerID, base *ballotInfo, ex
 		layerdiff[header.ID] = headerWithSign{header, against}
 	}
 	for _, header := range exceptions.Support {
-		from = minLayer(from, header.Layer)
-		layerdiff, exist := diff[header.Layer]
+		from = minLayer(from, header.LayerID)
+		layerdiff, exist := diff[header.LayerID]
 		if !exist {
 			layerdiff = map[types.BlockID]headerWithSign{}
-			diff[header.Layer] = layerdiff
+			diff[header.LayerID] = layerdiff
 		}
 		layerdiff[header.ID] = headerWithSign{header, support}
 	}

@@ -20,7 +20,7 @@ const (
 	BlockIDSize = Hash32Length
 )
 
-//go:generate scalegen -types Block,BlockHeader,InnerBlock,RatNum,AnyReward,Certificate,CertifyMessage,CertifyContent
+//go:generate scalegen -types Block,InnerBlock,RatNum,AnyReward,Certificate,CertifyMessage,CertifyContent
 
 // BlockID is a 20-byte blake3 sum of the serialized block used to identify a Block.
 type BlockID Hash20
@@ -43,32 +43,11 @@ func (id *BlockID) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, id[:])
 }
 
-type BlockHeader struct {
-	ID     BlockID
-	Layer  LayerID
-	Height uint64
-}
-
-func (h *BlockHeader) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddString("block", h.ID.String())
-	encoder.AddUint32("layer", h.Layer.Uint32())
-	encoder.AddUint64("height", h.Height)
-	return nil
-}
-
 // Block contains the content of a layer on the mesh history.
 type Block struct {
 	InnerBlock
 	// the following fields are kept private and from being serialized
 	blockID BlockID
-}
-
-func (b Block) Header() BlockHeader {
-	return BlockHeader{
-		ID:     b.ID(),
-		Layer:  b.LayerIndex,
-		Height: b.TickHeight,
-	}
 }
 
 func (b Block) Equal(other Block) bool {
@@ -137,6 +116,11 @@ func (b *Block) Bytes() []byte {
 // ID returns the BlockID.
 func (b *Block) ID() BlockID {
 	return b.blockID
+}
+
+// ToVote creates Vote struct from block.
+func (b *Block) ToVote() Vote {
+	return Vote{ID: b.ID(), LayerID: b.LayerIndex, Height: b.TickHeight}
 }
 
 // MarshalLogObject implements logging encoder for Block.

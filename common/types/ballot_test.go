@@ -21,8 +21,8 @@ func TestBallotIDUnaffectedByVotes(t *testing.T) {
 	ballot2 := types.Ballot{
 		InnerBallot: inner,
 	}
-	ballot1.Votes.Support = []types.BlockHeader{{ID: types.BlockID{1}}}
-	ballot1.Votes.Support = []types.BlockHeader{{ID: types.BlockID{2}}}
+	ballot1.Votes.Support = []types.Vote{{ID: types.BlockID{1}}}
+	ballot1.Votes.Support = []types.Vote{{ID: types.BlockID{2}}}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	ballot1.Signature = signer.Sign(signing.BALLOT, ballot1.SignedBytes())

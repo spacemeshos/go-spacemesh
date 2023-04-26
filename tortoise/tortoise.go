@@ -477,7 +477,7 @@ func (t *turtle) loadBlocksData(lid types.LayerID) error {
 		return fmt.Errorf("read blocks for layer %s: %w", lid, err)
 	}
 	for _, block := range blocks {
-		t.onBlock(block.Header())
+		t.onBlock(block.ToVote())
 	}
 	if err := t.loadHare(lid); err != nil {
 		return err
@@ -545,8 +545,8 @@ func (t *turtle) loadBallots(lid types.LayerID) error {
 	return nil
 }
 
-func (t *turtle) onBlock(header types.BlockHeader) {
-	if !header.Layer.After(t.evicted) {
+func (t *turtle) onBlock(header types.Vote) {
+	if !header.LayerID.After(t.evicted) {
 		return
 	}
 

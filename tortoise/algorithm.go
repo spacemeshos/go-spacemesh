@@ -202,7 +202,7 @@ func (t *Tortoise) OnBlock(block *types.Block) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	t.trtl.onBlock(block.Header())
+	t.trtl.onBlock(block.ToVote())
 }
 
 // OnBallot should be called every time new ballot is received.
@@ -332,7 +332,7 @@ type ResultLayer struct {
 }
 
 type ResultBlock struct {
-	Header types.BlockHeader
+	Header types.Vote
 	Valid  bool
 	Data   bool
 }

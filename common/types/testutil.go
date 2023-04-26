@@ -109,7 +109,7 @@ func RandomBallot() *Ballot {
 		},
 		Votes: Votes{
 			Base:    RandomBallotID(),
-			Support: []BlockHeader{{ID: RandomBlockID()}, {ID: RandomBlockID()}},
+			Support: []Vote{{ID: RandomBlockID()}, {ID: RandomBlockID()}},
 		},
 	}
 }

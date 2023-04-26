@@ -76,7 +76,7 @@ func TestVotesUpdate(t *testing.T) {
 				lid: types.LayerID(uint32(i)),
 			})
 			update[types.LayerID(uint32(i))] = map[types.BlockID]headerWithSign{
-				{byte(i)}: {types.BlockHeader{ID: types.BlockID{byte(i)}}, support},
+				{byte(i)}: {types.Vote{ID: types.BlockID{byte(i)}}, support},
 			}
 		}
 		cp, err := original.update(types.LayerID(0), update)
@@ -199,12 +199,12 @@ func newTestOpinion(lid types.LayerID) *testOpinion {
 type testOpinion struct {
 	lid types.LayerID
 
-	sup     []types.BlockHeader
-	ag      []types.BlockHeader
+	sup     []types.Vote
+	ag      []types.Vote
 	abs     []types.LayerID
 	pending struct {
-		sup []types.BlockHeader
-		ag  []types.BlockHeader
+		sup []types.Vote
+		ag  []types.Vote
 		abs []types.LayerID
 	}
 	reference votes
@@ -213,10 +213,10 @@ type testOpinion struct {
 func (o *testOpinion) support(hid string, height uint64) *testOpinion {
 	id := types.BlockID{}
 	copy(id[:], hid)
-	o.pending.sup = append(o.pending.sup, types.BlockHeader{
-		ID:     id,
-		Height: height,
-		Layer:  o.lid,
+	o.pending.sup = append(o.pending.sup, types.Vote{
+		ID:      id,
+		Height:  height,
+		LayerID: o.lid,
 	})
 	return o
 }
@@ -224,10 +224,10 @@ func (o *testOpinion) support(hid string, height uint64) *testOpinion {
 func (o *testOpinion) against(hid string, height uint64) *testOpinion {
 	id := types.BlockID{}
 	copy(id[:], hid)
-	o.pending.ag = append(o.pending.ag, types.BlockHeader{
-		ID:     id,
-		Height: height,
-		Layer:  o.lid,
+	o.pending.ag = append(o.pending.ag, types.Vote{
+		ID:      id,
+		Height:  height,
+		LayerID: o.lid,
 	})
 	return o
 }

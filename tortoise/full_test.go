@@ -351,7 +351,7 @@ func TestFullCountVotes(t *testing.T) {
 			}
 
 			var blocks [][]types.Block
-			refs := map[types.BlockID]types.BlockHeader{}
+			refs := map[types.BlockID]types.Vote{}
 			for i, layer := range tc.layerBlocks {
 				var layerBlocks []types.Block
 				lid := genesis.Add(uint32(i) + 1)
@@ -362,13 +362,13 @@ func TestFullCountVotes(t *testing.T) {
 					b.TxIDs = types.RandomTXSet(j)
 					b.Initialize()
 					layerBlocks = append(layerBlocks, b)
-					refs[b.ID()] = b.Header()
+					refs[b.ID()] = b.ToVote()
 				}
 				consensus.epochs[lid.GetEpoch()] = &epochInfo{
 					height: localHeight,
 				}
 				for _, block := range layerBlocks {
-					consensus.onBlock(block.Header())
+					consensus.onBlock(block.ToVote())
 				}
 				blocks = append(blocks, layerBlocks)
 			}
