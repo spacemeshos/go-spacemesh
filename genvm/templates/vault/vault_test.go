@@ -4,9 +4,9 @@ import (
 	"math"
 	"testing"
 
+	"github.com/spacemeshos/economics/constants"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/economics/constants"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 )
