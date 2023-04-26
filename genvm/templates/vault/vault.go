@@ -55,6 +55,9 @@ func (v *Vault) Spend(host core.Host, to core.Address, amount uint64) error {
 		return ErrNotOwner
 	}
 	available := v.Available(host.Layer())
+	if available > v.TotalAmount {
+		panic("wrong math")
+	}
 	if amount > available-v.DrainedSoFar {
 		return ErrAmountNotAvailable
 	}
