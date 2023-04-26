@@ -34,7 +34,6 @@ type request[T any, R any] struct {
 
 type dataResponse struct {
 	ballots map[types.BallotID]struct{}
-	blocks  map[types.BlockID]struct{}
 }
 
 type opinionResponse struct {
@@ -137,7 +136,6 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers 
 		peers: peers,
 		response: dataResponse{
 			ballots: map[types.BallotID]struct{}{},
-			blocks:  map[types.BlockID]struct{}{},
 		},
 		ch: make(chan peerResult[fetch.LayerData], len(peers)),
 	}
@@ -175,9 +173,6 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers 
 			// all peer responded
 			if success {
 				candidateErr = nil
-			}
-			if candidateErr == nil && len(req.response.blocks) == 0 {
-				d.msh.SetZeroBlockLayer(ctx, req.lid)
 			}
 			return candidateErr
 		case <-ctx.Done():
@@ -239,9 +234,6 @@ func registerLayerHashes(fetcher fetcher, peer p2p.Peer, data *fetch.LayerData) 
 	for _, ballotID := range data.Ballots {
 		layerHashes = append(layerHashes, ballotID.AsHash32())
 	}
-	for _, blkID := range data.Blocks {
-		layerHashes = append(layerHashes, blkID.AsHash32())
-	}
 	if len(layerHashes) == 0 {
 		return
 	}
@@ -290,14 +282,6 @@ func fetchLayerData(ctx context.Context, logger log.Log, fetcher fetcher, req *d
 			ballotsToFetch = append(ballotsToFetch, ballotID)
 		}
 	}
-	var blocksToFetch []types.BlockID
-	for _, blkID := range data.Blocks {
-		if _, ok := req.response.blocks[blkID]; !ok {
-			// not yet fetched
-			req.response.blocks[blkID] = struct{}{}
-			blocksToFetch = append(blocksToFetch, blkID)
-		}
-	}
 
 	if len(ballotsToFetch) > 0 {
 		logger.With().Debug("fetching new ballots", log.Int("to_fetch", len(ballotsToFetch)))
@@ -311,21 +295,6 @@ func fetchLayerData(ctx context.Context, logger log.Log, fetcher fetcher, req *d
 				})),
 				log.Err(err))
 			// syntactically invalid ballots are expected from malicious peers
-		}
-	}
-
-	if len(blocksToFetch) > 0 {
-		logger.With().Debug("fetching new blocks", log.Int("to_fetch", len(blocksToFetch)))
-		if err := fetcher.GetBlocks(ctx, blocksToFetch); err != nil {
-			logger.With().Warning("failed fetching new blocks",
-				log.Array("block_ids", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-					for _, bid := range blocksToFetch {
-						encoder.AppendString(bid.String())
-					}
-					return nil
-				})),
-				log.Err(err))
-			// syntactically invalid blocks are expected from malicious peers
 		}
 	}
 }

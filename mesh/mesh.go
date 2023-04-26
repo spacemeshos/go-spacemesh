@@ -665,7 +665,7 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
 }
 
 // SetZeroBlockLayer advances the latest layer in the network with a layer
-// that truly has no data.
+// that has no data.
 func (msh *Mesh) SetZeroBlockLayer(ctx context.Context, lid types.LayerID) {
 	msh.setLatestLayer(msh.logger.WithContext(ctx), lid)
 }
