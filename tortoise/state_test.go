@@ -309,7 +309,7 @@ func TestStateDecodeVotes(t *testing.T) {
 			"",
 		},
 		{
-			"overwrite previos supported",
+			"overwrite previous supported",
 			[]*testOpinion{
 				newTestOpinion(genesis).support("a", 100),
 				newTestOpinion(genesis).support("a", 101).
@@ -320,7 +320,7 @@ func TestStateDecodeVotes(t *testing.T) {
 			"",
 		},
 		{
-			"overwrite previos supported",
+			"overwrite previous supported",
 			[]*testOpinion{
 				newTestOpinion(genesis).support("a", 100),
 				newTestOpinion(genesis).support("a", 101).
