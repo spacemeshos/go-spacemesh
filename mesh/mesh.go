@@ -24,7 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
+	"github.com/spacemeshos/go-spacemesh/tortoise/result"
 )
 
 var errMissingHareOutput = errors.New("missing hare output")
@@ -50,7 +50,8 @@ type Mesh struct {
 	missingLayer        atomic.Value
 	nextProcessedLayers map[types.LayerID]struct{}
 	maxProcessedLayer   types.LayerID
-	validityUpdates     map[types.LayerID]map[types.BlockID]bool
+
+	reverted types.LayerID
 }
 
 // NewMesh creates a new instant of a mesh.
@@ -196,9 +197,10 @@ func (msh *Mesh) ProcessedLayer() types.LayerID {
 func (msh *Mesh) setProcessedLayer(logger log.Log, layerID types.LayerID) error {
 	processed := msh.ProcessedLayer()
 	if !layerID.After(processed) {
-		logger.With().Info("trying to set processed layer to an older layer",
-			log.FieldNamed("processed", processed),
-			layerID)
+		logger.With().Debug("trying to set processed layer to an older layer",
+			log.Stringer("processed", processed),
+			log.Stringer("layer", layerID),
+		)
 		return nil
 	}
 
@@ -207,9 +209,10 @@ func (msh *Mesh) setProcessedLayer(logger log.Log, layerID types.LayerID) error 
 	}
 
 	if layerID != processed.Add(1) {
-		logger.With().Info("trying to set processed layer out of order",
-			log.FieldNamed("processed", processed),
-			layerID)
+		logger.With().Debug("trying to set processed layer out of order",
+			log.Stringer("processed", processed),
+			log.Stringer("layer", layerID),
+		)
 		msh.nextProcessedLayers[layerID] = struct{}{}
 		return nil
 	}
@@ -229,103 +232,9 @@ func (msh *Mesh) setProcessedLayer(logger log.Log, layerID types.LayerID) error 
 	}
 	msh.processedLayer.Store(processed)
 	events.ReportNodeStatusUpdate()
-	logger.Event().Info("processed layer set", processed)
-	return nil
-}
-
-func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, updated map[types.LayerID]map[types.BlockID]bool) error {
-	if len(updated) == 0 && msh.validityUpdates == nil {
-		return nil
-	}
-	if msh.validityUpdates == nil {
-		msh.validityUpdates = updated
-	} else {
-		for lid, bvs := range updated {
-			if _, ok := msh.validityUpdates[lid]; !ok {
-				msh.validityUpdates[lid] = map[types.BlockID]bool{}
-			}
-			for bid, valid := range bvs {
-				msh.validityUpdates[lid][bid] = valid
-			}
-		}
-	}
-
-	logger.With().Info("processing validity update",
-		log.Int("num_updates", len(msh.validityUpdates)),
-		log.Object("updates", log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
-			for lid, bvs := range msh.validityUpdates {
-				encoder.AddUint32("layer_id", lid.Uint32())
-				for bid, valid := range bvs {
-					encoder.AddString("block_id", bid.String())
-					encoder.AddBool("valid", valid)
-				}
-			}
-			return nil
-		})))
-
-	var minChanged types.LayerID
-	inState := msh.LatestLayerInState()
-	for lid, bvs := range msh.validityUpdates {
-		if lid.After(inState) {
-			continue
-		}
-		logger := logger.WithFields(lid)
-		valids, err := layerValidBlocks(logger, msh.cdb, lid, bvs)
-		if err != nil {
-			return err
-		}
-		bid := types.EmptyBlockID
-		block := msh.getBlockToApply(valids)
-		if block != nil {
-			bid = block.ID()
-		}
-		applied, err := layers.GetApplied(msh.cdb, lid)
-		if err != nil {
-			return fmt.Errorf("get applied %v: %w", lid, err)
-		}
-		if bid != applied {
-			logger.With().Info("incorrect block applied",
-				log.Stringer("expected", bid),
-				log.Stringer("applied", applied))
-			if minChanged == 0 || lid.Before(minChanged) {
-				minChanged = lid
-			}
-		}
-	}
-
-	if minChanged != 0 {
-		revertTo := minChanged.Sub(1)
-		logger := logger.WithFields(log.Stringer("revert_to", revertTo))
-		logger.Info("reverting state")
-		if err := msh.revertState(ctx, logger, revertTo); err != nil {
-			return fmt.Errorf("revert state to %v: %w", revertTo, err)
-		}
-		msh.setLatestLayerInState(revertTo)
-	}
-
-	// only persist block validity *after* the state has been checked.
-	// if validity is persisted and the node restarts before the state is checked for revert,
-	// upon restarts, tortoise will use persisted validity, and there is no way for mesh
-	// to determine whether a state revert should be done.
-	if err := msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
-		for lid, updates := range msh.validityUpdates {
-			for bid, valid := range updates {
-				logger.With().Info("save block contextual validity",
-					bid, lid, log.Bool("validity", valid))
-				if valid {
-					if err := blocks.SetValid(dbtx, bid); err != nil {
-						return err
-					}
-				} else if err := blocks.SetInvalid(dbtx, bid); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	}); err != nil {
-		return fmt.Errorf("save block validity: %w", err)
-	}
-	msh.validityUpdates = nil
+	logger.Event().Debug("processed layer set",
+		log.Stringer("processed", processed),
+	)
 	return nil
 }
 
@@ -335,218 +244,73 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, upd
 func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error {
 	logger := msh.logger.WithContext(ctx).WithFields(log.Stringer("processing", layerID))
 
-	// pass the layer to tortoise for processing
-	logger.Debug("tallying votes")
-	msh.trtl.TallyVotes(ctx, layerID)
-
 	msh.mu.Lock()
 	defer msh.mu.Unlock()
 
-	logger.Info("processing layer")
-	var err error
-	defer func() {
-		if err != nil {
-			logger.With().Warning("failed to process layer", log.Err(err))
-		} else {
-			logger.Info("successfully processed layer")
-		}
-	}()
+	logger.Debug("tallying votes")
+	msh.trtl.TallyVotes(ctx, layerID)
 
 	// set processed layer even if later code will fail, as that failure is not related
 	// to the layer that is being processed
-	if err = msh.setProcessedLayer(logger, layerID); err != nil {
+	if err := msh.setProcessedLayer(logger, layerID); err != nil {
 		return err
 	}
-
-	updated := msh.trtl.Updates()
-	if err = msh.processValidityUpdates(ctx, logger, updated); err != nil {
+	results := msh.trtl.ChangedResults()
+	if err := msh.revert(ctx, results); err != nil {
 		return err
 	}
-
-	// mesh can't skip layer that failed to complete
-	from := msh.LatestLayerInState().Add(1)
-	to := layerID
-	if from == msh.MissingLayer() {
-		to = msh.maxProcessedLayer
-	}
-
-	if !to.Before(from) {
-		if err = msh.pushLayersToState(ctx, logger, from, to); err != nil {
+	for _, layer := range results {
+		if latest := msh.LatestLayerInState(); layer.Layer != latest.Add(1) {
+			logger.With().Fatal("update state out-of-order", log.Stringer("latest", latest))
+		}
+		if err := msh.applyState(ctx, logger, layer); err != nil {
 			return err
 		}
+		msh.setLatestLayerInState(layer.Layer)
 	}
 	return nil
 }
 
-func persistLayerHashes(dbtx *sql.Tx, lid types.LayerID, valids []*types.Block) error {
-	sortBlocks(valids)
-	var (
-		hasher = opinionhash.New()
-		err    error
-	)
-	if lid.After(types.GetEffectiveGenesis()) {
-		prev, err := layers.GetAggregatedHash(dbtx, lid.Sub(1))
-		if err != nil {
-			return fmt.Errorf("get previous aggregated hash %v: %w", lid, err)
-		}
-		hasher.WritePrevious(prev)
-	}
-	for _, block := range valids {
-		hasher.WriteSupport(block.ID(), block.TickHeight)
-	}
-	if err = layers.SetMeshHash(dbtx, lid, hasher.Hash()); err != nil {
-		return fmt.Errorf("persist hashes %v: %w", lid, err)
-	}
-	return nil
-}
+func (msh *Mesh) revert(ctx context.Context, results []result.Layer) error {
 
-// apply the state of a range of layers, including re-adding transactions from invalid blocks to the mempool.
-func (msh *Mesh) pushLayersToState(ctx context.Context, logger log.Log, from, to types.LayerID) error {
-	logger = logger.WithFields(
-		log.Stringer("from", from),
-		log.Stringer("to", to))
-	logger.Info("pushing layers to state")
-	if from.Before(types.GetEffectiveGenesis()) || to.Before(types.GetEffectiveGenesis()) {
-		logger.Fatal("tried to push genesis layers")
-	}
-
-	missing := msh.MissingLayer()
-	// we never reapply the state of oldVerified. note that state reversions must be handled separately.
-	for layerID := from; !layerID.After(to); layerID = layerID.Add(1) {
-		logger := logger.WithFields(layerID)
-		if !layerID.After(msh.LatestLayerInState()) {
-			logger.With().Error("trying to apply layer before currently applied layer",
-				log.Stringer("in_state", msh.LatestLayerInState()))
-			continue
-		}
-		if err := msh.pushLayer(ctx, logger, layerID); err != nil {
-			msh.missingLayer.Store(layerID)
-			return err
-		}
-		if layerID == missing {
-			msh.missingLayer.Store(types.LayerID(0))
-		}
-	}
-
-	return nil
-}
-
-func (msh *Mesh) getBlockToApply(validBlocks []*types.Block) *types.Block {
-	if len(validBlocks) == 0 {
-		return nil
-	}
-	sorted := sortBlocks(validBlocks)
-	return sorted[0]
-}
-
-func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID types.LayerID, updates map[types.BlockID]bool) ([]*types.Block, error) {
-	lyrBlocks, err := blocks.Layer(cdb, layerID)
-	if err != nil {
-		return nil, fmt.Errorf("get db layer blocks %s: %w", layerID, err)
-	}
-
-	if len(lyrBlocks) == 0 {
-		logger.Info("layer has no blocks")
-		return nil, nil
-	}
-
-	var valids, invalids []*types.Block
-	for _, b := range lyrBlocks {
-		if v, ok := updates[b.ID()]; ok {
-			if v {
-				valids = append(valids, b)
-			} else {
-				invalids = append(invalids, b)
-			}
-		} else if v, err = blocks.IsValid(cdb, b.ID()); err == nil {
-			if v {
-				valids = append(valids, b)
-			} else {
-				invalids = append(invalids, b)
-			}
-		} else if !errors.Is(err, blocks.ErrValidityNotDecided) {
-			return nil, fmt.Errorf("get block validity: %w", err)
-		}
-	}
-
-	if len(valids) > 0 {
-		return valids, nil
-	}
-
-	if len(invalids) > 0 {
-		logger.Info("layer blocks are all invalid")
-		return nil, nil
-	}
-
-	// tortoise has not verified this layer yet, simply apply the block that hare certified
-	bid, err := certificates.GetHareOutput(cdb, layerID)
-	if err != nil {
-		return nil, fmt.Errorf("%w: get hare output %v", errMissingHareOutput, err.Error())
-	}
-	// hare output an empty layer, or the network have multiple valid certificates
-	if bid == types.EmptyBlockID {
-		return nil, nil
-	}
-	for _, b := range lyrBlocks {
-		if b.ID() == bid {
-			logger.With().Info("hare output as valid block", b.ID())
-			valids = append(valids, b)
-			break
-		}
-	}
-	return valids, nil
-}
-
-func (msh *Mesh) pushLayer(ctx context.Context, logger log.Log, lid types.LayerID) error {
-	if latest := msh.LatestLayerInState(); lid != latest.Add(1) {
-		logger.With().Fatal("update state out-of-order", log.Stringer("latest", latest))
-	}
-
-	valids, err := layerValidBlocks(logger, msh.cdb, lid, map[types.BlockID]bool{})
-	if err != nil {
-		return err
-	}
-	if err = msh.applyState(ctx, logger, lid, valids); err != nil {
-		return err
-	}
-	msh.setLatestLayerInState(lid)
-	return nil
 }
 
 // applyState applies the block to the conservative state / vm and updates mesh's internal state.
 // ideally everything happens here should be atomic.
 // see https://github.com/spacemeshos/go-spacemesh/issues/3333
-func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.LayerID, valids []*types.Block) error {
-	applied := types.EmptyBlockID
-	block := msh.getBlockToApply(valids)
-	if block != nil {
-		applied = block.ID()
+func (msh *Mesh) applyState(ctx context.Context, logger log.Log, layer result.Layer) error {
+	var block *types.Block
+	if !layer.Empty() {
+		var err error
+		block, err = blocks.Get(msh.cdb, layer.Applied())
+		if err != nil {
+			return fmt.Errorf("get block %v", err, layer.Applied())
+		}
 	}
-
-	if err := msh.executor.Execute(ctx, lid, block); err != nil {
-		return fmt.Errorf("execute block %v/%v: %w", lid, applied, err)
+	if err := msh.executor.Execute(ctx, layer.Layer, block); err != nil {
+		return fmt.Errorf("execute block %v/%v: %w", layer.Layer, layer.Applied(), err)
 	}
-	logger.With().Info("block executed", log.Stringer("applied", applied))
-	return msh.persistState(ctx, logger, lid, applied, valids)
+	logger.With().Info("block executed", log.Stringer("block", layer.Applied()))
+	return msh.persistState(ctx, logger, layer)
 }
 
-func (msh *Mesh) persistState(ctx context.Context, logger log.Log, lid types.LayerID, applied types.BlockID, valids []*types.Block) error {
+func (msh *Mesh) persistState(ctx context.Context, logger log.Log, layer result.Layer) error {
 	if err := msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
-		if err := layers.SetApplied(dbtx, lid, applied); err != nil {
-			return fmt.Errorf("set applied for %v/%v: %w", lid, applied, err)
+		if err := layers.SetApplied(dbtx, layer.Layer, layer.Applied()); err != nil {
+			return fmt.Errorf("set applied for %v/%v: %w", layer.Layer, layer.Applied(), err)
 		}
-		if err := persistLayerHashes(dbtx, lid, valids); err != nil {
-			return err
+		if err := layers.SetMeshHash(dbtx, layer.Layer, layer.Opinion); err != nil {
+			return fmt.Errorf("persist hashes %v: %w", layer.Layer, err)
 		}
 		return nil
 	}); err != nil {
 		return err
 	}
 	events.ReportLayerUpdate(events.LayerUpdate{
-		LayerID: lid,
+		LayerID: layer.Layer,
 		Status:  events.LayerStatusTypeApplied,
 	})
-	logger.With().Info("state persisted", log.Stringer("applied", applied))
+	logger.With().Debug("state persisted", log.Stringer("applied", layer.Applied()))
 	return nil
 }
 
@@ -560,7 +324,7 @@ func (msh *Mesh) revertState(ctx context.Context, logger log.Log, revertTo types
 	if err := layers.UnsetAppliedFrom(msh.cdb, revertTo.Add(1)); err != nil {
 		return fmt.Errorf("unset applied layer %v: %w", revertTo.Add(1), err)
 	}
-	logger.Info("successfully reverted state")
+	logger.Info("reverted state")
 	return nil
 }
 
@@ -791,9 +555,4 @@ func sortBlocks(blks []*types.Block) []*types.Block {
 		return blks[i].ID().Compare(blks[j].ID())
 	})
 	return blks
-}
-
-// LastVerified returns the latest layer verified by tortoise.
-func (msh *Mesh) LastVerified() types.LayerID {
-	return msh.trtl.LatestComplete()
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
+	"github.com/spacemeshos/go-spacemesh/tortoise/result"
 )
 
 // Config for protocol parameters.
@@ -297,42 +298,44 @@ func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) 
 	return missing
 }
 
+func (t *Tortoise) results(from types.LayerID) []result.Layer {
+	rst := make([]result.Layer, 0, t.trtl.verified-from)
+	for lid := from + 1; lid <= t.trtl.verified; lid++ {
+		layer := t.trtl.layer(lid)
+		blocks := make([]result.Block, 0, len(layer.blocks))
+		for _, block := range layer.blocks {
+			blocks = append(blocks, result.Block{
+				Header: block.header(),
+				Data:   block.data,
+				Hare:   block.hare == support,
+				Valid:  block.validity == support,
+			})
+		}
+		rst = append(rst, result.Layer{
+			Layer:   lid,
+			Blocks:  blocks,
+			Opinion: layer.opinion,
+		})
+	}
+	return rst
+}
+
 // Results returns layers that crossed threshold in range (from, verified].
-func (t *Tortoise) Results(from types.LayerID) ([]ResultLayer, error) {
+func (t *Tortoise) Results(from types.LayerID) ([]result.Layer, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if from <= t.trtl.evicted {
 		return nil, fmt.Errorf("requested layer %d is before evicted %d", from, t.trtl.evicted)
 	}
-	if from > t.trtl.processed {
-		return nil, fmt.Errorf("request layer %d is not yet added to the state (processed %d)", from, t.trtl.processed)
+	if from > t.trtl.verified {
+		return nil, fmt.Errorf("request layer %d is not yet added to the state (verified %d)", from, t.trtl.verified)
 	}
-	rst := make([]ResultLayer, 0, t.trtl.verified-from)
-	for lid := from + 1; lid <= t.trtl.verified; lid++ {
-		layer := t.trtl.layer(lid)
-		blocks := make([]ResultBlock, 0, len(layer.blocks))
-		for _, block := range layer.blocks {
-			blocks = append(blocks, ResultBlock{
-				Header: block.header(),
-				Data:   block.data,
-				Valid:  block.validity == support,
-			})
-		}
-		rst = append(rst, ResultLayer{
-			Layer:  lid,
-			Blocks: blocks,
-		})
-	}
-	return rst, nil
+	return t.results(from), nil
 }
 
-type ResultLayer struct {
-	Layer  types.LayerID
-	Blocks []ResultBlock
-}
-
-type ResultBlock struct {
-	Header types.Vote
-	Valid  bool
-	Data   bool
+// ChangedResults returns list of the results that were changed this last call.
+func (t *Tortoise) ChangedResults() []result.Layer {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.results(t.trtl.processed)
 }

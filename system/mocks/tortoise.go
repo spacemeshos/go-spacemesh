@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	result "github.com/spacemeshos/go-spacemesh/tortoise/result"
 )
 
 // MockTortoise is a mock of Tortoise interface.
@@ -35,18 +36,18 @@ func (m *MockTortoise) EXPECT() *MockTortoiseMockRecorder {
 	return m.recorder
 }
 
-// LatestComplete mocks base method.
-func (m *MockTortoise) LatestComplete() types.LayerID {
+// ChangedResults mocks base method.
+func (m *MockTortoise) ChangedResults() []result.Layer {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LatestComplete")
-	ret0, _ := ret[0].(types.LayerID)
+	ret := m.ctrl.Call(m, "ChangedResults")
+	ret0, _ := ret[0].([]result.Layer)
 	return ret0
 }
 
-// LatestComplete indicates an expected call of LatestComplete.
-func (mr *MockTortoiseMockRecorder) LatestComplete() *gomock.Call {
+// ChangedResults indicates an expected call of ChangedResults.
+func (mr *MockTortoiseMockRecorder) ChangedResults() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestComplete", reflect.TypeOf((*MockTortoise)(nil).LatestComplete))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChangedResults", reflect.TypeOf((*MockTortoise)(nil).ChangedResults))
 }
 
 // OnBlock mocks base method.
@@ -71,6 +72,21 @@ func (m *MockTortoise) OnHareOutput(arg0 types.LayerID, arg1 types.BlockID) {
 func (mr *MockTortoiseMockRecorder) OnHareOutput(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnHareOutput", reflect.TypeOf((*MockTortoise)(nil).OnHareOutput), arg0, arg1)
+}
+
+// Result mocks base method.
+func (m *MockTortoise) Result(arg0 types.LayerID) ([]result.Layer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Result", arg0)
+	ret0, _ := ret[0].([]result.Layer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Result indicates an expected call of Result.
+func (mr *MockTortoiseMockRecorder) Result(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Result", reflect.TypeOf((*MockTortoise)(nil).Result), arg0)
 }
 
 // TallyVotes mocks base method.
