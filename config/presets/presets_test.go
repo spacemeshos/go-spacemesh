@@ -33,7 +33,8 @@ func TestCanGeneratePOST(t *testing.T) {
 				activation.DefaultPostProvingOpts(),
 			)
 			req.NoError(err)
-			req.NoError(mgr.StartSession(context.Background(), opts))
+			req.NoError(mgr.PrepareInitializer(context.Background(), opts))
+			req.NoError(mgr.StartSession(context.Background()))
 
 			_, _, err = mgr.GenerateProof(context.Background(), ch)
 			req.NoError(err)

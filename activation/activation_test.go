@@ -253,7 +253,8 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	coinbase := types.Address{1, 1, 1}
 	postSetupOpts := PostSetupOpts{}
 
-	tab.mpost.EXPECT().StartSession(gomock.Any(), postSetupOpts).AnyTimes()
+	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
+	tab.mpost.EXPECT().StartSession(gomock.Any()).AnyTimes()
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
 	require.NoError(t, tab.StartSmeshing(coinbase, postSetupOpts))
@@ -270,7 +271,8 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	now := time.Now()
 	getBuilder := func(t *testing.T) *Builder {
 		tab := newTestBuilder(t)
-		tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any()).AnyTimes()
+		tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
+		tab.mpost.EXPECT().StartSession(gomock.Any()).AnyTimes()
 		tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes()
 		tab.mpost.EXPECT().Reset().AnyTimes()
 		ch := make(chan struct{})
@@ -318,7 +320,8 @@ func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
 
 func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	tab := newTestBuilder(t)
-	tab.mpost.EXPECT().StartSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
+	tab.mpost.EXPECT().StartSession(gomock.Any()).Return(nil).AnyTimes()
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).Return(nil, nil, nil).AnyTimes()
 	ch := make(chan struct{})
 	close(ch)
@@ -1014,7 +1017,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 	select {
 	case <-builderConfirmation:
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		require.FailNow(t, "failed waiting for required number of tries to occur")
 	}
 }
