@@ -57,7 +57,7 @@ type PostProvingOpts struct {
 func DefaultPostProvingOpts() PostProvingOpts {
 	return PostProvingOpts{
 		Threads: 1,
-		Nonces:  20,
+		Nonces:  16,
 	}
 }
 
