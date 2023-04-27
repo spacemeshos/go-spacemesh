@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/tortoise/result"
 )
 
 func opinions(prevHash types.Hash32) []*fetch.LayerOpinion {
@@ -394,5 +395,36 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), instate)
 	ts.mTortoise.EXPECT().Updates().Return(nil)
+	require.NoError(t, ts.syncer.processLayers(context.Background()))
+}
+
+func TestProcessLayers_SucceedOnRetry(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+	ts.syncer.setATXSynced()
+	current := types.GetEffectiveGenesis().Add(1)
+	ts.mTicker.advanceToLayer(current)
+	ts.syncer.setLastSyncedLayer(current)
+
+	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
+	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
+	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), gomock.Any()).AnyTimes()
+	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
+	ts.mTortoise.EXPECT().Updates().Return(nil).AnyTimes()
+	ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	ts.mVm.EXPECT().GetStateRoot().AnyTimes()
+	ts.mConState.EXPECT().UpdateCache(gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).AnyTimes()
+
+	results := []result.Layer{
+		{Blocks: []result.Block{{Header: types.Vote{ID: types.BlockID{1}}, Hare: true}}},
+		{Blocks: []result.Block{{Header: types.Vote{ID: types.BlockID{2}}, Valid: true}}},
+	}
+	ts.mTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(results, nil).Times(2)
+	ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), []types.BlockID{{1}, {2}}).DoAndReturn(
+		func(_ context.Context, got []types.BlockID) error {
+			results[0].Blocks[0].Data = true
+			results[1].Blocks[0].Data = true
+			return nil
+		})
+
 	require.NoError(t, ts.syncer.processLayers(context.Background()))
 }
