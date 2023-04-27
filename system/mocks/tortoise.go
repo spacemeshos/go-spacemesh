@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	result "github.com/spacemeshos/go-spacemesh/tortoise/result"
 )
 
 // MockTortoise is a mock of Tortoise interface.
@@ -35,20 +36,6 @@ func (m *MockTortoise) EXPECT() *MockTortoiseMockRecorder {
 	return m.recorder
 }
 
-// LatestComplete mocks base method.
-func (m *MockTortoise) LatestComplete() types.LayerID {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LatestComplete")
-	ret0, _ := ret[0].(types.LayerID)
-	return ret0
-}
-
-// LatestComplete indicates an expected call of LatestComplete.
-func (mr *MockTortoiseMockRecorder) LatestComplete() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestComplete", reflect.TypeOf((*MockTortoise)(nil).LatestComplete))
-}
-
 // OnBlock mocks base method.
 func (m *MockTortoise) OnBlock(arg0 *types.Block) {
 	m.ctrl.T.Helper()
@@ -71,6 +58,21 @@ func (m *MockTortoise) OnHareOutput(arg0 types.LayerID, arg1 types.BlockID) {
 func (mr *MockTortoiseMockRecorder) OnHareOutput(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnHareOutput", reflect.TypeOf((*MockTortoise)(nil).OnHareOutput), arg0, arg1)
+}
+
+// Results mocks base method.
+func (m *MockTortoise) Results(from, to types.LayerID) ([]result.Layer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Results", from, to)
+	ret0, _ := ret[0].([]result.Layer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Results indicates an expected call of Results.
+func (mr *MockTortoiseMockRecorder) Results(from, to interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Results", reflect.TypeOf((*MockTortoise)(nil).Results), from, to)
 }
 
 // TallyVotes mocks base method.

@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
+	"github.com/spacemeshos/go-spacemesh/tortoise/result"
 )
 
 var errMissingHareOutput = errors.New("missing hare output")
@@ -343,23 +344,15 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	defer msh.mu.Unlock()
 
 	logger.Info("processing layer")
-	var err error
-	defer func() {
-		if err != nil {
-			logger.With().Warning("failed to process layer", log.Err(err))
-		} else {
-			logger.Info("successfully processed layer")
-		}
-	}()
 
 	// set processed layer even if later code will fail, as that failure is not related
 	// to the layer that is being processed
-	if err = msh.setProcessedLayer(logger, layerID); err != nil {
+	if err := msh.setProcessedLayer(logger, layerID); err != nil {
 		return err
 	}
 
 	updated := msh.trtl.Updates()
-	if err = msh.processValidityUpdates(ctx, logger, updated); err != nil {
+	if err := msh.processValidityUpdates(ctx, logger, updated); err != nil {
 		return err
 	}
 
@@ -371,11 +364,31 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	}
 
 	if !to.Before(from) {
+		results, err := msh.trtl.Results(from, to)
+		if err != nil {
+			return err
+		}
+		if missing := missingBlocks(results); len(missing) > 0 {
+			return &types.ErrorMissing{MissingData: types.MissingData{Blocks: missing}}
+		}
 		if err = msh.pushLayersToState(ctx, logger, from, to); err != nil {
 			return err
 		}
 	}
+	logger.Debug("finished processing layer")
 	return nil
+}
+
+func missingBlocks(results []result.Layer) []types.BlockID {
+	var response []types.BlockID
+	for _, layer := range results {
+		for _, block := range layer.Blocks {
+			if (block.Valid || block.Hare) && !block.Data {
+				response = append(response, block.Header.ID)
+			}
+		}
+	}
+	return response
 }
 
 func persistLayerHashes(dbtx *sql.Tx, lid types.LayerID, valids []*types.Block) error {
@@ -791,9 +804,4 @@ func sortBlocks(blks []*types.Block) []*types.Block {
 		return blks[i].ID().Compare(blks[j].ID())
 	})
 	return blks
-}
-
-// LastVerified returns the latest layer verified by tortoise.
-func (msh *Mesh) LastVerified() types.LayerID {
-	return msh.trtl.LatestComplete()
 }

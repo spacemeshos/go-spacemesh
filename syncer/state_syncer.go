@@ -95,8 +95,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		}
 		// even if it fails to fetch opinions, we still go ahead to ProcessLayer so that the tortoise
 		// has a chance to count ballots and form its own opinions
-
-		if err := s.mesh.ProcessLayer(ctx, lid); err != nil {
+		if err := s.processWithRetry(ctx, lid); err != nil {
 			s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", lid, log.Err(err))
 		}
 	}
@@ -106,6 +105,23 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		log.Stringer("processed", s.mesh.ProcessedLayer()),
 	)
 	return nil
+}
+
+func (s *Syncer) processWithRetry(ctx context.Context, lid types.LayerID) error {
+	for {
+		origerr := s.mesh.ProcessLayer(ctx, lid)
+		if origerr == nil {
+			return nil
+		}
+		var missing *types.ErrorMissing
+		if !errors.As(origerr, &missing) {
+			return origerr
+		}
+		err := s.dataFetcher.GetBlocks(ctx, missing.Blocks)
+		if err != nil {
+			return fmt.Errorf("%w: %s", origerr, err)
+		}
+	}
 }
 
 func (s *Syncer) needCert(logger log.Log, lid types.LayerID) (bool, error) {
