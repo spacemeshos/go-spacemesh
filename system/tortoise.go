@@ -15,5 +15,6 @@ type Tortoise interface {
 	OnHareOutput(types.LayerID, types.BlockID)
 	TallyVotes(context.Context, types.LayerID)
 	Updates() map[types.LayerID]map[types.BlockID]bool
+	LatestComplete() types.LayerID
 	Results(from, to types.LayerID) ([]result.Layer, error)
 }

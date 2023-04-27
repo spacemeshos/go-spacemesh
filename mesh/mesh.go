@@ -805,3 +805,8 @@ func sortBlocks(blks []*types.Block) []*types.Block {
 	})
 	return blks
 }
+
+// LastVerified returns the latest layer verified by tortoise.
+func (msh *Mesh) LastVerified() types.LayerID {
+	return msh.trtl.LatestComplete()
+}
