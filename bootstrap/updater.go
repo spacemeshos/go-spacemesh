@@ -256,6 +256,7 @@ func (u *Updater) get(ctx context.Context) (*VerifiedUpdate, []byte, error) {
 	if len(data) == 0 { // no update data
 		return nil, nil, nil
 	}
+	received.Add(float64(len(data)))
 	verified, err := validate(u.cfg, resource.String(), data, u.latestUpdateId())
 	if err != nil {
 		return nil, nil, err
