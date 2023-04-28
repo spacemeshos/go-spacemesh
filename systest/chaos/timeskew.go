@@ -15,11 +15,7 @@ func Timeskew(cctx *testcontext.Context, name string, offset string, pods ...str
 	tc.Namespace = cctx.Namespace
 
 	tc.Spec.Mode = chaos.AllMode
-	tc.Spec.Selector = chaos.PodSelectorSpec{
-		Pods: map[string][]string{
-			cctx.Namespace: pods,
-		},
-	}
+	tc.Spec.Selector = selectPods(pods)
 	tc.Spec.TimeOffset = offset
 
 	if err := cctx.Generic.Create(cctx, &tc); err != nil {

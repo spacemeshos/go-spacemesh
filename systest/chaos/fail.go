@@ -4,9 +4,24 @@ import (
 	"context"
 
 	chaos "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
+
+func selectPods(pods []string) chaos.PodSelectorSpec {
+	return chaos.PodSelectorSpec{
+		GenericSelectorSpec: chaos.GenericSelectorSpec{
+			ExpressionSelectors: chaos.LabelSelectorRequirements{
+				metav1.LabelSelectorRequirement{
+					Key:      "id",
+					Operator: metav1.LabelSelectorOpIn,
+					Values:   pods,
+				},
+			},
+		},
+	}
+}
 
 // Teardown is returned by every chaos action and executed
 // by the caller once chaos needs to be stopped.
@@ -20,11 +35,7 @@ func Fail(cctx *testcontext.Context, name string, pods ...string) (Teardown, err
 
 	fail.Spec.Action = chaos.PodFailureAction
 	fail.Spec.Mode = chaos.AllMode
-	fail.Spec.Selector = chaos.PodSelectorSpec{
-		Pods: map[string][]string{
-			cctx.Namespace: pods,
-		},
-	}
+	fail.Spec.Selector = selectPods(pods)
 	if err := cctx.Generic.Create(cctx, &fail); err != nil {
 		return nil, err
 	}
