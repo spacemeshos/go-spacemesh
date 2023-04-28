@@ -4,7 +4,7 @@ import (
 	"context"
 
 	chaos "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
@@ -13,9 +13,9 @@ func selectPods(pods []string) chaos.PodSelectorSpec {
 	return chaos.PodSelectorSpec{
 		GenericSelectorSpec: chaos.GenericSelectorSpec{
 			ExpressionSelectors: chaos.LabelSelectorRequirements{
-				metav1.LabelSelectorRequirement{
+				apimetav1.LabelSelectorRequirement{
 					Key:      "id",
-					Operator: metav1.LabelSelectorOpIn,
+					Operator: apimetav1.LabelSelectorOpIn,
 					Values:   pods,
 				},
 			},
