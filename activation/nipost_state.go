@@ -29,7 +29,7 @@ func write(path string, data []byte) error {
 		return fmt.Errorf("write data %v: %w", path, err)
 	}
 
-	crc := make([]byte, 8)
+	crc := make([]byte, crc64Size)
 	binary.BigEndian.PutUint64(crc, checksum.Sum64())
 	if _, err := buf.Write(crc); err != nil {
 		return fmt.Errorf("write checksum %v: %w", path, err)
