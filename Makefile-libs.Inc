@@ -104,7 +104,7 @@ get-postrs-lib: $(PROJ_DIR)$(POSTRS_SETUP_ZIP) $(BINDIR_POSTRS_SETUP_LIBS) insta
 
 install-deps:
 ifeq ($(platform), $(filter $(platform), linux linux-arm64))
-	sudo apt-get update && sudo apt-get install ocl-icd-opencl-dev libpocl2 clinfo
+	sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2 clinfo
 else
 ifeq ($(platform), windows)
 	choco install opencl-intel-cpu-runtime

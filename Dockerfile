@@ -15,8 +15,8 @@ RUN set -x \
    procps \
    net-tools \
    file \
-   # -- it allows to start with nvidia-docker runtime --
-   #libnvidia-compute-390 \
+   # required for OpenCL CPU provider
+   ocl-icd-libopencl1 libpocl2 \
    && apt-get clean \
    && rm -rf /var/lib/apt/lists/* \
    && locale-gen en_US.UTF-8 \
@@ -34,7 +34,8 @@ FROM golang:1.19 as builder
 RUN set -ex \
    && apt-get update --fix-missing \
    && apt-get install -qy --no-install-recommends \
-   unzip
+   unzip \
+   sudo
 
 WORKDIR /src
 
