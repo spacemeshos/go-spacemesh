@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -91,11 +90,6 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 	ld.Ballots, err = ballots.IDsInLayer(h.cdb, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get layer ballots", lid, log.Err(err))
-		return nil, err
-	}
-	ld.Blocks, err = blocks.IDsInLayer(h.cdb, lid)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Warning("failed to get layer blocks", lid, log.Err(err))
 		return nil, err
 	}
 

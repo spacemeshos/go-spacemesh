@@ -63,7 +63,6 @@ type EpochData struct {
 // LayerData is the data response for a given layer ID.
 type LayerData struct {
 	Ballots []types.BallotID `scale:"max=500"` // expected are 50 proposals per layer + safety margin
-	Blocks  []types.BlockID  `scale:"max=100"` // only expected to have 1 block per layer, 100 is a safe upper bound
 }
 
 // LayerOpinion is the response for opinion for a given layer.
