@@ -299,6 +299,20 @@ func (mr *MocknipostBuilderMockRecorder) BuildNIPost(ctx, challenge interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildNIPost", reflect.TypeOf((*MocknipostBuilder)(nil).BuildNIPost), ctx, challenge)
 }
 
+// DataDir mocks base method.
+func (m *MocknipostBuilder) DataDir() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DataDir")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// DataDir indicates an expected call of DataDir.
+func (mr *MocknipostBuilderMockRecorder) DataDir() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DataDir", reflect.TypeOf((*MocknipostBuilder)(nil).DataDir))
+}
+
 // UpdatePoETProvers mocks base method.
 func (m *MocknipostBuilder) UpdatePoETProvers(arg0 []PoetProvingServiceClient) {
 	m.ctrl.T.Helper()
