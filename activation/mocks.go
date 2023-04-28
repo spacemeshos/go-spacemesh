@@ -518,11 +518,12 @@ func (mr *MockpostSetupProviderMockRecorder) CommitmentAtx() *gomock.Call {
 }
 
 // ComputeProviders mocks base method.
-func (m *MockpostSetupProvider) ComputeProviders() []PostSetupComputeProvider {
+func (m *MockpostSetupProvider) ComputeProviders() ([]PostSetupComputeProvider, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ComputeProviders")
 	ret0, _ := ret[0].([]PostSetupComputeProvider)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // ComputeProviders indicates an expected call of ComputeProviders.

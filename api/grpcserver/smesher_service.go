@@ -201,7 +201,10 @@ func (s SmesherService) PostSetupStatusStream(_ *empty.Empty, stream pb.SmesherS
 func (s SmesherService) PostSetupComputeProviders(ctx context.Context, in *pb.PostSetupComputeProvidersRequest) (*pb.PostSetupComputeProvidersResponse, error) {
 	log.Info("GRPC SmesherService.PostSetupComputeProviders")
 
-	providers := s.postSetupProvider.ComputeProviders()
+	providers, err := s.postSetupProvider.ComputeProviders()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get OpenCL providers: %v", err)
+	}
 
 	res := &pb.PostSetupComputeProvidersResponse{}
 	res.Providers = make([]*pb.PostSetupComputeProvider, len(providers))
@@ -219,7 +222,7 @@ func (s SmesherService) PostSetupComputeProviders(ctx context.Context, in *pb.Po
 		res.Providers[i] = &pb.PostSetupComputeProvider{
 			Id:          uint32(p.ID),
 			Model:       p.Model,
-			ComputeApi:  pb.PostSetupComputeProvider_ComputeApiClass(p.ComputeAPI), // assuming enum values match.
+			ComputeApi:  pb.PostSetupComputeProvider_ComputeApiClass(p.DeviceType), // TODO(mafa): update API
 			Performance: uint64(hashesPerSec),
 		}
 	}

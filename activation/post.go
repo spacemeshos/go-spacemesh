@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/post/config"
-	"github.com/spacemeshos/post/gpu"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/proving"
 
@@ -150,22 +149,30 @@ func (mgr *PostSetupManager) Status() *PostSetupStatus {
 }
 
 // ComputeProviders returns a list of available compute providers for Post setup.
-func (*PostSetupManager) ComputeProviders() []PostSetupComputeProvider {
-	providers := initialization.Providers()
+func (*PostSetupManager) ComputeProviders() ([]PostSetupComputeProvider, error) {
+	providers, err := initialization.OpenCLProviders()
+	if err != nil {
+		return nil, err
+	}
 
 	providersAlias := make([]PostSetupComputeProvider, len(providers))
 	for i, p := range providers {
 		providersAlias[i] = PostSetupComputeProvider(p)
 	}
 
-	return providersAlias
+	return providersAlias, nil
 }
 
 // BestProvider returns the most performant compute provider based on a short benchmarking session.
 func (mgr *PostSetupManager) BestProvider() (*PostSetupComputeProvider, error) {
+	providers, err := mgr.ComputeProviders()
+	if err != nil {
+		return nil, err
+	}
+
 	var bestProvider PostSetupComputeProvider
 	var maxHS int
-	for _, p := range mgr.ComputeProviders() {
+	for _, p := range providers {
 		hs, err := mgr.Benchmark(p)
 		if err != nil {
 			return nil, err
@@ -180,7 +187,7 @@ func (mgr *PostSetupManager) BestProvider() (*PostSetupComputeProvider, error) {
 
 // Benchmark runs a short benchmarking session for a given provider to evaluate its performance.
 func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) {
-	score, err := gpu.Benchmark(initialization.ComputeProvider(p))
+	score, err := initialization.Benchmark(initialization.ComputeProvider(p))
 	if err != nil {
 		return score, fmt.Errorf("benchmark GPU: %w", err)
 	}
@@ -262,7 +269,7 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 			return err
 		}
 
-		mgr.logger.Info("found best compute provider: id: %d, model: %v, computeAPI: %v", p.ID, p.Model, p.ComputeAPI)
+		mgr.logger.Info("found best compute provider: id: %d, model: %v, device type: %v", p.ID, p.Model, p.DeviceType)
 		opts.ComputeProviderID = int(p.ID)
 	}
 
