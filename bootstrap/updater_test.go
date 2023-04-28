@@ -2,7 +2,6 @@ package bootstrap_test
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -186,7 +185,6 @@ func TestStartClose(t *testing.T) {
 	cfg := bootstrap.DefaultConfig()
 	fs := afero.NewMemMapFs()
 	persistDir := filepath.Join(cfg.DataDir, bootstrap.DirName)
-	fmt.Println(bootstrap.PersistFilename(persistDir, time.Now().Unix()))
 	require.NoError(t, afero.WriteFile(fs, bootstrap.PersistFilename(persistDir, time.Now().Unix()), []byte(update1), 0o400))
 	updater := bootstrap.New(
 		bootstrap.WithConfig(cfg),
@@ -404,4 +402,46 @@ func TestGetInvalidUpdate(t *testing.T) {
 			require.ErrorIs(t, updater.DoIt(context.Background()), tc.err)
 		})
 	}
+}
+
+func TestNoNewUpdate(t *testing.T) {
+	etag := "etag"
+	cached := false
+	fs := afero.NewMemMapFs()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodGet, r.Method)
+		if cached {
+			require.Equal(t, etag, r.Header.Get("If-None-Match"))
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		w.Header().Set("Etag", etag)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(update1))
+		cached = true
+	}))
+	defer ts.Close()
+	cfg := bootstrap.DefaultConfig()
+	cfg.URL = ts.URL
+	updater := bootstrap.New(
+		bootstrap.WithConfig(cfg),
+		bootstrap.WithLogger(logtest.New(t)),
+		bootstrap.WithFilesystem(fs),
+		bootstrap.WithHttpClient(ts.Client()),
+	)
+
+	ch := updater.Subscribe()
+	require.NoError(t, updater.DoIt(context.Background()))
+	require.Len(t, ch, 1)
+	got := <-ch
+	require.NotNil(t, got)
+	checkUpdate1(t, got)
+	require.NotEmpty(t, got.Persisted)
+	data, err := afero.ReadFile(fs, got.Persisted)
+	require.NoError(t, err)
+	require.Equal(t, []byte(update1), data)
+
+	// no new update
+	require.NoError(t, updater.DoIt(context.Background()))
+	require.Empty(t, ch)
 }

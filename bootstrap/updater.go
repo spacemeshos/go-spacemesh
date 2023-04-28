@@ -80,6 +80,7 @@ type Updater struct {
 	mu           sync.Mutex
 	subscribers  []chan *VerifiedUpdate
 	lastUpdateId int64 // ID (unix timestamp) of the last update
+	etag         string
 }
 
 type Opt func(*Updater)
@@ -184,9 +185,21 @@ func (u *Updater) latestUpdateId() int64 {
 	return u.lastUpdateId
 }
 
+func (u *Updater) setEtag(etag string) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.etag = etag
+}
+
+func (u *Updater) getEtag() string {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.etag
+}
+
 func (u *Updater) DoIt(ctx context.Context) error {
 	logger := u.logger.WithContext(ctx)
-	verified, data, err := get(ctx, u.client, u.cfg, u.latestUpdateId())
+	verified, data, err := u.get(ctx)
 	if err != nil {
 		return err
 	}
@@ -220,8 +233,8 @@ func (u *Updater) updateAndNotify(ctx context.Context, verified *VerifiedUpdate)
 	return nil
 }
 
-func get(ctx context.Context, client *http.Client, cfg Config, lastUpdateId int64) (*VerifiedUpdate, []byte, error) {
-	resource, err := url.Parse(cfg.URL)
+func (u *Updater) get(ctx context.Context) (*VerifiedUpdate, []byte, error) {
+	resource, err := url.Parse(u.cfg.URL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse bootstrap uri: %w", err)
 	}
@@ -232,39 +245,44 @@ func get(ctx context.Context, client *http.Client, cfg Config, lastUpdateId int6
 	ctx, cancel := context.WithTimeout(ctx, httpTimeout)
 	defer cancel()
 	t0 := time.Now()
-	data, err := query(ctx, client, resource)
+	etag, data, err := query(ctx, u.client, resource, u.getEtag())
 	if err != nil {
 		queryFailureCount.Add(1)
 		return nil, nil, err
 	}
 	queryDuration.WithLabelValues(labelQuery).Observe(float64(time.Since(t0)))
 	queryOkCount.Add(1)
+	u.setEtag(etag)
 	if len(data) == 0 { // no update data
 		return nil, nil, nil
 	}
-	verified, err := validate(cfg, resource.String(), data, lastUpdateId)
+	verified, err := validate(u.cfg, resource.String(), data, u.latestUpdateId())
 	if err != nil {
 		return nil, nil, err
 	}
 	return verified, data, nil
 }
 
-func query(ctx context.Context, client *http.Client, resource *url.URL) ([]byte, error) {
+func query(ctx context.Context, client *http.Client, resource *url.URL, etag string) (string, []byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, resource.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("create http request: %w", err)
+		return "", nil, fmt.Errorf("create http request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("If-None-Match", etag)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("http get bootstrap file: %w", err)
+		return "", nil, fmt.Errorf("http get bootstrap file: %w", err)
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("bootstrap read resonse: %w", err)
+		return "", nil, fmt.Errorf("bootstrap read resonse: %w", err)
 	}
-	return data, nil
+	if resp.StatusCode == http.StatusNotModified {
+		queryCachedCount.Add(1)
+	}
+	return resp.Header.Get("Etag"), data, nil
 }
 
 func validate(cfg Config, source string, data []byte, lastUpdateId int64) (*VerifiedUpdate, error) {
