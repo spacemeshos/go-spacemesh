@@ -117,6 +117,10 @@ func (s *Syncer) processWithRetry(ctx context.Context, lid types.LayerID) error 
 		if !errors.As(origerr, &missing) {
 			return origerr
 		}
+		s.logger.With().Debug("requesting missing blocks",
+			log.Context(ctx),
+			log.Inline(missing),
+		)
 		err := s.dataFetcher.GetBlocks(ctx, missing.Blocks)
 		if err != nil {
 			return fmt.Errorf("%w: %s", origerr, err)
