@@ -11,6 +11,7 @@ const (
 
 	success = "ok"
 	failure = "fail"
+	cached  = "cached"
 
 	labelQuery = "query"
 )
@@ -24,6 +25,14 @@ var (
 	)
 	queryOkCount      = queryCount.WithLabelValues(success)
 	queryFailureCount = queryCount.WithLabelValues(failure)
+	queryCachedCount  = queryCount.WithLabelValues(cached)
+
+	received = metrics.NewCounter(
+		"received",
+		namespace,
+		"total bytes received",
+		nil,
+	).WithLabelValues()
 
 	updateCount = metrics.NewCounter(
 		"updates",
