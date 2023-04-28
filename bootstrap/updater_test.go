@@ -444,4 +444,5 @@ func TestNoNewUpdate(t *testing.T) {
 	// no new update
 	require.NoError(t, updater.DoIt(context.Background()))
 	require.Empty(t, ch)
+	require.True(t, cached)
 }
