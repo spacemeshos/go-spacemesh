@@ -317,7 +317,7 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, upd
 					if err := blocks.SetValid(dbtx, bid); err != nil {
 						return err
 					}
-				} else if err := blocks.SetInvalid(dbtx, bid); err != nil {
+				} else if err := blocks.SetInvalid(dbtx, bid); err != nil && !errors.Is(err, sql.ErrNotFound) {
 					return err
 				}
 			}
