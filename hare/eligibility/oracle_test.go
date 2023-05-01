@@ -509,18 +509,18 @@ func TestActiveSet(t *testing.T) {
 	layer := targetEpoch.FirstLayer().Add(o.cfg.ConfidenceParam)
 	createLayerData(t, o.cdb, targetEpoch.FirstLayer(), numMiners)
 
-	activeSet, err := o.actives(context.Background(), layer)
+	aset, err := o.actives(context.Background(), layer)
 	require.NoError(t, err)
-	require.Equal(t, createMapWithSize(numMiners), activeSet)
+	require.Equal(t, createMapWithSize(numMiners), aset.set)
 
 	got, err := o.ActiveSet(context.Background(), targetEpoch)
 	require.NoError(t, err)
-	require.Len(t, got, len(activeSet))
+	require.Len(t, got, len(aset.set))
 	for _, id := range got {
 		atx, err := o.cdb.GetAtxHeader(id)
 		require.NoError(t, err)
-		require.Contains(t, activeSet, atx.NodeID)
-		delete(activeSet, atx.NodeID)
+		require.Contains(t, aset.set, atx.NodeID)
+		delete(aset.set, atx.NodeID)
 	}
 }
 
@@ -540,7 +540,7 @@ func TestActives(t *testing.T) {
 		}
 		activeSet, err := o.actives(context.Background(), first)
 		require.NoError(t, err)
-		require.Equal(t, createMapWithSize(numMiners), activeSet)
+		require.Equal(t, createMapWithSize(numMiners), activeSet.set)
 	})
 	t.Run("steady state", func(t *testing.T) {
 		numMiners++
@@ -551,7 +551,7 @@ func TestActives(t *testing.T) {
 		start := layer.Add(o.cfg.ConfidenceParam)
 		activeSet, err := o.actives(context.Background(), start)
 		require.NoError(t, err)
-		require.Equal(t, createMapWithSize(numMiners), activeSet)
+		require.Equal(t, createMapWithSize(numMiners), activeSet.set)
 		end := (layer.GetEpoch() + 1).FirstLayer().Add(o.cfg.ConfidenceParam)
 
 		for lid := start.Add(1); lid.Before(end); lid = lid.Add(1) {
@@ -581,7 +581,7 @@ func TestActives(t *testing.T) {
 		}
 		got, err := o.actives(context.Background(), end)
 		require.NoError(t, err)
-		require.Equal(t, createMapWithSize(numMiners+1), got)
+		require.Equal(t, createMapWithSize(numMiners+1), got.set)
 	})
 }
 
@@ -599,7 +599,11 @@ func TestActives_ConcurrentCalls(t *testing.T) {
 				firstCall = false
 				return nil, false
 			}
-			return createMapWithSize(5), true
+			aset := cachedActiveSet{set: createMapWithSize(5)}
+			for _, value := range aset.set {
+				aset.total += value
+			}
+			return &aset, true
 		}).Times(102)
 	mc.EXPECT().Add(layer.GetEpoch()-1, gomock.Any())
 	o.activesCache = mc

@@ -202,10 +202,7 @@ func (t *Tortoise) OnBlock(block *types.Block) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	if err := t.trtl.onBlock(block.LayerIndex, block); err != nil {
-		errorsCounter.Inc()
-		t.logger.With().Error("failed to add block to the state", block.ID(), log.Err(err))
-	}
+	t.trtl.onBlock(block.ToVote())
 }
 
 // OnBallot should be called every time new ballot is received.
@@ -223,6 +220,10 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 type DecodedBallot struct {
 	*types.Ballot
 	info *ballotInfo
+	// after validation is finished we need to add new vote targets
+	// for tortoise from the decoded votes. minHint identifies the boundary
+	// until which we have to scan.
+	minHint types.LayerID
 }
 
 // DecodeBallot decodes ballot if it wasn't processed earlier.
@@ -231,7 +232,7 @@ func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	info, err := t.trtl.decodeBallot(ballot)
+	info, min, err := t.trtl.decodeBallot(ballot)
 	if err != nil {
 		errorsCounter.Inc()
 		return nil, err
@@ -247,7 +248,7 @@ func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 			info.opinion().ShortString(), ballot.OpinionHash.ShortString(), ballot.ID(),
 		)
 	}
-	return &DecodedBallot{Ballot: ballot, info: info}, nil
+	return &DecodedBallot{Ballot: ballot, info: info, minHint: min}, nil
 }
 
 // StoreBallot stores previously decoded ballot.
@@ -259,10 +260,7 @@ func (t *Tortoise) StoreBallot(decoded *DecodedBallot) error {
 	if decoded.IsMalicious() {
 		decoded.info.malicious = true
 	}
-	if err := t.trtl.storeBallot(decoded.info); err != nil {
-		errorsCounter.Inc()
-		return err
-	}
+	t.trtl.storeBallot(decoded.info, decoded.minHint)
 	return nil
 }
 
@@ -297,4 +295,44 @@ func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) 
 		}
 	}
 	return missing
+}
+
+// Results returns layers that crossed threshold in range (from, verified].
+func (t *Tortoise) Results(from types.LayerID) ([]ResultLayer, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if from <= t.trtl.evicted {
+		return nil, fmt.Errorf("requested layer %d is before evicted %d", from, t.trtl.evicted)
+	}
+	if from > t.trtl.processed {
+		return nil, fmt.Errorf("request layer %d is not yet added to the state (processed %d)", from, t.trtl.processed)
+	}
+	rst := make([]ResultLayer, 0, t.trtl.verified-from)
+	for lid := from + 1; lid <= t.trtl.verified; lid++ {
+		layer := t.trtl.layer(lid)
+		blocks := make([]ResultBlock, 0, len(layer.blocks))
+		for _, block := range layer.blocks {
+			blocks = append(blocks, ResultBlock{
+				Header: block.header(),
+				Data:   block.data,
+				Valid:  block.validity == support,
+			})
+		}
+		rst = append(rst, ResultLayer{
+			Layer:  lid,
+			Blocks: blocks,
+		})
+	}
+	return rst, nil
+}
+
+type ResultLayer struct {
+	Layer  types.LayerID
+	Blocks []ResultBlock
+}
+
+type ResultBlock struct {
+	Header types.Vote
+	Valid  bool
+	Data   bool
 }
