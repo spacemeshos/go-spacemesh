@@ -1372,7 +1372,9 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 
 func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testing.T) *tester) {
 	for _, tc := range tcs {
+		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
+			t.Parallel()
 			tt := genTester(t)
 			next := types.GetEffectiveGenesis()
 			for i, layer := range tc.layers {
