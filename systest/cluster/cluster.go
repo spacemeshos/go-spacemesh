@@ -42,7 +42,7 @@ const (
 )
 
 func defaultBootnodes(size int) int {
-	bsize := (size / 1000) * 4
+	bsize := (size / 1000) * 2
 	if bsize == 0 {
 		return 2
 	}
@@ -522,6 +522,19 @@ func (c *Cluster) Client(i int) *NodeClient {
 func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
 	_, err := waitPod(tctx, c.Client(i).Name)
 	return err
+}
+
+// CloseClients closes connections to clients.
+func (c *Cluster) CloseClients() {
+	var eg errgroup.Group
+	for _, client := range c.clients {
+		client := client
+		eg.Go(func() error {
+			client.Close()
+			return nil
+		})
+	}
+	eg.Wait()
 }
 
 // Account contains address and private key.

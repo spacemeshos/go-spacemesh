@@ -132,6 +132,12 @@ type NodeClient struct {
 	conn *grpc.ClientConn
 }
 
+func (n *NodeClient) Close() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.resetConn(n.conn)
+}
+
 func (n *NodeClient) Resolve(ctx context.Context) (string, error) {
 	pod, err := waitPod(n.session, n.Name)
 	if err != nil {
@@ -169,7 +175,7 @@ func (n *NodeClient) resetConn(conn *grpc.ClientConn) {
 	}
 }
 
-func (n *NodeClient) Invoke(ctx context.Context, method string, args interface{}, reply interface{}, opts ...grpc.CallOption) error {
+func (n *NodeClient) Invoke(ctx context.Context, method string, args any, reply any, opts ...grpc.CallOption) error {
 	conn, err := n.ensureConn(ctx)
 	if err != nil {
 		return err

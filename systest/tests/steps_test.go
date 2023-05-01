@@ -111,6 +111,7 @@ func TestStepTransactions(t *testing.T) {
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	require.NoError(t, waitGenesis(tctx, cl.Client(0)))
+	t.Cleanup(cl.CloseClients)
 
 	clients := make([]*txClient, cl.Accounts())
 	synced := syncedNodes(tctx, cl)
