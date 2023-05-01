@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -599,8 +600,8 @@ func (b *Builder) currentEpoch() types.EpochID {
 
 func (b *Builder) discardChallenge() error {
 	b.pendingATX = nil
-	if err := discardNipostChallenge(b.nipostBuilder.DataDir()); err != nil {
-		b.log.Error("failed to discard NIPost challenge: %w", err)
+	if err := discardNipostChallenge(b.nipostBuilder.DataDir()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
 	return nil
 }
