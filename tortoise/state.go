@@ -424,7 +424,7 @@ func decodeVotes(evicted types.LayerID, blid types.LayerID, base *ballotInfo, ex
 		}
 		existing, exist := layerdiff[header.ID]
 		if exist {
-			return votes{}, 0, fmt.Errorf("conflicting votes on the same id with different heights (%d, %d)", existing.header.Height, header.Height)
+			return votes{}, 0, fmt.Errorf("conflicting votes on the same id %v with different heights %d conflict with %d", existing.header.ID, existing.header.Height, header.Height)
 		}
 		layerdiff[header.ID] = headerWithSign{header, against}
 	}
@@ -435,6 +435,10 @@ func decodeVotes(evicted types.LayerID, blid types.LayerID, base *ballotInfo, ex
 			layerdiff = map[types.BlockID]headerWithSign{}
 			diff[header.LayerID] = layerdiff
 		}
+		existing, exist := layerdiff[header.ID]
+		if exist {
+			return votes{}, 0, fmt.Errorf("conflicting votes on the same id %v with different heights %d conflict with %d", existing.header.ID, existing.header.Height, header.Height)
+		}
 		layerdiff[header.ID] = headerWithSign{header, support}
 	}
 	for _, lid := range exceptions.Abstain {
@@ -442,6 +446,8 @@ func decodeVotes(evicted types.LayerID, blid types.LayerID, base *ballotInfo, ex
 		_, exist := diff[lid]
 		if !exist {
 			diff[lid] = map[types.BlockID]headerWithSign{}
+		} else {
+			return votes{}, 0, fmt.Errorf("votes on layer %d conflict with abstain", lid)
 		}
 	}
 	if from <= evicted {

@@ -320,17 +320,6 @@ func TestStateDecodeVotes(t *testing.T) {
 			"",
 		},
 		{
-			"overwrite previous supported",
-			[]*testOpinion{
-				newTestOpinion(genesis).support("a", 100),
-				newTestOpinion(genesis).support("a", 101).
-					next().support("b", 100),
-			},
-			newTestOpinion(genesis).support("a", 101).
-				next().support("b", 100),
-			"",
-		},
-		{
 			"wrong last target",
 			[]*testOpinion{
 				newTestOpinion(genesis).support("a", 100),
@@ -341,12 +330,36 @@ func TestStateDecodeVotes(t *testing.T) {
 			"wrong target",
 		},
 		{
-			"conflicting votes",
+			"conflicting votes with against",
 			[]*testOpinion{
 				newTestOpinion(genesis).against("a", 100).against("a", 200),
 			},
 			nil,
 			"conflicting",
+		},
+		{
+			"conflicting votes with support",
+			[]*testOpinion{
+				newTestOpinion(genesis).support("a", 100).support("a", 200),
+			},
+			nil,
+			"conflicting",
+		},
+		{
+			"conflicting votes with against and support",
+			[]*testOpinion{
+				newTestOpinion(genesis).against("a", 100).support("a", 200),
+			},
+			nil,
+			"conflicting",
+		},
+		{
+			"conflicting abstain",
+			[]*testOpinion{
+				newTestOpinion(genesis).against("a", 100).abstain(),
+			},
+			nil,
+			"conflict with abstain",
 		},
 		{
 			"vote outside window",
