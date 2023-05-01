@@ -72,8 +72,9 @@ github.com/apmckinlay/gsuneido v0.0.0-20190404155041-0b6cd442a18f/go.mod h1:JU2D
 github.com/aquasecurity/libbpfgo v0.3.0-libbpf-0.8.0 h1:NQEf484vQOshZwZOLTE7kzo62TvYrM906gUjlVg4D2k=
 github.com/aquasecurity/libbpfgo v0.3.0-libbpf-0.8.0/go.mod h1:qu0TVGRvtNMFkuKLscJkY1FwmageNBLqeImAFslqPPc=
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
-github.com/benbjohnson/clock v1.3.0 h1:ip6w0uFQkncKQ979AypyG0ER7mqUSBdKLOgAle/AT8A=
 github.com/benbjohnson/clock v1.3.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
+github.com/benbjohnson/clock v1.3.3 h1:g+rSsSaAzhHJYcIQE78hJ3AhyjjtQvleKDjlhdBnIhc=
+github.com/benbjohnson/clock v1.3.3/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
@@ -602,8 +603,8 @@ github.com/spacemeshos/merkle-tree v0.2.1 h1:BSs/zt1n3ceZcpWdcqNFRvTeAWDlc0W+bql
 github.com/spacemeshos/merkle-tree v0.2.1/go.mod h1:IsrdlW6AHZ4HSi89H7G94ravFCMFZLGnm6To0tQ0SPY=
 github.com/spacemeshos/poet v0.8.1 h1:4Su831DQUrU7qE7MI1V84w5XcwCbNTl0nof6ahrsu5s=
 github.com/spacemeshos/poet v0.8.1/go.mod h1:Gd07wBLVGXPKdpODZeoVqX7++zs8+Hr2UJGhbBG+kyU=
-github.com/spacemeshos/post v0.5.4 h1:jtg+nPAUSwaVwHMXNmr67EokGzVKofnSbVTS7EoqIyE=
-github.com/spacemeshos/post v0.5.4/go.mod h1:MPjn9h2FdgKkYUZrFWAcHyRqRrbRfMFR52+YFA+EMSk=
+github.com/spacemeshos/post v0.5.5 h1:y24R6lL2Dy/Mj+aVcH22gfB7ajKKy/NI3+hww/vWfWs=
+github.com/spacemeshos/post v0.5.5/go.mod h1:VPm4YOmP2E5JLMn2VgUhOIV9qy+GWRZBIBCxkd3cWEE=
 github.com/spacemeshos/sha256-simd v0.1.0 h1:G7Mfu5RYdQiuE+wu4ZyJ7I0TI74uqLhFnKblEnSpjYI=
 github.com/spacemeshos/sha256-simd v0.1.0/go.mod h1:O8CClVIilId7RtuCMV2+YzMj6qjVn75JsxOxaE8vcfM=
 github.com/spaolacci/murmur3 v1.1.0 h1:7c1g84S4BPRrfL5Xrdp6fOJ206sU9y293DDHaoy0bLI=

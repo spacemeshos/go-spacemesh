@@ -64,18 +64,32 @@ func (mr *MockTemplateMockRecorder) EncodeScale(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EncodeScale", reflect.TypeOf((*MockTemplate)(nil).EncodeScale), arg0)
 }
 
-// FixedGas mocks base method.
-func (m *MockTemplate) FixedGas(arg0 byte) uint64 {
+// ExecGas mocks base method.
+func (m *MockTemplate) ExecGas(arg0 byte) uint64 {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FixedGas", arg0)
+	ret := m.ctrl.Call(m, "ExecGas", arg0)
 	ret0, _ := ret[0].(uint64)
 	return ret0
 }
 
-// FixedGas indicates an expected call of FixedGas.
-func (mr *MockTemplateMockRecorder) FixedGas(arg0 interface{}) *gomock.Call {
+// ExecGas indicates an expected call of ExecGas.
+func (mr *MockTemplateMockRecorder) ExecGas(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FixedGas", reflect.TypeOf((*MockTemplate)(nil).FixedGas), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecGas", reflect.TypeOf((*MockTemplate)(nil).ExecGas), arg0)
+}
+
+// LoadGas mocks base method.
+func (m *MockTemplate) LoadGas() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadGas")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// LoadGas indicates an expected call of LoadGas.
+func (mr *MockTemplateMockRecorder) LoadGas() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadGas", reflect.TypeOf((*MockTemplate)(nil).LoadGas))
 }
 
 // MaxSpend mocks base method.

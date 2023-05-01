@@ -163,11 +163,12 @@ func (b *Builder) Smeshing() bool {
 	return b.started.Load()
 }
 
-// StartSmeshing is the main entry point of the atx builder.
-// It runs the main loop of the builder and shouldn't be called more than once.
-// If the post data is incomplete or missing, data creation
-// session will be preceded. Changing of the post potions (e.g., number of labels),
-// after initial setup, is supported.
+// StartSmeshing is the main entry point of the atx builder. It runs the main
+// loop of the builder in a new go-routine and shouldn't be called more than
+// once without calling StopSmeshing in between. If the post data is incomplete
+// or missing, data creation session will be preceded. Changing of the post
+// options (e.g., number of labels), after initial setup, is supported. If data
+// creation fails for any reason then the go-routine will panic.
 func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) error {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
@@ -180,6 +181,11 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	ctx, stop := context.WithCancel(b.parentCtx)
 	b.stop = stop
 
+	err := b.postSetupProvider.PrepareInitializer(b.parentCtx, opts)
+	if err != nil {
+		return fmt.Errorf("failed to prepare post initializer: %w", err)
+	}
+
 	b.eg.Go(func() error {
 		defer b.started.Store(false)
 
@@ -190,8 +196,10 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 			// ensure we are ATX synced before starting the PoST Session
 		}
 
-		if err := b.postSetupProvider.StartSession(ctx, opts); err != nil {
-			return err
+		// If start session returns any error other than context.Canceled
+		// (which is how we signal it to stop) then we panic.
+		if err := b.postSetupProvider.StartSession(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			b.log.Panic(fmt.Sprintf("initialization failed: %v", err))
 		}
 
 		b.run(ctx)
@@ -441,9 +449,9 @@ func (b *Builder) loadChallenge() (*types.NIPostChallenge, error) {
 	}
 	if nipost.TargetEpoch() < b.currentEpoch() {
 		b.log.With().Info("atx nipost challenge is stale - discarding it",
-			log.FieldNamed("target_epoch", nipost.TargetEpoch()),
-			log.FieldNamed("publish_epoch", nipost.PublishEpoch),
-			log.FieldNamed("current_epoch", b.currentEpoch()),
+			log.Stringer("target_epoch", nipost.TargetEpoch()),
+			log.Stringer("publish_epoch", nipost.PublishEpoch),
+			log.Stringer("current_epoch", b.currentEpoch()),
 		)
 		b.discardChallenge()
 		return nil, errors.New("atx nipost challenge is stale")
@@ -468,9 +476,9 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	}
 
 	logger.With().Info("atx challenge is ready",
-		log.FieldNamed("current_epoch", b.currentEpoch()),
-		log.FieldNamed("publish_epoch", challenge.PublishEpoch),
-		log.FieldNamed("target_epoch", challenge.TargetEpoch()),
+		log.Stringer("current_epoch", b.currentEpoch()),
+		log.Stringer("publish_epoch", challenge.PublishEpoch),
+		log.Stringer("target_epoch", challenge.TargetEpoch()),
 	)
 
 	if b.pendingATX == nil {
@@ -522,9 +530,9 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	metrics.PostDuration.Set(float64(postDuration.Nanoseconds()))
 
 	b.log.With().Info("awaiting atx publication epoch",
-		log.FieldNamed("pub_epoch", pubEpoch),
-		log.FieldNamed("pub_epoch_first_layer", pubEpoch.FirstLayer()),
-		log.FieldNamed("current_layer", b.layerClock.CurrentLayer()),
+		log.Stringer("pub_epoch", pubEpoch),
+		log.Stringer("pub_epoch_first_layer", pubEpoch.FirstLayer()),
+		log.Stringer("current_layer", b.layerClock.CurrentLayer()),
 	)
 	select {
 	case <-ctx.Done():

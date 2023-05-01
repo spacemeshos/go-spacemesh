@@ -11,13 +11,14 @@ type charge struct {
 }
 
 var (
-	chargeTXDATA   = charge{"txdata (per 8)", 128, "charged for storing transaction data"}
-	chargeSTORE    = charge{"store (per 8)", 5000, "charged for changing active state from zero to non-zero"}
-	chargeUPDATE   = charge{"update (per 8)", 725, "charged for updating active state"}
-	chargeLOAD     = charge{"load (per 8)", 182, "charged for loading active state"}
-	chargeEDVERIFY = charge{"edverify (per sig)", 3000, "charged for ed25519 verification"}
-	chargeSPAWN    = charge{"spawn", 30000, "charged for every spawn transaction"}
-	chargeTX       = charge{"tx", 20000, "charged for every transaction"}
+	chargeTXDATA        = charge{"txdata (per 8)", 128, "charged for storing transaction data"}
+	chargeSTORE         = charge{"store (per 8)", 5000, "charged for changing active state from zero to non-zero"}
+	chargeACCOUNTACCESS = charge{"account access", 2500, "base cost for accessing account from storage"}
+	chargeUPDATE        = charge{"update (per 8)", 725, "charged for updating active state"}
+	chargeLOAD          = charge{"load (per 8)", 182, "charged for loading active state"}
+	chargeEDVERIFY      = charge{"edverify (per sig)", 3000, "charged for ed25519 verification"}
+	chargeSPAWN         = charge{"spawn", 30000, "charged for every spawn transaction"}
+	chargeTX            = charge{"tx", 20000, "charged for every transaction"}
 )
 
 var charges = []charge{
@@ -25,6 +26,7 @@ var charges = []charge{
 	chargeSTORE,
 	chargeUPDATE,
 	chargeLOAD,
+	chargeACCOUNTACCESS,
 	chargeEDVERIFY,
 	chargeSPAWN,
 	chargeTX,
@@ -42,6 +44,7 @@ const (
 	kindLoad
 	kindEdverify
 	kindSpawn
+	kindAccountsAccess
 )
 
 type tx struct {
@@ -84,6 +87,8 @@ func (o op) cost(f costFn) int {
 		return o.size * f(chargeEDVERIFY)
 	case kindSpawn:
 		return f(chargeSPAWN)
+	case kindAccountsAccess:
+		return f(chargeACCOUNTACCESS)
 	}
 	panic("unknown")
 }
@@ -108,6 +113,10 @@ func spawn() op {
 	return op{kindSpawn, 0}
 }
 
+func accountaccess() op {
+	return op{kindAccountsAccess, 0}
+}
+
 func describe(name string, size int, ops ...op) tx {
 	return tx{name: name, size: size, ops: ops}
 }
@@ -120,8 +129,8 @@ const (
 func txs() []tx {
 	txs := []tx{
 		describe("singlesig/selfspawn", sizeSpawn+32+64, store(48), edverify(1), spawn()),
-		describe("singlesig/spawn", sizeSpawn+32+64, load(48), store(48), update(16), edverify(1), spawn()),
-		describe("singlesig/spend", sizeSpend+64, load(48), load(8), update(16), update(8), edverify(1)),
+		describe("singlesig/spawn", sizeSpawn+32+64, accountaccess(), accountaccess(), load(48), store(48), update(16), edverify(1), spawn()),
+		describe("singlesig/spend", sizeSpend+64, accountaccess(), accountaccess(), load(48), load(8), update(16), update(8), edverify(1)),
 	}
 	for n := 1; n <= 3; n++ {
 		for k := 1; k <= 10; k++ {
@@ -132,10 +141,10 @@ func txs() []tx {
 			pubs := k * 32
 			txs = append(txs,
 				describe(fmt.Sprintf("multisig/%d/%d/selfspawn", n, k), sizeSpawn+sigs+pubs, store(16+pubs), edverify(n), spawn()),
-				describe(fmt.Sprintf("multisig/%d/%d/spawn", n, k), sizeSpawn+sigs+pubs, load(16+pubs), store(16+pubs), update(16), edverify(n), spawn()),
-				describe(fmt.Sprintf("multisig/%d/%d/spend", n, k), sizeSpend+sigs, load(16+pubs), load(8), update(16), update(8), edverify(n)),
-				describe(fmt.Sprintf("vesting/%d/%d/spawnvault", n, k), sizeSpawn+sigs+56, load(sizeSpawn+sigs), store(80), update(16), edverify(n), spawn()),
-				describe(fmt.Sprintf("vesting/%d/%d/drain", n, k), sizeSpend+24+sigs, load(16+pubs), load(80), edverify(n), update(16), update(16)),
+				describe(fmt.Sprintf("multisig/%d/%d/spawn", n, k), sizeSpawn+sigs+pubs, load(16+pubs), accountaccess(), store(16+pubs), update(16), edverify(n), spawn()),
+				describe(fmt.Sprintf("multisig/%d/%d/spend", n, k), sizeSpend+sigs, load(16+pubs), accountaccess(), accountaccess(), load(8), update(16), update(8), edverify(n)),
+				describe(fmt.Sprintf("vesting/%d/%d/spawnvault", n, k), sizeSpawn+sigs+56, accountaccess(), load(sizeSpawn+sigs), store(80), update(16), edverify(n), spawn()),
+				describe(fmt.Sprintf("vesting/%d/%d/drain", n, k), sizeSpend+24+sigs, accountaccess(), accountaccess(), load(16+pubs), load(80), edverify(n), update(16), update(16)),
 			)
 		}
 	}

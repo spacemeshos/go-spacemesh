@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/fixed"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 )
 
@@ -30,18 +31,6 @@ type (
 		weight weight
 		// median height from atxs
 		height uint64
-	}
-
-	blockInfo struct {
-		id     types.BlockID
-		layer  types.LayerID
-		height uint64
-		hare   sign
-		margin weight
-
-		validity sign
-		// emitted validity
-		emitted sign
 	}
 
 	state struct {
@@ -74,8 +63,6 @@ type (
 
 		// to efficiently find base and reference ballots
 		ballotRefs map[types.BallotID]*ballotInfo
-		// to efficiently decode exceptions
-		blockRefs map[types.BlockID]*blockInfo
 	}
 )
 
@@ -85,7 +72,6 @@ func newState() *state {
 		layers:     map[types.LayerID]*layerInfo{},
 		ballots:    map[types.LayerID][]*ballotInfo{},
 		ballotRefs: map[types.BallotID]*ballotInfo{},
-		blockRefs:  map[types.BlockID]*blockInfo{},
 	}
 }
 
@@ -125,13 +111,23 @@ func (s *state) addBallot(ballot *ballotInfo) {
 
 func (s *state) addBlock(block *blockInfo) {
 	blocksNumber.Inc()
-
 	layer := s.layer(block.layer)
+	if layer.hareTerminated {
+		block.hare = against
+	}
 	layer.blocks = append(layer.blocks, block)
 	sortBlocks(layer.blocks)
-
-	s.blockRefs[block.id] = block
 	s.updateRefHeight(layer, block)
+}
+
+func (s *state) getBlock(header types.Vote) *blockInfo {
+	layer := s.layer(header.LayerID)
+	for _, block := range layer.blocks {
+		if block.id == header.ID && block.height == header.Height {
+			return block
+		}
+	}
+	return nil
 }
 
 func (s *state) findRefHeightBelow(lid types.LayerID) uint64 {
@@ -145,10 +141,10 @@ func (s *state) findRefHeightBelow(lid types.LayerID) uint64 {
 	return 0
 }
 
-func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) error {
+func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) {
 	epoch, exist := s.epochs[block.layer.GetEpoch()]
 	if !exist {
-		return fmt.Errorf("reference height for epoch %v wasn't computed", block.layer.GetEpoch())
+		return
 	}
 	if layer.verifying.referenceHeight == 0 && layer.lid.After(s.evicted) {
 		layer.verifying.referenceHeight = s.findRefHeightBelow(layer.lid)
@@ -157,7 +153,6 @@ func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) error {
 		block.height > layer.verifying.referenceHeight {
 		layer.verifying.referenceHeight = block.height
 	}
-	return nil
 }
 
 type layerInfo struct {
@@ -247,11 +242,15 @@ func (v *votes) append(lv *layerVote) {
 	v.tail.computeOpinion()
 }
 
-func (v *votes) update(from types.LayerID, diff map[types.LayerID]map[types.BlockID]sign) votes {
+func (v *votes) update(from types.LayerID, diff map[types.LayerID]map[types.BlockID]headerWithSign) (votes, error) {
 	if v.tail == nil {
-		return votes{}
+		return votes{}, nil
 	}
-	return votes{tail: v.tail.update(from, diff)}
+	tail, err := v.tail.update(from, diff)
+	if err != nil {
+		return votes{}, err
+	}
+	return votes{tail: tail}, nil
 }
 
 // cutBefore cuts all pointers to votes before the specified layer.
@@ -277,7 +276,7 @@ func (v *votes) opinion() types.Hash32 {
 }
 
 type layerVote struct {
-	*layerInfo
+	lid       types.LayerID
 	opinion   types.Hash32
 	vote      sign
 	supported []*blockInfo
@@ -285,9 +284,9 @@ type layerVote struct {
 	prev *layerVote
 }
 
-func (l *layerVote) getVote(bid types.BlockID) sign {
+func (l *layerVote) getVote(binfo *blockInfo) sign {
 	for _, block := range l.supported {
-		if block.id == bid {
+		if block == binfo {
 			return support
 		}
 	}
@@ -296,7 +295,7 @@ func (l *layerVote) getVote(bid types.BlockID) sign {
 
 func (l *layerVote) copy() *layerVote {
 	return &layerVote{
-		layerInfo: l.layerInfo,
+		lid:       l.lid,
 		vote:      l.vote,
 		supported: l.supported,
 		prev:      l.prev,
@@ -308,13 +307,17 @@ func (l *layerVote) append(lv *layerVote) *layerVote {
 	return lv
 }
 
-func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.BlockID]sign) *layerVote {
+func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.BlockID]headerWithSign) (*layerVote, error) {
 	if l.lid.Before(from) {
-		return l
+		return l, nil
 	}
 	copied := l.copy()
 	if copied.prev != nil {
-		copied.prev = copied.prev.update(from, diff)
+		prev, err := copied.prev.update(from, diff)
+		if err != nil {
+			return nil, err
+		}
+		copied.prev = prev
 	}
 	layerdiff, exist := diff[copied.lid]
 	if exist && len(layerdiff) == 0 {
@@ -322,20 +325,25 @@ func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.
 		copied.supported = nil
 	} else if exist && len(layerdiff) > 0 {
 		var supported []*blockInfo
-		for _, block := range copied.blocks {
+		for _, block := range l.supported {
 			vote, exist := layerdiff[block.id]
-			if exist && vote == against {
+			if !exist {
+				supported = append(supported, block)
+			} else if vote.sign == against && vote.header != block.header() {
+				return nil, fmt.Errorf("wrong target. last supported is (%s/%d), but is against (%s,%d)", block.id, block.height, vote.header.ID, vote.header.Height)
+			}
+		}
+		for _, vote := range layerdiff {
+			if vote.sign == against {
 				continue
 			}
-			if (exist && vote == support) || l.getVote(block.id) == support {
-				supported = append(supported, block)
-			}
+			supported = append(supported, newBlockInfo(vote.header))
 		}
 		copied.supported = supported
 		copied.sortSupported()
 	}
 	copied.computeOpinion()
-	return copied
+	return copied, nil
 }
 
 func (l *layerVote) sortSupported() {
@@ -364,4 +372,111 @@ func sortBlocks(blocks []*blockInfo) {
 		}
 		return blocks[i].id.Compare(blocks[j].id)
 	})
+}
+
+func newBlockInfo(header types.Vote) *blockInfo {
+	return &blockInfo{
+		id:     header.ID,
+		layer:  header.LayerID,
+		height: header.Height,
+		hare:   neutral,
+	}
+}
+
+type blockInfo struct {
+	id     types.BlockID
+	layer  types.LayerID
+	height uint64
+	hare   sign
+	margin weight
+
+	validity sign
+	emitted  sign // same as validity field if event was emitted
+
+	data bool // set to true if block is available locally
+}
+
+func (b *blockInfo) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("block", b.id.String())
+	encoder.AddUint32("layer", b.layer.Uint32())
+	encoder.AddUint64("height", b.height)
+	return nil
+}
+
+func (b *blockInfo) header() types.Vote {
+	return types.Vote{ID: b.id, LayerID: b.layer, Height: b.height}
+}
+
+type headerWithSign struct {
+	header types.Vote
+	sign   sign
+}
+
+func decodeVotes(evicted types.LayerID, blid types.LayerID, base *ballotInfo, exceptions types.Votes) (votes, types.LayerID, error) {
+	from := base.layer
+	diff := map[types.LayerID]map[types.BlockID]headerWithSign{}
+	for _, header := range exceptions.Against {
+		from = minLayer(from, header.LayerID)
+		layerdiff, exist := diff[header.LayerID]
+		if !exist {
+			layerdiff = map[types.BlockID]headerWithSign{}
+			diff[header.LayerID] = layerdiff
+		}
+		existing, exist := layerdiff[header.ID]
+		if exist {
+			return votes{}, 0, fmt.Errorf("conflicting votes on the same id %v with different heights %d conflict with %d", existing.header.ID, existing.header.Height, header.Height)
+		}
+		layerdiff[header.ID] = headerWithSign{header, against}
+	}
+	for _, header := range exceptions.Support {
+		from = minLayer(from, header.LayerID)
+		layerdiff, exist := diff[header.LayerID]
+		if !exist {
+			layerdiff = map[types.BlockID]headerWithSign{}
+			diff[header.LayerID] = layerdiff
+		}
+		existing, exist := layerdiff[header.ID]
+		if exist {
+			return votes{}, 0, fmt.Errorf("conflicting votes on the same id %v with different heights %d conflict with %d", existing.header.ID, existing.header.Height, header.Height)
+		}
+		layerdiff[header.ID] = headerWithSign{header, support}
+	}
+	for _, lid := range exceptions.Abstain {
+		from = minLayer(from, lid)
+		_, exist := diff[lid]
+		if !exist {
+			diff[lid] = map[types.BlockID]headerWithSign{}
+		} else {
+			return votes{}, 0, fmt.Errorf("votes on layer %d conflict with abstain", lid)
+		}
+	}
+	if from <= evicted {
+		return votes{}, 0, fmt.Errorf("votes for a block in the layer (%d) outside the window (evicted %d)", from, evicted)
+	}
+
+	// inherit opinion from the base ballot by copying votes
+	decoded, err := base.votes.update(from, diff)
+	if err != nil {
+		return votes{}, 0, err
+	}
+	// add new opinions after the base layer
+	for lid := base.layer; lid.Before(blid); lid = lid.Add(1) {
+		lvote := layerVote{
+			lid:  lid,
+			vote: against,
+		}
+		layerdiff, exist := diff[lid]
+		if exist && len(layerdiff) == 0 {
+			lvote.vote = abstain
+		} else if exist && len(layerdiff) > 0 {
+			for _, vote := range layerdiff {
+				if vote.sign != support {
+					continue
+				}
+				lvote.supported = append(lvote.supported, newBlockInfo(vote.header))
+			}
+		}
+		decoded.append(&lvote)
+	}
+	return decoded, from, nil
 }
