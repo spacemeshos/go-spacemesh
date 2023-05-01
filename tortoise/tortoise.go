@@ -546,7 +546,7 @@ func (t *turtle) loadBallots(lid types.LayerID) error {
 }
 
 func (t *turtle) onBlock(header types.Vote) {
-	if !header.LayerID.After(t.evicted) {
+	if header.LayerID <= t.evicted {
 		return
 	}
 
