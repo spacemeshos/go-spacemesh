@@ -18,13 +18,16 @@ func Partition2(ctx *testcontext.Context, name string, a, b []string) (Teardown,
 
 	partition.Spec.Action = chaos.PartitionAction
 	partition.Spec.Mode = chaos.AllMode
-	partition.Spec.Selector = selectPods(a)
-
+	partition.Spec.Selector.Pods = map[string][]string{
+		ctx.Namespace: a,
+	}
 	partition.Spec.Direction = chaos.Both
 	partition.Spec.Target = &chaos.PodSelector{
 		Mode: chaos.AllMode,
 	}
-	partition.Spec.Target.Selector = selectPods(b)
+	partition.Spec.Target.Selector.Pods = map[string][]string{
+		ctx.Namespace: b,
+	}
 
 	desired := partition.DeepCopy()
 	_, err := controllerutil.CreateOrUpdate(ctx, ctx.Generic, &partition, func() error {
