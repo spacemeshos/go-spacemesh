@@ -891,9 +891,13 @@ func TestDecodeVotes(t *testing.T) {
 		ballot := types.NewExistingBallot(types.BallotID{3, 3, 3}, types.EmptyEdSignature, types.EmptyNodeID, ballots[0].Layer)
 		ballot.InnerBallot = ballots[0].InnerBallot
 		ballot.ActiveSet = ballots[0].ActiveSet
-		ballot.Votes.Support = []types.Vote{{ID: types.BlockID{2, 2, 2}}}
+		hasher := opinionhash.New()
+		supported := types.BlockID{2, 2, 2}
+		hasher.WriteSupport(supported, 0)
+		ballot.OpinionHash = hasher.Hash()
+		ballot.Votes.Support = []types.Vote{{ID: supported, LayerID: ballot.Layer - 1}}
 		_, err = tortoise.DecodeBallot(&ballot)
-		require.ErrorContains(t, err, "not in state")
+		require.NoError(t, err)
 	})
 }
 
@@ -1387,25 +1391,26 @@ func TestComputeLocalOpinion(t *testing.T) {
 			err := tortoise.trtl.loadBlocksData(tc.lid)
 			require.NoError(t, err)
 
-			blks, err := blocks.IDsInLayer(s.GetState(0).DB, tc.lid)
+			blks, err := blocks.Layer(s.GetState(0).DB, tc.lid)
 			require.NoError(t, err)
-			for _, bid := range blks {
+			for _, block := range blks {
+				header := block.ToVote()
 				vote, _ := getLocalVote(
 					cfg,
 					tortoise.trtl.state.verified,
 					tortoise.trtl.state.last,
-					tortoise.trtl.blockRefs[bid])
+					tortoise.trtl.getBlock(header))
 				if tc.expected == support {
 					hareOutput, err := certificates.GetHareOutput(s.GetState(0).DB, tc.lid)
 					require.NoError(t, err)
 					// only one block is supported
-					if bid == hareOutput {
-						require.Equal(t, tc.expected, vote, "block id %s", bid)
+					if header.ID == hareOutput {
+						require.Equal(t, tc.expected, vote, "block id %s", header.ID)
 					} else {
-						require.Equal(t, against, vote, "block id %s", bid)
+						require.Equal(t, against, vote, "block id %s", header.ID)
 					}
 				} else {
-					require.Equal(t, tc.expected, vote, "block id %s", bid)
+					require.Equal(t, tc.expected, vote, "block id %s", header.ID)
 				}
 			}
 		})
@@ -1935,9 +1940,6 @@ func TestStateManagement(t *testing.T) {
 	}
 
 	for lid := evicted.Add(1); !lid.After(last); lid = lid.Add(1) {
-		for _, block := range tortoise.trtl.layers[lid].blocks {
-			require.Contains(t, tortoise.trtl.blockRefs, block.id, "layer %s", lid)
-		}
 		for _, ballot := range tortoise.trtl.ballots[lid] {
 			require.Contains(t, tortoise.trtl.ballotRefs, ballot.id, "layer %s", lid)
 			for current := ballot.votes.tail; current != nil; current = current.prev {
@@ -1946,7 +1948,6 @@ func TestStateManagement(t *testing.T) {
 					require.Equal(t, current.lid, evicted, "last vote is exactly evicted")
 				}
 			}
-			break
 		}
 	}
 }
@@ -2943,4 +2944,66 @@ func BenchmarkOnBallot(b *testing.B) {
 		tortoise.trtl.isFull = true
 		bench(b)
 	})
+}
+
+func TestMultipleTargets(t *testing.T) {
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	const size = 4
+	cfg.LayerSize = size
+	cfg.Hdist = 2
+	cfg.Zdist = 1
+	s := sim.New(sim.WithLayerSize(cfg.LayerSize))
+	s.Setup(sim.WithSetupMinerRange(size, size))
+	tortoise := tortoiseFromSimState(t,
+		s.GetState(0),
+		WithConfig(cfg),
+		WithLogger(logtest.New(t)),
+	)
+	heights := []uint64{1, 2}
+	id := types.BlockID{'t'}
+	multi := func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
+		prev := layers[len(layers)-1]
+		require.NotEmpty(t, prev.BallotIDs())
+		return sim.Voting{
+			Base: prev.BallotIDs()[0],
+			Support: []types.Vote{
+				{
+					ID:      id,
+					Height:  heights[i%len(heights)],
+					LayerID: prev.Index(),
+				},
+			},
+		}
+	}
+	upvote := func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
+		prev := layers[len(layers)-1]
+		require.NotEmpty(t, prev.BallotIDs())
+		return sim.Voting{
+			Base: prev.BallotIDs()[0],
+		}
+	}
+	s.Next(sim.WithNumBlocks(0))
+	s.Next(sim.WithNumBlocks(0), sim.WithVoteGenerator(multi))
+	last := s.Next(sim.WithNumBlocks(0), sim.WithVoteGenerator(upvote))
+	tortoise.TallyVotes(ctx, last)
+
+	rst, err := tortoise.Results(types.GetEffectiveGenesis())
+	require.NoError(t, err)
+	require.Len(t, rst, 2)
+	block := rst[0].Blocks[0]
+	require.Equal(t, block.Header.Height, heights[0])
+	require.True(t, block.Valid)
+	require.False(t, block.Data)
+	votes, err := tortoise.EncodeVotes(ctx)
+	require.NoError(t, err)
+	require.Len(t, votes.Against, 1)
+	require.Equal(t, votes.Against[0], block.Header)
+	tortoise.OnBlock(types.NewExistingBlock(block.Header.ID, types.InnerBlock{
+		LayerIndex: block.Header.LayerID,
+		TickHeight: block.Header.Height,
+	}))
+	votes, err = tortoise.EncodeVotes(ctx)
+	require.NoError(t, err)
+	require.Empty(t, votes.Against)
 }

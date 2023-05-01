@@ -89,7 +89,12 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon, 
 		return nil, fmt.Errorf("failed to get valid atx for node for target epoch %d: %w", epoch, err)
 	}
 
-	return o.calcEligibilityProofs(atx, epoch, beacon, nonce)
+	ee, err := o.calcEligibilityProofs(atx, epoch, beacon, nonce)
+	if err != nil {
+		return nil, err
+	}
+	o.cache = ee
+	return ee, nil
 }
 
 func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxHeader, error) {
