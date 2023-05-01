@@ -24,7 +24,7 @@ type MalfeasanceProof struct {
 }
 
 func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddUint32("generated_layer", mp.Layer.Value)
+	encoder.AddUint32("generated_layer", mp.Layer.Uint32())
 	switch mp.Proof.Type {
 	case MultipleATXs:
 		encoder.AddString("type", "multiple atxs")
@@ -169,8 +169,10 @@ func (hp *HareProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 type AtxProofMsg struct {
-	InnerMsg  ATXMetadata
-	Signature []byte
+	InnerMsg ATXMetadata
+
+	SmesherID NodeID
+	Signature EdSignature
 }
 
 // SignedBytes returns the actual data being signed in a AtxProofMsg.
@@ -183,8 +185,10 @@ func (m *AtxProofMsg) SignedBytes() []byte {
 }
 
 type BallotProofMsg struct {
-	InnerMsg  BallotMetadata
-	Signature []byte
+	InnerMsg BallotMetadata
+
+	SmesherID NodeID
+	Signature EdSignature
 }
 
 // SignedBytes returns the actual data being signed in a BallotProofMsg.
@@ -205,15 +209,23 @@ type HareMetadata struct {
 }
 
 func (hm *HareMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddUint32("layer", hm.Layer.Value)
+	encoder.AddUint32("layer", hm.Layer.Uint32())
 	encoder.AddUint32("round", hm.Round)
 	encoder.AddString("msgHash", hm.MsgHash.String())
 	return nil
 }
 
+// Equivocation detects if two messages form an equivocation, based on their HareMetadata.
+// It returns true if the two messages are from the same layer and round, but have different hashes.
+func (hm *HareMetadata) Equivocation(other *HareMetadata) bool {
+	return hm.Layer == other.Layer && hm.Round == other.Round && hm.MsgHash != other.MsgHash
+}
+
 type HareProofMsg struct {
-	InnerMsg  HareMetadata
-	Signature []byte
+	InnerMsg HareMetadata
+
+	SmesherID NodeID
+	Signature EdSignature
 }
 
 // SignedBytes returns the actual data being signed in a HareProofMsg.

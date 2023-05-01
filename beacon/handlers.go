@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/bits"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -71,20 +73,24 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 		return errMalformedMessage
 	}
 
+	latency := receivedTime.Sub(pd.msgTimes.proposalSendTime(m.EpochID))
+	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconProposalProtocol, latency)
+
 	if !pd.isProposalTimely(&m, receivedTime) {
 		logger.With().Debug("proposal too early", m.EpochID, log.Time("received_at", receivedTime))
 		return errUntimelyMessage
 	}
 
 	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, log.Stringer("smesher", m.NodeID))
-	logger.With().Debug("new beacon proposal", log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))))
+	proposal := ProposalFromVrf(m.VRFSignature)
+	logger.With().Debug("new beacon proposal", log.String("proposal", hex.EncodeToString(proposal[:])))
 
 	st, err := pd.initEpochStateIfNotPresent(logger, m.EpochID)
 	if err != nil {
 		return err
 	}
 
-	atx, err := pd.minerAtxHdr(m.EpochID, m.NodeID.Bytes())
+	atx, err := pd.minerAtxHdr(m.EpochID, m.NodeID)
 	if err != nil {
 		return err
 	}
@@ -104,8 +110,9 @@ func (pd *ProtocolDriver) classifyProposal(
 	checker eligibilityChecker,
 ) category {
 	epochStart := pd.clock.LayerToTime(m.EpochID.FirstLayer())
+	proposal := ProposalFromVrf(m.VRFSignature)
 	logger = logger.WithFields(
-		log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))),
+		log.String("proposal", hex.EncodeToString(proposal[:])),
 		log.Time("atx_timestamp", atxReceived),
 		log.Stringer("next_epoch_start", epochStart),
 		log.Time("received_time", receivedTime),
@@ -145,7 +152,7 @@ func (pd *ProtocolDriver) classifyProposal(
 		logger.With().Debug("valid beacon proposal",
 			log.Duration("atx delay", atxDelay),
 			log.Duration("proposal delay", proposalDelay),
-			log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))),
+			log.String("proposal", hex.EncodeToString(proposal[:])),
 		)
 		return valid
 	case atxDelay <= pd.config.GracePeriodDuration &&
@@ -154,7 +161,7 @@ func (pd *ProtocolDriver) classifyProposal(
 		logger.With().Debug("potentially valid beacon proposal",
 			log.Duration("atx delay", atxDelay),
 			log.Duration("proposal delay", proposalDelay),
-			log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))),
+			log.String("proposal", hex.EncodeToString(proposal[:])),
 		)
 		return potentiallyValid
 	default:
@@ -162,29 +169,21 @@ func (pd *ProtocolDriver) classifyProposal(
 			logger.With().Warning("invalid beacon proposal",
 				log.Duration("atx delay", atxDelay),
 				log.Duration("proposal delay", proposalDelay),
-				log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))),
+				log.String("proposal", hex.EncodeToString(proposal[:])),
 			)
 		} else {
 			logger.With().Debug("proposal did not pass thresholds",
 				log.Duration("atx delay", atxDelay),
 				log.Duration("proposal delay", proposalDelay),
-				log.String("proposal", hex.EncodeToString(cropData(m.VRFSignature))),
+				log.String("proposal", hex.EncodeToString(proposal[:])),
 			)
 		}
 	}
 	return invalid
 }
 
-func cropData(data []byte) []byte {
-	shortened := data
-	if types.BeaconSize < len(data) {
-		shortened = data[:types.BeaconSize]
-	}
-	return shortened
-}
-
 func (pd *ProtocolDriver) addProposal(m ProposalMessage, cat category) error {
-	p := cropData(m.VRFSignature)
+	p := ProposalFromVrf(m.VRFSignature)
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	if _, ok := pd.states[m.EpochID]; !ok {
@@ -200,24 +199,21 @@ func (pd *ProtocolDriver) addProposal(m ProposalMessage, cat category) error {
 }
 
 func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessage) error {
-	minerID := m.NodeID.String()
-
 	nonce, err := pd.nonceFetcher.VRFNonce(m.NodeID, m.EpochID)
 	if err != nil {
 		logger.With().Warning("[proposal] failed to get VRF nonce", log.Err(err))
-		return fmt.Errorf("[proposal] get VRF nonce (miner ID %v): %w", minerID, err)
+		return fmt.Errorf("[proposal] get VRF nonce (miner ID %s): %w", m.NodeID, err)
 	}
 	currentEpochProposal := buildProposal(logger, m.EpochID, nonce)
 	if !pd.vrfVerifier.Verify(m.NodeID, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
 		logger.With().Warning("[proposal] failed to verify VRF signature")
-		return fmt.Errorf("[proposal] verify VRF (miner ID %v): %w", minerID, errVRFNotVerified)
+		return fmt.Errorf("[proposal] verify VRF (miner ID %s): %w", m.NodeID, errVRFNotVerified)
 	}
 
-	vrfPK := signing.NewPublicKey(m.NodeID.Bytes())
-	if err = pd.registerProposed(logger, m.EpochID, vrfPK); err != nil {
+	if err = pd.registerProposed(logger, m.EpochID, m.NodeID); err != nil {
 		logger.With().Warning("[proposal] failed to register miner proposed", log.Err(err))
-		return fmt.Errorf("[proposal] register proposal (miner ID %v): %w", minerID, err)
+		return fmt.Errorf("[proposal] register proposal (miner ID %s): %w", m.NodeID, err)
 	}
 
 	return nil
@@ -244,6 +240,7 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 }
 
 func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, msg []byte) error {
+	receivedTime := time.Now()
 	logger := pd.logger.WithContext(ctx).WithFields(types.FirstRound, log.Stringer("sender", peer))
 
 	var m FirstVotingMessage
@@ -251,6 +248,9 @@ func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, m
 		logger.With().Warning("received invalid first votes", log.Err(err))
 		return errMalformedMessage
 	}
+
+	latency := receivedTime.Sub(pd.msgTimes.firstVoteSendTime(m.EpochID))
+	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconFirstVotesProtocol, latency)
 
 	currentEpoch := pd.currentEpoch()
 	if m.EpochID != currentEpoch {
@@ -278,35 +278,27 @@ func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	return pd.storeFirstVotes(m, minerPK)
 }
 
-func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMessage) (*signing.PublicKey, error) {
-	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound)
+func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMessage) (types.NodeID, error) {
 	messageBytes, err := codec.Encode(&m.FirstVotingMessageBody)
 	if err != nil {
-		logger.With().Fatal("failed to serialize first voting message", log.Err(err))
+		pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound).With().Fatal("failed to serialize first voting message", log.Err(err))
 	}
-
-	minerPK, err := pd.pubKeyExtractor.Extract(signing.BEACON, messageBytes, m.Signature)
-	if err != nil {
-		return nil, fmt.Errorf("[round %v] recover ID %x: %w", types.FirstRound, m.Signature, err)
+	if !pd.edVerifier.Verify(signing.BEACON, m.SmesherID, messageBytes, m.Signature) {
+		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
-
-	nodeID := types.BytesToNodeID(minerPK.Bytes())
-	minerID := nodeID.String()
-	logger = logger.WithFields(log.Stringer("smesher", nodeID))
-
-	if err = pd.registerVoted(logger, m.EpochID, minerPK, types.FirstRound); err != nil {
-		return nil, fmt.Errorf("[round %v] register proposal (miner ID %v): %w", types.FirstRound, minerID, err)
+	if err = pd.registerVoted(m.EpochID, m.SmesherID, types.FirstRound); err != nil {
+		return types.EmptyNodeID, fmt.Errorf("[round %v] register proposal (miner ID %v): %w", types.FirstRound, m.SmesherID.ShortString(), err)
 	}
-	return minerPK, nil
+	return m.SmesherID, nil
 }
 
-func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, minerPK *signing.PublicKey) error {
+func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, nodeID types.NodeID) error {
 	if !pd.isInProtocol() {
 		pd.logger.Debug("beacon not in protocol, not storing first votes")
 		return errProtocolNotRunning
 	}
 
-	atx, err := pd.minerAtxHdr(m.EpochID, minerPK.Bytes())
+	atx, err := pd.minerAtxHdr(m.EpochID, nodeID)
 	if err != nil {
 		return err
 	}
@@ -320,11 +312,11 @@ func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, minerPK *signing
 	}
 
 	for _, proposal := range m.ValidProposals {
-		pd.states[m.EpochID].addVote(string(proposal), up, voteWeight)
+		pd.states[m.EpochID].addVote(proposal, up, voteWeight)
 	}
 
 	for _, proposal := range m.PotentiallyValidProposals {
-		pd.states[m.EpochID].addVote(string(proposal), down, voteWeight)
+		pd.states[m.EpochID].addVote(proposal, down, voteWeight)
 	}
 
 	// this is used for bit vector calculation
@@ -333,7 +325,7 @@ func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, minerPK *signing
 		voteList = voteList[:pd.config.VotesLimit]
 	}
 
-	pd.states[m.EpochID].setMinerFirstRoundVote(minerPK, voteList)
+	pd.states[m.EpochID].setMinerFirstRoundVote(nodeID, voteList)
 	return nil
 }
 
@@ -376,19 +368,22 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 		return errEpochNotActive
 	}
 
+	latency := receivedTime.Sub(pd.msgTimes.followupVoteSendTime(m.EpochID, m.RoundID))
+	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconFollowingVotesProtocol, latency)
+
 	// don't accept votes from future rounds
 	if !pd.isVoteTimely(&m, receivedTime) {
 		logger.With().Debug("following votes too early", m.RoundID, log.Time("received_at", receivedTime))
 		return errUntimelyMessage
 	}
 
-	minerPK, err := pd.verifyFollowingVotes(ctx, m)
+	nodeID, err := pd.verifyFollowingVotes(ctx, m)
 	if err != nil {
 		return err
 	}
 
 	logger.Debug("received following voting message, counting its votes")
-	if err = pd.storeFollowingVotes(m, minerPK); err != nil {
+	if err = pd.storeFollowingVotes(m, nodeID); err != nil {
 		logger.With().Warning("failed to store following votes", log.Err(err))
 		return err
 	}
@@ -396,43 +391,35 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 	return nil
 }
 
-func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingVotingMessage) (*signing.PublicKey, error) {
-	round := m.RoundID
+func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingVotingMessage) (types.NodeID, error) {
 	messageBytes, err := codec.Encode(&m.FollowingVotingMessageBody)
 	if err != nil {
 		pd.logger.With().Fatal("failed to serialize voting message", log.Err(err))
 	}
-
-	minerPK, err := pd.pubKeyExtractor.Extract(signing.BEACON, messageBytes, m.Signature)
-	if err != nil {
-		return nil, fmt.Errorf("[round %v] recover ID from signature %x: %w", round, m.Signature, err)
+	if !pd.edVerifier.Verify(signing.BEACON, m.SmesherID, messageBytes, m.Signature) {
+		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
-
-	nodeID := types.BytesToNodeID(minerPK.Bytes())
-	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, round, log.Stringer("smesher", nodeID))
-
-	if err := pd.registerVoted(logger, m.EpochID, minerPK, m.RoundID); err != nil {
-		return nil, err
+	if err := pd.registerVoted(m.EpochID, m.SmesherID, m.RoundID); err != nil {
+		return types.EmptyNodeID, err
 	}
-
-	return minerPK, nil
+	return m.SmesherID, nil
 }
 
-func (pd *ProtocolDriver) storeFollowingVotes(m FollowingVotingMessage, minerPK *signing.PublicKey) error {
+func (pd *ProtocolDriver) storeFollowingVotes(m FollowingVotingMessage, nodeID types.NodeID) error {
 	if !pd.isInProtocol() {
 		pd.logger.Debug("beacon not in protocol, not storing following votes")
 		return errProtocolNotRunning
 	}
 
-	atx, err := pd.minerAtxHdr(m.EpochID, minerPK.Bytes())
+	atx, err := pd.minerAtxHdr(m.EpochID, nodeID)
 	if err != nil {
 		return err
 	}
 	voteWeight := new(big.Int).SetUint64(atx.GetWeight())
 
-	firstRoundVotes, err := pd.getFirstRoundVote(m.EpochID, minerPK)
+	firstRoundVotes, err := pd.getFirstRoundVote(m.EpochID, nodeID)
 	if err != nil {
-		return fmt.Errorf("get miner first round votes %v: %w", minerPK.String(), err)
+		return fmt.Errorf("get miner first round votes %v: %w", nodeID.ShortString(), err)
 	}
 
 	thisRoundVotes := decodeVotes(m.VotesBitVector, firstRoundVotes)
@@ -506,20 +493,57 @@ func (pd *ProtocolDriver) isVoteTimely(m *FollowingVotingMessage, receivedTime t
 	return false
 }
 
-func (pd *ProtocolDriver) registerProposed(logger log.Log, epoch types.EpochID, minerPK *signing.PublicKey) error {
+func (pd *ProtocolDriver) registerProposed(logger log.Log, epoch types.EpochID, nodeID types.NodeID) error {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	if _, ok := pd.states[epoch]; !ok {
 		return errEpochNotActive
 	}
-	return pd.states[epoch].registerProposed(logger, minerPK)
+	return pd.states[epoch].registerProposed(logger, nodeID)
 }
 
-func (pd *ProtocolDriver) registerVoted(logger log.Log, epoch types.EpochID, minerPK *signing.PublicKey, round types.RoundID) error {
+func (pd *ProtocolDriver) registerVoted(epoch types.EpochID, nodeID types.NodeID, round types.RoundID) error {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	if _, ok := pd.states[epoch]; !ok {
 		return errEpochNotActive
 	}
-	return pd.states[epoch].registerVoted(logger, minerPK, round)
+	return pd.states[epoch].registerVoted(nodeID, round)
+}
+
+const wordSize = 64
+
+func newVotesTracker(limit uint32) *votesTracker {
+	b := bits.Len32(limit)
+	words := b / wordSize
+	if b%wordSize != 0 {
+		words += 1
+	}
+	return &votesTracker{words: make([]uint64, words)}
+}
+
+type votesTracker struct {
+	words []uint64
+}
+
+func (v *votesTracker) register(round types.RoundID) bool {
+	word := uint64(round) / wordSize
+	if word >= uint64(len(v.words)) {
+		return false
+	}
+	position := uint64(1) << (uint64(round) % wordSize)
+	if v.words[word]&position > 0 {
+		return false
+	}
+	v.words[word] |= position
+	return true
+}
+
+func (v *votesTracker) voted(round types.RoundID) bool {
+	word := uint64(round) / wordSize
+	if word >= uint64(len(v.words)) {
+		return false
+	}
+	position := uint64(1) << (uint64(round) % wordSize)
+	return v.words[word]&position > 0
 }

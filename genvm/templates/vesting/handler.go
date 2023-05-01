@@ -1,8 +1,6 @@
 package vesting
 
 import (
-	"fmt"
-
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
@@ -11,80 +9,28 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
 )
 
-var (
-	// TemplateAddress1 is an address for 1/n vesting wallet.
-	TemplateAddress1 core.Address
-	// TemplateAddress2 is an address for 2/n vesting wallet.
-	TemplateAddress2 core.Address
-	// TemplateAddress3 is an address for 3/n vesting wallet.
-	TemplateAddress3 core.Address
-)
+var TemplateAddress core.Address
 
-const (
-	// BaseGas is a cost of Parse and Verify methods.
-	BaseGas1 = multisig.BaseGas1
-	BaseGas2 = multisig.BaseGas1
-	BaseGas3 = multisig.BaseGas1
-
-	FixedGasSpawn1 = multisig.FixedGasSpawn1
-	FixedGasSpawn2 = multisig.FixedGasSpawn2
-	FixedGasSpawn3 = multisig.FixedGasSpawn3
-
-	FixedGasSpend1 = multisig.FixedGasSpend1
-	FixedGasSpend2 = multisig.FixedGasSpend2
-	FixedGasSpend3 = multisig.FixedGasSpend3
-
-	FixedGasDrainVault1 = 100
-	FixedGasDrainVault2 = 200
-	FixedGasDrainVault3 = 300
-)
+func init() {
+	TemplateAddress[len(TemplateAddress)-1] = 3
+}
 
 // MethodDrainVault is used to relay a call to drain a vault.
 const MethodDrainVault = 17
 
-func init() {
-	TemplateAddress1[len(TemplateAddress1)-1] = 5
-	TemplateAddress2[len(TemplateAddress2)-1] = 6
-	TemplateAddress3[len(TemplateAddress3)-1] = 7
-}
-
 // Register vesting templates.
 func Register(reg *registry.Registry) {
-	reg.Register(TemplateAddress1, &handler{
-		multisig:      multisig.NewHandler(TemplateAddress1, 1, BaseGas1, FixedGasSpawn1, FixedGasSpend1),
-		baseGas:       BaseGas1,
-		drainVaultGas: FixedGasDrainVault1,
-	})
-	reg.Register(TemplateAddress2, &handler{
-		multisig:      multisig.NewHandler(TemplateAddress2, 2, BaseGas2, FixedGasSpawn2, FixedGasSpend2),
-		baseGas:       BaseGas2,
-		drainVaultGas: FixedGasDrainVault2,
-	})
-	reg.Register(TemplateAddress3, &handler{
-		multisig:      multisig.NewHandler(TemplateAddress3, 3, BaseGas3, FixedGasSpawn3, FixedGasSpend3),
-		baseGas:       BaseGas3,
-		drainVaultGas: FixedGasDrainVault3,
+	reg.Register(TemplateAddress, &handler{
+		multisig: multisig.NewHandler(TemplateAddress),
 	})
 }
 
 type handler struct {
-	multisig               core.Handler
-	baseGas, drainVaultGas uint64
+	multisig core.Handler
 }
 
 // Parse header and arguments.
 func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
-	if method == MethodDrainVault {
-		var p core.Payload
-		if _, err = p.DecodeScale(decoder); err != nil {
-			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
-			return
-		}
-		output.GasPrice = p.GasPrice
-		output.Nonce = p.Nonce
-		output.FixedGas = h.drainVaultGas
-		return output, nil
-	}
 	return h.multisig.Parse(host, method, decoder)
 }
 

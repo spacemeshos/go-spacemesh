@@ -12,7 +12,7 @@ import (
 func genSeq(address types.Address, n int) []*types.Account {
 	seq := []*types.Account{}
 	for i := 1; i <= n; i++ {
-		seq = append(seq, &types.Account{Address: address, Layer: types.NewLayerID(uint32(i)), Balance: uint64(i)})
+		seq = append(seq, &types.Account{Address: address, Layer: types.LayerID(uint32(i)), Balance: uint64(i)})
 	}
 	return seq
 }
@@ -74,6 +74,6 @@ func TestAll(t *testing.T) {
 	require.Len(t, accounts, len(addresses))
 	for i, address := range addresses {
 		require.Equal(t, address, accounts[i].Address)
-		require.EqualValues(t, n[i], accounts[i].Layer.Value)
+		require.EqualValues(t, n[i], accounts[i].Layer)
 	}
 }

@@ -18,12 +18,6 @@ type HTTPPoetTestHarness struct {
 
 type HTTPPoetOpt func(*config.Config)
 
-func WithGateway(endpoint string) HTTPPoetOpt {
-	return func(cfg *config.Config) {
-		cfg.Service.GatewayAddresses = []string{endpoint}
-	}
-}
-
 func WithGenesis(genesis time.Time) HTTPPoetOpt {
 	return func(cfg *config.Config) {
 		cfg.Service.Genesis = genesis.Format(time.RFC3339)
@@ -76,8 +70,9 @@ func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, opts ...HTTPPoe
 	}
 
 	client, err := NewHTTPPoetClient(url.String(), PoetConfig{
-		PhaseShift: cfg.Service.PhaseShift,
-		CycleGap:   cfg.Service.CycleGap,
+		PhaseShift:  cfg.Service.PhaseShift,
+		CycleGap:    cfg.Service.CycleGap,
+		GracePeriod: cfg.Service.CycleGap / 2,
 	})
 	if err != nil {
 		return nil, err

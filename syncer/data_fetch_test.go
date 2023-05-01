@@ -145,7 +145,7 @@ func TestDataFetch_PollMaliciousIDs(t *testing.T) {
 func TestDataFetch_PollLayerData(t *testing.T) {
 	numPeers := 4
 	peers := GenPeers(numPeers)
-	layerID := types.NewLayerID(10)
+	layerID := types.LayerID(10)
 	errUnknown := errors.New("unknown")
 	t.Run("all peers have zero blocks", func(t *testing.T) {
 		t.Parallel()
@@ -202,7 +202,7 @@ func TestDataFetch_PollLayerData(t *testing.T) {
 func TestDataFetch_PollLayerData_PeerErrors(t *testing.T) {
 	numPeers := 4
 	peers := GenPeers(numPeers)
-	layerID := types.NewLayerID(10)
+	layerID := types.LayerID(10)
 	t.Run("only one peer has data", func(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetch(t)
@@ -240,7 +240,7 @@ func TestDataFetch_PollLayerData_PeerErrors(t *testing.T) {
 func TestDataFetch_PollLayerOpinions(t *testing.T) {
 	const numPeers = 4
 	peers := GenPeers(numPeers)
-	lid := types.NewLayerID(10)
+	lid := types.LayerID(10)
 	pe := errors.New("meh")
 	tt := []struct {
 		name  string

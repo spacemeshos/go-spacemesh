@@ -6,16 +6,9 @@ import (
 	"strconv"
 	"sync/atomic"
 
+	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/log"
-)
-
-const (
-	// LayerIDSize in bytes.
-	LayerIDSize = 4
-
-	// BootstrapBeacon is the hex value of the beacon used during genesis.
-	// TODO: make this a config.
-	BootstrapBeacon = "0x333c04dd151a2a6831c039cb9a651df29198be8a04e16ce861d4b6a34a11c954" // sha256("bootstrap")
 )
 
 var (
@@ -41,52 +34,59 @@ func GetLayersPerEpoch() uint32 {
 
 // GetEffectiveGenesis returns when actual proposals would be created.
 func GetEffectiveGenesis() LayerID {
-	return NewLayerID(atomic.LoadUint32(&effectiveGenesis))
+	return LayerID(atomic.LoadUint32(&effectiveGenesis))
 }
-
-// NewLayerID creates LayerID from uint32.
-func NewLayerID(value uint32) LayerID {
-	return LayerID{Value: value}
-}
-
-//go:generate scalegen -types LayerID
 
 // LayerID is representing a layer number. Zero value is safe to use, and means 0.
 // Internally it is a simple wrapper over uint32 and should be considered immutable
 // the same way as any integer.
-type LayerID struct {
-	// NOTE(dshulyak) it is made public for compatibility with encoding library.
-	// Don't modify it directly, as it will likely to be made private in the future.
-	Value uint32
+type LayerID uint32
+
+// EncodeScale implements scale codec interface.
+func (l LayerID) EncodeScale(e *scale.Encoder) (int, error) {
+	n, err := scale.EncodeCompact32(e, uint32(l))
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// DecodeScale implements scale codec interface.
+func (l *LayerID) DecodeScale(d *scale.Decoder) (int, error) {
+	value, n, err := scale.DecodeCompact32(d)
+	if err != nil {
+		return 0, err
+	}
+	*l = LayerID(value)
+	return n, nil
 }
 
 // GetEpoch returns the epoch number of this LayerID.
 func (l LayerID) GetEpoch() EpochID {
-	return EpochID(l.Value / GetLayersPerEpoch())
+	return EpochID(l.Uint32() / GetLayersPerEpoch())
 }
 
 // Add layers to the layer. Panics on wraparound.
 func (l LayerID) Add(layers uint32) LayerID {
-	nl := l.Value + layers
-	if nl < l.Value {
+	nl := l + LayerID(layers)
+	if nl < l {
 		panic("layer_id wraparound")
 	}
-	l.Value = nl
-	return l
+	return nl
 }
 
 // Sub layers from the layer. Panics on wraparound.
 func (l LayerID) Sub(layers uint32) LayerID {
-	if layers > l.Value {
+	if layers > l.Uint32() {
 		panic("layer_id wraparound")
 	}
-	l.Value -= layers
-	return l
+	nl := l - LayerID(layers)
+	return nl
 }
 
 // OrdinalInEpoch returns layer ordinal in epoch.
 func (l LayerID) OrdinalInEpoch() uint32 {
-	return l.Value % GetLayersPerEpoch()
+	return l.Uint32() % GetLayersPerEpoch()
 }
 
 // FirstInEpoch returns whether this LayerID is first in epoch.
@@ -96,46 +96,45 @@ func (l LayerID) FirstInEpoch() bool {
 
 // Mul layer by the layers. Panics on wraparound.
 func (l LayerID) Mul(layers uint32) LayerID {
-	if l.Value == 0 {
+	if l == 0 {
 		return l
 	}
-	nl := l.Value * layers
-	if nl/l.Value != layers {
+	nl := l * LayerID(layers)
+	if nl/l != LayerID(layers) {
 		panic("layer_id wraparound")
 	}
-	l.Value = nl
-	return l
+	return nl
 }
 
 // Uint32 returns the LayerID as a uint32.
 func (l LayerID) Uint32() uint32 {
-	return l.Value
+	return uint32(l)
 }
 
 // Before returns true if this layer is lower than the other.
 func (l LayerID) Before(other LayerID) bool {
-	return l.Value < other.Value
+	return l < other
 }
 
 // After returns true if this layer is higher than the other.
 func (l LayerID) After(other LayerID) bool {
-	return l.Value > other.Value
+	return l > other
 }
 
 // Difference returns the difference between current and other layer.
 func (l LayerID) Difference(other LayerID) uint32 {
-	if other.Value > l.Value {
-		panic(fmt.Sprintf("other (%d) must be before or equal to this layer (%d)", other.Value, l.Value))
+	if other > l {
+		panic(fmt.Sprintf("other (%d) must be before or equal to this layer (%d)", other, l))
 	}
-	return l.Value - other.Value
+	return (l - other).Uint32()
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (l LayerID) Field() log.Field { return log.Uint32("layer_id", l.Value) }
+func (l LayerID) Field() log.Field { return log.Uint32("layer_id", l.Uint32()) }
 
 // String returns string representation of the layer id numeric value.
 func (l LayerID) String() string {
-	return strconv.FormatUint(uint64(l.Value), 10)
+	return strconv.FormatUint(uint64(l), 10)
 }
 
 // Layer contains a list of proposals and their corresponding LayerID.
@@ -147,8 +146,7 @@ type Layer struct {
 
 // Field returns a log field. Implements the LoggableField interface.
 func (l *Layer) Field() log.Field {
-	return log.String("layer",
-		fmt.Sprintf("layer_id %d num_ballot %d num_blocks %d", l.index, len(l.ballots), len(l.blocks)))
+	return log.String("layer", fmt.Sprintf("layer_id %d num_ballot %d num_blocks %d", l.index, len(l.ballots), len(l.blocks)))
 }
 
 // Index returns the layer's ID.

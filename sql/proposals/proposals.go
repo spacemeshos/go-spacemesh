@@ -123,7 +123,7 @@ func Add(db sql.Executor, proposal *types.Proposal) error {
 		stmt.BindInt64(3, int64(proposal.Layer.Uint32()))
 		stmt.BindBytes(4, txIDsBytes)
 		stmt.BindBytes(5, proposal.MeshHash.Bytes())
-		stmt.BindBytes(6, proposal.Signature)
+		stmt.BindBytes(6, proposal.Signature.Bytes())
 		stmt.BindBytes(7, encodedProposal)
 	}
 
@@ -141,8 +141,8 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 	ballotID := types.BallotID{}
 	stmt.ColumnBytes(4, ballotID[:])
 
-	pubKeyBytes := make([]byte, stmt.ColumnLen(0))
-	stmt.ColumnBytes(0, pubKeyBytes[:])
+	var nodeID types.NodeID
+	stmt.ColumnBytes(0, nodeID[:])
 
 	bodyBytes := make([]byte, stmt.ColumnLen(1))
 	stmt.ColumnBytes(1, bodyBytes[:])
@@ -152,7 +152,7 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 		return nil, err
 	}
 	ballot.SetID(ballotID)
-	ballot.SetSmesherID(types.BytesToNodeID(pubKeyBytes))
+	ballot.SmesherID = nodeID
 	if stmt.ColumnInt(2) > 0 {
 		ballot.SetMalicious()
 	}
@@ -165,8 +165,8 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 
 	meshBytes := make([]byte, stmt.ColumnLen(6))
 	stmt.ColumnBytes(6, meshBytes)
-	signature := make([]byte, stmt.ColumnLen(7))
-	stmt.ColumnBytes(7, signature)
+	signature := types.EdSignature{}
+	stmt.ColumnBytes(7, signature[:])
 
 	txIDs, err := codec.DecodeSlice[types.TransactionID](txIDsBytes)
 	if err != nil {
@@ -182,8 +182,6 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 		},
 		Signature: signature,
 	}
-
 	proposal.SetID(proposalID)
-
 	return proposal, nil
 }

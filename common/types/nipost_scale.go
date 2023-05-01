@@ -23,14 +23,14 @@ func (t *NIPostBuilderState) EncodeScale(enc *scale.Encoder) (total int, err err
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSlice(enc, t.PoetRequests)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.PoetRequests, 100)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.PoetProofRef)
+		n, err := scale.EncodeByteArray(enc, t.PoetProofRef[:])
 		if err != nil {
 			return total, err
 		}
@@ -56,7 +56,7 @@ func (t *NIPostBuilderState) DecodeScale(dec *scale.Decoder) (total int, err err
 		t.NIPost = field
 	}
 	{
-		field, n, err := scale.DecodeStructSlice[PoetRequest](dec)
+		field, n, err := scale.DecodeStructSliceWithLimit[PoetRequest](dec, 100)
 		if err != nil {
 			return total, err
 		}
@@ -64,12 +64,11 @@ func (t *NIPostBuilderState) DecodeScale(dec *scale.Decoder) (total int, err err
 		t.PoetRequests = field
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		n, err := scale.DecodeByteArray(dec, t.PoetProofRef[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.PoetProofRef = field
 	}
 	return total, nil
 }
@@ -83,7 +82,7 @@ func (t *PoetRequest) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.PoetServiceID)
+		n, err := t.PoetServiceID.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -102,12 +101,34 @@ func (t *PoetRequest) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.PoetRound = field
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		n, err := t.PoetServiceID.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.PoetServiceID = field
+	}
+	return total, nil
+}
+
+func (t *PoetServiceID) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.ServiceID, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *PoetServiceID) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.ServiceID = field
 	}
 	return total, nil
 }

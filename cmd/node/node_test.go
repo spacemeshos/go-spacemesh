@@ -4,7 +4,9 @@ package node
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,7 +37,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -90,6 +92,43 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r.NoError(err)
 	r.Len(infos, 2)
 	r.NotEqual(signer1.PublicKey(), signer3.PublicKey())
+
+	t.Run("bad length", func(t *testing.T) {
+		testLoadOrCreateEdSigner(t,
+			bytes.Repeat([]byte("ab"), signing.PrivateKeySize-1),
+			"invalid key size 63/64",
+		)
+	})
+	t.Run("bad hex", func(t *testing.T) {
+		testLoadOrCreateEdSigner(t,
+			bytes.Repeat([]byte("CV"), signing.PrivateKeySize),
+			"decoding private key: encoding/hex: invalid byte",
+		)
+	})
+	t.Run("good key", func(t *testing.T) {
+		_, priv, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+		testLoadOrCreateEdSigner(t,
+			[]byte(hex.EncodeToString(priv)),
+			"",
+		)
+	})
+}
+
+func testLoadOrCreateEdSigner(t *testing.T, data []byte, expect string) {
+	tempdir := t.TempDir()
+	app := New(WithLog(logtest.New(t)))
+	app.Config.SMESHING.Opts.DataDir = tempdir
+	keyfile := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
+	require.NoError(t, os.WriteFile(keyfile, data, 0o600))
+	signer, err := app.LoadOrCreateEdSigner()
+	if len(expect) > 0 {
+		require.ErrorContains(t, err, expect)
+		require.Nil(t, signer)
+	} else {
+		require.NoError(t, err)
+		require.NotEmpty(t, signer)
+	}
 }
 
 func newLogger(buf *bytes.Buffer) log.Log {
@@ -212,145 +251,6 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(config.JSONLogEncoder, app.Config.LOGGING.Encoder)
 }
 
-func TestSpacemeshApp_GrpcFlags(t *testing.T) {
-	// Use a unique port
-	port := 1244
-
-	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
-	r.Equal(9092, app.Config.API.GrpcServerPort)
-	r.Equal(false, app.Config.API.StartNodeService)
-
-	// Try enabling an illegal service
-	run := func(c *cobra.Command, args []string) {
-		err := cmd.EnsureCLIFlags(c, app.Config)
-		r.Error(err)
-		r.Equal("parse services list: unrecognized GRPC service requested: illegal", err.Error())
-	}
-
-	str, err := testArgs(context.Background(), cmdWithRun(run), "--grpc-port", strconv.Itoa(port), "--grpc", "illegal")
-	r.NoError(err)
-	r.Empty(str)
-	// This should still be set
-	r.Equal(port, app.Config.API.GrpcServerPort)
-	r.Equal(false, app.Config.API.StartNodeService)
-
-	events.CloseEventReporter()
-
-	// Try enabling two services, one with a legal name and one with an illegal name
-	// In this case, the node service will be enabled because it comes first
-	str, err = testArgs(context.Background(), cmdWithRun(run), "--grpc-port", strconv.Itoa(port), "--grpc", "node", "--grpc", "illegal")
-	r.NoError(err)
-	r.Empty(str)
-	r.Equal(true, app.Config.API.StartNodeService)
-
-	events.CloseEventReporter()
-	app.Config.API = apiConfig.DefaultTestConfig()
-
-	// Try the same thing but change the order of the flags
-	// In this case, the node service will not be enabled because it comes second
-	str, err = testArgs(context.Background(), cmdWithRun(run), "--grpc", "illegal", "--grpc-port", strconv.Itoa(port), "--grpc", "node")
-	r.NoError(err)
-	r.Empty(str)
-	r.Equal(false, app.Config.API.StartNodeService)
-
-	events.CloseEventReporter()
-
-	// Use commas instead
-	// In this case, the node service will be enabled because it comes first
-	// Uses Cmd.Run as defined above
-	str, err = testArgs(context.Background(), cmdWithRun(run), "--grpc", "node,illegal", "--grpc-port", strconv.Itoa(port))
-	r.NoError(err)
-	r.Empty(str)
-	r.Equal(true, app.Config.API.StartNodeService)
-
-	events.CloseEventReporter()
-
-	// This should work
-	run = func(c *cobra.Command, args []string) {
-		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
-	}
-	str, err = testArgs(context.Background(), cmdWithRun(run), "--grpc", "node")
-	r.Empty(str)
-	r.NoError(err)
-	r.Equal(true, app.Config.API.StartNodeService)
-
-	events.CloseEventReporter()
-
-	// This should work too
-	str, err = testArgs(context.Background(), cmdWithRun(run), "--grpc", "node,node")
-	r.Empty(str)
-	r.NoError(err)
-	r.Equal(true, app.Config.API.StartNodeService)
-
-	// Test enabling two services both ways
-	events.CloseEventReporter()
-	app.Config.API = apiConfig.DefaultTestConfig()
-
-	r.Equal(false, app.Config.API.StartNodeService)
-	r.Equal(false, app.Config.API.StartMeshService)
-	str, err = testArgs(context.Background(), cmdWithRun(run), "--grpc", "node,mesh")
-	r.Empty(str)
-	r.NoError(err)
-	r.Equal(true, app.Config.API.StartNodeService)
-	r.Equal(true, app.Config.API.StartMeshService)
-
-	events.CloseEventReporter()
-	app.Config.API = apiConfig.DefaultTestConfig()
-
-	r.Equal(false, app.Config.API.StartNodeService)
-	r.Equal(false, app.Config.API.StartMeshService)
-	str, err = testArgs(context.Background(), cmdWithRun(run), "--grpc", "node", "--grpc", "mesh")
-	r.Empty(str)
-	r.NoError(err)
-	r.Equal(true, app.Config.API.StartNodeService)
-	r.Equal(true, app.Config.API.StartMeshService)
-}
-
-func TestSpacemeshApp_JsonFlags(t *testing.T) {
-	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
-	r.Equal(9093, app.Config.API.JSONServerPort)
-	r.Equal(false, app.Config.API.StartJSONServer)
-	r.Equal(false, app.Config.API.StartNodeService)
-
-	// Try enabling just the JSON service (without the GRPC service)
-	run := func(c *cobra.Command, args []string) {
-		err := cmd.EnsureCLIFlags(c, app.Config)
-		r.Error(err)
-		r.Equal("parse services list: must enable at least one GRPC service along with JSON gateway service", err.Error())
-	}
-	str, err := testArgs(context.Background(), cmdWithRun(run), "--json-server")
-	r.NoError(err)
-	r.Empty(str)
-	r.Equal(true, app.Config.API.StartJSONServer)
-	r.Equal(false, app.Config.API.StartNodeService)
-
-	events.CloseEventReporter()
-
-	// Try enabling both the JSON and the GRPC services
-	run = func(c *cobra.Command, args []string) {
-		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
-	}
-	str, err = testArgs(context.Background(), cmdWithRun(run), "--grpc", "node", "--json-server")
-	r.NoError(err)
-	r.Empty(str)
-	r.Equal(true, app.Config.API.StartNodeService)
-	r.Equal(true, app.Config.API.StartJSONServer)
-
-	events.CloseEventReporter()
-	app.Config.API = apiConfig.DefaultTestConfig()
-
-	// Try changing the port
-	// Uses Cmd.Run as defined above
-	str, err = testArgs(context.Background(), cmdWithRun(run), "--json-port", "1234")
-	r.NoError(err)
-	r.Empty(str)
-	r.Equal(false, app.Config.API.StartNodeService)
-	r.Equal(false, app.Config.API.StartJSONServer)
-	r.Equal(1234, app.Config.API.JSONServerPort)
-}
-
 func marshalProto(t *testing.T, msg proto.Message) string {
 	var buf bytes.Buffer
 	var m jsonpb.Marshaler
@@ -358,8 +258,8 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 	return buf.String()
 }
 
-func callEndpoint(t *testing.T, endpoint, payload string, port int) (string, int) {
-	url := fmt.Sprintf("http://127.0.0.1:%d/%s", port, endpoint)
+func callEndpoint(t *testing.T, endpoint, payload string, address string) (string, int) {
+	url := fmt.Sprintf("http://%s/%s", address, endpoint)
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
@@ -372,7 +272,7 @@ func callEndpoint(t *testing.T, endpoint, payload string, port int) (string, int
 
 func TestSpacemeshApp_GrpcService(t *testing.T) {
 	// Use a unique port
-	port := 1242
+	listener := "127.0.0.1:1242"
 
 	r := require.New(t)
 	app := New(WithLog(logtest.New(t)))
@@ -380,8 +280,10 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	path := t.TempDir()
 
 	run := func(c *cobra.Command, args []string) {
+		app.Config.API.PublicListener = listener
+		app.Config.API.PublicServices = nil
+		app.Config.API.PrivateServices = nil
 		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
-		app.Config.API.GrpcServerPort = port
 		app.Config.DataDirParent = path
 		app.startAPIServices(context.Background())
 	}
@@ -391,10 +293,10 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	str, err := testArgs(context.Background(), cmdWithRun(run)) // no args
 	r.Empty(str)
 	r.NoError(err)
-	r.Equal(false, app.Config.API.StartNodeService)
+	r.Empty(app.Config.API.PublicServices)
 
 	_, err = grpc.Dial(
-		fmt.Sprintf("localhost:%d", port),
+		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithTimeout(2*time.Second),
@@ -404,14 +306,14 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	events.CloseEventReporter()
 
 	// Test starting the server from the command line
-	str, err = testArgs(context.Background(), cmdWithRun(run), "--grpc-port", strconv.Itoa(port), "--grpc", "node")
+	str, err = testArgs(context.Background(), cmdWithRun(run), "--grpc-public-listener", listener, "--grpc-public-services", "node")
 	r.Empty(str)
 	r.NoError(err)
-	r.Equal(port, app.Config.API.GrpcServerPort)
-	r.True(app.Config.API.StartNodeService)
+	r.Equal(listener, app.Config.API.PublicListener)
+	r.Contains(app.Config.API.PublicServices, "node")
 
 	conn, err := grpc.Dial(
-		fmt.Sprintf("localhost:%d", port),
+		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithTimeout(2*time.Second),
@@ -445,12 +347,6 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	r.Empty(str)
 	r.NoError(err)
 	defer app.stopServices(context.Background())
-	r.Equal(false, app.Config.API.StartJSONServer)
-	r.Equal(false, app.Config.API.StartNodeService)
-	r.Equal(false, app.Config.API.StartMeshService)
-	r.Equal(false, app.Config.API.StartGlobalStateService)
-	r.Equal(false, app.Config.API.StartSmesherService)
-	r.Equal(false, app.Config.API.StartTransactionService)
 
 	// Try talking to the server
 	const message = "nihao shijie"
@@ -459,7 +355,7 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 
 	// We expect this one to fail
-	url := fmt.Sprintf("http://127.0.0.1:%d/%s", app.Config.API.JSONServerPort, "v1/node/echo")
+	url := fmt.Sprintf("http://%s/%s", app.Config.API.JSONListener, "v1/node/echo")
 	_, err = http.Post(url, "application/json", strings.NewReader(payload))
 	r.Error(err)
 
@@ -474,6 +370,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) {
+		app.Config.API.PrivateServices = nil
 		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 		app.Config.DataDirParent = t.TempDir()
 		app.startAPIServices(context.Background())
@@ -481,20 +378,20 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 	// Test starting the JSON server from the commandline
 	// uses Cmd.Run from above
-	str, err := testArgs(context.Background(), cmdWithRun(run), "--json-server", "--grpc", "node", "--json-port", "1234")
+	listener := "127.0.0.1:1234"
+	str, err := testArgs(context.Background(), cmdWithRun(run), "--grpc-public-services", "node", "--grpc-json-listener", listener)
 	r.Empty(str)
 	r.NoError(err)
 	defer app.stopServices(context.Background())
-	r.Equal(1234, app.Config.API.JSONServerPort)
-	r.Equal(true, app.Config.API.StartJSONServer)
-	r.Equal(true, app.Config.API.StartNodeService)
+	r.Equal(listener, app.Config.API.JSONListener)
+	r.Contains(app.Config.API.PublicServices, "node")
 
 	var (
 		respBody   string
 		respStatus int
 	)
 	require.Eventually(t, func() bool {
-		respBody, respStatus = callEndpoint(t, "v1/node/echo", payload, app.Config.API.JSONServerPort)
+		respBody, respStatus = callEndpoint(t, "v1/node/echo", payload, app.Config.API.JSONListener)
 		return respStatus == http.StatusOK
 	}, 2*time.Second, 100*time.Millisecond)
 	var msg pb.EchoResponse
@@ -575,7 +472,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// If there's an error in the args, it will return immediately.
 	var eg errgroup.Group
 	eg.Go(func() error {
-		str, err := testArgs(ctx, cmdWithRun(run), "--grpc-port", strconv.Itoa(port), "--grpc", "node", "--grpc-interface", "localhost")
+		str, err := testArgs(ctx, cmdWithRun(run), "--grpc-private-listener", fmt.Sprintf("localhost:%d", port), "--grpc-private-services", "node", "--grpc-public-services", "debug")
 		assert.Empty(t, str)
 		assert.NoError(t, err)
 		return nil
@@ -653,8 +550,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 func TestSpacemeshApp_TransactionService(t *testing.T) {
 	r := require.New(t)
 
-	// Use a unique port
-	port := 1236
+	listener := "127.0.0.1:14236"
 
 	app := New(WithLog(logtest.New(t)))
 	cfg := config.DefaultTestConfig()
@@ -673,9 +569,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		r.NoError(app.Initialize())
 
 		// GRPC configuration
-		app.Config.API.GrpcServerPort = port
-		app.Config.API.GrpcServerInterface = "localhost"
-		app.Config.API.StartTransactionService = true
+		app.Config.API.PublicListener = listener
+		app.Config.API.PublicServices = []grpcserver.Service{grpcserver.Transaction}
+		app.Config.API.PrivateServices = nil
 
 		// Prevent obnoxious warning in macOS
 		app.Config.P2P.Listen = "/ip4/127.0.0.1/tcp/7073"
@@ -717,7 +613,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	<-app.Started()
 	conn, err := grpc.Dial(
-		fmt.Sprintf("localhost:%d", port),
+		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithTimeout(5*time.Second),
@@ -1022,8 +918,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.Tortoise.Zdist = 5
 
 	cfg.LayerDuration = 20 * time.Second
-	cfg.HareEligibility.ConfidenceParam = 4
-	cfg.HareEligibility.EpochOffset = 0
+	cfg.HareEligibility.ConfidenceParam = 1
 	cfg.SyncRequestTimeout = 500
 	cfg.SyncInterval = 2
 
@@ -1044,7 +939,7 @@ func getTestDefaultConfig() *config.Config {
 // initSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
 func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle,
-	poetClient *activation.HTTPPoetClient, clock NodeClock, host *p2p.Host, edSgn *signing.EdSigner,
+	poetClient *activation.HTTPPoetClient, clock *timesync.NodeClock, host *p2p.Host, edSgn *signing.EdSigner,
 ) (*App, error) {
 	smApp := New(WithLog(lg))
 	smApp.Config = &cfg

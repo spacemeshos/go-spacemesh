@@ -11,8 +11,9 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
@@ -45,7 +46,7 @@ type Config struct {
 	Genesis         *GenesisConfig        `mapstructure:"genesis"`
 	Tortoise        tortoise.Config       `mapstructure:"tortoise"`
 	P2P             p2p.Config            `mapstructure:"p2p"`
-	API             apiConfig.Config      `mapstructure:"api"`
+	API             grpcserver.Config     `mapstructure:"api"`
 	HARE            hareConfig.Config     `mapstructure:"hare"`
 	HareEligibility eligConfig.Config     `mapstructure:"hare-eligibility"`
 	Beacon          beacon.Config         `mapstructure:"beacon"`
@@ -56,6 +57,7 @@ type Config struct {
 	SMESHING        SmeshingConfig        `mapstructure:"smeshing"`
 	LOGGING         LoggerConfig          `mapstructure:"logging"`
 	FETCH           fetch.Config          `mapstructure:"fetch"`
+	Bootstrap       bootstrap.Config      `mapstructure:"bootstrap"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -102,13 +104,17 @@ type BaseConfig struct {
 	// then we optimistically filter out infeasible transactions before constructing the block.
 	OptFilterThreshold int    `mapstructure:"optimistic-filtering-threshold"`
 	TickSize           uint64 `mapstructure:"tick-size"`
+
+	DatabaseConnections     int  `mapstructure:"db-connections"`
+	DatabaseLatencyMetering bool `mapstructure:"db-latency-metering"`
 }
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
 type SmeshingConfig struct {
-	Start           bool                     `mapstructure:"smeshing-start"`
-	CoinbaseAccount string                   `mapstructure:"smeshing-coinbase"`
-	Opts            activation.PostSetupOpts `mapstructure:"smeshing-opts"`
+	Start           bool                       `mapstructure:"smeshing-start"`
+	CoinbaseAccount string                     `mapstructure:"smeshing-coinbase"`
+	Opts            activation.PostSetupOpts   `mapstructure:"smeshing-opts"`
+	ProvingOpts     activation.PostProvingOpts `mapstructure:"smeshing-proving-opts"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node.
@@ -119,7 +125,7 @@ func DefaultConfig() Config {
 		Genesis:         DefaultGenesisConfig(),
 		Tortoise:        tortoise.DefaultConfig(),
 		P2P:             p2p.DefaultConfig(),
-		API:             apiConfig.DefaultConfig(),
+		API:             grpcserver.DefaultConfig(),
 		HARE:            hareConfig.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
 		Beacon:          beacon.DefaultConfig(),
@@ -130,6 +136,7 @@ func DefaultConfig() Config {
 		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           fetch.DefaultConfig(),
 		LOGGING:         defaultLoggingConfig(),
+		Bootstrap:       bootstrap.DefaultConfig(),
 	}
 }
 
@@ -138,7 +145,7 @@ func DefaultTestConfig() Config {
 	conf := DefaultConfig()
 	conf.BaseConfig = defaultTestConfig()
 	conf.P2P = p2p.DefaultConfig()
-	conf.API = apiConfig.DefaultTestConfig()
+	conf.API = grpcserver.DefaultTestConfig()
 	conf.Address = types.DefaultTestAddressConfig()
 	return conf
 }
@@ -164,6 +171,7 @@ func defaultBaseConfig() BaseConfig {
 		BlockGasLimit:       math.MaxUint64,
 		OptFilterThreshold:  90,
 		TickSize:            100,
+		DatabaseConnections: 16,
 	}
 }
 
@@ -173,6 +181,7 @@ func DefaultSmeshingConfig() SmeshingConfig {
 		Start:           false,
 		CoinbaseAccount: "",
 		Opts:            activation.DefaultPostSetupOpts(),
+		ProvingOpts:     activation.DefaultPostProvingOpts(),
 	}
 }
 
@@ -192,9 +201,4 @@ func LoadConfig(config string, vip *viper.Viper) error {
 		return fmt.Errorf("can't load config at %s: %w", config, err)
 	}
 	return nil
-}
-
-// SetConfigFile overrides the default config file path.
-func (cfg *BaseConfig) SetConfigFile(file string) {
-	cfg.ConfigFile = file
 }

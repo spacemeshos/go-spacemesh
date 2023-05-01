@@ -143,7 +143,7 @@ func New(
 	conf config.Config,
 	publisher pubsub.PublishSubsciber,
 	sign *signing.EdSigner,
-	pke *signing.PubKeyExtractor,
+	edVerifier *signing.EdVerifier,
 	nid types.NodeID,
 	ch chan LayerOutput,
 	syncState system.SyncStateProvider,
@@ -187,7 +187,7 @@ func New(
 	h.outputs = make(map[types.LayerID][]types.ProposalID, h.config.Hdist) // we keep results about LayerBuffer past layers
 	h.cps = make(map[types.LayerID]Consensus, h.config.LimitConcurrent)
 	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing *signing.EdSigner, nonce *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
-		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, pke, nid, nonce, p2p, comm, ev, clock, logger)
+		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, edVerifier, nid, nonce, p2p, comm, ev, clock, logger)
 	}
 
 	h.nodeID = nid
@@ -200,7 +200,7 @@ func New(
 	if h.msh == nil {
 		h.msh = defaultMesh{CachedDB: cdb}
 	}
-	h.broker = newBroker(h.msh, pke, ev, stateQ, syncState, h.mchMalfeasance, conf.LimitConcurrent, logger)
+	h.broker = newBroker(h.msh, edVerifier, ev, stateQ, syncState, h.mchMalfeasance, conf.LimitConcurrent, logger)
 
 	return h
 }
@@ -221,7 +221,7 @@ func (h *Hare) getLastLayer() types.LayerID {
 }
 
 func (h *Hare) setLastLayer(layerID types.LayerID) {
-	if layerID == (types.LayerID{}) {
+	if layerID == 0 {
 		// layers starts from 0. nothing to do here.
 		return
 	}
@@ -237,7 +237,7 @@ func (h *Hare) setLastLayer(layerID types.LayerID) {
 // checks if the provided id is too late/old to be requested.
 func (h *Hare) outOfBufferRange(id types.LayerID) bool {
 	last := h.getLastLayer()
-	if !last.After(types.NewLayerID(h.config.Hdist)) {
+	if !last.After(types.LayerID(h.config.Hdist)) {
 		return false
 	}
 	if id.Before(last.Sub(h.config.Hdist)) { // bufferSize>=0
@@ -255,7 +255,7 @@ func (h *Hare) oldestResultInBuffer() types.LayerID {
 func (h *Hare) oldestResultInBufferLocked() types.LayerID {
 	// buffer is usually quite small so its cheap to iterate.
 	// TODO: if it gets bigger change `outputs` to array.
-	lyr := types.NewLayerID(math.MaxUint32)
+	lyr := types.LayerID(math.MaxUint32)
 	for k := range h.outputs {
 		if k.Before(lyr) {
 			lyr = k
@@ -574,16 +574,15 @@ func (h *Hare) malfeasanceLoop(ctx context.Context) {
 			if gossip.Eligibility == nil {
 				h.WithContext(ctx).Fatal("missing hare eligibility")
 			}
-			nodeID := types.BytesToNodeID(gossip.Eligibility.PubKey)
-			logger := h.WithContext(ctx).WithFields(nodeID)
-			if malicious, err := h.msh.IsMalicious(nodeID); err != nil {
+			logger := h.WithContext(ctx).WithFields(gossip.Eligibility.NodeID)
+			if malicious, err := h.msh.IsMalicious(gossip.Eligibility.NodeID); err != nil {
 				logger.With().Error("failed to check identity", log.Err(err))
 				continue
 			} else if malicious {
 				logger.Debug("known malicious identity")
 				continue
 			}
-			if err := h.msh.AddMalfeasanceProof(nodeID, &gossip.MalfeasanceProof, nil); err != nil {
+			if err := h.msh.AddMalfeasanceProof(gossip.Eligibility.NodeID, &gossip.MalfeasanceProof, nil); err != nil {
 				logger.With().Error("failed to save MalfeasanceProof", log.Err(err))
 				continue
 			}
@@ -647,7 +646,7 @@ func (h *Hare) Close() {
 
 func reportEquivocation(
 	ctx context.Context,
-	pubKey []byte,
+	pubKey types.NodeID,
 	old, new *types.HareProofMsg,
 	eligibility *types.HareEligibility,
 	mch chan<- *types.MalfeasanceGossip,
@@ -665,7 +664,7 @@ func reportEquivocation(
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       old.InnerMsg.Layer,
 			Round:       old.InnerMsg.Round,
-			PubKey:      pubKey,
+			NodeID:      pubKey,
 			Eligibility: *eligibility,
 		},
 	}

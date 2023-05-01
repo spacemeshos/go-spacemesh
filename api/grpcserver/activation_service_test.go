@@ -13,13 +13,12 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
-	"github.com/spacemeshos/go-spacemesh/api/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestGet_RejectInvalidAtxID(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := mocks.NewMockAtxProvider(ctrl)
+	atxProvider := grpcserver.NewMockatxProvider(ctrl)
 	activationService := grpcserver.NewActivationService(atxProvider)
 
 	_, err := activationService.Get(context.Background(), &pb.GetRequest{})
@@ -29,7 +28,7 @@ func TestGet_RejectInvalidAtxID(t *testing.T) {
 
 func TestGet_AtxNotPresent(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := mocks.NewMockAtxProvider(ctrl)
+	atxProvider := grpcserver.NewMockatxProvider(ctrl)
 	activationService := grpcserver.NewActivationService(atxProvider)
 
 	id := types.RandomATXID()
@@ -42,7 +41,7 @@ func TestGet_AtxNotPresent(t *testing.T) {
 
 func TestGet_AtxProviderReturnsFailure(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := mocks.NewMockAtxProvider(ctrl)
+	atxProvider := grpcserver.NewMockatxProvider(ctrl)
 	activationService := grpcserver.NewActivationService(atxProvider)
 
 	id := types.RandomATXID()
@@ -55,7 +54,7 @@ func TestGet_AtxProviderReturnsFailure(t *testing.T) {
 
 func TestGet_HappyPath(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := mocks.NewMockAtxProvider(ctrl)
+	atxProvider := grpcserver.NewMockatxProvider(ctrl)
 	activationService := grpcserver.NewActivationService(atxProvider)
 
 	id := types.RandomATXID()
@@ -65,7 +64,7 @@ func TestGet_HappyPath(t *testing.T) {
 				NIPostChallenge: types.NIPostChallenge{
 					Sequence:           rand.Uint64(),
 					PrevATXID:          types.RandomATXID(),
-					PubLayerID:         types.LayerID{},
+					PublishEpoch:       0,
 					PositioningATX:     types.RandomATXID(),
 					InitialPostIndices: types.RandomBytes(7),
 				},
@@ -74,17 +73,15 @@ func TestGet_HappyPath(t *testing.T) {
 			},
 		},
 	}
-	atx.SetID(&id)
-	nodeId := types.BytesToNodeID(types.RandomBytes(32))
-	atx.SetNodeID(&nodeId)
+	atx.SetID(id)
 	atxProvider.EXPECT().GetFullAtx(id).Return(&atx, nil)
 
 	response, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
 	require.NoError(t, err)
 
 	require.Equal(t, atx.ID().Bytes(), response.Atx.Id.Id)
-	require.Equal(t, atx.PubLayerID.Value, response.Atx.Layer.Number)
-	require.Equal(t, atx.NodeID().Bytes(), response.Atx.SmesherId.Id)
+	require.Equal(t, atx.PublishEpoch.Uint32(), response.Atx.Layer.Number)
+	require.Equal(t, atx.SmesherID.Bytes(), response.Atx.SmesherId.Id)
 	require.Equal(t, atx.Coinbase.String(), response.Atx.Coinbase.Address)
 	require.Equal(t, atx.PrevATXID.Bytes(), response.Atx.PrevAtx.Id)
 	require.Equal(t, atx.NumUnits, response.Atx.NumUnits)

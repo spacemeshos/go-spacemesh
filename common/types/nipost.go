@@ -1,8 +1,10 @@
 package types
 
-//go:generate scalegen -types NIPostBuilderState,PoetRequest
+//go:generate scalegen -types NIPostBuilderState,PoetRequest,PoetServiceID
 
-type PoetServiceID = []byte
+type PoetServiceID struct {
+	ServiceID []byte `scale:"max=32"` // public key of the PoET service
+}
 
 // PoetRequest describes an in-flight challenge submission for a poet proof.
 type PoetRequest struct {
@@ -18,7 +20,7 @@ type NIPostBuilderState struct {
 
 	NIPost *NIPost
 
-	PoetRequests []PoetRequest
+	PoetRequests []PoetRequest `scale:"max=100"` // max number of poets a node connects to
 
 	// PoetProofRef is the root of the proof received from the PoET service.
 	PoetProofRef PoetProofRef

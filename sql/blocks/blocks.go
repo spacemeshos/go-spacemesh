@@ -35,7 +35,7 @@ func Add(db sql.Executor, block *types.Block) error {
 	if _, err := db.Exec("insert into blocks (id, layer, block) values (?1, ?2, ?3);",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, block.ID().Bytes())
-			stmt.BindInt64(2, int64(block.LayerIndex.Value))
+			stmt.BindInt64(2, int64(block.LayerIndex))
 			stmt.BindBytes(3, bytes) // this is actually should encode block
 		}, nil); err != nil {
 		return fmt.Errorf("insert %s: %w", block.ID(), err)
@@ -64,9 +64,9 @@ func Get(db sql.Executor, id types.BlockID) (rst *types.Block, err error) {
 		rst, err = decodeBlock(stmt.ColumnReader(0), id)
 		return true
 	}); err != nil {
-		return nil, fmt.Errorf("get %s: %w", id, err)
+		return nil, fmt.Errorf("get block %s: %w", id, err)
 	} else if rows == 0 {
-		return nil, fmt.Errorf("%w block %s", sql.ErrNotFound, id)
+		return nil, fmt.Errorf("get block %s: %w", id, sql.ErrNotFound)
 	}
 	return rst, err
 }
@@ -118,7 +118,7 @@ func GetLayer(db sql.Executor, id types.BlockID) (types.LayerID, error) {
 	if rows, err := db.Exec("select layer from blocks where id = ?1;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}, func(stmt *sql.Statement) bool {
-		lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+		lid = types.LayerID(uint32(stmt.ColumnInt64(0)))
 		return true
 	}); err != nil {
 		return lid, fmt.Errorf("get block layer %s: %w", id, err)

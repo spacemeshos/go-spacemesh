@@ -13,7 +13,6 @@ import (
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	pubsub "github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	signing "github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // Mockcoin is a mock of coin interface.
@@ -140,7 +139,7 @@ func (m *MockeligibilityChecker) EXPECT() *MockeligibilityCheckerMockRecorder {
 }
 
 // PassStrictThreshold mocks base method.
-func (m *MockeligibilityChecker) PassStrictThreshold(arg0 []byte) bool {
+func (m *MockeligibilityChecker) PassStrictThreshold(arg0 types.VrfSignature) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PassStrictThreshold", arg0)
 	ret0, _ := ret[0].(bool)
@@ -154,7 +153,7 @@ func (mr *MockeligibilityCheckerMockRecorder) PassStrictThreshold(arg0 interface
 }
 
 // PassThreshold mocks base method.
-func (m *MockeligibilityChecker) PassThreshold(arg0 []byte) bool {
+func (m *MockeligibilityChecker) PassThreshold(arg0 types.VrfSignature) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PassThreshold", arg0)
 	ret0, _ := ret[0].(bool)
@@ -269,25 +268,25 @@ func (mr *MockvrfSignerMockRecorder) LittleEndian() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LittleEndian", reflect.TypeOf((*MockvrfSigner)(nil).LittleEndian))
 }
 
-// PublicKey mocks base method.
-func (m *MockvrfSigner) PublicKey() *signing.PublicKey {
+// NodeID mocks base method.
+func (m *MockvrfSigner) NodeID() types.NodeID {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PublicKey")
-	ret0, _ := ret[0].(*signing.PublicKey)
+	ret := m.ctrl.Call(m, "NodeID")
+	ret0, _ := ret[0].(types.NodeID)
 	return ret0
 }
 
-// PublicKey indicates an expected call of PublicKey.
-func (mr *MockvrfSignerMockRecorder) PublicKey() *gomock.Call {
+// NodeID indicates an expected call of NodeID.
+func (mr *MockvrfSignerMockRecorder) NodeID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublicKey", reflect.TypeOf((*MockvrfSigner)(nil).PublicKey))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NodeID", reflect.TypeOf((*MockvrfSigner)(nil).NodeID))
 }
 
 // Sign mocks base method.
-func (m *MockvrfSigner) Sign(msg []byte) []byte {
+func (m *MockvrfSigner) Sign(msg []byte) types.VrfSignature {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Sign", msg)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].(types.VrfSignature)
 	return ret0
 }
 
@@ -321,7 +320,7 @@ func (m *MockvrfVerifier) EXPECT() *MockvrfVerifierMockRecorder {
 }
 
 // Verify mocks base method.
-func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg, sig []byte) bool {
+func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Verify", nodeID, msg, sig)
 	ret0, _ := ret[0].(bool)

@@ -43,7 +43,7 @@ func TestVerify(t *testing.T) {
 	wallet := New(spawn)
 
 	t.Run("Invalid", func(t *testing.T) {
-		buf64 := types.Bytes64{}
+		buf64 := types.EdSignature{}
 		require.False(t, wallet.Verify(&core.Context{}, buf64[:], scale.NewDecoder(bytes.NewReader(buf64[:]))))
 	})
 	t.Run("Empty", func(t *testing.T) {
@@ -52,8 +52,8 @@ func TestVerify(t *testing.T) {
 	t.Run("Valid", func(t *testing.T) {
 		msg := []byte{1, 2, 3}
 		empty := types.Hash20{}
-		hash := core.Hash(empty[:], msg)
-		sig := ed25519.Sign(pk, hash[:])
+		body := core.SigningBody(empty[:], msg)
+		sig := ed25519.Sign(pk, body[:])
 		require.True(t, wallet.Verify(&core.Context{GenesisID: empty}, append(msg, sig...), scale.NewDecoder(bytes.NewReader(sig))))
 	})
 }

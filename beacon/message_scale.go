@@ -77,7 +77,7 @@ func (t *ProposalMessage) EncodeScale(enc *scale.Encoder) (total int, err error)
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.VRFSignature)
+		n, err := scale.EncodeByteArray(enc, t.VRFSignature[:])
 		if err != nil {
 			return total, err
 		}
@@ -103,12 +103,11 @@ func (t *ProposalMessage) DecodeScale(dec *scale.Decoder) (total int, err error)
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		n, err := scale.DecodeByteArray(dec, t.VRFSignature[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.VRFSignature = field
 	}
 	return total, nil
 }
@@ -122,14 +121,14 @@ func (t *FirstVotingMessageBody) EncodeScale(enc *scale.Encoder) (total int, err
 		total += n
 	}
 	{
-		n, err := scale.EncodeSliceOfByteSlice(enc, t.ValidProposals)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.ValidProposals, 1000)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeSliceOfByteSlice(enc, t.PotentiallyValidProposals)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.PotentiallyValidProposals, 1000)
 		if err != nil {
 			return total, err
 		}
@@ -148,7 +147,7 @@ func (t *FirstVotingMessageBody) DecodeScale(dec *scale.Decoder) (total int, err
 		t.EpochID = types.EpochID(field)
 	}
 	{
-		field, n, err := scale.DecodeSliceOfByteSlice(dec)
+		field, n, err := scale.DecodeStructSliceWithLimit[Proposal](dec, 1000)
 		if err != nil {
 			return total, err
 		}
@@ -156,7 +155,7 @@ func (t *FirstVotingMessageBody) DecodeScale(dec *scale.Decoder) (total int, err
 		t.ValidProposals = field
 	}
 	{
-		field, n, err := scale.DecodeSliceOfByteSlice(dec)
+		field, n, err := scale.DecodeStructSliceWithLimit[Proposal](dec, 1000)
 		if err != nil {
 			return total, err
 		}
@@ -175,7 +174,14 @@ func (t *FirstVotingMessage) EncodeScale(enc *scale.Encoder) (total int, err err
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Signature)
+		n, err := scale.EncodeByteArray(enc, t.SmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.Signature[:])
 		if err != nil {
 			return total, err
 		}
@@ -193,12 +199,18 @@ func (t *FirstVotingMessage) DecodeScale(dec *scale.Decoder) (total int, err err
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Signature = field
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.Signature[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
 	}
 	return total, nil
 }
@@ -219,7 +231,7 @@ func (t *FollowingVotingMessageBody) EncodeScale(enc *scale.Encoder) (total int,
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.VotesBitVector)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.VotesBitVector, 128)
 		if err != nil {
 			return total, err
 		}
@@ -246,7 +258,7 @@ func (t *FollowingVotingMessageBody) DecodeScale(dec *scale.Decoder) (total int,
 		t.RoundID = types.RoundID(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 128)
 		if err != nil {
 			return total, err
 		}
@@ -265,7 +277,14 @@ func (t *FollowingVotingMessage) EncodeScale(enc *scale.Encoder) (total int, err
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Signature)
+		n, err := scale.EncodeByteArray(enc, t.SmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.Signature[:])
 		if err != nil {
 			return total, err
 		}
@@ -283,12 +302,18 @@ func (t *FollowingVotingMessage) DecodeScale(dec *scale.Decoder) (total int, err
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Signature = field
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.Signature[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
 	}
 	return total, nil
 }

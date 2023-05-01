@@ -1,7 +1,6 @@
 package hare
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -14,11 +13,9 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -184,7 +181,7 @@ func createConsensusProcess(
 	network.Register(pubsub.HareProtocol, broker.HandleMessage)
 	output := make(chan TerminationOutput, 1)
 	oracle.Register(isHonest, sig.NodeID())
-	pke, err := signing.NewPubKeyExtractor()
+	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(tb, err)
 	c, err := broker.Register(ctx, layer)
 	require.NoError(tb, err)
@@ -203,7 +200,7 @@ func createConsensusProcess(
 		oracle,
 		broker.mockStateQ,
 		sig,
-		pke,
+		edVerifier,
 		sig.NodeID(),
 		&nonce,
 		network,
@@ -571,7 +568,7 @@ func TestEquivocation(t *testing.T) {
 	for _, ch := range mchs {
 		require.Len(t, ch, 1)
 		gossip := <-ch
-		require.True(t, bytes.Equal(gossip.Eligibility.PubKey, badGuy.PublicKey().Bytes()))
+		require.Equal(t, badGuy.NodeID(), gossip.Eligibility.NodeID)
 	}
 }
 
@@ -585,14 +582,11 @@ func (eps *equivocatePubSub) Publish(ctx context.Context, protocol string, data 
 	if err != nil {
 		return fmt.Errorf("decode published data: %w", err)
 	}
-	if msg.InnerMsg.Type == pre {
-		msg.InnerMsg.Values = []types.ProposalID{types.RandomProposalID()}
+	if msg.Type == pre {
+		msg.Values = []types.ProposalID{types.RandomProposalID()}
 		msg.Signature = eps.sig.Sign(signing.HARE, msg.SignedBytes())
-		encoded, err := codec.Encode(&msg)
-		if err != nil {
-			log.With().Fatal("failed to encode equivocation data", log.Err(err))
-		}
-		if err = eps.ps.Publish(ctx, protocol, encoded); err != nil {
+		msg.SmesherID = eps.sig.NodeID()
+		if err = eps.ps.Publish(ctx, protocol, msg.Bytes()); err != nil {
 			return fmt.Errorf("publish equivocate message: %w", err)
 		}
 	}

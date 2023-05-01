@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -15,20 +16,19 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 var (
-	memberHash      = []byte{0x17, 0x51, 0xac, 0x12, 0xe7, 0xe, 0x15, 0xb4, 0xf7, 0x6c, 0x16, 0x77, 0x5c, 0xd3, 0x29, 0xae, 0x55, 0x97, 0x3b, 0x61, 0x25, 0x21, 0xda, 0xb2, 0xde, 0x82, 0x8a, 0x5c, 0xdb, 0x6c, 0x8a, 0xb3}
+	memberHash      = [32]byte{0x17, 0x51, 0xac, 0x12, 0xe7, 0xe, 0x15, 0xb4, 0xf7, 0x6c, 0x16, 0x77, 0x5c, 0xd3, 0x29, 0xae, 0x55, 0x97, 0x3b, 0x61, 0x25, 0x21, 0xda, 0xb2, 0xde, 0x82, 0x8a, 0x5c, 0xdb, 0x6c, 0x8a, 0xb3}
 	proof           *types.PoetProofMessage
 	createProofOnce sync.Once
 )
 
 func getPoetProof(t *testing.T) types.PoetProofMessage {
 	createProofOnce.Do(func() {
-		members := [][]byte{memberHash}
+		members := [][]byte{memberHash[:]}
 		challenge, err := prover.CalcTreeRoot(members)
 		require.NoError(t, err)
 
@@ -54,7 +54,7 @@ func getPoetProof(t *testing.T) types.PoetProofMessage {
 		proof = &types.PoetProofMessage{
 			PoetProof: types.PoetProof{
 				MerkleProof: *merkleProof,
-				Members:     members,
+				Members:     []types.Member{types.Member(memberHash)},
 				LeafCount:   leaves,
 			},
 			PoetServiceID: []byte("poet_id_123456"),
@@ -69,23 +69,23 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	msg := getPoetProof(t)
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 
-	r.NoError(poetDb.Validate(msg.PoetProof, msg.PoetServiceID, msg.RoundID, nil))
+	r.NoError(poetDb.Validate(msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature))
 	ref, err := msg.Ref()
 	r.NoError(err)
 
 	proofBytes, err := codec.Encode(&msg.PoetProof)
 	r.NoError(err)
-	expectedRef := hash.Sum(proofBytes)
-	r.Equal(types.PoetProofRef(types.CalcHash32(expectedRef[:]).Bytes()), ref)
+	expectedRef := types.CalcHash32(proofBytes)
+	r.Equal(types.PoetProofRef(expectedRef), ref)
 
-	r.NoError(poetDb.StoreProof(context.TODO(), ref, &msg))
+	r.NoError(poetDb.StoreProof(context.Background(), ref, &msg))
 	got, err := poetDb.GetProofRef(msg.PoetServiceID, msg.RoundID)
 	r.NoError(err)
 	r.Equal(ref, got)
 
 	membership, err := poetDb.GetMembershipMap(ref)
 	r.NoError(err)
-	r.True(membership[types.BytesToHash(memberHash)])
+	r.True(membership[memberHash])
 	r.False(membership[types.BytesToHash([]byte("5"))])
 }
 
@@ -97,7 +97,7 @@ func TestPoetDbPoetProofNoMembers(t *testing.T) {
 	poetProof.Root = []byte("some other root")
 	poetProof.Members = nil
 
-	err := poetDb.Validate(poetProof.PoetProof, poetProof.PoetServiceID, poetProof.RoundID, nil)
+	err := poetDb.Validate(poetProof.PoetProof, poetProof.PoetServiceID, poetProof.RoundID, types.EmptyEdSignature)
 	r.NoError(err)
 }
 
@@ -107,10 +107,10 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 	msg.PoetProof.Root = []byte("some other root")
 
-	err := poetDb.Validate(msg.PoetProof, msg.PoetServiceID, msg.RoundID, nil)
-	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid",
-		msg.PoetServiceID[:5]))
-	r.False(types.IsProcessingError(err))
+	err := poetDb.Validate(msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
+	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid", msg.PoetServiceID[:5]))
+	var pErr types.ProcessingError
+	r.False(errors.As(err, &pErr))
 }
 
 func TestPoetDbNonExistingKeys(t *testing.T) {
@@ -121,7 +121,7 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 	_, err := poetDb.GetProofRef(msg.PoetServiceID, "0")
 	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for poet ID %x in round %v: get value: database: not found", msg.PoetServiceID[:5], "0"))
 
-	ref := []byte("abcde")
+	ref := types.PoetProofRef{0xab, 0xcd, 0xef}
 	_, err = poetDb.GetMembershipMap(ref)
 	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for ref %x: get proof from store: get value: database: not found", ref[:5]))
 }

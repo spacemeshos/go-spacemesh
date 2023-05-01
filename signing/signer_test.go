@@ -1,9 +1,9 @@
 package signing
 
 import (
+	"crypto/ed25519"
 	"testing"
 
-	"github.com/spacemeshos/ed25519-recovery"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -25,12 +25,12 @@ func TestEdSigner_Sign(t *testing.T) {
 
 	m := make([]byte, 4)
 	rand.Read(m)
-	sig := ed.Sign(BALLOT, m)
+	sig := ed.Sign(HARE, m)
 	signed := make([]byte, len(m)+1)
-	signed[0] = byte(BALLOT)
+	signed[0] = byte(HARE)
 	copy(signed[1:], m)
 
-	ok := ed25519.Verify(ed.PublicKey().Bytes(), signed, sig)
+	ok := ed25519.Verify(ed.PublicKey().Bytes(), signed, sig[:])
 	require.Truef(t, ok, "failed to verify message %x with sig %x", m, sig)
 }
 

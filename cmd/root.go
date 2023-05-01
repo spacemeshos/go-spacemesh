@@ -55,8 +55,6 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(&cfg.PprofHTTPServer, "pprof-server",
 		cfg.PprofHTTPServer, "enable http pprof server")
 	cmd.PersistentFlags().Uint64Var(&cfg.TickSize, "tick-size", cfg.TickSize, "number of poet leaves in a single tick")
-	cmd.PersistentFlags().StringVar(&cfg.PublishEventsURL, "events-url",
-		cfg.PublishEventsURL, "publish events to this url; if no url specified no events will be published")
 	cmd.PersistentFlags().StringVar(&cfg.ProfilerURL, "profiler-url",
 		cfg.ProfilerURL, "send profiler data to certain url, if no url no profiling will be sent, format: http://<IP>:<PORT>")
 	cmd.PersistentFlags().StringVar(&cfg.ProfilerName, "profiler-name",
@@ -74,12 +72,16 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(cfg.Genesis.Accounts), "accounts", "a",
 		"List of prefunded accounts")
 
+	cmd.PersistentFlags().IntVar(&cfg.DatabaseConnections, "db-connections",
+		cfg.DatabaseConnections, "configure number of active connections to enable parallel read requests")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.Flood, "db-latency-metering",
+		cfg.DatabaseLatencyMetering, "if enabled collect latency histogram for every database query")
 	/** ======================== P2P Flags ========================== **/
 
 	cmd.PersistentFlags().StringVar(&cfg.P2P.Listen, "listen",
 		cfg.P2P.Listen, "address for listening")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.Flood, "flood",
-		cfg.P2P.Flood, "flood created messages to all peers (true by default. disable to lower traffic requirements)")
+		cfg.P2P.Flood, "flood created messages to all peers")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.DisableNatPort, "disable-natport",
 		cfg.P2P.DisableNatPort, "disable nat port-mapping (if enabled upnp protocol is used to negotiate external port with router)")
 	cmd.PersistentFlags().IntVar(&cfg.P2P.LowPeers, "low-peers",
@@ -112,25 +114,20 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.TIME.Peersync.RequiredResponses, "min number of clock samples from other that need to be collected to verify time")
 	/** ======================== API Flags ========================== **/
 
-	// StartJSONServer determines if json api server should be started
-	cmd.PersistentFlags().BoolVar(&cfg.API.StartJSONServer, "json-server",
-		cfg.API.StartJSONServer, "Start the grpc-gateway (json http) server. "+
-			"The gateway server will be enabled for all corresponding, enabled GRPC services.",
-	)
-	// JSONServerPort determines the json api server local listening port
-	cmd.PersistentFlags().IntVar(&cfg.API.JSONServerPort, "json-port",
-		cfg.API.JSONServerPort, "JSON api server port")
-	// StartGrpcServices determines which (if any) GRPC API services should be started
-	cmd.PersistentFlags().StringSliceVar(&cfg.API.StartGrpcServices, "grpc",
-		cfg.API.StartGrpcServices, "Comma-separated list of individual grpc services to enable "+
-			"(gateway,globalstate,mesh,node,smesher,transaction)")
-	// GrpcServerPort determines the grpc server local listening port
-	cmd.PersistentFlags().IntVar(&cfg.API.GrpcServerPort, "grpc-port",
-		cfg.API.GrpcServerPort, "GRPC api server port")
-	// GrpcServerInterface determines the interface the GRPC server listens on
-	cmd.PersistentFlags().StringVar(&cfg.API.GrpcServerInterface, "grpc-interface",
-		cfg.API.GrpcServerInterface, "GRPC api server interface")
-
+	cmd.PersistentFlags().StringSliceVar(&cfg.API.PublicServices, "grpc-public-services",
+		cfg.API.PublicServices, "List of services that are safe to open for the network.")
+	cmd.PersistentFlags().StringVar(&cfg.API.PublicListener, "grpc-public-listener",
+		cfg.API.PublicListener, "Socket for the list of services specified in grpc-public-services.")
+	cmd.PersistentFlags().StringSliceVar(&cfg.API.PrivateServices, "grpc-private-services",
+		cfg.API.PrivateServices, "List of services that must be kept private or exposed only in secure environments.")
+	cmd.PersistentFlags().StringVar(&cfg.API.PrivateListener, "grpc-private-listener",
+		cfg.API.PrivateListener, "Socket for the list of services specified in grpc-private-services.")
+	cmd.PersistentFlags().IntVar(&cfg.API.GrpcRecvMsgSize, "grpc-recv-msg-size",
+		cfg.API.GrpcRecvMsgSize, "GRPC api recv message size")
+	cmd.PersistentFlags().IntVar(&cfg.API.GrpcSendMsgSize, "grpc-send-msg-size",
+		cfg.API.GrpcSendMsgSize, "GRPC api send message size")
+	cmd.PersistentFlags().StringVar(&cfg.API.JSONListener, "grpc-json-listener",
+		cfg.API.JSONListener, "Socket for the grpc gateway for the list of services in grpc-public-services. If left empty - grpc gateway won't be enabled.")
 	/**======================== Hare Flags ========================== **/
 
 	// N determines the size of the hare committee
@@ -152,8 +149,6 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().Uint32Var(&cfg.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
 		cfg.HareEligibility.ConfidenceParam, "The relative layer (with respect to the current layer) we are confident to have consensus about")
-	cmd.PersistentFlags().Uint32Var(&cfg.HareEligibility.EpochOffset, "eligibility-epoch-offset",
-		cfg.HareEligibility.EpochOffset, "The constant layer (within an epoch) for which we traverse its view for the purpose of counting consensus active set")
 
 	/**======================== Beacon Flags ========================== **/
 
@@ -242,6 +237,12 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.POET.CycleGap, "cycle gap of poet server")
 	cmd.PersistentFlags().DurationVar(&cfg.POET.GracePeriod, "grace-period",
 		cfg.POET.GracePeriod, "propagation time for ATXs in the network")
+
+	/**======================== bootstrap data updater Flags ========================== **/
+	cmd.PersistentFlags().StringVar(&cfg.Bootstrap.URL, "bootstrap-url",
+		cfg.Bootstrap.URL, "the url to query bootstrap data update")
+	cmd.PersistentFlags().StringVar(&cfg.Bootstrap.Version, "bootstrap-version",
+		cfg.Bootstrap.Version, "the update version of the bootstrap data")
 
 	// Bind Flags to config
 	err := viper.BindPFlags(cmd.PersistentFlags())

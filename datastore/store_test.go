@@ -74,7 +74,7 @@ func TestMalfeasanceProof_Honest(t *testing.T) {
 
 	// but an add will update the cache
 	proof := &types.MalfeasanceProof{
-		Layer: types.NewLayerID(11),
+		Layer: types.LayerID(11),
 		Proof: types.Proof{
 			Type: types.MultipleBallots,
 			Data: &types.BallotProof{
@@ -99,7 +99,7 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 
 	// a bad guy
 	proof := &types.MalfeasanceProof{
-		Layer: types.NewLayerID(11),
+		Layer: types.LayerID(11),
 		Proof: types.Proof{
 			Type: types.MultipleBallots,
 			Data: &types.BallotProof{
@@ -159,8 +159,8 @@ func TestIdentityExists(t *testing.T) {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(22),
-				Sequence:   11,
+				PublishEpoch: types.EpochID(22),
+				Sequence:     11,
 			},
 			NumUnits: 11,
 		},
@@ -168,8 +168,6 @@ func TestIdentityExists(t *testing.T) {
 	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
 	atx.SetReceived(time.Now())
 	atx.SetEffectiveNumUnits(atx.NumUnits)
-	nodeID := signer.NodeID()
-	atx.SetNodeID(&nodeID)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(cdb, vAtx))
@@ -185,8 +183,8 @@ func TestStore_GetAtxByNodeID(t *testing.T) {
 	atx3 := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.EpochID(3).FirstLayer(),
-				Sequence:   11,
+				PublishEpoch: types.EpochID(3),
+				Sequence:     11,
 			},
 			NumUnits: 11,
 		},
@@ -194,20 +192,18 @@ func TestStore_GetAtxByNodeID(t *testing.T) {
 	atx4 := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.EpochID(4).FirstLayer(),
-				Sequence:   12,
+				PublishEpoch: types.EpochID(4),
+				Sequence:     12,
 			},
 			NumUnits: 11,
 		},
 	}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	nodeID := signer.NodeID()
 	for _, atx := range []*types.ActivationTx{atx3, atx4} {
 		require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		atx.SetNodeID(&nodeID)
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(cdb, vAtx))
@@ -229,8 +225,8 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: types.NewLayerID(22),
-				Sequence:   11,
+				PublishEpoch: types.EpochID(22),
+				Sequence:     11,
 			},
 			NumUnits: 11,
 		},
@@ -240,8 +236,6 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
-	extractedNodeID := signer.NodeID()
-	atx.SetNodeID(&extractedNodeID)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 
@@ -253,12 +247,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 
 	var gotA types.ActivationTx
 	require.NoError(t, codec.Decode(got, &gotA))
-	require.NoError(t, gotA.CalcAndSetID())
-	extract, err := signing.NewPubKeyExtractor()
-	require.NoError(t, err)
-	extractedNodeID, err = extract.ExtractNodeID(signing.ATX, atx.SignedBytes(), atx.Signature)
-	require.NoError(t, err)
-	gotA.SetNodeID(&extractedNodeID)
+	require.NoError(t, gotA.Initialize())
 	gotA.SetEffectiveNumUnits(gotA.NumUnits)
 	gotA.SetReceived(atx.Received())
 	require.Equal(t, *atx, gotA)
@@ -276,7 +265,7 @@ func TestBlobStore_GetBallotBlob(t *testing.T) {
 
 	blt := types.RandomBallot()
 	blt.Signature = sig.Sign(signing.BALLOT, blt.SignedBytes())
-	blt.SetSmesherID(sig.NodeID())
+	blt.SmesherID = sig.NodeID()
 	require.NoError(t, blt.Initialize())
 
 	_, err = bs.Get(datastore.BallotDB, blt.ID().Bytes())
@@ -286,11 +275,7 @@ func TestBlobStore_GetBallotBlob(t *testing.T) {
 	require.NoError(t, err)
 	var gotB types.Ballot
 	require.NoError(t, codec.Decode(got, &gotB))
-	extract, err := signing.NewPubKeyExtractor()
-	require.NoError(t, err)
-	nodeID, err := extract.ExtractNodeID(signing.BALLOT, gotB.SignedBytes(), gotB.Signature)
-	require.NoError(t, err)
-	gotB.SetSmesherID(nodeID)
+
 	require.NoError(t, gotB.Initialize())
 	require.Equal(t, *blt, gotB)
 
@@ -304,7 +289,7 @@ func TestBlobStore_GetBlockBlob(t *testing.T) {
 
 	blk := types.Block{
 		InnerBlock: types.InnerBlock{
-			LayerIndex: types.NewLayerID(11),
+			LayerIndex: types.LayerID(11),
 			TxIDs:      types.RandomTXSet(3),
 		},
 	}
@@ -334,7 +319,9 @@ func TestBlobStore_GetPoetBlob(t *testing.T) {
 
 	_, err := bs.Get(datastore.POETDB, ref)
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.NoError(t, poets.Add(db, ref, poet, sid, rid))
+	var poetRef types.PoetProofRef
+	copy(poetRef[:], ref)
+	require.NoError(t, poets.Add(db, poetRef, poet, sid, rid))
 	got, err := bs.Get(datastore.POETDB, ref)
 	require.NoError(t, err)
 	require.True(t, bytes.Equal(poet, got))
@@ -358,7 +345,7 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 		},
 	}
 	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
-	p.SetSmesherID(signer.NodeID())
+	p.SmesherID = signer.NodeID()
 	require.NoError(t, p.Initialize())
 
 	_, err = bs.Get(datastore.ProposalDB, p.ID().Bytes())
@@ -369,11 +356,6 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 	require.NoError(t, err)
 	var gotP types.Proposal
 	require.NoError(t, codec.Decode(got, &gotP))
-	extract, err := signing.NewPubKeyExtractor()
-	require.NoError(t, err)
-	nodeID, err := extract.ExtractNodeID(signing.BALLOT, gotP.SignedBytes(), gotP.Signature)
-	require.NoError(t, err)
-	gotP.SetSmesherID(nodeID)
 	require.NoError(t, gotP.Initialize())
 	require.Equal(t, p, gotP)
 	_, err = bs.Get(datastore.BlockDB, p.ID().Bytes())
@@ -404,7 +386,7 @@ func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
 	bs := datastore.NewBlobStore(db)
 
 	proof := &types.MalfeasanceProof{
-		Layer: types.NewLayerID(11),
+		Layer: types.LayerID(11),
 		Proof: types.Proof{
 			Type: types.HareEquivocation,
 			Data: &types.HareProof{

@@ -24,8 +24,7 @@ import (
 )
 
 const (
-	attempts       = 3
-	layersPerEpoch = 4
+	attempts = 3
 )
 
 func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.SugaredLogger, cl *cluster.Cluster, first, stop uint32, batch, amount int) {
@@ -375,7 +374,7 @@ func getVerifiedLayer(ctx context.Context, node *cluster.NodeClient) (*pb.Layer,
 func updatePoetServers(ctx context.Context, node *cluster.NodeClient, targets []string) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	svc := pb.NewNodeServiceClient(node)
+	svc := pb.NewSmesherServiceClient(node)
 	resp, err := svc.UpdatePoetServers(ctx, &pb.UpdatePoetServersRequest{Urls: targets})
 	if err != nil {
 		return false, err

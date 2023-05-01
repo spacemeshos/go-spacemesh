@@ -48,3 +48,24 @@ func TestAdd(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, beacon, got)
 }
+
+func TestSet(t *testing.T) {
+	db := sql.InMemory()
+
+	_, err := Get(db, types.EpochID(baseEpoch))
+	require.ErrorIs(t, err, sql.ErrNotFound)
+
+	beacon := types.HexToBeacon("0x1")
+	require.NoError(t, Add(db, baseEpoch, beacon))
+	require.ErrorIs(t, Add(db, baseEpoch, beacon), sql.ErrObjectExists)
+
+	got, err := Get(db, baseEpoch)
+	require.NoError(t, err)
+	require.Equal(t, beacon, got)
+
+	fallbackBeacon := types.HexToBeacon("0x2")
+	require.NoError(t, Set(db, baseEpoch, fallbackBeacon))
+	got, err = Get(db, baseEpoch)
+	require.NoError(t, err)
+	require.Equal(t, fallbackBeacon, got)
+}

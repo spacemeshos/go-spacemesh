@@ -20,16 +20,19 @@ func TestBlock_IDSize(t *testing.T) {
 }
 
 func Test_CertifyMessage(t *testing.T) {
-	msg := types.CertifyMessage{
-		CertifyContent: types.CertifyContent{
-			LayerID:        types.NewLayerID(11),
-			BlockID:        types.RandomBlockID(),
-			EligibilityCnt: 2,
-			Proof:          []byte("not a fraud"),
-		},
-	}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
+
+	msg := types.CertifyMessage{
+		CertifyContent: types.CertifyContent{
+			LayerID:        types.LayerID(11),
+			BlockID:        types.RandomBlockID(),
+			EligibilityCnt: 2,
+			Proof:          types.RandomVrfSignature(),
+		},
+		SmesherID: signer.NodeID(),
+	}
+
 	msg.Signature = signer.Sign(signing.HARE, msg.Bytes())
 	data, err := codec.Encode(&msg)
 	require.NoError(t, err)
@@ -37,11 +40,11 @@ func Test_CertifyMessage(t *testing.T) {
 	var decoded types.CertifyMessage
 	require.NoError(t, codec.Decode(data, &decoded))
 	require.Equal(t, msg, decoded)
-	pke, err := signing.NewPubKeyExtractor()
+
+	pke, err := signing.NewEdVerifier()
 	require.NoError(t, err)
-	nodeId, err := pke.ExtractNodeID(signing.HARE, decoded.Bytes(), decoded.Signature)
-	require.NoError(t, err)
-	require.Equal(t, signer.PublicKey().Bytes(), nodeId.Bytes())
+	ok := pke.Verify(signing.HARE, decoded.SmesherID, msg.Bytes(), decoded.Signature)
+	require.True(t, ok)
 }
 
 func Test_BlockIDsToHashes(t *testing.T) {
@@ -57,18 +60,18 @@ func Test_BlockIDsToHashes(t *testing.T) {
 }
 
 func Test_NewExistingBlock(t *testing.T) {
-	expectedNewExistingBlock := types.NewExistingBlock(types.BlockID{1, 1}, types.InnerBlock{LayerIndex: types.NewLayerID(1)})
+	expectedNewExistingBlock := types.NewExistingBlock(types.BlockID{1, 1}, types.InnerBlock{LayerIndex: types.LayerID(1)})
 
 	actualNewExistingBlock := types.NewExistingBlock(
 		types.BlockID{1, 1},
-		types.InnerBlock{LayerIndex: types.NewLayerID(1)},
+		types.InnerBlock{LayerIndex: types.LayerID(1)},
 	)
 
 	require.Equal(t, expectedNewExistingBlock, actualNewExistingBlock)
 }
 
 func Test_BlockInitialize(t *testing.T) {
-	testBlock := types.NewExistingBlock(types.BlockID{1, 1}, types.InnerBlock{LayerIndex: types.NewLayerID(1)})
+	testBlock := types.NewExistingBlock(types.BlockID{1, 1}, types.InnerBlock{LayerIndex: types.LayerID(1)})
 
 	expectedBlockID := types.BlockID(types.CalcHash32(testBlock.Bytes()).ToHash20())
 	// Initialize the block for compute actual Block ID
@@ -80,7 +83,7 @@ func Test_BlockInitialize(t *testing.T) {
 }
 
 func Test_BlockBytes(t *testing.T) {
-	testBlock := types.NewExistingBlock(types.BlockID{1, 1}, types.InnerBlock{LayerIndex: types.NewLayerID(1)})
+	testBlock := types.NewExistingBlock(types.BlockID{1, 1}, types.InnerBlock{LayerIndex: types.LayerID(1)})
 
 	expectedBytes, err := codec.Encode(&testBlock.InnerBlock)
 	require.NoError(t, err)
@@ -124,9 +127,9 @@ func Test_SortBlockIDs(t *testing.T) {
 
 func TestToBlockIDs(t *testing.T) {
 	testBlocks := []*types.Block{
-		types.NewExistingBlock(types.BlockID{1, 1}, types.InnerBlock{LayerIndex: types.NewLayerID(1)}),
-		types.NewExistingBlock(types.BlockID{2, 2}, types.InnerBlock{LayerIndex: types.NewLayerID(1)}),
-		types.NewExistingBlock(types.BlockID{3, 3}, types.InnerBlock{LayerIndex: types.NewLayerID(1)}),
+		types.NewExistingBlock(types.BlockID{1, 1}, types.InnerBlock{LayerIndex: types.LayerID(1)}),
+		types.NewExistingBlock(types.BlockID{2, 2}, types.InnerBlock{LayerIndex: types.LayerID(1)}),
+		types.NewExistingBlock(types.BlockID{3, 3}, types.InnerBlock{LayerIndex: types.LayerID(1)}),
 	}
 
 	expectedBlockIDs := []types.BlockID{{1, 1}, {2, 2}, {3, 3}}

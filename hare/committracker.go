@@ -8,7 +8,7 @@ import (
 )
 
 type commitTrackerProvider interface {
-	OnCommit(context.Context, *Msg)
+	OnCommit(context.Context, *Message)
 	HasEnoughCommits() bool
 	BuildCertificate() *Certificate
 	CommitCount() *CountInfo
@@ -19,8 +19,8 @@ type commitTracker struct {
 	logger      log.Log
 	round       uint32
 	malCh       chan<- *types.MalfeasanceGossip
-	seenSenders map[string]*types.HareProofMsg // tracks seen senders
-	committed   map[string]struct{}
+	seenSenders map[types.NodeID]*types.HareProofMsg // tracks seen senders
+	committed   map[types.NodeID]struct{}
 	commits     []Message // tracks Set->Commits
 	proposedSet *Set      // follows the set who has max number of commits
 	threshold   int       // the number of required commits
@@ -41,8 +41,8 @@ func newCommitTracker(
 		round:       round,
 		malCh:       mch,
 		eTracker:    et,
-		seenSenders: make(map[string]*types.HareProofMsg, expectedSize),
-		committed:   make(map[string]struct{}, expectedSize),
+		seenSenders: make(map[types.NodeID]*types.HareProofMsg, expectedSize),
+		committed:   make(map[types.NodeID]struct{}, expectedSize),
 		commits:     make([]Message, 0, threshold),
 		proposedSet: proposedSet,
 		threshold:   threshold,
@@ -50,7 +50,7 @@ func newCommitTracker(
 }
 
 // OnCommit tracks the given commit message.
-func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
+func (ct *commitTracker) OnCommit(ctx context.Context, msg *Message) {
 	if ct.proposedSet == nil { // no valid proposed set
 		return
 	}
@@ -59,43 +59,48 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Msg) {
 		return
 	}
 
-	if prev, ok := ct.seenSenders[string(msg.PubKey.Bytes())]; ok {
-		if prev.InnerMsg.Layer == msg.Layer &&
-			prev.InnerMsg.Round == msg.Round &&
-			prev.InnerMsg.MsgHash != msg.MsgHash {
-			nodeID := types.BytesToNodeID(msg.PubKey.Bytes())
-			ct.logger.WithContext(ctx).With().Warning("equivocation detected in commit round",
-				log.Stringer("smesher", nodeID),
-				log.Object("prev", &prev.InnerMsg),
-				log.Object("curr", &msg.HareMetadata),
+	metadata := types.HareMetadata{
+		Layer:   msg.Layer,
+		Round:   msg.Round,
+		MsgHash: types.BytesToHash(msg.HashBytes()),
+	}
+	if prev, ok := ct.seenSenders[msg.SmesherID]; ok {
+		if !prev.InnerMsg.Equivocation(&metadata) {
+			return
+		}
+
+		ct.logger.WithContext(ctx).With().Warning("equivocation detected in commit round",
+			log.Stringer("smesher", msg.SmesherID),
+			log.Object("prev", &prev.InnerMsg),
+			log.Object("curr", &metadata),
+		)
+		ct.eTracker.Track(msg.SmesherID, msg.Round, msg.Eligibility.Count, false)
+		this := &types.HareProofMsg{
+			InnerMsg:  metadata,
+			Signature: msg.Signature,
+		}
+		if err := reportEquivocation(ctx, msg.SmesherID, prev, this, &msg.Eligibility, ct.malCh); err != nil {
+			ct.logger.WithContext(ctx).With().Warning("failed to report equivocation in commit round",
+				log.Stringer("smesher", msg.SmesherID),
+				log.Err(err),
 			)
-			ct.eTracker.Track(msg.PubKey.Bytes(), msg.Round, msg.Eligibility.Count, false)
-			this := &types.HareProofMsg{
-				InnerMsg:  msg.HareMetadata,
-				Signature: msg.Signature,
-			}
-			if err := reportEquivocation(ctx, msg.PubKey.Bytes(), prev, this, &msg.Eligibility, ct.malCh); err != nil {
-				ct.logger.WithContext(ctx).With().Warning("failed to report equivocation in commit round",
-					log.Stringer("smesher", nodeID),
-					log.Err(err))
-				return
-			}
+			return
 		}
 		return
 	}
-	ct.seenSenders[string(msg.PubKey.Bytes())] = &types.HareProofMsg{
-		InnerMsg:  msg.HareMetadata,
+	ct.seenSenders[msg.SmesherID] = &types.HareProofMsg{
+		InnerMsg:  metadata,
 		Signature: msg.Signature,
 	}
 
-	s := NewSet(msg.InnerMsg.Values)
+	s := NewSet(msg.Values)
 	if !ct.proposedSet.Equals(s) { // ignore commit on different set
 		return
 	}
 
 	// add msg
-	ct.commits = append(ct.commits, msg.Message)
-	ct.committed[string(msg.PubKey.Bytes())] = struct{}{}
+	ct.commits = append(ct.commits, *msg)
+	ct.committed[msg.SmesherID] = struct{}{}
 }
 
 // HasEnoughCommits returns true if the tracker can build a certificate, false otherwise.
@@ -127,7 +132,7 @@ func (ct *commitTracker) CommitCount() *CountInfo {
 		return ct.finalTally
 	}
 	var ci CountInfo
-	ct.eTracker.ForEach(ct.round, func(node string, cr *Cred) {
+	ct.eTracker.ForEach(ct.round, func(node types.NodeID, cr *Cred) {
 		// only counts the eligibility count from the committed msgs
 		if _, ok := ct.committed[node]; ok {
 			if cr.Honest {
@@ -156,7 +161,7 @@ func (ct *commitTracker) BuildCertificate() *Certificate {
 
 	// optimize msg size by setting Values to nil
 	for _, commit := range c.AggMsgs.Messages {
-		commit.InnerMsg.Values = nil
+		commit.Values = nil
 	}
 
 	// TODO: set c.AggMsgs.AggSig

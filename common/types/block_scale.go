@@ -31,7 +31,7 @@ func (t *Block) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *InnerBlock) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := t.LayerIndex.EncodeScale(enc)
+		n, err := scale.EncodeCompact32(enc, uint32(t.LayerIndex))
 		if err != nil {
 			return total, err
 		}
@@ -45,14 +45,14 @@ func (t *InnerBlock) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSlice(enc, t.Rewards)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Rewards, 500)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSlice(enc, t.TxIDs)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.TxIDs, 100000)
 		if err != nil {
 			return total, err
 		}
@@ -63,11 +63,12 @@ func (t *InnerBlock) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *InnerBlock) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := t.LayerIndex.DecodeScale(dec)
+		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
+		t.LayerIndex = LayerID(field)
 	}
 	{
 		field, n, err := scale.DecodeCompact64(dec)
@@ -78,7 +79,7 @@ func (t *InnerBlock) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.TickHeight = uint64(field)
 	}
 	{
-		field, n, err := scale.DecodeStructSlice[AnyReward](dec)
+		field, n, err := scale.DecodeStructSliceWithLimit[AnyReward](dec, 500)
 		if err != nil {
 			return total, err
 		}
@@ -86,7 +87,7 @@ func (t *InnerBlock) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Rewards = field
 	}
 	{
-		field, n, err := scale.DecodeStructSlice[TransactionID](dec)
+		field, n, err := scale.DecodeStructSliceWithLimit[TransactionID](dec, 100000)
 		if err != nil {
 			return total, err
 		}
@@ -179,7 +180,7 @@ func (t *Certificate) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSlice(enc, t.Signatures)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Signatures, 1000)
 		if err != nil {
 			return total, err
 		}
@@ -197,7 +198,7 @@ func (t *Certificate) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeStructSlice[CertifyMessage](dec)
+		field, n, err := scale.DecodeStructSliceWithLimit[CertifyMessage](dec, 1000)
 		if err != nil {
 			return total, err
 		}
@@ -216,7 +217,14 @@ func (t *CertifyMessage) EncodeScale(enc *scale.Encoder) (total int, err error) 
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Signature)
+		n, err := scale.EncodeByteArray(enc, t.Signature[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.SmesherID[:])
 		if err != nil {
 			return total, err
 		}
@@ -234,19 +242,25 @@ func (t *CertifyMessage) DecodeScale(dec *scale.Decoder) (total int, err error) 
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		n, err := scale.DecodeByteArray(dec, t.Signature[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Signature = field
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
 	}
 	return total, nil
 }
 
 func (t *CertifyContent) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := t.LayerID.EncodeScale(enc)
+		n, err := scale.EncodeCompact32(enc, uint32(t.LayerID))
 		if err != nil {
 			return total, err
 		}
@@ -267,7 +281,7 @@ func (t *CertifyContent) EncodeScale(enc *scale.Encoder) (total int, err error) 
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Proof)
+		n, err := scale.EncodeByteArray(enc, t.Proof[:])
 		if err != nil {
 			return total, err
 		}
@@ -278,11 +292,12 @@ func (t *CertifyContent) EncodeScale(enc *scale.Encoder) (total int, err error) 
 
 func (t *CertifyContent) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := t.LayerID.DecodeScale(dec)
+		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
+		t.LayerID = LayerID(field)
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.BlockID[:])
@@ -300,12 +315,11 @@ func (t *CertifyContent) DecodeScale(dec *scale.Decoder) (total int, err error) 
 		t.EligibilityCnt = uint16(field)
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		n, err := scale.DecodeByteArray(dec, t.Proof[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Proof = field
 	}
 	return total, nil
 }

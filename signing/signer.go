@@ -2,12 +2,12 @@ package signing
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"io"
 
 	oasis "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
-	"github.com/spacemeshos/ed25519-recovery"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -22,6 +22,24 @@ const (
 	HARE
 	POET
 )
+
+// String returns the string representation of a domain.
+func (d domain) String() string {
+	switch d {
+	case ATX:
+		return "ATX"
+	case BEACON:
+		return "BEACON"
+	case BALLOT:
+		return "BALLOT"
+	case HARE:
+		return "HARE"
+	case POET:
+		return "POET"
+	default:
+		return "UNKNOWN"
+	}
+}
 
 type edSignerOption struct {
 	priv   PrivateKey
@@ -102,12 +120,13 @@ func NewEdSigner(opts ...EdSignerOptionFunc) (*EdSigner, error) {
 }
 
 // Sign signs the provided message.
-func (es *EdSigner) Sign(d domain, m []byte) []byte {
+func (es *EdSigner) Sign(d domain, m []byte) types.EdSignature {
 	msg := make([]byte, 0, len(es.prefix)+1+len(m))
 	msg = append(msg, es.prefix...)
 	msg = append(msg, byte(d))
 	msg = append(msg, m...)
-	return ed25519.Sign(es.priv, msg)
+
+	return *(*[types.EdSignatureSize]byte)(ed25519.Sign(es.priv, msg))
 }
 
 // NodeID returns the node ID of the signer.
@@ -131,4 +150,8 @@ func (es *EdSigner) VRFSigner() (*VRFSigner, error) {
 		privateKey: oasis.PrivateKey(es.priv),
 		nodeID:     es.NodeID(),
 	}, nil
+}
+
+func (es *EdSigner) Prefix() []byte {
+	return es.prefix
 }

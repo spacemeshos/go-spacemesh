@@ -13,18 +13,18 @@ import (
 
 func TestAdd(t *testing.T) {
 	db := sql.InMemory()
-	pub := types.BytesToNodeID([]byte{1, 1})
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.BallotMetadata{})
+	nodeID := types.RandomNodeID()
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
 
 	require.NoError(t, ballots.Add(db, &ballot))
-	require.NoError(t, identities.SetMalicious(db, pub, []byte("proof")))
+	require.NoError(t, identities.SetMalicious(db, nodeID, []byte("proof")))
 	proposal := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot:   ballot,
 			TxIDs:    []types.TransactionID{{3, 4}},
 			MeshHash: types.RandomHash(),
 		},
-		Signature: []byte{5, 6},
+		Signature: types.RandomEdSignature(),
 	}
 	proposal.SetID(types.ProposalID{7, 8})
 
@@ -34,18 +34,18 @@ func TestAdd(t *testing.T) {
 
 func TestHas(t *testing.T) {
 	db := sql.InMemory()
-	pub := types.BytesToNodeID([]byte{1, 1})
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.BallotMetadata{})
+	nodeID := types.RandomNodeID()
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
 
 	require.NoError(t, ballots.Add(db, &ballot))
-	require.NoError(t, identities.SetMalicious(db, pub, []byte("proof")))
+	require.NoError(t, identities.SetMalicious(db, nodeID, []byte("proof")))
 	proposal := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot:   ballot,
 			TxIDs:    []types.TransactionID{{3, 4}},
 			MeshHash: types.RandomHash(),
 		},
-		Signature: []byte{5, 6},
+		Signature: types.RandomEdSignature(),
 	}
 
 	proposal.SetID(types.ProposalID{7, 8})
@@ -59,11 +59,11 @@ func TestHas(t *testing.T) {
 func TestGet(t *testing.T) {
 	db := sql.InMemory()
 
-	pub := types.BytesToNodeID([]byte{1, 1})
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.BallotMetadata{})
+	nodeID := types.RandomNodeID()
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
 
 	require.NoError(t, ballots.Add(db, &ballot))
-	require.NoError(t, identities.SetMalicious(db, pub, []byte("proof")))
+	require.NoError(t, identities.SetMalicious(db, nodeID, []byte("proof")))
 	ballot.SetMalicious()
 
 	proposal := &types.Proposal{
@@ -72,7 +72,7 @@ func TestGet(t *testing.T) {
 			TxIDs:    []types.TransactionID{{3, 4}},
 			MeshHash: types.RandomHash(),
 		},
-		Signature: []byte{5, 6},
+		Signature: types.RandomEdSignature(),
 	}
 
 	proposal.SetID(types.ProposalID{7, 8})

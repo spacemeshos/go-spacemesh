@@ -39,16 +39,14 @@ func WithLogger(logger log.Log) Opt {
 
 // Config defines the configuration options for vm.
 type Config struct {
-	GasLimit          uint64
-	GenesisID         types.Hash20
-	StorageCostFactor uint64 `mapstructure:"vm-storage-cost-factor"`
+	GasLimit  uint64
+	GenesisID types.Hash20
 }
 
 // DefaultConfig returns the default RewardConfig.
 func DefaultConfig() Config {
 	return Config{
-		GasLimit:          100_000_000,
-		StorageCostFactor: 2,
+		GasLimit: 100_000_000,
 	}
 }
 
@@ -197,8 +195,6 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 		)
 	}
 	t1 := time.Now()
-
-	t2 := time.Now()
 	blockDurationWait.Observe(float64(time.Since(t1)))
 
 	ss := core.NewStagedCache(core.DBLoader{Executor: v.db})
@@ -206,16 +202,16 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 	if err != nil {
 		return nil, nil, err
 	}
-	t3 := time.Now()
-	blockDurationTxs.Observe(float64(time.Since(t2)))
+	t2 := time.Now()
+	blockDurationTxs.Observe(float64(time.Since(t1)))
 
 	rewardsResult, err := v.addRewards(lctx, ss, fees, blockRewards)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	t4 := time.Now()
-	blockDurationRewards.Observe(float64(time.Since(t3)))
+	t3 := time.Now()
+	blockDurationRewards.Observe(float64(time.Since(t2)))
 
 	hasher := hash.New()
 	encoder := scale.NewEncoder(hasher)
@@ -270,10 +266,10 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 		})
 	}
 
-	blockDurationPersist.Observe(float64(time.Since(t4)))
+	blockDurationPersist.Observe(float64(time.Since(t3)))
 	blockDuration.Observe(float64(time.Since(t1)))
 	transactionsPerBlock.Observe(float64(len(txs)))
-	appliedLayer.Set(float64(lctx.Layer.Value))
+	appliedLayer.Set(float64(lctx.Layer))
 
 	v.logger.With().Info("applied layer",
 		lctx.Layer,
@@ -331,7 +327,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 			invalidTxCount.Inc()
 			continue
 		}
-		if intrinsic := core.ComputeIntrinsicGasCost(ctx.ParseOutput.BaseGas, tx.GetRaw().Raw, v.cfg.StorageCostFactor); ctx.PrincipalAccount.Balance < intrinsic {
+		if intrinsic := core.IntrinsicGas(ctx.Gas.BaseGas, tx.GetRaw().Raw); ctx.PrincipalAccount.Balance < intrinsic {
 			logger.With().Warning("ineffective transaction. intrinstic gas not covered",
 				log.Object("header", header),
 				log.Object("account", &ctx.PrincipalAccount),
@@ -443,6 +439,9 @@ type Request struct {
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
 	start := time.Now()
+	if len(r.raw.Raw) > core.TxSizeLimit {
+		return nil, fmt.Errorf("%w: tx size (%d) > limit (%d)", core.ErrTxLimit, len(r.raw.Raw), core.TxSizeLimit)
+	}
 	header, ctx, args, err := parse(r.vm.logger, r.lid, r.vm.registry, r.cache, r.vm.cfg, r.raw.Raw, r.decoder)
 	if err != nil {
 		return nil, err
@@ -551,20 +550,31 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 			if err != nil {
 				return nil, nil, nil, err
 			}
+			ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas(method)
 		} else if account.TemplateAddress == nil {
 			return nil, nil, nil, fmt.Errorf("%w: account can't spawn until it is spawned itself", core.ErrNotSpawned)
+		} else {
+			target, err := handler.New(args)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
+			ctx.Gas.FixedGas += target.ExecGas(method)
 		}
+	} else {
+		ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
+		ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas(method)
 	}
+	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas(method)
 
 	ctx.ParseOutput = output
 
 	ctx.Header.Principal = principal
 	ctx.Header.TemplateAddress = *templateAddress
 	ctx.Header.Method = method
-	ctx.Header.MaxGas = core.ComputeGasCost(output.BaseGas, output.FixedGas, raw, cfg.StorageCostFactor)
+	ctx.Header.MaxGas = core.MaxGas(ctx.Gas.BaseGas, ctx.Gas.FixedGas, raw)
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce
-
 	ctx.Args = args
 
 	maxspend, err := ctx.PrincipalTemplate.MaxSpend(ctx.Header.Method, args)

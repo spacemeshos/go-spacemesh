@@ -109,7 +109,7 @@ func randomProposal(lyrID types.LayerID, beacon types.Beacon) *types.Proposal {
 	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
 	p.TxIDs = []types.TransactionID{}
-	p.SetSmesherID(signer.NodeID())
+	p.SmesherID = signer.NodeID()
 	p.Initialize()
 	return p
 }
@@ -134,7 +134,7 @@ func TestHare_New(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	pke, err := signing.NewPubKeyExtractor()
+	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
 	logger := logtest.New(t).WithName(t.Name())
@@ -144,7 +144,7 @@ func TestHare_New(t *testing.T) {
 		cfg,
 		noopPubSub(t),
 		signer,
-		pke,
+		edVerifier,
 		signer.NodeID(),
 		make(chan LayerOutput, 1),
 		smocks.NewMockSyncStateProvider(ctrl), smocks.NewMockBeaconGetter(ctrl),
@@ -167,7 +167,7 @@ func TestHare_Start(t *testing.T) {
 func TestHare_collectOutputAndGetResult(t *testing.T) {
 	h := createTestHare(t, newMockMesh(t), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 
-	lyrID := types.NewLayerID(10)
+	lyrID := types.LayerID(10)
 	res, err := h.getResult(lyrID)
 	require.Equal(t, errNoResult, err)
 	require.Nil(t, res)
@@ -191,7 +191,7 @@ func TestHare_collectOutputAndGetResult(t *testing.T) {
 func TestHare_collectOutputGetResult_TerminateTooLate(t *testing.T) {
 	h := createTestHare(t, newMockMesh(t), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 
-	lyrID := types.NewLayerID(10)
+	lyrID := types.LayerID(10)
 	res, err := h.getResult(lyrID)
 	require.Equal(t, errNoResult, err)
 	require.Nil(t, res)
@@ -216,7 +216,7 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	h := createTestHare(t, mockMesh, config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 	require.NoError(t, h.Start(context.Background()))
 
-	lyrID := types.NewLayerID(8)
+	lyrID := types.LayerID(8)
 	mo := mockReport{lyrID, NewEmptySet(0), true, false}
 	_, err := h.broker.Register(context.Background(), mo.ID())
 	require.NoError(t, err)
@@ -235,7 +235,7 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 	mockMesh := newMockMesh(t)
 	h := createTestHare(t, mockMesh, config.DefaultConfig(), newMockClock(), mpubsub, t.Name())
 
-	lid := types.NewLayerID(11)
+	lid := types.LayerID(11)
 	round := uint32(3)
 
 	gossip := types.MalfeasanceGossip{
@@ -251,7 +251,7 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 								Round:   round,
 								MsgHash: types.RandomHash(),
 							},
-							Signature: types.RandomBytes(64),
+							Signature: types.RandomEdSignature(),
 						},
 						{
 							InnerMsg: types.HareMetadata{
@@ -259,7 +259,7 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 								Round:   round,
 								MsgHash: types.RandomHash(),
 							},
-							Signature: types.RandomBytes(64),
+							Signature: types.RandomEdSignature(),
 						},
 					},
 				},
@@ -268,9 +268,9 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:  lid,
 			Round:  round,
-			PubKey: types.RandomBytes(32),
+			NodeID: types.RandomNodeID(),
 			Eligibility: types.HareEligibility{
-				Proof: []byte("eligible"),
+				Proof: types.RandomVrfSignature(),
 				Count: 3,
 			},
 		},
@@ -279,8 +279,8 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 	data, err := codec.Encode(&gossip)
 	require.NoError(t, err)
 	done := make(chan struct{})
-	mockMesh.EXPECT().IsMalicious(types.BytesToNodeID(gossip.Eligibility.PubKey)).Return(false, nil)
-	mockMesh.EXPECT().AddMalfeasanceProof(types.BytesToNodeID(gossip.Eligibility.PubKey), &gossip.MalfeasanceProof, nil).Return(nil)
+	mockMesh.EXPECT().IsMalicious(gossip.Eligibility.NodeID).Return(false, nil)
+	mockMesh.EXPECT().AddMalfeasanceProof(gossip.Eligibility.NodeID, &gossip.MalfeasanceProof, nil).Return(nil)
 	mpubsub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, data).DoAndReturn(
 		func(_ context.Context, _ string, _ []byte) error {
 			close(done)
@@ -423,7 +423,7 @@ func TestHare_onTick_notMining(t *testing.T) {
 }
 
 func TestHare_onTick_NoBeacon(t *testing.T) {
-	lyr := types.NewLayerID(199)
+	lyr := types.LayerID(199)
 
 	h := createTestHare(t, newMockMesh(t), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 	h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyr).Return(true, nil).MaxTimes(1)
@@ -439,7 +439,7 @@ func TestHare_onTick_NoBeacon(t *testing.T) {
 }
 
 func TestHare_onTick_NotSynced(t *testing.T) {
-	lyr := types.NewLayerID(199)
+	lyr := types.LayerID(199)
 
 	h := createTestHare(t, newMockMesh(t), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
 	h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyr).Return(true, nil).AnyTimes()
@@ -628,7 +628,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 func TestHare_WeakCoin(t *testing.T) {
 	mockMesh := newMockMesh(t)
 	h := createTestHare(t, mockMesh, config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
-	layerID := types.NewLayerID(10)
+	layerID := types.LayerID(10)
 	h.setLastLayer(layerID)
 
 	require.NoError(t, h.Start(context.Background()))

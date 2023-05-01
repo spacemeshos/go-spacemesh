@@ -9,13 +9,6 @@ import (
 
 func (t *Ballot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := t.BallotMetadata.EncodeScale(enc)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := t.InnerBallot.EncodeScale(enc)
 		if err != nil {
 			return total, err
@@ -23,7 +16,14 @@ func (t *Ballot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSlice(enc, t.Signature)
+		n, err := scale.EncodeByteArray(enc, t.Signature[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.SmesherID[:])
 		if err != nil {
 			return total, err
 		}
@@ -37,7 +37,14 @@ func (t *Ballot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSlice(enc, t.EligibilityProofs)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.EligibilityProofs, 500)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.ActiveSet, 100000)
 		if err != nil {
 			return total, err
 		}
@@ -48,13 +55,6 @@ func (t *Ballot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *Ballot) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := t.BallotMetadata.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := t.InnerBallot.DecodeScale(dec)
 		if err != nil {
 			return total, err
@@ -62,12 +62,18 @@ func (t *Ballot) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSlice(dec)
+		n, err := scale.DecodeByteArray(dec, t.Signature[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Signature = field
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
 	}
 	{
 		n, err := t.Votes.DecodeScale(dec)
@@ -77,19 +83,27 @@ func (t *Ballot) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeStructSlice[VotingEligibility](dec)
+		field, n, err := scale.DecodeStructSliceWithLimit[VotingEligibility](dec, 500)
 		if err != nil {
 			return total, err
 		}
 		total += n
 		t.EligibilityProofs = field
 	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[ATXID](dec, 100000)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.ActiveSet = field
+	}
 	return total, nil
 }
 
 func (t *BallotMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := t.Layer.EncodeScale(enc)
+		n, err := scale.EncodeCompact32(enc, uint32(t.Layer))
 		if err != nil {
 			return total, err
 		}
@@ -107,11 +121,12 @@ func (t *BallotMetadata) EncodeScale(enc *scale.Encoder) (total int, err error) 
 
 func (t *BallotMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := t.Layer.DecodeScale(dec)
+		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
+		t.Layer = LayerID(field)
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.MsgHash[:])
@@ -124,6 +139,13 @@ func (t *BallotMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) 
 }
 
 func (t *InnerBallot) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.Layer))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		n, err := scale.EncodeByteArray(enc, t.AtxID[:])
 		if err != nil {
@@ -156,6 +178,14 @@ func (t *InnerBallot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 }
 
 func (t *InnerBallot) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Layer = LayerID(field)
+	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.AtxID[:])
 		if err != nil {
@@ -197,21 +227,21 @@ func (t *Votes) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSlice(enc, t.Support)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Support, 10000)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSlice(enc, t.Against)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Against, 10000)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSlice(enc, t.Abstain)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Abstain, 10000)
 		if err != nil {
 			return total, err
 		}
@@ -229,7 +259,7 @@ func (t *Votes) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeStructSlice[Vote](dec)
+		field, n, err := scale.DecodeStructSliceWithLimit[Vote](dec, 10000)
 		if err != nil {
 			return total, err
 		}
@@ -237,7 +267,7 @@ func (t *Votes) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Support = field
 	}
 	{
-		field, n, err := scale.DecodeStructSlice[Vote](dec)
+		field, n, err := scale.DecodeStructSliceWithLimit[Vote](dec, 10000)
 		if err != nil {
 			return total, err
 		}
@@ -245,7 +275,7 @@ func (t *Votes) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Against = field
 	}
 	{
-		field, n, err := scale.DecodeStructSlice[LayerID](dec)
+		field, n, err := scale.DecodeStructSliceWithLimit[LayerID](dec, 10000)
 		if err != nil {
 			return total, err
 		}
@@ -264,7 +294,7 @@ func (t *Vote) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := t.LayerID.EncodeScale(enc)
+		n, err := scale.EncodeCompact32(enc, uint32(t.LayerID))
 		if err != nil {
 			return total, err
 		}
@@ -289,11 +319,12 @@ func (t *Vote) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := t.LayerID.DecodeScale(dec)
+		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
+		t.LayerID = LayerID(field)
 	}
 	{
 		field, n, err := scale.DecodeCompact64(dec)
@@ -344,7 +375,7 @@ func (t *Opinion) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *EpochData) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeStructSlice(enc, t.ActiveSet)
+		n, err := scale.EncodeByteArray(enc, t.ActiveSetHash[:])
 		if err != nil {
 			return total, err
 		}
@@ -357,17 +388,23 @@ func (t *EpochData) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.EligibilityCount))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
 func (t *EpochData) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeStructSlice[ATXID](dec)
+		n, err := scale.DecodeByteArray(dec, t.ActiveSetHash[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.ActiveSet = field
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.Beacon[:])
@@ -375,6 +412,14 @@ func (t *EpochData) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.EligibilityCount = uint32(field)
 	}
 	return total, nil
 }

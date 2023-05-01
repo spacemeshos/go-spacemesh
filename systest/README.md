@@ -25,7 +25,7 @@ This testing setup can run on top of any k8s installation. The instructions belo
     chaos-mesh is used for some tests. See <https://chaos-mesh.org/docs/quick-start/> for more up-to-date instructions.
 
     ```bash
-    curl -sSL https://mirrors.chaos-mesh.org/v2.3.0/install.sh | bash
+    curl -sSL https://mirrors.chaos-mesh.org/v2.5.1/install.sh | bash
     ```
 
 4. Install `loki` to use grafana dashboard.
@@ -179,6 +179,7 @@ make run smesher_config=parameters/longfast/smesher.json poet_config=parameters/
 ```
 
 Command below will add additional variable to configmap from env file:
+
 ```bash
 echo "layers-to-check=20" >> properties.env
 make run properties=properties.env test_name=TestStepCreate
@@ -247,10 +248,10 @@ On gke for the network with a moderate load `premium-rwo` storage class with 10G
 export storage=premium-rwo=10Gi
 ```
 
-### Schedule chaos tasks for longevity network.
+### Schedule chaos tasks for longevity network
 
 Chaos-mesh tasks are scheduled using native chaos-mesh api for flexibility.
-After cluster was created and all pods of the cluter have spawned it is possible to apply
+After cluster was created and all pods of the cluster have spawned it is possible to apply
 a predefined set of tasks using kubectl
 
 ```bash

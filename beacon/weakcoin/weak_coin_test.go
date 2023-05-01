@@ -1,12 +1,11 @@
 package weakcoin_test
 
 import (
-	"bytes"
 	"context"
-	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-scale/tester"
@@ -35,11 +34,11 @@ func encoded(tb testing.TB, msg weakcoin.Message) []byte {
 	return buf
 }
 
-func staticSigner(tb testing.TB, ctrl *gomock.Controller, sig []byte) *weakcoin.MockvrfSigner {
+func staticSigner(tb testing.TB, ctrl *gomock.Controller, nodeId types.NodeID, sig types.VrfSignature) *weakcoin.MockvrfSigner {
 	tb.Helper()
 	signer := weakcoin.NewMockvrfSigner(ctrl)
 	signer.EXPECT().Sign(gomock.Any()).Return(sig).AnyTimes()
-	signer.EXPECT().PublicKey().Return(signing.NewPublicKey(sig)).AnyTimes()
+	signer.EXPECT().NodeID().Return(nodeId).AnyTimes()
 	signer.EXPECT().LittleEndian().Return(true).AnyTimes()
 	return signer
 }
@@ -58,48 +57,60 @@ func nonceFetcher(tb testing.TB, ctrl *gomock.Controller) *weakcoin.MocknonceFet
 	return fetcher
 }
 
+// stubClock is provided to satisfy the needs of metric reporting in order to
+// avoid nil pointer exceptions in tests. It's simpler to do this than use a
+// mock which would require setting expectations for in every test where the
+// clock is interacted with.
+type stubClock struct{}
+
+func (c *stubClock) WeakCoinProposalSendTime(epoch types.EpochID, round types.RoundID) time.Time {
+	return time.Now()
+}
+
 func TestWeakCoin(t *testing.T) {
 	var (
 		ctrl                          = gomock.NewController(t)
 		epoch           types.EpochID = 10
 		round           types.RoundID = 4
-		oneLSB                        = []byte{0b0001}
-		zeroLSB                       = []byte{0b0110}
-		higherThreshold               = []byte{0xff}
+		oneLSBSig                     = types.VrfSignature{0b0001}
+		zeroLSBMiner                  = types.NodeID{0b0110}
+		zeroLSBSig                    = types.VrfSignature{0b0110}
+		higherThreshold types.VrfSignature
 	)
+	higherThreshold[79] = 0xff
 
 	for _, tc := range []struct {
 		desc             string
-		nodeSig          []byte
+		nodeSig          types.VrfSignature
 		mining, expected bool
 		msg              []byte
 		result           pubsub.ValidationResult
 	}{
 		{
 			desc:     "node not mining",
-			nodeSig:  oneLSB,
+			nodeSig:  oneLSBSig,
 			mining:   false,
 			expected: false,
 			msg: encoded(t, weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
-				MinerPK:      zeroLSB,
-				VrfSignature: zeroLSB,
+				NodeID:       zeroLSBMiner,
+				VrfSignature: zeroLSBSig,
 			}),
 			result: pubsub.ValidationAccept,
 		},
 		{
 			desc:     "node mining",
-			nodeSig:  oneLSB,
+			nodeSig:  oneLSBSig,
 			mining:   true,
 			expected: true,
 			msg: encoded(t, weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
-				MinerPK:      zeroLSB,
-				VrfSignature: zeroLSB,
+				NodeID:       zeroLSBMiner,
+				VrfSignature: zeroLSBSig,
 			}),
 			result: pubsub.ValidationIgnore,
 		},
@@ -112,14 +123,14 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
-				MinerPK:      zeroLSB,
-				VrfSignature: zeroLSB,
+				NodeID:       zeroLSBMiner,
+				VrfSignature: zeroLSBSig,
 			}),
 			result: pubsub.ValidationAccept,
 		},
 		{
 			desc:     "node only miner",
-			nodeSig:  oneLSB,
+			nodeSig:  oneLSBSig,
 			mining:   true,
 			expected: true,
 		},
@@ -143,13 +154,16 @@ func TestWeakCoin(t *testing.T) {
 					return wc.HandleProposal(ctx, "", msg)
 				},
 			).AnyTimes()
+			var threshold types.VrfSignature
+			threshold[79] = 0xfe
 			wc = weakcoin.New(
 				mockPublisher,
-				staticSigner(t, ctrl, tc.nodeSig),
+				staticSigner(t, ctrl, types.RandomNodeID(), tc.nodeSig),
 				sigVerifier(t, ctrl),
 				nonceFetcher(t, ctrl),
 				mockAllowance,
-				weakcoin.WithThreshold([]byte{0xfe}),
+				&stubClock{},
+				weakcoin.WithThreshold(threshold),
 				weakcoin.WithLog(logtest.New(t)),
 			)
 
@@ -181,10 +195,13 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 		round     types.RoundID = 4
 		allowance uint32        = 1
 
-		oneLSB          = []byte{0b0001}
-		zeroLSB         = []byte{0b0110}
-		higherThreshold = []byte{0xff}
+		oneLSBMiner     = types.NodeID{0b0001}
+		oneLSBSig       = types.VrfSignature{0b0001}
+		zeroLSBSig      = types.VrfSignature{0b0110}
+		highLSBMiner    = types.NodeID{0xff}
+		higherThreshold types.VrfSignature
 	)
+	higherThreshold[79] = 0xff
 
 	tcs := []struct {
 		desc         string
@@ -201,8 +218,8 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         allowance,
-				MinerPK:      oneLSB,
-				VrfSignature: oneLSB,
+				NodeID:       oneLSBMiner,
+				VrfSignature: oneLSBSig,
 			}),
 			expected: pubsub.ValidationAccept,
 		},
@@ -221,8 +238,8 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         allowance + 1,
-				MinerPK:      oneLSB,
-				VrfSignature: oneLSB,
+				NodeID:       oneLSBMiner,
+				VrfSignature: oneLSBSig,
 			}),
 			expected: pubsub.ValidationIgnore,
 		},
@@ -234,7 +251,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         allowance,
-				MinerPK:      higherThreshold,
+				NodeID:       highLSBMiner,
 				VrfSignature: higherThreshold,
 			}),
 			expected: pubsub.ValidationIgnore,
@@ -247,8 +264,8 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch - 1,
 				Round:        round,
 				Unit:         allowance,
-				MinerPK:      oneLSB,
-				VrfSignature: oneLSB,
+				NodeID:       oneLSBMiner,
+				VrfSignature: oneLSBSig,
 			}),
 			expected: pubsub.ValidationIgnore,
 		},
@@ -260,8 +277,8 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch + 1,
 				Round:        round,
 				Unit:         allowance,
-				MinerPK:      oneLSB,
-				VrfSignature: oneLSB,
+				NodeID:       oneLSBMiner,
+				VrfSignature: oneLSBSig,
 			}),
 			expected: pubsub.ValidationIgnore,
 		},
@@ -273,8 +290,8 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round - 1,
 				Unit:         allowance,
-				MinerPK:      oneLSB,
-				VrfSignature: oneLSB,
+				NodeID:       oneLSBMiner,
+				VrfSignature: oneLSBSig,
 			}),
 			expected: pubsub.ValidationIgnore,
 		},
@@ -286,8 +303,8 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Epoch:        epoch,
 				Round:        round + 1,
 				Unit:         allowance,
-				MinerPK:      oneLSB,
-				VrfSignature: oneLSB,
+				NodeID:       oneLSBMiner,
+				VrfSignature: oneLSBSig,
 			}),
 			expected: pubsub.ValidationAccept,
 		},
@@ -297,13 +314,16 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			mockAllowance := weakcoin.NewMockallowance(gomock.NewController(t))
 			mockAllowance.EXPECT().MinerAllowance(epoch, gomock.Any()).Return(allowance).AnyTimes()
+			var threshold types.VrfSignature
+			threshold[79] = 0xfe
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
-				staticSigner(t, ctrl, zeroLSB),
+				staticSigner(t, ctrl, types.RandomNodeID(), zeroLSBSig),
 				sigVerifier(t, ctrl),
 				nonceFetcher(t, ctrl),
 				mockAllowance,
-				weakcoin.WithThreshold([]byte{0xfe}),
+				&stubClock{},
+				weakcoin.WithThreshold(threshold),
 				weakcoin.WithLog(logtest.New(t)),
 			)
 
@@ -320,8 +340,9 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	var (
 		ctrl = gomock.NewController(t)
 
-		oneLSB  = []byte{0b0001}
-		zeroLSB = []byte{0b0000}
+		oneLSBMiner = types.NodeID{0b0001}
+		oneLSBSig   = types.VrfSignature{0b0001}
+		zeroLSBSig  = types.VrfSignature{0b0000}
 
 		epoch     types.EpochID = 10
 		round     types.RoundID = 2
@@ -333,10 +354,11 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	mockAllowance.EXPECT().MinerAllowance(epoch, gomock.Any()).Return(uint32(1)).AnyTimes()
 	wc := weakcoin.New(
 		noopBroadcaster(t, ctrl),
-		staticSigner(t, ctrl, oneLSB),
+		staticSigner(t, ctrl, types.RandomNodeID(), oneLSBSig),
 		sigVerifier(t, ctrl),
 		nonceFetcher(t, ctrl),
 		mockAllowance,
+		&stubClock{},
 		weakcoin.WithNextRoundBufferSize(bufSize),
 	)
 
@@ -347,15 +369,15 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 			Epoch:        epoch,
 			Round:        nextRound,
 			Unit:         1,
-			MinerPK:      oneLSB,
-			VrfSignature: oneLSB,
+			NodeID:       oneLSBMiner,
+			VrfSignature: oneLSBSig,
 		}))
 	}
 	wc.HandleProposal(context.Background(), "", encoded(t, weakcoin.Message{
 		Epoch:        epoch,
 		Round:        nextRound,
 		Unit:         1,
-		VrfSignature: zeroLSB,
+		VrfSignature: zeroLSBSig,
 	}))
 	wc.FinishRound(context.Background())
 	wc.StartRound(context.Background(), nextRound, nil)
@@ -369,7 +391,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	var (
-		sig   []byte
+		sig   types.VrfSignature
 		epoch types.EpochID = 1
 		round types.RoundID = 1
 	)
@@ -391,8 +413,8 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 
 	mockAllowance := weakcoin.NewMockallowance(gomock.NewController(t))
 	mockAllowance.EXPECT().MinerAllowance(epoch, gomock.Any()).DoAndReturn(
-		func(_ types.EpochID, miner []byte) uint32 {
-			if bytes.Equal(miner, signer.PublicKey().Bytes()) {
+		func(_ types.EpochID, miner types.NodeID) uint32 {
+			if miner == signer.NodeID() {
 				return 1
 			}
 			return 0
@@ -403,7 +425,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 		signing.NewVRFVerifier(),
 		nonceFetcher(t, ctrl),
 		mockAllowance,
-		weakcoin.WithThreshold([]byte{0xff}),
+		&stubClock{},
 		weakcoin.WithLog(logtest.New(t)),
 	)
 	instance.StartEpoch(context.Background(), epoch)
@@ -412,7 +434,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 
 	require.Equal(t,
 		"78f523319fd2cdf3812a3bc3905561acb2f7f1b7e47de71f92811d7bb82460e5999a048051cefa2d1b6f3f16656de83c2756b7539b33fa563a3e8fea5130235e66e8dce914d69bd40f13174f3914ad07",
-		hex.EncodeToString(sig),
+		sig.String(),
 	)
 }
 
@@ -458,6 +480,7 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 			signing.NewVRFVerifier(),
 			nonceFetcher(t, ctrl),
 			mockAllowance,
+			&stubClock{},
 			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),
 		)
 	}

@@ -16,15 +16,12 @@ import (
 )
 
 func init() {
-	// configure larger overlay parameters
-	// these params are copied from FIL https://github.com/filecoin-project/lotus
-	// TODO: reevaluate these params for spacemesh network
-	pubsub.GossipSubD = 8
-	pubsub.GossipSubDscore = 6
+	pubsub.GossipSubD = 6
+	pubsub.GossipSubDscore = 4
 	pubsub.GossipSubDout = 3
-	pubsub.GossipSubDlo = 6
-	pubsub.GossipSubDhi = 12
-	pubsub.GossipSubDlazy = 12
+	pubsub.GossipSubDlo = 4
+	pubsub.GossipSubDhi = 8
+	pubsub.GossipSubDlazy = 8
 	pubsub.GossipSubDirectConnectInitialDelay = 30 * time.Second
 	pubsub.GossipSubIWantFollowupTime = 5 * time.Second
 	pubsub.GossipSubHistoryLength = 10
@@ -63,6 +60,11 @@ const (
 	// BlockCertify is the protocol id for block certification.
 	BlockCertify = "bc1"
 
+	// BeaconProtocol is used currently only for recording metrics, but
+	// potentially will become used as an actual protocol if we decide to merge
+	// the beacon protocols.
+	// https://github.com/spacemeshos/go-spacemesh/issues/4207
+	BeaconProtocol = "b1"
 	// BeaconWeakCoinProtocol is the protocol id for beacon weak coin.
 	BeaconWeakCoinProtocol = "bw1"
 	// BeaconProposalProtocol is the protocol id for beacon proposals.
@@ -82,7 +84,6 @@ func DefaultConfig() Config {
 
 // Config for PubSub.
 type Config struct {
-	// TODO(dshulyak) change it to NoFlood
 	Flood          bool
 	IsBootnode     bool
 	MaxMessageSize int

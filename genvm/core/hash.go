@@ -7,8 +7,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
-// Hash bytes into blake3 hash.
-var Hash = hash.Sum
+func SigningBody(genesis, tx []byte) []byte {
+	full := make([]byte, 0, len(genesis)+len(tx))
+	full = append(full, genesis...)
+	full = append(full, tx...)
+	return full
+}
 
 // ComputePrincipal address as the last 20 bytes from blake3(scale(template || args)).
 func ComputePrincipal(template Address, args scale.Encodable) Address {

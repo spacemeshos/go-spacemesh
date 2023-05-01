@@ -30,14 +30,6 @@ func (a sign) String() string {
 	}
 }
 
-func iterateLayers(from, to types.LayerID, callback func(types.LayerID) bool) {
-	for lid := from; !lid.After(to); lid = lid.Add(1) {
-		if !callback(lid) {
-			return
-		}
-	}
-}
-
 type voteReason string
 
 func (v voteReason) String() string {
@@ -49,6 +41,7 @@ const (
 	reasonValidity       voteReason = "validity"
 	reasonLocalThreshold voteReason = "local_threshold"
 	reasonCoinflip       voteReason = "coinflip"
+	reasonMissingData    voteReason = "missing data"
 )
 
 func maxLayer(i, j types.LayerID) types.LayerID {
@@ -111,6 +104,7 @@ func verifyLayer(logger log.Log, blocks []*blockInfo, getDecision func(*blockInf
 							encoder.AddString("id", blocks[i].id.String())
 							encoder.AddString("weight", blocks[i].margin.String())
 							encoder.AddUint64("height", blocks[i].height)
+							encoder.AddBool("data", blocks[i].data)
 							return nil
 						}))
 					}

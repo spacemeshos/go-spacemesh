@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -38,7 +40,9 @@ const (
 
 func newTx(tb testing.TB, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
 	tb.Helper()
-	dest := types.Address{byte(rand.Int()), byte(rand.Int()), byte(rand.Int()), byte(rand.Int())}
+	var dest types.Address
+	_, err := rand.Read(dest[:])
+	require.NoError(tb, err)
 	return newTxWthRecipient(tb, dest, nonce, amount, fee, signer)
 }
 
@@ -65,10 +69,12 @@ type testConState struct {
 	logger log.Log
 	db     *sql.Database
 	mvm    *MockvmState
+
+	id peer.ID
 }
 
 func (t *testConState) handler() *TxHandler {
-	return NewTxHandler(t, t.logger)
+	return NewTxHandler(t, t.id, t.logger)
 }
 
 func createTestState(t *testing.T, gasLimit uint64) *testConState {
@@ -80,13 +86,20 @@ func createTestState(t *testing.T, gasLimit uint64) *testConState {
 		NumTXsPerProposal: numTXsInProposal,
 	}
 	logger := logtest.New(t)
+	_, pub, err := crypto.GenerateEd25519Key(nil)
+	require.NoError(t, err)
+	id, err := peer.IDFromPublicKey(pub)
+	require.NoError(t, err)
+
 	return &testConState{
 		ConservativeState: NewConservativeState(mvm, db,
 			WithCSConfig(cfg),
-			WithLogger(logger)),
+			WithLogger(logger),
+		),
 		logger: logger,
 		db:     db,
 		mvm:    mvm,
+		id:     id,
 	}
 }
 
@@ -115,7 +128,7 @@ func addBatch(tb testing.TB, tcs *testConState, numTXs int) ([]types.Transaction
 func TestSelectProposalTXs(t *testing.T) {
 	tcs := createConservativeState(t)
 	numTXs := 2 * numTXsInProposal
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	bid := types.BlockID{100}
 	for i := 0; i < numTXs; i++ {
 		signer, err := signing.NewEdSigner()
@@ -144,7 +157,7 @@ func TestSelectProposalTXs(t *testing.T) {
 
 func TestSelectProposalTXs_ExhaustGas(t *testing.T) {
 	numTXs := 2 * numTXsInProposal
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	bid := types.BlockID{100}
 	expSize := numTXsInProposal / 2
 	gasLimit := defaultGas * uint64(expSize)
@@ -172,7 +185,7 @@ func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
 	}
 	tcs := createConservativeState(t)
 	numTXs := numTXsInProposal - 1
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	bid := types.BlockID{100}
 	expected := make([]types.TransactionID, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
@@ -205,7 +218,7 @@ func TestSelectProposalTXs_SamePrincipal(t *testing.T) {
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	numTXs := numTXsInProposal * 2
 	numInBlock := numTXsInProposal
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	bid := types.BlockID{100}
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(uint64(0), nil).Times(1)
@@ -239,7 +252,7 @@ func TestSelectProposalTXs_TwoPrincipals(t *testing.T) {
 	signer2, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	addr2 := types.GenerateAddress(signer2.PublicKey().Bytes())
-	lid := types.NewLayerID(97)
+	lid := types.LayerID(97)
 	bid := types.BlockID{100}
 	tcs.mvm.EXPECT().GetBalance(addr1).Return(defaultBalance*100, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr1).Return(uint64(0), nil).Times(1)
@@ -292,7 +305,7 @@ func TestGetProjection(t *testing.T) {
 	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
 	tx1 := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	require.NoError(t, tcs.AddToCache(context.Background(), tx1))
-	require.NoError(t, tcs.LinkTXsWithBlock(types.NewLayerID(10), types.BlockID{100}, []types.TransactionID{tx1.ID}))
+	require.NoError(t, tcs.LinkTXsWithBlock(types.LayerID(10), types.BlockID{100}, []types.TransactionID{tx1.ID}))
 	tx2 := newTx(t, nonce+1, defaultAmount, defaultFee, signer)
 	require.NoError(t, tcs.AddToCache(context.Background(), tx2))
 
@@ -393,7 +406,7 @@ func TestGetMeshTransaction(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.MEMPOOL, mtx.State)
 
-	lid := types.NewLayerID(10)
+	lid := types.LayerID(10)
 	pid := types.ProposalID{1, 2, 3}
 	require.NoError(t, tcs.LinkTXsWithProposal(lid, pid, []types.TransactionID{tx.ID}))
 	mtx, err = tcs.GetMeshTransaction(tx.ID)
@@ -409,7 +422,7 @@ func TestGetMeshTransaction(t *testing.T) {
 
 func TestUpdateCache_UpdateHeader(t *testing.T) {
 	tcs := createConservativeState(t)
-	lid := types.NewLayerID(1)
+	lid := types.LayerID(1)
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -451,7 +464,7 @@ func TestUpdateCache_UpdateHeader(t *testing.T) {
 
 func TestUpdateCache(t *testing.T) {
 	tcs := createConservativeState(t)
-	lid := types.NewLayerID(1)
+	lid := types.LayerID(1)
 	ids, txs := addBatch(t, tcs, numTXs)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
@@ -483,7 +496,7 @@ func TestUpdateCache(t *testing.T) {
 
 func TestUpdateCache_EmptyLayer(t *testing.T) {
 	tcs := createConservativeState(t)
-	lid := types.NewLayerID(1)
+	lid := types.LayerID(1)
 	ids, _ := addBatch(t, tcs, numTXs)
 	require.NoError(t, tcs.LinkTXsWithBlock(lid, types.BlockID{1, 2, 3}, ids))
 	mempoolTxs := tcs.SelectProposalTXs(lid, 2)
@@ -544,12 +557,12 @@ func TestConsistentHandling(t *testing.T) {
 			failed.EXPECT().Parse().Times(1).Return(nil, errors.New("test"))
 			instances[1].mvm.EXPECT().Validation(txs[i].RawTx).Times(1).Return(failed)
 
-			require.Equal(t, pubsub.ValidationAccept, instances[0].handler().HandleGossipTransaction(context.Background(), "", txs[i].Raw))
+			require.Equal(t, pubsub.ValidationAccept, instances[0].handler().HandleGossipTransaction(context.Background(), p2p.NoPeer, txs[i].Raw))
 			require.NoError(t, instances[1].handler().HandleBlockTransaction(context.Background(), p2p.NoPeer, txs[i].Raw))
 		}
 		block := types.NewExistingBlock(types.BlockID{byte(lid)},
 			types.InnerBlock{
-				LayerIndex: types.NewLayerID(uint32(lid)),
+				LayerIndex: types.LayerID(uint32(lid)),
 				TxIDs:      ids,
 			},
 		)

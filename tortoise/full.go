@@ -39,7 +39,7 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 	}
 	logger.With().Debug("counted votes from ballot",
 		log.Stringer("id", ballot.id),
-		log.Uint32("lid", ballot.layer.Value),
+		log.Uint32("lid", ballot.layer.Uint32()),
 	)
 	for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
 		if !lvote.lid.After(f.evicted) {
@@ -48,12 +48,13 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 		if lvote.vote == abstain {
 			continue
 		}
+		layer := f.layer(lvote.lid)
 		empty := true
-		for _, block := range lvote.blocks {
+		for _, block := range layer.blocks {
 			if block.height > ballot.reference.height {
 				continue
 			}
-			switch lvote.getVote(block.id) {
+			switch lvote.getVote(block) {
 			case support:
 				empty = false
 				block.margin = block.margin.Add(ballot.weight)
@@ -62,9 +63,9 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 			}
 		}
 		if empty {
-			lvote.empty = lvote.empty.Add(ballot.weight)
+			layer.empty = layer.empty.Add(ballot.weight)
 		} else {
-			lvote.empty = lvote.empty.Sub(ballot.weight)
+			layer.empty = layer.empty.Sub(ballot.weight)
 		}
 	}
 	fcountBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
@@ -160,8 +161,8 @@ func (f *full) shouldBeDelayed(logger log.Log, ballot *ballotInfo) bool {
 	}
 	logger.With().Debug("ballot is delayed",
 		log.Stringer("id", ballot.id),
-		log.Uint32("ballot lid", ballot.layer.Value),
-		log.Uint32("counted at", delay.Value),
+		log.Uint32("ballot lid", ballot.layer.Uint32()),
+		log.Uint32("counted at", delay.Uint32()),
 	)
 	delayedBallots.Inc()
 	f.delayed[delay] = append(f.delayed[delay], ballot)

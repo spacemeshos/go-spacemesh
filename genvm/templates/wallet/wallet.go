@@ -40,11 +40,26 @@ func (s *Wallet) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool {
 	if err != nil {
 		return false
 	}
-	hash := core.Hash(host.GetGenesisID().Bytes(), raw[:len(raw)-n])
-	return ed25519.Verify(ed25519.PublicKey(s.PublicKey[:]), hash[:], sig[:])
+	return ed25519.Verify(
+		ed25519.PublicKey(s.PublicKey[:]),
+		core.SigningBody(host.GetGenesisID().Bytes(), raw[:len(raw)-n]),
+		sig[:],
+	)
 }
 
 // Spend transfers an amount to the address specified in SpendArguments.
 func (s *Wallet) Spend(host core.Host, args *SpendArguments) error {
 	return host.Transfer(args.Destination, args.Amount)
+}
+
+func (s *Wallet) BaseGas(method uint8) uint64 {
+	return BaseGas(method)
+}
+
+func (s *Wallet) LoadGas() uint64 {
+	return LoadGas()
+}
+
+func (s *Wallet) ExecGas(method uint8) uint64 {
+	return ExecGas(method)
 }

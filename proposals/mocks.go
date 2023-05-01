@@ -141,6 +141,20 @@ func (mr *MockballotDecoderMockRecorder) DecodeBallot(arg0 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecodeBallot", reflect.TypeOf((*MockballotDecoder)(nil).DecodeBallot), arg0)
 }
 
+// GetMissingActiveSet mocks base method.
+func (m *MockballotDecoder) GetMissingActiveSet(arg0 types.EpochID, arg1 []types.ATXID) []types.ATXID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMissingActiveSet", arg0, arg1)
+	ret0, _ := ret[0].([]types.ATXID)
+	return ret0
+}
+
+// GetMissingActiveSet indicates an expected call of GetMissingActiveSet.
+func (mr *MockballotDecoderMockRecorder) GetMissingActiveSet(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMissingActiveSet", reflect.TypeOf((*MockballotDecoder)(nil).GetMissingActiveSet), arg0, arg1)
+}
+
 // StoreBallot mocks base method.
 func (m *MockballotDecoder) StoreBallot(arg0 *tortoise.DecodedBallot) error {
 	m.ctrl.T.Helper()
@@ -179,7 +193,7 @@ func (m *MockvrfVerifier) EXPECT() *MockvrfVerifierMockRecorder {
 }
 
 // Verify mocks base method.
-func (m *MockvrfVerifier) Verify(arg0 types.NodeID, arg1, arg2 []byte) bool {
+func (m *MockvrfVerifier) Verify(arg0 types.NodeID, arg1 []byte, arg2 types.VrfSignature) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Verify", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)

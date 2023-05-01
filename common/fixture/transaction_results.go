@@ -57,7 +57,7 @@ func (g *TransactionResultGenerator) WithAddresses(n int) *TransactionResultGene
 func (g *TransactionResultGenerator) WithLayers(start int, n int) *TransactionResultGenerator {
 	g.Layers = nil
 	for i := 1; i <= n; i++ {
-		g.Layers = append(g.Layers, types.NewLayerID(uint32(start+i)))
+		g.Layers = append(g.Layers, types.LayerID(uint32(start+i)))
 	}
 	return g
 }
@@ -71,7 +71,7 @@ func (g *TransactionResultGenerator) Next() *types.TransactionWithResult {
 	tx.Block = g.Blocks[g.rng.Intn(len(g.Blocks))]
 	tx.Layer = g.Layers[g.rng.Intn(len(g.Layers))]
 	if lth := g.rng.Intn(len(g.Addrs)); lth > 0 {
-		tx.Addresses = make([]types.Address, lth)
+		tx.Addresses = make([]types.Address, lth%10+1)
 
 		g.rng.Shuffle(len(g.Addrs), func(i, j int) {
 			g.Addrs[i], g.Addrs[j] = g.Addrs[j], g.Addrs[i]

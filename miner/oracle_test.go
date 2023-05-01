@@ -2,14 +2,13 @@ package miner
 
 import (
 	"context"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -46,40 +45,46 @@ func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *s
 	return nodeID, edSigner, vrfSigner
 }
 
-func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publishLayer types.LayerID, nodeID types.NodeID) *types.VerifiedActivationTx {
+func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publishLayer types.LayerID, signer *signing.EdSigner) *types.VerifiedActivationTx {
 	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: publishLayer,
+			PublishEpoch: publishLayer.GetEpoch(),
 		},
 		NumUnits: defaultAtxWeight,
 	}}
-	atx.SetID(&id)
-	atx.SetNodeID(&nodeID)
+	atx.SetID(id)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
+	activation.SignAndFinalizeAtx(signer, atx)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(tb, err)
 	require.NoError(tb, atxs.Add(cdb, vAtx))
 	return vAtx
 }
 
-func genBallotWithEligibility(tb testing.TB, signer *signing.EdSigner, lid types.LayerID, atxID types.ATXID, proof types.VotingEligibility, activeSet []types.ATXID, beacon types.Beacon) *types.Ballot {
+func genBallotWithEligibility(
+	tb testing.TB,
+	signer *signing.EdSigner,
+	beacon types.Beacon,
+	lid types.LayerID,
+	ee *EpochEligibility,
+) *types.Ballot {
 	tb.Helper()
 	ballot := &types.Ballot{
-		BallotMetadata: types.BallotMetadata{
-			Layer: lid,
-		},
 		InnerBallot: types.InnerBallot{
-			AtxID: atxID,
+			Layer: lid,
+			AtxID: ee.Atx,
 			EpochData: &types.EpochData{
-				ActiveSet: activeSet,
-				Beacon:    beacon,
+				ActiveSetHash:    ee.ActiveSet.Hash(),
+				Beacon:           beacon,
+				EligibilityCount: ee.Slots,
 			},
 		},
-		EligibilityProofs: []types.VotingEligibility{proof},
+		ActiveSet:         ee.ActiveSet,
+		EligibilityProofs: ee.Proofs[lid],
 	}
 	ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
-	ballot.SetSmesherID(signer.NodeID())
+	ballot.SmesherID = signer.NodeID()
 	require.NoError(tb, ballot.Initialize())
 	return ballot
 }
@@ -105,24 +110,21 @@ type epochATXInfo struct {
 	beacon    types.Beacon
 }
 
-func genATXForTargetEpochs(tb testing.TB, cdb *datastore.CachedDB, start, end types.EpochID, nodeID types.NodeID, layersPerEpoch uint32) map[types.EpochID]epochATXInfo {
+func genATXForTargetEpochs(tb testing.TB, cdb *datastore.CachedDB, start, end types.EpochID, signer *signing.EdSigner, layersPerEpoch uint32) map[types.EpochID]epochATXInfo {
 	epochInfo := make(map[types.EpochID]epochATXInfo)
 	for epoch := start; epoch < end; epoch++ {
 		publishLayer := epoch.FirstLayer().Sub(layersPerEpoch)
 		activeSet := types.RandomActiveSet(activeSetSize)
+		atx := genMinerATX(tb, cdb, activeSet[0], publishLayer, signer)
 		info := epochATXInfo{
 			beacon:    types.RandomBeacon(),
 			activeSet: activeSet,
+			atxID:     atx.ID(),
 		}
-		for i, id := range activeSet {
-			nid := types.BytesToNodeID([]byte(strconv.Itoa(i)))
-			if i == 0 {
-				nid = nodeID
-			}
-			atx := genMinerATX(tb, cdb, id, publishLayer, nid)
-			if i == 0 {
-				info.atxID = atx.ID()
-			}
+		for _, id := range activeSet[1:] {
+			signer, err := signing.NewEdSigner()
+			require.NoError(tb, err)
+			genMinerATX(tb, cdb, id, publishLayer, signer)
 		}
 		epochInfo[epoch] = info
 	}
@@ -157,23 +159,23 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 
 	startEpoch, numberOfEpochsToTest := uint32(2), uint32(2)
 	startLayer := layersPerEpoch * startEpoch
-	endLayer := types.NewLayerID(numberOfEpochsToTest * layersPerEpoch).Add(startLayer)
+	endLayer := types.LayerID(numberOfEpochsToTest * layersPerEpoch).Add(startLayer)
 	counterValuesSeen := map[uint32]int{}
-	epochInfo := genATXForTargetEpochs(t, o.cdb, types.EpochID(startEpoch), types.EpochID(startEpoch+numberOfEpochsToTest), o.nodeID, layersPerEpoch)
-	for layer := types.NewLayerID(startLayer); layer.Before(endLayer); layer = layer.Add(1) {
+	epochInfo := genATXForTargetEpochs(t, o.cdb, types.EpochID(startEpoch), types.EpochID(startEpoch+numberOfEpochsToTest), o.edSigner, layersPerEpoch)
+	for layer := types.LayerID(startLayer); layer.Before(endLayer); layer = layer.Add(1) {
 		info, ok := epochInfo[layer.GetEpoch()]
 		require.True(t, ok)
-		_, _, proofs, err := o.GetProposalEligibility(layer, info.beacon, nonce)
+		ee, err := o.GetProposalEligibility(layer, info.beacon, nonce)
 		require.NoError(t, err)
 
-		for _, proof := range proofs {
-			b := genBallotWithEligibility(t, o.edSigner, layer, info.atxID, proof, info.activeSet, info.beacon)
-			b.SetSmesherID(o.edSigner.NodeID())
+		for _, proof := range ee.Proofs[layer] {
+			b := genBallotWithEligibility(t, o.edSigner, info.beacon, layer, ee)
+			b.SmesherID = o.edSigner.NodeID()
 			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b, info.beacon, gomock.Any()).Times(1)
-			nonceFetcher.EXPECT().VRFNonce(b.SmesherID(), layer.GetEpoch()).Return(nonce, nil).Times(1)
+			nonceFetcher.EXPECT().VRFNonce(b.SmesherID, layer.GetEpoch()).Return(nonce, nil).Times(1)
 			eligible, err := validator.CheckEligibility(context.Background(), b)
 			require.NoError(t, err, "at layer %d, with layersPerEpoch %d", layer, layersPerEpoch)
-			assert.True(t, eligible, "should be eligible at layer %d, but isn't", layer)
+			require.True(t, eligible, "should be eligible at layer %d, but isn't", layer)
 			counterValuesSeen[proof.J]++
 		}
 	}
@@ -183,21 +185,37 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 		numberOfEligibleBallots = 1
 	}
 	for c := uint32(0); c < numberOfEligibleBallots; c++ {
-		assert.EqualValues(t, numberOfEpochsToTest, counterValuesSeen[c],
+		require.EqualValues(t, numberOfEpochsToTest, counterValuesSeen[c],
 			"counter value %d expected %d times, but received %d times",
 			c, numberOfEpochsToTest, counterValuesSeen[c])
 	}
-	assert.Len(t, counterValuesSeen, int(numberOfEligibleBallots))
+	require.Len(t, counterValuesSeen, int(numberOfEligibleBallots))
 }
 
 func TestOracle_OwnATXNotFound(t *testing.T) {
 	avgLayerSize := uint32(10)
 	layersPerEpoch := uint32(20)
 	o := createTestOracle(t, avgLayerSize, layersPerEpoch)
-	lid := types.NewLayerID(layersPerEpoch * 3)
-	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
-	assert.ErrorIs(t, err, errMinerHasNoATXInPreviousEpoch)
-	assert.Equal(t, *types.EmptyATXID, atxID)
-	assert.Len(t, activeSet, 0)
-	assert.Len(t, proofs, 0)
+	lid := types.LayerID(layersPerEpoch * 3)
+	ee, err := o.GetProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
+	require.ErrorIs(t, err, errMinerHasNoATXInPreviousEpoch)
+	require.Nil(t, ee)
+}
+
+func TestOracle_EligibilityCached(t *testing.T) {
+	avgLayerSize := uint32(10)
+	layersPerEpoch := uint32(20)
+	o := createTestOracle(t, avgLayerSize, layersPerEpoch)
+	lid := types.LayerID(layersPerEpoch * 3)
+	epochInfo := genATXForTargetEpochs(t, o.cdb, lid.GetEpoch(), lid.GetEpoch()+1, o.edSigner, layersPerEpoch)
+	info, ok := epochInfo[lid.GetEpoch()]
+	require.True(t, ok)
+	ee1, err := o.GetProposalEligibility(lid, info.beacon, types.VRFPostIndex(1))
+	require.NoError(t, err)
+	require.NotNil(t, ee1)
+
+	// even if we pass a random beacon in this time, the cached value is still the same
+	ee2, err := o.GetProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
+	require.NoError(t, err)
+	require.Equal(t, ee1, ee2)
 }

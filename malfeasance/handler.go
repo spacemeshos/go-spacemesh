@@ -18,11 +18,11 @@ var errMalformedData = errors.New("malformed data")
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
 type Handler struct {
-	logger          log.Log
-	cdb             *datastore.CachedDB
-	self            p2p.Peer
-	cp              consensusProtocol
-	pubKeyExtractor *signing.PubKeyExtractor
+	logger     log.Log
+	cdb        *datastore.CachedDB
+	self       p2p.Peer
+	cp         consensusProtocol
+	edVerifier *signing.EdVerifier
 }
 
 func NewHandler(
@@ -30,14 +30,14 @@ func NewHandler(
 	lg log.Log,
 	self p2p.Peer,
 	cp consensusProtocol,
-	pubKeyExtractor *signing.PubKeyExtractor,
+	edVerifier *signing.EdVerifier,
 ) *Handler {
 	return &Handler{
-		logger:          lg,
-		cdb:             cdb,
-		self:            self,
-		cp:              cp,
-		pubKeyExtractor: pubKeyExtractor,
+		logger:     lg,
+		cdb:        cdb,
+		self:       self,
+		cp:         cp,
+		edVerifier: edVerifier,
 	}
 }
 
@@ -158,8 +158,7 @@ func (h *Handler) validateHareEligibility(ctx context.Context, logger log.Log, n
 	}
 
 	emsg := gossip.Eligibility
-	eNodeID := types.BytesToNodeID(emsg.PubKey)
-	if nodeID != eNodeID {
+	if nodeID != emsg.NodeID {
 		return fmt.Errorf("mismatch node id")
 	}
 	// any type of MalfeasanceProof can be accompanied by a hare eligibility
@@ -170,124 +169,119 @@ func (h *Handler) validateHareEligibility(ctx context.Context, logger log.Log, n
 
 func (h *Handler) validateHareEquivocation(logger log.Log, proof *types.MalfeasanceProof) (types.NodeID, error) {
 	if proof.Proof.Type != types.HareEquivocation {
-		return types.NodeID{}, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.HareEquivocation, proof.Proof.Type)
+		return types.EmptyNodeID, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.HareEquivocation, proof.Proof.Type)
 	}
 	var (
-		firstNid, nid types.NodeID
-		firstMsg, msg types.HareProofMsg
-		err           error
+		firstNid types.NodeID
+		firstMsg types.HareProofMsg
 	)
 	hp, ok := proof.Proof.Data.(*types.HareProof)
 	if !ok {
-		return types.NodeID{}, errors.New("wrong message type for hare equivocation")
+		return types.EmptyNodeID, errors.New("wrong message type for hare equivocation")
 	}
-	for _, msg = range hp.Messages {
-		nid, err = h.pubKeyExtractor.ExtractNodeID(signing.HARE, msg.SignedBytes(), msg.Signature)
-		if err != nil {
-			return types.NodeID{}, err
+	for _, msg := range hp.Messages {
+		if !h.edVerifier.Verify(signing.HARE, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
+			return types.EmptyNodeID, errors.New("invalid signature")
 		}
-		if err = checkIdentityExists(h.cdb, nid); err != nil {
-			return types.NodeID{}, fmt.Errorf("check identity in hare malfeasance %v: %w", nid, err)
+		if err := checkIdentityExists(h.cdb, msg.SmesherID); err != nil {
+			return types.EmptyNodeID, fmt.Errorf("check identity in hare malfeasance %v: %w", msg.SmesherID, err)
 		}
 		if firstNid == types.EmptyNodeID {
-			firstNid = nid
+			firstNid = msg.SmesherID
 			firstMsg = msg
-		} else if nid == firstNid {
+		} else if msg.SmesherID == firstNid {
 			if msg.InnerMsg.Layer == firstMsg.InnerMsg.Layer &&
 				msg.InnerMsg.Round == firstMsg.InnerMsg.Round &&
 				msg.InnerMsg.MsgHash != firstMsg.InnerMsg.MsgHash {
-				return nid, nil
+				return msg.SmesherID, nil
 			}
 		}
 	}
 	logger.With().Warning("received invalid hare malfeasance proof",
-		log.Stringer("smesher", firstNid),
-		log.Stringer("smesher", nid),
-		log.Object("first", &firstMsg.InnerMsg),
-		log.Object("second", &msg.InnerMsg),
+		log.Stringer("first_smesher", hp.Messages[0].SmesherID),
+		log.Object("first_proof", &hp.Messages[0].InnerMsg),
+		log.Stringer("second_smesher", hp.Messages[1].SmesherID),
+		log.Object("second_proof", &hp.Messages[1].InnerMsg),
 	)
 	numInvalidProofsHare.Inc()
-	return types.NodeID{}, errors.New("invalid hare malfeasance proof")
+	return types.EmptyNodeID, errors.New("invalid hare malfeasance proof")
 }
 
 func (h *Handler) validateMultipleATXs(logger log.Log, proof *types.MalfeasanceProof) (types.NodeID, error) {
 	if proof.Proof.Type != types.MultipleATXs {
-		return types.NodeID{}, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.MultipleATXs, proof.Proof.Type)
+		return types.EmptyNodeID, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.MultipleATXs, proof.Proof.Type)
 	}
 	var (
-		firstNid, nid types.NodeID
-		firstMsg, msg types.AtxProofMsg
-		err           error
+		firstNid types.NodeID
+		firstMsg types.AtxProofMsg
 	)
 	ap, ok := proof.Proof.Data.(*types.AtxProof)
 	if !ok {
-		return types.NodeID{}, errors.New("wrong message type for multiple ATXs")
+		return types.EmptyNodeID, errors.New("wrong message type for multiple ATXs")
 	}
-	for _, msg = range ap.Messages {
-		nid, err = h.pubKeyExtractor.ExtractNodeID(signing.ATX, msg.SignedBytes(), msg.Signature)
-		if err != nil {
-			return types.NodeID{}, err
+	for _, msg := range ap.Messages {
+		if !h.edVerifier.Verify(signing.ATX, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
+			return types.EmptyNodeID, errors.New("invalid signature")
 		}
-		if err = checkIdentityExists(h.cdb, nid); err != nil {
-			return types.NodeID{}, fmt.Errorf("check identity in atx malfeasance %v: %w", nid, err)
+		if err := checkIdentityExists(h.cdb, msg.SmesherID); err != nil {
+			return types.EmptyNodeID, fmt.Errorf("check identity in atx malfeasance %v: %w", msg.SmesherID, err)
 		}
 		if firstNid == types.EmptyNodeID {
-			firstNid = nid
+			firstNid = msg.SmesherID
 			firstMsg = msg
-		} else if nid == firstNid {
-			if msg.InnerMsg.Target == firstMsg.InnerMsg.Target &&
+		} else if msg.SmesherID == firstNid {
+			if msg.InnerMsg.PublishEpoch == firstMsg.InnerMsg.PublishEpoch &&
 				msg.InnerMsg.MsgHash != firstMsg.InnerMsg.MsgHash {
-				return nid, nil
+				return msg.SmesherID, nil
 			}
 		}
 	}
 	logger.With().Warning("received invalid atx malfeasance proof",
-		log.Stringer("smesher", firstNid),
-		log.Stringer("smesher", nid),
-		log.Object("first", &firstMsg.InnerMsg),
-		log.Object("second", &msg.InnerMsg),
+		log.Stringer("first_smesher", ap.Messages[0].SmesherID),
+		log.Object("first_proof", &ap.Messages[0].InnerMsg),
+		log.Stringer("second_smesher", ap.Messages[1].SmesherID),
+		log.Object("second_proof", &ap.Messages[1].InnerMsg),
 	)
 	numInvalidProofsATX.Inc()
-	return types.NodeID{}, errors.New("invalid atx malfeasance proof")
+	return types.EmptyNodeID, errors.New("invalid atx malfeasance proof")
 }
 
 func (h *Handler) validateMultipleBallots(logger log.Log, proof *types.MalfeasanceProof) (types.NodeID, error) {
 	if proof.Proof.Type != types.MultipleBallots {
-		return types.NodeID{}, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.MultipleBallots, proof.Proof.Type)
+		return types.EmptyNodeID, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.MultipleBallots, proof.Proof.Type)
 	}
 	var (
-		firstNid, nid types.NodeID
-		firstMsg, msg types.BallotProofMsg
-		err           error
+		firstNid types.NodeID
+		firstMsg types.BallotProofMsg
+		err      error
 	)
 	bp, ok := proof.Proof.Data.(*types.BallotProof)
 	if !ok {
-		return types.NodeID{}, errors.New("wrong message type for multi ballots")
+		return types.EmptyNodeID, errors.New("wrong message type for multi ballots")
 	}
-	for _, msg = range bp.Messages {
-		nid, err = h.pubKeyExtractor.ExtractNodeID(signing.BALLOT, msg.SignedBytes(), msg.Signature)
-		if err != nil {
-			return types.NodeID{}, err
+	for _, msg := range bp.Messages {
+		if !h.edVerifier.Verify(signing.BALLOT, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
+			return types.EmptyNodeID, errors.New("invalid signature")
 		}
-		if err = checkIdentityExists(h.cdb, nid); err != nil {
-			return types.NodeID{}, fmt.Errorf("check identity in ballot malfeasance %v: %w", nid, err)
+		if err = checkIdentityExists(h.cdb, msg.SmesherID); err != nil {
+			return types.EmptyNodeID, fmt.Errorf("check identity in ballot malfeasance %v: %w", msg.SmesherID, err)
 		}
 		if firstNid == types.EmptyNodeID {
-			firstNid = nid
+			firstNid = msg.SmesherID
 			firstMsg = msg
-		} else if nid == firstNid {
+		} else if msg.SmesherID == firstNid {
 			if msg.InnerMsg.Layer == firstMsg.InnerMsg.Layer &&
 				msg.InnerMsg.MsgHash != firstMsg.InnerMsg.MsgHash {
-				return nid, nil
+				return msg.SmesherID, nil
 			}
 		}
 	}
 	logger.With().Warning("received invalid ballot malfeasance proof",
-		log.Stringer("smesher", firstNid),
-		log.Stringer("smesher", nid),
-		log.Object("first", &firstMsg.InnerMsg),
-		log.Object("second", &msg.InnerMsg),
+		log.Stringer("first_smesher", bp.Messages[0].SmesherID),
+		log.Object("first_proof", &bp.Messages[0].InnerMsg),
+		log.Stringer("second_smesher", bp.Messages[1].SmesherID),
+		log.Object("second_proof", &bp.Messages[1].InnerMsg),
 	)
 	numInvalidProofsBallot.Inc()
-	return types.NodeID{}, errors.New("invalid ballot malfeasance proof")
+	return types.EmptyNodeID, errors.New("invalid ballot malfeasance proof")
 }

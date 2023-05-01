@@ -25,7 +25,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/ed25519-recovery"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
@@ -35,9 +34,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api/config"
-	"github.com/spacemeshos/go-spacemesh/api/mocks"
-	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -50,6 +46,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
@@ -68,26 +65,25 @@ const (
 	accountBalance = 8675301
 	accountCounter = 0
 	rewardAmount   = 5551234
+	activesetSize  = 10001
 )
 
 var (
-	txReturnLayer         = types.NewLayerID(1)
-	layerFirst            = types.NewLayerID(0)
-	layerVerified         = types.NewLayerID(8)
-	layerLatest           = types.NewLayerID(10)
-	layerCurrent          = types.NewLayerID(12)
-	postGenesisEpochLayer = types.NewLayerID(22)
-	genesisID             = types.Hash20{}
+	txReturnLayer    = types.LayerID(1)
+	layerFirst       = types.LayerID(0)
+	layerVerified    = types.LayerID(8)
+	layerLatest      = types.LayerID(10)
+	layerCurrent     = types.LayerID(12)
+	postGenesisEpoch = types.EpochID(2)
+	genesisID        = types.Hash20{}
 
-	networkMock = NetworkMock{}
-	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
 	addr1       types.Address
 	addr2       types.Address
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
 	poetRef     = []byte("66666")
 	nipost      = newNIPostWithChallenge(&chlng, poetRef)
-	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
 	globalAtx   *types.VerifiedActivationTx
 	globalAtx2  *types.VerifiedActivationTx
 	signer      *signing.EdSigner
@@ -95,11 +91,11 @@ var (
 	signer2     *signing.EdSigner
 	globalTx    *types.Transaction
 	globalTx2   *types.Transaction
-	ballot1     = genLayerBallot(types.NewLayerID(11))
-	block1      = genLayerBlock(types.NewLayerID(11), nil)
-	block2      = genLayerBlock(types.NewLayerID(11), nil)
-	block3      = genLayerBlock(types.NewLayerID(11), nil)
-	meshAPI     = &MeshAPIMock{}
+	ballot1     = genLayerBallot(types.LayerID(11))
+	block1      = genLayerBlock(types.LayerID(11), nil)
+	block2      = genLayerBlock(types.LayerID(11), nil)
+	block3      = genLayerBlock(types.LayerID(11), nil)
+	meshAPIMock = &MeshAPIMock{}
 	conStateAPI = &ConStateAPIMock{
 		returnTx:      make(map[types.TransactionID]*types.Transaction),
 		layerApplied:  make(map[types.TransactionID]*types.LayerID),
@@ -116,7 +112,7 @@ func genLayerBallot(layerID types.LayerID) *types.Ballot {
 	b.Layer = layerID
 	signer, _ := signing.NewEdSigner()
 	b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
-	b.SetSmesherID(signer.NodeID())
+	b.SmesherID = signer.NodeID()
 	b.Initialize()
 	return b
 }
@@ -132,10 +128,10 @@ func genLayerBlock(layerID types.LayerID, txs []types.TransactionID) *types.Bloc
 	return b
 }
 
-func dialGrpc(ctx context.Context, tb testing.TB, cfg config.Config) *grpc.ClientConn {
+func dialGrpc(ctx context.Context, tb testing.TB, address string) *grpc.ClientConn {
 	tb.Helper()
 	conn, err := grpc.DialContext(ctx,
-		"localhost:"+strconv.Itoa(cfg.GrpcServerPort),
+		address,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
@@ -160,7 +156,8 @@ func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
 	// run on a random port
-	cfg.GrpcServerPort = 1024 + rand.Intn(9999)
+	cfg.PublicListener = fmt.Sprintf("127.0.0.1:%d", 1024+rand.Intn(9999))
+	cfg.PrivateListener = fmt.Sprintf("127.0.0.1:%d", 1024+rand.Intn(9999))
 
 	var err error
 	signer, err = signing.NewEdSigner()
@@ -168,7 +165,6 @@ func TestMain(m *testing.M) {
 		log.Println("failed to create signer:", err)
 		os.Exit(1)
 	}
-	nodeID := signer.NodeID()
 	signer1, err = signing.NewEdSigner()
 	if err != nil {
 		log.Println("failed to create signer:", err)
@@ -183,7 +179,7 @@ func TestMain(m *testing.M) {
 	addr1 = wallet.Address(signer1.PublicKey().Bytes())
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
-	atx := types.NewActivationTx(challenge, &nodeID, addr1, nipost, numUnits, nil, nil)
+	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil, nil)
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx); err != nil {
@@ -196,7 +192,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	atx2 := types.NewActivationTx(challenge, &nodeID, addr2, nipost, numUnits, nil, nil)
+	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil, nil)
 	atx2.SetEffectiveNumUnits(numUnits)
 	atx2.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx2); err != nil {
@@ -212,7 +208,8 @@ func TestMain(m *testing.M) {
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
 	ballot1.AtxID = globalAtx.ID()
-	ballot1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
+	ballot1.EpochData = &types.EpochData{}
+	ballot1.ActiveSet = []types.ATXID{globalAtx.ID(), globalAtx2.ID()}
 
 	globalTx = NewTx(0, addr1, signer1)
 	globalTx2 = NewTx(1, addr2, signer2)
@@ -242,12 +239,6 @@ func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPo
 			LabelsPerUnit: labelsPerUnit,
 		},
 	}
-}
-
-type NetworkMock struct{}
-
-func (s *NetworkMock) PeerCount() uint64 {
-	return 0
 }
 
 type MeshAPIMock struct{}
@@ -283,7 +274,7 @@ func (m *MeshAPIMock) GetRewards(types.Address) (rewards []*types.Reward, err er
 }
 
 func (m *MeshAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
-	if tid.After(genTime.CurrentLayer()) {
+	if tid.After(layerCurrent) {
 		return nil, errors.New("requested layer later than current layer")
 	} else if tid.After(m.LatestLayer()) {
 		return nil, errors.New("haven't received that layer yet")
@@ -292,6 +283,10 @@ func (m *MeshAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 	ballots := []*types.Ballot{ballot1}
 	blocks := []*types.Block{block1, block2, block3}
 	return types.NewExistingLayer(tid, ballots, blocks), nil
+}
+
+func (m *MeshAPIMock) EpochAtxs(types.EpochID) ([]types.ATXID, error) {
+	return types.RandomActiveSet(activesetSize), nil
 }
 
 func (m *MeshAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
@@ -318,10 +313,10 @@ type ConStateAPIMock struct {
 	poolByTxId    map[types.TransactionID]*types.Transaction
 }
 
-func (t *ConStateAPIMock) Put(id types.TransactionID, tx *types.Transaction) {
+func (t *ConStateAPIMock) put(id types.TransactionID, tx *types.Transaction) {
 	t.poolByTxId[id] = tx
 	t.poolByAddress[tx.Principal] = id
-	events.ReportNewTx(types.LayerID{}, tx)
+	events.ReportNewTx(0, tx)
 }
 
 // Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
@@ -343,10 +338,6 @@ func (t *ConStateAPIMock) GetAllAccounts() (res []*types.Account, err error) {
 
 func (t *ConStateAPIMock) GetStateRoot() (types.Hash32, error) {
 	return stateRoot, nil
-}
-
-func (t *ConStateAPIMock) GetLayerApplied(txID types.TransactionID) (types.LayerID, error) {
-	return *t.layerApplied[txID], nil
 }
 
 func (t *ConStateAPIMock) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
@@ -397,6 +388,10 @@ func (t *ConStateAPIMock) GetNonce(addr types.Address) (types.Nonce, error) {
 	return t.nonces[addr], nil
 }
 
+func (t *ConStateAPIMock) Validation(raw types.RawTx) system.ValidationRequest {
+	panic("dont use this")
+}
+
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx := types.Transaction{TxHeader: &types.TxHeader{}}
 	tx.Principal = wallet.Address(signer.PublicKey().Bytes())
@@ -417,65 +412,23 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 	return &tx
 }
 
-func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
+func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, epoch types.EpochID) types.NIPostChallenge {
 	return types.NIPostChallenge{
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
-		PubLayerID:     pubLayerID,
+		PublishEpoch:   epoch,
 		PositioningATX: posAtxID,
 	}
 }
 
-// PostAPIMock is a mock for Post API.
-// TODO(mafa): replace this mock with the generated mock.
-type PostAPIMock struct{}
-
-func (*PostAPIMock) Status() *activation.PostSetupStatus {
-	return &activation.PostSetupStatus{}
-}
-
-func (p *PostAPIMock) StatusChan() <-chan *activation.PostSetupStatus {
-	ch := make(chan *activation.PostSetupStatus, 1)
-	ch <- p.Status()
-	close(ch)
-
-	return ch
-}
-
-func (p *PostAPIMock) ComputeProviders() []activation.PostSetupComputeProvider {
-	return nil
-}
-
-func (p *PostAPIMock) Benchmark(activation.PostSetupComputeProvider) (int, error) {
-	return 0, nil
-}
-
-func (p *PostAPIMock) StartSession(opts activation.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
-	return nil, nil
-}
-
-func (p *PostAPIMock) StopSession(deleteFiles bool) error {
-	return nil
-}
-
-func (p *PostAPIMock) GenerateProof(challenge []byte, commitmentAtx types.ATXID) (*types.Post, *types.PostMetadata, error) {
-	return &types.Post{}, &types.PostMetadata{}, nil
-}
-
-func (p *PostAPIMock) LastError() error {
-	return nil
-}
-
-func (p *PostAPIMock) LastOpts() *activation.PostSetupOpts {
-	return &activation.PostSetupOpts{}
-}
-
-func (p *PostAPIMock) Config() activation.PostConfig {
-	return activation.PostConfig{}
-}
-
 // SmeshingAPIMock is a mock for Smeshing API.
-type SmeshingAPIMock struct{}
+type SmeshingAPIMock struct {
+	UpdatePoETErr error
+}
+
+func (s *SmeshingAPIMock) UpdatePoETServers(context.Context, []string) error {
+	return s.UpdatePoETErr
+}
 
 func (*SmeshingAPIMock) Smeshing() bool {
 	return false
@@ -500,18 +453,6 @@ func (*SmeshingAPIMock) Coinbase() types.Address {
 func (*SmeshingAPIMock) SetCoinbase(coinbase types.Address) {
 }
 
-type GenesisTimeMock struct {
-	t time.Time
-}
-
-func (t GenesisTimeMock) CurrentLayer() types.LayerID {
-	return types.LayerID(layerCurrent)
-}
-
-func (t GenesisTimeMock) GenesisTime() time.Time {
-	return t.t
-}
-
 func marshalProto(t *testing.T, msg proto.Message) string {
 	var buf bytes.Buffer
 	var m jsonpb.Marshaler
@@ -519,27 +460,11 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 	return buf.String()
 }
 
-var cfg = config.DefaultTestConfig()
+var cfg = DefaultTestConfig()
 
-type SyncerMock struct {
-	startCalled bool
-	isSynced    bool
-}
-
-func (s *SyncerMock) IsSynced(context.Context) bool { return s.isSynced }
-func (s *SyncerMock) Start(context.Context)         { s.startCalled = true }
-
-type ActivationAPIMock struct {
-	UpdatePoETErr error
-}
-
-func (a *ActivationAPIMock) UpdatePoETServers(context.Context, []string) error {
-	return a.UpdatePoETErr
-}
-
-func launchServer(tb testing.TB, services ...ServiceAPI) func() {
-	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
-	jsonService := NewJSONHTTPServer(cfg.JSONServerPort)
+func launchServer(tb testing.TB, cfg Config, services ...ServiceAPI) func() {
+	grpcService := New(cfg.PublicListener)
+	jsonService := NewJSONHTTPServer(cfg.JSONListener)
 
 	// attach services
 	for _, svc := range services {
@@ -568,7 +493,7 @@ func launchServer(tb testing.TB, services ...ServiceAPI) func() {
 }
 
 func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
-	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.JSONServerPort, endpoint)
+	url := fmt.Sprintf("http://%s/%s", cfg.JSONListener, endpoint)
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
@@ -579,7 +504,7 @@ func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
 	return string(buf), resp.StatusCode
 }
 
-func getUnboundedPort(optionalPort int) (int, error) {
+func getFreePort(optionalPort int) (int, error) {
 	l, e := net.Listen("tcp", fmt.Sprintf(":%v", optionalPort))
 	if e != nil {
 		l, e = net.Listen("tcp", ":0")
@@ -593,32 +518,38 @@ func getUnboundedPort(optionalPort int) (int, error) {
 
 func TestNewServersConfig(t *testing.T) {
 	logtest.SetupGlobal(t)
-	port1, err := getUnboundedPort(0)
+	port1, err := getFreePort(0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	port2, err := getUnboundedPort(0)
+	port2, err := getFreePort(0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := NewServerWithInterface(port1, "localhost")
-	jsonService := NewJSONHTTPServer(port2)
+	grpcService := New(fmt.Sprintf(":%d", port1))
+	jsonService := NewJSONHTTPServer(fmt.Sprintf(":%d", port2))
 
-	require.Equal(t, port2, jsonService.port, "Expected same port")
-	require.Equal(t, port1, grpcService.Port, "Expected same port")
+	require.Contains(t, grpcService.Listener, strconv.Itoa(port1), "Expected same port")
+	require.Contains(t, jsonService.listener, strconv.Itoa(port2), "Expected same port")
 }
 
 func TestNodeService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	syncer := SyncerMock{}
-	atxapi := &ActivationAPIMock{}
+
+	ctrl := gomock.NewController(t)
+	syncer := NewMocksyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
+	peerCounter := NewMockpeerCounter(ctrl)
+	peerCounter.EXPECT().PeerCount().Return(uint64(0)).AnyTimes()
+	genTime := NewMockgenesisTimeAPI(ctrl)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	grpcService := NewNodeService(ctx, &networkMock, meshAPI, &genTime, &syncer, atxapi)
-	shutDown := launchServer(t, grpcService)
-	defer shutDown()
+	version := "v0.0.0"
+	build := "cafebabe"
+	grpcService := NewNodeService(ctx, peerCounter, meshAPIMock, genTime, syncer, version, build)
+	t.Cleanup(launchServer(t, cfg, grpcService))
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	c := pb.NewNodeServiceClient(conn)
 
 	// Construct an array of test cases to test each endpoint in turn
@@ -637,29 +568,27 @@ func TestNodeService(t *testing.T) {
 
 			// now try sending bad payloads
 			_, err = c.Echo(context.Background(), &pb.EchoRequest{Msg: nil})
-			require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
+			require.Error(t, err)
+			grpcStatus, ok := status.FromError(err)
+			require.True(t, ok)
+			require.Equal(t, codes.InvalidArgument, grpcStatus.Code())
+			require.Equal(t, "Must include `Msg`", grpcStatus.Message())
 
 			_, err = c.Echo(context.Background(), &pb.EchoRequest{})
-			require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
-			statusCode = status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
+			require.Error(t, err)
+			grpcStatus, ok = status.FromError(err)
+			require.True(t, ok)
+			require.Equal(t, codes.InvalidArgument, grpcStatus.Code())
+			require.Equal(t, "Must include `Msg`", grpcStatus.Message())
 		}},
 		{"Version", func(t *testing.T) {
 			logtest.SetupGlobal(t)
-			// must set this manually as it's set up in main() when running
-			version := "abc123"
-			cmd.Version = version
 			res, err := c.Version(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, version, res.VersionString.Value)
 		}},
 		{"Build", func(t *testing.T) {
 			logtest.SetupGlobal(t)
-			// must set this manually as it's set up in main() when running
-			build := "abc123"
-			cmd.Commit = build
 			res, err := c.Build(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, build, res.BuildString.Value)
@@ -668,8 +597,9 @@ func TestNodeService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			// First do a mock checking during a genesis layer
 			// During genesis all layers should be set to current layer
-			oldCurLayer := layerCurrent
-			layerCurrent = types.NewLayerID(layersPerEpoch) // end of first epoch
+
+			layerCurrent := types.LayerID(layersPerEpoch) // end of first epoch
+			genTime.EXPECT().CurrentLayer().Return(layerCurrent)
 			req := &pb.StatusRequest{}
 			res, err := c.Status(context.Background(), req)
 			require.NoError(t, err)
@@ -680,7 +610,8 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, layerLatest.Uint32(), res.Status.VerifiedLayer.Number)
 
 			// Now do a mock check post-genesis
-			layerCurrent = oldCurLayer
+			layerCurrent = types.LayerID(12)
+			genTime.EXPECT().CurrentLayer().Return(layerCurrent)
 			res, err = c.Status(context.Background(), req)
 			require.NoError(t, err)
 			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
@@ -688,36 +619,6 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, layerLatest.Uint32(), res.Status.SyncedLayer.Number)
 			require.Equal(t, layerCurrent.Uint32(), res.Status.TopLayer.Number)
 			require.Equal(t, layerVerified.Uint32(), res.Status.VerifiedLayer.Number)
-		}},
-		{"SyncStart", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			require.Equal(t, false, syncer.startCalled, "Start() not yet called on syncer")
-			req := &pb.SyncStartRequest{}
-			res, err := c.SyncStart(context.Background(), req)
-			require.Nil(t, res)
-			require.ErrorIs(t, err, status.Errorf(codes.Unimplemented, "UNIMPLEMENTED"))
-		}},
-		{"Shutdown", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			req := &pb.ShutdownRequest{}
-			res, err := c.Shutdown(context.Background(), req)
-			require.Nil(t, res)
-			require.ErrorIs(t, err, status.Errorf(codes.Unimplemented, "UNIMPLEMENTED"))
-		}},
-		{"UpdatePoetServer", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			atxapi.UpdatePoETErr = nil
-			res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
-			require.NoError(t, err)
-			require.EqualValues(t, res.Status.Code, code.Code_OK)
-		}},
-		{"UpdatePoetServerUnavailable", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			atxapi.UpdatePoETErr = activation.ErrPoetServiceUnstable
-			urls := []string{"test"}
-			res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: urls})
-			require.Nil(t, res)
-			require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", atxapi.UpdatePoETErr))
 		}},
 		// NOTE: ErrorStream and StatusStream have comprehensive, E2E tests in cmd/node/node_test.go.
 	}
@@ -729,13 +630,12 @@ func TestNodeService(t *testing.T) {
 
 func TestGlobalStateService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	svc := NewGlobalStateService(meshAPI, conStateAPI)
-	shutDown := launchServer(t, svc)
-	defer shutDown()
+	svc := NewGlobalStateService(meshAPIMock, conStateAPI)
+	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	c := pb.NewGlobalStateServiceClient(conn)
 
 	// Construct an array of test cases to test each endpoint in turn
@@ -1012,13 +912,19 @@ func TestGlobalStateService(t *testing.T) {
 
 func TestSmesherService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	svc := NewSmesherService(&PostAPIMock{}, &SmeshingAPIMock{}, 10*time.Millisecond)
-	shutDown := launchServer(t, svc)
-	defer shutDown()
+
+	ctrl := gomock.NewController(t)
+	postProvider := NewMockpostSetupProvider(ctrl)
+	postProvider.EXPECT().Config().Return(activation.DefaultPostConfig()).AnyTimes()
+	postProvider.EXPECT().Status().Return(&activation.PostSetupStatus{}).AnyTimes()
+	postProvider.EXPECT().ComputeProviders().Return(nil).AnyTimes()
+	smeshingAPI := &SmeshingAPIMock{}
+	svc := NewSmesherService(postProvider, smeshingAPI, 10*time.Millisecond, activation.DefaultPostSetupOpts())
+	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	c := pb.NewSmesherServiceClient(conn)
 
 	t.Run("IsSmeshing", func(t *testing.T) {
@@ -1133,17 +1039,36 @@ func TestSmesherService(t *testing.T) {
 		_, err = stream.Recv()
 		require.ErrorContains(t, err, context.Canceled.Error())
 	})
+	t.Run("UpdatePoetServer", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		smeshingAPI.UpdatePoETErr = nil
+		res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
+		require.NoError(t, err)
+		require.EqualValues(t, res.Status.Code, code.Code_OK)
+	})
+	t.Run("UpdatePoetServerUnavailable", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		smeshingAPI.UpdatePoETErr = activation.ErrPoetServiceUnstable
+		urls := []string{"test"}
+		res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: urls})
+		require.Nil(t, res)
+		require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", smeshingAPI.UpdatePoETErr))
+	})
 }
 
 func TestMeshService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
-	shutDown := launchServer(t, grpcService)
-	t.Cleanup(func() { shutDown() })
+	ctrl := gomock.NewController(t)
+	genTime := NewMockgenesisTimeAPI(ctrl)
+	genesis := time.Unix(genTimeUnix, 0)
+	genTime.EXPECT().GenesisTime().Return(genesis)
+	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
+	grpcService := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	c := pb.NewMeshServiceClient(conn)
 
 	// Construct an array of test cases to test each endpoint in turn
@@ -1155,19 +1080,19 @@ func TestMeshService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(genTime.GenesisTime().Unix()), response.Unixtime.Value)
+			require.Equal(t, uint64(genesis.Unix()), response.Unixtime.Value)
 		}},
 		{"CurrentLayer", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.CurrentLayer(context.Background(), &pb.CurrentLayerRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint32(12), response.Layernum.Number)
+			require.Equal(t, layerCurrent.Uint32(), response.Layernum.Number)
 		}},
 		{"CurrentEpoch", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.CurrentEpoch(context.Background(), &pb.CurrentEpochRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(2), response.Epochnum.Value)
+			require.Equal(t, layerCurrent.GetEpoch().Uint32(), response.Epochnum.Number)
 		}},
 		{"GenesisID", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -1666,18 +1591,21 @@ func TestMeshService(t *testing.T) {
 func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	logtest.SetupGlobal(t)
 	req := require.New(t)
-	syncer := &SyncerMock{}
-	ctrl := gomock.NewController(t)
-	publisher := pubsubmocks.NewMockPublisher(ctrl)
-	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer)
-	shutDown := launchServer(t, grpcService)
-	defer shutDown()
+	ctrl := gomock.NewController(t)
+	syncer := NewMocksyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(false)
+	publisher := pubsubmocks.NewMockPublisher(ctrl)
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	txHandler := NewMocktxValidator(ctrl)
+	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil)
+
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	c := pb.NewTransactionServiceClient(conn)
 
 	serializedTx, err := codec.Encode(globalTx)
@@ -1686,40 +1614,73 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	// This time, we expect an error, since isSynced is false (by default)
 	// The node should not allow tx submission when not synced
 	res, err := c.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{Transaction: serializedTx})
-	req.EqualError(err, "rpc error: code = FailedPrecondition desc = Cannot submit transaction, node is not in sync yet, try again later")
+	req.Error(err)
+	grpcStatus, ok := status.FromError(err)
+	req.True(ok)
+	req.Equal(codes.FailedPrecondition, grpcStatus.Code())
+	req.Equal("Cannot submit transaction, node is not in sync yet, try again later", grpcStatus.Message())
 	req.Nil(res)
 
-	syncer.isSynced = true
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(true)
 
 	// This time, we expect no error, since isSynced is now true
 	_, err = c.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{Transaction: serializedTx})
 	req.NoError(err)
-	// TODO: randomly got an error here, should investigate. Added specific error check above, as this error should have
-	//  happened there first.
-	//  Received unexpected error: "rpc error: code = Unimplemented desc = unknown service spacemesh.v1.TransactionService"
+}
+
+func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
+	logtest.SetupGlobal(t)
+	req := require.New(t)
+
+	ctrl := gomock.NewController(t)
+	syncer := NewMocksyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(true)
+	publisher := pubsubmocks.NewMockPublisher(ctrl) // publish is not called
+	txHandler := NewMocktxValidator(ctrl)
+	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(errors.New("failed validation"))
+
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	t.Cleanup(launchServer(t, cfg, grpcService))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	c := pb.NewTransactionServiceClient(conn)
+
+	serializedTx, err := codec.Encode(globalTx)
+	req.NoError(err, "error serializing tx")
+
+	// When verifying and caching the transaction fails we expect an error
+	res, err := c.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{Transaction: serializedTx})
+	req.Error(err)
+	grpcStatus, ok := status.FromError(err)
+	req.True(ok)
+	req.Equal(codes.InvalidArgument, grpcStatus.Code())
+	req.Equal("Failed to verify transaction", grpcStatus.Message())
+	req.Nil(res)
 }
 
 func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	logtest.SetupGlobal(t)
 
-	ctrl := gomock.NewController(t)
-	publisher := pubsubmocks.NewMockPublisher(ctrl)
+	numTxs := 20
 
-	expected := 20
-	n := 0
-	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
-		n++
-		return nil
-	})
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
-	shutDown := launchServer(t, grpcService)
-	defer shutDown()
+	ctrl := gomock.NewController(t)
+	syncer := NewMocksyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).Times(numTxs)
+	publisher := pubsubmocks.NewMockPublisher(ctrl)
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(numTxs)
+	txHandler := NewMocktxValidator(ctrl)
+	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).Times(numTxs)
+
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	c := pb.NewTransactionServiceClient(conn)
-	for i := 0; i < expected; i++ {
+	for i := 0; i < numTxs; i++ {
 		res, err := c.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{
 			Transaction: globalTx.Raw,
 		})
@@ -1728,23 +1689,25 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 		require.Equal(t, globalTx.ID.Bytes(), res.Txstate.Id.Id)
 		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
 	}
-	require.Equal(t, expected, n)
 }
 
 func TestTransactionService(t *testing.T) {
 	logtest.SetupGlobal(t)
 
 	ctrl := gomock.NewController(t)
+	syncer := NewMocksyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
-
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
-	shutDown := launchServer(t, grpcService)
-	defer shutDown()
+	txHandler := NewMocktxValidator(ctrl)
+	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	c := pb.NewTransactionServiceClient(conn)
 
 	// Construct an array of test cases to test each endpoint in turn
@@ -1848,7 +1811,7 @@ func TestTransactionService(t *testing.T) {
 			// Give the server-side time to subscribe to events
 			time.Sleep(time.Millisecond * 50)
 
-			events.ReportNewTx(types.LayerID{}, globalTx)
+			events.ReportNewTx(0, globalTx)
 			res, err := stream.Recv()
 			require.NoError(t, err)
 			require.Nil(t, res.Transaction)
@@ -1874,7 +1837,7 @@ func TestTransactionService(t *testing.T) {
 			// Give the server-side time to subscribe to events
 			time.Sleep(time.Millisecond * 50)
 
-			events.ReportNewTx(types.LayerID{}, globalTx)
+			events.ReportNewTx(0, globalTx)
 
 			// Verify
 			res, err := stream.Recv()
@@ -1917,7 +1880,7 @@ func TestTransactionService(t *testing.T) {
 					return
 				case <-broadcastSignal:
 					// We assume the data is valid here, and put it directly into the txpool
-					conStateAPI.Put(globalTx.ID, globalTx)
+					conStateAPI.put(globalTx.ID, globalTx)
 				}
 			}()
 
@@ -1970,7 +1933,7 @@ func TestTransactionService(t *testing.T) {
 
 			// TODO send header after stream has subscribed
 
-			events.ReportNewTx(types.LayerID{}, globalTx)
+			events.ReportNewTx(0, globalTx)
 
 			for _, stream := range streams {
 				res, err := stream.Recv()
@@ -2001,7 +1964,7 @@ func TestTransactionService(t *testing.T) {
 			time.Sleep(time.Millisecond * 50)
 
 			for i := 0; i < subscriptionChanBufSize*2; i++ {
-				events.ReportNewTx(types.LayerID{}, globalTx)
+				events.ReportNewTx(0, globalTx)
 			}
 
 			for i := 0; i < subscriptionChanBufSize; i++ {
@@ -2043,13 +2006,13 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Condition(t, func() bool {
 		for _, a := range l.Activations {
 			// Compare the two element by element
-			if a.Layer.Number != globalAtx.PubLayerID.Uint32() {
+			if a.Layer.Number != globalAtx.PublishEpoch.Uint32() {
 				continue
 			}
 			if !bytes.Equal(a.Id.Id, globalAtx.ID().Bytes()) {
 				continue
 			}
-			if !bytes.Equal(a.SmesherId.Id, globalAtx.NodeID().Bytes()) {
+			if !bytes.Equal(a.SmesherId.Id, globalAtx.SmesherID.Bytes()) {
 				continue
 			}
 			if a.Coinbase.Address != globalAtx.Coinbase.String() {
@@ -2089,13 +2052,14 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
-	shutDown := launchServer(t, grpcService)
-	defer shutDown()
+	ctrl := gomock.NewController(t)
+	genTime := NewMockgenesisTimeAPI(ctrl)
+	grpcService := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	c := pb.NewMeshServiceClient(conn)
 
 	// set up the grpc listener stream
@@ -2116,7 +2080,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	time.Sleep(time.Millisecond * 50)
 
 	// publish a tx
-	events.ReportNewTx(types.LayerID{}, globalTx)
+	events.ReportNewTx(0, globalTx)
 	res, err := stream.Recv()
 	require.NoError(t, err, "got error from stream")
 	checkAccountMeshDataItemTx(t, res.Datum.Datum)
@@ -2129,7 +2093,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	// test streaming a tx and an atx that are filtered out
 	// these should not be received
-	events.ReportNewTx(types.LayerID{}, globalTx2)
+	events.ReportNewTx(0, globalTx2)
 	events.ReportNewActivation(globalAtx2)
 
 	_, err = stream.Recv()
@@ -2146,13 +2110,12 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	svc := NewGlobalStateService(meshAPI, conStateAPI)
-	shutDown := launchServer(t, svc)
-	t.Cleanup(shutDown)
+	svc := NewGlobalStateService(meshAPIMock, conStateAPI)
+	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	c := pb.NewGlobalStateServiceClient(conn)
 
 	// set up the grpc listener stream
@@ -2206,13 +2169,12 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	svc := NewGlobalStateService(meshAPI, conStateAPI)
-	shutDown := launchServer(t, svc)
-	defer shutDown()
+	svc := NewGlobalStateService(meshAPIMock, conStateAPI)
+	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	c := pb.NewGlobalStateServiceClient(conn)
 
 	// set up the grpc listener stream
@@ -2246,7 +2208,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	checkGlobalStateDataAccountWrapper(t, res.Datum.Datum)
 
 	// publish a new layer
-	layer, err := meshAPI.GetLayer(layerFirst)
+	layer, err := meshAPIMock.GetLayer(layerFirst)
 	require.NoError(t, err)
 
 	events.ReportLayerUpdate(events.LayerUpdate{
@@ -2267,13 +2229,14 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
-	shutDown := launchServer(t, grpcService)
-	defer shutDown()
+	ctrl := gomock.NewController(t)
+	genTime := NewMockgenesisTimeAPI(ctrl)
+	grpcService := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
 
 	// set up the grpc listener stream
 	c := pb.NewMeshServiceClient(conn)
@@ -2282,7 +2245,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	// Give the server-side time to subscribe to events
 	time.Sleep(time.Millisecond * 50)
 
-	layer, err := meshAPI.GetLayer(layerFirst)
+	layer, err := meshAPIMock.GetLayer(layerFirst)
 	require.NoError(t, err)
 
 	// Act
@@ -2341,8 +2304,8 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem any) {
 	require.IsType(t, &pb.AccountMeshData_Activation{}, dataItem)
 	x := dataItem.(*pb.AccountMeshData_Activation)
 	require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
-	require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
-	require.Equal(t, globalAtx.NodeID().Bytes(), x.Activation.SmesherId.Id)
+	require.Equal(t, globalAtx.PublishEpoch.Uint32(), x.Activation.Layer.Number)
+	require.Equal(t, globalAtx.SmesherID.Bytes(), x.Activation.SmesherId.Id)
 	require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
 	require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
 	require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
@@ -2400,20 +2363,24 @@ func checkGlobalStateDataGlobalState(t *testing.T, dataItem any) {
 
 func TestMultiService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	cfg.GrpcServerPort = 9192
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	svc1 := NewNodeService(ctx, &networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
-	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
-	shutDown := launchServer(t, svc1, svc2)
-	defer shutDown()
+	ctrl, ctx := gomock.WithContext(ctx, t)
+	syncer := NewMocksyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
+	peerCounter := NewMockpeerCounter(ctrl)
+	genTime := NewMockgenesisTimeAPI(ctrl)
+	genesis := time.Unix(genTimeUnix, 0)
+	genTime.EXPECT().GenesisTime().Return(genesis)
+	svc1 := NewNodeService(ctx, peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
+	svc2 := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	shutDown := launchServer(t, cfg, svc1, svc2)
+	t.Cleanup(shutDown)
 
-	conn := dialGrpc(ctx, t, cfg)
-
-	c1 := pb.NewNodeServiceClient(conn)
-	c2 := pb.NewMeshServiceClient(conn)
+	c1 := pb.NewNodeServiceClient(dialGrpc(ctx, t, cfg.PublicListener))
+	c2 := pb.NewMeshServiceClient(dialGrpc(ctx, t, cfg.PublicListener))
 
 	// call endpoints and validate results
 	const message = "Hello World"
@@ -2424,7 +2391,7 @@ func TestMultiService(t *testing.T) {
 	require.Equal(t, message, res1.Msg.Value)
 	res2, err2 := c2.GenesisTime(ctx, &pb.GenesisTimeRequest{})
 	require.NoError(t, err2)
-	require.Equal(t, uint64(genTime.GenesisTime().Unix()), res2.Unixtime.Value)
+	require.Equal(t, uint64(genesis.Unix()), res2.Unixtime.Value)
 
 	// Make sure that shutting down the grpc service shuts them both down
 	shutDown()
@@ -2447,22 +2414,25 @@ func TestJsonApi(t *testing.T) {
 	const message = "hello world!"
 
 	// we cannot start the gateway service without enabling at least one service
-	cfg.StartNodeService = false
-	cfg.StartMeshService = false
-	shutDown := launchServer(t)
+	shutDown := launchServer(t, cfg)
+	t.Cleanup(shutDown)
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
-	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.JSONServerPort, "v1/node/echo")
+	url := fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/node/echo")
 	_, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.Error(t, err)
 	shutDown()
 
 	// enable services and try again
-	svc1 := NewNodeService(context.Background(), &networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
-	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
-	cfg.StartNodeService = true
-	cfg.StartMeshService = true
-	shutDown = launchServer(t, svc1, svc2)
-	defer shutDown()
+	ctrl := gomock.NewController(t)
+	syncer := NewMocksyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
+	peerCounter := NewMockpeerCounter(ctrl)
+	genTime := NewMockgenesisTimeAPI(ctrl)
+	genesis := time.Unix(genTimeUnix, 0)
+	genTime.EXPECT().GenesisTime().Return(genesis)
+	svc1 := NewNodeService(context.Background(), peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
+	svc2 := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	t.Cleanup(launchServer(t, cfg, svc1, svc2))
 	time.Sleep(time.Second)
 
 	// generate request payload (api input params)
@@ -2478,20 +2448,20 @@ func TestJsonApi(t *testing.T) {
 	require.Equal(t, http.StatusOK, respStatus2)
 	var msg2 pb.GenesisTimeResponse
 	require.NoError(t, jsonpb.UnmarshalString(respBody2, &msg2))
-	require.Equal(t, uint64(genTime.GenesisTime().Unix()), msg2.Unixtime.Value)
+	require.Equal(t, uint64(genesis.Unix()), msg2.Unixtime.Value)
 }
 
 func TestDebugService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	ctrl := gomock.NewController(t)
-	identity := mocks.NewMockNetworkIdentity(ctrl)
-	svc := NewDebugService(conStateAPI, identity)
-	shutDown := launchServer(t, svc)
-	defer shutDown()
+	identity := NewMocknetworkIdentity(ctrl)
+	mOracle := NewMockoracle(ctrl)
+	svc := NewDebugService(conStateAPI, identity, mOracle)
+	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	c := pb.NewDebugServiceClient(conn)
 
 	t.Run("Accounts", func(t *testing.T) {
@@ -2515,6 +2485,22 @@ func TestDebugService(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.Equal(t, id.String(), response.Id)
+	})
+	t.Run("ActiveSet", func(t *testing.T) {
+		epoch := types.EpochID(3)
+		activeSet := types.RandomActiveSet(11)
+		mOracle.EXPECT().ActiveSet(gomock.Any(), epoch).Return(activeSet, nil)
+		res, err := c.ActiveSet(context.Background(), &pb.ActiveSetRequest{
+			Epoch: epoch.Uint32(),
+		})
+		require.NoError(t, err)
+		require.Equal(t, len(activeSet), len(res.GetIds()))
+
+		var ids []types.ATXID
+		for _, a := range res.GetIds() {
+			ids = append(ids, types.ATXID(types.BytesToHash(a.GetId())))
+		}
+		require.ElementsMatch(t, activeSet, ids)
 	})
 	t.Run("ProposalsStream", func(t *testing.T) {
 		events.InitializeReporter()
@@ -2540,50 +2526,21 @@ func TestDebugService(t *testing.T) {
 	})
 }
 
-func TestGatewayService(t *testing.T) {
-	logtest.SetupGlobal(t)
-	ctrl := gomock.NewController(t)
-	verifier := mocks.NewMockChallengeVerifier(ctrl)
-	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(&activation.ChallengeVerificationResult{}, nil)
-
-	svc := NewGatewayService(verifier)
-	shutDown := launchServer(t, svc)
-	defer shutDown()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
-	c := pb.NewGatewayServiceClient(conn)
-
-	req := &pb.VerifyChallengeRequest{}
-	_, err := c.VerifyChallenge(ctx, req)
-	s, ok := status.FromError(err)
-	require.True(t, ok)
-	require.Equal(t, codes.OK, s.Code())
-}
-
 func TestEventsReceived(t *testing.T) {
 	logtest.SetupGlobal(t)
 	events.CloseEventReporter()
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	ctrl := gomock.NewController(t)
-	publisher := pubsubmocks.NewMockPublisher(ctrl)
-	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
-		return nil
-	})
-
-	txService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
-	gsService := NewGlobalStateService(meshAPI, conStateAPI)
-	shutDown := launchServer(t, txService, gsService)
-	defer shutDown()
+	txService := NewTransactionService(sql.InMemory(), nil, meshAPIMock, conStateAPI, nil, nil)
+	gsService := NewGlobalStateService(meshAPIMock, conStateAPI)
+	t.Cleanup(launchServer(t, cfg, txService, gsService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	conn1 := dialGrpc(ctx, t, cfg)
-	conn2 := dialGrpc(ctx, t, cfg)
+	conn1 := dialGrpc(ctx, t, cfg.PublicListener)
+	conn2 := dialGrpc(ctx, t, cfg.PublicListener)
 
 	txClient := pb.NewTransactionServiceClient(conn1)
 	accountClient := pb.NewGlobalStateServiceClient(conn2)
@@ -2655,12 +2612,11 @@ func TestTransactionsRewards(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	shutDown := launchServer(t, NewGlobalStateService(meshAPI, conStateAPI))
-	t.Cleanup(shutDown)
+	t.Cleanup(launchServer(t, cfg, NewGlobalStateService(meshAPIMock, conStateAPI)))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
-	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg))
+	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg.PublicListener))
 
 	address := newAddress(t)
 	weight := new(big.Rat).SetFloat64(18.7)
@@ -2679,7 +2635,7 @@ func TestTransactionsRewards(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 
 		svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
-		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.NewLayerID(17)}, []types.Transaction{*globalTx}, rewards)
+		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
 		data, err := stream.Recv()
@@ -2700,7 +2656,7 @@ func TestTransactionsRewards(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 
 		svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
-		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.NewLayerID(17)}, []types.Transaction{*globalTx}, rewards)
+		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
 		data, err := stream.Recv()
@@ -2723,25 +2679,25 @@ func TestVMAccountUpdates(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	svm := vm.New(db, vm.WithLogger(logtest.New(t)))
-	t.Cleanup(launchServer(t, NewGlobalStateService(nil, txs.NewConservativeState(svm, db))))
+	t.Cleanup(launchServer(t, cfg, NewGlobalStateService(nil, txs.NewConservativeState(svm, db))))
 
-	keys := make([]ed25519.PrivateKey, 10)
+	keys := make([]*signing.EdSigner, 10)
 	accounts := make([]types.Account, len(keys))
 	const initial = 100_000_000
 	for i := range keys {
-		pub, pk, err := ed25519.GenerateKey(nil)
+		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		keys[i] = pk
+		keys[i] = signer
 		accounts[i] = types.Account{
-			Address: wallet.Address(pub),
+			Address: wallet.Address(signer.NodeID().Bytes()),
 			Balance: initial,
 		}
 	}
 	require.NoError(t, svm.ApplyGenesis(accounts))
 	spawns := []types.Transaction{}
-	for _, pk := range keys {
+	for _, key := range keys {
 		spawns = append(spawns, types.Transaction{
-			RawTx: types.NewRawTx(wallet.SelfSpawn(pk, 0)),
+			RawTx: types.NewRawTx(wallet.SelfSpawn(key.PrivateKey(), 0)),
 		})
 	}
 	lid := types.GetEffectiveGenesis().Add(1)
@@ -2750,7 +2706,7 @@ func TestVMAccountUpdates(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
-	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg))
+	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg.PublicListener))
 	eg, ctx := errgroup.WithContext(ctx)
 	states := make(chan *pb.AccountState, len(accounts))
 	for _, account := range accounts {
@@ -2775,10 +2731,10 @@ func TestVMAccountUpdates(t *testing.T) {
 
 	spends := []types.Transaction{}
 	const amount = 100_000
-	for _, pk := range keys {
+	for _, key := range keys {
 		spends = append(spends, types.Transaction{
 			RawTx: types.NewRawTx(wallet.Spend(
-				pk, types.Address{1}, amount, 1,
+				key.PrivateKey(), types.Address{1}, amount, 1,
 			)),
 		})
 	}
@@ -2793,4 +2749,30 @@ func TestVMAccountUpdates(t *testing.T) {
 		require.Less(t, int(state.Balance.Value), initial-amount)
 	}
 	require.Equal(t, len(accounts), i)
+}
+
+func TestMeshService_EpochStream(t *testing.T) {
+	logtest.SetupGlobal(t)
+
+	ctrl := gomock.NewController(t)
+	genTime := NewMockgenesisTimeAPI(ctrl)
+	srv := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	t.Cleanup(launchServer(t, cfg, srv))
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	client := pb.NewMeshServiceClient(conn)
+
+	stream, err := client.EpochStream(ctx, &pb.EpochStreamRequest{Epoch: 3})
+	require.NoError(t, err)
+	var total int
+	for {
+		_, err = stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		total++
+	}
+	require.Equal(t, activesetSize, total)
 }

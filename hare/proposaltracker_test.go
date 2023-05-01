@@ -11,15 +11,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-func buildProposalMsg(sig *signing.EdSigner, s *Set, signature []byte) *Msg {
+func buildProposalMsg(sig *signing.EdSigner, s *Set, signature types.VrfSignature) *Message {
 	builder := newMessageBuilder().SetRoleProof(signature)
 	builder.SetType(proposal).SetLayer(instanceID1).SetRoundCounter(proposalRound).SetCommittedRound(ki).SetValues(s).SetSVP(buildSVP(ki, NewSetFromValues(types.ProposalID{1})))
 	builder.SetEligibilityCount(1)
-	return builder.SetPubKey(sig.PublicKey()).Sign(sig).Build()
+	return builder.Sign(sig).Build()
 }
 
-func BuildProposalMsg(sig *signing.EdSigner, s *Set) *Msg {
-	return buildProposalMsg(sig, s, []byte{})
+func BuildProposalMsg(sig *signing.EdSigner, s *Set) *Message {
+	return buildProposalMsg(sig, s, types.EmptyVrfSignature)
 }
 
 func TestProposalTracker_OnProposalConflict(t *testing.T) {
@@ -46,11 +46,19 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{
 						{
-							InnerMsg:  m1.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   m1.Layer,
+								Round:   m1.Round,
+								MsgHash: types.BytesToHash(m1.HashBytes()),
+							},
 							Signature: m1.Signature,
 						},
 						{
-							InnerMsg:  m2.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   m2.Layer,
+								Round:   m2.Round,
+								MsgHash: types.BytesToHash(m2.HashBytes()),
+							},
 							Signature: m2.Signature,
 						},
 					},
@@ -60,14 +68,14 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			PubKey:      m2.PubKey.Bytes(),
+			NodeID:      m2.SmesherID,
 			Eligibility: m2.Eligibility,
 		},
 	}
 	gossip := <-mch
 	require.Equal(t, expected, *gossip)
-	tracker.eTracker.ForEach(proposalRound, func(s string, cred *Cred) {
-		require.Equal(t, string(m1.PubKey.Bytes()), s)
+	tracker.eTracker.ForEach(proposalRound, func(s types.NodeID, cred *Cred) {
+		require.Equal(t, m1.SmesherID, s)
 		require.False(t, cred.Honest)
 		require.EqualValues(t, 1, cred.Count)
 	})
@@ -113,11 +121,19 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{
 						{
-							InnerMsg:  m1.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   m1.Layer,
+								Round:   m1.Round,
+								MsgHash: types.BytesToHash(m1.HashBytes()),
+							},
 							Signature: m1.Signature,
 						},
 						{
-							InnerMsg:  m2.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   m2.Layer,
+								Round:   m2.Round,
+								MsgHash: types.BytesToHash(m2.HashBytes()),
+							},
 							Signature: m2.Signature,
 						},
 					},
@@ -127,14 +143,14 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			PubKey:      m2.PubKey.Bytes(),
+			NodeID:      m2.SmesherID,
 			Eligibility: m2.Eligibility,
 		},
 	}
 	gossip := <-mch
 	require.Equal(t, expected, *gossip)
-	tracker.eTracker.ForEach(proposalRound, func(s string, cred *Cred) {
-		require.Equal(t, string(m1.PubKey.Bytes()), s)
+	tracker.eTracker.ForEach(proposalRound, func(s types.NodeID, cred *Cred) {
+		require.Equal(t, m1.SmesherID, s)
 		require.False(t, cred.Honest)
 		require.EqualValues(t, 1, cred.Count)
 	})
@@ -150,7 +166,7 @@ func TestProposalTracker_ProposedSet(t *testing.T) {
 	s1 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2})
 	signer1, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	tracker.OnProposal(context.Background(), buildProposalMsg(signer1, s1, []byte{1, 2, 3}))
+	tracker.OnProposal(context.Background(), buildProposalMsg(signer1, s1, types.RandomVrfSignature()))
 	proposedSet = tracker.ProposedSet()
 	require.NotNil(t, proposedSet)
 	require.True(t, s1.Equals(proposedSet))
@@ -159,13 +175,13 @@ func TestProposalTracker_ProposedSet(t *testing.T) {
 	s2 := NewSetFromValues(types.ProposalID{3}, types.ProposalID{4}, types.ProposalID{5})
 	signer2, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	m1 := buildProposalMsg(signer2, s2, []byte{0})
+	m1 := buildProposalMsg(signer2, s2, types.EmptyVrfSignature)
 	tracker.OnProposal(context.Background(), m1)
 	proposedSet = tracker.ProposedSet()
 	require.True(t, s2.Equals(proposedSet))
 	require.False(t, tracker.IsConflicting())
 
-	m2 := buildProposalMsg(signer2, s1, []byte{0})
+	m2 := buildProposalMsg(signer2, s1, types.EmptyVrfSignature)
 	tracker.OnProposal(context.Background(), m2)
 	proposedSet = tracker.ProposedSet()
 	require.Nil(t, proposedSet)
@@ -179,11 +195,19 @@ func TestProposalTracker_ProposedSet(t *testing.T) {
 				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{
 						{
-							InnerMsg:  m1.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   m1.Layer,
+								Round:   m1.Round,
+								MsgHash: types.BytesToHash(m1.HashBytes()),
+							},
 							Signature: m1.Signature,
 						},
 						{
-							InnerMsg:  m2.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   m2.Layer,
+								Round:   m2.Round,
+								MsgHash: types.BytesToHash(m2.HashBytes()),
+							},
 							Signature: m2.Signature,
 						},
 					},
@@ -193,14 +217,14 @@ func TestProposalTracker_ProposedSet(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			PubKey:      m2.PubKey.Bytes(),
+			NodeID:      m2.SmesherID,
 			Eligibility: m2.Eligibility,
 		},
 	}
 	gossip := <-mch
 	require.Equal(t, expected, *gossip)
-	tracker.eTracker.ForEach(proposalRound, func(s string, cred *Cred) {
-		require.Equal(t, string(m1.PubKey.Bytes()), s)
+	tracker.eTracker.ForEach(proposalRound, func(s types.NodeID, cred *Cred) {
+		require.Equal(t, m1.SmesherID, s)
 		require.False(t, cred.Honest)
 		require.EqualValues(t, 1, cred.Count)
 	})

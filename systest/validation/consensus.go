@@ -29,7 +29,7 @@ func getConsensusData(ctx context.Context, distance int, node *cluster.NodeClien
 		return nil
 	}
 	target := int(lid.Layernum.Number) - distance
-	if target < 2*int(layers.Numlayers.Value) {
+	if target < 2*int(layers.Numlayers.Number) {
 		// empty strings are always in consensus
 		return &ConsensusData{}
 	}

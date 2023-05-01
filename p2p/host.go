@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
@@ -21,7 +22,7 @@ import (
 func DefaultConfig() Config {
 	return Config{
 		Listen:             "/ip4/0.0.0.0/tcp/7513",
-		Flood:              true,
+		Flood:              false,
 		MinPeers:           6,
 		LowPeers:           40,
 		HighPeers:          100,
@@ -54,7 +55,8 @@ func New(_ context.Context, logger log.Log, cfg Config, genesisID types.Hash20, 
 	if err != nil {
 		return nil, err
 	}
-
+	lp2plog.SetPrimaryCore(logger.Core())
+	lp2plog.SetAllLoggers(lp2plog.LogLevel(cfg.LogLevel))
 	cm, err := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, connmgr.WithGracePeriod(cfg.GracePeersShutdown))
 	if err != nil {
 		return nil, fmt.Errorf("p2p create conn mgr: %w", err)

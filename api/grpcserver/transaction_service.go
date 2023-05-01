@@ -14,9 +14,9 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -26,10 +26,11 @@ import (
 // TransactionService exposes transaction data, and a submit tx endpoint.
 type TransactionService struct {
 	db        *sql.Database
-	publisher api.Publisher // P2P Swarm
-	mesh      api.MeshAPI   // Mesh
-	conState  api.ConservativeState
-	syncer    api.Syncer
+	publisher pubsub.Publisher // P2P Swarm
+	mesh      meshAPI          // Mesh
+	conState  conservativeState
+	syncer    syncer
+	txHandler txValidator
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -40,10 +41,11 @@ func (s TransactionService) RegisterService(server *Server) {
 // NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
 	db *sql.Database,
-	publisher api.Publisher,
-	msh api.MeshAPI,
-	conState api.ConservativeState,
-	syncer api.Syncer,
+	publisher pubsub.Publisher,
+	msh meshAPI,
+	conState conservativeState,
+	syncer syncer,
+	txHandler txValidator,
 ) *TransactionService {
 	return &TransactionService{
 		db:        db,
@@ -51,28 +53,50 @@ func NewTransactionService(
 		mesh:      msh,
 		conState:  conState,
 		syncer:    syncer,
+		txHandler: txHandler,
 	}
+}
+
+func (s TransactionService) ParseTransaction(ctx context.Context, in *pb.ParseTransactionRequest) (*pb.ParseTransactionResponse, error) {
+	if len(in.Transaction) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "empty transaction")
+	}
+	raw := types.NewRawTx(in.Transaction)
+	req := s.conState.Validation(raw)
+	header, err := req.Parse()
+	if errors.Is(err, core.ErrNotSpawned) {
+		return nil, status.Error(codes.NotFound, "account is not spawned")
+	} else if errors.Is(err, core.ErrMalformed) {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	} else if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if in.Verify && !req.Verify() {
+		return nil, status.Error(codes.InvalidArgument, "signature is invalid")
+	}
+	tx := types.Transaction{RawTx: raw, TxHeader: header}
+	return &pb.ParseTransactionResponse{Tx: castTransaction(&tx)}, nil
 }
 
 // SubmitTransaction allows a new tx to be submitted.
 func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.SubmitTransactionRequest) (*pb.SubmitTransactionResponse, error) {
-	log.Info("GRPC TransactionService.SubmitTransaction")
-
 	if len(in.Transaction) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` payload empty")
 	}
 
 	if !s.syncer.IsSynced(ctx) {
-		return nil, status.Error(codes.FailedPrecondition,
-			"Cannot submit transaction, node is not in sync yet, try again later")
+		return nil, status.Error(codes.FailedPrecondition, "Cannot submit transaction, node is not in sync yet, try again later")
+	}
+
+	if err := s.txHandler.VerifyAndCacheTx(ctx, in.Transaction); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "Failed to verify transaction")
 	}
 
 	if err := s.publisher.Publish(ctx, pubsub.TxProtocol, in.Transaction); err != nil {
-		log.Error("error broadcasting incoming tx: %v", err)
 		return nil, status.Error(codes.Internal, "Failed to publish transaction")
 	}
-	raw := types.NewRawTx(in.Transaction)
 
+	raw := types.NewRawTx(in.Transaction)
 	return &pb.SubmitTransactionResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 		Txstate: &pb.TransactionState{
@@ -103,11 +127,8 @@ func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (*
 
 // TransactionsState returns current tx data for one or more txs.
 func (s TransactionService) TransactionsState(_ context.Context, in *pb.TransactionsStateRequest) (*pb.TransactionsStateResponse, error) {
-	log.Info("GRPC TransactionService.TransactionsState")
-
 	if in.TransactionId == nil || len(in.TransactionId) == 0 {
-		return nil, status.Error(codes.InvalidArgument,
-			"`TransactionId` must include one or more transaction IDs")
+		return nil, status.Error(codes.InvalidArgument, "`TransactionId` must include one or more transaction IDs")
 	}
 
 	res := &pb.TransactionsStateResponse{}
@@ -125,7 +146,7 @@ func (s TransactionService) TransactionsState(_ context.Context, in *pb.Transact
 
 		if in.IncludeTransactions {
 			if tx != nil {
-				res.Transactions = append(res.Transactions, convertTransaction(tx))
+				res.Transactions = append(res.Transactions, castTransaction(tx))
 			} else {
 				// If the tx is unknown to us, add an empty placeholder
 				res.Transactions = append(res.Transactions, &pb.Transaction{})
@@ -140,8 +161,6 @@ func (s TransactionService) TransactionsState(_ context.Context, in *pb.Transact
 
 // TransactionsStateStream exposes a stream of tx data.
 func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStreamRequest, stream pb.TransactionService_TransactionsStateStreamServer) error {
-	log.Info("GRPC TransactionService.TransactionsStateStream")
-
 	if in.TransactionId == nil || len(in.TransactionId) == 0 {
 		return status.Error(codes.InvalidArgument, "`TransactionId` must include one or more transaction IDs")
 	}
@@ -194,7 +213,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 						},
 					}
 					if in.IncludeTransactions {
-						res.Transaction = convertTransaction(tx.Transaction)
+						res.Transaction = castTransaction(tx.Transaction)
 					}
 					if err := stream.Send(res); err != nil {
 						return fmt.Errorf("send stream: %w", err)
@@ -261,7 +280,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 								return status.Error(codes.Internal, "error retrieving tx data")
 							}
 
-							res.Transaction = convertTransaction(&tx.Transaction)
+							res.Transaction = castTransaction(&tx.Transaction)
 						}
 
 						if err := stream.Send(res); err != nil {
@@ -271,7 +290,6 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 				}
 			}
 		case <-stream.Context().Done():
-			log.Info("TransactionsStateStream closing stream, client disconnected")
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate
@@ -300,14 +318,14 @@ func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stre
 		filter.TID = &id
 	}
 	if in.Start > 0 {
-		lid := types.NewLayerID(in.Start)
+		lid := types.LayerID(in.Start)
 		filter.Start = &lid
 	}
 	if in.End > 0 {
 		if in.Watch {
 			return status.Error(codes.InvalidArgument, "watch stream should have an empty End argument")
 		}
-		lid := types.NewLayerID(in.End)
+		lid := types.LayerID(in.End)
 		filter.End = &lid
 	}
 
@@ -364,13 +382,13 @@ func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stre
 
 func castResult(rst *types.TransactionWithResult) *pb.TransactionResult {
 	casted := &pb.TransactionResult{
-		Tx:          convertTransaction(&rst.Transaction),
+		Tx:          castTransaction(&rst.Transaction),
 		Status:      pb.TransactionResult_Status(rst.Status),
 		Message:     rst.Message,
 		GasConsumed: rst.Gas,
 		Fee:         rst.Fee,
 		Block:       rst.Block[:],
-		Layer:       rst.Layer.Value,
+		Layer:       rst.Layer.Uint32(),
 	}
 	if len(rst.Addresses) > 0 {
 		casted.TouchedAddresses = make([]string, len(rst.Addresses))

@@ -35,12 +35,12 @@ func TestFullBallotFilter(t *testing.T) {
 			desc: "BadFromRecent",
 			ballot: ballotInfo{
 				id:    types.BallotID{1},
-				layer: types.NewLayerID(10),
+				layer: types.LayerID(10),
 				conditions: conditions{
 					badBeacon: true,
 				},
 			},
-			last:     types.NewLayerID(11),
+			last:     types.LayerID(11),
 			distance: 2,
 			expect:   true,
 		},
@@ -48,12 +48,12 @@ func TestFullBallotFilter(t *testing.T) {
 			desc: "BadFromOld",
 			ballot: ballotInfo{
 				id:    types.BallotID{1},
-				layer: types.NewLayerID(8),
+				layer: types.LayerID(8),
 				conditions: conditions{
 					badBeacon: true,
 				},
 			},
-			last:     types.NewLayerID(11),
+			last:     types.LayerID(11),
 			distance: 2,
 			expect:   false,
 		},
@@ -334,8 +334,7 @@ func TestFullCountVotes(t *testing.T) {
 					NumUnits:        1,
 				}}
 				atxid := types.ATXID{byte(i + 1)}
-				atx.SetID(&atxid)
-				atx.SetNodeID(&types.NodeID{1})
+				atx.SetID(atxid)
 				atx.SetEffectiveNumUnits(atx.NumUnits)
 				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(tc.activeset[i].BaseHeight, tc.activeset[i].TickCount)
@@ -352,6 +351,7 @@ func TestFullCountVotes(t *testing.T) {
 			}
 
 			var blocks [][]types.Block
+			refs := map[types.BlockID]types.Vote{}
 			for i, layer := range tc.layerBlocks {
 				var layerBlocks []types.Block
 				lid := genesis.Add(uint32(i) + 1)
@@ -362,12 +362,13 @@ func TestFullCountVotes(t *testing.T) {
 					b.TxIDs = types.RandomTXSet(j)
 					b.Initialize()
 					layerBlocks = append(layerBlocks, b)
+					refs[b.ID()] = b.ToVote()
 				}
 				consensus.epochs[lid.GetEpoch()] = &epochInfo{
 					height: localHeight,
 				}
 				for _, block := range layerBlocks {
-					consensus.onBlock(lid, &block)
+					consensus.onBlock(block.ToVote())
 				}
 				blocks = append(blocks, layerBlocks)
 			}
@@ -380,16 +381,17 @@ func TestFullCountVotes(t *testing.T) {
 					ballot := &types.Ballot{}
 					ballot.EligibilityProofs = []types.VotingEligibility{{J: uint32(j)}}
 					ballot.AtxID = activeset[b.ATX]
-					ballot.EpochData = &types.EpochData{ActiveSet: activeset}
+					ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}}
+					ballot.ActiveSet = activeset
 					ballot.Layer = lid
 					// don't vote on genesis for simplicity,
 					// since we don't care about block goodness in this test
 					if i > 0 {
 						for _, support := range getDiff(blocks, b.Support) {
-							ballot.Votes.Support = append(ballot.Votes.Support, types.Vote{ID: support})
+							ballot.Votes.Support = append(ballot.Votes.Support, refs[support])
 						}
 						for _, against := range getDiff(blocks, b.Against) {
-							ballot.Votes.Against = append(ballot.Votes.Against, types.Vote{ID: against})
+							ballot.Votes.Against = append(ballot.Votes.Against, refs[against])
 						}
 						for _, layerNumber := range b.Abstain {
 							ballot.Votes.Abstain = append(ballot.Votes.Abstain, genesis.Add(uint32(layerNumber)+1))
@@ -398,8 +400,8 @@ func TestFullCountVotes(t *testing.T) {
 					}
 					ballot.OpinionHash = types.RandomHash() // fake opinion, only to make sure each ballot has a unique ID
 					ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
+					ballot.SmesherID = signer.NodeID()
 					require.NoError(t, ballot.Initialize())
-					ballot.SetSmesherID(signer.NodeID())
 					layerBallots = append(layerBallots, ballot)
 				}
 				ballotsList = append(ballotsList, layerBallots)
@@ -409,7 +411,6 @@ func TestFullCountVotes(t *testing.T) {
 				for _, ballot := range layerBallots {
 					require.NoError(t, consensus.onBallot(ballot))
 				}
-
 				consensus.full.countVotes(logger)
 			}
 			block := blocks[tc.target[0]][tc.target[1]]
@@ -467,7 +468,7 @@ func TestFullVerify(t *testing.T) {
 				{margin: neutral, height: 30},
 				{margin: positive, height: 20},
 			},
-			validity: []sign{against, support},
+			validity: []sign{support, against},
 		},
 		{
 			desc: "abstained same height",
@@ -551,13 +552,11 @@ func TestFullVerify(t *testing.T) {
 					margin: fixed.From(float64(block.margin)),
 				}
 				layer.blocks = append(layer.blocks, block)
-				full.state.blockRefs[block.id] = block
 			}
 			require.Equal(t, tc.validity != nil, full.verify(logtest.New(t), target))
 			if tc.validity != nil {
 				for i, expect := range tc.validity {
-					id := types.BlockID{uint8(i) + 1}
-					require.Equal(t, expect, full.state.blockRefs[id].validity)
+					require.Equal(t, expect, layer.blocks[i].validity)
 				}
 			}
 		})

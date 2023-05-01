@@ -64,7 +64,7 @@ type config struct {
 	layerSize      uint32
 	layersPerEpoch uint32
 	hdist          uint32
-	minerID        types.NodeID
+	nodeID         types.NodeID
 }
 
 type defaultFetcher struct {
@@ -96,10 +96,10 @@ func WithLayerPerEpoch(layers uint32) Opt {
 	}
 }
 
-// WithMinerID defines the miner's NodeID.
-func WithMinerID(id types.NodeID) Opt {
+// WithNodeID defines the miner's NodeID.
+func WithNodeID(id types.NodeID) Opt {
 	return func(pb *ProposalBuilder) {
-		pb.cfg.minerID = id
+		pb.cfg.nodeID = id
 	}
 }
 
@@ -162,7 +162,7 @@ func NewProposalBuilder(
 	}
 
 	if pb.proposalOracle == nil {
-		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, cdb, vrfSigner, pb.cfg.minerID, pb.logger)
+		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, cdb, vrfSigner, pb.cfg.nodeID, pb.logger)
 	}
 
 	if pb.nonceFetcher == nil {
@@ -202,9 +202,7 @@ func (pb *ProposalBuilder) stopped() bool {
 func (pb *ProposalBuilder) createProposal(
 	ctx context.Context,
 	layerID types.LayerID,
-	proofs []types.VotingEligibility,
-	atxID types.ATXID,
-	activeSet []types.ATXID,
+	epochEligibility *EpochEligibility,
 	beacon types.Beacon,
 	txIDs []types.TransactionID,
 	opinion types.Opinion,
@@ -216,12 +214,13 @@ func (pb *ProposalBuilder) createProposal(
 	}
 
 	ib := &types.InnerBallot{
-		AtxID:       atxID,
+		Layer:       layerID,
+		AtxID:       epochEligibility.Atx,
 		OpinionHash: opinion.Hash,
 	}
 
 	epoch := layerID.GetEpoch()
-	refBallot, err := ballots.GetRefBallot(pb.cdb, epoch, pb.signer.PublicKey().Bytes())
+	refBallot, err := ballots.GetRefBallot(pb.cdb, epoch, pb.signer.NodeID())
 	if err != nil {
 		if !errors.Is(err, sql.ErrNotFound) {
 			logger.With().Error("failed to get ref ballot", log.Err(err))
@@ -229,11 +228,12 @@ func (pb *ProposalBuilder) createProposal(
 		}
 
 		logger.With().Debug("creating ballot with active set (reference ballot in epoch)",
-			log.Int("active_set_size", len(activeSet)))
+			log.Int("active_set_size", len(epochEligibility.ActiveSet)))
 		ib.RefBallot = types.EmptyBallotID
 		ib.EpochData = &types.EpochData{
-			ActiveSet: activeSet,
-			Beacon:    beacon,
+			ActiveSetHash:    epochEligibility.ActiveSet.Hash(),
+			Beacon:           beacon,
+			EligibilityCount: epochEligibility.Slots,
 		}
 	} else {
 		logger.With().Debug("creating ballot with reference ballot (no active set)",
@@ -244,20 +244,20 @@ func (pb *ProposalBuilder) createProposal(
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
-				BallotMetadata: types.BallotMetadata{
-					Layer: layerID,
-				},
 				InnerBallot:       *ib,
 				Votes:             opinion.Votes,
-				EligibilityProofs: proofs,
+				EligibilityProofs: epochEligibility.Proofs[layerID],
 			},
 			TxIDs:    txIDs,
 			MeshHash: pb.decideMeshHash(logger, layerID),
 		},
 	}
+	if p.EpochData != nil {
+		p.ActiveSet = epochEligibility.ActiveSet
+	}
 	p.Ballot.Signature = pb.signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.SmesherID = pb.signer.NodeID()
 	p.Signature = pb.signer.Sign(signing.BALLOT, p.SignedBytes())
-	p.SetSmesherID(pb.signer.NodeID())
 	if err := p.Initialize(); err != nil {
 		logger.With().Fatal("proposal failed to initialize", log.Err(err))
 	}
@@ -334,7 +334,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 
 	started := time.Now()
 
-	count, err := ballots.CountByPubkeyLayer(pb.cdb, layerID, pb.signer.PublicKey().Bytes())
+	count, err := ballots.CountByPubkeyLayer(pb.cdb, layerID, pb.signer.NodeID())
 	if err != nil {
 		logger.With().Error("count ballots in a layer for public key", log.Err(err))
 		return err
@@ -355,7 +355,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		}
 		return err
 	}
-	atxID, activeSet, proofs, err := pb.proposalOracle.GetProposalEligibility(layerID, beacon, nonce)
+	epochEligibility, err := pb.proposalOracle.GetProposalEligibility(layerID, beacon, nonce)
 	if err != nil {
 		if errors.Is(err, errMinerHasNoATXInPreviousEpoch) {
 			logger.Info("miner has no ATX in previous epoch")
@@ -364,11 +364,15 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		logger.With().Error("failed to check for proposal eligibility", log.Err(err))
 		return fmt.Errorf("proposal eligibility: %w", err)
 	}
+	proofs := epochEligibility.Proofs[layerID]
 	if len(proofs) == 0 {
 		logger.Debug("not eligible for proposal in layer")
 		return nil
 	}
-	logger.With().Info("eligible for proposals in layer", atxID, log.Int("num_proposals", len(proofs)))
+	logger.With().Info("eligible for proposals in layer",
+		epochEligibility.Atx,
+		log.Int("num_proposals", len(proofs)),
+	)
 
 	pb.tortoise.TallyVotes(ctx, layerID)
 	// TODO(dshulyak) will get rid from the EncodeVotesWithCurrent option in a followup
@@ -379,7 +383,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	}
 
 	txList := pb.conState.SelectProposalTXs(layerID, len(proofs))
-	p, err := pb.createProposal(ctx, layerID, proofs, atxID, activeSet, beacon, txList, *opinion)
+	p, err := pb.createProposal(ctx, layerID, epochEligibility, beacon, txList, *opinion)
 	if err != nil {
 		logger.With().Error("failed to create new proposal", log.Err(err))
 		return err

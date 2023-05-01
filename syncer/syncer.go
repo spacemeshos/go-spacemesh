@@ -177,7 +177,7 @@ func NewSyncer(
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
 	s.isBusy.Store(0)
-	s.targetSyncedLayer.Store(types.LayerID{})
+	s.targetSyncedLayer.Store(types.LayerID(0))
 	s.lastLayerSynced.Store(s.mesh.ProcessedLayer())
 	s.lastATXsSynced.Store(types.EpochID(0))
 	return s
@@ -358,7 +358,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 	// no need to worry about race condition for s.run. only one instance of synchronize can run at a time
 	s.run++
-	logger.With().Info(fmt.Sprintf("starting sync run #%v", s.run),
+	logger.With().Debug(fmt.Sprintf("starting sync run #%v", s.run),
 		log.Stringer("sync_state", s.getSyncState()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
 		log.Stringer("current", s.ticker.CurrentLayer()),
@@ -397,7 +397,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			}
 		}
 
-		if missing := s.mesh.MissingLayer(); (missing != types.LayerID{}) {
+		if missing := s.mesh.MissingLayer(); missing != 0 {
 			logger.With().Info("fetching data for missing layer", missing)
 			if err := s.syncLayer(ctx, missing); err != nil {
 				logger.With().Warning("failed to fetch missing layer", missing, log.Err(err))
@@ -421,7 +421,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 	success := syncFunc()
 	s.setStateAfterSync(ctx, success)
-	logger.With().Info(fmt.Sprintf("finished sync run #%v", s.run),
+	logger.With().Debug(fmt.Sprintf("finished sync run #%v", s.run),
 		log.Bool("success", success),
 		log.String("sync_state", s.getSyncState().String()),
 		log.Stringer("current", s.ticker.CurrentLayer()),

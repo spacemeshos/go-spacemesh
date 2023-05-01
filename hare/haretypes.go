@@ -38,15 +38,15 @@ const defaultSetSize = 200
 func (mType MessageType) String() string {
 	switch mType {
 	case status:
-		return "Status"
+		return "status"
 	case proposal:
-		return "Proposal"
+		return "proposal"
 	case commit:
-		return "Commit"
+		return "commit"
 	case notify:
-		return "Notify"
+		return "notify"
 	case pre:
-		return "PreRound"
+		return "preround"
 	default:
 		return "Unknown message type"
 	}
