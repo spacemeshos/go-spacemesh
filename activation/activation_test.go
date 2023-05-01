@@ -21,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
 
 // ========== Vars / Consts ==========
@@ -142,6 +141,8 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 	}
 	b.initialPostMeta = &types.PostMetadata{}
 	tab.Builder = b
+	dir := tb.TempDir()
+	tab.mnipost.EXPECT().DataDir().Return(dir).AnyTimes()
 	return tab
 }
 
@@ -917,7 +918,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	require.NotNil(t, built)
 
 	// the challenge remains
-	got, err := kvstore.GetNIPostChallenge(tab.cdb)
+	got, err := loadNipostChallenge(tab.nipostBuilder.DataDir())
 	require.NoError(t, err)
 	require.NotEmpty(t, got)
 
@@ -941,8 +942,8 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 		})
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	require.ErrorIs(t, tab.PublishActivationTx(context.Background()), ErrATXChallengeExpired)
-	got, err = kvstore.GetNIPostChallenge(tab.cdb)
-	require.ErrorIs(t, err, sql.ErrNotFound)
+	got, err = loadNipostChallenge(tab.nipostBuilder.DataDir())
+	require.ErrorIs(t, err, os.ErrNotExist)
 	require.Empty(t, got)
 
 	posEpoch = posEpoch + 1
@@ -959,8 +960,8 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	require.NotEqual(t, built.NIPost, built2.NIPost)
 	require.Equal(t, built.TargetEpoch()+1, built2.TargetEpoch())
 
-	got, err = kvstore.GetNIPostChallenge(tab.cdb)
-	require.ErrorIs(t, err, sql.ErrNotFound)
+	got, err = loadNipostChallenge(tab.nipostBuilder.DataDir())
+	require.ErrorIs(t, err, os.ErrNotExist)
 	require.Empty(t, got)
 }
 
