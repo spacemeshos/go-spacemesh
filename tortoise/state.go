@@ -25,12 +25,18 @@ type (
 		referenceHeight uint64
 	}
 
+	atxInfo struct {
+		weight uint64
+		height uint64
+	}
+
 	epochInfo struct {
-		atxs map[types.ATXID]uint64
+		atxs map[types.ATXID]atxInfo
 		// weight is a sum of all atxs
 		weight weight
 		// median height from atxs
 		height uint64
+		beacon *types.Beacon
 	}
 
 	state struct {
@@ -97,7 +103,7 @@ func (s *state) epoch(eid types.EpochID) *epochInfo {
 	epoch, exist := s.epochs[eid]
 	if !exist {
 		epochsNumber.Inc()
-		epoch = &epochInfo{atxs: map[types.ATXID]uint64{}}
+		epoch = &epochInfo{atxs: map[types.ATXID]atxInfo{}}
 		s.epochs[eid] = epoch
 	}
 	return epoch
@@ -161,6 +167,7 @@ type layerInfo struct {
 	hareTerminated bool
 	blocks         []*blockInfo
 	verifying      verifyingInfo
+	coinflip       sign
 
 	opinion types.Hash32
 	// a pointer to the value stored on the previous layerInfo object

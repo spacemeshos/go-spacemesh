@@ -135,6 +135,41 @@ func (t *Tortoise) Updates() map[types.LayerID]map[types.BlockID]bool {
 	return res
 }
 
+func (t *Tortoise) OnWeakCoin(lid types.LayerID, coin bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.logger.With().Debug("on weakcoin",
+		log.Uint32("layer_id", lid.Uint32()),
+		log.Uint32("evicted", t.trtl.evicted.Uint32()),
+		log.Bool("coin", coin),
+	)
+	if lid <= t.trtl.evicted {
+		return
+	}
+	layer := t.trtl.layer(lid)
+	if coin {
+		layer.coinflip = support
+	} else {
+		layer.coinflip = against
+	}
+}
+
+func (t *Tortoise) OnBeacon(eid types.EpochID, beacon types.Beacon) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	evicted := t.trtl.evicted.GetEpoch()
+	t.logger.With().Debug("on beacon",
+		log.Uint32("epoch_id", eid.Uint32()),
+		log.Uint32("evicted", evicted.Uint32()),
+		log.Stringer("beacon", beacon),
+	)
+	if eid <= evicted {
+		return
+	}
+	epoch := t.trtl.epoch(eid)
+	epoch.beacon = &beacon
+}
+
 type encodeConf struct {
 	current *types.LayerID
 }
@@ -197,12 +232,20 @@ func (t *Tortoise) OnAtx(atx *types.ActivationTxHeader) {
 }
 
 // OnBlock should be called every time new block is received.
-func (t *Tortoise) OnBlock(block *types.Block) {
+func (t *Tortoise) OnBlock(header types.BlockHeader) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	t.trtl.onBlock(block.ToVote())
+	t.trtl.onBlock(ResultBlock{Header: header, Data: true})
+}
+
+func (t *Tortoise) OnHistoricalResult(result ResultBlock) {
+	start := time.Now()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
+	t.trtl.onBlock(result)
 }
 
 // OnBallot should be called every time new ballot is received.
@@ -334,5 +377,6 @@ type ResultLayer struct {
 type ResultBlock struct {
 	Header types.Vote
 	Valid  bool
+	Hare   bool
 	Data   bool
 }

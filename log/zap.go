@@ -88,6 +88,22 @@ func Stringer(name string, val fmt.Stringer) Field {
 	return Field(zap.Stringer(name, val))
 }
 
+type ShortString interface {
+	ShortString() string
+}
+
+type shortStringAdapter struct {
+	val ShortString
+}
+
+func (a shortStringAdapter) String() string {
+	return a.val.ShortString()
+}
+
+func ShortStringer(name string, val ShortString) Field {
+	return Field(zap.Stringer(name, shortStringAdapter{val: val}))
+}
+
 // Binary will encode binary content in base64 when logged.
 func Binary(name string, val []byte) Field {
 	return Field(zap.Binary(name, val))

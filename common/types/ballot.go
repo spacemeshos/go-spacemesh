@@ -185,21 +185,23 @@ func (v *Votes) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// Vote additionally carries layer id and height
-// in order for the tortoise to count votes without downloading block body.
-type Vote struct {
+type BlockHeader struct {
 	ID      BlockID
 	LayerID LayerID
 	Height  uint64
 }
 
 // MarshalLogObject implements logging interface.
-func (s *Vote) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddString("id", s.ID.String())
-	encoder.AddUint32("layer", s.LayerID.Uint32())
-	encoder.AddUint64("height", s.Height)
+func (header *BlockHeader) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("id", header.ID.String())
+	encoder.AddUint32("layer", header.LayerID.Uint32())
+	encoder.AddUint64("height", header.Height)
 	return nil
 }
+
+// Vote additionally carries layer id and height
+// in order for the tortoise to count votes without downloading block body.
+type Vote = BlockHeader
 
 // Opinion is a tuple from opinion hash and votes that decode to opinion hash.
 type Opinion struct {
