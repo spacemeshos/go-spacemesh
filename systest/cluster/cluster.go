@@ -676,7 +676,7 @@ func genSigner() *signer {
 func extractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]string, error) {
 	var (
 		rst          = make([]string, len(nodes))
-		rctx, cancel = context.WithTimeout(tctx, 10*time.Second)
+		rctx, cancel = context.WithTimeout(tctx, time.Minute)
 		eg, ctx      = errgroup.WithContext(rctx)
 	)
 	defer cancel()
