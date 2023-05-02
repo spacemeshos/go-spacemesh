@@ -7,17 +7,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/stretchr/testify/require"
 )
 
 type persistanceAdapter struct {
 	testing.TB
 	*Tortoise
-	db   *datastore.CachedDB
+	db     *datastore.CachedDB
+	beacon system.BeaconGetter
+
 	prev types.LayerID
 }
 
@@ -30,7 +32,7 @@ func (a *persistanceAdapter) TallyVotes(ctx context.Context, current types.Layer
 				a.OnAtx(header)
 				return true
 			}))
-			beacon, err := beacons.Get(a.db, lid.GetEpoch())
+			beacon, err := a.beacon.GetBeacon(lid.GetEpoch())
 			require.NoError(a, err)
 			a.OnBeacon(lid.GetEpoch(), beacon)
 		}

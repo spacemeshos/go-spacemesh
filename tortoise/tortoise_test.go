@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -27,8 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/system"
-	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
@@ -38,10 +34,6 @@ func TestMain(m *testing.M) {
 
 	res := m.Run()
 	os.Exit(res)
-}
-
-func newCachedDB(t *testing.T, logger log.Log) *datastore.CachedDB {
-	return datastore.NewCachedDB(sql.InMemory(), logger)
 }
 
 const (
@@ -307,15 +299,6 @@ func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
 	}
 	require.Equal(t, votes.Support, supported)
 	require.Equal(t, votes.Abstain, []types.LayerID{types.LayerID(9)})
-}
-
-func mockedBeacons(tb testing.TB) system.BeaconGetter {
-	tb.Helper()
-
-	ctrl := gomock.NewController(tb)
-	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
-	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, nil).AnyTimes()
-	return mockBeacons
 }
 
 func defaultTestConfig() Config {
@@ -1373,11 +1356,11 @@ func TestComputeLocalOpinion(t *testing.T) {
 				tortoise.TallyVotes(ctx, lid)
 			}
 
-			err := tortoise.trtl.loadBlocksData(tc.lid)
-			require.NoError(t, err)
-
 			blks, err := blocks.Layer(s.GetState(0).DB, tc.lid)
 			require.NoError(t, err)
+			for _, block := range blks {
+				tortoise.OnBlock(block)
+			}
 			for _, block := range blks {
 				header := block.ToVote()
 				vote, _ := getLocalVote(
@@ -1498,24 +1481,22 @@ func TestComputeBallotWeight(t *testing.T) {
 				atxids []types.ATXID
 			)
 
-			cdb := newCachedDB(t, logtest.New(t))
 			cfg := DefaultConfig()
 			cfg.LayerSize = tc.layerSize
-			trtl, err := New(cdb, nil, WithLogger(logtest.New(t)), WithConfig(cfg))
+			trtl, err := New(WithLogger(logtest.New(t)), WithConfig(cfg))
 			require.NoError(t, err)
 			lid := types.LayerID(111)
 			for _, weight := range tc.atxs {
-				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-					NumUnits: uint32(weight),
-				}}
-				atx.PublishEpoch = lid.GetEpoch() - 1
 				atxID := types.RandomATXID()
-				atx.SetID(atxID)
-				atx.SetEffectiveNumUnits(atx.NumUnits)
-				atx.SetReceived(time.Now())
-				vAtx, err := atx.Verify(0, 1)
-				require.NoError(t, err)
-				require.NoError(t, atxs.Add(cdb, vAtx))
+				header := &types.ActivationTxHeader{
+					NumUnits:          uint32(weight),
+					ID:                atxID,
+					EffectiveNumUnits: uint32(weight),
+				}
+				header.PublishEpoch = lid.GetEpoch() - 1
+				header.BaseTickHeight = 0
+				header.TickCount = 1
+				trtl.OnAtx(header)
 				atxids = append(atxids, atxID)
 			}
 
@@ -2728,14 +2709,14 @@ func TestEncodeVotes(t *testing.T) {
 		ballot := types.Ballot{}
 
 		atxid := types.ATXID{1}
-		atx := &types.ActivationTx{}
-		atx.NumUnits = 10
-		atx.SetID(atxid)
-		atx.SetEffectiveNumUnits(atx.NumUnits)
-		atx.SetReceived(time.Now())
-		vatx, err := atx.Verify(1, 1)
-		require.NoError(t, err)
-		require.NoError(t, atxs.Add(cdb, vatx))
+		header := &types.ActivationTxHeader{
+			NumUnits:          10,
+			EffectiveNumUnits: 10,
+			ID:                atxid,
+			BaseTickHeight:    1,
+			TickCount:         1,
+		}
+		tortoise.OnAtx(header)
 
 		ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}}
 		ballot.ActiveSet = []types.ATXID{atxid}

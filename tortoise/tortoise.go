@@ -595,7 +595,7 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, types.LayerID,
 	if ballot.EpochData != nil {
 		atx, exists := t.epoch(ballot.Layer.GetEpoch()).atxs[ballot.AtxID]
 		if !exists {
-			return nil, 0, fmt.Errorf("atx %s not in state", ballot.AtxID)
+			return nil, 0, fmt.Errorf("atx %s/%d not in state", ballot.AtxID, ballot.Layer.GetEpoch())
 		}
 		refinfo = &referenceInfo{
 			height: atx.height,
