@@ -71,6 +71,13 @@ func Get(db sql.Executor, id types.BlockID) (rst *types.Block, err error) {
 	return rst, err
 }
 
+func UpdateValid(db sql.Executor, id types.BlockID, valid bool) error {
+	if valid {
+		return SetValid(db, id)
+	}
+	return SetInvalid(db, id)
+}
+
 // SetValid updates verified status for a block.
 func SetValid(db sql.Executor, id types.BlockID) error {
 	return setValidity(db, id, valid)

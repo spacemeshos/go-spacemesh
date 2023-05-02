@@ -198,7 +198,7 @@ func (msh *Mesh) setProcessedLayer(logger log.Log, layerID types.LayerID) error 
 	processed := msh.ProcessedLayer()
 	if !layerID.After(processed) {
 		logger.With().Info("trying to set processed layer to an older layer",
-			log.FieldNamed("processed", processed),
+			log.Uint32("processed", processed.Uint32()),
 			layerID)
 		return nil
 	}
@@ -209,7 +209,7 @@ func (msh *Mesh) setProcessedLayer(logger log.Log, layerID types.LayerID) error 
 
 	if layerID != processed.Add(1) {
 		logger.With().Info("trying to set processed layer out of order",
-			log.FieldNamed("processed", processed),
+			log.Uint32("processed", processed.Uint32()),
 			layerID)
 		msh.nextProcessedLayers[layerID] = struct{}{}
 		return nil
@@ -250,8 +250,17 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, upd
 			}
 		}
 	}
-
+	from, to := updatesRange(msh.validityUpdates)
+	results, err := msh.trtl.Results(from, to)
+	if err != nil {
+		return err
+	}
+	if missing := missingBlocks(results); len(missing) > 0 {
+		return &types.ErrorMissing{MissingData: types.MissingData{Blocks: missing}}
+	}
 	logger.With().Info("processing validity update",
+		log.Uint32("from", from.Uint32()),
+		log.Uint32("to", to.Uint32()),
 		log.Int("num_updates", len(msh.validityUpdates)),
 		log.Object("updates", log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
 			for lid, bvs := range msh.validityUpdates {
@@ -264,41 +273,39 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, upd
 			return nil
 		})))
 
-	var minChanged types.LayerID
-	inState := msh.LatestLayerInState()
-	for lid, bvs := range msh.validityUpdates {
-		if lid.After(inState) {
+	var (
+		changed types.LayerID
+		inState = msh.LatestLayerInState()
+	)
+	for _, layer := range results {
+		if layer.Layer.After(inState) {
 			continue
 		}
-		logger := logger.WithFields(lid)
-		valids, err := layerValidBlocks(logger, msh.cdb, lid, bvs)
+		bid := layer.FirstValid()
+		if bid.IsEmpty() {
+			bid = layer.FirstHare()
+		}
+		applied, err := layers.GetApplied(msh.cdb, layer.Layer)
 		if err != nil {
-			return err
+			return fmt.Errorf("get applied %v: %w", layer.Layer, err)
 		}
-		bid := types.EmptyBlockID
-		block := msh.getBlockToApply(valids)
-		if block != nil {
-			bid = block.ID()
+		if bid == applied {
+			continue
 		}
-		applied, err := layers.GetApplied(msh.cdb, lid)
-		if err != nil {
-			return fmt.Errorf("get applied %v: %w", lid, err)
-		}
-		if bid != applied {
-			logger.With().Info("incorrect block applied",
-				log.Stringer("expected", bid),
-				log.Stringer("applied", applied))
-			if minChanged == 0 || lid.Before(minChanged) {
-				minChanged = lid
-			}
-		}
+		logger.With().Debug("incorrect block applied",
+			log.Uint32("layer_id", layer.Layer.Uint32()),
+			log.Stringer("expected", bid),
+			log.Stringer("applied", applied),
+		)
+		changed = minNonZero(changed, layer.Layer)
 	}
 
-	if minChanged != 0 {
-		revertTo := minChanged.Sub(1)
-		logger := logger.WithFields(log.Stringer("revert_to", revertTo))
-		logger.Info("reverting state")
-		if err := msh.revertState(ctx, logger, revertTo); err != nil {
+	if changed != 0 {
+		revertTo := changed.Sub(1)
+		logger.Info("reverting state",
+			log.Uint32("revert_to", revertTo.Uint32()),
+		)
+		if err := msh.revertState(ctx, revertTo); err != nil {
 			return fmt.Errorf("revert state to %v: %w", revertTo, err)
 		}
 		msh.setLatestLayerInState(revertTo)
@@ -309,15 +316,12 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, upd
 	// upon restarts, tortoise will use persisted validity, and there is no way for mesh
 	// to determine whether a state revert should be done.
 	if err := msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
-		for lid, updates := range msh.validityUpdates {
-			for bid, valid := range updates {
-				logger.With().Info("save block contextual validity",
-					bid, lid, log.Bool("validity", valid))
-				if valid {
-					if err := blocks.SetValid(dbtx, bid); err != nil {
-						return err
-					}
-				} else if err := blocks.SetInvalid(dbtx, bid); err != nil && !errors.Is(err, sql.ErrNotFound) {
+		for i := range results {
+			for _, block := range results[i].Blocks {
+				if !block.Data {
+					continue
+				}
+				if err := blocks.UpdateValid(dbtx, block.Header.ID, block.Valid); err != nil {
 					return err
 				}
 			}
@@ -364,14 +368,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	}
 
 	if !to.Before(from) {
-		results, err := msh.trtl.Results(from, to)
-		if err != nil {
-			return err
-		}
-		if missing := missingBlocks(results); len(missing) > 0 {
-			return &types.ErrorMissing{MissingData: types.MissingData{Blocks: missing}}
-		}
-		if err = msh.pushLayersToState(ctx, logger, from, to); err != nil {
+		if err := msh.pushLayersToState(ctx, logger, from, to); err != nil {
 			return err
 		}
 	}
@@ -566,14 +563,13 @@ func (msh *Mesh) persistState(ctx context.Context, logger log.Log, lid types.Lay
 // revertState reverts the conservative state / vm and updates mesh's internal state.
 // ideally everything happens here should be atomic.
 // see https://github.com/spacemeshos/go-spacemesh/issues/3333
-func (msh *Mesh) revertState(ctx context.Context, logger log.Log, revertTo types.LayerID) error {
+func (msh *Mesh) revertState(ctx context.Context, revertTo types.LayerID) error {
 	if err := msh.executor.Revert(ctx, revertTo); err != nil {
 		return fmt.Errorf("revert state to layer %v: %w", revertTo, err)
 	}
 	if err := layers.UnsetAppliedFrom(msh.cdb, revertTo.Add(1)); err != nil {
 		return fmt.Errorf("unset applied layer %v: %w", revertTo.Add(1), err)
 	}
-	logger.Info("successfully reverted state")
 	return nil
 }
 
@@ -809,4 +805,34 @@ func sortBlocks(blks []*types.Block) []*types.Block {
 // LastVerified returns the latest layer verified by tortoise.
 func (msh *Mesh) LastVerified() types.LayerID {
 	return msh.trtl.LatestComplete()
+}
+
+func updatesRange(updates map[types.LayerID]map[types.BlockID]bool) (from types.LayerID, to types.LayerID) {
+	for lid := range updates {
+		from = minNonZero(from, lid)
+		to = maxNonZero(to, lid)
+	}
+	return from, to
+}
+
+func minNonZero(i, j types.LayerID) types.LayerID {
+	if i == 0 {
+		return j
+	} else if j == 0 {
+		return i
+	} else if i < j {
+		return i
+	}
+	return j
+}
+
+func maxNonZero(i, j types.LayerID) types.LayerID {
+	if i == 0 {
+		return j
+	} else if j == 0 {
+		return i
+	} else if i > j {
+		return i
+	}
+	return j
 }
