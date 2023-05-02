@@ -6,7 +6,7 @@ ENV SHELL /bin/bash
 ARG TZ=US/Eastern
 ENV TZ $TZ
 USER root
-RUN set -x \
+RUN set -ex \
    && apt-get update --fix-missing \
    && apt-get install -qy --no-install-recommends \
    ca-certificates \
@@ -15,8 +15,10 @@ RUN set -x \
    procps \
    net-tools \
    file \
+   wget gpg \
    # required for OpenCL CPU provider
-   ocl-icd-libopencl1 pocl-opencl-icd libpocl2 \
+   # ocl-icd-libopencl1 pocl-opencl-icd libpocl2 \
+   clinfo \
    && apt-get clean \
    && rm -rf /var/lib/apt/lists/* \
    && locale-gen en_US.UTF-8 \
@@ -25,6 +27,22 @@ RUN set -x \
 ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US.UTF-8
 ENV LC_ALL en_US.UTF-8
+
+RUN mkdir -p /tmp/opencl-driver-intel
+WORKDIR /tmp/opencl-driver-intel
+RUN wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+   | gpg --dearmor | tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null \
+   && echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | tee /etc/apt/sources.list.d/oneAPI.list \
+   && apt-get update --fix-missing \
+   && apt-get install -qy --no-install-recommends \
+   intel-oneapi-runtime-libs \
+   && apt-get clean \
+   && rm -rf /var/lib/apt/lists/* \
+   && rm -rf /tmp/opencl-driver-intel
+
+SHELL ["/bin/bash", "-c"]
+WORKDIR /
+RUN source /opt/intel/oneapi/lib/env/compiler_rt_vars.sh
 
 FROM golang:1.19 as builder
 RUN set -ex \
