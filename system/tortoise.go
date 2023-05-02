@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/tortoise/result"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/tortoise.go -source=./tortoise.go

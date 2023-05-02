@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -25,7 +26,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
-	"github.com/spacemeshos/go-spacemesh/tortoise/result"
 )
 
 var errMissingHareOutput = errors.New("missing hare output")
@@ -197,7 +197,7 @@ func (msh *Mesh) ProcessedLayer() types.LayerID {
 func (msh *Mesh) setProcessedLayer(logger log.Log, layerID types.LayerID) error {
 	processed := msh.ProcessedLayer()
 	if !layerID.After(processed) {
-		logger.With().Info("trying to set processed layer to an older layer",
+		logger.With().Debug("trying to set processed layer to an older layer",
 			log.Uint32("processed", processed.Uint32()),
 			layerID)
 		return nil
@@ -208,7 +208,7 @@ func (msh *Mesh) setProcessedLayer(logger log.Log, layerID types.LayerID) error 
 	}
 
 	if layerID != processed.Add(1) {
-		logger.With().Info("trying to set processed layer out of order",
+		logger.With().Debug("trying to set processed layer out of order",
 			log.Uint32("processed", processed.Uint32()),
 			layerID)
 		msh.nextProcessedLayers[layerID] = struct{}{}
@@ -255,30 +255,25 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, upd
 	if err != nil {
 		return err
 	}
+	logger.With().Info("consensus results",
+		log.Uint32("from", from.Uint32()),
+		log.Uint32("to", to.Uint32()),
+		log.Array("results", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+			for i := range results {
+				encoder.AppendObject(&results[i])
+			}
+			return nil
+		})),
+	)
 	if missing := missingBlocks(results); len(missing) > 0 {
 		return &types.ErrorMissing{MissingData: types.MissingData{Blocks: missing}}
 	}
-	logger.With().Info("processing validity update",
-		log.Uint32("from", from.Uint32()),
-		log.Uint32("to", to.Uint32()),
-		log.Int("num_updates", len(msh.validityUpdates)),
-		log.Object("updates", log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
-			for lid, bvs := range msh.validityUpdates {
-				encoder.AddUint32("layer_id", lid.Uint32())
-				for bid, valid := range bvs {
-					encoder.AddString("block_id", bid.String())
-					encoder.AddBool("valid", valid)
-				}
-			}
-			return nil
-		})))
-
 	var (
 		changed types.LayerID
 		inState = msh.LatestLayerInState()
 	)
 	for _, layer := range results {
-		if layer.Layer.After(inState) {
+		if layer.Layer > inState {
 			continue
 		}
 		bid := layer.FirstValid()
@@ -449,26 +444,18 @@ func (msh *Mesh) getBlockToApply(validBlocks []*types.Block) *types.Block {
 	return sorted[0]
 }
 
-func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID types.LayerID, updates map[types.BlockID]bool) ([]*types.Block, error) {
+func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID types.LayerID) ([]*types.Block, error) {
 	lyrBlocks, err := blocks.Layer(cdb, layerID)
 	if err != nil {
 		return nil, fmt.Errorf("get db layer blocks %s: %w", layerID, err)
 	}
-
 	if len(lyrBlocks) == 0 {
 		logger.Info("layer has no blocks")
 		return nil, nil
 	}
-
 	var valids, invalids []*types.Block
 	for _, b := range lyrBlocks {
-		if v, ok := updates[b.ID()]; ok {
-			if v {
-				valids = append(valids, b)
-			} else {
-				invalids = append(invalids, b)
-			}
-		} else if v, err = blocks.IsValid(cdb, b.ID()); err == nil {
+		if v, err := blocks.IsValid(cdb, b.ID()); err == nil {
 			if v {
 				valids = append(valids, b)
 			} else {
@@ -511,8 +498,7 @@ func (msh *Mesh) pushLayer(ctx context.Context, logger log.Log, lid types.LayerI
 	if latest := msh.LatestLayerInState(); lid != latest.Add(1) {
 		logger.With().Fatal("update state out-of-order", log.Stringer("latest", latest))
 	}
-
-	valids, err := layerValidBlocks(logger, msh.cdb, lid, map[types.BlockID]bool{})
+	valids, err := layerValidBlocks(logger, msh.cdb, lid)
 	if err != nil {
 		return err
 	}

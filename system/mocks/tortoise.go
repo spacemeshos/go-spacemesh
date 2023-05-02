@@ -10,7 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	result "github.com/spacemeshos/go-spacemesh/tortoise/result"
+	result "github.com/spacemeshos/go-spacemesh/common/types/result"
 )
 
 // MockTortoise is a mock of Tortoise interface.
