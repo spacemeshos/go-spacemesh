@@ -71,7 +71,6 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 				return nil
 			})
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(nil, nil)
 		ts.mTortoise.EXPECT().Updates().Return(nil)
 		ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, gomock.Any(), nil, nil).DoAndReturn(
@@ -171,7 +170,6 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 				}
 			}
 			ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-			ts.mTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(nil, nil)
 			ts.mTortoise.EXPECT().Updates().Return(nil)
 
 			require.False(t, ts.syncer.stateSynced())
@@ -235,8 +233,8 @@ func TestProcessLayers_HareIsStillWorking(t *testing.T) {
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(lastSynced).Return(false)
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced).Return(nil, nil)
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
-	ts.mTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(nil, nil)
 	ts.mTortoise.EXPECT().Updates().Return(map[types.LayerID]map[types.BlockID]bool{lastSynced: {}})
+	ts.mTortoise.EXPECT().Results(lastSynced, lastSynced)
 	ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 	ts.mConState.EXPECT().UpdateCache(gomock.Any(), lastSynced, types.EmptyBlockID, nil, nil)
 	ts.mVm.EXPECT().GetStateRoot()
@@ -261,7 +259,6 @@ func TestProcessLayers_HareTakesTooLong(t *testing.T) {
 		}
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(nil, nil)
 		ts.mTortoise.EXPECT().Updates().Return(nil)
 		ts.mVm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, nil, nil)
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
@@ -281,7 +278,6 @@ func TestProcessLayers_OpinionsOptional(t *testing.T) {
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(lastSynced).Return(false)
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced).Return(nil, errors.New("meh"))
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
-	ts.mTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(nil, nil)
 	ts.mTortoise.EXPECT().Updates().Return(nil)
 	require.False(t, ts.syncer.stateSynced())
 	ts.mVm.EXPECT().Apply(vm.ApplyContext{Layer: lastSynced}, nil, nil)
@@ -300,7 +296,6 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 		ts.msh.SetZeroBlockLayer(context.Background(), lid)
 		ts.mTortoise.EXPECT().OnHareOutput(lid, types.EmptyBlockID)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(nil, nil)
 		ts.mTortoise.EXPECT().Updates().Return(nil)
 		ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
@@ -409,7 +404,7 @@ func TestProcessLayers_SucceedOnRetry(t *testing.T) {
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), gomock.Any()).AnyTimes()
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
-	ts.mTortoise.EXPECT().Updates().Return(nil).AnyTimes()
+	ts.mTortoise.EXPECT().Updates().Return(map[types.LayerID]map[types.BlockID]bool{current: {}}).AnyTimes()
 	ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	ts.mVm.EXPECT().GetStateRoot().AnyTimes()
 	ts.mConState.EXPECT().UpdateCache(gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).AnyTimes()

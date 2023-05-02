@@ -627,6 +627,8 @@ func TestSyncMissingLayer(t *testing.T) {
 
 func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
+	ts.mTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
 	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).AnyTimes()
 	ts.mDataFetcher.EXPECT().PollMaliciousProofs(gomock.Any())
 	lyr := types.GetEffectiveGenesis().Add(1)
@@ -635,7 +637,6 @@ func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 
 	// simulate hare advancing the mesh forward
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lyr)
-	ts.mTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(nil, nil)
 	ts.mTortoise.EXPECT().Updates().Return(nil)
 	ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 	ts.mConState.EXPECT().UpdateCache(gomock.Any(), lyr, types.EmptyBlockID, nil, nil)
