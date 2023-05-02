@@ -100,6 +100,17 @@ func Reuse(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	return cl, nil
 }
 
+func ReuseWait(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
+	cl, err := Reuse(cctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	if err := cl.WaitAllTimeout(cctx.BootstrapDuration); err != nil {
+		return nil, err
+	}
+	return cl, nil
+}
+
 // Default deployes bootnodes, one poet and the smeshers according to the cluster size.
 func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	cl := New(cctx, opts...)
@@ -520,8 +531,32 @@ func (c *Cluster) Client(i int) *NodeClient {
 
 // Wait for i-th client to be up.
 func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
-	_, err := waitPod(tctx, c.Client(i).Name)
+	_, err := c.Client(i).Resolve(tctx)
 	return err
+}
+
+// WaitAll waits till (bootnode, smesher, poet, bootstrapper) pods are up.
+func (c *Cluster) WaitAll(ctx context.Context) error {
+	var eg errgroup.Group
+	wait := func(clients []*NodeClient) {
+		for i := range c.clients {
+			client := c.clients[i]
+			eg.Go(func() error {
+				_, err := client.Resolve(ctx)
+				return err
+			})
+		}
+	}
+	wait(c.clients)
+	wait(c.poets)
+	wait(c.bootstrappers)
+	return eg.Wait()
+}
+
+func (c *Cluster) WaitAllTimeout(timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return c.WaitAll(ctx)
 }
 
 // CloseClients closes connections to clients.
