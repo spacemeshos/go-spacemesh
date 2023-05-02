@@ -167,7 +167,7 @@ func (*PostSetupManager) ComputeProviders() ([]PostSetupComputeProvider, error) 
 func (mgr *PostSetupManager) BestProvider() (*PostSetupComputeProvider, error) {
 	providers, err := mgr.ComputeProviders()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetch best provider: %w", err)
 	}
 
 	var bestProvider PostSetupComputeProvider

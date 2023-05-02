@@ -16,7 +16,7 @@ RUN set -x \
    net-tools \
    file \
    # required for OpenCL CPU provider
-   ocl-icd-libopencl1 libpocl2 \
+   ocl-icd-libopencl1 pocl-opencl-icd libpocl2 \
    && apt-get clean \
    && rm -rf /var/lib/apt/lists/* \
    && locale-gen en_US.UTF-8 \
@@ -25,10 +25,6 @@ RUN set -x \
 ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US.UTF-8
 ENV LC_ALL en_US.UTF-8
-ENV NVIDIA_REQUIRE_CUDA "cuda>=9.1 driver>=390"
-ENV NVIDIA_VISIBLE_DEVICES all
-ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,display
-LABEL com.nvidia.volumes.needed="nvidia_driver"
 
 FROM golang:1.19 as builder
 RUN set -ex \
