@@ -7,10 +7,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // Config for protocol parameters.
@@ -73,7 +70,7 @@ func WithConfig(cfg Config) Opt {
 }
 
 // New creates Tortoise instance.
-func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, opts ...Opt) (*Tortoise, error) {
+func New(opts ...Opt) (*Tortoise, error) {
 	t := &Tortoise{
 		ctx:    context.Background(),
 		logger: log.NewNop(),
@@ -82,41 +79,13 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, opts ...Opt) (*To
 	for _, opt := range opts {
 		opt(t)
 	}
-
 	if t.cfg.Hdist < t.cfg.Zdist {
 		t.logger.With().Panic("hdist must be >= zdist",
 			log.Uint32("hdist", t.cfg.Hdist),
 			log.Uint32("zdist", t.cfg.Zdist),
 		)
 	}
-
-	latest, err := ballots.LatestLayer(cdb)
-	if err != nil {
-		t.logger.With().Panic("failed to load latest layer",
-			log.Err(err),
-		)
-	}
-	needsRecovery := latest.After(types.GetEffectiveGenesis())
-
-	t.trtl = newTurtle(
-		t.logger,
-		cdb,
-		beacons,
-		t.cfg,
-	)
-	if needsRecovery {
-		t.logger.With().Info("loading state from disk. make sure to wait until tortoise is ready",
-			log.Stringer("last layer", latest),
-		)
-		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(latest); lid = lid.Add(1) {
-			err := t.trtl.onLayer(context.Background(), lid)
-			if err != nil {
-				return nil, err
-			}
-		}
-	} else {
-		t.logger.Info("no state on disk. initialized with genesis")
-	}
+	t.trtl = newTurtle(t.logger, t.cfg)
 	return t, nil
 }
 
@@ -215,10 +184,7 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 	defer t.mu.Unlock()
 	waitTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 	start = time.Now()
-	if err := t.trtl.onLayer(ctx, lid); err != nil {
-		errorsCounter.Inc()
-		t.logger.With().Error("failed on layer", lid, log.Err(err))
-	}
+	t.trtl.onLayer(ctx, lid)
 	executeTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
@@ -232,12 +198,12 @@ func (t *Tortoise) OnAtx(atx *types.ActivationTxHeader) {
 }
 
 // OnBlock should be called every time new block is received.
-func (t *Tortoise) OnBlock(header types.BlockHeader) {
+func (t *Tortoise) OnBlock(block *types.Block) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	t.trtl.onBlock(ResultBlock{Header: header, Data: true})
+	t.trtl.onBlock(ResultBlock{Header: block.ToVote(), Data: true})
 }
 
 func (t *Tortoise) OnHistoricalResult(result ResultBlock) {
@@ -255,7 +221,7 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	defer t.mu.Unlock()
 	if err := t.trtl.onBallot(ballot); err != nil {
 		errorsCounter.Inc()
-		t.logger.With().Error("failed to save state from ballot", ballot.ID(), log.Err(err))
+		t.logger.With().Panic("failed to save state from ballot", ballot.ID(), log.Err(err))
 	}
 }
 

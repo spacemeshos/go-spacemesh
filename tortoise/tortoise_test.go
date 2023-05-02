@@ -318,17 +318,6 @@ func mockedBeacons(tb testing.TB) system.BeaconGetter {
 	return mockBeacons
 }
 
-func defaultTurtle(tb testing.TB) *turtle {
-	lg := logtest.New(tb)
-	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	return newTurtle(
-		lg,
-		cdb,
-		mockedBeacons(tb),
-		defaultTestConfig(),
-	)
-}
-
 func defaultTestConfig() Config {
 	return Config{
 		LayerSize:                defaultTestLayerSize,
@@ -341,14 +330,14 @@ func defaultTestConfig() Config {
 }
 
 func tortoiseFromSimState(tb testing.TB, state sim.State, opts ...Opt) *Tortoise {
-	trtl, err := New(state.DB, state.Beacons, opts...)
+	trtl, err := New(opts...)
 	require.NoError(tb, err)
 	return trtl
 }
 
-func defaultAlgorithm(tb testing.TB, cdb *datastore.CachedDB) *Tortoise {
+func defaultAlgorithm(tb testing.TB) *Tortoise {
 	tb.Helper()
-	trtl, err := New(cdb, mockedBeacons(tb),
+	trtl, err := New(
 		WithConfig(defaultTestConfig()),
 		WithLogger(logtest.New(tb)),
 	)
@@ -793,22 +782,18 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 	epochBeacon := types.RandomBeacon()
 	ballot := randomRefBallot(t, layerID, epochBeacon)
 
-	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
-	trtl := defaultTurtle(t)
-	trtl.beacons = mockBeacons
+	trtl := defaultAlgorithm(t)
 
 	logger := logtest.New(t)
-	// good beacon
-	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(1)
-	badBeacon, err := trtl.compareBeacons(logger, ballot.ID(), ballot.Layer, epochBeacon)
+	trtl.OnBeacon(layerID.GetEpoch(), epochBeacon)
+	badBeacon, err := trtl.trtl.compareBeacons(logger, ballot.ID(), ballot.Layer, epochBeacon)
 	assert.NoError(t, err)
 	assert.False(t, badBeacon)
 
 	// bad beacon
 	beacon := types.RandomBeacon()
 	require.NotEqual(t, epochBeacon, beacon)
-	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(1)
-	badBeacon, err = trtl.compareBeacons(logger, ballot.ID(), ballot.Layer, beacon)
+	badBeacon, err = trtl.trtl.compareBeacons(logger, ballot.ID(), ballot.Layer, beacon)
 	assert.NoError(t, err)
 	assert.True(t, badBeacon)
 }
@@ -2631,8 +2616,7 @@ func TestNonTerminatedLayers(t *testing.T) {
 func TestEncodeVotes(t *testing.T) {
 	ctx := context.Background()
 	t.Run("support", func(t *testing.T) {
-		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-		tortoise := defaultAlgorithm(t, cdb)
+		tortoise := defaultAlgorithm(t)
 
 		block := types.Block{}
 		block.LayerIndex = types.GetEffectiveGenesis().Add(1)
@@ -2654,8 +2638,7 @@ func TestEncodeVotes(t *testing.T) {
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
 	t.Run("against", func(t *testing.T) {
-		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-		tortoise := defaultAlgorithm(t, cdb)
+		tortoise := defaultAlgorithm(t)
 
 		tortoise.OnHareOutput(types.GetEffectiveGenesis().Add(1), types.EmptyBlockID)
 		current := types.GetEffectiveGenesis().Add(2)
@@ -2671,8 +2654,7 @@ func TestEncodeVotes(t *testing.T) {
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
 	t.Run("abstain", func(t *testing.T) {
-		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-		tortoise := defaultAlgorithm(t, cdb)
+		tortoise := defaultAlgorithm(t)
 
 		current := types.GetEffectiveGenesis().Add(2)
 		tortoise.TallyVotes(ctx, current)
@@ -2689,11 +2671,10 @@ func TestEncodeVotes(t *testing.T) {
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
 	t.Run("support multiple", func(t *testing.T) {
-		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 		cfg := defaultTestConfig()
 		cfg.Hdist = 1
 		cfg.Zdist = 1
-		tortoise, err := New(cdb, mockedBeacons(t),
+		tortoise, err := New(
 			WithConfig(cfg),
 			WithLogger(logtest.New(t)),
 		)
@@ -2707,11 +2688,10 @@ func TestEncodeVotes(t *testing.T) {
 		for _, block := range blks {
 			block.Initialize()
 			tortoise.OnBlock(block)
-			require.NoError(t, blocks.Add(cdb, block))
 		}
 
 		current := lid.Add(2)
-		require.NoError(t, layers.SetWeakCoin(cdb, current.Sub(1), true))
+		tortoise.OnWeakCoin(current.Sub(1), true)
 		tortoise.TallyVotes(ctx, current)
 
 		opinion, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(current))
@@ -2732,8 +2712,7 @@ func TestEncodeVotes(t *testing.T) {
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
 	t.Run("rewrite before base", func(t *testing.T) {
-		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-		tortoise, err := New(cdb, mockedBeacons(t),
+		tortoise, err := New(
 			WithConfig(defaultTestConfig()),
 			WithLogger(logtest.New(t)),
 		)
@@ -2860,8 +2839,7 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 }
 
 func TestMissingActiveSet(t *testing.T) {
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-	tortoise := defaultAlgorithm(t, cdb)
+	tortoise := defaultAlgorithm(t)
 	epoch := types.EpochID(3)
 	aset := []types.ATXID{
 		types.ATXID(types.BytesToHash([]byte("first"))),

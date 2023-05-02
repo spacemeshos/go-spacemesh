@@ -12,9 +12,7 @@ import (
 	"github.com/spacemeshos/fixed"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
 
@@ -41,12 +39,7 @@ type turtle struct {
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance.
-func newTurtle(
-	logger log.Log,
-	cdb *datastore.CachedDB,
-	beacons system.BeaconGetter,
-	config Config,
-) *turtle {
+func newTurtle(logger log.Log, config Config) *turtle {
 	t := &turtle{
 		Config: config,
 		state:  newState(),
@@ -292,7 +285,7 @@ func (t *turtle) getFullVote(verified, current types.LayerID, block *blockInfo) 
 	return layer.coinflip, reasonCoinflip, nil
 }
 
-func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
+func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 	t.logger.With().Debug("on layer", last)
 	defer t.evict(ctx)
 	if last.After(t.last) {
@@ -300,13 +293,11 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 		lastLayer.Set(float64(t.last))
 	}
 	if err := t.drainRetriable(); err != nil {
-		return nil
+		return
 	}
 	for process := t.processed.Add(1); !process.After(t.last); process = process.Add(1) {
 		if process.FirstInEpoch() {
-			if err := t.loadAtxs(process.GetEpoch()); err != nil {
-				return err
-			}
+			t.computeEpochHeight(process.GetEpoch())
 		}
 		layer := t.layer(process)
 		for _, block := range layer.blocks {
@@ -326,7 +317,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 				if errors.Is(err, errBeaconUnavailable) {
 					t.retryLater(ballot)
 				} else {
-					return err
+					panic(err)
 				}
 			}
 		}
@@ -347,7 +338,6 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 		}
 	}
 	t.verifyLayers()
-	return nil
 }
 
 func (t *turtle) switchModes(logger log.Log) {
@@ -451,14 +441,13 @@ func (t *turtle) verifyLayers() {
 	verifiedLayer.Set(float64(t.verified))
 }
 
-func (t *turtle) loadAtxs(epoch types.EpochID) error {
+func (t *turtle) computeEpochHeight(epoch types.EpochID) {
 	einfo := t.epoch(epoch)
 	heights := make([]uint64, 0, len(einfo.atxs))
 	for _, info := range einfo.atxs {
 		heights = append(heights, info.height)
 	}
 	einfo.height = getMedian(heights)
-	return nil
 }
 
 func (t *turtle) onBlock(rst ResultBlock) {

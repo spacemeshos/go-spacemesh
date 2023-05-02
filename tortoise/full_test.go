@@ -9,10 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
@@ -326,7 +324,6 @@ func TestFullCountVotes(t *testing.T) {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.New(t)
-			cdb := datastore.NewCachedDB(sql.InMemory(), logger)
 			var activeset []types.ATXID
 			for i := range tc.activeset {
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
@@ -343,8 +340,7 @@ func TestFullCountVotes(t *testing.T) {
 				activeset = append(activeset, atxid)
 			}
 
-			tortoise := defaultAlgorithm(t, cdb)
-			tortoise.trtl.cdb = cdb
+			tortoise := defaultAlgorithm(t)
 			consensus := tortoise.trtl
 			consensus.ballotRefs[types.EmptyBallotID] = &ballotInfo{
 				layer: genesis,
@@ -368,7 +364,7 @@ func TestFullCountVotes(t *testing.T) {
 					height: localHeight,
 				}
 				for _, block := range layerBlocks {
-					consensus.onBlock(block.ToVote())
+					consensus.onBlock(&block)
 				}
 				blocks = append(blocks, layerBlocks)
 			}
