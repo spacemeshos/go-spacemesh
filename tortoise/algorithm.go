@@ -221,7 +221,7 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	defer t.mu.Unlock()
 	if err := t.trtl.onBallot(ballot); err != nil {
 		errorsCounter.Inc()
-		t.logger.With().Panic("failed to save state from ballot", ballot.ID(), log.Err(err))
+		t.logger.With().Error("failed to save state from ballot", ballot.ID(), log.Err(err))
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/proposals/util"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
 
@@ -593,17 +594,23 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, types.LayerID,
 	}
 
 	if ballot.EpochData != nil {
-		atx, exists := t.epoch(ballot.Layer.GetEpoch()).atxs[ballot.AtxID]
+		epoch := t.epoch(ballot.Layer.GetEpoch())
+		atx, exists := epoch.atxs[ballot.AtxID]
 		if !exists {
 			return nil, 0, fmt.Errorf("atx %s/%d not in state", ballot.AtxID, ballot.Layer.GetEpoch())
+		}
+		total, err := activeSetWeight(epoch, ballot.ActiveSet)
+		if err != nil {
+			return nil, 0, err
+		}
+		expected, err := util.GetNumEligibleSlots(atx.weight, total, t.LayerSize, types.GetLayersPerEpoch())
+		if err != nil {
+			return nil, 0, err
 		}
 		refinfo = &referenceInfo{
 			height: atx.height,
 			beacon: ballot.EpochData.Beacon,
-			weight: big.NewRat(
-				int64(atx.weight),
-				int64(ballot.EpochData.EligibilityCount),
-			),
+			weight: big.NewRat(int64(atx.weight), int64(expected)),
 		}
 	} else {
 		ref, exists := t.state.ballotRefs[ballot.RefBallot]
