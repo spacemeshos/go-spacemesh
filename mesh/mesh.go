@@ -276,23 +276,18 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, upd
 		if layer.Layer > inState {
 			continue
 		}
-		bid := layer.FirstValid()
-		if bid.IsEmpty() {
-			bid = layer.FirstHare()
-		}
 		applied, err := layers.GetApplied(msh.cdb, layer.Layer)
 		if err != nil {
 			return fmt.Errorf("get applied %v: %w", layer.Layer, err)
 		}
-		if bid == applied {
-			continue
+		if bid := layer.FirstValid(); bid != applied {
+			logger.With().Debug("incorrect block applied",
+				log.Uint32("layer_id", layer.Layer.Uint32()),
+				log.Stringer("expected", bid),
+				log.Stringer("applied", applied),
+			)
+			changed = minNonZero(changed, layer.Layer)
 		}
-		logger.With().Debug("incorrect block applied",
-			log.Uint32("layer_id", layer.Layer.Uint32()),
-			log.Stringer("expected", bid),
-			log.Stringer("applied", applied),
-		)
-		changed = minNonZero(changed, layer.Layer)
 	}
 
 	if changed != 0 {
@@ -336,13 +331,12 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	logger := msh.logger.WithContext(ctx).WithFields(log.Stringer("processing", layerID))
 
 	// pass the layer to tortoise for processing
-	logger.Debug("tallying votes")
 	msh.trtl.TallyVotes(ctx, layerID)
 
 	msh.mu.Lock()
 	defer msh.mu.Unlock()
 
-	logger.Info("processing layer")
+	logger.Debug("processing layer")
 
 	// set processed layer even if later code will fail, as that failure is not related
 	// to the layer that is being processed
@@ -410,7 +404,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, logger log.Log, from, to
 	logger = logger.WithFields(
 		log.Stringer("from", from),
 		log.Stringer("to", to))
-	logger.Info("pushing layers to state")
+	logger.Debug("pushing layers to state")
 	if from.Before(types.GetEffectiveGenesis()) || to.Before(types.GetEffectiveGenesis()) {
 		logger.Fatal("tried to push genesis layers")
 	}
@@ -450,7 +444,7 @@ func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID types.Lay
 		return nil, fmt.Errorf("get db layer blocks %s: %w", layerID, err)
 	}
 	if len(lyrBlocks) == 0 {
-		logger.Info("layer has no blocks")
+		logger.Debug("layer has no blocks")
 		return nil, nil
 	}
 	var valids, invalids []*types.Block
@@ -471,7 +465,7 @@ func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID types.Lay
 	}
 
 	if len(invalids) > 0 {
-		logger.Info("layer blocks are all invalid")
+		logger.Debug("layer blocks are all invalid")
 		return nil, nil
 	}
 
@@ -522,7 +516,7 @@ func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.Layer
 	if err := msh.executor.Execute(ctx, lid, block); err != nil {
 		return fmt.Errorf("execute block %v/%v: %w", lid, applied, err)
 	}
-	logger.With().Info("block executed", log.Stringer("applied", applied))
+	logger.With().Debug("block executed", log.Stringer("applied", applied))
 	return msh.persistState(ctx, logger, lid, applied, valids)
 }
 
@@ -542,7 +536,7 @@ func (msh *Mesh) persistState(ctx context.Context, logger log.Log, lid types.Lay
 		LayerID: lid,
 		Status:  events.LayerStatusTypeApplied,
 	})
-	logger.With().Info("state persisted", log.Stringer("applied", applied))
+	logger.With().Debug("state persisted", log.Stringer("applied", applied))
 	return nil
 }
 

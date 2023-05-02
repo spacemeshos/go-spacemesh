@@ -20,15 +20,6 @@ func (l *Layer) FirstValid() types.BlockID {
 	return types.EmptyBlockID
 }
 
-func (l *Layer) FirstHare() types.BlockID {
-	for _, block := range l.Blocks {
-		if block.Hare {
-			return block.Header.ID
-		}
-	}
-	return types.EmptyBlockID
-}
-
 func (l *Layer) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("layer", l.Layer.Uint32())
 	encoder.AddString("opinion", l.Opinion.ShortString())

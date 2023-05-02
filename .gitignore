@@ -25,6 +25,7 @@ temp.js
 /cp.out
 /cover-all.out
 cover.out
+coverage.html
 gcloud.json
 spacemesh.json
 database/data

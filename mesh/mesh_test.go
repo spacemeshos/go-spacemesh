@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
@@ -445,106 +446,6 @@ func TestMesh_ProcessLayerPerHareOutput_emptyOutput(t *testing.T) {
 	checkLastAppliedInDB(t, tm.Mesh, gPlus2)
 }
 
-func makeValidityUpdates(lid types.LayerID, v, iv []*types.Block) map[types.BlockID]bool {
-	res := map[types.BlockID]bool{}
-	for _, b := range v {
-		res[b.ID()] = true
-	}
-	for _, b := range iv {
-		res[b.ID()] = false
-	}
-	return res
-}
-
-func TestMesh_Revert(t *testing.T) {
-	tm := createTestMesh(t)
-
-	gLyr := types.GetEffectiveGenesis()
-	gPlus1 := gLyr.Add(1)
-	gPlus2 := gLyr.Add(2)
-	gPlus3 := gLyr.Add(3)
-	gPlus4 := gLyr.Add(4)
-	gPlus5 := gLyr.Add(5)
-	blocks1 := createLayerBlocks(t, tm.db, tm.Mesh, gLyr.Add(1))
-	blocks2 := createLayerBlocks(t, tm.db, tm.Mesh, gLyr.Add(2))
-	blocks3 := createLayerBlocks(t, tm.db, tm.Mesh, gLyr.Add(3))
-	blocks4 := createLayerBlocks(t, tm.db, tm.Mesh, gLyr.Add(4))
-	blocks5 := createLayerBlocks(t, tm.db, tm.Mesh, gLyr.Add(5))
-	layerBlocks := map[types.LayerID]*types.Block{
-		gPlus1: blocks1[0],
-		gPlus2: blocks2[0],
-		gPlus3: blocks3[0],
-		gPlus4: blocks4[0],
-		gPlus5: blocks5[0],
-	}
-	lyrUpdates := make(map[types.LayerID]map[types.BlockID]bool)
-	lyrUpdates[gPlus1] = makeValidityUpdates(gPlus1, []*types.Block{blocks1[0]}, blocks1[1:])
-	lyrUpdates[gPlus2] = makeValidityUpdates(gPlus2, []*types.Block{blocks2[0]}, blocks2[1:])
-	lyrUpdates[gPlus3] = makeValidityUpdates(gPlus3, []*types.Block{blocks3[0]}, blocks3[1:])
-	lyrUpdates[gPlus4] = makeValidityUpdates(gPlus4, []*types.Block{blocks4[0]}, blocks4[1:])
-
-	for i := gPlus1; i.Before(gPlus4); i = i.Add(1) {
-		applied := layerBlocks[i]
-		tm.mockTortoise.EXPECT().OnHareOutput(i, applied.ID())
-		tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), i)
-		updates := make(map[types.LayerID]map[types.BlockID]bool)
-		updates[i.Sub(1)] = lyrUpdates[i.Sub(1)]
-		tm.mockTortoise.EXPECT().Updates().Return(updates)
-		require.NoError(t, tm.ProcessLayerPerHareOutput(context.Background(), i, applied.ID(), true))
-	}
-	require.Equal(t, gPlus3, tm.ProcessedLayer())
-	require.Equal(t, gPlus3, tm.LatestLayerInState())
-	checkLastAppliedInDB(t, tm.Mesh, gPlus3)
-
-	oldHash, err := layers.GetAggregatedHash(tm.cdb, gPlus2)
-	require.NoError(t, err)
-	require.NotEqual(t, types.EmptyLayerHash, oldHash)
-
-	// for layer gPlus2 and gPlus3, all other block turns out to be valid
-	layerBlocks[gPlus2] = sortBlocks(blocks2[1:])[0]
-	layerBlocks[gPlus3] = sortBlocks(blocks3[1:])[0]
-	newUpdates := make(map[types.LayerID]map[types.BlockID]bool)
-	newUpdates[gPlus2] = makeValidityUpdates(gPlus2, blocks2[1:], blocks2[0:1])
-	newUpdates[gPlus3] = makeValidityUpdates(gPlus3, blocks3[1:], blocks3[0:1])
-	tm.mockTortoise.EXPECT().OnHareOutput(gPlus4, blocks4[0].ID())
-	tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gPlus4)
-	tm.mockTortoise.EXPECT().Updates().Return(newUpdates)
-	tm.mockVM.EXPECT().Revert(gPlus1)
-	tm.mockState.EXPECT().RevertCache(gPlus1)
-	tm.mockVM.EXPECT().GetStateRoot()
-	// even tho gPlus4 block is optimistically applied, we still revert to gPlus1 and execute
-	// gPlus2, gPlus3 and gPlus4.
-	for i := gPlus2; !i.After(gPlus4); i = i.Add(1) {
-		applied := layerBlocks[i]
-		var ineffective []types.Transaction
-		var executed []types.TransactionWithResult
-		tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(ineffective, executed, nil)
-		tm.mockState.EXPECT().UpdateCache(gomock.Any(), i, applied.ID(), executed, ineffective)
-		tm.mockVM.EXPECT().GetStateRoot()
-	}
-	require.NoError(t, tm.ProcessLayerPerHareOutput(context.Background(), gPlus4, blocks4[0].ID(), true))
-	require.Equal(t, gPlus4, tm.ProcessedLayer())
-	require.Equal(t, gPlus4, tm.LatestLayerInState())
-	checkLastAppliedInDB(t, tm.Mesh, gPlus4)
-
-	newHash, err := layers.GetAggregatedHash(tm.cdb, gPlus2)
-	require.NoError(t, err)
-	require.NotEqual(t, types.EmptyLayerHash, newHash)
-	require.NotEqual(t, oldHash, newHash)
-
-	// another new layer won't cause a revert
-	tm.mockTortoise.EXPECT().OnHareOutput(gPlus5, blocks5[0].ID())
-	tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gPlus5)
-	tm.mockTortoise.EXPECT().Updates().Return(map[types.LayerID]map[types.BlockID]bool{gPlus4: lyrUpdates[gPlus4]})
-	require.NoError(t, tm.ProcessLayerPerHareOutput(context.Background(), gPlus5, blocks5[0].ID(), true))
-	require.Equal(t, gPlus5, tm.ProcessedLayer())
-	require.Equal(t, gPlus5, tm.LatestLayerInState())
-	checkLastAppliedInDB(t, tm.Mesh, gPlus5)
-	ah, err := layers.GetAggregatedHash(tm.cdb, gPlus2)
-	require.NoError(t, err)
-	require.Equal(t, newHash, ah)
-}
-
 func TestMesh_LatestKnownLayer(t *testing.T) {
 	tm := createTestMesh(t)
 	lg := logtest.New(t)
@@ -843,4 +744,346 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.EqualValues(t, expected, saved)
 }
 
-func TestProcessLayer(t *testing.T) {}
+func TestProcessLayer(t *testing.T) {
+	t.Parallel()
+
+	type call struct {
+		// inputs
+		hare    types.BlockID
+		updates map[types.LayerID]map[types.BlockID]bool
+		results []result.Layer
+
+		// outputs
+		err      string
+		applied  []types.BlockID
+		validity map[types.BlockID]bool
+	}
+	type testCase struct {
+		desc  string
+		calls []call
+	}
+	types.SetLayersPerEpoch(3)
+	start := types.GetEffectiveGenesis().Add(1)
+	for _, tc := range []testCase{
+		{
+			"sanity",
+			[]call{
+				{
+					updates: map[types.LayerID]map[types.BlockID]bool{
+						start: {
+							types.BlockID{1}: true,
+							types.BlockID{2}: false,
+						},
+					},
+					results: []result.Layer{
+						{
+							Layer: start,
+							Blocks: []result.Block{
+								{
+									Header: types.Vote{ID: types.BlockID{1}},
+									Data:   true,
+									Valid:  true,
+								},
+								{
+									Header: types.Vote{ID: types.BlockID{2}},
+									Data:   true,
+									Valid:  false,
+								},
+							},
+						},
+					},
+					applied: []types.BlockID{{1}},
+					validity: map[types.BlockID]bool{
+						{1}: true,
+						{2}: false,
+					},
+				},
+			},
+		},
+		{
+			"missing valid",
+			[]call{
+				{
+					updates: map[types.LayerID]map[types.BlockID]bool{
+						start: {
+							types.BlockID{1}: true,
+						},
+					},
+					results: []result.Layer{
+						{
+							Layer: start,
+							Blocks: []result.Block{
+								{
+									Header: types.Vote{ID: types.BlockID{1}},
+									Data:   false,
+									Valid:  true,
+								},
+							},
+						},
+					},
+					err: "missing",
+				},
+				{
+					results: []result.Layer{
+						{
+							Layer: start,
+							Blocks: []result.Block{
+								{
+									Header: types.Vote{ID: types.BlockID{1}},
+									Data:   true,
+									Valid:  true,
+								},
+							},
+						},
+					},
+					applied: []types.BlockID{{1}},
+					validity: map[types.BlockID]bool{
+						{1}: true,
+					},
+				},
+			},
+		},
+		{
+			"missing invalid",
+			[]call{
+				{
+					updates: map[types.LayerID]map[types.BlockID]bool{
+						start: {
+							types.BlockID{1}: true,
+						},
+					},
+					results: []result.Layer{
+						{
+							Layer: start,
+							Blocks: []result.Block{
+								{
+									Header: types.Vote{ID: types.BlockID{1}},
+									Data:   false,
+									Valid:  true,
+								},
+							},
+						},
+					},
+					err: "missing",
+				},
+				{
+					updates: map[types.LayerID]map[types.BlockID]bool{
+						start: {
+							types.BlockID{1}: false,
+						},
+					},
+					results: []result.Layer{
+						{
+							Layer: start,
+							Blocks: []result.Block{
+								{
+									Header: types.Vote{ID: types.BlockID{1}},
+								},
+							},
+						},
+					},
+					applied: []types.BlockID{{}},
+				},
+			},
+		},
+		{
+			"revert from empty",
+			[]call{
+				{
+					updates: map[types.LayerID]map[types.BlockID]bool{
+						start: {
+							types.BlockID{1}: false,
+						},
+					},
+					results: []result.Layer{
+						{
+							Layer: start,
+							Blocks: []result.Block{
+								{
+									Header: types.Vote{ID: types.BlockID{1}},
+								},
+							},
+						},
+					},
+					applied: []types.BlockID{{0}},
+				},
+				{
+					updates: map[types.LayerID]map[types.BlockID]bool{
+						start: {
+							types.BlockID{2}: true,
+						},
+					},
+					results: []result.Layer{
+						{
+							Layer: start,
+							Blocks: []result.Block{
+								{
+									Header: types.Vote{ID: types.BlockID{1}},
+								},
+								{
+									Header: types.Vote{ID: types.BlockID{2}},
+									Data:   true,
+									Valid:  true,
+								},
+							},
+						},
+					},
+					applied: []types.BlockID{{2}},
+				},
+			},
+		},
+		{
+			"hare",
+			[]call{
+				{
+					updates: map[types.LayerID]map[types.BlockID]bool{
+						start: {},
+					},
+					results: []result.Layer{},
+					hare:    types.BlockID{1},
+					applied: []types.BlockID{{1}},
+				},
+				{
+					updates: map[types.LayerID]map[types.BlockID]bool{
+						start: {
+							types.BlockID{1}: true,
+						},
+					},
+					results: []result.Layer{
+						{
+							Layer: start,
+							Blocks: []result.Block{
+								{
+									Header: types.Vote{ID: types.BlockID{1}},
+									Data:   true,
+									Hare:   true,
+									Valid:  true,
+								},
+							},
+						},
+					},
+					applied: []types.BlockID{{1}},
+				},
+			},
+		},
+		{
+			"invalid targets",
+			[]call{
+				{
+					updates: map[types.LayerID]map[types.BlockID]bool{
+						start: {
+							types.BlockID{1}: false,
+						},
+					},
+					results: []result.Layer{
+						{
+							Layer: start,
+							Blocks: []result.Block{
+								{
+									Header: types.Vote{
+										ID:     types.BlockID{1},
+										Height: 101,
+									},
+								},
+								{
+									Header: types.Vote{
+										ID:     types.BlockID{1},
+										Height: 202,
+									},
+								},
+							},
+						},
+					},
+					applied: []types.BlockID{{0}},
+				},
+				{
+					updates: map[types.LayerID]map[types.BlockID]bool{
+						start: {
+							types.BlockID{1}: true,
+						},
+					},
+					results: []result.Layer{
+						{
+							Layer: start,
+							Blocks: []result.Block{
+								{
+									Header: types.Vote{
+										ID:     types.BlockID{1},
+										Height: 101,
+									},
+								},
+								{
+									Header: types.Vote{
+										ID:     types.BlockID{1},
+										Height: 202,
+									},
+									Data:  true,
+									Valid: true,
+								},
+							},
+						},
+					},
+					applied: []types.BlockID{{1}},
+				},
+			},
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Parallel()
+
+			tm := createTestMesh(t)
+			tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
+			tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+			tm.mockState.EXPECT().UpdateCache(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			tm.mockVM.EXPECT().GetStateRoot().AnyTimes()
+			tm.mockVM.EXPECT().Revert(gomock.Any()).AnyTimes()
+			tm.mockState.EXPECT().RevertCache(gomock.Any()).AnyTimes()
+
+			lid := start
+			for _, c := range tc.calls {
+				tm.mockTortoise.EXPECT().Updates().Return(c.updates)
+				tm.mockTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(c.results, nil)
+				ensuresDatabaseConsistent(t, tm.cdb, c.results)
+				if !c.hare.IsEmpty() {
+					require.NoError(t, blocks.Add(tm.cdb, types.NewExistingBlock(c.hare, types.InnerBlock{
+						LayerIndex: lid,
+					})))
+					require.NoError(t, certificates.SetHareOutput(tm.db, lid, c.hare))
+				}
+
+				err := tm.ProcessLayer(context.TODO(), lid)
+				if len(c.err) > 0 {
+					require.ErrorContains(t, err, c.err)
+				} else {
+					require.NoError(t, err)
+				}
+
+				for i := range c.applied {
+					applied, err := layers.GetApplied(tm.cdb, start.Add(uint32(i)))
+					require.NoError(t, err)
+					require.Equal(t, c.applied[i], applied)
+				}
+				for bid, valid := range c.validity {
+					stored, err := blocks.IsValid(tm.cdb, bid)
+					require.NoError(t, err)
+					require.Equal(t, valid, stored, "%v", bid)
+				}
+				lid = lid.Add(1)
+			}
+		})
+	}
+}
+
+func ensuresDatabaseConsistent(t *testing.T, db sql.Executor, results []result.Layer) {
+	for _, layer := range results {
+		for _, rst := range layer.Blocks {
+			if !rst.Data {
+				continue
+			}
+			_ = blocks.Add(db, types.NewExistingBlock(rst.Header.ID, types.InnerBlock{
+				LayerIndex: layer.Layer,
+			}))
+		}
+	}
+}
