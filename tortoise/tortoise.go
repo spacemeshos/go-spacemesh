@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/fixed"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals/util"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
@@ -451,7 +452,7 @@ func (t *turtle) computeEpochHeight(epoch types.EpochID) {
 	einfo.height = getMedian(heights)
 }
 
-func (t *turtle) onBlock(rst ResultBlock) {
+func (t *turtle) onBlock(rst result.Block) {
 	if rst.Header.LayerID <= t.evicted {
 		return
 	}
