@@ -178,6 +178,27 @@ func Array(name string, array ArrayMarshaler) Field {
 	return Field(zap.Array(name, array))
 }
 
+// Context inlines requestId and sessionId fields if they are present.
+func Context(ctx context.Context) Field {
+	return Field(zap.Inline(&marshalledContext{Context: ctx}))
+}
+
+type marshalledContext struct {
+	context.Context
+}
+
+func (c *marshalledContext) MarshalLogObject(encoder ObjectEncoder) error {
+	if c.Context != nil {
+		if ctxRequestID, ok := ExtractRequestID(c.Context); ok {
+			encoder.AddString("requestId", ctxRequestID)
+		}
+		if ctxSessionID, ok := ExtractSessionID(c.Context); ok {
+			encoder.AddString("sessionId", ctxSessionID)
+		}
+	}
+	return nil
+}
+
 // LoggableField as an interface to enable every type to be used as a log field.
 type LoggableField interface {
 	Field() Field

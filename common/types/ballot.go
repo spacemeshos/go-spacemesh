@@ -211,7 +211,7 @@ type Opinion struct {
 
 // MarshalLogObject implements logging interface.
 func (o *Opinion) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddString("hash", o.Hash.String())
+	encoder.AddString("hash", o.Hash.ShortString())
 	return o.Votes.MarshalLogObject(encoder)
 }
 

@@ -688,7 +688,17 @@ func (app *App) initServices(
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, app.db, app.addLogger(NipostBuilderLogger, lg), sgn, poetCfg, clock)
+	nipostBuilder := activation.NewNIPostBuilder(
+		nodeID,
+		postSetupMgr,
+		poetClients,
+		poetDb,
+		app.Config.SMESHING.Opts.DataDir,
+		app.addLogger(NipostBuilderLogger, lg),
+		sgn,
+		poetCfg,
+		clock,
+	)
 
 	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
@@ -706,8 +716,18 @@ func (app *App) initServices(
 		GoldenATXID:     goldenATXID,
 		LayersPerEpoch:  layersPerEpoch,
 	}
-	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, app.cachedDB, atxHandler, app.host, nipostBuilder,
-		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg),
+	atxBuilder := activation.NewBuilder(
+		builderConfig,
+		nodeID,
+		sgn,
+		app.cachedDB,
+		atxHandler,
+		app.host,
+		nipostBuilder,
+		postSetupMgr,
+		clock,
+		newSyncer,
+		app.addLogger("atxBuilder", lg),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(poetCfg),
 		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),

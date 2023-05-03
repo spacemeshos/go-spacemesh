@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -41,7 +42,7 @@ func (a *persistanceAdapter) TallyVotes(ctx context.Context, current types.Layer
 		for _, block := range blocksrst {
 			valid, _ := blocks.IsValid(a.db, block.ID())
 			hare, _ := certificates.GetHareOutput(a.db, lid)
-			a.OnHistoricalResult(ResultBlock{
+			a.OnHistoricalResult(result.Block{
 				Header: block.ToVote(),
 				Data:   true,
 				Valid:  valid,

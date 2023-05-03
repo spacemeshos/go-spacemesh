@@ -2947,7 +2947,7 @@ func TestMultipleTargets(t *testing.T) {
 	last := s.Next(sim.WithNumBlocks(0), sim.WithVoteGenerator(upvote))
 	tortoise.TallyVotes(ctx, last)
 
-	rst, err := tortoise.Results(types.GetEffectiveGenesis())
+	rst, err := tortoise.Results(types.GetEffectiveGenesis().Add(1), last.Sub(1))
 	require.NoError(t, err)
 	require.Len(t, rst, 2)
 	block := rst[0].Blocks[0]
