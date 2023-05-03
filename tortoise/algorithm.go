@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -297,42 +298,28 @@ func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) 
 	return missing
 }
 
-// Results returns layers that crossed threshold in range (from, verified].
-func (t *Tortoise) Results(from types.LayerID) ([]ResultLayer, error) {
+// Results returns layers that crossed threshold in range [from, to].
+func (t *Tortoise) Results(from, to types.LayerID) ([]result.Layer, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if from <= t.trtl.evicted {
 		return nil, fmt.Errorf("requested layer %d is before evicted %d", from, t.trtl.evicted)
 	}
-	if from > t.trtl.processed {
-		return nil, fmt.Errorf("request layer %d is not yet added to the state (processed %d)", from, t.trtl.processed)
-	}
-	rst := make([]ResultLayer, 0, t.trtl.verified-from)
-	for lid := from + 1; lid <= t.trtl.verified; lid++ {
+	rst := make([]result.Layer, 0, to-from)
+	for lid := from; lid <= to; lid++ {
 		layer := t.trtl.layer(lid)
-		blocks := make([]ResultBlock, 0, len(layer.blocks))
+		blocks := make([]result.Block, 0, len(layer.blocks))
 		for _, block := range layer.blocks {
-			blocks = append(blocks, ResultBlock{
+			blocks = append(blocks, result.Block{
 				Header: block.header(),
 				Data:   block.data,
 				Valid:  block.validity == support,
 			})
 		}
-		rst = append(rst, ResultLayer{
+		rst = append(rst, result.Layer{
 			Layer:  lid,
 			Blocks: blocks,
 		})
 	}
 	return rst, nil
-}
-
-type ResultLayer struct {
-	Layer  types.LayerID
-	Blocks []ResultBlock
-}
-
-type ResultBlock struct {
-	Header types.Vote
-	Valid  bool
-	Data   bool
 }
