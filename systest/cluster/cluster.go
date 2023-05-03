@@ -91,6 +91,23 @@ func Reuse(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 		}
 		return nil, err
 	}
+	if cl.Total() < cctx.ClusterSize {
+		cctx.Log.Infow("scaling cluster", "total", cl.Total(), "target", cctx.ClusterSize)
+		if err := cl.AddSmeshers(cctx, cctx.ClusterSize-cl.Total()); err != nil {
+			return nil, err
+		}
+	}
+	return cl, nil
+}
+
+func ReuseWait(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
+	cl, err := Reuse(cctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	if err := cl.WaitAllTimeout(cctx.BootstrapDuration); err != nil {
+		return nil, err
+	}
 	return cl, nil
 }
 
@@ -512,23 +529,47 @@ func (c *Cluster) Client(i int) *NodeClient {
 	return c.clients[i]
 }
 
-// CloseClients closes connections to clients.
-func (c *Cluster) CloseClients() error {
+// Wait for i-th client to be up.
+func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
+	_, err := c.Client(i).Resolve(tctx)
+	return err
+}
+
+// WaitAll waits till (bootnode, smesher, poet, bootstrapper) pods are up.
+func (c *Cluster) WaitAll(ctx context.Context) error {
 	var eg errgroup.Group
-	for _, client := range c.clients {
-		eg.Go(client.Close)
+	wait := func(clients []*NodeClient) {
+		for i := range c.clients {
+			client := c.clients[i]
+			eg.Go(func() error {
+				_, err := client.Resolve(ctx)
+				return err
+			})
+		}
 	}
+	wait(c.clients)
+	wait(c.poets)
+	wait(c.bootstrappers)
 	return eg.Wait()
 }
 
-// Wait for i-th client to be up.
-func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
-	nc, err := waitNode(tctx, c.Client(i).Name)
-	if err != nil {
-		return err
+func (c *Cluster) WaitAllTimeout(timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return c.WaitAll(ctx)
+}
+
+// CloseClients closes connections to clients.
+func (c *Cluster) CloseClients() {
+	var eg errgroup.Group
+	for _, client := range c.clients {
+		client := client
+		eg.Go(func() error {
+			client.Close()
+			return nil
+		})
 	}
-	c.clients[i] = nc
-	return nil
+	eg.Wait()
 }
 
 // Account contains address and private key.
@@ -635,7 +676,7 @@ func genSigner() *signer {
 func extractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]string, error) {
 	var (
 		rst          = make([]string, len(nodes))
-		rctx, cancel = context.WithTimeout(tctx, 10*time.Second)
+		rctx, cancel = context.WithTimeout(tctx, 5*time.Minute)
 		eg, ctx      = errgroup.WithContext(rctx)
 	)
 	defer cancel()
@@ -643,12 +684,16 @@ func extractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]stri
 		i := i
 		n := nodes[i]
 		eg.Go(func() error {
+			ip, err := n.Resolve(ctx)
+			if err != nil {
+				return err
+			}
 			dbg := pb.NewDebugServiceClient(n)
 			info, err := dbg.NetworkInfo(ctx, &emptypb.Empty{})
 			if err != nil {
 				return err
 			}
-			rst[i] = p2pEndpoint(n.Node, info.Id)
+			rst[i] = p2pEndpoint(n.Node, ip, info.Id)
 			return nil
 		})
 	}

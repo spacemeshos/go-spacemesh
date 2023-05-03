@@ -38,7 +38,7 @@ func TestAddNodes(t *testing.T) {
 		tctx.Log.Info("cluster size changed to ", oldSize)
 		tctx.ClusterSize = oldSize
 	}
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
 	// increase the cluster size to the original test size
@@ -116,7 +116,7 @@ func TestFailedNodes(t *testing.T) {
 	t.Parallel()
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
 	const (
