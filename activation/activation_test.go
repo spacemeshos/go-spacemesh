@@ -314,6 +314,15 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	})
 }
 
+// This test is intended to check that if PrepareInitializer returns an error
+// then that error is returned instead of crashing, which is what should happen if
+// StartSession returns an error.
+func TestBuilder_StartSmeshingReturnsErrorIfPrepareInitializerReturnsError(t *testing.T) {
+	tab := newTestBuilder(t)
+	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).Return(errors.New("test"))
+	require.Error(t, tab.StartSmeshing(tab.coinbase, PostSetupOpts{}))
+}
+
 func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
 	tab := newTestBuilder(t)
 	require.ErrorContains(t, tab.StopSmeshing(true), "not started")
