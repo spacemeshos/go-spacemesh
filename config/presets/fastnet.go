@@ -23,7 +23,7 @@ func fastnet() config.Config {
 	conf.HARE.LimitConcurrent = 5
 	conf.HARE.LimitIterations = 3
 	conf.HARE.RoundDuration = 2 * time.Second
-	conf.HARE.WakeupDelta = 3 * time.Second
+	conf.HARE.WakeupDelta = 4 * time.Second
 
 	conf.P2P.MinPeers = 10
 
