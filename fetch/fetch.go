@@ -384,6 +384,14 @@ func (f *Fetch) failAfterRetry(hash types.Hash32) {
 		f.logger.With().Error("hash missing from ongoing requests", log.Stringer("hash", hash))
 		return
 	}
+
+	// first check if we have it locally from gossips
+	if _, err := f.bs.Get(req.hint, hash.Bytes()); err == nil {
+		close(req.promise.completed)
+		delete(f.ongoing, hash)
+		return
+	}
+
 	req.retries++
 	if req.retries > f.cfg.MaxRetriesForRequest {
 		f.logger.WithContext(req.ctx).With().Warning("gave up on hash after max retries",
