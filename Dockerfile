@@ -1,15 +1,12 @@
-# libsvm.a is linked with fcntl64, which was added to glibc since 2.28.
-# The earliest Ubuntu release that has glibc >=2.28 by default is 18.10, so the LTS one is 20.04.
-# If any issues occur on 20.04, it may be downgraded back to 18.04 with manual glibc upgrade.
+# go-spacemesh needs at least ubuntu 20.04 (because gpu-post and post-rs are linked to glibc 2.31)
+# newer versions of ubuntu should work as well, so far only 22.04 has been tested
 FROM ubuntu:22.04 AS linux
 ENV DEBIAN_FRONTEND noninteractive
 ENV SHELL /bin/bash
 ARG TZ=US/Eastern
 ENV TZ $TZ
 USER root
-RUN bash -c "for i in {1..9}; do mkdir -p /usr/share/man/man\$i; done" \
-   && echo 'APT::Get::Assume-Yes "true";' > /etc/apt/apt.conf.d/90noninteractive \
-   && echo 'DPkg::Options "--force-confnew";' >> /etc/apt/apt.conf.d/90noninteractive \
+RUN set -x \
    && apt-get update --fix-missing \
    && apt-get install -qy --no-install-recommends \
    ca-certificates \
@@ -17,7 +14,6 @@ RUN bash -c "for i in {1..9}; do mkdir -p /usr/share/man/man\$i; done" \
    locales \
    procps \
    net-tools \
-   apt-transport-https \
    file \
    # -- it allows to start with nvidia-docker runtime --
    #libnvidia-compute-390 \
