@@ -612,6 +612,9 @@ func (f *Fetch) getHash(ctx context.Context, hash types.Hash32, h datastore.Hint
 
 // RegisterPeerHashes registers provided peer for a list of hashes.
 func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
+	if peer == f.host.ID() {
+		return
+	}
 	f.hashToPeers.RegisterPeerHashes(peer, hashes)
 }
 

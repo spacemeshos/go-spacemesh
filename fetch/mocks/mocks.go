@@ -410,3 +410,17 @@ func (mr *MockhostMockRecorder) GetPeers() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*Mockhost)(nil).GetPeers))
 }
+
+// ID mocks base method.
+func (m *Mockhost) ID() p2p.Peer {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ID")
+	ret0, _ := ret[0].(p2p.Peer)
+	return ret0
+}
+
+// ID indicates an expected call of ID.
+func (mr *MockhostMockRecorder) ID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ID", reflect.TypeOf((*Mockhost)(nil).ID))
+}
