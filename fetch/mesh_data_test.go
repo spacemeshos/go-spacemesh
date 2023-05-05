@@ -149,6 +149,7 @@ func TestFetch_getHashes(t *testing.T) {
 			f.cfg.MaxRetriesForPeer = 0
 			peers := []p2p.Peer{p2p.Peer("buddy 0"), p2p.Peer("buddy 1")}
 			f.mh.EXPECT().GetPeers().Return(peers)
+			f.mh.EXPECT().ID().Return(p2p.Peer("self")).AnyTimes()
 			f.RegisterPeerHashes(peers[0], hashes[:2])
 			f.RegisterPeerHashes(peers[1], hashes[2:])
 
@@ -628,6 +629,7 @@ func Test_PeerEpochInfo(t *testing.T) {
 			t.Parallel()
 
 			f := createFetch(t)
+			f.mh.EXPECT().ID().Return(p2p.Peer("self")).AnyTimes()
 			var expected *EpochData
 			f.mAtxS.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, _ p2p.Peer, req []byte, okCB func([]byte), errCB func(error)) error {
