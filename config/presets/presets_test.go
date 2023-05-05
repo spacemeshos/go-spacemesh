@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -25,7 +24,6 @@ func TestCanGeneratePOST(t *testing.T) {
 
 			opts := params.SMESHING.Opts
 			opts.DataDir = t.TempDir()
-			opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 			mgr, err := activation.NewPostSetupManager(
 				types.EmptyNodeID,
