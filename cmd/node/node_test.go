@@ -901,16 +901,10 @@ func getTestDefaultConfig() *config.Config {
 	cfg.POST.LabelsPerUnit = 32
 	cfg.POST.K2 = 4
 
-	id, err := initialization.CPUProviderID()
-	if err != nil {
-		log.Error("cannot get cpu provider id")
-		return nil
-	}
-
 	cfg.SMESHING = config.DefaultSmeshingConfig()
 	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
-	cfg.SMESHING.Opts.ComputeProviderID = int(id)
+	cfg.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
 	cfg.HARE.RoundDuration = 2

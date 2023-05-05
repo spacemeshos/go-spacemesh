@@ -23,12 +23,9 @@ func TestCanGeneratePOST(t *testing.T) {
 			cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 			goldenATXID := types.ATXID{2, 3, 4}
 
-			id, err := initialization.CPUProviderID()
-			req.NoError(err)
-
 			opts := params.SMESHING.Opts
 			opts.DataDir = t.TempDir()
-			opts.ComputeProviderID = int(id)
+			opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 			mgr, err := activation.NewPostSetupManager(
 				types.EmptyNodeID,

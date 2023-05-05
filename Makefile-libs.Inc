@@ -78,7 +78,7 @@ $(PROJ_DIR)$(GPU_SETUP_ZIP):
 get-gpu-setup: $(PROJ_DIR)$(GPU_SETUP_ZIP) $(BINDIR_GPU_SETUP_LIBS)
 .PHONY: get-gpu-setup
 
-POSTRS_SETUP_REV = 0.1.7-beta1
+POSTRS_SETUP_REV = 0.1.7-beta2
 POSTRS_SETUP_ZIP = libpost-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SETUP_URL_ZIP ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SETUP_ZIP)
 ifeq ($(platform), windows)
