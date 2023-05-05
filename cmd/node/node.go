@@ -822,12 +822,45 @@ func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 	})
 }
 
-func (app *App) startServices(ctx context.Context, appErr chan error) error {
-	if err := app.fetcher.Start(); err != nil {
-		return fmt.Errorf("failed to start fetcher: %w", err)
+func (app *App) waitConnectedPeers(ctx context.Context) error {
+	want := uint64(app.Config.P2P.MinPeers)
+	ready := func() bool {
+		return app.host.PeerCount() >= want
 	}
+	timeout := time.Now().Add(10 * time.Minute)
+	wait := 10 * time.Second
+	for {
+		if ready() {
+			app.log.With().Info("peers ready",
+				log.Uint64("count", app.host.PeerCount()),
+				log.Uint64("want", want),
+			)
+			return nil
+		}
+		app.log.With().Warning("peers not ready",
+			log.Uint64("count", app.host.PeerCount()),
+			log.Uint64("want", want),
+		)
+		select {
+		case <-time.After(wait):
+			if time.Now().After(timeout) {
+				return fmt.Errorf("peers not ready. want %d got %d", want, app.host.PeerCount())
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func (app *App) startServices(ctx context.Context, appErr chan error) error {
 	app.eg.Go(func() error {
-		app.startSyncer(ctx)
+		if err := app.waitConnectedPeers(ctx); err != nil {
+			return fmt.Errorf("wait for peers: %w", err)
+		}
+		if err := app.fetcher.Start(); err != nil {
+			return fmt.Errorf("failed to start fetcher: %w", err)
+		}
+		app.syncer.Start(ctx)
 		return nil
 	})
 	app.beaconProtocol.Start(ctx)
@@ -1086,10 +1119,6 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
 
 	return edSgn, nil
-}
-
-func (app *App) startSyncer(ctx context.Context) {
-	app.syncer.Start(ctx)
 }
 
 func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
