@@ -194,7 +194,6 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 
 	b.eg.Go(func() error {
 		defer b.started.Store(false)
-		time.Sleep(time.Second)
 
 		select {
 		case <-ctx.Done():
