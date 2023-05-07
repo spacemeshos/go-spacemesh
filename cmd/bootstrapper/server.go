@@ -16,8 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-var bootstrapEpoch = types.EpochID(2)
-
 type NetworkParam struct {
 	Genesis      time.Time
 	LyrsPerEpoch uint32
@@ -40,21 +38,47 @@ func (np *NetworkParam) updateActiveSetTime(targetEpoch types.EpochID) time.Time
 // one on disk, even tho it's for an old epoch.
 type Server struct {
 	*http.Server
-	eg          errgroup.Group
-	logger      log.Log
-	fs          afero.Fs
-	gen         *Generator
-	genFallback bool
+	eg             errgroup.Group
+	logger         log.Log
+	fs             afero.Fs
+	gen            *Generator
+	genFallback    bool
+	bootstrapEpoch types.EpochID
 }
 
-func NewServer(fs afero.Fs, gen *Generator, fallback bool, port int, lg log.Log) *Server {
-	return &Server{
-		Server:      &http.Server{Addr: fmt.Sprintf(":%d", port)},
-		logger:      lg,
-		fs:          fs,
-		gen:         gen,
-		genFallback: fallback,
+type SrvOpt func(*Server)
+
+func WithSrvLogger(logger log.Log) SrvOpt {
+	return func(s *Server) {
+		s.logger = logger
 	}
+}
+
+func WithSrvFilesystem(fs afero.Fs) SrvOpt {
+	return func(s *Server) {
+		s.fs = fs
+	}
+}
+
+func WithBootstrapEpoch(e types.EpochID) SrvOpt {
+	return func(s *Server) {
+		s.bootstrapEpoch = e
+	}
+}
+
+func NewServer(gen *Generator, fallback bool, port int, opts ...SrvOpt) *Server {
+	s := &Server{
+		Server:         &http.Server{Addr: fmt.Sprintf(":%d", port)},
+		logger:         log.NewNop(),
+		fs:             afero.NewOsFs(),
+		gen:            gen,
+		genFallback:    fallback,
+		bootstrapEpoch: types.EpochID(2),
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 func (s *Server) Start(ctx context.Context, errCh chan error, params *NetworkParam) {
@@ -73,10 +97,10 @@ func (s *Server) Start(ctx context.Context, errCh chan error, params *NetworkPar
 }
 
 func (s *Server) loop(ctx context.Context, errCh chan error, params *NetworkParam) {
-	wait := time.Until(params.updateBeaconTime(bootstrapEpoch))
+	wait := time.Until(params.updateBeaconTime(s.bootstrapEpoch))
 	select {
 	case <-time.After(wait):
-		if err := s.GenBootstrap(ctx, 2); err != nil {
+		if err := s.GenBootstrap(ctx, s.bootstrapEpoch); err != nil {
 			errCh <- err
 			return
 		}
@@ -91,12 +115,12 @@ func (s *Server) loop(ctx context.Context, errCh chan error, params *NetworkPara
 	// start generating fallback data
 	s.eg.Go(
 		func() error {
-			s.genDataLoop(ctx, errCh, bootstrapEpoch, params.updateActiveSetTime, s.GenFallbackActiveSet)
+			s.genDataLoop(ctx, errCh, s.bootstrapEpoch, params.updateActiveSetTime, s.GenFallbackActiveSet)
 			return nil
 		})
 	s.eg.Go(
 		func() error {
-			s.genDataLoop(ctx, errCh, bootstrapEpoch+1, params.updateBeaconTime, s.GenFallbackBeacon)
+			s.genDataLoop(ctx, errCh, s.bootstrapEpoch+1, params.updateBeaconTime, s.GenFallbackBeacon)
 			return nil
 		})
 }
@@ -110,7 +134,7 @@ func epochBeacon(epoch types.EpochID) types.Beacon {
 }
 
 func (s *Server) GenBootstrap(ctx context.Context, epoch types.EpochID) error {
-	actives, err := getPartialActiveSet(ctx, epoch, s.gen.SmEndpoint())
+	actives, err := getActiveSet(ctx, s.gen.SmEndpoint(), epoch-1)
 	if err != nil {
 		return err
 	}
@@ -122,7 +146,7 @@ func (s *Server) GenFallbackBeacon(_ context.Context, epoch types.EpochID) error
 }
 
 func (s *Server) GenFallbackActiveSet(ctx context.Context, epoch types.EpochID) error {
-	actives, err := getPartialActiveSet(ctx, epoch, s.gen.SmEndpoint())
+	actives, err := getPartialActiveSet(ctx, s.gen.SmEndpoint(), epoch)
 	if err != nil {
 		return err
 	}
@@ -131,7 +155,7 @@ func (s *Server) GenFallbackActiveSet(ctx context.Context, epoch types.EpochID) 
 
 // in systests, we want to be sure the nodes use the fallback data unconditionally
 // we only use half of the active set as fallback value, so we can be sure that fallback is used during testing.
-func getPartialActiveSet(ctx context.Context, targetEpoch types.EpochID, smEndpoint string) ([]types.ATXID, error) {
+func getPartialActiveSet(ctx context.Context, smEndpoint string, targetEpoch types.EpochID) ([]types.ATXID, error) {
 	actives, err := getActiveSet(ctx, smEndpoint, targetEpoch-1)
 	if err != nil {
 		return nil, err

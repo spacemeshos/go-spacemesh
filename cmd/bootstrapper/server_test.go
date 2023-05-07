@@ -39,11 +39,16 @@ func TestServer(t *testing.T) {
 		WithFilesystem(fs),
 	)
 
-	srv := NewServer(fs, g, false, port, logtest.New(t))
+	epoch := types.EpochID(4)
+	srv := NewServer(g, false, port,
+		WithSrvFilesystem(fs),
+		WithSrvLogger(logtest.New(t)),
+		WithBootstrapEpoch(epoch),
+	)
 	np := &NetworkParam{
 		Genesis:      time.Now(),
 		LyrsPerEpoch: 2,
-		LyrDuration:  time.Second,
+		LyrDuration:  100 * time.Millisecond,
 		Offset:       1,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -58,8 +63,7 @@ func TestServer(t *testing.T) {
 	require.Empty(t, ch)
 
 	data := query(t, ctx)
-	epoch := types.EpochID(2)
-	verifyUpdate(t, data, epoch, hex.EncodeToString(epochBeacon(epoch).Bytes()), activeSetSize*3/4)
+	verifyUpdate(t, data, epoch, hex.EncodeToString(epochBeacon(epoch).Bytes()), activeSetSize)
 	cancel()
 	srv.Stop(ctx)
 }
