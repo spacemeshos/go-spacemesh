@@ -527,12 +527,12 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 	return nil
 }
 
-func deployBootstrapper(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
+func deployBootstrapper(ctx *testcontext.Context, id string, bsEpoch uint32, flags ...DeploymentFlag) (*NodeClient, error) {
 	if _, err := deployBootstrapperSvc(ctx, id); err != nil {
 		return nil, fmt.Errorf("apply poet service: %w", err)
 	}
 
-	node, err := deployBootstrapperD(ctx, id, flags...)
+	node, err := deployBootstrapperD(ctx, id, bsEpoch, flags...)
 	if err != nil {
 		return nil, err
 	}
@@ -555,9 +555,10 @@ func deployBootstrapperSvc(ctx *testcontext.Context, id string) (*apiv1.Service,
 	return ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
 }
 
-func deployBootstrapperD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
+func deployBootstrapperD(ctx *testcontext.Context, id string, bsEpoch uint32, flags ...DeploymentFlag) (*NodeClient, error) {
 	cmd := []string{
 		"/bin/go-bootstrapper",
+		strconv.Itoa(int(bsEpoch)),
 		"--serve-update",
 		"--data-dir=/data/bootstrapper",
 		"--epoch-offset=1",

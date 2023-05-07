@@ -136,6 +136,7 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 		smesherFlags:      map[string]DeploymentFlag{},
 		poetFlags:         map[string]DeploymentFlag{},
 		bootstrapperFlags: map[string]DeploymentFlag{},
+		bootstrapEpoch:    2,
 	}
 	genesis := GenesisTime(time.Now().Add(cctx.BootstrapDuration))
 	cluster.addFlag(genesis)
@@ -169,6 +170,8 @@ type Cluster struct {
 	clients       []*NodeClient
 	poets         []*NodeClient
 	bootstrappers []*NodeClient
+
+	bootstrapEpoch uint32
 }
 
 // GenesisID computes id from the configuration.
@@ -318,7 +321,15 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 		cctx.Log.Debugw("discovered existing poets", "name", poet.Name)
 	}
 
-	cctx.Log.Debugw("discovered cluster", "bootnodes", c.bootnodes, "smeshers", c.smeshers, "poets", len(c.poets))
+	c.bootstrappers, err = discoverNodes(cctx, bootstrapperApp)
+	if err != nil {
+		return err
+	}
+	for _, bs := range c.bootstrappers {
+		cctx.Log.Debugw("discovered existing bootstrapper", "name", bs.Name)
+	}
+
+	cctx.Log.Debugw("discovered cluster", "bootnodes", c.bootnodes, "smeshers", c.smeshers, "poets", len(c.poets), "bootstrappers", len(c.bootstrappers))
 	if err := c.accounts.Recover(cctx); err != nil {
 		return err
 	}
@@ -452,7 +463,7 @@ func (c *Cluster) AddBootstrapper(cctx *testcontext.Context, i int) error {
 		Name:  "--spacemesh-endpoint",
 		Value: fmt.Sprintf("dns:///%s:9092", c.clients[0].Name),
 	})
-	bs, err := deployBootstrapper(cctx, fmt.Sprintf("%s-%d", bootstrapperApp, i), flags...)
+	bs, err := deployBootstrapper(cctx, fmt.Sprintf("%s-%d", bootstrapperApp, i), c.bootstrapEpoch, flags...)
 	if err != nil {
 		return err
 	}
