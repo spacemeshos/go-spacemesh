@@ -159,6 +159,7 @@ func TestCalcEligibility(t *testing.T) {
 
 	t.Run("empty active set", func(t *testing.T) {
 		o := defaultOracle(t)
+		o.mBeacon.EXPECT().GetBeacon(gomock.Any())
 		lid := types.EpochID(5).FirstLayer()
 		res, err := o.CalcEligibility(context.Background(), lid, 1, 1, nid, nonce, types.EmptyVrfSignature)
 		require.ErrorIs(t, err, errEmptyActiveSet)
@@ -200,6 +201,7 @@ func TestCalcEligibility(t *testing.T) {
 
 	t.Run("empty active with fallback", func(t *testing.T) {
 		o := defaultOracle(t)
+		o.mBeacon.EXPECT().GetBeacon(gomock.Any())
 		lid := types.EpochID(5).FirstLayer().Add(o.cfg.ConfidenceParam)
 		res, err := o.CalcEligibility(context.Background(), lid, 1, 1, nid, nonce, types.EmptyVrfSignature)
 		require.ErrorIs(t, err, errEmptyActiveSet)
@@ -545,6 +547,7 @@ func TestActives(t *testing.T) {
 	t.Run("steady state", func(t *testing.T) {
 		numMiners++
 		o := defaultOracle(t)
+		o.mBeacon.EXPECT().GetBeacon(gomock.Any())
 		layer := types.EpochID(4).FirstLayer()
 		createLayerData(t, o.cdb, layer, numMiners)
 
@@ -567,6 +570,7 @@ func TestActives(t *testing.T) {
 	t.Run("use fallback despite block", func(t *testing.T) {
 		numMiners++
 		o := defaultOracle(t)
+		o.mBeacon.EXPECT().GetBeacon(gomock.Any()).AnyTimes()
 		layer := types.EpochID(4).FirstLayer()
 		end := layer.Add(o.cfg.ConfidenceParam)
 		createLayerData(t, o.cdb, layer, numMiners)
