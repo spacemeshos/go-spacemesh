@@ -321,7 +321,8 @@ func TestBuilder_StartSmeshingAvoidsPanickingIfPrepareInitializerReturnsError(t 
 	l := log.NewMockLogger(gomock.NewController(t))
 	l.EXPECT().Panic(gomock.Any(), gomock.Any())
 
-	tab := newTestBuilder(t, WithLogger(l))
+	tab := newTestBuilder(t)
+	tab.log = l
 
 	// Stub these methods in case they get called
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes()
@@ -334,7 +335,8 @@ func TestBuilder_StartSmeshingAvoidsPanickingIfPrepareInitializerReturnsError(t 
 
 	// Now verify that a panic does not occur if PrepareInitializer returns an error
 	l = log.NewMockLogger(gomock.NewController(t))
-	tab = newTestBuilder(t, WithLogger(l))
+	tab = newTestBuilder(t)
+	tab.log = l
 
 	// Stub these methods in case they get called
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes()

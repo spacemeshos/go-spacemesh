@@ -118,12 +118,6 @@ func WithPoetConfig(c PoetConfig) BuilderOption {
 	}
 }
 
-func WithLogger(l log.Logger) BuilderOption {
-	return func(b *Builder) {
-		b.log = l
-	}
-}
-
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(
 	conf Config,
