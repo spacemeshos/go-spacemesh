@@ -77,3 +77,27 @@ func TestAll(t *testing.T) {
 		require.EqualValues(t, n[i], accounts[i].Layer)
 	}
 }
+
+func TestSnapshot(t *testing.T) {
+	db := sql.InMemory()
+	addresses := []types.Address{{1, 1}, {2, 2}, {3, 3}}
+	n := []int{10, 7, 20}
+	for i, address := range addresses {
+		for _, update := range genSeq(address, n[i]) {
+			require.NoError(t, Update(db, update))
+		}
+	}
+
+	for lid := types.LayerID(20); lid.After(0); lid-- {
+		got, err := Snapshot(db, lid)
+		require.NoError(t, err)
+		for i, address := range addresses {
+			require.Equal(t, address, got[i].Address)
+			if uint32(n[i]) > lid.Uint32() {
+				require.EqualValues(t, lid, got[i].Layer)
+			} else {
+				require.EqualValues(t, n[i], got[i].Layer)
+			}
+		}
+	}
+}
