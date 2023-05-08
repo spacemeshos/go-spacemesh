@@ -42,7 +42,7 @@ func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 	}
 	cfg := tortoise.DefaultConfig()
 	cfg.LayerSize = layerSize
-	c.tortoise, err = tortoise.New(c.cdb, c.beacons,
+	c.tortoise, err = tortoise.New(
 		tortoise.WithLogger(logger.Named("trtl")),
 		tortoise.WithConfig(cfg),
 	)

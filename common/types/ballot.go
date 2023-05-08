@@ -293,7 +293,7 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("layer_id", b.Layer.Uint32())
 	encoder.AddUint32("epoch_id", uint32(b.Layer.GetEpoch()))
 	encoder.AddString("smesher", b.SmesherID.String())
-	encoder.AddString("opinion hash", b.OpinionHash.String())
+	encoder.AddString("opinion hash", b.OpinionHash.ShortString())
 	encoder.AddString("base_ballot", b.Votes.Base.String())
 	encoder.AddInt("support", len(b.Votes.Support))
 	encoder.AddInt("against", len(b.Votes.Against))

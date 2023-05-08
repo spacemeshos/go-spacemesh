@@ -312,10 +312,15 @@ func defaultTestConfig() Config {
 	}
 }
 
-func tortoiseFromSimState(tb testing.TB, state sim.State, opts ...Opt) *Tortoise {
+func tortoiseFromSimState(tb testing.TB, state sim.State, opts ...Opt) *persistanceAdapter {
 	trtl, err := New(opts...)
 	require.NoError(tb, err)
-	return trtl
+	return &persistanceAdapter{
+		TB:       tb,
+		Tortoise: trtl,
+		db:       state.DB,
+		beacon:   state.Beacons,
+	}
 }
 
 func defaultAlgorithm(tb testing.TB) *Tortoise {
@@ -514,7 +519,11 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 	require.Equal(t, last.Sub(1), verified)
 }
 
-func processBlockUpdates(tb testing.TB, tt *Tortoise, db sql.Executor) {
+type updater interface {
+	Updates() map[types.LayerID]map[types.BlockID]bool
+}
+
+func processBlockUpdates(tb testing.TB, tt updater, db sql.Executor) {
 	updated := tt.Updates()
 	for _, bids := range updated {
 		for bid, valid := range bids {
@@ -951,9 +960,13 @@ func outOfWindowBaseBallot(n, window int) sim.VotesGenerator {
 	}
 }
 
+type voter interface {
+	EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*types.Opinion, error)
+}
+
 // tortoiseVoting is for testing that protocol makes progress using heuristic that we are
 // using for the network.
-func tortoiseVoting(tortoise *Tortoise) sim.VotesGenerator {
+func tortoiseVoting(tortoise voter) sim.VotesGenerator {
 	return func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
 		votes, err := tortoise.EncodeVotes(context.Background())
 		if err != nil {
@@ -963,7 +976,7 @@ func tortoiseVoting(tortoise *Tortoise) sim.VotesGenerator {
 	}
 }
 
-func tortoiseVotingWithCurrent(tortoise *Tortoise) sim.VotesGenerator {
+func tortoiseVotingWithCurrent(tortoise voter) sim.VotesGenerator {
 	return func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
 		current := types.GetEffectiveGenesis().Add(1)
 		if len(layers) > 0 {
@@ -2716,7 +2729,9 @@ func TestEncodeVotes(t *testing.T) {
 			BaseTickHeight:    1,
 			TickCount:         1,
 		}
+		header.PublishEpoch = lid.GetEpoch() - 1
 		tortoise.OnAtx(header)
+		tortoise.OnBeacon(lid.GetEpoch(), types.EmptyBeacon)
 
 		ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}}
 		ballot.ActiveSet = []types.ATXID{atxid}
