@@ -22,7 +22,7 @@ func TestFallback(t *testing.T) {
 	t.Parallel()
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
-	cl, err := cluster.Reuse(tctx,
+	cl, err := cluster.ReuseWait(tctx,
 		cluster.WithKeys(10),
 		cluster.WithBootstrapperFlag(cluster.GenerateFallback()),
 	)
@@ -83,7 +83,10 @@ func TestFallback(t *testing.T) {
 	lastEpoch := last / layersPerEpoch
 	for epoch := uint32(2); epoch <= lastEpoch; epoch++ {
 		refActives, err := queryEpochAtxs(tctx, cl.Client(0), epoch)
-		cutoff := len(refActives) * 3 / 4 // bootstrapper only sets 3/4 of the epoch atx to be the fallback active set
+		cutoff := len(refActives)
+		if epoch > 2 {
+			cutoff = len(refActives) * 3 / 4 // bootstrapper only sets 3/4 of the epoch atx to be the fallback active set
+		}
 		require.NoError(t, err, "query atxs from client", cl.Client(0).Name)
 		tctx.Log.Debugw("got atx ids from client", "epoch", epoch, "client", cl.Client(0).Name, "size", len(refActives))
 		for i := 0; i < cl.Total(); i++ {

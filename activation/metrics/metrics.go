@@ -35,3 +35,11 @@ var (
 	PublishOntimeWindowLatency = publishWindowLatency.WithLabelValues("ontime")
 	PublishLateWindowLatency   = publishWindowLatency.WithLabelValues("late")
 )
+
+var PostVerificationLatency = metrics.NewHistogramWithBuckets(
+	"post_verification_seconds",
+	namespace,
+	"post verification in seconds",
+	[]string{},
+	prometheus.ExponentialBuckets(1, 2, 20),
+).WithLabelValues()

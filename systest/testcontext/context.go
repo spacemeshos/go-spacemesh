@@ -117,9 +117,8 @@ var (
 const nsfile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 
 const (
-	keepLabel        = "keep"
-	clusterSizeLabel = "size"
-	poetSizeLabel    = "poet-size"
+	keepLabel     = "keep"
+	poetSizeLabel = "poet-size"
 )
 
 func rngName() string {
@@ -178,10 +177,9 @@ func deleteNamespace(ctx *Context) error {
 func deployNamespace(ctx *Context) error {
 	_, err := ctx.Client.CoreV1().Namespaces().Apply(ctx,
 		corev1.Namespace(ctx.Namespace).WithLabels(map[string]string{
-			"testid":         ctx.TestID,
-			keepLabel:        strconv.FormatBool(ctx.Keep),
-			clusterSizeLabel: strconv.Itoa(ctx.ClusterSize),
-			poetSizeLabel:    strconv.Itoa(ctx.PoetSize),
+			"testid":      ctx.TestID,
+			keepLabel:     strconv.FormatBool(ctx.Keep),
+			poetSizeLabel: strconv.Itoa(ctx.PoetSize),
 		}),
 		apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
@@ -218,17 +216,6 @@ func updateContext(ctx *Context) error {
 			"keepval", keepval)
 	}
 	ctx.Keep = ctx.Keep || keep
-
-	sizeval := ns.Labels[clusterSizeLabel]
-	if err != nil {
-		ctx.Log.Panic("invalid state. cluster size label should exist")
-	}
-	size, err := strconv.Atoi(sizeval)
-	if err != nil {
-		ctx.Log.Panicw("invalid state. size label should be parsable as an integer",
-			"sizeval", sizeval)
-	}
-	ctx.ClusterSize = size
 
 	psizeval := ns.Labels[poetSizeLabel]
 	if err != nil {

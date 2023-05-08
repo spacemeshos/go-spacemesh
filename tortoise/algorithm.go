@@ -42,7 +42,7 @@ type Tortoise struct {
 	ctx    context.Context
 	cfg    Config
 
-	mu   sync.Mutex
+	mu   sync.RWMutex
 	trtl *turtle
 }
 
@@ -240,8 +240,8 @@ type DecodedBallot struct {
 // DecodeBallot decodes ballot if it wasn't processed earlier.
 func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 	start := time.Now()
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	waitBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	info, min, err := t.trtl.decodeBallot(ballot)
 	if err != nil {
@@ -272,6 +272,7 @@ func (t *Tortoise) StoreBallot(decoded *DecodedBallot) error {
 		decoded.info.malicious = true
 	}
 	t.trtl.storeBallot(decoded.info, decoded.minHint)
+	storeBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	return nil
 }
 
@@ -292,8 +293,8 @@ func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
 // GetMissingActiveSet returns unknown atxs from the original list. It is done for a specific epoch
 // as active set atxs never cross epoch boundary.
 func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) []types.ATXID {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	edata, exists := t.trtl.epochs[epoch]
 	if !exists {
 		return atxs
@@ -310,8 +311,8 @@ func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) 
 
 // Results returns layers that crossed threshold in range [from, to].
 func (t *Tortoise) Results(from, to types.LayerID) ([]result.Layer, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	if from <= t.trtl.evicted {
 		return nil, fmt.Errorf("requested layer %d is before evicted %d", from, t.trtl.evicted)
 	}
