@@ -29,14 +29,14 @@ func Recover(db *datastore.CachedDB, beacon system.BeaconGetter, opts ...Opt) (*
 		return trtl, nil
 	}
 	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(latest); lid = lid.Add(1) {
-		if err := loadLayer(context.Background(), trtl, db, beacon, lid); err != nil {
+		if err := RecoverLayer(context.Background(), trtl, db, beacon, lid); err != nil {
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
 		}
 	}
 	return trtl, nil
 }
 
-func loadLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, beacon system.BeaconGetter, lid types.LayerID) error {
+func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, beacon system.BeaconGetter, lid types.LayerID) error {
 	if lid.FirstInEpoch() {
 		if err := db.IterateEpochATXHeaders(lid.GetEpoch(), func(header *types.ActivationTxHeader) bool {
 			trtl.OnAtx(header)
