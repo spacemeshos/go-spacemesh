@@ -207,7 +207,7 @@ func TestAbstainLateBlock(t *testing.T) {
 	block := types.Block{}
 	block.LayerIndex = last.Sub(1)
 	block.Initialize()
-	tortoise.OnBlock(&block)
+	tortoise.OnBlock(block.ToVote())
 	tortoise.OnHareOutput(block.LayerIndex, block.ID())
 	tortoise.TallyVotes(ctx, last)
 
@@ -312,10 +312,10 @@ func defaultTestConfig() Config {
 	}
 }
 
-func tortoiseFromSimState(tb testing.TB, state sim.State, opts ...Opt) *persistanceAdapter {
+func tortoiseFromSimState(tb testing.TB, state sim.State, opts ...Opt) *recoveryAdapter {
 	trtl, err := New(opts...)
 	require.NoError(tb, err)
-	return &persistanceAdapter{
+	return &recoveryAdapter{
 		TB:       tb,
 		Tortoise: trtl,
 		db:       state.DB,
@@ -1372,7 +1372,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 			blks, err := blocks.Layer(s.GetState(0).DB, tc.lid)
 			require.NoError(t, err)
 			for _, block := range blks {
-				tortoise.OnBlock(block)
+				tortoise.OnBlock(block.ToVote())
 			}
 			for _, block := range blks {
 				header := block.ToVote()
@@ -1615,8 +1615,8 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 		mergedBlocks, err := blocks.Layer(s1.GetState(0).DB, lid)
 		require.NoError(t, err)
 		for _, block := range mergedBlocks {
-			tortoise1.OnBlock(block)
-			tortoise2.OnBlock(block)
+			tortoise1.OnBlock(block.ToVote())
+			tortoise2.OnBlock(block.ToVote())
 		}
 		mergedBallots, err := ballots.Layer(s1.GetState(0).DB, lid)
 		require.NoError(t, err)
@@ -1837,7 +1837,7 @@ func TestLateBlock(t *testing.T) {
 	require.True(t, len(block.TxIDs) > 2)
 	block.TxIDs = block.TxIDs[:2]
 	block.Initialize()
-	tortoise.OnBlock(&block)
+	tortoise.OnBlock(block.ToVote())
 	require.NoError(t, blocks.Add(s.GetState(0).DB, &block))
 
 	for _, last = range sim.GenLayers(s,
@@ -2616,7 +2616,7 @@ func TestEncodeVotes(t *testing.T) {
 		block.LayerIndex = types.GetEffectiveGenesis().Add(1)
 		block.Initialize()
 
-		tortoise.OnBlock(&block)
+		tortoise.OnBlock(block.ToVote())
 		tortoise.OnHareOutput(block.LayerIndex, block.ID())
 
 		tortoise.TallyVotes(ctx, block.LayerIndex.Add(1))
@@ -2681,7 +2681,7 @@ func TestEncodeVotes(t *testing.T) {
 		}
 		for _, block := range blks {
 			block.Initialize()
-			tortoise.OnBlock(block)
+			tortoise.OnBlock(block.ToVote())
 		}
 
 		current := lid.Add(2)
@@ -2715,7 +2715,7 @@ func TestEncodeVotes(t *testing.T) {
 		hare := types.GetEffectiveGenesis().Add(1)
 		block := types.Block{InnerBlock: types.InnerBlock{LayerIndex: hare}}
 		block.Initialize()
-		tortoise.OnBlock(&block)
+		tortoise.OnBlock(block.ToVote())
 		tortoise.OnHareOutput(hare, block.ID())
 
 		lid := hare.Add(1)
@@ -2973,10 +2973,7 @@ func TestMultipleTargets(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, votes.Against, 1)
 	require.Equal(t, votes.Against[0], block.Header)
-	tortoise.OnBlock(types.NewExistingBlock(block.Header.ID, types.InnerBlock{
-		LayerIndex: block.Header.LayerID,
-		TickHeight: block.Header.Height,
-	}))
+	tortoise.OnBlock(block.Header)
 	votes, err = tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)
 	require.Empty(t, votes.Against)

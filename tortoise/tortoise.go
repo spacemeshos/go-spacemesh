@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/fixed"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals/util"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
@@ -452,26 +451,22 @@ func (t *turtle) computeEpochHeight(epoch types.EpochID) {
 	einfo.height = getMedian(heights)
 }
 
-func (t *turtle) onBlock(rst result.Block) {
-	if rst.Header.LayerID <= t.evicted {
+func (t *turtle) onBlock(header types.BlockHeader, data bool, valid bool) {
+	if header.LayerID <= t.evicted {
 		return
 	}
-	if binfo := t.state.getBlock(rst.Header); binfo != nil {
-		binfo.data = rst.Data
-		if rst.Hare {
-			binfo.hare = support
+	if binfo := t.state.getBlock(header); binfo != nil {
+		binfo.data = data
+		if valid {
+			binfo.validity = support
 		}
 		return
 	}
-	t.logger.With().Debug("on data block", log.Inline(&rst.Header))
+	t.logger.With().Debug("on data block", log.Inline(&header))
 
-	binfo := newBlockInfo(rst.Header)
-	binfo.data = rst.Data
-	if rst.Hare {
-		binfo.hare = support
-	}
-	// TODO(dshulyak) test if it works not updating against blocks
-	if rst.Valid {
+	binfo := newBlockInfo(header)
+	binfo.data = data
+	if valid {
 		binfo.validity = support
 	}
 	t.addBlock(binfo)

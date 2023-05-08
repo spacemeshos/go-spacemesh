@@ -198,21 +198,22 @@ func (t *Tortoise) OnAtx(atx *types.ActivationTxHeader) {
 	t.trtl.onAtx(atx)
 }
 
-// OnBlock should be called every time new block is received.
-func (t *Tortoise) OnBlock(block *types.Block) {
+// OnBlock updates tortoise with information that data is available locally.
+func (t *Tortoise) OnBlock(header types.BlockHeader) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	t.trtl.onBlock(result.Block{Header: block.ToVote(), Data: true})
+	t.trtl.onBlock(header, true, false)
 }
 
-func (t *Tortoise) OnHistoricalResult(result result.Block) {
+// OnValidBlock is used for loading stored historical data or possibly opinion from peers. It lets tortoise know that data is available locally, and block is supported by local opinion (required for verifying tortoise).
+func (t *Tortoise) OnValidBlock(header types.BlockHeader) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	t.trtl.onBlock(result)
+	t.trtl.onBlock(header, true, true)
 }
 
 // OnBallot should be called every time new ballot is received.

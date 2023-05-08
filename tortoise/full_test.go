@@ -359,7 +359,7 @@ func TestFullCountVotes(t *testing.T) {
 				}
 				consensus.epoch(lid.GetEpoch()).height = localHeight
 				for _, block := range layerBlocks {
-					tortoise.OnBlock(&block)
+					tortoise.OnBlock(block.ToVote())
 				}
 				blocks = append(blocks, layerBlocks)
 			}

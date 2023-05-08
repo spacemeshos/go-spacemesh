@@ -522,7 +522,7 @@ func (app *App) initServices(
 	if trtlCfg.BadBeaconVoteDelayLayers == 0 {
 		trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 	}
-	trtl, err := tortoise.New(app.cachedDB, beaconProtocol,
+	trtl, err := tortoise.Recover(app.cachedDB, beaconProtocol,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
