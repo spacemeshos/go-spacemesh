@@ -657,7 +657,7 @@ func (app *App) initServices(
 		patrol,
 		app.hOracle,
 		clock,
-		weakCoin{db: app.cachedDB, tortoise: trtl},
+		tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
 		app.addLogger(HareLogger, lg),
 	)
 
@@ -1273,12 +1273,12 @@ func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
 	return rst, nil
 }
 
-type weakCoin struct {
+type tortoiseWeakCoin struct {
 	db       sql.Executor
 	tortoise system.Tortoise
 }
 
-func (w weakCoin) Set(lid types.LayerID, value bool) error {
+func (w tortoiseWeakCoin) Set(lid types.LayerID, value bool) error {
 	if err := layers.SetWeakCoin(w.db, lid, value); err != nil {
 		return err
 	}

@@ -50,18 +50,6 @@ func (mr *MockTortoiseMockRecorder) LatestComplete() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestComplete", reflect.TypeOf((*MockTortoise)(nil).LatestComplete))
 }
 
-// OnBeacon mocks base method.
-func (m *MockTortoise) OnBeacon(arg0 types.EpochID, arg1 types.Beacon) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnBeacon", arg0, arg1)
-}
-
-// OnBeacon indicates an expected call of OnBeacon.
-func (mr *MockTortoiseMockRecorder) OnBeacon(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnBeacon", reflect.TypeOf((*MockTortoise)(nil).OnBeacon), arg0, arg1)
-}
-
 // OnBlock mocks base method.
 func (m *MockTortoise) OnBlock(arg0 types.BlockHeader) {
 	m.ctrl.T.Helper()

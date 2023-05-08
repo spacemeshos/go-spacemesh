@@ -14,7 +14,6 @@ type Tortoise interface {
 	OnBlock(types.BlockHeader)
 	OnHareOutput(types.LayerID, types.BlockID)
 	OnWeakCoin(types.LayerID, bool)
-	OnBeacon(types.EpochID, types.Beacon)
 	TallyVotes(context.Context, types.LayerID)
 	Updates() map[types.LayerID]map[types.BlockID]bool
 	LatestComplete() types.LayerID
