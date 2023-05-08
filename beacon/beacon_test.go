@@ -16,6 +16,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -267,6 +268,16 @@ func TestBeacon_NoProposals(t *testing.T) {
 	}
 }
 
+func getNoWait(tb testing.TB, results <-chan result.Beacon) result.Beacon {
+	select {
+	case rst := <-results:
+		return rst
+	default:
+	}
+	require.Fail(tb, "beacon is not available")
+	panic("unreachable")
+}
+
 func TestBeaconNotSynced(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
@@ -281,6 +292,8 @@ func TestBeaconNotSynced(t *testing.T) {
 	bootstrap := types.Beacon{1, 2, 3, 4}
 	require.NoError(t, tpd.UpdateBeacon(types.EpochID(2), bootstrap))
 	got, err = tpd.GetBeacon(types.EpochID(2))
+	require.Equal(t, got, getNoWait(t, tpd.Results()).Beacon)
+
 	require.NoError(t, err)
 	require.Equal(t, bootstrap, got)
 

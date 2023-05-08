@@ -531,6 +531,13 @@ func (app *App) initServices(
 	if err != nil {
 		return fmt.Errorf("can't recover tortoise state: %w", err)
 	}
+	app.eg.Go(func() error {
+		for rst := range beaconProtocol.Results() {
+			trtl.OnBeacon(rst.Epoch, rst.Beacon)
+		}
+		app.log.Debug("beacon results watcher exited")
+		return nil
+	})
 
 	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(ExecutorLogger, lg))
 	msh, err := mesh.NewMesh(app.cachedDB, clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
