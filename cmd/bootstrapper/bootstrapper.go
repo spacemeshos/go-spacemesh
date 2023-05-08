@@ -24,6 +24,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+const (
+	retries       = 3
+	retryInterval = 3 * time.Second
+)
+
 var (
 	bitcoinEndpoint   string
 	spacemeshEndpoint string
@@ -69,6 +74,14 @@ var cmd = &cobra.Command{
 	Use:   "bootstrapper",
 	Short: "generate bootstrapping data",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return fmt.Errorf("epoch not specfiied")
+		}
+		targetEpoch, err := strconv.Atoi(args[0])
+		if err != nil {
+			return fmt.Errorf("cannot convert %v to epoch: %w", args[0], err)
+		}
+
 		log.JSONLog(true)
 		lvl, err := zap.ParseAtomicLevel(strings.ToLower(logLevel))
 		if err != nil {
@@ -84,17 +97,15 @@ var cmd = &cobra.Command{
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer cancel()
 		if serveUpdate {
-			return runServer(ctx, logger, g)
+			srv := NewServer(g, genFallback, port,
+				WithSrvFilesystem(afero.NewOsFs()),
+				WithSrvLogger(logger.WithName("server")),
+				WithBootstrapEpoch(types.EpochID(targetEpoch)),
+			)
+			return runServer(ctx, srv)
 		}
 
 		// one-time execution
-		if len(args) == 0 {
-			return fmt.Errorf("epoch not specfiied")
-		}
-		targetEpoch, err := strconv.Atoi(args[0])
-		if err != nil {
-			return fmt.Errorf("cannot convert %v to epoch: %w", args[0], err)
-		}
 		if !genBeacon && !genActiveSet {
 			return fmt.Errorf("no action specified via --beacon or --actives")
 		}
@@ -157,12 +168,26 @@ func parseToGsBucket(gsPath string) (bucket, path string, err error) {
 	return parsed.Host, parsed.Path[1:], nil
 }
 
-func runServer(ctx context.Context, logger log.Log, gen *Generator) error {
-	params, err := queryNetworkParams(ctx, spacemeshEndpoint)
+func runServer(ctx context.Context, srv *Server) error {
+	var (
+		params *NetworkParam
+		err    error
+	)
+	for i := 0; i < retries; i++ {
+		params, err = queryNetworkParams(ctx, spacemeshEndpoint)
+		if err != nil {
+			select {
+			case <-time.After(retryInterval):
+				continue
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		break
+	}
 	if err != nil {
 		return fmt.Errorf("query network params %v: %w", spacemeshEndpoint, err)
 	}
-	srv := NewServer(afero.NewOsFs(), gen, genFallback, port, logger.WithName("server"))
 	ch := make(chan error, 100)
 	srv.Start(ctx, ch, params)
 	select {

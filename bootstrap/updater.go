@@ -139,6 +139,7 @@ func (u *Updater) Load(ctx context.Context) error {
 		if err = u.updateAndNotify(ctx, verified); err != nil {
 			return err
 		}
+		u.logger.With().Info("loaded boostrap file", log.Inline(verified))
 	}
 	return nil
 }
@@ -150,7 +151,10 @@ func (u *Updater) Start(ctx context.Context) {
 				return err
 			}
 			wait := time.Duration(0)
-			u.logger.With().Info("start listening to update", log.String("source", u.cfg.URL))
+			u.logger.With().Info("start listening to update",
+				log.String("source", u.cfg.URL),
+				log.Duration("interval", u.cfg.Interval),
+			)
 			for {
 				select {
 				case <-ctx.Done():
@@ -160,8 +164,6 @@ func (u *Updater) Start(ctx context.Context) {
 					if err := u.DoIt(ctx); err != nil {
 						updateFailureCount.Add(1)
 						u.logger.With().Debug("failed to get bootstrap update", log.Err(err))
-					} else {
-						updateOkCount.Add(1)
 					}
 				}
 				wait = u.cfg.Interval
@@ -198,7 +200,6 @@ func (u *Updater) getEtag() string {
 }
 
 func (u *Updater) DoIt(ctx context.Context) error {
-	logger := u.logger.WithContext(ctx)
 	verified, data, err := u.get(ctx)
 	if err != nil {
 		return err
@@ -206,14 +207,15 @@ func (u *Updater) DoIt(ctx context.Context) error {
 	if verified == nil { // no new update
 		return nil
 	}
-	verified.Persisted, err = persist(logger, u.fs, u.cfg, verified.UpdateId, data)
+	verified.Persisted, err = persist(ctx, u.logger, u.fs, u.cfg, verified.UpdateId, data)
 	if err != nil {
 		return err
 	}
-	logger.With().Info("new bootstrap file", log.Inline(verified))
+	u.logger.WithContext(ctx).With().Info("new bootstrap file", log.Inline(verified))
 	if err = u.updateAndNotify(ctx, verified); err != nil {
 		return err
 	}
+	updateOkCount.Add(1)
 	return nil
 }
 
@@ -373,7 +375,7 @@ func load(fs afero.Fs, cfg Config) (*VerifiedUpdate, error) {
 	return verified, nil
 }
 
-func persist(logger log.Log, fs afero.Fs, cfg Config, id int64, data []byte) (string, error) {
+func persist(ctx context.Context, logger log.Log, fs afero.Fs, cfg Config, id int64, data []byte) (string, error) {
 	if len(cfg.DataDir) == 0 {
 		return "", nil
 	}
@@ -386,7 +388,7 @@ func persist(logger log.Log, fs afero.Fs, cfg Config, id int64, data []byte) (st
 		return "", fmt.Errorf("persist bootstrap: %w", err)
 	}
 	if err = prune(fs, dir, cfg.NumToKeep); err != nil {
-		logger.With().Warning("failed to prune bootstrap files", log.Err(err))
+		logger.WithContext(ctx).With().Warning("failed to prune bootstrap files", log.Err(err))
 	}
 	return filename, nil
 }
