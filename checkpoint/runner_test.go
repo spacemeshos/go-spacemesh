@@ -84,9 +84,12 @@ func genAccountSeq(address types.Address, n int) []*types.Account {
 	var seq []*types.Account
 	for i := 1; i <= n; i++ {
 		seq = append(seq, &types.Account{
-			Address: address,
-			Layer:   types.LayerID(uint32(i)),
-			Balance: uint64(i),
+			Address:         address,
+			Layer:           types.LayerID(uint32(i)),
+			Balance:         uint64(i),
+			NextNonce:       uint64(i + 1),
+			TemplateAddress: &types.Address{1},
+			State:           []byte{1, 3},
 		})
 	}
 	return seq
@@ -109,17 +112,25 @@ func toShortAtx(v *types.VerifiedActivationTx, cmt *types.ATXID, nonce *types.VR
 
 func TestRunner_Generate(t *testing.T) {
 	db := sql.InMemory()
+	snapshot := types.LayerID(15)
+	restore := types.LayerID(18)
+
 	addresses := []types.Address{{1, 1}, {2, 2}, {3, 3}}
 	lids := []int{10, 7, 20}
+	explids := []int{10, 7, 15}
+	var expAccts []*types.Account
 	for i, address := range addresses {
-		for _, update := range genAccountSeq(address, lids[i]) {
-			require.NoError(t, accounts.Update(db, update))
+		for _, acct := range genAccountSeq(address, lids[i]) {
+			require.NoError(t, accounts.Update(db, acct))
+			if acct.Layer.Uint32() == uint32(explids[i]) {
+				expAccts = append(expAccts, acct)
+			}
 		}
 	}
 
 	miners := []types.NodeID{{1, 1, 1}, {2, 2, 2}, {3, 3, 3}}
 	epochs := []int{6, 3, 10}
-	expected := map[types.NodeID][]checkpoint.ShortAtx{}
+	expAtxs := map[types.NodeID][]checkpoint.ShortAtx{}
 	for i, nid := range miners {
 		var first *types.VerifiedActivationTx
 		for j, atx := range genAtxSeq(t, nid, epochs[i]) {
@@ -128,7 +139,7 @@ func TestRunner_Generate(t *testing.T) {
 				first = atx
 			}
 			if j >= epochs[i]-2 {
-				expected[nid] = append(expected[nid], toShortAtx(atx, first.CommitmentATX, first.VRFNonce))
+				expAtxs[nid] = append(expAtxs[nid], toShortAtx(atx, first.CommitmentATX, first.VRFNonce))
 			}
 		}
 	}
@@ -147,8 +158,6 @@ func TestRunner_Generate(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, checkpoint.ValidateSchema(data))
 
-	snapshot := types.LayerID(15)
-	restore := types.LayerID(18)
 	persisted, err := afero.ReadFile(fs, checkpoint.SelfCheckpointFilename(dir, snapshot, restore))
 	require.NoError(t, err)
 	require.True(t, bytes.Equal(data, persisted))
@@ -166,13 +175,15 @@ func TestRunner_Generate(t *testing.T) {
 		got[nid] = append(got[nid], atx)
 	}
 	for nid, shortAtxes := range got {
-		require.ElementsMatch(t, expected[nid], shortAtxes)
+		require.ElementsMatch(t, expAtxs[nid], shortAtxes)
 	}
 
-	require.Len(t, cpdata.Data.Accounts, len(addresses))
+	require.Len(t, cpdata.Data.Accounts, len(expAccts))
 	for i, acct := range cpdata.Data.Accounts {
-		require.Equal(t, hex.EncodeToString(addresses[i].Bytes()), acct.Address)
-		// balance is set to last update layer.
-		require.LessOrEqual(t, acct.Balance, uint64(15))
+		require.Equal(t, hex.EncodeToString(expAccts[i].Address.Bytes()), acct.Address)
+		require.EqualValues(t, expAccts[i].Balance, acct.Balance)
+		require.EqualValues(t, expAccts[i].NextNonce, acct.Nonce)
+		require.Equal(t, hex.EncodeToString(expAccts[i].TemplateAddress.Bytes()), acct.Template)
+		require.Equal(t, hex.EncodeToString(expAccts[i].State), acct.State)
 	}
 }

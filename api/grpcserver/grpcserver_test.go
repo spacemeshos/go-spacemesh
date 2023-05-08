@@ -919,7 +919,10 @@ func TestSmesherService(t *testing.T) {
 	postProvider.EXPECT().Status().Return(&activation.PostSetupStatus{}).AnyTimes()
 	postProvider.EXPECT().ComputeProviders().Return(nil).AnyTimes()
 	smeshingAPI := &SmeshingAPIMock{}
-	svc := NewSmesherService(postProvider, smeshingAPI, 10*time.Millisecond, activation.DefaultPostSetupOpts())
+	mockFunc := func() CheckpointRunner {
+		return NewMockCheckpointRunner(ctrl)
+	}
+	svc := NewSmesherService(postProvider, smeshingAPI, mockFunc, 10*time.Millisecond, activation.DefaultPostSetupOpts())
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -1656,7 +1659,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	grpcStatus, ok := status.FromError(err)
 	req.True(ok)
 	req.Equal(codes.InvalidArgument, grpcStatus.Code())
-	req.Equal("Failed to verify transaction", grpcStatus.Message())
+	req.Contains(grpcStatus.Message(), "Failed to verify transaction")
 	req.Nil(res)
 }
 

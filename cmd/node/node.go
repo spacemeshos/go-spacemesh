@@ -32,6 +32,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
+	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -855,6 +856,16 @@ func (app *App) startServices(ctx context.Context, appErr chan error) error {
 	return nil
 }
 
+func (app *App) newCheckpointRunnerFunc() grpcserver.CheckpointRunnerFunc {
+	return func() grpcserver.CheckpointRunner {
+		return checkpoint.NewRunner(
+			app.db,
+			checkpoint.WithDataDir(app.Config.DataDir()),
+			checkpoint.WithLogger(app.log.WithName("checkpoint")),
+		)
+	}
+}
+
 func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcserver.ServiceAPI, error) {
 	switch svc {
 	case grpcserver.Debug:
@@ -866,7 +877,12 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 	case grpcserver.Node:
 		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
 	case grpcserver.Smesher:
-		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
+		return grpcserver.NewSmesherService(
+			app.postSetupMgr,
+			app.atxBuilder,
+			app.newCheckpointRunnerFunc(),
+			app.Config.API.SmesherStreamInterval,
+			app.Config.SMESHING.Opts), nil
 	case grpcserver.Transaction:
 		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
 	case grpcserver.Activation:

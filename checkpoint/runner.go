@@ -87,18 +87,10 @@ func (r *Runner) Generate(ctx context.Context, snapshotLayer types.LayerID, rest
 			if err != nil {
 				return fmt.Errorf("atxs snapshot commitment: %w", err)
 			}
-			r.logger.With().Info("found commitment atx",
-				log.Stringer("smesher", catx.SmesherID),
-				log.Stringer("commitmentATX", commitmentAtx),
-			)
 			vrfNonce, err := atxs.VRFNonce(tx, catx.SmesherID, snapshotLayer.GetEpoch())
 			if err != nil {
 				return fmt.Errorf("atxs snapshot nonce: %w", err)
 			}
-			r.logger.With().Info("found vrf nonce",
-				log.Stringer("smesher", catx.SmesherID),
-				log.Uint64("nonce", uint64(vrfNonce)),
-			)
 			copy(atxSnapshot[i].CommitmentATX[:], commitmentAtx[:])
 			atxSnapshot[i].VRFNonce = vrfNonce
 		}
@@ -130,10 +122,12 @@ func (r *Runner) Generate(ctx context.Context, snapshotLayer types.LayerID, rest
 			Address: hex.EncodeToString(acct.Address.Bytes()),
 			Balance: acct.Balance,
 			Nonce:   acct.NextNonce,
-			State:   hex.EncodeToString(acct.State),
 		}
 		if acct.TemplateAddress != nil {
 			a.Template = hex.EncodeToString(acct.TemplateAddress.Bytes())
+		}
+		if acct.State != nil {
+			a.State = hex.EncodeToString(acct.State)
 		}
 		checkpoint.Data.Accounts = append(checkpoint.Data.Accounts, a)
 	}
@@ -152,12 +146,6 @@ func (r *Runner) Generate(ctx context.Context, snapshotLayer types.LayerID, rest
 		log.String("checkpoint", filename),
 		log.String("content", string(data)),
 	)
-	if _, err = r.fs.Stat(filename); err != nil {
-		r.logger.Panic("failed to persist checkpoint data",
-			log.String("checkpoint", filename),
-			log.Err(err),
-		)
-	}
 	return data, nil
 }
 

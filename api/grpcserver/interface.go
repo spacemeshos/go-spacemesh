@@ -79,3 +79,7 @@ type meshAPI interface {
 type oracle interface {
 	ActiveSet(context.Context, types.EpochID) ([]types.ATXID, error)
 }
+
+type CheckpointRunner interface {
+	Generate(context.Context, types.LayerID, types.LayerID) ([]byte, error)
+}

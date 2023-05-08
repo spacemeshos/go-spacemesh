@@ -2,6 +2,7 @@ package grpcserver_test
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"testing"
 	"time"
@@ -21,8 +22,10 @@ func TestPostConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	postSetupProvider := activation.NewMockpostSetupProvider(ctrl)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-
-	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts())
+	mockFunc := func() grpcserver.CheckpointRunner {
+		return grpcserver.NewMockCheckpointRunner(ctrl)
+	}
+	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, mockFunc, time.Second, activation.DefaultPostSetupOpts())
 
 	postConfig := activation.PostConfig{
 		MinNumUnits:   rand.Uint32(),
@@ -47,7 +50,10 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	postSetupProvider := activation.NewMockpostSetupProvider(ctrl)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts())
+	mockFunc := func() grpcserver.CheckpointRunner {
+		return grpcserver.NewMockCheckpointRunner(ctrl)
+	}
+	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, mockFunc, time.Second, activation.DefaultPostSetupOpts())
 
 	types.DefaultTestAddressConfig()
 	addr, err := types.StringToAddress("stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5")
@@ -73,4 +79,36 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
+}
+
+func TestSmesherService_Checkpoint(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	postSetupProvider := activation.NewMockpostSetupProvider(ctrl)
+	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
+	runner := grpcserver.NewMockCheckpointRunner(ctrl)
+	mockFunc := func() grpcserver.CheckpointRunner {
+		return runner
+	}
+	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, mockFunc, time.Second, activation.DefaultPostSetupOpts())
+
+	const (
+		snapshot uint32 = 11
+		restore  uint32 = 13
+		data            = "checkpoint data"
+	)
+	runner.EXPECT().Generate(gomock.Any(), types.LayerID(snapshot), types.LayerID(restore)).Return([]byte(data), nil)
+	resp, err := svc.Checkpoint(context.Background(), &pb.CheckpointRequest{
+		SnapshotLayer: snapshot,
+		RestoreLayer:  restore,
+	})
+	require.NoError(t, err)
+	require.Equal(t, data, string(resp.Data))
+
+	errStr := "whatever"
+	runner.EXPECT().Generate(gomock.Any(), types.LayerID(snapshot), types.LayerID(restore)).Return(nil, errors.New(errStr))
+	_, err = svc.Checkpoint(context.Background(), &pb.CheckpointRequest{
+		SnapshotLayer: snapshot,
+		RestoreLayer:  restore,
+	})
+	require.ErrorContains(t, err, errStr)
 }
