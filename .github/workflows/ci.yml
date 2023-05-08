@@ -115,7 +115,7 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2 clinfo
       - name: Add OpenCL support for Windows
         if: ${{ matrix.os == 'windows-latest' }}
-        run: choco install opencl-intel-cpu-runtime
+        run: vcpkg install opencl        
       - name: setup env
         run: make install
       - name: build
@@ -204,7 +204,7 @@ jobs:
           go-version: ${{ env.go-version }}
       - name: Add OpenCL support for Windows
         if: ${{ matrix.os == 'windows-latest' }}
-        run: choco install opencl-intel-cpu-runtime
+        run: vcpkg install opencl
       - name: setup env
         run: make install
       - name: Clear test cache
