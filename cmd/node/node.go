@@ -54,6 +54,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -656,6 +657,7 @@ func (app *App) initServices(
 		patrol,
 		app.hOracle,
 		clock,
+		weakCoin{db: app.cachedDB, tortoise: trtl},
 		app.addLogger(HareLogger, lg),
 	)
 
@@ -1269,4 +1271,17 @@ func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
 		return nil, fmt.Errorf("mapstructure decode: %w", err)
 	}
 	return rst, nil
+}
+
+type weakCoin struct {
+	db       sql.Executor
+	tortoise system.Tortoise
+}
+
+func (w weakCoin) Set(lid types.LayerID, value bool) error {
+	if err := layers.SetWeakCoin(w.db, lid, value); err != nil {
+		return err
+	}
+	w.tortoise.OnWeakCoin(lid, value)
+	return nil
 }

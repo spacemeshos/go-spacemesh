@@ -50,8 +50,20 @@ func (mr *MockTortoiseMockRecorder) LatestComplete() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestComplete", reflect.TypeOf((*MockTortoise)(nil).LatestComplete))
 }
 
+// OnBeacon mocks base method.
+func (m *MockTortoise) OnBeacon(arg0 types.EpochID, arg1 types.Beacon) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "OnBeacon", arg0, arg1)
+}
+
+// OnBeacon indicates an expected call of OnBeacon.
+func (mr *MockTortoiseMockRecorder) OnBeacon(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnBeacon", reflect.TypeOf((*MockTortoise)(nil).OnBeacon), arg0, arg1)
+}
+
 // OnBlock mocks base method.
-func (m *MockTortoise) OnBlock(arg0 *types.Block) {
+func (m *MockTortoise) OnBlock(arg0 types.BlockHeader) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "OnBlock", arg0)
 }
@@ -72,6 +84,18 @@ func (m *MockTortoise) OnHareOutput(arg0 types.LayerID, arg1 types.BlockID) {
 func (mr *MockTortoiseMockRecorder) OnHareOutput(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnHareOutput", reflect.TypeOf((*MockTortoise)(nil).OnHareOutput), arg0, arg1)
+}
+
+// OnWeakCoin mocks base method.
+func (m *MockTortoise) OnWeakCoin(arg0 types.LayerID, arg1 bool) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "OnWeakCoin", arg0, arg1)
+}
+
+// OnWeakCoin indicates an expected call of OnWeakCoin.
+func (mr *MockTortoiseMockRecorder) OnWeakCoin(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnWeakCoin", reflect.TypeOf((*MockTortoise)(nil).OnWeakCoin), arg0, arg1)
 }
 
 // Results mocks base method.
