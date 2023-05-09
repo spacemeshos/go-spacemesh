@@ -859,7 +859,6 @@ func TestActiveSetDD(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func FuzzVrfMessageConsistency(f *testing.F) {
