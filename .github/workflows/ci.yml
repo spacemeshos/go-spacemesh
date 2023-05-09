@@ -65,7 +65,7 @@ jobs:
         with:
           go-version: ${{ env.go-version }}
       - name: Add OpenCL support
-        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2 clinfo
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: fmt, tidy, generate
         run: |
           make install
@@ -89,7 +89,7 @@ jobs:
         with:
           go-version: ${{ env.go-version }}
       - name: Add OpenCL support
-        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2 clinfo
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: setup env
         run: make install
       - name: lint
@@ -112,10 +112,10 @@ jobs:
           go-version: ${{ env.go-version }}
       - name: Add OpenCL support for Linux
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2 clinfo
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: Add OpenCL support for Windows
         if: ${{ matrix.os == 'windows-latest' }}
-        run: vcpkg install opencl        
+        run: choco install opencl-intel-cpu-runtime   
       - name: setup env
         run: make install
       - name: build
@@ -150,7 +150,7 @@ jobs:
           go-version: ${{ env.go-version }}
       - name: Add OpenCL support for Linux
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2 clinfo
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: setup env
         run: make install
       - name: Clear test cache
@@ -204,7 +204,7 @@ jobs:
           go-version: ${{ env.go-version }}
       - name: Add OpenCL support for Windows
         if: ${{ matrix.os == 'windows-latest' }}
-        run: vcpkg install opencl
+        run: choco install opencl-intel-cpu-runtime
       - name: setup env
         run: make install
       - name: Clear test cache
