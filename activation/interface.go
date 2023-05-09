@@ -57,8 +57,8 @@ type atxProvider interface {
 // PostSetupProvider defines the functionality required for Post setup.
 type postSetupProvider interface {
 	Status() *PostSetupStatus
-	ComputeProviders() ([]PostSetupComputeProvider, error)
-	Benchmark(p PostSetupComputeProvider) (int, error)
+	Providers() ([]PostSetupProvider, error)
+	Benchmark(p PostSetupProvider) (int, error)
 	PrepareInitializer(ctx context.Context, opts PostSetupOpts) error
 	StartSession(context context.Context) error
 	Reset() error

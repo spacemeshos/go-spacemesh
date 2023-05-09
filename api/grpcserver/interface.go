@@ -48,8 +48,8 @@ type atxProvider interface {
 
 type postSetupProvider interface {
 	Status() *activation.PostSetupStatus
-	ComputeProviders() ([]activation.PostSetupComputeProvider, error)
-	Benchmark(p activation.PostSetupComputeProvider) (int, error)
+	Providers() ([]activation.PostSetupProvider, error)
+	Benchmark(p activation.PostSetupProvider) (int, error)
 	Config() activation.PostConfig
 }
 

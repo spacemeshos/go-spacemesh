@@ -201,7 +201,7 @@ func (s SmesherService) PostSetupStatusStream(_ *empty.Empty, stream pb.SmesherS
 func (s SmesherService) PostSetupComputeProviders(ctx context.Context, in *pb.PostSetupComputeProvidersRequest) (*pb.PostSetupComputeProvidersResponse, error) {
 	log.Info("GRPC SmesherService.PostSetupComputeProviders")
 
-	providers, err := s.postSetupProvider.ComputeProviders()
+	providers, err := s.postSetupProvider.Providers()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get OpenCL providers: %v", err)
 	}

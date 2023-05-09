@@ -17,8 +17,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
-// PostSetupComputeProvider represent a compute provider for Post setup data creation.
-type PostSetupComputeProvider initialization.ComputeProvider
+// PostSetupProvider represent a compute provider for Post setup data creation.
+type PostSetupProvider initialization.ComputeProvider
 
 // PostConfig is the configuration of the Post protocol, used for data creation, proofs generation and validation.
 type PostConfig struct {
@@ -148,29 +148,29 @@ func (mgr *PostSetupManager) Status() *PostSetupStatus {
 	}
 }
 
-// ComputeProviders returns a list of available compute providers for Post setup.
-func (*PostSetupManager) ComputeProviders() ([]PostSetupComputeProvider, error) {
+// Providers returns a list of available compute providers for Post setup.
+func (*PostSetupManager) Providers() ([]PostSetupProvider, error) {
 	providers, err := initialization.OpenCLProviders()
 	if err != nil {
 		return nil, err
 	}
 
-	providersAlias := make([]PostSetupComputeProvider, len(providers))
+	providersAlias := make([]PostSetupProvider, len(providers))
 	for i, p := range providers {
-		providersAlias[i] = PostSetupComputeProvider(p)
+		providersAlias[i] = PostSetupProvider(p)
 	}
 
 	return providersAlias, nil
 }
 
 // BestProvider returns the most performant compute provider based on a short benchmarking session.
-func (mgr *PostSetupManager) BestProvider() (*PostSetupComputeProvider, error) {
-	providers, err := mgr.ComputeProviders()
+func (mgr *PostSetupManager) BestProvider() (*PostSetupProvider, error) {
+	providers, err := mgr.Providers()
 	if err != nil {
 		return nil, fmt.Errorf("fetch best provider: %w", err)
 	}
 
-	var bestProvider PostSetupComputeProvider
+	var bestProvider PostSetupProvider
 	var maxHS int
 	for _, p := range providers {
 		hs, err := mgr.Benchmark(p)
@@ -186,7 +186,7 @@ func (mgr *PostSetupManager) BestProvider() (*PostSetupComputeProvider, error) {
 }
 
 // Benchmark runs a short benchmarking session for a given provider to evaluate its performance.
-func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) {
+func (mgr *PostSetupManager) Benchmark(p PostSetupProvider) (int, error) {
 	score, err := initialization.Benchmark(initialization.ComputeProvider(p))
 	if err != nil {
 		return score, fmt.Errorf("benchmark GPU: %w", err)

@@ -488,7 +488,7 @@ func (m *MockpostSetupProvider) EXPECT() *MockpostSetupProviderMockRecorder {
 }
 
 // Benchmark mocks base method.
-func (m *MockpostSetupProvider) Benchmark(p PostSetupComputeProvider) (int, error) {
+func (m *MockpostSetupProvider) Benchmark(p PostSetupProvider) (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Benchmark", p)
 	ret0, _ := ret[0].(int)
@@ -515,21 +515,6 @@ func (m *MockpostSetupProvider) CommitmentAtx() (types.ATXID, error) {
 func (mr *MockpostSetupProviderMockRecorder) CommitmentAtx() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CommitmentAtx", reflect.TypeOf((*MockpostSetupProvider)(nil).CommitmentAtx))
-}
-
-// ComputeProviders mocks base method.
-func (m *MockpostSetupProvider) ComputeProviders() ([]PostSetupComputeProvider, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ComputeProviders")
-	ret0, _ := ret[0].([]PostSetupComputeProvider)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ComputeProviders indicates an expected call of ComputeProviders.
-func (mr *MockpostSetupProviderMockRecorder) ComputeProviders() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ComputeProviders", reflect.TypeOf((*MockpostSetupProvider)(nil).ComputeProviders))
 }
 
 // Config mocks base method.
@@ -588,6 +573,21 @@ func (m *MockpostSetupProvider) PrepareInitializer(ctx context.Context, opts Pos
 func (mr *MockpostSetupProviderMockRecorder) PrepareInitializer(ctx, opts interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareInitializer", reflect.TypeOf((*MockpostSetupProvider)(nil).PrepareInitializer), ctx, opts)
+}
+
+// Providers mocks base method.
+func (m *MockpostSetupProvider) Providers() ([]PostSetupProvider, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Providers")
+	ret0, _ := ret[0].([]PostSetupProvider)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Providers indicates an expected call of Providers.
+func (mr *MockpostSetupProviderMockRecorder) Providers() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Providers", reflect.TypeOf((*MockpostSetupProvider)(nil).Providers))
 }
 
 // Reset mocks base method.
