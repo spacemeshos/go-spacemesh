@@ -739,7 +739,7 @@ func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error 
 
 	// add block to the tortoise before storing it
 	// otherwise fetcher will not wait until data is stored in the tortoise
-	msh.trtl.OnBlock(block)
+	msh.trtl.OnBlock(block.ToVote())
 	if err := blocks.Add(msh.cdb, block); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 		return err
 	}

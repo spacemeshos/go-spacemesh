@@ -34,8 +34,11 @@ type mesh interface {
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 	Proposals(types.LayerID) ([]*types.Proposal, error)
 	Ballot(types.BallotID) (*types.Ballot, error)
-	SetWeakCoin(types.LayerID, bool) error
 	IsMalicious(types.NodeID) (bool, error)
 	AddMalfeasanceProof(types.NodeID, *types.MalfeasanceProof, *sql.Tx) error
 	GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error)
+}
+
+type weakCoin interface {
+	Set(types.LayerID, bool) error
 }

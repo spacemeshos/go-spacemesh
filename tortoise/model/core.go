@@ -42,7 +42,7 @@ func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 	}
 	cfg := tortoise.DefaultConfig()
 	cfg.LayerSize = layerSize
-	c.tortoise, err = tortoise.New(c.cdb, c.beacons,
+	c.tortoise, err = tortoise.New(
 		tortoise.WithLogger(logger.Named("trtl")),
 		tortoise.WithConfig(cfg),
 	)
@@ -133,7 +133,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		m.Send(MessageBallot{Ballot: ballot})
 	case MessageLayerEnd:
 		if ev.LayerID.After(types.GetEffectiveGenesis()) {
-			c.tortoise.TallyVotes(context.TODO(), ev.LayerID)
+			tortoise.RecoverLayer(context.Background(), c.tortoise, c.cdb, c.beacons, ev.LayerID)
 			m.Notify(EventVerified{ID: c.id, Verified: c.tortoise.LatestComplete(), Layer: ev.LayerID})
 		}
 

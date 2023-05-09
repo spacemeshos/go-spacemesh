@@ -54,6 +54,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -522,7 +523,7 @@ func (app *App) initServices(
 	if trtlCfg.BadBeaconVoteDelayLayers == 0 {
 		trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 	}
-	trtl, err := tortoise.New(app.cachedDB, beaconProtocol,
+	trtl, err := tortoise.Recover(app.cachedDB, beaconProtocol,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
@@ -530,6 +531,13 @@ func (app *App) initServices(
 	if err != nil {
 		return fmt.Errorf("can't recover tortoise state: %w", err)
 	}
+	app.eg.Go(func() error {
+		for rst := range beaconProtocol.Results() {
+			trtl.OnBeacon(rst.Epoch, rst.Beacon)
+		}
+		app.log.Debug("beacon results watcher exited")
+		return nil
+	})
 
 	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(ExecutorLogger, lg))
 	msh, err := mesh.NewMesh(app.cachedDB, clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
@@ -656,6 +664,7 @@ func (app *App) initServices(
 		patrol,
 		app.hOracle,
 		clock,
+		tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
 		app.addLogger(HareLogger, lg),
 	)
 
@@ -1269,4 +1278,17 @@ func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
 		return nil, fmt.Errorf("mapstructure decode: %w", err)
 	}
 	return rst, nil
+}
+
+type tortoiseWeakCoin struct {
+	db       sql.Executor
+	tortoise system.Tortoise
+}
+
+func (w tortoiseWeakCoin) Set(lid types.LayerID, value bool) error {
+	if err := layers.SetWeakCoin(w.db, lid, value); err != nil {
+		return err
+	}
+	w.tortoise.OnWeakCoin(lid, value)
+	return nil
 }

@@ -8,10 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // Config for protocol parameters.
@@ -74,7 +71,7 @@ func WithConfig(cfg Config) Opt {
 }
 
 // New creates Tortoise instance.
-func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, opts ...Opt) (*Tortoise, error) {
+func New(opts ...Opt) (*Tortoise, error) {
 	t := &Tortoise{
 		ctx:    context.Background(),
 		logger: log.NewNop(),
@@ -83,41 +80,13 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, opts ...Opt) (*To
 	for _, opt := range opts {
 		opt(t)
 	}
-
 	if t.cfg.Hdist < t.cfg.Zdist {
 		t.logger.With().Panic("hdist must be >= zdist",
 			log.Uint32("hdist", t.cfg.Hdist),
 			log.Uint32("zdist", t.cfg.Zdist),
 		)
 	}
-
-	latest, err := ballots.LatestLayer(cdb)
-	if err != nil {
-		t.logger.With().Panic("failed to load latest layer",
-			log.Err(err),
-		)
-	}
-	needsRecovery := latest.After(types.GetEffectiveGenesis())
-
-	t.trtl = newTurtle(
-		t.logger,
-		cdb,
-		beacons,
-		t.cfg,
-	)
-	if needsRecovery {
-		t.logger.With().Info("loading state from disk. make sure to wait until tortoise is ready",
-			log.Stringer("last layer", latest),
-		)
-		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(latest); lid = lid.Add(1) {
-			err := t.trtl.onLayer(context.Background(), lid)
-			if err != nil {
-				return nil, err
-			}
-		}
-	} else {
-		t.logger.Info("no state on disk. initialized with genesis")
-	}
+	t.trtl = newTurtle(t.logger, t.cfg)
 	return t, nil
 }
 
@@ -134,6 +103,41 @@ func (t *Tortoise) Updates() map[types.LayerID]map[types.BlockID]bool {
 	res := t.trtl.updated
 	t.trtl.updated = nil
 	return res
+}
+
+func (t *Tortoise) OnWeakCoin(lid types.LayerID, coin bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.logger.With().Debug("on weakcoin",
+		log.Uint32("layer_id", lid.Uint32()),
+		log.Uint32("evicted", t.trtl.evicted.Uint32()),
+		log.Bool("coin", coin),
+	)
+	if lid <= t.trtl.evicted {
+		return
+	}
+	layer := t.trtl.layer(lid)
+	if coin {
+		layer.coinflip = support
+	} else {
+		layer.coinflip = against
+	}
+}
+
+func (t *Tortoise) OnBeacon(eid types.EpochID, beacon types.Beacon) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	evicted := t.trtl.evicted.GetEpoch()
+	t.logger.With().Debug("on beacon",
+		log.Uint32("epoch_id", eid.Uint32()),
+		log.Uint32("evicted", evicted.Uint32()),
+		log.Stringer("beacon", beacon),
+	)
+	if eid <= evicted {
+		return
+	}
+	epoch := t.trtl.epoch(eid)
+	epoch.beacon = &beacon
 }
 
 type encodeConf struct {
@@ -181,10 +185,7 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 	defer t.mu.Unlock()
 	waitTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 	start = time.Now()
-	if err := t.trtl.onLayer(ctx, lid); err != nil {
-		errorsCounter.Inc()
-		t.logger.With().Error("failed on layer", lid, log.Err(err))
-	}
+	t.trtl.onLayer(ctx, lid)
 	executeTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
@@ -197,17 +198,28 @@ func (t *Tortoise) OnAtx(atx *types.ActivationTxHeader) {
 	t.trtl.onAtx(atx)
 }
 
-// OnBlock should be called every time new block is received.
-func (t *Tortoise) OnBlock(block *types.Block) {
+// OnBlock updates tortoise with information that data is available locally.
+func (t *Tortoise) OnBlock(header types.BlockHeader) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	t.trtl.onBlock(block.ToVote())
+	t.trtl.onBlock(header, true, false)
+}
+
+// OnValidBlock inserts block, updates that data is stored locally
+// and that block was previously considered valid by tortoise.
+func (t *Tortoise) OnValidBlock(header types.BlockHeader) {
+	start := time.Now()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
+	t.trtl.onBlock(header, true, true)
 }
 
 // OnBallot should be called every time new ballot is received.
-// BaseBallot and RefBallot must be always processed first. And ATX must be stored in the database.
+// Dependencies (base ballot, ref ballot, active set and its own atx) must
+// be processed before ballot.
 func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

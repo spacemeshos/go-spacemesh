@@ -89,7 +89,6 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 	mockMesh.EXPECT().GetEpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
 	mockMesh.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
 	mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).Return(nil, nil).AnyTimes()
-	mockMesh.EXPECT().SetWeakCoin(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	for i := 0; i < nodes; i++ {
 		host := mesh.Hosts()[i]
@@ -105,6 +104,7 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 				return oracle(layer, round, committeeSize, id, sig, th)
 			}).AnyTimes()
 		th.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+		th.mockCoin.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 		go func() {
 			for out := range th.blockGenCh {
 				validate(out.Layer, th)
