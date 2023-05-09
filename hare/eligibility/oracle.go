@@ -419,7 +419,7 @@ func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]ty
 	if err != nil {
 		return nil, err
 	}
-	activeSet := make([]types.ATXID, 0, 10_000)
+	activeSet := make([]types.ATXID, 0, len(aset.set))
 	for nodeID := range aset.set {
 		hdr, err := o.cdb.GetEpochAtx(targetEpoch-1, nodeID)
 		if err != nil {
@@ -500,6 +500,7 @@ func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, er
 			activeMap[id] = struct{}{}
 		}
 	}
+	o.Log.With().Warning("using tortoise active set", log.Uint32("epoch", epoch.Uint32()), log.Stringer("beacon", beacon))
 	return maps.Keys(activeMap), nil
 }
 

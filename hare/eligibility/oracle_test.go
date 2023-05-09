@@ -647,6 +647,221 @@ func TestMaxSupportedN(t *testing.T) {
 	})
 }
 
+func TestActiveSetDD(t *testing.T) {
+	t.Parallel()
+
+	target := types.EpochID(4)
+	bgen := func(id types.BallotID, lid types.LayerID, node types.NodeID, beacon types.Beacon, atxs []types.ATXID, option ...func(*types.Ballot)) types.Ballot {
+		ballot := types.Ballot{}
+		ballot.Layer = lid
+		ballot.EpochData = &types.EpochData{Beacon: beacon}
+		ballot.ActiveSet = atxs
+		ballot.SmesherID = node
+		ballot.SetID(id)
+		for _, opt := range option {
+			opt(&ballot)
+		}
+		return ballot
+	}
+	agen := func(id types.ATXID, node types.NodeID, option ...func(*types.VerifiedActivationTx)) *types.VerifiedActivationTx {
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{},
+		}}
+		atx.PublishEpoch = target - 1
+		atx.SmesherID = node
+		atx.SetID(id)
+		atx.SetEffectiveNumUnits(1)
+		atx.SetReceived(time.Time{}.Add(1))
+		verified, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		for _, opt := range option {
+			opt(verified)
+		}
+		return verified
+	}
+
+	for _, tc := range []struct {
+		desc    string
+		beacon  types.Beacon // local beacon
+		ballots []types.Ballot
+		atxs    []*types.VerifiedActivationTx
+		expect  any
+	}{
+		{
+			"merged activesets",
+			types.Beacon{1},
+			[]types.Ballot{
+				bgen(
+					types.BallotID{1},
+					target.FirstLayer(),
+					types.NodeID{1},
+					types.Beacon{1},
+					[]types.ATXID{{1}, {2}},
+				),
+				bgen(
+					types.BallotID{2},
+					target.FirstLayer(),
+					types.NodeID{2},
+					types.Beacon{1},
+					[]types.ATXID{{2}, {3}},
+				),
+			},
+			[]*types.VerifiedActivationTx{
+				agen(types.ATXID{1}, types.NodeID{1}),
+				agen(types.ATXID{2}, types.NodeID{2}),
+				agen(types.ATXID{3}, types.NodeID{3}),
+			},
+			[]types.ATXID{{1}, {2}, {3}},
+		},
+		{
+			"filter by beacon",
+			types.Beacon{1},
+			[]types.Ballot{
+				bgen(
+					types.BallotID{1},
+					target.FirstLayer(),
+					types.NodeID{1},
+					types.Beacon{1},
+					[]types.ATXID{{1}, {2}},
+				),
+				bgen(
+					types.BallotID{2},
+					target.FirstLayer(),
+					types.NodeID{2},
+					types.Beacon{2, 2, 2, 2},
+					[]types.ATXID{{2}, {3}},
+				),
+			},
+			[]*types.VerifiedActivationTx{
+				agen(types.ATXID{1}, types.NodeID{1}),
+				agen(types.ATXID{2}, types.NodeID{2}),
+			},
+			[]types.ATXID{{1}, {2}},
+		},
+		{
+			"no local beacon",
+			types.EmptyBeacon,
+			[]types.Ballot{
+				bgen(
+					types.BallotID{1},
+					target.FirstLayer(),
+					types.NodeID{1},
+					types.Beacon{1},
+					[]types.ATXID{{1}, {2}},
+				),
+				bgen(
+					types.BallotID{2},
+					target.FirstLayer(),
+					types.NodeID{2},
+					types.Beacon{2, 2, 2, 2},
+					[]types.ATXID{{2}, {3}},
+				),
+			},
+			[]*types.VerifiedActivationTx{},
+			"not found",
+		},
+		{
+			"unknown atxs",
+			types.Beacon{1},
+			[]types.Ballot{
+				bgen(
+					types.BallotID{1},
+					target.FirstLayer(),
+					types.NodeID{1},
+					types.Beacon{1},
+					[]types.ATXID{{1}, {2}},
+				),
+				bgen(
+					types.BallotID{2},
+					target.FirstLayer(),
+					types.NodeID{2},
+					types.Beacon{2, 2, 2, 2},
+					[]types.ATXID{{2}, {3}},
+				),
+			},
+			[]*types.VerifiedActivationTx{},
+			"get ATX",
+		},
+		{
+			"ballot no epoch data",
+			types.Beacon{1},
+			[]types.Ballot{
+				bgen(
+					types.BallotID{1},
+					target.FirstLayer(),
+					types.NodeID{1},
+					types.Beacon{1},
+					[]types.ATXID{{1}, {2}},
+					func(ballot *types.Ballot) {
+						ballot.EpochData = nil
+					},
+				),
+				bgen(
+					types.BallotID{2},
+					target.FirstLayer(),
+					types.NodeID{2},
+					types.Beacon{1},
+					[]types.ATXID{{2}, {3}},
+				),
+			},
+			[]*types.VerifiedActivationTx{
+				agen(types.ATXID{2}, types.NodeID{2}),
+				agen(types.ATXID{3}, types.NodeID{3}),
+			},
+			[]types.ATXID{{2}, {3}},
+		},
+		{
+			"wrong target epoch",
+			types.Beacon{1},
+			[]types.Ballot{
+				bgen(
+					types.BallotID{1},
+					target.FirstLayer(),
+					types.NodeID{1},
+					types.Beacon{1},
+					[]types.ATXID{{1}},
+				),
+			},
+			[]*types.VerifiedActivationTx{
+				agen(types.ATXID{1}, types.NodeID{1}, func(verified *types.VerifiedActivationTx) {
+					verified.PublishEpoch = target
+				}),
+			},
+			"no epoch atx found",
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Parallel()
+			oracle := defaultOracle(t)
+			for _, ballot := range tc.ballots {
+				require.NoError(t, ballots.Add(oracle.cdb, &ballot))
+			}
+			for _, atx := range tc.atxs {
+				require.NoError(t, atxs.Add(oracle.cdb, atx))
+			}
+			if tc.beacon != types.EmptyBeacon {
+				oracle.mBeacon.EXPECT().GetBeacon(target).Return(tc.beacon, nil)
+			} else {
+				oracle.mBeacon.EXPECT().GetBeacon(target).Return(types.EmptyBeacon, sql.ErrNotFound)
+			}
+			rst, err := oracle.ActiveSet(context.TODO(), target)
+
+			switch typed := tc.expect.(type) {
+			case []types.ATXID:
+				require.NoError(t, err)
+				require.ElementsMatch(t, typed, rst)
+			case string:
+				require.Empty(t, rst)
+				require.ErrorContains(t, err, typed)
+			default:
+				require.Failf(t, "unknown assert type", "%v", typed)
+			}
+		})
+	}
+
+}
+
 func FuzzVrfMessageConsistency(f *testing.F) {
 	tester.FuzzConsistency[VrfMessage](f)
 }
