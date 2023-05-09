@@ -207,7 +207,8 @@ func (t *Tortoise) OnBlock(header types.BlockHeader) {
 	t.trtl.onBlock(header, true, false)
 }
 
-// OnValidBlock is used for loading stored historical data or possibly opinion from peers. It lets tortoise know that data is available locally, and block is supported by local opinion (required for verifying tortoise).
+// OnValidBlock inserts block, updates that data is stored locally
+// and that block was previously considered valid by tortoise.
 func (t *Tortoise) OnValidBlock(header types.BlockHeader) {
 	start := time.Now()
 	t.mu.Lock()
@@ -217,7 +218,8 @@ func (t *Tortoise) OnValidBlock(header types.BlockHeader) {
 }
 
 // OnBallot should be called every time new ballot is received.
-// BaseBallot and RefBallot must be always processed first. And ATX must be stored in the database.
+// Dependencies (base ballot, ref ballot, active set and its own atx) must
+// be processed before ballot.
 func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

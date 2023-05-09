@@ -275,7 +275,7 @@ func getNoWait(tb testing.TB, results <-chan result.Beacon) result.Beacon {
 	default:
 	}
 	require.Fail(tb, "beacon is not available")
-	panic("unreachable")
+	return result.Beacon{}
 }
 
 func TestBeaconNotSynced(t *testing.T) {
