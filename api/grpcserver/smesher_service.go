@@ -74,7 +74,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 	opts.DataDir = in.Opts.DataDir
 	opts.NumUnits = in.Opts.NumUnits
 	opts.MaxFileSize = in.Opts.MaxFileSize
-	opts.ComputeProviderID = int(in.Opts.ComputeProviderId)
+	opts.ProviderID = int(in.Opts.ProviderId)
 	opts.Throttle = in.Opts.Throttle
 
 	coinbaseAddr, err := types.StringToAddress(in.Coinbase.Address)
@@ -198,16 +198,16 @@ func (s SmesherService) PostSetupStatusStream(_ *empty.Empty, stream pb.SmesherS
 }
 
 // PostSetupComputeProviders returns a list of available Post setup compute providers.
-func (s SmesherService) PostSetupComputeProviders(ctx context.Context, in *pb.PostSetupComputeProvidersRequest) (*pb.PostSetupComputeProvidersResponse, error) {
-	log.Info("GRPC SmesherService.PostSetupComputeProviders")
+func (s SmesherService) PostSetupProviders(ctx context.Context, in *pb.PostSetupProvidersRequest) (*pb.PostSetupProvidersResponse, error) {
+	log.Info("GRPC SmesherService.PostSetupProviders")
 
 	providers, err := s.postSetupProvider.Providers()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get OpenCL providers: %v", err)
 	}
 
-	res := &pb.PostSetupComputeProvidersResponse{}
-	res.Providers = make([]*pb.PostSetupComputeProvider, len(providers))
+	res := &pb.PostSetupProvidersResponse{}
+	res.Providers = make([]*pb.PostSetupProvider, len(providers))
 	for i, p := range providers {
 		var hashesPerSec int
 		if in.Benchmark {
@@ -219,10 +219,10 @@ func (s SmesherService) PostSetupComputeProviders(ctx context.Context, in *pb.Po
 			}
 		}
 
-		res.Providers[i] = &pb.PostSetupComputeProvider{
+		res.Providers[i] = &pb.PostSetupProvider{
 			Id:          uint32(p.ID),
 			Model:       p.Model,
-			ComputeApi:  pb.PostSetupComputeProvider_ComputeApiClass(p.DeviceType), // TODO(mafa): update API
+			DeviceType:  pb.PostSetupProvider_DeviceType(p.DeviceType),
 			Performance: uint64(hashesPerSec),
 		}
 	}
@@ -254,11 +254,11 @@ func statusToPbStatus(status *activation.PostSetupStatus) *pb.PostSetupStatus {
 
 	if status.LastOpts != nil {
 		pbStatus.Opts = &pb.PostSetupOpts{
-			DataDir:           status.LastOpts.DataDir,
-			NumUnits:          status.LastOpts.NumUnits,
-			MaxFileSize:       status.LastOpts.MaxFileSize,
-			ComputeProviderId: uint32(status.LastOpts.ComputeProviderID),
-			Throttle:          status.LastOpts.Throttle,
+			DataDir:     status.LastOpts.DataDir,
+			NumUnits:    status.LastOpts.NumUnits,
+			MaxFileSize: status.LastOpts.MaxFileSize,
+			ProviderId:  uint32(status.LastOpts.ProviderID),
+			Throttle:    status.LastOpts.Throttle,
 		}
 	}
 

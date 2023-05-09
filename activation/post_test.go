@@ -372,7 +372,7 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 	opts := DefaultPostSetupOpts()
 	opts.DataDir = tb.TempDir()
 	opts.NumUnits = cfg.MaxNumUnits
-	opts.ComputeProviderID = int(initialization.CPUProviderID())
+	opts.ProviderID = int(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
 	goldenATXID := types.ATXID{2, 3, 4}

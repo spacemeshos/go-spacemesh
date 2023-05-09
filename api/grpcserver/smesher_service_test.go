@@ -53,23 +53,23 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	addr, err := types.StringToAddress("stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5")
 	require.NoError(t, err)
 	smeshingProvider.EXPECT().StartSmeshing(addr, activation.PostSetupOpts{
-		DataDir:           "data-dir",
-		NumUnits:          1,
-		MaxFileSize:       1024,
-		ComputeProviderID: 7,
-		Throttle:          true,
-		Scrypt:            config.DefaultLabelParams(),
-		ComputeBatchSize:  config.DefaultComputeBatchSize,
+		DataDir:          "data-dir",
+		NumUnits:         1,
+		MaxFileSize:      1024,
+		ProviderID:       7,
+		Throttle:         true,
+		Scrypt:           config.DefaultLabelParams(),
+		ComputeBatchSize: config.DefaultComputeBatchSize,
 	}).Return(nil)
 
 	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
 		Coinbase: &pb.AccountId{Address: "stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5"},
 		Opts: &pb.PostSetupOpts{
-			DataDir:           "data-dir",
-			NumUnits:          1,
-			MaxFileSize:       1024,
-			ComputeProviderId: 7,
-			Throttle:          true,
+			DataDir:     "data-dir",
+			NumUnits:    1,
+			MaxFileSize: 1024,
+			ProviderId:  7,
+			Throttle:    true,
 		},
 	})
 	require.NoError(t, err)

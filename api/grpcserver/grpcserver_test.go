@@ -1018,7 +1018,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("PostSetupComputeProviders", func(t *testing.T) {
 		logtest.SetupGlobal(t)
-		_, err := c.PostSetupComputeProviders(context.Background(), &pb.PostSetupComputeProvidersRequest{Benchmark: false})
+		_, err := c.PostSetupProviders(context.Background(), &pb.PostSetupProvidersRequest{Benchmark: false})
 		require.NoError(t, err)
 	})
 

@@ -36,13 +36,13 @@ type PostConfig struct {
 // PostSetupOpts are the options used to initiate a Post setup data creation session,
 // either via the public smesher API, or on node launch (via cmd args).
 type PostSetupOpts struct {
-	DataDir           string              `mapstructure:"smeshing-opts-datadir"`
-	NumUnits          uint32              `mapstructure:"smeshing-opts-numunits"`
-	MaxFileSize       uint64              `mapstructure:"smeshing-opts-maxfilesize"`
-	ComputeProviderID int                 `mapstructure:"smeshing-opts-provider"`
-	Throttle          bool                `mapstructure:"smeshing-opts-throttle"`
-	Scrypt            config.ScryptParams `mapstructure:"smeshing-opts-scrypt"`
-	ComputeBatchSize  uint64              `mapstructure:"smeshing-opts-compute-batch-size"`
+	DataDir          string              `mapstructure:"smeshing-opts-datadir"`
+	NumUnits         uint32              `mapstructure:"smeshing-opts-numunits"`
+	MaxFileSize      uint64              `mapstructure:"smeshing-opts-maxfilesize"`
+	ProviderID       int                 `mapstructure:"smeshing-opts-provider"`
+	Throttle         bool                `mapstructure:"smeshing-opts-throttle"`
+	Scrypt           config.ScryptParams `mapstructure:"smeshing-opts-scrypt"`
+	ComputeBatchSize uint64              `mapstructure:"smeshing-opts-compute-batch-size"`
 }
 
 // PostProvingOpts are the options controlling POST proving process.
@@ -219,7 +219,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 		log.String("data_dir", mgr.lastOpts.DataDir),
 		log.String("num_units", fmt.Sprintf("%d", mgr.lastOpts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ComputeProviderID)),
+		log.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ProviderID)),
 	)
 
 	err = mgr.init.Initialize(ctx)
@@ -243,7 +243,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 		log.String("data_dir", mgr.lastOpts.DataDir),
 		log.String("num_units", fmt.Sprintf("%d", mgr.lastOpts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ComputeProviderID)),
+		log.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ProviderID)),
 	)
 	mgr.state = PostSetupStateComplete
 	return nil
@@ -263,14 +263,14 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 		return fmt.Errorf("post setup session in progress")
 	}
 
-	if opts.ComputeProviderID == config.BestProviderID {
+	if opts.ProviderID == config.BestProviderID {
 		p, err := mgr.BestProvider()
 		if err != nil {
 			return err
 		}
 
 		mgr.logger.Info("found best compute provider: id: %d, model: %v, device type: %v", p.ID, p.Model, p.DeviceType)
-		opts.ComputeProviderID = int(p.ID)
+		opts.ProviderID = int(p.ID)
 	}
 
 	var err error
