@@ -101,6 +101,7 @@ func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*PubSub,
 		logger: logger,
 		pubsub: ps,
 		topics: map[string]*pubsub.Topic{},
+		host:   h,
 	}, nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -17,6 +18,7 @@ import (
 type PubSub struct {
 	logger log.Log
 	pubsub *pubsub.PubSub
+	host   host.Host
 
 	mu     sync.RWMutex
 	topics map[string]*pubsub.Topic
@@ -34,6 +36,19 @@ func (ps *PubSub) Register(topic string, handler GossipHandler) {
 		rst := handler(log.WithNewRequestID(ctx), pid, msg.Data)
 		metrics.ProcessedMessagesDuration.WithLabelValues(topic, castResult(rst)).
 			Observe(float64(time.Since(start)))
+		if rst == ValidationReject {
+			// We want to disconnect the peer and also penalize it which could result in it being blacklisted.
+
+			// Ok we close the peer here but the deadpeerhandler may try a redial if the state of the conn is connected
+			err := ps.host.Network().ClosePeer(pid)
+			if err != nil {
+				ps.logger.With().Error("failed to close peer",
+					log.String("topic", topic),
+					log.String("peer", pid.ShortString()),
+					log.Err(err),
+				)
+			}
+		}
 		return rst
 	})
 	topich, err := ps.pubsub.Join(topic)
