@@ -7,10 +7,8 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // Config for protocol parameters.
@@ -44,7 +42,7 @@ type Tortoise struct {
 	ctx    context.Context
 	cfg    Config
 
-	mu   sync.Mutex
+	mu   sync.RWMutex
 	trtl *turtle
 }
 
@@ -73,7 +71,7 @@ func WithConfig(cfg Config) Opt {
 }
 
 // New creates Tortoise instance.
-func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, opts ...Opt) (*Tortoise, error) {
+func New(opts ...Opt) (*Tortoise, error) {
 	t := &Tortoise{
 		ctx:    context.Background(),
 		logger: log.NewNop(),
@@ -82,41 +80,13 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, opts ...Opt) (*To
 	for _, opt := range opts {
 		opt(t)
 	}
-
 	if t.cfg.Hdist < t.cfg.Zdist {
 		t.logger.With().Panic("hdist must be >= zdist",
 			log.Uint32("hdist", t.cfg.Hdist),
 			log.Uint32("zdist", t.cfg.Zdist),
 		)
 	}
-
-	latest, err := ballots.LatestLayer(cdb)
-	if err != nil {
-		t.logger.With().Panic("failed to load latest layer",
-			log.Err(err),
-		)
-	}
-	needsRecovery := latest.After(types.GetEffectiveGenesis())
-
-	t.trtl = newTurtle(
-		t.logger,
-		cdb,
-		beacons,
-		t.cfg,
-	)
-	if needsRecovery {
-		t.logger.With().Info("loading state from disk. make sure to wait until tortoise is ready",
-			log.Stringer("last layer", latest),
-		)
-		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(latest); lid = lid.Add(1) {
-			err := t.trtl.onLayer(context.Background(), lid)
-			if err != nil {
-				return nil, err
-			}
-		}
-	} else {
-		t.logger.Info("no state on disk. initialized with genesis")
-	}
+	t.trtl = newTurtle(t.logger, t.cfg)
 	return t, nil
 }
 
@@ -133,6 +103,41 @@ func (t *Tortoise) Updates() map[types.LayerID]map[types.BlockID]bool {
 	res := t.trtl.updated
 	t.trtl.updated = nil
 	return res
+}
+
+func (t *Tortoise) OnWeakCoin(lid types.LayerID, coin bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.logger.With().Debug("on weakcoin",
+		log.Uint32("layer_id", lid.Uint32()),
+		log.Uint32("evicted", t.trtl.evicted.Uint32()),
+		log.Bool("coin", coin),
+	)
+	if lid <= t.trtl.evicted {
+		return
+	}
+	layer := t.trtl.layer(lid)
+	if coin {
+		layer.coinflip = support
+	} else {
+		layer.coinflip = against
+	}
+}
+
+func (t *Tortoise) OnBeacon(eid types.EpochID, beacon types.Beacon) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	evicted := t.trtl.evicted.GetEpoch()
+	t.logger.With().Debug("on beacon",
+		log.Uint32("epoch_id", eid.Uint32()),
+		log.Uint32("evicted", evicted.Uint32()),
+		log.Stringer("beacon", beacon),
+	)
+	if eid <= evicted {
+		return
+	}
+	epoch := t.trtl.epoch(eid)
+	epoch.beacon = &beacon
 }
 
 type encodeConf struct {
@@ -180,10 +185,7 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 	defer t.mu.Unlock()
 	waitTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 	start = time.Now()
-	if err := t.trtl.onLayer(ctx, lid); err != nil {
-		errorsCounter.Inc()
-		t.logger.With().Error("failed on layer", lid, log.Err(err))
-	}
+	t.trtl.onLayer(ctx, lid)
 	executeTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
@@ -196,20 +198,28 @@ func (t *Tortoise) OnAtx(atx *types.ActivationTxHeader) {
 	t.trtl.onAtx(atx)
 }
 
-// OnBlock should be called every time new block is received.
-func (t *Tortoise) OnBlock(block *types.Block) {
+// OnBlock updates tortoise with information that data is available locally.
+func (t *Tortoise) OnBlock(header types.BlockHeader) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	if err := t.trtl.onBlock(block.LayerIndex, block); err != nil {
-		errorsCounter.Inc()
-		t.logger.With().Error("failed to add block to the state", block.ID(), log.Err(err))
-	}
+	t.trtl.onBlock(header, true, false)
+}
+
+// OnValidBlock inserts block, updates that data is stored locally
+// and that block was previously considered valid by tortoise.
+func (t *Tortoise) OnValidBlock(header types.BlockHeader) {
+	start := time.Now()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
+	t.trtl.onBlock(header, true, true)
 }
 
 // OnBallot should be called every time new ballot is received.
-// BaseBallot and RefBallot must be always processed first. And ATX must be stored in the database.
+// Dependencies (base ballot, ref ballot, active set and its own atx) must
+// be processed before ballot.
 func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -223,15 +233,19 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 type DecodedBallot struct {
 	*types.Ballot
 	info *ballotInfo
+	// after validation is finished we need to add new vote targets
+	// for tortoise from the decoded votes. minHint identifies the boundary
+	// until which we have to scan.
+	minHint types.LayerID
 }
 
 // DecodeBallot decodes ballot if it wasn't processed earlier.
 func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 	start := time.Now()
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	waitBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	info, err := t.trtl.decodeBallot(ballot)
+	info, min, err := t.trtl.decodeBallot(ballot)
 	if err != nil {
 		errorsCounter.Inc()
 		return nil, err
@@ -247,7 +261,7 @@ func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 			info.opinion().ShortString(), ballot.OpinionHash.ShortString(), ballot.ID(),
 		)
 	}
-	return &DecodedBallot{Ballot: ballot, info: info}, nil
+	return &DecodedBallot{Ballot: ballot, info: info, minHint: min}, nil
 }
 
 // StoreBallot stores previously decoded ballot.
@@ -259,10 +273,8 @@ func (t *Tortoise) StoreBallot(decoded *DecodedBallot) error {
 	if decoded.IsMalicious() {
 		decoded.info.malicious = true
 	}
-	if err := t.trtl.storeBallot(decoded.info); err != nil {
-		errorsCounter.Inc()
-		return err
-	}
+	t.trtl.storeBallot(decoded.info, decoded.minHint)
+	storeBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	return nil
 }
 
@@ -283,8 +295,8 @@ func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
 // GetMissingActiveSet returns unknown atxs from the original list. It is done for a specific epoch
 // as active set atxs never cross epoch boundary.
 func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) []types.ATXID {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	edata, exists := t.trtl.epochs[epoch]
 	if !exists {
 		return atxs
@@ -297,4 +309,30 @@ func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) 
 		}
 	}
 	return missing
+}
+
+// Results returns layers that crossed threshold in range [from, to].
+func (t *Tortoise) Results(from, to types.LayerID) ([]result.Layer, error) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if from <= t.trtl.evicted {
+		return nil, fmt.Errorf("requested layer %d is before evicted %d", from, t.trtl.evicted)
+	}
+	rst := make([]result.Layer, 0, to-from)
+	for lid := from; lid <= to; lid++ {
+		layer := t.trtl.layer(lid)
+		blocks := make([]result.Block, 0, len(layer.blocks))
+		for _, block := range layer.blocks {
+			blocks = append(blocks, result.Block{
+				Header: block.header(),
+				Data:   block.data,
+				Valid:  block.validity == support,
+			})
+		}
+		rst = append(rst, result.Layer{
+			Layer:  lid,
+			Blocks: blocks,
+		})
+	}
+	return rst, nil
 }

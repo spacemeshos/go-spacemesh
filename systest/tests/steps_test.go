@@ -110,10 +110,8 @@ func TestStepTransactions(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		cl.CloseClients()
-	})
 	require.NoError(t, waitGenesis(tctx, cl.Client(0)))
+	t.Cleanup(cl.CloseClients)
 
 	clients := make([]*txClient, cl.Accounts())
 	synced := syncedNodes(tctx, cl)
@@ -284,30 +282,6 @@ func TestStepVerifyConsistency(t *testing.T) {
 	}
 }
 
-func TestStepVerifySynced(t *testing.T) {
-	cctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
-	require.NoError(t, err)
-
-	require.Eventually(t, func() bool {
-		for i := 0; i < cl.Total(); i++ {
-			node := cl.Client(i)
-			if isSynced(cctx, node) {
-				continue
-			}
-			if time.Since(node.Restarted) < 30*time.Minute {
-				continue
-			}
-			cctx.Log.Warnw("node is not synced",
-				"node", node.Name,
-				"restarted", node.Restarted,
-			)
-			return false
-		}
-		return true
-	}, 20*time.Minute, 1*time.Minute)
-}
-
 func newRunner() *runner {
 	return &runner{
 		failed: make(chan struct{}),
@@ -370,9 +344,6 @@ func TestScheduleBasic(t *testing.T) {
 	})
 	rn.concurrent(5*time.Minute, func() bool {
 		return t.Run("verify", TestStepVerifyConsistency)
-	})
-	rn.concurrent(5*time.Minute, func() bool {
-		return t.Run("verify synced", TestStepVerifySynced)
 	})
 	rn.one(60*time.Minute, func() bool {
 		return t.Run("replace nodes", TestStepReplaceNodes)

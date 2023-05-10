@@ -2,7 +2,6 @@ package vault
 
 import (
 	"errors"
-	"math/big"
 
 	"github.com/spacemeshos/go-scale"
 
@@ -44,10 +43,10 @@ func (v *Vault) Available(lid core.LayerID) uint64 {
 	if !lid.Before(v.VestingEnd) {
 		return v.TotalAmount
 	}
-	incremental := new(big.Int).SetUint64(v.TotalAmount - v.InitialUnlockAmount)
-	incremental.Mul(incremental, new(big.Int).SetUint64(uint64(lid.Difference(v.VestingStart))))
-	incremental.Quo(incremental, new(big.Int).SetUint64(uint64(v.VestingEnd.Difference(v.VestingStart))))
-	return v.InitialUnlockAmount + incremental.Uint64()
+	incremental := v.TotalAmount - v.InitialUnlockAmount
+	incremental *= uint64(lid.Difference(v.VestingStart))
+	incremental /= uint64(v.VestingEnd.Difference(v.VestingStart))
+	return v.InitialUnlockAmount + incremental
 }
 
 // Spend transaction.
@@ -56,6 +55,9 @@ func (v *Vault) Spend(host core.Host, to core.Address, amount uint64) error {
 		return ErrNotOwner
 	}
 	available := v.Available(host.Layer())
+	if available > v.TotalAmount {
+		panic("wrong math")
+	}
 	if amount > available-v.DrainedSoFar {
 		return ErrAmountNotAvailable
 	}

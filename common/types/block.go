@@ -43,6 +43,10 @@ func (id *BlockID) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, id[:])
 }
 
+func (id *BlockID) IsEmpty() bool {
+	return *id == EmptyBlockID
+}
+
 // Block contains the content of a layer on the mesh history.
 type Block struct {
 	InnerBlock

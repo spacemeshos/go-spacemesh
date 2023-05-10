@@ -54,6 +54,11 @@ var (
 	errMinerNotActive    = errors.New("miner not active in epoch")
 )
 
+type cachedActiveSet struct {
+	set   map[types.NodeID]uint64
+	total uint64
+}
+
 // Oracle is the hare eligibility oracle.
 type Oracle struct {
 	lock           sync.Mutex
@@ -159,12 +164,7 @@ func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, 
 	if err != nil {
 		return 0, err
 	}
-
-	var totalWeight uint64
-	for _, w := range actives {
-		totalWeight += w
-	}
-	return totalWeight, nil
+	return actives.total, nil
 }
 
 func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error) {
@@ -173,10 +173,10 @@ func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.
 		return 0, err
 	}
 
-	w, ok := actives[id]
+	w, ok := actives.set[id]
 	if !ok {
 		o.With().Debug("miner is not active in specified layer",
-			log.Int("active_set_size", len(actives)),
+			log.Int("active_set_size", len(actives.set)),
 			log.String("actives", fmt.Sprintf("%v", actives)),
 			layer, log.Stringer("id.Key", id),
 		)
@@ -371,7 +371,7 @@ func (o *Oracle) Proof(ctx context.Context, nonce types.VRFPostIndex, layer type
 }
 
 // Returns a map of all active node IDs in the specified layer id.
-func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[types.NodeID]uint64, error) {
+func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cachedActiveSet, error) {
 	if !targetLayer.After(types.GetEffectiveGenesis()) {
 		return nil, errEmptyActiveSet
 	}
@@ -391,7 +391,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 	o.lock.Lock()
 	defer o.lock.Unlock()
 	if value, exists := o.activesCache.Get(targetEpoch); exists {
-		return value.(map[types.NodeID]uint64), nil
+		return value.(*cachedActiveSet), nil
 	}
 	activeSet, err := o.computeActiveSet(logger, targetEpoch)
 	if err != nil {
@@ -404,18 +404,23 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 	if err != nil {
 		return nil, err
 	}
+
+	aset := &cachedActiveSet{set: activeWeights}
+	for _, weight := range activeWeights {
+		aset.total += weight
+	}
 	logger.With().Info("got hare active set", log.Int("count", len(activeWeights)))
-	o.activesCache.Add(targetEpoch, activeWeights)
-	return activeWeights, nil
+	o.activesCache.Add(targetEpoch, aset)
+	return aset, nil
 }
 
 func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]types.ATXID, error) {
-	activeWeights, err := o.actives(ctx, targetEpoch.FirstLayer().Add(o.cfg.ConfidenceParam))
+	aset, err := o.actives(ctx, targetEpoch.FirstLayer().Add(o.cfg.ConfidenceParam))
 	if err != nil {
 		return nil, err
 	}
-	activeSet := make([]types.ATXID, 0, 10_000)
-	for nodeID := range activeWeights {
+	activeSet := make([]types.ATXID, 0, len(aset.set))
+	for nodeID := range aset.set {
 		hdr, err := o.cdb.GetEpochAtx(targetEpoch-1, nodeID)
 		if err != nil {
 			return nil, err
@@ -436,7 +441,7 @@ func (o *Oracle) computeActiveSet(logger log.Log, targetEpoch types.EpochID) ([]
 		return nil, err
 	}
 	if bid == types.EmptyBlockID {
-		return nil, nil
+		return o.activeSetFromRefBallots(targetEpoch)
 	}
 	return o.activeSetFromBlock(bid)
 }
@@ -472,6 +477,33 @@ func (o *Oracle) activeSetFromBlock(bid types.BlockID) ([]types.ATXID, error) {
 	return maps.Keys(activeMap), nil
 }
 
+func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, error) {
+	beacon, err := o.beacons.GetBeacon(epoch)
+	if err != nil {
+		return nil, fmt.Errorf("get beacon: %w", err)
+	}
+	ballotsrst, err := ballots.AllFirstInEpoch(o.cdb, epoch)
+	if err != nil {
+		return nil, fmt.Errorf("first in epoch %d: %w", epoch, err)
+	}
+	activeMap := make(map[types.ATXID]struct{})
+	for _, ballot := range ballotsrst {
+		if ballot.EpochData == nil {
+			o.Log.With().Error("invalid data. first ballot doesn't have epoch data", log.Inline(ballot))
+			continue
+		}
+		if ballot.EpochData.Beacon != beacon {
+			o.Log.With().Debug("beacon mismatch", log.Stringer("local", beacon), log.Object("ballot", ballot))
+			continue
+		}
+		for _, id := range ballot.ActiveSet {
+			activeMap[id] = struct{}{}
+		}
+	}
+	o.Log.With().Warning("using tortoise active set", log.Uint32("epoch", epoch.Uint32()), log.Stringer("beacon", beacon))
+	return maps.Keys(activeMap), nil
+}
+
 // IsIdentityActiveOnConsensusView returns true if the provided identity is active on the consensus view derived
 // from the specified layer, false otherwise.
 func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID types.NodeID, layer types.LayerID) (bool, error) {
@@ -484,7 +516,7 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID types
 		o.WithContext(ctx).With().Error("error getting active set", layer, log.Err(err))
 		return false, err
 	}
-	_, exist := actives[edID]
+	_, exist := actives.set[edID]
 	return exist, nil
 }
 

@@ -15,8 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
 
 //go:generate mockgen -package=activation -destination=./nipost_mocks.go -source=./nipost.go PoetProvingServiceClient
@@ -37,7 +35,7 @@ type PoetProvingServiceClient interface {
 }
 
 func (nb *NIPostBuilder) load(challenge types.Hash32) {
-	state, err := kvstore.GetNIPostBuilderState(nb.db)
+	state, err := loadBuilderState(nb.dataDir)
 	if err != nil {
 		nb.log.With().Warning("cannot load nipost state", log.Err(err))
 		return
@@ -50,7 +48,7 @@ func (nb *NIPostBuilder) load(challenge types.Hash32) {
 }
 
 func (nb *NIPostBuilder) persist() {
-	if err := kvstore.AddNIPostBuilderState(nb.db, nb.state); err != nil {
+	if err := saveBuilderState(nb.dataDir, nb.state); err != nil {
 		nb.log.With().Warning("cannot store nipost state", log.Err(err))
 	}
 }
@@ -58,7 +56,7 @@ func (nb *NIPostBuilder) persist() {
 // NIPostBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPost).
 type NIPostBuilder struct {
 	nodeID            types.NodeID
-	db                *sql.Database
+	dataDir           string
 	postSetupProvider postSetupProvider
 	poetProvers       []PoetProvingServiceClient
 	poetDB            poetDbAPI
@@ -80,8 +78,8 @@ func NewNIPostBuilder(
 	postSetupProvider postSetupProvider,
 	poetProvers []PoetProvingServiceClient,
 	poetDB poetDbAPI,
-	db *sql.Database,
-	log log.Log,
+	dataDir string,
+	lg log.Log,
 	signer *signing.EdSigner,
 	poetCfg PoetConfig,
 	layerClock layerClock,
@@ -92,12 +90,16 @@ func NewNIPostBuilder(
 		poetProvers:       poetProvers,
 		poetDB:            poetDB,
 		state:             &types.NIPostBuilderState{NIPost: &types.NIPost{}},
-		db:                db,
-		log:               log,
+		dataDir:           dataDir,
+		log:               lg,
 		signer:            signer,
 		poetCfg:           poetCfg,
 		layerClock:        layerClock,
 	}
+}
+
+func (nb *NIPostBuilder) DataDir() string {
+	return nb.dataDir
 }
 
 // UpdatePoETProvers updates poetProver reference. It should not be executed concurrently with BuildNIPoST.

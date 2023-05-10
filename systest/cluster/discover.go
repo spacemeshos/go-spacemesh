@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/sync/errgroup"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
@@ -18,30 +17,17 @@ func discoverNodes(ctx *testcontext.Context, kind string) ([]*NodeClient, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pods app=%s: %w", kind, err)
 	}
-	var (
-		eg      errgroup.Group
-		clients = make(chan *NodeClient, len(deployments.Items))
-		rst     []*NodeClient
-	)
+	var rst []*NodeClient
 	for _, deployment := range deployments.Items {
 		deployment := deployment
-		eg.Go(func() error {
-			client, err := waitNode(ctx, deployment.Name)
-			if err != nil {
-				return err
-			}
-			if client != nil {
-				clients <- client
-			}
-			return nil
+		rst = append(rst, &NodeClient{
+			session: ctx,
+			Node: Node{
+				Name: deployment.Name,
+				P2P:  7513,
+				GRPC: 9092,
+			},
 		})
-	}
-	if err := eg.Wait(); err != nil {
-		return nil, err
-	}
-	close(clients)
-	for node := range clients {
-		rst = append(rst, node)
 	}
 	sort.Slice(rst, func(i, j int) bool {
 		return decodeOrdinal(rst[i].Name) < decodeOrdinal(rst[j].Name)

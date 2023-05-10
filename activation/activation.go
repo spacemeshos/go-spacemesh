@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -22,7 +23,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
 
 // PoetConfig is the configuration to interact with the poet server.
@@ -71,7 +71,7 @@ type Builder struct {
 	// smeshingMutex protects `StartSmeshing` and `StopSmeshing` from concurrent access
 	smeshingMutex sync.Mutex
 
-	// pendingATX is created with current commitment and nipst from current challenge.
+	// pendingATX is created with current commitment and nipost from current challenge.
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
 	syncer                syncer
@@ -163,11 +163,12 @@ func (b *Builder) Smeshing() bool {
 	return b.started.Load()
 }
 
-// StartSmeshing is the main entry point of the atx builder.
-// It runs the main loop of the builder and shouldn't be called more than once.
-// If the post data is incomplete or missing, data creation
-// session will be preceded. Changing of the post potions (e.g., number of labels),
-// after initial setup, is supported.
+// StartSmeshing is the main entry point of the atx builder. It runs the main
+// loop of the builder in a new go-routine and shouldn't be called more than
+// once without calling StopSmeshing in between. If the post data is incomplete
+// or missing, data creation session will be preceded. Changing of the post
+// options (e.g., number of labels), after initial setup, is supported. If data
+// creation fails for any reason then the go-routine will panic.
 func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) error {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
@@ -180,6 +181,11 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	ctx, stop := context.WithCancel(b.parentCtx)
 	b.stop = stop
 
+	err := b.postSetupProvider.PrepareInitializer(b.parentCtx, opts)
+	if err != nil {
+		return fmt.Errorf("failed to prepare post initializer: %w", err)
+	}
+
 	b.eg.Go(func() error {
 		defer b.started.Store(false)
 
@@ -190,8 +196,10 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 			// ensure we are ATX synced before starting the PoST Session
 		}
 
-		if err := b.postSetupProvider.StartSession(ctx, opts); err != nil {
-			return err
+		// If start session returns any error other than context.Canceled
+		// (which is how we signal it to stop) then we panic.
+		if err := b.postSetupProvider.StartSession(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			b.log.Panic(fmt.Sprintf("initialization failed: %v", err))
 		}
 
 		b.run(ctx)
@@ -294,7 +302,9 @@ func (b *Builder) loop(ctx context.Context) {
 		switch {
 		case errors.Is(err, ErrATXChallengeExpired):
 			b.log.WithContext(ctx).Debug("retrying with new challenge after waiting for a layer")
-			b.discardChallenge()
+			if err = b.discardChallenge(); err != nil {
+				b.log.WithContext(ctx).Error("failed to discard challenge", log.Err(err))
+			}
 			// give node some time to sync in case selecting the positioning ATX caused the challenge to expire
 			currentLayer := b.layerClock.CurrentLayer()
 			select {
@@ -381,8 +391,8 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		challenge.Sequence = prevAtx.Sequence + 1
 	}
 
-	if err := kvstore.AddNIPostChallenge(b.cdb, challenge); err != nil {
-		return nil, fmt.Errorf("failed to store nipost challenge: %w", err)
+	if err = saveNipostChallenge(b.nipostBuilder.DataDir(), challenge); err != nil {
+		return nil, err
 	}
 	return challenge, nil
 }
@@ -435,9 +445,9 @@ func (b *Builder) Coinbase() types.Address {
 }
 
 func (b *Builder) loadChallenge() (*types.NIPostChallenge, error) {
-	nipost, err := kvstore.GetNIPostChallenge(b.cdb)
+	nipost, err := loadNipostChallenge(b.nipostBuilder.DataDir())
 	if err != nil {
-		return nil, fmt.Errorf("failed to load nipost challenge from DB: %w", err)
+		return nil, err
 	}
 	if nipost.TargetEpoch() < b.currentEpoch() {
 		b.log.With().Info("atx nipost challenge is stale - discarding it",
@@ -445,7 +455,9 @@ func (b *Builder) loadChallenge() (*types.NIPostChallenge, error) {
 			log.Stringer("publish_epoch", nipost.PublishEpoch),
 			log.Stringer("current_epoch", b.currentEpoch()),
 		)
-		b.discardChallenge()
+		if err = b.discardChallenge(); err != nil {
+			return nil, fmt.Errorf("%w: atx nipost challenge is stale", err)
+		}
 		return nil, errors.New("atx nipost challenge is stale")
 	}
 	return nipost, nil
@@ -495,12 +507,16 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	case <-atxReceived:
 		logger.With().Info("received atx in db", atx.ID())
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
-		b.discardChallenge()
+		if err = b.discardChallenge(); err != nil {
+			return fmt.Errorf("%w: target epoch has passed", err)
+		}
 		return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	b.discardChallenge()
+	if err = b.discardChallenge(); err != nil {
+		return fmt.Errorf("%w: after published atx", err)
+	}
 	return nil
 }
 
@@ -534,7 +550,9 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	b.log.Debug("publication epoch has arrived!")
 
 	if challenge.TargetEpoch() < b.currentEpoch() {
-		b.discardChallenge()
+		if err = b.discardChallenge(); err != nil {
+			return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", err)
+		}
 		return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", ErrATXChallengeExpired)
 	}
 
@@ -580,11 +598,12 @@ func (b *Builder) currentEpoch() types.EpochID {
 	return b.layerClock.CurrentLayer().GetEpoch()
 }
 
-func (b *Builder) discardChallenge() {
+func (b *Builder) discardChallenge() error {
 	b.pendingATX = nil
-	if err := kvstore.ClearNIPostChallenge(b.cdb); err != nil {
-		b.log.Error("failed to discard NIPost challenge: %w", err)
+	if err := discardNipostChallenge(b.nipostBuilder.DataDir()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
+	return nil
 }
 
 func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {

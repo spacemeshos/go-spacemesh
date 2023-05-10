@@ -299,6 +299,20 @@ func (mr *MocknipostBuilderMockRecorder) BuildNIPost(ctx, challenge interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildNIPost", reflect.TypeOf((*MocknipostBuilder)(nil).BuildNIPost), ctx, challenge)
 }
 
+// DataDir mocks base method.
+func (m *MocknipostBuilder) DataDir() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DataDir")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// DataDir indicates an expected call of DataDir.
+func (mr *MocknipostBuilderMockRecorder) DataDir() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DataDir", reflect.TypeOf((*MocknipostBuilder)(nil).DataDir))
+}
+
 // UpdatePoETProvers mocks base method.
 func (m *MocknipostBuilder) UpdatePoETProvers(arg0 []PoetProvingServiceClient) {
 	m.ctrl.T.Helper()
@@ -561,6 +575,20 @@ func (mr *MockpostSetupProviderMockRecorder) LastOpts() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastOpts", reflect.TypeOf((*MockpostSetupProvider)(nil).LastOpts))
 }
 
+// PrepareInitializer mocks base method.
+func (m *MockpostSetupProvider) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PrepareInitializer", ctx, opts)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PrepareInitializer indicates an expected call of PrepareInitializer.
+func (mr *MockpostSetupProviderMockRecorder) PrepareInitializer(ctx, opts interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareInitializer", reflect.TypeOf((*MockpostSetupProvider)(nil).PrepareInitializer), ctx, opts)
+}
+
 // Reset mocks base method.
 func (m *MockpostSetupProvider) Reset() error {
 	m.ctrl.T.Helper()
@@ -576,17 +604,17 @@ func (mr *MockpostSetupProviderMockRecorder) Reset() *gomock.Call {
 }
 
 // StartSession mocks base method.
-func (m *MockpostSetupProvider) StartSession(context context.Context, opts PostSetupOpts) error {
+func (m *MockpostSetupProvider) StartSession(context context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSession", context, opts)
+	ret := m.ctrl.Call(m, "StartSession", context)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // StartSession indicates an expected call of StartSession.
-func (mr *MockpostSetupProviderMockRecorder) StartSession(context, opts interface{}) *gomock.Call {
+func (mr *MockpostSetupProviderMockRecorder) StartSession(context interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockpostSetupProvider)(nil).StartSession), context, opts)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockpostSetupProvider)(nil).StartSession), context)
 }
 
 // Status mocks base method.

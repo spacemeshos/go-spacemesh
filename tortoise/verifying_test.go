@@ -585,9 +585,10 @@ func TestVerifying_Verify(t *testing.T) {
 			state.processed = processed
 			state.last = processed
 			state.layers = tc.layers
+			refs := map[types.BlockID]*blockInfo{}
 			for _, layer := range state.layers {
 				for _, block := range layer.blocks {
-					state.blockRefs[block.id] = block
+					refs[block.id] = block
 					state.updateRefHeight(layer, block)
 				}
 			}
@@ -604,10 +605,18 @@ func TestVerifying_Verify(t *testing.T) {
 			})
 			require.Equal(t, tc.expected, state.verified)
 			for block, sig := range tc.expectedValidity {
-				ref, exist := state.blockRefs[block]
+				ref, exist := refs[block]
 				require.True(t, exist, "block %d should be in state", block)
 				require.Equal(t, sig, ref.validity)
 			}
 		})
+	}
+}
+
+func iterateLayers(from, to types.LayerID, callback func(types.LayerID) bool) {
+	for lid := from; !lid.After(to); lid = lid.Add(1) {
+		if !callback(lid) {
+			return
+		}
 	}
 }

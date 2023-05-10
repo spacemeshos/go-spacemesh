@@ -37,6 +37,7 @@ type layerClock interface {
 type nipostBuilder interface {
 	UpdatePoETProvers([]PoetProvingServiceClient)
 	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, time.Duration, error)
+	DataDir() string
 }
 
 type atxHandler interface {
@@ -58,7 +59,8 @@ type postSetupProvider interface {
 	Status() *PostSetupStatus
 	ComputeProviders() []PostSetupComputeProvider
 	Benchmark(p PostSetupComputeProvider) (int, error)
-	StartSession(context context.Context, opts PostSetupOpts) error
+	PrepareInitializer(ctx context.Context, opts PostSetupOpts) error
+	StartSession(context context.Context) error
 	Reset() error
 	GenerateProof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error)
 	CommitmentAtx() (types.ATXID, error)
