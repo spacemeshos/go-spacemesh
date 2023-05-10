@@ -155,7 +155,7 @@ func DefaultTestConfig() Config {
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		DataDirParent:       defaultDataDir,
-		FileLock:            "/tmp/spacemesh.lock",
+		FileLock:            filepath.Join(os.TempDir(), "spacemesh.lock"),
 		CollectMetrics:      false,
 		MetricsPort:         1010,
 		MetricsPush:         "", // "" = doesn't push
