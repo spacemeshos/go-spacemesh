@@ -69,11 +69,7 @@ func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, opts ...HTTPPoe
 		Host:   poet.GrpcRestProxyAddr().String(),
 	}
 
-	client, err := NewHTTPPoetClient(url.String(), PoetConfig{
-		PhaseShift:  cfg.Service.PhaseShift,
-		CycleGap:    cfg.Service.CycleGap,
-		GracePeriod: cfg.Service.CycleGap / 2,
-	})
+	client, err := NewHTTPPoetClient(url.String(), DefaultPoetConfig())
 	if err != nil {
 		return nil, err
 	}
