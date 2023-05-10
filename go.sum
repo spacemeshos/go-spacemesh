@@ -73,8 +73,8 @@ github.com/aquasecurity/libbpfgo v0.3.0-libbpf-0.8.0 h1:NQEf484vQOshZwZOLTE7kzo6
 github.com/aquasecurity/libbpfgo v0.3.0-libbpf-0.8.0/go.mod h1:qu0TVGRvtNMFkuKLscJkY1FwmageNBLqeImAFslqPPc=
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
 github.com/benbjohnson/clock v1.3.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
-github.com/benbjohnson/clock v1.3.3 h1:g+rSsSaAzhHJYcIQE78hJ3AhyjjtQvleKDjlhdBnIhc=
-github.com/benbjohnson/clock v1.3.3/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
+github.com/benbjohnson/clock v1.3.4 h1:wj3BFPrTw8yYgA1OlMqvUk95nc8OMv3cvBSF5erT2W4=
+github.com/benbjohnson/clock v1.3.4/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=

@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/storage v1.30.1
 	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20220102081255-38c8b72a9924
-	github.com/benbjohnson/clock v1.3.3
+	github.com/benbjohnson/clock v1.3.4
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20230209235359-64dc83baed9b
 	github.com/cosmos/btcutil v1.0.5
 	github.com/gofrs/flock v0.8.1
