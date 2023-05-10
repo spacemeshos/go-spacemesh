@@ -318,9 +318,14 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 func TestBuilder_StartSmeshingAvoidsPanickingIfPrepareInitializerReturnsError(t *testing.T) {
 	// First verify that a panic occurs when PrepareInitializer does not return
 	// an error but StartSession does.
-	l := log.NewMockLogger(gomock.NewController(t))
-	l.EXPECT().Panic(gomock.Any(), gomock.Any())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
+	l := log.NewMockLogger(gomock.NewController(t))
+	panicCalled := make(chan struct{})
+	l.EXPECT().Panic(gomock.Any(), gomock.Any()).Do(func(_, _ any) {
+		close(panicCalled)
+	})
 	tab := newTestBuilder(t)
 	tab.log = l
 
@@ -333,6 +338,13 @@ func TestBuilder_StartSmeshingAvoidsPanickingIfPrepareInitializerReturnsError(t 
 	tab.mpost.EXPECT().StartSession(gomock.Any()).Return(errors.New("should panic"))
 	tab.StartSmeshing(tab.coinbase, PostSetupOpts{})
 
+	select {
+	case <-panicCalled:
+		// Success
+	case <-ctx.Done():
+		require.Fail(t, "test timed out or failed")
+	}
+
 	// Now verify that a panic does not occur if PrepareInitializer returns an error
 	l = log.NewMockLogger(gomock.NewController(t))
 	tab = newTestBuilder(t)
@@ -342,16 +354,15 @@ func TestBuilder_StartSmeshingAvoidsPanickingIfPrepareInitializerReturnsError(t 
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).AnyTimes()
 
-	// Set expectations
+	// Set expectations, we don't expect StartSession to be called, since
+	// StartSmeshing should exit early if PrepareInitializer returns an error.
 	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(),
 		gomock.Any()).Return(errors.New("avoid panic"))
-	// We don't expect this call to be made, but we need StartSession to return
-	// an error if it is called so that l.Panic is then called. If we didn't set this then
-	// the test could pass even if StartSession was called.
-	tab.mpost.EXPECT().StartSession(gomock.Any()).Return(errors.New("err")).MaxTimes(0)
+
 	tab.StartSmeshing(tab.coinbase, PostSetupOpts{})
 
-	// We wait a second since the call to l.Panic is happening in a different goroutine
+	// We wait a second since the call to StartSession and l.Panic happen in a
+	// different goroutine.
 	time.Sleep(time.Second)
 }
 
