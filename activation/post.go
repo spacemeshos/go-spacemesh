@@ -254,7 +254,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 // function be separate from StartSession provides a means to understand if the
 // post configuration is valid before kicking off a very long running task
 // (StartSession can take days to complete). After the first call to this
-// method subseqeunt calls to this method will return an error until
+// method subsequent calls to this method will return an error until
 // StartSession has completed execution.
 func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
 	mgr.mu.Lock()

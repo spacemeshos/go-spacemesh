@@ -137,7 +137,7 @@ func TestPostSetupManager_InitializationCallSequence(t *testing.T) {
 
 	req.NoError(mgr.StartSession(ctx))
 
-	// Should fali since it is required to call PrepareInitializer before each
+	// Should fail since it is required to call PrepareInitializer before each
 	// call to StartSession.
 	req.Error(mgr.StartSession(ctx))
 }
