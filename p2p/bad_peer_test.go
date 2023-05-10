@@ -18,6 +18,8 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/cmd/node"
+	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -70,22 +72,41 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 
 	s := getStream(conns[0], pubsub.GossipSubID_v11, network.DirOutbound)
 
-	// Create invalid atx message.
-	protocol := ps.AtxProtocol
+	protocol := ps.ProposalProtocol
+	// Send a message that doesn't result in ValidationReject.
+	p := types.Proposal{}
+	bytes, err := codec.Encode(&p)
+	require.NoError(t, err)
 	m := &pb.Message{
-		Data:  make([]byte, 20),
+		Data:  bytes,
 		Topic: &protocol,
 	}
-	// Send the invalid message.
 	err = writeRpc(rpcWithMessages(m), s)
 	require.NoError(t, err)
 
+	// Verify that connections remain up
+	for i := 0; i < 5; i++ {
+		conns := app2.Host().Network().ConnsToPeer(app1.Host().ID())
+		require.Equal(t, 1, len(conns))
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Send message that results in ValidationReject
+	m = &pb.Message{
+		Data:  make([]byte, 20),
+		Topic: &protocol,
+	}
+	err = writeRpc(rpcWithMessages(m), s)
+	require.NoError(t, err)
+
+	// Wait for connection to be dropped
 	require.Eventually(t, func() bool {
 		return len(app2.Host().Network().ConnsToPeer(app1.Host().ID())) == 0
 	}, time.Second*15, time.Millisecond*200)
 
 	// Stop the nodes by canceling the context
 	cancel()
+	// Wait for nodes to finish
 	require.NoError(t, g.Wait())
 }
 
