@@ -28,6 +28,8 @@ func AddCommands(cmd *cobra.Command) {
 		"config", "c", cfg.BaseConfig.ConfigFile, "Set Load configuration from file")
 	cmd.PersistentFlags().StringVarP(&cfg.BaseConfig.DataDirParent, "data-folder", "d",
 		cfg.BaseConfig.DataDirParent, "Specify data directory for spacemesh")
+	cmd.PersistentFlags().StringVar(&cfg.BaseConfig.FileLock,
+		"filelock", cfg.BaseConfig.FileLock, "Filesystem lock to prevent running more than one instance.")
 	cmd.PersistentFlags().StringVar(&cfg.LOGGING.Encoder, "log-encoder",
 		cfg.LOGGING.Encoder, "Log as JSON instead of plain text")
 	cmd.PersistentFlags().BoolVar(&cfg.CollectMetrics, "metrics",

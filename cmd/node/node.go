@@ -68,7 +68,6 @@ import (
 const (
 	edKeyFileName   = "key.bin"
 	genesisFileName = "genesis.json"
-	lockFile        = "LOCK"
 )
 
 // Logger names.
@@ -325,15 +324,10 @@ func (app *App) introduction() {
 
 // Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
 func (app *App) Initialize() (err error) {
-	// ensure all data folders exist
-	if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
-		return fmt.Errorf("ensure folders exist: %w", err)
-	}
-	lockName := filepath.Join(app.Config.DataDir(), lockFile)
-	fl := flock.New(lockName)
+	fl := flock.New(app.Config.FileLock)
 	locked, err := fl.TryLock()
 	if err != nil {
-		return fmt.Errorf("flock %s: %w", lockName, err)
+		return fmt.Errorf("flock %s: %w", app.Config.FileLock, err)
 	} else if !locked {
 		return fmt.Errorf("only one spacemesh instance should be running (locking file %s)", fl.Path())
 	}
