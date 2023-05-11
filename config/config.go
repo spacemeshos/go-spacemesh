@@ -69,6 +69,7 @@ func (cfg *Config) DataDir() string {
 // BaseConfig defines the default configuration options for spacemesh app.
 type BaseConfig struct {
 	DataDirParent string `mapstructure:"data-folder"`
+	FileLock      string `mapstructure:"filelock"`
 
 	ConfigFile string `mapstructure:"config"`
 
@@ -154,6 +155,7 @@ func DefaultTestConfig() Config {
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		DataDirParent:       defaultDataDir,
+		FileLock:            filepath.Join(os.TempDir(), "spacemesh.lock"),
 		CollectMetrics:      false,
 		MetricsPort:         1010,
 		MetricsPush:         "", // "" = doesn't push
