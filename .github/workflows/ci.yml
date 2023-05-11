@@ -55,8 +55,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    # should not take more than 4-5 mins
-    timeout-minutes: 7
+    # should not take more than 7-8 mins
+    timeout-minutes: 10
     steps:
       - name: checkout
         uses: actions/checkout@v3
@@ -64,6 +64,8 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
+      - name: Add OpenCL support
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: fmt, tidy, generate
         run: |
           make install
@@ -86,6 +88,8 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
+      - name: Add OpenCL support
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: setup env
         run: make install
       - name: lint
@@ -106,6 +110,9 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
+      - name: Add OpenCL support for Linux
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: setup env
         run: make install
       - name: build
@@ -138,6 +145,9 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
+      - name: Add OpenCL support for Linux
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: setup env
         run: make install
       - name: Clear test cache
@@ -189,6 +199,9 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
+      - name: Add OpenCL support for Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: choco install opencl-intel-cpu-runtime
       - name: setup env
         run: make install
       - name: Clear test cache
