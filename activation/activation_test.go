@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -359,7 +360,13 @@ func TestBuilder_StartSmeshingAvoidsPanickingIfPrepareInitializerReturnsError(t 
 	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(),
 		gomock.Any()).Return(errors.New("avoid panic"))
 
+	// We check that no new goroutines were started as a result of the call to
+	// StartSmeshing, this assures us that upon returning from StartSmeshing
+	// there is no chance that StartSession is subsequently called in a
+	// goroutine.
+	goroutineCount := runtime.NumGoroutine()
 	tab.StartSmeshing(tab.coinbase, PostSetupOpts{})
+	require.Equal(t, goroutineCount, runtime.NumGoroutine())
 }
 
 func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
