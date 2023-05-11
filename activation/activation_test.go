@@ -360,10 +360,6 @@ func TestBuilder_StartSmeshingAvoidsPanickingIfPrepareInitializerReturnsError(t 
 		gomock.Any()).Return(errors.New("avoid panic"))
 
 	tab.StartSmeshing(tab.coinbase, PostSetupOpts{})
-
-	// We wait a second since the call to StartSession and l.Panic happen in a
-	// different goroutine.
-	time.Sleep(time.Second)
 }
 
 func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
