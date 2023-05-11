@@ -298,15 +298,25 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 	return vAtx, nil
 }
 
+// Merkle proof proving that a given leaf is included in the root of merkle tree.
+type MerkleProof struct {
+	Root  Hash32
+	Nodes []Hash32 `scale:"max=32"`
+	Leaf  Hash32
+}
+
 // NIPost is Non-Interactive Proof of Space-Time.
 // Given an id, a space parameter S, a duration D and a challenge C,
 // it can convince a verifier that (1) the prover expended S * D space-time
 // after learning the challenge C. (2) the prover did not know the NIPost until D time
 // after the prover learned C.
 type NIPost struct {
-	// Challenge is the challenge for the PoET which is
-	// constructed from fields in the activation transaction.
-	Challenge *Hash32
+	// Membership proves that the challenge for the PoET, which is
+	// constructed from fields in the activation transaction,
+	// is a member of the poet's proof.
+	// Proof.Leaf is the challenge submitted to poet service.
+	// Proof.Root must match the Poet's POSW statement.
+	Membership *MerkleProof
 
 	// Post is the proof that the prover data is still stored (or was recomputed) at
 	// the time he learned the challenge constructed from the PoET.
@@ -316,6 +326,10 @@ type NIPost struct {
 	// The proof should be verified upon the metadata during the syntactic validation,
 	// while the metadata should be verified during the contextual validation.
 	PostMetadata *PostMetadata
+}
+
+func (n *NIPost) PoetChallenge() Hash32 {
+	return n.Membership.Leaf
 }
 
 // VRFPostIndex is the nonce generated using Pow during post initialization. It is used as a mitigation for

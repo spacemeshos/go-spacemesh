@@ -489,7 +489,7 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 	receivedTime := time.Now()
 	var atx types.ActivationTx
 	if err := codec.Decode(data, &atx); err != nil {
-		return errMalformedData
+		return fmt.Errorf("%w: %v", errMalformedData, err)
 	}
 
 	epochStart := h.clock.LayerToTime(atx.PublishEpoch.FirstLayer())

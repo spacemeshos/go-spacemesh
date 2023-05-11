@@ -54,10 +54,8 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 
 	poetProvider := defaultPoetServiceMock(t, []byte("poet"))
 	poetProvider.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{
-		PoetProof: types.PoetProof{
-			Members: []types.Member{types.Member(challenge.Hash())},
-		},
-	}, nil)
+		PoetProof: types.PoetProof{},
+	}, []types.Member{types.Member(challenge.Hash())}, nil)
 
 	poetDb := NewMockpoetDbAPI(ctrl)
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
@@ -84,10 +82,8 @@ func TestPostSetup(t *testing.T) {
 
 	poetProvider := defaultPoetServiceMock(t, []byte("poet"))
 	poetProvider.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{
-		PoetProof: types.PoetProof{
-			Members: []types.Member{types.Member(challenge.Hash())},
-		},
-	}, nil)
+		PoetProof: types.PoetProof{},
+	}, []types.Member{types.Member(challenge.Hash())}, nil)
 
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
@@ -116,9 +112,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
 	poetDb.EXPECT().GetProof(gomock.Any()).Return(
-		&types.PoetProof{
-			Members: []types.Member{types.Member(challenge.Hash())},
-		}, nil,
+		&types.PoetProof{}, nil,
 	)
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 
@@ -201,9 +195,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
 	poetDb.EXPECT().GetProof(gomock.Any()).Return(
-		&types.PoetProof{
-			Members: []types.Member{types.Member(challenge.Hash())},
-		}, nil,
+		&types.PoetProof{}, nil,
 	)
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 	mclock := defaultLayerClockMock(t)
@@ -253,12 +245,10 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	poetProver := defaultPoetServiceMock(t, []byte("poet"))
 	poetProver.EXPECT().Proof(gomock.Any(), "").AnyTimes().Return(
 		&types.PoetProofMessage{
-			PoetProof: types.PoetProof{
-				Members: []types.Member{
-					types.Member(challenge.Hash()),
-					types.Member(challenge2.Hash()),
-				},
-			},
+			PoetProof: types.PoetProof{},
+		}, []types.Member{
+			types.Member(challenge.Hash()),
+			types.Member(challenge2.Hash()),
 		}, nil,
 	)
 
@@ -320,11 +310,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 		PublishEpoch: postGenesisEpoch + 1,
 	}
 
-	proof := &types.PoetProofMessage{
-		PoetProof: types.PoetProof{
-			Members: []types.Member{types.Member(challenge.Hash())},
-		},
-	}
+	proof := &types.PoetProofMessage{PoetProof: types.PoetProof{}}
 
 	ctrl := gomock.NewController(t)
 	poetDb := NewMockpoetDbAPI(ctrl)
@@ -348,7 +334,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 		poet := NewMockPoetProvingServiceClient(ctrl)
 		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte("poet1")}, nil)
 		poet.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&types.PoetRound{}, nil)
-		poet.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(proof, nil)
+		poet.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(proof, []types.Member{types.Member(challenge.Hash())}, nil)
 		poet.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
 		poets = append(poets, poet)
 	}
@@ -374,7 +360,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	req.NoError(err)
 
 	// Verify
-	req.Equal(challenge.Hash(), *nipost.Challenge)
+	req.Equal(challenge.Hash(), nipost.Membership.Leaf)
 	ref, _ := proof.Ref()
 	req.EqualValues(ref[:], nipost.PostMetadata.Challenge)
 }
@@ -387,11 +373,7 @@ func TestNIPostBuilder_ManyPoETs_WaitingForProof_DeadlineReached(t *testing.T) {
 		PublishEpoch: postGenesisEpoch + 1,
 	}
 
-	proof := &types.PoetProofMessage{
-		PoetProof: types.PoetProof{
-			Members: []types.Member{types.Member(challenge.Hash())},
-		},
-	}
+	proof := &types.PoetProofMessage{PoetProof: types.PoetProof{}}
 	ctrl := gomock.NewController(t)
 	poetDb := NewMockpoetDbAPI(ctrl)
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
@@ -400,16 +382,16 @@ func TestNIPostBuilder_ManyPoETs_WaitingForProof_DeadlineReached(t *testing.T) {
 	poets := make([]PoetProvingServiceClient, 0, 2)
 	{
 		poet := defaultPoetServiceMock(t, []byte("poet0"))
-		poet.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(proof, nil)
+		poet.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(proof, []types.Member{types.Member(challenge.Hash())}, nil)
 		poets = append(poets, poet)
 	}
 	{
 		poet := defaultPoetServiceMock(t, []byte("poet1"))
 		poet.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, _ string) (*types.PoetProofMessage, error) {
+			func(ctx context.Context, _ string) (*types.PoetProofMessage, []types.Member, error) {
 				// Hang up after the context expired
 				<-ctx.Done()
-				return nil, ctx.Err()
+				return nil, nil, ctx.Err()
 			},
 		)
 		poets = append(poets, poet)
@@ -437,7 +419,7 @@ func TestNIPostBuilder_ManyPoETs_WaitingForProof_DeadlineReached(t *testing.T) {
 	req.NoError(err)
 
 	// Verify
-	req.Equal(challenge.Hash(), *nipost.Challenge)
+	req.Equal(challenge.Hash(), nipost.Membership.Leaf)
 	ref, _ := proof.Ref()
 	req.EqualValues(ref[:], nipost.PostMetadata.Challenge)
 }
@@ -453,13 +435,11 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 
 	proofWorse := &types.PoetProofMessage{
 		PoetProof: types.PoetProof{
-			Members:   []types.Member{types.Member(challenge.Hash())},
 			LeafCount: 111,
 		},
 	}
 	proofBetter := &types.PoetProofMessage{
 		PoetProof: types.PoetProof{
-			Members:   []types.Member{types.Member(challenge.Hash())},
 			LeafCount: 999,
 		},
 	}
@@ -472,12 +452,12 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	poets := make([]PoetProvingServiceClient, 0, 2)
 	{
 		poet := defaultPoetServiceMock(t, []byte("poet0"))
-		poet.EXPECT().Proof(gomock.Any(), "").Return(proofWorse, nil)
+		poet.EXPECT().Proof(gomock.Any(), "").Return(proofWorse, []types.Member{types.Member(challenge.Hash())}, nil)
 		poets = append(poets, poet)
 	}
 	{
 		poet := defaultPoetServiceMock(t, []byte("poet1"))
-		poet.EXPECT().Proof(gomock.Any(), "").Return(proofBetter, nil)
+		poet.EXPECT().Proof(gomock.Any(), "").Return(proofBetter, []types.Member{types.Member(challenge.Hash())}, nil)
 		poets = append(poets, poet)
 	}
 
@@ -499,7 +479,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	req.NoError(err)
 
 	// Verify
-	req.Equal(challenge.Hash(), *nipost.Challenge)
+	req.Equal(challenge.Hash(), nipost.Membership.Leaf)
 	ref, _ := proofBetter.Ref()
 	req.EqualValues(ref[:], nipost.PostMetadata.Challenge)
 }
@@ -606,7 +586,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		postProver := NewMockpostSetupProvider(ctrl)
 		postProver.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
 		poetProver := defaultPoetServiceMock(t, []byte("poet"))
-		poetProver.EXPECT().Proof(gomock.Any(), "").Return(nil, errors.New("failed"))
+		poetProver.EXPECT().Proof(gomock.Any(), "").Return(nil, nil, errors.New("failed"))
 
 		nb := NewNIPostBuilder(nodeID, postProver, []PoetProvingServiceClient{poetProver},
 			poetDb, t.TempDir(), logtest.New(t), sig, poetCfg, mclock)
@@ -623,7 +603,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		postProver := NewMockpostSetupProvider(ctrl)
 		postProver.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
 		poetProver := defaultPoetServiceMock(t, []byte("poet"))
-		poetProver.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{PoetProof: types.PoetProof{}}, nil)
+		poetProver.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{PoetProof: types.PoetProof{}}, []types.Member{}, nil)
 
 		nb := NewNIPostBuilder(nodeID, postProver, []PoetProvingServiceClient{poetProver},
 			poetDb, t.TempDir(), logtest.New(t), sig, poetCfg, mclock)
@@ -701,7 +681,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 
 	proof := &types.PoetProofMessage{
 		PoetProof: types.PoetProof{
-			Members: []types.Member{types.Member(challenge.Hash())},
+			LeafCount: 777,
 		},
 	}
 
@@ -721,9 +701,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 		},
 	)
 	poet.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
-	poet.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{
-		PoetProof: types.PoetProof{Members: []types.Member{types.Member(challenge.Hash())}},
-	}, nil)
+	poet.EXPECT().Proof(gomock.Any(), "").Return(proof, []types.Member{types.Member(challenge.Hash())}, nil)
 
 	sig, err := signing.NewEdSigner()
 	req.NoError(err)
@@ -750,9 +728,35 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	req.NoError(err)
 
 	// Verify
-	req.Equal(challenge.Hash(), *nipost.Challenge)
+	req.Equal(challenge.Hash(), nipost.Membership.Leaf)
 	ref, _ := proof.Ref()
 	req.EqualValues(ref[:], nipost.PostMetadata.Challenge)
+}
+
+func TestConstructingMerkleProof(t *testing.T) {
+	challenge := types.NIPostChallenge{}
+	challengeHash := challenge.Hash()
+
+	t.Run("members empty", func(t *testing.T) {
+		_, err := constructMerkleProof(&challengeHash, []types.Member{})
+		require.Error(t, err)
+	})
+	t.Run("not a member", func(t *testing.T) {
+		_, err := constructMerkleProof(&challengeHash, []types.Member{{}, {}})
+		require.Error(t, err)
+	})
+
+	t.Run("is member", func(t *testing.T) {
+		otherChallenge := types.NIPostChallenge{Sequence: 1}
+		proof, err := constructMerkleProof(&challengeHash, []types.Member{
+			types.Member(challengeHash),
+			types.Member(otherChallenge.Hash()),
+		})
+		require.NoError(t, err)
+
+		err = validateMerkleProof(proof)
+		require.NoError(t, err)
+	})
 }
 
 func FuzzBuilderStateConsistency(f *testing.F) {

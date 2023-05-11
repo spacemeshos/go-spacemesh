@@ -84,13 +84,6 @@ func (t *PoetProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Members, 100000)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := scale.EncodeCompact64(enc, uint64(t.LeafCount))
 		if err != nil {
 			return total, err
@@ -107,14 +100,6 @@ func (t *PoetProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-	}
-	{
-		field, n, err := scale.DecodeStructSliceWithLimit[Member](dec, 100000)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Members = field
 	}
 	{
 		field, n, err := scale.DecodeCompact64(dec)
@@ -144,6 +129,13 @@ func (t *PoetProofMessage) EncodeScale(enc *scale.Encoder) (total int, err error
 	}
 	{
 		n, err := scale.EncodeStringWithLimit(enc, string(t.RoundID), 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Statement, 32)
 		if err != nil {
 			return total, err
 		}
@@ -182,6 +174,14 @@ func (t *PoetProofMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 		}
 		total += n
 		t.RoundID = string(field)
+	}
+	{
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Statement = field
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.Signature[:])

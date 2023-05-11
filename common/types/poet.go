@@ -55,11 +55,10 @@ type PoetProofRef [32]byte
 // EmptyPoetProofRef is an empty PoET proof reference.
 var EmptyPoetProofRef = PoetProofRef{}
 
-// PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
-// and the actual PoET Merkle proof.
+// PoetProof is the full PoET service proof of elapsed time.
+// It includes the number of leaves produced and the actual PoET Merkle proof.
 type PoetProof struct {
 	poetShared.MerkleProof
-	Members   []Member `scale:"max=100000"` // max size depends on how many smeshers submit a challenge to a poet server
 	LeafCount uint64
 }
 
@@ -68,12 +67,6 @@ func (p *PoetProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 		return nil
 	}
 	encoder.AddUint64("LeafCount", p.LeafCount)
-	encoder.AddArray("Indices", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		for _, member := range p.Members {
-			encoder.AppendString(hex.EncodeToString(member[:]))
-		}
-		return nil
-	}))
 
 	encoder.AddString("MerkleProof.Root", hex.EncodeToString(p.Root))
 	encoder.AddArray("MerkleProof.ProvenLeaves", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
@@ -97,7 +90,11 @@ type PoetProofMessage struct {
 	PoetProof
 	PoetServiceID []byte `scale:"max=32"` // public key of the PoET service
 	RoundID       string `scale:"max=32"` // TODO(mafa): convert to uint64
-	Signature     EdSignature
+	// The input to Poet's POSW.
+	// It's the root of a merkle tree built from all of the members
+	// that are included in the proof.
+	Statement []byte `scale:"max=32"`
+	Signature EdSignature
 }
 
 func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -107,6 +104,7 @@ func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddObject("PoetProof", &p.PoetProof)
 	encoder.AddString("PoetServiceID", hex.EncodeToString(p.PoetServiceID))
 	encoder.AddString("RoundID", p.RoundID)
+	encoder.AddString("Statement", hex.EncodeToString(p.Statement[:]))
 	encoder.AddString("Signature", p.Signature.String())
 
 	return nil

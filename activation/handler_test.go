@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/merkle-tree"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -30,9 +31,40 @@ import (
 
 const layersPerEpochBig = 1000
 
+func newMerkleProof(challenge types.Hash32, otherLeafs []types.Hash32) *types.MerkleProof {
+	tree, err := merkle.NewTreeBuilder().
+		WithLeavesToProve(map[uint64]bool{0: true}).
+		Build()
+	if err != nil {
+		panic("failed to add leaf to tree")
+	}
+	if err := tree.AddLeaf(challenge[:]); err != nil {
+		panic("failed to add leaf to tree")
+	}
+	for _, m := range otherLeafs {
+		if err := tree.AddLeaf(m[:]); err != nil {
+			panic("failed to add leaf to tree")
+		}
+	}
+	root, nodes := tree.RootAndProof()
+	nodesH32 := make([]types.Hash32, 0, len(nodes))
+	for _, n := range nodes {
+		nodesH32 = append(nodesH32, types.BytesToHash(n))
+	}
+	return &types.MerkleProof{
+		Root:  types.BytesToHash(root),
+		Nodes: nodesH32,
+		Leaf:  challenge,
+	}
+}
+
 func newNIPostWithChallenge(challenge types.Hash32, poetRef []byte) *types.NIPost {
 	return &types.NIPost{
-		Challenge: &challenge,
+		Membership: newMerkleProof(challenge, []types.Hash32{
+			types.BytesToHash([]byte("leaf2")),
+			types.BytesToHash([]byte("leaf3")),
+			types.BytesToHash([]byte("leaf4")),
+		}),
 		Post: &types.Post{
 			Nonce:   0,
 			Indices: []byte(nil),

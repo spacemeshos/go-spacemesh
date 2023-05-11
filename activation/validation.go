@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
@@ -50,15 +51,20 @@ func NewValidator(poetDb poetDbAPI, cfg PostConfig) *Validator {
 // consensus instead of local configuration. If so, their validation should be removed to contextual validation,
 // while still syntactically-validate them here according to locally configured min/max values.
 func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error) {
-	if !bytes.Equal(nipost.Challenge[:], expectedChallenge[:]) {
-		return 0, fmt.Errorf("invalid `Challenge`; expected: %x, given: %x", expectedChallenge, nipost.Challenge)
-	}
-
 	if err := v.NumUnits(&v.cfg, numUnits); err != nil {
 		return 0, err
 	}
 
 	if err := v.PostMetadata(&v.cfg, nipost.PostMetadata); err != nil {
+		return 0, err
+	}
+
+	poetChallenge := nipost.Membership.Leaf
+	if !bytes.Equal(poetChallenge[:], expectedChallenge[:]) {
+		return 0, fmt.Errorf("invalid `Challenge` in membership merkle proof leaf; expected: %x, given: %x", expectedChallenge, poetChallenge)
+	}
+
+	if err := validateMerkleProof(nipost.Membership); err != nil {
 		return 0, err
 	}
 
@@ -69,10 +75,6 @@ func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nip
 		return 0, fmt.Errorf("poet proof is not available %x: %w", nipost.PostMetadata.Challenge, err)
 	}
 
-	if !contains(proof, nipost.Challenge.Bytes()) {
-		return 0, fmt.Errorf("challenge is not included in the proof %x", nipost.PostMetadata.Challenge)
-	}
-
 	if err := v.Post(nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
 		return 0, fmt.Errorf("invalid Post: %v", err)
 	}
@@ -80,13 +82,15 @@ func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nip
 	return proof.LeafCount, nil
 }
 
-func contains(proof *types.PoetProof, member []byte) bool {
-	for _, part := range proof.Members {
-		if bytes.Equal(part[:], member) {
-			return true
-		}
+func validateMerkleProof(proof *types.MerkleProof) error {
+	hash := append([]byte{}, proof.Leaf[:]...)
+	for _, node := range proof.Nodes {
+		hash = merkle.GetSha256Parent(hash[:0], hash, node[:])
 	}
-	return false
+	if !bytes.Equal(hash, proof.Root[:]) {
+		return errors.New("invalid merkle proof")
+	}
+	return nil
 }
 
 // Post validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why

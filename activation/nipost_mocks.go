@@ -66,12 +66,13 @@ func (mr *MockPoetProvingServiceClientMockRecorder) PowParams(ctx interface{}) *
 }
 
 // Proof mocks base method.
-func (m *MockPoetProvingServiceClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, error) {
+func (m *MockPoetProvingServiceClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Proof", ctx, roundID)
 	ret0, _ := ret[0].(*types.PoetProofMessage)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].([]types.Member)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // Proof indicates an expected call of Proof.

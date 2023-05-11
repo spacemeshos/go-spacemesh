@@ -25,6 +25,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/merkle-tree"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
@@ -228,8 +229,26 @@ func TestMain(m *testing.M) {
 }
 
 func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
+	tree, err := merkle.NewTreeBuilder().
+		WithLeavesToProve(map[uint64]bool{0: true}).
+		Build()
+	if err != nil {
+		panic("failed to add leaf to tree")
+	}
+	if err := tree.AddLeaf(challenge[:]); err != nil {
+		panic("failed to add leaf to tree")
+	}
+	root, nodes := tree.RootAndProof()
+	nodesH32 := make([]types.Hash32, 0, len(nodes))
+	for _, n := range nodes {
+		nodesH32 = append(nodesH32, types.BytesToHash(n))
+	}
 	return &types.NIPost{
-		Challenge: challenge,
+		Membership: &types.MerkleProof{
+			Root:  types.BytesToHash(root),
+			Nodes: nodesH32,
+			Leaf:  *challenge,
+		},
 		Post: &types.Post{
 			Nonce:   0,
 			Indices: []byte(nil),

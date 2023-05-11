@@ -301,9 +301,60 @@ func (t *ActivationTx) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	return total, nil
 }
 
+func (t *MerkleProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeByteArray(enc, t.Root[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Nodes, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.Leaf[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *MerkleProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := scale.DecodeByteArray(dec, t.Root[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[Hash32](dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Nodes = field
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.Leaf[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
 func (t *NIPost) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeOption(enc, t.Challenge)
+		n, err := scale.EncodeOption(enc, t.Membership)
 		if err != nil {
 			return total, err
 		}
@@ -328,12 +379,12 @@ func (t *NIPost) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *NIPost) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeOption[Hash32](dec)
+		field, n, err := scale.DecodeOption[MerkleProof](dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Challenge = field
+		t.Membership = field
 	}
 	{
 		field, n, err := scale.DecodeOption[Post](dec)
