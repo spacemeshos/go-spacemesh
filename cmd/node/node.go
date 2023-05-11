@@ -324,6 +324,10 @@ func (app *App) introduction() {
 
 // Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
 func (app *App) Initialize() (err error) {
+	// ensure all data folders exist
+	if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
+		return fmt.Errorf("ensure folders exist: %w", err)
+	}
 	fl := flock.New(app.Config.FileLock)
 	locked, err := fl.TryLock()
 	if err != nil {
