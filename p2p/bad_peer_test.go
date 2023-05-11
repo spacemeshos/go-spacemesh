@@ -3,6 +3,7 @@ package p2p_test
 import (
 	"context"
 	"encoding/binary"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -33,11 +34,13 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	// Make 2 node instances
 	conf1 := config.DefaultTestConfig()
 	conf1.DataDirParent = t.TempDir()
+	conf1.FileLock = filepath.Join(conf1.DataDirParent, "LOCK")
 	conf1.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
 	app1, err := NewApp(&conf1)
 	require.NoError(t, err)
 	conf2 := config.DefaultTestConfig()
 	conf2.DataDirParent = t.TempDir()
+	conf2.FileLock = filepath.Join(conf2.DataDirParent, "LOCK")
 	conf2.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
 	app2, err := NewApp(&conf2)
 	require.NoError(t, err)
