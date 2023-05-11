@@ -72,7 +72,7 @@ func TestVerify(t *testing.T) {
 			} {
 				t.Run(tc.desc, func(t *testing.T) {
 					ms := MultiSig{
-						k: uint8(variant.K),
+						Required: uint8(variant.K),
 					}
 					for _, pub := range publics[:variant.N] {
 						key := core.PublicKey{}
@@ -114,7 +114,7 @@ func BenchmarkVerify(b *testing.B) {
 	} {
 		b.Run(fmt.Sprintf("%d/%d", variant.K, variant.N), func(b *testing.B) {
 			ms := MultiSig{
-				k: uint8(variant.K),
+				Required: uint8(variant.K),
 			}
 			for _, pub := range publics[:variant.N] {
 				key := core.PublicKey{}
@@ -138,7 +138,7 @@ func BenchmarkVerify(b *testing.B) {
 
 func FuzzVerify(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
-		ms := MultiSig{k: 2, PublicKeys: make([]core.PublicKey, 3)}
+		ms := MultiSig{Required: 2, PublicKeys: make([]core.PublicKey, 3)}
 		dec := scale.NewDecoder(bytes.NewReader(data))
 		ms.Verify(&core.Context{}, data, dec)
 	})
@@ -178,10 +178,9 @@ func pullWithDups(k int) (rst []int) {
 func prepSigFromKeys(tb testing.TB, message []byte, privates []ed25519.PrivateKey, refs ...int) []byte {
 	tb.Helper()
 	sigs := Signatures{}
-	hash := core.Hash(message)
 	for _, ref := range refs {
 		sig := core.Signature{}
-		copy(sig[:], ed25519.Sign(privates[ref], hash[:]))
+		copy(sig[:], ed25519.Sign(privates[ref], message))
 		sigs = append(sigs, Part{Ref: uint8(ref), Sig: sig})
 	}
 	buf := bytes.NewBuffer(nil)

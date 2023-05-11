@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/spacemeshos/post/initialization"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 )
@@ -15,13 +17,6 @@ func init() {
 func fastnet() config.Config {
 	conf := config.DefaultConfig()
 	conf.Address = types.DefaultTestAddressConfig()
-
-	conf.API.StartGrpcServices = []string{
-		"node", "mesh", "globalstate", "transaction", "smesher", "debug",
-	}
-	if err := conf.API.ParseServicesList(); err != nil {
-		panic(err)
-	}
 
 	conf.BaseConfig.OptFilterThreshold = 90
 
@@ -47,8 +42,7 @@ func fastnet() config.Config {
 	conf.Tortoise.Zdist = 2
 	conf.Tortoise.BadBeaconVoteDelayLayers = 2
 
-	conf.HareEligibility.ConfidenceParam = 2 // half epoch
-	conf.HareEligibility.EpochOffset = 0
+	conf.HareEligibility.ConfidenceParam = 2
 
 	conf.POST.K1 = 12
 	conf.POST.K2 = 4
@@ -59,14 +53,14 @@ func fastnet() config.Config {
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
-	conf.SMESHING.Opts.ComputeProviderID = 1
+	conf.SMESHING.Opts.ProviderID = int(initialization.CPUProviderID())
 	conf.SMESHING.Opts.NumUnits = 2
 	conf.SMESHING.Opts.Throttle = true
 
 	conf.Beacon.Kappa = 40
 	conf.Beacon.Theta = big.NewRat(1, 4)
 	conf.Beacon.FirstVotingRoundDuration = 10 * time.Second
-	conf.Beacon.GracePeriodDuration = 2 * time.Second
+	conf.Beacon.GracePeriodDuration = 30 * time.Second
 	conf.Beacon.ProposalDuration = 2 * time.Second
 	conf.Beacon.VotingRoundDuration = 2 * time.Second
 	conf.Beacon.WeakCoinRoundDuration = 2 * time.Second

@@ -11,14 +11,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-func buildStatusMsg(sig *signing.EdSigner, s *Set, ki uint32) *Msg {
+func buildStatusMsg(sig *signing.EdSigner, s *Set, ki uint32) *Message {
 	builder := newMessageBuilder()
-	builder.SetType(status).SetLayer(instanceID1).SetRoundCounter(statusRound).SetCommittedRound(ki).SetValues(s)
-	builder.SetEligibilityCount(1)
-	return builder.SetNodeID(sig.NodeID()).Sign(sig).Build()
+	builder.
+		SetType(status).
+		SetLayer(instanceID1).
+		SetRoundCounter(statusRound).
+		SetCommittedRound(ki).
+		SetValues(s).
+		SetEligibilityCount(1)
+	return builder.Sign(sig).Build()
 }
 
-func BuildStatusMsg(sig *signing.EdSigner, s *Set) *Msg {
+func BuildStatusMsg(sig *signing.EdSigner, s *Set) *Message {
 	return buildStatusMsg(sig, s, preRound)
 }
 
@@ -36,12 +41,12 @@ func TestStatusTracker_RecordStatus(t *testing.T) {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		m := BuildStatusMsg(sig, s)
-		et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
+		et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 		tracker.RecordStatus(context.Background(), m)
 		require.False(t, tracker.IsSVPReady())
 	}
 
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	require.True(t, tracker.IsSVPReady())
 	require.Empty(t, mch)
 }
@@ -61,15 +66,15 @@ func TestStatusTracker_BuildUnionSet(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(types.ProposalID{1})
 	m1 := BuildStatusMsg(sig1, s)
-	et.Track(m1.NodeID, m1.Round, m1.Eligibility.Count, true)
+	et.Track(m1.SmesherID, m1.Round, m1.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m1)
 	s.Add(types.ProposalID{2})
 	m2 := BuildStatusMsg(sig2, s)
-	et.Track(m2.NodeID, m2.Round, m2.Eligibility.Count, true)
+	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m2)
 	s.Add(types.ProposalID{3})
 	m3 := BuildStatusMsg(sig3, s)
-	et.Track(m3.NodeID, m3.Round, m3.Eligibility.Count, true)
+	et.Track(m3.SmesherID, m3.Round, m3.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m3)
 
 	g := tracker.buildUnionSet(defaultSetSize)
@@ -87,9 +92,9 @@ func TestStatusTracker_IsSVPReady(t *testing.T) {
 	require.False(t, tracker.IsSVPReady())
 	s := NewSetFromValues(types.ProposalID{1})
 	m := BuildStatusMsg(sig, s)
-	et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
+	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), BuildStatusMsg(sig, s))
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	require.True(t, tracker.IsSVPReady())
 	require.Empty(t, mch)
 }
@@ -105,12 +110,12 @@ func TestStatusTracker_BuildSVP(t *testing.T) {
 	tracker := newStatusTracker(logtest.New(t), statusRound, mch, et, 2, 1)
 	s := NewSetFromValues(types.ProposalID{1})
 	m1 := BuildStatusMsg(sig1, s)
-	et.Track(m1.NodeID, m1.Round, m1.Eligibility.Count, true)
+	et.Track(m1.SmesherID, m1.Round, m1.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m1)
 	m2 := BuildStatusMsg(sig2, s)
-	et.Track(m2.NodeID, m2.Round, m2.Eligibility.Count, true)
+	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m2)
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	svp := tracker.BuildSVP()
 	require.Equal(t, 2, len(svp.Messages))
 	require.Empty(t, mch)
@@ -127,11 +132,11 @@ func TestStatusTracker_ProposalSetTypeA(t *testing.T) {
 	tracker := newStatusTracker(logtest.New(t), statusRound, mch, et, 2, 1)
 	s1 := NewSetFromValues(types.ProposalID{1})
 	m1 := buildStatusMsg(sig1, s1, preRound)
-	et.Track(m1.NodeID, m1.Round, m1.Eligibility.Count, true)
+	et.Track(m1.SmesherID, m1.Round, m1.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m1)
 	s2 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2})
 	m2 := buildStatusMsg(sig2, s2, preRound)
-	et.Track(m2.NodeID, m2.Round, m2.Eligibility.Count, true)
+	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m2)
 
 	proposedSet := tracker.ProposalSet(2)
@@ -152,12 +157,12 @@ func TestStatusTracker_ProposalSetTypeB(t *testing.T) {
 	s1 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{3})
 	s2 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2})
 	m1 := buildStatusMsg(sig1, s1, 0)
-	et.Track(m1.NodeID, m1.Round, m1.Eligibility.Count, true)
+	et.Track(m1.SmesherID, m1.Round, m1.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m1)
 	m2 := buildStatusMsg(sig2, s2, 2)
-	et.Track(m2.NodeID, m2.Round, m2.Eligibility.Count, true)
+	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m2)
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	proposedSet := tracker.ProposalSet(2)
 	require.NotNil(t, proposedSet)
 	require.True(t, proposedSet.Equals(s2))
@@ -174,12 +179,12 @@ func TestStatusTracker_Equivocate_Fail(t *testing.T) {
 	s1 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{3})
 	s2 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2})
 	m1 := buildStatusMsg(sig, s1, 0)
-	et.Track(m1.NodeID, m1.Round, m1.Eligibility.Count, true)
+	et.Track(m1.SmesherID, m1.Round, m1.Eligibility.Count, true)
 	m2 := buildStatusMsg(sig, s2, 0)
-	et.Track(m2.NodeID, m2.Round, m2.Eligibility.Count, true)
+	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m1)
 	tracker.RecordStatus(context.Background(), m2)
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	proposedSet := tracker.ProposalSet(2)
 	require.NotNil(t, proposedSet)
 	require.True(t, proposedSet.Equals(s1), proposedSet)
@@ -192,11 +197,19 @@ func TestStatusTracker_Equivocate_Fail(t *testing.T) {
 				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{
 						{
-							InnerMsg:  m1.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   m1.Layer,
+								Round:   m1.Round,
+								MsgHash: types.BytesToHash(m1.HashBytes()),
+							},
 							Signature: m1.Signature,
 						},
 						{
-							InnerMsg:  m2.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   m2.Layer,
+								Round:   m2.Round,
+								MsgHash: types.BytesToHash(m2.HashBytes()),
+							},
 							Signature: m2.Signature,
 						},
 					},
@@ -206,7 +219,7 @@ func TestStatusTracker_Equivocate_Fail(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			NodeID:      m2.NodeID,
+			NodeID:      m2.SmesherID,
 			Eligibility: m2.Eligibility,
 		},
 	}
@@ -232,19 +245,19 @@ func TestStatusTracker_Equivocate_Pass(t *testing.T) {
 	s1 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{3})
 	s2 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2})
 	m1 := buildStatusMsg(sigBad, s1, 0)
-	et.Track(m1.NodeID, m1.Round, m1.Eligibility.Count, true)
+	et.Track(m1.SmesherID, m1.Round, m1.Eligibility.Count, true)
 	m2 := buildStatusMsg(sigBad, s2, 0)
-	et.Track(m2.NodeID, m2.Round, m2.Eligibility.Count, true)
+	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m1)
 	tracker.RecordStatus(context.Background(), m2)
 
 	for _, sig := range []*signing.EdSigner{sig1, sig2} {
 		m := buildStatusMsg(sig, s1, 0)
-		et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
+		et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 		tracker.RecordStatus(context.Background(), m)
 	}
 
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	proposedSet := tracker.ProposalSet(2)
 	require.NotNil(t, proposedSet)
 	require.True(t, proposedSet.Equals(s1), proposedSet)
@@ -257,11 +270,19 @@ func TestStatusTracker_Equivocate_Pass(t *testing.T) {
 				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{
 						{
-							InnerMsg:  m1.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   m1.Layer,
+								Round:   m1.Round,
+								MsgHash: types.BytesToHash(m1.HashBytes()),
+							},
 							Signature: m1.Signature,
 						},
 						{
-							InnerMsg:  m2.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   m2.Layer,
+								Round:   m2.Round,
+								MsgHash: types.BytesToHash(m2.HashBytes()),
+							},
 							Signature: m2.Signature,
 						},
 					},
@@ -271,7 +292,7 @@ func TestStatusTracker_Equivocate_Pass(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       m2.Layer,
 			Round:       m2.Round,
-			NodeID:      m2.NodeID,
+			NodeID:      m2.SmesherID,
 			Eligibility: m2.Eligibility,
 		},
 	}
@@ -298,13 +319,13 @@ func TestStatusTracker_WithKnownEquivocator(t *testing.T) {
 
 	for _, sig := range []*signing.EdSigner{sig1, sig2} {
 		m := buildStatusMsg(sig, s1, 0)
-		et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
+		et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 		tracker.RecordStatus(context.Background(), m)
 	}
 	// received a gossiped eligibility for this round
 	et.Track(sigBad.NodeID(), statusRound, 1, false)
 
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	proposedSet := tracker.ProposalSet(2)
 	require.NotNil(t, proposedSet)
 	require.True(t, proposedSet.Equals(s1), proposedSet)
@@ -329,10 +350,10 @@ func TestStatusTracker_NotEnoughKnownEquivocators(t *testing.T) {
 	require.NoError(t, err)
 	s := NewSetFromValues(types.ProposalID{1}, types.ProposalID{3})
 	m := buildStatusMsg(sig, s, 0)
-	et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
+	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m)
 
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	proposedSet := tracker.ProposalSet(2)
 	require.NotNil(t, proposedSet)
 	require.True(t, proposedSet.Equals(s), proposedSet)
@@ -356,10 +377,10 @@ func TestStatusTracker_NotEnoughHonestVote(t *testing.T) {
 	require.NoError(t, err)
 	s := NewSetFromValues(types.ProposalID{1}, types.ProposalID{3})
 	m := buildStatusMsg(sig, s, 0)
-	et.Track(m.NodeID, m.Round, m.Eligibility.Count, false)
+	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, false)
 	tracker.RecordStatus(context.Background(), m)
 
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	proposedSet := tracker.ProposalSet(2)
 	require.NotNil(t, proposedSet)
 	require.True(t, proposedSet.Equals(s), proposedSet)
@@ -383,10 +404,10 @@ func TestStatusTracker_JustEnough(t *testing.T) {
 	require.NoError(t, err)
 	s := NewSetFromValues(types.ProposalID{1}, types.ProposalID{3})
 	m := buildStatusMsg(sig, s, 0)
-	et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
+	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m)
 
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	proposedSet := tracker.ProposalSet(2)
 	require.NotNil(t, proposedSet)
 	require.True(t, proposedSet.Equals(s), proposedSet)
@@ -410,15 +431,15 @@ func TestStatusTracker_AnalyzeStatuses(t *testing.T) {
 	s1 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{3})
 	s2 := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2})
 	m1 := buildStatusMsg(sig1, s1, 2)
-	et.Track(m1.NodeID, m1.Round, m1.Eligibility.Count, true)
+	et.Track(m1.SmesherID, m1.Round, m1.Eligibility.Count, true)
 	m2 := buildStatusMsg(sig2, s2, 1)
-	et.Track(m2.NodeID, m2.Round, m2.Eligibility.Count, true)
+	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
 	m3 := buildStatusMsg(sig3, s2, 2)
-	et.Track(m3.NodeID, m3.Round, m3.Eligibility.Count, true)
+	et.Track(m3.SmesherID, m3.Round, m3.Eligibility.Count, true)
 	tracker.RecordStatus(context.Background(), m1)
 	tracker.RecordStatus(context.Background(), m2)
 	tracker.RecordStatus(context.Background(), m3)
-	tracker.AnalyzeStatusMessages(func(m *Msg) bool { return true })
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
 	require.True(t, tracker.IsSVPReady())
 	require.NotNil(t, tracker.tally)
 	expected := CountInfo{hCount: 3, numHonest: 3}

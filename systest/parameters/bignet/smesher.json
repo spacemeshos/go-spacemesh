@@ -1,26 +1,26 @@
 {
     "preset": "fastnet",
     "main": {
-        "layers-per-epoch": 50,
-        "layer-duration": "5m"
+        "layers-per-epoch": 200,
+        "layer-duration": "3m"
     },
     "poet": {
-        "phase-shift": "100m",
-        "cycle-gap": "15m",
-        "grace-period": "1m"
+        "phase-shift": "300m",
+        "cycle-gap": "40m",
+        "grace-period": "10m"
     },
     "tortoise": {
         "tortoise-zdist": 4,
         "tortoise-hdist": 10
     },
     "hare": {
-        "hare-wakeup-delta": "30s",
-        "hare-round-duration": "30s",
+        "hare-wakeup-delta": "25s",
+        "hare-round-duration": "25s",
         "hare-limit-iterations": 4,
         "hare-committee-size": 200
     },
     "hare-eligibility": {
-        "eligibility-confidence-param": 10
+        "eligibility-confidence-param": 5
     },
     "beacon": {
         "beacon-grace-period-duration": "1m",
@@ -29,5 +29,15 @@
         "beacon-rounds-number": 100,
         "beacon-voting-round-duration": "1m",
         "beacon-weak-coin-round-duration": "1m"
+    },
+    "post": {
+        "post-labels-per-unit": 1280,
+        "post-max-numunits": 4,
+        "post-min-numunits": 2,
+        "post-k1": 273,
+        "post-k2": 300,
+        "post-k3": 100,
+        "post-k2pow-difficulty": 469112881707866048,
+        "post-k3pow-difficulty": 29244622850649904
     }
 }

@@ -317,13 +317,6 @@ func (t *LayerData) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
-	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Blocks, 100)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
 	return total, nil
 }
 
@@ -335,14 +328,6 @@ func (t *LayerData) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.Ballots = field
-	}
-	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.BlockID](dec, 100)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Blocks = field
 	}
 	return total, nil
 }

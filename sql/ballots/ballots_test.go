@@ -1,14 +1,27 @@
 package ballots
 
 import (
+	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
+
+const layersPerEpoch = 3
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+
+	res := m.Run()
+	os.Exit(res)
+}
 
 func TestLayer(t *testing.T) {
 	db := sql.InMemory()
@@ -141,7 +154,6 @@ func TestLayerBallotBySmesher(t *testing.T) {
 }
 
 func TestGetRefBallot(t *testing.T) {
-	types.SetLayersPerEpoch(3)
 	db := sql.InMemory()
 	lid2 := types.LayerID(2)
 	lid3 := types.LayerID(3)
@@ -178,4 +190,155 @@ func TestGetRefBallot(t *testing.T) {
 
 	_, err = GetRefBallot(db, 1, nodeID4)
 	require.ErrorIs(t, err, sql.ErrNotFound)
+}
+
+func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActivationTx, error) {
+	atx := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PublishEpoch: layerID.GetEpoch(),
+				PrevATXID:    types.RandomATXID(),
+			},
+			NumUnits: 2,
+		},
+	}
+
+	nodeID := signer.NodeID()
+	atx.SetID(types.ATXID{1, 2, 3})
+	atx.SmesherID = nodeID
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now().Local())
+	return atx.Verify(0, 1)
+}
+
+func TestFirstInEpoch(t *testing.T) {
+	db := sql.InMemory()
+	lid := types.LayerID(layersPerEpoch * 2)
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	atx, err := newAtx(sig, lid)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(db, atx))
+
+	got, err := FirstInEpoch(db, atx.ID(), 2)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, got)
+
+	b1 := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, sig.NodeID(), lid)
+	b1.AtxID = atx.ID()
+	require.NoError(t, Add(db, &b1))
+	b2 := types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, sig.NodeID(), lid)
+	b2.AtxID = atx.ID()
+	require.NoError(t, Add(db, &b2))
+	b3 := types.NewExistingBallot(types.BallotID{3}, types.EmptyEdSignature, sig.NodeID(), lid.Add(1))
+	b3.AtxID = atx.ID()
+	require.NoError(t, Add(db, &b3))
+
+	got, err = FirstInEpoch(db, atx.ID(), 2)
+	require.NoError(t, err)
+	require.Equal(t, got.AtxID, atx.ID())
+	require.Equal(t, got.ID(), b1.ID())
+}
+
+func TestAllFirstInEpoch(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		desc    string
+		target  types.EpochID
+		ballots []types.Ballot
+		expect  []int // references to ballots field
+	}{
+		{
+			"sanity",
+			0,
+			[]types.Ballot{
+				types.NewExistingBallot(
+					types.BallotID{1}, types.EmptyEdSignature, types.NodeID{1},
+					types.EpochID(0).FirstLayer()+2,
+				),
+				types.NewExistingBallot(
+					types.BallotID{2}, types.EmptyEdSignature, types.NodeID{1},
+					types.EpochID(0).FirstLayer(),
+				),
+			},
+			[]int{1},
+		},
+		{
+			"multiple smeshers",
+			0,
+			[]types.Ballot{
+				types.NewExistingBallot(
+					types.BallotID{1}, types.EmptyEdSignature, types.NodeID{1},
+					types.EpochID(0).FirstLayer()+2,
+				),
+				types.NewExistingBallot(
+					types.BallotID{2}, types.EmptyEdSignature, types.NodeID{1},
+					types.EpochID(0).FirstLayer(),
+				),
+				types.NewExistingBallot(
+					types.BallotID{3}, types.EmptyEdSignature, types.NodeID{2},
+					types.EpochID(1).FirstLayer()-1,
+				),
+				types.NewExistingBallot(
+					types.BallotID{4}, types.EmptyEdSignature, types.NodeID{2},
+					types.EpochID(0).FirstLayer(),
+				),
+			},
+			[]int{1, 3},
+		},
+		{
+			"empty",
+			1,
+			[]types.Ballot{
+				types.NewExistingBallot(
+					types.BallotID{1}, types.EmptyEdSignature, types.NodeID{1},
+					types.EpochID(0).FirstLayer(),
+				),
+				types.NewExistingBallot(
+					types.BallotID{3}, types.EmptyEdSignature, types.NodeID{2},
+					types.EpochID(0).FirstLayer(),
+				),
+			},
+			[]int{},
+		},
+		{
+			"multi epoch",
+			1,
+			[]types.Ballot{
+				types.NewExistingBallot(
+					types.BallotID{1}, types.EmptyEdSignature, types.NodeID{1},
+					types.EpochID(0).FirstLayer(),
+				),
+				types.NewExistingBallot(
+					types.BallotID{3}, types.EmptyEdSignature, types.NodeID{2},
+					types.EpochID(0).FirstLayer(),
+				),
+				types.NewExistingBallot(
+					types.BallotID{4}, types.EmptyEdSignature, types.NodeID{1},
+					types.EpochID(1).FirstLayer(),
+				),
+				types.NewExistingBallot(
+					types.BallotID{5}, types.EmptyEdSignature, types.NodeID{2},
+					types.EpochID(1).FirstLayer(),
+				),
+			},
+			[]int{2, 3},
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Parallel()
+			db := sql.InMemory()
+			for _, ballot := range tc.ballots {
+				require.NoError(t, Add(db, &ballot))
+			}
+			var expect []*types.Ballot
+			for _, bi := range tc.expect {
+				expect = append(expect, &tc.ballots[bi])
+			}
+			results, err := AllFirstInEpoch(db, tc.target)
+			require.NoError(t, err)
+			require.Equal(t, expect, results)
+		})
+	}
 }

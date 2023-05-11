@@ -201,3 +201,21 @@ func TestOracle_OwnATXNotFound(t *testing.T) {
 	require.ErrorIs(t, err, errMinerHasNoATXInPreviousEpoch)
 	require.Nil(t, ee)
 }
+
+func TestOracle_EligibilityCached(t *testing.T) {
+	avgLayerSize := uint32(10)
+	layersPerEpoch := uint32(20)
+	o := createTestOracle(t, avgLayerSize, layersPerEpoch)
+	lid := types.LayerID(layersPerEpoch * 3)
+	epochInfo := genATXForTargetEpochs(t, o.cdb, lid.GetEpoch(), lid.GetEpoch()+1, o.edSigner, layersPerEpoch)
+	info, ok := epochInfo[lid.GetEpoch()]
+	require.True(t, ok)
+	ee1, err := o.GetProposalEligibility(lid, info.beacon, types.VRFPostIndex(1))
+	require.NoError(t, err)
+	require.NotNil(t, ee1)
+
+	// even if we pass a random beacon in this time, the cached value is still the same
+	ee2, err := o.GetProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
+	require.NoError(t, err)
+	require.Equal(t, ee1, ee2)
+}

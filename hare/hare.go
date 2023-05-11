@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -88,10 +87,6 @@ func (m defaultMesh) Ballot(bid types.BallotID) (*types.Ballot, error) {
 	return ballots.Get(m, bid)
 }
 
-func (m defaultMesh) SetWeakCoin(lid types.LayerID, wc bool) error {
-	return layers.SetWeakCoin(m, lid, wc)
-}
-
 // Opt for configuring beacon protocol.
 type Opt func(*Hare)
 
@@ -105,6 +100,7 @@ func withMesh(m mesh) Opt {
 type Hare struct {
 	log.Log
 	msh        mesh
+	weakCoin   weakCoin
 	config     config.Config
 	publisher  pubsub.Publisher
 	layerClock LayerClock
@@ -143,7 +139,7 @@ func New(
 	conf config.Config,
 	publisher pubsub.PublishSubsciber,
 	sign *signing.EdSigner,
-	pke *signing.PubKeyExtractor,
+	edVerifier *signing.EdVerifier,
 	nid types.NodeID,
 	ch chan LayerOutput,
 	syncState system.SyncStateProvider,
@@ -152,6 +148,7 @@ func New(
 	patrol layerPatrol,
 	stateQ stateQuerier,
 	layerClock LayerClock,
+	weakCoin weakCoin,
 	logger log.Log,
 	opts ...Opt,
 ) *Hare {
@@ -181,13 +178,14 @@ func New(
 	h.beacons = beacons
 	h.rolacle = rolacle
 	h.patrol = patrol
+	h.weakCoin = weakCoin
 
 	h.networkDelta = conf.WakeupDelta
 	h.outputChan = make(chan TerminationOutput, h.config.Hdist)
 	h.outputs = make(map[types.LayerID][]types.ProposalID, h.config.Hdist) // we keep results about LayerBuffer past layers
 	h.cps = make(map[types.LayerID]Consensus, h.config.LimitConcurrent)
 	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing *signing.EdSigner, nonce *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
-		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, pke, nid, nonce, p2p, comm, ev, clock, logger)
+		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, edVerifier, nid, nonce, p2p, comm, ev, clock, logger)
 	}
 
 	h.nodeID = nid
@@ -200,7 +198,7 @@ func New(
 	if h.msh == nil {
 		h.msh = defaultMesh{CachedDB: cdb}
 	}
-	h.broker = newBroker(h.msh, pke, ev, stateQ, syncState, h.mchMalfeasance, conf.LimitConcurrent, logger)
+	h.broker = newBroker(h.msh, edVerifier, ev, stateQ, syncState, h.mchMalfeasance, conf.LimitConcurrent, logger)
 
 	return h
 }
@@ -530,7 +528,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 			// collect coinflip, regardless of success
 			logger.With().Debug("recording weak coin result for layer",
 				log.Bool("weak_coin", coin))
-			if err := h.msh.SetWeakCoin(layerID, coin); err != nil {
+			if err := h.weakCoin.Set(layerID, coin); err != nil {
 				logger.With().Error("failed to set weak coin for layer", log.Err(err))
 			}
 			if err := h.collectOutput(ctx, out); err != nil {

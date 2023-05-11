@@ -11,11 +11,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-func BuildCommitMsg(signer *signing.EdSigner, s *Set) *Msg {
+func BuildCommitMsg(signer *signing.EdSigner, s *Set) *Message {
 	builder := newMessageBuilder()
 	builder.SetType(commit).SetLayer(instanceID1).SetRoundCounter(commitRound).SetCommittedRound(ki).SetValues(s)
 	builder.SetEligibilityCount(1)
-	builder = builder.SetNodeID(signer.NodeID()).Sign(signer)
+	builder = builder.Sign(signer)
 	return builder.Build()
 }
 
@@ -29,7 +29,7 @@ func TestCommitTracker_OnCommit(t *testing.T) {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		m := BuildCommitMsg(signer, s)
-		et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
+		et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 		tracker.OnCommit(context.Background(), m)
 		require.False(t, tracker.HasEnoughCommits())
 	}
@@ -38,7 +38,7 @@ func TestCommitTracker_OnCommit(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildCommitMsg(signer, s)
-	et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
+	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 	tracker.OnCommit(context.Background(), m)
 	require.True(t, tracker.HasEnoughCommits())
 	require.Equal(t, CountInfo{hCount: lowThresh10 + 1, numHonest: lowThresh10 + 1}, *tracker.CommitCount())
@@ -62,7 +62,7 @@ func TestCommitTracker_OnCommit_TooManyDishonest(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildCommitMsg(signer, s)
-	et.Track(m.NodeID, m.Round, m.Eligibility.Count, false)
+	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, false)
 	tracker.OnCommit(context.Background(), m)
 	require.False(t, tracker.HasEnoughCommits())
 	require.Equal(t, CountInfo{dhCount: 1, keCount: lowThresh10, numDishonest: 1, numKE: lowThresh10}, *tracker.CommitCount())
@@ -86,7 +86,7 @@ func TestCommitTracker_OnCommit_JustEnough(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildCommitMsg(signer, s)
-	et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
+	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 	tracker.OnCommit(context.Background(), m)
 	require.True(t, tracker.HasEnoughCommits())
 	require.Equal(t, CountInfo{hCount: 1, keCount: lowThresh10, numHonest: 1, numKE: lowThresh10}, *tracker.CommitCount())
@@ -103,7 +103,7 @@ func TestCommitTracker_OnCommit_KnownEquivocator(t *testing.T) {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		m := BuildCommitMsg(signer, s)
-		et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
+		et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 		tracker.OnCommit(context.Background(), m)
 		require.False(t, tracker.HasEnoughCommits())
 	}
@@ -158,11 +158,19 @@ func TestCommitTracker_OnCommitEquivocate(t *testing.T) {
 				Data: &types.HareProof{
 					Messages: [2]types.HareProofMsg{
 						{
-							InnerMsg:  msg1.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   msg1.Layer,
+								Round:   msg1.Round,
+								MsgHash: types.BytesToHash(msg1.InnerMessage.HashBytes()),
+							},
 							Signature: msg1.Signature,
 						},
 						{
-							InnerMsg:  msg2.HareMetadata,
+							InnerMsg: types.HareMetadata{
+								Layer:   msg2.Layer,
+								Round:   msg2.Round,
+								MsgHash: types.BytesToHash(msg2.InnerMessage.HashBytes()),
+							},
 							Signature: msg2.Signature,
 						},
 					},
@@ -172,7 +180,7 @@ func TestCommitTracker_OnCommitEquivocate(t *testing.T) {
 		Eligibility: &types.HareEligibilityGossip{
 			Layer:       msg2.Layer,
 			Round:       msg2.Round,
-			NodeID:      msg2.NodeID,
+			NodeID:      msg2.SmesherID,
 			Eligibility: msg2.Eligibility,
 		},
 	}
@@ -196,10 +204,10 @@ func TestCommitTracker_HasEnoughCommits(t *testing.T) {
 	tracker := newCommitTracker(logtest.New(t), commitRound, mch, et, 2, 2, s)
 	require.False(t, tracker.HasEnoughCommits())
 	m1 := BuildCommitMsg(signer1, s)
-	et.Track(m1.NodeID, m1.Round, m1.Eligibility.Count, true)
+	et.Track(m1.SmesherID, m1.Round, m1.Eligibility.Count, true)
 	tracker.OnCommit(context.Background(), m1)
 	m2 := BuildCommitMsg(signer2, s)
-	et.Track(m2.NodeID, m2.Round, m2.Eligibility.Count, true)
+	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
 	tracker.OnCommit(context.Background(), m2)
 	require.True(t, tracker.HasEnoughCommits())
 	require.Empty(t, mch)
@@ -217,7 +225,7 @@ func TestCommitTracker_HasEnoughCommits_KnownEquivocator(t *testing.T) {
 	tracker := newCommitTracker(logtest.New(t), commitRound, mch, et, 2, 2, s)
 	require.False(t, tracker.HasEnoughCommits())
 	m := BuildCommitMsg(signer1, s)
-	et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
+	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 	tracker.OnCommit(context.Background(), m)
 	require.False(t, tracker.HasEnoughCommits())
 
@@ -239,7 +247,7 @@ func TestCommitTracker_HasEnoughCommits_TooFewKnownEquivocator(t *testing.T) {
 	tracker := newCommitTracker(logtest.New(t), commitRound, mch, et, 3, 5, s)
 	require.False(t, tracker.HasEnoughCommits())
 	m := BuildCommitMsg(signer1, s)
-	et.Track(m.NodeID, m.Round, m.Eligibility.Count, true)
+	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 	tracker.OnCommit(context.Background(), m)
 	require.False(t, tracker.HasEnoughCommits())
 
@@ -275,14 +283,14 @@ func TestCommitTracker_BuildCertificate(t *testing.T) {
 	tracker := newCommitTracker(logtest.New(t), commitRound, make(chan *types.MalfeasanceGossip, 2), et, 2, 2, s)
 	require.Nil(t, tracker.BuildCertificate())
 	m1 := BuildCommitMsg(signer1, s)
-	et.Track(m1.NodeID, m1.Round, m1.Eligibility.Count, true)
+	et.Track(m1.SmesherID, m1.Round, m1.Eligibility.Count, true)
 	tracker.OnCommit(context.Background(), m1)
 	m2 := BuildCommitMsg(signer2, s)
-	et.Track(m2.NodeID, m2.Round, m2.Eligibility.Count, true)
+	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
 	tracker.OnCommit(context.Background(), m2)
 	cert := tracker.BuildCertificate()
 	require.NotNil(t, cert)
 	require.Equal(t, 2, len(cert.AggMsgs.Messages))
-	require.Nil(t, cert.AggMsgs.Messages[0].InnerMsg.Values)
-	require.Nil(t, cert.AggMsgs.Messages[1].InnerMsg.Values)
+	require.Nil(t, cert.AggMsgs.Messages[0].Values)
+	require.Nil(t, cert.AggMsgs.Messages[1].Values)
 }

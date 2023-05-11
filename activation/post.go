@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/post/config"
-	"github.com/spacemeshos/post/gpu"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/proving"
 
@@ -18,8 +17,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
-// PostSetupComputeProvider represent a compute provider for Post setup data creation.
-type PostSetupComputeProvider initialization.ComputeProvider
+// PostSetupProvider represent a compute provider for Post setup data creation.
+type PostSetupProvider initialization.ComputeProvider
 
 // PostConfig is the configuration of the Post protocol, used for data creation, proofs generation and validation.
 type PostConfig struct {
@@ -37,13 +36,28 @@ type PostConfig struct {
 // PostSetupOpts are the options used to initiate a Post setup data creation session,
 // either via the public smesher API, or on node launch (via cmd args).
 type PostSetupOpts struct {
-	DataDir           string              `mapstructure:"smeshing-opts-datadir"`
-	NumUnits          uint32              `mapstructure:"smeshing-opts-numunits"`
-	MaxFileSize       uint64              `mapstructure:"smeshing-opts-maxfilesize"`
-	ComputeProviderID int                 `mapstructure:"smeshing-opts-provider"`
-	Throttle          bool                `mapstructure:"smeshing-opts-throttle"`
-	Scrypt            config.ScryptParams `mapstructure:"smeshing-opts-scrypt"`
-	ComputeBatchSize  uint64              `mapstructure:"smeshing-opts-compute-batch-size"`
+	DataDir          string              `mapstructure:"smeshing-opts-datadir"`
+	NumUnits         uint32              `mapstructure:"smeshing-opts-numunits"`
+	MaxFileSize      uint64              `mapstructure:"smeshing-opts-maxfilesize"`
+	ProviderID       int                 `mapstructure:"smeshing-opts-provider"`
+	Throttle         bool                `mapstructure:"smeshing-opts-throttle"`
+	Scrypt           config.ScryptParams `mapstructure:"smeshing-opts-scrypt"`
+	ComputeBatchSize uint64              `mapstructure:"smeshing-opts-compute-batch-size"`
+}
+
+// PostProvingOpts are the options controlling POST proving process.
+type PostProvingOpts struct {
+	// Number of threads used in POST proving process.
+	Threads uint `mapstructure:"smeshing-opts-proving-threads"`
+	// Number of nonces tried in parallel in POST proving process.
+	Nonces uint `mapstructure:"smeshing-opts-proving-nonces"`
+}
+
+func DefaultPostProvingOpts() PostProvingOpts {
+	return PostProvingOpts{
+		Threads: 1,
+		Nonces:  16,
+	}
 }
 
 // PostSetupStatus represents a status snapshot of the Post setup.
@@ -57,6 +71,7 @@ type PostSetupState int32
 
 const (
 	PostSetupStateNotStarted PostSetupState = 1 + iota
+	PostSetupStatePrepared
 	PostSetupStateInProgress
 	PostSetupStateStopped
 	PostSetupStateComplete
@@ -88,14 +103,15 @@ type PostSetupManager struct {
 	db          *datastore.CachedDB
 	goldenATXID types.ATXID
 
-	mu       sync.Mutex                  // mu protects setting the values below.
-	lastOpts *PostSetupOpts              // the last options used to initiate a Post setup session.
-	state    PostSetupState              // state is the current state of the Post setup.
-	init     *initialization.Initializer // init is the current initializer instance.
+	mu          sync.Mutex                  // mu protects setting the values below.
+	lastOpts    *PostSetupOpts              // the last options used to initiate a Post setup session.
+	state       PostSetupState              // state is the current state of the Post setup.
+	init        *initialization.Initializer // init is the current initializer instance.
+	provingOpts PostProvingOpts
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
-func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger log.Log, db *datastore.CachedDB, goldenATXID types.ATXID) (*PostSetupManager, error) {
+func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger log.Log, db *datastore.CachedDB, goldenATXID types.ATXID, provingOpts PostProvingOpts) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
 		id:          id,
 		cfg:         cfg,
@@ -103,6 +119,7 @@ func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger log.Log, db *da
 		db:          db,
 		goldenATXID: goldenATXID,
 		state:       PostSetupStateNotStarted,
+		provingOpts: provingOpts,
 	}
 
 	return mgr, nil
@@ -131,23 +148,31 @@ func (mgr *PostSetupManager) Status() *PostSetupStatus {
 	}
 }
 
-// ComputeProviders returns a list of available compute providers for Post setup.
-func (*PostSetupManager) ComputeProviders() []PostSetupComputeProvider {
-	providers := initialization.Providers()
-
-	providersAlias := make([]PostSetupComputeProvider, len(providers))
-	for i, p := range providers {
-		providersAlias[i] = PostSetupComputeProvider(p)
+// Providers returns a list of available compute providers for Post setup.
+func (*PostSetupManager) Providers() ([]PostSetupProvider, error) {
+	providers, err := initialization.OpenCLProviders()
+	if err != nil {
+		return nil, err
 	}
 
-	return providersAlias
+	providersAlias := make([]PostSetupProvider, len(providers))
+	for i, p := range providers {
+		providersAlias[i] = PostSetupProvider(p)
+	}
+
+	return providersAlias, nil
 }
 
 // BestProvider returns the most performant compute provider based on a short benchmarking session.
-func (mgr *PostSetupManager) BestProvider() (*PostSetupComputeProvider, error) {
-	var bestProvider PostSetupComputeProvider
+func (mgr *PostSetupManager) BestProvider() (*PostSetupProvider, error) {
+	providers, err := mgr.Providers()
+	if err != nil {
+		return nil, fmt.Errorf("fetch best provider: %w", err)
+	}
+
+	var bestProvider PostSetupProvider
 	var maxHS int
-	for _, p := range mgr.ComputeProviders() {
+	for _, p := range providers {
 		hs, err := mgr.Benchmark(p)
 		if err != nil {
 			return nil, err
@@ -161,8 +186,8 @@ func (mgr *PostSetupManager) BestProvider() (*PostSetupComputeProvider, error) {
 }
 
 // Benchmark runs a short benchmarking session for a given provider to evaluate its performance.
-func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) {
-	score, err := gpu.Benchmark(initialization.ComputeProvider(p))
+func (mgr *PostSetupManager) Benchmark(p PostSetupProvider) (int, error) {
+	score, err := initialization.Benchmark(initialization.ComputeProvider(p))
 	if err != nil {
 		return score, fmt.Errorf("benchmark GPU: %w", err)
 	}
@@ -170,25 +195,34 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 	return score, nil
 }
 
-// StartSession starts (or continues) a PoST session. It supports resuming a previously started
-// session, and will return an error if a session is already in progress.
-//
-// Ensure that before calling this method, the node is ATX synced.
-func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts) error {
-	if err := mgr.prepareInitializer(ctx, opts); err != nil {
+// StartSession starts (or continues) a PoST session. It supports resuming a
+// previously started session, and will return an error if a session is already
+// in progress. It must be ensured that PrepareInitializer is called once
+// before each call to StartSession and that the node is ATX synced.
+func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
+	// Ensure only one goroutine can execute initialization at a time.
+	err := func() error {
+		mgr.mu.Lock()
+		defer mgr.mu.Unlock()
+		if mgr.state != PostSetupStatePrepared {
+			return fmt.Errorf("post session not prepared")
+		}
+		mgr.state = PostSetupStateInProgress
+		return nil
+	}()
+	if err != nil {
 		return err
 	}
-
 	mgr.logger.With().Info("post setup session starting",
 		log.String("node_id", mgr.id.String()),
 		log.String("commitment_atx", mgr.commitmentAtxId.String()),
-		log.String("data_dir", opts.DataDir),
-		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
+		log.String("data_dir", mgr.lastOpts.DataDir),
+		log.String("num_units", fmt.Sprintf("%d", mgr.lastOpts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
+		log.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ProviderID)),
 	)
 
-	err := mgr.init.Initialize(ctx)
+	err = mgr.init.Initialize(ctx)
 
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
@@ -206,31 +240,37 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	mgr.logger.With().Info("post setup completed",
 		log.String("node_id", mgr.id.String()),
 		log.String("commitment_atx", mgr.commitmentAtxId.String()),
-		log.String("data_dir", opts.DataDir),
-		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
+		log.String("data_dir", mgr.lastOpts.DataDir),
+		log.String("num_units", fmt.Sprintf("%d", mgr.lastOpts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
+		log.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ProviderID)),
 	)
 	mgr.state = PostSetupStateComplete
 	return nil
 }
 
-func (mgr *PostSetupManager) prepareInitializer(ctx context.Context, opts PostSetupOpts) error {
+// PrepareInitializer prepares the initializer to begin the initialization
+// process, it needs to be called before each call to StartSession. Having this
+// function be separate from StartSession provides a means to understand if the
+// post configuration is valid before kicking off a very long running task
+// (StartSession can take days to complete). After the first call to this
+// method subsequent calls to this method will return an error until
+// StartSession has completed execution.
+func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
-
-	if mgr.state == PostSetupStateInProgress {
+	if mgr.state == PostSetupStatePrepared || mgr.state == PostSetupStateInProgress {
 		return fmt.Errorf("post setup session in progress")
 	}
 
-	if opts.ComputeProviderID == config.BestProviderID {
+	if opts.ProviderID == config.BestProviderID {
 		p, err := mgr.BestProvider()
 		if err != nil {
 			return err
 		}
 
-		mgr.logger.Info("found best compute provider: id: %d, model: %v, computeAPI: %v", p.ID, p.Model, p.ComputeAPI)
-		opts.ComputeProviderID = int(p.ID)
+		mgr.logger.Info("found best compute provider: id: %d, model: %v, device type: %v", p.ID, p.Model, p.DeviceType)
+		opts.ProviderID = int(p.ID)
 	}
 
 	var err error
@@ -251,7 +291,7 @@ func (mgr *PostSetupManager) prepareInitializer(ctx context.Context, opts PostSe
 		return fmt.Errorf("new initializer: %w", err)
 	}
 
-	mgr.state = PostSetupStateInProgress
+	mgr.state = PostSetupStatePrepared
 	mgr.init = newInit
 	mgr.lastOpts = &opts
 	return nil
@@ -332,6 +372,8 @@ func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte
 
 	proof, proofMetadata, err := proving.Generate(ctx, challenge, config.Config(mgr.cfg), mgr.logger,
 		proving.WithDataSource(config.Config(mgr.cfg), mgr.id.Bytes(), mgr.commitmentAtxId.Bytes(), mgr.lastOpts.DataDir),
+		proving.WithNonces(mgr.provingOpts.Nonces),
+		proving.WithThreads(mgr.provingOpts.Threads),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate proof: %w", err)

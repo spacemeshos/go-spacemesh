@@ -9,7 +9,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -17,9 +16,9 @@ import (
 
 // MeshService exposes mesh data such as accounts, blocks, and transactions.
 type MeshService struct {
-	mesh           api.MeshAPI // Mesh
-	conState       api.ConservativeState
-	genTime        api.GenesisTimeAPI
+	mesh           meshAPI // Mesh
+	conState       conservativeState
+	genTime        genesisTimeAPI
 	layersPerEpoch uint32
 	genesisID      types.Hash20
 	layerDuration  time.Duration
@@ -34,7 +33,7 @@ func (s MeshService) RegisterService(server *Server) {
 
 // NewMeshService creates a new service using config data.
 func NewMeshService(
-	msh api.MeshAPI, cstate api.ConservativeState, genTime api.GenesisTimeAPI,
+	msh meshAPI, cstate conservativeState, genTime genesisTimeAPI,
 	layersPerEpoch uint32, genesisID types.Hash20, layerDuration time.Duration,
 	layerAvgSize uint32, txsPerProposal uint32,
 ) *MeshService {
@@ -70,8 +69,8 @@ func (s MeshService) CurrentLayer(context.Context, *pb.CurrentLayerRequest) (*pb
 func (s MeshService) CurrentEpoch(context.Context, *pb.CurrentEpochRequest) (*pb.CurrentEpochResponse, error) {
 	log.Info("GRPC MeshService.CurrentEpoch")
 	curLayer := s.genTime.CurrentLayer()
-	return &pb.CurrentEpochResponse{Epochnum: &pb.SimpleInt{
-		Value: uint64(curLayer.GetEpoch()),
+	return &pb.CurrentEpochResponse{Epochnum: &pb.EpochNumber{
+		Number: curLayer.GetEpoch().Uint32(),
 	}}, nil
 }
 
@@ -84,8 +83,8 @@ func (s MeshService) GenesisID(context.Context, *pb.GenesisIDRequest) (*pb.Genes
 // EpochNumLayers returns the number of layers per epoch (a network parameter).
 func (s MeshService) EpochNumLayers(context.Context, *pb.EpochNumLayersRequest) (*pb.EpochNumLayersResponse, error) {
 	log.Info("GRPC MeshService.EpochNumLayers")
-	return &pb.EpochNumLayersResponse{Numlayers: &pb.SimpleInt{
-		Value: uint64(s.layersPerEpoch),
+	return &pb.EpochNumLayersResponse{Numlayers: &pb.LayerNumber{
+		Number: s.layersPerEpoch,
 	}}, nil
 }
 
@@ -189,7 +188,7 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 			res.Data = append(res.Data, &pb.AccountMeshData{
 				Datum: &pb.AccountMeshData_MeshTransaction{
 					MeshTransaction: &pb.MeshTransaction{
-						Transaction: convertTransaction(&t.Transaction),
+						Transaction: castTransaction(&t.Transaction),
 						LayerId:     &pb.LayerNumber{Number: t.LayerID.Uint32()},
 					},
 				},
@@ -247,7 +246,7 @@ func convertLayerID(l types.LayerID) *pb.LayerNumber {
 	return nil
 }
 
-func convertTransaction(t *types.Transaction) *pb.Transaction {
+func castTransaction(t *types.Transaction) *pb.Transaction {
 	tx := &pb.Transaction{
 		Id:  t.ID[:],
 		Raw: t.Raw,
@@ -321,7 +320,7 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 
 		pbTxs := make([]*pb.Transaction, 0, len(mtxs))
 		for _, t := range mtxs {
-			pbTxs = append(pbTxs, convertTransaction(&t.Transaction))
+			pbTxs = append(pbTxs, castTransaction(&t.Transaction))
 		}
 		blocks = append(blocks, &pb.Block{
 			Id:           types.Hash20(b.ID()).Bytes(),
@@ -496,7 +495,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_MeshTransaction{
 							MeshTransaction: &pb.MeshTransaction{
-								Transaction: convertTransaction(tx.Transaction),
+								Transaction: castTransaction(tx.Transaction),
 								LayerId:     convertLayerID(tx.LayerID),
 							},
 						},

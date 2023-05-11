@@ -10,6 +10,13 @@ import (
 
 func (t *MultiSig) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
+		n, err := scale.EncodeCompact8(enc, uint8(t.Required))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeStructSliceWithLimit(enc, t.PublicKeys, 10)
 		if err != nil {
 			return total, err
@@ -20,6 +27,14 @@ func (t *MultiSig) EncodeScale(enc *scale.Encoder) (total int, err error) {
 }
 
 func (t *MultiSig) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeCompact8(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Required = uint8(field)
+	}
 	{
 		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 10)
 		if err != nil {

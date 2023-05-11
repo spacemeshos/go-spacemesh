@@ -196,7 +196,7 @@ You specify these parameters by providing go-spacemesh with a json config file. 
     **Example:**
 
     ```bash
-    ./go-spacemesh --listen /ip4/0.0.0.0/tcp/7513 --config ./tn1.json -d ./sm_data --smeshing-coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --smeshing-start --smeshing-opts-datadir ./post_data
+    ./go-spacemesh --listen /ip4/0.0.0.0/tcp/7513 --config ./tn1.json -d ./sm_data --smeshing-coinbase stest1qqqqqqp3qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqql50dsa --smeshing-start --smeshing-opts-datadir ./post_data
     ```
 
 4. Use the CLI wallet to check your coinbase account balance and to transact

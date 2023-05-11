@@ -3,6 +3,8 @@ package presets
 import (
 	"time"
 
+	"github.com/spacemeshos/post/initialization"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 )
@@ -14,13 +16,6 @@ func init() {
 func testnet() config.Config {
 	conf := config.DefaultConfig()
 	conf.Address = types.DefaultTestAddressConfig()
-
-	conf.API.StartGrpcServices = []string{
-		"node", "mesh", "globalstate", "transaction", "smesher", "debug",
-	}
-	if err := conf.API.ParseServicesList(); err != nil {
-		panic(err)
-	}
 
 	conf.HARE.N = 800
 	conf.HARE.ExpectedLeaders = 10
@@ -60,7 +55,7 @@ func testnet() config.Config {
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
-	conf.SMESHING.Opts.ComputeProviderID = 1
+	conf.SMESHING.Opts.ProviderID = int(initialization.CPUProviderID())
 	conf.SMESHING.Opts.NumUnits = 2
 	conf.SMESHING.Opts.Throttle = true
 

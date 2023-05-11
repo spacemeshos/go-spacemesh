@@ -100,13 +100,8 @@ func generateLayerContent(t *testing.T) []byte {
 	for i := 0; i < numBallots; i++ {
 		ballotIDs = append(ballotIDs, types.RandomBallotID())
 	}
-	blockIDs := make([]types.BlockID, 0, numBlocks)
-	for i := 0; i < numBlocks; i++ {
-		blockIDs = append(blockIDs, types.RandomBlockID())
-	}
 	lb := LayerData{
 		Ballots: ballotIDs,
-		Blocks:  blockIDs,
 	}
 	out, _ := codec.Encode(&lb)
 	return out

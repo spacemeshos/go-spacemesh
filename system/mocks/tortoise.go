@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	result "github.com/spacemeshos/go-spacemesh/common/types/result"
 )
 
 // MockTortoise is a mock of Tortoise interface.
@@ -50,7 +51,7 @@ func (mr *MockTortoiseMockRecorder) LatestComplete() *gomock.Call {
 }
 
 // OnBlock mocks base method.
-func (m *MockTortoise) OnBlock(arg0 *types.Block) {
+func (m *MockTortoise) OnBlock(arg0 types.BlockHeader) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "OnBlock", arg0)
 }
@@ -71,6 +72,33 @@ func (m *MockTortoise) OnHareOutput(arg0 types.LayerID, arg1 types.BlockID) {
 func (mr *MockTortoiseMockRecorder) OnHareOutput(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnHareOutput", reflect.TypeOf((*MockTortoise)(nil).OnHareOutput), arg0, arg1)
+}
+
+// OnWeakCoin mocks base method.
+func (m *MockTortoise) OnWeakCoin(arg0 types.LayerID, arg1 bool) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "OnWeakCoin", arg0, arg1)
+}
+
+// OnWeakCoin indicates an expected call of OnWeakCoin.
+func (mr *MockTortoiseMockRecorder) OnWeakCoin(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnWeakCoin", reflect.TypeOf((*MockTortoise)(nil).OnWeakCoin), arg0, arg1)
+}
+
+// Results mocks base method.
+func (m *MockTortoise) Results(from, to types.LayerID) ([]result.Layer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Results", from, to)
+	ret0, _ := ret[0].([]result.Layer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Results indicates an expected call of Results.
+func (mr *MockTortoiseMockRecorder) Results(from, to interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Results", reflect.TypeOf((*MockTortoise)(nil).Results), from, to)
 }
 
 // TallyVotes mocks base method.

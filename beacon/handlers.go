@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/bits"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -278,18 +279,14 @@ func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, m
 }
 
 func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMessage) (types.NodeID, error) {
-	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound)
 	messageBytes, err := codec.Encode(&m.FirstVotingMessageBody)
 	if err != nil {
-		logger.With().Fatal("failed to serialize first voting message", log.Err(err))
+		pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound).With().Fatal("failed to serialize first voting message", log.Err(err))
 	}
-
 	if !pd.edVerifier.Verify(signing.BEACON, m.SmesherID, messageBytes, m.Signature) {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
-
-	logger = logger.WithFields(log.Stringer("smesher", m.SmesherID))
-	if err = pd.registerVoted(logger, m.EpochID, m.SmesherID, types.FirstRound); err != nil {
+	if err = pd.registerVoted(m.EpochID, m.SmesherID, types.FirstRound); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] register proposal (miner ID %v): %w", types.FirstRound, m.SmesherID.ShortString(), err)
 	}
 	return m.SmesherID, nil
@@ -395,21 +392,16 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 }
 
 func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingVotingMessage) (types.NodeID, error) {
-	round := m.RoundID
 	messageBytes, err := codec.Encode(&m.FollowingVotingMessageBody)
 	if err != nil {
 		pd.logger.With().Fatal("failed to serialize voting message", log.Err(err))
 	}
-
 	if !pd.edVerifier.Verify(signing.BEACON, m.SmesherID, messageBytes, m.Signature) {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
-
-	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, round, log.Stringer("smesher", m.SmesherID))
-	if err := pd.registerVoted(logger, m.EpochID, m.SmesherID, m.RoundID); err != nil {
+	if err := pd.registerVoted(m.EpochID, m.SmesherID, m.RoundID); err != nil {
 		return types.EmptyNodeID, err
 	}
-
 	return m.SmesherID, nil
 }
 
@@ -510,11 +502,48 @@ func (pd *ProtocolDriver) registerProposed(logger log.Log, epoch types.EpochID, 
 	return pd.states[epoch].registerProposed(logger, nodeID)
 }
 
-func (pd *ProtocolDriver) registerVoted(logger log.Log, epoch types.EpochID, nodeID types.NodeID, round types.RoundID) error {
+func (pd *ProtocolDriver) registerVoted(epoch types.EpochID, nodeID types.NodeID, round types.RoundID) error {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	if _, ok := pd.states[epoch]; !ok {
 		return errEpochNotActive
 	}
-	return pd.states[epoch].registerVoted(logger, nodeID, round)
+	return pd.states[epoch].registerVoted(nodeID, round)
+}
+
+const wordSize = 64
+
+func newVotesTracker(limit uint32) *votesTracker {
+	b := bits.Len32(limit)
+	words := b / wordSize
+	if b%wordSize != 0 {
+		words += 1
+	}
+	return &votesTracker{words: make([]uint64, words)}
+}
+
+type votesTracker struct {
+	words []uint64
+}
+
+func (v *votesTracker) register(round types.RoundID) bool {
+	word := uint64(round) / wordSize
+	if word >= uint64(len(v.words)) {
+		return false
+	}
+	position := uint64(1) << (uint64(round) % wordSize)
+	if v.words[word]&position > 0 {
+		return false
+	}
+	v.words[word] |= position
+	return true
+}
+
+func (v *votesTracker) voted(round types.RoundID) bool {
+	word := uint64(round) / wordSize
+	if word >= uint64(len(v.words)) {
+		return false
+	}
+	position := uint64(1) << (uint64(round) % wordSize)
+	return v.words[word]&position > 0
 }

@@ -68,9 +68,9 @@ func withCustomHttpClient(client *http.Client) PoetClientOpts {
 // NewHTTPPoetClient returns new instance of HTTPPoetClient connecting to the specified url.
 func NewHTTPPoetClient(baseUrl string, cfg PoetConfig, opts ...PoetClientOpts) (*HTTPPoetClient, error) {
 	client := &retryablehttp.Client{
-		RetryMax:     10,
-		RetryWaitMin: cfg.CycleGap / 100,
-		RetryWaitMax: cfg.CycleGap / 10,
+		RetryMax:     cfg.MaxRequestRetries,
+		RetryWaitMin: cfg.RequestRetryDelay,
+		RetryWaitMax: 2 * cfg.RequestRetryDelay,
 		Backoff:      retryablehttp.LinearJitterBackoff,
 		CheckRetry:   checkRetry,
 	}

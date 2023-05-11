@@ -11,15 +11,16 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // DebugService exposes global state data, output from the STF.
 type DebugService struct {
-	conState api.ConservativeState
-	identity api.NetworkIdentity
+	conState conservativeState
+	identity networkIdentity
+	oracle   oracle
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -28,10 +29,11 @@ func (d DebugService) RegisterService(server *Server) {
 }
 
 // NewDebugService creates a new grpc service using config data.
-func NewDebugService(conState api.ConservativeState, host api.NetworkIdentity) *DebugService {
+func NewDebugService(conState conservativeState, host networkIdentity, oracle oracle) *DebugService {
 	return &DebugService{
 		conState: conState,
 		identity: host,
+		oracle:   oracle,
 	}
 }
 
@@ -69,6 +71,19 @@ func (d DebugService) NetworkInfo(ctx context.Context, _ *empty.Empty) (*pb.Netw
 	return &pb.NetworkInfoResponse{Id: d.identity.ID().String()}, nil
 }
 
+// ActiveSet query provides hare active set for the specified epoch.
+func (d DebugService) ActiveSet(ctx context.Context, req *pb.ActiveSetRequest) (*pb.ActiveSetResponse, error) {
+	actives, err := d.oracle.ActiveSet(ctx, types.EpochID(req.Epoch))
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, fmt.Sprintf("active set for epoch %d: %s", req.Epoch, err.Error()))
+	}
+	resp := &pb.ActiveSetResponse{}
+	for _, atxid := range actives {
+		resp.Ids = append(resp.Ids, &pb.ActivationId{Id: atxid.Bytes()})
+	}
+	return resp, nil
+}
+
 // ProposalsStream streams all proposals confirmed by hare.
 func (d DebugService) ProposalsStream(_ *emptypb.Empty, stream pb.DebugService_ProposalsStreamServer) error {
 	sub := events.SubcribeProposals()
@@ -98,7 +113,7 @@ func (d DebugService) ProposalsStream(_ *emptypb.Empty, stream pb.DebugService_P
 func castEventProposal(ev *events.EventProposal) *pb.Proposal {
 	proposal := &pb.Proposal{
 		Id:      ev.Proposal.ID().Bytes(),
-		Epoch:   &pb.SimpleInt{Value: uint64(ev.Proposal.Layer.GetEpoch())},
+		Epoch:   &pb.EpochNumber{Number: ev.Proposal.Layer.GetEpoch().Uint32()},
 		Layer:   convertLayerID(ev.Proposal.Layer),
 		Smesher: &pb.SmesherId{Id: ev.Proposal.SmesherID.Bytes()},
 		Ballot:  ev.Proposal.Ballot.ID().Bytes(),

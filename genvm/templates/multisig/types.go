@@ -9,6 +9,7 @@ import (
 
 // SpawnArguments contains a collection with PublicKeys.
 type SpawnArguments struct {
+	Required   uint8
 	PublicKeys []core.PublicKey `scale:"max=10"` // update StorageLimit if it changes.
 }
 

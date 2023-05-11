@@ -134,7 +134,7 @@ func TestHare_New(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	pke, err := signing.NewPubKeyExtractor()
+	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
 	logger := logtest.New(t).WithName(t.Name())
@@ -144,7 +144,7 @@ func TestHare_New(t *testing.T) {
 		cfg,
 		noopPubSub(t),
 		signer,
-		pke,
+		edVerifier,
 		signer.NodeID(),
 		make(chan LayerOutput, 1),
 		smocks.NewMockSyncStateProvider(ctrl), smocks.NewMockBeaconGetter(ctrl),
@@ -152,6 +152,7 @@ func TestHare_New(t *testing.T) {
 		mocks.NewMocklayerPatrol(ctrl),
 		mocks.NewMockstateQuerier(ctrl),
 		newMockClock(),
+		mocks.NewMockweakCoin(ctrl),
 		logger,
 		withMesh(mocks.NewMockmesh(ctrl)),
 	)
@@ -222,7 +223,7 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
-	mockMesh.EXPECT().SetWeakCoin(lyrID, mo.Coinflip())
+	h.mockCoin.EXPECT().Set(lyrID, mo.Coinflip())
 	h.outputChan <- mo
 	lo := <-h.blockGenCh
 	require.Equal(t, lyrID, lo.Layer)
@@ -332,7 +333,7 @@ func TestHare_onTick(t *testing.T) {
 	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch(), h.nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil)
 	mockMesh.EXPECT().VRFNonce(h.nodeID, lyrID.GetEpoch()).Return(types.VRFPostIndex(1), nil)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
-	mockMesh.EXPECT().SetWeakCoin(lyrID, gomock.Any())
+	h.mockCoin.EXPECT().Set(lyrID, gomock.Any())
 
 	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
 	h.beacons = mockBeacons
@@ -400,7 +401,7 @@ func TestHare_onTick_notMining(t *testing.T) {
 	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch(), h.nodeID).Return(nil, sql.ErrNotFound)
 	mockMesh.EXPECT().VRFNonce(h.nodeID, lyrID.GetEpoch()).Return(types.VRFPostIndex(1), nil)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
-	mockMesh.EXPECT().SetWeakCoin(lyrID, gomock.Any())
+	h.mockCoin.EXPECT().Set(lyrID, gomock.Any())
 
 	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
 	h.beacons = mockBeacons
@@ -646,22 +647,22 @@ func TestHare_WeakCoin(t *testing.T) {
 	set := NewSet([]types.ProposalID{{1}, {2}})
 
 	// complete + coin flip true
-	mockMesh.EXPECT().SetWeakCoin(layerID, true)
+	h.mockCoin.EXPECT().Set(layerID, true)
 	h.outputChan <- mockReport{layerID, set, true, true}
 	require.NoError(t, waitForMsg())
 
 	// incomplete + coin flip true
-	mockMesh.EXPECT().SetWeakCoin(layerID, true)
+	h.mockCoin.EXPECT().Set(layerID, true)
 	h.outputChan <- mockReport{layerID, set, false, true}
 	require.Error(t, waitForMsg())
 
 	// complete + coin flip false
-	mockMesh.EXPECT().SetWeakCoin(layerID, false)
+	h.mockCoin.EXPECT().Set(layerID, false)
 	h.outputChan <- mockReport{layerID, set, true, false}
 	require.NoError(t, waitForMsg())
 
 	// incomplete + coin flip false
-	mockMesh.EXPECT().SetWeakCoin(layerID, false)
+	h.mockCoin.EXPECT().Set(layerID, false)
 	h.outputChan <- mockReport{layerID, set, false, false}
 	require.Error(t, waitForMsg())
 }

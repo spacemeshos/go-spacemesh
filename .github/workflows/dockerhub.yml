@@ -19,5 +19,7 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v3
-    - name: push to dockerhub
+    - name: push go-spacemesh
       run: make dockerpush
+    - name: push go-bootstrapper
+      run: make dockerpush-bs

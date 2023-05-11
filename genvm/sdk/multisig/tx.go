@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
-	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
 func encode(fields ...scale.Encodable) []byte {
@@ -71,8 +70,8 @@ func (tx *Aggregator) Raw() []byte {
 }
 
 // SelfSpawn returns accumulator for self-spawn transaction.
-func SelfSpawn(ref uint8, pk ed25519.PrivateKey, template types.Address, pubs []ed25519.PublicKey, nonce core.Nonce, opts ...sdk.Opt) *Aggregator {
-	args := multisig.SpawnArguments{}
+func SelfSpawn(ref uint8, pk ed25519.PrivateKey, template types.Address, required uint8, pubs []ed25519.PublicKey, nonce core.Nonce, opts ...sdk.Opt) *Aggregator {
+	args := multisig.SpawnArguments{Required: required}
 	args.PublicKeys = make([]core.PublicKey, len(pubs))
 	for i := range pubs {
 		copy(args.PublicKeys[i][:], pubs[i])
@@ -93,8 +92,7 @@ func Spawn(ref uint8, pk ed25519.PrivateKey, principal, template types.Address, 
 	payload.GasPrice = options.GasPrice
 
 	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpawn, &template, &payload, args)
-	hh := hash.Sum(options.GenesisID[:], tx)
-	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
 	aggregator := &Aggregator{unsigned: tx, parts: map[uint8]multisig.Part{}}
 	part := multisig.Part{Ref: ref}
 	copy(part.Sig[:], sig)
@@ -118,8 +116,7 @@ func Spend(ref uint8, pk ed25519.PrivateKey, principal, to types.Address, amount
 	args.Amount = amount
 
 	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpend, &payload, &args)
-	hh := hash.Sum(options.GenesisID[:], tx)
-	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
 	aggregator := &Aggregator{unsigned: tx, parts: map[uint8]multisig.Part{}}
 	part := multisig.Part{Ref: ref}
 	copy(part.Sig[:], sig)

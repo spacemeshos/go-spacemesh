@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -128,6 +129,7 @@ func New(
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 		states:         make(map[types.EpochID]*state),
+		results:        make(chan result.Beacon, 100),
 	}
 	for _, opt := range opts {
 		opt(pd)
@@ -203,6 +205,7 @@ type ProtocolDriver struct {
 	// the map key is the epoch when the ballot is published. the beacon value is calculated in the
 	// previous epoch and used in the current epoch.
 	ballotsBeacons map[types.EpochID]map[types.Beacon]*beaconWeight
+	results        chan result.Beacon
 
 	// metrics
 	metricsCollector *metrics.BeaconMetricsCollector
@@ -242,6 +245,18 @@ func (pd *ProtocolDriver) Start(ctx context.Context) {
 	})
 }
 
+func (pd *ProtocolDriver) UpdateBeacon(epoch types.EpochID, beacon types.Beacon) error {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+	if err := beacons.Set(pd.cdb, epoch, beacon); err != nil {
+		return fmt.Errorf("persist fallback beacon epoch %v, beacon %v: %w", epoch, beacon, err)
+	}
+	pd.beacons[epoch] = beacon
+	pd.logger.With().Info("using fallback beacon", epoch, beacon)
+	pd.onResult(epoch, beacon)
+	return nil
+}
+
 // Close closes ProtocolDriver.
 func (pd *ProtocolDriver) Close() {
 	pd.logger.Info("closing beacon protocol")
@@ -251,7 +266,24 @@ func (pd *ProtocolDriver) Close() {
 	if err := pd.eg.Wait(); err != nil {
 		pd.logger.With().Info("received error waiting for goroutines to finish", log.Err(err))
 	}
+	close(pd.results)
 	pd.logger.Info("beacon goroutines finished")
+}
+
+func (pd *ProtocolDriver) onResult(epoch types.EpochID, beacon types.Beacon) {
+	select {
+	case pd.results <- result.Beacon{Epoch: epoch, Beacon: beacon}:
+	default:
+		pd.logger.With().Error("results queue is congested",
+			log.Uint32("epoch_id", epoch.Uint32()),
+			log.Stringer("beacon", beacon),
+		)
+	}
+}
+
+// Results notifies waiter that beacon for a target epoch has completed.
+func (pd *ProtocolDriver) Results() <-chan result.Beacon {
+	return pd.results
 }
 
 // isClosed returns true if the beacon protocol is shutting down.
@@ -421,14 +453,6 @@ func (pd *ProtocolDriver) findMajorityBeacon(epoch types.EpochID) types.Beacon {
 
 // GetBeacon returns the beacon for the specified epoch or an error if it doesn't exist.
 func (pd *ProtocolDriver) GetBeacon(targetEpoch types.EpochID) (types.Beacon, error) {
-	// Returns empty beacon up to epoch 2:
-	// epoch 0 - no ATXs
-	// epoch 1 - ATXs, no beacon protocol, only genesis ballot needs to set the beacon value
-	// epoch 2 - ATXs, proposals/blocks, beacon protocol (but targeting for epoch 3)
-	if targetEpoch <= types.EpochID(2) {
-		return types.HexToBeacon(types.BootstrapBeacon), nil
-	}
-
 	beacon := pd.getBeacon(targetEpoch)
 	if beacon != types.EmptyBeacon {
 		return beacon, nil
@@ -475,6 +499,7 @@ func (pd *ProtocolDriver) setBeacon(targetEpoch types.EpochID, beacon types.Beac
 		return fmt.Errorf("persist beacon: %w", err)
 	}
 	pd.beacons[targetEpoch] = beacon
+	pd.onResult(targetEpoch, beacon)
 	return nil
 }
 
@@ -1172,7 +1197,7 @@ func (mt *messageTimes) followupVoteSendTime(epoch types.EpochID, round types.Ro
 	return mt.firstVoteSendTime(epoch).Add(mt.conf.FirstVotingRoundDuration).Add(subsequentRoundDuration * time.Duration(round-1))
 }
 
-// weakCoinProposalSendTime returns the time at which the weak coin proposals are sent for an epoch and round.
+// WeakCoinProposalSendTime returns the time at which the weak coin proposals are sent for an epoch and round.
 func (mt *messageTimes) WeakCoinProposalSendTime(epoch types.EpochID, round types.RoundID) time.Time {
 	subsequentRoundDuration := mt.conf.VotingRoundDuration + mt.conf.WeakCoinRoundDuration
 	return mt.firstVoteSendTime(epoch).Add(mt.conf.FirstVotingRoundDuration + mt.conf.VotingRoundDuration).Add(subsequentRoundDuration * time.Duration(round-1))

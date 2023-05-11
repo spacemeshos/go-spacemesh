@@ -41,41 +41,47 @@ func newNotifyTracker(
 
 // OnNotify tracks the provided notification message.
 // Returns true if the InnerMsg didn't affect the state, false otherwise.
-func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Msg) bool {
-	if prev, exist := nt.notifies[msg.NodeID]; exist { // already seenSenders
-		if prev.InnerMsg.Layer == msg.Layer &&
-			prev.InnerMsg.Round == msg.Round &&
-			prev.InnerMsg.MsgHash != msg.MsgHash {
-			nt.logger.WithContext(ctx).With().Warning("equivocation detected in notify round",
-				log.Stringer("smesher", msg.NodeID),
-				log.Object("prev", &prev.InnerMsg),
-				log.Object("curr", &msg.HareMetadata),
+func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Message) bool {
+	metadata := types.HareMetadata{
+		Layer:   msg.Layer,
+		Round:   msg.Round,
+		MsgHash: types.BytesToHash(msg.HashBytes()),
+	}
+
+	if prev, exist := nt.notifies[msg.SmesherID]; exist { // already seenSenders
+		if !prev.InnerMsg.Equivocation(&metadata) {
+			return true // ignored
+		}
+
+		nt.logger.WithContext(ctx).With().Warning("equivocation detected in notify round",
+			log.Stringer("smesher", msg.SmesherID),
+			log.Object("prev", &prev.InnerMsg),
+			log.Object("curr", &metadata),
+		)
+		nt.eTracker.Track(msg.SmesherID, msg.Round, msg.Eligibility.Count, false)
+		this := &types.HareProofMsg{
+			InnerMsg:  metadata,
+			Signature: msg.Signature,
+		}
+		if err := reportEquivocation(ctx, msg.SmesherID, prev, this, &msg.Eligibility, nt.malCh); err != nil {
+			nt.logger.WithContext(ctx).With().Warning("failed to report equivocation in notify round",
+				log.Stringer("smesher", msg.SmesherID),
+				log.Err(err),
 			)
-			nt.eTracker.Track(msg.NodeID, msg.Round, msg.Eligibility.Count, false)
-			this := &types.HareProofMsg{
-				InnerMsg:  msg.HareMetadata,
-				Signature: msg.Signature,
-			}
-			if err := reportEquivocation(ctx, msg.NodeID, prev, this, &msg.Eligibility, nt.malCh); err != nil {
-				nt.logger.WithContext(ctx).With().Warning("failed to report equivocation in notify round",
-					log.Stringer("smesher", msg.NodeID),
-					log.Err(err),
-				)
-			}
 		}
 		return true // ignored
 	}
 
 	// keep msg for pub
-	nt.notifies[msg.NodeID] = &types.HareProofMsg{
-		InnerMsg:  msg.HareMetadata,
+	nt.notifies[msg.SmesherID] = &types.HareProofMsg{
+		InnerMsg:  metadata,
 		Signature: msg.Signature,
 	}
 
 	// track that set
-	s := NewSet(msg.InnerMsg.Values)
-	nt.onCertificate(msg.InnerMsg.Cert.AggMsgs.Messages[0].Round, s)
-	nt.tracker.Track(s.ID(), msg.NodeID)
+	s := NewSet(msg.Values)
+	nt.onCertificate(msg.Cert.AggMsgs.Messages[0].Round, s)
+	nt.tracker.Track(s.ID(), msg.SmesherID)
 	return false
 }
 

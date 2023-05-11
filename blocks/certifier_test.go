@@ -46,7 +46,7 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	pke, err := signing.NewPubKeyExtractor()
+	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 	nid := signer.NodeID()
 	ctrl := gomock.NewController(t)
@@ -56,7 +56,7 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	mtortoise := smocks.NewMockTortoise(ctrl)
 	mNonceFetcher := mocks.NewMocknonceFetcher(ctrl)
-	c := NewCertifier(db, mo, nid, signer, pke, mp, mc, mb, mtortoise,
+	c := NewCertifier(db, mo, nid, signer, edVerifier, mp, mc, mb, mtortoise,
 		WithCertifierLogger(logtest.New(t)),
 		withNonceFetcher(mNonceFetcher),
 	)
@@ -94,6 +94,7 @@ func genCertifyMsg(tb testing.TB, lid types.LayerID, bid types.BlockID, cnt uint
 			EligibilityCnt: cnt,
 			Proof:          types.RandomVrfSignature(),
 		},
+		SmesherID: signer.NodeID(),
 	}
 	msg.Signature = signer.Sign(signing.HARE, msg.Bytes())
 	return signer.NodeID(), msg
@@ -173,6 +174,7 @@ func Test_HandleSyncedCertificate(t *testing.T) {
 	tc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 	require.NoError(t, tc.HandleSyncedCertificate(context.Background(), b.LayerIndex, cert))
 	verifyCerts(t, tc.db, b.LayerIndex, map[types.BlockID]bool{b.ID(): true})
+	require.Equal(t, map[types.EpochID]int{b.LayerIndex.GetEpoch(): 1}, tc.CertCount())
 }
 
 func Test_HandleSyncedCertificate_HareOutputTrumped(t *testing.T) {
@@ -195,6 +197,7 @@ func Test_HandleSyncedCertificate_HareOutputTrumped(t *testing.T) {
 	tc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 	require.NoError(t, tc.HandleSyncedCertificate(context.Background(), b.LayerIndex, cert))
 	verifyCerts(t, tc.db, b.LayerIndex, map[types.BlockID]bool{b.ID(): true, ho: false})
+	require.Equal(t, map[types.EpochID]int{b.LayerIndex.GetEpoch(): 1}, tc.CertCount())
 }
 
 func Test_HandleSyncedCertificate_MultipleCertificates(t *testing.T) {
@@ -264,9 +267,11 @@ func Test_HandleSyncedCertificate_MultipleCertificates(t *testing.T) {
 					expected[b.ID()] = true
 					expected[bid] = false
 				}
+				require.Equal(t, map[types.EpochID]int{b.LayerIndex.GetEpoch(): 1}, tcc.CertCount())
 			} else {
 				expected[b.ID()] = true
 				expected[bid] = true
+				require.Empty(t, tcc.CertCount())
 			}
 			verifyCerts(t, tcc.db, b.LayerIndex, expected)
 		})
@@ -290,6 +295,7 @@ func Test_HandleSyncedCertificate_NotEnoughEligibility(t *testing.T) {
 		Signatures: sigs,
 	}
 	require.ErrorIs(t, tc.HandleSyncedCertificate(context.Background(), b.LayerIndex, cert), errInvalidCert)
+	require.Empty(t, tc.CertCount())
 }
 
 func Test_HandleCertifyMessage(t *testing.T) {
@@ -354,6 +360,7 @@ func Test_HandleCertifyMessage(t *testing.T) {
 			}
 			res := testCert.HandleCertifyMessage(context.Background(), "peer", encoded)
 			require.Equal(t, tc.expected, res)
+			require.Empty(t, testCert.CertCount())
 		})
 	}
 }
@@ -409,6 +416,7 @@ func Test_HandleCertifyMessage_Certified(t *testing.T) {
 			}
 			wg.Wait()
 			verifyCerts(t, tcc.db, b.LayerIndex, map[types.BlockID]bool{b.ID(): true, ho: false})
+			require.Equal(t, map[types.EpochID]int{b.LayerIndex.GetEpoch(): 1}, tcc.CertCount())
 		})
 	}
 }
@@ -480,9 +488,11 @@ func Test_HandleCertifyMessage_MultipleCertificates(t *testing.T) {
 					expected[b.ID()] = true
 					expected[bid] = false
 				}
+				require.Equal(t, map[types.EpochID]int{b.LayerIndex.GetEpoch(): 1}, tcc.CertCount())
 			} else {
 				expected[b.ID()] = true
 				expected[bid] = true
+				require.Empty(t, tcc.CertCount())
 			}
 			verifyCerts(t, tcc.db, b.LayerIndex, expected)
 		})
@@ -504,6 +514,7 @@ func Test_HandleCertifyMessage_NotRegistered(t *testing.T) {
 		require.Equal(t, pubsub.ValidationAccept, res)
 	}
 	verifyCerts(t, tc.db, b.LayerIndex, nil)
+	require.Empty(t, tc.CertCount())
 }
 
 func Test_HandleCertifyMessage_Stopped(t *testing.T) {
@@ -595,7 +606,7 @@ func Test_CertifyIfEligible(t *testing.T) {
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 	proof := types.RandomVrfSignature()
 
-	extractor, err := signing.NewPubKeyExtractor()
+	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
 	nonce := types.VRFPostIndex(rand.Uint64())
@@ -607,9 +618,8 @@ func Test_CertifyIfEligible(t *testing.T) {
 			var msg types.CertifyMessage
 			require.NoError(t, codec.Decode(got, &msg))
 
-			nodeId, err := extractor.ExtractNodeID(signing.HARE, msg.Bytes(), msg.Signature)
-			require.NoError(t, err)
-			require.Equal(t, tc.nodeID, nodeId)
+			ok := edVerifier.Verify(signing.HARE, msg.SmesherID, msg.Bytes(), msg.Signature)
+			require.True(t, ok)
 			require.Equal(t, b.LayerIndex, msg.LayerID)
 			require.Equal(t, b.ID(), msg.BlockID)
 			require.Equal(t, proof, msg.Proof)

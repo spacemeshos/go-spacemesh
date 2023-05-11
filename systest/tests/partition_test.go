@@ -18,9 +18,10 @@ import (
 
 func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, pct int, wait uint32) {
 	require.Greater(t, cl.Bootnodes(), 1)
+	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
 
 	var (
-		first      = uint32(layersPerEpoch * 2)
+		first      = layersPerEpoch * 2
 		startSplit = uint32(4*layersPerEpoch) - 1
 		rejoin     = startSplit + layersPerEpoch
 		last       = rejoin + (wait-1)*layersPerEpoch
@@ -172,7 +173,7 @@ func TestPartition_30_70(t *testing.T) {
 		tctx.Log.Info("cluster size changed to 30")
 		tctx.ClusterSize = 30
 	}
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	// TODO: re-assess the number of epoch required for healing.
 	testPartition(t, tctx, cl, 30, 4)
@@ -186,7 +187,7 @@ func TestPartition_50_50(t *testing.T) {
 		tctx.Log.Info("cluster size changed to 30")
 		tctx.ClusterSize = 30
 	}
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	// TODO: re-assess the number of epoch required for healing.
 	testPartition(t, tctx, cl, 50, 5)

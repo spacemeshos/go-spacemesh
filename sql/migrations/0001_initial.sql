@@ -10,6 +10,7 @@ CREATE INDEX blocks_by_layer ON blocks (layer, id asc);
 CREATE TABLE ballots
 (
     id        CHAR(20) PRIMARY KEY,
+    atx       CHAR(32) NOT NULL,
     layer     INT NOT NULL,
     pubkey    VARCHAR,
     ballot    BLOB
@@ -106,12 +107,12 @@ CREATE TABLE atxs
     nonce               UNSIGNED LONG INT,
     base_tick_height    UNSIGNED LONG INT,
     tick_count          UNSIGNED LONG INT,
-    smesher             CHAR(32),
+    pubkey             CHAR(32),
     atx                 BLOB,
     received            INT NOT NULL
 ) WITHOUT ROWID;
-CREATE INDEX atxs_by_smesher_by_epoch_desc ON atxs (smesher, epoch desc);
-CREATE INDEX atxs_by_epoch_by_pubkey ON atxs (epoch, smesher);
+CREATE INDEX atxs_by_pubkey_by_epoch_desc ON atxs (pubkey, epoch desc);
+CREATE INDEX atxs_by_epoch_by_pubkey ON atxs (epoch, pubkey);
 
 CREATE TABLE proposals
 (
@@ -135,12 +136,6 @@ CREATE TABLE poets
 ) WITHOUT ROWID;
 
 CREATE INDEX poets_by_service_id_by_round_id ON poets (service_id, round_id);
-
-CREATE TABLE kvstore
-(
-    id VARCHAR PRIMARY KEY,
-    value BLOB
-) WITHOUT ROWID;
 
 CREATE TABLE accounts
 (

@@ -9,6 +9,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -88,7 +89,6 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 	mockMesh.EXPECT().GetEpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
 	mockMesh.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
 	mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).Return(nil, nil).AnyTimes()
-	mockMesh.EXPECT().SetWeakCoin(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	for i := 0; i < nodes; i++ {
 		host := mesh.Hosts()[i]
@@ -104,6 +104,7 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 				return oracle(layer, round, committeeSize, id, sig, th)
 			}).AnyTimes()
 		th.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+		th.mockCoin.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 		go func() {
 			for out := range th.blockGenCh {
 				validate(out.Layer, th)
@@ -152,9 +153,7 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 
 	for x := range m {
 		for y := range m[x] {
-			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
-			}
+			assert.Equal(t, 1, m[x][y], "at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
 		}
 	}
 }
@@ -188,9 +187,7 @@ func Test_HareNotEnoughStatuses(t *testing.T) {
 
 	for x := range m {
 		for y := range m[x] {
-			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
-			}
+			assert.Equal(t, 1, m[x][y], "at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
 		}
 	}
 }
@@ -222,9 +219,7 @@ func Test_HareNotEnoughLeaders(t *testing.T) {
 
 	for x := range m {
 		for y := range m[x] {
-			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
-			}
+			assert.Equal(t, 1, m[x][y], "at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
 		}
 	}
 }
@@ -257,9 +252,7 @@ func Test_HareNotEnoughCommits(t *testing.T) {
 
 	for x := range m {
 		for y := range m[x] {
-			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
-			}
+			assert.Equal(t, 1, m[x][y], "at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
 		}
 	}
 }
@@ -292,9 +285,7 @@ func Test_HareNotEnoughNotifications(t *testing.T) {
 
 	for x := range m {
 		for y := range m[x] {
-			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
-			}
+			assert.Equal(t, 1, m[x][y], "at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
 		}
 	}
 }
@@ -324,9 +315,7 @@ func Test_HareComplete(t *testing.T) {
 
 	for x := range m {
 		for y := range m[x] {
-			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has emty set in result", x, y)
-			}
+			assert.Equal(t, 1, m[x][y], "at layer %v node %v has empty set in result", x, y)
 		}
 	}
 }

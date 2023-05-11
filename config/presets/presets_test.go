@@ -25,9 +25,16 @@ func TestCanGeneratePOST(t *testing.T) {
 			opts := params.SMESHING.Opts
 			opts.DataDir = t.TempDir()
 
-			mgr, err := activation.NewPostSetupManager(types.EmptyNodeID, params.POST, logtest.New(t), cdb, goldenATXID)
+			mgr, err := activation.NewPostSetupManager(
+				types.EmptyNodeID,
+				params.POST,
+				logtest.New(t),
+				cdb, goldenATXID,
+				activation.DefaultPostProvingOpts(),
+			)
 			req.NoError(err)
-			req.NoError(mgr.StartSession(context.Background(), opts))
+			req.NoError(mgr.PrepareInitializer(context.Background(), opts))
+			req.NoError(mgr.StartSession(context.Background()))
 
 			_, _, err = mgr.GenerateProof(context.Background(), ch)
 			req.NoError(err)

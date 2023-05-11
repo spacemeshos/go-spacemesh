@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -46,7 +46,7 @@ type Config struct {
 	Genesis         *GenesisConfig        `mapstructure:"genesis"`
 	Tortoise        tortoise.Config       `mapstructure:"tortoise"`
 	P2P             p2p.Config            `mapstructure:"p2p"`
-	API             apiConfig.Config      `mapstructure:"api"`
+	API             grpcserver.Config     `mapstructure:"api"`
 	HARE            hareConfig.Config     `mapstructure:"hare"`
 	HareEligibility eligConfig.Config     `mapstructure:"hare-eligibility"`
 	Beacon          beacon.Config         `mapstructure:"beacon"`
@@ -69,6 +69,7 @@ func (cfg *Config) DataDir() string {
 // BaseConfig defines the default configuration options for spacemesh app.
 type BaseConfig struct {
 	DataDirParent string `mapstructure:"data-folder"`
+	FileLock      string `mapstructure:"filelock"`
 
 	ConfigFile string `mapstructure:"config"`
 
@@ -111,9 +112,10 @@ type BaseConfig struct {
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
 type SmeshingConfig struct {
-	Start           bool                     `mapstructure:"smeshing-start"`
-	CoinbaseAccount string                   `mapstructure:"smeshing-coinbase"`
-	Opts            activation.PostSetupOpts `mapstructure:"smeshing-opts"`
+	Start           bool                       `mapstructure:"smeshing-start"`
+	CoinbaseAccount string                     `mapstructure:"smeshing-coinbase"`
+	Opts            activation.PostSetupOpts   `mapstructure:"smeshing-opts"`
+	ProvingOpts     activation.PostProvingOpts `mapstructure:"smeshing-proving-opts"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node.
@@ -124,7 +126,7 @@ func DefaultConfig() Config {
 		Genesis:         DefaultGenesisConfig(),
 		Tortoise:        tortoise.DefaultConfig(),
 		P2P:             p2p.DefaultConfig(),
-		API:             apiConfig.DefaultConfig(),
+		API:             grpcserver.DefaultConfig(),
 		HARE:            hareConfig.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
 		Beacon:          beacon.DefaultConfig(),
@@ -144,7 +146,7 @@ func DefaultTestConfig() Config {
 	conf := DefaultConfig()
 	conf.BaseConfig = defaultTestConfig()
 	conf.P2P = p2p.DefaultConfig()
-	conf.API = apiConfig.DefaultTestConfig()
+	conf.API = grpcserver.DefaultTestConfig()
 	conf.Address = types.DefaultTestAddressConfig()
 	return conf
 }
@@ -153,6 +155,7 @@ func DefaultTestConfig() Config {
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		DataDirParent:       defaultDataDir,
+		FileLock:            filepath.Join(os.TempDir(), "spacemesh.lock"),
 		CollectMetrics:      false,
 		MetricsPort:         1010,
 		MetricsPush:         "", // "" = doesn't push
@@ -180,6 +183,7 @@ func DefaultSmeshingConfig() SmeshingConfig {
 		Start:           false,
 		CoinbaseAccount: "",
 		Opts:            activation.DefaultPostSetupOpts(),
+		ProvingOpts:     activation.DefaultPostProvingOpts(),
 	}
 }
 

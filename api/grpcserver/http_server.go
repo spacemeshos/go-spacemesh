@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -15,22 +16,26 @@ import (
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
 // It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway .
 type JSONHTTPServer struct {
-	mu     sync.RWMutex
-	port   int
-	server *http.Server
+	mu       sync.RWMutex
+	listener string
+	server   *http.Server
 }
 
 // NewJSONHTTPServer creates a new json http server.
-func NewJSONHTTPServer(port int) *JSONHTTPServer {
-	return &JSONHTTPServer{port: port}
+func NewJSONHTTPServer(listener string) *JSONHTTPServer {
+	return &JSONHTTPServer{listener: listener}
 }
 
 // Shutdown stops the server.
 func (s *JSONHTTPServer) Shutdown(ctx context.Context) error {
-	log.Debug("stopping new json-http service...")
+	log.Debug("stopping json-http service...")
 	server := s.getServer()
 	if server != nil {
-		if err := server.Shutdown(ctx); err != nil {
+		err := server.Shutdown(ctx)
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		if err != nil {
 			return fmt.Errorf("shutdown: %w", err)
 		}
 	}
@@ -98,9 +103,9 @@ func (s *JSONHTTPServer) startInternal(
 		return
 	}
 
-	log.Info("starting grpc gateway server on port %d", s.port)
+	log.With().Info("starting grpc gateway server", log.String("address", s.listener))
 	s.setServer(&http.Server{
-		Addr:    fmt.Sprintf(":%d", s.port),
+		Addr:    s.listener,
 		Handler: mux,
 	})
 

@@ -16,6 +16,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -174,9 +175,11 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	current := atxPublishLid.Add(1)
 	dbs := make([]*datastore.CachedDB, 0, numNodes)
 	cfg := NodeSimUnitTestConfig()
+	bootstrap := types.Beacon{1, 2, 3, 4}
 	now := time.Now()
 	for i := 0; i < numNodes; i++ {
 		node := newTestDriver(t, cfg, publisher)
+		require.NoError(t, node.UpdateBeacon(types.EpochID(2), bootstrap))
 		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 		node.mClock.EXPECT().CurrentLayer().Return(current).AnyTimes()
 		node.mClock.EXPECT().LayerToTime(current).Return(now).AnyTimes()
@@ -185,12 +188,9 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 
 		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
 		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
-		got, err := node.GetBeacon(types.EpochID(1))
+		got, err := node.GetBeacon(types.EpochID(2))
 		require.NoError(t, err)
-		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
-		got, err = node.GetBeacon(types.EpochID(2))
-		require.NoError(t, err)
-		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
+		require.Equal(t, bootstrap, got)
 	}
 	for i, node := range testNodes {
 		if i == 0 {
@@ -231,8 +231,10 @@ func TestBeacon_NoProposals(t *testing.T) {
 	dbs := make([]*datastore.CachedDB, 0, numNodes)
 	cfg := NodeSimUnitTestConfig()
 	now := time.Now()
+	bootstrap := types.Beacon{1, 2, 3, 4}
 	for i := 0; i < numNodes; i++ {
 		node := newTestDriver(t, cfg, publisher)
+		require.NoError(t, node.UpdateBeacon(types.EpochID(2), bootstrap))
 		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 		node.mClock.EXPECT().CurrentLayer().Return(current).AnyTimes()
 		node.mClock.EXPECT().LayerToTime(current).Return(now).AnyTimes()
@@ -241,12 +243,9 @@ func TestBeacon_NoProposals(t *testing.T) {
 
 		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
 		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
-		got, err := node.GetBeacon(types.EpochID(1))
+		got, err := node.GetBeacon(types.EpochID(2))
 		require.NoError(t, err)
-		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
-		got, err = node.GetBeacon(types.EpochID(2))
-		require.NoError(t, err)
-		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
+		require.Equal(t, bootstrap, got)
 	}
 	for _, node := range testNodes {
 		for _, db := range dbs {
@@ -269,6 +268,16 @@ func TestBeacon_NoProposals(t *testing.T) {
 	}
 }
 
+func getNoWait(tb testing.TB, results <-chan result.Beacon) result.Beacon {
+	select {
+	case rst := <-results:
+		return rst
+	default:
+	}
+	require.Fail(tb, "beacon is not available")
+	return result.Beacon{}
+}
+
 func TestBeaconNotSynced(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
@@ -277,8 +286,17 @@ func TestBeaconNotSynced(t *testing.T) {
 	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(2)), errNodeNotSynced)
 
 	got, err := tpd.GetBeacon(types.EpochID(2))
+	require.Equal(t, errBeaconNotCalculated, err)
+	require.Equal(t, types.EmptyBeacon, got)
+
+	bootstrap := types.Beacon{1, 2, 3, 4}
+	require.NoError(t, tpd.UpdateBeacon(types.EpochID(2), bootstrap))
+	got, err = tpd.GetBeacon(types.EpochID(2))
+	require.Equal(t, got, getNoWait(t, tpd.Results()).Beacon)
+
 	require.NoError(t, err)
-	require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
+	require.Equal(t, bootstrap, got)
+
 	got, err = tpd.GetBeacon(types.EpochID(3))
 	require.Equal(t, errBeaconNotCalculated, err)
 	require.Equal(t, types.EmptyBeacon, got)
@@ -307,13 +325,6 @@ func TestBeaconNoATXInPreviousEpoch(t *testing.T) {
 	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
 	tpd.mClock.EXPECT().LayerToTime(types.EpochID(2).FirstLayer()).Return(time.Now())
 	require.ErrorIs(t, errZeroEpochWeight, tpd.onNewEpoch(context.Background(), types.EpochID(2)))
-
-	got, err := tpd.GetBeacon(types.EpochID(2))
-	require.NoError(t, err)
-	require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
-	got, err = tpd.GetBeacon(types.EpochID(3))
-	require.Equal(t, errBeaconNotCalculated, err)
-	require.Equal(t, types.EmptyBeacon, got)
 }
 
 func TestBeaconWithMetrics(t *testing.T) {

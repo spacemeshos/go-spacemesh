@@ -259,7 +259,7 @@ func (t *Votes) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[Vote](dec, 10000)
+		field, n, err := scale.DecodeStructSliceWithLimit[BlockHeader](dec, 10000)
 		if err != nil {
 			return total, err
 		}
@@ -267,7 +267,7 @@ func (t *Votes) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Support = field
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[Vote](dec, 10000)
+		field, n, err := scale.DecodeStructSliceWithLimit[BlockHeader](dec, 10000)
 		if err != nil {
 			return total, err
 		}
@@ -285,7 +285,7 @@ func (t *Votes) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	return total, nil
 }
 
-func (t *Vote) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *BlockHeader) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeByteArray(enc, t.ID[:])
 		if err != nil {
@@ -310,7 +310,7 @@ func (t *Vote) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	return total, nil
 }
 
-func (t *Vote) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *BlockHeader) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		n, err := scale.DecodeByteArray(dec, t.ID[:])
 		if err != nil {
