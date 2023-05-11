@@ -152,7 +152,7 @@ func DefaultTestConfig() Config {
 
 // DefaultBaseConfig returns a default configuration for spacemesh.
 func defaultBaseConfig() BaseConfig {
-	return BaseConfig{
+	return BaseConfig{ // any change
 		DataDirParent:       defaultDataDir,
 		CollectMetrics:      false,
 		MetricsPort:         1010,
