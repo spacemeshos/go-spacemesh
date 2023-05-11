@@ -27,13 +27,18 @@ import (
 
 // PoetConfig is the configuration to interact with the poet server.
 type PoetConfig struct {
-	PhaseShift  time.Duration `mapstructure:"phase-shift"`
-	CycleGap    time.Duration `mapstructure:"cycle-gap"`
-	GracePeriod time.Duration `mapstructure:"grace-period"`
+	PhaseShift        time.Duration `mapstructure:"phase-shift"`
+	CycleGap          time.Duration `mapstructure:"cycle-gap"`
+	GracePeriod       time.Duration `mapstructure:"grace-period"`
+	RequestRetryDelay time.Duration `mapstructure:"retry-delay"`
+	MaxRequestRetries int           `mapstructure:"retry-max"`
 }
 
 func DefaultPoetConfig() PoetConfig {
-	return PoetConfig{}
+	return PoetConfig{
+		RequestRetryDelay: 400 * time.Millisecond,
+		MaxRequestRetries: 10,
+	}
 }
 
 const defaultPoetRetryInterval = 5 * time.Second

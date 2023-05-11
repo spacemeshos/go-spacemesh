@@ -84,7 +84,7 @@ func TestPostSetupManager_PrepareInitializer(t *testing.T) {
 	// check no error with good options.
 	req.NoError(mgr.PrepareInitializer(ctx, mgr.opts))
 
-	dedfault := config.DefaultConfig()
+	defaultConfig := config.DefaultConfig()
 
 	// Check that invalid options return errors
 	opts := mgr.opts
@@ -92,17 +92,29 @@ func TestPostSetupManager_PrepareInitializer(t *testing.T) {
 	req.Error(mgr.PrepareInitializer(ctx, opts))
 
 	opts = mgr.opts
-	opts.NumUnits = dedfault.MaxNumUnits + 1
+	opts.NumUnits = defaultConfig.MaxNumUnits + 1
 	req.Error(mgr.PrepareInitializer(ctx, opts))
 
 	opts = mgr.opts
-	opts.NumUnits = dedfault.MinNumUnits - 1
+	opts.NumUnits = defaultConfig.MinNumUnits - 1
 	req.Error(mgr.PrepareInitializer(ctx, opts))
 
 	opts = mgr.opts
 	opts.Scrypt.N = 0
 	req.Error(opts.Scrypt.Validate())
 	req.Error(mgr.PrepareInitializer(ctx, opts))
+}
+
+func TestPostSetupManager_PrepareInitializer_BestProvider(t *testing.T) {
+	req := require.New(t)
+
+	mgr := newTestPostManager(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+
+	mgr.opts.ProviderID = config.BestProviderID
+	req.NoError(mgr.PrepareInitializer(ctx, mgr.opts))
 }
 
 // Checks that the sequence of calls for initialization (first
@@ -125,7 +137,7 @@ func TestPostSetupManager_InitializationCallSequence(t *testing.T) {
 
 	req.NoError(mgr.StartSession(ctx))
 
-	// Should fali since it is required to call PrepareInitializer before each
+	// Should fail since it is required to call PrepareInitializer before each
 	// call to StartSession.
 	req.Error(mgr.StartSession(ctx))
 }
@@ -321,6 +333,41 @@ func TestPostSetupManager_findCommitmentAtx_DefaultsToGoldenAtx(t *testing.T) {
 	require.Equal(t, mgr.goldenATXID, atx)
 }
 
+func TestPostSetupManager_Providers_includesCPU(t *testing.T) {
+	mgr := newTestPostManager(t)
+
+	providers, err := mgr.Providers()
+	require.NoError(t, err)
+
+	for _, p := range providers {
+		if p.ID == initialization.CPUProviderID() {
+			return
+		}
+	}
+	require.Fail(t, "no CPU provider found")
+}
+
+func TestPostSetupManager_BestProvider(t *testing.T) {
+	mgr := newTestPostManager(t)
+
+	providers, err := mgr.BestProvider()
+	require.NoError(t, err)
+	require.NotNil(t, providers)
+}
+
+func TestPostSetupManager_Benchmark(t *testing.T) {
+	mgr := newTestPostManager(t)
+
+	providers, err := mgr.Providers()
+	require.NoError(t, err)
+
+	for _, p := range providers {
+		score, err := mgr.Benchmark(p)
+		require.NoError(t, err)
+		require.NotZero(t, score)
+	}
+}
+
 func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromPostMetadata(t *testing.T) {
 	mgr := newTestPostManager(t)
 
@@ -372,7 +419,7 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 	opts := DefaultPostSetupOpts()
 	opts.DataDir = tb.TempDir()
 	opts.NumUnits = cfg.MaxNumUnits
-	opts.ComputeProviderID = int(initialization.CPUProviderID())
+	opts.ProviderID = int(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
 	goldenATXID := types.ATXID{2, 3, 4}

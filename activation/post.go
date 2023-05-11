@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/post/config"
-	"github.com/spacemeshos/post/gpu"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/proving"
 
@@ -18,8 +17,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
-// PostSetupComputeProvider represent a compute provider for Post setup data creation.
-type PostSetupComputeProvider initialization.ComputeProvider
+// PostSetupProvider represent a compute provider for Post setup data creation.
+type PostSetupProvider initialization.ComputeProvider
 
 // PostConfig is the configuration of the Post protocol, used for data creation, proofs generation and validation.
 type PostConfig struct {
@@ -37,13 +36,13 @@ type PostConfig struct {
 // PostSetupOpts are the options used to initiate a Post setup data creation session,
 // either via the public smesher API, or on node launch (via cmd args).
 type PostSetupOpts struct {
-	DataDir           string              `mapstructure:"smeshing-opts-datadir"`
-	NumUnits          uint32              `mapstructure:"smeshing-opts-numunits"`
-	MaxFileSize       uint64              `mapstructure:"smeshing-opts-maxfilesize"`
-	ComputeProviderID int                 `mapstructure:"smeshing-opts-provider"`
-	Throttle          bool                `mapstructure:"smeshing-opts-throttle"`
-	Scrypt            config.ScryptParams `mapstructure:"smeshing-opts-scrypt"`
-	ComputeBatchSize  uint64              `mapstructure:"smeshing-opts-compute-batch-size"`
+	DataDir          string              `mapstructure:"smeshing-opts-datadir"`
+	NumUnits         uint32              `mapstructure:"smeshing-opts-numunits"`
+	MaxFileSize      uint64              `mapstructure:"smeshing-opts-maxfilesize"`
+	ProviderID       int                 `mapstructure:"smeshing-opts-provider"`
+	Throttle         bool                `mapstructure:"smeshing-opts-throttle"`
+	Scrypt           config.ScryptParams `mapstructure:"smeshing-opts-scrypt"`
+	ComputeBatchSize uint64              `mapstructure:"smeshing-opts-compute-batch-size"`
 }
 
 // PostProvingOpts are the options controlling POST proving process.
@@ -149,23 +148,31 @@ func (mgr *PostSetupManager) Status() *PostSetupStatus {
 	}
 }
 
-// ComputeProviders returns a list of available compute providers for Post setup.
-func (*PostSetupManager) ComputeProviders() []PostSetupComputeProvider {
-	providers := initialization.Providers()
-
-	providersAlias := make([]PostSetupComputeProvider, len(providers))
-	for i, p := range providers {
-		providersAlias[i] = PostSetupComputeProvider(p)
+// Providers returns a list of available compute providers for Post setup.
+func (*PostSetupManager) Providers() ([]PostSetupProvider, error) {
+	providers, err := initialization.OpenCLProviders()
+	if err != nil {
+		return nil, err
 	}
 
-	return providersAlias
+	providersAlias := make([]PostSetupProvider, len(providers))
+	for i, p := range providers {
+		providersAlias[i] = PostSetupProvider(p)
+	}
+
+	return providersAlias, nil
 }
 
 // BestProvider returns the most performant compute provider based on a short benchmarking session.
-func (mgr *PostSetupManager) BestProvider() (*PostSetupComputeProvider, error) {
-	var bestProvider PostSetupComputeProvider
+func (mgr *PostSetupManager) BestProvider() (*PostSetupProvider, error) {
+	providers, err := mgr.Providers()
+	if err != nil {
+		return nil, fmt.Errorf("fetch best provider: %w", err)
+	}
+
+	var bestProvider PostSetupProvider
 	var maxHS int
-	for _, p := range mgr.ComputeProviders() {
+	for _, p := range providers {
 		hs, err := mgr.Benchmark(p)
 		if err != nil {
 			return nil, err
@@ -179,8 +186,8 @@ func (mgr *PostSetupManager) BestProvider() (*PostSetupComputeProvider, error) {
 }
 
 // Benchmark runs a short benchmarking session for a given provider to evaluate its performance.
-func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) {
-	score, err := gpu.Benchmark(initialization.ComputeProvider(p))
+func (mgr *PostSetupManager) Benchmark(p PostSetupProvider) (int, error) {
+	score, err := initialization.Benchmark(initialization.ComputeProvider(p))
 	if err != nil {
 		return score, fmt.Errorf("benchmark GPU: %w", err)
 	}
@@ -212,7 +219,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 		log.String("data_dir", mgr.lastOpts.DataDir),
 		log.String("num_units", fmt.Sprintf("%d", mgr.lastOpts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ComputeProviderID)),
+		log.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ProviderID)),
 	)
 
 	err = mgr.init.Initialize(ctx)
@@ -236,7 +243,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 		log.String("data_dir", mgr.lastOpts.DataDir),
 		log.String("num_units", fmt.Sprintf("%d", mgr.lastOpts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ComputeProviderID)),
+		log.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ProviderID)),
 	)
 	mgr.state = PostSetupStateComplete
 	return nil
@@ -247,7 +254,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 // function be separate from StartSession provides a means to understand if the
 // post configuration is valid before kicking off a very long running task
 // (StartSession can take days to complete). After the first call to this
-// method subseqeunt calls to this method will return an error until
+// method subsequent calls to this method will return an error until
 // StartSession has completed execution.
 func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
 	mgr.mu.Lock()
@@ -256,14 +263,14 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 		return fmt.Errorf("post setup session in progress")
 	}
 
-	if opts.ComputeProviderID == config.BestProviderID {
+	if opts.ProviderID == config.BestProviderID {
 		p, err := mgr.BestProvider()
 		if err != nil {
 			return err
 		}
 
-		mgr.logger.Info("found best compute provider: id: %d, model: %v, computeAPI: %v", p.ID, p.Model, p.ComputeAPI)
-		opts.ComputeProviderID = int(p.ID)
+		mgr.logger.Info("found best compute provider: id: %d, model: %v, device type: %v", p.ID, p.Model, p.DeviceType)
+		opts.ProviderID = int(p.ID)
 	}
 
 	var err error

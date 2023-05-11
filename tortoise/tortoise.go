@@ -6,20 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"time"
 
 	"github.com/spacemeshos/fixed"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
-	putil "github.com/spacemeshos/go-spacemesh/proposals/util"
-	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/sql/blocks"
-	"github.com/spacemeshos/go-spacemesh/sql/certificates"
-	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/system"
+	"github.com/spacemeshos/go-spacemesh/proposals/util"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
 
@@ -28,9 +22,7 @@ var errBeaconUnavailable = errors.New("beacon unavailable")
 type turtle struct {
 	Config
 	logger log.Log
-	cdb    *datastore.CachedDB
 
-	beacons system.BeaconGetter
 	updated map[types.LayerID]map[types.BlockID]bool
 
 	*state
@@ -48,18 +40,11 @@ type turtle struct {
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance.
-func newTurtle(
-	logger log.Log,
-	cdb *datastore.CachedDB,
-	beacons system.BeaconGetter,
-	config Config,
-) *turtle {
+func newTurtle(logger log.Log, config Config) *turtle {
 	t := &turtle{
-		Config:  config,
-		state:   newState(),
-		logger:  logger,
-		cdb:     cdb,
-		beacons: beacons,
+		Config: config,
+		state:  newState(),
+		logger: logger,
 	}
 	genesis := types.GetEffectiveGenesis()
 
@@ -68,7 +53,7 @@ func newTurtle(
 	t.verified = genesis
 	t.evicted = genesis.Sub(1)
 
-	t.epochs[genesis.GetEpoch()] = &epochInfo{atxs: map[types.ATXID]uint64{}}
+	t.epochs[genesis.GetEpoch()] = &epochInfo{atxs: map[types.ATXID]atxInfo{}}
 	t.layers[genesis] = &layerInfo{
 		lid:            genesis,
 		hareTerminated: true,
@@ -293,18 +278,15 @@ func (t *turtle) getFullVote(verified, current types.LayerID, block *blockInfo) 
 	if vote != abstain {
 		return vote, reasonLocalThreshold, nil
 	}
-	coin, err := layers.GetWeakCoin(t.cdb, current.Sub(1))
-	if err != nil {
+	layer := t.layer(current.Sub(1))
+	if layer.coinflip == neutral {
 		return 0, "", fmt.Errorf("coinflip is not recorded in %s. required for vote on %s / %s",
 			current.Sub(1), block.id, block.layer)
 	}
-	if coin {
-		return support, reasonCoinflip, nil
-	}
-	return against, reasonCoinflip, nil
+	return layer.coinflip, reasonCoinflip, nil
 }
 
-func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
+func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 	t.logger.With().Debug("on layer", last)
 	defer t.evict(ctx)
 	if last.After(t.last) {
@@ -312,13 +294,11 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 		lastLayer.Set(float64(t.last))
 	}
 	if err := t.drainRetriable(); err != nil {
-		return nil
+		return
 	}
 	for process := t.processed.Add(1); !process.After(t.last); process = process.Add(1) {
 		if process.FirstInEpoch() {
-			if err := t.loadAtxs(process.GetEpoch()); err != nil {
-				return err
-			}
+			t.computeEpochHeight(process.GetEpoch())
 		}
 		layer := t.layer(process)
 		for _, block := range layer.blocks {
@@ -338,16 +318,9 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 				if errors.Is(err, errBeaconUnavailable) {
 					t.retryLater(ballot)
 				} else {
-					return err
+					panic(err)
 				}
 			}
-		}
-
-		if err := t.loadBlocksData(process); err != nil {
-			return err
-		}
-		if err := t.loadBallots(process); err != nil {
-			return err
 		}
 
 		layer.prevOpinion = &prev.opinion
@@ -366,7 +339,6 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 		}
 	}
 	t.verifyLayers()
-	return nil
 }
 
 func (t *turtle) switchModes(logger log.Log) {
@@ -470,94 +442,33 @@ func (t *turtle) verifyLayers() {
 	verifiedLayer.Set(float64(t.verified))
 }
 
-// loadBlocksData loads blocks, hare output and contextual validity.
-func (t *turtle) loadBlocksData(lid types.LayerID) error {
-	blocks, err := blocks.Layer(t.cdb, lid)
-	if err != nil {
-		return fmt.Errorf("read blocks for layer %s: %w", lid, err)
-	}
-	for _, block := range blocks {
-		t.onBlock(block.ToVote())
-	}
-	if err := t.loadHare(lid); err != nil {
-		return err
-	}
-	return t.loadContextualValidity(lid)
-}
-
-func (t *turtle) loadHare(lid types.LayerID) error {
-	output, err := certificates.GetHareOutput(t.cdb, lid)
-	if err == nil {
-		t.onHareOutput(lid, output)
-		return nil
-	}
-	if errors.Is(err, sql.ErrNotFound) {
-		t.logger.With().Debug("hare output for layer is not found", lid)
-		return nil
-	}
-	return fmt.Errorf("get hare output %s: %w", lid, err)
-}
-
-func (t *turtle) loadContextualValidity(lid types.LayerID) error {
-	// validities will be available only during rerun or
-	// if they are synced from peers
-	for _, block := range t.layer(lid).blocks {
-		valid, err := blocks.IsValid(t.cdb, block.id)
-		if err != nil {
-			if !errors.Is(err, blocks.ErrValidityNotDecided) {
-				return err
-			}
-		} else if valid {
-			block.validity = support
-		} else {
-			block.validity = against
-		}
-	}
-	return nil
-}
-
-// loadAtxs and compute reference height.
-func (t *turtle) loadAtxs(epoch types.EpochID) error {
-	var heights []uint64
-	if err := t.cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
-		t.onAtx(header)
-		heights = append(heights, header.TickHeight())
-		return true
-	}); err != nil {
-		return fmt.Errorf("computing epoch data for %d: %w", epoch, err)
-	}
+func (t *turtle) computeEpochHeight(epoch types.EpochID) {
 	einfo := t.epoch(epoch)
+	heights := make([]uint64, 0, len(einfo.atxs))
+	for _, info := range einfo.atxs {
+		heights = append(heights, info.height)
+	}
 	einfo.height = getMedian(heights)
-	return nil
 }
 
-func (t *turtle) loadBallots(lid types.LayerID) error {
-	blts, err := ballots.Layer(t.cdb, lid)
-	if err != nil {
-		return fmt.Errorf("read ballots for layer %s: %w", lid, err)
-	}
-
-	for _, ballot := range blts {
-		if err := t.onBallot(ballot); err != nil {
-			t.logger.With().Error("failed to add ballot to the state", log.Err(err), log.Inline(ballot))
-		}
-	}
-	return nil
-}
-
-func (t *turtle) onBlock(header types.Vote) {
+func (t *turtle) onBlock(header types.BlockHeader, data bool, valid bool) {
 	if header.LayerID <= t.evicted {
 		return
 	}
-
 	if binfo := t.state.getBlock(header); binfo != nil {
-		binfo.data = true
+		binfo.data = data
+		if valid {
+			binfo.validity = support
+		}
 		return
 	}
 	t.logger.With().Debug("on data block", log.Inline(&header))
 
 	binfo := newBlockInfo(header)
-	binfo.data = true
+	binfo.data = data
+	if valid {
+		binfo.validity = support
+	}
 	t.addBlock(binfo)
 }
 
@@ -630,7 +541,7 @@ func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
 			log.Uint32("epoch", uint32(atx.TargetEpoch())),
 			log.Uint64("weight", atx.GetWeight()),
 		)
-		epoch.atxs[atx.ID] = atx.GetWeight()
+		epoch.atxs[atx.ID] = atxInfo{weight: atx.GetWeight(), height: atx.TickHeight()}
 		if atx.GetWeight() > math.MaxInt64 {
 			// atx weight is not expected to overflow int64
 			t.logger.With().Fatal("fixme: atx size overflows int64", log.Uint64("weight", atx.GetWeight()))
@@ -682,19 +593,23 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, types.LayerID,
 	}
 
 	if ballot.EpochData != nil {
-		beacon := ballot.EpochData.Beacon
-		height, err := getBallotHeight(t.cdb, ballot)
+		epoch := t.epoch(ballot.Layer.GetEpoch())
+		atx, exists := epoch.atxs[ballot.AtxID]
+		if !exists {
+			return nil, 0, fmt.Errorf("atx %s/%d not in state", ballot.AtxID, ballot.Layer.GetEpoch())
+		}
+		total, err := activeSetWeight(epoch, ballot.ActiveSet)
 		if err != nil {
 			return nil, 0, err
 		}
-		refweight, err := putil.ComputeWeightPerEligibility(t.cdb, ballot, t.LayerSize, types.GetLayersPerEpoch())
+		expected, err := util.GetNumEligibleSlots(atx.weight, total, t.LayerSize, types.GetLayersPerEpoch())
 		if err != nil {
 			return nil, 0, err
 		}
 		refinfo = &referenceInfo{
-			height: height,
-			beacon: beacon,
-			weight: refweight,
+			height: atx.height,
+			beacon: ballot.EpochData.Beacon,
+			weight: big.NewRat(int64(atx.weight), int64(expected)),
 		}
 	} else {
 		ref, exists := t.state.ballotRefs[ballot.RefBallot]
@@ -786,17 +701,18 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	return nil
 }
 
-func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, layerID types.LayerID, beacon types.Beacon) (bool, error) {
-	epochBeacon, err := t.beacons.GetBeacon(layerID.GetEpoch())
-	if err != nil {
-		return false, err
+func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, lid types.LayerID, beacon types.Beacon) (bool, error) {
+	epoch := t.epoch(lid.GetEpoch())
+	if epoch.beacon == nil {
+		return false, errBeaconUnavailable
 	}
-	if beacon != epochBeacon {
+	if beacon != *epoch.beacon {
 		logger.With().Debug("ballot has different beacon",
-			layerID,
-			bid,
-			log.String("ballot_beacon", beacon.ShortString()),
-			log.String("epoch_beacon", epochBeacon.ShortString()))
+			log.Uint32("layer_id", lid.Uint32()),
+			log.Stringer("block", bid),
+			log.ShortStringer("ballot_beacon", beacon),
+			log.ShortStringer("epoch_beacon", epoch.beacon),
+		)
 		return true, nil
 	}
 	return false, nil

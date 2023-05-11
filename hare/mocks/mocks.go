@@ -296,20 +296,6 @@ func (mr *MockmeshMockRecorder) Proposals(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proposals", reflect.TypeOf((*Mockmesh)(nil).Proposals), arg0)
 }
 
-// SetWeakCoin mocks base method.
-func (m *Mockmesh) SetWeakCoin(arg0 types.LayerID, arg1 bool) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetWeakCoin", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SetWeakCoin indicates an expected call of SetWeakCoin.
-func (mr *MockmeshMockRecorder) SetWeakCoin(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetWeakCoin", reflect.TypeOf((*Mockmesh)(nil).SetWeakCoin), arg0, arg1)
-}
-
 // VRFNonce mocks base method.
 func (m *Mockmesh) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (types.VRFPostIndex, error) {
 	m.ctrl.T.Helper()
@@ -323,4 +309,41 @@ func (m *Mockmesh) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (types.VRFPos
 func (mr *MockmeshMockRecorder) VRFNonce(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*Mockmesh)(nil).VRFNonce), arg0, arg1)
+}
+
+// MockweakCoin is a mock of weakCoin interface.
+type MockweakCoin struct {
+	ctrl     *gomock.Controller
+	recorder *MockweakCoinMockRecorder
+}
+
+// MockweakCoinMockRecorder is the mock recorder for MockweakCoin.
+type MockweakCoinMockRecorder struct {
+	mock *MockweakCoin
+}
+
+// NewMockweakCoin creates a new mock instance.
+func NewMockweakCoin(ctrl *gomock.Controller) *MockweakCoin {
+	mock := &MockweakCoin{ctrl: ctrl}
+	mock.recorder = &MockweakCoinMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockweakCoin) EXPECT() *MockweakCoinMockRecorder {
+	return m.recorder
+}
+
+// Set mocks base method.
+func (m *MockweakCoin) Set(arg0 types.LayerID, arg1 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Set", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Set indicates an expected call of Set.
+func (mr *MockweakCoinMockRecorder) Set(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockweakCoin)(nil).Set), arg0, arg1)
 }

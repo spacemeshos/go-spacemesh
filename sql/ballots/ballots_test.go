@@ -239,3 +239,106 @@ func TestFirstInEpoch(t *testing.T) {
 	require.Equal(t, got.AtxID, atx.ID())
 	require.Equal(t, got.ID(), b1.ID())
 }
+
+func TestAllFirstInEpoch(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		desc    string
+		target  types.EpochID
+		ballots []types.Ballot
+		expect  []int // references to ballots field
+	}{
+		{
+			"sanity",
+			0,
+			[]types.Ballot{
+				types.NewExistingBallot(
+					types.BallotID{1}, types.EmptyEdSignature, types.NodeID{1},
+					types.EpochID(0).FirstLayer()+2,
+				),
+				types.NewExistingBallot(
+					types.BallotID{2}, types.EmptyEdSignature, types.NodeID{1},
+					types.EpochID(0).FirstLayer(),
+				),
+			},
+			[]int{1},
+		},
+		{
+			"multiple smeshers",
+			0,
+			[]types.Ballot{
+				types.NewExistingBallot(
+					types.BallotID{1}, types.EmptyEdSignature, types.NodeID{1},
+					types.EpochID(0).FirstLayer()+2,
+				),
+				types.NewExistingBallot(
+					types.BallotID{2}, types.EmptyEdSignature, types.NodeID{1},
+					types.EpochID(0).FirstLayer(),
+				),
+				types.NewExistingBallot(
+					types.BallotID{3}, types.EmptyEdSignature, types.NodeID{2},
+					types.EpochID(1).FirstLayer()-1,
+				),
+				types.NewExistingBallot(
+					types.BallotID{4}, types.EmptyEdSignature, types.NodeID{2},
+					types.EpochID(0).FirstLayer(),
+				),
+			},
+			[]int{1, 3},
+		},
+		{
+			"empty",
+			1,
+			[]types.Ballot{
+				types.NewExistingBallot(
+					types.BallotID{1}, types.EmptyEdSignature, types.NodeID{1},
+					types.EpochID(0).FirstLayer(),
+				),
+				types.NewExistingBallot(
+					types.BallotID{3}, types.EmptyEdSignature, types.NodeID{2},
+					types.EpochID(0).FirstLayer(),
+				),
+			},
+			[]int{},
+		},
+		{
+			"multi epoch",
+			1,
+			[]types.Ballot{
+				types.NewExistingBallot(
+					types.BallotID{1}, types.EmptyEdSignature, types.NodeID{1},
+					types.EpochID(0).FirstLayer(),
+				),
+				types.NewExistingBallot(
+					types.BallotID{3}, types.EmptyEdSignature, types.NodeID{2},
+					types.EpochID(0).FirstLayer(),
+				),
+				types.NewExistingBallot(
+					types.BallotID{4}, types.EmptyEdSignature, types.NodeID{1},
+					types.EpochID(1).FirstLayer(),
+				),
+				types.NewExistingBallot(
+					types.BallotID{5}, types.EmptyEdSignature, types.NodeID{2},
+					types.EpochID(1).FirstLayer(),
+				),
+			},
+			[]int{2, 3},
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Parallel()
+			db := sql.InMemory()
+			for _, ballot := range tc.ballots {
+				require.NoError(t, Add(db, &ballot))
+			}
+			var expect []*types.Ballot
+			for _, bi := range tc.expect {
+				expect = append(expect, &tc.ballots[bi])
+			}
+			results, err := AllFirstInEpoch(db, tc.target)
+			require.NoError(t, err)
+			require.Equal(t, expect, results)
+		})
+	}
+}

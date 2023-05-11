@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/storage v1.30.1
 	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20220102081255-38c8b72a9924
-	github.com/benbjohnson/clock v1.3.3
+	github.com/benbjohnson/clock v1.3.4
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20230209235359-64dc83baed9b
 	github.com/cosmos/btcutil v1.0.5
 	github.com/gofrs/flock v0.8.1
@@ -33,13 +33,13 @@ require (
 	github.com/pyroscope-io/pyroscope v0.37.2
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.0
 	github.com/seehuhn/mt19937 v1.0.0
-	github.com/spacemeshos/api/release/go v1.9.0
+	github.com/spacemeshos/api/release/go v1.10.0
 	github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
 	github.com/spacemeshos/go-scale v1.1.8
 	github.com/spacemeshos/merkle-tree v0.2.1
 	github.com/spacemeshos/poet v0.8.1
-	github.com/spacemeshos/post v0.5.5
+	github.com/spacemeshos/post v0.6.0
 	github.com/spf13/afero v1.9.5
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
@@ -184,7 +184,7 @@ require (
 	golang.org/x/mod v0.10.0 // indirect
 	golang.org/x/net v0.9.0 // indirect
 	golang.org/x/oauth2 v0.6.0 // indirect
-	golang.org/x/sys v0.7.0 // indirect
+	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/term v0.7.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
 	golang.org/x/time v0.3.0 // indirect

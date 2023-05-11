@@ -264,3 +264,39 @@ func FirstInEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID) (*types
 	}
 	return &ballot, err
 }
+
+func AllFirstInEpoch(db sql.Executor, epoch types.EpochID) ([]*types.Ballot, error) {
+	var (
+		err error
+		rst []*types.Ballot
+	)
+	enc := func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(epoch.FirstLayer()))
+		stmt.BindInt64(2, int64((epoch+1).FirstLayer()-1))
+	}
+	dec := func(stmt *sql.Statement) bool {
+		var (
+			bid    types.BallotID
+			ballot types.Ballot
+		)
+		stmt.ColumnBytes(0, bid[:])
+		if _, err = codec.DecodeFrom(stmt.ColumnReader(1), &ballot); err != nil && err != io.EOF {
+			err = fmt.Errorf("decode ballot: %w", err)
+			return false
+		} else {
+			err = nil
+		}
+		ballot.SetID(bid)
+		rst = append(rst, &ballot)
+		return true
+	}
+	if _, err := db.Exec(`
+		select id, ballot, min(layer) from ballots where layer between ?1 and ?2
+		group by pubkey;`, enc, dec); err != nil {
+		return nil, fmt.Errorf("query first ballots in epoch %d: %w", epoch, err)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return rst, nil
+}

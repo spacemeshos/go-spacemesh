@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -27,8 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/system"
-	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
@@ -38,10 +34,6 @@ func TestMain(m *testing.M) {
 
 	res := m.Run()
 	os.Exit(res)
-}
-
-func newCachedDB(t *testing.T, logger log.Log) *datastore.CachedDB {
-	return datastore.NewCachedDB(sql.InMemory(), logger)
 }
 
 const (
@@ -215,7 +207,7 @@ func TestAbstainLateBlock(t *testing.T) {
 	block := types.Block{}
 	block.LayerIndex = last.Sub(1)
 	block.Initialize()
-	tortoise.OnBlock(&block)
+	tortoise.OnBlock(block.ToVote())
 	tortoise.OnHareOutput(block.LayerIndex, block.ID())
 	tortoise.TallyVotes(ctx, last)
 
@@ -309,26 +301,6 @@ func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
 	require.Equal(t, votes.Abstain, []types.LayerID{types.LayerID(9)})
 }
 
-func mockedBeacons(tb testing.TB) system.BeaconGetter {
-	tb.Helper()
-
-	ctrl := gomock.NewController(tb)
-	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
-	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, nil).AnyTimes()
-	return mockBeacons
-}
-
-func defaultTurtle(tb testing.TB) *turtle {
-	lg := logtest.New(tb)
-	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	return newTurtle(
-		lg,
-		cdb,
-		mockedBeacons(tb),
-		defaultTestConfig(),
-	)
-}
-
 func defaultTestConfig() Config {
 	return Config{
 		LayerSize:                defaultTestLayerSize,
@@ -340,15 +312,20 @@ func defaultTestConfig() Config {
 	}
 }
 
-func tortoiseFromSimState(tb testing.TB, state sim.State, opts ...Opt) *Tortoise {
-	trtl, err := New(state.DB, state.Beacons, opts...)
+func tortoiseFromSimState(tb testing.TB, state sim.State, opts ...Opt) *recoveryAdapter {
+	trtl, err := New(opts...)
 	require.NoError(tb, err)
-	return trtl
+	return &recoveryAdapter{
+		TB:       tb,
+		Tortoise: trtl,
+		db:       state.DB,
+		beacon:   state.Beacons,
+	}
 }
 
-func defaultAlgorithm(tb testing.TB, cdb *datastore.CachedDB) *Tortoise {
+func defaultAlgorithm(tb testing.TB) *Tortoise {
 	tb.Helper()
-	trtl, err := New(cdb, mockedBeacons(tb),
+	trtl, err := New(
 		WithConfig(defaultTestConfig()),
 		WithLogger(logtest.New(tb)),
 	)
@@ -542,7 +519,11 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 	require.Equal(t, last.Sub(1), verified)
 }
 
-func processBlockUpdates(tb testing.TB, tt *Tortoise, db sql.Executor) {
+type updater interface {
+	Updates() map[types.LayerID]map[types.BlockID]bool
+}
+
+func processBlockUpdates(tb testing.TB, tt updater, db sql.Executor) {
 	updated := tt.Updates()
 	for _, bids := range updated {
 		for bid, valid := range bids {
@@ -793,22 +774,18 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 	epochBeacon := types.RandomBeacon()
 	ballot := randomRefBallot(t, layerID, epochBeacon)
 
-	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
-	trtl := defaultTurtle(t)
-	trtl.beacons = mockBeacons
+	trtl := defaultAlgorithm(t)
 
 	logger := logtest.New(t)
-	// good beacon
-	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(1)
-	badBeacon, err := trtl.compareBeacons(logger, ballot.ID(), ballot.Layer, epochBeacon)
+	trtl.OnBeacon(layerID.GetEpoch(), epochBeacon)
+	badBeacon, err := trtl.trtl.compareBeacons(logger, ballot.ID(), ballot.Layer, epochBeacon)
 	assert.NoError(t, err)
 	assert.False(t, badBeacon)
 
 	// bad beacon
 	beacon := types.RandomBeacon()
 	require.NotEqual(t, epochBeacon, beacon)
-	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(1)
-	badBeacon, err = trtl.compareBeacons(logger, ballot.ID(), ballot.Layer, beacon)
+	badBeacon, err = trtl.trtl.compareBeacons(logger, ballot.ID(), ballot.Layer, beacon)
 	assert.NoError(t, err)
 	assert.True(t, badBeacon)
 }
@@ -983,9 +960,13 @@ func outOfWindowBaseBallot(n, window int) sim.VotesGenerator {
 	}
 }
 
+type voter interface {
+	EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*types.Opinion, error)
+}
+
 // tortoiseVoting is for testing that protocol makes progress using heuristic that we are
 // using for the network.
-func tortoiseVoting(tortoise *Tortoise) sim.VotesGenerator {
+func tortoiseVoting(tortoise voter) sim.VotesGenerator {
 	return func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
 		votes, err := tortoise.EncodeVotes(context.Background())
 		if err != nil {
@@ -995,7 +976,7 @@ func tortoiseVoting(tortoise *Tortoise) sim.VotesGenerator {
 	}
 }
 
-func tortoiseVotingWithCurrent(tortoise *Tortoise) sim.VotesGenerator {
+func tortoiseVotingWithCurrent(tortoise voter) sim.VotesGenerator {
 	return func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
 		current := types.GetEffectiveGenesis().Add(1)
 		if len(layers) > 0 {
@@ -1388,11 +1369,11 @@ func TestComputeLocalOpinion(t *testing.T) {
 				tortoise.TallyVotes(ctx, lid)
 			}
 
-			err := tortoise.trtl.loadBlocksData(tc.lid)
-			require.NoError(t, err)
-
 			blks, err := blocks.Layer(s.GetState(0).DB, tc.lid)
 			require.NoError(t, err)
+			for _, block := range blks {
+				tortoise.OnBlock(block.ToVote())
+			}
 			for _, block := range blks {
 				header := block.ToVote()
 				vote, _ := getLocalVote(
@@ -1513,24 +1494,22 @@ func TestComputeBallotWeight(t *testing.T) {
 				atxids []types.ATXID
 			)
 
-			cdb := newCachedDB(t, logtest.New(t))
 			cfg := DefaultConfig()
 			cfg.LayerSize = tc.layerSize
-			trtl, err := New(cdb, nil, WithLogger(logtest.New(t)), WithConfig(cfg))
+			trtl, err := New(WithLogger(logtest.New(t)), WithConfig(cfg))
 			require.NoError(t, err)
 			lid := types.LayerID(111)
 			for _, weight := range tc.atxs {
-				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-					NumUnits: uint32(weight),
-				}}
-				atx.PublishEpoch = lid.GetEpoch() - 1
 				atxID := types.RandomATXID()
-				atx.SetID(atxID)
-				atx.SetEffectiveNumUnits(atx.NumUnits)
-				atx.SetReceived(time.Now())
-				vAtx, err := atx.Verify(0, 1)
-				require.NoError(t, err)
-				require.NoError(t, atxs.Add(cdb, vAtx))
+				header := &types.ActivationTxHeader{
+					NumUnits:          uint32(weight),
+					ID:                atxID,
+					EffectiveNumUnits: uint32(weight),
+				}
+				header.PublishEpoch = lid.GetEpoch() - 1
+				header.BaseTickHeight = 0
+				header.TickCount = 1
+				trtl.OnAtx(header)
 				atxids = append(atxids, atxID)
 			}
 
@@ -1636,8 +1615,8 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 		mergedBlocks, err := blocks.Layer(s1.GetState(0).DB, lid)
 		require.NoError(t, err)
 		for _, block := range mergedBlocks {
-			tortoise1.OnBlock(block)
-			tortoise2.OnBlock(block)
+			tortoise1.OnBlock(block.ToVote())
+			tortoise2.OnBlock(block.ToVote())
 		}
 		mergedBallots, err := ballots.Layer(s1.GetState(0).DB, lid)
 		require.NoError(t, err)
@@ -1858,7 +1837,7 @@ func TestLateBlock(t *testing.T) {
 	require.True(t, len(block.TxIDs) > 2)
 	block.TxIDs = block.TxIDs[:2]
 	block.Initialize()
-	tortoise.OnBlock(&block)
+	tortoise.OnBlock(block.ToVote())
 	require.NoError(t, blocks.Add(s.GetState(0).DB, &block))
 
 	for _, last = range sim.GenLayers(s,
@@ -2631,14 +2610,13 @@ func TestNonTerminatedLayers(t *testing.T) {
 func TestEncodeVotes(t *testing.T) {
 	ctx := context.Background()
 	t.Run("support", func(t *testing.T) {
-		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-		tortoise := defaultAlgorithm(t, cdb)
+		tortoise := defaultAlgorithm(t)
 
 		block := types.Block{}
 		block.LayerIndex = types.GetEffectiveGenesis().Add(1)
 		block.Initialize()
 
-		tortoise.OnBlock(&block)
+		tortoise.OnBlock(block.ToVote())
 		tortoise.OnHareOutput(block.LayerIndex, block.ID())
 
 		tortoise.TallyVotes(ctx, block.LayerIndex.Add(1))
@@ -2654,8 +2632,7 @@ func TestEncodeVotes(t *testing.T) {
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
 	t.Run("against", func(t *testing.T) {
-		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-		tortoise := defaultAlgorithm(t, cdb)
+		tortoise := defaultAlgorithm(t)
 
 		tortoise.OnHareOutput(types.GetEffectiveGenesis().Add(1), types.EmptyBlockID)
 		current := types.GetEffectiveGenesis().Add(2)
@@ -2671,8 +2648,7 @@ func TestEncodeVotes(t *testing.T) {
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
 	t.Run("abstain", func(t *testing.T) {
-		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-		tortoise := defaultAlgorithm(t, cdb)
+		tortoise := defaultAlgorithm(t)
 
 		current := types.GetEffectiveGenesis().Add(2)
 		tortoise.TallyVotes(ctx, current)
@@ -2689,11 +2665,10 @@ func TestEncodeVotes(t *testing.T) {
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
 	t.Run("support multiple", func(t *testing.T) {
-		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 		cfg := defaultTestConfig()
 		cfg.Hdist = 1
 		cfg.Zdist = 1
-		tortoise, err := New(cdb, mockedBeacons(t),
+		tortoise, err := New(
 			WithConfig(cfg),
 			WithLogger(logtest.New(t)),
 		)
@@ -2706,12 +2681,11 @@ func TestEncodeVotes(t *testing.T) {
 		}
 		for _, block := range blks {
 			block.Initialize()
-			tortoise.OnBlock(block)
-			require.NoError(t, blocks.Add(cdb, block))
+			tortoise.OnBlock(block.ToVote())
 		}
 
 		current := lid.Add(2)
-		require.NoError(t, layers.SetWeakCoin(cdb, current.Sub(1), true))
+		tortoise.OnWeakCoin(current.Sub(1), true)
 		tortoise.TallyVotes(ctx, current)
 
 		opinion, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(current))
@@ -2732,8 +2706,7 @@ func TestEncodeVotes(t *testing.T) {
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
 	t.Run("rewrite before base", func(t *testing.T) {
-		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-		tortoise, err := New(cdb, mockedBeacons(t),
+		tortoise, err := New(
 			WithConfig(defaultTestConfig()),
 			WithLogger(logtest.New(t)),
 		)
@@ -2742,21 +2715,23 @@ func TestEncodeVotes(t *testing.T) {
 		hare := types.GetEffectiveGenesis().Add(1)
 		block := types.Block{InnerBlock: types.InnerBlock{LayerIndex: hare}}
 		block.Initialize()
-		tortoise.OnBlock(&block)
+		tortoise.OnBlock(block.ToVote())
 		tortoise.OnHareOutput(hare, block.ID())
 
 		lid := hare.Add(1)
 		ballot := types.Ballot{}
 
 		atxid := types.ATXID{1}
-		atx := &types.ActivationTx{}
-		atx.NumUnits = 10
-		atx.SetID(atxid)
-		atx.SetEffectiveNumUnits(atx.NumUnits)
-		atx.SetReceived(time.Now())
-		vatx, err := atx.Verify(1, 1)
-		require.NoError(t, err)
-		require.NoError(t, atxs.Add(cdb, vatx))
+		header := &types.ActivationTxHeader{
+			NumUnits:          10,
+			EffectiveNumUnits: 10,
+			ID:                atxid,
+			BaseTickHeight:    1,
+			TickCount:         1,
+		}
+		header.PublishEpoch = lid.GetEpoch() - 1
+		tortoise.OnAtx(header)
+		tortoise.OnBeacon(lid.GetEpoch(), types.EmptyBeacon)
 
 		ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}}
 		ballot.ActiveSet = []types.ATXID{atxid}
@@ -2860,8 +2835,7 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 }
 
 func TestMissingActiveSet(t *testing.T) {
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-	tortoise := defaultAlgorithm(t, cdb)
+	tortoise := defaultAlgorithm(t)
 	epoch := types.EpochID(3)
 	aset := []types.ATXID{
 		types.ATXID(types.BytesToHash([]byte("first"))),
@@ -2999,10 +2973,7 @@ func TestMultipleTargets(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, votes.Against, 1)
 	require.Equal(t, votes.Against[0], block.Header)
-	tortoise.OnBlock(types.NewExistingBlock(block.Header.ID, types.InnerBlock{
-		LayerIndex: block.Header.LayerID,
-		TickHeight: block.Header.Height,
-	}))
+	tortoise.OnBlock(block.Header)
 	votes, err = tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)
 	require.Empty(t, votes.Against)

@@ -6,7 +6,7 @@ ENV SHELL /bin/bash
 ARG TZ=US/Eastern
 ENV TZ $TZ
 USER root
-RUN set -x \
+RUN set -ex \
    && apt-get update --fix-missing \
    && apt-get install -qy --no-install-recommends \
    ca-certificates \
@@ -15,8 +15,9 @@ RUN set -x \
    procps \
    net-tools \
    file \
-   # -- it allows to start with nvidia-docker runtime --
-   #libnvidia-compute-390 \
+   ocl-icd-libopencl1 clinfo \
+   # required for OpenCL CPU provider
+   # pocl-opencl-icd libpocl2 \
    && apt-get clean \
    && rm -rf /var/lib/apt/lists/* \
    && locale-gen en_US.UTF-8 \
@@ -25,16 +26,13 @@ RUN set -x \
 ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US.UTF-8
 ENV LC_ALL en_US.UTF-8
-ENV NVIDIA_REQUIRE_CUDA "cuda>=9.1 driver>=390"
-ENV NVIDIA_VISIBLE_DEVICES all
-ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,display
-LABEL com.nvidia.volumes.needed="nvidia_driver"
 
 FROM golang:1.19 as builder
 RUN set -ex \
    && apt-get update --fix-missing \
    && apt-get install -qy --no-install-recommends \
-   unzip
+   unzip sudo \
+   ocl-icd-opencl-dev
 
 WORKDIR /src
 
@@ -54,7 +52,7 @@ COPY . .
 RUN --mount=type=cache,id=build,target=/root/.cache/go-build make build
 RUN --mount=type=cache,id=build,target=/root/.cache/go-build make gen-p2p-identity
 
-#In this last stage, we start from a fresh Alpine image, to reduce the image size and not ship the Go compiler in our production artifacts.
+# In this last stage, we start from a fresh Alpine image, to reduce the image size and not ship the Go compiler in our production artifacts.
 FROM linux AS spacemesh
 
 # Finally we copy the statically compiled Go binary.

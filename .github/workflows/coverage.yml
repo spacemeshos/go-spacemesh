@@ -24,6 +24,8 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: ${{ env.go-version }}
+      - name: Add OpenCL support
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: setup env
         run: make install
       - name: test coverage
