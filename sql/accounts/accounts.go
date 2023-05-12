@@ -91,7 +91,7 @@ func All(db sql.Executor) ([]*types.Account, error) {
 
 func Snapshot(db sql.Executor, layer types.LayerID) ([]*types.Account, error) {
 	var rst []*types.Account
-	_, err := db.Exec(`
+	if rows, err := db.Exec(`
 			select address, balance, next_nonce, max(layer_updated), template, state from accounts 
 			where layer_updated <= ?1
 			group by address order by address asc;`,
@@ -113,9 +113,10 @@ func Snapshot(db sql.Executor, layer types.LayerID) ([]*types.Account, error) {
 			}
 			rst = append(rst, &account)
 			return true
-		})
-	if err != nil {
+		}); err != nil {
 		return nil, fmt.Errorf("failed to load all accounts %w", err)
+	} else if rows == 0 {
+		return nil, sql.ErrNotFound
 	}
 	return rst, nil
 }
@@ -134,7 +135,7 @@ func Update(db sql.Executor, to *types.Account) error {
 			stmt.BindNull(6)
 		} else {
 			stmt.BindBytes(5, to.TemplateAddress[:])
-			stmt.BindBytes(6, to.State)
+			stmt.BindBytes(6, to.State[:])
 		}
 	}, nil)
 	if err != nil {

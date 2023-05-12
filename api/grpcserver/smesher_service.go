@@ -19,13 +19,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type CheckpointRunnerFunc func() CheckpointRunner
-
 // SmesherService exposes endpoints to manage smeshing.
 type SmesherService struct {
 	postSetupProvider postSetupProvider
 	smeshingProvider  activation.SmeshingProvider
-	checkpoint        CheckpointRunnerFunc
 
 	streamInterval time.Duration
 	postOpts       activation.PostSetupOpts
@@ -40,14 +37,12 @@ func (s SmesherService) RegisterService(server *Server) {
 func NewSmesherService(
 	post postSetupProvider,
 	smeshing activation.SmeshingProvider,
-	cp CheckpointRunnerFunc,
 	streamInterval time.Duration,
 	postOpts activation.PostSetupOpts,
 ) *SmesherService {
 	return &SmesherService{
 		postSetupProvider: post,
 		smeshingProvider:  smeshing,
-		checkpoint:        cp,
 		streamInterval:    streamInterval,
 		postOpts:          postOpts,
 	}
@@ -293,18 +288,4 @@ func (s SmesherService) UpdatePoetServers(ctx context.Context, req *pb.UpdatePoe
 		return nil, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", err)
 	}
 	return nil, status.Errorf(codes.Internal, "failed to update poet server")
-}
-
-func (s SmesherService) Checkpoint(ctx context.Context, req *pb.CheckpointRequest) (*pb.CheckpointResponse, error) {
-	data, err := s.checkpoint().Generate(ctx, types.LayerID(req.SnapshotLayer), types.LayerID(req.RestoreLayer))
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, fmt.Sprintf("failed to create checkpoint: %s", err.Error()))
-	}
-	return &pb.CheckpointResponse{
-		Data: data,
-	}, nil
-}
-
-func (s SmesherService) Recover(_ context.Context, _ *pb.RecoverRequest) (*empty.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }

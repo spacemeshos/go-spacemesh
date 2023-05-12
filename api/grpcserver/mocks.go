@@ -708,10 +708,10 @@ func (m *MockCheckpointRunner) EXPECT() *MockCheckpointRunnerMockRecorder {
 }
 
 // Generate mocks base method.
-func (m *MockCheckpointRunner) Generate(arg0 context.Context, arg1, arg2 types.LayerID) ([]byte, error) {
+func (m *MockCheckpointRunner) Generate(arg0 context.Context, arg1, arg2 types.LayerID) (string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Generate", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

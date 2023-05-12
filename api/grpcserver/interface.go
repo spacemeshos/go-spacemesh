@@ -81,5 +81,5 @@ type oracle interface {
 }
 
 type CheckpointRunner interface {
-	Generate(context.Context, types.LayerID, types.LayerID) ([]byte, error)
+	Generate(context.Context, types.LayerID, types.LayerID) (string, error)
 }

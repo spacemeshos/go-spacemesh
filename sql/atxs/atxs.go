@@ -344,7 +344,7 @@ func LatestTwo(db sql.Executor) ([]CheckpointAtx, error) {
 			select row_number() over (partition by pubkey order by epoch desc) RowNum,
 			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase from atxs
 		)
-		where RowNum <=2;`, nil, dec); err != nil {
+		where RowNum <=2 order by pubkey;`, nil, dec); err != nil {
 		return nil, fmt.Errorf("latestTwo: %w", err)
 	} else if rows == 0 {
 		return nil, sql.ErrNotFound

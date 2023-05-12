@@ -883,11 +883,12 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 		return grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal)), nil
 	case grpcserver.Node:
 		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
+	case grpcserver.Admin:
+		return grpcserver.NewAdminService(app.newCheckpointRunnerFunc()), nil
 	case grpcserver.Smesher:
 		return grpcserver.NewSmesherService(
 			app.postSetupMgr,
 			app.atxBuilder,
-			app.newCheckpointRunnerFunc(),
 			app.Config.API.SmesherStreamInterval,
 			app.Config.SMESHING.Opts), nil
 	case grpcserver.Transaction:

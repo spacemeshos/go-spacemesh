@@ -1,15 +1,52 @@
 package checkpoint
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"github.com/spf13/afero"
-
-	"github.com/spacemeshos/go-spacemesh/log"
 )
+
+type RecoveryFile struct {
+	file    afero.File
+	fwriter *bufio.Writer
+	path    string
+}
+
+func NewRecoveryFile(fs afero.Fs, path string) (*RecoveryFile, error) {
+	if err := fs.MkdirAll(filepath.Dir(path), dirPerm); err != nil {
+		return nil, fmt.Errorf("create dst dir %v: %w", filepath.Dir(path), err)
+	}
+	tmpf, err := afero.TempFile(fs, filepath.Dir(path), filepath.Base(path))
+	if err != nil {
+		return nil, fmt.Errorf("%w: create tmp file", err)
+	}
+	return &RecoveryFile{
+		file:    tmpf,
+		fwriter: bufio.NewWriter(tmpf),
+		path:    path,
+	}, nil
+}
+
+func (rf *RecoveryFile) save(fs afero.Fs) error {
+	defer rf.file.Close()
+	if err := rf.fwriter.Flush(); err != nil {
+		return fmt.Errorf("flush tmp file: %w", err)
+	}
+	if err := rf.file.Sync(); err != nil {
+		return fmt.Errorf("%w: sync tmp file", err)
+	}
+	if err := rf.file.Close(); err != nil {
+		return fmt.Errorf("%w: close tmp file", err)
+	}
+	if err := fs.Rename(rf.file.Name(), rf.path); err != nil {
+		return fmt.Errorf("%w: rename tmp file %v to %v", err, rf.file.Name(), rf.path)
+	}
+	return nil
+}
 
 func ValidateSchema(data []byte) error {
 	sch, err := jsonschema.CompileString(schemaFile, Schema)
@@ -23,31 +60,5 @@ func ValidateSchema(data []byte) error {
 	if err = sch.Validate(v); err != nil {
 		return fmt.Errorf("validate checkpoint data: %w", err)
 	}
-	return nil
-}
-
-func savefile(logger log.Log, fs afero.Fs, dst string, data []byte) error {
-	if err := fs.MkdirAll(filepath.Dir(dst), dirPerm); err != nil {
-		return fmt.Errorf("create dst dir %v: %w", filepath.Dir(dst), err)
-	}
-	tmpf, err := afero.TempFile(fs, filepath.Dir(dst), filepath.Base(dst))
-	if err != nil {
-		return fmt.Errorf("%w: create tmp file", err)
-	}
-	logger.With().Info("created tmp file", log.String("file", tmpf.Name()))
-	defer tmpf.Close()
-	if _, err = tmpf.Write(data); err != nil {
-		return fmt.Errorf("%w: write tmp file", err)
-	}
-	if err = tmpf.Sync(); err != nil {
-		return fmt.Errorf("%w: sync tmp file", err)
-	}
-	if err = tmpf.Close(); err != nil {
-		return fmt.Errorf("%w: close tmp file", err)
-	}
-	if err = fs.Rename(tmpf.Name(), dst); err != nil {
-		return fmt.Errorf("%w: rename tmp file %v", err, dst)
-	}
-	logger.With().Info("created file", log.String("file", dst))
 	return nil
 }

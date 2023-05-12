@@ -919,10 +919,7 @@ func TestSmesherService(t *testing.T) {
 	postProvider.EXPECT().Status().Return(&activation.PostSetupStatus{}).AnyTimes()
 	postProvider.EXPECT().Providers().Return(nil, nil).AnyTimes()
 	smeshingAPI := &SmeshingAPIMock{}
-	mockFunc := func() CheckpointRunner {
-		return NewMockCheckpointRunner(ctrl)
-	}
-	svc := NewSmesherService(postProvider, smeshingAPI, mockFunc, 10*time.Millisecond, activation.DefaultPostSetupOpts())
+	svc := NewSmesherService(postProvider, smeshingAPI, 10*time.Millisecond, activation.DefaultPostSetupOpts())
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)

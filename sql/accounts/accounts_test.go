@@ -80,6 +80,10 @@ func TestAll(t *testing.T) {
 
 func TestSnapshot(t *testing.T) {
 	db := sql.InMemory()
+
+	_, err := Snapshot(db, types.LayerID(1))
+	require.ErrorIs(t, err, sql.ErrNotFound)
+
 	addresses := []types.Address{{1, 1}, {2, 2}, {3, 3}}
 	n := []int{10, 7, 20}
 	for i, address := range addresses {
@@ -87,7 +91,6 @@ func TestSnapshot(t *testing.T) {
 			require.NoError(t, Update(db, update))
 		}
 	}
-
 	for lid := types.LayerID(20); lid.After(0); lid-- {
 		got, err := Snapshot(db, lid)
 		require.NoError(t, err)

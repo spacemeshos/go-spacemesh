@@ -1,5 +1,10 @@
 package checkpoint
 
+import (
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
+)
+
 type Checkpoint struct {
 	Version string    `json:"version"`
 	Data    InnerData `json:"data"`
@@ -13,22 +18,31 @@ type InnerData struct {
 }
 
 type ShortAtx struct {
-	ID             string `json:"id"`
+	ID             []byte `json:"id"`
 	Epoch          uint32 `json:"epoch"`
-	CommitmentAtx  string `json:"commitmentAtx"`
+	CommitmentAtx  []byte `json:"commitmentAtx"`
 	VrfNonce       uint64 `json:"vrfNonce"`
 	NumUnits       uint32 `json:"numUnits"`
 	BaseTickHeight uint64 `json:"baseTickHeight"`
 	TickCount      uint64 `json:"tickCount"`
-	PublicKey      string `json:"publicKey"`
+	PublicKey      []byte `json:"publicKey"`
 	Sequence       uint64 `json:"sequence"`
-	Coinbase       string `json:"coinbase"`
+	Coinbase       []byte `json:"coinbase"`
+}
+
+func (vatx ShortAtx) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("atx_id", types.BytesToHash(vatx.ID).ShortString())
+	encoder.AddString("smesher", types.BytesToNodeID(vatx.PublicKey).String())
+	encoder.AddString("commitment_atx_id", types.BytesToHash(vatx.CommitmentAtx).String())
+	encoder.AddUint32("epoch", vatx.Epoch)
+	encoder.AddUint64("sequence_number", vatx.Sequence)
+	return nil
 }
 
 type Account struct {
-	Address  string `json:"address"`
+	Address  []byte `json:"address"`
 	Balance  uint64 `json:"balance"`
 	Nonce    uint64 `json:"nonce"`
-	Template string `json:"template"`
-	State    string `json:"state"`
+	Template []byte `json:"template"`
+	State    []byte `json:"state"`
 }
