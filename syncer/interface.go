@@ -19,6 +19,10 @@ type meshProvider interface {
 	SetZeroBlockLayer(context.Context, types.LayerID)
 }
 
+type activeSetCache interface {
+	GetMissingActiveSet(types.EpochID, []types.ATXID) []types.ATXID
+}
+
 // fetchLogic is the interface between syncer and low-level fetching.
 // it handles all data fetching related logic (for layer or for epoch, from all peers or from any random peer ...etc).
 type fetchLogic interface {

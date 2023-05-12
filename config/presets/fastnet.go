@@ -34,7 +34,6 @@ func fastnet() config.Config {
 	}
 
 	conf.LayerAvgSize = 50
-	conf.SyncRequestTimeout = 1_000
 	conf.LayerDuration = 15 * time.Second
 	conf.LayersPerEpoch = 4
 

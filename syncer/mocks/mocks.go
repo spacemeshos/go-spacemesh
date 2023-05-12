@@ -87,6 +87,43 @@ func (mr *MockmeshProviderMockRecorder) SetZeroBlockLayer(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetZeroBlockLayer", reflect.TypeOf((*MockmeshProvider)(nil).SetZeroBlockLayer), arg0, arg1)
 }
 
+// MockactiveSetCache is a mock of activeSetCache interface.
+type MockactiveSetCache struct {
+	ctrl     *gomock.Controller
+	recorder *MockactiveSetCacheMockRecorder
+}
+
+// MockactiveSetCacheMockRecorder is the mock recorder for MockactiveSetCache.
+type MockactiveSetCacheMockRecorder struct {
+	mock *MockactiveSetCache
+}
+
+// NewMockactiveSetCache creates a new mock instance.
+func NewMockactiveSetCache(ctrl *gomock.Controller) *MockactiveSetCache {
+	mock := &MockactiveSetCache{ctrl: ctrl}
+	mock.recorder = &MockactiveSetCacheMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockactiveSetCache) EXPECT() *MockactiveSetCacheMockRecorder {
+	return m.recorder
+}
+
+// GetMissingActiveSet mocks base method.
+func (m *MockactiveSetCache) GetMissingActiveSet(arg0 types.EpochID, arg1 []types.ATXID) []types.ATXID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMissingActiveSet", arg0, arg1)
+	ret0, _ := ret[0].([]types.ATXID)
+	return ret0
+}
+
+// GetMissingActiveSet indicates an expected call of GetMissingActiveSet.
+func (mr *MockactiveSetCacheMockRecorder) GetMissingActiveSet(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMissingActiveSet", reflect.TypeOf((*MockactiveSetCache)(nil).GetMissingActiveSet), arg0, arg1)
+}
+
 // MockfetchLogic is a mock of fetchLogic interface.
 type MockfetchLogic struct {
 	ctrl     *gomock.Controller

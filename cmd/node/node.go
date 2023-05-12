@@ -622,13 +622,14 @@ func (app *App) initServices(
 
 	patrol := layerpatrol.New()
 	syncerConf := syncer.Config{
-		SyncInterval:     time.Duration(app.Config.SyncInterval) * time.Second,
+		Interval:         app.Config.Sync.Interval,
+		EpochEndFraction: 0.8,
 		HareDelayLayers:  app.Config.Tortoise.Zdist,
 		SyncCertDistance: app.Config.Tortoise.Hdist,
 		MaxHashesInReq:   100,
 		MaxStaleDuration: time.Hour,
 	}
-	newSyncer := syncer.NewSyncer(app.cachedDB, clock, beaconProtocol, msh, fetcher, patrol, app.certifier,
+	newSyncer := syncer.NewSyncer(app.cachedDB, clock, beaconProtocol, msh, trtl, fetcher, patrol, app.certifier,
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.addLogger(SyncLogger, lg)))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
@@ -822,47 +823,11 @@ func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 	})
 }
 
-func (app *App) waitConnectedPeers(ctx context.Context) error {
-	want := uint64(app.Config.P2P.MinPeers)
-	ready := func() bool {
-		return app.host.PeerCount() >= want
-	}
-	timeout := time.Now().Add(10 * time.Minute)
-	wait := 10 * time.Second
-	for {
-		if ready() {
-			app.log.With().Info("peers ready",
-				log.Uint64("count", app.host.PeerCount()),
-				log.Uint64("want", want),
-			)
-			return nil
-		}
-		app.log.With().Warning("peers not ready",
-			log.Uint64("count", app.host.PeerCount()),
-			log.Uint64("want", want),
-		)
-		select {
-		case <-time.After(wait):
-			if time.Now().After(timeout) {
-				return fmt.Errorf("peers not ready. want %d got %d", want, app.host.PeerCount())
-			}
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
-
 func (app *App) startServices(ctx context.Context, appErr chan error) error {
-	app.eg.Go(func() error {
-		if err := app.waitConnectedPeers(ctx); err != nil {
-			return fmt.Errorf("wait for peers: %w", err)
-		}
-		if err := app.fetcher.Start(); err != nil {
-			return fmt.Errorf("failed to start fetcher: %w", err)
-		}
-		app.syncer.Start(ctx)
-		return nil
-	})
+	if err := app.fetcher.Start(); err != nil {
+		return fmt.Errorf("failed to start fetcher: %w", err)
+	}
+	app.syncer.Start(ctx)
 	app.beaconProtocol.Start(ctx)
 
 	app.blockGen.Start()
