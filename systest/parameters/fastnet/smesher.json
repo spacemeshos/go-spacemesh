@@ -11,7 +11,7 @@
     "api": {
         "grpc-public-services": [
             "debug", "global", "mesh", "node",
-            "transaction", "activation", "smesher"
+            "transaction", "activation", "admin", "smesher"
         ],
         "grpc-private-services": []
     }

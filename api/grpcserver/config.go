@@ -20,6 +20,7 @@ type Config struct {
 type Service = string
 
 const (
+	Admin       Service = "admin"
 	Debug       Service = "debug"
 	GlobalState Service = "global"
 	Mesh        Service = "mesh"
@@ -34,7 +35,7 @@ func DefaultConfig() Config {
 	return Config{
 		PublicServices:        []Service{Debug, GlobalState, Mesh, Transaction, Node},
 		PublicListener:        "0.0.0.0:9092",
-		PrivateServices:       []Service{Smesher},
+		PrivateServices:       []Service{Admin, Smesher},
 		PrivateListener:       "127.0.0.1:9093",
 		JSONListener:          "",
 		GrpcSendMsgSize:       1024 * 1024 * 10,
