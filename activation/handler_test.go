@@ -31,7 +31,7 @@ import (
 
 const layersPerEpochBig = 1000
 
-func newMerkleProof(t testing.TB, challenge types.Hash32, otherLeafs []types.Hash32) *types.MerkleProof {
+func newMerkleProof(t testing.TB, challenge types.Hash32, otherLeafs []types.Hash32) types.MerkleProof {
 	t.Helper()
 	tree, err := merkle.NewTreeBuilder().
 		WithLeavesToProve(map[uint64]bool{0: true}).
@@ -46,10 +46,9 @@ func newMerkleProof(t testing.TB, challenge types.Hash32, otherLeafs []types.Has
 	for _, n := range nodes {
 		nodesH32 = append(nodesH32, types.BytesToHash(n))
 	}
-	return &types.MerkleProof{
+	return types.MerkleProof{
 		Root:  types.BytesToHash(root),
 		Nodes: nodesH32,
-		Leaf:  challenge,
 	}
 }
 

@@ -109,16 +109,16 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
 	}
+	challengeHash := challenge.Hash()
 
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
 	poetDb.EXPECT().GetProof(gomock.Any()).Return(
-		&types.PoetProof{}, nil,
+		&types.PoetProof{}, &challengeHash, nil,
 	)
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 
 	postProvider := newTestPostManager(t)
 
-	challengeHash := challenge.Hash()
 	postCfg := DefaultPostConfig()
 	nipost := buildNIPost(t, postProvider, postCfg, challenge, poetDb)
 	err := validateNIPost(
@@ -188,6 +188,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
 	}
+	challengeHash := challenge.Hash()
 
 	postProvider := newTestPostManager(t)
 
@@ -195,7 +196,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
 	poetDb.EXPECT().GetProof(gomock.Any()).Return(
-		&types.PoetProof{}, nil,
+		&types.PoetProof{}, &challengeHash, nil,
 	)
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 	mclock := defaultLayerClockMock(t)
@@ -360,7 +361,6 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	req.NoError(err)
 
 	// Verify
-	req.Equal(challenge.Hash(), nipost.Membership.Leaf)
 	ref, _ := proof.Ref()
 	req.EqualValues(ref[:], nipost.PostMetadata.Challenge)
 }
@@ -419,7 +419,6 @@ func TestNIPostBuilder_ManyPoETs_WaitingForProof_DeadlineReached(t *testing.T) {
 	req.NoError(err)
 
 	// Verify
-	req.Equal(challenge.Hash(), nipost.Membership.Leaf)
 	ref, _ := proof.Ref()
 	req.EqualValues(ref[:], nipost.PostMetadata.Challenge)
 }
@@ -479,7 +478,6 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	req.NoError(err)
 
 	// Verify
-	req.Equal(challenge.Hash(), nipost.Membership.Leaf)
 	ref, _ := proofBetter.Ref()
 	req.EqualValues(ref[:], nipost.PostMetadata.Challenge)
 }
@@ -728,7 +726,6 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	req.NoError(err)
 
 	// Verify
-	req.Equal(challenge.Hash(), nipost.Membership.Leaf)
 	ref, _ := proof.Ref()
 	req.EqualValues(ref[:], nipost.PostMetadata.Challenge)
 }
@@ -738,34 +735,34 @@ func TestConstructingMerkleProof(t *testing.T) {
 	challengeHash := challenge.Hash()
 
 	t.Run("members empty", func(t *testing.T) {
-		_, err := constructMerkleProof(&challengeHash, []types.Member{})
+		_, err := constructMerkleProof(challengeHash, []types.Member{})
 		require.Error(t, err)
 	})
 	t.Run("not a member", func(t *testing.T) {
-		_, err := constructMerkleProof(&challengeHash, []types.Member{{}, {}})
+		_, err := constructMerkleProof(challengeHash, []types.Member{{}, {}})
 		require.Error(t, err)
 	})
 
 	t.Run("is odd member", func(t *testing.T) {
 		otherChallenge := types.NIPostChallenge{Sequence: 1}
-		proof, err := constructMerkleProof(&challengeHash, []types.Member{
+		proof, err := constructMerkleProof(challengeHash, []types.Member{
 			types.Member(challengeHash),
 			types.Member(otherChallenge.Hash()),
 		})
 		require.NoError(t, err)
 
-		err = validateMerkleProof(proof)
+		err = validateMerkleProof(challengeHash[:], proof)
 		require.NoError(t, err)
 	})
 	t.Run("is even member", func(t *testing.T) {
 		otherChallenge := types.NIPostChallenge{Sequence: 1}
-		proof, err := constructMerkleProof(&challengeHash, []types.Member{
+		proof, err := constructMerkleProof(challengeHash, []types.Member{
 			types.Member(otherChallenge.Hash()),
 			types.Member(challengeHash),
 		})
 		require.NoError(t, err)
 
-		err = validateMerkleProof(proof)
+		err = validateMerkleProof(challengeHash[:], proof)
 		require.NoError(t, err)
 	})
 }

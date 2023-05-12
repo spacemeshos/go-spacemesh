@@ -69,7 +69,7 @@ type NIPostBuilder struct {
 }
 
 type poetDbAPI interface {
-	GetProof(types.PoetProofRef) (*types.PoetProof, error)
+	GetProof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
 
@@ -190,7 +190,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		}
 		getProofsCtx, cancel := context.WithDeadline(ctx, poetProofDeadline)
 		defer cancel()
-		poetProofRef, membership, err := nb.getBestProof(getProofsCtx, &nb.state.Challenge)
+		poetProofRef, membership, err := nb.getBestProof(getProofsCtx, nb.state.Challenge)
 		if err != nil {
 			return nil, 0, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
@@ -198,7 +198,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 			return nil, 0, &PoetSvcUnstableError{source: ErrPoetProofNotReceived}
 		}
 		nb.state.PoetProofRef = poetProofRef
-		nipost.Membership = membership
+		nipost.Membership = *membership
 		nb.persist()
 	}
 
@@ -305,7 +305,7 @@ func (nb *NIPostBuilder) getPoetClient(ctx context.Context, id types.PoetService
 }
 
 // membersContainChallenge verifies that the challenge is included in proof's members.
-func membersContainChallenge(members []types.Member, challenge *types.Hash32) (uint64, error) {
+func membersContainChallenge(members []types.Member, challenge types.Hash32) (uint64, error) {
 	for id, member := range members {
 		if bytes.Equal(member[:], challenge.Bytes()) {
 			return uint64(id), nil
@@ -314,7 +314,7 @@ func membersContainChallenge(members []types.Member, challenge *types.Hash32) (u
 	return 0, fmt.Errorf("challenge is not a member of the proof")
 }
 
-func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash32) (types.PoetProofRef, *types.MerkleProof, error) {
+func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge types.Hash32) (types.PoetProofRef, *types.MerkleProof, error) {
 	type poetProof struct {
 		poet       *types.PoetProofMessage
 		membership *types.MerkleProof
@@ -395,7 +395,7 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 	return types.PoetProofRef{}, nil, ErrPoetProofNotReceived
 }
 
-func constructMerkleProof(challenge *types.Hash32, members []types.Member) (*types.MerkleProof, error) {
+func constructMerkleProof(challenge types.Hash32, members []types.Member) (*types.MerkleProof, error) {
 	// We are interested only in proofs that we are members of
 	id, err := membersContainChallenge(members, challenge)
 	if err != nil {
@@ -421,7 +421,6 @@ func constructMerkleProof(challenge *types.Hash32, members []types.Member) (*typ
 	}
 	return &types.MerkleProof{
 		Root:      types.BytesToHash(root),
-		Leaf:      *challenge,
 		LeafIndex: id,
 		Nodes:     nodesH32,
 	}, nil

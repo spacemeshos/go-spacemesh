@@ -93,7 +93,7 @@ type PoetProofMessage struct {
 	// The input to Poet's POSW.
 	// It's the root of a merkle tree built from all of the members
 	// that are included in the proof.
-	Statement []byte `scale:"max=32"`
+	Statement Hash32
 	Signature EdSignature
 }
 

@@ -120,12 +120,13 @@ func (m *MockpoetDbAPI) EXPECT() *MockpoetDbAPIMockRecorder {
 }
 
 // GetProof mocks base method.
-func (m *MockpoetDbAPI) GetProof(arg0 types.PoetProofRef) (*types.PoetProof, error) {
+func (m *MockpoetDbAPI) GetProof(arg0 types.PoetProofRef) (*types.PoetProof, *types.Hash32, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetProof", arg0)
 	ret0, _ := ret[0].(*types.PoetProof)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].(*types.Hash32)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // GetProof indicates an expected call of GetProof.

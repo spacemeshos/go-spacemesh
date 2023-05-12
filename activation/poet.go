@@ -176,7 +176,7 @@ func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.Poet
 		},
 		PoetServiceID: resBody.Pubkey,
 		RoundID:       roundID,
-		Statement:     statement,
+		Statement:     types.BytesToHash(statement),
 	}
 	if c.poetServiceID.ServiceID == nil {
 		c.poetServiceID.ServiceID = proof.PoetServiceID

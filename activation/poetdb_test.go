@@ -58,7 +58,7 @@ func getPoetProof(t *testing.T) types.PoetProofMessage {
 			},
 			PoetServiceID: []byte("poet_id_123456"),
 			RoundID:       "1337",
-			Statement:     challenge,
+			Statement:     types.BytesToHash(challenge),
 		}
 	})
 	return *proof
@@ -69,7 +69,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	msg := getPoetProof(t)
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 
-	r.NoError(poetDb.Validate(msg.Statement, msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature))
+	r.NoError(poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature))
 	ref, err := msg.Ref()
 	r.NoError(err)
 
@@ -90,7 +90,7 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 	msg.PoetProof.Root = []byte("some other root")
 
-	err := poetDb.Validate(msg.Statement, msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
+	err := poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
 	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid", msg.PoetServiceID[:5]))
 	var pErr types.ProcessingError
 	r.False(errors.As(err, &pErr))
@@ -100,9 +100,9 @@ func TestPoetDbInvalidPoetStatement(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
-	msg.Statement = []byte("some other statement")
+	msg.Statement = types.CalcHash32([]byte("some other statement"))
 
-	err := poetDb.Validate(msg.Statement, msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
+	err := poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
 	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid", msg.PoetServiceID[:5]))
 	var pErr types.ProcessingError
 	r.False(errors.As(err, &pErr))

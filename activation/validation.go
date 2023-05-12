@@ -13,6 +13,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
 type ErrAtxNotFound struct {
@@ -59,13 +60,8 @@ func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nip
 		return 0, err
 	}
 
-	poetChallenge := nipost.Membership.Leaf
-	if !bytes.Equal(poetChallenge[:], expectedChallenge[:]) {
-		return 0, fmt.Errorf("invalid `Challenge` in membership merkle proof leaf; expected: %x, given: %x", expectedChallenge, poetChallenge)
-	}
-
-	if err := validateMerkleProof(nipost.Membership); err != nil {
-		return 0, err
+	if err := validateMerkleProof(expectedChallenge[:], &nipost.Membership); err != nil {
+		return 0, fmt.Errorf("invalid membership proof %w", err)
 	}
 
 	if err := v.Post(nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
@@ -74,22 +70,25 @@ func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nip
 
 	var ref types.PoetProofRef
 	copy(ref[:], nipost.PostMetadata.Challenge)
-	proof, err := v.poetDb.GetProof(ref)
+	proof, statement, err := v.poetDb.GetProof(ref)
 	if err != nil {
 		return 0, fmt.Errorf("poet proof is not available %x: %w", nipost.PostMetadata.Challenge, err)
+	}
+	if !bytes.Equal(statement[:], nipost.Membership.Root[:]) {
+		return 0, fmt.Errorf("invalid membership proof - root doesn't match poet proof statement; expected: %x, given: %x", statement[:], nipost.Membership.Root[:])
 	}
 
 	return proof.LeafCount, nil
 }
 
-func validateMerkleProof(proof *types.MerkleProof) error {
+func validateMerkleProof(leaf []byte, proof *types.MerkleProof) error {
 	nodes := make([][]byte, 0, len(proof.Nodes))
 	for _, n := range proof.Nodes {
 		nodes = append(nodes, n.Bytes())
 	}
 	ok, err := merkle.ValidatePartialTree(
 		[]uint64{proof.LeafIndex},
-		[][]byte{proof.Leaf.Bytes()},
+		[][]byte{leaf},
 		nodes, proof.Root.Bytes(),
 		merkle.GetSha256Parent,
 	)
@@ -103,7 +102,7 @@ func validateMerkleProof(proof *types.MerkleProof) error {
 		}
 		return fmt.Errorf(
 			"invalid merkle proof, calculated root does not match the proof root, leaf: %v, nodes: %v, root: %v",
-			proof.Leaf.Hex(),
+			util.Encode(leaf),
 			hexNodes,
 			proof.Root.Hex(),
 		)

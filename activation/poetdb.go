@@ -118,16 +118,16 @@ func (db *PoetDb) GetProofMessage(proofRef types.PoetProofRef) ([]byte, error) {
 }
 
 // GetProof returns full proof.
-func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, error) {
+func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, *types.Hash32, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
-		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef, err)
+		return nil, nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef, err)
 	}
 	var proofMessage types.PoetProofMessage
 	if err := codec.Decode(proofMessageBytes, &proofMessage); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef, err)
+		return nil, nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef, err)
 	}
-	return &proofMessage.PoetProof, nil
+	return &proofMessage.PoetProof, &proofMessage.Statement, nil
 }
 
 func calcRoot(leaves []types.Member) ([]byte, error) {

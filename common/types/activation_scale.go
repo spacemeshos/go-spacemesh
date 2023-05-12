@@ -317,13 +317,6 @@ func (t *MerkleProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.Leaf[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := scale.EncodeCompact64(enc, uint64(t.LeafIndex))
 		if err != nil {
 			return total, err
@@ -350,13 +343,6 @@ func (t *MerkleProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Nodes = field
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.Leaf[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		field, n, err := scale.DecodeCompact64(dec)
 		if err != nil {
 			return total, err
@@ -369,7 +355,7 @@ func (t *MerkleProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *NIPost) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeOption(enc, t.Membership)
+		n, err := t.Membership.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -394,12 +380,11 @@ func (t *NIPost) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *NIPost) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeOption[MerkleProof](dec)
+		n, err := t.Membership.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Membership = field
 	}
 	{
 		field, n, err := scale.DecodeOption[Post](dec)

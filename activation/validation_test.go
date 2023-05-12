@@ -577,7 +577,7 @@ func TestValidator_Validate(t *testing.T) {
 	}
 	challengeHash := challenge.Hash()
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
-	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().Return(&types.PoetProof{}, nil)
+	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().Return(&types.PoetProof{}, &challengeHash, nil)
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 
 	postProvider := newTestPostManager(t)
@@ -588,7 +588,7 @@ func TestValidator_Validate(t *testing.T) {
 	r.NoError(err)
 
 	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, types.BytesToHash([]byte("lerner")), poetDb, postProvider.cfg, postProvider.opts.NumUnits, opts...)
-	r.Contains(err.Error(), "invalid `Challenge`")
+	r.Contains(err.Error(), "invalid membership proof")
 
 	newNIPost := *nipost
 	newNIPost.Post = &types.Post{}
@@ -618,7 +618,8 @@ func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *typ
 }
 
 func TestValidateMerkleProof(t *testing.T) {
-	proof := newMerkleProof(t, types.BytesToHash([]byte("challenge")), []types.Hash32{
+	challenge := types.CalcHash32([]byte("challenge"))
+	proof := newMerkleProof(t, challenge, []types.Hash32{
 		types.BytesToHash([]byte("leaf2")),
 		types.BytesToHash([]byte("leaf3")),
 		types.BytesToHash([]byte("leaf4")),
@@ -627,16 +628,16 @@ func TestValidateMerkleProof(t *testing.T) {
 	t.Run("valid proof", func(t *testing.T) {
 		t.Parallel()
 
-		err := validateMerkleProof(proof)
+		err := validateMerkleProof(challenge[:], &proof)
 		require.NoError(t, err)
 	})
 	t.Run("invalid proof", func(t *testing.T) {
 		t.Parallel()
 
-		invalidProof := *proof
+		invalidProof := proof
 		invalidProof.Root = types.BytesToHash([]byte("invalid root"))
 
-		err := validateMerkleProof(&invalidProof)
+		err := validateMerkleProof(challenge[:], &invalidProof)
 		require.Error(t, err)
 	})
 }

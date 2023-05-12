@@ -244,10 +244,9 @@ func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPo
 		nodesH32 = append(nodesH32, types.BytesToHash(n))
 	}
 	return &types.NIPost{
-		Membership: &types.MerkleProof{
+		Membership: types.MerkleProof{
 			Root:  types.BytesToHash(root),
 			Nodes: nodesH32,
-			Leaf:  *challenge,
 		},
 		Post: &types.Post{
 			Nonce:   0,
