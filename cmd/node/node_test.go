@@ -425,7 +425,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	require.NoError(t, err)
 	mesh, err := mocknet.WithNPeers(1)
 	require.NoError(t, err)
-	cfg := getTestDefaultConfig()
+	cfg := getTestDefaultConfig(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
@@ -672,16 +672,18 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 func TestInitialize_BadTortoiseParams(t *testing.T) {
 	conf := config.DefaultConfig()
 	conf.DataDirParent = t.TempDir()
+	conf.FileLock = filepath.Join(t.TempDir(), "LOCK")
 	app := New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
 
 	conf = config.DefaultTestConfig()
 	conf.DataDirParent = t.TempDir()
+	conf.FileLock = filepath.Join(t.TempDir(), "LOCK")
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
 	app.Cleanup(context.Background())
 
-	tconf := getTestDefaultConfig()
+	tconf := getTestDefaultConfig(t)
 	tconf.DataDirParent = t.TempDir()
 	app = New(WithLog(logtest.New(t)), WithConfig(tconf))
 	require.NoError(t, app.Initialize())
@@ -826,7 +828,7 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 func TestGenesisConfig(t *testing.T) {
 	t.Run("config is written to a file", func(t *testing.T) {
 		app := New()
-		app.Config = getTestDefaultConfig()
+		app.Config = getTestDefaultConfig(t)
 		app.Config.DataDirParent = t.TempDir()
 
 		require.NoError(t, app.Initialize())
@@ -836,7 +838,7 @@ func TestGenesisConfig(t *testing.T) {
 	})
 	t.Run("no error if no diff", func(t *testing.T) {
 		app := New()
-		app.Config = getTestDefaultConfig()
+		app.Config = getTestDefaultConfig(t)
 		app.Config.DataDirParent = t.TempDir()
 
 		require.NoError(t, app.Initialize())
@@ -845,7 +847,7 @@ func TestGenesisConfig(t *testing.T) {
 	})
 	t.Run("fatal error on a diff", func(t *testing.T) {
 		app := New()
-		app.Config = getTestDefaultConfig()
+		app.Config = getTestDefaultConfig(t)
 		app.Config.DataDirParent = t.TempDir()
 
 		require.NoError(t, app.Initialize())
@@ -856,7 +858,7 @@ func TestGenesisConfig(t *testing.T) {
 	})
 	t.Run("not valid time", func(t *testing.T) {
 		app := New()
-		app.Config = getTestDefaultConfig()
+		app.Config = getTestDefaultConfig(t)
 		app.Config.DataDirParent = t.TempDir()
 		app.Config.Genesis.GenesisTime = time.Now().Format(time.RFC1123)
 
@@ -864,7 +866,7 @@ func TestGenesisConfig(t *testing.T) {
 	})
 	t.Run("long extra data", func(t *testing.T) {
 		app := New()
-		app.Config = getTestDefaultConfig()
+		app.Config = getTestDefaultConfig(t)
 		app.Config.DataDirParent = t.TempDir()
 		app.Config.Genesis.ExtraData = string(make([]byte, 256))
 
@@ -874,19 +876,18 @@ func TestGenesisConfig(t *testing.T) {
 
 func TestFlock(t *testing.T) {
 	app := New()
-	app.Config = getTestDefaultConfig()
-	app.Config.DataDirParent = t.TempDir()
+	app.Config = getTestDefaultConfig(t)
 
 	require.NoError(t, app.Initialize())
 	app1 := *app
 	require.ErrorContains(t, app1.Initialize(), "only one spacemesh instance")
 	app.Cleanup(context.Background())
 	require.NoError(t, app.Initialize())
-	require.NoError(t, os.Remove(filepath.Join(app.Config.DataDir(), lockFile)))
+	require.NoError(t, os.Remove(filepath.Join(app.Config.FileLock)))
 	require.NoError(t, app.Initialize())
 }
 
-func getTestDefaultConfig() *config.Config {
+func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg, err := LoadConfigFromFile()
 	if err != nil {
 		log.Error("cannot load config from file")
@@ -904,7 +905,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.SMESHING = config.DefaultSmeshingConfig()
 	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
-	cfg.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
+	cfg.SMESHING.Opts.ProviderID = int(initialization.CPUProviderID())
 
 	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
 	cfg.HARE.RoundDuration = 2
@@ -921,6 +922,9 @@ func getTestDefaultConfig() *config.Config {
 	cfg.HareEligibility.ConfidenceParam = 1
 	cfg.SyncRequestTimeout = 500
 	cfg.SyncInterval = 2
+	tmp := tb.TempDir()
+	cfg.DataDirParent = tmp
+	cfg.FileLock = filepath.Join(tmp, "LOCK")
 
 	cfg.FETCH.RequestTimeout = 10
 	cfg.FETCH.MaxRetriesForPeer = 5

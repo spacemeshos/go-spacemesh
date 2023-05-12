@@ -361,7 +361,7 @@ func (m *MockpostSetupProvider) EXPECT() *MockpostSetupProviderMockRecorder {
 }
 
 // Benchmark mocks base method.
-func (m *MockpostSetupProvider) Benchmark(p activation.PostSetupComputeProvider) (int, error) {
+func (m *MockpostSetupProvider) Benchmark(p activation.PostSetupProvider) (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Benchmark", p)
 	ret0, _ := ret[0].(int)
@@ -373,20 +373,6 @@ func (m *MockpostSetupProvider) Benchmark(p activation.PostSetupComputeProvider)
 func (mr *MockpostSetupProviderMockRecorder) Benchmark(p interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Benchmark", reflect.TypeOf((*MockpostSetupProvider)(nil).Benchmark), p)
-}
-
-// ComputeProviders mocks base method.
-func (m *MockpostSetupProvider) ComputeProviders() []activation.PostSetupComputeProvider {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ComputeProviders")
-	ret0, _ := ret[0].([]activation.PostSetupComputeProvider)
-	return ret0
-}
-
-// ComputeProviders indicates an expected call of ComputeProviders.
-func (mr *MockpostSetupProviderMockRecorder) ComputeProviders() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ComputeProviders", reflect.TypeOf((*MockpostSetupProvider)(nil).ComputeProviders))
 }
 
 // Config mocks base method.
@@ -401,6 +387,21 @@ func (m *MockpostSetupProvider) Config() activation.PostConfig {
 func (mr *MockpostSetupProviderMockRecorder) Config() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Config", reflect.TypeOf((*MockpostSetupProvider)(nil).Config))
+}
+
+// Providers mocks base method.
+func (m *MockpostSetupProvider) Providers() ([]activation.PostSetupProvider, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Providers")
+	ret0, _ := ret[0].([]activation.PostSetupProvider)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Providers indicates an expected call of Providers.
+func (mr *MockpostSetupProviderMockRecorder) Providers() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Providers", reflect.TypeOf((*MockpostSetupProvider)(nil).Providers))
 }
 
 // Status mocks base method.

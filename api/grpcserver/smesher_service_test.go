@@ -59,26 +59,66 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	addr, err := types.StringToAddress("stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5")
 	require.NoError(t, err)
 	smeshingProvider.EXPECT().StartSmeshing(addr, activation.PostSetupOpts{
-		DataDir:           "data-dir",
-		NumUnits:          1,
-		MaxFileSize:       1024,
-		ComputeProviderID: 7,
-		Throttle:          true,
-		Scrypt:            config.DefaultLabelParams(),
-		ComputeBatchSize:  config.DefaultComputeBatchSize,
+		DataDir:          "data-dir",
+		NumUnits:         1,
+		MaxFileSize:      1024,
+		ProviderID:       7,
+		Throttle:         true,
+		Scrypt:           config.DefaultLabelParams(),
+		ComputeBatchSize: config.DefaultComputeBatchSize,
 	}).Return(nil)
 
 	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
 		Coinbase: &pb.AccountId{Address: "stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5"},
 		Opts: &pb.PostSetupOpts{
-			DataDir:           "data-dir",
-			NumUnits:          1,
-			MaxFileSize:       1024,
-			ComputeProviderId: 7,
-			Throttle:          true,
+			DataDir:     "data-dir",
+			NumUnits:    1,
+			MaxFileSize: 1024,
+			ProviderId:  7,
+			Throttle:    true,
 		},
 	})
 	require.NoError(t, err)
+}
+
+func TestSmesherService_PostSetupProviders(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	postSetupProvider := activation.NewMockpostSetupProvider(ctrl)
+	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
+	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts())
+
+	providers := []activation.PostSetupProvider{
+		{
+			ID:    0,
+			Model: "cpu",
+		},
+		{
+			ID:    1,
+			Model: "gpu",
+		},
+	}
+	postSetupProvider.EXPECT().Providers().Return(providers, nil).AnyTimes()
+
+	resp, err := svc.PostSetupProviders(context.Background(), &pb.PostSetupProvidersRequest{
+		Benchmark: false,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Providers, 2)
+	require.EqualValues(t, providers[0].ID, resp.Providers[0].Id)
+	require.EqualValues(t, providers[1].ID, resp.Providers[1].Id)
+
+	postSetupProvider.EXPECT().Benchmark(providers[0]).Return(1_000, nil)
+	postSetupProvider.EXPECT().Benchmark(providers[1]).Return(100_000, nil)
+
+	resp, err = svc.PostSetupProviders(context.Background(), &pb.PostSetupProvidersRequest{
+		Benchmark: true,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Providers, 2)
+	require.EqualValues(t, providers[0].ID, resp.Providers[0].Id)
+	require.Equal(t, uint64(1_000), resp.Providers[0].Performance)
+	require.EqualValues(t, providers[1].ID, resp.Providers[1].Id)
+	require.Equal(t, uint64(100_000), resp.Providers[1].Performance)
 }
 
 func TestSmesherService_Checkpoint(t *testing.T) {

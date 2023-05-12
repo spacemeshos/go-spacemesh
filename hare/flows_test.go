@@ -126,6 +126,7 @@ func (m *p2pManipulator) Publish(ctx context.Context, protocol string, payload [
 type hareWithMocks struct {
 	*Hare
 	mockRoracle *mocks.MockRolacle
+	mockCoin    *mocks.MockweakCoin
 }
 
 func createTestHare(tb testing.TB, msh mesh, tcfg config.Config, clock *mockClock, p2p pubsub.PublishSubsciber, name string) *hareWithMocks {
@@ -147,7 +148,7 @@ func createTestHare(tb testing.TB, msh mesh, tcfg config.Config, clock *mockCloc
 	mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 
 	mockRoracle := mocks.NewMockRolacle(ctrl)
-
+	mockCoin := mocks.NewMockweakCoin(ctrl)
 	hare := New(
 		nil,
 		tcfg,
@@ -162,6 +163,7 @@ func createTestHare(tb testing.TB, msh mesh, tcfg config.Config, clock *mockCloc
 		patrol,
 		mockStateQ,
 		clock,
+		mockCoin,
 		logtest.New(tb).WithName(name+"_"+signer.PublicKey().ShortString()),
 		withMesh(msh),
 	)
@@ -170,6 +172,7 @@ func createTestHare(tb testing.TB, msh mesh, tcfg config.Config, clock *mockCloc
 	return &hareWithMocks{
 		Hare:        hare,
 		mockRoracle: mockRoracle,
+		mockCoin:    mockCoin,
 	}
 }
 
@@ -269,7 +272,6 @@ func Test_multipleCPs(t *testing.T) {
 		mockMesh.EXPECT().GetEpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
 		mockMesh.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
 		mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
-		mockMesh.EXPECT().SetWeakCoin(gomock.Any(), gomock.Any()).AnyTimes()
 		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(finalLyr); lid = lid.Add(1) {
 			mockMesh.EXPECT().Proposals(lid).Return(pList[lid], nil)
 			for _, p := range pList[lid] {
@@ -294,6 +296,7 @@ func Test_multipleCPs(t *testing.T) {
 		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(types.EmptyVrfSignature, nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
 		h.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+		h.mockCoin.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 		outputsWaitGroup.Add(1)
 		go func(idx int) {
 			defer outputsWaitGroup.Done()
@@ -391,7 +394,6 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		mockMesh.EXPECT().GetEpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
 		mockMesh.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(0), nil).AnyTimes()
 		mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
-		mockMesh.EXPECT().SetWeakCoin(gomock.Any(), gomock.Any()).AnyTimes()
 		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(finalLyr); lid = lid.Add(1) {
 			mockMesh.EXPECT().Proposals(lid).Return(pList[lid], nil)
 			for _, p := range pList[lid] {
@@ -417,6 +419,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(types.EmptyVrfSignature, nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
 		h.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+		h.mockCoin.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 		outputsWaitGroup.Add(1)
 		go func(idx int) {
 			defer outputsWaitGroup.Done()

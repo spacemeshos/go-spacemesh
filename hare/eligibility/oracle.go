@@ -419,7 +419,7 @@ func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]ty
 	if err != nil {
 		return nil, err
 	}
-	activeSet := make([]types.ATXID, 0, 10_000)
+	activeSet := make([]types.ATXID, 0, len(aset.set))
 	for nodeID := range aset.set {
 		hdr, err := o.cdb.GetEpochAtx(targetEpoch-1, nodeID)
 		if err != nil {
@@ -441,7 +441,7 @@ func (o *Oracle) computeActiveSet(logger log.Log, targetEpoch types.EpochID) ([]
 		return nil, err
 	}
 	if bid == types.EmptyBlockID {
-		return nil, nil
+		return o.activeSetFromRefBallots(targetEpoch)
 	}
 	return o.activeSetFromBlock(bid)
 }
@@ -474,6 +474,33 @@ func (o *Oracle) activeSetFromBlock(bid types.BlockID) ([]types.ATXID, error) {
 			activeMap[id] = struct{}{}
 		}
 	}
+	return maps.Keys(activeMap), nil
+}
+
+func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, error) {
+	beacon, err := o.beacons.GetBeacon(epoch)
+	if err != nil {
+		return nil, fmt.Errorf("get beacon: %w", err)
+	}
+	ballotsrst, err := ballots.AllFirstInEpoch(o.cdb, epoch)
+	if err != nil {
+		return nil, fmt.Errorf("first in epoch %d: %w", epoch, err)
+	}
+	activeMap := make(map[types.ATXID]struct{})
+	for _, ballot := range ballotsrst {
+		if ballot.EpochData == nil {
+			o.Log.With().Error("invalid data. first ballot doesn't have epoch data", log.Inline(ballot))
+			continue
+		}
+		if ballot.EpochData.Beacon != beacon {
+			o.Log.With().Debug("beacon mismatch", log.Stringer("local", beacon), log.Object("ballot", ballot))
+			continue
+		}
+		for _, id := range ballot.ActiveSet {
+			activeMap[id] = struct{}{}
+		}
+	}
+	o.Log.With().Warning("using tortoise active set", log.Uint32("epoch", epoch.Uint32()), log.Stringer("beacon", beacon))
 	return maps.Keys(activeMap), nil
 }
 

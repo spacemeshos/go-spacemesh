@@ -917,7 +917,7 @@ func TestSmesherService(t *testing.T) {
 	postProvider := NewMockpostSetupProvider(ctrl)
 	postProvider.EXPECT().Config().Return(activation.DefaultPostConfig()).AnyTimes()
 	postProvider.EXPECT().Status().Return(&activation.PostSetupStatus{}).AnyTimes()
-	postProvider.EXPECT().ComputeProviders().Return(nil).AnyTimes()
+	postProvider.EXPECT().Providers().Return(nil, nil).AnyTimes()
 	smeshingAPI := &SmeshingAPIMock{}
 	mockFunc := func() CheckpointRunner {
 		return NewMockCheckpointRunner(ctrl)
@@ -1021,7 +1021,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("PostSetupComputeProviders", func(t *testing.T) {
 		logtest.SetupGlobal(t)
-		_, err := c.PostSetupComputeProviders(context.Background(), &pb.PostSetupComputeProvidersRequest{Benchmark: false})
+		_, err := c.PostSetupProviders(context.Background(), &pb.PostSetupProvidersRequest{Benchmark: false})
 		require.NoError(t, err)
 	})
 

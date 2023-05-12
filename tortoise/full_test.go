@@ -3,17 +3,13 @@ package tortoise
 import (
 	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 func TestFullBallotFilter(t *testing.T) {
@@ -326,25 +322,22 @@ func TestFullCountVotes(t *testing.T) {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.New(t)
-			cdb := datastore.NewCachedDB(sql.InMemory(), logger)
+			tortoise := defaultAlgorithm(t)
 			var activeset []types.ATXID
 			for i := range tc.activeset {
-				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-					NIPostChallenge: types.NIPostChallenge{},
-					NumUnits:        1,
-				}}
 				atxid := types.ATXID{byte(i + 1)}
-				atx.SetID(atxid)
-				atx.SetEffectiveNumUnits(atx.NumUnits)
-				atx.SetReceived(time.Now())
-				vAtx, err := atx.Verify(tc.activeset[i].BaseHeight, tc.activeset[i].TickCount)
-				require.NoError(t, err)
-				require.NoError(t, atxs.Add(cdb, vAtx))
+				header := &types.ActivationTxHeader{
+					ID:                atxid,
+					NumUnits:          1,
+					EffectiveNumUnits: 1,
+					BaseTickHeight:    tc.activeset[i].BaseHeight,
+					TickCount:         tc.activeset[i].TickCount,
+				}
+				header.PublishEpoch = 1
+				tortoise.OnAtx(header)
 				activeset = append(activeset, atxid)
 			}
 
-			tortoise := defaultAlgorithm(t, cdb)
-			tortoise.trtl.cdb = cdb
 			consensus := tortoise.trtl
 			consensus.ballotRefs[types.EmptyBallotID] = &ballotInfo{
 				layer: genesis,
@@ -364,11 +357,9 @@ func TestFullCountVotes(t *testing.T) {
 					layerBlocks = append(layerBlocks, b)
 					refs[b.ID()] = b.ToVote()
 				}
-				consensus.epochs[lid.GetEpoch()] = &epochInfo{
-					height: localHeight,
-				}
+				consensus.epoch(lid.GetEpoch()).height = localHeight
 				for _, block := range layerBlocks {
-					consensus.onBlock(block.ToVote())
+					tortoise.OnBlock(block.ToVote())
 				}
 				blocks = append(blocks, layerBlocks)
 			}
@@ -381,7 +372,7 @@ func TestFullCountVotes(t *testing.T) {
 					ballot := &types.Ballot{}
 					ballot.EligibilityProofs = []types.VotingEligibility{{J: uint32(j)}}
 					ballot.AtxID = activeset[b.ATX]
-					ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}}
+					ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}, EligibilityCount: 1}
 					ballot.ActiveSet = activeset
 					ballot.Layer = lid
 					// don't vote on genesis for simplicity,

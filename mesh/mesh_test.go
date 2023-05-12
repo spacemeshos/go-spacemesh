@@ -681,7 +681,7 @@ func TestMesh_CallOnBlock(t *testing.T) {
 	block.LayerIndex = types.LayerID(10)
 	block.Initialize()
 
-	tm.mockTortoise.EXPECT().OnBlock(&block)
+	tm.mockTortoise.EXPECT().OnBlock(block.ToVote())
 	tm.mockState.EXPECT().LinkTXsWithBlock(block.LayerIndex, block.ID(), block.TxIDs)
 	require.NoError(t, tm.AddBlockWithTXs(context.Background(), &block))
 }

@@ -113,7 +113,7 @@ func (m *MockPostSetupProvider) EXPECT() *MockPostSetupProviderMockRecorder {
 }
 
 // Benchmark mocks base method.
-func (m *MockPostSetupProvider) Benchmark(arg0 activation.PostSetupComputeProvider) (int, error) {
+func (m *MockPostSetupProvider) Benchmark(arg0 activation.PostSetupProvider) (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Benchmark", arg0)
 	ret0, _ := ret[0].(int)
@@ -128,10 +128,10 @@ func (mr *MockPostSetupProviderMockRecorder) Benchmark(arg0 interface{}) *gomock
 }
 
 // ComputeProviders mocks base method.
-func (m *MockPostSetupProvider) ComputeProviders() []activation.PostSetupComputeProvider {
+func (m *MockPostSetupProvider) ComputeProviders() []activation.PostSetupProvider {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ComputeProviders")
-	ret0, _ := ret[0].([]activation.PostSetupComputeProvider)
+	ret0, _ := ret[0].([]activation.PostSetupProvider)
 	return ret0
 }
 
