@@ -300,9 +300,10 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 
 // Merkle proof proving that a given leaf is included in the root of merkle tree.
 type MerkleProof struct {
-	Root  Hash32
-	Nodes []Hash32 `scale:"max=32"`
-	Leaf  Hash32
+	Root      Hash32
+	Nodes     []Hash32 `scale:"max=32"`
+	Leaf      Hash32
+	LeafIndex uint64
 }
 
 // NIPost is Non-Interactive Proof of Space-Time.

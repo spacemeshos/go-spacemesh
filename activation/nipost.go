@@ -304,13 +304,14 @@ func (nb *NIPostBuilder) getPoetClient(ctx context.Context, id types.PoetService
 	return nil
 }
 
-func membersContain(members []types.Member, challenge *types.Hash32) *int {
+// membersContainChallenge verifies that the challenge is included in proof's members.
+func membersContainChallenge(members []types.Member, challenge *types.Hash32) (uint64, error) {
 	for id, member := range members {
 		if bytes.Equal(member[:], challenge.Bytes()) {
-			return &id
+			return uint64(id), nil
 		}
 	}
-	return nil
+	return 0, fmt.Errorf("challenge is not a member of the proof")
 }
 
 func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash32) (types.PoetProofRef, *types.MerkleProof, error) {
@@ -396,13 +397,13 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 
 func constructMerkleProof(challenge *types.Hash32, members []types.Member) (*types.MerkleProof, error) {
 	// We are interested only in proofs that we are members of
-	id := membersContain(members, challenge)
-	if id == nil {
-		return nil, fmt.Errorf("challenge is not a member of the proof")
+	id, err := membersContainChallenge(members, challenge)
+	if err != nil {
+		return nil, err
 	}
 
 	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{uint64(*id): true}).
+		WithLeavesToProve(map[uint64]bool{id: true}).
 		WithHashFunc(merkle.GetSha256Parent).
 		Build()
 	if err != nil {
@@ -419,8 +420,9 @@ func constructMerkleProof(challenge *types.Hash32, members []types.Member) (*typ
 		nodesH32 = append(nodesH32, types.BytesToHash(n))
 	}
 	return &types.MerkleProof{
-		Root:  types.BytesToHash(root),
-		Leaf:  *challenge,
-		Nodes: nodesH32,
+		Root:      types.BytesToHash(root),
+		Leaf:      *challenge,
+		LeafIndex: id,
+		Nodes:     nodesH32,
 	}, nil
 }
