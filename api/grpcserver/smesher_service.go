@@ -34,18 +34,8 @@ func (s SmesherService) RegisterService(server *Server) {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(
-	post postSetupProvider,
-	smeshing activation.SmeshingProvider,
-	streamInterval time.Duration,
-	postOpts activation.PostSetupOpts,
-) *SmesherService {
-	return &SmesherService{
-		postSetupProvider: post,
-		smeshingProvider:  smeshing,
-		streamInterval:    streamInterval,
-		postOpts:          postOpts,
-	}
+func NewSmesherService(post postSetupProvider, smeshing activation.SmeshingProvider, streamInterval time.Duration, postOpts activation.PostSetupOpts) *SmesherService {
+	return &SmesherService{post, smeshing, streamInterval, postOpts}
 }
 
 // IsSmeshing reports whether the node is smeshing.
