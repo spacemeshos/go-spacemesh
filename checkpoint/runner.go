@@ -76,61 +76,55 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot, restore types
 		return nil, fmt.Errorf("create db tx: %s", err)
 	}
 	defer tx.Release()
-	// using scoped block to signal GC
-	{
-		atxSnapshot, err := atxs.LatestTwo(tx)
-		if err != nil {
-			return nil, fmt.Errorf("atxs snapshot: %w", err)
-		}
-		for i, catx := range atxSnapshot {
-			commitmentAtx, err := atxs.CommitmentATX(tx, catx.SmesherID)
-			if err != nil {
-				return nil, fmt.Errorf("atxs snapshot commitment: %w", err)
-			}
-			vrfNonce, err := atxs.VRFNonce(tx, catx.SmesherID, snapshot.GetEpoch())
-			if err != nil {
-				return nil, fmt.Errorf("atxs snapshot nonce: %w", err)
-			}
-			copy(atxSnapshot[i].CommitmentATX[:], commitmentAtx[:])
-			atxSnapshot[i].VRFNonce = vrfNonce
-		}
-		for _, catx := range atxSnapshot {
-			checkpoint.Data.Atxs = append(checkpoint.Data.Atxs, ShortAtx{
-				ID:             catx.ID.Bytes(),
-				Epoch:          catx.Epoch.Uint32(),
-				CommitmentAtx:  catx.CommitmentATX.Bytes(),
-				VrfNonce:       uint64(catx.VRFNonce),
-				NumUnits:       catx.NumUnits,
-				BaseTickHeight: catx.BaseTickHeight,
-				TickCount:      catx.TickCount,
-				PublicKey:      catx.SmesherID.Bytes(),
-				Sequence:       catx.Sequence,
-				Coinbase:       catx.Coinbase.Bytes(),
-			})
-		}
+
+	atxSnapshot, err := atxs.LatestN(tx, 2)
+	if err != nil {
+		return nil, fmt.Errorf("atxs snapshot: %w", err)
 	}
-	{
-		acctSnapshot, err := accounts.Snapshot(tx, snapshot)
+	for i, catx := range atxSnapshot {
+		commitmentAtx, err := atxs.CommitmentATX(tx, catx.SmesherID)
 		if err != nil {
-			return nil, fmt.Errorf("accounts snapshot: %w", err)
+			return nil, fmt.Errorf("atxs snapshot commitment: %w", err)
 		}
-		for _, acct := range acctSnapshot {
-			a := Account{
-				Address: acct.Address.Bytes(),
-				Balance: acct.Balance,
-				Nonce:   acct.NextNonce,
-			}
-			if acct.TemplateAddress != nil {
-				a.Template = acct.TemplateAddress.Bytes()
-			}
-			if acct.State != nil {
-				a.State = acct.State
-			}
-			checkpoint.Data.Accounts = append(checkpoint.Data.Accounts, a)
+		vrfNonce, err := atxs.VRFNonce(tx, catx.SmesherID, snapshot.GetEpoch())
+		if err != nil {
+			return nil, fmt.Errorf("atxs snapshot nonce: %w", err)
 		}
+		copy(atxSnapshot[i].CommitmentATX[:], commitmentAtx[:])
+		atxSnapshot[i].VRFNonce = vrfNonce
 	}
-	if err = tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit db tx: %w", err)
+	for _, catx := range atxSnapshot {
+		checkpoint.Data.Atxs = append(checkpoint.Data.Atxs, ShortAtx{
+			ID:             catx.ID.Bytes(),
+			Epoch:          catx.Epoch.Uint32(),
+			CommitmentAtx:  catx.CommitmentATX.Bytes(),
+			VrfNonce:       uint64(catx.VRFNonce),
+			NumUnits:       catx.NumUnits,
+			BaseTickHeight: catx.BaseTickHeight,
+			TickCount:      catx.TickCount,
+			PublicKey:      catx.SmesherID.Bytes(),
+			Sequence:       catx.Sequence,
+			Coinbase:       catx.Coinbase.Bytes(),
+		})
+	}
+
+	acctSnapshot, err := accounts.Snapshot(tx, snapshot)
+	if err != nil {
+		return nil, fmt.Errorf("accounts snapshot: %w", err)
+	}
+	for _, acct := range acctSnapshot {
+		a := Account{
+			Address: acct.Address.Bytes(),
+			Balance: acct.Balance,
+			Nonce:   acct.NextNonce,
+		}
+		if acct.TemplateAddress != nil {
+			a.Template = acct.TemplateAddress.Bytes()
+		}
+		if acct.State != nil {
+			a.State = acct.State
+		}
+		checkpoint.Data.Accounts = append(checkpoint.Data.Accounts, a)
 	}
 	return checkpoint, nil
 }

@@ -321,9 +321,12 @@ type CheckpointAtx struct {
 	Coinbase       types.Address
 }
 
-// LatestTwo returns the latest two ATXs per smesher.
-func LatestTwo(db sql.Executor) ([]CheckpointAtx, error) {
+// LatestN returns the latest N ATXs per smesher.
+func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 	var rst []CheckpointAtx
+	enc := func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(n))
+	}
 	dec := func(stmt *sql.Statement) bool {
 		var catx CheckpointAtx
 		stmt.ColumnBytes(0, catx.ID[:])
@@ -344,8 +347,8 @@ func LatestTwo(db sql.Executor) ([]CheckpointAtx, error) {
 			select row_number() over (partition by pubkey order by epoch desc) RowNum,
 			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase from atxs
 		)
-		where RowNum <=2 order by pubkey;`, nil, dec); err != nil {
-		return nil, fmt.Errorf("latestTwo: %w", err)
+		where RowNum <= ?1 order by pubkey;`, enc, dec); err != nil {
+		return nil, fmt.Errorf("latestN: %w", err)
 	} else if rows == 0 {
 		return nil, sql.ErrNotFound
 	}

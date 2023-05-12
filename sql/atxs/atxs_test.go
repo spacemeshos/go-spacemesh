@@ -123,7 +123,7 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
-func TestLatestTwo(t *testing.T) {
+func TestLatestN(t *testing.T) {
 	db := sql.InMemory()
 
 	sig1, err := signing.NewEdSigner()
@@ -145,33 +145,79 @@ func TestLatestTwo(t *testing.T) {
 	require.NoError(t, err)
 	atx6, err := newAtx(sig3, withPublishEpoch(1), withSequence(0))
 	require.NoError(t, err)
+
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4, atx5, atx6} {
 		require.NoError(t, atxs.Add(db, atx))
 	}
 
-	got, err := atxs.LatestTwo(db)
-	require.NoError(t, err)
-	require.Len(t, got, 5)
-	expected := map[types.NodeID]map[types.ATXID]struct{}{
-		sig1.NodeID(): {
-			atx1.ID(): struct{}{},
-			atx2.ID(): struct{}{},
+	for _, tc := range []struct {
+		desc     string
+		n        int
+		expected map[types.NodeID]map[types.ATXID]struct{}
+	}{
+		{
+			desc: "latest 3",
+			n:    3,
+			expected: map[types.NodeID]map[types.ATXID]struct{}{
+				sig1.NodeID(): {
+					atx1.ID(): struct{}{},
+					atx2.ID(): struct{}{},
+				},
+				sig2.NodeID(): {
+					atx3.ID(): struct{}{},
+					atx4.ID(): struct{}{},
+					atx5.ID(): struct{}{},
+				},
+				sig3.NodeID(): {
+					atx6.ID(): struct{}{},
+				},
+			},
 		},
-		sig2.NodeID(): {
-			atx4.ID(): struct{}{},
-			atx5.ID(): struct{}{},
+		{
+			desc: "latest 2",
+			n:    2,
+			expected: map[types.NodeID]map[types.ATXID]struct{}{
+				sig1.NodeID(): {
+					atx1.ID(): struct{}{},
+					atx2.ID(): struct{}{},
+				},
+				sig2.NodeID(): {
+					atx4.ID(): struct{}{},
+					atx5.ID(): struct{}{},
+				},
+				sig3.NodeID(): {
+					atx6.ID(): struct{}{},
+				},
+			},
 		},
-		sig3.NodeID(): {
-			atx6.ID(): struct{}{},
+		{
+			desc: "latest 1",
+			n:    1,
+			expected: map[types.NodeID]map[types.ATXID]struct{}{
+				sig1.NodeID(): {
+					atx2.ID(): struct{}{},
+				},
+				sig2.NodeID(): {
+					atx5.ID(): struct{}{},
+				},
+				sig3.NodeID(): {
+					atx6.ID(): struct{}{},
+				},
+			},
 		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			got, err := atxs.LatestN(db, tc.n)
+			require.NoError(t, err)
+			for _, catx := range got {
+				delete(tc.expected[catx.SmesherID], catx.ID)
+				if len(tc.expected[catx.SmesherID]) == 0 {
+					delete(tc.expected, catx.SmesherID)
+				}
+			}
+			require.Empty(t, tc.expected)
+		})
 	}
-	for _, catx := range got {
-		delete(expected[catx.SmesherID], catx.ID)
-		if len(expected[catx.SmesherID]) == 0 {
-			delete(expected, catx.SmesherID)
-		}
-	}
-	require.Empty(t, expected)
 }
 
 func TestGetByEpochAndNodeID(t *testing.T) {
