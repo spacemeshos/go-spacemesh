@@ -618,7 +618,7 @@ func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *typ
 }
 
 func TestValidateMerkleProof(t *testing.T) {
-	proof := newMerkleProof(types.BytesToHash([]byte("challenge")), []types.Hash32{
+	proof := newMerkleProof(t, types.BytesToHash([]byte("challenge")), []types.Hash32{
 		types.BytesToHash([]byte("leaf2")),
 		types.BytesToHash([]byte("leaf3")),
 		types.BytesToHash([]byte("leaf4")),
