@@ -33,11 +33,10 @@ func TestServer(t *testing.T) {
 	opts := []Opt{
 		WithTimeout(100 * time.Millisecond),
 		WithContext(ctx),
-		WithRequestSizeLimit(limit),
 	}
-	client := New(mesh.Hosts()[0], proto, handler, opts...)
-	_ = New(mesh.Hosts()[1], proto, handler, opts...)
-	_ = New(mesh.Hosts()[2], proto, errhandler, opts...)
+	client := New(mesh.Hosts()[0], proto, handler, append(opts, WithRequestSizeLimit(2*limit))...)
+	_ = New(mesh.Hosts()[1], proto, handler, append(opts, WithRequestSizeLimit(limit))...)
+	_ = New(mesh.Hosts()[2], proto, errhandler, append(opts, WithRequestSizeLimit(limit))...)
 
 	respHandler := func(msg []byte) {
 		select {
