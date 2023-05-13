@@ -1284,10 +1284,3 @@ func TestCollectHashes(t *testing.T) {
 	expected = append(expected, types.TransactionIDsToHashes(p.TxIDs)...)
 	require.ElementsMatch(t, expected, collectHashes(*p))
 }
-
-func toIds(votes []types.Vote) (rst []types.BlockID) {
-	for _, vote := range votes {
-		rst = append(rst, vote.ID)
-	}
-	return rst
-}

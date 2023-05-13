@@ -42,7 +42,6 @@ var (
 	errDuplicateTX           = errors.New("duplicate TxID in proposal")
 	errKnownProposal         = errors.New("known proposal")
 	errKnownBallot           = errors.New("known ballot")
-	errInvalidVote           = errors.New("invalid layer/height in the vote")
 	errMaliciousBallot       = errors.New("malicious ballot")
 	errWrongSmesherID        = errors.New("ballot atx from a different smesher")
 )
