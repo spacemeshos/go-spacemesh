@@ -32,7 +32,7 @@ type testHandler struct {
 	mb  *smocks.MockBeaconGetter
 }
 
-func createTestHandler(t *testing.T) *testHandler {
+func createTestHandler(t testing.TB) *testHandler {
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	ctrl := gomock.NewController(t)
