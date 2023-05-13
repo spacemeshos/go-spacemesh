@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	fuzz "github.com/google/gofuzz"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -16,8 +17,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 const (
@@ -720,4 +723,19 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func FuzzMeshHashRequest(f *testing.F) {
+	h := newHandler(datastore.NewCachedDB(sql.InMemory(), log.NewNop()), nil, nil, nil, log.NewNop())
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzzer := fuzz.NewFromGoFuzz(data)
+		var object MeshHashRequest
+		fuzzer.Fuzz(&object)
+		buf, err := codec.Encode(&object)
+		if err != nil {
+			// object may fail to encode due to limts, it is ok to skip it
+			return
+		}
+		h.handleMeshHashReq(context.TODO(), buf)
+	})
 }
