@@ -150,6 +150,9 @@ func (s *Server) streamHandler(stream network.Stream) {
 // Request sends a binary request to the peer. Request is executed in the background, one of the callbacks
 // is guaranteed to be called on success/error.
 func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte, resp func([]byte), failure func(error)) error {
+	if len(req) < s.requestLimit {
+		return fmt.Errorf("request length (%d) is longer than limit %d", len(req), s.requestLimit)
+	}
 	if s.h.Network().Connectedness(pid) != network.Connected {
 		return fmt.Errorf("%w: %s", ErrNotConnected, pid)
 	}
