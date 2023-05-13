@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -207,11 +206,11 @@ func collectHashes(a any) []types.Hash32 {
 
 	b, ok := a.(types.Ballot)
 	if ok {
-		hashes := types.BlockIDsToHashes(ballotBlockView(&b))
+		hashes := []types.Hash32{b.Votes.Base.AsHash32()}
 		if b.RefBallot != types.EmptyBallotID {
 			hashes = append(hashes, b.RefBallot.AsHash32())
 		}
-		return append(hashes, b.Votes.Base.AsHash32())
+		return hashes
 	}
 	log.Fatal("unexpected type")
 	return nil
@@ -452,14 +451,6 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 	// to the hare output within hdist of the current layer when producing a ballot.
 	for _, vote := range b.Votes.Support {
 		exceptions[vote.ID] = struct{}{}
-		block, err := blocks.Get(h.cdb, vote.ID)
-		if err != nil {
-			h.logger.WithContext(ctx).With().Error("failed to get block layer", log.Err(err))
-			return fmt.Errorf("check exception get block layer: %w", err)
-		}
-		if block.ToVote() != vote {
-			return fmt.Errorf("%w: encoded vote %+v doesn't match actual %+v", errInvalidVote, vote, block.ToVote())
-		}
 		if voted, ok := layers[vote.LayerID]; ok {
 			// already voted for a block in this layer
 			if voted != vote.ID && vote.LayerID.Add(h.cfg.Hdist).After(b.Layer) {
@@ -483,15 +474,6 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 			h.logger.WithContext(ctx).With().Warning("conflicting votes on block", vote.ID, b.ID(), b.Layer)
 			return fmt.Errorf("%w: block %s is referenced multiple times in exceptions of ballot %s at layer %v",
 				errConflictingExceptions, vote.ID, b.ID(), b.Layer)
-		}
-		block, err := blocks.Get(h.cdb, vote.ID)
-		if err != nil {
-			h.logger.WithContext(ctx).With().Error("failed to get block layer", log.Err(err))
-			return fmt.Errorf("check exception get block layer: %w", err)
-		}
-		if block.ToVote() != vote {
-			return fmt.Errorf("%w encoded vote %+v doesn't match actual %+v",
-				errInvalidVote, vote, block.ToVote())
 		}
 		layers[vote.LayerID] = vote.ID
 	}
@@ -517,17 +499,6 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 	return nil
 }
 
-func ballotBlockView(b *types.Ballot) []types.BlockID {
-	combined := make([]types.BlockID, 0, len(b.Votes.Support)+len(b.Votes.Against))
-	for _, vote := range b.Votes.Support {
-		combined = append(combined, vote.ID)
-	}
-	for _, vote := range b.Votes.Against {
-		combined = append(combined, vote.ID)
-	}
-	return combined
-}
-
 func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ballot) error {
 	var blts []types.BallotID
 	if b.Votes.Base != types.EmptyBallotID {
@@ -542,13 +513,6 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 
 	if err := h.fetchReferencedATXs(ctx, b); err != nil {
 		return fmt.Errorf("fetch referenced ATXs: %w", err)
-	}
-
-	bids := ballotBlockView(b)
-	if len(bids) > 0 {
-		if err := h.fetcher.GetBlocks(ctx, bids); err != nil {
-			return fmt.Errorf("fetch blocks: %w", err)
-		}
 	}
 	return nil
 }
