@@ -326,12 +326,14 @@ func (t *Tortoise) Results(from, to types.LayerID) ([]result.Layer, error) {
 			blocks = append(blocks, result.Block{
 				Header: block.header(),
 				Data:   block.data,
+				Hare:   block.hare == support,
 				Valid:  block.validity == support,
 			})
 		}
 		rst = append(rst, result.Layer{
-			Layer:  lid,
-			Blocks: blocks,
+			Layer:   lid,
+			Blocks:  blocks,
+			Opinion: layer.opinion,
 		})
 	}
 	return rst, nil
