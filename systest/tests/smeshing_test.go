@@ -25,21 +25,19 @@ func TestSmeshing(t *testing.T) {
 
 	t.Run("Proposals", func(t *testing.T) {
 		t.Parallel()
-		testSmeshing(t, tctx, cl)
+		testSmeshing(t, tctx, cl, 15)
 	})
 	t.Run("Transactions", func(t *testing.T) {
 		t.Parallel()
-		testTransactions(t, tctx, cl)
+		testTransactions(t, tctx, cl, 8)
 	})
 }
 
-func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
-	const limit = 15
-
+func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, limit int) {
 	first := currentLayer(tctx, t, cl.Client(0))
 	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
 	first = nextFirstLayer(first, layersPerEpoch)
-	last := first + limit
+	last := first + uint32(limit)
 	tctx.Log.Debugw("watching layer between", "first", first, "last", last)
 
 	createdch := make(chan *pb.Proposal, cl.Total()*(limit+1))
@@ -115,9 +113,9 @@ func requireEqualProposals(tb testing.TB, reference map[uint32][]*pb.Proposal, r
 			})
 		}
 		for layer, proposals := range reference {
-			require.Len(tb, included[layer], len(proposals), "client=%d layer=%d", i, layer)
+			require.Lenf(tb, included[layer], len(proposals), "client=%d layer=%d", i, layer)
 			for j := range proposals {
-				assert.Equal(tb, proposals[j].Id, included[layer][j].Id, "client=%d layer=%d", i, layer)
+				assert.Equalf(tb, proposals[j].Id, included[layer][j].Id, "client=%d layer=%d", i, layer)
 			}
 		}
 	}

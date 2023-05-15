@@ -321,8 +321,7 @@ func deployPoet(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*
 	return node, nil
 }
 
-func deletePoet(ctx *testcontext.Context, id string) error {
-	errCfg := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Delete(ctx, id, apimetav1.DeleteOptions{})
+func deleteServiceAndPod(ctx *testcontext.Context, id string) error {
 	errPod := ctx.Client.AppsV1().Deployments(ctx.Namespace).DeleteCollection(ctx, apimetav1.DeleteOptions{}, apimetav1.ListOptions{LabelSelector: labelSelector(id)})
 	var errSvc error
 	if svcs, err := ctx.Client.CoreV1().Services(ctx.Namespace).List(ctx, apimetav1.ListOptions{LabelSelector: labelSelector(id)}); err == nil {
@@ -332,9 +331,6 @@ func deletePoet(ctx *testcontext.Context, id string) error {
 				errSvc = err
 			}
 		}
-	}
-	if errCfg != nil {
-		return errSvc
 	}
 	if errPod != nil {
 		return errPod
