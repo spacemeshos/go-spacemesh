@@ -45,6 +45,12 @@ func WithContext(ctx context.Context) Opt {
 	}
 }
 
+func WithRequestSizeLimit(limit int) Opt {
+	return func(s *Server) {
+		s.requestLimit = limit
+	}
+}
+
 // Handler is the handler to be defined by the application.
 type Handler func(context.Context, []byte) ([]byte, error)
 
@@ -67,10 +73,11 @@ type Host interface {
 
 // Server for the Handler.
 type Server struct {
-	logger   log.Log
-	protocol string
-	handler  Handler
-	timeout  time.Duration
+	logger       log.Log
+	protocol     string
+	handler      Handler
+	timeout      time.Duration
+	requestLimit int
 
 	h Host
 
@@ -80,12 +87,13 @@ type Server struct {
 // New server for the handler.
 func New(h Host, proto string, handler Handler, opts ...Opt) *Server {
 	srv := &Server{
-		ctx:      context.Background(),
-		logger:   log.NewNop(),
-		protocol: proto,
-		handler:  handler,
-		h:        h,
-		timeout:  10 * time.Second,
+		ctx:          context.Background(),
+		logger:       log.NewNop(),
+		protocol:     proto,
+		handler:      handler,
+		h:            h,
+		timeout:      10 * time.Second,
+		requestLimit: 10240,
 	}
 	for _, opt := range opts {
 		opt(srv)
@@ -101,6 +109,14 @@ func (s *Server) streamHandler(stream network.Stream) {
 	rd := bufio.NewReader(stream)
 	size, err := varint.ReadUvarint(rd)
 	if err != nil {
+		return
+	}
+	if size > uint64(s.requestLimit) {
+		s.logger.Warning("request limit overflow",
+			log.Int("limit", s.requestLimit),
+			log.Uint64("request", size),
+		)
+		stream.Conn().Close()
 		return
 	}
 	buf := make([]byte, size)
@@ -134,6 +150,9 @@ func (s *Server) streamHandler(stream network.Stream) {
 // Request sends a binary request to the peer. Request is executed in the background, one of the callbacks
 // is guaranteed to be called on success/error.
 func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte, resp func([]byte), failure func(error)) error {
+	if len(req) > s.requestLimit {
+		return fmt.Errorf("request length (%d) is longer than limit %d", len(req), s.requestLimit)
+	}
 	if s.h.Network().Connectedness(pid) != network.Connected {
 		return fmt.Errorf("%w: %s", ErrNotConnected, pid)
 	}

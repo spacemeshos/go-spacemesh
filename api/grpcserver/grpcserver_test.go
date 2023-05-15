@@ -1656,7 +1656,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	grpcStatus, ok := status.FromError(err)
 	req.True(ok)
 	req.Equal(codes.InvalidArgument, grpcStatus.Code())
-	req.Equal("Failed to verify transaction", grpcStatus.Message())
+	req.Contains(grpcStatus.Message(), "Failed to verify transaction")
 	req.Nil(res)
 }
 

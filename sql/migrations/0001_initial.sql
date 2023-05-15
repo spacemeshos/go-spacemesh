@@ -104,10 +104,13 @@ CREATE TABLE atxs
     id                  CHAR(32) PRIMARY KEY,
     epoch               INT NOT NULL,
     effective_num_units INT NOT NULL,
+    commitment_atx      CHAR(32),
     nonce               UNSIGNED LONG INT,
     base_tick_height    UNSIGNED LONG INT,
     tick_count          UNSIGNED LONG INT,
-    pubkey             CHAR(32),
+    sequence            UNSIGNED LONG INT,
+    pubkey              CHAR(32),
+    coinbase            CHAR(24),
     atx                 BLOB,
     received            INT NOT NULL
 ) WITHOUT ROWID;
@@ -141,7 +144,6 @@ CREATE TABLE accounts
 (
     address        CHAR(24),
     balance        UNSIGNED LONG INT,
-    initialized    BOOL,
     next_nonce     UNSIGNED LONG INT,
     layer_updated  UNSIGNED LONG INT,
     template       CHAR(24),
@@ -149,4 +151,4 @@ CREATE TABLE accounts
     PRIMARY KEY (address, layer_updated DESC)
 );
 
-CREATE INDEX accounts_by_layer_udated ON accounts (layer_updated);
+CREATE INDEX accounts_by_layer_updated ON accounts (layer_updated);

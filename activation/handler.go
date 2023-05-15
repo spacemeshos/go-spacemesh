@@ -302,15 +302,11 @@ func (h *Handler) getCommitmentAtx(atx *types.ActivationTx) (*types.ATXID, error
 		return atx.CommitmentATX, nil
 	}
 
-	id, err := atxs.GetFirstIDByNodeID(h.cdb, atx.SmesherID)
+	id, err := atxs.CommitmentATX(h.cdb, atx.SmesherID)
 	if err != nil {
 		return nil, err
 	}
-	initialATX, err := h.cdb.GetAtxHeader(id)
-	if err != nil {
-		return nil, err
-	}
-	return initialATX.CommitmentATX, nil
+	return &id, nil
 }
 
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
@@ -524,7 +520,7 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 	}
 
 	if err := h.FetchAtxReferences(ctx, &atx); err != nil {
-		return fmt.Errorf("received atx with missing references of prev or pos id %v, %v, %v, %v",
+		return fmt.Errorf("received atx (%v) with missing references of prev or pos id %v, %v, %v",
 			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}
 
