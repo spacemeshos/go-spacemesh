@@ -404,7 +404,7 @@ func constructMerkleProof(challenge types.Hash32, members []types.Member) (*type
 
 	tree, err := merkle.NewTreeBuilder().
 		WithLeavesToProve(map[uint64]bool{id: true}).
-		WithHashFunc(merkle.GetSha256Parent).
+		WithHashFunc(shared.HashMembershipTreeNode).
 		Build()
 	if err != nil {
 		return nil, fmt.Errorf("creating Merkle Tree: %w", err)

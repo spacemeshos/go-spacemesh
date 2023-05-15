@@ -131,7 +131,7 @@ func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, *type
 }
 
 func calcRoot(leaves []types.Member) ([]byte, error) {
-	tree, err := merkle.NewTree()
+	tree, err := merkle.NewTreeBuilder().WithHashFunc(shared.HashMembershipTreeNode).Build()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tree: %w", err)
 	}

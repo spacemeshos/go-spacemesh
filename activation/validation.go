@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/merkle-tree"
+	poetShared "github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
@@ -90,7 +91,7 @@ func validateMerkleProof(leaf []byte, proof *types.MerkleProof) error {
 		[]uint64{proof.LeafIndex},
 		[][]byte{leaf},
 		nodes, proof.Root.Bytes(),
-		merkle.GetSha256Parent,
+		poetShared.HashMembershipTreeNode,
 	)
 	if err != nil {
 		return fmt.Errorf("validating merkle proof: %w", err)

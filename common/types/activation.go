@@ -93,12 +93,14 @@ func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 // Hash serializes the NIPostChallenge and returns its hash.
+// The serialized challenge is first prepended with a byte 0x00, and then hashed
+// for second preimage resistance of poet membership merkle tree.
 func (challenge *NIPostChallenge) Hash() Hash32 {
 	ncBytes, err := codec.Encode(challenge)
 	if err != nil {
 		log.With().Fatal("failed to encode NIPostChallenge", log.Err(err))
 	}
-	return CalcHash32(ncBytes)
+	return hash.Sum([]byte{0x00}, ncBytes)
 }
 
 // String returns a string representation of the NIPostChallenge, for logging purposes.

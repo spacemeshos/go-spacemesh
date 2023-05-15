@@ -12,6 +12,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/merkle-tree"
+	poetShared "github.com/spacemeshos/poet/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -34,6 +35,7 @@ const layersPerEpochBig = 1000
 func newMerkleProof(t testing.TB, challenge types.Hash32, otherLeafs []types.Hash32) types.MerkleProof {
 	t.Helper()
 	tree, err := merkle.NewTreeBuilder().
+		WithHashFunc(poetShared.HashMembershipTreeNode).
 		WithLeavesToProve(map[uint64]bool{0: true}).
 		Build()
 	require.NoError(t, err)
