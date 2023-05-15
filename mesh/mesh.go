@@ -81,13 +81,11 @@ func NewMesh(cdb *datastore.CachedDB, c layerClock, trtl system.Tortoise, exec *
 
 	gLid := types.GetEffectiveGenesis()
 	if err = cdb.WithTx(context.Background(), func(dbtx *sql.Tx) error {
-		for i := types.LayerID(1); !i.After(gLid); i = i.Add(1) {
-			if err = layers.SetProcessed(dbtx, i); err != nil {
-				return fmt.Errorf("mesh init: %w", err)
-			}
-			if err = layers.SetApplied(dbtx, i, types.EmptyBlockID); err != nil {
-				return fmt.Errorf("mesh init: %w", err)
-			}
+		if err = layers.SetProcessed(dbtx, gLid); err != nil {
+			return fmt.Errorf("mesh init: %w", err)
+		}
+		if err = layers.SetApplied(dbtx, gLid, types.EmptyBlockID); err != nil {
+			return fmt.Errorf("mesh init: %w", err)
 		}
 		return persistLayerHashes(dbtx, gLid, nil)
 	}); err != nil {

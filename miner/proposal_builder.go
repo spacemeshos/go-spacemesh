@@ -316,19 +316,15 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		beacon types.Beacon
 		err    error
 		epoch  = layerID.GetEpoch()
-		logger = pb.logger.WithContext(ctx).WithFields(layerID, epoch)
 	)
 
-	if layerID.GetEpoch().IsGenesis() {
-		logger.Info("not building proposal: genesis")
+	if layerID <= types.GetEffectiveGenesis() {
 		return errGenesis
 	}
 	if !pb.syncer.IsSynced(ctx) {
-		logger.Info("not building proposal: not synced")
 		return errNotSynced
 	}
 	if beacon, err = pb.beaconProvider.GetBeacon(epoch); err != nil {
-		logger.With().Warning("beacon not available for epoch", log.Err(err))
 		return errNoBeacon
 	}
 
@@ -336,40 +332,33 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 
 	count, err := ballots.CountByPubkeyLayer(pb.cdb, layerID, pb.signer.NodeID())
 	if err != nil {
-		logger.With().Error("count ballots in a layer for public key", log.Err(err))
 		return err
 	} else if count != 0 {
-		logger.With().Error("smesher already created a proposal in this layer",
-			log.Int("count", count),
-		)
 		return errDuplicateLayer
 	}
 
 	nonce, err := pb.nonceFetcher.VRFNonce(pb.signer.NodeID(), layerID.GetEpoch())
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
-			logger.With().Info("miner has no valid vrf nonce, not building proposal")
+			pb.logger.WithContext(ctx).With().Info("miner has no valid vrf nonce, not building proposal", layerID)
 			return nil
-		} else {
-			logger.With().Error("failed to get VRF nonce", log.Err(err))
 		}
 		return err
 	}
 	epochEligibility, err := pb.proposalOracle.GetProposalEligibility(layerID, beacon, nonce)
 	if err != nil {
 		if errors.Is(err, errMinerHasNoATXInPreviousEpoch) {
-			logger.Info("miner has no ATX in previous epoch")
 			return fmt.Errorf("miner no ATX: %w", err)
 		}
-		logger.With().Error("failed to check for proposal eligibility", log.Err(err))
 		return fmt.Errorf("proposal eligibility: %w", err)
 	}
 	proofs := epochEligibility.Proofs[layerID]
 	if len(proofs) == 0 {
-		logger.Debug("not eligible for proposal in layer")
+		pb.logger.WithContext(ctx).With().Debug("not eligible for proposal in layer", layerID)
 		return nil
 	}
-	logger.With().Info("eligible for proposals in layer",
+	pb.logger.WithContext(ctx).With().Info("eligible for proposals in layer",
+		layerID,
 		epochEligibility.Atx,
 		log.Int("num_proposals", len(proofs)),
 	)
@@ -385,7 +374,6 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	txList := pb.conState.SelectProposalTXs(layerID, len(proofs))
 	p, err := pb.createProposal(ctx, layerID, epochEligibility, beacon, txList, *opinion)
 	if err != nil {
-		logger.With().Error("failed to create new proposal", log.Err(err))
 		return err
 	}
 
@@ -402,10 +390,10 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		// proposal is sent over the network
 		data, err := codec.Encode(p)
 		if err != nil {
-			logger.With().Panic("failed to serialize proposal", log.Err(err))
+			pb.logger.WithContext(newCtx).With().Fatal("failed to serialize proposal", log.Err(err))
 		}
 		if err = pb.publisher.Publish(newCtx, pubsub.ProposalProtocol, data); err != nil {
-			logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
+			pb.logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
 		}
 		events.ReportProposal(events.ProposalCreated, p)
 		return nil
@@ -427,7 +415,9 @@ func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
 			}
 			next = current.Add(1)
 			lyrCtx := log.WithNewSessionID(ctx)
-			_ = pb.handleLayer(lyrCtx, current)
+			if err := pb.handleLayer(lyrCtx, current); err != nil {
+				pb.logger.WithContext(lyrCtx).With().Warning("failed to build proposal", current, log.Err(err))
+			}
 		}
 	}
 }
