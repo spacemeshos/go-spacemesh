@@ -212,6 +212,15 @@ func (h *Handler) HandleSyncedProposal(ctx context.Context, peer p2p.Peer, data 
 
 // HandleProposal is the gossip receiver for Proposal.
 func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
+	err := h.handleProposal(ctx, peer, data)
+	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownProposal) {
+		h.logger.WithContext(ctx).With().Warning("failed to process proposal gossip", log.Err(err))
+	}
+	return err
+}
+
+// HandleProposal is the gossip receiver for Proposal.
+func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
 	receivedTime := time.Now()
 	logger := h.logger.WithContext(ctx)
 

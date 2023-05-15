@@ -468,10 +468,21 @@ func (h *Handler) registerHashes(atx *types.ActivationTx, peer p2p.Peer) {
 
 // HandleGossipAtx handles the atx gossip data channel.
 func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
+	err := h.handleGossipAtx(ctx, peer, msg)
+	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
+		h.log.WithContext(ctx).With().Warning("failed to process atx gossip",
+			log.Stringer("sender", peer),
+			log.Err(err),
+		)
+	}
+	return err
+}
+
+func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
 	receivedTime := time.Now()
 	var atx types.ActivationTx
 	if err := codec.Decode(msg, &atx); err != nil {
-		return fmt.Errorf("atx message malformed data: %w", pubsub.ValidationRejectErr)
+		return errMalformedData
 	}
 
 	epochStart := h.clock.LayerToTime(atx.PublishEpoch.FirstLayer())

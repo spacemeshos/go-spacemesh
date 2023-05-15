@@ -356,8 +356,16 @@ func (c *Certifier) expected(lid types.LayerID) bool {
 	return !lid.Before(start) && !lid.After(current.Add(c.cfg.LayerBuffer))
 }
 
-// HandleCertifyMessage is the gossip receiver for certify message.
 func (c *Certifier) HandleCertifyMessage(ctx context.Context, peer p2p.Peer, data []byte) error {
+	err := c.handleCertifyMessage(ctx, peer, data)
+	if err != nil && errors.Is(err, errMalformedData) {
+		c.logger.WithContext(ctx).With().Warning("malformed cert msg", log.Stringer("peer", peer), log.Err(err))
+	}
+	return err
+}
+
+// HandleCertifyMessage is the gossip receiver for certify message.
+func (c *Certifier) handleCertifyMessage(ctx context.Context, peer p2p.Peer, data []byte) error {
 	if c.isShuttingDown() {
 		return errors.New("certifier shutting down")
 	}
