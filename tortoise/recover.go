@@ -25,6 +25,18 @@ func Recover(db *datastore.CachedDB, beacon system.BeaconGetter, opts ...Opt) (*
 	if err != nil {
 		return nil, fmt.Errorf("failed to load latest known layer: %v", err)
 	}
+
+	if latest == 0 && types.GetEffectiveGenesis() != types.FirstEffectiveGenesis() {
+		first := types.GetEffectiveGenesis().GetEpoch()
+		for _, epoch := range []types.EpochID{first, first + 1} {
+			if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
+				trtl.OnAtx(header)
+				return true
+			}); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if latest <= types.GetEffectiveGenesis() {
 		return trtl, nil
 	}

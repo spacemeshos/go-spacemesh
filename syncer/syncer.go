@@ -179,7 +179,7 @@ func NewSyncer(
 	s.isBusy.Store(0)
 	s.targetSyncedLayer.Store(types.LayerID(0))
 	s.lastLayerSynced.Store(s.mesh.ProcessedLayer())
-	s.lastEpochSynced.Store(types.EpochID(0))
+	s.lastEpochSynced.Store(types.GetEffectiveGenesis().GetEpoch() - 1)
 	return s
 }
 
@@ -222,7 +222,7 @@ func (s *Syncer) Start(ctx context.Context) {
 	s.syncOnce.Do(func() {
 		s.logger.WithContext(ctx).Info("starting syncer loop")
 		s.eg.Go(func() error {
-			if s.ticker.CurrentLayer().Uint32() <= 1 {
+			if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
 				s.setATXSynced()
 				s.setSyncState(ctx, synced)
 			}
@@ -429,7 +429,8 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("latest", s.mesh.LatestLayer()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
-		log.Stringer("processed", s.mesh.ProcessedLayer()))
+		log.Stringer("processed", s.mesh.ProcessedLayer()),
+	)
 	return success
 }
 
@@ -453,6 +454,17 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 		}
 		s.setATXSynced()
 		return nil
+	}
+
+	// after recovering from a checkpoint, we want to be aggressive syncing atx from peers
+	// as a form of regossip for atxs that didn't make it into the checkpoint data.
+	if types.FirstEffectiveGenesis() != types.GetEffectiveGenesis() &&
+		(s.ticker.CurrentLayer() < types.GetEffectiveGenesis() ||
+			s.ticker.CurrentLayer().GetEpoch() == types.GetEffectiveGenesis().GetEpoch()) {
+		// sync atxs for the first recovery epoch
+		if err := s.fetchATXsForEpoch(ctx, types.GetEffectiveGenesis().GetEpoch()+1); err != nil {
+			return err
+		}
 	}
 
 	// steady state atx syncing

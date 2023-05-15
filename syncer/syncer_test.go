@@ -101,7 +101,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		SyncCertDistance: 4,
 		HareDelayLayers:  5,
 	}
-	ts.syncer = NewSyncer(ts.cdb, mt, ts.mBeacon, ts.msh, nil, nil, ts.mLyrPatrol, ts.mCertHdr,
+	ts.syncer = NewSyncer(ts.cdb, ts.mTicker, ts.mBeacon, ts.msh, nil, nil, ts.mLyrPatrol, ts.mCertHdr,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withDataFetcher(ts.mDataFetcher),
@@ -706,4 +706,21 @@ func TestSyncer_IsBeaconSynced(t *testing.T) {
 	require.False(t, ts.syncer.IsBeaconSynced(epoch))
 	ts.mBeacon.EXPECT().GetBeacon(epoch).Return(types.RandomBeacon(), nil)
 	require.True(t, ts.syncer.IsBeaconSynced(epoch))
+}
+
+func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+	current := types.GetEffectiveGenesis().Add(types.GetLayersPerEpoch() * 5)
+	// recover from a checkpoint
+	types.SetEffectiveGenesis(current.Uint32())
+	ts.mTicker.advanceToLayer(current)
+	ts.syncer = NewSyncer(ts.cdb, ts.mTicker, ts.mBeacon, ts.msh, nil, nil, ts.mLyrPatrol, ts.mCertHdr,
+		WithConfig(ts.syncer.cfg),
+		WithLogger(ts.syncer.logger),
+		withDataFetcher(ts.mDataFetcher),
+		withForkFinder(ts.mForkFinder))
+	// should not sync any atxs before current epoch
+	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), current.GetEpoch())
+	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.Equal(t, current.GetEpoch(), ts.syncer.lastAtxEpoch())
 }
