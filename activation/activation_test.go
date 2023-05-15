@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -312,6 +314,59 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		}
 		require.NoError(t, eg.Wait())
 	})
+}
+
+func TestBuilder_StartSmeshingAvoidsPanickingIfPrepareInitializerReturnsError(t *testing.T) {
+	// First verify that a panic occurs when PrepareInitializer does not return
+	// an error but StartSession does.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	l := log.NewMockLogger(gomock.NewController(t))
+	panicCalled := make(chan struct{})
+	l.EXPECT().Panic(gomock.Any(), gomock.Any()).Do(func(_, _ any) {
+		close(panicCalled)
+	})
+	tab := newTestBuilder(t)
+	tab.log = l
+
+	// Stub these methods in case they get called
+	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes()
+	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).AnyTimes()
+
+	// Set expectations
+	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).Return(nil)
+	tab.mpost.EXPECT().StartSession(gomock.Any()).Return(errors.New("should panic"))
+	tab.StartSmeshing(tab.coinbase, PostSetupOpts{})
+
+	select {
+	case <-panicCalled:
+		// Success
+	case <-ctx.Done():
+		require.Fail(t, "test timed out or failed")
+	}
+
+	// Now verify that a panic does not occur if PrepareInitializer returns an error
+	l = log.NewMockLogger(gomock.NewController(t))
+	tab = newTestBuilder(t)
+	tab.log = l
+
+	// Stub these methods in case they get called
+	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes()
+	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).AnyTimes()
+
+	// Set expectations, we don't expect StartSession to be called, since
+	// StartSmeshing should exit early if PrepareInitializer returns an error.
+	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(),
+		gomock.Any()).Return(errors.New("avoid panic"))
+
+	// We check that no new goroutines were started as a result of the call to
+	// StartSmeshing, this assures us that upon returning from StartSmeshing
+	// there is no chance that StartSession is subsequently called in a
+	// goroutine.
+	goroutineCount := runtime.NumGoroutine()
+	tab.StartSmeshing(tab.coinbase, PostSetupOpts{})
+	require.Equal(t, goroutineCount, runtime.NumGoroutine())
 }
 
 func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
