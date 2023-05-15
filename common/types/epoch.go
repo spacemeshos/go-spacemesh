@@ -32,12 +32,12 @@ func (e *EpochID) DecodeScale(dec *scale.Decoder) (int, error) {
 
 // IsGenesis returns true if this epoch is in genesis. The first two epochs are considered genesis epochs.
 func (e EpochID) IsGenesis() bool {
-	return e < 2
+	return e <= GetEffectiveGenesis().GetEpoch()
 }
 
 // FirstLayer returns the layer ID of the first layer in the epoch.
 func (e EpochID) FirstLayer() LayerID {
-	return LayerID(uint32(e)).Mul(GetLayersPerEpoch())
+	return LayerID(e).Mul(GetLayersPerEpoch())
 }
 
 // Add Epochs to the EpochID. Panics on wraparound.

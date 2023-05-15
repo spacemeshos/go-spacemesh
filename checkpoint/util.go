@@ -2,9 +2,14 @@ package checkpoint
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"path/filepath"
+	"time"
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"github.com/spf13/afero"
@@ -31,8 +36,21 @@ func NewRecoveryFile(fs afero.Fs, path string) (*RecoveryFile, error) {
 	}, nil
 }
 
+func (rf *RecoveryFile) copy(fs afero.Fs, src io.Reader) error {
+	n, err := io.Copy(rf.fwriter, src)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("no recovery data")
+	}
+	return rf.save(fs)
+}
+
 func (rf *RecoveryFile) save(fs afero.Fs) error {
-	defer rf.file.Close()
+	defer func() {
+		_ = rf.file.Close()
+	}()
 	if err := rf.fwriter.Flush(); err != nil {
 		return fmt.Errorf("flush tmp file: %w", err)
 	}
@@ -61,4 +79,72 @@ func ValidateSchema(data []byte) error {
 		return fmt.Errorf("validate checkpoint data: %w", err)
 	}
 	return nil
+}
+
+func copyfile(fs afero.Fs, src, dst string) error {
+	rf, err := NewRecoveryFile(fs, dst)
+	if err != nil {
+		return fmt.Errorf("new recovery file %w", err)
+	}
+	srcf, err := fs.Open(src)
+	if err != nil {
+		return fmt.Errorf("open src recovery file: %w", err)
+	}
+	defer func() {
+		_ = srcf.Close()
+	}()
+	return rf.copy(fs, srcf)
+}
+
+func httpToLocalFile(ctx context.Context, client *http.Client, resource *url.URL, fs afero.Fs, dst string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, resource.String(), nil)
+	if err != nil {
+		return fmt.Errorf("create http request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("http get bootstrap file: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	rf, err := NewRecoveryFile(fs, dst)
+	if err != nil {
+		return fmt.Errorf("new recovery file %w", err)
+	}
+	return rf.copy(fs, resp.Body)
+}
+
+func backupRecovery(fs afero.Fs, recoveryDir string) (string, error) {
+	if _, err := fs.Stat(recoveryDir); err != nil {
+		return "", nil
+	}
+	backupDir := fmt.Sprintf("%s.%d", recoveryDir, time.Now().Unix())
+	if err := fs.Rename(recoveryDir, backupDir); err != nil {
+		return "", fmt.Errorf("backup old checkpoint data: %w", err)
+	}
+	return backupDir, nil
+}
+
+func backupOldDb(fs afero.Fs, srcDir, dbFile string) (string, error) {
+	backupDir := filepath.Join(srcDir, fmt.Sprintf("%s.%d", "backup", time.Now().Unix()))
+	if err := fs.MkdirAll(backupDir, dirPerm); err != nil {
+		return "", fmt.Errorf("create backup dir: %w", err)
+	}
+	// sqlite create .sql, .sql-shm and .sql-wal files.
+	files, err := afero.Glob(fs, filepath.Join(srcDir, fmt.Sprintf("%s*", dbFile)))
+	if err != nil {
+		return "", fmt.Errorf("list db files: %w", err)
+	}
+	if len(files) == 0 {
+		return "", nil
+	}
+	for _, src := range files {
+		dst := filepath.Join(backupDir, filepath.Base(src))
+		if err = fs.Rename(src, dst); err != nil {
+			return "", err
+		}
+	}
+	return backupDir, nil
 }

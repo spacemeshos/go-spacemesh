@@ -13,7 +13,7 @@ import (
 
 func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, fees uint64, blockRewards []types.CoinbaseReward) ([]types.Reward, error) {
 	var (
-		layersAfterEffectiveGenesis = lctx.Layer.Difference(types.GetEffectiveGenesis())
+		layersAfterEffectiveGenesis = lctx.Layer.Difference(types.FirstEffectiveGenesis())
 		subsidy                     = rewards.TotalSubsidyAtLayer(layersAfterEffectiveGenesis)
 		total                       = subsidy + fees
 		transferred                 uint64

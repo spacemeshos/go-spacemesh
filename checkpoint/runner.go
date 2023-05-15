@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/afero"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -22,45 +21,6 @@ const (
 	schemaFile    = "schema.json"
 	dirPerm       = 0o700
 )
-
-type Runner struct {
-	fs     afero.Fs
-	db     *sql.Database
-	logger log.Log
-	dir    string
-}
-
-type Opt func(*Runner)
-
-func WithDataDir(dir string) Opt {
-	return func(r *Runner) {
-		r.dir = dir
-	}
-}
-
-func WithLogger(lg log.Log) Opt {
-	return func(r *Runner) {
-		r.logger = lg
-	}
-}
-
-func WithFilesystem(fs afero.Fs) Opt {
-	return func(r *Runner) {
-		r.fs = fs
-	}
-}
-
-func NewRunner(db *sql.Database, opts ...Opt) *Runner {
-	r := &Runner{
-		fs:     afero.NewOsFs(),
-		db:     db,
-		logger: log.NewNop(),
-	}
-	for _, opt := range opts {
-		opt(r)
-	}
-	return r
-}
 
 func checkpointDB(ctx context.Context, db *sql.Database, snapshot, restore types.LayerID) (*Checkpoint, error) {
 	checkpoint := &Checkpoint{
@@ -75,7 +35,9 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot, restore types
 	if err != nil {
 		return nil, fmt.Errorf("create db tx: %s", err)
 	}
-	defer tx.Release()
+	defer func() {
+		_ = tx.Release()
+	}()
 
 	atxSnapshot, err := atxs.LatestN(tx, 2)
 	if err != nil {
@@ -129,27 +91,23 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot, restore types
 	return checkpoint, nil
 }
 
-func (r *Runner) Generate(ctx context.Context, snapshot, restore types.LayerID) (string, error) {
-	checkpoint, err := checkpointDB(ctx, r.db, snapshot, restore)
+func Generate(ctx context.Context, fs afero.Fs, db *sql.Database, dataDir string, snapshot, restore types.LayerID) error {
+	checkpoint, err := checkpointDB(ctx, db, snapshot, restore)
 	if err != nil {
-		return "", err
+		return err
 	}
-	rf, err := NewRecoveryFile(r.fs, SelfCheckpointFilename(r.dir, snapshot, restore))
+	rf, err := NewRecoveryFile(fs, SelfCheckpointFilename(dataDir, snapshot, restore))
 	if err != nil {
-		return "", fmt.Errorf("new recovery file: %w", err)
+		return fmt.Errorf("new recovery file: %w", err)
 	}
 	// one writer persist the checkpoint data, one returning result to caller.
 	if err = json.NewEncoder(rf.fwriter).Encode(checkpoint); err != nil {
-		return "", fmt.Errorf("marshal checkpoint json: %w", err)
+		return fmt.Errorf("marshal checkpoint json: %w", err)
 	}
-	if err = rf.save(r.fs); err != nil {
-		return "", err
+	if err = rf.save(fs); err != nil {
+		return err
 	}
-	r.logger.With().Info("checkpoint persisted",
-		log.String("checkpoint", rf.path),
-		log.Int("size", rf.fwriter.Size()),
-	)
-	return rf.path, nil
+	return nil
 }
 
 func SelfCheckpointFilename(dataDir string, snapshotLayer, restoreLayer types.LayerID) string {

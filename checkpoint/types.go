@@ -1,10 +1,5 @@
 package checkpoint
 
-import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
-)
-
 type Checkpoint struct {
 	Version string    `json:"version"`
 	Data    InnerData `json:"data"`
@@ -28,15 +23,6 @@ type ShortAtx struct {
 	PublicKey      []byte `json:"publicKey"`
 	Sequence       uint64 `json:"sequence"`
 	Coinbase       []byte `json:"coinbase"`
-}
-
-func (vatx ShortAtx) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddString("atx_id", types.BytesToHash(vatx.ID).ShortString())
-	encoder.AddString("smesher", types.BytesToNodeID(vatx.PublicKey).String())
-	encoder.AddString("commitment_atx_id", types.BytesToHash(vatx.CommitmentAtx).String())
-	encoder.AddUint32("epoch", vatx.Epoch)
-	encoder.AddUint64("sequence_number", vatx.Sequence)
-	return nil
 }
 
 type Account struct {

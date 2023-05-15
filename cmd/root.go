@@ -22,6 +22,8 @@ func ResetConfig() {
 func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringP("preset", "p", "",
 		fmt.Sprintf("preset overwrites default values of the config. options %+s", presets.Options()))
+	cmd.PersistentFlags().StringP("checkpoint", "k", "",
+		"reset the node state based on the supplied checkpoint file")
 
 	/** ======================== BaseConfig Flags ========================== **/
 	cmd.PersistentFlags().StringVarP(&cfg.BaseConfig.ConfigFile,
