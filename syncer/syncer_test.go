@@ -723,4 +723,5 @@ func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), current.GetEpoch())
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.Equal(t, current.GetEpoch(), ts.syncer.lastAtxEpoch())
+	types.SetEffectiveGenesis(types.FirstEffectiveGenesis().Uint32())
 }

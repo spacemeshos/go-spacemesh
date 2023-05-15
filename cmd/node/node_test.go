@@ -557,6 +557,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	r.NoError(err)
+	app.edSgn = signer
 	address := wallet.Address(signer.PublicKey().Bytes())
 
 	appCtx, appCancel := context.WithCancel(context.Background())
