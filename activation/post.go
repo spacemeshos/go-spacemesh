@@ -18,7 +18,7 @@ import (
 )
 
 // PostSetupProvider represent a compute provider for Post setup data creation.
-type PostSetupProvider initialization.ComputeProvider
+type PostSetupProvider initialization.Provider
 
 // PostConfig is the configuration of the Post protocol, used for data creation, proofs generation and validation.
 type PostConfig struct {
@@ -187,7 +187,7 @@ func (mgr *PostSetupManager) BestProvider() (*PostSetupProvider, error) {
 
 // Benchmark runs a short benchmarking session for a given provider to evaluate its performance.
 func (mgr *PostSetupManager) Benchmark(p PostSetupProvider) (int, error) {
-	score, err := initialization.Benchmark(initialization.ComputeProvider(p))
+	score, err := initialization.Benchmark(initialization.Provider(p))
 	if err != nil {
 		return score, fmt.Errorf("benchmark GPU: %w", err)
 	}
