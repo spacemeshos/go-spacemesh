@@ -124,7 +124,14 @@ type PublishSubsciber interface {
 	Subscriber
 }
 
-// GossipHandler is a function that is for receiving messages.
+// GossipHandler is a function that is for receiving messages from the pubsub
+// system. The returned error will be translated into a
+// pubsusb.ValidationResult returned to the pubsub system.
+//
+// The translation works as follows:
+// If errors.Is(err, ValidationRejectErr) == true -> pubsub.ValidationReject.
+// If err == nil -> pubsub.ValidationAccept.
+// Otherwise -> pubsub.ValidationIgnore.
 type GossipHandler = func(context.Context, peer.ID, []byte) error
 
 // ValidationResult is a one of the validation result constants.

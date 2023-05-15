@@ -26,7 +26,7 @@ import (
 
 var (
 	errKnownAtx      = errors.New("known atx")
-	errMalformedData = errors.New("malformed data")
+	errMalformedData = fmt.Errorf("malformed data: %w", pubsub.ValidationRejectErr)
 	errMaliciousATX  = errors.New("malicious atx")
 )
 

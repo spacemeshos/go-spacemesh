@@ -85,7 +85,7 @@ func TestWeakCoin(t *testing.T) {
 		nodeSig          types.VrfSignature
 		mining, expected bool
 		msg              []byte
-		result           error
+		result           func(error) bool
 	}{
 		{
 			desc:     "node not mining",
@@ -99,7 +99,7 @@ func TestWeakCoin(t *testing.T) {
 				NodeID:       zeroLSBMiner,
 				VrfSignature: zeroLSBSig,
 			}),
-			result: nil,
+			result: nilErr,
 		},
 		{
 			desc:     "node mining",
@@ -113,7 +113,7 @@ func TestWeakCoin(t *testing.T) {
 				NodeID:       zeroLSBMiner,
 				VrfSignature: zeroLSBSig,
 			}),
-			result: errors.New("ignore"),
+			result: isErr,
 		},
 		{
 			desc:     "node mining but exceed threshold",
@@ -127,7 +127,7 @@ func TestWeakCoin(t *testing.T) {
 				NodeID:       zeroLSBMiner,
 				VrfSignature: zeroLSBSig,
 			}),
-			result: nil,
+			result: nilErr,
 		},
 		{
 			desc:     "node only miner",
@@ -177,7 +177,7 @@ func TestWeakCoin(t *testing.T) {
 			}
 
 			if len(tc.msg) > 0 {
-				require.Equal(t, tc.result, wc.HandleProposal(context.Background(), "", tc.msg))
+				require.True(t, tc.result(wc.HandleProposal(context.Background(), "", tc.msg)))
 			}
 			wc.FinishRound(context.Background())
 
@@ -209,7 +209,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 		startedEpoch types.EpochID
 		startedRound types.RoundID
 		msg          []byte
-		expected     error
+		expected     func(error) bool
 	}{
 		{
 			desc:         "ValidProposal",
@@ -222,14 +222,14 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: nil,
+			expected: nilErr,
 		},
 		{
 			desc:         "Malformed",
 			startedEpoch: epoch,
 			startedRound: round,
 			msg:          []byte{1, 2, 3},
-			expected:     pubsub.ValidationRejectErr,
+			expected:     isValidationRejectErr,
 		},
 		{
 			desc:         "ExceedAllowance",
@@ -242,7 +242,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: errors.New("ignore"),
+			expected: isErr,
 		},
 		{
 			desc:         "ExceedThreshold",
@@ -255,7 +255,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       highLSBMiner,
 				VrfSignature: higherThreshold,
 			}),
-			expected: errors.New("ignore"),
+			expected: isErr,
 		},
 		{
 			desc:         "PreviousEpoch",
@@ -268,7 +268,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: errors.New("ignore"),
+			expected: isErr,
 		},
 		{
 			desc:         "NextEpoch",
@@ -281,7 +281,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: errors.New("ignore"),
+			expected: isErr,
 		},
 		{
 			desc:         "PreviousRound",
@@ -294,7 +294,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: errors.New("ignore"),
+			expected: isErr,
 		},
 		{
 			desc:         "NextRound",
@@ -307,7 +307,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: nil,
+			expected: nilErr,
 		},
 	}
 	for _, tc := range tcs {
@@ -331,7 +331,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			wc.StartEpoch(context.Background(), tc.startedEpoch)
 			wc.StartRound(context.Background(), tc.startedRound, nil)
 
-			require.Equal(t, tc.expected, wc.HandleProposal(context.Background(), "", tc.msg))
+			require.True(t, tc.expected(wc.HandleProposal(context.Background(), "", tc.msg)))
 			wc.FinishRound(context.Background())
 		})
 	}
@@ -522,4 +522,16 @@ func FuzzMessageConsistency(f *testing.F) {
 
 func FuzzMessageStateSafety(f *testing.F) {
 	tester.FuzzSafety[weakcoin.Message](f)
+}
+
+func nilErr(err error) bool {
+	return err == nil
+}
+
+func isErr(err error) bool {
+	return err != nil
+}
+
+func isValidationRejectErr(err error) bool {
+	return errors.Is(err, pubsub.ValidationRejectErr)
 }

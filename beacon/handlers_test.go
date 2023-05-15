@@ -16,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -203,7 +202,7 @@ func Test_HandleProposal_InitEpoch(t *testing.T) {
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 	res := tpd.HandleProposal(context.Background(), "peerID", msgBytes)
-	require.Equal(t, pubsub.ValidationAccept, res)
+	require.Equal(t, nil, res)
 }
 
 func Test_HandleProposal_Success(t *testing.T) {
@@ -242,7 +241,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 	mockChecker.EXPECT().PassStrictThreshold(gomock.Any()).Return(true)
 	res := tpd.HandleProposal(context.Background(), "peerID", msgBytes1)
-	require.Equal(t, pubsub.ValidationAccept, res)
+	require.Equal(t, nil, res)
 
 	require.NoError(t, tpd.markProposalPhaseFinished(epoch, time.Now()))
 
@@ -254,7 +253,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 	// tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart)
 	mockChecker.EXPECT().PassThreshold(gomock.Any()).Return(true)
 	res = tpd.HandleProposal(context.Background(), "peerID", msgBytes2)
-	require.Equal(t, pubsub.ValidationAccept, res)
+	require.Equal(t, nil, res)
 
 	p1 := ProposalFromVrf(msg1.VRFSignature)
 	p2 := ProposalFromVrf(msg2.VRFSignature)
@@ -284,7 +283,7 @@ func Test_HandleProposal_Shutdown(t *testing.T) {
 	require.NoError(t, err)
 
 	res := tpd.HandleProposal(context.Background(), "peerID", msgBytes)
-	require.Equal(t, pubsub.ValidationIgnore, res)
+	require.Error(t, res)
 
 	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), false)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
@@ -319,7 +318,7 @@ func Test_HandleProposal_NotInProtocolStillWorks(t *testing.T) {
 	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 	mockChecker.EXPECT().PassStrictThreshold(gomock.Any()).Return(true)
 	res := tpd.HandleProposal(context.Background(), "peerID", msgBytes)
-	require.Equal(t, pubsub.ValidationAccept, res)
+	require.Equal(t, nil, res)
 
 	p := ProposalFromVrf(msg.VRFSignature)
 	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), true)
@@ -773,7 +772,7 @@ func Test_HandleFirstVotes_Success(t *testing.T) {
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	res := tpd.HandleFirstVotes(context.Background(), "peerID", msgBytes)
-	require.Equal(t, pubsub.ValidationAccept, res)
+	require.Equal(t, nil, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, true)
 	expected := map[types.NodeID]proposalList{
 		signer.NodeID(): append(validVotes, pValidVotes...),
@@ -803,7 +802,7 @@ func Test_HandleFirstVotes_Shutdown(t *testing.T) {
 	require.NoError(t, err)
 
 	res := tpd.HandleFirstVotes(context.Background(), "peerID", msgBytes)
-	require.Equal(t, pubsub.ValidationIgnore, res)
+	require.Error(t, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, false)
 	checkFirstIncomingVotes(t, tpd.ProtocolDriver, epoch, map[types.NodeID]proposalList{})
 }
@@ -829,7 +828,7 @@ func Test_HandleFirstVotes_NotInProtocol(t *testing.T) {
 
 	tpd.setEndProtocol(context.Background())
 	res := tpd.HandleFirstVotes(context.Background(), "peerID", msgBytes)
-	require.Equal(t, pubsub.ValidationIgnore, res)
+	require.Error(t, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, false)
 	checkFirstIncomingVotes(t, tpd.ProtocolDriver, epoch, map[types.NodeID]proposalList{})
 }
@@ -1039,7 +1038,7 @@ func Test_HandleFollowingVotes_Success(t *testing.T) {
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	res := tpd.HandleFollowingVotes(context.Background(), "peerID", msgBytes)
-	require.Equal(t, pubsub.ValidationAccept, res)
+	require.Equal(t, nil, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, true)
 	expected := make(map[Proposal]*big.Int, len(plist))
 	for i, p := range plist {
@@ -1068,7 +1067,7 @@ func Test_HandleFollowingVotes_Shutdown(t *testing.T) {
 	require.NoError(t, err)
 
 	res := tpd.HandleFollowingVotes(context.Background(), "peerID", msgBytes)
-	require.Equal(t, pubsub.ValidationIgnore, res)
+	require.Error(t, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, false)
 	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }
@@ -1089,7 +1088,7 @@ func Test_HandleFollowingVotes_NotInProtocol(t *testing.T) {
 
 	tpd.setEndProtocol(context.Background())
 	res := tpd.HandleFollowingVotes(context.Background(), "peerID", msgBytes)
-	require.Equal(t, pubsub.ValidationIgnore, res)
+	require.Error(t, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, false)
 	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }

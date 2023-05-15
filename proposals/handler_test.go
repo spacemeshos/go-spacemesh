@@ -918,7 +918,7 @@ func TestProposal_MalformedData(t *testing.T) {
 	data, err := codec.Encode(&p.InnerProposal)
 	require.NoError(t, err)
 	require.ErrorIs(t, th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data), errMalformedData)
-	require.Equal(t, pubsub.ValidationReject, th.HandleProposal(context.Background(), "", data))
+	require.ErrorIs(t, th.HandleProposal(context.Background(), "", data), pubsub.ValidationRejectErr)
 	checkProposal(t, th.cdb, p, false)
 }
 
@@ -930,7 +930,7 @@ func TestProposal_BadSignature(t *testing.T) {
 	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
 	require.ErrorContains(t, got, "failed to verify proposal signature")
 
-	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
+	require.Error(t, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)
 }
 
@@ -942,7 +942,7 @@ func TestProposal_AtxFromDifferentSmesher(t *testing.T) {
 	got := th.HandleSyncedProposal(context.Background(), "", data)
 	require.ErrorIs(t, got, errWrongSmesherID)
 
-	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
+	require.Error(t, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)
 }
 
@@ -967,7 +967,7 @@ func TestProposal_InconsistentSmeshers(t *testing.T) {
 	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
 	require.ErrorContains(t, got, "failed to verify proposal signature")
 
-	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
+	require.Error(t, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)
 }
 
@@ -979,7 +979,7 @@ func TestProposal_KnownProposal(t *testing.T) {
 	require.NoError(t, proposals.Add(th.cdb, p))
 	data := encodeProposal(t, p)
 	require.NoError(t, th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data))
-	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
+	require.Error(t, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, true)
 }
 
@@ -1216,7 +1216,7 @@ func TestProposal_BroadcastMaliciousGossip(t *testing.T) {
 			return nil
 		})
 	data := encodeProposal(t, pMal)
-	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), peer, data))
+	require.Error(t, th.HandleProposal(context.Background(), peer, data))
 	checkProposal(t, th.cdb, pMal, true)
 }
 
@@ -1274,10 +1274,10 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 			th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).Return(nil, nil)
 			th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil)
 			if tc.propFetched {
-				require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), peer, data))
+				require.Error(t, th.HandleProposal(context.Background(), peer, data))
 			} else {
 				th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.Layer, p.ID(), p.TxIDs).Return(nil).Times(1)
-				require.Equal(t, pubsub.ValidationAccept, th.HandleProposal(context.Background(), peer, data))
+				require.Equal(t, nil, th.HandleProposal(context.Background(), peer, data))
 			}
 			checkProposal(t, th.cdb, p, true)
 		})
