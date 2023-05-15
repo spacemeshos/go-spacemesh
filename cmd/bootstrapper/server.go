@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/afero"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -193,6 +195,8 @@ func (s *Server) startHttp(ch chan error) {
 		return
 	}
 	http.HandleFunc("/", s.handle)
+	http.HandleFunc("/checkpoint", s.handleCheckpoint)
+	http.HandleFunc("/updateCheckpoint", s.handleUpdate)
 	s.logger.With().Info("server starts serving", log.String("addr", ln.Addr().String()))
 	if err = s.Serve(ln); err != nil {
 		ch <- err
@@ -200,23 +204,67 @@ func (s *Server) startHttp(ch chan error) {
 }
 
 func (s *Server) Stop(ctx context.Context) {
+	s.logger.With().Info("shutting down server")
 	_ = s.Shutdown(ctx)
 	_ = s.eg.Wait()
 }
 
 func (s *Server) handle(w http.ResponseWriter, _ *http.Request) {
+	s.servefile(PersistedFilename(), w)
+}
+
+func (s *Server) handleCheckpoint(w http.ResponseWriter, _ *http.Request) {
+	s.servefile(CheckpointFilename(), w)
+}
+
+func (s *Server) servefile(f string, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
-	data, err := afero.ReadFile(s.fs, PersistedFilename())
+	data, err := afero.ReadFile(s.fs, f)
 	if err != nil && errors.Is(err, afero.ErrFileNotFound) {
 		return
 	}
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "servefile %s: %v", f, err)
 		return
 	}
 
 	if _, err = w.Write(data); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "write response %s: %v", f, err)
 		return
 	}
+}
+
+func CheckpointFilename() string {
+	return filepath.Join(dataDir, "spacemesh-checkpoint")
+}
+
+func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "ParseForm err: %v", err)
+		return
+	}
+	data := r.FormValue("checkpoint")
+
+	// validate
+	if err := checkpoint.ValidateSchema([]byte(data)); err != nil {
+		s.logger.With().Warning("invalid checkpoint data", log.Err(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "validate checkpoint err: %v", err)
+		return
+	}
+
+	filename := CheckpointFilename()
+	err := afero.WriteFile(s.fs, filename, []byte(data), 0o600)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "save checkpoint err: %v", err)
+		return
+	}
+	s.logger.With().Info("saved checkpoint data",
+		log.String("data", data),
+		log.String("filename", filename),
+	)
 }
