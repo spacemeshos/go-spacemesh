@@ -78,7 +78,7 @@ $(PROJ_DIR)$(GPU_SETUP_ZIP):
 get-gpu-setup: $(PROJ_DIR)$(GPU_SETUP_ZIP) $(BINDIR_GPU_SETUP_LIBS)
 .PHONY: get-gpu-setup
 
-POSTRS_SETUP_REV = 0.1.8
+POSTRS_SETUP_REV = 0.1.10
 POSTRS_SETUP_ZIP = libpost-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SETUP_URL_ZIP ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SETUP_ZIP)
 ifeq ($(platform), windows)
@@ -100,7 +100,17 @@ $(BINDIR_POSTRS_SETUP_LIBS): $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
 $(PROJ_DIR)$(POSTRS_SETUP_ZIP):
 	curl -L $(POSTRS_SETUP_URL_ZIP) -o $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
 
-get-postrs-lib: $(PROJ_DIR)$(POSTRS_SETUP_ZIP) $(BINDIR_POSTRS_SETUP_LIBS)
+install-deps:
+ifeq ($(platform), $(filter $(platform), linux linux-arm64))
+	sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2 clinfo
+else
+ifeq ($(platform), windows)
+	choco install opencl-intel-cpu-runtime
+endif
+endif
+.PHONY: install-deps
+
+get-postrs-lib: $(PROJ_DIR)$(POSTRS_SETUP_ZIP) $(BINDIR_POSTRS_SETUP_LIBS) install-deps
 
 SUBDIRS_LVL1 := $(foreach X,$(wildcard $(dir $(PROJ_DIR))*/.), $(lastword $(subst /, ,$(dir $(X)))))
 SUBDIRS_ONLY := $(sort \
