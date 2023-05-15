@@ -10,7 +10,6 @@ import (
 type Account struct {
 	Layer           LayerID
 	Address         Address
-	Initialized     bool
 	NextNonce       uint64
 	Balance         uint64
 	TemplateAddress *Address

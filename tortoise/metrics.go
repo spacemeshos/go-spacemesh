@@ -78,7 +78,6 @@ var (
 	)
 	waitBallotDuration   = onBallotHist.WithLabelValues("wait")
 	decodeBallotDuration = onBallotHist.WithLabelValues("decode")
-	storeBallotDuration  = onBallotHist.WithLabelValues("store")
 	fcountBallotDuration = onBallotHist.WithLabelValues("full_count")
 	vcountBallotDuration = onBallotHist.WithLabelValues("verifying_count")
 )

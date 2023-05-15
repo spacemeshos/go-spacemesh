@@ -89,11 +89,11 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 	}
 
 	if err := s.txHandler.VerifyAndCacheTx(ctx, in.Transaction); err != nil {
-		return nil, status.Error(codes.InvalidArgument, "Failed to verify transaction")
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("Failed to verify transaction: %s", err.Error()))
 	}
 
 	if err := s.publisher.Publish(ctx, pubsub.TxProtocol, in.Transaction); err != nil {
-		return nil, status.Error(codes.Internal, "Failed to publish transaction")
+		return nil, status.Error(codes.Internal, fmt.Sprintf("Failed to publish transaction: %s", err.Error()))
 	}
 
 	raw := types.NewRawTx(in.Transaction)
