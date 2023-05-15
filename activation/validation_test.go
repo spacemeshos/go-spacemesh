@@ -619,7 +619,8 @@ func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *typ
 
 func TestValidateMerkleProof(t *testing.T) {
 	challenge := types.CalcHash32([]byte("challenge"))
-	proof := newMerkleProof(t, challenge, []types.Hash32{
+
+	proof, root := newMerkleProof(t, challenge, []types.Hash32{
 		types.BytesToHash([]byte("leaf2")),
 		types.BytesToHash([]byte("leaf3")),
 		types.BytesToHash([]byte("leaf4")),
@@ -628,16 +629,23 @@ func TestValidateMerkleProof(t *testing.T) {
 	t.Run("valid proof", func(t *testing.T) {
 		t.Parallel()
 
-		err := validateMerkleProof(challenge[:], &proof)
+		err := validateMerkleProof(challenge[:], &proof, root[:])
 		require.NoError(t, err)
 	})
 	t.Run("invalid proof", func(t *testing.T) {
 		t.Parallel()
 
 		invalidProof := proof
-		invalidProof.Root = types.BytesToHash([]byte("invalid root"))
+		invalidProof.Nodes = append([]types.Hash32{}, invalidProof.Nodes...)
+		invalidProof.Nodes[0] = types.BytesToHash([]byte("invalid leaf"))
 
-		err := validateMerkleProof(challenge[:], &invalidProof)
+		err := validateMerkleProof(challenge[:], &invalidProof, root[:])
+		require.Error(t, err)
+	})
+	t.Run("invalid proof - different root", func(t *testing.T) {
+		t.Parallel()
+
+		err := validateMerkleProof(challenge[:], &proof, []byte("expected root"))
 		require.Error(t, err)
 	})
 }

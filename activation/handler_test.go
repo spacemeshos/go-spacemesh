@@ -32,7 +32,7 @@ import (
 
 const layersPerEpochBig = 1000
 
-func newMerkleProof(t testing.TB, challenge types.Hash32, otherLeafs []types.Hash32) types.MerkleProof {
+func newMerkleProof(t testing.TB, challenge types.Hash32, otherLeafs []types.Hash32) (types.MerkleProof, types.Hash32) {
 	t.Helper()
 	tree, err := merkle.NewTreeBuilder().
 		WithHashFunc(poetShared.HashMembershipTreeNode).
@@ -49,19 +49,20 @@ func newMerkleProof(t testing.TB, challenge types.Hash32, otherLeafs []types.Has
 		nodesH32 = append(nodesH32, types.BytesToHash(n))
 	}
 	return types.MerkleProof{
-		Root:  types.BytesToHash(root),
 		Nodes: nodesH32,
-	}
+	}, types.BytesToHash(root)
 }
 
 func newNIPostWithChallenge(t testing.TB, challenge types.Hash32, poetRef []byte) *types.NIPost {
 	t.Helper()
+	proof, _ := newMerkleProof(t, challenge, []types.Hash32{
+		types.BytesToHash([]byte("leaf2")),
+		types.BytesToHash([]byte("leaf3")),
+		types.BytesToHash([]byte("leaf4")),
+	})
+
 	return &types.NIPost{
-		Membership: newMerkleProof(t, challenge, []types.Hash32{
-			types.BytesToHash([]byte("leaf2")),
-			types.BytesToHash([]byte("leaf3")),
-			types.BytesToHash([]byte("leaf4")),
-		}),
+		Membership: proof,
 		Post: &types.Post{
 			Nonce:   0,
 			Indices: []byte(nil),

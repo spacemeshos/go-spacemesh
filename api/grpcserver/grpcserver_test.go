@@ -240,14 +240,13 @@ func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPo
 	if err := tree.AddLeaf(challenge[:]); err != nil {
 		panic("failed to add leaf to tree")
 	}
-	root, nodes := tree.RootAndProof()
+	nodes := tree.Proof()
 	nodesH32 := make([]types.Hash32, 0, len(nodes))
 	for _, n := range nodes {
 		nodesH32 = append(nodesH32, types.BytesToHash(n))
 	}
 	return &types.NIPost{
 		Membership: types.MerkleProof{
-			Root:  types.BytesToHash(root),
 			Nodes: nodesH32,
 		},
 		Post: &types.Post{

@@ -61,10 +61,6 @@ func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nip
 		return 0, err
 	}
 
-	if err := validateMerkleProof(expectedChallenge[:], &nipost.Membership); err != nil {
-		return 0, fmt.Errorf("invalid membership proof %w", err)
-	}
-
 	if err := v.Post(nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
 		return 0, fmt.Errorf("invalid Post: %v", err)
 	}
@@ -75,14 +71,15 @@ func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nip
 	if err != nil {
 		return 0, fmt.Errorf("poet proof is not available %x: %w", nipost.PostMetadata.Challenge, err)
 	}
-	if !bytes.Equal(statement[:], nipost.Membership.Root[:]) {
-		return 0, fmt.Errorf("invalid membership proof - root doesn't match poet proof statement; expected: %x, given: %x", statement[:], nipost.Membership.Root[:])
+
+	if err := validateMerkleProof(expectedChallenge[:], &nipost.Membership, statement[:]); err != nil {
+		return 0, fmt.Errorf("invalid membership proof %w", err)
 	}
 
 	return proof.LeafCount, nil
 }
 
-func validateMerkleProof(leaf []byte, proof *types.MerkleProof) error {
+func validateMerkleProof(leaf []byte, proof *types.MerkleProof, expectedRoot []byte) error {
 	nodes := make([][]byte, 0, len(proof.Nodes))
 	for _, n := range proof.Nodes {
 		nodes = append(nodes, n.Bytes())
@@ -90,7 +87,8 @@ func validateMerkleProof(leaf []byte, proof *types.MerkleProof) error {
 	ok, err := merkle.ValidatePartialTree(
 		[]uint64{proof.LeafIndex},
 		[][]byte{leaf},
-		nodes, proof.Root.Bytes(),
+		nodes,
+		expectedRoot,
 		poetShared.HashMembershipTreeNode,
 	)
 	if err != nil {
@@ -102,10 +100,10 @@ func validateMerkleProof(leaf []byte, proof *types.MerkleProof) error {
 			hexNodes = append(hexNodes, n.Hex())
 		}
 		return fmt.Errorf(
-			"invalid merkle proof, calculated root does not match the proof root, leaf: %v, nodes: %v, root: %v",
+			"invalid merkle proof, calculated root does not match the proof root, leaf: %v, nodes: %v, expected root: %v",
 			util.Encode(leaf),
 			hexNodes,
-			proof.Root.Hex(),
+			util.Encode(expectedRoot),
 		)
 	}
 	return nil

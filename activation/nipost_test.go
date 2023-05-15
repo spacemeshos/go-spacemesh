@@ -745,24 +745,32 @@ func TestConstructingMerkleProof(t *testing.T) {
 
 	t.Run("is odd member", func(t *testing.T) {
 		otherChallenge := types.NIPostChallenge{Sequence: 1}
-		proof, err := constructMerkleProof(challengeHash, []types.Member{
+		members := []types.Member{
 			types.Member(challengeHash),
 			types.Member(otherChallenge.Hash()),
-		})
+		}
+		proof, err := constructMerkleProof(challengeHash, members)
 		require.NoError(t, err)
 
-		err = validateMerkleProof(challengeHash[:], proof)
+		root, err := calcRoot(members)
+		require.NoError(t, err)
+
+		err = validateMerkleProof(challengeHash[:], proof, root)
 		require.NoError(t, err)
 	})
 	t.Run("is even member", func(t *testing.T) {
 		otherChallenge := types.NIPostChallenge{Sequence: 1}
-		proof, err := constructMerkleProof(challengeHash, []types.Member{
+		members := []types.Member{
 			types.Member(otherChallenge.Hash()),
 			types.Member(challengeHash),
-		})
+		}
+		proof, err := constructMerkleProof(challengeHash, members)
 		require.NoError(t, err)
 
-		err = validateMerkleProof(challengeHash[:], proof)
+		root, err := calcRoot(members)
+		require.NoError(t, err)
+
+		err = validateMerkleProof(challengeHash[:], proof, root)
 		require.NoError(t, err)
 	})
 }

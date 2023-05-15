@@ -414,13 +414,12 @@ func constructMerkleProof(challenge types.Hash32, members []types.Member) (*type
 			return nil, fmt.Errorf("adding leaf to Merkle Tree: %w", err)
 		}
 	}
-	root, nodes := tree.RootAndProof()
+	nodes := tree.Proof()
 	nodesH32 := make([]types.Hash32, 0, len(nodes))
 	for _, n := range nodes {
 		nodesH32 = append(nodesH32, types.BytesToHash(n))
 	}
 	return &types.MerkleProof{
-		Root:      types.BytesToHash(root),
 		LeafIndex: id,
 		Nodes:     nodesH32,
 	}, nil

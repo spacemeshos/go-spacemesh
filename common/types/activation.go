@@ -302,7 +302,6 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 
 // Merkle proof proving that a given leaf is included in the root of merkle tree.
 type MerkleProof struct {
-	Root Hash32
 	// Nodes on path from leaf to root (not including leaf)
 	Nodes     []Hash32 `scale:"max=32"`
 	LeafIndex uint64

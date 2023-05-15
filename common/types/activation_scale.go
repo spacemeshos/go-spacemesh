@@ -303,13 +303,6 @@ func (t *ActivationTx) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *MerkleProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.Root[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := scale.EncodeStructSliceWithLimit(enc, t.Nodes, 32)
 		if err != nil {
 			return total, err
@@ -327,13 +320,6 @@ func (t *MerkleProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 }
 
 func (t *MerkleProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := scale.DecodeByteArray(dec, t.Root[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
 	{
 		field, n, err := scale.DecodeStructSliceWithLimit[Hash32](dec, 32)
 		if err != nil {
