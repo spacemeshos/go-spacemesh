@@ -31,12 +31,12 @@ func (ps *PubSub) Register(topic string, handler GossipHandler) {
 	if _, exist := ps.topics[topic]; exist {
 		ps.logger.Panic("already registered a topic %s", topic)
 	}
-	ps.pubsub.RegisterTopicValidator(topic, func(ctx context.Context, pid peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
+	ps.pubsub.RegisterTopicValidator(topic, func(ctx context.Context, pid peer.ID, msg *pubsub.Message) error {
 		start := time.Now()
-		rst := handler(log.WithNewRequestID(ctx), pid, msg.Data)
-		metrics.ProcessedMessagesDuration.WithLabelValues(topic, castResult(rst)).
+		err := handler(log.WithNewRequestID(ctx), pid, msg.Data)
+		metrics.ProcessedMessagesDuration.WithLabelValues(topic, castResult(err)).
 			Observe(float64(time.Since(start)))
-		if rst == ValidationReject {
+		if err == ValidationRejectErr {
 			// We want to disconnect the peer and also penalize it which could result in it being blacklisted.
 
 			// Ok we close the peer here but the deadpeerhandler may try a redial if the state of the conn is connected
@@ -49,7 +49,7 @@ func (ps *PubSub) Register(topic string, handler GossipHandler) {
 				)
 			}
 		}
-		return rst
+		return err
 	})
 	topich, err := ps.pubsub.Join(topic)
 	if err != nil {

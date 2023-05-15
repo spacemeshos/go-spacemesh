@@ -9,13 +9,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var (
-	errMalformedData  = errors.New("malformed data")
+	errMalformedData  = fmt.Errorf("malformed data: %w", pubsub.ValidationRejectErr)
 	errInvalidRewards = errors.New("invalid rewards")
 	errDuplicateTX    = errors.New("duplicate TxID in proposal")
 )

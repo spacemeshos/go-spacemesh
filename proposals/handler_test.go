@@ -1137,7 +1137,7 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(2)
-	var res1, res2 pubsub.ValidationResult
+	var res1, res2 error
 	go func() {
 		defer wg.Done()
 		res1 = th.HandleProposal(context.Background(), peer, data)
@@ -1147,11 +1147,11 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 		res2 = th.HandleProposal(context.Background(), peer, data)
 	}()
 	wg.Wait()
-	if res1 == pubsub.ValidationAccept {
-		require.Equal(t, pubsub.ValidationIgnore, res2)
+	if res1 == nil {
+		require.Error(t, res2)
 	} else {
-		require.Equal(t, pubsub.ValidationIgnore, res1)
-		require.Equal(t, pubsub.ValidationAccept, res2)
+		require.Error(t, res1)
+		require.Equal(t, nil, res2)
 	}
 	checkProposal(t, th.cdb, p, true)
 }

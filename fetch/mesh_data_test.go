@@ -196,7 +196,7 @@ func TestFetch_getHashes(t *testing.T) {
 func TestFetch_GetMalfeasanceProofs(t *testing.T) {
 	nodeIDs := []types.NodeID{{1}, {2}, {3}}
 	f := createFetch(t)
-	f.mMalH.EXPECT().HandleSyncedMalfeasanceProof(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(nodeIDs))
+	f.mMalH.EXPECT().HandleMalfeasanceProof(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(nodeIDs))
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group

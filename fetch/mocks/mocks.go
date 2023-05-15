@@ -73,18 +73,18 @@ func (m *MockMalfeasanceValidator) EXPECT() *MockMalfeasanceValidatorMockRecorde
 	return m.recorder
 }
 
-// HandleSyncedMalfeasanceProof mocks base method.
-func (m *MockMalfeasanceValidator) HandleSyncedMalfeasanceProof(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) error {
+// HandleMalfeasanceProof mocks base method.
+func (m *MockMalfeasanceValidator) HandleMalfeasanceProof(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleSyncedMalfeasanceProof", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "HandleMalfeasanceProof", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// HandleSyncedMalfeasanceProof indicates an expected call of HandleSyncedMalfeasanceProof.
-func (mr *MockMalfeasanceValidatorMockRecorder) HandleSyncedMalfeasanceProof(arg0, arg1, arg2 interface{}) *gomock.Call {
+// HandleMalfeasanceProof indicates an expected call of HandleMalfeasanceProof.
+func (mr *MockMalfeasanceValidatorMockRecorder) HandleMalfeasanceProof(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncedMalfeasanceProof", reflect.TypeOf((*MockMalfeasanceValidator)(nil).HandleSyncedMalfeasanceProof), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleMalfeasanceProof", reflect.TypeOf((*MockMalfeasanceValidator)(nil).HandleMalfeasanceProof), arg0, arg1, arg2)
 }
 
 // MockAtxValidator is a mock of AtxValidator interface.

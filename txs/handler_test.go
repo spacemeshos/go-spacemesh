@@ -139,55 +139,55 @@ func Test_HandleGossip(t *testing.T) {
 		noHeader                 bool
 		hasErr, addErr, parseErr error
 		verify                   bool
-		expect                   pubsub.ValidationResult
+		expect                   error
 	}{
 		{
 			desc:   "Success",
 			fee:    1,
 			verify: true,
-			expect: pubsub.ValidationAccept,
+			expect: nil,
 		},
 		{
 			desc:     "SuccessNoHeader",
 			fee:      1,
 			noHeader: true,
 			verify:   true,
-			expect:   pubsub.ValidationAccept,
+			expect:   nil,
 		},
 		{
 			desc:   "Dup",
 			fee:    1,
 			has:    true,
-			expect: pubsub.ValidationIgnore,
+			expect: errors.New("ignore"),
 		},
 		{
 			desc:   "HasFailed",
 			fee:    1,
 			hasErr: errors.New("test"),
-			expect: pubsub.ValidationIgnore,
+			expect: errors.New("ignore"),
 		},
 		{
 			desc:   "ParseFailed",
 			fee:    1,
 			addErr: errors.New("test"),
-			expect: pubsub.ValidationIgnore,
+			expect: errors.New("ignore"),
 		},
 		{
 			desc:   "VerifyFalse",
 			fee:    1,
-			expect: pubsub.ValidationIgnore,
+			expect: errors.New("ignore"),
 		},
 		{
 			desc:   "AddFailed",
 			fee:    1,
 			verify: true,
 			addErr: errors.New("test"),
-			expect: pubsub.ValidationIgnore,
+			expect: errors.New("ignore"),
 		},
 		{
 			desc:   "ZeroPrice",
 			fee:    1,
-			expect: pubsub.ValidationIgnore,
+			expect: errors.New("ignore"),
 		},
 	} {
 		tc := tc

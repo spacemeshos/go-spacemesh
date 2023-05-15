@@ -749,17 +749,17 @@ func (app *App) initServices(
 	)
 	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, app.txHandler, malfeasanceHandler)
 
-	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
+	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
 		if newSyncer.ListenToGossip() {
-			return pubsub.ValidationAccept
+			return nil
 		}
-		return pubsub.ValidationIgnore
+		return errors.New("not synced for gossip")
 	}
-	atxSyncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
+	atxSyncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
 		if newSyncer.ListenToATXGossip() {
-			return pubsub.ValidationAccept
+			return nil
 		}
-		return pubsub.ValidationIgnore
+		return errors.New("not synced for gossip")
 	}
 
 	app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))

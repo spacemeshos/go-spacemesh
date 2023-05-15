@@ -14,7 +14,7 @@ type requester interface {
 }
 
 type MalfeasanceValidator interface {
-	HandleSyncedMalfeasanceProof(context.Context, p2p.Peer, []byte) error
+	HandleMalfeasanceProof(context.Context, p2p.Peer, []byte) error
 }
 
 type AtxValidator interface {

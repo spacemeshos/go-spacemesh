@@ -304,35 +304,35 @@ func Test_HandleCertifyMessage(t *testing.T) {
 	tt := []struct {
 		name     string
 		diff     int
-		expected pubsub.ValidationResult
+		expected error
 	}{
 		{
 			name:     "on time",
-			expected: pubsub.ValidationAccept,
+			expected: nil,
 		},
 		{
 			name:     "genesis",
-			expected: pubsub.ValidationIgnore,
+			expected: errors.New("ignore"),
 			diff:     -10,
 		},
 		{
 			name:     "boundary - early",
-			expected: pubsub.ValidationAccept,
+			expected: nil,
 			diff:     -1 * int(cfg.LayerBuffer),
 		},
 		{
 			name:     "boundary - late",
-			expected: pubsub.ValidationAccept,
+			expected: nil,
 			diff:     int(cfg.LayerBuffer + 1),
 		},
 		{
 			name:     "too early",
-			expected: pubsub.ValidationIgnore,
+			expected: errors.New("ignore"),
 			diff:     -1 * int(cfg.LayerBuffer+1),
 		},
 		{
 			name:     "too late",
-			expected: pubsub.ValidationIgnore,
+			expected: errors.New("ignore"),
 			diff:     int(cfg.LayerBuffer + 2),
 		},
 	}
@@ -354,7 +354,7 @@ func Test_HandleCertifyMessage(t *testing.T) {
 			testCert.mClk.EXPECT().CurrentLayer().Return(current).AnyTimes()
 			testCert.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 			require.NoError(t, testCert.RegisterForCert(context.Background(), b.LayerIndex, b.ID()))
-			if tc.expected == pubsub.ValidationAccept {
+			if tc.expected == nil {
 				testCert.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, testCert.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
 					Return(true, nil)
 			}

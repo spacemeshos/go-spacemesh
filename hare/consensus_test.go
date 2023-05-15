@@ -496,11 +496,11 @@ func (ps *delayedPubSub) Publish(ctx context.Context, protocol string, msg []byt
 
 func (ps *delayedPubSub) Register(protocol string, handler pubsub.GossipHandler) {
 	if ps.recvDelay != 0 {
-		handler = func(ctx context.Context, pid p2p.Peer, msg []byte) pubsub.ValidationResult {
+		handler = func(ctx context.Context, pid p2p.Peer, msg []byte) error {
 			rng := time.Duration(rand.Uint32()) * time.Second % ps.recvDelay
 			select {
 			case <-ctx.Done():
-				return pubsub.ValidationIgnore
+				return errors.New("ignore")
 			case <-time.After(rng):
 			}
 			return handler(ctx, pid, msg)

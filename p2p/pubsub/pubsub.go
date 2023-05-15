@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -124,7 +125,7 @@ type PublishSubsciber interface {
 }
 
 // GossipHandler is a function that is for receiving messages.
-type GossipHandler = func(context.Context, peer.ID, []byte) ValidationResult
+type GossipHandler = func(context.Context, peer.ID, []byte) error
 
 // ValidationResult is a one of the validation result constants.
 type ValidationResult = pubsub.ValidationResult
@@ -140,15 +141,21 @@ const (
 	ValidationReject = pubsub.ValidationReject
 )
 
+// ValidationRejectErr is used to indicate that the pubsub validation result is
+// ValidationReject. ValidationAccept is indicated by a nil error and
+// ValidationIgnore is indicated by any error that is not a
+// ValidationRejectErr.
+var ValidationRejectErr = errors.New("validation reject")
+
 // ChainGossipHandler helper to chain multiple GossipHandler together. Called synchronously and in the order.
 func ChainGossipHandler(handlers ...GossipHandler) GossipHandler {
-	return func(ctx context.Context, pid peer.ID, msg []byte) ValidationResult {
+	return func(ctx context.Context, pid peer.ID, msg []byte) error {
 		for _, h := range handlers {
-			if rst := h(ctx, pid, msg); rst != pubsub.ValidationAccept {
-				return rst
+			if err := h(ctx, pid, msg); err != nil {
+				return err
 			}
 		}
-		return pubsub.ValidationAccept
+		return nil
 	}
 }
 
@@ -253,15 +260,13 @@ func defaultTopicParam() *pubsub.TopicScoreParams {
 	}
 }
 
-func castResult(rst ValidationResult) string {
-	switch rst {
-	case ValidationAccept:
+func castResult(err error) string {
+	switch {
+	case err == nil:
 		return "accept"
-	case ValidationIgnore:
-		return "ignore"
-	case ValidationReject:
+	case errors.Is(err, ValidationRejectErr):
 		return "reject"
 	default:
-		panic(fmt.Sprintf("unknown result %d", rst))
+		return "ignore"
 	}
 }

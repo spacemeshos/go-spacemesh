@@ -2,6 +2,7 @@ package weakcoin_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -84,7 +85,7 @@ func TestWeakCoin(t *testing.T) {
 		nodeSig          types.VrfSignature
 		mining, expected bool
 		msg              []byte
-		result           pubsub.ValidationResult
+		result           error
 	}{
 		{
 			desc:     "node not mining",
@@ -98,7 +99,7 @@ func TestWeakCoin(t *testing.T) {
 				NodeID:       zeroLSBMiner,
 				VrfSignature: zeroLSBSig,
 			}),
-			result: pubsub.ValidationAccept,
+			result: nil,
 		},
 		{
 			desc:     "node mining",
@@ -112,7 +113,7 @@ func TestWeakCoin(t *testing.T) {
 				NodeID:       zeroLSBMiner,
 				VrfSignature: zeroLSBSig,
 			}),
-			result: pubsub.ValidationIgnore,
+			result: errors.New("ignore"),
 		},
 		{
 			desc:     "node mining but exceed threshold",
@@ -126,7 +127,7 @@ func TestWeakCoin(t *testing.T) {
 				NodeID:       zeroLSBMiner,
 				VrfSignature: zeroLSBSig,
 			}),
-			result: pubsub.ValidationAccept,
+			result: nil,
 		},
 		{
 			desc:     "node only miner",
@@ -150,7 +151,7 @@ func TestWeakCoin(t *testing.T) {
 			var wc *weakcoin.WeakCoin
 			mockPublisher := mocks.NewMockPublisher(ctrl)
 			mockPublisher.EXPECT().Publish(gomock.Any(), pubsub.BeaconWeakCoinProtocol, gomock.Any()).DoAndReturn(
-				func(ctx context.Context, _ string, msg []byte) pubsub.ValidationResult {
+				func(ctx context.Context, _ string, msg []byte) error {
 					return wc.HandleProposal(ctx, "", msg)
 				},
 			).AnyTimes()
@@ -208,7 +209,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 		startedEpoch types.EpochID
 		startedRound types.RoundID
 		msg          []byte
-		expected     pubsub.ValidationResult
+		expected     error
 	}{
 		{
 			desc:         "ValidProposal",
@@ -221,14 +222,14 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationAccept,
+			expected: nil,
 		},
 		{
 			desc:         "Malformed",
 			startedEpoch: epoch,
 			startedRound: round,
 			msg:          []byte{1, 2, 3},
-			expected:     pubsub.ValidationReject,
+			expected:     pubsub.ValidationRejectErr,
 		},
 		{
 			desc:         "ExceedAllowance",
@@ -241,7 +242,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationIgnore,
+			expected: errors.New("ignore"),
 		},
 		{
 			desc:         "ExceedThreshold",
@@ -254,7 +255,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       highLSBMiner,
 				VrfSignature: higherThreshold,
 			}),
-			expected: pubsub.ValidationIgnore,
+			expected: errors.New("ignore"),
 		},
 		{
 			desc:         "PreviousEpoch",
@@ -267,7 +268,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationIgnore,
+			expected: errors.New("ignore"),
 		},
 		{
 			desc:         "NextEpoch",
@@ -280,7 +281,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationIgnore,
+			expected: errors.New("ignore"),
 		},
 		{
 			desc:         "PreviousRound",
@@ -293,7 +294,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationIgnore,
+			expected: errors.New("ignore"),
 		},
 		{
 			desc:         "NextRound",
@@ -306,7 +307,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationAccept,
+			expected: nil,
 		},
 	}
 	for _, tc := range tcs {
