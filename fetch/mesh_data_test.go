@@ -723,3 +723,24 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 		})
 	}
 }
+
+func FuzzMeshHashRequest(f *testing.F) {
+	h := createTestHandler(f)
+	f.Fuzz(func(t *testing.T, data []byte) {
+		h.handleMeshHashReq(context.TODO(), data)
+	})
+}
+
+func FuzzLayerInfo(f *testing.F) {
+	h := createTestHandler(f)
+	f.Fuzz(func(t *testing.T, data []byte) {
+		h.handleEpochInfoReq(context.TODO(), data)
+	})
+}
+
+func FuzzHashReq(f *testing.F) {
+	h := createTestHandler(f)
+	f.Fuzz(func(t *testing.T, data []byte) {
+		h.handleHashReq(context.TODO(), data)
+	})
+}

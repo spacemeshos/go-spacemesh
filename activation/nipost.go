@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
 	"golang.org/x/sync/errgroup"
 
@@ -31,7 +32,7 @@ type PoetProvingServiceClient interface {
 	PoetServiceID(context.Context) (types.PoetServiceID, error)
 
 	// Proof returns the proof for the given round ID.
-	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, error)
+	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error)
 }
 
 func (nb *NIPostBuilder) load(challenge types.Hash32) {
@@ -68,7 +69,7 @@ type NIPostBuilder struct {
 }
 
 type poetDbAPI interface {
-	GetProof(types.PoetProofRef) (*types.PoetProof, error)
+	GetProof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
 
@@ -174,7 +175,6 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 			return nil, 0, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: ctx.Err()}
 		}
 
-		nipost.Challenge = &challengeHash
 		nb.state.Challenge = challengeHash
 		nb.state.PoetRequests = poetRequests
 		nb.persist()
@@ -190,7 +190,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		}
 		getProofsCtx, cancel := context.WithDeadline(ctx, poetProofDeadline)
 		defer cancel()
-		poetProofRef, err := nb.getBestProof(getProofsCtx, &nb.state.Challenge)
+		poetProofRef, membership, err := nb.getBestProof(getProofsCtx, nb.state.Challenge)
 		if err != nil {
 			return nil, 0, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
@@ -198,6 +198,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 			return nil, 0, &PoetSvcUnstableError{source: ErrPoetProofNotReceived}
 		}
 		nb.state.PoetProofRef = poetProofRef
+		nipost.Membership = *membership
 		nb.persist()
 	}
 
@@ -303,17 +304,22 @@ func (nb *NIPostBuilder) getPoetClient(ctx context.Context, id types.PoetService
 	return nil
 }
 
-func membersContain(members []types.Member, challenge *types.Hash32) bool {
-	for _, member := range members {
+// membersContainChallenge verifies that the challenge is included in proof's members.
+func membersContainChallenge(members []types.Member, challenge types.Hash32) (uint64, error) {
+	for id, member := range members {
 		if bytes.Equal(member[:], challenge.Bytes()) {
-			return true
+			return uint64(id), nil
 		}
 	}
-	return false
+	return 0, fmt.Errorf("challenge is not a member of the proof")
 }
 
-func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash32) (types.PoetProofRef, error) {
-	proofs := make(chan *types.PoetProofMessage, len(nb.state.PoetRequests))
+func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge types.Hash32) (types.PoetProofRef, *types.MerkleProof, error) {
+	type poetProof struct {
+		poet       *types.PoetProofMessage
+		membership *types.MerkleProof
+	}
+	proofs := make(chan *poetProof, len(nb.state.PoetRequests))
 
 	var eg errgroup.Group
 	for _, r := range nb.state.PoetRequests {
@@ -336,7 +342,7 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 			case <-time.After(waitTime):
 			}
 
-			proof, err := client.Proof(ctx, round)
+			proof, members, err := client.Proof(ctx, round)
 			switch {
 			case errors.Is(err, context.Canceled):
 				return fmt.Errorf("querying proof: %w", ctx.Err())
@@ -350,38 +356,71 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 				return nil
 			}
 
-			// We are interested only in proofs that we are members of
-			if !membersContain(proof.Members, challenge) {
-				logger.With().Warning("poet proof membership doesn't contain the challenge", challenge)
+			membership, err := constructMerkleProof(challenge, members)
+			if err != nil {
+				logger.With().Warning("failed to construct merkle proof", log.Err(err))
 				return nil
 			}
 
-			proofs <- proof
+			proofs <- &poetProof{
+				poet:       proof,
+				membership: membership,
+			}
 			return nil
 		})
 	}
 	if err := eg.Wait(); err != nil {
-		return types.PoetProofRef{}, fmt.Errorf("querying for proofs: %w", err)
+		return types.PoetProofRef{}, nil, fmt.Errorf("querying for proofs: %w", err)
 	}
 	close(proofs)
 
-	var bestProof *types.PoetProofMessage
+	var bestProof *poetProof
 
 	for proof := range proofs {
-		nb.log.With().Info("got poet proof", log.Uint64("leaf count", proof.LeafCount))
-		if bestProof == nil || bestProof.LeafCount < proof.LeafCount {
+		nb.log.With().Info("got poet proof", log.Uint64("leaf count", proof.poet.LeafCount))
+		if bestProof == nil || bestProof.poet.LeafCount < proof.poet.LeafCount {
 			bestProof = proof
 		}
 	}
 
 	if bestProof != nil {
-		ref, err := bestProof.Ref()
+		ref, err := bestProof.poet.Ref()
 		if err != nil {
-			return types.PoetProofRef{}, err
+			return types.PoetProofRef{}, nil, err
 		}
-		nb.log.With().Info("selected the best proof", log.Uint64("leafCount", bestProof.LeafCount), log.Binary("ref", ref[:]))
-		return ref, nil
+		nb.log.With().Info("selected the best proof", log.Uint64("leafCount", bestProof.poet.LeafCount), log.Binary("ref", ref[:]))
+		return ref, bestProof.membership, nil
 	}
 
-	return types.PoetProofRef{}, ErrPoetProofNotReceived
+	return types.PoetProofRef{}, nil, ErrPoetProofNotReceived
+}
+
+func constructMerkleProof(challenge types.Hash32, members []types.Member) (*types.MerkleProof, error) {
+	// We are interested only in proofs that we are members of
+	id, err := membersContainChallenge(members, challenge)
+	if err != nil {
+		return nil, err
+	}
+
+	tree, err := merkle.NewTreeBuilder().
+		WithLeavesToProve(map[uint64]bool{id: true}).
+		WithHashFunc(shared.HashMembershipTreeNode).
+		Build()
+	if err != nil {
+		return nil, fmt.Errorf("creating Merkle Tree: %w", err)
+	}
+	for _, member := range members {
+		if err := tree.AddLeaf(member[:]); err != nil {
+			return nil, fmt.Errorf("adding leaf to Merkle Tree: %w", err)
+		}
+	}
+	nodes := tree.Proof()
+	nodesH32 := make([]types.Hash32, 0, len(nodes))
+	for _, n := range nodes {
+		nodesH32 = append(nodesH32, types.BytesToHash(n))
+	}
+	return &types.MerkleProof{
+		LeafIndex: id,
+		Nodes:     nodesH32,
+	}, nil
 }

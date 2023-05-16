@@ -80,7 +80,7 @@ type Builder struct {
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
 	syncer                syncer
-	log                   log.Log
+	log                   log.Logger
 	parentCtx             context.Context
 	stop                  context.CancelFunc
 	poetCfg               PoetConfig
@@ -204,7 +204,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 		// If start session returns any error other than context.Canceled
 		// (which is how we signal it to stop) then we panic.
 		if err := b.postSetupProvider.StartSession(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			b.log.Panic(fmt.Sprintf("initialization failed: %v", err))
+			b.log.Panic("initialization failed: %v", err)
 		}
 
 		b.run(ctx)

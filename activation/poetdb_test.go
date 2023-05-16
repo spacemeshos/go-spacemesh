@@ -54,11 +54,11 @@ func getPoetProof(t *testing.T) types.PoetProofMessage {
 		proof = &types.PoetProofMessage{
 			PoetProof: types.PoetProof{
 				MerkleProof: *merkleProof,
-				Members:     []types.Member{types.Member(memberHash)},
 				LeafCount:   leaves,
 			},
 			PoetServiceID: []byte("poet_id_123456"),
 			RoundID:       "1337",
+			Statement:     types.BytesToHash(challenge),
 		}
 	})
 	return *proof
@@ -69,7 +69,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	msg := getPoetProof(t)
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 
-	r.NoError(poetDb.Validate(msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature))
+	r.NoError(poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature))
 	ref, err := msg.Ref()
 	r.NoError(err)
 
@@ -82,23 +82,6 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	got, err := poetDb.GetProofRef(msg.PoetServiceID, msg.RoundID)
 	r.NoError(err)
 	r.Equal(ref, got)
-
-	membership, err := poetDb.GetMembershipMap(ref)
-	r.NoError(err)
-	r.True(membership[memberHash])
-	r.False(membership[types.BytesToHash([]byte("5"))])
-}
-
-func TestPoetDbPoetProofNoMembers(t *testing.T) {
-	r := require.New(t)
-
-	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
-	poetProof := getPoetProof(t)
-	poetProof.Root = []byte("some other root")
-	poetProof.Members = nil
-
-	err := poetDb.Validate(poetProof.PoetProof, poetProof.PoetServiceID, poetProof.RoundID, types.EmptyEdSignature)
-	r.NoError(err)
 }
 
 func TestPoetDbInvalidPoetProof(t *testing.T) {
@@ -107,7 +90,19 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 	msg.PoetProof.Root = []byte("some other root")
 
-	err := poetDb.Validate(msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
+	err := poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
+	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid", msg.PoetServiceID[:5]))
+	var pErr types.ProcessingError
+	r.False(errors.As(err, &pErr))
+}
+
+func TestPoetDbInvalidPoetStatement(t *testing.T) {
+	r := require.New(t)
+	msg := getPoetProof(t)
+	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
+	msg.Statement = types.CalcHash32([]byte("some other statement"))
+
+	err := poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
 	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid", msg.PoetServiceID[:5]))
 	var pErr types.ProcessingError
 	r.False(errors.As(err, &pErr))
@@ -120,8 +115,4 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 
 	_, err := poetDb.GetProofRef(msg.PoetServiceID, "0")
 	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for poet ID %x in round %v: get value: database: not found", msg.PoetServiceID[:5], "0"))
-
-	ref := types.PoetProofRef{0xab, 0xcd, 0xef}
-	_, err = poetDb.GetMembershipMap(ref)
-	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for ref %x: get proof from store: get value: database: not found", ref[:5]))
 }
