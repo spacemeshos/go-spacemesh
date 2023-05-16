@@ -100,8 +100,6 @@ func TestCheckpoint(t *testing.T) {
 		t.Fail()
 	}
 
-	require.NoError(t, waitLayer(tctx, cl.Client(0), restoreLayer))
-
 	tctx.Log.Infow("rediscovering cluster")
 	cl, err = cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
@@ -120,6 +118,7 @@ func TestCheckpoint(t *testing.T) {
 		}
 	}
 
+	require.NoError(t, waitLayer(tctx, cl.Client(0), 5*layersPerEpoch))
 	testSmeshing(t, tctx, cl, 7)
 
 	ip, err := cl.Bootstrapper(0).Resolve(tctx)
