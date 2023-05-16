@@ -105,11 +105,11 @@ func TestServer(t *testing.T) {
 		WithFilesystem(fs),
 	)
 
-	epoch := types.EpochID(4)
+	epochs := []types.EpochID{types.EpochID(4), types.EpochID(5)}
 	srv := NewServer(g, false, port,
 		WithSrvFilesystem(fs),
 		WithSrvLogger(logtest.New(t)),
-		WithBootstrapEpoch(epoch),
+		WithBootstrapEpochs(epochs),
 	)
 	np := &NetworkParam{
 		Genesis:      time.Now(),
@@ -122,14 +122,18 @@ func TestServer(t *testing.T) {
 	ch := make(chan error, 1)
 	srv.Start(ctx, ch, np)
 
-	require.Eventually(t, func() bool {
-		_, err := fs.Stat(PersistedFilename())
-		return err == nil
-	}, 5*time.Second, 100*time.Millisecond)
-	require.Empty(t, ch)
+	for _, epoch := range epochs {
+		fname := PersistedFilename()
+		require.Eventually(t, func() bool {
+			_, err := fs.Stat(fname)
+			return err == nil
+		}, 5*time.Second, 100*time.Millisecond)
+		require.Empty(t, ch)
 
-	data := query(t, ctx)
-	verifyUpdate(t, data, epoch, hex.EncodeToString(epochBeacon(epoch).Bytes()), activeSetSize)
+		data := query(t, ctx)
+		verifyUpdate(t, data, epoch, hex.EncodeToString(epochBeacon(epoch).Bytes()), activeSetSize)
+		require.NoError(t, fs.Remove(fname))
+	}
 
 	got := queryCheckpoint(t, ctx)
 	require.Empty(t, got)

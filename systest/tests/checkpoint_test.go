@@ -35,10 +35,20 @@ func TestCheckpoint(t *testing.T) {
 		tctx.Log.Info("cluster size changed to ", oldSize)
 		tctx.ClusterSize = oldSize
 	}
-	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
+
+	// at the last layer of epoch 3, in the beginning of poet round 2.
+	// it is important to avoid check-pointing in the middle of cycle gap
+	// otherwise nodes' proof generation will be interrupted and miss
+	// the start of the next poet round
+	snapshotLayer := uint32(15)
+	restoreLayer := uint32(18)
+
+	// need to bootstrap the checkpoint epoch and the next epoch as the beacon protocol was interrupted in the last epoch
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10), cluster.WithBootstrapEpochs([]int{2, 4, 5}))
 	require.NoError(t, err)
 
 	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
+	require.EqualValues(t, 4, layersPerEpoch, "checkpoint layer require tuning as layersPerEpoch is changed")
 	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
 
 	eg, ctx := errgroup.WithContext(tctx)
@@ -48,14 +58,6 @@ func TestCheckpoint(t *testing.T) {
 	tctx.Log.Infow("sending transactions", "from", first, "to", stop-1)
 	sendTransactions(ctx, eg, tctx.Log, cl, first, stop, receiver, 1, 100)
 	require.NoError(t, eg.Wait())
-
-	// at the last layer of epoch 3, in the beginning of poet round 2.
-	// it is important to avoid check-pointing in the middle of cycle gap
-	// otherwise nodes' proof generation will be interrupted and miss
-	// the start of the next poet round
-	snapshotLayer := layersPerEpoch*4 - 1
-	restoreLayer := snapshotLayer + 3
-	bootstrapEpoch := restoreLayer / layersPerEpoch
 
 	require.NoError(t, waitLayer(tctx, cl.Client(0), snapshotLayer))
 
@@ -98,12 +100,6 @@ func TestCheckpoint(t *testing.T) {
 		t.Fail()
 	}
 
-	require.NoError(t, waitLayer(tctx, cl.Client(0), restoreLayer-1))
-	tctx.Log.Infow("start new bootstrapper", "bootstrap epoch", bootstrapEpoch)
-	cl.SetBootstrapEpoch(bootstrapEpoch)
-	require.NoError(t, cl.DeleteBootstrappers(tctx))
-	require.NoError(t, cl.AddBootstrappers(tctx))
-
 	require.NoError(t, waitLayer(tctx, cl.Client(0), restoreLayer))
 
 	tctx.Log.Infow("rediscovering cluster")
@@ -123,12 +119,6 @@ func TestCheckpoint(t *testing.T) {
 				"addr %v before %+v , after %+v", addr.String(), state, st)
 		}
 	}
-
-	// need to bootstrap the next epoch as the beacon protocol was interrupted in the last epoch
-	tctx.Log.Infow("start new bootstrapper", "bootstrap epoch", bootstrapEpoch+1)
-	cl.SetBootstrapEpoch(bootstrapEpoch + 1)
-	require.NoError(t, cl.DeleteBootstrappers(tctx))
-	require.NoError(t, cl.AddBootstrappers(tctx))
 
 	testSmeshing(t, tctx, cl, 7)
 
