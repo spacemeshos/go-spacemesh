@@ -133,7 +133,7 @@ func (t *Tortoise) OnBeacon(eid types.EpochID, beacon types.Beacon) {
 		log.Uint32("evicted", evicted.Uint32()),
 		log.Stringer("beacon", beacon),
 	)
-	// when the node recover from checkpoint, the new effective genesis can be the same as the beacon genesis
+	// when the node recover from checkpoint, the new effective genesis can be the same as the beacon's target epoch.
 	if eid <= evicted && eid != types.GetEffectiveGenesis().GetEpoch() {
 		return
 	}
