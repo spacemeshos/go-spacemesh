@@ -166,7 +166,6 @@ func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
 				ProvenLeaves: [][]byte{{1}, {2}},
 				ProofNodes:   [][]byte{{1}, {2}},
 			},
-			Members:   []types.Member{types.Member(types.RandomHash())},
 			LeafCount: 1234,
 		},
 		PoetServiceID: []byte("poet_id_123456"),
