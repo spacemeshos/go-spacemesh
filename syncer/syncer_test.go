@@ -96,15 +96,17 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 	require.NoError(t, err)
 
 	cfg := Config{
-		SyncInterval:     interval,
+		Interval:         interval,
+		EpochEndFraction: 0.66,
 		SyncCertDistance: 4,
 		HareDelayLayers:  5,
 	}
-	ts.syncer = NewSyncer(ts.cdb, mt, ts.mBeacon, ts.msh, nil, ts.mLyrPatrol, ts.mCertHdr,
+	ts.syncer = NewSyncer(ts.cdb, mt, ts.mBeacon, ts.msh, nil, nil, ts.mLyrPatrol, ts.mCertHdr,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withDataFetcher(ts.mDataFetcher),
 		withForkFinder(ts.mForkFinder))
+	ts.mDataFetcher.EXPECT().GetPeers().Return([]p2p.Peer{"non-empty"}).AnyTimes()
 	return ts
 }
 
@@ -174,7 +176,6 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	close(done)
 	wg.Wait()
 
-	require.Equal(t, uint64(1), ts.syncer.run)
 	cancel()
 	ts.syncer.Close()
 }
@@ -206,7 +207,7 @@ func TestSynchronize_AllGood(t *testing.T) {
 
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.Equal(t, current.Sub(1), ts.syncer.getLastSyncedLayer())
-	require.Equal(t, current.GetEpoch(), ts.syncer.getLastSyncedATXs())
+	require.Equal(t, current.GetEpoch(), ts.syncer.lastAtxEpoch())
 	require.True(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
@@ -232,13 +233,13 @@ func TestSynchronize_FetchLayerDataFailed(t *testing.T) {
 	ts.mTicker.advanceToLayer(current)
 	lyr := current.Sub(1)
 	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), gLayer.GetEpoch())
-	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), current.GetEpoch())
+	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), gLayer.GetEpoch()+1)
 	ts.mDataFetcher.EXPECT().PollMaliciousProofs(gomock.Any())
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr).Return(errors.New("meh"))
 
 	require.False(t, ts.syncer.synchronize(context.Background()))
 	require.Equal(t, lyr.Sub(1), ts.syncer.getLastSyncedLayer())
-	require.Equal(t, current.GetEpoch(), ts.syncer.getLastSyncedATXs())
+	require.Equal(t, current.GetEpoch(), ts.syncer.lastAtxEpoch())
 	require.False(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
@@ -255,7 +256,7 @@ func TestSynchronize_FetchMalfeasanceFailed(t *testing.T) {
 	ts.mDataFetcher.EXPECT().PollMaliciousProofs(gomock.Any()).Return(errors.New("meh"))
 
 	require.False(t, ts.syncer.synchronize(context.Background()))
-	require.EqualValues(t, current.GetEpoch(), ts.syncer.getLastSyncedATXs())
+	require.EqualValues(t, current.GetEpoch(), ts.syncer.lastAtxEpoch())
 	require.Equal(t, lyr.Sub(1), ts.syncer.getLastSyncedLayer())
 }
 
@@ -283,7 +284,7 @@ func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
 
 	require.False(t, ts.syncer.synchronize(context.Background()))
 	require.Equal(t, types.GetEffectiveGenesis(), ts.syncer.getLastSyncedLayer())
-	require.Equal(t, failedEpoch-1, ts.syncer.getLastSyncedATXs())
+	require.Equal(t, failedEpoch-1, ts.syncer.lastAtxEpoch())
 	require.False(t, ts.syncer.dataSynced())
 	require.False(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
@@ -308,7 +309,6 @@ func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
 	gLayer := types.GetEffectiveGenesis()
 	ts.mTicker.advanceToLayer(gLayer)
 	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), gLayer.GetEpoch())
-	ts.mDataFetcher.EXPECT().PollMaliciousProofs(gomock.Any())
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
@@ -330,18 +330,42 @@ func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
 	return current
 }
 
-func TestSynchronize_SyncEpochATXAtFirstLayer(t *testing.T) {
-	ts := newSyncerWithoutSyncTimer(t)
-	lyr := startWithSyncedState(t, ts)
+func TestSyncAtxs(t *testing.T) {
+	tcs := []struct {
+		desc          string
+		current       types.LayerID
+		lastSyncEpoch types.EpochID
+	}{
+		{
+			desc:          "start of epoch",
+			current:       7,
+			lastSyncEpoch: 1,
+		},
+		{
+			desc:          "end of epoch",
+			current:       8,
+			lastSyncEpoch: 2,
+		},
+	}
+	for _, tc := range tcs {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			ts := newSyncerWithoutSyncTimer(t)
+			lyr := startWithSyncedState(t, ts)
 
-	require.Equal(t, lyr.GetEpoch()-1, ts.syncer.getLastSyncedATXs())
-	current := lyr.Add(2)
-	ts.mTicker.advanceToLayer(current)
-	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), current.GetEpoch()-1)
-	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), gomock.Any()).Times(2)
+			require.Equal(t, lyr.GetEpoch()-1, ts.syncer.lastAtxEpoch())
+			ts.mTicker.advanceToLayer(tc.current)
+			for epoch := lyr.GetEpoch(); epoch <= tc.lastSyncEpoch; epoch++ {
+				ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), epoch)
+			}
+			for lid := lyr; lid < tc.current; lid++ {
+				ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
+			}
 
-	require.True(t, ts.syncer.synchronize(context.Background()))
-	require.Equal(t, current.GetEpoch()-1, ts.syncer.getLastSyncedATXs())
+			require.True(t, ts.syncer.synchronize(context.Background()))
+			require.Equal(t, tc.lastSyncEpoch, ts.syncer.lastAtxEpoch())
+		})
+	}
 }
 
 func TestSynchronize_StaySyncedUponFailure(t *testing.T) {
@@ -349,6 +373,7 @@ func TestSynchronize_StaySyncedUponFailure(t *testing.T) {
 	lyr := startWithSyncedState(t, ts)
 	current := lyr.Add(1)
 	ts.mTicker.advanceToLayer(current)
+	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), current.GetEpoch())
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr).Return(errors.New("doh"))
 
 	require.False(t, ts.syncer.synchronize(context.Background()))

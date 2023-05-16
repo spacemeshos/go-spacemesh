@@ -454,7 +454,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		events.InitializeReporter()
 
 		// Speed things up a little
-		app.Config.SyncInterval = 1
+		app.Config.Sync.Interval = time.Second
 		app.Config.LayerDuration = 2 * time.Second
 		app.Config.DataDirParent = path
 		app.Config.LOGGING = cfg.LOGGING
@@ -581,7 +581,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 		// syncer will cause the node to go out of sync (and not listen to gossip)
 		// since we are testing single-node transaction service, we don't need the syncer to run
-		app.Config.SyncInterval = 1000000
+		app.Config.Sync.Interval = 1000000 * time.Second
 		app.Config.LayerDuration = 2 * time.Second
 
 		app.Config.Genesis = &config.GenesisConfig{
@@ -920,8 +920,7 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 
 	cfg.LayerDuration = 20 * time.Second
 	cfg.HareEligibility.ConfidenceParam = 1
-	cfg.SyncRequestTimeout = 500
-	cfg.SyncInterval = 2
+	cfg.Sync.Interval = 2 * time.Second
 	tmp := tb.TempDir()
 	cfg.DataDirParent = tmp
 	cfg.FileLock = filepath.Join(tmp, "LOCK")
