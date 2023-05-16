@@ -16,7 +16,6 @@ func Test_Encode_Decode_ProofMessage(t *testing.T) {
 			MerkleProof: shared.MerkleProof{
 				Root: []byte{1, 2, 3},
 			},
-			Members:   []Member{Member(RandomHash())},
 			LeafCount: 1234,
 		},
 		PoetServiceID: []byte("poet_id_123456"),
