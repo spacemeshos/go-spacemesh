@@ -114,8 +114,11 @@ func queryEpochAtxs(ctx *testcontext.Context, client *cluster.NodeClient, target
 	atxids := make([]types.ATXID, 0, 10_000)
 	for {
 		resp, err := stream.Recv()
-		if errors.Is(err, io.EOF) {
-			break
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, err
 		}
 		atxids = append(atxids, types.ATXID(types.BytesToHash(resp.GetId().GetId())))
 	}

@@ -32,6 +32,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
+	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -621,13 +622,14 @@ func (app *App) initServices(
 
 	patrol := layerpatrol.New()
 	syncerConf := syncer.Config{
-		SyncInterval:     time.Duration(app.Config.SyncInterval) * time.Second,
+		Interval:         app.Config.Sync.Interval,
+		EpochEndFraction: 0.8,
 		HareDelayLayers:  app.Config.Tortoise.Zdist,
 		SyncCertDistance: app.Config.Tortoise.Hdist,
 		MaxHashesInReq:   100,
 		MaxStaleDuration: time.Hour,
 	}
-	newSyncer := syncer.NewSyncer(app.cachedDB, clock, beaconProtocol, msh, fetcher, patrol, app.certifier,
+	newSyncer := syncer.NewSyncer(app.cachedDB, clock, beaconProtocol, msh, trtl, fetcher, patrol, app.certifier,
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.addLogger(SyncLogger, lg)))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
@@ -834,10 +836,7 @@ func (app *App) startServices(ctx context.Context, appErr chan error) error {
 	if err := app.fetcher.Start(); err != nil {
 		return fmt.Errorf("failed to start fetcher: %w", err)
 	}
-	app.eg.Go(func() error {
-		app.startSyncer(ctx)
-		return nil
-	})
+	app.syncer.Start(ctx)
 	app.beaconProtocol.Start(ctx)
 
 	app.blockGen.Start()
@@ -871,6 +870,16 @@ func (app *App) startServices(ctx context.Context, appErr chan error) error {
 	return nil
 }
 
+func (app *App) newCheckpointRunnerFunc() grpcserver.CheckpointRunnerFunc {
+	return func() grpcserver.CheckpointRunner {
+		return checkpoint.NewRunner(
+			app.db,
+			checkpoint.WithDataDir(app.Config.DataDir()),
+			checkpoint.WithLogger(app.log.WithName("checkpoint")),
+		)
+	}
+}
+
 func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcserver.ServiceAPI, error) {
 	switch svc {
 	case grpcserver.Debug:
@@ -881,6 +890,8 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 		return grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal)), nil
 	case grpcserver.Node:
 		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
+	case grpcserver.Admin:
+		return grpcserver.NewAdminService(app.newCheckpointRunnerFunc()), nil
 	case grpcserver.Smesher:
 		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
 	case grpcserver.Transaction:
@@ -1082,10 +1093,6 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
 
 	return edSgn, nil
-}
-
-func (app *App) startSyncer(ctx context.Context) {
-	app.syncer.Start(ctx)
 }
 
 func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {

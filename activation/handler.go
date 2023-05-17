@@ -302,15 +302,11 @@ func (h *Handler) getCommitmentAtx(atx *types.ActivationTx) (*types.ATXID, error
 		return atx.CommitmentATX, nil
 	}
 
-	id, err := atxs.GetFirstIDByNodeID(h.cdb, atx.SmesherID)
+	id, err := atxs.CommitmentATX(h.cdb, atx.SmesherID)
 	if err != nil {
 		return nil, err
 	}
-	initialATX, err := h.cdb.GetAtxHeader(id)
-	if err != nil {
-		return nil, err
-	}
-	return initialATX.CommitmentATX, nil
+	return &id, nil
 }
 
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
@@ -482,7 +478,7 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	receivedTime := time.Now()
 	var atx types.ActivationTx
 	if err := codec.Decode(msg, &atx); err != nil {
-		return errMalformedData
+		return fmt.Errorf("%w: %v", errMalformedData, err)
 	}
 
 	epochStart := h.clock.LayerToTime(atx.PublishEpoch.FirstLayer())
@@ -517,7 +513,7 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	}
 
 	if err := h.FetchAtxReferences(ctx, &atx); err != nil {
-		return fmt.Errorf("received atx with missing references of prev or pos id %v, %v, %v, %v",
+		return fmt.Errorf("received atx (%v) with missing references of prev or pos id %v, %v, %v",
 			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}
 

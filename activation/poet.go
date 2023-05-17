@@ -147,10 +147,10 @@ func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) (types.PoetServiceID
 }
 
 // Proof implements PoetProvingServiceClient.
-func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, error) {
+func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error) {
 	resBody := rpcapi.ProofResponse{}
 	if err := c.req(ctx, http.MethodGet, fmt.Sprintf("/v1/proofs/%s", roundID), nil, &resBody); err != nil {
-		return nil, fmt.Errorf("getting proof: %w", err)
+		return nil, nil, fmt.Errorf("getting proof: %w", err)
 	}
 
 	p := resBody.Proof.GetProof()
@@ -160,6 +160,10 @@ func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.Poet
 	for i, m := range pMembers {
 		copy(members[i][:], m)
 	}
+	statement, err := calcRoot(members)
+	if err != nil {
+		return nil, nil, fmt.Errorf("calculating root: %w", err)
+	}
 
 	proof := types.PoetProofMessage{
 		PoetProof: types.PoetProof{
@@ -168,17 +172,17 @@ func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.Poet
 				ProvenLeaves: p.GetProvenLeaves(),
 				ProofNodes:   p.GetProofNodes(),
 			},
-			Members:   members,
 			LeafCount: resBody.Proof.GetLeaves(),
 		},
 		PoetServiceID: resBody.Pubkey,
 		RoundID:       roundID,
+		Statement:     types.BytesToHash(statement),
 	}
 	if c.poetServiceID.ServiceID == nil {
 		c.poetServiceID.ServiceID = proof.PoetServiceID
 	}
 
-	return &proof, nil
+	return &proof, members, nil
 }
 
 func (c *HTTPPoetClient) req(ctx context.Context, method string, path string, reqBody proto.Message, resBody proto.Message) error {

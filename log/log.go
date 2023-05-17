@@ -32,10 +32,13 @@ func DefaultLevel() Level {
 	return zapcore.InfoLevel
 }
 
+//go:generate mockgen -package=log -destination=./log_mock.go -source=./log.go
+
 // Logger is an interface for our logging API.
 type Logger interface {
 	Info(format string, args ...any)
 	Debug(format string, args ...any)
+	Panic(format string, args ...any)
 	Error(format string, args ...any)
 	Warning(format string, args ...any)
 	With() FieldLogger

@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 var (
@@ -54,18 +53,22 @@ type (
 type DataFetch struct {
 	fetcher
 
-	logger log.Log
-	msh    meshProvider
-	ids    idProvider
+	logger    log.Log
+	msh       meshProvider
+	ids       idProvider
+	asCache   activeSetCache
+	atxSynced map[types.EpochID]map[p2p.Peer]struct{}
 }
 
 // NewDataFetch creates a new DataFetch instance.
-func NewDataFetch(msh meshProvider, fetch fetcher, ids idProvider, lg log.Log) *DataFetch {
+func NewDataFetch(msh meshProvider, fetch fetcher, ids idProvider, cache activeSetCache, lg log.Log) *DataFetch {
 	return &DataFetch{
-		fetcher: fetch,
-		logger:  lg,
-		msh:     msh,
-		ids:     ids,
+		fetcher:   fetch,
+		logger:    lg,
+		msh:       msh,
+		ids:       ids,
+		asCache:   cache,
+		atxSynced: map[types.EpochID]map[p2p.Peer]struct{}{},
 	}
 }
 
@@ -374,20 +377,55 @@ func (d *DataFetch) receiveOpinions(ctx context.Context, req *opinionRequest, pe
 	}
 }
 
-// GetEpochATXs fetches all ATXs in the specified epoch from a peer.
+// GetEpochATXs fetches all ATXs published in the specified epoch from a peer.
 func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error {
 	peers := d.fetcher.GetPeers()
 	if len(peers) == 0 {
 		return errNoPeers
 	}
-	peer := peers[rand.Intn(len(peers))]
+	peer := p2p.NoPeer
+	if _, ok := d.atxSynced[epoch]; !ok {
+		d.atxSynced[epoch] = map[p2p.Peer]struct{}{}
+		delete(d.atxSynced, epoch-1)
+	}
+	for _, p := range peers {
+		if _, ok := d.atxSynced[epoch][p]; !ok {
+			peer = p
+			break
+		}
+	}
+	if peer == p2p.NoPeer {
+		d.logger.WithContext(ctx).With().Debug("synced atxs from all peers",
+			epoch,
+			log.Int("peers", len(peers)),
+		)
+		return nil
+	}
+
 	ed, err := d.fetcher.PeerEpochInfo(ctx, peer, epoch)
 	if err != nil {
 		return fmt.Errorf("get epoch info (peer %v): %w", peer, err)
 	}
+	if len(ed.AtxIDs) == 0 {
+		d.logger.WithContext(ctx).With().Debug("peer have zero atx",
+			epoch,
+			log.Stringer("peer", peer),
+		)
+		return nil
+	}
+	d.atxSynced[epoch][peer] = struct{}{}
 	d.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
-	if err := d.fetcher.GetAtxs(ctx, ed.AtxIDs); err != nil {
-		return fmt.Errorf("get ATXs: %w", err)
+	missing := d.asCache.GetMissingActiveSet(epoch+1, ed.AtxIDs)
+	d.logger.WithContext(ctx).With().Debug("fetching atxs",
+		epoch,
+		log.Stringer("peer", peer),
+		log.Int("total", len(ed.AtxIDs)),
+		log.Int("missing", len(missing)),
+	)
+	if len(missing) > 0 {
+		if err := d.fetcher.GetAtxs(ctx, missing); err != nil {
+			return fmt.Errorf("get ATXs: %w", err)
+		}
 	}
 	return nil
 }

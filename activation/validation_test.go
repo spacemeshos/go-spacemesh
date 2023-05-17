@@ -577,12 +577,7 @@ func TestValidator_Validate(t *testing.T) {
 	}
 	challengeHash := challenge.Hash()
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
-	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().DoAndReturn(func(types.PoetProofRef) (*types.PoetProof, error) {
-		proof := &types.PoetProof{
-			Members: []types.Member{types.Member(challengeHash)},
-		}
-		return proof, nil
-	})
+	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().Return(&types.PoetProof{}, &challengeHash, nil)
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 
 	postProvider := newTestPostManager(t)
@@ -593,7 +588,7 @@ func TestValidator_Validate(t *testing.T) {
 	r.NoError(err)
 
 	err = validateNIPost(postProvider.id, postProvider.commitmentAtxId, nipost, types.BytesToHash([]byte("lerner")), poetDb, postProvider.cfg, postProvider.opts.NumUnits, opts...)
-	r.Contains(err.Error(), "invalid `Challenge`")
+	r.Contains(err.Error(), "invalid membership proof")
 
 	newNIPost := *nipost
 	newNIPost.Post = &types.Post{}
@@ -620,4 +615,37 @@ func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *typ
 	v := &Validator{poetDb, postCfg}
 	_, err := v.NIPost(minerID, commitmentAtx, nipost, challenge, numUnits, opts...)
 	return err
+}
+
+func TestValidateMerkleProof(t *testing.T) {
+	challenge := types.CalcHash32([]byte("challenge"))
+
+	proof, root := newMerkleProof(t, challenge, []types.Hash32{
+		types.BytesToHash([]byte("leaf2")),
+		types.BytesToHash([]byte("leaf3")),
+		types.BytesToHash([]byte("leaf4")),
+	})
+
+	t.Run("valid proof", func(t *testing.T) {
+		t.Parallel()
+
+		err := validateMerkleProof(challenge[:], &proof, root[:])
+		require.NoError(t, err)
+	})
+	t.Run("invalid proof", func(t *testing.T) {
+		t.Parallel()
+
+		invalidProof := proof
+		invalidProof.Nodes = append([]types.Hash32{}, invalidProof.Nodes...)
+		invalidProof.Nodes[0] = types.BytesToHash([]byte("invalid leaf"))
+
+		err := validateMerkleProof(challenge[:], &invalidProof, root[:])
+		require.Error(t, err)
+	})
+	t.Run("invalid proof - different root", func(t *testing.T) {
+		t.Parallel()
+
+		err := validateMerkleProof(challenge[:], &proof, []byte("expected root"))
+		require.Error(t, err)
+	})
 }

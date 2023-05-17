@@ -62,8 +62,6 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&cfg.ProfilerName, "profiler-name",
 		cfg.ProfilerName, "the name to use when sending profiles")
 
-	cmd.PersistentFlags().IntVar(&cfg.SyncRequestTimeout, "sync-request-timeout",
-		cfg.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")
 	cmd.PersistentFlags().IntVar(&cfg.TxsPerProposal, "txs-per-proposal",
 		cfg.TxsPerProposal, "the number of transactions to select per proposal")
 	cmd.PersistentFlags().Uint64Var(&cfg.BlockGasLimit, "block-gas-limit",

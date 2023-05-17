@@ -2,7 +2,6 @@ package atxs
 
 import (
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -10,37 +9,73 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
+const fullQuery = "select id, atx, base_tick_height, tick_count, pubkey, effective_num_units, received, epoch, sequence, coinbase from atxs"
+
+func load(db sql.Executor, query string, enc sql.Encoder) (*types.VerifiedActivationTx, error) {
+	var (
+		v     *types.VerifiedActivationTx
+		myerr error
+	)
+	_, err := db.Exec(query, enc, func(stmt *sql.Statement) bool {
+		var (
+			a  types.ActivationTx
+			id types.ATXID
+		)
+		stmt.ColumnBytes(0, id[:])
+		if _, decodeErr := codec.DecodeFrom(stmt.ColumnReader(1), &a); decodeErr != nil {
+			myerr = fmt.Errorf("decode %w", decodeErr)
+			return true
+		}
+		a.SetID(id)
+		baseTickHeight := uint64(stmt.ColumnInt64(2))
+		tickCount := uint64(stmt.ColumnInt64(3))
+		stmt.ColumnBytes(4, a.SmesherID[:])
+		effectiveNumUnits := uint32(stmt.ColumnInt32(5))
+		a.SetEffectiveNumUnits(effectiveNumUnits)
+		a.SetReceived(time.Unix(0, stmt.ColumnInt64(6)).Local())
+		a.PublishEpoch = types.EpochID(uint32(stmt.ColumnInt(7)))
+		a.Sequence = uint64(stmt.ColumnInt64(8))
+		stmt.ColumnBytes(9, a.Coinbase[:])
+		v, myerr = a.Verify(baseTickHeight, tickCount)
+		return myerr == nil
+	})
+	if err == nil && myerr != nil {
+		err = myerr
+	}
+	return v, err
+}
+
 // Get gets an ATX by a given ATX ID.
-func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err error) {
+func Get(db sql.Executor, id types.ATXID) (*types.VerifiedActivationTx, error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}
-	dec := func(stmt *sql.Statement) bool {
-		var v types.ActivationTx
-		if _, decodeErr := codec.DecodeFrom(stmt.ColumnReader(0), &v); decodeErr != nil {
-			atx, err = nil, fmt.Errorf("decode %w", decodeErr)
-			return true
-		}
-		v.SetID(id)
-		stmt.ColumnBytes(3, v.SmesherID[:])
-
-		effectiveNumUnits := uint32(stmt.ColumnInt32(4))
-		v.SetEffectiveNumUnits(effectiveNumUnits)
-		v.SetReceived(time.Unix(0, stmt.ColumnInt64(5)).Local())
-
-		baseTickHeight := uint64(stmt.ColumnInt64(1))
-		tickCount := uint64(stmt.ColumnInt64(2))
-		atx, err = v.Verify(baseTickHeight, tickCount)
-		return err == nil
+	q := fmt.Sprintf("%v where id =?1;", fullQuery)
+	v, err := load(db, q, enc)
+	if err != nil {
+		return nil, fmt.Errorf("get id %s: %w", id.String(), err)
 	}
-
-	if rows, err := db.Exec("select atx, base_tick_height, tick_count, pubkey, effective_num_units, received from atxs where id = ?1;", enc, dec); err != nil {
-		return nil, fmt.Errorf("exec id %v: %w", id, err)
-	} else if rows == 0 {
-		return nil, fmt.Errorf("exec id %v: %w", id, sql.ErrNotFound)
+	if v == nil {
+		return nil, fmt.Errorf("get id %s: %w", id.String(), sql.ErrNotFound)
 	}
+	return v, nil
+}
 
-	return atx, err
+// GetByEpochAndNodeID gets any ATX by the specified NodeID in the given epoch.
+func GetByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (*types.VerifiedActivationTx, error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(epoch))
+		stmt.BindBytes(2, nodeID.Bytes())
+	}
+	q := fmt.Sprintf("%v where epoch = ?1 and pubkey = ?2 limit 1;", fullQuery)
+	v, err := load(db, q, enc)
+	if err != nil {
+		return nil, fmt.Errorf("get by epoch %v nid %s: %w", epoch, nodeID.String(), err)
+	}
+	if v == nil {
+		return nil, fmt.Errorf("get by epoch %v nid %s: %w", epoch, nodeID.String(), sql.ErrNotFound)
+	}
+	return v, nil
 }
 
 // Has checks if an ATX exists by a given ATX ID.
@@ -54,6 +89,28 @@ func Has(db sql.Executor, id types.ATXID) (bool, error) {
 		return false, fmt.Errorf("exec id %v: %w", id, err)
 	}
 	return rows > 0, nil
+}
+
+func CommitmentATX(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+	}
+	dec := func(stmt *sql.Statement) bool {
+		stmt.ColumnBytes(0, id[:])
+		return true
+	}
+
+	if rows, err := db.Exec(`
+		select commitment_atx from atxs 
+		where pubkey = ?1 and commitment_atx is not null
+		order by epoch desc
+		limit 1;`, enc, dec); err != nil {
+		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+	} else if rows == 0 {
+		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+	}
+
+	return id, err
 }
 
 // GetFirstIDByNodeID gets the initial ATX ID for a given node ID.
@@ -114,7 +171,7 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 	}
 
 	if rows, err := db.Exec(`
-		select id from atxs 
+		select id from atxs
 		where epoch = ?1 and pubkey = ?2
 		limit 1;`, enc, dec); err != nil {
 		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
@@ -123,53 +180,6 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 	}
 
 	return id, err
-}
-
-// GetByEpochAndNodeID gets any ATX by the specified NodeID in the given epoch.
-func GetByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (*types.VerifiedActivationTx, error) {
-	var (
-		atx *types.VerifiedActivationTx
-		err error
-	)
-	enc := func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(epoch))
-		stmt.BindBytes(2, nodeID.Bytes())
-	}
-	dec := func(stmt *sql.Statement) bool {
-		var (
-			v  types.ActivationTx
-			id types.ATXID
-			n  int
-		)
-		stmt.ColumnBytes(0, id[:])
-		if n, err = codec.DecodeFrom(stmt.ColumnReader(1), &v); err != nil {
-			if err != io.EOF {
-				err = fmt.Errorf("atx decode epoch %v nodeID %v: %w", epoch, nodeID, err)
-				return false
-			}
-		} else if n == 0 {
-			err = fmt.Errorf("atx data missing epoch %v nodeID %v", epoch, nodeID)
-			return false
-		}
-		v.SetID(id)
-		v.SmesherID = nodeID
-		v.SetEffectiveNumUnits(uint32(stmt.ColumnInt32(4)))
-		v.SetReceived(time.Unix(0, stmt.ColumnInt64(5)).Local())
-		baseTickHeight := uint64(stmt.ColumnInt64(2))
-		tickCount := uint64(stmt.ColumnInt64(3))
-		atx, err = v.Verify(baseTickHeight, tickCount)
-		return err == nil
-	}
-
-	if rows, err := db.Exec(`
-		select id, atx, base_tick_height, tick_count, effective_num_units, received from atxs
-		where epoch = ?1 and pubkey = ?2
-		limit 1;`, enc, dec); err != nil {
-		return nil, fmt.Errorf("atx by epoch %v nodeID %v: %w", epoch, nodeID, err)
-	} else if rows == 0 {
-		return nil, sql.ErrNotFound
-	}
-	return atx, err
 }
 
 // GetIDsByEpoch gets ATX IDs for a given epoch.
@@ -245,19 +255,28 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PublishEpoch))
 		stmt.BindInt64(3, int64(atx.EffectiveNumUnits()))
-		if atx.VRFNonce != nil {
-			stmt.BindInt64(4, int64(*atx.VRFNonce))
+		if atx.CommitmentATX != nil {
+			stmt.BindBytes(4, atx.CommitmentATX.Bytes())
+		} else {
+			stmt.BindNull(4)
 		}
-		stmt.BindBytes(5, atx.SmesherID.Bytes())
-		stmt.BindBytes(6, buf)
-		stmt.BindInt64(7, atx.Received().UnixNano())
-		stmt.BindInt64(8, int64(atx.BaseTickHeight()))
-		stmt.BindInt64(9, int64(atx.TickCount()))
+		if atx.VRFNonce != nil {
+			stmt.BindInt64(5, int64(*atx.VRFNonce))
+		} else {
+			stmt.BindNull(5)
+		}
+		stmt.BindBytes(6, atx.SmesherID.Bytes())
+		stmt.BindBytes(7, buf)
+		stmt.BindInt64(8, atx.Received().UnixNano())
+		stmt.BindInt64(9, int64(atx.BaseTickHeight()))
+		stmt.BindInt64(10, int64(atx.TickCount()))
+		stmt.BindInt64(11, int64(atx.Sequence))
+		stmt.BindBytes(12, atx.Coinbase.Bytes())
 	}
 
 	_, err = db.Exec(`
-		insert into atxs (id, epoch, effective_num_units, nonce, pubkey, atx, received, base_tick_height, tick_count)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);`, enc, nil)
+		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce, pubkey, atx, received, base_tick_height, tick_count, sequence, coinbase)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
@@ -285,6 +304,53 @@ func GetAtxIDWithMaxHeight(db sql.Executor) (types.ATXID, error) {
 		return types.ATXID{}, fmt.Errorf("select positioning atx: %w", err)
 	} else if rows == 0 {
 		return types.ATXID{}, sql.ErrNotFound
+	}
+	return rst, nil
+}
+
+type CheckpointAtx struct {
+	ID             types.ATXID
+	Epoch          types.EpochID
+	CommitmentATX  types.ATXID
+	VRFNonce       types.VRFPostIndex
+	NumUnits       uint32
+	BaseTickHeight uint64
+	TickCount      uint64
+	SmesherID      types.NodeID
+	Sequence       uint64
+	Coinbase       types.Address
+}
+
+// LatestN returns the latest N ATXs per smesher.
+func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
+	var rst []CheckpointAtx
+	enc := func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(n))
+	}
+	dec := func(stmt *sql.Statement) bool {
+		var catx CheckpointAtx
+		stmt.ColumnBytes(0, catx.ID[:])
+		catx.Epoch = types.EpochID(uint32(stmt.ColumnInt64(1)))
+		catx.NumUnits = uint32(stmt.ColumnInt64(2))
+		catx.BaseTickHeight = uint64(stmt.ColumnInt64(3))
+		catx.TickCount = uint64(stmt.ColumnInt64(4))
+		stmt.ColumnBytes(5, catx.SmesherID[:])
+		catx.Sequence = uint64(stmt.ColumnInt64(6))
+		stmt.ColumnBytes(7, catx.Coinbase[:])
+		rst = append(rst, catx)
+		return true
+	}
+
+	if rows, err := db.Exec(`
+		select id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase 
+		from (
+			select row_number() over (partition by pubkey order by epoch desc) RowNum,
+			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase from atxs
+		)
+		where RowNum <= ?1 order by pubkey;`, enc, dec); err != nil {
+		return nil, fmt.Errorf("latestN: %w", err)
+	} else if rows == 0 {
+		return nil, sql.ErrNotFound
 	}
 	return rst, nil
 }
