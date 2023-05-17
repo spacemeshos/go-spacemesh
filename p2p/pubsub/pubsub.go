@@ -124,6 +124,7 @@ type PublishSubsciber interface {
 	Subscriber
 }
 
+// GossipHandler is a function that is for receiving p2p messages.
 type GossipHandler = func(context.Context, peer.ID, []byte) error
 
 // ValidationResult is a one of the validation result constants.
