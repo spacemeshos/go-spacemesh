@@ -124,14 +124,6 @@ type PublishSubsciber interface {
 	Subscriber
 }
 
-// GossipHandler is a function that is for receiving messages from the pubsub
-// system. The returned error will be translated into a
-// pubsusb.ValidationResult returned to the pubsub system.
-//
-// The translation works as follows:
-// If errors.Is(err, ValidationRejectErr) == true -> pubsub.ValidationReject.
-// If err == nil -> pubsub.ValidationAccept.
-// Otherwise -> pubsub.ValidationIgnore.
 type GossipHandler = func(context.Context, peer.ID, []byte) error
 
 // ValidationResult is a one of the validation result constants.
@@ -148,9 +140,9 @@ const (
 	ValidationReject = pubsub.ValidationReject
 )
 
-// ValidationRejectErr is used to indicate that the pubsub validation result is
-// ValidationReject. ValidationAccept is indicated by a nil error and
-// ValidationIgnore is indicated by any error that is not a
+// ValidationRejectErr is returned by a GossipHandler to indicate that the
+// pubsub validation result is ValidationReject. ValidationAccept is indicated
+// by a nil error and ValidationIgnore is indicated by any error that is not a
 // ValidationRejectErr.
 var ValidationRejectErr = errors.New("validation reject")
 
@@ -163,6 +155,25 @@ func ChainGossipHandler(handlers ...GossipHandler) GossipHandler {
 			}
 		}
 		return nil
+	}
+}
+
+// DropPeerOnError wraps a gossip handler to provide a handler that drops a
+// peer if the wrapped handler returns an error that is the targetErr.
+func DropPeerOnError(handler GossipHandler, h host.Host, logger log.Log, targetErr error) GossipHandler {
+	return func(ctx context.Context, peer peer.ID, data []byte) error {
+		err := handler(ctx, peer, data)
+		if errors.Is(err, targetErr) {
+			// We want to disconnect the peer and also penalize it which could result in it being blacklisted.
+			err := h.Network().ClosePeer(peer)
+			if err != nil {
+				logger.With().Debug("failed to close peer",
+					log.String("peer", peer.ShortString()),
+					log.Err(err),
+				)
+			}
+		}
+		return err
 	}
 }
 

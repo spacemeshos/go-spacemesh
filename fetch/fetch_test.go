@@ -29,34 +29,36 @@ type testFetch struct {
 	mHashS  *mocks.Mockrequester
 	mMHashS *mocks.Mockrequester
 
-	mMesh      *mocks.MockmeshProvider
-	mMalH      *mocks.MockMalfeasanceValidator
-	mAtxH      *mocks.MockAtxValidator
-	mBallotH   *mocks.MockBallotValidator
-	mBlocksH   *mocks.MockBlockValidator
-	mProposalH *mocks.MockProposalValidator
-	method     int
-	mTxH       *mocks.MockTxValidator
-	mPoetH     *mocks.MockPoetValidator
+	mMesh        *mocks.MockmeshProvider
+	mMalH        *mocks.MockSyncValidator
+	mAtxH        *mocks.MockSyncValidator
+	mBallotH     *mocks.MockSyncValidator
+	mBlocksH     *mocks.MockSyncValidator
+	mProposalH   *mocks.MockSyncValidator
+	method       int
+	mTxBlocksH   *mocks.MockSyncValidator
+	mTxProposalH *mocks.MockSyncValidator
+	mPoetH       *mocks.MockSyncValidator
 }
 
 func createFetch(tb testing.TB) *testFetch {
 	ctrl := gomock.NewController(tb)
 	tf := &testFetch{
-		mh:         mocks.NewMockhost(ctrl),
-		mMalS:      mocks.NewMockrequester(ctrl),
-		mAtxS:      mocks.NewMockrequester(ctrl),
-		mLyrS:      mocks.NewMockrequester(ctrl),
-		mOpnS:      mocks.NewMockrequester(ctrl),
-		mHashS:     mocks.NewMockrequester(ctrl),
-		mMHashS:    mocks.NewMockrequester(ctrl),
-		mMalH:      mocks.NewMockMalfeasanceValidator(ctrl),
-		mAtxH:      mocks.NewMockAtxValidator(ctrl),
-		mBallotH:   mocks.NewMockBallotValidator(ctrl),
-		mBlocksH:   mocks.NewMockBlockValidator(ctrl),
-		mProposalH: mocks.NewMockProposalValidator(ctrl),
-		mTxH:       mocks.NewMockTxValidator(ctrl),
-		mPoetH:     mocks.NewMockPoetValidator(ctrl),
+		mh:           mocks.NewMockhost(ctrl),
+		mMalS:        mocks.NewMockrequester(ctrl),
+		mAtxS:        mocks.NewMockrequester(ctrl),
+		mLyrS:        mocks.NewMockrequester(ctrl),
+		mOpnS:        mocks.NewMockrequester(ctrl),
+		mHashS:       mocks.NewMockrequester(ctrl),
+		mMHashS:      mocks.NewMockrequester(ctrl),
+		mMalH:        mocks.NewMockSyncValidator(ctrl),
+		mAtxH:        mocks.NewMockSyncValidator(ctrl),
+		mBallotH:     mocks.NewMockSyncValidator(ctrl),
+		mBlocksH:     mocks.NewMockSyncValidator(ctrl),
+		mProposalH:   mocks.NewMockSyncValidator(ctrl),
+		mTxBlocksH:   mocks.NewMockSyncValidator(ctrl),
+		mTxProposalH: mocks.NewMockSyncValidator(ctrl),
+		mPoetH:       mocks.NewMockSyncValidator(ctrl),
 	}
 	cfg := Config{
 		time.Millisecond * time.Duration(2000), // make sure we never hit the batch timeout
@@ -80,7 +82,7 @@ func createFetch(tb testing.TB) *testFetch {
 			meshHashProtocol: tf.mMHashS,
 		}),
 		withHost(tf.mh))
-	tf.Fetch.SetValidators(tf.mAtxH, tf.mPoetH, tf.mBallotH, tf.mBlocksH, tf.mProposalH, tf.mTxH, tf.mMalH)
+	tf.Fetch.SetValidators(tf.mAtxH, tf.mPoetH, tf.mBallotH, tf.mBlocksH, tf.mProposalH, tf.mTxBlocksH, tf.mTxProposalH, tf.mMalH)
 	return tf
 }
 
