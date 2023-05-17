@@ -70,7 +70,7 @@ install:
 build: go-spacemesh
 .PHONY: build
 
-get-libs: get-gpu-setup get-postrs-lib
+get-libs: get-postrs-lib
 .PHONY: get-libs
 
 gen-p2p-identity:
