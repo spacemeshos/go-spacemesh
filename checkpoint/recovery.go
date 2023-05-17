@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
+	"github.com/spacemeshos/go-spacemesh/sql/recovery"
 )
 
 const (
@@ -33,11 +34,9 @@ type Config struct {
 }
 
 type RecoverConfig struct {
-	GoldenAtx         types.ATXID
-	DataDir           string
-	DbFile            string
-	DbConnections     int
-	DbLatencyMetering bool
+	GoldenAtx types.ATXID
+	DataDir   string
+	DbFile    string
 }
 
 func RecoveryDir(dataDir string) string {
@@ -135,13 +134,49 @@ func Recover(
 	nodeID types.NodeID,
 	uri string,
 	restore types.LayerID,
+) error {
+	db, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	if err != nil {
+		return fmt.Errorf("open old database: %w", err)
+	}
+	newdb, err := RecoverWithDb(ctx, logger, db, fs, cfg, nodeID, uri, restore)
+	if err != nil {
+		if dberr := db.Close(); dberr != nil {
+			logger.WithContext(ctx).Error("failed to close old db", log.Err(dberr))
+		}
+		return err
+	}
+	if newdb != nil {
+		if err = newdb.Close(); err != nil {
+			return fmt.Errorf("close new db: %w", err)
+		}
+	}
+	return nil
+}
+
+func RecoverWithDb(
+	ctx context.Context,
+	logger log.Log,
+	db *sql.Database,
+	fs afero.Fs,
+	cfg *RecoverConfig,
+	nodeID types.NodeID,
+	uri string,
+	restore types.LayerID,
 ) (*sql.Database, error) {
+	oldRestore, err := recovery.CheckpointInfo(db)
+	if err != nil {
+		return nil, fmt.Errorf("get last checkpoint: %w", err)
+	}
+	if oldRestore >= restore {
+		return nil, nil
+	}
 	logger.With().Info("Recover from uri", log.String("uri", uri))
 	cpfile, err := copyToLocalFile(ctx, logger, fs, cfg.DataDir, uri, restore)
 	if err != nil {
 		return nil, err
 	}
-	return recoverFromLocalFile(ctx, logger, fs, cfg, nodeID, cpfile, restore)
+	return recoverFromLocalFile(ctx, logger, db, fs, cfg, nodeID, cpfile, restore)
 }
 
 type recoverydata struct {
@@ -210,6 +245,7 @@ func preserveOwnData(
 func recoverFromLocalFile(
 	ctx context.Context,
 	logger log.Log,
+	db *sql.Database,
 	fs afero.Fs,
 	cfg *RecoverConfig,
 	nodeID types.NodeID,
@@ -225,14 +261,6 @@ func recoverFromLocalFile(
 		log.Int("num_accounts", len(data.accounts)),
 		log.Int("num_atxs", len(data.atxs)),
 	)
-	dbf := filepath.Join(cfg.DataDir, cfg.DbFile)
-	db, err := sql.Open("file:"+dbf,
-		sql.WithConnections(cfg.DbConnections),
-		sql.WithLatencyMetering(cfg.DbLatencyMetering),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("open old database: %w", err)
-	}
 	own, err := preserveOwnData(db, cfg, nodeID, data)
 	if err != nil {
 		return nil, err
@@ -248,10 +276,7 @@ func recoverFromLocalFile(
 	}
 	logger.With().Info("backed up old database", log.String("backup dir", backupDir))
 
-	db, err = sql.Open("file:"+dbf,
-		sql.WithConnections(cfg.DbConnections),
-		sql.WithLatencyMetering(cfg.DbLatencyMetering),
-	)
+	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite db %w", err)
 	}
@@ -260,7 +285,7 @@ func recoverFromLocalFile(
 		log.Int("num atxs", len(data.atxs)),
 		log.Int("own atx and deps", len(own.preserve)),
 	)
-	if err = db.WithTx(ctx, func(tx *sql.Tx) error {
+	if err = newdb.WithTx(ctx, func(tx *sql.Tx) error {
 		for _, acct := range data.accounts {
 			if err = accounts.Update(tx, acct); err != nil {
 				return fmt.Errorf("restore account snapshot: %w", err)
@@ -294,6 +319,9 @@ func recoverFromLocalFile(
 			}
 			logger.WithContext(ctx).With().Info("own atx proof saved", own.atx.ID())
 		}
+		if err = recovery.SetCheckpoint(tx, restore); err != nil {
+			return fmt.Errorf("save checkppoint info: %w", err)
+		}
 		return nil
 	}); err != nil {
 		return nil, err
@@ -303,7 +331,7 @@ func recoverFromLocalFile(
 	}
 	types.SetEffectiveGenesis(restore.Uint32() - 1)
 	logger.WithContext(ctx).With().Info("effective genesis reset for recovery", types.GetEffectiveGenesis())
-	return db, nil
+	return newdb, nil
 }
 
 func checkpointData(fs afero.Fs, file string) (*recoverydata, error) {

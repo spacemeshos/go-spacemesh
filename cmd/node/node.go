@@ -135,8 +135,7 @@ func GetCommand() *cobra.Command {
 					return fmt.Errorf("could not retrieve identity: %w", err)
 				}
 
-				app.db, err = app.LoadCheckpoint(ctx)
-				if err != nil {
+				if err = app.LoadCheckpoint(ctx); err != nil {
 					return err
 				}
 				if err = app.Initialize(); err != nil {
@@ -356,7 +355,7 @@ func defaultRecoveryFile(dataDir string) (string, types.LayerID, error) {
 	return fmt.Sprintf("file://%s", files[0]), restore, nil
 }
 
-func (app *App) LoadCheckpoint(ctx context.Context) (*sql.Database, error) {
+func (app *App) LoadCheckpoint(ctx context.Context) error {
 	var (
 		checkpointFile = app.Config.Recovery.Uri
 		restore        = types.LayerID(app.Config.Recovery.Restore)
@@ -365,21 +364,19 @@ func (app *App) LoadCheckpoint(ctx context.Context) (*sql.Database, error) {
 	if len(checkpointFile) == 0 {
 		checkpointFile, restore, err = defaultRecoveryFile(app.Config.DataDir())
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if len(checkpointFile) == 0 {
-		return nil, nil
+		return nil
 	}
 	if restore == 0 {
-		return nil, fmt.Errorf("restore layer not set")
+		return fmt.Errorf("restore layer not set")
 	}
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:         types.ATXID(app.Config.Genesis.GoldenATX()),
-		DataDir:           app.Config.DataDir(),
-		DbConnections:     app.Config.DatabaseConnections,
-		DbLatencyMetering: app.Config.DatabaseLatencyMetering,
-		DbFile:            dbFile,
+		GoldenAtx: types.ATXID(app.Config.Genesis.GoldenATX()),
+		DataDir:   app.Config.DataDir(),
+		DbFile:    dbFile,
 	}
 	app.log.WithContext(ctx).With().Info("recover from checkpoint",
 		log.String("url", checkpointFile),
@@ -1144,23 +1141,21 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 }
 
 func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
-	if app.db == nil {
-		if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
-			return fmt.Errorf("failed to create %s: %w", dbPath, err)
-		}
-		sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile),
-			sql.WithConnections(app.Config.DatabaseConnections),
-			sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
-		)
-		if err != nil {
-			return fmt.Errorf("open sqlite db %w", err)
-		}
-		app.db = sqlDB
+	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
+	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile),
+		sql.WithConnections(app.Config.DatabaseConnections),
+		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
+	)
+	if err != nil {
+		return fmt.Errorf("open sqlite db %w", err)
+	}
+	app.db = sqlDB
 	if app.Config.CollectMetrics {
-		app.dbMetrics = dbmetrics.NewDBMetricsCollector(ctx, app.db, app.addLogger(StateDbLogger, lg), 5*time.Minute)
+		app.dbMetrics = dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
 	}
-	app.cachedDB = datastore.NewCachedDB(app.db, app.addLogger(CachedDBLogger, lg))
+	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg))
 	return nil
 }
 

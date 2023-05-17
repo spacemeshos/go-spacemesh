@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
+	"github.com/spacemeshos/go-spacemesh/sql/recovery"
 )
 
 func atxequal(tb testing.TB, satx checkpoint.ShortAtx, vatx *types.VerifiedActivationTx, commitAtx types.ATXID, vrfnonce types.VRFPostIndex) {
@@ -105,19 +106,45 @@ func TestRecoverFromHttp(t *testing.T) {
 
 	fs := afero.NewMemMapFs()
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:         types.ATXID{1},
-		DataDir:           t.TempDir(),
-		DbFile:            "state.sql",
-		DbConnections:     100,
-		DbLatencyMetering: false,
+		GoldenAtx: types.ATXID{1},
+		DataDir:   t.TempDir(),
+		DbFile:    "state.sql",
 	}
 	url := fmt.Sprintf("%s/snapshot-15-restore-18", ts.URL)
-	db, err := checkpoint.Recover(ctx, logtest.New(t), fs, cfg, types.NodeID{2, 3, 4}, url, 18)
+	db := sql.InMemory()
+	newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg, types.NodeID{2, 3, 4}, url, 18)
 	require.NoError(t, err)
-	require.NotNil(t, db)
-	exras := verifyDbContent(t, db)
+	require.NotNil(t, newdb)
+	exras := verifyDbContent(t, newdb)
 	require.Empty(t, exras)
-	require.NoError(t, db.Close())
+	restore, err := recovery.CheckpointInfo(newdb)
+	require.NoError(t, err)
+	require.EqualValues(t, 18, restore)
+}
+
+func TestRecoverSameRecoveryInfo(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodGet, r.Method)
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte(checkpointdata))
+		require.NoError(t, err)
+	}))
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	fs := afero.NewMemMapFs()
+	cfg := &checkpoint.RecoverConfig{
+		GoldenAtx: types.ATXID{1},
+		DataDir:   t.TempDir(),
+		DbFile:    "state.sql",
+	}
+	url := fmt.Sprintf("%s/snapshot-15-restore-18", ts.URL)
+	db := sql.InMemory()
+	require.NoError(t, recovery.SetCheckpoint(db, 18))
+	newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg, types.NodeID{2, 3, 4}, url, 18)
+	require.NoError(t, err)
+	require.Nil(t, newdb)
 }
 
 func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
@@ -132,20 +159,12 @@ func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
 	defer cancel()
 
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:         types.ATXID{1},
-		DataDir:           t.TempDir(),
-		DbFile:            "state.sql",
-		DbConnections:     100,
-		DbLatencyMetering: false,
+		GoldenAtx: types.ATXID{1},
+		DataDir:   t.TempDir(),
+		DbFile:    "state.sql",
 	}
 
-	dbf := filepath.Join(cfg.DataDir, cfg.DbFile)
-	olddb, err := sql.Open("file:"+dbf,
-		sql.WithConnections(cfg.DbConnections),
-		sql.WithLatencyMetering(cfg.DbLatencyMetering),
-	)
-	require.NoError(t, err)
-
+	olddb := sql.InMemory()
 	nid := types.NodeID{1, 2, 3}
 	prev := newvatx(t, newatx(types.ATXID{12}, &types.ATXID{1}, 2, 0, 123, nid.Bytes()))
 	require.NoError(t, atxs.Add(olddb, prev))
@@ -174,18 +193,19 @@ func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
 	encoded, err := codec.Encode(proofMessage)
 	require.NoError(t, err)
 	require.NoError(t, poets.Add(olddb, types.PoetProofRef(atx.GetPoetProofRef()), encoded, proofMessage.PoetServiceID, proofMessage.RoundID))
-	require.NoError(t, olddb.Close())
 
 	url := fmt.Sprintf("%s/snapshot-15-restore-18", ts.URL)
-	db, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url, 18)
+	newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), olddb, afero.NewOsFs(), cfg, nid, url, 18)
 	require.NoError(t, err)
-	require.NotNil(t, db)
-	extras := verifyDbContent(t, db)
+	require.NotNil(t, newdb)
+	extras := verifyDbContent(t, newdb)
 	require.ElementsMatch(t, extras, []*types.VerifiedActivationTx{prev, vatx})
-	gotProof, err := poets.Get(db, types.PoetProofRef(atx.GetPoetProofRef()))
+	gotProof, err := poets.Get(newdb, types.PoetProofRef(atx.GetPoetProofRef()))
 	require.NoError(t, err)
 	require.Equal(t, encoded, gotProof)
-	require.NoError(t, db.Close())
+	restore, err := recovery.CheckpointInfo(newdb)
+	require.NoError(t, err)
+	require.EqualValues(t, 18, restore)
 }
 
 func TestRecover(t *testing.T) {
@@ -215,19 +235,20 @@ func TestRecover(t *testing.T) {
 			src := filepath.Join(tc.dataDir, tc.dir, "snapshot-15-restore-18")
 			require.NoError(t, afero.WriteFile(fs, src, []byte(checkpointdata), 0o600))
 			cfg := &checkpoint.RecoverConfig{
-				GoldenAtx:         types.ATXID{1},
-				DataDir:           tc.dataDir,
-				DbFile:            "state.sql",
-				DbConnections:     100,
-				DbLatencyMetering: false,
+				GoldenAtx: types.ATXID{1},
+				DataDir:   tc.dataDir,
+				DbFile:    "state.sql",
 			}
 			uri := fmt.Sprintf("file://%s", src)
-			db, err := checkpoint.Recover(ctx, logtest.New(t), fs, cfg, types.NodeID{2, 3, 4}, uri, 18)
+			db := sql.InMemory()
+			newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg, types.NodeID{2, 3, 4}, uri, 18)
 			require.NoError(t, err)
-			require.NotNil(t, db)
-			extras := verifyDbContent(t, db)
+			require.NotNil(t, newdb)
+			extras := verifyDbContent(t, newdb)
 			require.Empty(t, extras)
-			require.NoError(t, db.Close())
+			restore, err := recovery.CheckpointInfo(newdb)
+			require.NoError(t, err)
+			require.EqualValues(t, 18, restore)
 		})
 	}
 }
