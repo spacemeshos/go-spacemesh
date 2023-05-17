@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,6 +23,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
+
+func reuseCluster(tctx *testcontext.Context) (*cluster.Cluster, error) {
+	return cluster.ReuseWait(tctx,
+		cluster.WithKeys(10),
+		cluster.WithSmesherFlag(cluster.DeploymentFlag{Name: "--recover-from-default-dir", Value: "true"}),
+		cluster.WithBootstrapEpochs([]int{2, 4, 5}),
+	)
+}
 
 func TestCheckpoint(t *testing.T) {
 	t.Parallel()
@@ -44,7 +52,7 @@ func TestCheckpoint(t *testing.T) {
 	restoreLayer := uint32(18)
 
 	// need to bootstrap the checkpoint epoch and the next epoch as the beacon protocol was interrupted in the last epoch
-	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10), cluster.WithBootstrapEpochs([]int{2, 4, 5}))
+	cl, err := reuseCluster(tctx)
 	require.NoError(t, err)
 
 	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
@@ -62,7 +70,7 @@ func TestCheckpoint(t *testing.T) {
 	require.NoError(t, waitLayer(tctx, cl.Client(0), snapshotLayer))
 
 	tctx.Log.Debugw("getting account balances")
-	before, err := getBalance(tctx, cl)
+	before, err := getBalance(tctx, cl, snapshotLayer)
 	require.NoError(t, err)
 	for addr, state := range before {
 		tctx.Log.Infow("account received",
@@ -101,12 +109,12 @@ func TestCheckpoint(t *testing.T) {
 	}
 
 	tctx.Log.Infow("rediscovering cluster")
-	cl, err = cluster.ReuseWait(tctx, cluster.WithKeys(10))
+	cl, err = reuseCluster(tctx)
 	require.NoError(t, err)
 
 	tctx.Log.Infow("checking account balances")
 	// check if the account balance is correct
-	after, err := getBalance(tctx, cl)
+	after, err := getBalance(tctx, cl, restoreLayer)
 	require.NoError(t, err)
 	for addr, state := range before {
 		st, ok := after[addr]
@@ -119,6 +127,7 @@ func TestCheckpoint(t *testing.T) {
 	}
 
 	require.NoError(t, waitLayer(tctx, cl.Client(0), 5*layersPerEpoch))
+	tctx.Log.Info("at epoch 5")
 	testSmeshing(t, tctx, cl, 7)
 
 	ip, err := cl.Bootstrapper(0).Resolve(tctx)
@@ -141,9 +150,13 @@ func TestCheckpoint(t *testing.T) {
 	tctx.ClusterSize = size
 
 	tctx.Log.Infow("adding smesher with checkpoint url", "query url", queryUrl)
-	require.NoError(t, cl.AddSmeshers(tctx, addedLater, cluster.DeploymentFlag{Name: "--checkpoint", Value: queryUrl}))
+	require.NoError(t, cl.AddSmeshers(tctx, addedLater,
+		cluster.DeploymentFlag{Name: "--checkpoint-file", Value: queryUrl},
+		cluster.DeploymentFlag{Name: "--restore-layer", Value: strconv.Itoa(int(restoreLayer))},
+	))
 
 	require.NoError(t, waitLayer(tctx, cl.Client(0), layersPerEpoch*9))
+	tctx.Log.Info("at epoch 9")
 	eg, _ = errgroup.WithContext(tctx)
 	created := map[uint32][]*pb.Proposal{}
 	for i := cl.Total() - addedLater; i < cl.Total(); i++ {
@@ -205,36 +218,37 @@ func updateCheckpointServer(ctx *testcontext.Context, endpoint string, chdata []
 	return resp.Body.Close()
 }
 
-func checkpointAndRecover(ctx *testcontext.Context, client *cluster.NodeClient, snapshotLayer, restoreLayer uint32) ([]byte, error) {
+func checkpointAndRecover(ctx *testcontext.Context, client *cluster.NodeClient, snapshot, restore uint32) ([]byte, error) {
 	smshr := pb.NewAdminServiceClient(client)
-	stream, err := smshr.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshotLayer, RestoreLayer: restoreLayer})
+	stream, err := smshr.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshot})
 	if err != nil {
 		return nil, fmt.Errorf("stream checkpoiont %v: %w", client.Name, err)
 	}
-	var result bytes.Buffer
-	total := 0
+	var (
+		result bytes.Buffer
+		msg    *pb.CheckpointStreamResponse
+	)
 	for {
-		msg, err := stream.Recv()
+		msg, err = stream.Recv()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
 			return nil, fmt.Errorf("receive stream %v, %w", client.Name, err)
 		}
-		if n, err := result.Write(msg.Data); err != nil {
+		if _, err = result.Write(msg.Data); err != nil {
 			return nil, fmt.Errorf("write data to buffer: %w", err)
-		} else {
-			total += n
 		}
 	}
 	// recover
 	_, err = smshr.Recover(ctx, &pb.RecoverRequest{
-		Uri: filepath.Join("file:///data/state/checkpoint", fmt.Sprintf("snapshot-%d-restore-%d", snapshotLayer, restoreLayer)),
+		Uri:          filepath.Join("file:///data/state/checkpoint", fmt.Sprintf("snapshot-%d", snapshot)),
+		RestoreLayer: restore,
 	})
 	if err != nil {
 		ctx.Log.Infow("recover returned error", "err", err.Error())
 	}
-	ctx.Log.Infow("checkpoint file received", "client", client.Name, "size", len(result.Bytes()), "n", total)
+	ctx.Log.Infow("checkpoint file received", "client", client.Name, "size", len(result.Bytes()))
 	return result.Bytes(), nil
 }
 
@@ -243,9 +257,9 @@ type acctState struct {
 	balance uint64
 }
 
-func getBalance(tctx *testcontext.Context, cl *cluster.Cluster) (map[types.Address]acctState, error) {
+func getBalance(tctx *testcontext.Context, cl *cluster.Cluster, layer uint32) (map[types.Address]acctState, error) {
 	dbg := pb.NewDebugServiceClient(cl.Client(0))
-	response, err := dbg.Accounts(tctx, &empty.Empty{})
+	response, err := dbg.Accounts(tctx, &pb.AccountsRequest{Layer: layer})
 	if err != nil {
 		return nil, err
 	}

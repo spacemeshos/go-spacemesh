@@ -112,7 +112,7 @@ func TestRecoverFromHttp(t *testing.T) {
 		DbLatencyMetering: false,
 	}
 	url := fmt.Sprintf("%s/snapshot-15-restore-18", ts.URL)
-	db, err := checkpoint.Recover(ctx, logtest.New(t), fs, cfg, types.NodeID{2, 3, 4}, url)
+	db, err := checkpoint.Recover(ctx, logtest.New(t), fs, cfg, types.NodeID{2, 3, 4}, url, 18)
 	require.NoError(t, err)
 	require.NotNil(t, db)
 	exras := verifyDbContent(t, db)
@@ -177,7 +177,7 @@ func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
 	require.NoError(t, olddb.Close())
 
 	url := fmt.Sprintf("%s/snapshot-15-restore-18", ts.URL)
-	db, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url)
+	db, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url, 18)
 	require.NoError(t, err)
 	require.NotNil(t, db)
 	extras := verifyDbContent(t, db)
@@ -222,7 +222,7 @@ func TestRecover(t *testing.T) {
 				DbLatencyMetering: false,
 			}
 			uri := fmt.Sprintf("file://%s", src)
-			db, err := checkpoint.Recover(ctx, logtest.New(t), fs, cfg, types.NodeID{2, 3, 4}, uri)
+			db, err := checkpoint.Recover(ctx, logtest.New(t), fs, cfg, types.NodeID{2, 3, 4}, uri, 18)
 			require.NoError(t, err)
 			require.NotNil(t, db)
 			extras := verifyDbContent(t, db)

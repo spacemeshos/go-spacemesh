@@ -328,23 +328,51 @@ type App struct {
 	eg      *errgroup.Group
 }
 
+// this code path is only used during systest after admin::Recover() RPC causing
+// the node to log.fatal and restart without reading any new config.
+// the expected action for node operator is to supply new config with
+// --checkpoint-file and --restore-layer via config file or cmdline options.
+func defaultRecoveryFile(dataDir string) (string, types.LayerID, error) {
+	if !viper.GetBool("recover-from-default-dir") {
+		return "", 0, nil
+	}
+	recoverDir := checkpoint.RecoveryDir(dataDir)
+	files, err := filepath.Glob(fmt.Sprintf("%s%s*", recoverDir, string([]rune{filepath.Separator})))
+	if err != nil {
+		return "", 0, nil
+	}
+	if len(files) == 0 {
+		// remove the directory regardless
+		_ = os.Remove(recoverDir)
+		return "", 0, nil
+	}
+	if len(files) > 1 {
+		return "", 0, fmt.Errorf("multiple checkpoint files found [%v]. delete all and re-download", files)
+	}
+	restore, err := checkpoint.ParseRestoreLayer(filepath.Base(files[0]))
+	if err != nil {
+		return "", 0, err
+	}
+	return fmt.Sprintf("file://%s", files[0]), restore, nil
+}
+
 func (app *App) LoadCheckpoint(ctx context.Context) (*sql.Database, error) {
-	cpUri := viper.GetString("checkpoint")
-	if len(cpUri) == 0 {
-		recoverDir := checkpoint.RecoveryDir(app.Config.DataDir())
-		files, err := filepath.Glob(fmt.Sprintf("%s%s*", recoverDir, string([]rune{filepath.Separator})))
+	var (
+		checkpointFile = app.Config.Recovery.Uri
+		restore        = types.LayerID(app.Config.Recovery.Restore)
+		err            error
+	)
+	if len(checkpointFile) == 0 {
+		checkpointFile, restore, err = defaultRecoveryFile(app.Config.DataDir())
 		if err != nil {
-			return nil, nil
+			return nil, err
 		}
-		if len(files) == 0 {
-			// remove the directory regardless
-			_ = os.Remove(recoverDir)
-			return nil, nil
-		}
-		if len(files) > 1 {
-			return nil, fmt.Errorf("multiple checkpoint files found [%v]. delete all and re-download", files)
-		}
-		cpUri = fmt.Sprintf("file://%s", files[0])
+	}
+	if len(checkpointFile) == 0 {
+		return nil, nil
+	}
+	if restore == 0 {
+		return nil, fmt.Errorf("restore layer not set")
 	}
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:         types.ATXID(app.Config.Genesis.GoldenATX()),
@@ -353,7 +381,11 @@ func (app *App) LoadCheckpoint(ctx context.Context) (*sql.Database, error) {
 		DbLatencyMetering: app.Config.DatabaseLatencyMetering,
 		DbFile:            dbFile,
 	}
-	return checkpoint.Recover(ctx, app.log, afero.NewOsFs(), cfg, app.edSgn.NodeID(), cpUri)
+	app.log.WithContext(ctx).With().Info("recover from checkpoint",
+		log.String("url", checkpointFile),
+		log.Stringer("restore", restore),
+	)
+	return checkpoint.Recover(ctx, app.log, afero.NewOsFs(), cfg, app.edSgn.NodeID(), checkpointFile, restore)
 }
 
 func (app *App) Started() chan struct{} {
@@ -900,7 +932,7 @@ func (app *App) startServices(ctx context.Context, appErr chan error) error {
 func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcserver.ServiceAPI, error) {
 	switch svc {
 	case grpcserver.Debug:
-		return grpcserver.NewDebugService(app.conState, app.host, app.hOracle), nil
+		return grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle), nil
 	case grpcserver.GlobalState:
 		return grpcserver.NewGlobalStateService(app.mesh, app.conState), nil
 	case grpcserver.Mesh:

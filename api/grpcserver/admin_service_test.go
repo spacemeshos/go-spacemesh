@@ -68,7 +68,7 @@ func TestAdminService_Checkpoint(t *testing.T) {
 	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	c := pb.NewAdminServiceClient(conn)
 
-	stream, err := c.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshot, RestoreLayer: restore})
+	stream, err := c.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshot})
 	require.NoError(t, err)
 
 	var chunks int
@@ -104,7 +104,7 @@ func TestAdminService_CheckpointError(t *testing.T) {
 	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	c := pb.NewAdminServiceClient(conn)
 
-	stream, err := c.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshot, RestoreLayer: restore})
+	stream, err := c.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshot})
 	require.NoError(t, err)
 	_, err = stream.Recv()
 	require.ErrorContains(t, err, sql.ErrNotFound.Error())

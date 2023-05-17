@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"regexp"
+	"strconv"
 
 	"github.com/spf13/afero"
 
@@ -22,7 +24,13 @@ import (
 
 const (
 	recoveryDir = "recovery"
+	fileRegex   = "snapshot-(?P<Snapshot>[1-9][0-9]*)-restore-(?P<Restore>[1-9][0-9]*)"
 )
+
+type Config struct {
+	Uri     string `mapstructure:"checkpoint-file"`
+	Restore uint32 `mapstructure:"restore-layer"`
+}
 
 type RecoverConfig struct {
 	GoldenAtx         types.ATXID
@@ -36,13 +44,38 @@ func RecoveryDir(dataDir string) string {
 	return filepath.Join(dataDir, recoveryDir)
 }
 
-func RecoveryFilename(dataDir, base string) string {
-	return filepath.Join(RecoveryDir(dataDir), base)
+func RecoveryFilename(dataDir, base string, restore types.LayerID) string {
+	matches := regexp.MustCompile(fileRegex).FindStringSubmatch(base)
+	if len(matches) > 0 {
+		return filepath.Join(RecoveryDir(dataDir), base)
+	}
+	return filepath.Join(RecoveryDir(dataDir), fmt.Sprintf("%s-restore-%d", base, restore.Uint32()))
 }
 
-func ReadCheckpointAndDie(ctx context.Context, logger log.Log, dataDir, uri string) error {
+func ParseRestoreLayer(fname string) (types.LayerID, error) {
+	matches := regexp.MustCompile(fileRegex).FindStringSubmatch(fname)
+	if len(matches) != 3 {
+		return 0, fmt.Errorf("unrecogized recovery file %s", fname)
+	}
+	s, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return 0, fmt.Errorf("parse snapshot layer %s: %w", fname, err)
+	}
+	r, err := strconv.Atoi(matches[2])
+	if err != nil {
+		return 0, fmt.Errorf("parse restore layer %s: %w", fname, err)
+	}
+	snapshot := types.LayerID(s)
+	restore := types.LayerID(r)
+	if restore <= snapshot {
+		return 0, fmt.Errorf("inconsistent restore layer %s: %w", fname, err)
+	}
+	return restore, nil
+}
+
+func ReadCheckpointAndDie(ctx context.Context, logger log.Log, dataDir, uri string, restore types.LayerID) error {
 	fs := afero.NewOsFs()
-	file, err := copyToLocalFile(ctx, logger, fs, dataDir, uri)
+	file, err := copyToLocalFile(ctx, logger, fs, dataDir, uri, restore)
 	if err != nil {
 		logger.WithContext(ctx).With().Error("failed to copy checkpoint file", log.Err(err))
 		return fmt.Errorf("copy checkpoint file before restart: %w", err)
@@ -51,18 +84,18 @@ func ReadCheckpointAndDie(ctx context.Context, logger log.Log, dataDir, uri stri
 	return nil
 }
 
-func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, uri string) (string, error) {
+func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, uri string, restore types.LayerID) (string, error) {
 	parsed, err := url.Parse(uri)
 	if err != nil {
 		return "", fmt.Errorf("%w: parse recovery URI %v", err, uri)
 	}
-	dst := RecoveryFilename(dataDir, filepath.Base(parsed.Path))
+	dst := RecoveryFilename(dataDir, filepath.Base(parsed.Path), restore)
 	if parsed.Scheme == "file" {
 		_, err = fs.Stat(parsed.Path)
 		if err != nil {
 			return "", fmt.Errorf("stat checkpoint file %v: %w", parsed.Path, err)
 		}
-		if dst != parsed.Path {
+		if parsed.Path != dst {
 			if bdir, err := backupRecovery(fs, RecoveryDir(dataDir)); err != nil {
 				return "", err
 			} else if bdir != "" {
@@ -94,17 +127,24 @@ func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, 
 	return dst, nil
 }
 
-func Recover(ctx context.Context, logger log.Log, fs afero.Fs, cfg *RecoverConfig, nodeID types.NodeID, uri string) (*sql.Database, error) {
+func Recover(
+	ctx context.Context,
+	logger log.Log,
+	fs afero.Fs,
+	cfg *RecoverConfig,
+	nodeID types.NodeID,
+	uri string,
+	restore types.LayerID,
+) (*sql.Database, error) {
 	logger.With().Info("Recover from uri", log.String("uri", uri))
-	cpfile, err := copyToLocalFile(ctx, logger, fs, cfg.DataDir, uri)
+	cpfile, err := copyToLocalFile(ctx, logger, fs, cfg.DataDir, uri, restore)
 	if err != nil {
 		return nil, err
 	}
-	return recoverFromLocalFile(ctx, logger, fs, cfg, nodeID, cpfile)
+	return recoverFromLocalFile(ctx, logger, fs, cfg, nodeID, cpfile, restore)
 }
 
 type recoverydata struct {
-	restore  types.LayerID
 	accounts []*types.Account
 	atxs     []*atxs.CheckpointAtx
 }
@@ -174,6 +214,7 @@ func recoverFromLocalFile(
 	cfg *RecoverConfig,
 	nodeID types.NodeID,
 	file string,
+	restore types.LayerID,
 ) (*sql.Database, error) {
 	logger.With().Info("recovering from checkpoint file", log.String("file", file))
 	data, err := checkpointData(fs, file)
@@ -260,7 +301,7 @@ func recoverFromLocalFile(
 	if _, err = backupRecovery(fs, RecoveryDir(cfg.DataDir)); err != nil {
 		return nil, err
 	}
-	types.SetEffectiveGenesis(data.restore.Uint32() - 1)
+	types.SetEffectiveGenesis(restore.Uint32() - 1)
 	logger.WithContext(ctx).With().Info("effective genesis reset for recovery", types.GetEffectiveGenesis())
 	return db, nil
 }
@@ -313,7 +354,6 @@ func checkpointData(fs afero.Fs, file string) (*recoverydata, error) {
 		allAtxs = append(allAtxs, &catx)
 	}
 	return &recoverydata{
-		restore:  types.LayerID(checkpoint.Data.Restore),
 		accounts: allAccts,
 		atxs:     allAtxs,
 	}, nil

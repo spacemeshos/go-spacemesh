@@ -48,12 +48,11 @@ func (a AdminService) CheckpointStream(req *pb.CheckpointStreamRequest, stream p
 	// - on the client side (default limit on the receiving end)
 	// - locally as the node already loads db query result in memory
 	snapshot := types.LayerID(req.SnapshotLayer)
-	restore := types.LayerID(req.RestoreLayer)
-	err := checkpoint.Generate(stream.Context(), afero.NewOsFs(), a.db, a.dataDir, snapshot, restore)
+	err := checkpoint.Generate(stream.Context(), afero.NewOsFs(), a.db, a.dataDir, snapshot)
 	if err != nil {
 		return status.Errorf(codes.Internal, fmt.Sprintf("failed to create checkpoint: %s", err.Error()))
 	}
-	fname := checkpoint.SelfCheckpointFilename(a.dataDir, snapshot, restore)
+	fname := checkpoint.SelfCheckpointFilename(a.dataDir, snapshot)
 	if err := stream.SendHeader(metadata.MD{}); err != nil {
 		return status.Errorf(codes.Unavailable, "can't send header")
 	}
@@ -88,7 +87,7 @@ func (a AdminService) CheckpointStream(req *pb.CheckpointStreamRequest, stream p
 }
 
 func (a AdminService) Recover(ctx context.Context, req *pb.RecoverRequest) (*empty.Empty, error) {
-	if err := checkpoint.ReadCheckpointAndDie(ctx, a.logger, a.dataDir, req.Uri); err != nil {
+	if err := checkpoint.ReadCheckpointAndDie(ctx, a.logger, a.dataDir, req.Uri, types.LayerID(req.RestoreLayer)); err != nil {
 		return nil, status.Errorf(codes.Internal, fmt.Sprintf("failed to copy checkpoint %s: %s", req.Uri, err.Error()))
 	}
 	return &empty.Empty{}, nil

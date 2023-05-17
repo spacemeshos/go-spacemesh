@@ -7,7 +7,6 @@ type Checkpoint struct {
 
 type InnerData struct {
 	CheckpointId string     `json:"id"`
-	Restore      uint32     `json:"restore"`
 	Atxs         []ShortAtx `json:"atxs"`
 	Accounts     []Account  `json:"accounts"`
 }

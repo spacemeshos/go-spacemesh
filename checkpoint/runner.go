@@ -22,12 +22,11 @@ const (
 	dirPerm       = 0o700
 )
 
-func checkpointDB(ctx context.Context, db *sql.Database, snapshot, restore types.LayerID) (*Checkpoint, error) {
+func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID) (*Checkpoint, error) {
 	checkpoint := &Checkpoint{
 		Version: SchemaVersion,
 		Data: InnerData{
-			CheckpointId: fmt.Sprintf("snapshot-%d-restore-%d", snapshot, restore),
-			Restore:      restore.Uint32(),
+			CheckpointId: fmt.Sprintf("snapshot-%d", snapshot),
 		},
 	}
 
@@ -91,12 +90,12 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot, restore types
 	return checkpoint, nil
 }
 
-func Generate(ctx context.Context, fs afero.Fs, db *sql.Database, dataDir string, snapshot, restore types.LayerID) error {
-	checkpoint, err := checkpointDB(ctx, db, snapshot, restore)
+func Generate(ctx context.Context, fs afero.Fs, db *sql.Database, dataDir string, snapshot types.LayerID) error {
+	checkpoint, err := checkpointDB(ctx, db, snapshot)
 	if err != nil {
 		return err
 	}
-	rf, err := NewRecoveryFile(fs, SelfCheckpointFilename(dataDir, snapshot, restore))
+	rf, err := NewRecoveryFile(fs, SelfCheckpointFilename(dataDir, snapshot))
 	if err != nil {
 		return fmt.Errorf("new recovery file: %w", err)
 	}
@@ -110,6 +109,6 @@ func Generate(ctx context.Context, fs afero.Fs, db *sql.Database, dataDir string
 	return nil
 }
 
-func SelfCheckpointFilename(dataDir string, snapshotLayer, restoreLayer types.LayerID) string {
-	return filepath.Join(filepath.Join(dataDir, checkpointDir), fmt.Sprintf("snapshot-%d-restore-%d", snapshotLayer, restoreLayer))
+func SelfCheckpointFilename(dataDir string, snapshot types.LayerID) string {
+	return filepath.Join(filepath.Join(dataDir, checkpointDir), fmt.Sprintf("snapshot-%d", snapshot))
 }
