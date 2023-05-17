@@ -96,13 +96,13 @@ func copyfile(fs afero.Fs, src, dst string) error {
 	return rf.copy(fs, srcf)
 }
 
-func httpToLocalFile(ctx context.Context, client *http.Client, resource *url.URL, fs afero.Fs, dst string) error {
+func httpToLocalFile(ctx context.Context, resource *url.URL, fs afero.Fs, dst string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, resource.String(), nil)
 	if err != nil {
 		return fmt.Errorf("create http request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.Do(req)
+	resp, err := (&http.Client{}).Do(req)
 	if err != nil {
 		return fmt.Errorf("http get bootstrap file: %w", err)
 	}

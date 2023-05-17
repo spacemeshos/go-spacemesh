@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -76,7 +75,6 @@ func ReadCheckpointAndDie(ctx context.Context, logger log.Log, dataDir, uri stri
 	fs := afero.NewOsFs()
 	file, err := copyToLocalFile(ctx, logger, fs, dataDir, uri, restore)
 	if err != nil {
-		logger.WithContext(ctx).With().Error("failed to copy checkpoint file", log.Err(err))
 		return fmt.Errorf("copy checkpoint file before restart: %w", err)
 	}
 	logger.With().Fatal("restart to recover from checkpoint", log.String("file", file))
@@ -119,7 +117,7 @@ func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, 
 	} else if bdir != "" {
 		logger.WithContext(ctx).With().Info("old recovery data backed up", log.String("dir", bdir))
 	}
-	if err = httpToLocalFile(ctx, &http.Client{}, parsed, fs, dst); err != nil {
+	if err = httpToLocalFile(ctx, parsed, fs, dst); err != nil {
 		return "", err
 	}
 	logger.WithContext(ctx).With().Info("checkpoint data persisted", log.String("file", dst))
@@ -141,10 +139,10 @@ func Recover(
 	}
 	newdb, err := RecoverWithDb(ctx, logger, db, fs, cfg, nodeID, uri, restore)
 	if err != nil {
-		if dberr := db.Close(); dberr != nil {
-			logger.WithContext(ctx).Error("failed to close old db", log.Err(dberr))
-		}
 		return err
+	}
+	if err = db.Close(); err != nil {
+		return fmt.Errorf("close old db: %w", err)
 	}
 	if newdb != nil {
 		if err = newdb.Close(); err != nil {
@@ -264,9 +262,6 @@ func recoverFromLocalFile(
 	own, err := preserveOwnData(db, cfg, nodeID, data)
 	if err != nil {
 		return nil, err
-	}
-	if err = db.Close(); err != nil {
-		return nil, fmt.Errorf("close old db: %w", err)
 	}
 
 	// all is ready. backup the old data and create new.

@@ -88,7 +88,9 @@ func (a AdminService) CheckpointStream(req *pb.CheckpointStreamRequest, stream p
 
 func (a AdminService) Recover(ctx context.Context, req *pb.RecoverRequest) (*empty.Empty, error) {
 	if err := checkpoint.ReadCheckpointAndDie(ctx, a.logger, a.dataDir, req.Uri, types.LayerID(req.RestoreLayer)); err != nil {
-		return nil, status.Errorf(codes.Internal, fmt.Sprintf("failed to copy checkpoint %s: %s", req.Uri, err.Error()))
+		a.logger.WithContext(ctx).With().Error("failed to read checkpoint file", log.Err(err))
+		return nil, status.Errorf(codes.Internal,
+			fmt.Sprintf("read checkpoint %s and restore %d: %s", req.Uri, req.RestoreLayer, err.Error()))
 	}
 	return &empty.Empty{}, nil
 }

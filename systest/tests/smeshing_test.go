@@ -25,7 +25,7 @@ func TestSmeshing(t *testing.T) {
 
 	t.Run("Proposals", func(t *testing.T) {
 		t.Parallel()
-		testSmeshing(t, tctx, cl, 15)
+		testSmeshing(t, tctx, cl)
 	})
 	t.Run("Transactions", func(t *testing.T) {
 		t.Parallel()
@@ -33,11 +33,13 @@ func TestSmeshing(t *testing.T) {
 	})
 }
 
-func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, limit int) {
+func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
+	const limit = 15
+
 	first := currentLayer(tctx, t, cl.Client(0))
 	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
 	first = nextFirstLayer(first, layersPerEpoch)
-	last := first + uint32(limit)
+	last := first + limit
 	tctx.Log.Debugw("watching layer between", "first", first, "last", last)
 
 	createdch := make(chan *pb.Proposal, cl.Total()*(limit+1))

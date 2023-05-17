@@ -50,6 +50,8 @@ func TestCheckpoint(t *testing.T) {
 	// the start of the next poet round
 	snapshotLayer := uint32(15)
 	restoreLayer := uint32(18)
+	checkpointEpoch := uint32(4)
+	lastEpoch := uint32(8)
 
 	// need to bootstrap the checkpoint epoch and the next epoch as the beacon protocol was interrupted in the last epoch
 	cl, err := reuseCluster(tctx)
@@ -126,9 +128,8 @@ func TestCheckpoint(t *testing.T) {
 		}
 	}
 
-	require.NoError(t, waitLayer(tctx, cl.Client(0), 5*layersPerEpoch))
-	tctx.Log.Info("at epoch 5")
-	testSmeshing(t, tctx, cl, 7)
+	tctx.Log.Infow("waiting for all miners to be smeshing", "last epoch", checkpointEpoch+2)
+	ensureSmeshing(t, tctx, cl, cl.Total()-cl.Bootnodes(), checkpointEpoch+2)
 
 	ip, err := cl.Bootstrapper(0).Resolve(tctx)
 	require.NoError(t, err)
@@ -149,21 +150,25 @@ func TestCheckpoint(t *testing.T) {
 	tctx.Log.Info("cluster size changed to ", size)
 	tctx.ClusterSize = size
 
-	tctx.Log.Infow("adding smesher with checkpoint url", "query url", queryUrl)
+	tctx.Log.Infow("adding smesher with checkpoint url",
+		"checkpoint url", queryUrl, "restore layer", restoreLayer)
 	require.NoError(t, cl.AddSmeshers(tctx, addedLater,
 		cluster.DeploymentFlag{Name: "--checkpoint-file", Value: queryUrl},
 		cluster.DeploymentFlag{Name: "--restore-layer", Value: strconv.Itoa(int(restoreLayer))},
 	))
 
-	require.NoError(t, waitLayer(tctx, cl.Client(0), layersPerEpoch*9))
-	tctx.Log.Info("at epoch 9")
-	eg, _ = errgroup.WithContext(tctx)
-	created := map[uint32][]*pb.Proposal{}
-	for i := cl.Total() - addedLater; i < cl.Total(); i++ {
+	tctx.Log.Infow("waiting for all miners to be smeshing", "last epoch", lastEpoch)
+	ensureSmeshing(t, tctx, cl, cl.Total()-cl.Bootnodes(), lastEpoch)
+}
+
+func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, numSmeshers int, stop uint32) {
+	uniqueSmeshers := map[types.NodeID]struct{}{}
+	eg, _ := errgroup.WithContext(tctx)
+	for i := cl.Bootnodes(); i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
 		watchProposals(tctx, eg, client, func(proposal *pb.Proposal) (bool, error) {
-			if proposal.Epoch.Number > 9 {
+			if proposal.Epoch.Number > stop {
 				return false, nil
 			}
 			if proposal.Status == pb.Proposal_Created {
@@ -175,13 +180,14 @@ func TestCheckpoint(t *testing.T) {
 					"eligibilities", len(proposal.Eligibilities),
 					"status", pb.Proposal_Status_name[int32(proposal.Status)],
 				)
-				created[proposal.Layer.Number] = append(created[proposal.Layer.Number], proposal)
+				uniqueSmeshers[types.BytesToNodeID(proposal.Smesher.Id)] = struct{}{}
+				return false, nil
 			}
 			return true, nil
 		})
 	}
 	require.NoError(t, eg.Wait())
-	requireEqualEligibilities(tctx, t, created)
+	require.Lenf(t, uniqueSmeshers, numSmeshers, "not all miners are smeshing, expected %d, got %d", numSmeshers, len(uniqueSmeshers))
 }
 
 func query(ctx context.Context, endpoint string) ([]byte, error) {
@@ -245,10 +251,10 @@ func checkpointAndRecover(ctx *testcontext.Context, client *cluster.NodeClient, 
 		Uri:          filepath.Join("file:///data/state/checkpoint", fmt.Sprintf("snapshot-%d", snapshot)),
 		RestoreLayer: restore,
 	})
-	if err != nil {
-		ctx.Log.Infow("recover returned error", "err", err.Error())
+	if err == nil {
+		return nil, errors.New("recover should return error but did not")
 	}
-	ctx.Log.Infow("checkpoint file received", "client", client.Name, "size", len(result.Bytes()))
+	ctx.Log.Debugw("checkpoint file received", "client", client.Name, "size", len(result.Bytes()))
 	return result.Bytes(), nil
 }
 
