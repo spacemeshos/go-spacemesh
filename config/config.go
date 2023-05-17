@@ -20,6 +20,7 @@ import (
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -58,6 +59,7 @@ type Config struct {
 	LOGGING         LoggerConfig          `mapstructure:"logging"`
 	FETCH           fetch.Config          `mapstructure:"fetch"`
 	Bootstrap       bootstrap.Config      `mapstructure:"bootstrap"`
+	Sync            syncer.Config         `mapstructure:"syncer"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -92,10 +94,6 @@ type BaseConfig struct {
 	PoETServers []string `mapstructure:"poet-server"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
-
-	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // ms the timeout for direct request in the sync
-
-	SyncInterval int `mapstructure:"sync-interval"` // sync interval in seconds
 
 	PublishEventsURL string `mapstructure:"events-url"`
 
@@ -138,6 +136,7 @@ func DefaultConfig() Config {
 		FETCH:           fetch.DefaultConfig(),
 		LOGGING:         defaultLoggingConfig(),
 		Bootstrap:       bootstrap.DefaultConfig(),
+		Sync:            syncer.DefaultConfig(),
 	}
 }
 
@@ -167,8 +166,6 @@ func defaultBaseConfig() BaseConfig {
 		LayerDuration:       30 * time.Second,
 		LayersPerEpoch:      3,
 		PoETServers:         []string{"127.0.0.1"},
-		SyncRequestTimeout:  2000,
-		SyncInterval:        10,
 		TxsPerProposal:      100,
 		BlockGasLimit:       math.MaxUint64,
 		OptFilterThreshold:  90,

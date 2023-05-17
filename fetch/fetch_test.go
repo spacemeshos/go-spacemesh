@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -285,5 +284,22 @@ func TestFetch_GetRandomPeer(t *testing.T) {
 			allTheSame = false
 		}
 	}
-	assert.False(t, allTheSame)
+	require.False(t, allTheSame)
+}
+
+func TestFetch_RegisterPeerHashes(t *testing.T) {
+	myPeers := make([]p2p.Peer, 10)
+	for i := 0; i < len(myPeers); i++ {
+		myPeers[i] = p2p.Peer(types.RandomBytes(20))
+	}
+	f := createFetch(t)
+	hostID := p2p.Peer("self")
+	f.mh.EXPECT().ID().Return(hostID).AnyTimes()
+	hashes := []types.Hash32{{1, 2, 3}, {4, 5, 6}}
+	f.RegisterPeerHashes(hostID, hashes)
+	require.Zero(t, f.hashToPeers.Len())
+
+	peer := p2p.Peer("buddy")
+	f.RegisterPeerHashes(peer, hashes)
+	require.Equal(t, len(hashes), f.hashToPeers.Len())
 }

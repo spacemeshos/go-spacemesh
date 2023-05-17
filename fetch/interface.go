@@ -47,6 +47,7 @@ type meshProvider interface {
 }
 
 type host interface {
+	ID() p2p.Peer
 	GetPeers() []p2p.Peer
 	Close() error
 }

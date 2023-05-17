@@ -93,12 +93,14 @@ func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 // Hash serializes the NIPostChallenge and returns its hash.
+// The serialized challenge is first prepended with a byte 0x00, and then hashed
+// for second preimage resistance of poet membership merkle tree.
 func (challenge *NIPostChallenge) Hash() Hash32 {
 	ncBytes, err := codec.Encode(challenge)
 	if err != nil {
 		log.With().Fatal("failed to encode NIPostChallenge", log.Err(err))
 	}
-	return CalcHash32(ncBytes)
+	return hash.Sum([]byte{0x00}, ncBytes)
 }
 
 // String returns a string representation of the NIPostChallenge, for logging purposes.
@@ -298,15 +300,24 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 	return vAtx, nil
 }
 
+// Merkle proof proving that a given leaf is included in the root of merkle tree.
+type MerkleProof struct {
+	// Nodes on path from leaf to root (not including leaf)
+	Nodes     []Hash32 `scale:"max=32"`
+	LeafIndex uint64
+}
+
 // NIPost is Non-Interactive Proof of Space-Time.
 // Given an id, a space parameter S, a duration D and a challenge C,
 // it can convince a verifier that (1) the prover expended S * D space-time
 // after learning the challenge C. (2) the prover did not know the NIPost until D time
 // after the prover learned C.
 type NIPost struct {
-	// Challenge is the challenge for the PoET which is
-	// constructed from fields in the activation transaction.
-	Challenge *Hash32
+	// Membership proves that the challenge for the PoET, which is
+	// constructed from fields in the activation transaction,
+	// is a member of the poet's proof.
+	// Proof.Root must match the Poet's POSW statement.
+	Membership MerkleProof
 
 	// Post is the proof that the prover data is still stored (or was recomputed) at
 	// the time he learned the challenge constructed from the PoET.
