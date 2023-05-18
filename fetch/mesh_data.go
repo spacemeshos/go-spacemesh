@@ -48,7 +48,7 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 				return ctx.Err()
 			case <-p.completed:
 				if p.err != nil {
-					return fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h, p.err)
+					return fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h.String(), p.err)
 				}
 				return nil
 			}
@@ -239,7 +239,11 @@ func iterateLayers(req *MeshHashRequest) ([]types.LayerID, error) {
 	lids := make([]types.LayerID, req.Steps+1)
 	lids[0] = req.From
 	for i := uint32(1); i <= req.Steps; i++ {
-		lids[i] = lids[i-1].Add(req.Delta)
+		next := lids[i-1] + types.LayerID(req.Delta)
+		if next < lids[i-1] {
+			return nil, fmt.Errorf("request causes layer overflow in %d. delta %d", lids[i-1], req.Delta)
+		}
+		lids[i] = next
 	}
 	if lids[req.Steps].After(req.To) {
 		lids[req.Steps] = req.To

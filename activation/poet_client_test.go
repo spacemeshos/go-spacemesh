@@ -80,7 +80,7 @@ func Test_HTTPPoetClient_Proof(t *testing.T) {
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
-	_, err = client.Proof(context.Background(), "1")
+	_, _, err = client.Proof(context.Background(), "1")
 	require.NoError(t, err)
 }
 
