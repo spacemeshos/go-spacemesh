@@ -97,14 +97,6 @@ func (t *Tortoise) LatestComplete() types.LayerID {
 	return t.trtl.verified
 }
 
-func (t *Tortoise) Updates() map[types.LayerID]map[types.BlockID]bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	res := t.trtl.updated
-	t.trtl.updated = nil
-	return res
-}
-
 func (t *Tortoise) OnWeakCoin(lid types.LayerID, coin bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -310,10 +302,34 @@ func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) 
 	return missing
 }
 
+// Updates returns list of layers where opinion was changed since previous call.
+func (t *Tortoise) Updates() []result.Layer {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.trtl.notifications.min == 0 || t.trtl.notifications.max == 0 {
+		return nil
+	}
+	rst, err := t.results(t.trtl.notifications.min, t.trtl.notifications.max)
+	if err != nil {
+		t.logger.With().Panic("unexpected error",
+			log.Uint32("min", t.trtl.notifications.min.Uint32()),
+			log.Uint32("min", t.trtl.notifications.max.Uint32()),
+			log.Err(err),
+		)
+	}
+	t.trtl.notifications.min = 0
+	t.trtl.notifications.max = 0
+	return rst
+}
+
 // Results returns layers that crossed threshold in range [from, to].
 func (t *Tortoise) Results(from, to types.LayerID) ([]result.Layer, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	return t.results(from, to)
+}
+
+func (t *Tortoise) results(from, to types.LayerID) ([]result.Layer, error) {
 	if from <= t.trtl.evicted {
 		return nil, fmt.Errorf("requested layer %d is before evicted %d", from, t.trtl.evicted)
 	}

@@ -25,6 +25,10 @@ type turtle struct {
 
 	*state
 
+	notifications struct {
+		min, max types.LayerID
+	}
+
 	// a linked list with retriable ballots
 	// the purpose is to add ballot to the state even
 	// if beacon is not available locally, as tortoise
@@ -426,13 +430,8 @@ func (t *turtle) verifyLayers() {
 				log.Stringer("hare", block.hare),
 				log.Stringer("emitted", block.emitted),
 			)
-			if t.updated == nil {
-				t.updated = map[types.LayerID]map[types.BlockID]bool{}
-			}
-			if _, ok := t.updated[target]; !ok {
-				t.updated[target] = map[types.BlockID]bool{}
-			}
-			t.updated[target][block.id] = block.validity == support
+			t.notifications.min = minNonZero(t.notifications.min, target)
+			t.notifications.max = maxNonZero(t.notifications.max, target)
 			block.emitted = block.validity
 		}
 	}
@@ -761,6 +760,28 @@ func getLocalVote(config Config, verified, last types.LayerID, block *blockInfo)
 
 func minLayer(i, j types.LayerID) types.LayerID {
 	if i < j {
+		return i
+	}
+	return j
+}
+
+func minNonZero(i, j types.LayerID) types.LayerID {
+	if i == 0 {
+		return j
+	} else if j == 0 {
+		return i
+	} else if i < j {
+		return i
+	}
+	return j
+}
+
+func maxNonZero(i, j types.LayerID) types.LayerID {
+	if i == 0 {
+		return j
+	} else if j == 0 {
+		return i
+	} else if i > j {
 		return i
 	}
 	return j

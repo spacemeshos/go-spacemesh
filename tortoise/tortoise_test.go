@@ -15,6 +15,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -197,11 +198,9 @@ func TestAbstainLateBlock(t *testing.T) {
 
 	events := tortoise.Updates()
 	require.Len(t, events, 1)
-	got, ok := events[last.Sub(2)]
-	require.True(t, ok)
-	require.Len(t, got, 1)
-	for _, v := range got {
-		require.True(t, v)
+	require.Equal(t, events[0].Layer, last.Sub(2))
+	for _, v := range events[0].Blocks {
+		require.True(t, v.Valid)
 	}
 
 	block := types.Block{}
@@ -520,17 +519,16 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 }
 
 type updater interface {
-	Updates() map[types.LayerID]map[types.BlockID]bool
+	Updates() []result.Layer
 }
 
 func processBlockUpdates(tb testing.TB, tt updater, db sql.Executor) {
-	updated := tt.Updates()
-	for _, bids := range updated {
-		for bid, valid := range bids {
-			if valid {
-				require.NoError(tb, blocks.SetValid(db, bid))
+	for _, layer := range tt.Updates() {
+		for _, block := range layer.Blocks {
+			if block.Valid {
+				require.NoError(tb, blocks.SetValid(db, block.Header.ID))
 			} else {
-				require.NoError(tb, blocks.SetInvalid(db, bid))
+				require.NoError(tb, blocks.SetInvalid(db, block.Header.ID))
 			}
 		}
 	}
@@ -2236,12 +2234,10 @@ func TestSwitchMode(t *testing.T) {
 		}
 		events := tortoise.Updates()
 		require.Len(t, events, int(cfg.Hdist))
-		for i := 0; i < int(cfg.Hdist); i++ {
-			got, ok := events[nohare.Add(uint32(i))]
-			require.True(t, ok)
-			require.Len(t, got, 1)
-			for _, v := range got {
-				require.True(t, v)
+		for i, layer := range events {
+			require.Equal(t, nohare.Add(uint32(i)), layer.Layer)
+			for _, v := range layer.Blocks {
+				require.True(t, v.Valid)
 			}
 		}
 
@@ -2267,11 +2263,10 @@ func TestSwitchMode(t *testing.T) {
 		tortoise.TallyVotes(ctx, last)
 		events = tortoise.Updates()
 		require.Len(t, events, 1)
-		got, ok := events[nohare]
-		require.True(t, ok)
-		require.Len(t, got, 1)
-		for _, v := range got {
-			require.False(t, v)
+		require.Equal(t, events[0].Layer, nohare)
+		require.Len(t, events[0].Blocks, 1)
+		for _, v := range events[0].Blocks {
+			require.False(t, v.Valid)
 		}
 	})
 }
