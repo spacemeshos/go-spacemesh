@@ -11,9 +11,16 @@ type Layer struct {
 	Blocks  []Block
 }
 
+// FirstValid returns first block that is considered valid by tortoise
+// or first block considered valid by hare.
 func (l *Layer) FirstValid() types.BlockID {
 	for _, block := range l.Blocks {
 		if block.Valid {
+			return block.Header.ID
+		}
+	}
+	for _, block := range l.Blocks {
+		if block.Hare {
 			return block.Header.ID
 		}
 	}

@@ -430,8 +430,6 @@ func (t *turtle) verifyLayers() {
 				log.Stringer("hare", block.hare),
 				log.Stringer("emitted", block.emitted),
 			)
-			t.notifications.min = minNonZero(t.notifications.min, target)
-			t.notifications.max = maxNonZero(t.notifications.max, target)
 			block.emitted = block.validity
 		}
 	}
@@ -518,7 +516,12 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 func (t *turtle) onOpinionChange(lid types.LayerID) {
 	for recompute := lid; !recompute.After(t.processed); recompute = recompute.Add(1) {
 		layer := t.layer(recompute)
+		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
+		if opinion != layer.opinion {
+			t.notifications.min = minNonZero(t.notifications.min, lid)
+			t.notifications.max = maxNonZero(t.notifications.max, lid)
+		}
 		t.logger.With().Debug("computed local opinion",
 			layer.lid,
 			log.Stringer("local opinion", layer.opinion))
