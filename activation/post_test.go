@@ -208,6 +208,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 		LabelsPerUnit:   m.LabelsPerUnit,
 	},
 		config.DefaultConfig(),
+		logtest.New(t).WithName("verifying").Zap(),
 		verifying.WithLabelScryptParams(mgr.opts.Scrypt),
 	)
 	req.NoError(err)

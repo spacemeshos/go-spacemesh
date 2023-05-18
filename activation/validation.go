@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type ErrAtxNotFound struct {
@@ -40,11 +41,12 @@ func (e *ErrAtxNotFound) Is(target error) bool {
 type Validator struct {
 	poetDb poetDbAPI
 	cfg    PostConfig
+	log    log.Log
 }
 
 // NewValidator returns a new NIPost validator.
-func NewValidator(poetDb poetDbAPI, cfg PostConfig) *Validator {
-	return &Validator{poetDb, cfg}
+func NewValidator(poetDb poetDbAPI, cfg PostConfig, log log.Log) *Validator {
+	return &Validator{poetDb, cfg, log}
 }
 
 // NIPost validates a NIPost, given a node id and expected challenge. It returns an error if the NIPost is invalid.
@@ -123,7 +125,7 @@ func (v *Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST 
 	}
 
 	start := time.Now()
-	if err := verifying.Verify(p, m, (config.Config)(v.cfg), opts...); err != nil {
+	if err := verifying.Verify(p, m, (config.Config)(v.cfg), v.log.Zap(), opts...); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
 	}
 	metrics.PostVerificationLatency.Observe(time.Since(start).Seconds())
