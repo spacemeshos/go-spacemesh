@@ -127,11 +127,11 @@ type PublishSubsciber interface {
 // GossipHandler is a function that is for receiving p2p messages.
 type GossipHandler = func(context.Context, peer.ID, []byte) error
 
-// ValidationRejectErr is returned by a GossipHandler to indicate that the
+// ErrValidationReject is returned by a GossipHandler to indicate that the
 // pubsub validation result is ValidationReject. ValidationAccept is indicated
 // by a nil error and ValidationIgnore is indicated by any error that is not a
-// ValidationRejectErr.
-var ValidationRejectErr = errors.New("validation reject")
+// ErrValidationReject.
+var ErrValidationReject = errors.New("validation reject")
 
 // ChainGossipHandler helper to chain multiple GossipHandler together. Called synchronously and in the order.
 func ChainGossipHandler(handlers ...GossipHandler) GossipHandler {
@@ -268,7 +268,7 @@ func castResult(err error) string {
 	switch {
 	case err == nil:
 		return "accept"
-	case errors.Is(err, ValidationRejectErr):
+	case errors.Is(err, ErrValidationReject):
 		return "reject"
 	default:
 		return "ignore"

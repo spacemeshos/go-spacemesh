@@ -537,7 +537,7 @@ func Test_HandleCertifyMessage_CorruptedMsg(t *testing.T) {
 	encoded := []byte("guaranteed corrupt")
 
 	res := tc.HandleCertifyMessage(context.Background(), "peer", encoded)
-	require.ErrorIs(t, res, pubsub.ValidationRejectErr)
+	require.ErrorIs(t, res, pubsub.ErrValidationReject)
 }
 
 func Test_HandleCertifyMessage_LayerNotRegistered(t *testing.T) {

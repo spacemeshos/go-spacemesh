@@ -22,7 +22,7 @@ func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byt
 	var message Message
 	if err := codec.Decode(msg, &message); err != nil {
 		logger.With().Warning("malformed weak coin message", log.Err(err))
-		return pubsub.ValidationRejectErr
+		return pubsub.ErrValidationReject
 	}
 
 	latency := receivedTime.Sub(wc.msgTime.WeakCoinProposalSendTime(message.Epoch, message.Round))

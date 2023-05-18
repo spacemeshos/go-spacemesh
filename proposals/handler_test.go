@@ -918,7 +918,7 @@ func TestProposal_MalformedData(t *testing.T) {
 	data, err := codec.Encode(&p.InnerProposal)
 	require.NoError(t, err)
 	require.ErrorIs(t, th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data), errMalformedData)
-	require.ErrorIs(t, th.HandleProposal(context.Background(), "", data), pubsub.ValidationRejectErr)
+	require.ErrorIs(t, th.HandleProposal(context.Background(), "", data), pubsub.ErrValidationReject)
 	checkProposal(t, th.cdb, p, false)
 }
 

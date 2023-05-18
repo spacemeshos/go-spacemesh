@@ -750,14 +750,14 @@ func (app *App) initServices(
 		app.edVerifier,
 	)
 	fetcher.SetValidators(
-		fetch.ValidatorFunc(pubsub.DropPeerOnError(atxHandler.HandleAtxData, app.host, lg, pubsub.ValidationRejectErr)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnError(poetDb.ValidateAndStoreMsg, app.host, lg, pubsub.ValidationRejectErr)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnError(proposalListener.HandleSyncedProposal, app.host, lg, pubsub.ValidationRejectErr)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnError(blockHandler.HandleSyncedBlock, app.host, lg, pubsub.ValidationRejectErr)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnError(proposalListener.HandleSyncedProposal, app.host, lg, pubsub.ValidationRejectErr)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnError(app.txHandler.HandleBlockTransaction, app.host, lg, pubsub.ValidationRejectErr)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnError(app.txHandler.HandleProposalTransaction, app.host, lg, pubsub.ValidationRejectErr)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnError(malfeasanceHandler.HandleMalfeasanceProof, app.host, lg, pubsub.ValidationRejectErr)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnError(atxHandler.HandleAtxData, app.host, lg, pubsub.ErrValidationReject)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnError(poetDb.ValidateAndStoreMsg, app.host, lg, pubsub.ErrValidationReject)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnError(proposalListener.HandleSyncedProposal, app.host, lg, pubsub.ErrValidationReject)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnError(blockHandler.HandleSyncedBlock, app.host, lg, pubsub.ErrValidationReject)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnError(proposalListener.HandleSyncedProposal, app.host, lg, pubsub.ErrValidationReject)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnError(app.txHandler.HandleBlockTransaction, app.host, lg, pubsub.ErrValidationReject)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnError(app.txHandler.HandleProposalTransaction, app.host, lg, pubsub.ErrValidationReject)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnError(malfeasanceHandler.HandleMalfeasanceProof, app.host, lg, pubsub.ErrValidationReject)),
 	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {

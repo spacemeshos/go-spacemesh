@@ -533,5 +533,5 @@ func isErr(err error) bool {
 }
 
 func isValidationRejectErr(err error) bool {
-	return errors.Is(err, pubsub.ValidationRejectErr)
+	return errors.Is(err, pubsub.ErrValidationReject)
 }

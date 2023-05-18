@@ -33,14 +33,14 @@ func (ps *PubSub) Register(topic string, handler GossipHandler) {
 		ps.logger.Panic("already registered a topic %s", topic)
 	}
 	// Drop peers on ValidationRejectErr
-	handler = DropPeerOnError(handler, ps.host, ps.logger, ValidationRejectErr)
+	handler = DropPeerOnError(handler, ps.host, ps.logger, ErrValidationReject)
 	ps.pubsub.RegisterTopicValidator(topic, func(ctx context.Context, pid peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
 		start := time.Now()
 		err := handler(log.WithNewRequestID(ctx), pid, msg.Data)
 		metrics.ProcessedMessagesDuration.WithLabelValues(topic, castResult(err)).
 			Observe(float64(time.Since(start)))
 		switch {
-		case errors.Is(err, ValidationRejectErr):
+		case errors.Is(err, ErrValidationReject):
 			return pubsub.ValidationReject
 		case err != nil:
 			return pubsub.ValidationIgnore
