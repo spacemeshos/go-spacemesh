@@ -28,9 +28,7 @@ type PostConfig struct {
 	K1            uint32 `mapstructure:"post-k1"`
 	K2            uint32 `mapstructure:"post-k2"`
 	K3            uint32 `mapstructure:"post-k3"`
-	// Difficulties for K2 and K3 Proofs of Work
 	K2PowDifficulty uint64 `mapstructure:"post-k2pow-difficulty"`
-	K3PowDifficulty uint64 `mapstructure:"post-k3pow-difficulty"`
 }
 
 // PostSetupOpts are the options used to initiate a Post setup data creation session,

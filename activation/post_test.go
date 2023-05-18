@@ -199,7 +199,6 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 		Nonce:   p.Nonce,
 		Indices: p.Indices,
 		K2Pow:   p.K2Pow,
-		K3Pow:   p.K3Pow,
 	}, &shared.ProofMetadata{
 		NodeId:          mgr.id.Bytes(),
 		CommitmentAtxId: mgr.goldenATXID.Bytes(),
