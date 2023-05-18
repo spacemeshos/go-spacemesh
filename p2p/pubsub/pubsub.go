@@ -151,7 +151,6 @@ func DropPeerOnError(handler GossipHandler, h host.Host, logger log.Log, targetE
 	return func(ctx context.Context, peer peer.ID, data []byte) error {
 		err := handler(ctx, peer, data)
 		if errors.Is(err, targetErr) {
-			// We want to disconnect the peer and also penalize it which could result in it being blacklisted.
 			err := h.Network().ClosePeer(peer)
 			if err != nil {
 				logger.With().Debug("failed to close peer",
