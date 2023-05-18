@@ -515,7 +515,6 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 						).
 						WithEnv(
 							corev1.EnvVar().WithName("GOMAXPROCS").WithValue("4"),
-							corev1.EnvVar().WithName("GODEBUG").WithValue("http2debug=1"),
 						).
 						WithCommand(cmd...),
 					),
