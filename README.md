@@ -203,9 +203,32 @@ You specify these parameters by providing go-spacemesh with a json config file. 
 
 ---
 
+### Smeshing
+
+To be able to initialize your PoST using your Graphics card you will need to install the tools necessary to enable OpenCL support on your system.
+The exact steps to do this will vary based on your OS and GPU. In general you will need to install the OpenCL runtime for your GPU and ICD loader.
+
+A good starting point to get more info is <https://wiki.archlinux.org/title/GPGPU>.
+
+If your system doesn't have a GPU or you can use a generic runtime instead. Be aware that we do not recommend this for initialization of PoST.
+On Ubuntu you need to install the following packages:
+
+```bash
+apt-get update
+apt-get install libpocl2
+```
+
+on Windows you can use Intel OpenAPI:
+
+```bash
+choco install opencl-intel-cpu-runtime
+```
+
+---
+
 ### Testing
 
-*NOTE*: if tests are hanging try running `ulimit -n 400`. some tests require that to work.
+_NOTE_: if tests are hanging try running `ulimit -n 400`. some tests require that to work.
 
 ```bash
 TEST_LOG_LEVEL="" make test

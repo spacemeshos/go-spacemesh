@@ -93,6 +93,7 @@ const (
 	ProposalBuilderLogger  = "proposalBuilder"
 	ProposalListenerLogger = "proposalListener"
 	NipostBuilderLogger    = "nipostBuilder"
+	NipostValidatorLogger  = "nipostValidator"
 	Fetcher                = "fetcher"
 	TimeSyncLogger         = "timesync"
 	VMLogger               = "vm"
@@ -470,7 +471,7 @@ func (app *App) initServices(
 	lg := app.log.Named(nodeID.ShortString()).WithFields(nodeID)
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
-	validator := activation.NewValidator(poetDb, app.Config.POST)
+	validator := activation.NewValidator(poetDb, app.Config.POST, app.addLogger(NipostValidatorLogger, lg))
 	app.validator = validator
 
 	cfg := vm.DefaultConfig()
@@ -622,13 +623,14 @@ func (app *App) initServices(
 
 	patrol := layerpatrol.New()
 	syncerConf := syncer.Config{
-		SyncInterval:     time.Duration(app.Config.SyncInterval) * time.Second,
+		Interval:         app.Config.Sync.Interval,
+		EpochEndFraction: 0.8,
 		HareDelayLayers:  app.Config.Tortoise.Zdist,
 		SyncCertDistance: app.Config.Tortoise.Hdist,
 		MaxHashesInReq:   100,
 		MaxStaleDuration: time.Hour,
 	}
-	newSyncer := syncer.NewSyncer(app.cachedDB, clock, beaconProtocol, msh, fetcher, patrol, app.certifier,
+	newSyncer := syncer.NewSyncer(app.cachedDB, clock, beaconProtocol, msh, trtl, fetcher, patrol, app.certifier,
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.addLogger(SyncLogger, lg)))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
@@ -826,10 +828,7 @@ func (app *App) startServices(ctx context.Context, appErr chan error) error {
 	if err := app.fetcher.Start(); err != nil {
 		return fmt.Errorf("failed to start fetcher: %w", err)
 	}
-	app.eg.Go(func() error {
-		app.startSyncer(ctx)
-		return nil
-	})
+	app.syncer.Start(ctx)
 	app.beaconProtocol.Start(ctx)
 
 	app.blockGen.Start()
@@ -1086,10 +1085,6 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
 
 	return edSgn, nil
-}
-
-func (app *App) startSyncer(ctx context.Context) {
-	app.syncer.Start(ctx)
 }
 
 func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {

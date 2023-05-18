@@ -18,7 +18,7 @@ import (
 )
 
 // PostSetupProvider represent a compute provider for Post setup data creation.
-type PostSetupProvider initialization.ComputeProvider
+type PostSetupProvider initialization.Provider
 
 // PostConfig is the configuration of the Post protocol, used for data creation, proofs generation and validation.
 type PostConfig struct {
@@ -187,7 +187,7 @@ func (mgr *PostSetupManager) BestProvider() (*PostSetupProvider, error) {
 
 // Benchmark runs a short benchmarking session for a given provider to evaluate its performance.
 func (mgr *PostSetupManager) Benchmark(p PostSetupProvider) (int, error) {
-	score, err := initialization.Benchmark(initialization.ComputeProvider(p))
+	score, err := initialization.Benchmark(initialization.Provider(p))
 	if err != nil {
 		return score, fmt.Errorf("benchmark GPU: %w", err)
 	}
@@ -284,7 +284,7 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 		initialization.WithCommitmentAtxId(mgr.commitmentAtxId.Bytes()),
 		initialization.WithConfig(config.Config(mgr.cfg)),
 		initialization.WithInitOpts(config.InitOpts(opts)),
-		initialization.WithLogger(mgr.logger),
+		initialization.WithLogger(mgr.logger.Zap()),
 	)
 	if err != nil {
 		mgr.state = PostSetupStateError
@@ -370,7 +370,7 @@ func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte
 	}
 	mgr.mu.Unlock()
 
-	proof, proofMetadata, err := proving.Generate(ctx, challenge, config.Config(mgr.cfg), mgr.logger,
+	proof, proofMetadata, err := proving.Generate(ctx, challenge, config.Config(mgr.cfg), mgr.logger.Zap(),
 		proving.WithDataSource(config.Config(mgr.cfg), mgr.id.Bytes(), mgr.commitmentAtxId.Bytes(), mgr.lastOpts.DataDir),
 		proving.WithNonces(mgr.provingOpts.Nonces),
 		proving.WithThreads(mgr.provingOpts.Threads),

@@ -53,11 +53,11 @@ func putEncoderBuffer(b *bytes.Buffer) {
 func Encode(value Encodable) ([]byte, error) {
 	b := getEncoderBuffer()
 	defer putEncoderBuffer(b)
-	_, err := EncodeTo(b, value)
+	n, err := EncodeTo(b, value)
 	if err != nil {
 		return nil, err
 	}
-	buf := make([]byte, len(b.Bytes()))
+	buf := make([]byte, n)
 	copy(buf, b.Bytes())
 	return buf, nil
 }

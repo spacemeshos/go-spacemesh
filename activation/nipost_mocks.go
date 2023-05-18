@@ -66,12 +66,13 @@ func (mr *MockPoetProvingServiceClientMockRecorder) PowParams(ctx interface{}) *
 }
 
 // Proof mocks base method.
-func (m *MockPoetProvingServiceClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, error) {
+func (m *MockPoetProvingServiceClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Proof", ctx, roundID)
 	ret0, _ := ret[0].(*types.PoetProofMessage)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].([]types.Member)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // Proof indicates an expected call of Proof.
@@ -119,12 +120,13 @@ func (m *MockpoetDbAPI) EXPECT() *MockpoetDbAPIMockRecorder {
 }
 
 // GetProof mocks base method.
-func (m *MockpoetDbAPI) GetProof(arg0 types.PoetProofRef) (*types.PoetProof, error) {
+func (m *MockpoetDbAPI) GetProof(arg0 types.PoetProofRef) (*types.PoetProof, *types.Hash32, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetProof", arg0)
 	ret0, _ := ret[0].(*types.PoetProof)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].(*types.Hash32)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // GetProof indicates an expected call of GetProof.

@@ -157,12 +157,20 @@ func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error
 	// this will iterate all requests and populate appropriate Responses, if there are any missing items they will not
 	// be included in the response at all
 	for _, r := range requestBatch.Requests {
+		totalHashReqs.WithLabelValues(string(r.Hint)).Add(1)
 		res, err := h.bs.Get(r.Hint, r.Hash.Bytes())
 		if err != nil {
-			h.logger.WithContext(ctx).With().Info("remote peer requested nonexistent hash",
+			h.logger.WithContext(ctx).With().Debug("remote peer requested nonexistent hash",
 				log.String("hash", r.Hash.ShortString()),
 				log.String("hint", string(r.Hint)),
 				log.Err(err))
+			hashMissing.WithLabelValues(string(r.Hint)).Add(1)
+			continue
+		} else if res == nil {
+			h.logger.WithContext(ctx).With().Debug("remote peer requested golden",
+				log.String("hash", r.Hash.ShortString()),
+				log.Int("dataSize", len(res)))
+			hashEmptyData.WithLabelValues(string(r.Hint)).Add(1)
 			continue
 		} else {
 			h.logger.WithContext(ctx).With().Debug("responded to hash request",

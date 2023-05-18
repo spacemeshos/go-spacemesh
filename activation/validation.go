@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/spacemeshos/merkle-tree"
+	poetShared "github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type ErrAtxNotFound struct {
@@ -37,11 +41,12 @@ func (e *ErrAtxNotFound) Is(target error) bool {
 type Validator struct {
 	poetDb poetDbAPI
 	cfg    PostConfig
+	log    log.Log
 }
 
 // NewValidator returns a new NIPost validator.
-func NewValidator(poetDb poetDbAPI, cfg PostConfig) *Validator {
-	return &Validator{poetDb, cfg}
+func NewValidator(poetDb poetDbAPI, cfg PostConfig, log log.Log) *Validator {
+	return &Validator{poetDb, cfg, log}
 }
 
 // NIPost validates a NIPost, given a node id and expected challenge. It returns an error if the NIPost is invalid.
@@ -50,10 +55,6 @@ func NewValidator(poetDb poetDbAPI, cfg PostConfig) *Validator {
 // consensus instead of local configuration. If so, their validation should be removed to contextual validation,
 // while still syntactically-validate them here according to locally configured min/max values.
 func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error) {
-	if !bytes.Equal(nipost.Challenge[:], expectedChallenge[:]) {
-		return 0, fmt.Errorf("invalid `Challenge`; expected: %x, given: %x", expectedChallenge, nipost.Challenge)
-	}
-
 	if err := v.NumUnits(&v.cfg, numUnits); err != nil {
 		return 0, err
 	}
@@ -62,31 +63,52 @@ func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nip
 		return 0, err
 	}
 
+	if err := v.Post(nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
+		return 0, fmt.Errorf("invalid Post: %v", err)
+	}
+
 	var ref types.PoetProofRef
 	copy(ref[:], nipost.PostMetadata.Challenge)
-	proof, err := v.poetDb.GetProof(ref)
+	proof, statement, err := v.poetDb.GetProof(ref)
 	if err != nil {
 		return 0, fmt.Errorf("poet proof is not available %x: %w", nipost.PostMetadata.Challenge, err)
 	}
 
-	if !contains(proof, nipost.Challenge.Bytes()) {
-		return 0, fmt.Errorf("challenge is not included in the proof %x", nipost.PostMetadata.Challenge)
-	}
-
-	if err := v.Post(nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
-		return 0, fmt.Errorf("invalid Post: %v", err)
+	if err := validateMerkleProof(expectedChallenge[:], &nipost.Membership, statement[:]); err != nil {
+		return 0, fmt.Errorf("invalid membership proof %w", err)
 	}
 
 	return proof.LeafCount, nil
 }
 
-func contains(proof *types.PoetProof, member []byte) bool {
-	for _, part := range proof.Members {
-		if bytes.Equal(part[:], member) {
-			return true
-		}
+func validateMerkleProof(leaf []byte, proof *types.MerkleProof, expectedRoot []byte) error {
+	nodes := make([][]byte, 0, len(proof.Nodes))
+	for _, n := range proof.Nodes {
+		nodes = append(nodes, n.Bytes())
 	}
-	return false
+	ok, err := merkle.ValidatePartialTree(
+		[]uint64{proof.LeafIndex},
+		[][]byte{leaf},
+		nodes,
+		expectedRoot,
+		poetShared.HashMembershipTreeNode,
+	)
+	if err != nil {
+		return fmt.Errorf("validating merkle proof: %w", err)
+	}
+	if !ok {
+		hexNodes := make([]string, 0, len(proof.Nodes))
+		for _, n := range proof.Nodes {
+			hexNodes = append(hexNodes, n.Hex())
+		}
+		return fmt.Errorf(
+			"invalid merkle proof, calculated root does not match the proof root, leaf: %v, nodes: %v, expected root: %v",
+			util.Encode(leaf),
+			hexNodes,
+			util.Encode(expectedRoot),
+		)
+	}
+	return nil
 }
 
 // Post validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
@@ -103,7 +125,7 @@ func (v *Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST 
 	}
 
 	start := time.Now()
-	if err := verifying.Verify(p, m, (config.Config)(v.cfg), opts...); err != nil {
+	if err := verifying.Verify(p, m, (config.Config)(v.cfg), v.log.Zap(), opts...); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
 	}
 	metrics.PostVerificationLatency.Observe(time.Since(start).Seconds())
