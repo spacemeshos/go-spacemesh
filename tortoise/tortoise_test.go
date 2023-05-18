@@ -527,7 +527,7 @@ func processBlockUpdates(tb testing.TB, tt updater, db sql.Executor) {
 		for _, block := range layer.Blocks {
 			if block.Valid {
 				require.NoError(tb, blocks.SetValid(db, block.Header.ID))
-			} else {
+			} else if block.Invalid {
 				require.NoError(tb, blocks.SetInvalid(db, block.Header.ID))
 			}
 		}

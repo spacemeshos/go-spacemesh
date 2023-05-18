@@ -431,6 +431,8 @@ func (t *turtle) verifyLayers() {
 				log.Stringer("emitted", block.emitted),
 			)
 			block.emitted = block.validity
+			t.notifications.min = minNonZero(t.notifications.min, target)
+			t.notifications.max = maxNonZero(t.notifications.max, target)
 		}
 	}
 	t.verified = verified
