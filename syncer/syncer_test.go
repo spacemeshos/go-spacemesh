@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -21,9 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/blocks"
-	"github.com/spacemeshos/go-spacemesh/sql/certificates"
-	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -576,80 +574,6 @@ func genTx(t testing.TB) types.Transaction {
 	return tx
 }
 
-func TestSyncMissingLayer(t *testing.T) {
-	ts := newTestSyncer(t, never)
-	genesis := types.GetEffectiveGenesis()
-	failed := genesis.Add(2)
-	last := genesis.Add(4)
-	ts.mTicker.advanceToLayer(last)
-
-	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).AnyTimes()
-	ts.mDataFetcher.EXPECT().PollMaliciousProofs(gomock.Any())
-	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
-	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
-	ts.mTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
-
-	tx := genTx(t)
-	block := types.NewExistingBlock(types.RandomBlockID(), types.InnerBlock{
-		LayerIndex: failed,
-		TxIDs:      []types.TransactionID{tx.ID},
-	})
-	require.NoError(t, blocks.Add(ts.cdb, block))
-	require.NoError(t, certificates.SetHareOutput(ts.cdb, failed, block.ID()))
-	require.NoError(t, blocks.SetValid(ts.cdb, block.ID()))
-	for lid := genesis.Add(1); lid.Before(last); lid = lid.Add(1) {
-		if lid != failed {
-			require.NoError(t, certificates.SetHareOutput(ts.cdb, lid, types.EmptyBlockID))
-		}
-	}
-
-	for lid := genesis.Add(1); lid.Before(last); lid = lid.Add(1) {
-		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
-		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
-		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().Updates().Return(nil)
-		if lid.Before(failed) {
-			ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
-			ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
-			ts.mVm.EXPECT().GetStateRoot()
-		}
-		if lid != failed {
-			ts.msh.SetZeroBlockLayer(context.Background(), lid)
-		}
-	}
-
-	require.True(t, ts.syncer.synchronize(context.Background()))
-	require.NoError(t, ts.syncer.processLayers(context.Background()))
-	require.Equal(t, last.Sub(1), ts.syncer.getLastSyncedLayer())
-	require.Equal(t, failed, ts.msh.MissingLayer())
-	require.Equal(t, last.Sub(1), ts.msh.ProcessedLayer())
-	require.Equal(t, failed.Sub(1), ts.msh.LatestLayerInState())
-
-	// test that synchronize will sync from missing layer again
-	require.NoError(t, transactions.Add(ts.cdb, &tx, time.Now()))
-	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), failed)
-	require.True(t, ts.syncer.synchronize(context.Background()))
-
-	for lid := failed.Sub(1); lid.Before(last); lid = lid.Add(1) {
-		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
-		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().Updates().Return(nil)
-		if lid == failed {
-			ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
-			ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, block.ID(), nil, nil)
-			ts.mVm.EXPECT().GetStateRoot()
-		} else if lid.After(failed) {
-			ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
-			ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
-			ts.mVm.EXPECT().GetStateRoot()
-		}
-	}
-	require.NoError(t, ts.syncer.processLayers(context.Background()))
-	require.Equal(t, types.LayerID(0), ts.msh.MissingLayer())
-	require.Equal(t, last.Sub(1), ts.msh.ProcessedLayer())
-	require.Equal(t, last.Sub(1), ts.msh.LatestLayerInState())
-}
-
 func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
 	ts.mTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
@@ -662,7 +586,7 @@ func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 
 	// simulate hare advancing the mesh forward
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lyr)
-	ts.mTortoise.EXPECT().Updates().Return(nil)
+	ts.mTortoise.EXPECT().Updates().Return([]result.Layer{{Layer: lyr}})
 	ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 	ts.mConState.EXPECT().UpdateCache(gomock.Any(), lyr, types.EmptyBlockID, nil, nil)
 	ts.mVm.EXPECT().GetStateRoot()

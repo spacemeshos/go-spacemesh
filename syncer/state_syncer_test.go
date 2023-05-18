@@ -71,7 +71,15 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 				return nil
 			})
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().Updates().Return(nil)
+		rst := []result.Layer{
+			{Layer: lid, Blocks: []result.Block{{Header: types.BlockHeader{
+				ID: adopted[lid],
+			},
+				Data:  true,
+				Valid: true,
+			}}},
+		}
+		ts.mTortoise.EXPECT().Updates().Return(rst)
 		ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, gomock.Any(), nil, nil).DoAndReturn(
 			func(_ context.Context, _ types.LayerID, got types.BlockID, _ []types.TransactionWithResult, _ []types.Transaction) error {
