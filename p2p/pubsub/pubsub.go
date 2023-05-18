@@ -127,20 +127,6 @@ type PublishSubsciber interface {
 // GossipHandler is a function that is for receiving p2p messages.
 type GossipHandler = func(context.Context, peer.ID, []byte) error
 
-// ValidationResult is a one of the validation result constants.
-type ValidationResult = pubsub.ValidationResult
-
-const (
-	// ValidationAccept should be returned if message is good and can be broadcasted.
-	ValidationAccept = pubsub.ValidationAccept
-	// ValidationIgnore should be returned if message might be good, but outdated
-	// and shouldn't be broadcasted.
-	ValidationIgnore = pubsub.ValidationIgnore
-	// ValidationReject should be returned if message is malformed or malicious
-	// and shouldn't be broadcasted. Peer might be potentially get banned when on this result.
-	ValidationReject = pubsub.ValidationReject
-)
-
 // ValidationRejectErr is returned by a GossipHandler to indicate that the
 // pubsub validation result is ValidationReject. ValidationAccept is indicated
 // by a nil error and ValidationIgnore is indicated by any error that is not a
