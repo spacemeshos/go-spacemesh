@@ -144,6 +144,9 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []
 		logger.With().Error("malformed ballot", log.Err(err))
 		return errMalformedData
 	}
+	if b.Layer <= types.GetEffectiveGenesis() {
+		return fmt.Errorf("ballot before effective genesis: layer %v", b.Layer)
+	}
 
 	if !h.edVerifier.Verify(signing.BALLOT, b.SmesherID, b.SignedBytes(), b.Signature) {
 		return fmt.Errorf("failed to verify ballot signature")
@@ -227,6 +230,9 @@ func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte
 	if err := codec.Decode(data, &p); err != nil {
 		logger.With().Error("malformed proposal", log.Err(err))
 		return errMalformedData
+	}
+	if p.Layer <= types.GetEffectiveGenesis() {
+		return fmt.Errorf("proposal before effective genesis: layer %v", p.Layer)
 	}
 
 	latency := receivedTime.Sub(h.clock.LayerToTime(p.Layer))

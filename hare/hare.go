@@ -322,7 +322,7 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 
 	h.setLastLayer(lid)
 
-	if lid.GetEpoch().IsGenesis() {
+	if lid <= types.GetEffectiveGenesis() {
 		logger.Info("not starting hare: genesis")
 		return false, nil
 	}
@@ -331,8 +331,9 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 	h.eg.Go(func() error {
 		// this is called only for its side effects, but at least print the error if it returns one
 		if isActive, err := h.rolacle.IsIdentityActiveOnConsensusView(ctx, h.nodeID, lid); err != nil {
-			logger.With().Error("error checking if identity is active",
-				log.Bool("isActive", isActive), log.Err(err))
+			logger.With().Warning("error checking if identity is active",
+				log.Bool("isActive", isActive), log.Err(err),
+			)
 		}
 		return nil
 	})
@@ -430,9 +431,9 @@ func goodProposals(logger log.Log, msh mesh, nodeID types.NodeID, lid types.Laye
 	props, err := msh.Proposals(lid)
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
-			logger.With().Warning("no proposals found for hare, using empty set", log.Err(err))
+			logger.With().Warning("no proposals found for hare, using empty set", lid, log.Err(err))
 		} else {
-			logger.With().Error("failed to get proposals for hare", log.Err(err))
+			logger.With().Error("failed to get proposals for hare", lid, log.Err(err))
 		}
 		return []types.ProposalID{}
 	}
