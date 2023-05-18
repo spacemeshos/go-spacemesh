@@ -93,6 +93,7 @@ const (
 	ProposalBuilderLogger  = "proposalBuilder"
 	ProposalListenerLogger = "proposalListener"
 	NipostBuilderLogger    = "nipostBuilder"
+	NipostValidatorLogger  = "nipostValidator"
 	Fetcher                = "fetcher"
 	TimeSyncLogger         = "timesync"
 	VMLogger               = "vm"
@@ -470,7 +471,7 @@ func (app *App) initServices(
 	lg := app.log.Named(nodeID.ShortString()).WithFields(nodeID)
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
-	validator := activation.NewValidator(poetDb, app.Config.POST)
+	validator := activation.NewValidator(poetDb, app.Config.POST, app.addLogger(NipostValidatorLogger, lg))
 	app.validator = validator
 
 	cfg := vm.DefaultConfig()

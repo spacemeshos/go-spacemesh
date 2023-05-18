@@ -202,8 +202,6 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.POST.K3, "subset of labels to verify in a proof")
 	cmd.PersistentFlags().Uint64Var(&cfg.POST.K2PowDifficulty, "post-k2pow-difficulty",
 		cfg.POST.K2PowDifficulty, "difficulty of K2 proof of work")
-	cmd.PersistentFlags().Uint64Var(&cfg.POST.K3PowDifficulty, "post-k3pow-difficulty",
-		cfg.POST.K3PowDifficulty, "difficulty of K3 proof of work")
 
 	/**======================== Smeshing Flags ========================== **/
 

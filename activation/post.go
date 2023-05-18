@@ -28,9 +28,7 @@ type PostConfig struct {
 	K1            uint32 `mapstructure:"post-k1"`
 	K2            uint32 `mapstructure:"post-k2"`
 	K3            uint32 `mapstructure:"post-k3"`
-	// Difficulties for K2 and K3 Proofs of Work
 	K2PowDifficulty uint64 `mapstructure:"post-k2pow-difficulty"`
-	K3PowDifficulty uint64 `mapstructure:"post-k3pow-difficulty"`
 }
 
 // PostSetupOpts are the options used to initiate a Post setup data creation session,
@@ -284,7 +282,7 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 		initialization.WithCommitmentAtxId(mgr.commitmentAtxId.Bytes()),
 		initialization.WithConfig(config.Config(mgr.cfg)),
 		initialization.WithInitOpts(config.InitOpts(opts)),
-		initialization.WithLogger(mgr.logger),
+		initialization.WithLogger(mgr.logger.Zap()),
 	)
 	if err != nil {
 		mgr.state = PostSetupStateError
@@ -370,7 +368,7 @@ func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte
 	}
 	mgr.mu.Unlock()
 
-	proof, proofMetadata, err := proving.Generate(ctx, challenge, config.Config(mgr.cfg), mgr.logger,
+	proof, proofMetadata, err := proving.Generate(ctx, challenge, config.Config(mgr.cfg), mgr.logger.Zap(),
 		proving.WithDataSource(config.Config(mgr.cfg), mgr.id.Bytes(), mgr.commitmentAtxId.Bytes(), mgr.lastOpts.DataDir),
 		proving.WithNonces(mgr.provingOpts.Nonces),
 		proving.WithThreads(mgr.provingOpts.Threads),
