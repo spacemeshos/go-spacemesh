@@ -586,6 +586,7 @@ func TestProcessLayer(t *testing.T) {
 
 		// outputs
 		err      string
+		executed []types.BlockID
 		applied  []types.BlockID
 		validity map[types.BlockID]bool
 	}
@@ -603,7 +604,8 @@ func TestProcessLayer(t *testing.T) {
 					updates: []result.Layer{
 						layer(start, validhare("1", true), invalid("2", true)),
 					},
-					applied: []types.BlockID{id("1")},
+					executed: []types.BlockID{id("1")},
+					applied:  []types.BlockID{id("1")},
 					validity: map[types.BlockID]bool{
 						id("1"): true,
 						id("2"): false,
@@ -624,7 +626,8 @@ func TestProcessLayer(t *testing.T) {
 					results: []result.Layer{
 						layer(start, valid("1", true)),
 					},
-					applied: []types.BlockID{id("1")},
+					executed: []types.BlockID{id("1")},
+					applied:  []types.BlockID{id("1")},
 					validity: map[types.BlockID]bool{
 						id("1"): true,
 					},
@@ -644,7 +647,8 @@ func TestProcessLayer(t *testing.T) {
 					results: []result.Layer{
 						layer(start, invalid("1", false)),
 					},
-					applied: []types.BlockID{{}},
+					executed: []types.BlockID{{}},
+					applied:  []types.BlockID{{}},
 				},
 			},
 		},
@@ -655,13 +659,15 @@ func TestProcessLayer(t *testing.T) {
 					updates: []result.Layer{
 						layer(start),
 					},
-					applied: []types.BlockID{{0}},
+					executed: []types.BlockID{{}},
+					applied:  []types.BlockID{{0}},
 				},
 				{
 					updates: []result.Layer{
 						layer(start, valid("2", true)),
 					},
-					applied: []types.BlockID{id("2")},
+					executed: []types.BlockID{id("2")},
+					applied:  []types.BlockID{id("2")},
 				},
 			},
 		},
@@ -672,7 +678,8 @@ func TestProcessLayer(t *testing.T) {
 					updates: []result.Layer{
 						layer(start, hare("1", true)),
 					},
-					applied: []types.BlockID{id("1")},
+					executed: []types.BlockID{id("1")},
+					applied:  []types.BlockID{id("1")},
 				},
 				{
 					updates: []result.Layer{
@@ -689,13 +696,15 @@ func TestProcessLayer(t *testing.T) {
 					updates: []result.Layer{
 						layer(start, hare("1", true)),
 					},
-					applied: []types.BlockID{id("1")},
+					executed: []types.BlockID{id("1")},
+					applied:  []types.BlockID{id("1")},
 				},
 				{
 					updates: []result.Layer{
 						layer(start.Add(1), hare("2", true)),
 					},
-					applied: []types.BlockID{id("1"), id("2")},
+					executed: []types.BlockID{id("2")},
+					applied:  []types.BlockID{id("1"), id("2")},
 				},
 			},
 		},
@@ -706,13 +715,15 @@ func TestProcessLayer(t *testing.T) {
 					updates: []result.Layer{
 						layer(start, hare("1", true)),
 					},
-					applied: []types.BlockID{id("1")},
+					executed: []types.BlockID{id("1")},
+					applied:  []types.BlockID{id("1")},
 				},
 				{
 					updates: []result.Layer{
 						layer(start, invalidhare("1", true)),
 					},
-					applied: []types.BlockID{{0}},
+					executed: []types.BlockID{{0}},
+					applied:  []types.BlockID{{0}},
 				},
 			},
 		},
@@ -723,14 +734,17 @@ func TestProcessLayer(t *testing.T) {
 
 			tm := createTestMesh(t)
 			tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
-			tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-			tm.mockState.EXPECT().UpdateCache(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 			tm.mockVM.EXPECT().GetStateRoot().AnyTimes()
 			tm.mockVM.EXPECT().Revert(gomock.Any()).AnyTimes()
 			tm.mockState.EXPECT().RevertCache(gomock.Any()).AnyTimes()
 
 			lid := start
 			for _, c := range tc.calls {
+				for _, executed := range c.executed {
+					tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
+					tm.mockState.EXPECT().UpdateCache(gomock.Any(), gomock.Any(), executed, gomock.Any(), gomock.Any()).Return(nil)
+
+				}
 				tm.mockTortoise.EXPECT().Updates().Return(c.updates)
 				if c.results != nil {
 					tm.mockTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(c.results, nil)

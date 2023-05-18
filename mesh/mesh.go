@@ -329,22 +329,22 @@ func missingBlocks(results []result.Layer) []types.BlockID {
 func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error {
 	msh.logger.With().Debug("applying results", log.Context(ctx))
 	for _, layer := range results {
-		applied := layer.FirstValid()
+		target := layer.FirstValid()
 		current, err := layers.GetApplied(msh.cdb, layer.Layer)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return fmt.Errorf("get applied %v: %w", layer.Layer, err)
 		}
-		if current != applied {
+		if current != target || err != nil {
 			var block *types.Block
-			if !applied.IsEmpty() {
+			if !target.IsEmpty() {
 				var err error
-				block, err = blocks.Get(msh.cdb, applied)
+				block, err = blocks.Get(msh.cdb, target)
 				if err != nil {
 					return fmt.Errorf("get block: %w", err)
 				}
 			}
 			if err := msh.executor.Execute(ctx, layer.Layer, block); err != nil {
-				return fmt.Errorf("execute block %v/%v: %w", layer.Layer, applied, err)
+				return fmt.Errorf("execute block %v/%v: %w", layer.Layer, target, err)
 			}
 		} else {
 			msh.logger.With().Debug("correct block already applied",
@@ -354,8 +354,8 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 			)
 		}
 		if err := msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
-			if err := layers.SetApplied(dbtx, layer.Layer, applied); err != nil {
-				return fmt.Errorf("set applied for %v/%v: %w", layer.Layer, applied, err)
+			if err := layers.SetApplied(dbtx, layer.Layer, target); err != nil {
+				return fmt.Errorf("set applied for %v/%v: %w", layer.Layer, target, err)
 			}
 			if err := layers.SetMeshHash(dbtx, layer.Layer, layer.Opinion); err != nil {
 				return fmt.Errorf("set mesh hash for %v/%v: %w", layer.Layer, layer.Opinion, err)
@@ -381,7 +381,7 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 		})
 		msh.logger.With().Debug("state persisted",
 			log.Context(ctx),
-			log.Stringer("applied", applied),
+			log.Stringer("applied", target),
 		)
 		msh.setLatestLayerInState(layer.Layer)
 	}
