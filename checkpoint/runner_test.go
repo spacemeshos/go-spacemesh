@@ -12,7 +12,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -49,8 +48,7 @@ func expectedCheckpoint(t *testing.T) *checkpoint.Checkpoint {
 	return &checkpoint.Checkpoint{
 		Version: "https://spacemesh.io/checkpoint.schema.json.1.0",
 		Data: checkpoint.InnerData{
-			CheckpointId: "snapshot-5-restore-7",
-			Restore:      7,
+			CheckpointId: "snapshot-5",
 			Atxs: []checkpoint.ShortAtx{
 				toShortAtx(newvatx(t, allAtxs[3]), allAtxs[0].CommitmentATX, allAtxs[0].VRFNonce),
 				toShortAtx(newvatx(t, allAtxs[2]), allAtxs[0].CommitmentATX, allAtxs[0].VRFNonce),
@@ -148,26 +146,20 @@ func TestRunner_Generate(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			db := sql.InMemory()
 			snapshot := types.LayerID(5)
-			restore := types.LayerID(7)
 			createMesh(t, db, tc.atxes, tc.accts)
 
 			fs := afero.NewMemMapFs()
 			dir, err := afero.TempDir(fs, "", "Generate")
 			require.NoError(t, err)
-			r := checkpoint.NewRunner(db,
-				checkpoint.WithFilesystem(fs),
-				checkpoint.WithLogger(logtest.New(t)),
-				checkpoint.WithDataDir(dir),
-			)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			fname, err := r.Generate(ctx, snapshot, restore)
+			err = checkpoint.Generate(ctx, fs, db, dir, snapshot)
 			if tc.fail {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
-			require.Equal(t, fname, checkpoint.SelfCheckpointFilename(dir, snapshot, restore))
+			fname := checkpoint.SelfCheckpointFilename(dir, snapshot)
 			persisted, err := afero.ReadFile(fs, fname)
 			require.NoError(t, err)
 			require.NoError(t, checkpoint.ValidateSchema(persisted))
