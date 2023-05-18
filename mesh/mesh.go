@@ -260,8 +260,9 @@ func (msh *Mesh) ensureConsistentResults(ctx context.Context, results []result.L
 
 }
 
-// ProcessLayer gets latest consensus results and ensures that vm state
+// ProcessLayer reads latest consensus results and ensures that vm state
 // is consistent with results.
+// It is safe to call after optimistically executing the block.
 func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 	msh.mu.Lock()
 	defer msh.mu.Unlock()
