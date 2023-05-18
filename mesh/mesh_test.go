@@ -599,27 +599,150 @@ func invalidharegen(id types.BlockID, data bool) result.Block {
 	return block
 }
 
+func validcert(id types.BlockID) certificates.CertValidity {
+	return certificates.CertValidity{
+		Block: id,
+		Valid: true,
+	}
+}
+
+func invalidcert(id types.BlockID) certificates.CertValidity {
+	return certificates.CertValidity{
+		Block: id,
+	}
+}
+
+func fullcert(id types.BlockID) certificates.CertValidity {
+	return certificates.CertValidity{
+		Block: id,
+		Cert:  &types.Certificate{BlockID: id},
+		Valid: true,
+	}
+
+}
+
 func TestProcessLayerPerHareOutput(t *testing.T) {
 	t.Parallel()
 	type cert struct {
 		layer types.LayerID
-		cert  *certificates.CertValidity
+		cert  certificates.CertValidity
 	}
 	type call struct {
 		lid    types.LayerID
 		bid    types.BlockID
 		onHare bool
-		expect []*certificates.CertValidity
+		expect []certificates.CertValidity
+		err    string
 	}
+	types.SetLayersPerEpoch(3)
+	start := types.GetEffectiveGenesis().Add(1)
 	for _, tc := range []struct {
 		desc  string
 		calls []call
 		certs []cert
-	}{} {
+	}{
+		{
+			desc: "sanity",
+			calls: []call{
+				{
+					lid: start, bid: idg("1"), onHare: true,
+					expect: []certificates.CertValidity{validcert(idg("1"))},
+				},
+			},
+		},
+		{
+			desc: "empty",
+			calls: []call{
+				{
+					lid: start, bid: types.BlockID{}, onHare: true,
+					expect: []certificates.CertValidity{validcert(types.BlockID{})},
+				},
+			},
+		},
+		{
+			desc: "exists",
+			calls: []call{
+				{
+					lid: start, bid: idg("1"),
+					expect: []certificates.CertValidity{validcert(idg("1"))},
+				},
+			},
+			certs: []cert{
+				{layer: start, cert: validcert(idg("1"))},
+			},
+		},
+		{
+			desc: "exists different",
+			calls: []call{
+				{
+					lid: start, bid: idg("1"),
+					expect: []certificates.CertValidity{invalidcert(idg("1")), validcert(idg("2"))},
+				},
+			},
+			certs: []cert{
+				{layer: start, cert: validcert(idg("2"))},
+			},
+		},
+		{
+			desc: "exists different invalid",
+			calls: []call{
+				{
+					lid: start, bid: idg("1"),
+					expect: []certificates.CertValidity{validcert(idg("1")), invalidcert(idg("2"))},
+				},
+			},
+			certs: []cert{
+				{layer: start, cert: invalidcert(idg("2"))},
+			},
+		},
+		{
+			desc: "many",
+			calls: []call{
+				{
+					lid: start, bid: idg("1"),
+					expect: []certificates.CertValidity{
+						fullcert(idg("2")),
+						fullcert(idg("3")),
+						invalidcert(idg("1")),
+					},
+				},
+			},
+			certs: []cert{
+				{layer: start, cert: fullcert(idg("2"))},
+				{layer: start, cert: fullcert(idg("3"))},
+			},
+		},
+	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-
-			certificates.Add()
+			t.Parallel()
+			tm := createTestMesh(t)
+			tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
+			tm.mockTortoise.EXPECT().Updates().Return(nil) // this make ProcessLayer noop
+			for _, c := range tc.certs {
+				if c.cert.Cert != nil {
+					require.NoError(t, certificates.Add(tm.cdb, c.layer, c.cert.Cert))
+				} else if c.cert.Valid {
+					require.NoError(t, certificates.SetHareOutput(tm.cdb, c.layer, c.cert.Block))
+				} else {
+					require.NoError(t, certificates.SetHareOutputInvalid(tm.cdb, c.layer, c.cert.Block))
+				}
+			}
+			for _, c := range tc.calls {
+				if c.onHare {
+					tm.mockTortoise.EXPECT().OnHareOutput(c.lid, c.bid)
+				}
+				err := tm.ProcessLayerPerHareOutput(context.TODO(), c.lid, c.bid, false)
+				if len(c.err) > 0 {
+					require.ErrorContains(t, err, c.err)
+				}
+				rst, err := certificates.Get(tm.cdb, c.lid)
+				require.NoError(t, err)
+				require.Len(t, rst, len(c.expect))
+				for i := range c.expect {
+					require.Equal(t, c.expect[i], rst[i])
+				}
+			}
 		})
 	}
 }

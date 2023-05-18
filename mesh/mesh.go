@@ -218,7 +218,7 @@ func (msh *Mesh) setProcessedLayer(layerID types.LayerID) error {
 	}
 	msh.processedLayer.Store(processed)
 	events.ReportNodeStatusUpdate()
-	msh.logger.Event().Info("processed layer set", processed)
+	msh.logger.Event().Debug("processed layer set", processed)
 	return nil
 }
 
