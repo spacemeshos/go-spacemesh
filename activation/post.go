@@ -22,12 +22,12 @@ type PostSetupProvider initialization.Provider
 
 // PostConfig is the configuration of the Post protocol, used for data creation, proofs generation and validation.
 type PostConfig struct {
-	MinNumUnits   uint32 `mapstructure:"post-min-numunits"`
-	MaxNumUnits   uint32 `mapstructure:"post-max-numunits"`
-	LabelsPerUnit uint64 `mapstructure:"post-labels-per-unit"`
-	K1            uint32 `mapstructure:"post-k1"`
-	K2            uint32 `mapstructure:"post-k2"`
-	K3            uint32 `mapstructure:"post-k3"`
+	MinNumUnits     uint32 `mapstructure:"post-min-numunits"`
+	MaxNumUnits     uint32 `mapstructure:"post-max-numunits"`
+	LabelsPerUnit   uint64 `mapstructure:"post-labels-per-unit"`
+	K1              uint32 `mapstructure:"post-k1"`
+	K2              uint32 `mapstructure:"post-k2"`
+	K3              uint32 `mapstructure:"post-k3"`
 	K2PowDifficulty uint64 `mapstructure:"post-k2pow-difficulty"`
 }
 
