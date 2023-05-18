@@ -33,7 +33,7 @@ var (
 	errMinerNotActive         = errors.New("miner ATX not found in previous epoch")
 	errProtocolNotRunning     = errors.New("beacon protocol not running")
 	errEpochNotActive         = errors.New("epoch not active")
-	errMalformedMessage       = fmt.Errorf("malformed msg: %w", pubsub.ValidationRejectErr)
+	errMalformedMessage       = fmt.Errorf("%w: malformed msg", pubsub.ValidationRejectErr)
 	errUntimelyMessage        = errors.New("untimely msg")
 	errBeaconProtocolInactive = errors.New("beacon protocol inactive")
 )

@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	errMalformedData  = fmt.Errorf("malformed data: %w", pubsub.ValidationRejectErr)
+	errMalformedData  = fmt.Errorf("%w: malformed data", pubsub.ValidationRejectErr)
 	errInvalidRewards = errors.New("invalid rewards")
 	errDuplicateTX    = errors.New("duplicate TxID in proposal")
 )

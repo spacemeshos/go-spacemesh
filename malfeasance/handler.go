@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-var errMalformedData = fmt.Errorf("malformed data: %w", pubsub.ValidationRejectErr)
+var errMalformedData = fmt.Errorf("%w: malformed data", pubsub.ValidationRejectErr)
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
 type Handler struct {

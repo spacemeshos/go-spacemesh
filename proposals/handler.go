@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	errMalformedData         = fmt.Errorf("malformed data: %w", pubsub.ValidationRejectErr)
+	errMalformedData         = fmt.Errorf("%w: malformed data", pubsub.ValidationRejectErr)
 	errInitialize            = errors.New("failed to initialize")
 	errInvalidATXID          = errors.New("ballot has invalid ATXID")
 	errMissingEpochData      = errors.New("epoch data is missing in ref ballot")
