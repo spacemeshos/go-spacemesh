@@ -39,8 +39,8 @@ type LoggerConfig struct {
 	BlockBuilderLoggerLevel   string     `mapstructure:"block-builder"`
 	BlockListenerLoggerLevel  string     `mapstructure:"block-listener"`
 	PoetListenerLoggerLevel   string     `mapstructure:"poet"`
-	NipostBuilderLoggerLevel  string     `mapstructure:"nipost"`
-	AtxBuilderLoggerLevel     string     `mapstructure:"atx-builder"`
+	NipostBuilderLoggerLevel  string     `mapstructure:"nipostBuilder"`
+	AtxBuilderLoggerLevel     string     `mapstructure:"atxBuilder"`
 	HareBeaconLoggerLevel     string     `mapstructure:"hare-beacon"`
 	TimeSyncLoggerLevel       string     `mapstructure:"timesync"`
 	VMLogLevel                string     `mapstructure:"vm"`
