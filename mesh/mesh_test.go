@@ -553,6 +553,7 @@ func TestProcessLayer(t *testing.T) {
 		block := result.Block{}
 		copy(block.Header.ID[:], id)
 		block.Data = data
+		block.Invalid = true
 		return block
 	}
 	valid := func(id string, data bool) result.Block {
@@ -569,11 +570,17 @@ func TestProcessLayer(t *testing.T) {
 		block.Data = data
 		return block
 	}
-	_ = hare
+	invalidhare := func(id string, data bool) result.Block {
+		block := result.Block{}
+		copy(block.Header.ID[:], id)
+		block.Invalid = true
+		block.Hare = true
+		block.Data = data
+		return block
+	}
 
 	type call struct {
 		// inputs
-		hare    types.BlockID
 		updates []result.Layer
 		results []result.Layer
 
@@ -658,6 +665,57 @@ func TestProcessLayer(t *testing.T) {
 				},
 			},
 		},
+		{
+			"hare to valid",
+			[]call{
+				{
+					updates: []result.Layer{
+						layer(start, hare("1", true)),
+					},
+					applied: []types.BlockID{id("1")},
+				},
+				{
+					updates: []result.Layer{
+						layer(start, validhare("1", true)),
+					},
+					applied: []types.BlockID{id("1")},
+				},
+			},
+		},
+		{
+			"multiple layers of hare",
+			[]call{
+				{
+					updates: []result.Layer{
+						layer(start, hare("1", true)),
+					},
+					applied: []types.BlockID{id("1")},
+				},
+				{
+					updates: []result.Layer{
+						layer(start.Add(1), hare("2", true)),
+					},
+					applied: []types.BlockID{id("1"), id("2")},
+				},
+			},
+		},
+		{
+			"hare to invalid",
+			[]call{
+				{
+					updates: []result.Layer{
+						layer(start, hare("1", true)),
+					},
+					applied: []types.BlockID{id("1")},
+				},
+				{
+					updates: []result.Layer{
+						layer(start, invalidhare("1", true)),
+					},
+					applied: []types.BlockID{{0}},
+				},
+			},
+		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
@@ -679,13 +737,6 @@ func TestProcessLayer(t *testing.T) {
 				}
 				ensuresDatabaseConsistent(t, tm.cdb, c.updates)
 				ensuresDatabaseConsistent(t, tm.cdb, c.results)
-				if !c.hare.IsEmpty() {
-					require.NoError(t, blocks.Add(tm.cdb, types.NewExistingBlock(c.hare, types.InnerBlock{
-						LayerIndex: lid,
-					})))
-					require.NoError(t, certificates.SetHareOutput(tm.db, lid, c.hare))
-				}
-
 				err := tm.ProcessLayer(context.TODO(), lid)
 				if len(c.err) > 0 {
 					require.ErrorContains(t, err, c.err)

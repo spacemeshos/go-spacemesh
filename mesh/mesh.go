@@ -360,11 +360,14 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 				return fmt.Errorf("set mesh hash for %v/%v: %w", layer.Layer, layer.Opinion, err)
 			}
 			for _, block := range layer.Blocks {
-				if !block.Data {
-					continue
-				}
-				if err := blocks.UpdateValid(dbtx, block.Header.ID, block.Valid); err != nil {
-					return err
+				if block.Data && block.Valid {
+					if err := blocks.SetValid(dbtx, block.Header.ID); err != nil {
+						return err
+					}
+				} else if block.Data && block.Invalid {
+					if err := blocks.SetInvalid(dbtx, block.Header.ID); err != nil {
+						return err
+					}
 				}
 			}
 			return nil

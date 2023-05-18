@@ -12,7 +12,7 @@ type Layer struct {
 }
 
 // FirstValid returns first block that is considered valid by tortoise
-// or first block considered valid by hare.
+// or first block considered valid by hare, while tortoise didn't decide yet.
 func (l *Layer) FirstValid() types.BlockID {
 	for _, block := range l.Blocks {
 		if block.Valid {
@@ -20,7 +20,7 @@ func (l *Layer) FirstValid() types.BlockID {
 		}
 	}
 	for _, block := range l.Blocks {
-		if block.Hare {
+		if block.Hare && !block.Invalid {
 			return block.Header.ID
 		}
 	}
@@ -40,15 +40,16 @@ func (l *Layer) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 type Block struct {
-	Header types.Vote
-	Valid  bool
-	Hare   bool
-	Data   bool
+	Header         types.Vote
+	Valid, Invalid bool
+	Hare           bool
+	Data           bool
 }
 
 func (b *Block) MarshalLogObject(encoder log.ObjectEncoder) error {
 	b.Header.MarshalLogObject(encoder)
 	encoder.AddBool("valid", b.Valid)
+	encoder.AddBool("invalid", b.Valid)
 	encoder.AddBool("hare", b.Hare)
 	encoder.AddBool("data", b.Data)
 	return nil

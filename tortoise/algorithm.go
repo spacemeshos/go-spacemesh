@@ -339,10 +339,11 @@ func (t *Tortoise) results(from, to types.LayerID) ([]result.Layer, error) {
 		blocks := make([]result.Block, 0, len(layer.blocks))
 		for _, block := range layer.blocks {
 			blocks = append(blocks, result.Block{
-				Header: block.header(),
-				Data:   block.data,
-				Hare:   block.hare == support,
-				Valid:  block.validity == support,
+				Header:  block.header(),
+				Data:    block.data,
+				Hare:    block.hare == support,
+				Valid:   block.validity == support,
+				Invalid: block.validity == against,
 			})
 		}
 		rst = append(rst, result.Layer{
