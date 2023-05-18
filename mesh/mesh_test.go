@@ -226,174 +226,6 @@ func TestMesh_GetLayer(t *testing.T) {
 	require.ElementsMatch(t, blks, lyr.Blocks())
 }
 
-func TestMesh_ProcessLayerPerHareOutput(t *testing.T) {
-	for _, tc := range []struct {
-		desc     string
-		executed bool
-	}{
-		{
-			desc: "no optimistic filtering",
-		},
-		{
-			desc:     "optimistic",
-			executed: true,
-		},
-	} {
-		tc := tc
-		t.Run(tc.desc, func(t *testing.T) {
-			tm := createTestMesh(t)
-			tm.mockTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
-			gLyr := types.GetEffectiveGenesis()
-			gPlus1 := gLyr.Add(1)
-			gPlus2 := gLyr.Add(2)
-			gPlus3 := gLyr.Add(3)
-			gPlus4 := gLyr.Add(4)
-			gPlus5 := gLyr.Add(5)
-			blocks1 := createLayerBlocks(t, tm.db, tm.Mesh, gPlus1)
-			blocks2 := createLayerBlocks(t, tm.db, tm.Mesh, gPlus2)
-			blocks3 := createLayerBlocks(t, tm.db, tm.Mesh, gPlus3)
-			blocks4 := createLayerBlocks(t, tm.db, tm.Mesh, gPlus4)
-			blocks5 := createLayerBlocks(t, tm.db, tm.Mesh, gPlus5)
-			layerBlocks := map[types.LayerID]*types.Block{
-				gPlus1: blocks1[0],
-				gPlus2: blocks2[0],
-				gPlus3: blocks3[0],
-				gPlus4: blocks4[0],
-				gPlus5: blocks5[0],
-			}
-
-			for i := gPlus1; !i.After(gPlus5); i = i.Add(1) {
-				toApply := layerBlocks[i]
-				tm.mockTortoise.EXPECT().OnHareOutput(toApply.LayerIndex, toApply.ID())
-				tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), i)
-				tm.mockTortoise.EXPECT().Updates().Return(nil)
-				if !tc.executed {
-					var ineffective []types.Transaction
-					var executed []types.TransactionWithResult
-					tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).Return(ineffective, executed, nil)
-					tm.mockState.EXPECT().UpdateCache(gomock.Any(), i, toApply.ID(), executed, ineffective)
-					tm.mockVM.EXPECT().GetStateRoot()
-				}
-				require.NoError(t, tm.ProcessLayerPerHareOutput(context.Background(), i, toApply.ID(), tc.executed))
-				got, err := certificates.GetHareOutput(tm.cdb, i)
-				require.NoError(t, err)
-				require.Equal(t, toApply.ID(), got)
-				require.Equal(t, i, tm.ProcessedLayer())
-			}
-			checkLastAppliedInDB(t, tm.Mesh, gPlus5)
-		})
-	}
-}
-
-func TestMesh_ProcessLayerPerHareOutput_certificateSynced(t *testing.T) {
-	tm := createTestMesh(t)
-	tm.mockTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
-	lid := types.GetEffectiveGenesis().Add(1)
-
-	require.Greater(t, numBlocks, 1)
-	blks := createLayerBlocks(t, tm.db, tm.Mesh, lid)
-	cert := &types.Certificate{
-		BlockID: blks[0].ID(),
-	}
-	require.NoError(t, certificates.Add(tm.cdb, lid, cert))
-
-	tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-	tm.mockTortoise.EXPECT().Updates().Return(nil)
-	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
-	tm.mockState.EXPECT().UpdateCache(gomock.Any(), lid, blks[0].ID(), gomock.Any(), gomock.Any())
-	tm.mockVM.EXPECT().GetStateRoot()
-	require.NoError(t, tm.ProcessLayerPerHareOutput(context.Background(), lid, blks[1].ID(), false))
-	hareOutput, err := certificates.GetHareOutput(tm.cdb, lid)
-	require.NoError(t, err)
-	require.Equal(t, blks[0].ID(), hareOutput)
-	require.Equal(t, lid, tm.ProcessedLayer())
-	checkLastAppliedInDB(t, tm.Mesh, lid)
-
-	certs, err := certificates.Get(tm.cdb, lid)
-	require.NoError(t, err)
-	require.Len(t, certs, 2)
-	require.True(t, certs[0].Valid)
-	require.Equal(t, certs[0].Block, blks[0].ID())
-	require.NotNil(t, certs[0].Cert)
-	require.False(t, certs[1].Valid)
-	require.Equal(t, certs[1].Block, blks[1].ID())
-	require.Nil(t, certs[1].Cert)
-}
-
-func TestMesh_ProcessLayerPerHareOutput_certificateSyncedButInvalid(t *testing.T) {
-	tm := createTestMesh(t)
-	tm.mockTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
-	lid := types.GetEffectiveGenesis().Add(1)
-
-	require.Greater(t, numBlocks, 1)
-	blks := createLayerBlocks(t, tm.db, tm.Mesh, lid)
-	cert := &types.Certificate{
-		BlockID: blks[0].ID(),
-	}
-	require.NoError(t, certificates.Add(tm.cdb, lid, cert))
-	require.NoError(t, certificates.SetInvalid(tm.cdb, lid, blks[0].ID()))
-
-	tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-	tm.mockTortoise.EXPECT().Updates().Return(nil)
-	tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
-	tm.mockState.EXPECT().UpdateCache(gomock.Any(), lid, blks[1].ID(), gomock.Any(), gomock.Any())
-	tm.mockVM.EXPECT().GetStateRoot()
-	require.NoError(t, tm.ProcessLayerPerHareOutput(context.Background(), lid, blks[1].ID(), false))
-	hareOutput, err := certificates.GetHareOutput(tm.cdb, lid)
-	require.NoError(t, err)
-	require.Equal(t, blks[1].ID(), hareOutput)
-	require.Equal(t, lid, tm.ProcessedLayer())
-	checkLastAppliedInDB(t, tm.Mesh, lid)
-
-	certs, err := certificates.Get(tm.cdb, lid)
-	require.NoError(t, err)
-	require.Len(t, certs, 2)
-	require.False(t, certs[0].Valid)
-	require.Equal(t, certs[0].Block, blks[0].ID())
-	require.NotNil(t, certs[0].Cert)
-	require.True(t, certs[1].Valid)
-	require.Equal(t, certs[1].Block, blks[1].ID())
-	require.Nil(t, certs[1].Cert)
-}
-
-func TestMesh_ProcessLayerPerHareOutput_emptyOutput(t *testing.T) {
-	tm := createTestMesh(t)
-	tm.mockTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
-
-	gLyr := types.GetEffectiveGenesis()
-	gPlus1 := gLyr.Add(1)
-	blocks1 := createLayerBlocks(t, tm.db, tm.Mesh, gPlus1)
-	tm.mockTortoise.EXPECT().OnHareOutput(gPlus1, blocks1[0].ID())
-	tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gPlus1)
-	tm.mockTortoise.EXPECT().Updates().Return(nil)
-	require.NoError(t, tm.ProcessLayerPerHareOutput(context.Background(), gPlus1, blocks1[0].ID(), true))
-	hareOutput, err := certificates.GetHareOutput(tm.cdb, gPlus1)
-	require.NoError(t, err)
-	require.Equal(t, blocks1[0].ID(), hareOutput)
-	require.Equal(t, gPlus1, tm.ProcessedLayer())
-	checkLastAppliedInDB(t, tm.Mesh, gPlus1)
-
-	gPlus2 := gLyr.Add(2)
-	createLayerBlocks(t, tm.db, tm.Mesh, gPlus2)
-	tm.mockTortoise.EXPECT().OnHareOutput(gPlus2, types.EmptyBlockID)
-	tm.mockVM.EXPECT().Apply(gomock.Any(), nil, nil).Return(nil, nil, nil)
-	tm.mockState.EXPECT().UpdateCache(gomock.Any(), gPlus2, types.EmptyBlockID, nil, nil)
-	tm.mockVM.EXPECT().GetStateRoot()
-	tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gPlus2)
-	tm.mockTortoise.EXPECT().Updates().Return(nil)
-	require.NoError(t, tm.ProcessLayerPerHareOutput(context.Background(), gPlus2, types.EmptyBlockID, false))
-
-	// hare output saved
-	hareOutput, err = certificates.GetHareOutput(tm.cdb, gPlus2)
-	require.NoError(t, err)
-	require.Equal(t, types.EmptyBlockID, hareOutput)
-
-	// but processed layer has advanced
-	require.Equal(t, gPlus2, tm.ProcessedLayer())
-	require.Equal(t, gPlus2, tm.LatestLayerInState())
-	checkLastAppliedInDB(t, tm.Mesh, gPlus2)
-}
-
 func TestMesh_LatestKnownLayer(t *testing.T) {
 	tm := createTestMesh(t)
 	lg := logtest.New(t)
@@ -436,26 +268,6 @@ func TestMesh_AddBlockWithTXs(t *testing.T) {
 	block := genLayerBlock(layerID, txIDs)
 	tm.mockState.EXPECT().LinkTXsWithBlock(layerID, block.ID(), txIDs).Return(nil)
 	r.NoError(tm.AddBlockWithTXs(context.Background(), block))
-}
-
-func TestMesh_MissingTransactionsFailure(t *testing.T) {
-	tm := createTestMesh(t)
-	ctx := context.Background()
-	genesis := types.GetEffectiveGenesis()
-	last := genesis.Add(1)
-
-	block := types.NewExistingBlock(types.BlockID{1},
-		types.InnerBlock{LayerIndex: last, TxIDs: []types.TransactionID{{1, 1, 1}}})
-	require.NoError(t, blocks.Add(tm.cdb, block))
-	require.NoError(t, certificates.SetHareOutput(tm.cdb, last, block.ID()))
-
-	tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), last)
-	tm.mockTortoise.EXPECT().Updates().Return(nil)
-	require.ErrorIs(t, tm.ProcessLayer(ctx, last), sql.ErrNotFound)
-
-	require.Equal(t, last, tm.ProcessedLayer())
-	require.Equal(t, genesis, tm.LatestLayerInState())
-	checkLastAppliedInDB(t, tm.Mesh, genesis)
 }
 
 func TestMesh_CallOnBlock(t *testing.T) {
@@ -529,56 +341,6 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 
 func TestProcessLayer(t *testing.T) {
 	t.Parallel()
-
-	layer := func(lid types.LayerID, blocks ...result.Block) result.Layer {
-		return result.Layer{
-			Layer:  lid,
-			Blocks: blocks,
-		}
-	}
-	id := func(name string) types.BlockID {
-		id := types.BlockID{}
-		copy(id[:], name)
-		return id
-	}
-	validhare := func(id string, data bool) result.Block {
-		block := result.Block{}
-		copy(block.Header.ID[:], id)
-		block.Valid = true
-		block.Hare = true
-		block.Data = data
-		return block
-	}
-	invalid := func(id string, data bool) result.Block {
-		block := result.Block{}
-		copy(block.Header.ID[:], id)
-		block.Data = data
-		block.Invalid = true
-		return block
-	}
-	valid := func(id string, data bool) result.Block {
-		block := result.Block{}
-		copy(block.Header.ID[:], id)
-		block.Valid = true
-		block.Data = data
-		return block
-	}
-	hare := func(id string, data bool) result.Block {
-		block := result.Block{}
-		copy(block.Header.ID[:], id)
-		block.Hare = true
-		block.Data = data
-		return block
-	}
-	invalidhare := func(id string, data bool) result.Block {
-		block := result.Block{}
-		copy(block.Header.ID[:], id)
-		block.Invalid = true
-		block.Hare = true
-		block.Data = data
-		return block
-	}
-
 	type call struct {
 		// inputs
 		updates []result.Layer
@@ -602,13 +364,13 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: []result.Layer{
-						layer(start, validhare("1", true), invalid("2", true)),
+						layergen(start, validharegen(idg("1"), true), invalidgen(idg("2"), true)),
 					},
-					executed: []types.BlockID{id("1")},
-					applied:  []types.BlockID{id("1")},
+					executed: []types.BlockID{idg("1")},
+					applied:  []types.BlockID{idg("1")},
 					validity: map[types.BlockID]bool{
-						id("1"): true,
-						id("2"): false,
+						idg("1"): true,
+						idg("2"): false,
 					},
 				},
 			},
@@ -618,18 +380,18 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: []result.Layer{
-						layer(start, valid("1", false)),
+						layergen(start, validgen(idg("1"), false)),
 					},
 					err: "missing",
 				},
 				{
 					results: []result.Layer{
-						layer(start, valid("1", true)),
+						layergen(start, validgen(idg("1"), true)),
 					},
-					executed: []types.BlockID{id("1")},
-					applied:  []types.BlockID{id("1")},
+					executed: []types.BlockID{idg("1")},
+					applied:  []types.BlockID{idg("1")},
 					validity: map[types.BlockID]bool{
-						id("1"): true,
+						idg("1"): true,
 					},
 				},
 			},
@@ -639,13 +401,13 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: []result.Layer{
-						layer(start, valid("1", false)),
+						layergen(start, validgen(idg("1"), false)),
 					},
 					err: "missing",
 				},
 				{
 					results: []result.Layer{
-						layer(start, invalid("1", false)),
+						layergen(start, invalidgen(idg("1"), false)),
 					},
 					executed: []types.BlockID{{}},
 					applied:  []types.BlockID{{}},
@@ -657,17 +419,17 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: []result.Layer{
-						layer(start),
+						layergen(start),
 					},
 					executed: []types.BlockID{{}},
 					applied:  []types.BlockID{{0}},
 				},
 				{
 					updates: []result.Layer{
-						layer(start, valid("2", true)),
+						layergen(start, validgen(idg("2"), true)),
 					},
-					executed: []types.BlockID{id("2")},
-					applied:  []types.BlockID{id("2")},
+					executed: []types.BlockID{idg("2")},
+					applied:  []types.BlockID{idg("2")},
 				},
 			},
 		},
@@ -676,16 +438,16 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: []result.Layer{
-						layer(start, hare("1", true)),
+						layergen(start, haregen(idg("1"), true)),
 					},
-					executed: []types.BlockID{id("1")},
-					applied:  []types.BlockID{id("1")},
+					executed: []types.BlockID{idg("1")},
+					applied:  []types.BlockID{idg("1")},
 				},
 				{
 					updates: []result.Layer{
-						layer(start, validhare("1", true)),
+						layergen(start, validharegen(idg("1"), true)),
 					},
-					applied: []types.BlockID{id("1")},
+					applied: []types.BlockID{idg("1")},
 				},
 			},
 		},
@@ -694,17 +456,17 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: []result.Layer{
-						layer(start, hare("1", true)),
+						layergen(start, haregen(idg("1"), true)),
 					},
-					executed: []types.BlockID{id("1")},
-					applied:  []types.BlockID{id("1")},
+					executed: []types.BlockID{idg("1")},
+					applied:  []types.BlockID{idg("1")},
 				},
 				{
 					updates: []result.Layer{
-						layer(start.Add(1), hare("2", true)),
+						layergen(start.Add(1), haregen(idg("2"), true)),
 					},
-					executed: []types.BlockID{id("2")},
-					applied:  []types.BlockID{id("1"), id("2")},
+					executed: []types.BlockID{idg("2")},
+					applied:  []types.BlockID{idg("1"), idg("2")},
 				},
 			},
 		},
@@ -713,14 +475,14 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: []result.Layer{
-						layer(start, hare("1", true)),
+						layergen(start, haregen(idg("1"), true)),
 					},
-					executed: []types.BlockID{id("1")},
-					applied:  []types.BlockID{id("1")},
+					executed: []types.BlockID{idg("1")},
+					applied:  []types.BlockID{idg("1")},
 				},
 				{
 					updates: []result.Layer{
-						layer(start, invalidhare("1", true)),
+						layergen(start, invalidharegen(idg("1"), true)),
 					},
 					executed: []types.BlockID{{0}},
 					applied:  []types.BlockID{{0}},
@@ -743,7 +505,6 @@ func TestProcessLayer(t *testing.T) {
 				for _, executed := range c.executed {
 					tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
 					tm.mockState.EXPECT().UpdateCache(gomock.Any(), gomock.Any(), executed, gomock.Any(), gomock.Any()).Return(nil)
-
 				}
 				tm.mockTortoise.EXPECT().Updates().Return(c.updates)
 				if c.results != nil {
@@ -757,7 +518,6 @@ func TestProcessLayer(t *testing.T) {
 				} else {
 					require.NoError(t, err)
 				}
-
 				for i := range c.applied {
 					applied, err := layers.GetApplied(tm.cdb, start.Add(uint32(i)))
 					require.NoError(t, err)
@@ -784,5 +544,82 @@ func ensuresDatabaseConsistent(t *testing.T, db sql.Executor, results []result.L
 				LayerIndex: layer.Layer,
 			}))
 		}
+	}
+}
+
+func layergen(lid types.LayerID, blocks ...result.Block) result.Layer {
+	return result.Layer{
+		Layer:  lid,
+		Blocks: blocks,
+	}
+}
+
+func idg(name string) types.BlockID {
+	id := types.BlockID{}
+	copy(id[:], name)
+	return id
+}
+
+func validharegen(id types.BlockID, data bool) result.Block {
+	block := result.Block{}
+	block.Header.ID = id
+	block.Valid = true
+	block.Hare = true
+	block.Data = data
+	return block
+}
+func invalidgen(id types.BlockID, data bool) result.Block {
+	block := result.Block{}
+	block.Header.ID = id
+	block.Data = data
+	block.Invalid = true
+	return block
+}
+func validgen(id types.BlockID, data bool) result.Block {
+	block := result.Block{}
+	block.Header.ID = id
+	block.Valid = true
+	block.Data = data
+	return block
+}
+func haregen(id types.BlockID, data bool) result.Block {
+	block := result.Block{}
+	block.Header.ID = id
+	block.Hare = true
+	block.Data = data
+	return block
+}
+
+func invalidharegen(id types.BlockID, data bool) result.Block {
+	block := result.Block{}
+	block.Header.ID = id
+	block.Invalid = true
+	block.Hare = true
+	block.Data = data
+	return block
+}
+
+func TestProcessLayerPerHareOutput(t *testing.T) {
+	t.Parallel()
+	type cert struct {
+		layer types.LayerID
+		cert  *certificates.CertValidity
+	}
+	type call struct {
+		lid    types.LayerID
+		bid    types.BlockID
+		onHare bool
+		expect []*certificates.CertValidity
+	}
+	for _, tc := range []struct {
+		desc  string
+		calls []call
+		certs []cert
+	}{} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+
+			certificates.Add()
+		})
 	}
 }

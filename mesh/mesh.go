@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -84,6 +85,9 @@ func NewMesh(cdb *datastore.CachedDB, c layerClock, trtl system.Tortoise, exec *
 			}
 			if err = layers.SetApplied(dbtx, i, types.EmptyBlockID); err != nil {
 				return fmt.Errorf("mesh init: %w", err)
+			}
+			if err := layers.SetMeshHash(dbtx, i, hash.Sum(nil)); err != nil {
+				return err
 			}
 		}
 		return nil
@@ -463,14 +467,7 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 			log.Uint32("layer_id", layerID.Uint32()),
 			log.Stringer("block_id", blockID),
 		)
-	} else {
-		// double-check we have this block in the mesh
-		_, err := blocks.Get(msh.cdb, blockID)
-		if err != nil {
-			return fmt.Errorf("failed to lookup hare output %v: %w", blockID, err)
-		}
 	}
-	// report that hare "approved" this layer
 	events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: layerID,
 		Status:  events.LayerStatusTypeApproved,
