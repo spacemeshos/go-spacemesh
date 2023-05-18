@@ -36,20 +36,6 @@ func (m *MockTortoise) EXPECT() *MockTortoiseMockRecorder {
 	return m.recorder
 }
 
-// LatestComplete mocks base method.
-func (m *MockTortoise) LatestComplete() types.LayerID {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LatestComplete")
-	ret0, _ := ret[0].(types.LayerID)
-	return ret0
-}
-
-// LatestComplete indicates an expected call of LatestComplete.
-func (mr *MockTortoiseMockRecorder) LatestComplete() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestComplete", reflect.TypeOf((*MockTortoise)(nil).LatestComplete))
-}
-
 // OnBlock mocks base method.
 func (m *MockTortoise) OnBlock(arg0 types.BlockHeader) {
 	m.ctrl.T.Helper()
@@ -114,10 +100,10 @@ func (mr *MockTortoiseMockRecorder) TallyVotes(arg0, arg1 interface{}) *gomock.C
 }
 
 // Updates mocks base method.
-func (m *MockTortoise) Updates() map[types.LayerID]map[types.BlockID]bool {
+func (m *MockTortoise) Updates() []result.Layer {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Updates")
-	ret0, _ := ret[0].(map[types.LayerID]map[types.BlockID]bool)
+	ret0, _ := ret[0].([]result.Layer)
 	return ret0
 }
 
