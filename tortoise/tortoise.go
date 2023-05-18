@@ -23,8 +23,6 @@ type turtle struct {
 	Config
 	logger log.Log
 
-	updated map[types.LayerID]map[types.BlockID]bool
-
 	*state
 
 	// a linked list with retriable ballots
