@@ -145,12 +145,12 @@ func ChainGossipHandler(handlers ...GossipHandler) GossipHandler {
 	}
 }
 
-// DropPeerOnError wraps a gossip handler to provide a handler that drops a
-// peer if the wrapped handler returns an error that is the targetErr.
-func DropPeerOnError(handler GossipHandler, h host.Host, logger log.Log, targetErr error) GossipHandler {
+// DropPeerValidationReject wraps a gossip handler to provide a handler that drops a
+// peer if the wrapped handler returns ErrValidationReject.
+func DropPeerOnValidationReject(handler GossipHandler, h host.Host, logger log.Log) GossipHandler {
 	return func(ctx context.Context, peer peer.ID, data []byte) error {
 		err := handler(ctx, peer, data)
-		if errors.Is(err, targetErr) {
+		if errors.Is(err, ErrValidationReject) {
 			err := h.Network().ClosePeer(peer)
 			if err != nil {
 				logger.With().Debug("failed to close peer",
