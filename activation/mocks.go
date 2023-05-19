@@ -11,6 +11,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	shared "github.com/spacemeshos/post/shared"
 	verifying "github.com/spacemeshos/post/verifying"
 )
 
@@ -47,6 +48,48 @@ func (m *MockAtxReceiver) OnAtx(arg0 *types.ActivationTxHeader) {
 func (mr *MockAtxReceiverMockRecorder) OnAtx(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnAtx", reflect.TypeOf((*MockAtxReceiver)(nil).OnAtx), arg0)
+}
+
+// MockPostVerifier is a mock of PostVerifier interface.
+type MockPostVerifier struct {
+	ctrl     *gomock.Controller
+	recorder *MockPostVerifierMockRecorder
+}
+
+// MockPostVerifierMockRecorder is the mock recorder for MockPostVerifier.
+type MockPostVerifierMockRecorder struct {
+	mock *MockPostVerifier
+}
+
+// NewMockPostVerifier creates a new mock instance.
+func NewMockPostVerifier(ctrl *gomock.Controller) *MockPostVerifier {
+	mock := &MockPostVerifier{ctrl: ctrl}
+	mock.recorder = &MockPostVerifierMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPostVerifier) EXPECT() *MockPostVerifierMockRecorder {
+	return m.recorder
+}
+
+// Verify mocks base method.
+func (m_2 *MockPostVerifier) Verify(p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
+	m_2.ctrl.T.Helper()
+	varargs := []interface{}{p, m}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m_2.ctrl.Call(m_2, "Verify", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Verify indicates an expected call of Verify.
+func (mr *MockPostVerifierMockRecorder) Verify(p, m interface{}, opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{p, m}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockPostVerifier)(nil).Verify), varargs...)
 }
 
 // MocknipostValidator is a mock of nipostValidator interface.

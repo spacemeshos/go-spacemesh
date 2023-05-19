@@ -8,7 +8,6 @@ import (
 
 	"github.com/spacemeshos/merkle-tree"
 	poetShared "github.com/spacemeshos/poet/shared"
-	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
@@ -39,14 +38,15 @@ func (e *ErrAtxNotFound) Is(target error) bool {
 
 // Validator contains the dependencies required to validate NIPosts.
 type Validator struct {
-	poetDb poetDbAPI
-	cfg    PostConfig
-	log    log.Log
+	poetDb       poetDbAPI
+	cfg          PostConfig
+	log          log.Log
+	postVerifier PostVerifier
 }
 
 // NewValidator returns a new NIPost validator.
-func NewValidator(poetDb poetDbAPI, cfg PostConfig, log log.Log) *Validator {
-	return &Validator{poetDb, cfg, log}
+func NewValidator(poetDb poetDbAPI, cfg PostConfig, log log.Log, postVerifier PostVerifier) *Validator {
+	return &Validator{poetDb, cfg, log, postVerifier}
 }
 
 // NIPost validates a NIPost, given a node id and expected challenge. It returns an error if the NIPost is invalid.
@@ -125,7 +125,7 @@ func (v *Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST 
 	}
 
 	start := time.Now()
-	if err := verifying.Verify(p, m, (config.Config)(v.cfg), v.log.Zap(), opts...); err != nil {
+	if err := v.postVerifier.Verify(p, m, opts...); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
 	}
 	metrics.PostVerificationLatency.Observe(time.Since(start).Seconds())

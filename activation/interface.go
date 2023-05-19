@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -15,6 +16,9 @@ type AtxReceiver interface {
 	OnAtx(*types.ActivationTxHeader)
 }
 
+type PostVerifier interface {
+	Verify(p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error
+}
 type nipostValidator interface {
 	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID, expectedPostIndices []byte) error
 	NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error
