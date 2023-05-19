@@ -58,6 +58,9 @@ jobs:
         with:
           path: ./version.txt
 
+      - name: Add OpenCL support for Linux
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
       - name: Build go-spacemesh
         shell: bash
