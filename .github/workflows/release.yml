@@ -69,17 +69,12 @@ jobs:
           make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
       - name: Create release archive
         shell: bash
+        env:
+          OUTNAME: ${{ env.OUTNAME }}
         run: |
-          echo "OUTNAME = ${{ env.OUTNAME }} \n"
-
-          mkdir build_${{ runner.os }}
-          unzip libpost-*.zip -d build_${{ runner.os }}
-
-          rm -f build_${{ runner.os }}/prover.h
-          mv build_${{ runner.os }} $OUTNAME
-
+          mkdir $OUTNAME
           mv ./build/* $OUTNAME
-
+          rm -f $OUTNAME/prover.h
           zip -r $OUTNAME.zip $OUTNAME
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v0
