@@ -301,7 +301,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 		ts.msh.SetZeroBlockLayer(context.Background(), lid)
 		ts.mTortoise.EXPECT().OnHareOutput(lid, types.EmptyBlockID)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().Updates().Return(rlayers(rlayer(lid)))
+		ts.mTortoise.EXPECT().Updates().Return(rlayers(ropinion(lid, types.RandomHash())))
 		ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
 		ts.mVm.EXPECT().GetStateRoot()
