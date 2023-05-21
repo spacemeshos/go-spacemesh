@@ -15,12 +15,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	mmocks "github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
@@ -552,26 +550,6 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, ts *testSyncer) {
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
 	require.True(t, ts.syncer.IsSynced(context.Background()))
-}
-
-func genTx(t testing.TB) types.Transaction {
-	t.Helper()
-	amount := uint64(1)
-	price := uint64(100)
-	nonce := uint64(11)
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	raw := wallet.Spend(signer.PrivateKey(), types.GenerateAddress([]byte("1")), amount, nonce)
-	tx := types.Transaction{
-		RawTx:    types.NewRawTx(raw),
-		TxHeader: &types.TxHeader{},
-	}
-	tx.MaxGas = 100
-	tx.MaxSpend = amount
-	tx.GasPrice = price
-	tx.Nonce = nonce
-	tx.Principal = types.GenerateAddress(signer.PublicKey().Bytes())
-	return tx
 }
 
 func TestSync_AlsoSyncProcessedLayer(t *testing.T) {

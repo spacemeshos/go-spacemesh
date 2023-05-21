@@ -71,15 +71,9 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 				return nil
 			})
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		rst := []result.Layer{
-			{Layer: lid, Blocks: []result.Block{{Header: types.BlockHeader{
-				ID: adopted[lid],
-			},
-				Data:  true,
-				Valid: true,
-			}}},
-		}
-		ts.mTortoise.EXPECT().Updates().Return(rst)
+		ts.mTortoise.EXPECT().Updates().DoAndReturn(func() []result.Layer {
+			return rlayers(rlayer(lid, rblock(adopted[lid])))
+		})
 		ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, gomock.Any(), nil, nil).DoAndReturn(
 			func(_ context.Context, _ types.LayerID, got types.BlockID, _ []types.TransactionWithResult, _ []types.Transaction) error {
@@ -178,7 +172,11 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 				}
 			}
 			ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-			ts.mTortoise.EXPECT().Updates().Return(nil)
+			results := rlayers(rlayer(lid))
+			if tc.localCert != types.EmptyBlockID {
+				results = rlayers(rlayer(lid, rblock(tc.localCert)))
+			}
+			ts.mTortoise.EXPECT().Updates().Return(results)
 
 			require.False(t, ts.syncer.stateSynced())
 			require.NoError(t, ts.syncer.processLayers(context.Background()))
@@ -241,8 +239,7 @@ func TestProcessLayers_HareIsStillWorking(t *testing.T) {
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(lastSynced).Return(false)
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced).Return(nil, nil)
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
-	ts.mTortoise.EXPECT().Updates().Return(map[types.LayerID]map[types.BlockID]bool{lastSynced: {}})
-	ts.mTortoise.EXPECT().Results(lastSynced, lastSynced)
+	ts.mTortoise.EXPECT().Updates().Return(rlayers(rlayer(lastSynced)))
 	ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 	ts.mConState.EXPECT().UpdateCache(gomock.Any(), lastSynced, types.EmptyBlockID, nil, nil)
 	ts.mVm.EXPECT().GetStateRoot()
@@ -267,7 +264,7 @@ func TestProcessLayers_HareTakesTooLong(t *testing.T) {
 		}
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().Updates().Return(nil)
+		ts.mTortoise.EXPECT().Updates().Return(rlayers(rlayer(lid)))
 		ts.mVm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, nil, nil)
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
 		ts.mVm.EXPECT().GetStateRoot()
@@ -286,7 +283,7 @@ func TestProcessLayers_OpinionsOptional(t *testing.T) {
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(lastSynced).Return(false)
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced).Return(nil, errors.New("meh"))
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
-	ts.mTortoise.EXPECT().Updates().Return(nil)
+	ts.mTortoise.EXPECT().Updates().Return(rlayers(rlayer(lastSynced)))
 	require.False(t, ts.syncer.stateSynced())
 	ts.mVm.EXPECT().Apply(vm.ApplyContext{Layer: lastSynced}, nil, nil)
 	ts.mConState.EXPECT().UpdateCache(gomock.Any(), lastSynced, types.EmptyBlockID, nil, nil)
@@ -304,7 +301,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 		ts.msh.SetZeroBlockLayer(context.Background(), lid)
 		ts.mTortoise.EXPECT().OnHareOutput(lid, types.EmptyBlockID)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().Updates().Return(nil)
+		ts.mTortoise.EXPECT().Updates().Return(rlayers(rlayer(lid)))
 		ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
 		ts.mVm.EXPECT().GetStateRoot()
@@ -397,7 +394,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	ts.mForkFinder.EXPECT().Purge(true)
 
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), instate)
-	ts.mTortoise.EXPECT().Updates().Return(nil)
+	ts.mTortoise.EXPECT().Updates().Return(rlayers(rlayer(instate)))
 	require.NoError(t, ts.syncer.processLayers(context.Background()))
 }
 
@@ -412,22 +409,61 @@ func TestProcessLayers_SucceedOnRetry(t *testing.T) {
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), gomock.Any()).AnyTimes()
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
-	ts.mTortoise.EXPECT().Updates().Return(map[types.LayerID]map[types.BlockID]bool{current: {}}).AnyTimes()
 	ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	ts.mVm.EXPECT().GetStateRoot().AnyTimes()
 	ts.mConState.EXPECT().UpdateCache(gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).AnyTimes()
 
-	results := []result.Layer{
-		{Blocks: []result.Block{{Header: types.Vote{ID: types.BlockID{1}}, Hare: true}}},
-		{Blocks: []result.Block{{Header: types.Vote{ID: types.BlockID{2}}, Valid: true}}},
-	}
-	ts.mTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(results, nil).Times(2)
-	ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), []types.BlockID{{1}, {2}}).DoAndReturn(
+	missing := rlayers(rlayer(current,
+		rblock(types.BlockID{1}, rhare()),
+		rblock(types.BlockID{2}, rvalid()),
+	))
+	ts.mTortoise.EXPECT().Updates().Return(missing)
+	ts.mTortoise.EXPECT().Updates().Return(nil)
+	ts.mTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(missing, nil)
+	ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, got []types.BlockID) error {
-			results[0].Blocks[0].Data = true
-			results[1].Blocks[0].Data = true
+			missing[0].Blocks[0].Data = true
+			missing[0].Blocks[1].Data = true
 			return nil
 		})
-
 	require.NoError(t, ts.syncer.processLayers(context.Background()))
+}
+
+func rlayers(layers ...result.Layer) []result.Layer {
+	return layers
+}
+
+func rlayer(lid types.LayerID, blocks ...result.Block) result.Layer {
+	return result.Layer{
+		Layer:  lid,
+		Blocks: blocks,
+	}
+}
+
+type ropt func(*result.Block)
+
+func rhare() ropt {
+	return func(b *result.Block) {
+		b.Hare = true
+	}
+}
+
+func rvalid() ropt {
+	return func(b *result.Block) {
+		b.Valid = true
+	}
+}
+
+func rblock(id types.BlockID, opts ...ropt) result.Block {
+	block := result.Block{}
+	block.Header.ID = id
+	if opts == nil {
+		block.Valid = true
+		block.Hare = true
+		block.Data = true
+	}
+	for _, opt := range opts {
+		opt(&block)
+	}
+	return block
 }
