@@ -361,6 +361,7 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 			if err := layers.SetApplied(dbtx, layer.Layer, target); err != nil {
 				return fmt.Errorf("set applied for %v/%v: %w", layer.Layer, target, err)
 			}
+			fmt.Printf("set mesh hash %v/%v\n", layer.Layer, layer.Opinion)
 			if err := layers.SetMeshHash(dbtx, layer.Layer, layer.Opinion); err != nil {
 				return fmt.Errorf("set mesh hash for %v/%v: %w", layer.Layer, layer.Opinion, err)
 			}

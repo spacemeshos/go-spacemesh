@@ -386,6 +386,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	for lid := fork0.Add(1); lid.Before(current); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid, opns[0].Peer())
 	}
+
 	for lid := fork2.Add(1); lid.Before(current); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid, opns[2].Peer())
 	}
@@ -394,7 +395,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	ts.mForkFinder.EXPECT().Purge(true)
 
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), instate)
-	ts.mTortoise.EXPECT().Updates().Return(rlayers(rlayer(instate)))
+	ts.mTortoise.EXPECT().Updates().Return(rlayers(ropinion(instate.Sub(1), opns[2].PrevAggHash)))
 	require.NoError(t, ts.syncer.processLayers(context.Background()))
 }
 
@@ -438,6 +439,12 @@ func rlayer(lid types.LayerID, blocks ...result.Block) result.Layer {
 		Layer:  lid,
 		Blocks: blocks,
 	}
+}
+
+func ropinion(lid types.LayerID, opinion types.Hash32, blocks ...result.Block) result.Layer {
+	r := rlayer(lid, blocks...)
+	r.Opinion = opinion
+	return r
 }
 
 type ropt func(*result.Block)
