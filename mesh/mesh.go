@@ -474,6 +474,11 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 	if err := msh.saveHareOutput(ctx, layerID, blockID); err != nil {
 		return err
 	}
+	if executed {
+		if err := layers.SetApplied(msh.cdb, layerID, blockID); err != nil {
+			return fmt.Errorf("optimistically applied for %v/%v: %w", layerID, blockID, err)
+		}
+	}
 	return msh.ProcessLayer(ctx, layerID)
 }
 
