@@ -712,13 +712,36 @@ func TestProcessLayerPerHareOutput(t *testing.T) {
 				{layer: start, cert: fullcert(idg("3"))},
 			},
 		},
+		{
+			desc: "out of order",
+			calls: []call{
+				{
+					lid: start, bid: idg("1"), onHare: true,
+					expect: []certificates.CertValidity{
+						validcert(idg("1")),
+					},
+				},
+				{
+					lid: start.Add(2), bid: idg("2"), onHare: true,
+					expect: []certificates.CertValidity{
+						validcert(idg("2")),
+					},
+				},
+				{
+					lid: start.Add(1), bid: idg("3"), onHare: true,
+					expect: []certificates.CertValidity{
+						validcert(idg("3")),
+					},
+				},
+			},
+		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 			tm := createTestMesh(t)
 			tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
-			tm.mockTortoise.EXPECT().Updates().Return(nil) // this make ProcessLayer noop
+			tm.mockTortoise.EXPECT().Updates().Return(nil).AnyTimes() // this make ProcessLayer noop
 			for _, c := range tc.certs {
 				if c.cert.Cert != nil {
 					require.NoError(t, certificates.Add(tm.cdb, c.layer, c.cert.Cert))
