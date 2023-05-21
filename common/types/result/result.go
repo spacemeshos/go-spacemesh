@@ -49,7 +49,7 @@ type Block struct {
 func (b *Block) MarshalLogObject(encoder log.ObjectEncoder) error {
 	b.Header.MarshalLogObject(encoder)
 	encoder.AddBool("valid", b.Valid)
-	encoder.AddBool("invalid", b.Valid)
+	encoder.AddBool("invalid", b.Invalid)
 	encoder.AddBool("hare", b.Hare)
 	encoder.AddBool("data", b.Data)
 	return nil
