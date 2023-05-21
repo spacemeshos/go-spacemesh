@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -554,7 +553,6 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, ts *testSyncer) {
 
 func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
-	ts.mTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).AnyTimes()
 	ts.mDataFetcher.EXPECT().PollMaliciousProofs(gomock.Any())
@@ -564,7 +562,7 @@ func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 
 	// simulate hare advancing the mesh forward
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lyr)
-	ts.mTortoise.EXPECT().Updates().Return([]result.Layer{{Layer: lyr}})
+	ts.mTortoise.EXPECT().Updates().Return(rlayers(rlayer(lyr)))
 	ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 	ts.mConState.EXPECT().UpdateCache(gomock.Any(), lyr, types.EmptyBlockID, nil, nil)
 	ts.mVm.EXPECT().GetStateRoot()
