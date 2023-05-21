@@ -15,6 +15,7 @@ type Tortoise interface {
 	OnHareOutput(types.LayerID, types.BlockID)
 	OnWeakCoin(types.LayerID, bool)
 	TallyVotes(context.Context, types.LayerID)
+	LatestComplete() types.LayerID
 	Updates() []result.Layer
 	Results(from, to types.LayerID) ([]result.Layer, error)
 }

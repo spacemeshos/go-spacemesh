@@ -568,6 +568,7 @@ func validharegen(id types.BlockID, data bool) result.Block {
 	block.Data = data
 	return block
 }
+
 func invalidgen(id types.BlockID, data bool) result.Block {
 	block := result.Block{}
 	block.Header.ID = id
@@ -575,6 +576,7 @@ func invalidgen(id types.BlockID, data bool) result.Block {
 	block.Invalid = true
 	return block
 }
+
 func validgen(id types.BlockID, data bool) result.Block {
 	block := result.Block{}
 	block.Header.ID = id
@@ -582,6 +584,7 @@ func validgen(id types.BlockID, data bool) result.Block {
 	block.Data = data
 	return block
 }
+
 func haregen(id types.BlockID, data bool) result.Block {
 	block := result.Block{}
 	block.Header.ID = id
@@ -618,7 +621,6 @@ func fullcert(id types.BlockID) certificates.CertValidity {
 		Cert:  &types.Certificate{BlockID: id},
 		Valid: true,
 	}
-
 }
 
 func TestProcessLayerPerHareOutput(t *testing.T) {

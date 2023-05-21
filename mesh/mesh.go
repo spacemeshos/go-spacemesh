@@ -186,7 +186,7 @@ func (msh *Mesh) setProcessedLayer(layerID types.LayerID) error {
 	processed := msh.ProcessedLayer()
 	if !layerID.After(processed) {
 		msh.logger.With().Debug("trying to set processed layer to an older layer",
-			log.Uint32("processer", processed.Uint32()),
+			log.Uint32("processed", processed.Uint32()),
 			layerID)
 		return nil
 	}
@@ -261,7 +261,6 @@ func (msh *Mesh) ensureConsistentResults(ctx context.Context, results []result.L
 	}
 	msh.setLatestLayerInState(revert)
 	return nil
-
 }
 
 // ProcessLayer reads latest consensus results and ensures that vm state
@@ -598,6 +597,11 @@ func (msh *Mesh) EpochAtxs(epoch types.EpochID) ([]types.ATXID, error) {
 // GetRewards retrieves account's rewards by the coinbase address.
 func (msh *Mesh) GetRewards(coinbase types.Address) ([]*types.Reward, error) {
 	return rewards.List(msh.cdb, coinbase)
+}
+
+// LastVerified returns the latest layer verified by tortoise.
+func (msh *Mesh) LastVerified() types.LayerID {
+	return msh.trtl.LatestComplete()
 }
 
 func minNonZero(i, j types.LayerID) types.LayerID {
