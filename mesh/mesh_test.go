@@ -8,6 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -363,9 +364,11 @@ func TestProcessLayer(t *testing.T) {
 			"sanity",
 			[]call{
 				{
-					updates: []result.Layer{
-						layergen(start, validharegen(idg("1"), true), invalidgen(idg("2"), true)),
-					},
+					updates: rlayers(
+						layergen(start,
+							blockgen(idg("1"), fixture.Good()),
+							blockgen(idg("2"), fixture.Data(), fixture.Invalid())),
+					),
 					executed: []types.BlockID{idg("1")},
 					applied:  []types.BlockID{idg("1")},
 					validity: map[types.BlockID]bool{
@@ -379,15 +382,15 @@ func TestProcessLayer(t *testing.T) {
 			"missing valid",
 			[]call{
 				{
-					updates: []result.Layer{
-						layergen(start, validgen(idg("1"), false)),
-					},
+					updates: rlayers(
+						layergen(start, blockgen(idg("1"), fixture.Valid())),
+					),
 					err: "missing",
 				},
 				{
-					results: []result.Layer{
-						layergen(start, validgen(idg("1"), true)),
-					},
+					results: rlayers(
+						layergen(start, blockgen(idg("1"), fixture.Data(), fixture.Valid())),
+					),
 					executed: []types.BlockID{idg("1")},
 					applied:  []types.BlockID{idg("1")},
 					validity: map[types.BlockID]bool{
@@ -400,15 +403,15 @@ func TestProcessLayer(t *testing.T) {
 			"missing invalid",
 			[]call{
 				{
-					updates: []result.Layer{
-						layergen(start, validgen(idg("1"), false)),
-					},
+					updates: rlayers(
+						layergen(start, blockgen(idg("1"), fixture.Valid())),
+					),
 					err: "missing",
 				},
 				{
-					results: []result.Layer{
-						layergen(start, invalidgen(idg("1"), false)),
-					},
+					results: rlayers(
+						layergen(start, blockgen(idg("1"), fixture.Invalid())),
+					),
 					executed: []types.BlockID{{}},
 					applied:  []types.BlockID{{}},
 				},
@@ -418,15 +421,15 @@ func TestProcessLayer(t *testing.T) {
 			"revert from empty",
 			[]call{
 				{
-					updates: []result.Layer{
+					updates: rlayers(
 						layergen(start),
-					},
+					),
 					executed: []types.BlockID{{}},
 					applied:  []types.BlockID{{0}},
 				},
 				{
 					updates: []result.Layer{
-						layergen(start, validgen(idg("2"), true)),
+						layergen(start, blockgen(idg("2"), fixture.Valid(), fixture.Data())),
 					},
 					executed: []types.BlockID{idg("2")},
 					applied:  []types.BlockID{idg("2")},
@@ -437,15 +440,15 @@ func TestProcessLayer(t *testing.T) {
 			"hare to valid",
 			[]call{
 				{
-					updates: []result.Layer{
-						layergen(start, haregen(idg("1"), true)),
-					},
+					updates: rlayers(
+						layergen(start, blockgen(idg("1"), fixture.Hare(), fixture.Data())),
+					),
 					executed: []types.BlockID{idg("1")},
 					applied:  []types.BlockID{idg("1")},
 				},
 				{
 					updates: []result.Layer{
-						layergen(start, validharegen(idg("1"), true)),
+						layergen(start, blockgen(idg("1"), fixture.Hare(), fixture.Data(), fixture.Valid())),
 					},
 					applied: []types.BlockID{idg("1")},
 				},
@@ -455,16 +458,16 @@ func TestProcessLayer(t *testing.T) {
 			"multiple layers of hare",
 			[]call{
 				{
-					updates: []result.Layer{
-						layergen(start, haregen(idg("1"), true)),
-					},
+					updates: rlayers(
+						layergen(start, blockgen(idg("1"), fixture.Hare(), fixture.Data())),
+					),
 					executed: []types.BlockID{idg("1")},
 					applied:  []types.BlockID{idg("1")},
 				},
 				{
-					updates: []result.Layer{
-						layergen(start.Add(1), haregen(idg("2"), true)),
-					},
+					updates: rlayers(
+						layergen(start.Add(1), blockgen(idg("2"), fixture.Hare(), fixture.Data())),
+					),
 					executed: []types.BlockID{idg("2")},
 					applied:  []types.BlockID{idg("1"), idg("2")},
 				},
@@ -474,18 +477,97 @@ func TestProcessLayer(t *testing.T) {
 			"hare to invalid",
 			[]call{
 				{
-					updates: []result.Layer{
-						layergen(start, haregen(idg("1"), true)),
-					},
+					updates: rlayers(
+						layergen(start, blockgen(idg("1"), fixture.Valid(), fixture.Data())),
+					),
 					executed: []types.BlockID{idg("1")},
 					applied:  []types.BlockID{idg("1")},
 				},
 				{
-					updates: []result.Layer{
-						layergen(start, invalidharegen(idg("1"), true)),
-					},
+					updates: rlayers(
+						layergen(start, blockgen(idg("1"), fixture.Invalid(), fixture.Hare(), fixture.Data())),
+					),
 					executed: []types.BlockID{{0}},
 					applied:  []types.BlockID{{0}},
+				},
+			},
+		},
+		{
+			"reorg",
+			[]call{
+				{
+					updates: rlayers(
+						layergen(start, blockgen(idg("1"), fixture.Valid(), fixture.Data())),
+						layergen(start+1, blockgen(idg("2"), fixture.Valid(), fixture.Data())),
+					),
+					executed: []types.BlockID{idg("1"), idg("2")},
+					applied:  []types.BlockID{idg("1"), idg("2")},
+				},
+				{
+					updates: rlayers(
+						layergen(start, blockgen(idg("1"), fixture.Invalid(), fixture.Data())),
+						layergen(start+1, blockgen(idg("2"), fixture.Valid(), fixture.Data())),
+					),
+					executed: []types.BlockID{types.EmptyBlockID, idg("2")},
+					applied:  []types.BlockID{types.EmptyBlockID, idg("2")},
+				},
+			},
+		},
+		{
+			"reorg with missing",
+			[]call{
+				{
+					updates: rlayers(
+						layergen(start, blockgen(idg("1"), fixture.Valid(), fixture.Data())),
+						layergen(start+1, blockgen(idg("2"), fixture.Valid(), fixture.Data())),
+					),
+					executed: []types.BlockID{idg("1"), idg("2")},
+					applied:  []types.BlockID{idg("1"), idg("2")},
+				},
+				{
+					updates: rlayers(
+						layergen(start,
+							blockgen(idg("1"), fixture.Invalid(), fixture.Data()),
+							blockgen(idg("3"), fixture.Valid()),
+						),
+						layergen(start+1,
+							blockgen(idg("2"), fixture.Valid(), fixture.Data())),
+					),
+					err: "missing",
+				},
+				{
+					results: rlayers(
+						layergen(start,
+							blockgen(idg("1"), fixture.Invalid(), fixture.Data()),
+							blockgen(idg("3"), fixture.Valid(), fixture.Data()),
+						),
+						layergen(start+1,
+							blockgen(idg("2"), fixture.Valid(), fixture.Data())),
+					),
+					executed: []types.BlockID{idg("3"), idg("2")},
+					applied:  []types.BlockID{idg("3"), idg("2")},
+				},
+			},
+		},
+		{
+			"more updates after failure",
+			[]call{
+				{
+					updates: rlayers(
+						layergen(start, blockgen(idg("1"), fixture.Valid())),
+					),
+					err: "missing",
+				},
+				{
+					updates: rlayers(
+						layergen(start+1, blockgen(idg("2"), fixture.Valid(), fixture.Data())),
+					),
+					results: rlayers(
+						layergen(start, blockgen(idg("1"), fixture.Valid(), fixture.Data())),
+						layergen(start+1, blockgen(idg("2"), fixture.Valid(), fixture.Data())),
+					),
+					executed: []types.BlockID{idg("1"), idg("2")},
+					applied:  []types.BlockID{idg("1"), idg("2")},
 				},
 			},
 		},
@@ -547,60 +629,12 @@ func ensuresDatabaseConsistent(t *testing.T, db sql.Executor, results []result.L
 	}
 }
 
-func layergen(lid types.LayerID, blocks ...result.Block) result.Layer {
-	return result.Layer{
-		Layer:  lid,
-		Blocks: blocks,
-	}
-}
-
-func idg(name string) types.BlockID {
-	id := types.BlockID{}
-	copy(id[:], name)
-	return id
-}
-
-func validharegen(id types.BlockID, data bool) result.Block {
-	block := result.Block{}
-	block.Header.ID = id
-	block.Valid = true
-	block.Hare = true
-	block.Data = data
-	return block
-}
-
-func invalidgen(id types.BlockID, data bool) result.Block {
-	block := result.Block{}
-	block.Header.ID = id
-	block.Data = data
-	block.Invalid = true
-	return block
-}
-
-func validgen(id types.BlockID, data bool) result.Block {
-	block := result.Block{}
-	block.Header.ID = id
-	block.Valid = true
-	block.Data = data
-	return block
-}
-
-func haregen(id types.BlockID, data bool) result.Block {
-	block := result.Block{}
-	block.Header.ID = id
-	block.Hare = true
-	block.Data = data
-	return block
-}
-
-func invalidharegen(id types.BlockID, data bool) result.Block {
-	block := result.Block{}
-	block.Header.ID = id
-	block.Invalid = true
-	block.Hare = true
-	block.Data = data
-	return block
-}
+var (
+	rlayers  = fixture.RLayers
+	layergen = fixture.RLayer
+	blockgen = fixture.RBlock
+	idg      = fixture.IDGen
+)
 
 func validcert(id types.BlockID) certificates.CertValidity {
 	return certificates.CertValidity{
@@ -743,7 +777,7 @@ func TestProcessLayerPerHareOutput(t *testing.T) {
 			t.Parallel()
 			tm := createTestMesh(t)
 			tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
-			tm.mockTortoise.EXPECT().Updates().Return(nil).AnyTimes() // this make ProcessLayer noop
+			tm.mockTortoise.EXPECT().Updates().Return(nil).AnyTimes() // this makes ProcessLayer noop
 			for _, c := range tc.certs {
 				if c.cert.Cert != nil {
 					require.NoError(t, certificates.Add(tm.cdb, c.layer, c.cert.Cert))

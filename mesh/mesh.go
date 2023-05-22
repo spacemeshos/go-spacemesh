@@ -121,7 +121,6 @@ func (msh *Mesh) recoverFromDB(latest types.LayerID) {
 			msh.logger.With().Fatal("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
 		}
 	}
-
 	msh.logger.With().Info("recovered mesh from disk",
 		log.Stringer("latest", msh.LatestLayer()),
 		log.Stringer("processed", msh.ProcessedLayer()))
@@ -162,15 +161,11 @@ func (msh *Mesh) setLatestLayer(logger log.Log, lid types.LayerID) {
 
 // GetLayer returns GetLayer i from the database.
 func (msh *Mesh) GetLayer(lid types.LayerID) (*types.Layer, error) {
-	return getLayer(msh.cdb, lid)
-}
-
-func getLayer(db sql.Executor, lid types.LayerID) (*types.Layer, error) {
-	blts, err := ballots.Layer(db, lid)
+	blts, err := ballots.Layer(msh.cdb, lid)
 	if err != nil {
 		return nil, fmt.Errorf("layer ballots: %w", err)
 	}
-	blks, err := blocks.Layer(db, lid)
+	blks, err := blocks.Layer(msh.cdb, lid)
 	if err != nil {
 		return nil, fmt.Errorf("layer blks: %w", err)
 	}
@@ -222,7 +217,10 @@ func (msh *Mesh) setProcessedLayer(layerID types.LayerID) error {
 	return nil
 }
 
-func (msh *Mesh) ensureConsistentResults(ctx context.Context, results []result.Layer) error {
+// ensureStateConsistent finds first layer where applied doesn't match
+// the block in consensus, and reverts state before that layer
+// if such layer is found.
+func (msh *Mesh) ensureStateConsistent(ctx context.Context, results []result.Layer) error {
 	var (
 		changed types.LayerID
 		inState = msh.LatestLayerInState()
@@ -293,7 +291,6 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 			return err
 		}
 	}
-
 	msh.logger.With().Info("consensus results",
 		log.Context(ctx),
 		log.Array("results", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
@@ -306,7 +303,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 	if missing := missingBlocks(results); len(missing) > 0 {
 		return &types.ErrorMissing{MissingData: types.MissingData{Blocks: missing}}
 	}
-	if err := msh.ensureConsistentResults(ctx, results); err != nil {
+	if err := msh.ensureStateConsistent(ctx, results); err != nil {
 		return err
 	}
 	if err := msh.applyResults(ctx, results); err != nil {
