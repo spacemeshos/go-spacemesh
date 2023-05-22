@@ -436,8 +436,9 @@ func rlayers(layers ...result.Layer) []result.Layer {
 
 func rlayer(lid types.LayerID, blocks ...result.Block) result.Layer {
 	return result.Layer{
-		Layer:  lid,
-		Blocks: blocks,
+		Layer:    lid,
+		Verified: true,
+		Blocks:   blocks,
 	}
 }
 
