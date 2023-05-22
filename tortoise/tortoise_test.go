@@ -197,7 +197,7 @@ func TestAbstainLateBlock(t *testing.T) {
 	tortoise.TallyVotes(ctx, last)
 
 	events := tortoise.Updates()
-	require.Len(t, events, 1)
+	require.Len(t, events, 3)
 	require.Equal(t, events[0].Layer, last.Sub(2))
 	for _, v := range events[0].Blocks {
 		require.True(t, v.Valid)
@@ -2233,12 +2233,17 @@ func TestSwitchMode(t *testing.T) {
 			tortoise.TallyVotes(ctx, last)
 		}
 		events := tortoise.Updates()
-		require.Len(t, events, int(cfg.Hdist))
-		for i, layer := range events {
+		require.Len(t, events, int(cfg.Hdist)+1)
+		for i := 0; i < int(cfg.Hdist); i++ {
+			layer := events[i]
 			require.Equal(t, nohare.Add(uint32(i)), layer.Layer)
 			for _, v := range layer.Blocks {
 				require.True(t, v.Valid)
 			}
+		}
+		for _, v := range events[len(events)-1].Blocks {
+			require.False(t, v.Valid)
+			require.True(t, v.Hare)
 		}
 
 		templates, err := ballots.Layer(s.GetState(0).DB, nohare.Add(1))
@@ -2262,11 +2267,12 @@ func TestSwitchMode(t *testing.T) {
 		}
 		tortoise.TallyVotes(ctx, last)
 		events = tortoise.Updates()
-		require.Len(t, events, 1)
+		require.Len(t, events, 3)
 		require.Equal(t, events[0].Layer, nohare)
-		require.Len(t, events[0].Blocks, 1)
-		for _, v := range events[0].Blocks {
-			require.False(t, v.Valid)
+		for i := 0; i < int(cfg.Hdist); i++ {
+			for _, v := range events[0].Blocks {
+				require.True(t, v.Invalid)
+			}
 		}
 	})
 }
@@ -2972,4 +2978,27 @@ func TestMultipleTargets(t *testing.T) {
 	votes, err = tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)
 	require.Empty(t, votes.Against)
+}
+
+func TestUpdates(t *testing.T) {
+	genesis := types.GetEffectiveGenesis()
+	t.Run("hare output included", func(t *testing.T) {
+		trt, err := New()
+		require.NoError(t, err)
+		id := types.BlockID{1}
+		lid := genesis + 1
+
+		trt.OnBlock(types.BlockHeader{
+			ID:      id,
+			LayerID: lid,
+		})
+		trt.OnHareOutput(lid, id)
+		trt.TallyVotes(context.TODO(), lid)
+		updates := trt.Updates()
+		require.Len(t, updates, 1)
+		require.Len(t, updates[0].Blocks, 1)
+		require.True(t, updates[0].Blocks[0].Hare)
+		require.False(t, updates[0].Blocks[0].Valid)
+		require.Equal(t, id, updates[0].Blocks[0].Header.ID)
+	})
 }

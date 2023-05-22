@@ -306,19 +306,18 @@ func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) 
 func (t *Tortoise) Updates() []result.Layer {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.trtl.notifications.min == 0 || t.trtl.notifications.max == 0 {
+	if t.trtl.pending == 0 {
 		return nil
 	}
-	rst, err := t.results(t.trtl.notifications.min, t.trtl.notifications.max)
+	rst, err := t.results(t.trtl.pending, t.trtl.processed)
 	if err != nil {
 		t.logger.With().Panic("unexpected error",
-			log.Uint32("min", t.trtl.notifications.min.Uint32()),
-			log.Uint32("min", t.trtl.notifications.max.Uint32()),
+			log.Uint32("pending", t.trtl.pending.Uint32()),
+			log.Uint32("processed", t.trtl.pending.Uint32()),
 			log.Err(err),
 		)
 	}
-	t.trtl.notifications.min = 0
-	t.trtl.notifications.max = 0
+	t.trtl.pending = 0
 	return rst
 }
 

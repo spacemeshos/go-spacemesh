@@ -25,9 +25,8 @@ type turtle struct {
 
 	*state
 
-	notifications struct {
-		min, max types.LayerID
-	}
+	// pending is a minimal layer where opinion has changed
+	pending types.LayerID
 
 	// a linked list with retriable ballots
 	// the purpose is to add ballot to the state even
@@ -326,7 +325,12 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 		}
 
 		layer.prevOpinion = &prev.opinion
+		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
+		if opinion != layer.opinion {
+			t.pending = minNonZero(t.pending, t.last)
+		}
+
 		t.logger.With().Debug("initial local opinion",
 			layer.lid,
 			log.Stringer("local opinion", layer.opinion))
@@ -431,8 +435,7 @@ func (t *turtle) verifyLayers() {
 				log.Stringer("emitted", block.emitted),
 			)
 			block.emitted = block.validity
-			t.notifications.min = minNonZero(t.notifications.min, target)
-			t.notifications.max = maxNonZero(t.notifications.max, target)
+			t.pending = minNonZero(t.pending, target)
 		}
 	}
 	t.verified = verified
@@ -521,8 +524,7 @@ func (t *turtle) onOpinionChange(lid types.LayerID) {
 		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
 		if opinion != layer.opinion {
-			t.notifications.min = minNonZero(t.notifications.min, lid)
-			t.notifications.max = maxNonZero(t.notifications.max, lid)
+			t.pending = minNonZero(t.pending, lid)
 		}
 		t.logger.With().Debug("computed local opinion",
 			layer.lid,
@@ -764,10 +766,7 @@ func getLocalVote(config Config, verified, last types.LayerID, block *blockInfo)
 }
 
 func minLayer(i, j types.LayerID) types.LayerID {
-	if i < j {
-		return i
-	}
-	return j
+	return minNonZero(i, j)
 }
 
 func minNonZero(i, j types.LayerID) types.LayerID {
@@ -776,17 +775,6 @@ func minNonZero(i, j types.LayerID) types.LayerID {
 	} else if j == 0 {
 		return i
 	} else if i < j {
-		return i
-	}
-	return j
-}
-
-func maxNonZero(i, j types.LayerID) types.LayerID {
-	if i == 0 {
-		return j
-	} else if j == 0 {
-		return i
-	} else if i > j {
 		return i
 	}
 	return j

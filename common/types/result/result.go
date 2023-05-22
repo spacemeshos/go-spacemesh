@@ -1,6 +1,8 @@
 package result
 
 import (
+	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -25,6 +27,10 @@ func (l *Layer) FirstValid() types.BlockID {
 		}
 	}
 	return types.EmptyBlockID
+}
+
+func (l Layer) String() string {
+	return fmt.Sprintf("%d %+v", l.Layer, l.Blocks)
 }
 
 func (l *Layer) MarshalLogObject(encoder log.ObjectEncoder) error {
