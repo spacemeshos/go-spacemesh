@@ -55,7 +55,7 @@ func NewValidator(poetDb poetDbAPI, cfg PostConfig, log log.Log, postVerifier Po
 // Some of the Post metadata fields validation values is ought to eventually be derived from
 // consensus instead of local configuration. If so, their validation should be removed to contextual validation,
 // while still syntactically-validate them here according to locally configured min/max values.
-func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error) {
+func (v *Validator) NIPost(ctx context.Context, nodeId types.NodeID, commitmentAtxId types.ATXID, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error) {
 	if err := v.NumUnits(&v.cfg, numUnits); err != nil {
 		return 0, err
 	}
@@ -64,7 +64,7 @@ func (v *Validator) NIPost(nodeId types.NodeID, commitmentAtxId types.ATXID, nip
 		return 0, err
 	}
 
-	if err := v.Post(nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
+	if err := v.Post(ctx, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
 		return 0, fmt.Errorf("invalid Post: %v", err)
 	}
 
@@ -114,7 +114,7 @@ func validateMerkleProof(leaf []byte, proof *types.MerkleProof, expectedRoot []b
 
 // Post validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
 // validation failed.
-func (v *Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...verifying.OptionFunc) error {
+func (v *Validator) Post(ctx context.Context, nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...verifying.OptionFunc) error {
 	p := (*shared.Proof)(PoST)
 
 	m := &shared.ProofMetadata{
@@ -126,7 +126,7 @@ func (v *Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST 
 	}
 
 	start := time.Now()
-	if err := v.postVerifier.Verify(context.TODO(), p, m, opts...); err != nil {
+	if err := v.postVerifier.Verify(ctx, p, m, opts...); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
 	}
 	metrics.PostVerificationLatency.Observe(time.Since(start).Seconds())

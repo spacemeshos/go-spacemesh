@@ -129,6 +129,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		NewPostVerifier(postCfg, logger),
 	)
 	_, err := v.NIPost(
+		context.Background(),
 		postProvider.id,
 		postProvider.commitmentAtxId,
 		nipost,
@@ -224,6 +225,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	logger := logtest.New(t).WithName("validator")
 	v := NewValidator(poetDb, postProvider.cfg, logger, NewPostVerifier(postProvider.cfg, logger))
 	_, err = v.NIPost(
+		context.Background(),
 		postProvider.id,
 		postProvider.goldenATXID,
 		nipost,

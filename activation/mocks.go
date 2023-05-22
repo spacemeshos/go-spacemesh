@@ -130,9 +130,9 @@ func (mr *MocknipostValidatorMockRecorder) InitialNIPostChallenge(challenge, atx
 }
 
 // NIPost mocks base method.
-func (m *MocknipostValidator) NIPost(nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error) {
+func (m *MocknipostValidator) NIPost(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error) {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{nodeId, atxId, NIPost, expectedChallenge, numUnits}
+	varargs := []interface{}{ctx, nodeId, atxId, NIPost, expectedChallenge, numUnits}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
@@ -143,9 +143,9 @@ func (m *MocknipostValidator) NIPost(nodeId types.NodeID, atxId types.ATXID, NIP
 }
 
 // NIPost indicates an expected call of NIPost.
-func (mr *MocknipostValidatorMockRecorder) NIPost(nodeId, atxId, NIPost, expectedChallenge, numUnits interface{}, opts ...interface{}) *gomock.Call {
+func (mr *MocknipostValidatorMockRecorder) NIPost(ctx, nodeId, atxId, NIPost, expectedChallenge, numUnits interface{}, opts ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{nodeId, atxId, NIPost, expectedChallenge, numUnits}, opts...)
+	varargs := append([]interface{}{ctx, nodeId, atxId, NIPost, expectedChallenge, numUnits}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NIPost", reflect.TypeOf((*MocknipostValidator)(nil).NIPost), varargs...)
 }
 
@@ -192,9 +192,9 @@ func (mr *MocknipostValidatorMockRecorder) PositioningAtx(id, atxs, goldenATXID,
 }
 
 // Post mocks base method.
-func (m *MocknipostValidator) Post(nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...verifying.OptionFunc) error {
+func (m *MocknipostValidator) Post(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...verifying.OptionFunc) error {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{nodeId, atxId, Post, PostMetadata, numUnits}
+	varargs := []interface{}{ctx, nodeId, atxId, Post, PostMetadata, numUnits}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
@@ -204,9 +204,9 @@ func (m *MocknipostValidator) Post(nodeId types.NodeID, atxId types.ATXID, Post 
 }
 
 // Post indicates an expected call of Post.
-func (mr *MocknipostValidatorMockRecorder) Post(nodeId, atxId, Post, PostMetadata, numUnits interface{}, opts ...interface{}) *gomock.Call {
+func (mr *MocknipostValidatorMockRecorder) Post(ctx, nodeId, atxId, Post, PostMetadata, numUnits interface{}, opts ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{nodeId, atxId, Post, PostMetadata, numUnits}, opts...)
+	varargs := append([]interface{}{ctx, nodeId, atxId, Post, PostMetadata, numUnits}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Post", reflect.TypeOf((*MocknipostValidator)(nil).Post), varargs...)
 }
 

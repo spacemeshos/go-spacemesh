@@ -588,33 +588,33 @@ func TestValidator_Validate(t *testing.T) {
 
 	logger := logtest.New(t).WithName("validator")
 	v := NewValidator(poetDb, postProvider.cfg, logger, NewPostVerifier(postProvider.cfg, logger))
-	_, err := v.NIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
+	_, err := v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
 	r.NoError(err)
 
-	_, err = v.NIPost(postProvider.id, postProvider.commitmentAtxId, nipost, types.BytesToHash([]byte("lerner")), postProvider.opts.NumUnits, opts...)
+	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, types.BytesToHash([]byte("lerner")), postProvider.opts.NumUnits, opts...)
 	r.Contains(err.Error(), "invalid membership proof")
 
 	newNIPost := *nipost
 	newNIPost.Post = &types.Post{}
-	_, err = v.NIPost(postProvider.id, postProvider.commitmentAtxId, &newNIPost, challengeHash, postProvider.opts.NumUnits, opts...)
+	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, &newNIPost, challengeHash, postProvider.opts.NumUnits, opts...)
 	r.Contains(err.Error(), "invalid Post")
 
 	newPostCfg := postProvider.cfg
 	newPostCfg.MinNumUnits = postProvider.opts.NumUnits + 1
 	v = NewValidator(poetDb, newPostCfg, logtest.New(t).WithName("validator"), nil)
-	_, err = v.NIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
+	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
 	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", newPostCfg.MinNumUnits, postProvider.opts.NumUnits))
 
 	newPostCfg = postProvider.cfg
 	newPostCfg.MaxNumUnits = postProvider.opts.NumUnits - 1
 	v = NewValidator(poetDb, newPostCfg, logtest.New(t).WithName("validator"), nil)
-	_, err = v.NIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
+	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
 	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", newPostCfg.MaxNumUnits, postProvider.opts.NumUnits))
 
 	newPostCfg = postProvider.cfg
 	newPostCfg.LabelsPerUnit = nipost.PostMetadata.LabelsPerUnit + 1
 	v = NewValidator(poetDb, newPostCfg, logtest.New(t).WithName("validator"), nil)
-	_, err = v.NIPost(postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
+	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
 	r.EqualError(err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", newPostCfg.LabelsPerUnit, nipost.PostMetadata.LabelsPerUnit))
 }
 
