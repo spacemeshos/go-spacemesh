@@ -2,6 +2,7 @@ package activation
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -125,7 +126,7 @@ func (v *Validator) Post(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST 
 	}
 
 	start := time.Now()
-	if err := v.postVerifier.Verify(p, m, opts...); err != nil {
+	if err := v.postVerifier.Verify(context.TODO(), p, m, opts...); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
 	}
 	metrics.PostVerificationLatency.Observe(time.Since(start).Seconds())

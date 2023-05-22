@@ -17,7 +17,7 @@ type AtxReceiver interface {
 }
 
 type PostVerifier interface {
-	Verify(p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error
+	Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error
 }
 type nipostValidator interface {
 	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID, expectedPostIndices []byte) error

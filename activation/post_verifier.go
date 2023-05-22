@@ -33,17 +33,17 @@ type postVerifierWorker struct {
 	channel  <-chan *verifyPostJob
 }
 
-type verifierFunc func(*shared.Proof, *shared.ProofMetadata, ...verifying.OptionFunc) error
+type verifierFunc func(context.Context, *shared.Proof, *shared.ProofMetadata, ...verifying.OptionFunc) error
 
-func (f verifierFunc) Verify(p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
-	return f(p, m, opts...)
+func (f verifierFunc) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
+	return f(ctx, p, m, opts...)
 }
 
 // NewPostVerifier creates a new post verifier.
 func NewPostVerifier(cfg PostConfig, logger log.Log) PostVerifier {
 	c := config.Config(cfg)
-	verify := func(p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
-		logger.With().Debug("verifying post", log.FieldNamed("proof_node_id", types.BytesToNodeID(m.NodeId)))
+	verify := func(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
+		logger.WithContext(ctx).Debug("verifying post", log.FieldNamed("proof_node_id", types.BytesToNodeID(m.NodeId)))
 		return verifying.Verify(p, m, c, logger.Zap(), opts...)
 	}
 	return verifierFunc(verify)
@@ -77,30 +77,44 @@ func (v *OffloadingPostVerifier) Start(ctx context.Context) {
 	v.log.Info("starting post verifier")
 	for _, worker := range v.workers {
 		worker := worker
-		v.eg.Go(func() error { worker.start(); return nil })
+		v.eg.Go(func() error { return worker.start(ctx) })
 	}
 	<-ctx.Done()
 	v.log.Info("stopping post verifier")
-	close(v.channel)
 	v.eg.Wait()
 	v.log.Info("stopped post verifier")
 }
 
-func (v *OffloadingPostVerifier) Verify(p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
+func (v *OffloadingPostVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
 	job := &verifyPostJob{
 		proof:    p,
 		metadata: m,
 		opts:     opts,
-		result:   make(chan error),
+		result:   make(chan error, 1),
 	}
-	v.channel <- job
-	return <-job.result
+	select {
+	case v.channel <- job:
+	case <-ctx.Done():
+		return fmt.Errorf("submitting verifying job: %w", ctx.Err())
+	}
+
+	select {
+	case res := <-job.result:
+		return res
+	case <-ctx.Done():
+		return fmt.Errorf("waiting for verification result: %w", ctx.Err())
+	}
 }
 
-func (w *postVerifierWorker) start() {
+func (w *postVerifierWorker) start(ctx context.Context) error {
 	w.log.Info("starting post proof verifier worker")
-	for job := range w.channel {
-		job.result <- w.verifier.Verify(job.proof, job.metadata, job.opts...)
+	for {
+		select {
+		case <-ctx.Done():
+			w.log.Info("stopped post proof verifier worker")
+			return ctx.Err()
+		case job := <-w.channel:
+			job.result <- w.verifier.Verify(ctx, job.proof, job.metadata, job.opts...)
+		}
 	}
-	w.log.Info("stopped post proof verifier worker")
 }

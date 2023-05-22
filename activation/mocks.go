@@ -74,9 +74,9 @@ func (m *MockPostVerifier) EXPECT() *MockPostVerifierMockRecorder {
 }
 
 // Verify mocks base method.
-func (m_2 *MockPostVerifier) Verify(p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
+func (m_2 *MockPostVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
 	m_2.ctrl.T.Helper()
-	varargs := []interface{}{p, m}
+	varargs := []interface{}{ctx, p, m}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
@@ -86,9 +86,9 @@ func (m_2 *MockPostVerifier) Verify(p *shared.Proof, m *shared.ProofMetadata, op
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockPostVerifierMockRecorder) Verify(p, m interface{}, opts ...interface{}) *gomock.Call {
+func (mr *MockPostVerifierMockRecorder) Verify(ctx, p, m interface{}, opts ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{p, m}, opts...)
+	varargs := append([]interface{}{ctx, p, m}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockPostVerifier)(nil).Verify), varargs...)
 }
 
