@@ -571,6 +571,23 @@ func TestProcessLayer(t *testing.T) {
 				},
 			},
 		},
+		{
+			"empty non verified",
+			[]call{
+				{
+					updates: rlayers(
+						fixture.RLayerNonFinal(start),
+					),
+				},
+				{
+					updates: rlayers(
+						fixture.RLayer(start),
+					),
+					executed: []types.BlockID{{}},
+					applied:  []types.BlockID{{}},
+				},
+			},
+		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {

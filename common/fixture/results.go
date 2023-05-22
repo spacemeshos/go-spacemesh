@@ -9,11 +9,21 @@ func RLayers(layers ...result.Layer) []result.Layer {
 	return layers
 }
 
-func RLayer(lid types.LayerID, blocks ...result.Block) result.Layer {
-	return result.Layer{
+func RLayerNonFinal(lid types.LayerID, blocks ...result.Block) result.Layer {
+	layer := result.Layer{
 		Layer:  lid,
 		Blocks: blocks,
 	}
+	return layer
+}
+
+func RLayer(lid types.LayerID, blocks ...result.Block) result.Layer {
+	layer := result.Layer{
+		Layer:    lid,
+		Verified: true,
+		Blocks:   blocks,
+	}
+	return layer
 }
 
 type RBlockOpt func(*result.Block)

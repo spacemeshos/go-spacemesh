@@ -3001,4 +3001,27 @@ func TestUpdates(t *testing.T) {
 		require.False(t, updates[0].Blocks[0].Valid)
 		require.Equal(t, id, updates[0].Blocks[0].Header.ID)
 	})
+	t.Run("tally first", func(t *testing.T) {
+		trt, err := New()
+		require.NoError(t, err)
+		id := types.BlockID{1}
+		lid := genesis + 1
+
+		trt.TallyVotes(context.TODO(), lid)
+		updates := trt.Updates()
+		require.Len(t, updates, 1)
+		require.Empty(t, updates[0].Blocks)
+		require.False(t, updates[0].Verified)
+		trt.OnBlock(types.BlockHeader{
+			ID:      id,
+			LayerID: lid,
+		})
+		trt.OnHareOutput(lid, id)
+		updates = trt.Updates()
+		require.Len(t, updates, 1)
+		require.Len(t, updates[0].Blocks, 1)
+		require.True(t, updates[0].Blocks[0].Hare)
+		require.False(t, updates[0].Blocks[0].Valid)
+		require.Equal(t, id, updates[0].Blocks[0].Header.ID)
+	})
 }

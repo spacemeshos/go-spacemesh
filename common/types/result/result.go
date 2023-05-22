@@ -8,13 +8,14 @@ import (
 )
 
 type Layer struct {
-	Layer   types.LayerID
-	Opinion types.Hash32
-	Blocks  []Block
+	Layer    types.LayerID
+	Verified bool
+	Opinion  types.Hash32
+	Blocks   []Block
 }
 
-// FirstValid returns first block that is considered valid by tortoise
-// or first block considered valid by hare, while tortoise didn't decide yet.
+// FirstValid returns first block that crossed positive tortoise threshold,
+// or if layer didn't accumulate enough weight yet - use hare result.
 func (l *Layer) FirstValid() types.BlockID {
 	for _, block := range l.Blocks {
 		if block.Valid {
@@ -36,6 +37,7 @@ func (l Layer) String() string {
 func (l *Layer) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("layer", l.Layer.Uint32())
 	encoder.AddString("opinion", l.Opinion.ShortString())
+	encoder.AddBool("verified", l.Verified)
 	encoder.AddArray("blocks", log.ArrayMarshalerFunc(func(aencoder log.ArrayEncoder) error {
 		for i := range l.Blocks {
 			aencoder.AppendObject(&l.Blocks[i])
