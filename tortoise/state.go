@@ -169,6 +169,9 @@ type layerInfo struct {
 	verifying      verifyingInfo
 	coinflip       sign
 
+	// used to track when opinion on empty layer has changed
+	emitted bool
+
 	opinion types.Hash32
 	// a pointer to the value stored on the previous layerInfo object
 	// it is stored as a pointer so that when previous layerInfo is evicted

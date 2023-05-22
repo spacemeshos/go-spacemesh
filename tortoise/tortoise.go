@@ -58,6 +58,7 @@ func newTurtle(logger log.Log, config Config) *turtle {
 	t.layers[genesis] = &layerInfo{
 		lid:            genesis,
 		hareTerminated: true,
+		emitted:        true,
 	}
 	t.verifying = newVerifying(config, t.state)
 	t.full = newFullTortoise(config, t.state)
@@ -386,8 +387,8 @@ func (t *turtle) verifyLayers() {
 	if t.changedOpinion.min != 0 && !withinDistance(t.Hdist, t.changedOpinion.max, t.last) {
 		logger.With().Debug("changed opinion outside hdist", log.Stringer("from", t.changedOpinion.min), log.Stringer("to", t.changedOpinion.max))
 		t.onOpinionChange(t.changedOpinion.min)
-		t.changedOpinion.min = types.LayerID(0)
-		t.changedOpinion.max = types.LayerID(0)
+		t.changedOpinion.min = 0
+		t.changedOpinion.max = 0
 	}
 
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
@@ -411,20 +412,27 @@ func (t *turtle) verifyLayers() {
 		if !success {
 			break
 		}
+
 		verified = target
-		for _, block := range t.layers[target].blocks {
+		layer := t.layer(target)
+		if len(layer.blocks) == 0 && !layer.emitted && layer.hareTerminated {
+			layer.emitted = true
+			t.changedOpinion.min = minNonZero(t.changedOpinion.min, target)
+			t.changedOpinion.max = maxNonZero(t.changedOpinion.max, target)
+			t.pending = minNonZero(t.pending, target)
+		}
+		for _, block := range layer.blocks {
 			if block.emitted == block.validity {
 				continue
 			}
 			// record range of layers where opinion has changed.
 			// once those layers fall out of hdist window - opinion can be recomputed
+			//
+			// we don't recompute opinion that matches hare opinion
+			// and we don't recompute more than necessary
 			if block.validity != block.hare || (block.emitted != block.validity && block.emitted != abstain) {
-				if target.After(t.changedOpinion.max) {
-					t.changedOpinion.max = target
-				}
-				if t.changedOpinion.min == 0 || target.Before(t.changedOpinion.min) {
-					t.changedOpinion.min = target
-				}
+				t.changedOpinion.min = minNonZero(t.changedOpinion.min, target)
+				t.changedOpinion.max = maxNonZero(t.changedOpinion.max, target)
 			}
 			if block.validity == abstain {
 				logger.With().Fatal("bug: layer should not be verified if there is an undecided block", target, block.id)
@@ -484,12 +492,12 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 	if !lid.After(t.evicted) {
 		return
 	}
-	t.logger.With().Debug("on hare output", lid, bid, log.Bool("empty", bid == types.EmptyBlockID))
 	var (
 		layer    = t.state.layer(lid)
 		previous types.BlockID
 		exists   bool
 	)
+	t.logger.With().Debug("on hare output", lid, bid, log.Bool("empty", bid == types.EmptyBlockID), log.Uint32("processed", t.processed.Uint32()), log.Uint32("hdist", t.Hdist), log.Uint32("last", t.last.Uint32()))
 	layer.hareTerminated = true
 	for i := range layer.blocks {
 		block := layer.blocks[i]
@@ -775,6 +783,17 @@ func minNonZero(i, j types.LayerID) types.LayerID {
 	} else if j == 0 {
 		return i
 	} else if i < j {
+		return i
+	}
+	return j
+}
+
+func maxNonZero(i, j types.LayerID) types.LayerID {
+	if i == 0 {
+		return j
+	} else if j == 0 {
+		return i
+	} else if i > j {
 		return i
 	}
 	return j

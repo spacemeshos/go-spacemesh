@@ -187,7 +187,7 @@ func TestAbstainLateBlock(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	cfg.Hdist = 1
+	cfg.Hdist = 2
 	cfg.Zdist = 1
 	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
@@ -203,11 +203,8 @@ func TestAbstainLateBlock(t *testing.T) {
 		require.True(t, v.Valid)
 	}
 
-	block := types.Block{}
-	block.LayerIndex = last.Sub(1)
-	block.Initialize()
-	tortoise.OnBlock(block.ToVote())
-	tortoise.OnHareOutput(block.LayerIndex, block.ID())
+	block := types.BlockHeader{ID: types.BlockID{1}, LayerID: last.Sub(1)}
+	tortoise.OnBlock(block)
 	tortoise.TallyVotes(ctx, last)
 
 	events = tortoise.Updates()
