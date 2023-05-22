@@ -154,7 +154,7 @@ func (msh *Mesh) setLatestLayer(logger log.Log, lid types.LayerID) {
 		}
 		if msh.latestLayer.CompareAndSwap(current, lid) {
 			events.ReportNodeStatusUpdate()
-			logger.With().Info("set latest known layer", lid)
+			logger.With().Debug("set latest known layer", lid)
 		}
 	}
 }
@@ -293,6 +293,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 	}
 	msh.logger.With().Info("consensus results",
 		log.Context(ctx),
+		log.Uint32("layer_id", lid.Uint32()),
 		log.Array("results", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 			for i := range results {
 				encoder.AppendObject(&results[i])
