@@ -85,5 +85,4 @@ func TestPostVerifierVerifyAfterStop(t *testing.T) {
 		err := offloadingVerifier.Verify(ctx, &proof, &metadata)
 		require.ErrorIs(t, err, context.Canceled)
 	}
-
 }
