@@ -334,10 +334,10 @@ func missingBlocks(results []result.Layer) []types.BlockID {
 func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error {
 	msh.logger.With().Debug("applying results", log.Context(ctx))
 	for _, layer := range results {
-		if !layer.Verified && len(layer.Blocks) == 0 {
+		target := layer.FirstValid()
+		if !layer.Verified && target.IsEmpty() {
 			return nil
 		}
-		target := layer.FirstValid()
 		current, err := layers.GetApplied(msh.cdb, layer.Layer)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return fmt.Errorf("get applied %v: %w", layer.Layer, err)
