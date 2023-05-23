@@ -77,7 +77,7 @@ func ReadCheckpointAndDie(ctx context.Context, logger log.Log, dataDir, uri stri
 	if err != nil {
 		return fmt.Errorf("copy checkpoint file before restart: %w", err)
 	}
-	logger.With().Fatal("restart to recover from checkpoint", log.String("file", file))
+	logger.With().Panic("restart to recover from checkpoint", log.String("file", file))
 	return nil
 }
 
@@ -169,7 +169,7 @@ func RecoverWithDb(
 	if oldRestore >= restore {
 		return nil, nil
 	}
-	logger.With().Info("Recover from uri", log.String("uri", uri))
+	logger.With().Info("recover from uri", log.String("uri", uri))
 	cpfile, err := copyToLocalFile(ctx, logger, fs, cfg.DataDir, uri, restore)
 	if err != nil {
 		return nil, err
