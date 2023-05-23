@@ -383,14 +383,6 @@ func (t *turtle) verifyLayers() {
 		)
 		verified = maxLayer(t.evicted, types.GetEffectiveGenesis())
 	)
-
-	if t.changedOpinion.min != 0 && !withinDistance(t.Hdist, t.changedOpinion.max, t.last) {
-		logger.With().Debug("changed opinion outside hdist", log.Stringer("from", t.changedOpinion.min), log.Stringer("to", t.changedOpinion.max))
-		t.onOpinionChange(t.changedOpinion.min)
-		t.changedOpinion.min = 0
-		t.changedOpinion.max = 0
-	}
-
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
 		success := t.verifying.verify(logger, target)
 		if success && t.isFull {
@@ -448,6 +440,12 @@ func (t *turtle) verifyLayers() {
 	}
 	t.verified = verified
 	verifiedLayer.Set(float64(t.verified))
+	if t.changedOpinion.min != 0 && !withinDistance(t.Hdist, t.changedOpinion.max, t.last) {
+		logger.With().Debug("changed opinion outside hdist", log.Stringer("from", t.changedOpinion.min), log.Stringer("to", t.changedOpinion.max))
+		t.onOpinionChange(t.changedOpinion.min)
+		t.changedOpinion.min = 0
+		t.changedOpinion.max = 0
+	}
 }
 
 func (t *turtle) computeEpochHeight(epoch types.EpochID) {
