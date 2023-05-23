@@ -346,10 +346,10 @@ func (t *Tortoise) results(from, to types.LayerID) ([]result.Layer, error) {
 			})
 		}
 		rst = append(rst, result.Layer{
-			Layer:    lid,
-			Blocks:   blocks,
-			Verified: t.trtl.verified >= lid,
-			Opinion:  layer.opinion,
+			Layer:     lid,
+			Blocks:    blocks,
+			Finalized: t.trtl.verified >= lid && !withinDistance(t.cfg.Hdist, lid, t.trtl.last),
+			Opinion:   layer.opinion,
 		})
 	}
 	return rst, nil
