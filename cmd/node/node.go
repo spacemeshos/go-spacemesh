@@ -308,6 +308,7 @@ type App struct {
 	ptimesync          *peersync.Sync
 	tortoise           *tortoise.Tortoise
 	updater            *bootstrap.Updater
+	postVerifier       *activation.OffloadingPostVerifier
 
 	host *p2p.Host
 
@@ -471,7 +472,16 @@ func (app *App) initServices(
 	lg := app.log.Named(nodeID.ShortString()).WithFields(nodeID)
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
-	validator := activation.NewValidator(poetDb, app.Config.POST, app.addLogger(NipostValidatorLogger, lg))
+
+	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
+	postVerifiers := make([]activation.PostVerifier, 0, app.Config.SMESHING.VerifyingOpts.Workers)
+	for i := 0; i < app.Config.SMESHING.VerifyingOpts.Workers; i++ {
+		logger := nipostValidatorLogger.Named(fmt.Sprintf("worker-%d", i))
+		postVerifiers = append(postVerifiers, activation.NewPostVerifier(app.Config.POST, logger))
+	}
+	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
+
+	validator := activation.NewValidator(poetDb, app.Config.POST, nipostValidatorLogger, app.postVerifier)
 	app.validator = validator
 
 	cfg := vm.DefaultConfig()
@@ -828,6 +838,10 @@ func (app *App) startServices(ctx context.Context, appErr chan error) error {
 	if err := app.fetcher.Start(); err != nil {
 		return fmt.Errorf("failed to start fetcher: %w", err)
 	}
+	app.eg.Go(func() error {
+		app.postVerifier.Start(ctx)
+		return nil
+	})
 	app.syncer.Start(ctx)
 	app.beaconProtocol.Start(ctx)
 

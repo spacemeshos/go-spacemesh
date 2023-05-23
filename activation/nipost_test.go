@@ -120,9 +120,16 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	postProvider := newTestPostManager(t)
 
 	postCfg := DefaultPostConfig()
+	logger := logtest.New(t).WithName("validator")
 	nipost := buildNIPost(t, postProvider, postCfg, challenge, poetDb)
-	v := NewValidator(poetDb, postCfg, logtest.New(t).WithName("validator"))
+	v := NewValidator(
+		poetDb,
+		postCfg,
+		logger,
+		NewPostVerifier(postCfg, logger),
+	)
 	_, err := v.NIPost(
+		context.Background(),
 		postProvider.id,
 		postProvider.commitmentAtxId,
 		nipost,
@@ -193,7 +200,8 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 
 	poetProver := spawnPoet(t, WithGenesis(time.Now()), WithEpochDuration(time.Second))
 
-	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	poetDb := NewMockpoetDbAPI(ctrl)
 	poetDb.EXPECT().GetProof(gomock.Any()).Return(
 		&types.PoetProof{}, &challengeHash, nil,
 	)
@@ -214,8 +222,10 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 	r.NotNil(nipost)
 
-	v := NewValidator(poetDb, postProvider.cfg, logtest.New(t).WithName("validator"))
+	logger := logtest.New(t).WithName("validator")
+	v := NewValidator(poetDb, postProvider.cfg, logger, NewPostVerifier(postProvider.cfg, logger))
 	_, err = v.NIPost(
+		context.Background(),
 		postProvider.id,
 		postProvider.goldenATXID,
 		nipost,
