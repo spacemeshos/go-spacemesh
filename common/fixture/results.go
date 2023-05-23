@@ -25,9 +25,9 @@ func ROpinion(lid types.LayerID, opinion types.Hash32, blocks ...result.Block) r
 
 func RLayer(lid types.LayerID, blocks ...result.Block) result.Layer {
 	layer := result.Layer{
-		Layer:     lid,
-		Finalized: true,
-		Blocks:    blocks,
+		Layer:    lid,
+		Verified: true,
+		Blocks:   blocks,
 	}
 	return layer
 }

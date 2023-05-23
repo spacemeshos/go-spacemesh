@@ -335,7 +335,7 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 	msh.logger.With().Debug("applying results", log.Context(ctx))
 	for _, layer := range results {
 		target := layer.FirstValid()
-		if !layer.Finalized && target.IsEmpty() {
+		if !layer.Verified && target.IsEmpty() {
 			return nil
 		}
 		current, err := layers.GetApplied(msh.cdb, layer.Layer)

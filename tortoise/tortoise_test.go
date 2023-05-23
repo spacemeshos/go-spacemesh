@@ -3008,7 +3008,7 @@ func TestUpdates(t *testing.T) {
 		updates := trt.Updates()
 		require.Len(t, updates, 1)
 		require.Empty(t, updates[0].Blocks)
-		require.False(t, updates[0].Finalized)
+		require.False(t, updates[0].Verified)
 		trt.OnBlock(types.BlockHeader{
 			ID:      id,
 			LayerID: lid,
