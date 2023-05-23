@@ -1,12 +1,15 @@
 package p2p
 
 import (
+	"context"
 	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
@@ -57,10 +60,12 @@ func TestConnectionsNotifier(t *testing.T) {
 	require.NoError(t, err)
 	counter := [n]atomic.Uint32{}
 	// we count events - not peers
+	var hosts []*Host
 	for i, host := range mesh.Hosts() {
 		i := i
-		_, err := Upgrade(host, types.Hash20{}, types.LayerID(23), WithNodeReporter(func() { counter[i].Add(1) }))
+		h, err := Upgrade(host, types.Hash20{2, 4, 5}, types.LayerID(23), WithNodeReporter(func() { counter[i].Add(1) }))
 		require.NoError(t, err)
+		hosts = append(hosts, h)
 	}
 
 	mesh.ConnectPeers(mesh.Hosts()[0].ID(), mesh.Hosts()[1].ID())
@@ -68,6 +73,12 @@ func TestConnectionsNotifier(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return counter[0].Load() >= 2 && counter[1].Load() >= 1 && counter[2].Load() >= 1
 	}, time.Second, 10*time.Millisecond)
+
+	prtcl := protocol.ID("test")
+	hosts[1].SetStreamHandler(prtcl, func(stream network.Stream) {})
+	stm, err := hosts[0].NewStream(context.Background(), hosts[1].ID(), prtcl)
+	require.NoError(t, err)
+	require.Equal(t, stm.Protocol(), protocol.ID("/02040/23/test"))
 
 	mesh.DisconnectPeers(mesh.Hosts()[0].ID(), mesh.Hosts()[1].ID())
 	require.Eventually(t, func() bool {

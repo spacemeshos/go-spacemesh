@@ -99,14 +99,14 @@ func Upgrade(h host.Host, genesisID types.Hash20, firstLayer types.LayerID, opts
 	if err != nil {
 		return nil, fmt.Errorf("check node as bootnode: %w", err)
 	}
-	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
+	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, fh, pubsub.Config{
 		Flood:          cfg.Flood,
 		IsBootnode:     bootnode,
 		MaxMessageSize: cfg.MaxMessageSize,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
 	}
-	if fh.discovery, err = peerexchange.New(fh.logger, h, peerexchange.Config{
+	if fh.discovery, err = peerexchange.New(fh.logger, fh, peerexchange.Config{
 		DataDir:          cfg.DataDir,
 		Bootnodes:        cfg.Bootnodes,
 		AdvertiseAddress: cfg.AdvertiseAddress,
