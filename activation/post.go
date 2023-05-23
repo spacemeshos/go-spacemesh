@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"sync"
 
 	"github.com/spacemeshos/post/config"
@@ -55,6 +56,22 @@ func DefaultPostProvingOpts() PostProvingOpts {
 	return PostProvingOpts{
 		Threads: 1,
 		Nonces:  16,
+	}
+}
+
+// PostProvingOpts are the options controlling POST proving process.
+type PostProofVerifyingOpts struct {
+	// Number of workers spawned to verify proofs.
+	Workers int `mapstructure:"smeshing-opts-verifying-workers"`
+}
+
+func DefaultPostVerifyingOpts() PostProofVerifyingOpts {
+	workers := runtime.NumCPU() * 3 / 4
+	if workers < 1 {
+		workers = 1
+	}
+	return PostProofVerifyingOpts{
+		Workers: workers,
 	}
 }
 
