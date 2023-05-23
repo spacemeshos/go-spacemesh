@@ -365,9 +365,9 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: rlayers(
-						layergen(start,
-							blockgen(idg("1"), fixture.Good()),
-							blockgen(idg("2"), fixture.Data(), fixture.Invalid())),
+						rlayer(start,
+							rblock(idg("1"), fixture.Good()),
+							rblock(idg("2"), fixture.Data(), fixture.Invalid())),
 					),
 					executed: []types.BlockID{idg("1")},
 					applied:  []types.BlockID{idg("1")},
@@ -383,13 +383,13 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: rlayers(
-						layergen(start, blockgen(idg("1"), fixture.Valid())),
+						rlayer(start, rblock(idg("1"), fixture.Valid())),
 					),
 					err: "missing",
 				},
 				{
 					results: rlayers(
-						layergen(start, blockgen(idg("1"), fixture.Data(), fixture.Valid())),
+						rlayer(start, rblock(idg("1"), fixture.Data(), fixture.Valid())),
 					),
 					executed: []types.BlockID{idg("1")},
 					applied:  []types.BlockID{idg("1")},
@@ -404,13 +404,13 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: rlayers(
-						layergen(start, blockgen(idg("1"), fixture.Valid())),
+						rlayer(start, rblock(idg("1"), fixture.Valid())),
 					),
 					err: "missing",
 				},
 				{
 					results: rlayers(
-						layergen(start, blockgen(idg("1"), fixture.Invalid())),
+						rlayer(start, rblock(idg("1"), fixture.Invalid())),
 					),
 					executed: []types.BlockID{{}},
 					applied:  []types.BlockID{{}},
@@ -422,14 +422,14 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: rlayers(
-						layergen(start),
+						rlayer(start),
 					),
 					executed: []types.BlockID{{}},
 					applied:  []types.BlockID{{0}},
 				},
 				{
 					updates: []result.Layer{
-						layergen(start, blockgen(idg("2"), fixture.Valid(), fixture.Data())),
+						rlayer(start, rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					},
 					executed: []types.BlockID{idg("2")},
 					applied:  []types.BlockID{idg("2")},
@@ -441,14 +441,14 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: rlayers(
-						layergen(start, blockgen(idg("1"), fixture.Hare(), fixture.Data())),
+						rlayer(start, rblock(idg("1"), fixture.Hare(), fixture.Data())),
 					),
 					executed: []types.BlockID{idg("1")},
 					applied:  []types.BlockID{idg("1")},
 				},
 				{
 					updates: []result.Layer{
-						layergen(start, blockgen(idg("1"), fixture.Hare(), fixture.Data(), fixture.Valid())),
+						rlayer(start, rblock(idg("1"), fixture.Hare(), fixture.Data(), fixture.Valid())),
 					},
 					applied: []types.BlockID{idg("1")},
 				},
@@ -459,14 +459,14 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: rlayers(
-						layergen(start, blockgen(idg("1"), fixture.Hare(), fixture.Data())),
+						rlayer(start, rblock(idg("1"), fixture.Hare(), fixture.Data())),
 					),
 					executed: []types.BlockID{idg("1")},
 					applied:  []types.BlockID{idg("1")},
 				},
 				{
 					updates: rlayers(
-						layergen(start.Add(1), blockgen(idg("2"), fixture.Hare(), fixture.Data())),
+						rlayer(start.Add(1), rblock(idg("2"), fixture.Hare(), fixture.Data())),
 					),
 					executed: []types.BlockID{idg("2")},
 					applied:  []types.BlockID{idg("1"), idg("2")},
@@ -478,14 +478,14 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: rlayers(
-						layergen(start, blockgen(idg("1"), fixture.Valid(), fixture.Data())),
+						rlayer(start, rblock(idg("1"), fixture.Valid(), fixture.Data())),
 					),
 					executed: []types.BlockID{idg("1")},
 					applied:  []types.BlockID{idg("1")},
 				},
 				{
 					updates: rlayers(
-						layergen(start, blockgen(idg("1"), fixture.Invalid(), fixture.Hare(), fixture.Data())),
+						rlayer(start, rblock(idg("1"), fixture.Invalid(), fixture.Hare(), fixture.Data())),
 					),
 					executed: []types.BlockID{{0}},
 					applied:  []types.BlockID{{0}},
@@ -497,16 +497,16 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: rlayers(
-						layergen(start, blockgen(idg("1"), fixture.Valid(), fixture.Data())),
-						layergen(start+1, blockgen(idg("2"), fixture.Valid(), fixture.Data())),
+						rlayer(start, rblock(idg("1"), fixture.Valid(), fixture.Data())),
+						rlayer(start+1, rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					),
 					executed: []types.BlockID{idg("1"), idg("2")},
 					applied:  []types.BlockID{idg("1"), idg("2")},
 				},
 				{
 					updates: rlayers(
-						layergen(start, blockgen(idg("1"), fixture.Invalid(), fixture.Data())),
-						layergen(start+1, blockgen(idg("2"), fixture.Valid(), fixture.Data())),
+						rlayer(start, rblock(idg("1"), fixture.Invalid(), fixture.Data())),
+						rlayer(start+1, rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					),
 					executed: []types.BlockID{types.EmptyBlockID, idg("2")},
 					applied:  []types.BlockID{types.EmptyBlockID, idg("2")},
@@ -518,31 +518,31 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: rlayers(
-						layergen(start, blockgen(idg("1"), fixture.Valid(), fixture.Data())),
-						layergen(start+1, blockgen(idg("2"), fixture.Valid(), fixture.Data())),
+						rlayer(start, rblock(idg("1"), fixture.Valid(), fixture.Data())),
+						rlayer(start+1, rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					),
 					executed: []types.BlockID{idg("1"), idg("2")},
 					applied:  []types.BlockID{idg("1"), idg("2")},
 				},
 				{
 					updates: rlayers(
-						layergen(start,
-							blockgen(idg("1"), fixture.Invalid(), fixture.Data()),
-							blockgen(idg("3"), fixture.Valid()),
+						rlayer(start,
+							rblock(idg("1"), fixture.Invalid(), fixture.Data()),
+							rblock(idg("3"), fixture.Valid()),
 						),
-						layergen(start+1,
-							blockgen(idg("2"), fixture.Valid(), fixture.Data())),
+						rlayer(start+1,
+							rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					),
 					err: "missing",
 				},
 				{
 					results: rlayers(
-						layergen(start,
-							blockgen(idg("1"), fixture.Invalid(), fixture.Data()),
-							blockgen(idg("3"), fixture.Valid(), fixture.Data()),
+						rlayer(start,
+							rblock(idg("1"), fixture.Invalid(), fixture.Data()),
+							rblock(idg("3"), fixture.Valid(), fixture.Data()),
 						),
-						layergen(start+1,
-							blockgen(idg("2"), fixture.Valid(), fixture.Data())),
+						rlayer(start+1,
+							rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					),
 					executed: []types.BlockID{idg("3"), idg("2")},
 					applied:  []types.BlockID{idg("3"), idg("2")},
@@ -554,17 +554,17 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: rlayers(
-						layergen(start, blockgen(idg("1"), fixture.Valid())),
+						rlayer(start, rblock(idg("1"), fixture.Valid())),
 					),
 					err: "missing",
 				},
 				{
 					updates: rlayers(
-						layergen(start+1, blockgen(idg("2"), fixture.Valid(), fixture.Data())),
+						rlayer(start+1, rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					),
 					results: rlayers(
-						layergen(start, blockgen(idg("1"), fixture.Valid(), fixture.Data())),
-						layergen(start+1, blockgen(idg("2"), fixture.Valid(), fixture.Data())),
+						rlayer(start, rblock(idg("1"), fixture.Valid(), fixture.Data())),
+						rlayer(start+1, rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					),
 					executed: []types.BlockID{idg("1"), idg("2")},
 					applied:  []types.BlockID{idg("1"), idg("2")},
@@ -598,10 +598,10 @@ func TestProcessLayer(t *testing.T) {
 						),
 					),
 					results: rlayers(
-						layergen(start,
+						rlayer(start,
 							fixture.RBlock(fixture.IDGen("1"), fixture.Valid(), fixture.Data()),
 						),
-						layergen(start.Add(1),
+						rlayer(start.Add(1),
 							fixture.RBlock(fixture.IDGen("2"), fixture.Valid(), fixture.Data()),
 						),
 					),
@@ -669,10 +669,10 @@ func ensuresDatabaseConsistent(t *testing.T, db sql.Executor, results []result.L
 }
 
 var (
-	rlayers  = fixture.RLayers
-	layergen = fixture.RLayer
-	blockgen = fixture.RBlock
-	idg      = fixture.IDGen
+	rlayers = fixture.RLayers
+	rlayer  = fixture.RLayer
+	rblock  = fixture.RBlock
+	idg     = fixture.IDGen
 )
 
 func validcert(id types.BlockID) certificates.CertValidity {

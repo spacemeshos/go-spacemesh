@@ -17,6 +17,12 @@ func RLayerNonFinal(lid types.LayerID, blocks ...result.Block) result.Layer {
 	return layer
 }
 
+func ROpinion(lid types.LayerID, opinion types.Hash32, blocks ...result.Block) result.Layer {
+	layer := RLayer(lid, blocks...)
+	layer.Opinion = opinion
+	return layer
+}
+
 func RLayer(lid types.LayerID, blocks ...result.Block) result.Layer {
 	layer := result.Layer{
 		Layer:    lid,

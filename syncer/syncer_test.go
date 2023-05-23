@@ -12,6 +12,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -562,7 +563,7 @@ func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 
 	// simulate hare advancing the mesh forward
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lyr)
-	ts.mTortoise.EXPECT().Updates().Return(rlayers(rlayer(lyr)))
+	ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lyr)))
 	ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 	ts.mConState.EXPECT().UpdateCache(gomock.Any(), lyr, types.EmptyBlockID, nil, nil)
 	ts.mVm.EXPECT().GetStateRoot()
