@@ -152,7 +152,6 @@ func DropPeerOnValidationReject(handler GossipHandler, h host.Host, logger log.L
 		err := handler(ctx, peer, data)
 		if errors.Is(err, ErrValidationReject) {
 			err := h.Network().ClosePeer(peer)
-			println("closed")
 			if err != nil {
 				logger.With().Debug("failed to close peer",
 					log.String("peer", peer.ShortString()),
