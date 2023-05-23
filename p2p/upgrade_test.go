@@ -63,7 +63,7 @@ func TestConnectionsNotifier(t *testing.T) {
 	var hosts []*Host
 	for i, host := range mesh.Hosts() {
 		i := i
-		h, err := Upgrade(host, types.Hash20{2, 4, 5}, types.LayerID(23), WithNodeReporter(func() { counter[i].Add(1) }))
+		h, err := Upgrade(host, types.Hash20{2, 4, 5}, "/prefix", WithNodeReporter(func() { counter[i].Add(1) }))
 		require.NoError(t, err)
 		hosts = append(hosts, h)
 	}
@@ -78,7 +78,7 @@ func TestConnectionsNotifier(t *testing.T) {
 	hosts[1].SetStreamHandler(prtcl, func(stream network.Stream) {})
 	stm, err := hosts[0].NewStream(context.Background(), hosts[1].ID(), prtcl)
 	require.NoError(t, err)
-	require.Equal(t, stm.Protocol(), protocol.ID("/02040/23/test"))
+	require.Equal(t, protocol.ID("/prefix/test"), stm.Protocol())
 
 	mesh.DisconnectPeers(mesh.Hosts()[0].ID(), mesh.Hosts()[1].ID())
 	require.Eventually(t, func() bool {

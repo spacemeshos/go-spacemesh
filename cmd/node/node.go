@@ -1200,7 +1200,8 @@ func (app *App) Start(ctx context.Context) error {
 	p2plog := app.addLogger(P2PLogger, lg)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
-	app.host, err = p2p.New(ctx, p2plog, cfg, app.Config.Genesis.GenesisID(), types.GetEffectiveGenesis()+1,
+	p2pPrefix := fmt.Sprintf("/%s/%d", hex.EncodeToString(app.Config.Genesis.GenesisID().Bytes())[:5], types.GetEffectiveGenesis()+1)
+	app.host, err = p2p.New(ctx, p2plog, cfg, app.Config.Genesis.GenesisID(), p2pPrefix,
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {

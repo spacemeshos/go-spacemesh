@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -83,12 +82,12 @@ func isBootnode(h host.Host, bootnodes []string) (bool, error) {
 }
 
 // Upgrade creates Host instance from host.Host.
-func Upgrade(h host.Host, genesisID types.Hash20, firstLayer types.LayerID, opts ...Opt) (*Host, error) {
+func Upgrade(h host.Host, genesisID types.Hash20, prefix string, opts ...Opt) (*Host, error) {
 	fh := &Host{
 		ctx:            context.Background(),
 		cfg:            DefaultConfig(),
 		logger:         log.NewNop(),
-		protocolPrefix: fmt.Sprintf("/%s/%d", hex.EncodeToString(genesisID.Bytes())[:5], firstLayer),
+		protocolPrefix: prefix,
 		Host:           h,
 	}
 	for _, opt := range opts {
