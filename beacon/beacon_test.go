@@ -378,8 +378,8 @@ func TestBeaconWithMetrics(t *testing.T) {
 				numObserved = numObserved + 2
 				count := layer.OrdinalInEpoch() + 1
 				expected := []string{
-					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon1.ShortString(), thisEpoch, count),
-					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon2.ShortString(), thisEpoch, count),
+					fmt.Sprintf("label:{name:\"beacon\" value:\"%s\"} label:{name:\"epoch\" value:\"%d\"} counter:{value:%d}", beacon1.ShortString(), thisEpoch, count),
+					fmt.Sprintf("label:{name:\"beacon\" value:\"%s\"} label:{name:\"epoch\" value:\"%d\"} counter:{value:%d}", beacon2.ShortString(), thisEpoch, count),
 				}
 				for _, subM := range m.Metric {
 					require.Contains(t, expected, subM.String())
@@ -389,8 +389,8 @@ func TestBeaconWithMetrics(t *testing.T) {
 				numObservedWeight = numObservedWeight + 2
 				weight := layer.OrdinalInEpoch() + 1
 				expected := []string{
-					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon1.ShortString(), thisEpoch, weight),
-					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon2.ShortString(), thisEpoch, weight),
+					fmt.Sprintf("label:{name:\"beacon\" value:\"%s\"} label:{name:\"epoch\" value:\"%d\"} counter:{value:%d}", beacon1.ShortString(), thisEpoch, weight),
+					fmt.Sprintf("label:{name:\"beacon\" value:\"%s\"} label:{name:\"epoch\" value:\"%d\"} counter:{value:%d}", beacon2.ShortString(), thisEpoch, weight),
 				}
 				for _, subM := range m.Metric {
 					require.Contains(t, expected, subM.String())
