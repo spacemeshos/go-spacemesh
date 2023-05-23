@@ -49,7 +49,7 @@ type Config struct {
 }
 
 // New initializes libp2p host configured for spacemesh.
-func New(_ context.Context, logger log.Log, cfg Config, genesisID types.Hash20, opts ...Opt) (*Host, error) {
+func New(_ context.Context, logger log.Log, cfg Config, genesisID types.Hash20, firstLayer types.LayerID, opts ...Opt) (*Host, error) {
 	logger.Info("starting libp2p host with config %+v", cfg)
 	key, err := EnsureIdentity(cfg.DataDir)
 	if err != nil {
@@ -95,5 +95,5 @@ func New(_ context.Context, logger log.Log, cfg Config, genesisID types.Hash20, 
 	// TODO(dshulyak) this is small mess. refactor to avoid this patching
 	// both New and Upgrade should use options.
 	opts = append(opts, WithConfig(cfg), WithLog(logger))
-	return Upgrade(h, genesisID, opts...)
+	return Upgrade(h, genesisID, firstLayer, opts...)
 }
