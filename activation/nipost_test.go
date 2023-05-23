@@ -121,13 +121,12 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 
 	postCfg := DefaultPostConfig()
 	nipost := buildNIPost(t, postProvider, postCfg, challenge, poetDb)
-	err := validateNIPost(
+	v := NewValidator(poetDb, postCfg, logtest.New(t).WithName("validator"))
+	_, err := v.NIPost(
 		postProvider.id,
 		postProvider.commitmentAtxId,
 		nipost,
 		challengeHash,
-		poetDb,
-		postCfg,
 		postProvider.opts.NumUnits,
 		verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
 	)
@@ -215,16 +214,16 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 	r.NotNil(nipost)
 
-	r.NoError(validateNIPost(
+	v := NewValidator(poetDb, postProvider.cfg, logtest.New(t).WithName("validator"))
+	_, err = v.NIPost(
 		postProvider.id,
 		postProvider.goldenATXID,
 		nipost,
 		challenge.Hash(),
-		poetDb,
-		postProvider.cfg,
 		postProvider.opts.NumUnits,
 		verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
-	))
+	)
+	r.NoError(err)
 }
 
 func TestNIPostBuilder_BuildNIPost(t *testing.T) {

@@ -487,6 +487,10 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 							WithEmptyDir(corev1.EmptyDirVolumeSource().
 								WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
 					).
+					WithDNSConfig(corev1.PodDNSConfig().WithOptions(
+						corev1.PodDNSConfigOption().WithName("timeout").WithValue("1"),
+						corev1.PodDNSConfigOption().WithName("attempts").WithValue("5"),
+					)).
 					WithContainers(corev1.Container().
 						WithName("smesher").
 						WithImage(ctx.Image).
