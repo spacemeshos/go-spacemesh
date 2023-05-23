@@ -1,4 +1,4 @@
-package p2p_test
+package node
 
 import (
 	"context"
@@ -18,7 +18,6 @@ import (
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/cmd/node"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -113,10 +112,10 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	require.NoError(t, g.Wait())
 }
 
-func NewApp(conf *config.Config) (*node.App, error) {
-	app := node.New(
-		node.WithConfig(conf),
-		node.WithLog(log.RegisterHooks(
+func NewApp(conf *config.Config) (*App, error) {
+	app := New(
+		WithConfig(conf),
+		WithLog(log.RegisterHooks(
 			log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel)),
 			events.EventHook())),
 	)
