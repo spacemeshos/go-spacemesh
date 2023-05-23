@@ -3,7 +3,6 @@ package fetch
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -325,6 +324,28 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	mesh, err := mocknet.FullMeshLinked(2)
 	require.NoError(t, err)
 
+	p2pconf := p2p.DefaultConfig()
+	p2pconf.Listen = "/ip4/127.0.0.1/tcp/0"
+	p2pconf.DataDir = t.TempDir()
+
+	genesisID := types.Hash20{}
+	h, err := p2p.New(context.Background(), lg, p2pconf, genesisID)
+	require.NoError(t, err)
+	t.Cleanup(func() { h.Close() })
+
+	p2pconf.DataDir = t.TempDir()
+	badPeerHost, err := p2p.New(context.Background(), lg, p2pconf, genesisID)
+	require.NoError(t, err)
+	t.Cleanup(func() { badPeerHost.Close() })
+
+	err = h.Connect(context.Background(), peer.AddrInfo{
+		ID:    badPeerHost.ID(),
+		Addrs: badPeerHost.Addrs(),
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(h.GetPeers()))
+
 	// if len(mesh.Hosts()[0].Network().Peers()) == 0 {
 	// 	panic("no peers in test0")
 	// }
@@ -332,12 +353,12 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	// 	fmt.Printf("%v\n", mesh.Hosts()[0].Network().Peers())
 	// }
 	// println(mesh.Hosts()[0].Network().Peers())
-	h, err := p2p.Upgrade(mesh.Hosts()[0], types.Hash20{})
-	require.NoError(t, err)
+	// h, err := p2p.Upgrade(mesh.Hosts()[0], types.Hash20{})
+	// require.NoError(t, err)
 
 	// fmt.Printf("%v\n", h.GetPeers())
 	// time.Sleep(time.Second)
-	fmt.Printf("%v %v\n", h.GetPeers(), mesh.Hosts()[1].Network().Peers())
+	// fmt.Printf("%v %v\n", h.GetPeers(), mesh.Hosts()[1].Network().Peers())
 
 	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, h,
 		WithContext(context.Background()),
@@ -350,17 +371,18 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	// if len(h.GetPeers()) == 0 {
 	// 	panic("no peers in test1")
 	// }
-	badPeerHost, err := p2p.Upgrade(mesh.Hosts()[1], types.Hash20{})
-	require.NoError(t, err)
+	// badPeerHost, err := p2p.Upgrade(mesh.Hosts()[1], types.Hash20{})
+	// require.NoError(t, err)
 	// if len(h.GetPeers()) == 0 {
 	// 	panic("no peers in test 2")
 	// }
 
-	_, err = mesh.ConnectPeers(mesh.Hosts()[0].ID(), mesh.Hosts()[1].ID())
-	require.NoError(t, err)
-	require.Equal(t, 1, len(h.GetPeers()))
+	// _, err = mesh.ConnectPeers(mesh.Hosts()[0].ID(), mesh.Hosts()[1].ID())
+	// require.NoError(t, err)
+	// require.Equal(t, 1, len(h.GetPeers()))
 
 	println("conns", len(h.Host.Network().ConnsToPeer(mesh.Hosts()[1].ID())))
+	// println("conn id", h.Host.Network().ConnsToPeer(mesh.Hosts()[1].ID())[0].ID())
 	badPeerHandler := func(_ context.Context, data []byte) ([]byte, error) {
 		var b RequestBatch
 		codec.Decode(data, &b)
@@ -381,6 +403,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	require.NoError(t, err)
 	fetcher.requestHashBatchFromPeers()
 
+	println("conns", len(h.Host.Network().ConnsToPeer(mesh.Hosts()[1].ID())))
 	// err = fetcher.GetAtxs(context.Background(), []types.ATXID{{}})
 	// require.NoError(t, err)
 
@@ -389,10 +412,14 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	// }
 	// fetcher.ongoing[msg.Hash] = msg
 	// fetcher.send([]RequestMessage{msg})
-
+	// time.Sleep(time.Second * 3)
 	// Wait for connection to be dropped
 	require.Eventually(t, func() bool {
-		println(len(h.Host.Network().ConnsToPeer(mesh.Hosts()[1].ID())))
+		l := len(h.Host.Network().ConnsToPeer(mesh.Hosts()[1].ID()))
+		println(l)
+		if l > 0 {
+			println("conn id", h.Host.Network().ConnsToPeer(mesh.Hosts()[1].ID())[0].ID())
+		}
 		return len(h.Host.Network().ConnsToPeer(mesh.Hosts()[1].ID())) == 0
 	}, time.Second*15, time.Millisecond*200)
 	require.Equal(t, 0, len(h.GetPeers()))
