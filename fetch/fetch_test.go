@@ -3,11 +3,15 @@ package fetch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/libp2p/go-libp2p/core/peer"
+	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -15,6 +19,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -304,4 +310,90 @@ func TestFetch_RegisterPeerHashes(t *testing.T) {
 	peer := p2p.Peer("buddy")
 	f.RegisterPeerHashes(peer, hashes)
 	require.Equal(t, len(hashes), f.hashToPeers.Len())
+}
+
+func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
+	lg := logtest.New(t, zapcore.DebugLevel)
+	cfg := Config{
+		time.Millisecond * time.Duration(2000), // make sure we never hit the batch timeout
+		3,
+		3,
+		1000,
+		time.Second * time.Duration(3),
+		3,
+	}
+	mesh, err := mocknet.FullMeshLinked(2)
+	require.NoError(t, err)
+
+	// if len(mesh.Hosts()[0].Network().Peers()) == 0 {
+	// 	panic("no peers in test0")
+	// }
+	// for x := 0; x < 10; x++ {
+	// 	fmt.Printf("%v\n", mesh.Hosts()[0].Network().Peers())
+	// }
+	// println(mesh.Hosts()[0].Network().Peers())
+	h, err := p2p.Upgrade(mesh.Hosts()[0], types.Hash20{})
+	require.NoError(t, err)
+
+	// fmt.Printf("%v\n", h.GetPeers())
+	// time.Sleep(time.Second)
+	fmt.Printf("%v %v\n", h.GetPeers(), mesh.Hosts()[1].Network().Peers())
+
+	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, h,
+		WithContext(context.Background()),
+		WithConfig(cfg),
+		WithLogger(lg),
+	)
+	vf := ValidatorFunc(pubsub.DropPeerOnValidationReject(func(ctx context.Context, id peer.ID, data []byte) error { return pubsub.ErrValidationReject }, h, lg))
+	fetcher.SetValidators(vf, nil, nil, nil, nil, nil, nil, nil)
+
+	// if len(h.GetPeers()) == 0 {
+	// 	panic("no peers in test1")
+	// }
+	badPeerHost, err := p2p.Upgrade(mesh.Hosts()[1], types.Hash20{})
+	require.NoError(t, err)
+	// if len(h.GetPeers()) == 0 {
+	// 	panic("no peers in test 2")
+	// }
+
+	_, err = mesh.ConnectPeers(mesh.Hosts()[0].ID(), mesh.Hosts()[1].ID())
+	require.NoError(t, err)
+	require.Equal(t, 1, len(h.GetPeers()))
+
+	println("conns", len(h.Host.Network().ConnsToPeer(mesh.Hosts()[1].ID())))
+	badPeerHandler := func(_ context.Context, data []byte) ([]byte, error) {
+		var b RequestBatch
+		codec.Decode(data, &b)
+
+		r := ResponseBatch{
+			ID:        b.ID,
+			Responses: []ResponseMessage{{}},
+		}
+		result, err := codec.Encode(&r)
+		if err != nil {
+			panic(err.Error())
+		}
+		return result, nil
+	}
+	server.New(badPeerHost, hashProtocol, badPeerHandler)
+
+	_, err = fetcher.getHash(context.Background(), types.Hash32{}, datastore.ATXDB, fetcher.validators.atx.HandleMessage)
+	require.NoError(t, err)
+	fetcher.requestHashBatchFromPeers()
+
+	// err = fetcher.GetAtxs(context.Background(), []types.ATXID{{}})
+	// require.NoError(t, err)
+
+	// msg := RequestMessage{
+	// 	Hint: datastore.ATXDB,
+	// }
+	// fetcher.ongoing[msg.Hash] = msg
+	// fetcher.send([]RequestMessage{msg})
+
+	// Wait for connection to be dropped
+	require.Eventually(t, func() bool {
+		println(len(h.Host.Network().ConnsToPeer(mesh.Hosts()[1].ID())))
+		return len(h.Host.Network().ConnsToPeer(mesh.Hosts()[1].ID())) == 0
+	}, time.Second*15, time.Millisecond*200)
+	require.Equal(t, 0, len(h.GetPeers()))
 }
