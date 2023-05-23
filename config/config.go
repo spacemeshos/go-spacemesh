@@ -110,10 +110,11 @@ type BaseConfig struct {
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
 type SmeshingConfig struct {
-	Start           bool                       `mapstructure:"smeshing-start"`
-	CoinbaseAccount string                     `mapstructure:"smeshing-coinbase"`
-	Opts            activation.PostSetupOpts   `mapstructure:"smeshing-opts"`
-	ProvingOpts     activation.PostProvingOpts `mapstructure:"smeshing-proving-opts"`
+	Start           bool                              `mapstructure:"smeshing-start"`
+	CoinbaseAccount string                            `mapstructure:"smeshing-coinbase"`
+	Opts            activation.PostSetupOpts          `mapstructure:"smeshing-opts"`
+	ProvingOpts     activation.PostProvingOpts        `mapstructure:"smeshing-proving-opts"`
+	VerifyingOpts   activation.PostProofVerifyingOpts `mapstructure:"smeshing-verifying-opts"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node.
@@ -181,6 +182,7 @@ func DefaultSmeshingConfig() SmeshingConfig {
 		CoinbaseAccount: "",
 		Opts:            activation.DefaultPostSetupOpts(),
 		ProvingOpts:     activation.DefaultPostProvingOpts(),
+		VerifyingOpts:   activation.DefaultPostVerifyingOpts(),
 	}
 }
 
