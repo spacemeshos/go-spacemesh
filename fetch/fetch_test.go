@@ -345,16 +345,6 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 
 	require.Equal(t, 1, len(h.GetPeers()))
 
-	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, h,
-		WithContext(ctx),
-		WithConfig(cfg),
-		WithLogger(lg),
-	)
-
-	// We set a validatior just for atxs
-	vf := ValidatorFunc(pubsub.DropPeerOnValidationReject(func(ctx context.Context, id peer.ID, data []byte) error { return pubsub.ErrValidationReject }, h, lg))
-	fetcher.SetValidators(vf, nil, nil, nil, nil, nil, nil, nil)
-
 	// This handler returns a ResponseBatch with an empty response that will fail validation on the remote peer
 	badPeerHandler := func(_ context.Context, data []byte) ([]byte, error) {
 		var b RequestBatch
@@ -372,6 +362,31 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 		return result, nil
 	}
 	server.New(badPeerHost, hashProtocol, badPeerHandler)
+
+	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, h,
+		WithContext(ctx),
+		WithConfig(cfg),
+		WithLogger(lg),
+	)
+
+	// We set a validatior just for atxs, this validator does not drop connections
+	vf := ValidatorFunc(func(ctx context.Context, id peer.ID, data []byte) error { return pubsub.ErrValidationReject })
+	fetcher.SetValidators(vf, nil, nil, nil, nil, nil, nil, nil)
+
+	// Request an atx by hash
+	_, err = fetcher.getHash(ctx, types.Hash32{}, datastore.ATXDB, fetcher.validators.atx.HandleMessage)
+	require.NoError(t, err)
+	fetcher.requestHashBatchFromPeers()
+
+	// Verify that connections remain up
+	for i := 0; i < 5; i++ {
+		conns := h.Network().ConnsToPeer(badPeerHost.ID())
+		require.Equal(t, 1, len(conns))
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Now wrap the atx validator with  DropPeerOnValidationReject and set it again
+	fetcher.SetValidators(ValidatorFunc(pubsub.DropPeerOnValidationReject(vf, h, lg)), nil, nil, nil, nil, nil, nil, nil)
 
 	// Request an atx by hash
 	_, err = fetcher.getHash(ctx, types.Hash32{}, datastore.ATXDB, fetcher.validators.atx.HandleMessage)
