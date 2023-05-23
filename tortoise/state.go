@@ -426,7 +426,7 @@ func decodeVotes(evicted types.LayerID, blid types.LayerID, base *ballotInfo, ex
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]headerWithSign{}
 	for _, header := range exceptions.Against {
-		from = minLayer(from, header.LayerID)
+		from = types.MinLayer(from, header.LayerID)
 		layerdiff, exist := diff[header.LayerID]
 		if !exist {
 			layerdiff = map[types.BlockID]headerWithSign{}
@@ -439,7 +439,7 @@ func decodeVotes(evicted types.LayerID, blid types.LayerID, base *ballotInfo, ex
 		layerdiff[header.ID] = headerWithSign{header, against}
 	}
 	for _, header := range exceptions.Support {
-		from = minLayer(from, header.LayerID)
+		from = types.MinLayer(from, header.LayerID)
 		layerdiff, exist := diff[header.LayerID]
 		if !exist {
 			layerdiff = map[types.BlockID]headerWithSign{}
@@ -452,7 +452,7 @@ func decodeVotes(evicted types.LayerID, blid types.LayerID, base *ballotInfo, ex
 		layerdiff[header.ID] = headerWithSign{header, support}
 	}
 	for _, lid := range exceptions.Abstain {
-		from = minLayer(from, lid)
+		from = types.MinLayer(from, lid)
 		_, exist := diff[lid]
 		if !exist {
 			diff[lid] = map[types.BlockID]headerWithSign{}

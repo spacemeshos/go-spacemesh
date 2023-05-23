@@ -329,7 +329,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
 		if opinion != layer.opinion {
-			t.pending = minNonZero(t.pending, t.last)
+			t.pending = types.MinLayer(t.pending, t.last)
 		}
 
 		t.logger.With().Debug("initial local opinion",
@@ -417,9 +417,9 @@ func (t *turtle) verifyLayers() {
 		layer := t.layer(target)
 		if len(layer.blocks) == 0 && !layer.emitted && layer.hareTerminated {
 			layer.emitted = true
-			t.changedOpinion.min = minNonZero(t.changedOpinion.min, target)
-			t.changedOpinion.max = maxNonZero(t.changedOpinion.max, target)
-			t.pending = minNonZero(t.pending, target)
+			t.changedOpinion.min = types.MinLayer(t.changedOpinion.min, target)
+			t.changedOpinion.max = types.MaxLayer(t.changedOpinion.max, target)
+			t.pending = types.MinLayer(t.pending, target)
 		}
 		for _, block := range layer.blocks {
 			if block.emitted == block.validity {
@@ -431,8 +431,8 @@ func (t *turtle) verifyLayers() {
 			// we don't recompute opinion that matches hare opinion
 			// and we don't recompute more than necessary
 			if block.validity != block.hare || (block.emitted != block.validity && block.emitted != abstain) {
-				t.changedOpinion.min = minNonZero(t.changedOpinion.min, target)
-				t.changedOpinion.max = maxNonZero(t.changedOpinion.max, target)
+				t.changedOpinion.min = types.MinLayer(t.changedOpinion.min, target)
+				t.changedOpinion.max = types.MaxLayer(t.changedOpinion.max, target)
 			}
 			if block.validity == abstain {
 				logger.With().Fatal("bug: layer should not be verified if there is an undecided block", target, block.id)
@@ -443,7 +443,7 @@ func (t *turtle) verifyLayers() {
 				log.Stringer("emitted", block.emitted),
 			)
 			block.emitted = block.validity
-			t.pending = minNonZero(t.pending, target)
+			t.pending = types.MinLayer(t.pending, target)
 		}
 	}
 	t.verified = verified
@@ -532,7 +532,7 @@ func (t *turtle) onOpinionChange(lid types.LayerID) {
 		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
 		if opinion != layer.opinion {
-			t.pending = minNonZero(t.pending, lid)
+			t.pending = types.MinLayer(t.pending, lid)
 		}
 		t.logger.With().Debug("computed local opinion",
 			layer.lid,
@@ -771,30 +771,4 @@ func getLocalVote(config Config, verified, last types.LayerID, block *blockInfo)
 		return abstain, reasonValidity
 	}
 	return block.validity, reasonValidity
-}
-
-func minLayer(i, j types.LayerID) types.LayerID {
-	return minNonZero(i, j)
-}
-
-func minNonZero(i, j types.LayerID) types.LayerID {
-	if i == 0 {
-		return j
-	} else if j == 0 {
-		return i
-	} else if i < j {
-		return i
-	}
-	return j
-}
-
-func maxNonZero(i, j types.LayerID) types.LayerID {
-	if i == 0 {
-		return j
-	} else if j == 0 {
-		return i
-	} else if i > j {
-		return i
-	}
-	return j
 }

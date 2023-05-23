@@ -240,7 +240,7 @@ func (msh *Mesh) ensureStateConsistent(ctx context.Context, results []result.Lay
 				log.Stringer("expected", bid),
 				log.Stringer("applied", applied),
 			)
-			changed = minNonZero(changed, layer.Layer)
+			changed = types.MinLayer(changed, layer.Layer)
 		}
 	}
 	if changed == 0 {
@@ -281,9 +281,10 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 	results := msh.trtl.Updates()
 	pending := msh.pendingUpdates.min != 0
 	if len(results) > 0 {
-		msh.pendingUpdates.min = minNonZero(msh.pendingUpdates.min, results[0].Layer)
-		msh.pendingUpdates.max = maxNonZero(msh.pendingUpdates.max, results[len(results)-1].Layer)
+		msh.pendingUpdates.min = types.MinLayer(msh.pendingUpdates.min, results[0].Layer)
+		msh.pendingUpdates.max = types.MaxLayer(msh.pendingUpdates.max, results[len(results)-1].Layer)
 	}
+	// msh.pendingUpdates.min = types.MinLayer(msh.pendingUpdates.min, msh.LatestLayerInState())
 	if pending {
 		var err error
 		results, err = msh.trtl.Results(msh.pendingUpdates.min, msh.pendingUpdates.max)
@@ -608,26 +609,4 @@ func (msh *Mesh) GetRewards(coinbase types.Address) ([]*types.Reward, error) {
 // LastVerified returns the latest layer verified by tortoise.
 func (msh *Mesh) LastVerified() types.LayerID {
 	return msh.trtl.LatestComplete()
-}
-
-func minNonZero(i, j types.LayerID) types.LayerID {
-	if i == 0 {
-		return j
-	} else if j == 0 {
-		return i
-	} else if i < j {
-		return i
-	}
-	return j
-}
-
-func maxNonZero(i, j types.LayerID) types.LayerID {
-	if i == 0 {
-		return j
-	} else if j == 0 {
-		return i
-	} else if i > j {
-		return i
-	}
-	return j
 }
