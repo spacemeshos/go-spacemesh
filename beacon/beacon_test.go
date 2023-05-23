@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 
@@ -337,7 +339,6 @@ func TestBeaconWithMetrics(t *testing.T) {
 	tpd.mClock.EXPECT().LayerToTime((gLayer.GetEpoch() + 1).FirstLayer()).Return(time.Now()).AnyTimes()
 	tpd.Start(context.Background())
 
-	epoch3Beacon := types.HexToBeacon("0xaf1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262")
 	epoch := types.EpochID(3)
 	for i := types.EpochID(2); i < epoch; i++ {
 		lid := i.FirstLayer().Sub(1)
@@ -360,46 +361,35 @@ func TestBeaconWithMetrics(t *testing.T) {
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		tpd.recordBeacon(thisEpoch, &b, beacon2, fixed.New64(1))
 
-		numCalculated := 0
-		numObserved := 0
-		numObservedWeight := 0
-		allMetrics, err := prometheus.DefaultGatherer.Gather()
+		count := layer.OrdinalInEpoch() + 1
+		expected := fmt.Sprintf(`
+			# HELP spacemesh_beacons_beacon_observed_total Number of beacons collected from blocks for each epoch and value
+			# TYPE spacemesh_beacons_beacon_observed_total counter
+			spacemesh_beacons_beacon_observed_total{beacon="%s",epoch="%d"} %d
+			spacemesh_beacons_beacon_observed_total{beacon="%s",epoch="%d"} %d
+			`,
+			beacon1.ShortString(), thisEpoch, count,
+			beacon2.ShortString(), thisEpoch, count,
+		)
+		err := testutil.GatherAndCompare(prometheus.DefaultGatherer, strings.NewReader(expected), "spacemesh_beacons_beacon_observed_total")
 		require.NoError(t, err)
-		for _, m := range allMetrics {
-			switch *m.Name {
-			case "spacemesh_beacons_beacon_calculated_weight":
-				require.Equal(t, 1, len(m.Metric))
-				numCalculated++
-				beaconStr := epoch3Beacon.ShortString()
-				expected := fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beaconStr, thisEpoch+1, 0)
-				require.Equal(t, expected, m.Metric[0].String())
-			case "spacemesh_beacons_beacon_observed_total":
-				require.Equal(t, 2, len(m.Metric))
-				numObserved = numObserved + 2
-				count := layer.OrdinalInEpoch() + 1
-				expected := []string{
-					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon1.ShortString(), thisEpoch, count),
-					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon2.ShortString(), thisEpoch, count),
-				}
-				for _, subM := range m.Metric {
-					require.Contains(t, expected, subM.String())
-				}
-			case "spacemesh_beacons_beacon_observed_weight":
-				require.Equal(t, 2, len(m.Metric))
-				numObservedWeight = numObservedWeight + 2
-				weight := layer.OrdinalInEpoch() + 1
-				expected := []string{
-					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon1.ShortString(), thisEpoch, weight),
-					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon2.ShortString(), thisEpoch, weight),
-				}
-				for _, subM := range m.Metric {
-					require.Contains(t, expected, subM.String())
-				}
-			}
-		}
-		require.Equal(t, 0, numCalculated, layer)
-		require.Equal(t, 2, numObserved, layer)
-		require.Equal(t, 2, numObservedWeight, layer)
+
+		weight := layer.OrdinalInEpoch() + 1
+		expected = fmt.Sprintf(`
+			# HELP spacemesh_beacons_beacon_observed_weight Weight of beacons collected from blocks for each epoch and value
+			# TYPE spacemesh_beacons_beacon_observed_weight counter
+			spacemesh_beacons_beacon_observed_weight{beacon="%s",epoch="%d"} %d
+			spacemesh_beacons_beacon_observed_weight{beacon="%s",epoch="%d"} %d
+			`,
+			beacon1.ShortString(), thisEpoch, weight,
+			beacon2.ShortString(), thisEpoch, weight,
+		)
+		err = testutil.GatherAndCompare(prometheus.DefaultGatherer, strings.NewReader(expected), "spacemesh_beacons_beacon_observed_weight")
+		require.NoError(t, err)
+
+		calcWeightCount, err := testutil.GatherAndCount(prometheus.DefaultGatherer, "spacemesh_beacons_beacon_calculated_weight")
+		require.NoError(t, err)
+		require.Zero(t, calcWeightCount)
 	}
 
 	tpd.Close()
