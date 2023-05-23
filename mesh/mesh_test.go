@@ -588,6 +588,28 @@ func TestProcessLayer(t *testing.T) {
 				},
 			},
 		},
+		{
+			"missing layer",
+			[]call{
+				{
+					updates: rlayers(
+						fixture.RLayerNonFinal(start.Add(1),
+							fixture.RBlock(fixture.IDGen("2"), fixture.Valid(), fixture.Data()),
+						),
+					),
+					results: rlayers(
+						layergen(start,
+							fixture.RBlock(fixture.IDGen("1"), fixture.Valid(), fixture.Data()),
+						),
+						layergen(start.Add(1),
+							fixture.RBlock(fixture.IDGen("2"), fixture.Valid(), fixture.Data()),
+						),
+					),
+					executed: []types.BlockID{idg("1"), idg("2")},
+					applied:  []types.BlockID{idg("1"), idg("2")},
+				},
+			},
+		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
