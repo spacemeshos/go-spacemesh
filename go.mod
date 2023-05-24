@@ -37,7 +37,7 @@ require (
 	github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
 	github.com/spacemeshos/go-scale v1.1.9
-	github.com/spacemeshos/merkle-tree v0.2.1
+	github.com/spacemeshos/merkle-tree v0.2.2
 	github.com/spacemeshos/poet v0.8.4
 	github.com/spacemeshos/post v0.6.6
 	github.com/spf13/afero v1.9.5
