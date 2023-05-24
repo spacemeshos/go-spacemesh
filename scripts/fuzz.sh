@@ -8,11 +8,9 @@ fuzzTime=${1:-"10s"}
 
 files=$(grep -r --include='**_test.go' --files-with-matches 'func Fuzz' .)
 
-for file in ${files}
-do
+for file in ${files}; do
     funcs=$(grep -oP 'func \K(Fuzz\w*)' $file)
-    for func in ${funcs}
-    do
+    for func in ${funcs}; do
         parentDir=$(dirname $file)
         command="go test $parentDir -run=$func -fuzz=^$func\$ -fuzztime=${fuzzTime}"
         echo $command
