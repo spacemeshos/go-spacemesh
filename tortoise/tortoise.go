@@ -110,6 +110,10 @@ func (t *turtle) evict(ctx context.Context) {
 		delete(t.ballots, lid)
 		if lid.OrdinalInEpoch() == types.GetLayersPerEpoch()-1 {
 			layersNumber.Dec()
+			epoch := t.epoch(lid.GetEpoch())
+			for range epoch.atxs {
+				atxsNumber.Dec()
+			}
 			delete(t.epochs, lid.GetEpoch())
 		}
 	}
@@ -553,6 +557,7 @@ func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
 			Div(fixed.New(localThresholdFraction)).
 			Div(fixed.New64(int64(types.GetLayersPerEpoch())))
 	}
+	atxsNumber.Inc()
 	addAtxDuration.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
