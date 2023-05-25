@@ -199,7 +199,6 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 		Nonce:   p.Nonce,
 		Indices: p.Indices,
 		K2Pow:   p.K2Pow,
-		K3Pow:   p.K3Pow,
 	}, &shared.ProofMetadata{
 		NodeId:          mgr.id.Bytes(),
 		CommitmentAtxId: mgr.goldenATXID.Bytes(),
@@ -208,6 +207,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 		LabelsPerUnit:   m.LabelsPerUnit,
 	},
 		config.DefaultConfig(),
+		logtest.New(t).WithName("verifying").Zap(),
 		verifying.WithLabelScryptParams(mgr.opts.Scrypt),
 	)
 	req.NoError(err)

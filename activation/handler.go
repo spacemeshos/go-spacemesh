@@ -208,7 +208,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	expectedChallengeHash := atx.NIPostChallenge.Hash()
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	leaves, err := h.nipostValidator.NIPost(atx.SmesherID, *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
+	leaves, err := h.nipostValidator.NIPost(ctx, atx.SmesherID, *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
@@ -216,7 +216,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	return atx.Verify(baseTickHeight, leaves/h.tickSize)
 }
 
-func (h *Handler) validateInitialAtx(_ context.Context, atx *types.ActivationTx) error {
+func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationTx) error {
 	if atx.InitialPost == nil {
 		return fmt.Errorf("no prevATX declared, but initial Post is not included")
 	}
@@ -234,7 +234,7 @@ func (h *Handler) validateInitialAtx(_ context.Context, atx *types.ActivationTx)
 	initialPostMetadata := *atx.NIPost.PostMetadata
 	initialPostMetadata.Challenge = shared.ZeroChallenge
 
-	if err := h.nipostValidator.Post(atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
+	if err := h.nipostValidator.Post(ctx, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid initial Post: %w", err)
 	}
 

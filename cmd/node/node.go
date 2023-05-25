@@ -93,6 +93,7 @@ const (
 	ProposalBuilderLogger  = "proposalBuilder"
 	ProposalListenerLogger = "proposalListener"
 	NipostBuilderLogger    = "nipostBuilder"
+	NipostValidatorLogger  = "nipostValidator"
 	Fetcher                = "fetcher"
 	TimeSyncLogger         = "timesync"
 	VMLogger               = "vm"
@@ -307,6 +308,7 @@ type App struct {
 	ptimesync          *peersync.Sync
 	tortoise           *tortoise.Tortoise
 	updater            *bootstrap.Updater
+	postVerifier       *activation.OffloadingPostVerifier
 
 	host *p2p.Host
 
@@ -470,7 +472,16 @@ func (app *App) initServices(
 	lg := app.log.Named(nodeID.ShortString()).WithFields(nodeID)
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
-	validator := activation.NewValidator(poetDb, app.Config.POST)
+
+	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
+	postVerifiers := make([]activation.PostVerifier, 0, app.Config.SMESHING.VerifyingOpts.Workers)
+	for i := 0; i < app.Config.SMESHING.VerifyingOpts.Workers; i++ {
+		logger := nipostValidatorLogger.Named(fmt.Sprintf("worker-%d", i))
+		postVerifiers = append(postVerifiers, activation.NewPostVerifier(app.Config.POST, logger))
+	}
+	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
+
+	validator := activation.NewValidator(poetDb, app.Config.POST, nipostValidatorLogger, app.postVerifier)
 	app.validator = validator
 
 	cfg := vm.DefaultConfig()
@@ -836,6 +847,10 @@ func (app *App) startServices(ctx context.Context, appErr chan error) error {
 	if err := app.fetcher.Start(); err != nil {
 		return fmt.Errorf("failed to start fetcher: %w", err)
 	}
+	app.eg.Go(func() error {
+		app.postVerifier.Start(ctx)
+		return nil
+	})
 	app.syncer.Start(ctx)
 	app.beaconProtocol.Start(ctx)
 
@@ -1208,7 +1223,8 @@ func (app *App) Start(ctx context.Context) error {
 	p2plog := app.addLogger(P2PLogger, lg)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
-	app.host, err = p2p.New(ctx, p2plog, cfg, app.Config.Genesis.GenesisID(),
+	p2pPrefix := fmt.Sprintf("/%s/%d", hex.EncodeToString(app.Config.Genesis.GenesisID().Bytes())[:5], types.GetEffectiveGenesis()+1)
+	app.host, err = p2p.New(ctx, p2plog, cfg, app.Config.Genesis.GenesisID(), p2pPrefix,
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {
