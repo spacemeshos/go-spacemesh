@@ -20,25 +20,32 @@ type smesher struct {
 
 type atxOpt func(*types.ActivationTxHeader)
 
-func base(value uint64) atxOpt {
-	return func(header *types.ActivationTxHeader) {
-		header.BaseTickHeight = value
-	}
+type aopt struct {
+	opts []atxOpt
 }
 
-func ticks(value uint64) atxOpt {
-	return func(header *types.ActivationTxHeader) {
-		header.TickCount = value
-	}
+func (a *aopt) base(val uint64) *aopt {
+	a.opts = append(a.opts, func(header *types.ActivationTxHeader) {
+		header.BaseTickHeight = val
+	})
+	return a
 }
 
-func units(value uint32) atxOpt {
-	return func(header *types.ActivationTxHeader) {
-		header.EffectiveNumUnits = value
-	}
+func (a *aopt) ticks(val uint64) *aopt {
+	a.opts = append(a.opts, func(header *types.ActivationTxHeader) {
+		header.TickCount = val
+	})
+	return a
 }
 
-func (s *smesher) atx(epoch uint32, opts ...atxOpt) *atxAction {
+func (a *aopt) units(val uint32) *aopt {
+	a.opts = append(a.opts, func(header *types.ActivationTxHeader) {
+		header.EffectiveNumUnits = val
+	})
+	return a
+}
+
+func (s *smesher) atx(epoch uint32, opts ...*aopt) *atxAction {
 	if val, exists := s.atxs[epoch]; exists {
 		return val
 	}
@@ -46,7 +53,9 @@ func (s *smesher) atx(epoch uint32, opts ...atxOpt) *atxAction {
 	header.ID = hash.Sum([]byte(s.id), []byte(strconv.Itoa(int(epoch))))
 	header.PublishEpoch = types.EpochID(epoch)
 	for _, opt := range opts {
-		opt(&header)
+		for _, o := range opt.opts {
+			o(&header)
+		}
 	}
 	val := &atxAction{
 		header:  header,
@@ -102,6 +111,7 @@ func malicious() ballotOpt {
 }
 
 func (a *atxAction) ballot(lid uint32, opts ...ballotOpt) *ballotAction {
+	lid = lid + types.GetEffectiveGenesis().Uint32()
 	if val, exist := a.ballots[lid]; exist {
 		return val
 	}
@@ -183,12 +193,14 @@ func TestTortoise(t *testing.T) {
 	t.Run("sanity", func(t *testing.T) {
 		var s session
 		s.append(
-			s.smesher("1").atx(1, units(1), base(0), ticks(2)),
-			s.smesher("2").atx(1, units(1), base(0), ticks(2)),
-			s.smesher("3").atx(1, units(1), base(0), ticks(2)),
-			s.beacon(1, "one"),
+			s.smesher("1").atx(1, new(aopt).base(0).ticks(1).units(1)),
+			s.smesher("2").atx(1, new(aopt).base(0).ticks(1).units(1)),
+			s.smesher("3").atx(1, new(aopt).base(0).ticks(1).units(1)),
+			s.beacon(1, "a"),
+			s.smesher("1").atx(1).ballot(1),
+			s.smesher("1").atx(1).ballot(1),
+			s.smesher("1").atx(2).ballot(1),
 		)
 		s.run(mustNew(t))
-
 	})
 }
