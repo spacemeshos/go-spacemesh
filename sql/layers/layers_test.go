@@ -1,6 +1,7 @@
 package layers
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -196,4 +197,15 @@ func TestGetAggHashes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetAggHashesOom(t *testing.T) {
+	db := sql.InMemory()
+
+	lids := make([]types.LayerID, 0, math.MaxUint32)
+	for i := 0; i < math.MaxUint32; i++ {
+		lids = append(lids, types.LayerID(i))
+	}
+
+	GetAggHashes(db, lids)
 }
