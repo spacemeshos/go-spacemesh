@@ -38,6 +38,10 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	app1, err := NewApp(&conf1)
 	require.NoError(t, err)
 	conf2 := config.DefaultTestConfig()
+	// We need to copy the genesis config to ensure that both nodes share the
+	// same gnenesis ID, otherwise they will not be able to connect to each
+	// other.
+	*conf2.Genesis = *conf1.Genesis
 	conf2.DataDirParent = t.TempDir()
 	conf2.FileLock = filepath.Join(conf2.DataDirParent, "LOCK")
 	conf2.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
