@@ -25,8 +25,10 @@ func Recover(db *datastore.CachedDB, beacon system.BeaconGetter, opts ...Opt) (*
 	if err != nil {
 		return nil, fmt.Errorf("failed to load latest known layer: %v", err)
 	}
-	if latest <= types.GetEffectiveGenesis() {
-		return trtl, nil
+	if latest == 0 {
+		if err := recoverEpoch(types.GetEffectiveGenesis().Add(1).GetEpoch(), trtl, db, beacon); err != nil {
+			return nil, err
+		}
 	}
 	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(latest); lid = lid.Add(1) {
 		if err := RecoverLayer(context.Background(), trtl, db, beacon, lid); err != nil {
@@ -36,20 +38,27 @@ func Recover(db *datastore.CachedDB, beacon system.BeaconGetter, opts ...Opt) (*
 	return trtl, nil
 }
 
+func recoverEpoch(epoch types.EpochID, trtl *Tortoise, db *datastore.CachedDB, beacondb system.BeaconGetter) error {
+	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
+		trtl.OnAtx(header)
+		return true
+	}); err != nil {
+		return err
+	}
+	beacon, err := beacondb.GetBeacon(epoch)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return err
+	}
+	if err == nil {
+		trtl.OnBeacon(epoch, beacon)
+	}
+	return nil
+}
+
 func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, beacon system.BeaconGetter, lid types.LayerID) error {
 	if lid.FirstInEpoch() {
-		if err := db.IterateEpochATXHeaders(lid.GetEpoch(), func(header *types.ActivationTxHeader) bool {
-			trtl.OnAtx(header)
-			return true
-		}); err != nil {
+		if err := recoverEpoch(lid.GetEpoch(), trtl, db, beacon); err != nil {
 			return err
-		}
-		beacon, err := beacon.GetBeacon(lid.GetEpoch())
-		if err != nil && !errors.Is(err, sql.ErrNotFound) {
-			return err
-		}
-		if err == nil {
-			trtl.OnBeacon(lid.GetEpoch(), beacon)
 		}
 	}
 	blocksrst, err := blocks.Layer(db, lid)
