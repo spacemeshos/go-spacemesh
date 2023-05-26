@@ -2,6 +2,7 @@ package timesync
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
