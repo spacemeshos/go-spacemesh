@@ -197,10 +197,7 @@ func SetMeshHash(db sql.Executor, lid types.LayerID, aggHash types.Hash32) error
 
 // GetAggregatedHash for layer.
 func GetAggregatedHash(db sql.Executor, lid types.LayerID) (types.Hash32, error) {
-	var (
-		rst types.Hash32
-		err error
-	)
+	var rst types.Hash32
 	if rows, err := db.Exec("select aggregated_hash from layers where id = ?1",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Uint32()))
@@ -213,7 +210,7 @@ func GetAggregatedHash(db sql.Executor, lid types.LayerID) (types.Hash32, error)
 	} else if rows == 0 {
 		return rst, fmt.Errorf("%w layer %s", sql.ErrNotFound, lid)
 	}
-	return rst, err
+	return rst, nil
 }
 
 func makeInClause(num int) string {
