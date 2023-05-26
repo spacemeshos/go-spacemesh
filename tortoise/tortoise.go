@@ -112,6 +112,10 @@ func (t *turtle) evict(ctx context.Context) {
 		delete(t.ballots, lid)
 		if lid.OrdinalInEpoch() == types.GetLayersPerEpoch()-1 {
 			layersNumber.Dec()
+			epoch := t.epoch(lid.GetEpoch())
+			for range epoch.atxs {
+				atxsNumber.Dec()
+			}
 			delete(t.epochs, lid.GetEpoch())
 		}
 	}
@@ -557,6 +561,7 @@ func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
 			t.logger.With().Fatal("fixme: atx size overflows int64", log.Uint64("weight", atx.GetWeight()))
 		}
 		epoch.weight = epoch.weight.Add(fixed.New64(int64(atx.GetWeight())))
+		atxsNumber.Inc()
 	}
 	if atx.TargetEpoch() == t.last.GetEpoch() {
 		t.localThreshold = epoch.weight.

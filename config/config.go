@@ -80,6 +80,8 @@ type BaseConfig struct {
 
 	MetricsPush       string `mapstructure:"metrics-push"`
 	MetricsPushPeriod int    `mapstructure:"metrics-push-period"`
+	MetricsPushUser   string `mapstructure:"metrics-push-user"`
+	MetricsPushPass   string `mapstructure:"metrics-push-pass"`
 
 	ProfilerName string `mapstructure:"profiler-name"`
 	ProfilerURL  string `mapstructure:"profiler-url"`

@@ -122,7 +122,11 @@ func TestFailedNodes(t *testing.T) {
 	const (
 		failAt    = 15
 		lastLayer = failAt + 8
+<<<<<<< HEAD
 		stopLayer = lastLayer + 2
+=======
+		stopLayer = lastLayer + 3
+>>>>>>> develop
 	)
 	failed := int(0.6 * float64(tctx.ClusterSize))
 
