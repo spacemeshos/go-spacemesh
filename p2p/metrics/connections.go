@@ -23,6 +23,15 @@ var (
 		"Histogram of server request durations per protocol (seconds)",
 		[]string{"protocol"},
 	)
+
+	// DroppedConnectionsValidationReject is incremented every time a
+	// connection is dropped due to an ErrValidationReject result.
+	DroppedConnectionsValidationReject = metrics.NewCounter(
+		"dropped_connections_validation_reject",
+		subsystem,
+		"Connections dropped due to ErrValidationReject result",
+		nil,
+	).WithLabelValues()
 )
 
 // ConnectionsMeeter stores the number of connections for node.

@@ -760,19 +760,28 @@ func (app *App) initServices(
 		app.hare,
 		app.edVerifier,
 	)
-	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, app.txHandler, malfeasanceHandler)
+	fetcher.SetValidators(
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(atxHandler.HandleAtxData, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(proposalListener.HandleSyncedBallot, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(blockHandler.HandleSyncedBlock, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(proposalListener.HandleSyncedProposal, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleBlockTransaction, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleProposalTransaction, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(malfeasanceHandler.HandleMalfeasanceProof, app.host, lg)),
+	)
 
-	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
+	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
 		if newSyncer.ListenToGossip() {
-			return pubsub.ValidationAccept
+			return nil
 		}
-		return pubsub.ValidationIgnore
+		return errors.New("not synced for gossip")
 	}
-	atxSyncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
+	atxSyncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
 		if newSyncer.ListenToATXGossip() {
-			return pubsub.ValidationAccept
+			return nil
 		}
-		return pubsub.ValidationIgnore
+		return errors.New("not synced for gossip")
 	}
 
 	app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
@@ -1287,6 +1296,10 @@ func (app *App) Start(ctx context.Context) error {
 	case err = <-appErr:
 		return err
 	}
+}
+
+func (app *App) Host() *p2p.Host {
+	return app.host
 }
 
 type layerFetcher struct {

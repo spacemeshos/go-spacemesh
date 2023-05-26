@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -101,6 +102,7 @@ func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*PubSub,
 		logger: logger,
 		pubsub: ps,
 		topics: map[string]*pubsub.Topic{},
+		host:   h,
 	}, nil
 }
 
@@ -122,32 +124,43 @@ type PublishSubsciber interface {
 	Subscriber
 }
 
-// GossipHandler is a function that is for receiving messages.
-type GossipHandler = func(context.Context, peer.ID, []byte) ValidationResult
+// GossipHandler is a function that is for receiving p2p messages.
+type GossipHandler = func(context.Context, peer.ID, []byte) error
 
-// ValidationResult is a one of the validation result constants.
-type ValidationResult = pubsub.ValidationResult
-
-const (
-	// ValidationAccept should be returned if message is good and can be broadcasted.
-	ValidationAccept = pubsub.ValidationAccept
-	// ValidationIgnore should be returned if message might be good, but outdated
-	// and shouldn't be broadcasted.
-	ValidationIgnore = pubsub.ValidationIgnore
-	// ValidationReject should be returned if message is malformed or malicious
-	// and shouldn't be broadcasted. Peer might be potentially get banned when on this result.
-	ValidationReject = pubsub.ValidationReject
-)
+// ErrValidationReject is returned by a GossipHandler to indicate that the
+// pubsub validation result is ValidationReject. ValidationAccept is indicated
+// by a nil error and ValidationIgnore is indicated by any error that is not a
+// ErrValidationReject.
+var ErrValidationReject = errors.New("validation reject")
 
 // ChainGossipHandler helper to chain multiple GossipHandler together. Called synchronously and in the order.
 func ChainGossipHandler(handlers ...GossipHandler) GossipHandler {
-	return func(ctx context.Context, pid peer.ID, msg []byte) ValidationResult {
+	return func(ctx context.Context, pid peer.ID, msg []byte) error {
 		for _, h := range handlers {
-			if rst := h(ctx, pid, msg); rst != pubsub.ValidationAccept {
-				return rst
+			if err := h(ctx, pid, msg); err != nil {
+				return err
 			}
 		}
-		return pubsub.ValidationAccept
+		return nil
+	}
+}
+
+// DropPeerValidationReject wraps a gossip handler to provide a handler that drops a
+// peer if the wrapped handler returns ErrValidationReject.
+func DropPeerOnValidationReject(handler GossipHandler, h host.Host, logger log.Log) GossipHandler {
+	return func(ctx context.Context, peer peer.ID, data []byte) error {
+		err := handler(ctx, peer, data)
+		if errors.Is(err, ErrValidationReject) {
+			p2pmetrics.DroppedConnectionsValidationReject.Inc()
+			err := h.Network().ClosePeer(peer)
+			if err != nil {
+				logger.With().Debug("failed to close peer",
+					log.String("peer", peer.ShortString()),
+					log.Err(err),
+				)
+			}
+		}
+		return err
 	}
 }
 
@@ -252,15 +265,13 @@ func defaultTopicParam() *pubsub.TopicScoreParams {
 	}
 }
 
-func castResult(rst ValidationResult) string {
-	switch rst {
-	case ValidationAccept:
+func castResult(err error) string {
+	switch {
+	case err == nil:
 		return "accept"
-	case ValidationIgnore:
-		return "ignore"
-	case ValidationReject:
+	case errors.Is(err, ErrValidationReject):
 		return "reject"
 	default:
-		panic(fmt.Sprintf("unknown result %d", rst))
+		return "ignore"
 	}
 }

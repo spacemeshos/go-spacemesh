@@ -162,11 +162,11 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 			for _, node := range testNodes {
 				switch protocol {
 				case pubsub.BeaconProposalProtocol:
-					require.NoError(t, node.handleProposal(ctx, p2p.Peer(node.nodeID.ShortString()), data, time.Now()))
+					require.NoError(t, node.HandleProposal(ctx, p2p.Peer(node.nodeID.ShortString()), data))
 				case pubsub.BeaconFirstVotesProtocol:
-					require.NoError(t, node.handleFirstVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+					require.NoError(t, node.HandleFirstVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
 				case pubsub.BeaconFollowingVotesProtocol:
-					require.NoError(t, node.handleFollowingVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data, time.Now()))
+					require.NoError(t, node.HandleFollowingVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
 				case pubsub.BeaconWeakCoinProtocol:
 				}
 			}

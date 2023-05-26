@@ -16,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -242,20 +241,20 @@ func TestBroker_Send(t *testing.T) {
 	broker.Start(ctx)
 	t.Cleanup(broker.Close)
 
-	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", nil))
+	require.Error(t, broker.HandleMessage(ctx, "", nil))
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	msg := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
 	msg.Layer = instanceID2
-	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
+	require.Error(t, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
 
 	msg.Layer = instanceID1
-	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
+	require.Error(t, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
 	// nothing happens since this is an invalid InnerMsg
 
 	atomic.StoreInt32(&mev.valid, 1)
-	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
+	require.Equal(t, nil, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
 }
 
 func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
@@ -280,7 +279,7 @@ func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 	data := mustEncode(t, m)
 
 	broker.mockMesh.EXPECT().GetMalfeasanceProof(signer.NodeID())
-	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(ctx, "", data))
+	require.Equal(t, nil, broker.HandleMessage(ctx, "", data))
 	require.Len(t, inbox, 1)
 	got := <-inbox
 	msg, ok := got.(*Message)
@@ -306,7 +305,7 @@ func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 			Eligibility: msg.Eligibility,
 		},
 	}
-	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", data))
+	require.Error(t, broker.HandleMessage(ctx, "", data))
 	require.Len(t, mch, 1)
 	gotG := <-mch
 	require.EqualValues(t, gossip, gotG)
@@ -447,12 +446,12 @@ func TestBroker_Register2(t *testing.T) {
 	m := BuildPreRoundMsg(signer, NewSetFromValues(types.RandomProposalID()), types.EmptyVrfSignature)
 	m.Layer = instanceID1
 
-	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(context.Background(), "", mustEncode(t, m)))
+	require.Equal(t, nil, broker.HandleMessage(context.Background(), "", mustEncode(t, m)))
 
 	m.Layer = instanceID2
 	m.Signature = signer.Sign(signing.HARE, m.SignedBytes())
 	m.SmesherID = signer.NodeID()
-	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(context.Background(), "", mustEncode(t, m)))
+	require.Equal(t, nil, broker.HandleMessage(context.Background(), "", mustEncode(t, m)))
 }
 
 func TestBroker_Register3(t *testing.T) {
@@ -593,7 +592,7 @@ func TestBroker_eventLoop(t *testing.T) {
 	// not synced
 	m.Layer = instanceID1
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
-	r.Equal(pubsub.ValidationIgnore, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
+	r.Error(b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
 	_, e := b.Register(context.Background(), instanceID1)
@@ -604,7 +603,7 @@ func TestBroker_eventLoop(t *testing.T) {
 	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	c, e := b.Register(context.Background(), instanceID1)
 	r.Nil(e)
-	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
+	r.Equal(nil, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 	recM := <-c
 	rec, ok := recM.(*Message)
 	r.True(ok)
@@ -614,17 +613,17 @@ func TestBroker_eventLoop(t *testing.T) {
 	m.Layer = instanceID2
 	m.Signature = signer.Sign(signing.HARE, m.SignedBytes())
 	m.SmesherID = signer.NodeID()
-	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
+	r.Equal(nil, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 
 	// future message
 	m.Layer = instanceID3
 	m.Signature = signer.Sign(signing.HARE, m.SignedBytes())
 	m.SmesherID = signer.NodeID()
-	r.Equal(pubsub.ValidationIgnore, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
+	r.Error(b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 
 	c, e = b.Register(context.Background(), instanceID3)
 	r.Nil(e)
-	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
+	r.Equal(nil, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 	recM = <-c
 	rec, ok = recM.(*Message)
 	r.True(ok)

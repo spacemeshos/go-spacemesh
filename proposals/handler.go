@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	errMalformedData         = errors.New("malformed data")
+	errMalformedData         = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
 	errInitialize            = errors.New("failed to initialize")
 	errInvalidATXID          = errors.New("ballot has invalid ATXID")
 	errMissingEpochData      = errors.New("epoch data is missing in ref ballot")
@@ -134,22 +134,6 @@ func NewHandler(
 	return b
 }
 
-// HandleProposal is the gossip receiver for Proposal.
-func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
-	err := h.handleProposalData(ctx, peer, msg)
-	switch {
-	case err == nil:
-		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedData):
-		return pubsub.ValidationReject
-	case errors.Is(err, errKnownProposal):
-		return pubsub.ValidationIgnore
-	default:
-		h.logger.WithContext(ctx).With().Warning("failed to process proposal gossip", log.Err(err))
-		return pubsub.ValidationIgnore
-	}
-}
-
 // HandleSyncedBallot handles Ballot data from sync.
 func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []byte) error {
 	logger := h.logger.WithContext(ctx)
@@ -217,14 +201,24 @@ func collectHashes(a any) []types.Hash32 {
 
 // HandleSyncedProposal handles Proposal data from sync.
 func (h *Handler) HandleSyncedProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
-	err := h.handleProposalData(ctx, peer, data)
+	err := h.HandleProposal(ctx, peer, data)
 	if errors.Is(err, errKnownProposal) {
 		return nil
 	}
 	return err
 }
 
-func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []byte) error {
+// HandleProposal is the gossip receiver for Proposal.
+func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
+	err := h.handleProposal(ctx, peer, data)
+	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownProposal) {
+		h.logger.WithContext(ctx).With().Warning("failed to process proposal gossip", log.Err(err))
+	}
+	return err
+}
+
+// HandleProposal is the gossip receiver for Proposal.
+func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
 	receivedTime := time.Now()
 	logger := h.logger.WithContext(ctx)
 

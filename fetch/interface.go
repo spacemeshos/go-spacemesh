@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
@@ -13,29 +14,20 @@ type requester interface {
 	Request(context.Context, p2p.Peer, []byte, func([]byte), func(error)) error
 }
 
-type MalfeasanceValidator interface {
-	HandleSyncedMalfeasanceProof(context.Context, p2p.Peer, []byte) error
+// The ValidatorFunc type is an adapter to allow the use of functions as
+// SyncValidators so that we can mock the behavior of GossipHandlers. If we
+// didn't need to mock GossipHandler behavior then we could use GossipHandlers
+// directly and do away with both ValidatorFunc and SyncValidator.
+type ValidatorFunc pubsub.GossipHandler
+
+func (f ValidatorFunc) HandleMessage(ctx context.Context, peer p2p.Peer, msg []byte) error {
+	return f(ctx, peer, msg)
 }
 
-type AtxValidator interface {
-	HandleAtxData(context.Context, p2p.Peer, []byte) error
-}
-
-type BlockValidator interface {
-	HandleSyncedBlock(context.Context, p2p.Peer, []byte) error
-}
-
-type BallotValidator interface {
-	HandleSyncedBallot(context.Context, p2p.Peer, []byte) error
-}
-
-type ProposalValidator interface {
-	HandleSyncedProposal(context.Context, p2p.Peer, []byte) error
-}
-
-type TxValidator interface {
-	HandleBlockTransaction(context.Context, p2p.Peer, []byte) error
-	HandleProposalTransaction(context.Context, p2p.Peer, []byte) error
+// SyncValidator exists to allow for mocking of GossipHandlers through the use
+// of ValidatorFunc.
+type SyncValidator interface {
+	HandleMessage(context.Context, p2p.Peer, []byte) error
 }
 
 type PoetValidator interface {

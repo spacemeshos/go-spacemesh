@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -55,18 +54,18 @@ func updateMetrics(err error, counter *prometheus.CounterVec) {
 }
 
 // HandleGossipTransaction handles data received on the transactions gossip channel.
-func (th *TxHandler) HandleGossipTransaction(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+func (th *TxHandler) HandleGossipTransaction(ctx context.Context, peer p2p.Peer, msg []byte) error {
 	if peer == th.self {
-		return pubsub.ValidationAccept
+		return nil
 	}
 
 	err := th.VerifyAndCacheTx(ctx, msg)
 	updateMetrics(err, gossipTxCount)
 	if err != nil {
 		th.logger.WithContext(ctx).With().Warning("failed to handle tx", log.Err(err))
-		return pubsub.ValidationIgnore
+		return err
 	}
-	return pubsub.ValidationAccept
+	return nil
 }
 
 // HandleProposalTransaction handles data received on the transactions synced as a part of proposal.
