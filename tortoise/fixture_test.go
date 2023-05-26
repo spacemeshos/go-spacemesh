@@ -9,8 +9,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+
 	"github.com/stretchr/testify/require"
 )
+
+const size = 50
 
 type smesher struct {
 	reg registry
@@ -111,9 +114,44 @@ func (b *bopt) activeset(values ...*atxAction) *bopt {
 	return b
 }
 
-func (b *bopt) votes(value types.Votes) *bopt {
+// encoded votes
+type evotes struct {
+	votes types.Votes
+}
+
+func (e *evotes) base(base *ballotAction) *evotes {
+	e.votes.Base = base.ballot.ID()
+	return e
+}
+
+func (e *evotes) abstain(lid uint32) *evotes {
+	e.votes.Abstain = append(e.votes.Abstain, types.GetEffectiveGenesis()+types.LayerID(lid))
+	return e
+}
+
+func (e *evotes) support(lid int, id string, height uint64) *evotes {
+	vote := types.Vote{
+		LayerID: types.GetEffectiveGenesis() + types.LayerID(lid),
+		Height:  height,
+	}
+	copy(vote.ID[:], id)
+	e.votes.Support = append(e.votes.Support, vote)
+	return e
+}
+
+func (e *evotes) against(lid uint32, id string, height uint64) *evotes {
+	vote := types.Vote{
+		LayerID: types.GetEffectiveGenesis() + types.LayerID(lid),
+		Height:  height,
+	}
+	copy(vote.ID[:], id)
+	e.votes.Against = append(e.votes.Against, vote)
+	return e
+}
+
+func (b *bopt) votes(value *evotes) *bopt {
 	b.opts = append(b.opts, func(ballot *types.Ballot) {
-		ballot.Votes = value
+		ballot.Votes = value.votes
 	})
 	return b
 }
@@ -129,8 +167,8 @@ func (a *atxAction) execute(trt *Tortoise) {
 	trt.OnAtx(&a.header)
 }
 
-func (a *atxAction) ballot(lid uint32, opts ...*bopt) *ballotAction {
-	lid = lid + types.GetEffectiveGenesis().Uint32()
+func (a *atxAction) ballot(n int, opts ...*bopt) *ballotAction {
+	lid := uint32(n) + types.GetEffectiveGenesis().Uint32()
 	if val, exist := a.ballots[lid]; exist {
 		return val
 	}
@@ -204,8 +242,8 @@ func (t *tallyAction) execute(trt *Tortoise) {
 	trt.TallyVotes(context.Background(), types.LayerID(t.lid))
 }
 
-func (s *session) tally(lid uint32) {
-	s.register(&tallyAction{uint32(types.GetEffectiveGenesis()) + lid})
+func (s *session) tally(lid int) {
+	s.register(&tallyAction{uint32(types.GetEffectiveGenesis()) + uint32(lid)})
 }
 
 type hareAction struct {
@@ -227,11 +265,11 @@ func (b *blockAction) execute(trt *Tortoise) {
 	trt.OnBlock(b.header)
 }
 
-func (s *session) hare(lid uint32, id string) {
+func (s *session) hare(lid int, id string) {
 	s.register(&hareAction{lid: types.GetEffectiveGenesis() + types.LayerID(lid), block: id})
 }
 
-func (s *session) block(lid uint32, id string, height uint64) {
+func (s *session) block(lid int, id string, height uint64) {
 	header := types.BlockHeader{
 		LayerID: types.GetEffectiveGenesis() + types.LayerID(lid),
 		Height:  height,
@@ -240,7 +278,7 @@ func (s *session) block(lid uint32, id string, height uint64) {
 	s.register(&blockAction{header})
 }
 
-func (s *session) hareblock(lid uint32, id string, height uint64) {
+func (s *session) hareblock(lid int, id string, height uint64) {
 	s.block(lid, id, height)
 	s.hare(lid, id)
 }
@@ -266,7 +304,7 @@ type results struct {
 	results []result.Layer
 }
 
-func (r *results) next(lid uint32) *results {
+func (r *results) next(lid int) *results {
 	r.results = append(r.results, result.Layer{
 		Layer:  types.GetEffectiveGenesis() + types.LayerID(lid),
 		Blocks: []result.Block{},
@@ -274,7 +312,7 @@ func (r *results) next(lid uint32) *results {
 	return r
 }
 
-func (r *results) verified(lid uint32) *results {
+func (r *results) verified(lid int) *results {
 	r.results = append(r.results, result.Layer{
 		Layer:    types.GetEffectiveGenesis() + types.LayerID(lid),
 		Verified: true,
@@ -374,38 +412,79 @@ func (s *session) tortoise(tb testing.TB) *Tortoise {
 	return trt
 }
 
-func TestTortoise(t *testing.T) {
-	t.Run("sanity", func(t *testing.T) {
-		var (
-			s         = new(session)
-			activeset []*atxAction
-			n         = 5
+func TestSanity(t *testing.T) {
+	const (
+		n = 5
+	)
+	var activeset []*atxAction
+	s := new(session)
+	for i := 0; i < n; i++ {
+		activeset = append(
+			activeset,
+			s.smesher(i).atx(1, new(aopt).ticks(100).units(4)),
 		)
-		for i := 0; i < n; i++ {
-			activeset = append(
-				activeset,
-				s.smesher(i).atx(1, new(aopt).ticks(100).units(4)),
+	}
+	s.beacon(1, "a")
+	for i := 0; i < n; i++ {
+		s.smesher(i).atx(1).ballot(1, new(bopt).
+			beacon("a").
+			activeset(activeset...).
+			eligibilities(size/n))
+	}
+	s.tally(1)
+	s.hareblock(1, "aa", 0)
+	for i := 0; i < n; i++ {
+		s.smesher(i).atx(1).ballot(2, new(bopt).
+			eligibilities(size/n).
+			votes(new(evotes).support(1, "aa", 0)),
+		)
+	}
+	s.block(2, "bb", 0)
+	s.tally(2)
+	s.updates(t, new(results).
+		verified(1).block("aa", 0, valid|hare|data).
+		next(2).block("bb", 0, data),
+	)
+	s.run(s.tortoise(t))
+}
+
+func TestEpochGap(t *testing.T) {
+	var activeset []*atxAction
+	s := new(session)
+	for i := 0; i < 2; i++ {
+		activeset = append(
+			activeset,
+			s.smesher(i).atx(1, new(aopt).ticks(10).units(1)),
+		)
+	}
+	s.beacon(1, "a")
+	for i := 0; i < 2; i++ {
+		s.smesher(i).atx(1).ballot(1, new(bopt).
+			beacon("a").
+			activeset(activeset...).
+			eligibilities(size/2))
+	}
+	rst := new(results)
+	for l := 2; l <= epochSize; l++ {
+		id := strconv.Itoa(l - 1)
+		s.hareblock(l-1, id, 0)
+		rst = rst.verified(l-1).block(id, 0, hare|data|valid)
+		for i := 0; i < 2; i++ {
+			s.smesher(i).atx(1).ballot(l, new(bopt).
+				eligibilities(size/2).
+				votes(new(evotes).
+					base(s.smesher(i).atx(1).ballot(l-1)).
+					support(l-1, strconv.Itoa(l-1), 0)),
 			)
 		}
-		s.beacon(1, "a")
-		for i := 0; i < n; i++ {
-			s.smesher(i).atx(1).ballot(1, new(bopt).
-				beacon("a").
-				activeset(activeset...).
-				eligibilities(50/n))
-		}
-		s.tally(1)
-		s.hareblock(1, "aa", 0)
-		for i := 0; i < n-1; i++ {
-			s.smesher(i).atx(1).ballot(2, new(bopt).
-				eligibilities(50/n),
-			)
-		}
-		s.tally(2)
-		s.updates(t, new(results).
-			next(1).block("aa", 0, hare|data).
-			next(2),
-		)
-		s.run(s.tortoise(t))
-	})
+	}
+	s.tally(epochSize)
+	s.updates(t, rst.next(epochSize))
+	rst = new(results)
+	for i := epochSize + 1; i <= 2*epochSize; i++ {
+		rst = rst.next(i)
+		s.tally(i)
+	}
+	s.updates(t, rst)
+	s.run(s.tortoise(t))
 }

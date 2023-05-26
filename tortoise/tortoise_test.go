@@ -31,7 +31,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	types.SetLayersPerEpoch(4)
+	types.SetLayersPerEpoch(epochSize)
 
 	res := m.Run()
 	os.Exit(res)
@@ -42,6 +42,7 @@ const (
 	defaultTestWindowSize = 30
 	defaultVoteDelays     = 6
 	numValidBlock         = 1
+	epochSize             = 4
 )
 
 var (
