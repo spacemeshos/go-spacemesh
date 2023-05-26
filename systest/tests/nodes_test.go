@@ -122,6 +122,7 @@ func TestFailedNodes(t *testing.T) {
 	const (
 		failAt    = 15
 		lastLayer = failAt + 8
+		stopLayer = lastLayer + 3
 	)
 	failed := int(0.6 * float64(tctx.ClusterSize))
 
@@ -149,10 +150,12 @@ func TestFailedNodes(t *testing.T) {
 					"layer", layer.Layer.Number.Number,
 					"hash", prettyHex(layer.Layer.Hash),
 				)
-				if layer.Layer.Number.Number == lastLayer {
+				if layer.Layer.Number.Number == stopLayer {
 					return false, nil
 				}
-				hashes[i][layer.Layer.Number.Number] = prettyHex(layer.Layer.Hash)
+				if layer.Layer.Number.Number <= lastLayer {
+					hashes[i][layer.Layer.Number.Number] = prettyHex(layer.Layer.Hash)
+				}
 			}
 			return true, nil
 		})

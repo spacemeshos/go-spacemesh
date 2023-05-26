@@ -398,14 +398,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
 			return true
 		}
-
-		if missing := s.mesh.MissingLayer(); missing != 0 {
-			s.logger.WithContext(ctx).With().Info("fetching data for missing layer", missing)
-			if err := s.syncLayer(ctx, missing); err != nil {
-				s.logger.WithContext(ctx).With().Warning("failed to fetch missing layer", missing, log.Err(err))
-				return false
-			}
-		}
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
 			if err := s.syncLayer(ctx, layerID); err != nil {

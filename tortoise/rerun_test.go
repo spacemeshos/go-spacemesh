@@ -114,13 +114,13 @@ func testWindowCounting(tb testing.TB, maliciousLayers, windowSize int, expected
 		sim.WithSequence(10, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
 	) {
 		tortoise.TallyVotes(ctx, last)
+		processBlockUpdates(tb, tortoise, s.GetState(0).DB)
 	}
 	require.Equal(tb, last.Sub(1), tortoise.LatestComplete())
 
 	blks, err := blocks.IDsInLayer(s.GetState(0).DB, misverified)
 	require.NoError(tb, err)
 
-	processBlockUpdates(tb, tortoise, s.GetState(0).DB)
 	for _, blk := range blks {
 		validity, err := blocks.IsValid(s.GetState(0).DB, blk)
 		require.NoError(tb, err, "layer %s", misverified)

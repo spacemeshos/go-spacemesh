@@ -97,14 +97,6 @@ func (t *Tortoise) LatestComplete() types.LayerID {
 	return t.trtl.verified
 }
 
-func (t *Tortoise) Updates() map[types.LayerID]map[types.BlockID]bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	res := t.trtl.updated
-	t.trtl.updated = nil
-	return res
-}
-
 func (t *Tortoise) OnWeakCoin(lid types.LayerID, coin bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -310,10 +302,33 @@ func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) 
 	return missing
 }
 
+// Updates returns list of layers where opinion was changed since previous call.
+func (t *Tortoise) Updates() []result.Layer {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.trtl.pending == 0 {
+		return nil
+	}
+	rst, err := t.results(t.trtl.pending, t.trtl.processed)
+	if err != nil {
+		t.logger.With().Panic("unexpected error",
+			log.Uint32("pending", t.trtl.pending.Uint32()),
+			log.Uint32("processed", t.trtl.pending.Uint32()),
+			log.Err(err),
+		)
+	}
+	t.trtl.pending = 0
+	return rst
+}
+
 // Results returns layers that crossed threshold in range [from, to].
 func (t *Tortoise) Results(from, to types.LayerID) ([]result.Layer, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	return t.results(from, to)
+}
+
+func (t *Tortoise) results(from, to types.LayerID) ([]result.Layer, error) {
 	if from <= t.trtl.evicted {
 		return nil, fmt.Errorf("requested layer %d is before evicted %d", from, t.trtl.evicted)
 	}
@@ -323,16 +338,18 @@ func (t *Tortoise) Results(from, to types.LayerID) ([]result.Layer, error) {
 		blocks := make([]result.Block, 0, len(layer.blocks))
 		for _, block := range layer.blocks {
 			blocks = append(blocks, result.Block{
-				Header: block.header(),
-				Data:   block.data,
-				Hare:   block.hare == support,
-				Valid:  block.validity == support,
+				Header:  block.header(),
+				Data:    block.data,
+				Hare:    block.hare == support,
+				Valid:   block.validity == support,
+				Invalid: block.validity == against,
 			})
 		}
 		rst = append(rst, result.Layer{
-			Layer:   lid,
-			Blocks:  blocks,
-			Opinion: layer.opinion,
+			Layer:    lid,
+			Blocks:   blocks,
+			Verified: t.trtl.verified >= lid,
+			Opinion:  layer.opinion,
 		})
 	}
 	return rst, nil
