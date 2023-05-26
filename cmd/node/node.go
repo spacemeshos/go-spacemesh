@@ -1199,7 +1199,7 @@ func (app *App) Start(ctx context.Context) error {
 	}
 	clock, err := timesync.NewClock(
 		timesync.WithLayerDuration(app.Config.LayerDuration),
-		timesync.WithTickInterval(1*time.Second),
+		timesync.WithTickInterval(app.Config.TickInterval),
 		timesync.WithGenesisTime(gTime),
 		timesync.WithLogger(app.addLogger(ClockLogger, lg)),
 	)

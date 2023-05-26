@@ -88,6 +88,7 @@ type BaseConfig struct {
 	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
 
 	LayerDuration  time.Duration `mapstructure:"layer-duration"`
+	TickInterval   time.Duration `mapstructure:"clock-tick-interval"`
 	LayerAvgSize   uint32        `mapstructure:"layer-average-size"`
 	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`
 
@@ -165,6 +166,7 @@ func defaultBaseConfig() BaseConfig {
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldID: 0,
 		LayerDuration:       30 * time.Second,
+		TickInterval:        time.Second,
 		LayersPerEpoch:      3,
 		PoETServers:         []string{"127.0.0.1"},
 		TxsPerProposal:      100,

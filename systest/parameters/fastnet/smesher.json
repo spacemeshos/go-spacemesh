@@ -14,5 +14,8 @@
             "transaction", "activation", "admin", "smesher"
         ],
         "grpc-private-services": []
+    },
+    "main": {
+        "tick-interval": "100ms"
     }
 }
