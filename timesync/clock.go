@@ -127,7 +127,8 @@ func (t *NodeClock) tick() {
 		return
 	}
 
-	layer := t.TimeToLayer(t.clock.Now())
+	now := t.clock.Now()
+	layer := t.TimeToLayer(now)
 	switch {
 	case layer.Before(t.lastTicked):
 		t.log.With().Info("clock ticked back in time",
@@ -149,6 +150,10 @@ func (t *NodeClock) tick() {
 
 	// close await channel for prev layers
 	for l := t.minLayer; !l.After(layer); l = l.Add(1) {
+		delta := now.Sub(t.LayerToTime(l))
+		if delta > 0 {
+			accuracyHist.Observe(float64(delta.Nanoseconds()))
+		}
 		if layerChan, found := t.layerChannels[l]; found {
 			close(layerChan)
 			delete(t.layerChannels, l)
