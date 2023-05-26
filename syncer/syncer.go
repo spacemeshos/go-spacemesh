@@ -332,6 +332,7 @@ func (s *Syncer) getTargetSyncedLayer() types.LayerID {
 
 func (s *Syncer) setLastSyncedLayer(lid types.LayerID) {
 	s.lastLayerSynced.Store(lid)
+	syncedLayer.Set(float64(lid))
 }
 
 func (s *Syncer) getLastSyncedLayer() types.LayerID {
