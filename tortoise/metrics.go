@@ -39,6 +39,12 @@ var (
 		"Number of epochs in the state",
 		[]string{},
 	).WithLabelValues()
+	atxsNumber = metrics.NewGauge(
+		"atxs",
+		namespace,
+		"number of atxs in the tortoise state",
+		[]string{},
+	).WithLabelValues()
 )
 
 var (

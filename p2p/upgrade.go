@@ -8,7 +8,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/protocol"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -56,8 +55,6 @@ type Host struct {
 	cfg    Config
 	logger log.Log
 
-	protocolPrefix string
-
 	host.Host
 	*pubsub.PubSub
 
@@ -82,13 +79,12 @@ func isBootnode(h host.Host, bootnodes []string) (bool, error) {
 }
 
 // Upgrade creates Host instance from host.Host.
-func Upgrade(h host.Host, genesisID types.Hash20, prefix string, opts ...Opt) (*Host, error) {
+func Upgrade(h host.Host, genesisID types.Hash20, opts ...Opt) (*Host, error) {
 	fh := &Host{
-		ctx:            context.Background(),
-		cfg:            DefaultConfig(),
-		logger:         log.NewNop(),
-		protocolPrefix: prefix,
-		Host:           h,
+		ctx:    context.Background(),
+		cfg:    DefaultConfig(),
+		logger: log.NewNop(),
+		Host:   h,
 	}
 	for _, opt := range opts {
 		opt(fh)
@@ -98,14 +94,14 @@ func Upgrade(h host.Host, genesisID types.Hash20, prefix string, opts ...Opt) (*
 	if err != nil {
 		return nil, fmt.Errorf("check node as bootnode: %w", err)
 	}
-	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, fh, pubsub.Config{
+	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
 		Flood:          cfg.Flood,
 		IsBootnode:     bootnode,
 		MaxMessageSize: cfg.MaxMessageSize,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
 	}
-	if fh.discovery, err = peerexchange.New(fh.logger, fh, peerexchange.Config{
+	if fh.discovery, err = peerexchange.New(fh.logger, h, peerexchange.Config{
 		DataDir:          cfg.DataDir,
 		Bootnodes:        cfg.Bootnodes,
 		AdvertiseAddress: cfg.AdvertiseAddress,
@@ -147,23 +143,4 @@ func (fh *Host) Stop() error {
 		return fmt.Errorf("failed to close libp2p host: %w", err)
 	}
 	return nil
-}
-
-// PrefixedProtocol prepends network specific params to protocol.
-func (fh *Host) PrefixedProtocol(protocol protocol.ID) string {
-	return fmt.Sprintf("%s/%s", fh.protocolPrefix, protocol)
-}
-
-// SetStreamHandler implements host.Host with overwritten protocol ID.
-func (fh *Host) SetStreamHandler(pid protocol.ID, handler network.StreamHandler) {
-	fh.Host.SetStreamHandler(protocol.ID(fh.PrefixedProtocol(pid)), handler)
-}
-
-// NewStream implements host.Host with overwritten protocol ID.
-func (fh *Host) NewStream(ctx context.Context, p peer.ID, pids ...protocol.ID) (network.Stream, error) {
-	var prefixed []protocol.ID
-	for _, pid := range pids {
-		prefixed = append(prefixed, protocol.ID(fh.PrefixedProtocol(pid)))
-	}
-	return fh.Host.NewStream(ctx, p, prefixed...)
 }

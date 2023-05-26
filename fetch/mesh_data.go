@@ -229,6 +229,16 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 }
 
 func iterateLayers(req *MeshHashRequest) ([]types.LayerID, error) {
+	// TODO(mafa): there is MaxHashesInReq config in syncer that could be passed here instead of hardcoding this value
+	if req.Steps == 0 || req.Steps > 100 {
+		return nil, fmt.Errorf("%w: %v", errBadRequest, req)
+	}
+
+	// check for overflow
+	if req.Delta == 0 || (req.Delta*req.Steps)/req.Delta != req.Steps {
+		return nil, fmt.Errorf("%w: %v", errBadRequest, req)
+	}
+
 	var diff uint32
 	if req.To.After(req.From) {
 		diff = req.To.Difference(req.From)
@@ -236,14 +246,11 @@ func iterateLayers(req *MeshHashRequest) ([]types.LayerID, error) {
 	if diff == 0 || diff > req.Delta*req.Steps || diff < req.Delta*(req.Steps-1) {
 		return nil, fmt.Errorf("%w: %v", errBadRequest, req)
 	}
+
 	lids := make([]types.LayerID, req.Steps+1)
 	lids[0] = req.From
 	for i := uint32(1); i <= req.Steps; i++ {
-		next := lids[i-1] + types.LayerID(req.Delta)
-		if next < lids[i-1] {
-			return nil, fmt.Errorf("request causes layer overflow in %d. delta %d", lids[i-1], req.Delta)
-		}
-		lids[i] = next
+		lids[i] = lids[i-1].Add(req.Delta)
 	}
 	if lids[req.Steps].After(req.To) {
 		lids[req.Steps] = req.To

@@ -100,6 +100,9 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	} else {
 		logger.With().Debug("crosses global threshold")
 	}
+	if len(layer.blocks) == 0 {
+		logger.With().Debug("candidate layer is empty")
+	}
 	return verifyLayer(
 		logger,
 		layer.blocks,
