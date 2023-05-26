@@ -27,12 +27,12 @@ type Config struct {
 // DefaultConfig for Tortoise.
 func DefaultConfig() Config {
 	return Config{
-		LayerSize:                30,
+		LayerSize:                50,
 		Hdist:                    10,
 		Zdist:                    8,
 		WindowSize:               1000,
 		BadBeaconVoteDelayLayers: 0,
-		MaxExceptions:            30 * 100, // 100 layers of average size
+		MaxExceptions:            50 * 100, // 100 layers of average size
 	}
 }
 
