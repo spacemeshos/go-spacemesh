@@ -76,10 +76,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 		return len(conns[0].GetStreams()) == 2
 	}, time.Second*5, time.Millisecond*50)
 
-	// We need to prefix the protocol appropriately, all protocols are prefixed
-	// with a kind of network id.
-	prefixed := app1.Host().PrefixedProtocol(pubsub.GossipSubID_v11)
-	s := getStream(conns[0], protocol.ID(prefixed), network.DirOutbound)
+	s := getStream(conns[0], pubsub.GossipSubID_v11, network.DirOutbound)
 
 	protocol := ps.ProposalProtocol
 	// Send a message that doesn't result in ValidationReject.
