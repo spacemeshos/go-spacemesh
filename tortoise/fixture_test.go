@@ -75,42 +75,51 @@ type atxAction struct {
 
 type ballotOpt func(*types.Ballot)
 
-func beacon(value string) ballotOpt {
-	return func(ballot *types.Ballot) {
+type bopt struct {
+	opts []ballotOpt
+}
+
+func (b *bopt) beacon(value string) *bopt {
+	b.opts = append(b.opts, func(ballot *types.Ballot) {
 		if ballot.EpochData == nil {
 			ballot.EpochData = &types.EpochData{}
 		}
 		copy(ballot.EpochData.Beacon[:], value)
-	}
+	})
+	return b
 }
 
-func eligibilities(value int) ballotOpt {
-	return func(ballot *types.Ballot) {
+func (b *bopt) eligibilities(value int) *bopt {
+	b.opts = append(b.opts, func(ballot *types.Ballot) {
 		ballot.EligibilityProofs = make([]types.VotingEligibility, value)
-	}
+	})
+	return b
 }
 
-func activeset(values ...atxAction) ballotOpt {
-	return func(ballot *types.Ballot) {
+func (b *bopt) activeset(values ...atxAction) *bopt {
+	b.opts = append(b.opts, func(ballot *types.Ballot) {
 		for _, val := range values {
 			ballot.ActiveSet = append(ballot.ActiveSet, val.header.ID)
 		}
-	}
+	})
+	return b
 }
 
-func bvotes(value types.Votes) ballotOpt {
-	return func(ballot *types.Ballot) {
+func (b *bopt) votes(value types.Votes) *bopt {
+	b.opts = append(b.opts, func(ballot *types.Ballot) {
 		ballot.Votes = value
-	}
+	})
+	return b
 }
 
-func malicious() ballotOpt {
-	return func(ballot *types.Ballot) {
+func (b *bopt) malicious() *bopt {
+	b.opts = append(b.opts, func(ballot *types.Ballot) {
 		ballot.SetMalicious()
-	}
+	})
+	return b
 }
 
-func (a *atxAction) ballot(lid uint32, opts ...ballotOpt) *ballotAction {
+func (a *atxAction) ballot(lid uint32, opts ...bopt) *ballotAction {
 	lid = lid + types.GetEffectiveGenesis().Uint32()
 	if val, exist := a.ballots[lid]; exist {
 		return val
@@ -122,7 +131,9 @@ func (a *atxAction) ballot(lid uint32, opts ...ballotOpt) *ballotAction {
 	copy(id[:], hs[:])
 	b.SetID(id)
 	for _, opt := range opts {
-		opt(&b)
+		for _, o := range opt.opts {
+			o(&b)
+		}
 	}
 	val := &ballotAction{ballot: b}
 	if a.reference == nil {
