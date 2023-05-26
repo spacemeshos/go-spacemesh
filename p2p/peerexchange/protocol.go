@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	protocolName = "peerexchange/v1.0.0"
+	protocolName = "/peerexchange/v1.0.0"
 	// messageTimeout is the timeout for the whole stream lifetime.
 	messageTimeout = 10 * time.Second
 	sharedPeers    = 10
@@ -34,7 +34,7 @@ type peerExchange struct {
 	logger log.Log
 }
 
-// newPeerExchange is a constructor for a protocol provider.
+// newPeerExchange is a constructor for a protocol protocol provider.
 func newPeerExchange(h host.Host, rt *book.Book, advertise ma.Multiaddr, log log.Log) *peerExchange {
 	pe := &peerExchange{
 		h:      h,
