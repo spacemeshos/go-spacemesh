@@ -26,6 +26,14 @@ func Recover(db *datastore.CachedDB, beacon system.BeaconGetter, opts ...Opt) (*
 	if err != nil {
 		return nil, fmt.Errorf("failed to load latest known layer: %w", err)
 	}
+
+	if types.GetEffectiveGenesis() != types.FirstEffectiveGenesis() {
+		// need to load the golden atxs after a checkpoint recovery
+		if err := recoverEpoch(types.GetEffectiveGenesis().Add(1).GetEpoch(), trtl, db, beacon); err != nil {
+			return nil, err
+		}
+	}
+
 	epoch, err := atxs.LatestEpoch(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load latest epoch: %w", err)
@@ -38,6 +46,7 @@ func Recover(db *datastore.CachedDB, beacon system.BeaconGetter, opts ...Opt) (*
 			}
 		}
 	}
+
 	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(layer); lid = lid.Add(1) {
 		if err := RecoverLayer(context.Background(), trtl, db, beacon, lid); err != nil {
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
