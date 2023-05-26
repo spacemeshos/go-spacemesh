@@ -30,8 +30,8 @@ func TestRecoverState(t *testing.T) {
 	}
 	require.Equal(t, last.Sub(1), verified)
 
-	tortoise2 := tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
-	tortoise2.TallyVotes(ctx, last)
+	tortoise2, err := Recover(s.GetState(0).DB, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
+	require.NoError(t, err)
 	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
 	tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
@@ -70,6 +70,18 @@ func TestWindowSizeVoteCounting(t *testing.T) {
 	t.Run("FixesMisverified", func(t *testing.T) {
 		testWindowCounting(t, 3, 10, true)
 	})
+}
+
+func TestRecoverEmpty(t *testing.T) {
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	tortoise, err := Recover(s.GetState(0).DB, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
+	require.NoError(t, err)
+	require.NotNil(t, tortoise)
 }
 
 func testWindowCounting(tb testing.TB, maliciousLayers, windowSize int, expectedValidity bool) {
