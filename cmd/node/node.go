@@ -1248,7 +1248,8 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	if app.Config.MetricsPush != "" {
-		metrics.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
+		metrics.StartPushingMetrics(app.Config.MetricsPush,
+			app.Config.MetricsPushUser, app.Config.MetricsPushPass, app.Config.MetricsPushPeriod,
 			app.host.ID().String(), app.Config.Genesis.GenesisID().ShortString())
 	}
 
