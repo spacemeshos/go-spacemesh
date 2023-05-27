@@ -154,7 +154,7 @@ func (o *Oracle) calcEligibilityProofs(atx *types.ActivationTxHeader, epoch type
 		)
 	}
 
-	logger.With().Info("tortoise eligibility for an epoch",
+	logger.With().Info("proposal eligibility for an epoch",
 		log.Uint32("total_num_slots", numEligibleSlots),
 		log.Int("num_layers_eligible", len(eligibilityProofs)),
 		log.Array("layers_to_num_proposals", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
