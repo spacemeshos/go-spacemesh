@@ -2,6 +2,7 @@ package checkpoint
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -57,6 +58,9 @@ func RecoveryFilename(dataDir, base string, restore types.LayerID) string {
 	return filepath.Join(RecoveryDir(dataDir), fmt.Sprintf("%s-restore-%d", base, restore.Uint32()))
 }
 
+// ParseRestoreLayer parses the restore layer from the filename.
+// only used in systests when RecoverFromDefaultDir is true.
+// DO NOT USE in production as inferring metadata from filename is not robust and error-prone.
 func ParseRestoreLayer(fname string) (types.LayerID, error) {
 	matches := regexp.MustCompile(fileRegex).FindStringSubmatch(fname)
 	if len(matches) != 3 {
@@ -78,6 +82,9 @@ func ParseRestoreLayer(fname string) (types.LayerID, error) {
 	return restore, nil
 }
 
+// ReadCheckpointAndDie copies the checkpoint file from uri and panic to restart
+// the node and recover from the checkpoint data just copied.
+// only used in systests. only has effect when RecoverFromDefaultDir is true.
 func ReadCheckpointAndDie(ctx context.Context, logger log.Log, dataDir, uri string, restore types.LayerID) error {
 	fs := afero.NewOsFs()
 	file, err := copyToLocalFile(ctx, logger, fs, dataDir, uri, restore)
@@ -103,12 +110,16 @@ func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, 
 			if bdir, err := backupRecovery(fs, RecoveryDir(dataDir)); err != nil {
 				return "", err
 			} else if bdir != "" {
-				logger.WithContext(ctx).With().Info("old recovery data backed up", log.String("dir", bdir))
+				logger.With().Info("old recovery data backed up",
+					log.Context(ctx),
+					log.String("dir", bdir),
+				)
 			}
 			if err = CopyFile(fs, parsed.Path, dst); err != nil {
 				return "", err
 			}
 			logger.With().Debug("copied file",
+				log.Context(ctx),
 				log.String("from", parsed.Path),
 				log.String("to", dst),
 			)
@@ -122,12 +133,18 @@ func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, 
 	if bdir, err := backupRecovery(fs, RecoveryDir(dataDir)); err != nil {
 		return "", err
 	} else if bdir != "" {
-		logger.WithContext(ctx).With().Info("old recovery data backed up", log.String("dir", bdir))
+		logger.With().Info("old recovery data backed up",
+			log.Context(ctx),
+			log.String("dir", bdir),
+		)
 	}
 	if err = httpToLocalFile(ctx, parsed, fs, dst); err != nil {
 		return "", err
 	}
-	logger.WithContext(ctx).With().Info("checkpoint data persisted", log.String("file", dst))
+	logger.With().Info("checkpoint data persisted",
+		log.Context(ctx),
+		log.String("file", dst),
+	)
 	return dst, nil
 }
 
@@ -279,13 +296,17 @@ func recoverFromLocalFile(
 	if err != nil {
 		return nil, err
 	}
-	logger.With().Info("backed up old database", log.String("backup dir", backupDir))
+	logger.With().Info("backed up old database",
+		log.Context(ctx),
+		log.String("backup dir", backupDir),
+	)
 
 	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite db %w", err)
 	}
 	logger.With().Info("populating new database",
+		log.Context(ctx),
 		log.Int("num accounts", len(data.accounts)),
 		log.Int("num atxs", len(data.atxs)),
 		log.Int("own atx and deps", len(own.preserve)),
@@ -295,7 +316,8 @@ func recoverFromLocalFile(
 			if err = accounts.Update(tx, acct); err != nil {
 				return fmt.Errorf("restore account snapshot: %w", err)
 			}
-			logger.WithContext(ctx).With().Info("account stored",
+			logger.With().Info("account stored",
+				log.Context(ctx),
 				acct.Address,
 				log.Uint64("nonce", acct.NextNonce),
 				log.Uint64("balance", acct.Balance),
@@ -305,15 +327,21 @@ func recoverFromLocalFile(
 			if err = atxs.AddCheckpointed(tx, catx); err != nil {
 				return fmt.Errorf("add checkpoint atx %s: %w", catx.ID.String(), err)
 			}
-			logger.WithContext(ctx).With().Info("checkpoint atx saved", catx.ID)
-			logger.WithContext(ctx).With().Info("checkpoint atx saved", catx.SmesherID)
+			logger.With().Info("checkpoint atx saved",
+				log.Context(ctx),
+				catx.ID,
+				catx.SmesherID,
+			)
 		}
 		if len(own.preserve) != 0 {
 			for _, atx := range own.preserve {
 				if err = atxs.Add(tx, atx); err != nil {
 					return fmt.Errorf("preserve atx %s: %w", atx.ID().String(), err)
 				}
-				logger.WithContext(ctx).With().Info("atx preserved", atx.ID())
+				logger.With().Info("atx preserved",
+					log.Context(ctx),
+					atx.ID(),
+				)
 			}
 			ref := types.PoetProofRef(own.atx.GetPoetProofRef())
 			var proofMessage types.PoetProofMessage
@@ -323,7 +351,12 @@ func recoverFromLocalFile(
 			if err = poets.Add(tx, ref, own.proof, proofMessage.PoetServiceID, proofMessage.RoundID); err != nil {
 				return fmt.Errorf("add own atx proof %s: %w", own.atx.ID().String(), err)
 			}
-			logger.WithContext(ctx).With().Info("own atx proof saved", own.atx.ID())
+			logger.With().Info("own atx proof saved",
+				log.Context(ctx),
+				log.String("poet service id", hex.EncodeToString(proofMessage.PoetServiceID)),
+				log.String("poet round id", proofMessage.RoundID),
+				own.atx.ID(),
+			)
 		}
 		if err = recovery.SetCheckpoint(tx, restore); err != nil {
 			return fmt.Errorf("save checkppoint info: %w", err)
@@ -336,7 +369,10 @@ func recoverFromLocalFile(
 		return nil, err
 	}
 	types.SetEffectiveGenesis(restore.Uint32() - 1)
-	logger.WithContext(ctx).With().Info("effective genesis reset for recovery", types.GetEffectiveGenesis())
+	logger.With().Info("effective genesis reset for recovery",
+		log.Context(ctx),
+		types.GetEffectiveGenesis(),
+	)
 	return newdb, nil
 }
 

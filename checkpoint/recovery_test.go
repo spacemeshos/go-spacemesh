@@ -189,9 +189,10 @@ func TestRecoverFromHttp(t *testing.T) {
 
 			fs := afero.NewMemMapFs()
 			cfg := &checkpoint.RecoverConfig{
-				GoldenAtx: types.ATXID{1},
-				DataDir:   t.TempDir(),
-				DbFile:    "state.sql",
+				GoldenAtx:      types.ATXID{1},
+				DataDir:        t.TempDir(),
+				DbFile:         "test.sql",
+				PreserveOwnAtx: true,
 			}
 			db := sql.InMemory()
 			newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg, types.NodeID{2, 3, 4}, tc.uri, 18)
@@ -223,9 +224,10 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 
 	fs := afero.NewMemMapFs()
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx: types.ATXID{1},
-		DataDir:   t.TempDir(),
-		DbFile:    "state.sql",
+		GoldenAtx:      types.ATXID{1},
+		DataDir:        t.TempDir(),
+		DbFile:         "test.sql",
+		PreserveOwnAtx: true,
 	}
 	url := fmt.Sprintf("%s/snapshot-15-restore-18", ts.URL)
 	db := sql.InMemory()
@@ -342,9 +344,10 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	defer cancel()
 
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx: types.ATXID{1},
-		DataDir:   t.TempDir(),
-		DbFile:    "test.sql",
+		GoldenAtx:      types.ATXID{1},
+		DataDir:        t.TempDir(),
+		DbFile:         "test.sql",
+		PreserveOwnAtx: true,
 	}
 
 	olddb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
@@ -444,9 +447,10 @@ func TestRecover(t *testing.T) {
 				}
 			}
 			cfg := &checkpoint.RecoverConfig{
-				GoldenAtx: types.ATXID{1},
-				DataDir:   tc.dataDir,
-				DbFile:    "test.sql",
+				GoldenAtx:      types.ATXID{1},
+				DataDir:        tc.dataDir,
+				DbFile:         "test.sql",
+				PreserveOwnAtx: true,
 			}
 
 			uri := fmt.Sprintf("file://%s", src)
