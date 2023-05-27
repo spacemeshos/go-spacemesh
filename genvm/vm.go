@@ -271,8 +271,8 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 	transactionsPerBlock.Observe(float64(len(txs)))
 	appliedLayer.Set(float64(lctx.Layer))
 
-	v.logger.With().Info("applied layer",
-		lctx.Layer,
+	v.logger.With().Debug("applied layer",
+		log.Uint32("layer", lctx.Layer.Uint32()),
 		log.Int("count", len(txs)-len(skipped)),
 		log.Duration("duration", time.Since(t1)),
 		log.Stringer("state_hash", hash),
