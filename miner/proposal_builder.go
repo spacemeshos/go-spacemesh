@@ -369,7 +369,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		logger.Debug("not eligible for proposal in layer")
 		return nil
 	}
-	logger.With().Info("eligible for proposals in layer",
+	logger.With().Debug("eligible for proposals in layer",
 		epochEligibility.Atx,
 		log.Int("num_proposals", len(proofs)),
 	)

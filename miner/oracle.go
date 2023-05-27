@@ -130,7 +130,7 @@ func (o *Oracle) calcEligibilityProofs(atx *types.ActivationTxHeader, epoch type
 	}
 
 	logger = logger.WithFields(log.Uint64("total_weight", totalWeight))
-	logger.Info("calculating eligibility")
+	logger.Debug("calculating eligibility")
 
 	numEligibleSlots, err := proposals.GetNumEligibleSlots(weight, totalWeight, o.avgLayerSize, o.layersPerEpoch)
 	if err != nil {
@@ -154,7 +154,7 @@ func (o *Oracle) calcEligibilityProofs(atx *types.ActivationTxHeader, epoch type
 		)
 	}
 
-	logger.With().Info("proposal eligibility calculated",
+	logger.With().Info("tortoise eligibility for an epoch",
 		log.Uint32("total_num_slots", numEligibleSlots),
 		log.Int("num_layers_eligible", len(eligibilityProofs)),
 		log.Array("layers_to_num_proposals", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
