@@ -364,7 +364,7 @@ func LatestEpoch(db sql.Executor) (types.EpochID, error) {
 			epoch = types.EpochID(uint32(stmt.ColumnInt64(0)))
 			return true
 		}); err != nil {
-		return epoch, fmt.Errorf("latest layer: %w", err)
+		return epoch, fmt.Errorf("latest epoch: %w", err)
 	}
 	return epoch, nil
 }
