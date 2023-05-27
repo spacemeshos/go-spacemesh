@@ -297,7 +297,7 @@ func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte
 		return fmt.Errorf("save proposal: %w", err)
 	}
 	proposalDuration.WithLabelValues(dbSave).Observe(float64(time.Since(t5)))
-	logger.With().Info("added proposal to database")
+	logger.With().Debug("added proposal to database")
 
 	t6 := time.Now()
 	if err := h.mesh.AddTXsFromProposal(ctx, p.Layer, p.ID(), p.TxIDs); err != nil {

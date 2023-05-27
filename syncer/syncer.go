@@ -539,7 +539,6 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...
 // fetching ATXs published the specified epoch.
 func (s *Syncer) fetchATXsForEpoch(ctx context.Context, epoch types.EpochID) error {
 	if err := s.dataFetcher.GetEpochATXs(ctx, epoch); err != nil {
-		s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", epoch, log.Err(err))
 		return err
 	}
 	s.setLastAtxEpoch(epoch)
