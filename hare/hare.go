@@ -395,8 +395,9 @@ func (h *Hare) addCP(logger log.Log, cp Consensus) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.cps[cp.ID()] = cp
-	logger.With().Info("number of consensus processes (after register)",
+	logger.With().Debug("number of consensus processes (after register)",
 		log.Int("count", len(h.cps)))
+	processesGauge.Set(float64(len(h.cps)))
 }
 
 func (h *Hare) getCP(lid types.LayerID) Consensus {
@@ -417,8 +418,9 @@ func (h *Hare) removeCP(logger log.Log, lid types.LayerID) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	delete(h.cps, cp.ID())
-	logger.With().Info("number of consensus processes (after deregister)",
+	logger.With().Debug("number of consensus processes (after deregister)",
 		log.Int("count", len(h.cps)))
+	processesGauge.Set(float64(len(h.cps)))
 }
 
 // goodProposals finds the "good proposals" for the specified layer. a proposal is good if

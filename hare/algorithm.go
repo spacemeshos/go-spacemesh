@@ -383,7 +383,7 @@ PreRound:
 			endOfRound = proc.clock.AwaitEndOfRound(round)
 
 		case <-proc.ctx.Done(): // close event
-			logger.With().Info("terminating: received signal",
+			logger.With().Debug("terminating: received signal",
 				log.Uint32("current_round", proc.getRound()))
 			return
 		}

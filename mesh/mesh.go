@@ -275,7 +275,8 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 
 	msh.trtl.TallyVotes(ctx, lid)
 
-	if err := msh.setProcessedLayer(lid); err != nil {
+	if err := msh.setProcessedLayer(
+		lid); err != nil {
 		return err
 	}
 	results := msh.trtl.Updates()
@@ -295,16 +296,19 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 			return err
 		}
 	}
-	msh.logger.With().Info("consensus results",
-		log.Context(ctx),
-		log.Uint32("layer_id", lid.Uint32()),
-		log.Array("results", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-			for i := range results {
-				encoder.AppendObject(&results[i])
-			}
-			return nil
-		})),
-	)
+	//TODO(dshulyak) https://github.com/spacemeshos/go-spacemesh/issues/4425
+	if len(results) > 0 {
+		msh.logger.With().Info("consensus results",
+			log.Context(ctx),
+			log.Uint32("layer_id", lid.Uint32()),
+			log.Array("results", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				for i := range results {
+					encoder.AppendObject(&results[i])
+				}
+				return nil
+			})),
+		)
+	}
 	if missing := missingBlocks(results); len(missing) > 0 {
 		return &types.ErrorMissing{MissingData: types.MissingData{Blocks: missing}}
 	}

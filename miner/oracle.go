@@ -71,12 +71,12 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon, 
 		logger.With().Panic("eligibility should not be queried during genesis", lid, epoch)
 	}
 
-	logger.Info("asked for proposal eligibility")
+	logger.Debug("asked for proposal eligibility")
 
 	var layerProofs []types.VotingEligibility
 	if o.cache.Epoch == epoch { // use the cached value
 		layerProofs = o.cache.Proofs[lid]
-		logger.With().Info("got cached eligibility", log.Int("num_proposals", len(layerProofs)))
+		logger.With().Debug("got cached eligibility", log.Int("num_proposals", len(layerProofs)))
 		return o.cache, nil
 	}
 

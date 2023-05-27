@@ -379,6 +379,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	// there are some dependencies in the tests
 	opinion, err := pb.tortoise.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(layerID))
 	if err != nil {
+		logger.With().Error("failed to encode votes", log.Err(err))
 		return fmt.Errorf("get base ballot: %w", err)
 	}
 
