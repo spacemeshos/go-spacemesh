@@ -101,7 +101,6 @@ func httpToLocalFile(ctx context.Context, resource *url.URL, fs afero.Fs, dst st
 	if err != nil {
 		return fmt.Errorf("create http request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
 	resp, err := (&http.Client{}).Do(req)
 	if err != nil {
 		return fmt.Errorf("http get bootstrap file: %w", err)
@@ -120,7 +119,7 @@ func backupRecovery(fs afero.Fs, recoveryDir string) (string, error) {
 	if _, err := fs.Stat(recoveryDir); err != nil {
 		return "", nil
 	}
-	backupDir := fmt.Sprintf("%s.%d", recoveryDir, time.Now().Unix())
+	backupDir := fmt.Sprintf("%s.%d", recoveryDir, time.Now().UnixNano())
 	if err := fs.Rename(recoveryDir, backupDir); err != nil {
 		return "", fmt.Errorf("backup old checkpoint data: %w", err)
 	}

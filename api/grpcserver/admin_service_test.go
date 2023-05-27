@@ -3,7 +3,9 @@ package grpcserver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -108,4 +110,20 @@ func TestAdminService_CheckpointError(t *testing.T) {
 	require.NoError(t, err)
 	_, err = stream.Recv()
 	require.ErrorContains(t, err, sql.ErrNotFound.Error())
+}
+
+func TestAdminService_RecoveryFileMissing(t *testing.T) {
+	logtest.SetupGlobal(t)
+	db := sql.InMemory()
+	svc := NewAdminService(db, t.TempDir(), logtest.New(t))
+	t.Cleanup(launchServer(t, cfg, svc))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	c := pb.NewAdminServiceClient(conn)
+
+	fname := filepath.Join(t.TempDir(), "snapshot")
+	_, err := c.Recover(ctx, &pb.RecoverRequest{Uri: fmt.Sprintf("file://%s", fname), RestoreLayer: restore})
+	require.Error(t, err)
 }

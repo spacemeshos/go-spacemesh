@@ -296,6 +296,7 @@ func recoverFromLocalFile(
 				return fmt.Errorf("add checkpoint atx %s: %w", catx.ID.String(), err)
 			}
 			logger.WithContext(ctx).With().Info("checkpoint atx saved", catx.ID)
+			logger.WithContext(ctx).With().Info("checkpoint atx saved", catx.SmesherID)
 		}
 		if len(own.preserve) != 0 {
 			for _, atx := range own.preserve {

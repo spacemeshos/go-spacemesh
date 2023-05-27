@@ -3,6 +3,7 @@ package checkpoint_test
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -102,17 +103,51 @@ func TestReadCheckpointAndDie(t *testing.T) {
 		require.NoError(t, err)
 	}))
 	defer ts.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
-	url := fmt.Sprintf("%s/snapshot-15", ts.URL)
-	dataDir := t.TempDir()
-	require.Panics(t, func() { checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, url, 18) })
+	tt := []struct {
+		name string
+		uri  string
+		fail bool
+	}{
+		{
+			name: "all good",
+			uri:  fmt.Sprintf("%s/snapshot-15", ts.URL),
+		},
+		{
+			name: "file does not exist",
+			uri:  "file:///snapshot-15",
+			fail: true,
+		},
+		{
+			name: "not uri",
+			uri:  "snapshot-15",
+			fail: true,
+		},
+	}
 
-	fname := checkpoint.RecoveryFilename(dataDir, filepath.Base(url), 18)
-	got, err := os.ReadFile(fname)
-	require.NoError(t, err)
-	require.True(t, bytes.Equal([]byte(checkpointdata), got))
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			dataDir := t.TempDir()
+			if tc.fail {
+				require.Error(t, checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, tc.uri, 18))
+			} else {
+				require.Panics(t, func() { checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, tc.uri, 18) })
+			}
+
+			fname := checkpoint.RecoveryFilename(dataDir, filepath.Base(tc.uri), 18)
+			got, err := os.ReadFile(fname)
+			if tc.fail {
+				require.ErrorIs(t, err, os.ErrNotExist)
+			} else {
+				require.NoError(t, err)
+				require.True(t, bytes.Equal([]byte(checkpointdata), got))
+			}
+		})
+	}
 }
 
 func TestRecoverFromHttp(t *testing.T) {
@@ -125,13 +160,18 @@ func TestRecoverFromHttp(t *testing.T) {
 	defer ts.Close()
 
 	tt := []struct {
-		name string
-		uri  string
-		fail bool
+		name        string
+		uri         string
+		fail, exist bool
 	}{
 		{
 			name: "http",
 			uri:  fmt.Sprintf("%s/snapshot-15", ts.URL),
+		},
+		{
+			name: "url unreachable",
+			uri:  "http://nowhere/snapshot-15",
+			fail: true,
 		},
 		{
 			name: "ftp",
@@ -169,7 +209,7 @@ func TestRecoverFromHttp(t *testing.T) {
 	}
 }
 
-func TestRecoverSameRecoveryInfo(t *testing.T) {
+func TestRecover_SameRecoveryInfo(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodGet, r.Method)
 		w.WriteHeader(http.StatusOK)
@@ -194,7 +234,7 @@ func TestRecoverSameRecoveryInfo(t *testing.T) {
 	require.Nil(t, newdb)
 }
 
-func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
+func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodGet, r.Method)
 		w.WriteHeader(http.StatusOK)
@@ -213,6 +253,7 @@ func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
 
 	olddb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
+	require.NotNil(t, olddb)
 	nid := types.NodeID{1, 2, 3}
 	prev := newvatx(t, newatx(types.ATXID{12}, &types.ATXID{1}, 2, 0, 123, nid.Bytes()))
 	require.NoError(t, atxs.Add(olddb, prev))
@@ -241,15 +282,15 @@ func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
 	encoded, err := codec.Encode(proofMessage)
 	require.NoError(t, err)
 	require.NoError(t, poets.Add(olddb, types.PoetProofRef(atx.GetPoetProofRef()), encoded, proofMessage.PoetServiceID, proofMessage.RoundID))
+	require.NoError(t, olddb.Close())
 
 	url := fmt.Sprintf("%s/snapshot-15", ts.URL)
 	require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url, 18))
 
 	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
-
-	require.NoError(t, err)
 	require.NotNil(t, newdb)
+	t.Cleanup(func() { require.NoError(t, newdb.Close()) })
 	extras := verifyDbContent(t, newdb)
 	require.ElementsMatch(t, extras, []*types.VerifiedActivationTx{prev, vatx})
 	gotProof, err := poets.Get(newdb, types.PoetProofRef(atx.GetPoetProofRef()))
@@ -265,10 +306,61 @@ func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
 	require.Greater(t, len(files), 1)
 }
 
+func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodGet, r.Method)
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte(checkpointdata))
+		require.NoError(t, err)
+	}))
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cfg := &checkpoint.RecoverConfig{
+		GoldenAtx: types.ATXID{1},
+		DataDir:   t.TempDir(),
+		DbFile:    "test.sql",
+	}
+
+	olddb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	require.NoError(t, err)
+	require.NotNil(t, olddb)
+	data, err := hex.DecodeString("0230c5d75d42b84f98800eceb47bc9cc4d803058900a50346a09ff61d56b6582")
+	require.NoError(t, err)
+	nid := types.BytesToNodeID(data)
+	data, err = hex.DecodeString("98e47278c1f58acfd2b670a730f28898f74eb140482a07b91ff81f9ff0b7d9f4")
+	require.NoError(t, err)
+	atx := newatx(types.ATXID(types.BytesToHash(data)), nil, 3, 1, 0, nid.Bytes())
+	require.NoError(t, atxs.Add(olddb, newvatx(t, atx)))
+	require.NoError(t, olddb.Close())
+
+	url := fmt.Sprintf("%s/snapshot-15", ts.URL)
+	require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url, 18))
+
+	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	require.NoError(t, err)
+	require.NotNil(t, newdb)
+	t.Cleanup(func() { require.NoError(t, newdb.Close()) })
+	extras := verifyDbContent(t, newdb)
+	require.Empty(t, extras)
+	restore, err := recovery.CheckpointInfo(newdb)
+	require.NoError(t, err)
+	require.EqualValues(t, 18, restore)
+
+	// sqlite create .sql, .sql-shm and .sql-wal files.
+	files, err := filepath.Glob(fmt.Sprintf("%s/backup.*/%s*", cfg.DataDir, cfg.DbFile))
+	require.NoError(t, err)
+	require.Greater(t, len(files), 1)
+}
+
 func TestRecover(t *testing.T) {
 	tt := []struct {
-		name                string
-		fname, dataDir, dir string
+		name           string
+		fname, oldFile string
+		dataDir, dir   string
+		missing, fail  bool
+		invalidData    []byte
 	}{
 		{
 			name:    "from local file",
@@ -277,10 +369,34 @@ func TestRecover(t *testing.T) {
 			fname:   "snapshot-15",
 		},
 		{
+			name:    "old recovery file",
+			dataDir: t.TempDir(),
+			dir:     "checkpoint",
+			fname:   "snapshot-15-restore-18",
+			oldFile: "snapshot-10-restore-12",
+		},
+		{
+			name:    "file does not exist",
+			dataDir: t.TempDir(),
+			dir:     "checkpoint",
+			fname:   "snapshot-15",
+			missing: true,
+			fail:    true,
+		},
+		{
 			name:    "from recovery file",
 			dataDir: t.TempDir(),
 			dir:     "recovery",
 			fname:   "snapshot-15-restore-18",
+		},
+		{
+			name:        "invalid data",
+			fname:       "snapshot-15-restore-18",
+			dataDir:     t.TempDir(),
+			dir:         "recovery",
+			missing:     false,
+			invalidData: []byte("invalid"),
+			fail:        true,
 		},
 	}
 
@@ -291,8 +407,18 @@ func TestRecover(t *testing.T) {
 			defer cancel()
 
 			fs := afero.NewMemMapFs()
+			if tc.oldFile != "" {
+				old := filepath.Join(checkpoint.RecoveryDir(tc.dataDir), tc.oldFile)
+				require.NoError(t, afero.WriteFile(fs, old, []byte{1, 2, 3}, 0o600))
+			}
 			src := filepath.Join(tc.dataDir, tc.dir, tc.fname)
-			require.NoError(t, afero.WriteFile(fs, src, []byte(checkpointdata), 0o600))
+			if !tc.missing {
+				if tc.invalidData != nil {
+					require.NoError(t, afero.WriteFile(fs, src, tc.invalidData, 0o600))
+				} else {
+					require.NoError(t, afero.WriteFile(fs, src, []byte(checkpointdata), 0o600))
+				}
+			}
 			cfg := &checkpoint.RecoverConfig{
 				GoldenAtx: types.ATXID{1},
 				DataDir:   tc.dataDir,
@@ -300,8 +426,12 @@ func TestRecover(t *testing.T) {
 			}
 
 			uri := fmt.Sprintf("file://%s", src)
-			require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), fs, cfg, types.NodeID{2, 3, 4}, uri, 18))
-
+			err := checkpoint.Recover(ctx, logtest.New(t), fs, cfg, types.NodeID{2, 3, 4}, uri, 18)
+			if tc.fail {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
 			db, err := sql.Open("file:" + filepath.Join(tc.dataDir, cfg.DbFile))
 			require.NoError(t, err)
 			require.NotNil(t, db)
@@ -311,6 +441,14 @@ func TestRecover(t *testing.T) {
 			restore, err := recovery.CheckpointInfo(db)
 			require.NoError(t, err)
 			require.EqualValues(t, 18, restore)
+
+			files, err := afero.Glob(fs, fmt.Sprintf("%s*", checkpoint.RecoveryDir(tc.dataDir)))
+			require.NoError(t, err)
+			if tc.oldFile != "" {
+				require.Len(t, files, 2)
+			} else {
+				require.Len(t, files, 1)
+			}
 		})
 	}
 }
