@@ -384,7 +384,7 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 	set := NewSet(props)
 	cp := h.factory(ctx, h.config, lid, set, h.rolacle, h.sign, nonce, h.publisher, comm, clock)
 
-	logger.With().Info("starting hare", log.Int("num_proposals", len(props)))
+	logger.With().Debug("starting hare", log.Int("num_proposals", len(props)))
 	cp.Start()
 	h.addCP(logger, cp)
 	h.patrol.SetHareInCharge(lid)
@@ -395,8 +395,9 @@ func (h *Hare) addCP(logger log.Log, cp Consensus) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.cps[cp.ID()] = cp
-	logger.With().Info("number of consensus processes (after register)",
+	logger.With().Debug("number of consensus processes (after register)",
 		log.Int("count", len(h.cps)))
+	processesGauge.Set(float64(len(h.cps)))
 }
 
 func (h *Hare) getCP(lid types.LayerID) Consensus {
@@ -417,8 +418,9 @@ func (h *Hare) removeCP(logger log.Log, lid types.LayerID) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	delete(h.cps, cp.ID())
-	logger.With().Info("number of consensus processes (after deregister)",
+	logger.With().Debug("number of consensus processes (after deregister)",
 		log.Int("count", len(h.cps)))
+	processesGauge.Set(float64(len(h.cps)))
 }
 
 // goodProposals finds the "good proposals" for the specified layer. a proposal is good if

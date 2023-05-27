@@ -6,7 +6,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 //go:generate mockgen -package=beacon -destination=./mocks.go -source=./interface.go
@@ -17,7 +16,7 @@ type coin interface {
 	FinishRound(context.Context)
 	Get(context.Context, types.EpochID, types.RoundID) (bool, error)
 	FinishEpoch(context.Context, types.EpochID)
-	HandleProposal(context.Context, p2p.Peer, []byte) pubsub.ValidationResult
+	HandleProposal(context.Context, p2p.Peer, []byte) error
 }
 
 type eligibilityChecker interface {

@@ -67,11 +67,14 @@ install:
 	go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
 .PHONY: install
 
-build: go-spacemesh
+build: go-spacemesh get-profiler
 .PHONY: build
 
 get-libs: get-postrs-lib
 .PHONY: get-libs
+
+get-profiler: get-postrs-profiler
+.PHONY: get-profiler
 
 gen-p2p-identity:
 	cd $@ ; go build -o $(BIN_DIR)$@$(EXE) .

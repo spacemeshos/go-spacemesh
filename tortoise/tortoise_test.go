@@ -15,6 +15,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -186,7 +187,7 @@ func TestAbstainLateBlock(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	cfg.Hdist = 1
+	cfg.Hdist = 2
 	cfg.Zdist = 1
 	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
@@ -196,19 +197,14 @@ func TestAbstainLateBlock(t *testing.T) {
 	tortoise.TallyVotes(ctx, last)
 
 	events := tortoise.Updates()
-	require.Len(t, events, 1)
-	got, ok := events[last.Sub(2)]
-	require.True(t, ok)
-	require.Len(t, got, 1)
-	for _, v := range got {
-		require.True(t, v)
+	require.Len(t, events, 3)
+	require.Equal(t, events[0].Layer, last.Sub(2))
+	for _, v := range events[0].Blocks {
+		require.True(t, v.Valid)
 	}
 
-	block := types.Block{}
-	block.LayerIndex = last.Sub(1)
-	block.Initialize()
-	tortoise.OnBlock(block.ToVote())
-	tortoise.OnHareOutput(block.LayerIndex, block.ID())
+	block := types.BlockHeader{ID: types.BlockID{1}, LayerID: last.Sub(1)}
+	tortoise.OnBlock(block)
 	tortoise.TallyVotes(ctx, last)
 
 	events = tortoise.Updates()
@@ -520,17 +516,16 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 }
 
 type updater interface {
-	Updates() map[types.LayerID]map[types.BlockID]bool
+	Updates() []result.Layer
 }
 
 func processBlockUpdates(tb testing.TB, tt updater, db sql.Executor) {
-	updated := tt.Updates()
-	for _, bids := range updated {
-		for bid, valid := range bids {
-			if valid {
-				require.NoError(tb, blocks.SetValid(db, bid))
-			} else {
-				require.NoError(tb, blocks.SetInvalid(db, bid))
+	for _, layer := range tt.Updates() {
+		for _, block := range layer.Blocks {
+			if block.Valid {
+				require.NoError(tb, blocks.SetValid(db, block.Header.ID))
+			} else if block.Invalid {
+				require.NoError(tb, blocks.SetInvalid(db, block.Header.ID))
 			}
 		}
 	}
@@ -2235,14 +2230,17 @@ func TestSwitchMode(t *testing.T) {
 			tortoise.TallyVotes(ctx, last)
 		}
 		events := tortoise.Updates()
-		require.Len(t, events, int(cfg.Hdist))
+		require.Len(t, events, int(cfg.Hdist)+1)
 		for i := 0; i < int(cfg.Hdist); i++ {
-			got, ok := events[nohare.Add(uint32(i))]
-			require.True(t, ok)
-			require.Len(t, got, 1)
-			for _, v := range got {
-				require.True(t, v)
+			layer := events[i]
+			require.Equal(t, nohare.Add(uint32(i)), layer.Layer)
+			for _, v := range layer.Blocks {
+				require.True(t, v.Valid)
 			}
+		}
+		for _, v := range events[len(events)-1].Blocks {
+			require.False(t, v.Valid)
+			require.True(t, v.Hare)
 		}
 
 		templates, err := ballots.Layer(s.GetState(0).DB, nohare.Add(1))
@@ -2266,12 +2264,12 @@ func TestSwitchMode(t *testing.T) {
 		}
 		tortoise.TallyVotes(ctx, last)
 		events = tortoise.Updates()
-		require.Len(t, events, 1)
-		got, ok := events[nohare]
-		require.True(t, ok)
-		require.Len(t, got, 1)
-		for _, v := range got {
-			require.False(t, v)
+		require.Len(t, events, 3)
+		require.Equal(t, events[0].Layer, nohare)
+		for i := 0; i < int(cfg.Hdist); i++ {
+			for _, v := range events[0].Blocks {
+				require.True(t, v.Invalid)
+			}
 		}
 	})
 }
@@ -2977,4 +2975,50 @@ func TestMultipleTargets(t *testing.T) {
 	votes, err = tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)
 	require.Empty(t, votes.Against)
+}
+
+func TestUpdates(t *testing.T) {
+	genesis := types.GetEffectiveGenesis()
+	t.Run("hare output included", func(t *testing.T) {
+		trt, err := New()
+		require.NoError(t, err)
+		id := types.BlockID{1}
+		lid := genesis + 1
+
+		trt.OnBlock(types.BlockHeader{
+			ID:      id,
+			LayerID: lid,
+		})
+		trt.OnHareOutput(lid, id)
+		trt.TallyVotes(context.TODO(), lid)
+		updates := trt.Updates()
+		require.Len(t, updates, 1)
+		require.Len(t, updates[0].Blocks, 1)
+		require.True(t, updates[0].Blocks[0].Hare)
+		require.False(t, updates[0].Blocks[0].Valid)
+		require.Equal(t, id, updates[0].Blocks[0].Header.ID)
+	})
+	t.Run("tally first", func(t *testing.T) {
+		trt, err := New()
+		require.NoError(t, err)
+		id := types.BlockID{1}
+		lid := genesis + 1
+
+		trt.TallyVotes(context.TODO(), lid)
+		updates := trt.Updates()
+		require.Len(t, updates, 1)
+		require.Empty(t, updates[0].Blocks)
+		require.False(t, updates[0].Verified)
+		trt.OnBlock(types.BlockHeader{
+			ID:      id,
+			LayerID: lid,
+		})
+		trt.OnHareOutput(lid, id)
+		updates = trt.Updates()
+		require.Len(t, updates, 1)
+		require.Len(t, updates[0].Blocks, 1)
+		require.True(t, updates[0].Blocks[0].Hare)
+		require.False(t, updates[0].Blocks[0].Valid)
+		require.Equal(t, id, updates[0].Blocks[0].Header.ID)
+	})
 }

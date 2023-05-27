@@ -332,6 +332,7 @@ func (s *Syncer) getTargetSyncedLayer() types.LayerID {
 
 func (s *Syncer) setLastSyncedLayer(lid types.LayerID) {
 	s.lastLayerSynced.Store(lid)
+	syncedLayer.Set(float64(lid))
 }
 
 func (s *Syncer) getLastSyncedLayer() types.LayerID {
@@ -397,14 +398,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 		if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
 			return true
-		}
-
-		if missing := s.mesh.MissingLayer(); missing != 0 {
-			s.logger.WithContext(ctx).With().Info("fetching data for missing layer", missing)
-			if err := s.syncLayer(ctx, missing); err != nil {
-				s.logger.WithContext(ctx).With().Warning("failed to fetch missing layer", missing, log.Err(err))
-				return false
-			}
 		}
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
@@ -546,7 +539,6 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...
 // fetching ATXs published the specified epoch.
 func (s *Syncer) fetchATXsForEpoch(ctx context.Context, epoch types.EpochID) error {
 	if err := s.dataFetcher.GetEpochATXs(ctx, epoch); err != nil {
-		s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", epoch, log.Err(err))
 		return err
 	}
 	s.setLastAtxEpoch(epoch)

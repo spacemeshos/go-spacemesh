@@ -116,7 +116,7 @@ func getProposalMetadata(
 		return nil, fmt.Errorf("%w: majority %v, node %v", errNodeHasBadMeshHash, majorityState.hash, ownMeshHash)
 	}
 	md.optFilter = true
-	logger.With().Info("consensus on mesh hash. doing optimistic filtering",
+	logger.With().Debug("consensus on mesh hash. doing optimistic filtering",
 		lid,
 		log.Stringer("mesh_hash", majorityState.hash))
 	return md, nil

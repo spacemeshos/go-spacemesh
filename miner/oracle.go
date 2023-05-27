@@ -71,12 +71,12 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon, 
 		logger.With().Panic("eligibility should not be queried during genesis", lid, epoch)
 	}
 
-	logger.Info("asked for proposal eligibility")
+	logger.Debug("asked for proposal eligibility")
 
 	var layerProofs []types.VotingEligibility
 	if o.cache.Epoch == epoch { // use the cached value
 		layerProofs = o.cache.Proofs[lid]
-		logger.With().Info("got cached eligibility", log.Int("num_proposals", len(layerProofs)))
+		logger.With().Debug("got cached eligibility", log.Int("num_proposals", len(layerProofs)))
 		return o.cache, nil
 	}
 
@@ -130,7 +130,7 @@ func (o *Oracle) calcEligibilityProofs(atx *types.ActivationTxHeader, epoch type
 	}
 
 	logger = logger.WithFields(log.Uint64("total_weight", totalWeight))
-	logger.Info("calculating eligibility")
+	logger.Debug("calculating eligibility")
 
 	numEligibleSlots, err := proposals.GetNumEligibleSlots(weight, totalWeight, o.avgLayerSize, o.layersPerEpoch)
 	if err != nil {
@@ -154,7 +154,7 @@ func (o *Oracle) calcEligibilityProofs(atx *types.ActivationTxHeader, epoch type
 		)
 	}
 
-	logger.With().Info("proposal eligibility calculated",
+	logger.With().Info("proposal eligibility for an epoch",
 		log.Uint32("total_num_slots", numEligibleSlots),
 		log.Int("num_layers_eligible", len(eligibilityProofs)),
 		log.Array("layers_to_num_proposals", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {

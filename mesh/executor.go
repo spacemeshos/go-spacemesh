@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -72,6 +73,8 @@ func (e *Executor) ExecuteOptimistic(
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	start := time.Now()
+
 	logger := e.logger.WithContext(ctx).WithFields(lid)
 	if err := e.checkOrder(lid); err != nil {
 		return nil, err
@@ -107,7 +110,14 @@ func (e *Executor) ExecuteOptimistic(
 	if err != nil {
 		return nil, fmt.Errorf("get state hash: %w", err)
 	}
-	logger.Event().Info("optimistically executed block", b.ID(), log.Stringer("state_hash", state))
+	logger.Event().Info("optimistically executed block",
+		log.Stringer("block", b.ID()),
+		log.Stringer("state_hash", state),
+		log.Duration("duration", time.Since(start)),
+		log.Int("count", len(executed)),
+		log.Int("skipped", len(ineffective)),
+		log.Int("rewards", len(b.Rewards)),
+	)
 	return b, nil
 }
 
@@ -115,7 +125,7 @@ func (e *Executor) ExecuteOptimistic(
 func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.Block) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-
+	start := time.Now()
 	if err := e.checkOrder(lid); err != nil {
 		return err
 	}
@@ -144,7 +154,12 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 	if err != nil {
 		return fmt.Errorf("get state hash: %w", err)
 	}
-	logger.Event().Info("executed block", block.ID(), log.Stringer("state_hash", state))
+	logger.Event().Info("executed block",
+		log.Stringer("block", block.ID()),
+		log.Stringer("state_hash", state),
+		log.Duration("duration", time.Since(start)),
+		log.Int("count", len(executed)),
+	)
 	return nil
 }
 
@@ -167,6 +182,7 @@ func (e *Executor) convertRewards(rewards []types.AnyReward) ([]types.CoinbaseRe
 }
 
 func (e *Executor) executeEmpty(ctx context.Context, lid types.LayerID) error {
+	start := time.Now()
 	logger := e.logger.WithContext(ctx).WithFields(lid)
 	if _, _, err := e.vm.Apply(vm.ApplyContext{Layer: lid}, nil, nil); err != nil {
 		return fmt.Errorf("apply empty layer: %w", err)
@@ -178,7 +194,10 @@ func (e *Executor) executeEmpty(ctx context.Context, lid types.LayerID) error {
 	if err != nil {
 		return fmt.Errorf("get state hash: %w", err)
 	}
-	logger.Event().Info("executed empty layer", log.Stringer("state_hash", state))
+	logger.Event().Info("executed empty layer",
+		log.Stringer("state_hash", state),
+		log.Duration("duration", time.Since(start)),
+	)
 	return nil
 }
 

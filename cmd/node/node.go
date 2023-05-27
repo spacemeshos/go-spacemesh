@@ -324,6 +324,7 @@ type App struct {
 	ptimesync          *peersync.Sync
 	tortoise           *tortoise.Tortoise
 	updater            *bootstrap.Updater
+	postVerifier       *activation.OffloadingPostVerifier
 
 	host *p2p.Host
 
@@ -538,7 +539,16 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	lg := app.log.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
-	validator := activation.NewValidator(poetDb, app.Config.POST, app.addLogger(NipostValidatorLogger, lg))
+
+	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
+	postVerifiers := make([]activation.PostVerifier, 0, app.Config.SMESHING.VerifyingOpts.Workers)
+	for i := 0; i < app.Config.SMESHING.VerifyingOpts.Workers; i++ {
+		logger := nipostValidatorLogger.Named(fmt.Sprintf("worker-%d", i))
+		postVerifiers = append(postVerifiers, activation.NewPostVerifier(app.Config.POST, logger))
+	}
+	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
+
+	validator := activation.NewValidator(poetDb, app.Config.POST, nipostValidatorLogger, app.postVerifier)
 	app.validator = validator
 
 	cfg := vm.DefaultConfig()
@@ -816,19 +826,28 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		app.hare,
 		app.edVerifier,
 	)
-	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, app.txHandler, malfeasanceHandler)
+	fetcher.SetValidators(
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(atxHandler.HandleAtxData, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(proposalListener.HandleSyncedBallot, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(blockHandler.HandleSyncedBlock, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(proposalListener.HandleSyncedProposal, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleBlockTransaction, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleProposalTransaction, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(malfeasanceHandler.HandleMalfeasanceProof, app.host, lg)),
+	)
 
-	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
+	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
 		if newSyncer.ListenToGossip() {
-			return pubsub.ValidationAccept
+			return nil
 		}
-		return pubsub.ValidationIgnore
+		return errors.New("not synced for gossip")
 	}
-	atxSyncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
+	atxSyncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
 		if newSyncer.ListenToATXGossip() {
-			return pubsub.ValidationAccept
+			return nil
 		}
-		return pubsub.ValidationIgnore
+		return errors.New("not synced for gossip")
 	}
 
 	app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
@@ -893,6 +912,10 @@ func (app *App) startServices(ctx context.Context, appErr chan error) error {
 	if err := app.fetcher.Start(); err != nil {
 		return fmt.Errorf("failed to start fetcher: %w", err)
 	}
+	app.eg.Go(func() error {
+		app.postVerifier.Start(ctx)
+		return nil
+	})
 	app.syncer.Start(ctx)
 	app.beaconProtocol.Start(ctx)
 
@@ -1262,7 +1285,8 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	if app.Config.MetricsPush != "" {
-		metrics.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
+		metrics.StartPushingMetrics(app.Config.MetricsPush,
+			app.Config.MetricsPushUser, app.Config.MetricsPushPass, app.Config.MetricsPushPeriod,
 			app.host.ID().String(), app.Config.Genesis.GenesisID().ShortString())
 	}
 
@@ -1300,6 +1324,10 @@ func (app *App) Start(ctx context.Context) error {
 	case err = <-appErr:
 		return err
 	}
+}
+
+func (app *App) Host() *p2p.Host {
+	return app.host
 }
 
 type layerFetcher struct {

@@ -41,9 +41,9 @@ func (f *testFetch) withMethod(method int) *testFetch {
 
 func (f *testFetch) expectTransactionCall(times int) *gomock.Call {
 	if f.method == txsForBlock {
-		return f.mTxH.EXPECT().HandleBlockTransaction(gomock.Any(), gomock.Any(), gomock.Any()).Times(times)
+		return f.mTxBlocksH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Times(times)
 	} else if f.method == txsForProposal {
-		return f.mTxH.EXPECT().HandleProposalTransaction(gomock.Any(), gomock.Any(), gomock.Any()).Times(times)
+		return f.mTxProposalH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Times(times)
 	}
 	return nil
 }
@@ -176,7 +176,7 @@ func TestFetch_getHashes(t *testing.T) {
 						}
 						res := responses[r.Hash]
 						resBatch.Responses = append(resBatch.Responses, res)
-						f.mBlocksH.EXPECT().HandleSyncedBlock(gomock.Any(), p, res.Data).Return(tc.hdlrErr)
+						f.mBlocksH.EXPECT().HandleMessage(gomock.Any(), p, res.Data).Return(tc.hdlrErr)
 					}
 					bts, err := codec.Encode(&resBatch)
 					require.NoError(t, err)
@@ -184,7 +184,7 @@ func TestFetch_getHashes(t *testing.T) {
 					return nil
 				}).Times(len(peers))
 
-			got := f.getHashes(context.TODO(), hashes, datastore.BlockDB, f.validators.block.HandleSyncedBlock)
+			got := f.getHashes(context.TODO(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
 			if len(tc.fetchErrs) > 0 || tc.hdlrErr != nil {
 				require.NotEmpty(t, got)
 			} else {
@@ -197,7 +197,7 @@ func TestFetch_getHashes(t *testing.T) {
 func TestFetch_GetMalfeasanceProofs(t *testing.T) {
 	nodeIDs := []types.NodeID{{1}, {2}, {3}}
 	f := createFetch(t)
-	f.mMalH.EXPECT().HandleSyncedMalfeasanceProof(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(nodeIDs))
+	f.mMalH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(nodeIDs))
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group
@@ -215,7 +215,7 @@ func TestFetch_GetBlocks(t *testing.T) {
 	}
 	blockIDs := types.ToBlockIDs(blks)
 	f := createFetch(t)
-	f.mBlocksH.EXPECT().HandleSyncedBlock(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(blockIDs))
+	f.mBlocksH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(blockIDs))
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group
@@ -233,7 +233,7 @@ func TestFetch_GetBallots(t *testing.T) {
 	}
 	ballotIDs := types.ToBallotIDs(blts)
 	f := createFetch(t)
-	f.mBallotH.EXPECT().HandleSyncedBallot(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(ballotIDs))
+	f.mBallotH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(ballotIDs))
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group
@@ -298,7 +298,7 @@ func TestFetch_GetProposals(t *testing.T) {
 	}
 	proposalIDs := types.ToProposalIDs(proposals)
 	f := createFetch(t)
-	f.mProposalH.EXPECT().HandleSyncedProposal(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(proposalIDs))
+	f.mProposalH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(proposalIDs))
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group
@@ -385,7 +385,7 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 func TestGetATXs(t *testing.T) {
 	atxs := genATXs(t, 2)
 	f := createFetch(t)
-	f.mAtxH.EXPECT().HandleAtxData(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(atxs))
+	f.mAtxH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(atxs))
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group
@@ -400,7 +400,7 @@ func TestGetATXs(t *testing.T) {
 func TestGetPoetProof(t *testing.T) {
 	f := createFetch(t)
 	h := types.RandomHash()
-	f.mPoetH.EXPECT().ValidateAndStoreMsg(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	f.mPoetH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group

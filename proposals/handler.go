@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -27,7 +26,7 @@ import (
 )
 
 var (
-	errMalformedData         = errors.New("malformed data")
+	errMalformedData         = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
 	errInitialize            = errors.New("failed to initialize")
 	errInvalidATXID          = errors.New("ballot has invalid ATXID")
 	errMissingEpochData      = errors.New("epoch data is missing in ref ballot")
@@ -43,7 +42,6 @@ var (
 	errDuplicateTX           = errors.New("duplicate TxID in proposal")
 	errKnownProposal         = errors.New("known proposal")
 	errKnownBallot           = errors.New("known ballot")
-	errInvalidVote           = errors.New("invalid layer/height in the vote")
 	errMaliciousBallot       = errors.New("malicious ballot")
 	errWrongSmesherID        = errors.New("ballot atx from a different smesher")
 )
@@ -136,22 +134,6 @@ func NewHandler(
 	return b
 }
 
-// HandleProposal is the gossip receiver for Proposal.
-func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
-	err := h.handleProposalData(ctx, peer, msg)
-	switch {
-	case err == nil:
-		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedData):
-		return pubsub.ValidationReject
-	case errors.Is(err, errKnownProposal):
-		return pubsub.ValidationIgnore
-	default:
-		h.logger.WithContext(ctx).With().Warning("failed to process proposal gossip", log.Err(err))
-		return pubsub.ValidationIgnore
-	}
-}
-
 // HandleSyncedBallot handles Ballot data from sync.
 func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []byte) error {
 	logger := h.logger.WithContext(ctx)
@@ -207,11 +189,11 @@ func collectHashes(a any) []types.Hash32 {
 
 	b, ok := a.(types.Ballot)
 	if ok {
-		hashes := types.BlockIDsToHashes(ballotBlockView(&b))
+		hashes := []types.Hash32{b.Votes.Base.AsHash32()}
 		if b.RefBallot != types.EmptyBallotID {
 			hashes = append(hashes, b.RefBallot.AsHash32())
 		}
-		return append(hashes, b.Votes.Base.AsHash32())
+		return hashes
 	}
 	log.Fatal("unexpected type")
 	return nil
@@ -219,14 +201,24 @@ func collectHashes(a any) []types.Hash32 {
 
 // HandleSyncedProposal handles Proposal data from sync.
 func (h *Handler) HandleSyncedProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
-	err := h.handleProposalData(ctx, peer, data)
+	err := h.HandleProposal(ctx, peer, data)
 	if errors.Is(err, errKnownProposal) {
 		return nil
 	}
 	return err
 }
 
-func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []byte) error {
+// HandleProposal is the gossip receiver for Proposal.
+func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
+	err := h.handleProposal(ctx, peer, data)
+	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownProposal) {
+		h.logger.WithContext(ctx).With().Warning("failed to process proposal gossip", log.Err(err))
+	}
+	return err
+}
+
+// HandleProposal is the gossip receiver for Proposal.
+func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
 	receivedTime := time.Now()
 	logger := h.logger.WithContext(ctx)
 
@@ -305,7 +297,7 @@ func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []
 		return fmt.Errorf("save proposal: %w", err)
 	}
 	proposalDuration.WithLabelValues(dbSave).Observe(float64(time.Since(t5)))
-	logger.With().Info("added proposal to database")
+	logger.With().Debug("added proposal to database")
 
 	t6 := time.Now()
 	if err := h.mesh.AddTXsFromProposal(ctx, p.Layer, p.ID(), p.TxIDs); err != nil {
@@ -452,14 +444,6 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 	// to the hare output within hdist of the current layer when producing a ballot.
 	for _, vote := range b.Votes.Support {
 		exceptions[vote.ID] = struct{}{}
-		block, err := blocks.Get(h.cdb, vote.ID)
-		if err != nil {
-			h.logger.WithContext(ctx).With().Error("failed to get block layer", log.Err(err))
-			return fmt.Errorf("check exception get block layer: %w", err)
-		}
-		if block.ToVote() != vote {
-			return fmt.Errorf("%w: encoded vote %+v doesn't match actual %+v", errInvalidVote, vote, block.ToVote())
-		}
 		if voted, ok := layers[vote.LayerID]; ok {
 			// already voted for a block in this layer
 			if voted != vote.ID && vote.LayerID.Add(h.cfg.Hdist).After(b.Layer) {
@@ -483,15 +467,6 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 			h.logger.WithContext(ctx).With().Warning("conflicting votes on block", vote.ID, b.ID(), b.Layer)
 			return fmt.Errorf("%w: block %s is referenced multiple times in exceptions of ballot %s at layer %v",
 				errConflictingExceptions, vote.ID, b.ID(), b.Layer)
-		}
-		block, err := blocks.Get(h.cdb, vote.ID)
-		if err != nil {
-			h.logger.WithContext(ctx).With().Error("failed to get block layer", log.Err(err))
-			return fmt.Errorf("check exception get block layer: %w", err)
-		}
-		if block.ToVote() != vote {
-			return fmt.Errorf("%w encoded vote %+v doesn't match actual %+v",
-				errInvalidVote, vote, block.ToVote())
 		}
 		layers[vote.LayerID] = vote.ID
 	}
@@ -517,17 +492,6 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 	return nil
 }
 
-func ballotBlockView(b *types.Ballot) []types.BlockID {
-	combined := make([]types.BlockID, 0, len(b.Votes.Support)+len(b.Votes.Against))
-	for _, vote := range b.Votes.Support {
-		combined = append(combined, vote.ID)
-	}
-	for _, vote := range b.Votes.Against {
-		combined = append(combined, vote.ID)
-	}
-	return combined
-}
-
 func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ballot) error {
 	var blts []types.BallotID
 	if b.Votes.Base != types.EmptyBallotID {
@@ -542,13 +506,6 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 
 	if err := h.fetchReferencedATXs(ctx, b); err != nil {
 		return fmt.Errorf("fetch referenced ATXs: %w", err)
-	}
-
-	bids := ballotBlockView(b)
-	if len(bids) > 0 {
-		if err := h.fetcher.GetBlocks(ctx, bids); err != nil {
-			return fmt.Errorf("fetch blocks: %w", err)
-		}
 	}
 	return nil
 }

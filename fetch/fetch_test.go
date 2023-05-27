@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -15,6 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -28,34 +31,36 @@ type testFetch struct {
 	mHashS  *mocks.Mockrequester
 	mMHashS *mocks.Mockrequester
 
-	mMesh      *mocks.MockmeshProvider
-	mMalH      *mocks.MockMalfeasanceValidator
-	mAtxH      *mocks.MockAtxValidator
-	mBallotH   *mocks.MockBallotValidator
-	mBlocksH   *mocks.MockBlockValidator
-	mProposalH *mocks.MockProposalValidator
-	method     int
-	mTxH       *mocks.MockTxValidator
-	mPoetH     *mocks.MockPoetValidator
+	mMesh        *mocks.MockmeshProvider
+	mMalH        *mocks.MockSyncValidator
+	mAtxH        *mocks.MockSyncValidator
+	mBallotH     *mocks.MockSyncValidator
+	mBlocksH     *mocks.MockSyncValidator
+	mProposalH   *mocks.MockSyncValidator
+	method       int
+	mTxBlocksH   *mocks.MockSyncValidator
+	mTxProposalH *mocks.MockSyncValidator
+	mPoetH       *mocks.MockSyncValidator
 }
 
 func createFetch(tb testing.TB) *testFetch {
 	ctrl := gomock.NewController(tb)
 	tf := &testFetch{
-		mh:         mocks.NewMockhost(ctrl),
-		mMalS:      mocks.NewMockrequester(ctrl),
-		mAtxS:      mocks.NewMockrequester(ctrl),
-		mLyrS:      mocks.NewMockrequester(ctrl),
-		mOpnS:      mocks.NewMockrequester(ctrl),
-		mHashS:     mocks.NewMockrequester(ctrl),
-		mMHashS:    mocks.NewMockrequester(ctrl),
-		mMalH:      mocks.NewMockMalfeasanceValidator(ctrl),
-		mAtxH:      mocks.NewMockAtxValidator(ctrl),
-		mBallotH:   mocks.NewMockBallotValidator(ctrl),
-		mBlocksH:   mocks.NewMockBlockValidator(ctrl),
-		mProposalH: mocks.NewMockProposalValidator(ctrl),
-		mTxH:       mocks.NewMockTxValidator(ctrl),
-		mPoetH:     mocks.NewMockPoetValidator(ctrl),
+		mh:           mocks.NewMockhost(ctrl),
+		mMalS:        mocks.NewMockrequester(ctrl),
+		mAtxS:        mocks.NewMockrequester(ctrl),
+		mLyrS:        mocks.NewMockrequester(ctrl),
+		mOpnS:        mocks.NewMockrequester(ctrl),
+		mHashS:       mocks.NewMockrequester(ctrl),
+		mMHashS:      mocks.NewMockrequester(ctrl),
+		mMalH:        mocks.NewMockSyncValidator(ctrl),
+		mAtxH:        mocks.NewMockSyncValidator(ctrl),
+		mBallotH:     mocks.NewMockSyncValidator(ctrl),
+		mBlocksH:     mocks.NewMockSyncValidator(ctrl),
+		mProposalH:   mocks.NewMockSyncValidator(ctrl),
+		mTxBlocksH:   mocks.NewMockSyncValidator(ctrl),
+		mTxProposalH: mocks.NewMockSyncValidator(ctrl),
+		mPoetH:       mocks.NewMockSyncValidator(ctrl),
 	}
 	cfg := Config{
 		time.Millisecond * time.Duration(2000), // make sure we never hit the batch timeout
@@ -79,7 +84,7 @@ func createFetch(tb testing.TB) *testFetch {
 			meshHashProtocol: tf.mMHashS,
 		}),
 		withHost(tf.mh))
-	tf.Fetch.SetValidators(tf.mAtxH, tf.mPoetH, tf.mBallotH, tf.mBlocksH, tf.mProposalH, tf.mTxH, tf.mMalH)
+	tf.Fetch.SetValidators(tf.mAtxH, tf.mPoetH, tf.mBallotH, tf.mBlocksH, tf.mProposalH, tf.mTxBlocksH, tf.mTxProposalH, tf.mMalH)
 	return tf
 }
 
@@ -302,4 +307,95 @@ func TestFetch_RegisterPeerHashes(t *testing.T) {
 	peer := p2p.Peer("buddy")
 	f.RegisterPeerHashes(peer, hashes)
 	require.Equal(t, len(hashes), f.hashToPeers.Len())
+}
+
+func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
+	lg := logtest.New(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	t.Cleanup(cancel)
+	cfg := Config{
+		time.Minute * time.Duration(2000), // make sure we never hit the batch timeout
+		3,
+		3,
+		1000,
+		time.Second * time.Duration(3),
+		3,
+	}
+	p2pconf := p2p.DefaultConfig()
+	p2pconf.Listen = "/ip4/127.0.0.1/tcp/0"
+	p2pconf.DataDir = t.TempDir()
+
+	// Good host
+	genesisID := types.Hash20{}
+	h, err := p2p.New(ctx, lg, p2pconf, genesisID)
+	require.NoError(t, err)
+	t.Cleanup(func() { h.Close() })
+
+	// Bad host, will send a message that results in validation reject
+	p2pconf.DataDir = t.TempDir()
+	badPeerHost, err := p2p.New(ctx, lg, p2pconf, genesisID)
+	require.NoError(t, err)
+	t.Cleanup(func() { badPeerHost.Close() })
+
+	err = h.Connect(ctx, peer.AddrInfo{
+		ID:    badPeerHost.ID(),
+		Addrs: badPeerHost.Addrs(),
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(h.GetPeers()))
+
+	// This handler returns a ResponseBatch with an empty response that will fail validation on the remote peer
+	badPeerHandler := func(_ context.Context, data []byte) ([]byte, error) {
+		var b RequestBatch
+		codec.Decode(data, &b)
+
+		r := ResponseBatch{
+			ID:        b.ID,
+			Responses: []ResponseMessage{{}},
+		}
+		result, err := codec.Encode(&r)
+		// This runs in a different goroutine so we can't call t.Fatal or equivalent
+		if err != nil {
+			panic(err.Error())
+		}
+		return result, nil
+	}
+	server.New(badPeerHost, hashProtocol, badPeerHandler)
+
+	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, h,
+		WithContext(ctx),
+		WithConfig(cfg),
+		WithLogger(lg),
+	)
+
+	// We set a validatior just for atxs, this validator does not drop connections
+	vf := ValidatorFunc(func(ctx context.Context, id peer.ID, data []byte) error { return pubsub.ErrValidationReject })
+	fetcher.SetValidators(vf, nil, nil, nil, nil, nil, nil, nil)
+
+	// Request an atx by hash
+	_, err = fetcher.getHash(ctx, types.Hash32{}, datastore.ATXDB, fetcher.validators.atx.HandleMessage)
+	require.NoError(t, err)
+	fetcher.requestHashBatchFromPeers()
+
+	// Verify that connections remain up
+	for i := 0; i < 5; i++ {
+		conns := h.Network().ConnsToPeer(badPeerHost.ID())
+		require.Equal(t, 1, len(conns))
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Now wrap the atx validator with  DropPeerOnValidationReject and set it again
+	fetcher.SetValidators(ValidatorFunc(pubsub.DropPeerOnValidationReject(vf, h, lg)), nil, nil, nil, nil, nil, nil, nil)
+
+	// Request an atx by hash
+	_, err = fetcher.getHash(ctx, types.Hash32{}, datastore.ATXDB, fetcher.validators.atx.HandleMessage)
+	require.NoError(t, err)
+	fetcher.requestHashBatchFromPeers()
+
+	// See that the connection gets dropped
+	require.Eventually(t, func() bool {
+		return len(h.Host.Network().ConnsToPeer(badPeerHost.ID())) == 0
+	}, time.Second*15, time.Millisecond*200)
+	require.Equal(t, 0, len(h.GetPeers()))
 }

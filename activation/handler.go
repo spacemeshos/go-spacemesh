@@ -26,7 +26,7 @@ import (
 
 var (
 	errKnownAtx      = errors.New("known atx")
-	errMalformedData = errors.New("malformed data")
+	errMalformedData = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
 	errMaliciousATX  = errors.New("malicious atx")
 )
 
@@ -208,7 +208,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	expectedChallengeHash := atx.NIPostChallenge.Hash()
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	leaves, err := h.nipostValidator.NIPost(atx.SmesherID, *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
+	leaves, err := h.nipostValidator.NIPost(ctx, atx.SmesherID, *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
@@ -216,7 +216,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	return atx.Verify(baseTickHeight, leaves/h.tickSize)
 }
 
-func (h *Handler) validateInitialAtx(_ context.Context, atx *types.ActivationTx) error {
+func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationTx) error {
 	if atx.InitialPost == nil {
 		return fmt.Errorf("no prevATX declared, but initial Post is not included")
 	}
@@ -234,7 +234,7 @@ func (h *Handler) validateInitialAtx(_ context.Context, atx *types.ActivationTx)
 	initialPostMetadata := *atx.NIPost.PostMetadata
 	initialPostMetadata.Challenge = shared.ZeroChallenge
 
-	if err := h.nipostValidator.Post(atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
+	if err := h.nipostValidator.Post(ctx, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid initial Post: %w", err)
 	}
 
@@ -442,28 +442,9 @@ func (h *Handler) GetPosAtxID() (types.ATXID, error) {
 	return id, nil
 }
 
-// HandleGossipAtx handles the atx gossip data channel.
-func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
-	err := h.handleAtxData(ctx, peer, msg)
-	switch {
-	case err == nil:
-		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedData):
-		return pubsub.ValidationReject
-	case errors.Is(err, errKnownAtx):
-		return pubsub.ValidationIgnore
-	default:
-		h.log.WithContext(ctx).With().Warning("failed to process atx gossip",
-			log.Stringer("sender", peer),
-			log.Err(err),
-		)
-		return pubsub.ValidationIgnore
-	}
-}
-
 // HandleAtxData handles atxs received either by gossip or sync.
 func (h *Handler) HandleAtxData(ctx context.Context, peer p2p.Peer, data []byte) error {
-	err := h.handleAtxData(ctx, peer, data)
+	err := h.HandleGossipAtx(ctx, peer, data)
 	if errors.Is(err, errKnownAtx) {
 		return nil
 	}
@@ -481,10 +462,22 @@ func (h *Handler) registerHashes(atx *types.ActivationTx, peer p2p.Peer) {
 	h.fetcher.RegisterPeerHashes(peer, maps.Keys(hashes))
 }
 
-func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte) error {
+// HandleGossipAtx handles the atx gossip data channel.
+func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
+	err := h.handleGossipAtx(ctx, peer, msg)
+	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
+		h.log.WithContext(ctx).With().Warning("failed to process atx gossip",
+			log.Stringer("sender", peer),
+			log.Err(err),
+		)
+	}
+	return err
+}
+
+func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
 	receivedTime := time.Now()
 	var atx types.ActivationTx
-	if err := codec.Decode(data, &atx); err != nil {
+	if err := codec.Decode(msg, &atx); err != nil {
 		return fmt.Errorf("%w: %v", errMalformedData, err)
 	}
 
@@ -541,7 +534,7 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 		r.OnAtx(header)
 	}
 	events.ReportNewActivation(vAtx)
-	logger.With().Info("new atx", log.Inline(vAtx), log.Int("size", len(data)))
+	logger.With().Info("new atx", log.Inline(vAtx), log.Int("size", len(msg)))
 	return nil
 }
 

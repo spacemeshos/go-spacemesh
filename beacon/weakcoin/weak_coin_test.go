@@ -2,6 +2,7 @@ package weakcoin_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -84,7 +85,7 @@ func TestWeakCoin(t *testing.T) {
 		nodeSig          types.VrfSignature
 		mining, expected bool
 		msg              []byte
-		result           pubsub.ValidationResult
+		result           func(error) bool
 	}{
 		{
 			desc:     "node not mining",
@@ -98,7 +99,7 @@ func TestWeakCoin(t *testing.T) {
 				NodeID:       zeroLSBMiner,
 				VrfSignature: zeroLSBSig,
 			}),
-			result: pubsub.ValidationAccept,
+			result: nilErr,
 		},
 		{
 			desc:     "node mining",
@@ -112,7 +113,7 @@ func TestWeakCoin(t *testing.T) {
 				NodeID:       zeroLSBMiner,
 				VrfSignature: zeroLSBSig,
 			}),
-			result: pubsub.ValidationIgnore,
+			result: isErr,
 		},
 		{
 			desc:     "node mining but exceed threshold",
@@ -126,7 +127,7 @@ func TestWeakCoin(t *testing.T) {
 				NodeID:       zeroLSBMiner,
 				VrfSignature: zeroLSBSig,
 			}),
-			result: pubsub.ValidationAccept,
+			result: nilErr,
 		},
 		{
 			desc:     "node only miner",
@@ -150,7 +151,7 @@ func TestWeakCoin(t *testing.T) {
 			var wc *weakcoin.WeakCoin
 			mockPublisher := mocks.NewMockPublisher(ctrl)
 			mockPublisher.EXPECT().Publish(gomock.Any(), pubsub.BeaconWeakCoinProtocol, gomock.Any()).DoAndReturn(
-				func(ctx context.Context, _ string, msg []byte) pubsub.ValidationResult {
+				func(ctx context.Context, _ string, msg []byte) error {
 					return wc.HandleProposal(ctx, "", msg)
 				},
 			).AnyTimes()
@@ -176,7 +177,7 @@ func TestWeakCoin(t *testing.T) {
 			}
 
 			if len(tc.msg) > 0 {
-				require.Equal(t, tc.result, wc.HandleProposal(context.Background(), "", tc.msg))
+				require.True(t, tc.result(wc.HandleProposal(context.Background(), "", tc.msg)))
 			}
 			wc.FinishRound(context.Background())
 
@@ -208,7 +209,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 		startedEpoch types.EpochID
 		startedRound types.RoundID
 		msg          []byte
-		expected     pubsub.ValidationResult
+		expected     func(error) bool
 	}{
 		{
 			desc:         "ValidProposal",
@@ -221,14 +222,14 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationAccept,
+			expected: nilErr,
 		},
 		{
 			desc:         "Malformed",
 			startedEpoch: epoch,
 			startedRound: round,
 			msg:          []byte{1, 2, 3},
-			expected:     pubsub.ValidationReject,
+			expected:     isValidationRejectErr,
 		},
 		{
 			desc:         "ExceedAllowance",
@@ -241,7 +242,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationIgnore,
+			expected: isErr,
 		},
 		{
 			desc:         "ExceedThreshold",
@@ -254,7 +255,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       highLSBMiner,
 				VrfSignature: higherThreshold,
 			}),
-			expected: pubsub.ValidationIgnore,
+			expected: isErr,
 		},
 		{
 			desc:         "PreviousEpoch",
@@ -267,7 +268,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationIgnore,
+			expected: isErr,
 		},
 		{
 			desc:         "NextEpoch",
@@ -280,7 +281,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationIgnore,
+			expected: isErr,
 		},
 		{
 			desc:         "PreviousRound",
@@ -293,7 +294,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationIgnore,
+			expected: isErr,
 		},
 		{
 			desc:         "NextRound",
@@ -306,7 +307,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				NodeID:       oneLSBMiner,
 				VrfSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationAccept,
+			expected: nilErr,
 		},
 	}
 	for _, tc := range tcs {
@@ -330,7 +331,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			wc.StartEpoch(context.Background(), tc.startedEpoch)
 			wc.StartRound(context.Background(), tc.startedRound, nil)
 
-			require.Equal(t, tc.expected, wc.HandleProposal(context.Background(), "", tc.msg))
+			require.True(t, tc.expected(wc.HandleProposal(context.Background(), "", tc.msg)))
 			wc.FinishRound(context.Background())
 		})
 	}
@@ -521,4 +522,16 @@ func FuzzMessageConsistency(f *testing.F) {
 
 func FuzzMessageStateSafety(f *testing.F) {
 	tester.FuzzSafety[weakcoin.Message](f)
+}
+
+func nilErr(err error) bool {
+	return err == nil
+}
+
+func isErr(err error) bool {
+	return err != nil
+}
+
+func isValidationRejectErr(err error) bool {
+	return errors.Is(err, pubsub.ErrValidationReject)
 }

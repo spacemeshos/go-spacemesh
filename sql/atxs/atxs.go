@@ -403,3 +403,17 @@ func All(db sql.Executor) ([]types.ATXID, error) {
 	}
 	return all, nil
 }
+
+// LatestEpoch with atxs.
+func LatestEpoch(db sql.Executor) (types.EpochID, error) {
+	var epoch types.EpochID
+	if _, err := db.Exec("select max(epoch) from atxs;",
+		nil,
+		func(stmt *sql.Statement) bool {
+			epoch = types.EpochID(uint32(stmt.ColumnInt64(0)))
+			return true
+		}); err != nil {
+		return epoch, fmt.Errorf("latest epoch: %w", err)
+	}
+	return epoch, nil
+}

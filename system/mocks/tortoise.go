@@ -114,10 +114,10 @@ func (mr *MockTortoiseMockRecorder) TallyVotes(arg0, arg1 interface{}) *gomock.C
 }
 
 // Updates mocks base method.
-func (m *MockTortoise) Updates() map[types.LayerID]map[types.BlockID]bool {
+func (m *MockTortoise) Updates() []result.Layer {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Updates")
-	ret0, _ := ret[0].(map[types.LayerID]map[types.BlockID]bool)
+	ret0, _ := ret[0].([]result.Layer)
 	return ret0
 }
 
