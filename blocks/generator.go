@@ -298,6 +298,6 @@ func (g *Generator) genBlockOptimistic(ctx context.Context, logger log.Log, md *
 	if err != nil {
 		return nil, false, fmt.Errorf("execute in situ: %w", err)
 	}
-	logger.With().Info("block generated and executed", log.Inline(block))
+	logger.With().Debug("block generated and executed", log.Inline(block))
 	return block, true, nil
 }

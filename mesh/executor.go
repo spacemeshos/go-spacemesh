@@ -116,6 +116,7 @@ func (e *Executor) ExecuteOptimistic(
 		log.Duration("duration", time.Since(start)),
 		log.Int("count", len(executed)),
 		log.Int("skipped", len(ineffective)),
+		log.Int("rewards", len(b.Rewards)),
 	)
 	return b, nil
 }
