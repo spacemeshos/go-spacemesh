@@ -288,7 +288,7 @@ func (proc *consensusProcess) eventLoop() {
 	ctx := proc.ctx
 	logger := proc.WithContext(ctx).WithFields(proc.layer)
 	logger.With().Info("consensus process started",
-		log.String("current_set", proc.value.String()),
+		log.Stringer("current_set", proc.value),
 		log.Int("set_size", proc.value.Size()),
 	)
 

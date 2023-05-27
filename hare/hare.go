@@ -384,7 +384,7 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 	set := NewSet(props)
 	cp := h.factory(ctx, h.config, lid, set, h.rolacle, h.sign, nonce, h.publisher, comm, clock)
 
-	logger.With().Info("starting hare", log.Int("num_proposals", len(props)))
+	logger.With().Debug("starting hare", log.Int("num_proposals", len(props)))
 	cp.Start()
 	h.addCP(logger, cp)
 	h.patrol.SetHareInCharge(lid)
