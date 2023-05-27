@@ -574,3 +574,37 @@ func TestPositioningID(t *testing.T) {
 		})
 	}
 }
+
+func TestLatest(t *testing.T) {
+	for _, tc := range []struct {
+		desc   string
+		epochs []uint32
+		expect uint32
+	}{
+		{"empty", nil, 0},
+		{"in order", []uint32{1, 2, 3, 4}, 4},
+		{"out of order", []uint32{3, 4, 1, 2}, 4},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			db := sql.InMemory()
+			for i, epoch := range tc.epochs {
+				full := &types.ActivationTx{
+					InnerActivationTx: types.InnerActivationTx{
+						NIPostChallenge: types.NIPostChallenge{
+							PublishEpoch: types.EpochID(epoch),
+						},
+					},
+				}
+				full.SetEffectiveNumUnits(1)
+				full.SetReceived(time.Now())
+				full.SetID(types.ATXID{byte(i)})
+				vAtx, err := full.Verify(0, 1)
+				require.NoError(t, err)
+				require.NoError(t, atxs.Add(db, vAtx))
+			}
+			latest, err := atxs.LatestEpoch(db)
+			require.NoError(t, err)
+			require.EqualValues(t, tc.expect, latest)
+		})
+	}
+}

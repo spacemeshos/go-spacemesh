@@ -354,3 +354,17 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 	}
 	return rst, nil
 }
+
+// LatestEpoch with atxs.
+func LatestEpoch(db sql.Executor) (types.EpochID, error) {
+	var epoch types.EpochID
+	if _, err := db.Exec("select max(epoch) from atxs;",
+		nil,
+		func(stmt *sql.Statement) bool {
+			epoch = types.EpochID(uint32(stmt.ColumnInt64(0)))
+			return true
+		}); err != nil {
+		return epoch, fmt.Errorf("latest layer: %w", err)
+	}
+	return epoch, nil
+}
