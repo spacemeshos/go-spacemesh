@@ -380,9 +380,10 @@ func (app *App) LoadCheckpoint(ctx context.Context) error {
 		return fmt.Errorf("restore layer not set")
 	}
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx: types.ATXID(app.Config.Genesis.GoldenATX()),
-		DataDir:   app.Config.DataDir(),
-		DbFile:    dbFile,
+		GoldenAtx:      types.ATXID(app.Config.Genesis.GoldenATX()),
+		DataDir:        app.Config.DataDir(),
+		DbFile:         dbFile,
+		PreserveOwnAtx: app.Config.Recovery.PreserveOwnAtx,
 	}
 	app.log.WithContext(ctx).With().Info("recover from checkpoint",
 		log.String("url", checkpointFile),

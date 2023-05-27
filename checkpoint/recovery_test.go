@@ -234,79 +234,102 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	require.Nil(t, newdb)
 }
 
-func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointdata))
-		require.NoError(t, err)
-	}))
-	defer ts.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx: types.ATXID{1},
-		DataDir:   t.TempDir(),
-		DbFile:    "test.sql",
-	}
-
-	olddb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
-	require.NoError(t, err)
-	require.NotNil(t, olddb)
-	nid := types.NodeID{1, 2, 3}
-	prev := newvatx(t, newatx(types.ATXID{12}, &types.ATXID{1}, 2, 0, 123, nid.Bytes()))
-	require.NoError(t, atxs.Add(olddb, prev))
-	atx := newatx(types.ATXID{13}, nil, 3, 1, 0, nid.Bytes())
-	atx.PrevATXID = prev.ID()
-	atx.PositioningATX = prev.ID()
-	atx.NIPost = &types.NIPost{
-		PostMetadata: &types.PostMetadata{
-			Challenge: []byte{3, 4, 5},
+func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
+	tt := []struct {
+		name     string
+		preserve bool
+	}{
+		{
+			name:     "preserve own atx",
+			preserve: true,
+		},
+		{
+			name: "do not preserve own atx",
 		},
 	}
-	vatx := newvatx(t, atx)
-	require.NoError(t, atxs.Add(olddb, vatx))
-	proofMessage := &types.PoetProofMessage{
-		PoetProof: types.PoetProof{
-			MerkleProof: shared.MerkleProof{
-				Root:         []byte{1, 2, 3},
-				ProvenLeaves: [][]byte{{1}, {2}},
-				ProofNodes:   [][]byte{{1}, {2}},
-			},
-			LeafCount: 1234,
-		},
-		PoetServiceID: []byte("poet_id_123456"),
-		RoundID:       "1337",
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				require.Equal(t, http.MethodGet, r.Method)
+				w.WriteHeader(http.StatusOK)
+				_, err := w.Write([]byte(checkpointdata))
+				require.NoError(t, err)
+			}))
+			defer ts.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			cfg := &checkpoint.RecoverConfig{
+				GoldenAtx:      types.ATXID{1},
+				DataDir:        t.TempDir(),
+				DbFile:         "test.sql",
+				PreserveOwnAtx: tc.preserve,
+			}
+
+			olddb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+			require.NoError(t, err)
+			require.NotNil(t, olddb)
+			nid := types.NodeID{1, 2, 3}
+			prev := newvatx(t, newatx(types.ATXID{12}, &types.ATXID{1}, 2, 0, 123, nid.Bytes()))
+			require.NoError(t, atxs.Add(olddb, prev))
+			atx := newatx(types.ATXID{13}, nil, 3, 1, 0, nid.Bytes())
+			atx.PrevATXID = prev.ID()
+			atx.PositioningATX = prev.ID()
+			atx.NIPost = &types.NIPost{
+				PostMetadata: &types.PostMetadata{
+					Challenge: []byte{3, 4, 5},
+				},
+			}
+			vatx := newvatx(t, atx)
+			require.NoError(t, atxs.Add(olddb, vatx))
+			proofMessage := &types.PoetProofMessage{
+				PoetProof: types.PoetProof{
+					MerkleProof: shared.MerkleProof{
+						Root:         []byte{1, 2, 3},
+						ProvenLeaves: [][]byte{{1}, {2}},
+						ProofNodes:   [][]byte{{1}, {2}},
+					},
+					LeafCount: 1234,
+				},
+				PoetServiceID: []byte("poet_id_123456"),
+				RoundID:       "1337",
+			}
+			encoded, err := codec.Encode(proofMessage)
+			require.NoError(t, err)
+			require.NoError(t, poets.Add(olddb, types.PoetProofRef(atx.GetPoetProofRef()), encoded, proofMessage.PoetServiceID, proofMessage.RoundID))
+			require.NoError(t, olddb.Close())
+
+			url := fmt.Sprintf("%s/snapshot-15", ts.URL)
+			require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url, 18))
+
+			newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+			require.NoError(t, err)
+			require.NotNil(t, newdb)
+			t.Cleanup(func() { require.NoError(t, newdb.Close()) })
+			extras := verifyDbContent(t, newdb)
+			if tc.preserve {
+				require.ElementsMatch(t, extras, []*types.VerifiedActivationTx{prev, vatx})
+				gotProof, err := poets.Get(newdb, types.PoetProofRef(atx.GetPoetProofRef()))
+				require.NoError(t, err)
+				require.Equal(t, encoded, gotProof)
+			} else {
+				require.Empty(t, extras)
+			}
+			restore, err := recovery.CheckpointInfo(newdb)
+			require.NoError(t, err)
+			require.EqualValues(t, 18, restore)
+
+			// sqlite create .sql, .sql-shm and .sql-wal files.
+			files, err := filepath.Glob(fmt.Sprintf("%s/backup.*/%s*", cfg.DataDir, cfg.DbFile))
+			require.NoError(t, err)
+			require.Greater(t, len(files), 1)
+		})
 	}
-	encoded, err := codec.Encode(proofMessage)
-	require.NoError(t, err)
-	require.NoError(t, poets.Add(olddb, types.PoetProofRef(atx.GetPoetProofRef()), encoded, proofMessage.PoetServiceID, proofMessage.RoundID))
-	require.NoError(t, olddb.Close())
-
-	url := fmt.Sprintf("%s/snapshot-15", ts.URL)
-	require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url, 18))
-
-	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
-	require.NoError(t, err)
-	require.NotNil(t, newdb)
-	t.Cleanup(func() { require.NoError(t, newdb.Close()) })
-	extras := verifyDbContent(t, newdb)
-	require.ElementsMatch(t, extras, []*types.VerifiedActivationTx{prev, vatx})
-	gotProof, err := poets.Get(newdb, types.PoetProofRef(atx.GetPoetProofRef()))
-	require.NoError(t, err)
-	require.Equal(t, encoded, gotProof)
-	restore, err := recovery.CheckpointInfo(newdb)
-	require.NoError(t, err)
-	require.EqualValues(t, 18, restore)
-
-	// sqlite create .sql, .sql-shm and .sql-wal files.
-	files, err := filepath.Glob(fmt.Sprintf("%s/backup.*/%s*", cfg.DataDir, cfg.DbFile))
-	require.NoError(t, err)
-	require.Greater(t, len(files), 1)
 }
 
-func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
+func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodGet, r.Method)
 		w.WriteHeader(http.StatusOK)

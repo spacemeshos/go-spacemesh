@@ -31,14 +31,18 @@ type Config struct {
 	Uri     string `mapstructure:"recovery-uri"`
 	Restore uint32 `mapstructure:"recovery-layer"`
 
+	// set to false if atxs are not compatible before and after the checkpoint recovery.
+	PreserveOwnAtx bool
+
 	// only set for systests. recovery from file in $DataDir/recovery
 	RecoverFromDefaultDir bool
 }
 
 type RecoverConfig struct {
-	GoldenAtx types.ATXID
-	DataDir   string
-	DbFile    string
+	GoldenAtx      types.ATXID
+	DataDir        string
+	DbFile         string
+	PreserveOwnAtx bool
 }
 
 func RecoveryDir(dataDir string) string {
@@ -198,6 +202,9 @@ func preserveOwnData(
 	data *recoverydata,
 ) (ownAtxData, error) {
 	var own ownAtxData
+	if !cfg.PreserveOwnAtx {
+		return own, nil
+	}
 	atxid, err := atxs.GetLastIDByNodeID(db, nodeID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return own, fmt.Errorf("query own last atx id: %w", err)
