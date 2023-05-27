@@ -232,7 +232,7 @@ func (c *Certifier) createIfNeeded(lid types.LayerID, bid types.BlockID) {
 // RegisterForCert register to generate a certificate for the specified layer/block.
 func (c *Certifier) RegisterForCert(ctx context.Context, lid types.LayerID, bid types.BlockID) error {
 	logger := c.logger.WithContext(ctx).WithFields(lid, bid)
-	logger.Info("certifier registered")
+	logger.Debug("certifier registered")
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
