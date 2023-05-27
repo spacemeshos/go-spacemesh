@@ -28,8 +28,11 @@ const (
 )
 
 type Config struct {
-	Uri     string `mapstructure:"checkpoint-file"`
-	Restore uint32 `mapstructure:"restore-layer"`
+	Uri     string `mapstructure:"recovery-uri"`
+	Restore uint32 `mapstructure:"recovery-layer"`
+
+	// only set for systests. recovery from file in $DataDir/recovery
+	RecoverFromDefaultDir bool
 }
 
 type RecoverConfig struct {

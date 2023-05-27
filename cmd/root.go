@@ -23,14 +23,11 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringP("preset", "p", "",
 		fmt.Sprintf("preset overwrites default values of the config. options %+s", presets.Options()))
 
-	cmd.PersistentFlags().Bool("recover-from-default-dir", false,
-		"allow nodes to recover from the default recovery dir. only used in systests.")
-
 	/** ======================== Checkpoint Flags ========================== **/
-	cmd.PersistentFlags().StringVarP(&cfg.Recovery.Uri,
-		"checkpoint-file", "k", cfg.Recovery.Uri, "reset the node state based on the supplied checkpoint file")
-	cmd.PersistentFlags().Uint32VarP(&cfg.Recovery.Restore,
-		"restore-layer", "r", cfg.Recovery.Restore, "restart the mesh with the checkpoint file at this layer")
+	cmd.PersistentFlags().StringVar(&cfg.Recovery.Uri,
+		"recovery-uri", cfg.Recovery.Uri, "reset the node state based on the supplied checkpoint file")
+	cmd.PersistentFlags().Uint32Var(&cfg.Recovery.Restore,
+		"recovery-layer", cfg.Recovery.Restore, "restart the mesh with the checkpoint file at this layer")
 
 	/** ======================== BaseConfig Flags ========================== **/
 	cmd.PersistentFlags().StringVarP(&cfg.BaseConfig.ConfigFile,

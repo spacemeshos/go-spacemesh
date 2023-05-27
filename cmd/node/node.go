@@ -338,9 +338,6 @@ type App struct {
 // the expected action for node operator is to supply new config with
 // --checkpoint-file and --restore-layer via config file or cmdline options.
 func defaultRecoveryFile(dataDir string) (string, types.LayerID, error) {
-	if !viper.GetBool("recover-from-default-dir") {
-		return "", 0, nil
-	}
 	recoverDir := checkpoint.RecoveryDir(dataDir)
 	files, err := filepath.Glob(fmt.Sprintf("%s%s*", recoverDir, string([]rune{filepath.Separator})))
 	if err != nil {
@@ -368,6 +365,9 @@ func (app *App) LoadCheckpoint(ctx context.Context) error {
 		err            error
 	)
 	if len(checkpointFile) == 0 {
+		if !app.Config.Recovery.RecoverFromDefaultDir {
+			return nil
+		}
 		checkpointFile, restore, err = defaultRecoveryFile(app.Config.DataDir())
 		if err != nil {
 			return err
