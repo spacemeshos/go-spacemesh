@@ -170,3 +170,46 @@ func TestRunner_Generate(t *testing.T) {
 		})
 	}
 }
+
+func TestRunner_Generate_Error(t *testing.T) {
+	tcs := []struct {
+		desc              string
+		missingVrf        bool
+		missingCommitment bool
+	}{
+		{
+			desc:       "no vrf nonce",
+			missingVrf: true,
+		},
+		{
+			desc:              "no commitment atx",
+			missingCommitment: true,
+		},
+	}
+	for _, tc := range tcs {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			db := sql.InMemory()
+			snapshot := types.LayerID(5)
+			var atx *types.ActivationTx
+			if tc.missingCommitment {
+				atx = newatx(types.ATXID{13}, nil, 2, 1, 11, []byte("smesher1"))
+			} else if tc.missingVrf {
+				atx = newatx(types.ATXID{13}, &types.ATXID{11}, 2, 1, 0, []byte("smesher1"))
+			}
+			createMesh(t, db, []*types.ActivationTx{atx}, allAccounts)
+
+			fs := afero.NewMemMapFs()
+			dir, err := afero.TempDir(fs, "", "Generate")
+			require.NoError(t, err)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			err = checkpoint.Generate(ctx, fs, db, dir, snapshot)
+			if tc.missingCommitment {
+				require.ErrorContains(t, err, "atxs snapshot commitment")
+			} else if tc.missingVrf {
+				require.ErrorContains(t, err, "atxs snapshot nonce")
+			}
+		})
+	}
+}

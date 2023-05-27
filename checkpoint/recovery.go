@@ -105,7 +105,7 @@ func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, 
 			} else if bdir != "" {
 				logger.WithContext(ctx).With().Info("old recovery data backed up", log.String("dir", bdir))
 			}
-			if err = copyfile(fs, parsed.Path, dst); err != nil {
+			if err = CopyFile(fs, parsed.Path, dst); err != nil {
 				return "", err
 			}
 			logger.With().Debug("copied file",
@@ -117,7 +117,7 @@ func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, 
 	}
 
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", fmt.Errorf("uri scheme %s not supported", uri)
+		return "", fmt.Errorf("uri scheme not supported: %s", uri)
 	}
 	if bdir, err := backupRecovery(fs, RecoveryDir(dataDir)); err != nil {
 		return "", err

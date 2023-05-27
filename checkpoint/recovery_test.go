@@ -105,23 +105,23 @@ func TestReadCheckpointAndDie(t *testing.T) {
 	defer ts.Close()
 
 	tt := []struct {
-		name string
-		uri  string
-		fail bool
+		name   string
+		uri    string
+		expErr string
 	}{
 		{
 			name: "all good",
 			uri:  fmt.Sprintf("%s/snapshot-15", ts.URL),
 		},
 		{
-			name: "file does not exist",
-			uri:  "file:///snapshot-15",
-			fail: true,
+			name:   "file does not exist",
+			uri:    "file:///snapshot-15",
+			expErr: "no such file or directory",
 		},
 		{
-			name: "not uri",
-			uri:  "snapshot-15",
-			fail: true,
+			name:   "invalid uri",
+			uri:    fmt.Sprintf("%s^/snapshot-15", ts.URL),
+			expErr: "parse recovery URI",
 		},
 	}
 
@@ -132,15 +132,16 @@ func TestReadCheckpointAndDie(t *testing.T) {
 			defer cancel()
 
 			dataDir := t.TempDir()
-			if tc.fail {
-				require.Error(t, checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, tc.uri, 18))
+			if len(tc.expErr) > 0 {
+				err := checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, tc.uri, 18)
+				require.ErrorContains(t, err, tc.expErr)
 			} else {
 				require.Panics(t, func() { checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, tc.uri, 18) })
 			}
 
 			fname := checkpoint.RecoveryFilename(dataDir, filepath.Base(tc.uri), 18)
 			got, err := os.ReadFile(fname)
-			if tc.fail {
+			if len(tc.expErr) > 0 {
 				require.ErrorIs(t, err, os.ErrNotExist)
 			} else {
 				require.NoError(t, err)
@@ -160,23 +161,23 @@ func TestRecoverFromHttp(t *testing.T) {
 	defer ts.Close()
 
 	tt := []struct {
-		name        string
-		uri         string
-		fail, exist bool
+		name   string
+		uri    string
+		expErr string
 	}{
 		{
 			name: "http",
 			uri:  fmt.Sprintf("%s/snapshot-15", ts.URL),
 		},
 		{
-			name: "url unreachable",
-			uri:  "http://nowhere/snapshot-15",
-			fail: true,
+			name:   "url unreachable",
+			uri:    "http://nowhere/snapshot-15",
+			expErr: "Temporary failure in name resolution",
 		},
 		{
-			name: "ftp",
-			uri:  "ftp://snapshot-15",
-			fail: true,
+			name:   "ftp",
+			uri:    "ftp://snapshot-15",
+			expErr: "uri scheme not supported",
 		},
 	}
 
@@ -194,8 +195,8 @@ func TestRecoverFromHttp(t *testing.T) {
 			}
 			db := sql.InMemory()
 			newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg, types.NodeID{2, 3, 4}, tc.uri, 18)
-			if tc.fail {
-				require.Error(t, err)
+			if len(tc.expErr) > 0 {
+				require.ErrorContains(t, err, tc.expErr)
 				return
 			}
 			require.NoError(t, err)

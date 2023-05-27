@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -25,6 +26,10 @@ func NewRecoveryFile(fs afero.Fs, path string) (*RecoveryFile, error) {
 	if err := fs.MkdirAll(filepath.Dir(path), dirPerm); err != nil {
 		return nil, fmt.Errorf("create dst dir %v: %w", filepath.Dir(path), err)
 	}
+	f, _ := fs.Stat(path)
+	if f != nil {
+		return nil, fmt.Errorf("%w: file already exist: %v", os.ErrExist, path)
+	}
 	tmpf, err := afero.TempFile(fs, filepath.Dir(path), filepath.Base(path))
 	if err != nil {
 		return nil, fmt.Errorf("%w: create tmp file", err)
@@ -36,7 +41,7 @@ func NewRecoveryFile(fs afero.Fs, path string) (*RecoveryFile, error) {
 	}, nil
 }
 
-func (rf *RecoveryFile) copy(fs afero.Fs, src io.Reader) error {
+func (rf *RecoveryFile) Copy(fs afero.Fs, src io.Reader) error {
 	n, err := io.Copy(rf.fwriter, src)
 	if err != nil {
 		return err
@@ -44,13 +49,11 @@ func (rf *RecoveryFile) copy(fs afero.Fs, src io.Reader) error {
 	if n == 0 {
 		return fmt.Errorf("no recovery data")
 	}
-	return rf.save(fs)
+	return rf.Save(fs)
 }
 
-func (rf *RecoveryFile) save(fs afero.Fs) error {
-	defer func() {
-		_ = rf.file.Close()
-	}()
+func (rf *RecoveryFile) Save(fs afero.Fs) error {
+	defer rf.file.Close()
 	if err := rf.fwriter.Flush(); err != nil {
 		return fmt.Errorf("flush tmp file: %w", err)
 	}
@@ -81,7 +84,7 @@ func ValidateSchema(data []byte) error {
 	return nil
 }
 
-func copyfile(fs afero.Fs, src, dst string) error {
+func CopyFile(fs afero.Fs, src, dst string) error {
 	rf, err := NewRecoveryFile(fs, dst)
 	if err != nil {
 		return fmt.Errorf("new recovery file %w", err)
@@ -90,10 +93,8 @@ func copyfile(fs afero.Fs, src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("open src recovery file: %w", err)
 	}
-	defer func() {
-		_ = srcf.Close()
-	}()
-	return rf.copy(fs, srcf)
+	defer srcf.Close()
+	return rf.Copy(fs, srcf)
 }
 
 func httpToLocalFile(ctx context.Context, resource *url.URL, fs afero.Fs, dst string) error {
@@ -105,14 +106,12 @@ func httpToLocalFile(ctx context.Context, resource *url.URL, fs afero.Fs, dst st
 	if err != nil {
 		return fmt.Errorf("http get bootstrap file: %w", err)
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
+	defer resp.Body.Close()
 	rf, err := NewRecoveryFile(fs, dst)
 	if err != nil {
 		return fmt.Errorf("new recovery file %w", err)
 	}
-	return rf.copy(fs, resp.Body)
+	return rf.Copy(fs, resp.Body)
 }
 
 func backupRecovery(fs afero.Fs, recoveryDir string) (string, error) {

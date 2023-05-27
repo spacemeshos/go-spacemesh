@@ -34,9 +34,7 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID)
 	if err != nil {
 		return nil, fmt.Errorf("create db tx: %s", err)
 	}
-	defer func() {
-		_ = tx.Release()
-	}()
+	defer tx.Release()
 
 	atxSnapshot, err := atxs.LatestN(tx, 2)
 	if err != nil {
@@ -103,7 +101,7 @@ func Generate(ctx context.Context, fs afero.Fs, db *sql.Database, dataDir string
 	if err = json.NewEncoder(rf.fwriter).Encode(checkpoint); err != nil {
 		return fmt.Errorf("marshal checkpoint json: %w", err)
 	}
-	if err = rf.save(fs); err != nil {
+	if err = rf.Save(fs); err != nil {
 		return err
 	}
 	return nil
