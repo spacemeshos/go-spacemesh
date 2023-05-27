@@ -62,18 +62,15 @@ func TestAll(t *testing.T) {
 		atxList = append(atxList, atx)
 	}
 
-	expected := map[types.ATXID]struct{}{}
+	var expected []types.ATXID
 	for _, atx := range atxList {
 		require.NoError(t, atxs.Add(db, atx))
-		expected[atx.ID()] = struct{}{}
+		expected = append(expected, atx.ID())
 	}
 
 	all, err := atxs.All(db)
 	require.NoError(t, err)
-	for _, got := range all {
-		delete(expected, got)
-	}
-	require.Empty(t, expected)
+	require.ElementsMatch(t, expected, all)
 }
 
 func TestHasID(t *testing.T) {
