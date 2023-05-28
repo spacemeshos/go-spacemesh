@@ -1053,7 +1053,6 @@ func TestBaseBallotEvictedBlock(t *testing.T) {
 		tortoise.TallyVotes(ctx, last)
 		verified = tortoise.LatestComplete()
 		require.Equal(t, last.Sub(1), verified)
-
 	}
 }
 
