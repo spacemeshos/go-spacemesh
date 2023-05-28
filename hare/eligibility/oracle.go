@@ -51,7 +51,7 @@ var (
 	errZeroCommitteeSize = errors.New("zero committee size")
 	errEmptyActiveSet    = errors.New("empty active set")
 	errZeroTotalWeight   = errors.New("zero total weight")
-	errMinerNotActive    = errors.New("miner not active in epoch")
+	ErrNotActive         = errors.New("oracle: miner is not active in epoch")
 )
 
 type cachedActiveSet struct {
@@ -180,7 +180,7 @@ func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.
 			log.String("actives", fmt.Sprintf("%v", actives)),
 			layer, log.Stringer("id.Key", id),
 		)
-		return 0, errMinerNotActive
+		return 0, fmt.Errorf("%w: %v", ErrNotActive, id)
 	}
 	return w, nil
 }
@@ -207,7 +207,6 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	// this is cheap in case the node is not eligible
 	minerWeight, err := o.minerWeight(ctx, layer, id)
 	if err != nil {
-		logger.With().Error("failed to get miner weight", log.Err(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 

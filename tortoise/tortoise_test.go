@@ -1063,6 +1063,7 @@ func TestBaseBallotEvictedBlock(t *testing.T) {
 		sim.WithSequence(2),
 	) {
 		last = lid
+		tortoise.Updates() // drain pending
 		tortoise.TallyVotes(ctx, lid)
 		verified = tortoise.LatestComplete()
 	}
@@ -1930,6 +1931,12 @@ func TestStateManagement(t *testing.T) {
 		verified = tortoise.LatestComplete()
 	}
 	require.Equal(t, last.Sub(1), verified)
+	require.Equal(t, types.GetEffectiveGenesis()-1, tortoise.trtl.evicted,
+		"should not be evicted unless pending is drained",
+	)
+
+	tortoise.Updates()
+	tortoise.TallyVotes(ctx, last)
 
 	evicted := tortoise.trtl.evicted
 	require.Equal(t, verified.Sub(window).Sub(1), evicted)
