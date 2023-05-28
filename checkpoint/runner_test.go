@@ -12,7 +12,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -49,8 +48,7 @@ func expectedCheckpoint(t *testing.T) *checkpoint.Checkpoint {
 	return &checkpoint.Checkpoint{
 		Version: "https://spacemesh.io/checkpoint.schema.json.1.0",
 		Data: checkpoint.InnerData{
-			CheckpointId: "snapshot-5-restore-7",
-			Restore:      7,
+			CheckpointId: "snapshot-5",
 			Atxs: []checkpoint.ShortAtx{
 				toShortAtx(newvatx(t, allAtxs[3]), allAtxs[0].CommitmentATX, allAtxs[0].VRFNonce),
 				toShortAtx(newvatx(t, allAtxs[2]), allAtxs[0].CommitmentATX, allAtxs[0].VRFNonce),
@@ -148,26 +146,20 @@ func TestRunner_Generate(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			db := sql.InMemory()
 			snapshot := types.LayerID(5)
-			restore := types.LayerID(7)
 			createMesh(t, db, tc.atxes, tc.accts)
 
 			fs := afero.NewMemMapFs()
 			dir, err := afero.TempDir(fs, "", "Generate")
 			require.NoError(t, err)
-			r := checkpoint.NewRunner(db,
-				checkpoint.WithFilesystem(fs),
-				checkpoint.WithLogger(logtest.New(t)),
-				checkpoint.WithDataDir(dir),
-			)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			fname, err := r.Generate(ctx, snapshot, restore)
+			err = checkpoint.Generate(ctx, fs, db, dir, snapshot)
 			if tc.fail {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
-			require.Equal(t, fname, checkpoint.SelfCheckpointFilename(dir, snapshot, restore))
+			fname := checkpoint.SelfCheckpointFilename(dir, snapshot)
 			persisted, err := afero.ReadFile(fs, fname)
 			require.NoError(t, err)
 			require.NoError(t, checkpoint.ValidateSchema(persisted))
@@ -175,6 +167,49 @@ func TestRunner_Generate(t *testing.T) {
 			expected := expectedCheckpoint(t)
 			require.NoError(t, json.Unmarshal(persisted, &got))
 			require.Equal(t, *expected, got)
+		})
+	}
+}
+
+func TestRunner_Generate_Error(t *testing.T) {
+	tcs := []struct {
+		desc              string
+		missingVrf        bool
+		missingCommitment bool
+	}{
+		{
+			desc:       "no vrf nonce",
+			missingVrf: true,
+		},
+		{
+			desc:              "no commitment atx",
+			missingCommitment: true,
+		},
+	}
+	for _, tc := range tcs {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			db := sql.InMemory()
+			snapshot := types.LayerID(5)
+			var atx *types.ActivationTx
+			if tc.missingCommitment {
+				atx = newatx(types.ATXID{13}, nil, 2, 1, 11, []byte("smesher1"))
+			} else if tc.missingVrf {
+				atx = newatx(types.ATXID{13}, &types.ATXID{11}, 2, 1, 0, []byte("smesher1"))
+			}
+			createMesh(t, db, []*types.ActivationTx{atx}, allAccounts)
+
+			fs := afero.NewMemMapFs()
+			dir, err := afero.TempDir(fs, "", "Generate")
+			require.NoError(t, err)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			err = checkpoint.Generate(ctx, fs, db, dir, snapshot)
+			if tc.missingCommitment {
+				require.ErrorContains(t, err, "atxs snapshot commitment")
+			} else if tc.missingVrf {
+				require.ErrorContains(t, err, "atxs snapshot nonce")
+			}
 		})
 	}
 }
