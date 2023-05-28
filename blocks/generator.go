@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare"
+	heligibility "github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbproposals "github.com/spacemeshos/go-spacemesh/sql/proposals"
@@ -238,7 +239,11 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) error {
 	}
 
 	if err := g.cert.CertifyIfEligible(ctx, logger.WithFields(hareOutput), out.Layer, hareOutput); err != nil {
-		logger.With().Warning("failed to certify block", hareOutput, log.Err(err))
+		if errors.Is(err, heligibility.ErrNotActive) {
+			logger.With().Debug("smesher is not active", log.Err(err))
+		} else {
+			logger.With().Warning("failed to certify block", hareOutput, log.Err(err))
+		}
 	}
 
 	if err := g.msh.ProcessLayerPerHareOutput(ctx, out.Layer, hareOutput, executed); err != nil {
