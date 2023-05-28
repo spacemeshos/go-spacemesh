@@ -77,7 +77,7 @@ func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
 	return t.verified.Sub(t.WindowSize), true
 }
 
-// evict makes sure we only keep a window of the last t.WindowSize layers.
+// evict makes sure we only keep a window of the last hdist layers.
 func (t *turtle) evict(ctx context.Context) {
 	// Don't evict before we've verified at least hdist layers
 	if !t.verified.After(types.GetEffectiveGenesis().Add(t.Hdist)) {

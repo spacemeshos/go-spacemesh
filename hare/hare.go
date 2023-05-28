@@ -376,7 +376,6 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 	var nonce *types.VRFPostIndex
 	nnc, err := h.msh.VRFNonce(h.nodeID, h.lastLayer.GetEpoch())
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.With().Error("failed to get vrf nonce", log.Err(err))
 		return false, fmt.Errorf("vrf nonce: %w", err)
 	} else if err == nil {
 		nonce = &nnc
@@ -391,7 +390,7 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		mchOut: h.mchMalfeasance,
 		report: h.outputChan,
 	}
-	props := goodProposals(h.Log, h.msh, h.nodeID, lid, beacon)
+	props := goodProposals(ctx, h.Log, h.msh, h.nodeID, lid, beacon)
 	preNumProposals.Add(float64(len(props)))
 	set := NewSet(props)
 	cp := h.factory(ctx, h.config, lid, set, h.rolacle, h.sign, nonce, h.publisher, comm, clock)
@@ -446,13 +445,13 @@ func (h *Hare) removeCP(ctx context.Context, lid types.LayerID) {
 // goodProposals finds the "good proposals" for the specified layer. a proposal is good if
 // it has the same beacon value as the node's beacon value.
 // any error encountered will be ignored and an empty set is returned.
-func goodProposals(logger log.Log, msh mesh, nodeID types.NodeID, lid types.LayerID, epochBeacon types.Beacon) []types.ProposalID {
+func goodProposals(ctx context.Context, logger log.Log, msh mesh, nodeID types.NodeID, lid types.LayerID, epochBeacon types.Beacon) []types.ProposalID {
 	props, err := msh.Proposals(lid)
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
-			logger.With().Warning("no proposals found for hare, using empty set", lid, log.Err(err))
+			logger.With().Warning("no proposals found for hare, using empty set", log.Context(ctx), lid, log.Err(err))
 		} else {
-			logger.With().Error("failed to get proposals for hare", lid, log.Err(err))
+			logger.With().Error("failed to get proposals for hare", log.Context(ctx), lid, log.Err(err))
 		}
 		return []types.ProposalID{}
 	}
@@ -467,7 +466,7 @@ func goodProposals(logger log.Log, msh mesh, nodeID types.NodeID, lid types.Laye
 	// and only observes the consensus process.
 	ownHdr, err = msh.GetEpochAtx(lid.GetEpoch(), nodeID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		logger.With().Error("failed to get own atx", log.Err(err))
+		logger.With().Error("failed to get own atx", log.Context(ctx), lid, log.Err(err))
 		return []types.ProposalID{}
 	}
 	if ownHdr != nil {
@@ -477,12 +476,14 @@ func goodProposals(logger log.Log, msh mesh, nodeID types.NodeID, lid types.Laye
 		if ownHdr != nil {
 			hdr, err := msh.GetAtxHeader(p.AtxID)
 			if err != nil {
-				logger.With().Error("failed to get atx", p.AtxID, log.Err(err))
+				logger.With().Error("failed to get atx", log.Context(ctx), lid, p.AtxID, log.Err(err))
 				return []types.ProposalID{}
 			}
 			if hdr.BaseTickHeight >= ownTickHeight {
 				// does not vote for future proposal
 				logger.With().Warning("proposal base tick height too high. skipping",
+					log.Context(ctx),
+					lid,
 					log.Uint64("proposal_height", hdr.BaseTickHeight),
 					log.Uint64("own_height", ownTickHeight),
 				)
@@ -498,7 +499,7 @@ func goodProposals(logger log.Log, msh mesh, nodeID types.NodeID, lid types.Laye
 			logger.With().Error("failed to get ref ballot", p.ID(), p.RefBallot, log.Err(err))
 			return []types.ProposalID{}
 		} else if refBallot.EpochData == nil {
-			logger.With().Error("ref ballot missing epoch data", refBallot.ID())
+			logger.With().Error("ref ballot missing epoch data", log.Context(ctx), lid, refBallot.ID())
 			return []types.ProposalID{}
 		} else {
 			beacon = refBallot.EpochData.Beacon
@@ -508,6 +509,8 @@ func goodProposals(logger log.Log, msh mesh, nodeID types.NodeID, lid types.Laye
 			result = append(result, p.ID())
 		} else {
 			logger.With().Warning("proposal has different beacon value",
+				log.Context(ctx),
+				lid,
 				p.ID(),
 				log.String("proposal_beacon", beacon.ShortString()),
 				log.String("epoch_beacon", epochBeacon.ShortString()))
@@ -584,12 +587,8 @@ func (h *Hare) tickLoop(ctx context.Context) {
 				continue
 			}
 			_, err := h.onTick(ctx, layer)
-			if err != nil {
-				h.With().Warning("hare failed",
-					log.Context(ctx),
-					layer,
-					log.Err(err),
-				)
+			if err != nil && !errors.Is(err, context.Canceled) {
+				h.With().Warning("hare failed", log.Context(ctx), layer, log.Err(err))
 			}
 		case <-h.ctx.Done():
 			return
