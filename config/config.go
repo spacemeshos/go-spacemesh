@@ -142,6 +142,7 @@ func DefaultConfig() Config {
 		LOGGING:         defaultLoggingConfig(),
 		Bootstrap:       bootstrap.DefaultConfig(),
 		Sync:            syncer.DefaultConfig(),
+		Recovery:        checkpoint.DefaultConfig(),
 	}
 }
 

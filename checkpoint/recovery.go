@@ -39,6 +39,12 @@ type Config struct {
 	RecoverFromDefaultDir bool
 }
 
+func DefaultConfig() Config {
+	return Config{
+		PreserveOwnAtx: true,
+	}
+}
+
 type RecoverConfig struct {
 	GoldenAtx      types.ATXID
 	DataDir        string
