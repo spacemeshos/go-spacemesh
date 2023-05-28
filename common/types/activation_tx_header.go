@@ -1,6 +1,8 @@
 package types
 
-import "time"
+import (
+	"time"
+)
 
 // ActivationTxHeader is the header of an activation transaction. It includes all fields from the NIPostChallenge, as
 // well as the coinbase address and total weight.
@@ -31,6 +33,7 @@ type ActivationTxHeader struct {
 	TickCount uint64
 
 	Received time.Time
+	Golden   bool
 }
 
 // GetWeight of the ATX. The total weight of the epoch is expected to fit in a uint64 and is

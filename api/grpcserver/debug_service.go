@@ -14,10 +14,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 )
 
 // DebugService exposes global state data, output from the STF.
 type DebugService struct {
+	db       *sql.Database
 	conState conservativeState
 	identity networkIdentity
 	oracle   oracle
@@ -29,8 +32,9 @@ func (d DebugService) RegisterService(server *Server) {
 }
 
 // NewDebugService creates a new grpc service using config data.
-func NewDebugService(conState conservativeState, host networkIdentity, oracle oracle) *DebugService {
+func NewDebugService(db *sql.Database, conState conservativeState, host networkIdentity, oracle oracle) *DebugService {
 	return &DebugService{
+		db:       db,
 		conState: conState,
 		identity: host,
 		oracle:   oracle,
@@ -38,10 +42,18 @@ func NewDebugService(conState conservativeState, host networkIdentity, oracle or
 }
 
 // Accounts returns current counter and balance for all accounts.
-func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.AccountsResponse, error) {
+func (d DebugService) Accounts(_ context.Context, in *pb.AccountsRequest) (*pb.AccountsResponse, error) {
 	log.Info("GRPC DebugServices.Accounts")
 
-	accounts, err := d.conState.GetAllAccounts()
+	var (
+		accts []*types.Account
+		err   error
+	)
+	if in.Layer == 0 {
+		accts, err = d.conState.GetAllAccounts()
+	} else {
+		accts, err = accounts.Snapshot(d.db, types.LayerID(in.Layer))
+	}
 	if err != nil {
 		log.Error("Failed to get all accounts from state: %s", err)
 		return nil, status.Errorf(codes.Internal, "error fetching accounts state")
@@ -49,7 +61,7 @@ func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.Accounts
 
 	res := &pb.AccountsResponse{}
 
-	for _, account := range accounts {
+	for _, account := range accts {
 		state := &pb.AccountState{
 			Counter: account.NextNonce,
 			Balance: &pb.Amount{Value: account.Balance},

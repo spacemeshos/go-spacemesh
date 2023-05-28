@@ -24,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	ps "github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
@@ -47,6 +48,8 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	conf2.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
 	app2, err := NewApp(&conf2)
 	require.NoError(t, err)
+
+	types.SetLayersPerEpoch(conf1.LayersPerEpoch)
 	t.Cleanup(func() {
 		app1.Cleanup(ctx)
 		app2.Cleanup(ctx)
@@ -124,7 +127,14 @@ func NewApp(conf *config.Config) (*App, error) {
 			events.EventHook())),
 	)
 
-	err := app.Initialize()
+	var err error
+	if err = app.Initialize(); err != nil {
+		return nil, err
+	}
+	app.edSgn, err = signing.NewEdSigner()
+	if err != nil {
+		return nil, err
+	}
 	return app, err
 }
 

@@ -48,6 +48,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
@@ -2475,7 +2476,8 @@ func TestDebugService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	identity := NewMocknetworkIdentity(ctrl)
 	mOracle := NewMockoracle(ctrl)
-	svc := NewDebugService(conStateAPI, identity, mOracle)
+	db := sql.InMemory()
+	svc := NewDebugService(db, conStateAPI, identity, mOracle)
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -2484,7 +2486,7 @@ func TestDebugService(t *testing.T) {
 	c := pb.NewDebugServiceClient(conn)
 
 	t.Run("Accounts", func(t *testing.T) {
-		res, err := c.Accounts(context.Background(), &empty.Empty{})
+		res, err := c.Accounts(context.Background(), &pb.AccountsRequest{})
 		require.NoError(t, err)
 		require.Equal(t, 2, len(res.AccountWrapper))
 
@@ -2496,6 +2498,33 @@ func TestDebugService(t *testing.T) {
 		require.Contains(t, addresses, globalTx.Principal.String())
 		require.Contains(t, addresses, addr1.String())
 	})
+
+	t.Run("Accounts at layer", func(t *testing.T) {
+		lid := types.LayerID(11)
+		for address, balance := range conStateAPI.balances {
+			accounts.Update(db, &types.Account{
+				Address:   address,
+				Balance:   balance.Uint64(),
+				NextNonce: conStateAPI.nonces[address],
+				Layer:     lid,
+			})
+		}
+		res, err := c.Accounts(context.Background(), &pb.AccountsRequest{Layer: lid.Uint32()})
+		require.NoError(t, err)
+		require.Equal(t, 2, len(res.AccountWrapper))
+
+		// Get the list of addresses and compare them regardless of order
+		var addresses []string
+		for _, a := range res.AccountWrapper {
+			addresses = append(addresses, a.AccountId.Address)
+		}
+		require.Contains(t, addresses, globalTx.Principal.String())
+		require.Contains(t, addresses, addr1.String())
+
+		_, err = c.Accounts(context.Background(), &pb.AccountsRequest{Layer: lid.Uint32() - 1})
+		require.Error(t, err)
+	})
+
 	t.Run("networkID", func(t *testing.T) {
 		id := p2p.Peer("test")
 		identity.EXPECT().ID().Return(id)
