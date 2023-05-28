@@ -139,7 +139,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 	if existingATX != nil { // Already processed
 		return nil
 	}
-	h.log.WithContext(ctx).With().Info("processing atx",
+	h.log.WithContext(ctx).With().Debug("processing atx",
 		atx.ID(),
 		atx.PublishEpoch,
 		log.Stringer("smesher", atx.SmesherID),
@@ -152,7 +152,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 			log.Err(err),
 		)
 	} else {
-		h.log.WithContext(ctx).With().Info("atx is valid", atx.ID())
+		h.log.WithContext(ctx).With().Debug("atx is valid", atx.ID())
 	}
 	if err := h.storeAtx(ctx, atx); err != nil {
 		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
@@ -403,7 +403,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		delete(h.atxChannels, atx.ID())
 	}
 
-	h.log.WithContext(ctx).With().Info("finished storing atx in epoch", atx.ID(), atx.PublishEpoch)
+	h.log.WithContext(ctx).With().Debug("finished storing atx in epoch", atx.ID(), atx.PublishEpoch)
 
 	// broadcast malfeasance proof last as the verification of the proof will take place
 	// in the same goroutine
