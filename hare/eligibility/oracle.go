@@ -376,23 +376,24 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 	}
 	targetEpoch := targetLayer.GetEpoch()
 	// the first bootstrap data targets first epoch after genesis (epoch 2)
-	if targetEpoch != (types.GetEffectiveGenesis().GetEpoch()+1) &&
+	// and the epoch where checkpoint recovery happens
+	if targetEpoch != 2 &&
+		targetEpoch > types.GetEffectiveGenesis().GetEpoch() &&
 		targetLayer.Difference(targetEpoch.FirstLayer()) < o.cfg.ConfidenceParam {
 		targetEpoch -= 1
 	}
-	logger := o.WithContext(ctx).WithFields(
-		log.FieldNamed("target_layer", targetLayer),
-		log.FieldNamed("target_layer_epoch", targetLayer.GetEpoch()),
-		log.FieldNamed("target_epoch", targetEpoch),
+	o.WithContext(ctx).With().Debug("hare oracle getting active set",
+		log.Stringer("target_layer", targetLayer),
+		log.Stringer("target_layer_epoch", targetLayer.GetEpoch()),
+		log.Stringer("target_epoch", targetEpoch),
 	)
-	logger.Debug("hare oracle getting active set")
 
 	o.lock.Lock()
 	defer o.lock.Unlock()
 	if value, exists := o.activesCache.Get(targetEpoch); exists {
 		return value.(*cachedActiveSet), nil
 	}
-	activeSet, err := o.computeActiveSet(logger, targetEpoch)
+	activeSet, err := o.computeActiveSet(ctx, targetEpoch)
 	if err != nil {
 		return nil, err
 	}
@@ -408,7 +409,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 	for _, weight := range activeWeights {
 		aset.total += weight
 	}
-	logger.With().Info("got hare active set", log.Int("count", len(activeWeights)))
+	o.WithContext(ctx).With().Info("got hare active set", log.Int("count", len(activeWeights)))
 	o.activesCache.Add(targetEpoch, aset)
 	return aset, nil
 }
@@ -429,10 +430,13 @@ func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]ty
 	return activeSet, nil
 }
 
-func (o *Oracle) computeActiveSet(logger log.Log, targetEpoch types.EpochID) ([]types.ATXID, error) {
+func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]types.ATXID, error) {
 	activeSet, ok := o.fallback[targetEpoch]
 	if ok {
-		logger.With().Info("using fallback active set", log.Int("size", len(activeSet)))
+		o.WithContext(ctx).With().Info("using fallback active set",
+			targetEpoch,
+			log.Int("size", len(activeSet)),
+		)
 		return activeSet, nil
 	}
 	bid, err := certificates.FirstInEpoch(o.cdb, targetEpoch)

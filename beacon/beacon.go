@@ -688,7 +688,7 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) e
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	defer pd.cleanupEpoch(epoch)
 
-	if epoch.IsGenesis() {
+	if epoch.FirstLayer() <= types.GetEffectiveGenesis() {
 		logger.Info("not running beacon protocol: genesis epochs")
 		return errGenesis
 	}

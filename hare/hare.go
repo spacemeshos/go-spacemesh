@@ -314,16 +314,15 @@ func (h *Hare) isClosed() bool {
 // the logic that happens when a new layer arrives.
 // this function triggers the start of new consensus processes.
 func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
-	logger := h.WithContext(ctx).WithFields(lid)
 	if h.isClosed() {
-		logger.Info("hare exiting")
+		h.With().Debug("hare exiting", log.Context(ctx), lid)
 		return false, nil
 	}
 
 	h.setLastLayer(lid)
 
-	if lid.GetEpoch().IsGenesis() {
-		logger.Info("not starting hare: genesis")
+	if lid <= types.GetEffectiveGenesis() {
+		h.With().Debug("not starting hare: genesis", log.Context(ctx), lid)
 		return false, nil
 	}
 
@@ -331,13 +330,21 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 	h.eg.Go(func() error {
 		// this is called only for its side effects, but at least print the error if it returns one
 		if isActive, err := h.rolacle.IsIdentityActiveOnConsensusView(ctx, h.nodeID, lid); err != nil {
-			logger.With().Error("error checking if identity is active",
-				log.Bool("isActive", isActive), log.Err(err))
+			h.With().Warning("error checking if identity is active",
+				log.Context(ctx),
+				lid,
+				log.Bool("isActive", isActive),
+				log.Err(err),
+			)
 		}
 		return nil
 	})
 
-	logger.With().Debug("hare got tick, sleeping", log.String("delta", fmt.Sprint(h.networkDelta)))
+	h.With().Debug("hare got tick, sleeping",
+		log.Context(ctx),
+		lid,
+		log.String("delta", fmt.Sprint(h.networkDelta)),
+	)
 
 	clock := h.newRoundClock(lid)
 	select {
@@ -349,21 +356,26 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 
 	if !h.broker.Synced(ctx, lid) {
 		// if not currently synced don't start consensus process
-		logger.Info("not starting hare: node not synced at this layer")
+		h.With().Info("not starting hare: node not synced at this layer",
+			log.Context(ctx),
+			lid,
+		)
 		return false, nil
 	}
 
 	var err error
 	beacon, err := h.beacons.GetBeacon(lid.GetEpoch())
 	if err != nil {
-		logger.Info("not starting hare: beacon not retrieved")
+		h.With().Info("not starting hare: beacon not retrieved",
+			log.Context(ctx),
+			lid,
+		)
 		return false, nil
 	}
 
 	var nonce *types.VRFPostIndex
 	nnc, err := h.msh.VRFNonce(h.nodeID, h.lastLayer.GetEpoch())
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		logger.With().Error("failed to get vrf nonce", log.Err(err))
 		return false, fmt.Errorf("vrf nonce: %w", err)
 	} else if err == nil {
 		nonce = &nnc
@@ -371,7 +383,6 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 
 	ch, err := h.broker.Register(ctx, lid)
 	if err != nil {
-		logger.With().Error("failed to register with broker", log.Err(err))
 		return false, fmt.Errorf("broker register: %w", err)
 	}
 	comm := communication{
@@ -379,24 +390,30 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		mchOut: h.mchMalfeasance,
 		report: h.outputChan,
 	}
-	props := goodProposals(logger, h.msh, h.nodeID, lid, beacon)
+	props := goodProposals(ctx, h.Log, h.msh, h.nodeID, lid, beacon)
 	preNumProposals.Add(float64(len(props)))
 	set := NewSet(props)
 	cp := h.factory(ctx, h.config, lid, set, h.rolacle, h.sign, nonce, h.publisher, comm, clock)
 
-	logger.With().Debug("starting hare", log.Int("num_proposals", len(props)))
+	h.With().Debug("starting hare",
+		log.Context(ctx),
+		lid,
+		log.Int("num proposals", len(props)),
+	)
 	cp.Start()
-	h.addCP(logger, cp)
+	h.addCP(ctx, cp)
 	h.patrol.SetHareInCharge(lid)
 	return true, nil
 }
 
-func (h *Hare) addCP(logger log.Log, cp Consensus) {
+func (h *Hare) addCP(ctx context.Context, cp Consensus) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.cps[cp.ID()] = cp
-	logger.With().Debug("number of consensus processes (after register)",
-		log.Int("count", len(h.cps)))
+	h.With().Debug("number of consensus processes (after register)",
+		log.Context(ctx),
+		log.Int("count", len(h.cps)),
+	)
 	processesGauge.Set(float64(len(h.cps)))
 }
 
@@ -406,10 +423,10 @@ func (h *Hare) getCP(lid types.LayerID) Consensus {
 	return h.cps[lid]
 }
 
-func (h *Hare) removeCP(logger log.Log, lid types.LayerID) {
+func (h *Hare) removeCP(ctx context.Context, lid types.LayerID) {
 	cp := h.getCP(lid)
 	if cp == nil {
-		logger.With().Error("failed to find consensus process", lid)
+		h.With().Error("failed to find consensus process", log.Context(ctx), lid)
 		return
 	}
 	// do not hold lock while waiting for consensus process to terminate
@@ -418,7 +435,9 @@ func (h *Hare) removeCP(logger log.Log, lid types.LayerID) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	delete(h.cps, cp.ID())
-	logger.With().Debug("number of consensus processes (after deregister)",
+	h.With().Debug("number of consensus processes (after deregister)",
+		log.Context(ctx),
+		lid,
 		log.Int("count", len(h.cps)))
 	processesGauge.Set(float64(len(h.cps)))
 }
@@ -426,13 +445,13 @@ func (h *Hare) removeCP(logger log.Log, lid types.LayerID) {
 // goodProposals finds the "good proposals" for the specified layer. a proposal is good if
 // it has the same beacon value as the node's beacon value.
 // any error encountered will be ignored and an empty set is returned.
-func goodProposals(logger log.Log, msh mesh, nodeID types.NodeID, lid types.LayerID, epochBeacon types.Beacon) []types.ProposalID {
+func goodProposals(ctx context.Context, logger log.Log, msh mesh, nodeID types.NodeID, lid types.LayerID, epochBeacon types.Beacon) []types.ProposalID {
 	props, err := msh.Proposals(lid)
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
-			logger.With().Warning("no proposals found for hare, using empty set", log.Err(err))
+			logger.With().Warning("no proposals found for hare, using empty set", log.Context(ctx), lid, log.Err(err))
 		} else {
-			logger.With().Error("failed to get proposals for hare", log.Err(err))
+			logger.With().Error("failed to get proposals for hare", log.Context(ctx), lid, log.Err(err))
 		}
 		return []types.ProposalID{}
 	}
@@ -447,7 +466,7 @@ func goodProposals(logger log.Log, msh mesh, nodeID types.NodeID, lid types.Laye
 	// and only observes the consensus process.
 	ownHdr, err = msh.GetEpochAtx(lid.GetEpoch(), nodeID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		logger.With().Error("failed to get own atx", log.Err(err))
+		logger.With().Error("failed to get own atx", log.Context(ctx), lid, log.Err(err))
 		return []types.ProposalID{}
 	}
 	if ownHdr != nil {
@@ -457,12 +476,14 @@ func goodProposals(logger log.Log, msh mesh, nodeID types.NodeID, lid types.Laye
 		if ownHdr != nil {
 			hdr, err := msh.GetAtxHeader(p.AtxID)
 			if err != nil {
-				logger.With().Error("failed to get atx", p.AtxID, log.Err(err))
+				logger.With().Error("failed to get atx", log.Context(ctx), lid, p.AtxID, log.Err(err))
 				return []types.ProposalID{}
 			}
 			if hdr.BaseTickHeight >= ownTickHeight {
 				// does not vote for future proposal
 				logger.With().Warning("proposal base tick height too high. skipping",
+					log.Context(ctx),
+					lid,
 					log.Uint64("proposal_height", hdr.BaseTickHeight),
 					log.Uint64("own_height", ownTickHeight),
 				)
@@ -478,7 +499,7 @@ func goodProposals(logger log.Log, msh mesh, nodeID types.NodeID, lid types.Laye
 			logger.With().Error("failed to get ref ballot", p.ID(), p.RefBallot, log.Err(err))
 			return []types.ProposalID{}
 		} else if refBallot.EpochData == nil {
-			logger.With().Error("ref ballot missing epoch data", refBallot.ID())
+			logger.With().Error("ref ballot missing epoch data", log.Context(ctx), lid, refBallot.ID())
 			return []types.ProposalID{}
 		} else {
 			beacon = refBallot.EpochData.Beacon
@@ -488,6 +509,8 @@ func goodProposals(logger log.Log, msh mesh, nodeID types.NodeID, lid types.Laye
 			result = append(result, p.ID())
 		} else {
 			logger.With().Warning("proposal has different beacon value",
+				log.Context(ctx),
+				lid,
 				p.ID(),
 				log.String("proposal_beacon", beacon.ShortString()),
 				log.String("epoch_beacon", epochBeacon.ShortString()))
@@ -525,19 +548,28 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 			layerID := out.ID()
 			coin := out.Coinflip()
 			ctx := log.WithNewSessionID(ctx)
-			logger := h.WithContext(ctx).WithFields(layerID)
 
 			// collect coinflip, regardless of success
-			logger.With().Debug("recording weak coin result for layer",
+			h.With().Debug("recording weak coin result for layer",
+				log.Context(ctx),
+				layerID,
 				log.Bool("weak_coin", coin))
 			if err := h.weakCoin.Set(layerID, coin); err != nil {
-				logger.With().Error("failed to set weak coin for layer", log.Err(err))
+				h.With().Error("failed to set weak coin for layer",
+					log.Context(ctx),
+					layerID,
+					log.Err(err),
+				)
 			}
 			if err := h.collectOutput(ctx, out); err != nil {
-				logger.With().Warning("error collecting output from hare", log.Err(err))
+				h.With().Warning("error collecting output from hare",
+					log.Context(ctx),
+					layerID,
+					log.Err(err),
+				)
 			}
 			h.broker.Unregister(ctx, out.ID())
-			h.removeCP(logger, out.ID())
+			h.removeCP(ctx, out.ID())
 		case <-h.ctx.Done():
 			return
 		}
@@ -554,7 +586,10 @@ func (h *Hare) tickLoop(ctx context.Context) {
 				h.WithContext(ctx).With().Warning("missed hare window, skipping layer", layer)
 				continue
 			}
-			_, _ = h.onTick(ctx, layer)
+			_, err := h.onTick(ctx, layer)
+			if err != nil && !errors.Is(err, context.Canceled) {
+				h.With().Warning("hare failed", log.Context(ctx), layer, log.Err(err))
+			}
 		case <-h.ctx.Done():
 			return
 		}
@@ -574,24 +609,42 @@ func (h *Hare) malfeasanceLoop(ctx context.Context) {
 			if gossip.Eligibility == nil {
 				h.WithContext(ctx).Fatal("missing hare eligibility")
 			}
-			logger := h.WithContext(ctx).WithFields(gossip.Eligibility.NodeID)
 			if malicious, err := h.msh.IsMalicious(gossip.Eligibility.NodeID); err != nil {
-				logger.With().Error("failed to check identity", log.Err(err))
+				h.With().Error("failed to check identity",
+					log.Context(ctx),
+					gossip.Eligibility.NodeID,
+					log.Err(err),
+				)
 				continue
 			} else if malicious {
-				logger.Debug("known malicious identity")
+				h.With().Debug("known malicious identity",
+					log.Context(ctx),
+					gossip.Eligibility.NodeID,
+				)
 				continue
 			}
 			if err := h.msh.AddMalfeasanceProof(gossip.Eligibility.NodeID, &gossip.MalfeasanceProof, nil); err != nil {
-				logger.With().Error("failed to save MalfeasanceProof", log.Err(err))
+				h.With().Error("failed to save MalfeasanceProof",
+					log.Context(ctx),
+					gossip.Eligibility.NodeID,
+					log.Err(err),
+				)
 				continue
 			}
 			gossipBytes, err := codec.Encode(gossip)
 			if err != nil {
-				logger.With().Fatal("failed to encode MalfeasanceGossip", log.Err(err))
+				h.With().Fatal("failed to encode MalfeasanceGossip",
+					log.Context(ctx),
+					gossip.Eligibility.NodeID,
+					log.Err(err),
+				)
 			}
 			if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, gossipBytes); err != nil {
-				logger.With().Error("failed to broadcast MalfeasanceProof")
+				h.With().Error("failed to broadcast MalfeasanceProof",
+					log.Context(ctx),
+					gossip.Eligibility.NodeID,
+					log.Err(err),
+				)
 			}
 		case <-ctx.Done():
 			return

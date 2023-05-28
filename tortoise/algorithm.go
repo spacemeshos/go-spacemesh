@@ -119,13 +119,13 @@ func (t *Tortoise) OnWeakCoin(lid types.LayerID, coin bool) {
 func (t *Tortoise) OnBeacon(eid types.EpochID, beacon types.Beacon) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	evicted := t.trtl.evicted.GetEpoch()
+	firstInWindow := t.trtl.evicted.Add(1).GetEpoch()
 	t.logger.With().Debug("on beacon",
-		log.Uint32("epoch_id", eid.Uint32()),
-		log.Uint32("evicted", evicted.Uint32()),
+		log.Uint32("epoch id", eid.Uint32()),
+		log.Uint32("first epoch", firstInWindow.Uint32()),
 		log.Stringer("beacon", beacon),
 	)
-	if eid <= evicted {
+	if eid < firstInWindow {
 		return
 	}
 	epoch := t.trtl.epoch(eid)

@@ -60,7 +60,7 @@ func Test_HandleBlockData_MalformedData(t *testing.T) {
 
 func Test_HandleBlockData_InvalidRewards(t *testing.T) {
 	th := createTestHandler(t)
-	buf, err := codec.Encode(&types.Block{})
+	buf, err := codec.Encode(&types.Block{InnerBlock: types.InnerBlock{LayerIndex: 11}})
 	require.NoError(t, err)
 	require.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), p2p.NoPeer, buf), errInvalidRewards)
 }

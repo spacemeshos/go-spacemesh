@@ -11,7 +11,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -135,7 +134,7 @@ func TestForkFinder_FindFork_Permutation(t *testing.T) {
 	expected := diverge - 1
 	for maxHashes := uint32(30); maxHashes >= 5; maxHashes -= 3 {
 		for lid := max; lid > expected; lid-- {
-			tf := newTestForkFinderWithDuration(t, maxHashes, time.Hour, logtest.New(t, zapcore.DebugLevel))
+			tf := newTestForkFinderWithDuration(t, maxHashes, time.Hour, logtest.New(t))
 			storeNodeHashes(t, tf.db, diverge, max)
 			tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
 				func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
