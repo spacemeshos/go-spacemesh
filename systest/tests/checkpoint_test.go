@@ -128,7 +128,7 @@ func TestCheckpoint(t *testing.T) {
 	}
 
 	tctx.Log.Infow("waiting for all miners to be smeshing", "last epoch", checkpointEpoch+2)
-	ensureSmeshing(t, tctx, cl, cl.Total()-cl.Bootnodes(), checkpointEpoch+2)
+	ensureSmeshing(t, tctx, cl, checkpointEpoch+2)
 
 	ip, err := cl.Bootstrapper(0).Resolve(tctx)
 	require.NoError(t, err)
@@ -157,11 +157,13 @@ func TestCheckpoint(t *testing.T) {
 	))
 
 	tctx.Log.Infow("waiting for all miners to be smeshing", "last epoch", lastEpoch)
-	ensureSmeshing(t, tctx, cl, cl.Total()-cl.Bootnodes(), lastEpoch)
+	ensureSmeshing(t, tctx, cl, lastEpoch)
 }
 
-func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, numSmeshers int, stop uint32) {
-	uniqueSmeshers := map[types.NodeID]struct{}{}
+func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, stop uint32) {
+	numSmeshers := cl.Total() - cl.Bootnodes()
+	var got int
+	createdch := make(chan *pb.Proposal, numSmeshers)
 	eg, _ := errgroup.WithContext(tctx)
 	for i := cl.Bootnodes(); i < cl.Total(); i++ {
 		i := i
@@ -179,13 +181,20 @@ func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster
 					"eligibilities", len(proposal.Eligibilities),
 					"status", pb.Proposal_Status_name[int32(proposal.Status)],
 				)
-				uniqueSmeshers[types.BytesToNodeID(proposal.Smesher.Id)] = struct{}{}
+				got++
+				createdch <- proposal
 				return false, nil
 			}
 			return true, nil
 		})
 	}
 	require.NoError(t, eg.Wait())
+	close(createdch)
+
+	uniqueSmeshers := map[types.NodeID]struct{}{}
+	for proposal := range createdch {
+		uniqueSmeshers[types.BytesToNodeID(proposal.Smesher.Id)] = struct{}{}
+	}
 	require.Lenf(t, uniqueSmeshers, numSmeshers, "not all miners are smeshing, expected %d, got %d", numSmeshers, len(uniqueSmeshers))
 }
 
