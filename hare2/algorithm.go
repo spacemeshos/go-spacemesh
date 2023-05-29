@@ -23,19 +23,20 @@ package hare2
 // 	Gossip([]byte) (action Action, output []byte)
 // }
 
+//--------------------------------------------------
 // Take 2 below
 
-type NetworkGossiper interface {
-	NetworkGossip([]byte)
-}
+// type NetworkGossiper interface {
+// 	NetworkGossip([]byte)
+// }
 
-type ByzantineGossiper interface {
-	Gossip([]byte) (output []byte)
-}
+// type ByzantineGossiper interface {
+// 	Gossip([]byte) (output []byte)
+// }
 
-type ThresholdGossiper interface {
-	Gossip([]byte) (output []byte)
-}
+// type ThresholdGossiper interface {
+// 	Gossip([]byte) (output []byte)
+// }
 
 // messages have iteration round
 
@@ -45,3 +46,14 @@ type ThresholdGossiper interface {
 //     ByzantineReceiver -> GradecastSender -> ProtocolReceiver
 //     ProtocolSender -> ThresholdSender -> ByzantineSender
 //     ProtocolSender -> GradecastSender -> ByzantineSender
+
+//--------------------------------------------------
+
+// Take 3 below
+
+// so actually rather than the above approach I am now leaning towards not
+// nesting the protocols and simply connecting them up to provide the output of
+// one to the next. This keeps things nice and flat and very isolated.
+
+// I'm going to remove signature verification from these protocols to keep them
+// simple, we assume signature verification is done up front.
