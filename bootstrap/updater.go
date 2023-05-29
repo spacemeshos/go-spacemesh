@@ -271,7 +271,6 @@ func query(ctx context.Context, client *http.Client, resource *url.URL, etag str
 	if err != nil {
 		return "", nil, fmt.Errorf("create http request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("If-None-Match", etag)
 	resp, err := client.Do(req)
 	if err != nil {

@@ -222,7 +222,6 @@ func (s *Server) handleCheckpoint(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) servefile(f string, w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
 	data, err := afero.ReadFile(s.fs, f)
 	if err != nil && errors.Is(err, afero.ErrFileNotFound) {
 		return
