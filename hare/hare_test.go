@@ -443,22 +443,21 @@ func TestHare_onTick_NotSynced(t *testing.T) {
 	lyr := types.LayerID(199)
 
 	h := createTestHare(t, newMockMesh(t), config.DefaultConfig(), newMockClock(), noopPubSub(t), t.Name())
-	h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyr).Return(true, nil).AnyTimes()
 	mockSyncS := smocks.NewMockSyncStateProvider(gomock.NewController(t))
 	h.broker.nodeSyncState = mockSyncS
 	h.broker.Start(context.Background())
-	defer h.broker.Close()
 
-	mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
+	mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false).Times(2)
 	started, err := h.onTick(context.Background(), lyr)
 	require.NoError(t, err)
 	require.False(t, started)
 
-	mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
-	mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(false)
+	mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).Times(2)
+	mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(false).Times(2)
 	started, err = h.onTick(context.Background(), lyr)
 	require.NoError(t, err)
 	require.False(t, started)
+	h.Close()
 }
 
 func TestHare_goodProposal(t *testing.T) {
