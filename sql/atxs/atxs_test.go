@@ -50,6 +50,29 @@ func TestGet(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
+func TestAll(t *testing.T) {
+	db := sql.InMemory()
+
+	atxList := make([]*types.VerifiedActivationTx, 0)
+	for i := 0; i < 3; i++ {
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		atx, err := newAtx(sig, withPublishEpoch(types.EpochID(i)))
+		require.NoError(t, err)
+		atxList = append(atxList, atx)
+	}
+
+	var expected []types.ATXID
+	for _, atx := range atxList {
+		require.NoError(t, atxs.Add(db, atx))
+		expected = append(expected, atx.ID())
+	}
+
+	all, err := atxs.All(db)
+	require.NoError(t, err)
+	require.ElementsMatch(t, expected, all)
+}
+
 func TestHasID(t *testing.T) {
 	db := sql.InMemory()
 
@@ -455,6 +478,52 @@ func TestGetBlob(t *testing.T) {
 	require.Equal(t, encoded, buf)
 }
 
+func TestCheckpointATX(t *testing.T) {
+	db := sql.InMemory()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	atx, err := newAtx(sig, withPublishEpoch(3), withSequence(4))
+	require.NoError(t, err)
+	catx := &atxs.CheckpointAtx{
+		ID:             atx.ID(),
+		Epoch:          atx.PublishEpoch,
+		CommitmentATX:  types.ATXID{1, 2, 3},
+		VRFNonce:       types.VRFPostIndex(119),
+		NumUnits:       atx.NumUnits,
+		BaseTickHeight: 1000,
+		TickCount:      atx.TickCount() + 1,
+		SmesherID:      sig.NodeID(),
+		Sequence:       atx.Sequence + 1,
+		Coinbase:       types.Address{3, 2, 1},
+	}
+	require.NoError(t, atxs.AddCheckpointed(db, catx))
+	got, err := atxs.Get(db, catx.ID)
+	require.NoError(t, err)
+	require.Equal(t, catx.ID, got.ID())
+	require.Equal(t, catx.Epoch, got.PublishEpoch)
+	require.Equal(t, catx.NumUnits, got.NumUnits)
+	require.Equal(t, catx.BaseTickHeight, got.BaseTickHeight())
+	require.Equal(t, catx.TickCount, got.TickCount())
+	require.Equal(t, catx.SmesherID, got.SmesherID)
+	require.Equal(t, catx.Sequence, got.Sequence)
+	require.Equal(t, catx.Coinbase, got.Coinbase)
+	require.True(t, got.Received().IsZero(), got.Received())
+	require.True(t, got.Golden())
+
+	gotcommit, err := atxs.CommitmentATX(db, sig.NodeID())
+	require.NoError(t, err)
+	require.Equal(t, catx.CommitmentATX, gotcommit)
+	gotvrf, err := atxs.VRFNonce(db, sig.NodeID(), atx.TargetEpoch())
+	require.NoError(t, err)
+	require.Equal(t, catx.VRFNonce, gotvrf)
+
+	// checkpoint atx does not have actual atx data
+	blob, err := atxs.GetBlob(db, catx.ID.Bytes())
+	require.NoError(t, err)
+	require.Nil(t, blob)
+}
+
 func TestAdd(t *testing.T) {
 	db := sql.InMemory()
 
@@ -571,6 +640,40 @@ func TestPositioningID(t *testing.T) {
 			} else {
 				require.Equal(t, ids[tc.expect], rst)
 			}
+		})
+	}
+}
+
+func TestLatest(t *testing.T) {
+	for _, tc := range []struct {
+		desc   string
+		epochs []uint32
+		expect uint32
+	}{
+		{"empty", nil, 0},
+		{"in order", []uint32{1, 2, 3, 4}, 4},
+		{"out of order", []uint32{3, 4, 1, 2}, 4},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			db := sql.InMemory()
+			for i, epoch := range tc.epochs {
+				full := &types.ActivationTx{
+					InnerActivationTx: types.InnerActivationTx{
+						NIPostChallenge: types.NIPostChallenge{
+							PublishEpoch: types.EpochID(epoch),
+						},
+					},
+				}
+				full.SetEffectiveNumUnits(1)
+				full.SetReceived(time.Now())
+				full.SetID(types.ATXID{byte(i)})
+				vAtx, err := full.Verify(0, 1)
+				require.NoError(t, err)
+				require.NoError(t, atxs.Add(db, vAtx))
+			}
+			latest, err := atxs.LatestEpoch(db)
+			require.NoError(t, err)
+			require.EqualValues(t, tc.expect, latest)
 		})
 	}
 }

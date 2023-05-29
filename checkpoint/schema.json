@@ -17,18 +17,12 @@
       "type": "object",
       "required": [
         "id",
-        "restore",
         "atxs",
         "accounts"
       ],
       "properties": {
         "id": {
           "type": "string"
-        },
-        "restore": {
-          "description": "the layer to restore the mesh with checkpoint data",
-          "type": "integer",
-          "exclusiveMinimum": 0
         },
         "atxs": {
           "description": "the set of golden ATXs",

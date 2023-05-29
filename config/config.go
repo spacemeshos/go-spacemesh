@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
+	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
@@ -60,6 +61,7 @@ type Config struct {
 	FETCH           fetch.Config          `mapstructure:"fetch"`
 	Bootstrap       bootstrap.Config      `mapstructure:"bootstrap"`
 	Sync            syncer.Config         `mapstructure:"syncer"`
+	Recovery        checkpoint.Config     `mapstructure:"recovery"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -140,6 +142,7 @@ func DefaultConfig() Config {
 		LOGGING:         defaultLoggingConfig(),
 		Bootstrap:       bootstrap.DefaultConfig(),
 		Sync:            syncer.DefaultConfig(),
+		Recovery:        checkpoint.DefaultConfig(),
 	}
 }
 

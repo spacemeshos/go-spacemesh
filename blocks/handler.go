@@ -65,6 +65,9 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, peer p2p.Peer, data []b
 	}
 	// set the block ID when received
 	b.Initialize()
+	if b.LayerIndex <= types.GetEffectiveGenesis() {
+		return fmt.Errorf("block before effective genesis: layer %v", b.LayerIndex)
+	}
 
 	if err := ValidateRewards(b.Rewards); err != nil {
 		return fmt.Errorf("%w: %s", errInvalidRewards, err.Error())

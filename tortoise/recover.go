@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
@@ -21,16 +22,31 @@ func Recover(db *datastore.CachedDB, beacon system.BeaconGetter, opts ...Opt) (*
 	if err != nil {
 		return nil, err
 	}
-	latest, err := ballots.LatestLayer(db)
+	layer, err := ballots.LatestLayer(db)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load latest known layer: %v", err)
+		return nil, fmt.Errorf("failed to load latest known layer: %w", err)
 	}
-	if latest == 0 {
+
+	if types.GetEffectiveGenesis() != types.FirstEffectiveGenesis() {
+		// need to load the golden atxs after a checkpoint recovery
 		if err := recoverEpoch(types.GetEffectiveGenesis().Add(1).GetEpoch(), trtl, db, beacon); err != nil {
 			return nil, err
 		}
 	}
-	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(latest); lid = lid.Add(1) {
+
+	epoch, err := atxs.LatestEpoch(db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load latest epoch: %w", err)
+	}
+	epoch++ // recoverEpoch expects target epoch, rather than publish
+	if layer.GetEpoch() != epoch {
+		for eid := layer.GetEpoch(); eid <= epoch; eid++ {
+			if err := recoverEpoch(eid, trtl, db, beacon); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(layer); lid = lid.Add(1) {
 		if err := RecoverLayer(context.Background(), trtl, db, beacon, lid); err != nil {
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
 		}

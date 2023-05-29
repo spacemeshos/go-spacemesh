@@ -288,7 +288,7 @@ func (proc *consensusProcess) eventLoop() {
 	ctx := proc.ctx
 	logger := proc.WithContext(ctx).WithFields(proc.layer)
 	logger.With().Info("consensus process started",
-		log.String("current_set", proc.value.String()),
+		log.Stringer("current_set", proc.value),
 		log.Int("set_size", proc.value.Size()),
 	)
 
@@ -383,7 +383,7 @@ PreRound:
 			endOfRound = proc.clock.AwaitEndOfRound(round)
 
 		case <-proc.ctx.Done(): // close event
-			logger.With().Info("terminating: received signal",
+			logger.With().Debug("terminating: received signal",
 				log.Uint32("current_round", proc.getRound()))
 			return
 		}

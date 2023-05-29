@@ -535,7 +535,7 @@ func TestHare_goodProposal(t *testing.T) {
 			for _, i := range tc.expected {
 				expected = append(expected, pList[i].ID())
 			}
-			got := goodProposals(logtest.New(t), mockMesh, nodeID, lyrID, nodeBeacon)
+			got := goodProposals(context.Background(), logtest.New(t), mockMesh, nodeID, lyrID, nodeBeacon)
 			require.ElementsMatch(t, expected, got)
 		})
 	}

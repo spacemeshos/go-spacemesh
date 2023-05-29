@@ -22,9 +22,12 @@ func load(db sql.Executor, query string, enc sql.Encoder) (*types.VerifiedActiva
 			id types.ATXID
 		)
 		stmt.ColumnBytes(0, id[:])
-		if _, decodeErr := codec.DecodeFrom(stmt.ColumnReader(1), &a); decodeErr != nil {
-			myerr = fmt.Errorf("decode %w", decodeErr)
-			return true
+		checkpointed := stmt.ColumnLen(1) == 0
+		if !checkpointed {
+			if _, decodeErr := codec.DecodeFrom(stmt.ColumnReader(1), &a); decodeErr != nil {
+				myerr = fmt.Errorf("decode %w", decodeErr)
+				return true
+			}
 		}
 		a.SetID(id)
 		baseTickHeight := uint64(stmt.ColumnInt64(2))
@@ -32,7 +35,13 @@ func load(db sql.Executor, query string, enc sql.Encoder) (*types.VerifiedActiva
 		stmt.ColumnBytes(4, a.SmesherID[:])
 		effectiveNumUnits := uint32(stmt.ColumnInt32(5))
 		a.SetEffectiveNumUnits(effectiveNumUnits)
-		a.SetReceived(time.Unix(0, stmt.ColumnInt64(6)).Local())
+		if checkpointed {
+			a.SetGolden()
+			a.NumUnits = effectiveNumUnits
+			a.SetReceived(time.Time{})
+		} else {
+			a.SetReceived(time.Unix(0, stmt.ColumnInt64(6)).Local())
+		}
 		a.PublishEpoch = types.EpochID(uint32(stmt.ColumnInt(7)))
 		a.Sequence = uint64(stmt.ColumnInt64(8))
 		stmt.ColumnBytes(9, a.Coinbase[:])
@@ -233,8 +242,10 @@ func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id)
 		}, func(stmt *sql.Statement) bool {
-			buf = make([]byte, stmt.ColumnLen(0))
-			stmt.ColumnBytes(0, buf)
+			if stmt.ColumnLen(0) > 0 {
+				buf = make([]byte, stmt.ColumnLen(0))
+				stmt.ColumnBytes(0, buf)
+			}
 			return true
 		}); err != nil {
 		return nil, fmt.Errorf("get %s: %w", types.BytesToHash(id), err)
@@ -353,4 +364,56 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 		return nil, sql.ErrNotFound
 	}
 	return rst, nil
+}
+
+func AddCheckpointed(db sql.Executor, catx *CheckpointAtx) error {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, catx.ID.Bytes())
+		stmt.BindInt64(2, int64(catx.Epoch))
+		stmt.BindInt64(3, int64(catx.NumUnits))
+		stmt.BindBytes(4, catx.CommitmentATX.Bytes())
+		stmt.BindInt64(5, int64(catx.VRFNonce))
+		stmt.BindInt64(6, int64(catx.BaseTickHeight))
+		stmt.BindInt64(7, int64(catx.TickCount))
+		stmt.BindInt64(8, int64(catx.Sequence))
+		stmt.BindBytes(9, catx.SmesherID.Bytes())
+		stmt.BindBytes(10, catx.Coinbase.Bytes())
+	}
+
+	_, err := db.Exec(`
+		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce, base_tick_height, tick_count, sequence, pubkey, coinbase, received)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0);`, enc, nil)
+	if err != nil {
+		return fmt.Errorf("insert checkpoint ATX %v: %w", catx.ID, err)
+	}
+	return nil
+}
+
+// All gets all atx IDs.
+func All(db sql.Executor) ([]types.ATXID, error) {
+	var all []types.ATXID
+	dec := func(stmt *sql.Statement) bool {
+		var id types.ATXID
+		stmt.ColumnBytes(0, id[:])
+		all = append(all, id)
+		return true
+	}
+	if _, err := db.Exec("select id from atxs order by epoch asc;", nil, dec); err != nil {
+		return nil, fmt.Errorf("all atxs: %w", err)
+	}
+	return all, nil
+}
+
+// LatestEpoch with atxs.
+func LatestEpoch(db sql.Executor) (types.EpochID, error) {
+	var epoch types.EpochID
+	if _, err := db.Exec("select max(epoch) from atxs;",
+		nil,
+		func(stmt *sql.Statement) bool {
+			epoch = types.EpochID(uint32(stmt.ColumnInt64(0)))
+			return true
+		}); err != nil {
+		return epoch, fmt.Errorf("latest epoch: %w", err)
+	}
+	return epoch, nil
 }

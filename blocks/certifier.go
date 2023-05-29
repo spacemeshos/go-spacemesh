@@ -232,7 +232,7 @@ func (c *Certifier) createIfNeeded(lid types.LayerID, bid types.BlockID) {
 // RegisterForCert register to generate a certificate for the specified layer/block.
 func (c *Certifier) RegisterForCert(ctx context.Context, lid types.LayerID, bid types.BlockID) error {
 	logger := c.logger.WithContext(ctx).WithFields(lid, bid)
-	logger.Info("certifier registered")
+	logger.Debug("certifier registered")
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -264,7 +264,6 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 
 	eligibilityCount, err := c.oracle.CalcEligibility(ctx, lid, eligibility.CertifyRound, c.cfg.CommitteeSize, c.nodeID, nonce, proof)
 	if err != nil {
-		logger.With().Error("failed to check eligibility to certify", log.Err(err))
 		return err
 	}
 	if eligibilityCount == 0 { // not eligible

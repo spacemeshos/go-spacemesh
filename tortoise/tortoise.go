@@ -77,28 +77,25 @@ func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
 	return t.verified.Sub(t.WindowSize), true
 }
 
-// evict makes sure we only keep a window of the last hdist layers.
 func (t *turtle) evict(ctx context.Context) {
-	// Don't evict before we've verified at least hdist layers
 	if !t.verified.After(types.GetEffectiveGenesis().Add(t.Hdist)) {
 		return
 	}
-	// TODO: fix potential leak when we can't verify but keep receiving layers
-	//    see https://github.com/spacemeshos/go-spacemesh/issues/2671
-
 	windowStart, ok := t.lookbackWindowStart()
 	if !ok {
 		return
 	}
-	if !windowStart.After(t.evicted) {
-		return
-	}
-
 	t.logger.With().Debug("evict in memory state",
+		log.Stringer("pending", t.pending),
 		log.Stringer("from_layer", t.evicted.Add(1)),
 		log.Stringer("upto_layer", windowStart),
 	)
-
+	if !windowStart.After(t.evicted) {
+		return
+	}
+	if t.pending != 0 && t.pending < windowStart {
+		return
+	}
 	for lid := t.evicted.Add(1); lid.Before(windowStart); lid = lid.Add(1) {
 		for _, ballot := range t.ballots[lid] {
 			ballotsNumber.Dec()

@@ -2,9 +2,15 @@ package checkpoint
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"github.com/spf13/afero"
@@ -20,6 +26,10 @@ func NewRecoveryFile(fs afero.Fs, path string) (*RecoveryFile, error) {
 	if err := fs.MkdirAll(filepath.Dir(path), dirPerm); err != nil {
 		return nil, fmt.Errorf("create dst dir %v: %w", filepath.Dir(path), err)
 	}
+	f, _ := fs.Stat(path)
+	if f != nil {
+		return nil, fmt.Errorf("%w: file already exist: %v", os.ErrExist, path)
+	}
 	tmpf, err := afero.TempFile(fs, filepath.Dir(path), filepath.Base(path))
 	if err != nil {
 		return nil, fmt.Errorf("%w: create tmp file", err)
@@ -31,7 +41,18 @@ func NewRecoveryFile(fs afero.Fs, path string) (*RecoveryFile, error) {
 	}, nil
 }
 
-func (rf *RecoveryFile) save(fs afero.Fs) error {
+func (rf *RecoveryFile) Copy(fs afero.Fs, src io.Reader) error {
+	n, err := io.Copy(rf.fwriter, src)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("no recovery data")
+	}
+	return rf.Save(fs)
+}
+
+func (rf *RecoveryFile) Save(fs afero.Fs) error {
 	defer rf.file.Close()
 	if err := rf.fwriter.Flush(); err != nil {
 		return fmt.Errorf("flush tmp file: %w", err)
@@ -61,4 +82,67 @@ func ValidateSchema(data []byte) error {
 		return fmt.Errorf("validate checkpoint data: %w", err)
 	}
 	return nil
+}
+
+func CopyFile(fs afero.Fs, src, dst string) error {
+	rf, err := NewRecoveryFile(fs, dst)
+	if err != nil {
+		return fmt.Errorf("new recovery file %w", err)
+	}
+	srcf, err := fs.Open(src)
+	if err != nil {
+		return fmt.Errorf("open src recovery file: %w", err)
+	}
+	defer srcf.Close()
+	return rf.Copy(fs, srcf)
+}
+
+func httpToLocalFile(ctx context.Context, resource *url.URL, fs afero.Fs, dst string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, resource.String(), nil)
+	if err != nil {
+		return fmt.Errorf("create http request: %w", err)
+	}
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return fmt.Errorf("http get bootstrap file: %w", err)
+	}
+	defer resp.Body.Close()
+	rf, err := NewRecoveryFile(fs, dst)
+	if err != nil {
+		return fmt.Errorf("new recovery file %w", err)
+	}
+	return rf.Copy(fs, resp.Body)
+}
+
+func backupRecovery(fs afero.Fs, recoveryDir string) (string, error) {
+	if _, err := fs.Stat(recoveryDir); err != nil {
+		return "", nil
+	}
+	backupDir := fmt.Sprintf("%s.%d", recoveryDir, time.Now().UnixNano())
+	if err := fs.Rename(recoveryDir, backupDir); err != nil {
+		return "", fmt.Errorf("backup old checkpoint data: %w", err)
+	}
+	return backupDir, nil
+}
+
+func backupOldDb(fs afero.Fs, srcDir, dbFile string) (string, error) {
+	backupDir := filepath.Join(srcDir, fmt.Sprintf("%s.%d", "backup", time.Now().Unix()))
+	if err := fs.MkdirAll(backupDir, dirPerm); err != nil {
+		return "", fmt.Errorf("create backup dir: %w", err)
+	}
+	// sqlite create .sql, .sql-shm and .sql-wal files.
+	files, err := afero.Glob(fs, filepath.Join(srcDir, fmt.Sprintf("%s*", dbFile)))
+	if err != nil {
+		return "", fmt.Errorf("list db files: %w", err)
+	}
+	if len(files) == 0 {
+		return "", nil
+	}
+	for _, src := range files {
+		dst := filepath.Join(backupDir, filepath.Base(src))
+		if err = fs.Rename(src, dst); err != nil {
+			return "", err
+		}
+	}
+	return backupDir, nil
 }

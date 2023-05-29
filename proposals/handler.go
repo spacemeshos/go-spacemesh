@@ -144,6 +144,9 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []
 		logger.With().Error("malformed ballot", log.Err(err))
 		return errMalformedData
 	}
+	if b.Layer <= types.GetEffectiveGenesis() {
+		return fmt.Errorf("ballot before effective genesis: layer %v", b.Layer)
+	}
 
 	if !h.edVerifier.Verify(signing.BALLOT, b.SmesherID, b.SignedBytes(), b.Signature) {
 		return fmt.Errorf("failed to verify ballot signature")
@@ -228,6 +231,9 @@ func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte
 		logger.With().Error("malformed proposal", log.Err(err))
 		return errMalformedData
 	}
+	if p.Layer <= types.GetEffectiveGenesis() {
+		return fmt.Errorf("proposal before effective genesis: layer %v", p.Layer)
+	}
 
 	latency := receivedTime.Sub(h.clock.LayerToTime(p.Layer))
 	metrics.ReportMessageLatency(pubsub.ProposalProtocol, pubsub.ProposalProtocol, latency)
@@ -297,7 +303,7 @@ func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte
 		return fmt.Errorf("save proposal: %w", err)
 	}
 	proposalDuration.WithLabelValues(dbSave).Observe(float64(time.Since(t5)))
-	logger.With().Info("added proposal to database")
+	logger.With().Debug("added proposal to database")
 
 	t6 := time.Now()
 	if err := h.mesh.AddTXsFromProposal(ctx, p.Layer, p.ID(), p.TxIDs); err != nil {

@@ -79,16 +79,14 @@ func NewMesh(cdb *datastore.CachedDB, c layerClock, trtl system.Tortoise, exec *
 
 	genesis := types.GetEffectiveGenesis()
 	if err = cdb.WithTx(context.Background(), func(dbtx *sql.Tx) error {
-		for i := types.LayerID(1); !i.After(genesis); i = i.Add(1) {
-			if err = layers.SetProcessed(dbtx, i); err != nil {
-				return fmt.Errorf("mesh init: %w", err)
-			}
-			if err = layers.SetApplied(dbtx, i, types.EmptyBlockID); err != nil {
-				return fmt.Errorf("mesh init: %w", err)
-			}
-			if err := layers.SetMeshHash(dbtx, i, hash.Sum(nil)); err != nil {
-				return err
-			}
+		if err = layers.SetProcessed(dbtx, genesis); err != nil {
+			return fmt.Errorf("mesh init: %w", err)
+		}
+		if err = layers.SetApplied(dbtx, genesis, types.EmptyBlockID); err != nil {
+			return fmt.Errorf("mesh init: %w", err)
+		}
+		if err := layers.SetMeshHash(dbtx, genesis, hash.Sum(nil)); err != nil {
+			return err
 		}
 		return nil
 	}); err != nil {
@@ -275,7 +273,8 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 
 	msh.trtl.TallyVotes(ctx, lid)
 
-	if err := msh.setProcessedLayer(lid); err != nil {
+	if err := msh.setProcessedLayer(
+		lid); err != nil {
 		return err
 	}
 	results := msh.trtl.Updates()
@@ -295,16 +294,19 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 			return err
 		}
 	}
-	msh.logger.With().Info("consensus results",
-		log.Context(ctx),
-		log.Uint32("layer_id", lid.Uint32()),
-		log.Array("results", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-			for i := range results {
-				encoder.AppendObject(&results[i])
-			}
-			return nil
-		})),
-	)
+	// TODO(dshulyak) https://github.com/spacemeshos/go-spacemesh/issues/4425
+	if len(results) > 0 {
+		msh.logger.With().Info("consensus results",
+			log.Context(ctx),
+			log.Uint32("layer_id", lid.Uint32()),
+			log.Array("results", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				for i := range results {
+					encoder.AppendObject(&results[i])
+				}
+				return nil
+			})),
+		)
+	}
 	if missing := missingBlocks(results); len(missing) > 0 {
 		return &types.ErrorMissing{MissingData: types.MissingData{Blocks: missing}}
 	}

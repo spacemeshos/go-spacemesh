@@ -159,7 +159,6 @@ func queryBitcoin(ctx context.Context, client *http.Client, targetUrl string) (*
 	if err != nil {
 		return nil, fmt.Errorf("create http request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("http get latest bitcoin block: %w", err)

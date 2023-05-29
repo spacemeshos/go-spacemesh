@@ -1,3 +1,9 @@
+CREATE TABLE recovery
+(
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    restore INT NOT NULL
+);
+
 CREATE TABLE blocks
 (
     id       CHAR(20) PRIMARY KEY,

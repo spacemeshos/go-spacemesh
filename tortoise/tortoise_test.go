@@ -985,6 +985,30 @@ func tortoiseVotingWithCurrent(tortoise voter) sim.VotesGenerator {
 	}
 }
 
+func TestOnBeacon(t *testing.T) {
+	cfg := defaultTestConfig()
+	tortoise, err := New(WithConfig(cfg), WithLogger(logtest.New(t)))
+	require.NoError(t, err)
+
+	genesis := types.GetEffectiveGenesis()
+	tortoise.OnBeacon(genesis.GetEpoch()-1, types.Beacon{1})
+	require.Nil(t, tortoise.trtl.epoch(genesis.GetEpoch()-1).beacon)
+	tortoise.OnBeacon(genesis.GetEpoch(), types.Beacon{1})
+	require.Equal(t, types.Beacon{1}, *tortoise.trtl.epoch(genesis.GetEpoch()).beacon)
+
+	newGenesis := genesis.Add(types.GetLayersPerEpoch()*10 + types.GetLayersPerEpoch()/2)
+	types.SetEffectiveGenesis(newGenesis.Uint32())
+	defer func() {
+		types.SetEffectiveGenesis(genesis.Uint32())
+	}()
+	tortoise, err = New(WithConfig(cfg), WithLogger(logtest.New(t)))
+	require.NoError(t, err)
+	tortoise.OnBeacon(newGenesis.GetEpoch()-1, types.Beacon{2})
+	require.Nil(t, tortoise.trtl.epoch(newGenesis.GetEpoch()-1).beacon)
+	tortoise.OnBeacon(newGenesis.GetEpoch(), types.Beacon{2})
+	require.Equal(t, types.Beacon{2}, *tortoise.trtl.epoch(newGenesis.GetEpoch()).beacon)
+}
+
 func TestBaseBallotGenesis(t *testing.T) {
 	ctx := context.Background()
 
@@ -1039,6 +1063,7 @@ func TestBaseBallotEvictedBlock(t *testing.T) {
 		sim.WithSequence(2),
 	) {
 		last = lid
+		tortoise.Updates() // drain pending
 		tortoise.TallyVotes(ctx, lid)
 		verified = tortoise.LatestComplete()
 	}
@@ -1906,6 +1931,12 @@ func TestStateManagement(t *testing.T) {
 		verified = tortoise.LatestComplete()
 	}
 	require.Equal(t, last.Sub(1), verified)
+	require.Equal(t, types.GetEffectiveGenesis()-1, tortoise.trtl.evicted,
+		"should not be evicted unless pending is drained",
+	)
+
+	tortoise.Updates()
+	tortoise.TallyVotes(ctx, last)
 
 	evicted := tortoise.trtl.evicted
 	require.Equal(t, verified.Sub(window).Sub(1), evicted)

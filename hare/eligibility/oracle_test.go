@@ -171,7 +171,7 @@ func TestCalcEligibility(t *testing.T) {
 		lid := types.EpochID(5).FirstLayer()
 		createLayerData(t, o.cdb, lid.Sub(defLayersPerEpoch), 11)
 		res, err := o.CalcEligibility(context.Background(), lid, 1, 1, nid, nonce, types.EmptyVrfSignature)
-		require.ErrorIs(t, err, errMinerNotActive)
+		require.ErrorIs(t, err, ErrNotActive)
 		require.Equal(t, 0, int(res))
 	})
 

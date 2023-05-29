@@ -156,7 +156,7 @@ type WeakCoin struct {
 // Get the result of the coin flip in this round. It is only valid in between StartEpoch/EndEpoch
 // and only after CompleteRound was called.
 func (wc *WeakCoin) Get(ctx context.Context, epoch types.EpochID, round types.RoundID) (bool, error) {
-	if epoch.IsGenesis() {
+	if epoch.FirstLayer() <= types.GetEffectiveGenesis() {
 		wc.logger.WithContext(ctx).With().Fatal("beacon weak coin not used during genesis")
 	}
 

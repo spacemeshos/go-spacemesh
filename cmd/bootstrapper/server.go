@@ -205,7 +205,6 @@ func (s *Server) Stop(ctx context.Context) {
 }
 
 func (s *Server) handle(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	data, err := afero.ReadFile(s.fs, PersistedFilename())
 	if err != nil && errors.Is(err, afero.ErrFileNotFound) {
 		return
