@@ -449,7 +449,7 @@ func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
 			}
 			next = current.Add(1)
 			lyrCtx := log.WithNewSessionID(ctx)
-			if err := pb.handleLayer(lyrCtx, current); err != nil {
+			if err := pb.handleLayer(lyrCtx, current); err != nil && !errors.Is(err, errGenesis) {
 				pb.logger.WithContext(lyrCtx).With().Warning("failed to build proposal", current, log.Err(err))
 			}
 		}
