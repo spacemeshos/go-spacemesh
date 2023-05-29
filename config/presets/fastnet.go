@@ -35,6 +35,7 @@ func fastnet() config.Config {
 
 	conf.LayerAvgSize = 50
 	conf.LayerDuration = 15 * time.Second
+	conf.Sync.Interval = 5 * time.Second
 	conf.LayersPerEpoch = 4
 
 	conf.Tortoise.Hdist = 4
@@ -67,5 +68,6 @@ func fastnet() config.Config {
 	conf.Beacon.BeaconSyncWeightUnits = 10
 	conf.Beacon.VotesLimit = 100
 
+	conf.Recovery.RecoverFromDefaultDir = true
 	return conf
 }

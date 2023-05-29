@@ -77,9 +77,14 @@ var cmd = &cobra.Command{
 		if len(args) == 0 {
 			return fmt.Errorf("epoch not specfiied")
 		}
-		targetEpoch, err := strconv.Atoi(args[0])
-		if err != nil {
-			return fmt.Errorf("cannot convert %v to epoch: %w", args[0], err)
+		var targetEpochs []types.EpochID
+		epochs := strings.Split(args[0], ",")
+		for _, e := range epochs {
+			epoch, err := strconv.Atoi(e)
+			if err != nil {
+				return fmt.Errorf("cannot convert %v to epoch: %w", e, err)
+			}
+			targetEpochs = append(targetEpochs, types.EpochID(epoch))
 		}
 
 		log.JSONLog(true)
@@ -100,11 +105,14 @@ var cmd = &cobra.Command{
 			srv := NewServer(g, genFallback, port,
 				WithSrvFilesystem(afero.NewOsFs()),
 				WithSrvLogger(logger.WithName("server")),
-				WithBootstrapEpoch(types.EpochID(targetEpoch)),
+				WithBootstrapEpochs(targetEpochs),
 			)
 			return runServer(ctx, srv)
 		}
 
+		if len(targetEpochs) != 1 {
+			return fmt.Errorf("too many epochs specified")
+		}
 		// one-time execution
 		if !genBeacon && !genActiveSet {
 			return fmt.Errorf("no action specified via --beacon or --actives")
@@ -119,7 +127,7 @@ var cmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("parse output uri %v: %w", out, err)
 		}
-		if err = g.Generate(ctx, types.EpochID(targetEpoch), genBeacon, genActiveSet); err != nil {
+		if err = g.Generate(ctx, targetEpochs[0], genBeacon, genActiveSet); err != nil {
 			return err
 		}
 		return upload(ctx, bucket, path)
