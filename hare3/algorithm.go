@@ -1,4 +1,4 @@
-package hare2
+package hare3
 
 // Don't really want this to be part of the impl because it introduces errors
 // that we don't want or really need.
