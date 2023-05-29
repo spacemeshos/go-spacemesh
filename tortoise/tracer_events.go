@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 )
@@ -155,7 +156,7 @@ type DecodeBallotTrace struct {
 	Ballot *types.Ballot
 	Error  string `scale:"max=100000"`
 
-	//TODO(dshulyak) want to assert decoding results somehow
+	// TODO(dshulyak) want to assert decoding results somehow
 }
 
 func (d *DecodeBallotTrace) Type() eventType {
