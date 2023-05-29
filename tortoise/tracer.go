@@ -3,86 +3,37 @@ package tortoise
 import (
 	"bufio"
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
-	"time"
 
+	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/result"
 )
-
-const (
-	traceStart = 1 + iota
-	traceWeakCoin
-	traceBeacon
-	traceDecode
-	traceStore
-	traceEncode
-	traceTally
-	traceHare
-	traceActiveset
-	traceResults
-	traceUpdates
-)
-
-type ConfigTrace struct {
-	Hdist                    uint32
-	Zdist                    uint32
-	WindowSize               uint32
-	MaxExceptions            int
-	BadBeaconVoteDelayLayers uint32
-	LayerSize                uint32
-	EpochSize                uint32 // this field is not set in the original config
-}
-
-type WeakCoinTrace struct {
-	Layer types.LayerID
-	Coin  bool
-}
-
-type BeaconTrace struct {
-	Epoch  types.EpochID
-	Beacon types.Beacon
-}
-
-type DecodeBallotTrace struct {
-	Ballot types.Ballot
-	Error  string
-
-	//TODO(dshulyak) want to assert decoding results somehow
-}
-
-type EncodeVotesTrace struct {
-	Layer   types.LayerID
-	Opinion types.Opinion
-	Error   string
-}
-
-type TallyVotesTrace struct {
-	Layer types.LayerID
-}
-
-type HareTrace struct {
-	Layer types.LayerID
-	Vote  types.BlockID
-}
-
-type ResultsTrace struct {
-	From, To types.LayerID
-	Error    string
-	Results  []result.Layer
-}
-
-type MissingActiveSetTrace struct {
-	Epoch             types.EpochID
-	Request, Response []types.ATXID
-}
 
 type Event struct {
-	Timestamp time.Time
-	Domain    int
-	Object    any
+	Type  eventType
+	Event scale.Encodable
+}
+
+func (e *Event) EncodeScale(enc *scale.Encoder) (int, error) {
+	total := 0
+	{
+		n, err := scale.EncodeCompact16(enc, e.Type)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := e.Event.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
 }
 
 type backend interface {
@@ -96,9 +47,6 @@ type Tracer struct {
 }
 
 func (t *Tracer) Close() error {
-	if t.backend == nil {
-		return nil
-	}
 	return t.backend.Close()
 }
 
@@ -111,8 +59,11 @@ func (t *Tracer) Wait(ctx context.Context) error {
 	}
 }
 
-func (t *Tracer) onEvent(event *Event) {
-	err := t.backend.OnEvent(event)
+func (t *Tracer) On(event traceEvent) {
+	err := t.backend.OnEvent(&Event{
+		Type:  event.Type(),
+		Event: event,
+	})
 	if err == nil {
 		return
 	}
@@ -122,40 +73,35 @@ func (t *Tracer) onEvent(event *Event) {
 	}
 }
 
-func (t *Tracer) OnStart(cfg *ConfigTrace) {
-	t.onEvent(&Event{
-		Timestamp: time.Now(),
-		Domain:    1,
-		Object:    cfg,
-	})
-}
-
-// func (t *Tracer) OnWeakCoin()
-
-func Open(path string) (*JsonWriter, error) {
-	f, err := os.Open(path)
+func NewTracer(path string) (*Tracer, error) {
+	f, err := os.Create(path)
 	if err != nil {
 		return nil, fmt.Errorf("file at %s: %w", path, err)
 	}
 	buf := bufio.NewWriterSize(f, 1<<20)
-	return &JsonWriter{
+	codec := &writer{
 		f:   f,
 		buf: buf,
-		enc: json.NewEncoder(buf),
+		enc: scale.NewEncoder(buf),
+	}
+	return &Tracer{
+		errors:  make(chan error, 1),
+		backend: codec,
 	}, nil
 }
 
-type JsonWriter struct {
+type writer struct {
 	f   *os.File
 	buf *bufio.Writer
-	enc *json.Encoder
+	enc *scale.Encoder
 }
 
-func (f *JsonWriter) OnEvent(event *Event) error {
-	return f.enc.Encode(event)
+func (f *writer) OnEvent(event *Event) error {
+	_, err := event.EncodeScale(f.enc)
+	return err
 }
 
-func (f *JsonWriter) Close() error {
+func (f *writer) Close() error {
 	err1 := f.buf.Flush()
 	err2 := f.f.Sync()
 	err3 := f.f.Close()
@@ -166,4 +112,37 @@ func (f *JsonWriter) Close() error {
 		return err2
 	}
 	return err3
+}
+
+type traceRunner struct {
+	opts          []Opt
+	trt           *Tortoise
+	pending       map[types.BallotID]*DecodedBallot
+	assertOutputs bool
+}
+
+func RunTrace(path string, opts ...Opt) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	dec := scale.NewDecoder(bufio.NewReaderSize(f, 1<<20))
+	enum := NewEventEnum()
+	runner := &traceRunner{
+		opts:          opts,
+		pending:       map[types.BallotID]*DecodedBallot{},
+		assertOutputs: true,
+	}
+	for {
+		ev, err := enum.Decode(dec)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+		if err := ev.Run(runner); err != nil {
+			return err
+		}
+	}
 }

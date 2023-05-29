@@ -868,7 +868,7 @@ func TestDecodeVotes(t *testing.T) {
 		hasher.WriteSupport(supported, 0)
 		ballot.OpinionHash = hasher.Hash()
 		ballot.Votes.Support = []types.Vote{{ID: supported, LayerID: ballot.Layer - 1}}
-		_, err = tortoise.DecodeBallot(&ballot)
+		_, err = tortoise.decodeBallot(&ballot)
 		require.NoError(t, err)
 	})
 }
@@ -2779,7 +2779,7 @@ func TestEncodeVotes(t *testing.T) {
 		hasher.WriteSupport(block.ID(), block.TickHeight)
 		hasher.Sum(ballot.OpinionHash[:0])
 
-		decoded, err := tortoise.DecodeBallot(&ballot)
+		decoded, err := tortoise.decodeBallot(&ballot)
 		require.NoError(t, err)
 		require.NoError(t, tortoise.StoreBallot(decoded))
 
@@ -2858,7 +2858,7 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 		ballot.InnerBallot = ballots[0].InnerBallot
 		ballot.EligibilityProofs = ballots[0].EligibilityProofs
 		ballot.Votes.Base = ballots[1].ID()
-		_, err = tortoise.DecodeBallot(&ballot)
+		_, err = tortoise.decodeBallot(&ballot)
 		require.ErrorContains(t, err, "votes for ballot")
 	})
 }
