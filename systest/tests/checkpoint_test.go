@@ -115,7 +115,7 @@ func TestCheckpoint(t *testing.T) {
 
 	tctx.Log.Infow("checking account balances")
 	// check if the account balance is correct
-	after, err := getBalance(tctx, cl, restoreLayer)
+	after, err := getBalance(tctx, cl, restoreLayer-1)
 	require.NoError(t, err)
 	for addr, state := range before {
 		st, ok := after[addr]

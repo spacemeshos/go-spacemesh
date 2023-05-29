@@ -28,6 +28,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/recovery"
 )
 
+const recoverLayer uint32 = 18
+
 func atxequal(tb testing.TB, satx checkpoint.ShortAtx, vatx *types.VerifiedActivationTx, commitAtx types.ATXID, vrfnonce types.VRFPostIndex) {
 	require.True(tb, bytes.Equal(satx.ID, vatx.ID().Bytes()))
 	require.EqualValues(tb, satx.Epoch, vatx.PublishEpoch)
@@ -91,6 +93,7 @@ func verifyDbContent(tb testing.TB, db *sql.Database) []*types.VerifiedActivatio
 		require.True(tb, ok)
 		require.NotNil(tb, acct)
 		accountequal(tb, cacct, acct)
+		require.EqualValues(tb, recoverLayer-1, acct.Layer)
 	}
 	return extra
 }
@@ -133,13 +136,15 @@ func TestReadCheckpointAndDie(t *testing.T) {
 
 			dataDir := t.TempDir()
 			if len(tc.expErr) > 0 {
-				err := checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, tc.uri, 18)
+				err := checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, tc.uri, types.LayerID(recoverLayer))
 				require.ErrorContains(t, err, tc.expErr)
 			} else {
-				require.Panics(t, func() { checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, tc.uri, 18) })
+				require.Panics(t, func() {
+					checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, tc.uri, types.LayerID(recoverLayer))
+				})
 			}
 
-			fname := checkpoint.RecoveryFilename(dataDir, filepath.Base(tc.uri), 18)
+			fname := checkpoint.RecoveryFilename(dataDir, filepath.Base(tc.uri), types.LayerID(recoverLayer))
 			got, err := os.ReadFile(fname)
 			if len(tc.expErr) > 0 {
 				require.ErrorIs(t, err, os.ErrNotExist)
@@ -195,7 +200,7 @@ func TestRecoverFromHttp(t *testing.T) {
 				PreserveOwnAtx: true,
 			}
 			db := sql.InMemory()
-			newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg, types.NodeID{2, 3, 4}, tc.uri, 18)
+			newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg, types.NodeID{2, 3, 4}, tc.uri, types.LayerID(recoverLayer))
 			if len(tc.expErr) > 0 {
 				require.ErrorContains(t, err, tc.expErr)
 				return
@@ -206,7 +211,7 @@ func TestRecoverFromHttp(t *testing.T) {
 			require.Empty(t, exras)
 			restore, err := recovery.CheckpointInfo(newdb)
 			require.NoError(t, err)
-			require.EqualValues(t, 18, restore)
+			require.EqualValues(t, recoverLayer, restore)
 		})
 	}
 }
@@ -229,10 +234,10 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 		DbFile:         "test.sql",
 		PreserveOwnAtx: true,
 	}
-	url := fmt.Sprintf("%s/snapshot-15-restore-18", ts.URL)
+	url := fmt.Sprintf("%s/snapshot-15", ts.URL)
 	db := sql.InMemory()
-	require.NoError(t, recovery.SetCheckpoint(db, 18))
-	newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg, types.NodeID{2, 3, 4}, url, 18)
+	require.NoError(t, recovery.SetCheckpoint(db, types.LayerID(recoverLayer)))
+	newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg, types.NodeID{2, 3, 4}, url, types.LayerID(recoverLayer))
 	require.NoError(t, err)
 	require.Nil(t, newdb)
 }
@@ -305,7 +310,7 @@ func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
 			require.NoError(t, olddb.Close())
 
 			url := fmt.Sprintf("%s/snapshot-15", ts.URL)
-			require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url, 18))
+			require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url, types.LayerID(recoverLayer)))
 
 			newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 			require.NoError(t, err)
@@ -322,7 +327,7 @@ func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
 			}
 			restore, err := recovery.CheckpointInfo(newdb)
 			require.NoError(t, err)
-			require.EqualValues(t, 18, restore)
+			require.EqualValues(t, recoverLayer, restore)
 
 			// sqlite create .sql, .sql-shm and .sql-wal files.
 			files, err := filepath.Glob(fmt.Sprintf("%s/backup.*/%s*", cfg.DataDir, cfg.DbFile))
@@ -363,7 +368,7 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	require.NoError(t, olddb.Close())
 
 	url := fmt.Sprintf("%s/snapshot-15", ts.URL)
-	require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url, 18))
+	require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url, types.LayerID(recoverLayer)))
 
 	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
@@ -373,7 +378,7 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	require.Empty(t, extras)
 	restore, err := recovery.CheckpointInfo(newdb)
 	require.NoError(t, err)
-	require.EqualValues(t, 18, restore)
+	require.EqualValues(t, recoverLayer, restore)
 
 	// sqlite create .sql, .sql-shm and .sql-wal files.
 	files, err := filepath.Glob(fmt.Sprintf("%s/backup.*/%s*", cfg.DataDir, cfg.DbFile))
@@ -399,8 +404,8 @@ func TestRecover(t *testing.T) {
 			name:    "old recovery file",
 			dataDir: t.TempDir(),
 			dir:     "checkpoint",
-			fname:   "snapshot-15-restore-18",
-			oldFile: "snapshot-10-restore-12",
+			fname:   "snapshot-15",
+			oldFile: "snapshot-10",
 		},
 		{
 			name:    "file does not exist",
@@ -454,7 +459,7 @@ func TestRecover(t *testing.T) {
 			}
 
 			uri := fmt.Sprintf("file://%s", src)
-			err := checkpoint.Recover(ctx, logtest.New(t), fs, cfg, types.NodeID{2, 3, 4}, uri, 18)
+			err := checkpoint.Recover(ctx, logtest.New(t), fs, cfg, types.NodeID{2, 3, 4}, uri, types.LayerID(recoverLayer))
 			if tc.fail {
 				require.Error(t, err)
 				return
@@ -468,7 +473,7 @@ func TestRecover(t *testing.T) {
 			require.Empty(t, extras)
 			restore, err := recovery.CheckpointInfo(db)
 			require.NoError(t, err)
-			require.EqualValues(t, 18, restore)
+			require.EqualValues(t, recoverLayer, restore)
 
 			files, err := afero.Glob(fs, fmt.Sprintf("%s*", checkpoint.RecoveryDir(tc.dataDir)))
 			require.NoError(t, err)
