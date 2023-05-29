@@ -32,5 +32,5 @@ func TestTracer(t *testing.T) {
 	trt.TallyVotes(ctx, s.Next())
 	trt.Updates() // just trace final result
 	require.NoError(t, tracer.Close())
-	require.NoError(t, RunTrace(path, WithLogger(logtest.New(t).Named("trace"))))
+	require.NoError(t, RunTrace(path, WithLogger(logtest.New(t))))
 }

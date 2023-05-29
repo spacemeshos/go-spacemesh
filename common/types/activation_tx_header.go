@@ -4,6 +4,8 @@ import (
 	"time"
 )
 
+//go:generate scalegen
+
 // ActivationTxHeader is the header of an activation transaction. It includes all fields from the NIPostChallenge, as
 // well as the coinbase address and total weight.
 type ActivationTxHeader struct {
@@ -32,8 +34,12 @@ type ActivationTxHeader struct {
 	// hashes
 	TickCount uint64
 
-	Received time.Time
+	Received uint64
 	Golden   bool
+}
+
+func (a *ActivationTxHeader) Timestamp() time.Time {
+	return time.Unix(0, int64(a.Received))
 }
 
 // GetWeight of the ATX. The total weight of the epoch is expected to fit in a uint64 and is

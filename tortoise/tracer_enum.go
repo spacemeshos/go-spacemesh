@@ -12,6 +12,7 @@ func NewEventEnum() EventEnum {
 	enum.Register(&WeakCoinTrace{})
 	enum.Register(&BeaconTrace{})
 	enum.Register(&AtxTrace{})
+	enum.Register(&BallotTrace{})
 	enum.Register(&DecodeBallotTrace{})
 	enum.Register(&StoreBallotTrace{})
 	enum.Register(&EncodeVotesTrace{})

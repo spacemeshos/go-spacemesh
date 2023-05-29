@@ -272,14 +272,7 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 		t.logger.With().Error("failed to save state from ballot", ballot.ID(), log.Err(err))
 	}
 	if t.tracer != nil {
-		ev1 := &DecodeBallotTrace{Ballot: ballot}
-		if err != nil {
-			ev1.Error = err.Error()
-		}
-		t.tracer.On(ev1)
-		if err == nil {
-			t.tracer.On(&StoreBallotTrace{ID: ballot.ID()})
-		}
+		t.tracer.On(&BallotTrace{Ballot: ballot, Malicious: ballot.IsMalicious()})
 	}
 }
 

@@ -18,6 +18,7 @@ const (
 	traceWeakCoin
 	traceBeacon
 	traceAtx
+	traceBallot
 	traceDecode
 	traceStore
 	traceEncode
@@ -123,6 +124,30 @@ func (b *BeaconTrace) New() traceEvent {
 
 func (b *BeaconTrace) Run(r *traceRunner) error {
 	r.trt.OnBeacon(b.Epoch, b.Beacon)
+	return nil
+}
+
+type BallotTrace struct {
+	Ballot    *types.Ballot
+	Malicious bool
+}
+
+func (b *BallotTrace) Type() eventType {
+	return traceBallot
+}
+
+func (b *BallotTrace) New() traceEvent {
+	return &BallotTrace{}
+}
+
+func (b *BallotTrace) Run(r *traceRunner) error {
+	if err := b.Ballot.Initialize(); err != nil {
+		return err
+	}
+	if b.Malicious {
+		b.Ballot.SetMalicious()
+	}
+	r.trt.OnBallot(b.Ballot)
 	return nil
 }
 

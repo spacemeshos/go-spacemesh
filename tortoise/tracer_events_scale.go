@@ -220,6 +220,44 @@ func (t *BeaconTrace) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	return total, nil
 }
 
+func (t *BallotTrace) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeOption(enc, t.Ballot)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeBool(enc, t.Malicious)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *BallotTrace) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeOption[types.Ballot](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Ballot = field
+	}
+	{
+		field, n, err := scale.DecodeBool(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Malicious = field
+	}
+	return total, nil
+}
+
 func (t *DecodeBallotTrace) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeOption(enc, t.Ballot)
