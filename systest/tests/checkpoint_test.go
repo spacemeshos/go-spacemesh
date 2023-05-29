@@ -27,7 +27,6 @@ import (
 func reuseCluster(tctx *testcontext.Context) (*cluster.Cluster, error) {
 	return cluster.ReuseWait(tctx,
 		cluster.WithKeys(10),
-		cluster.WithSmesherFlag(cluster.DeploymentFlag{Name: "--recover-from-default-dir", Value: "true"}),
 		cluster.WithBootstrapEpochs([]int{2, 4, 5}),
 	)
 }
@@ -153,8 +152,8 @@ func TestCheckpoint(t *testing.T) {
 	tctx.Log.Infow("adding smesher with checkpoint url",
 		"checkpoint url", queryUrl, "restore layer", restoreLayer)
 	require.NoError(t, cl.AddSmeshers(tctx, addedLater,
-		cluster.DeploymentFlag{Name: "--checkpoint-file", Value: queryUrl},
-		cluster.DeploymentFlag{Name: "--restore-layer", Value: strconv.Itoa(int(restoreLayer))},
+		cluster.DeploymentFlag{Name: "--recovery-uri", Value: queryUrl},
+		cluster.DeploymentFlag{Name: "--recovery-layer", Value: strconv.Itoa(int(restoreLayer))},
 	))
 
 	tctx.Log.Infow("waiting for all miners to be smeshing", "last epoch", lastEpoch)
