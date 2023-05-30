@@ -29,7 +29,7 @@ func TestSmeshing(t *testing.T) {
 	})
 	t.Run("Transactions", func(t *testing.T) {
 		t.Parallel()
-		testTransactions(t, tctx, cl)
+		testTransactions(t, tctx, cl, 8)
 	})
 }
 
@@ -115,9 +115,9 @@ func requireEqualProposals(tb testing.TB, reference map[uint32][]*pb.Proposal, r
 			})
 		}
 		for layer, proposals := range reference {
-			require.Len(tb, included[layer], len(proposals), "client=%d layer=%d", i, layer)
+			require.Lenf(tb, included[layer], len(proposals), "client=%d layer=%d", i, layer)
 			for j := range proposals {
-				assert.Equal(tb, proposals[j].Id, included[layer][j].Id, "client=%d layer=%d", i, layer)
+				assert.Equalf(tb, proposals[j].Id, included[layer][j].Id, "client=%d layer=%d", i, layer)
 			}
 		}
 	}

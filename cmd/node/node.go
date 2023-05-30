@@ -141,7 +141,9 @@ func GetCommand() *cobra.Command {
 					return fmt.Errorf("could not retrieve identity: %w", err)
 				}
 
-				// TODO(kimmy): invoke app.LoadCheckpoint() here
+				if err = app.LoadCheckpoint(ctx); err != nil {
+					return err
+				}
 
 				if err = app.Initialize(); err != nil {
 					return err

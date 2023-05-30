@@ -284,7 +284,8 @@ func recoverFromLocalFile(
 	restore types.LayerID,
 ) (*sql.Database, error) {
 	logger.With().Info("recovering from checkpoint file", log.String("file", file))
-	data, err := checkpointData(fs, file)
+	newGenesis := restore - 1
+	data, err := checkpointData(fs, file, newGenesis)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +375,7 @@ func recoverFromLocalFile(
 	if _, err = backupRecovery(fs, RecoveryDir(cfg.DataDir)); err != nil {
 		return nil, err
 	}
-	types.SetEffectiveGenesis(restore.Uint32() - 1)
+	types.SetEffectiveGenesis(newGenesis.Uint32())
 	logger.With().Info("effective genesis reset for recovery",
 		log.Context(ctx),
 		types.GetEffectiveGenesis(),
@@ -382,7 +383,7 @@ func recoverFromLocalFile(
 	return newdb, nil
 }
 
-func checkpointData(fs afero.Fs, file string) (*recoverydata, error) {
+func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recoverydata, error) {
 	data, err := afero.ReadFile(fs, file)
 	if err != nil {
 		return nil, fmt.Errorf("%w: read recovery file %v", err, file)
@@ -401,7 +402,7 @@ func checkpointData(fs afero.Fs, file string) (*recoverydata, error) {
 	allAccts := make([]*types.Account, 0, len(checkpoint.Data.Accounts))
 	for _, acct := range checkpoint.Data.Accounts {
 		a := types.Account{
-			Layer:     types.GetEffectiveGenesis(),
+			Layer:     newGenesis,
 			NextNonce: acct.Nonce,
 			Balance:   acct.Balance,
 			State:     acct.State,
