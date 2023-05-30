@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
@@ -22,11 +23,11 @@ type output struct {
 	Event json.RawMessage `json:"o"`
 }
 
-type Tracer struct {
+type tracer struct {
 	logger *zap.Logger
 }
 
-func (t *Tracer) On(event traceEvent) {
+func (t *tracer) On(event traceEvent) {
 	buf, err := json.Marshal(event)
 	if err != nil {
 		panic(err.Error())
@@ -46,8 +47,12 @@ func WithOutput(path string) TraceOpt {
 	}
 }
 
-func NewTracer(opts ...TraceOpt) *Tracer {
+func newTracer(opts ...TraceOpt) *tracer {
 	cfg := zap.NewProductionConfig()
+	cfg.Sampling = nil
+	cfg.EncoderConfig.CallerKey = zapcore.OmitKey
+	cfg.EncoderConfig.MessageKey = zapcore.OmitKey
+	cfg.EncoderConfig.LevelKey = zapcore.OmitKey
 	cfg.DisableCaller = true
 	for _, opt := range opts {
 		opt(&cfg)
@@ -56,7 +61,7 @@ func NewTracer(opts ...TraceOpt) *Tracer {
 	if err != nil {
 		panic(err.Error())
 	}
-	return &Tracer{
+	return &tracer{
 		logger: logger.Named("tracer"),
 	}
 }
@@ -69,7 +74,7 @@ type traceRunner struct {
 	assertErrors  bool
 }
 
-func RunTrace(path string, opts ...Opt) error {
+func RunTrace(path string, breakpoint func(), opts ...Opt) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -92,6 +97,9 @@ func RunTrace(path string, opts ...Opt) error {
 		}
 		if err := ev.Run(runner); err != nil {
 			return err
+		}
+		if breakpoint != nil {
+			breakpoint()
 		}
 	}
 }
@@ -140,6 +148,7 @@ func (c *ConfigTrace) New() traceEvent {
 }
 
 func (c *ConfigTrace) Run(r *traceRunner) error {
+	types.SetLayersPerEpoch(c.EpochSize)
 	trt, err := New(append(r.opts, WithConfig(Config{
 		Hdist:                    c.Hdist,
 		Zdist:                    c.Zdist,
@@ -152,7 +161,6 @@ func (c *ConfigTrace) Run(r *traceRunner) error {
 		return err
 	}
 	r.trt = trt
-	types.SetLayersPerEpoch(c.EpochSize)
 	return nil
 }
 
