@@ -16,8 +16,7 @@ func TestTracer(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "tortoise.trace")
-	tracer, err := NewTracer(path)
-	require.NoError(t, err)
+	tracer := NewTracer(WithOutput(path))
 
 	const size = 12
 	s := sim.New(
@@ -35,7 +34,6 @@ func TestTracer(t *testing.T) {
 	}
 	trt.TallyVotes(ctx, s.Next())
 	trt.Updates() // just trace final result
-	require.NoError(t, tracer.Close())
 	t.Run("live", func(t *testing.T) {
 		t.Parallel()
 		require.NoError(t, RunTrace(path, WithLogger(logtest.New(t))))
@@ -43,27 +41,23 @@ func TestTracer(t *testing.T) {
 	t.Run("recover", func(t *testing.T) {
 		t.Parallel()
 		path := filepath.Join(t.TempDir(), "tortoise.trace")
-		tracer, err := NewTracer(path)
-		require.NoError(t, err)
+		tracer := NewTracer(WithOutput(path))
 		trt, err := Recover(s.GetState(0).DB, s.GetState(0).Beacons, WithTracer(tracer))
 		require.NoError(t, err)
 		trt.Updates()
 		trt.Results(types.GetEffectiveGenesis(), trt.LatestComplete())
-		require.NoError(t, tracer.Close())
 		require.NoError(t, RunTrace(path, WithLogger(logtest.New(t))))
 	})
 	t.Run("errors", func(t *testing.T) {
 		t.Parallel()
 		path := filepath.Join(t.TempDir(), "tortoise.trace")
-		tracer, err := NewTracer(path)
-		require.NoError(t, err)
+		tracer := NewTracer(WithOutput(path))
 		trt, err := New(WithTracer(tracer))
 		require.NoError(t, err)
 		ballot := &types.Ballot{}
 		ballot.Initialize()
 		_, err = trt.DecodeBallot(ballot)
 		require.Error(t, err)
-		require.NoError(t, tracer.Close())
 		require.NoError(t, RunTrace(path, WithLogger(logtest.New(t))))
 	})
 }

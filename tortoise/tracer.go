@@ -3,116 +3,62 @@ package tortoise
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 
-	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 )
 
-type Event struct {
-	Type  eventType
-	Event scale.Encodable
-}
-
-func (e *Event) EncodeScale(enc *scale.Encoder) (int, error) {
-	total := 0
-	{
-		n, err := scale.EncodeCompact16(enc, e.Type)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := e.Event.EncodeScale(enc)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-type backend interface {
-	OnEvent(*Event) error
-	Close() error
+type output struct {
+	Type  eventType       `json:"t"`
+	Event json.RawMessage `json:"o"`
 }
 
 type Tracer struct {
-	errors  chan error
-	backend backend
-}
-
-func (t *Tracer) Close() error {
-	return t.backend.Close()
-}
-
-func (t *Tracer) Wait(ctx context.Context) error {
-	select {
-	case err := <-t.errors:
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	logger *zap.Logger
 }
 
 func (t *Tracer) On(event traceEvent) {
-	err := t.backend.OnEvent(&Event{
-		Type:  event.Type(),
-		Event: event,
-	})
-	if err == nil {
-		return
+	buf, err := json.Marshal(event)
+	if err != nil {
+		panic(err.Error())
 	}
-	select {
-	case t.errors <- err:
-	default:
+	raw := json.RawMessage(buf)
+	t.logger.Info("",
+		zap.Uint16("t", event.Type()),
+		zap.Any("o", &raw),
+	)
+}
+
+type TraceOpt func(*zap.Config)
+
+func WithOutput(path string) TraceOpt {
+	return func(cfg *zap.Config) {
+		cfg.OutputPaths = []string{path}
 	}
 }
 
-func NewTracer(path string) (*Tracer, error) {
-	f, err := os.Create(path)
-	if err != nil {
-		return nil, fmt.Errorf("file at %s: %w", path, err)
+func NewTracer(opts ...TraceOpt) *Tracer {
+	cfg := zap.NewProductionConfig()
+	cfg.DisableCaller = true
+	for _, opt := range opts {
+		opt(&cfg)
 	}
-	buf := bufio.NewWriterSize(f, 1<<20)
-	codec := &writer{
-		f:   f,
-		buf: buf,
-		enc: scale.NewEncoder(buf),
+	logger, err := cfg.Build()
+	if err != nil {
+		panic(err.Error())
 	}
 	return &Tracer{
-		errors:  make(chan error, 1),
-		backend: codec,
-	}, nil
-}
-
-type writer struct {
-	f   *os.File
-	buf *bufio.Writer
-	enc *scale.Encoder
-}
-
-func (f *writer) OnEvent(event *Event) error {
-	_, err := event.EncodeScale(f.enc)
-	return err
-}
-
-func (f *writer) Close() error {
-	err1 := f.buf.Flush()
-	err2 := f.f.Sync()
-	err3 := f.f.Close()
-	if err1 != nil {
-		return err1
+		logger: logger.Named("tracer"),
 	}
-	if err2 != nil {
-		return err2
-	}
-	return err3
 }
 
 type traceRunner struct {
@@ -128,8 +74,8 @@ func RunTrace(path string, opts ...Opt) error {
 	if err != nil {
 		return err
 	}
-	dec := scale.NewDecoder(bufio.NewReaderSize(f, 1<<20))
-	enum := NewEventEnum()
+	dec := json.NewDecoder(bufio.NewReaderSize(f, 1<<20))
+	enum := newEventEnum()
 	runner := &traceRunner{
 		opts:          opts,
 		pending:       map[types.BallotID]*DecodedBallot{},
@@ -148,4 +94,386 @@ func RunTrace(path string, opts ...Opt) error {
 			return err
 		}
 	}
+}
+
+type eventType = uint16
+
+const (
+	traceStart eventType = 1 + iota
+	traceWeakCoin
+	traceBeacon
+	traceAtx
+	traceBallot
+	traceDecode
+	traceStore
+	traceEncode
+	traceTally
+	traceBlock
+	traceHare
+	traceActiveset
+	traceResults
+	traceUpdates
+)
+
+type traceEvent interface {
+	Type() eventType
+	New() traceEvent
+	Run(*traceRunner) error
+}
+
+type ConfigTrace struct {
+	Hdist                    uint32
+	Zdist                    uint32
+	WindowSize               uint32
+	MaxExceptions            uint32
+	BadBeaconVoteDelayLayers uint32
+	LayerSize                uint32
+	EpochSize                uint32 // this field is not set in the original config
+}
+
+func (c *ConfigTrace) Type() eventType {
+	return traceStart
+}
+
+func (c *ConfigTrace) New() traceEvent {
+	return &ConfigTrace{}
+}
+
+func (c *ConfigTrace) Run(r *traceRunner) error {
+	trt, err := New(append(r.opts, WithConfig(Config{
+		Hdist:                    c.Hdist,
+		Zdist:                    c.Zdist,
+		WindowSize:               c.WindowSize,
+		MaxExceptions:            int(c.MaxExceptions),
+		BadBeaconVoteDelayLayers: c.BadBeaconVoteDelayLayers,
+		LayerSize:                c.LayerSize,
+	}))...)
+	if err != nil {
+		return err
+	}
+	r.trt = trt
+	types.SetLayersPerEpoch(c.EpochSize)
+	return nil
+}
+
+type AtxTrace struct {
+	Header *types.ActivationTxHeader
+}
+
+func (a *AtxTrace) Type() eventType {
+	return traceAtx
+}
+
+func (a *AtxTrace) New() traceEvent {
+	return &AtxTrace{}
+}
+
+func (a *AtxTrace) Run(r *traceRunner) error {
+	r.trt.OnAtx(a.Header)
+	return nil
+}
+
+type WeakCoinTrace struct {
+	Layer types.LayerID
+	Coin  bool
+}
+
+func (w *WeakCoinTrace) Type() eventType {
+	return traceWeakCoin
+}
+
+func (w *WeakCoinTrace) New() traceEvent {
+	return &WeakCoinTrace{}
+}
+
+func (w *WeakCoinTrace) Run(r *traceRunner) error {
+	r.trt.OnWeakCoin(w.Layer, w.Coin)
+	return nil
+}
+
+type BeaconTrace struct {
+	Epoch  types.EpochID
+	Beacon types.Beacon
+}
+
+func (b *BeaconTrace) Type() eventType {
+	return traceBeacon
+}
+
+func (b *BeaconTrace) New() traceEvent {
+	return &BeaconTrace{}
+}
+
+func (b *BeaconTrace) Run(r *traceRunner) error {
+	r.trt.OnBeacon(b.Epoch, b.Beacon)
+	return nil
+}
+
+type BallotTrace struct {
+	Ballot    *types.Ballot
+	Malicious bool
+}
+
+func (b *BallotTrace) Type() eventType {
+	return traceBallot
+}
+
+func (b *BallotTrace) New() traceEvent {
+	return &BallotTrace{}
+}
+
+func (b *BallotTrace) Run(r *traceRunner) error {
+	if err := b.Ballot.Initialize(); err != nil {
+		return err
+	}
+	if b.Malicious {
+		b.Ballot.SetMalicious()
+	}
+	r.trt.OnBallot(b.Ballot)
+	return nil
+}
+
+type DecodeBallotTrace struct {
+	Ballot *types.Ballot
+	Error  string `scale:"max=100000"`
+
+	// TODO(dshulyak) want to assert decoding results somehow
+}
+
+func (d *DecodeBallotTrace) Type() eventType {
+	return traceDecode
+}
+
+func (d *DecodeBallotTrace) New() traceEvent {
+	return &DecodeBallotTrace{}
+}
+
+func (b *DecodeBallotTrace) Run(r *traceRunner) error {
+	if err := b.Ballot.Initialize(); err != nil {
+		return err
+	}
+	decoded, err := r.trt.DecodeBallot(b.Ballot)
+	if r.assertErrors {
+		if err := assertErrors(err, b.Error); err != nil {
+			return err
+		}
+	}
+	if err == nil {
+		r.pending[decoded.ID()] = decoded
+	}
+	return nil
+}
+
+type StoreBallotTrace struct {
+	ID        types.BallotID
+	Malicious bool
+}
+
+func (s *StoreBallotTrace) Type() eventType {
+	return traceStore
+}
+
+func (s *StoreBallotTrace) New() traceEvent {
+	return &StoreBallotTrace{}
+}
+
+func (s *StoreBallotTrace) Run(r *traceRunner) error {
+	pending, exist := r.pending[s.ID]
+	if !exist {
+		return fmt.Errorf("id %v should be pending", s.ID)
+	}
+	if s.Malicious {
+		pending.SetMalicious()
+	}
+	delete(r.pending, s.ID)
+	r.trt.StoreBallot(pending)
+	return nil
+}
+
+type EncodeVotesTrace struct {
+	Layer   types.LayerID
+	Opinion *types.Opinion
+	Error   string `scale:"max=100000"`
+}
+
+func (e *EncodeVotesTrace) Type() eventType {
+	return traceEncode
+}
+
+func (e *EncodeVotesTrace) New() traceEvent {
+	return &EncodeVotesTrace{}
+}
+
+func (e *EncodeVotesTrace) Run(r *traceRunner) error {
+	opinion, err := r.trt.EncodeVotes(context.Background(), EncodeVotesWithCurrent(e.Layer))
+	if r.assertErrors {
+		if err := assertErrors(err, e.Error); err != nil {
+			return err
+		}
+	}
+	if err == nil {
+		if diff := cmp.Diff(opinion, e.Opinion); len(diff) > 0 && r.assertOutputs {
+			return errors.New(diff)
+		}
+	}
+	return nil
+}
+
+type TallyTrace struct {
+	Layer types.LayerID
+}
+
+func (t *TallyTrace) Type() eventType {
+	return traceTally
+}
+
+func (t *TallyTrace) New() traceEvent {
+	return &TallyTrace{}
+}
+
+func (t *TallyTrace) Run(r *traceRunner) error {
+	r.trt.TallyVotes(context.Background(), t.Layer)
+	return nil
+}
+
+type HareTrace struct {
+	Layer types.LayerID
+	Vote  types.BlockID
+}
+
+func (h *HareTrace) Type() eventType {
+	return traceHare
+}
+
+func (h *HareTrace) New() traceEvent {
+	return &HareTrace{}
+}
+
+func (h *HareTrace) Run(r *traceRunner) error {
+	r.trt.OnHareOutput(h.Layer, h.Vote)
+	return nil
+}
+
+type ResultsTrace struct {
+	From, To types.LayerID
+	Error    string         `scale:"max=100000"`
+	Results  []result.Layer `scale:"max=100000"`
+}
+
+func (r *ResultsTrace) Type() eventType {
+	return traceResults
+}
+
+func (r *ResultsTrace) New() traceEvent {
+	return &ResultsTrace{}
+}
+
+func (r *ResultsTrace) Run(rt *traceRunner) error {
+	rst, err := rt.trt.Results(r.From, r.To)
+	if rt.assertErrors {
+		if err := assertErrors(err, r.Error); err != nil {
+			return err
+		}
+	}
+	if err == nil {
+		if diff := cmp.Diff(rst, r.Results, cmpopts.EquateEmpty()); len(diff) > 0 && rt.assertOutputs {
+			return errors.New(diff)
+		}
+	}
+	return nil
+}
+
+type UpdatesTrace struct {
+	ResultsTrace
+}
+
+func (u *UpdatesTrace) Type() eventType {
+	return traceUpdates
+}
+
+func (u *UpdatesTrace) New() traceEvent {
+	return &UpdatesTrace{}
+}
+
+func (u *UpdatesTrace) Run(r *traceRunner) error {
+	rst := r.trt.Updates()
+	if diff := cmp.Diff(rst, u.Results, cmpopts.EquateEmpty()); len(diff) > 0 && r.assertOutputs {
+		return errors.New(diff)
+	}
+	return nil
+}
+
+type BlockTrace struct {
+	Header types.BlockHeader
+	Valid  bool
+}
+
+func (b *BlockTrace) Type() eventType {
+	return traceBlock
+}
+
+func (b *BlockTrace) New() traceEvent {
+	return &BlockTrace{}
+}
+
+func (b *BlockTrace) Run(r *traceRunner) error {
+	if b.Valid {
+		r.trt.OnValidBlock(b.Header)
+	} else {
+		r.trt.OnBlock(b.Header)
+	}
+	return nil
+}
+
+func assertErrors(err error, expect string) error {
+	msg := ""
+	if err != nil {
+		msg = err.Error()
+	}
+	if expect != msg {
+		return fmt.Errorf("%s != %s", expect, msg)
+	}
+	return nil
+}
+
+func newEventEnum() eventEnum {
+	enum := eventEnum{types: map[uint16]traceEvent{}}
+	enum.Register(&ConfigTrace{})
+	enum.Register(&WeakCoinTrace{})
+	enum.Register(&BeaconTrace{})
+	enum.Register(&AtxTrace{})
+	enum.Register(&BallotTrace{})
+	enum.Register(&DecodeBallotTrace{})
+	enum.Register(&StoreBallotTrace{})
+	enum.Register(&EncodeVotesTrace{})
+	enum.Register(&TallyTrace{})
+	enum.Register(&BlockTrace{})
+	enum.Register(&HareTrace{})
+	enum.Register(&ResultsTrace{})
+	enum.Register(&UpdatesTrace{})
+	return enum
+}
+
+type eventEnum struct {
+	types map[eventType]traceEvent
+}
+
+func (e *eventEnum) Register(ev traceEvent) {
+	e.types[ev.Type()] = ev
+}
+
+func (e *eventEnum) Decode(dec *json.Decoder) (traceEvent, error) {
+	var event output
+	if err := dec.Decode(&event); err != nil {
+		return nil, err
+	}
+	ev := e.types[event.Type]
+	if ev == nil {
+		return nil, fmt.Errorf("type %d is not registered", event.Type)
+	}
+	obj := ev.New()
+	if err := json.Unmarshal(event.Event, obj); err != nil {
+		return nil, err
+	}
+	return obj, nil
 }
