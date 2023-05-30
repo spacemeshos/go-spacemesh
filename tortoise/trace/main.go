@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"runtime"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -11,7 +12,8 @@ import (
 )
 
 var (
-	level = zap.LevelFlag("level", zapcore.InfoLevel, "set verbosity level for execution")
+	level  = zap.LevelFlag("level", zapcore.ErrorLevel, "set verbosity level for execution")
+	bpoint = flag.Bool("breakpoint", false, "enable breakpoint after every step")
 )
 
 func main() {
@@ -19,7 +21,11 @@ func main() {
 	atom := zap.NewAtomicLevelAt(*level)
 	logger := log.NewWithLevel("trace", atom)
 	logger.With().Debug("using trace", log.String("path", flag.Arg(0)))
-	if err := tortoise.RunTrace(flag.Arg(0), tortoise.WithLogger(logger)); err != nil {
+	var breakpoint func()
+	if *bpoint {
+		breakpoint = runtime.Breakpoint
+	}
+	if err := tortoise.RunTrace(flag.Arg(0), breakpoint, tortoise.WithLogger(logger)); err != nil {
 		logger.With().Fatal("run trace failed", log.Err(err))
 	}
 }

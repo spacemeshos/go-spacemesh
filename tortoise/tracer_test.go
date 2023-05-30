@@ -34,7 +34,7 @@ func TestTracer(t *testing.T) {
 	trt.Updates() // just trace final result
 	t.Run("live", func(t *testing.T) {
 		t.Parallel()
-		require.NoError(t, RunTrace(path, WithLogger(logtest.New(t))))
+		require.NoError(t, RunTrace(path, nil, WithLogger(logtest.New(t))))
 	})
 	t.Run("recover", func(t *testing.T) {
 		t.Parallel()
@@ -43,7 +43,7 @@ func TestTracer(t *testing.T) {
 		require.NoError(t, err)
 		trt.Updates()
 		trt.Results(types.GetEffectiveGenesis(), trt.LatestComplete())
-		require.NoError(t, RunTrace(path, WithLogger(logtest.New(t))))
+		require.NoError(t, RunTrace(path, nil, WithLogger(logtest.New(t))))
 	})
 	t.Run("errors", func(t *testing.T) {
 		t.Parallel()
@@ -54,6 +54,6 @@ func TestTracer(t *testing.T) {
 		ballot.Initialize()
 		_, err = trt.DecodeBallot(ballot)
 		require.Error(t, err)
-		require.NoError(t, RunTrace(path, WithLogger(logtest.New(t))))
+		require.NoError(t, RunTrace(path, nil, WithLogger(logtest.New(t))))
 	})
 }

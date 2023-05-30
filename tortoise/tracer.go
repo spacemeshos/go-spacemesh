@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -70,7 +69,7 @@ type traceRunner struct {
 	assertErrors  bool
 }
 
-func RunTrace(path string, opts ...Opt) error {
+func RunTrace(path string, breakpoint func(), opts ...Opt) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -94,7 +93,9 @@ func RunTrace(path string, opts ...Opt) error {
 		if err := ev.Run(runner); err != nil {
 			return err
 		}
-		runtime.Breakpoint()
+		if breakpoint != nil {
+			breakpoint()
+		}
 	}
 }
 
