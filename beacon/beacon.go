@@ -550,9 +550,9 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		epochWeight += header.GetWeight()
 		if _, ok := miners[header.NodeID]; !ok {
 			miners[header.NodeID] = header.ID
-			if header.Timestamp().Before(early) {
+			if header.Received.Before(early) {
 				w1++
-			} else if header.Timestamp().Before(ontime) {
+			} else if header.Received.Before(ontime) {
 				w2++
 			}
 		} else {
@@ -813,7 +813,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 		VRFSignature: vrfSig,
 	}
 
-	if invalid == pd.classifyProposal(logger, m, atx.Timestamp(), time.Now(), checker) {
+	if invalid == pd.classifyProposal(logger, m, atx.Received, time.Now(), checker) {
 		logger.With().Debug("own proposal doesn't pass threshold",
 			log.String("proposal", hex.EncodeToString(proposal[:])),
 		)

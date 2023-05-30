@@ -88,7 +88,7 @@ func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg
 		return err
 	}
 
-	cat := pd.classifyProposal(logger, m, atx.Timestamp(), receivedTime, st.proposalChecker)
+	cat := pd.classifyProposal(logger, m, atx.Received, receivedTime, st.proposalChecker)
 	return pd.addProposal(m, cat)
 }
 

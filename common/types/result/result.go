@@ -7,13 +7,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen
-
 type Layer struct {
 	Layer    types.LayerID
 	Verified bool
 	Opinion  types.Hash32
-	Blocks   []Block `scale:"max=100000"`
+	Blocks   []Block
 }
 
 // FirstValid returns first block that crossed positive tortoise threshold,
