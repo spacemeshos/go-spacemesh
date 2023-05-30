@@ -6,7 +6,7 @@
         "grace-period": "10s"
     },
     "tortoise": {
-        "tortoise-tracer-path": "tortoise.trace"
+        "tortoise-enable-tracer": true
     },
     "api": {
         "grpc-public-services": [

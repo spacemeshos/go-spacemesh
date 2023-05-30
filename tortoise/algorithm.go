@@ -21,7 +21,7 @@ type Config struct {
 	// number of layers to delay votes for blocks with bad beacon values during self-healing. ideally a full epoch.
 	BadBeaconVoteDelayLayers uint32 `mapstructure:"tortoise-delay-layers"`
 	// EnableTracer will write tortoise traces to the stderr.
-	EnableTracer bool `mapstructure:"tortoise-tracer-path"`
+	EnableTracer bool `mapstructure:"tortoise-enable-tracer"`
 
 	LayerSize uint32
 }
