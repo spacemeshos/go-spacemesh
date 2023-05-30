@@ -148,6 +148,7 @@ func (c *ConfigTrace) New() traceEvent {
 }
 
 func (c *ConfigTrace) Run(r *traceRunner) error {
+	types.SetLayersPerEpoch(c.EpochSize)
 	trt, err := New(append(r.opts, WithConfig(Config{
 		Hdist:                    c.Hdist,
 		Zdist:                    c.Zdist,
@@ -160,7 +161,6 @@ func (c *ConfigTrace) Run(r *traceRunner) error {
 		return err
 	}
 	r.trt = trt
-	types.SetLayersPerEpoch(c.EpochSize)
 	return nil
 }
 
