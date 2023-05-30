@@ -604,24 +604,9 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
 	}
-	if len(trtlCfg.TracerPath) > 0 {
-		app.log.With().Info("tortoise will trace execution", log.String("path", trtlCfg.TracerPath))
-		tracer, err := tortoise.NewTracer(filepath.Join(app.Config.DataDirParent, trtlCfg.TracerPath))
-		if err != nil {
-			return fmt.Errorf("can't enable tracer: %w", err)
-		}
-		trtlopts = append(trtlopts, tortoise.WithTracer(tracer))
-		app.eg.Go(func() error {
-			err := tracer.Wait(ctx)
-			if err == nil || errors.Is(err, context.Canceled) {
-				if err := tracer.Close(); err != nil {
-					app.log.With().Warning("error closing tracer", log.Err(err))
-				}
-				return nil
-			}
-			app.log.With().Error("tortoise tracer failed", log.Err(err))
-			return err
-		})
+	if trtlCfg.EnableTracer {
+		app.log.With().Info("tortoise will trace execution")
+		trtlopts = append(trtlopts, tortoise.WithTracer())
 	}
 	trtl, err := tortoise.Recover(
 		app.cachedDB, beaconProtocol, trtlopts...,
