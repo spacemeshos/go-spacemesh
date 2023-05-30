@@ -46,7 +46,7 @@ type Tortoise struct {
 
 	mu     sync.Mutex
 	trtl   *turtle
-	tracer *Tracer
+	tracer *tracer
 }
 
 // Opt for configuring tortoise.
@@ -76,7 +76,7 @@ func WithConfig(cfg Config) Opt {
 // WithTracer enables tracing of every call to the tortoise.
 func WithTracer(opts ...TraceOpt) Opt {
 	return func(t *Tortoise) {
-		t.tracer = NewTracer(opts...)
+		t.tracer = newTracer(opts...)
 	}
 }
 

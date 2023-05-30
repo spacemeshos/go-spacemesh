@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -22,11 +23,11 @@ type output struct {
 	Event json.RawMessage `json:"o"`
 }
 
-type Tracer struct {
+type tracer struct {
 	logger *zap.Logger
 }
 
-func (t *Tracer) On(event traceEvent) {
+func (t *tracer) On(event traceEvent) {
 	buf, err := json.Marshal(event)
 	if err != nil {
 		panic(err.Error())
@@ -46,7 +47,7 @@ func WithOutput(path string) TraceOpt {
 	}
 }
 
-func NewTracer(opts ...TraceOpt) *Tracer {
+func newTracer(opts ...TraceOpt) *tracer {
 	cfg := zap.NewProductionConfig()
 	cfg.DisableCaller = true
 	for _, opt := range opts {
@@ -56,7 +57,7 @@ func NewTracer(opts ...TraceOpt) *Tracer {
 	if err != nil {
 		panic(err.Error())
 	}
-	return &Tracer{
+	return &tracer{
 		logger: logger.Named("tracer"),
 	}
 }
@@ -93,6 +94,7 @@ func RunTrace(path string, opts ...Opt) error {
 		if err := ev.Run(runner); err != nil {
 			return err
 		}
+		runtime.Breakpoint()
 	}
 }
 
