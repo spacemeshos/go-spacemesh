@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
@@ -48,6 +49,10 @@ func WithOutput(path string) TraceOpt {
 
 func newTracer(opts ...TraceOpt) *tracer {
 	cfg := zap.NewProductionConfig()
+	cfg.Sampling = nil
+	cfg.EncoderConfig.CallerKey = zapcore.OmitKey
+	cfg.EncoderConfig.MessageKey = zapcore.OmitKey
+	cfg.EncoderConfig.LevelKey = zapcore.OmitKey
 	cfg.DisableCaller = true
 	for _, opt := range opts {
 		opt(&cfg)
