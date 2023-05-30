@@ -33,7 +33,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.19'
+          check-latest: true
+          go-version-file: "go.mod"
 
       - if: matrix.os == 'windows-latest'
         name: Install dependencies in windows
