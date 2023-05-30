@@ -20,6 +20,8 @@ type Config struct {
 	MaxExceptions int    `mapstructure:"tortoise-max-exceptions"` // if candidate for base ballot has more than max exceptions it will be ignored
 	// number of layers to delay votes for blocks with bad beacon values during self-healing. ideally a full epoch.
 	BadBeaconVoteDelayLayers uint32 `mapstructure:"tortoise-delay-layers"`
+	// by providing TracerPath execution will be written to a file at that path.
+	TracerPath string `mapstructure:"tortoise-tracer-path"`
 
 	LayerSize uint32
 }

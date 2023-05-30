@@ -5,8 +5,8 @@
         "cycle-gap": "30s",
         "grace-period": "10s"
     },
-    "logging": {
-        "trtl": "debug"
+    "tortoise": {
+        "tortoise-tracer-path": "tortoise.trace"
     },
     "api": {
         "grpc-public-services": [
