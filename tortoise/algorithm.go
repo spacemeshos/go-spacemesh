@@ -407,7 +407,7 @@ func (t *Tortoise) Results(from, to types.LayerID) ([]result.Layer, error) {
 	rst, err := t.results(from, to)
 	if t.tracer != nil {
 		ev := &ResultsTrace{
-			From: t.trtl.pending, To: t.trtl.processed,
+			From: from, To: to,
 			Results: rst,
 		}
 		if err != nil {

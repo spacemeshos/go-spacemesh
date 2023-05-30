@@ -120,6 +120,7 @@ type traceRunner struct {
 	trt           *Tortoise
 	pending       map[types.BallotID]*DecodedBallot
 	assertOutputs bool
+	assertErrors  bool
 }
 
 func RunTrace(path string, opts ...Opt) error {
@@ -133,6 +134,7 @@ func RunTrace(path string, opts ...Opt) error {
 		opts:          opts,
 		pending:       map[types.BallotID]*DecodedBallot{},
 		assertOutputs: true,
+		assertErrors:  true,
 	}
 	for {
 		ev, err := enum.Decode(dec)

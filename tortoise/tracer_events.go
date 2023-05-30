@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -172,6 +173,11 @@ func (b *DecodeBallotTrace) Run(r *traceRunner) error {
 		return err
 	}
 	decoded, err := r.trt.DecodeBallot(b.Ballot)
+	if r.assertErrors {
+		if err := assertErrors(err, b.Error); err != nil {
+			return err
+		}
+	}
 	if err == nil {
 		r.pending[decoded.ID()] = decoded
 	}
@@ -220,6 +226,11 @@ func (e *EncodeVotesTrace) New() traceEvent {
 
 func (e *EncodeVotesTrace) Run(r *traceRunner) error {
 	opinion, err := r.trt.EncodeVotes(context.Background(), EncodeVotesWithCurrent(e.Layer))
+	if r.assertErrors {
+		if err := assertErrors(err, e.Error); err != nil {
+			return err
+		}
+	}
 	if err == nil {
 		if diff := cmp.Diff(opinion, e.Opinion); len(diff) > 0 && r.assertOutputs {
 			return errors.New(diff)
@@ -279,8 +290,13 @@ func (r *ResultsTrace) New() traceEvent {
 
 func (r *ResultsTrace) Run(rt *traceRunner) error {
 	rst, err := rt.trt.Results(r.From, r.To)
+	if rt.assertErrors {
+		if err := assertErrors(err, r.Error); err != nil {
+			return err
+		}
+	}
 	if err == nil {
-		if diff := cmp.Diff(rst, r.Results); len(diff) > 0 && rt.assertOutputs {
+		if diff := cmp.Diff(rst, r.Results, cmpopts.EquateEmpty()); len(diff) > 0 && rt.assertOutputs {
 			return errors.New(diff)
 		}
 	}
@@ -301,7 +317,7 @@ func (u *UpdatesTrace) New() traceEvent {
 
 func (u *UpdatesTrace) Run(r *traceRunner) error {
 	rst := r.trt.Updates()
-	if diff := cmp.Diff(rst, u.Results); len(diff) > 0 && r.assertOutputs {
+	if diff := cmp.Diff(rst, u.Results, cmpopts.EquateEmpty()); len(diff) > 0 && r.assertOutputs {
 		return errors.New(diff)
 	}
 	return nil
@@ -325,6 +341,17 @@ func (b *BlockTrace) Run(r *traceRunner) error {
 		r.trt.OnValidBlock(b.Header)
 	} else {
 		r.trt.OnBlock(b.Header)
+	}
+	return nil
+}
+
+func assertErrors(err error, expect string) error {
+	msg := ""
+	if err != nil {
+		msg = err.Error()
+	}
+	if expect != msg {
+		return fmt.Errorf("%s != %s", expect, msg)
 	}
 	return nil
 }
