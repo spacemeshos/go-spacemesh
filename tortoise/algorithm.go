@@ -226,7 +226,7 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 }
 
 // OnAtx is expected to be called before ballots that use this atx.
-func (t *Tortoise) OnAtx(header *types.ActivationTxHeader) {
+func (t *Tortoise) OnAtx(header *types.AtxTortoiseData) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -265,13 +265,13 @@ func (t *Tortoise) OnValidBlock(header types.BlockHeader) {
 // OnBallot should be called every time new ballot is received.
 // Dependencies (base ballot, ref ballot, active set and its own atx) must
 // be processed before ballot.
-func (t *Tortoise) OnBallot(ballot *types.Ballot) {
+func (t *Tortoise) OnBallot(ballot *types.BallotTortoiseData) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	err := t.trtl.onBallot(ballot)
 	if err != nil {
 		errorsCounter.Inc()
-		t.logger.With().Error("failed to save state from ballot", ballot.ID(), log.Err(err))
+		t.logger.With().Error("failed to save state from ballot", ballot.ID, log.Err(err))
 	}
 	if t.tracer != nil {
 		t.tracer.On(&BallotTrace{Ballot: ballot, Malicious: ballot.IsMalicious()})

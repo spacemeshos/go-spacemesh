@@ -1530,7 +1530,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				header.PublishEpoch = lid.GetEpoch() - 1
 				header.BaseTickHeight = 0
 				header.TickCount = 1
-				trtl.OnAtx(header)
+				trtl.OnAtx(header.ToData())
 				atxids = append(atxids, atxID)
 			}
 
@@ -1628,8 +1628,8 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	s1.Merge(s2)
 	require.NoError(t, s1.GetState(0).DB.IterateEpochATXHeaders(
 		partitionEnd.GetEpoch(), func(header *types.ActivationTxHeader) bool {
-			tortoise1.OnAtx(header)
-			tortoise2.OnAtx(header)
+			tortoise1.OnAtx(header.ToData())
+			tortoise2.OnAtx(header.ToData())
 			return true
 		}))
 	for lid := partitionStart; !lid.After(partitionEnd); lid = lid.Add(1) {
@@ -2284,7 +2284,7 @@ func TestSwitchMode(t *testing.T) {
 		// add an atx to increase optimistic threshold in verifying tortoise to trigger a switch
 		header := &types.ActivationTxHeader{ID: types.ATXID{1}, EffectiveNumUnits: 1, TickCount: 200}
 		header.PublishEpoch = types.EpochID(1)
-		tortoise.OnAtx(header)
+		tortoise.OnAtx(header.ToData())
 		// feed ballots that vote against previously validated layer
 		// without the fix they would be ignored
 		for i := 1; i <= 16; i++ {
@@ -2760,7 +2760,7 @@ func TestEncodeVotes(t *testing.T) {
 			TickCount:         1,
 		}
 		header.PublishEpoch = lid.GetEpoch() - 1
-		tortoise.OnAtx(header)
+		tortoise.OnAtx(header.ToData())
 		tortoise.OnBeacon(lid.GetEpoch(), types.EmptyBeacon)
 
 		ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}}
@@ -2876,7 +2876,7 @@ func TestMissingActiveSet(t *testing.T) {
 		atx := &types.ActivationTxHeader{}
 		atx.ID = atxid
 		atx.PublishEpoch = epoch - 1
-		tortoise.OnAtx(atx)
+		tortoise.OnAtx(atx.ToData())
 	}
 	t.Run("empty", func(t *testing.T) {
 		require.Equal(t, aset, tortoise.GetMissingActiveSet(epoch+1, aset))

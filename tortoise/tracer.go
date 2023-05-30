@@ -165,7 +165,7 @@ func (c *ConfigTrace) Run(r *traceRunner) error {
 }
 
 type AtxTrace struct {
-	Header *types.ActivationTxHeader
+	Header *types.AtxTortoiseData
 }
 
 func (a *AtxTrace) Type() eventType {
@@ -218,8 +218,7 @@ func (b *BeaconTrace) Run(r *traceRunner) error {
 }
 
 type BallotTrace struct {
-	Ballot    *types.Ballot
-	Malicious bool
+	Ballot *types.BallotTortoiseData
 }
 
 func (b *BallotTrace) Type() eventType {
@@ -231,12 +230,6 @@ func (b *BallotTrace) New() traceEvent {
 }
 
 func (b *BallotTrace) Run(r *traceRunner) error {
-	if err := b.Ballot.Initialize(); err != nil {
-		return err
-	}
-	if b.Malicious {
-		b.Ballot.SetMalicious()
-	}
 	r.trt.OnBallot(b.Ballot)
 	return nil
 }

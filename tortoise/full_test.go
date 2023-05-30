@@ -334,7 +334,7 @@ func TestFullCountVotes(t *testing.T) {
 					TickCount:         tc.activeset[i].TickCount,
 				}
 				header.PublishEpoch = 1
-				tortoise.OnAtx(header)
+				tortoise.OnAtx(header.ToData())
 				activeset = append(activeset, atxid)
 			}
 

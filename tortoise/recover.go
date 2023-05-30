@@ -56,7 +56,7 @@ func Recover(db *datastore.CachedDB, beacon system.BeaconGetter, opts ...Opt) (*
 
 func recoverEpoch(epoch types.EpochID, trtl *Tortoise, db *datastore.CachedDB, beacondb system.BeaconGetter) error {
 	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
-		trtl.OnAtx(header)
+		trtl.OnAtx(header.ToData())
 		return true
 	}); err != nil {
 		return err
