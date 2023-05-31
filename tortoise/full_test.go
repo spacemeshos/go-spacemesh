@@ -400,7 +400,7 @@ func TestFullCountVotes(t *testing.T) {
 				consensus.processed = lid
 				consensus.last = lid
 				for _, ballot := range layerBallots {
-					require.NoError(t, consensus.onBallot(ballot))
+					require.NoError(t, consensus.onBallot(ballot.ToTortoiseData()))
 				}
 				consensus.full.countVotes(logger)
 			}

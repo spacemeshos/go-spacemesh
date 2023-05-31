@@ -360,7 +360,7 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 	}
 	ballotDuration.WithLabelValues(dbSave).Observe(float64(time.Since(t1)))
 	if err := h.decoder.StoreBallot(decoded); err != nil {
-		return nil, fmt.Errorf("store decoded ballot %s: %w", decoded.ID(), err)
+		return nil, fmt.Errorf("store decoded ballot %s: %w", decoded.ID, err)
 	}
 	reportVotesMetrics(b)
 	return proof, nil
@@ -386,7 +386,7 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.L
 	t2 := time.Now()
 	// ballot can be decoded only if all dependencies (blocks, ballots, atxs) were downloaded
 	// and added to the tortoise.
-	decoded, err := h.decoder.DecodeBallot(b)
+	decoded, err := h.decoder.DecodeBallot(b.ToTortoiseData())
 	if err != nil {
 		return nil, fmt.Errorf("decode ballot %s: %w", b.ID(), err)
 	}

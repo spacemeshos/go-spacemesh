@@ -15,7 +15,7 @@ import (
 func TestTracer(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "tortoise.trace")
+	path := filepath.Join("/tmp", "tortoise.trace")
 	const size = 12
 	s := sim.New(
 		sim.WithLayerSize(size),
@@ -50,8 +50,7 @@ func TestTracer(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "tortoise.trace")
 		trt, err := New(WithTracer(WithOutput(path)))
 		require.NoError(t, err)
-		ballot := &types.Ballot{}
-		ballot.Initialize()
+		ballot := &types.BallotTortoiseData{}
 		_, err = trt.DecodeBallot(ballot)
 		require.Error(t, err)
 		require.NoError(t, RunTrace(path, nil, WithLogger(logtest.New(t))))

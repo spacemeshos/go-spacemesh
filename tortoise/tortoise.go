@@ -624,8 +624,8 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 			beacon: ballot.EpochData.Beacon,
 			weight: big.NewRat(int64(atx.weight), int64(expected)),
 		}
-	} else if ballot.Pointer != nil {
-		ptr := *ballot.Pointer
+	} else if ballot.Ref != nil {
+		ptr := *ballot.Ref
 		ref, exists := t.state.ballotRefs[ptr]
 		if !exists {
 			t.logger.With().Warning("ref ballot not in state",

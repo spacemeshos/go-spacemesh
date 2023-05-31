@@ -306,6 +306,30 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
+func (b *Ballot) ToTortoiseData() *BallotTortoiseData {
+	data := &BallotTortoiseData{
+		ID:            b.ID(),
+		Layer:         b.Layer,
+		Eligibilities: uint32(len(b.EligibilityProofs)),
+		AtxID:         b.AtxID,
+		Opinion: Opinion{
+			Votes: b.Votes,
+			Hash:  b.OpinionHash,
+		},
+		Malicious: b.malicious,
+	}
+	if b.EpochData != nil {
+		data.EpochData = &ReferenceData{
+			Beacon:        b.EpochData.Beacon,
+			Eligibilities: uint32(b.EpochData.EligibilityCount),
+			ActiveSet:     b.ActiveSet,
+		}
+	} else {
+		data.Ref = &b.RefBallot
+	}
+	return data
+}
+
 // ToBallotIDs turns a list of Ballot into a list of BallotID.
 func ToBallotIDs(ballots []*Ballot) []BallotID {
 	ids := make([]BallotID, 0, len(ballots))
