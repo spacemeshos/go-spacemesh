@@ -281,7 +281,7 @@ type DecodedBallot struct {
 	minHint types.LayerID
 }
 
-// decodeBallot decodes ballot if it wasn't processed earlier.
+// DecodeBallot decodes ballot if it wasn't processed earlier.
 func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 	start := time.Now()
 	t.mu.Lock()
