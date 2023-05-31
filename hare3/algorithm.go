@@ -88,13 +88,18 @@ func (m *Wrapper) DecodeScale(d *scale.Decoder) (int, error) {
 	return 0, nil
 }
 
-type MsgType uint8
+type (
+	MsgType uint8
+	Hash20  [20]byte
+)
 
 const (
 	Preround MsgType = iota
 	Propose
 	Commit
 	Notify
+
+	grades = 5
 )
 
 type Msg struct {
@@ -127,9 +132,49 @@ type TrhesholdGradedGossiper interface {
 	// Threshold graded gossip takes outputs from graded gossip, which are in
 	// fact sets of values not single values, and returns sets of values that
 	// have reached the required threshold, along with the grade for that set.
-	ReceiveMsg(values [][]byte, round AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
+	ReceiveMsg(values []Hash20, msgRound AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
 	// Increment round increments the current round
 	IncRound() (v [][]byte, g uint8)
+
+	// Tuples of sid round and value are output once only, since they could
+	// only be output again in a later round with a lower grade. This function
+	// outputs the values that were part of messages sent at msgRound and
+	// reached the threshold at round. It also outputs the grade assigned which
+	// will be 5-(round-msgRound).
+	RetrieveThresholdMessages(msgRound, round AbsRound) (values [][]byte, grade uint8)
+}
+
+type testThresh struct {
+	count  map[AbsRound]map[Hash20][grades]uint16
+	thresh uint16
+}
+
+// TODO need to make sure round is never -1
+// TODO figure out how to mark a value as having been done ? so we don't re-process it repeatedly
+func (t *testThresh) ReceiveMsg(values []Hash20, msgRound AbsRound, grade uint8) {
+	// make grade zero indexed
+	index := grade - 1
+	for _, v := range values {
+		counts := t.count[msgRound][v]
+		counts[index]++
+	}
+}
+
+// Gets the messages that have met the threshold
+func (t *testThresh) RetrieveThresholdMessages(msgRound, round AbsRound) (values []Hash20, grade uint8) {
+	var result []Hash20
+	// This is the max index we consider to reach the threshold
+	s := int(grades - (round - msgRound))
+	for v, votes := range t.count[msgRound] {
+		var count uint16
+		for i := 0; i < s; i++ {
+			count += votes[i]
+		}
+		if count > t.thresh {
+			result = append(result, v)
+		}
+	}
+	return result, uint8(grades + 1 - s)
 }
 
 type ValueSet interface {
@@ -218,12 +263,12 @@ type Protocol struct {
 	values      [][]byte
 	validValues [][][]byte
 	round       AbsRound
-	tgg TrhesholdGradedGossiper
+	tgg         TrhesholdGradedGossiper
 }
 
 func (p *Protocol) NextRound() *miniMsg {
 	if p.round >= 0 && p.round <= 3 {
-		p.validValues[p.round] = p.tgg.
+		p.validValues[p.round] = p.tgg.RetrieveThresholdMessages(msgRound, round)
 	}
 	switch p.round {
 	case 0:
