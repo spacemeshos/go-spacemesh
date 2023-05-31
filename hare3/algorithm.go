@@ -100,7 +100,6 @@ const (
 type Msg struct {
 	sid, value, key []byte
 	round           int8
-	msgType         MsgType
 }
 
 func (m *Msg) DecodeScale(d *scale.Decoder) (int, error) {
@@ -121,14 +120,14 @@ type GradedGossiper interface {
 	// key) and grade and processes them. If a non nil v is returned the
 	// originally received input message should be forwarded to all neighbors
 	// and (sid, value, key, grade) is considered to have been output.
-	ReceiveMsg(sid, value, key []byte, round int8, grade uint8) (v []byte)
+	ReceiveMsg(value []byte, round AbsRound, grade uint8) (v []byte)
 }
 
 type TrhesholdGradedGossiper interface {
 	// Threshold graded gossip takes outputs from graded gossip, which are in
 	// fact sets of values not single values, and returns sets of values that
 	// have reached the required threshold, along with the grade for that set.
-	ReceiveMsg(sid, key []byte, values [][]byte, round int8, grade uint8) (v [][]byte, g uint8) // (sid, r, v, d + 1 − s)
+	ReceiveMsg(values [][]byte, round AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
 	// Increment round increments the current round
 	IncRound() (v [][]byte, g uint8)
 }
@@ -185,13 +184,14 @@ func HandleMsg(msg []byte) error {
 		return err
 	}
 	var g uint8
-	switch m.msgType {
+	r := AbsRound(m.round)
+	switch r.Type() {
 	case Propose:
 		g = gradeKey3(m.key)
 	default:
 		g = gradeKey5(m.key)
 	}
-	v := gg.ReceiveMsg(m.sid, m.value, m.key, m.round, g)
+	v := gg.ReceiveMsg(m.value, r, g)
 	if v == nil {
 		// Equivocation we drop the message
 		return nil
@@ -199,16 +199,15 @@ func HandleMsg(msg []byte) error {
 	// Send the message to peers
 	ng.Gossip(msg)
 
-	if m.msgType == Propose {
+	if r.Type() == Propose {
 		// store it
 		return nil
 	}
 
 	// Somehow break down the value into its values
-
 	var values [][]byte
 	// Pass result to threshold gossip
-	tgg.ReceiveMsg(m.sid, m.key, values, m.round, g)
+	tgg.ReceiveMsg(values, r, g)
 	return nil
 }
 
@@ -216,36 +215,62 @@ type Protocol struct {
 	iteration   int8
 	hardLocked  bool
 	lockedValue []byte
+	values      [][]byte
+	validValues [][][]byte
+	round       AbsRound
+	tgg TrhesholdGradedGossiper
 }
 
-// Preround returns a set of values to send in the preround.
-func (p *Protocol) DoPreround() [][]byte {
+func (p *Protocol) NextRound() *miniMsg {
+	if p.round >= 0 && p.round <= 3 {
+		p.validValues[p.round] = p.tgg.
+	}
+	switch p.round {
+	case 0:
+	case 1:
+	case 2:
+	case 3:
+	}
+
+	p.round++
 	return nil
 }
 
-func (p *Protocol) DoHardLock() {
+// Preround returns a set of values to send in the preround.
+func (p *Protocol) DoPreround() *miniMsg {
+	return &miniMsg{-1, p.values}
 }
 
-func (p *Protocol) DoSoftlock() {
+func (p *Protocol) DoHardLock() *miniMsg {
+	return nil
+}
+
+func (p *Protocol) DoSoftlock() *miniMsg {
+	return nil
 }
 
 // propose and commit both return iteration and value that can be used to send a message of the appropriate type.
-func (p *Protocol) DoPropose() (iteration int8, round int8, values [][]byte) {
-	return 0, 0, nil
+func (p *Protocol) DoPropose() *miniMsg {
+	return nil
 }
 
-func (p *Protocol) DoCommit() (iteration int8, values [][]byte) {
-	return 0, nil
+func (p *Protocol) DoCommit() *miniMsg {
+	return nil
 }
 
-func (p *Protocol) DoNotify() (iteration int8, values [][]byte) {
-	return 0, nil
+func (p *Protocol) DoNotify() *miniMsg {
+	return nil
 }
 
 type miniMsg struct {
-	iteration int8
-	round     int8
-	values    [][]byte
+	round  AbsRound
+	values [][]byte
+}
+
+type AbsRound int8
+
+func (r AbsRound) Type() MsgType {
+	return MsgType(r % 7)
 }
 
 // To run this we just want a loop that pulls from 2 channels a timer channel and a channel of messages
