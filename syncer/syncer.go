@@ -397,11 +397,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			return false
 		}
 
-		s.logger.WithContext(ctx).With().Info("prepare to sync data",
-			log.Stringer("current", s.ticker.CurrentLayer()),
-			log.Stringer("genesis", types.GetEffectiveGenesis()),
-		)
-
 		if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
 			return true
 		}
