@@ -95,11 +95,11 @@ func RunTrace(path string, breakpoint func(), opts ...Opt) error {
 			}
 			return err
 		}
-		if breakpoint != nil {
-			breakpoint()
-		}
 		if err := ev.Run(runner); err != nil {
 			return err
+		}
+		if breakpoint != nil {
+			breakpoint()
 		}
 	}
 }
