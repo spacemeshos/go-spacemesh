@@ -610,6 +610,39 @@ func TestProcessLayer(t *testing.T) {
 				},
 			},
 		},
+		{
+			"silent revert",
+			[]call{
+				{
+					updates: rlayers(
+						rlayer(start,
+							rblock(fixture.IDGen("1"), fixture.Invalid(), fixture.Data()),
+						),
+						rlayer(start.Add(1),
+							rblock(fixture.IDGen("2"), fixture.Invalid(), fixture.Data()),
+						),
+					),
+					executed: []types.BlockID{{}, {}},
+					applied:  []types.BlockID{{}, {}},
+				},
+				{
+					updates: rlayers(
+						rlayer(start,
+							rblock(fixture.IDGen("1"), fixture.Invalid(), fixture.Data()),
+						)),
+					applied: []types.BlockID{{}, {}},
+				},
+				{
+					updates: rlayers(
+						rlayer(start.Add(1),
+							rblock(fixture.IDGen("2"), fixture.Valid(), fixture.Data()),
+						),
+					),
+					executed: []types.BlockID{idg("2")},
+					applied:  []types.BlockID{{}, idg("2")},
+				},
+			},
+		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
