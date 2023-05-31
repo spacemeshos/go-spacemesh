@@ -1,5 +1,10 @@
 package hare3
 
+import (
+	"github.com/spacemeshos/go-scale"
+	"github.com/spacemeshos/go-spacemesh/codec"
+)
+
 // Hare 2 below --------------------------------------------------
 
 // Don't really want this to be part of the impl because it introduces errors
@@ -75,19 +80,172 @@ type KeyGrader any
 
 // not sure exactly what to put here, but the output should be the grade of key
 
-type GradedGossiper interface {
-	// GradedGossip takes the given sid (session id) value, key (verification
+type Wrapper struct {
+	msg, sig []byte
+}
+
+func (m *Wrapper) DecodeScale(d *scale.Decoder) (int, error) {
+	return 0, nil
+}
+
+type MsgType uint8
+
+const (
+	Preround MsgType = iota
+	Propose
+	Commit
+	Notify
+)
+
+type Msg struct {
+	sid, value, key []byte
+	round           int8
+	msgType         MsgType
+}
+
+func (m *Msg) DecodeScale(d *scale.Decoder) (int, error) {
+	return 0, nil
+}
+
+type NetworkGossiper interface {
+	// ReceiveMsg takes the given sid (session id) value, key (verification
 	// key) and grade and processes them. If a non nil v is returned the
 	// originally received input message should be forwarded to all neighbors
 	// and (sid, value, key, grade) is considered to have been output.
-	GradedGossip(sid, value, key []byte, grade uint8) (v []byte)
+	Gossip(msg []byte) error
+}
+
+// TODO remove some params from here need to combine the value and round
+type GradedGossiper interface {
+	// ReceiveMsg takes the given sid (session id) value, key (verification
+	// key) and grade and processes them. If a non nil v is returned the
+	// originally received input message should be forwarded to all neighbors
+	// and (sid, value, key, grade) is considered to have been output.
+	ReceiveMsg(sid, value, key []byte, round int8, grade uint8) (v []byte)
 }
 
 type TrhesholdGradedGossiper interface {
 	// Threshold graded gossip takes outputs from graded gossip, which are in
 	// fact sets of values not single values, and returns sets of values that
 	// have reached the required threshold, along with the grade for that set.
-	ThresholdGradedGossip(sid, round uint32, value [][]byte, key []byte, grade uint8) (v [][]byte, g uint8) // (sid, r, v, d + 1 − s)
+	ReceiveMsg(sid, key []byte, values [][]byte, round int8, grade uint8) (v [][]byte, g uint8) // (sid, r, v, d + 1 − s)
 	// Increment round increments the current round
-	IncRound()
+	IncRound() (v [][]byte, g uint8)
 }
+
+type ValueSet interface {
+	// Threshold graded gossip takes outputs from graded gossip, which are in
+	// fact sets of values not single values, and returns sets of values that
+	// have reached the required threshold, along with the grade for that set.
+	Hash() []byte
+	// Increment round increments the current round
+	Values() [][]byte
+}
+
+func verify(sig, data []byte) error {
+	return nil
+}
+
+func gradeKey3(key []byte) uint8 {
+	return 0
+}
+
+func gradeKey5(key []byte) uint8 {
+	return 0
+}
+
+// with int8 we have a max iterations of 17 before we overflow.
+// func absRound(iteration int8, round int8) int8 {
+// 	return 7*iteration + round
+// }
+
+// Can we remove sid from the protocols, probably, say we have a separate instance for each sid.
+//
+// TODO remove notion of sid from this method so assume we have a separate
+// method that does the decoding key verifying ... etc and we jump into this
+// method with just the required params at the point we grade keys.
+func HandleMsg(msg []byte) error {
+	var ng NetworkGossiper
+	var gg GradedGossiper
+	var tgg TrhesholdGradedGossiper
+	w := &Wrapper{}
+
+	// These three cases we are dropping the message.
+	err := codec.Decode(msg, w)
+	if err != nil {
+		return err
+	}
+	err = verify(w.sig, w.msg)
+	if err != nil {
+		return err
+	}
+	m := &Msg{}
+	err = codec.Decode(msg, m)
+	if err != nil {
+		return err
+	}
+	var g uint8
+	switch m.msgType {
+	case Propose:
+		g = gradeKey3(m.key)
+	default:
+		g = gradeKey5(m.key)
+	}
+	v := gg.ReceiveMsg(m.sid, m.value, m.key, m.round, g)
+	if v == nil {
+		// Equivocation we drop the message
+		return nil
+	}
+	// Send the message to peers
+	ng.Gossip(msg)
+
+	if m.msgType == Propose {
+		// store it
+		return nil
+	}
+
+	// Somehow break down the value into its values
+
+	var values [][]byte
+	// Pass result to threshold gossip
+	tgg.ReceiveMsg(m.sid, m.key, values, m.round, g)
+	return nil
+}
+
+type Protocol struct {
+	iteration   int8
+	hardLocked  bool
+	lockedValue []byte
+}
+
+// Preround returns a set of values to send in the preround.
+func (p *Protocol) DoPreround() [][]byte {
+	return nil
+}
+
+func (p *Protocol) DoHardLock() {
+}
+
+func (p *Protocol) DoSoftlock() {
+}
+
+// propose and commit both return iteration and value that can be used to send a message of the appropriate type.
+func (p *Protocol) DoPropose() (iteration int8, round int8, values [][]byte) {
+	return 0, 0, nil
+}
+
+func (p *Protocol) DoCommit() (iteration int8, values [][]byte) {
+	return 0, nil
+}
+
+func (p *Protocol) DoNotify() (iteration int8, values [][]byte) {
+	return 0, nil
+}
+
+type miniMsg struct {
+	iteration int8
+	round     int8
+	values    [][]byte
+}
+
+// To run this we just want a loop that pulls from 2 channels a timer channel and a channel of messages
