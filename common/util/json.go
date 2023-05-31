@@ -183,7 +183,10 @@ func Base64Encode(src []byte) []byte {
 
 func Base64Decode(dst, src []byte) error {
 	n, err := base64.StdEncoding.Decode(dst, src)
-	if n != len(src) {
+	if err != nil {
+		return err
+	}
+	if n != len(dst) {
 		return fmt.Errorf("incomplete decoding: %d != %d", n, len(src))
 	}
 	return err
