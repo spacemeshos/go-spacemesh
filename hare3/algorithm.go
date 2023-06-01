@@ -125,14 +125,14 @@ type GradedGossiper interface {
 	// key) and grade and processes them. If a non nil v is returned the
 	// originally received input message should be forwarded to all neighbors
 	// and (sid, value, key, grade) is considered to have been output.
-	ReceiveMsg(value []byte, round AbsRound, grade uint8) (v []byte)
+	ReceiveMsg(vk Hash20, value []byte, round AbsRound, grade uint8) (v []byte)
 }
 
 type TrhesholdGradedGossiper interface {
 	// Threshold graded gossip takes outputs from graded gossip, which are in
 	// fact sets of values not single values, and returns sets of values that
 	// have reached the required threshold, along with the grade for that set.
-	ReceiveMsg(values []Hash20, msgRound AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
+	ReceiveMsg(vk Hash20, values []Hash20, msgRound AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
 	// Increment round increments the current round
 	IncRound() (v [][]byte, g uint8)
 
@@ -144,13 +144,18 @@ type TrhesholdGradedGossiper interface {
 	RetrieveThresholdMessages(msgRound, round AbsRound) (values []Hash20, grade uint8)
 }
 
+type LeaderChecker interface {
+	IsLeader(vk Hash20, round AbsRound) bool
+}
+
 type GradecastedSet struct {
+	vk     Hash20
 	values []Hash20
 	grade  uint8
 }
 
 type Gradecaster interface {
-	ReceiveMsg(values []Hash20, msgRound AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
+	ReceiveMsg(vk Hash20, values []Hash20, msgRound AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
 	// Increment round increments the current round
 	IncRound() (v [][]byte, g uint8)
 
@@ -253,6 +258,7 @@ func gradeKey5(key []byte) uint8 {
 // method with just the required params at the point we grade keys.
 func HandleMsg(msg []byte) error {
 	var ng NetworkGossiper
+	var gc Gradecaster
 	var gg GradedGossiper
 	var tgg TrhesholdGradedGossiper
 	w := &Wrapper{}
@@ -279,7 +285,8 @@ func HandleMsg(msg []byte) error {
 	default:
 		g = gradeKey5(m.key)
 	}
-	v := gg.ReceiveMsg(m.value, r, g)
+	vk := hashBytes(m.key)
+	v := gg.ReceiveMsg(vk, m.value, r, g)
 	if v == nil {
 		// Equivocation we drop the message
 		return nil
@@ -288,21 +295,24 @@ func HandleMsg(msg []byte) error {
 	ng.Gossip(msg)
 
 	if r.Type() == Propose {
-		// store it
+		// Somehow break down the value into its values
+		var values []Hash20
+		// Send to gradecast
+		gc.ReceiveMsg(vk, values, r, g)
 		return nil
 	}
-
 	// Somehow break down the value into its values
 	var values []Hash20
+
 	// Pass result to threshold gossip
-	tgg.ReceiveMsg(values, r, g)
+	tgg.ReceiveMsg(vk, values, r, g)
 	return nil
 }
 
 type Protocol struct {
 	iteration   int8
 	hardLocked  []bool
-	lockedValue []Hash20
+	lockedValue []*Hash20
 	values      []Hash20
 	// Each index "i" holds values considered valid up to round "i+1"
 	Vi [][]Hash20
@@ -315,10 +325,15 @@ type Protocol struct {
 	round  AbsRound
 	tgg    TrhesholdGradedGossiper
 	gc     Gradecaster
+	lc     LeaderChecker
 	active bool
 }
 
 func toHash(values []Hash20) Hash20 {
+	return Hash20{}
+}
+
+func hashBytes(v []byte) Hash20 {
 	return Hash20{}
 }
 
@@ -427,9 +442,61 @@ func (p *Protocol) NextRound() *miniMsg {
 		if p.hardLocked[j] {
 			mm = &miniMsg{
 				round:  NewAbsRound(j, 5),
-				values: []Hash20{p.lockedValue[j]},
+				values: []Hash20{*p.lockedValue[j]},
 			}
 		} else {
+		OUTER:
+			for _, c := range candidates {
+				candidateHash := toHash(c.values)
+				// Check to see if valid proposal for this iteration
+				// Round 5 condition c
+				_, ok := p.Ti[j][candidateHash]
+				if !ok {
+					continue
+				}
+				// Check leader
+				// Round 5 condition d
+				if !p.lc.IsLeader(c.vk, NewAbsRound(j, 2)) {
+					continue
+				}
+				// Check grade
+				// Round 5 condition e
+				if c.grade < 2 {
+					continue
+				}
+				// Check subset of threshold values at round 3
+				// Round 5 condition f
+				if !isSubset(c.values, p.Vi[3]) {
+					continue
+				}
+				// Check superset of highest graded values or we received a
+				// commit for the previous iteration from thresh-gossip for
+				// this set with grade >= 1.
+				// Round 5 condition g
+				if !isSubset(p.Vi[5], c.values) {
+					continue
+				}
+				lastIterationCommit := NewAbsRound(j-1, 5)
+				// By adding grades to lastIterationCommit we retreive messages
+				// that passed the threshold with grade 1
+				values, _ := p.tgg.RetrieveThresholdMessages(lastIterationCommit, lastIterationCommit+grades)
+				for _, v := range values {
+					if v != candidateHash {
+						break OUTER
+					}
+				}
+				// Locked value for this iteration is nil or matches set
+				//
+				// Round 5 condition h
+				if !(p.lockedValue[j] == nil || *p.lockedValue[j] == candidateHash) {
+					continue
+				}
+				mm = &miniMsg{
+					round:  NewAbsRound(j, 5),
+					values: []Hash20{candidateHash},
+				}
+				break
+			}
 		}
 		return mm
 	case 6:
@@ -477,7 +544,7 @@ func NewAbsRound(j, r int8) AbsRound {
 }
 
 func (r AbsRound) Round() int8 {
-	return r % 7
+	return int8(r) % 7
 }
 
 func (r AbsRound) Type() MsgType {
