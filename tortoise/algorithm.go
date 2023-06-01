@@ -431,6 +431,7 @@ func (t *Tortoise) results(from, to types.LayerID) ([]result.Layer, error) {
 				Hare:    block.hare == support,
 				Valid:   block.validity == support,
 				Invalid: block.validity == against,
+				Local:   crossesThreshold(block.margin, t.trtl.localThreshold) == support,
 			})
 		}
 		rst = append(rst, result.Layer{

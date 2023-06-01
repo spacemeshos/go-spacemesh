@@ -50,6 +50,7 @@ func (l *Layer) MarshalLogObject(encoder log.ObjectEncoder) error {
 type Block struct {
 	Header  types.Vote `json:"header"`
 	Valid   bool       `json:"v"`
+	Local   bool       `json:"l"` // set to true if block crossed local threshold
 	Invalid bool       `json:"i"`
 	Hare    bool       `json:"h"`
 	Data    bool       `json:"d"`
@@ -61,5 +62,6 @@ func (b *Block) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddBool("invalid", b.Invalid)
 	encoder.AddBool("hare", b.Hare)
 	encoder.AddBool("data", b.Data)
+	encoder.AddBool("local", b.Local)
 	return nil
 }
