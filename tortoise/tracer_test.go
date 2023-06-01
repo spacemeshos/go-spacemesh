@@ -2,6 +2,8 @@ package tortoise
 
 import (
 	"context"
+	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -55,4 +57,24 @@ func TestTracer(t *testing.T) {
 		require.Error(t, err)
 		require.NoError(t, RunTrace(path, nil, WithLogger(logtest.New(t))))
 	})
+}
+
+func TestData(t *testing.T) {
+	t.Parallel()
+	data, err := filepath.Abs("./data")
+	require.NoError(t, err)
+
+	entries, err := os.ReadDir(data)
+	if err != nil && errors.Is(err, os.ErrNotExist) {
+		t.Skip("directory with data is empty")
+	}
+	require.NoError(t, err)
+	for _, entry := range entries {
+		entry := entry
+		t.Run(entry.Name(), func(t *testing.T) {
+			t.Parallel()
+			require.NoError(t, RunTrace(filepath.Join(data, entry.Name()), nil,
+				WithLogger(logtest.New(t))))
+		})
+	}
 }
