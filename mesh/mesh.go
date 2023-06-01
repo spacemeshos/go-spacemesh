@@ -394,7 +394,7 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 			log.Stringer("applied", target),
 		)
 		if latest := msh.LatestLayerInState(); latest > layer.Layer {
-			msh.logger.With().Warning("reverted layer without reverting state",
+			msh.logger.With().Debug("reverted layer without reverting state",
 				log.Context(ctx),
 				log.Uint32("latest", latest.Uint32()),
 				log.Uint32("update", layer.Layer.Uint32()),
