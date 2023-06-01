@@ -34,6 +34,8 @@ func (d Domain) String() string {
 		return "BEACON_FIRST_MSG"
 	case BEACON_FOLLOWUP_MSG:
 		return "BEACON_FOLLOWUP_MSG"
+	case BEACON_PROPOSAL:
+		return "BEACON_PROPOSAL"
 	case BALLOT:
 		return "BALLOT"
 	case HARE:

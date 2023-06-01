@@ -192,7 +192,7 @@ func TestCalcEligibility(t *testing.T) {
 		layer := types.EpochID(5).FirstLayer()
 		miners := createLayerData(t, o.cdb, layer.Sub(defLayersPerEpoch), 5)
 		o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
-		o.mVerifier.EXPECT().Verify(signing.BEACON_PROPOSAL, gomock.Any(), gomock.Any(), gomock.Any()).Return(false).Times(1)
+		o.mVerifier.EXPECT().Verify(signing.HARE, gomock.Any(), gomock.Any(), gomock.Any()).Return(false).Times(1)
 
 		res, err := o.CalcEligibility(context.Background(), layer, 0, 1, miners[0], nonce, types.EmptyVrfSignature)
 		require.NoError(t, err)
@@ -211,7 +211,7 @@ func TestCalcEligibility(t *testing.T) {
 		miners := createActiveSet(t, o.cdb, types.EpochID(4).FirstLayer(), activeSet)
 		o.UpdateActiveSet(5, activeSet)
 		o.mBeacon.EXPECT().GetBeacon(lid.GetEpoch()).Return(types.RandomBeacon(), nil)
-		o.mVerifier.EXPECT().Verify(signing.BEACON_PROPOSAL, gomock.Any(), gomock.Any(), gomock.Any()).Return(true)
+		o.mVerifier.EXPECT().Verify(signing.HARE, gomock.Any(), gomock.Any(), gomock.Any()).Return(true)
 		_, err = o.CalcEligibility(context.Background(), lid, 1, 1, miners[0], nonce, types.EmptyVrfSignature)
 		require.NoError(t, err)
 	})
@@ -237,7 +237,7 @@ func TestCalcEligibility(t *testing.T) {
 
 			nonce := types.VRFPostIndex(1)
 			o.mBeacon.EXPECT().GetBeacon(lid.GetEpoch()).Return(beacon, nil).Times(1)
-			o.mVerifier.EXPECT().Verify(signing.BEACON_PROPOSAL, gomock.Any(), gomock.Any(), gomock.Any()).Return(true).Times(1)
+			o.mVerifier.EXPECT().Verify(signing.HARE, gomock.Any(), gomock.Any(), gomock.Any()).Return(true).Times(1)
 			res, err := o.CalcEligibility(context.Background(), lid, 1, 10, miners[0], nonce, vrfSig)
 			require.NoError(t, err, vrf)
 			require.Equal(t, exp, res, vrf)
@@ -264,7 +264,7 @@ func TestCalcEligibilityWithSpaceUnit(t *testing.T) {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			o := defaultOracle(t)
-			o.mVerifier.EXPECT().Verify(signing.BEACON_PROPOSAL, gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+			o.mVerifier.EXPECT().Verify(signing.HARE, gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
 			lid := types.EpochID(5).FirstLayer()
 			beacon := types.Beacon{1, 0, 0, 0}
@@ -334,7 +334,7 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 
 func Test_VrfSignVerify(t *testing.T) {
 	// eligibility of the proof depends on the identity
-	rng := rand.New(rand.NewSource(5))
+	rng := rand.New(rand.NewSource(1000))
 
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	require.NoError(t, err)
