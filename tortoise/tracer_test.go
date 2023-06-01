@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -71,6 +72,9 @@ func TestData(t *testing.T) {
 	require.NoError(t, err)
 	for _, entry := range entries {
 		entry := entry
+		if strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
 		t.Run(entry.Name(), func(t *testing.T) {
 			t.Parallel()
 			require.NoError(t, RunTrace(filepath.Join(data, entry.Name()), nil,
