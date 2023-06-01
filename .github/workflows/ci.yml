@@ -143,6 +143,8 @@ jobs:
           sudo ethtool -K eth0 rx off
       - name: checkout
         uses: actions/checkout@v3
+        with:
+          lfs: true
       - name: set up go
         uses: actions/setup-go@v4
         with:
@@ -198,6 +200,8 @@ jobs:
           Disable-NetAdapterChecksumOffload -Name * -TcpIPv4 -UdpIPv4 -TcpIPv6 -UdpIPv6
       - name: checkout
         uses: actions/checkout@v3
+        with:
+          lfs: true
       - name: set up go
         uses: actions/setup-go@v4
         with:

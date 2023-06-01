@@ -17,6 +17,8 @@ jobs:
           sudo ethtool -K eth0 tx off
           sudo ethtool -K eth0 rx off
       - uses: actions/checkout@v3
+        with:
+          lfs: true
       - name: set up go
         uses: actions/setup-go@v4
         with:
