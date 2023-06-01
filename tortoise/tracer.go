@@ -242,8 +242,9 @@ func (b *BallotTrace) Run(r *traceRunner) error {
 }
 
 type DecodeBallotTrace struct {
-	Ballot *types.Ballot
-	Error  string `scale:"max=100000"`
+	Ballot    *types.Ballot
+	Malicious bool
+	Error     string `scale:"max=100000"`
 
 	// TODO(dshulyak) want to assert decoding results somehow
 }
@@ -259,6 +260,9 @@ func (d *DecodeBallotTrace) New() traceEvent {
 func (b *DecodeBallotTrace) Run(r *traceRunner) error {
 	if err := b.Ballot.Initialize(); err != nil {
 		return err
+	}
+	if b.Malicious {
+		b.Ballot.SetMalicious()
 	}
 	decoded, err := r.trt.DecodeBallot(b.Ballot)
 	if r.assertErrors {
