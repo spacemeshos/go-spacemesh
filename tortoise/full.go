@@ -37,10 +37,6 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 	if ballot.malicious {
 		return
 	}
-	logger.With().Debug("counted votes from ballot",
-		log.Stringer("id", ballot.id),
-		log.Uint32("lid", ballot.layer.Uint32()),
-	)
 	for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
 		if !lvote.lid.After(f.evicted) {
 			break
@@ -54,13 +50,21 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 			if block.height > ballot.reference.height {
 				continue
 			}
-			switch lvote.getVote(block) {
+			vote := lvote.getVote(block)
+			switch vote {
 			case support:
 				empty = false
 				block.margin = block.margin.Add(ballot.weight)
 			case against:
 				block.margin = block.margin.Sub(ballot.weight)
 			}
+			logger.With().Debug("counted votes from ballot",
+				log.Stringer("id", ballot.id),
+				log.Uint32("lid", ballot.layer.Uint32()),
+				log.Stringer("block", block.id),
+				log.Stringer("vote", vote),
+				log.Stringer("margin", block.margin),
+			)
 		}
 		if empty {
 			layer.empty = layer.empty.Add(ballot.weight)
