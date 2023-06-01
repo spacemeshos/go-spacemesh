@@ -289,7 +289,7 @@ func (t *Tortoise) DecodeBallot(ballot *types.BallotTortoiseData) (*DecodedBallo
 	waitBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	decoded, err := t.decodeBallot(ballot)
 	if t.tracer != nil {
-		ev := &DecodeBallotTrace{Ballot: ballot, Malicious: ballot.IsMalicious()}
+		ev := &DecodeBallotTrace{Ballot: ballot}
 		if err != nil {
 			ev.Error = err.Error()
 		}
