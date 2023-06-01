@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -868,7 +869,7 @@ func TestDecodeVotes(t *testing.T) {
 		hasher.WriteSupport(supported, 0)
 		ballot.OpinionHash = hasher.Hash()
 		ballot.Votes.Support = []types.Vote{{ID: supported, LayerID: ballot.Layer - 1}}
-		_, err = tortoise.DecodeBallot(&ballot)
+		_, err = tortoise.decodeBallot(&ballot)
 		require.NoError(t, err)
 	})
 }
@@ -2779,7 +2780,7 @@ func TestEncodeVotes(t *testing.T) {
 		hasher.WriteSupport(block.ID(), block.TickHeight)
 		hasher.Sum(ballot.OpinionHash[:0])
 
-		decoded, err := tortoise.DecodeBallot(&ballot)
+		decoded, err := tortoise.decodeBallot(&ballot)
 		require.NoError(t, err)
 		require.NoError(t, tortoise.StoreBallot(decoded))
 
@@ -2858,7 +2859,7 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 		ballot.InnerBallot = ballots[0].InnerBallot
 		ballot.EligibilityProofs = ballots[0].EligibilityProofs
 		ballot.Votes.Base = ballots[1].ID()
-		_, err = tortoise.DecodeBallot(&ballot)
+		_, err = tortoise.decodeBallot(&ballot)
 		require.ErrorContains(t, err, "votes for ballot")
 	})
 }
@@ -3052,4 +3053,22 @@ func TestUpdates(t *testing.T) {
 		require.False(t, updates[0].Blocks[0].Valid)
 		require.Equal(t, id, updates[0].Blocks[0].Header.ID)
 	})
+}
+
+func TestData(t *testing.T) {
+	t.Skip()
+	t.Parallel()
+	data, err := filepath.Abs("./data")
+	require.NoError(t, err)
+
+	entries, err := os.ReadDir(data)
+	require.NoError(t, err)
+	for _, entry := range entries {
+		entry := entry
+		t.Run(entry.Name(), func(t *testing.T) {
+			t.Parallel()
+			require.NoError(t, RunTrace(filepath.Join(data, entry.Name()), nil,
+				WithLogger(logtest.New(t)), WithTracer(WithOutput("/tmp/trace"))))
+		})
+	}
 }
