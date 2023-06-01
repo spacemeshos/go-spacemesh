@@ -35,7 +35,7 @@ require (
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/spacemeshos/api/release/go v1.12.0
 	github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d
-	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
+	github.com/spacemeshos/fixed v0.1.0
 	github.com/spacemeshos/go-scale v1.1.9
 	github.com/spacemeshos/merkle-tree v0.2.2
 	github.com/spacemeshos/poet v0.8.5
