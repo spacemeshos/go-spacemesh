@@ -17,7 +17,7 @@ import (
 func TestTracer(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join("/tmp", "tortoise.trace")
+	path := filepath.Join(t.TempDir(), "tortoise.trace")
 	const size = 12
 	s := sim.New(
 		sim.WithLayerSize(size),

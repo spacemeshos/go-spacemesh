@@ -269,6 +269,9 @@ func (t *Tortoise) OnBallot(ballot *types.BallotTortoiseData) {
 	if t.tracer != nil {
 		t.tracer.On(&BallotTrace{Ballot: ballot})
 	}
+	if t.tracer != nil {
+		t.tracer.On(&BallotTrace{Ballot: ballot})
+	}
 }
 
 // DecodedBallot created after unwrapping exceptions list and computing internal opinion.

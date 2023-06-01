@@ -313,11 +313,7 @@ func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
 	current := gLayer.Add(2)
 	ts.mTicker.advanceToLayer(current)
 	lyr := current.Sub(1)
-	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr).DoAndReturn(
-		func(_ context.Context, got types.LayerID, _ ...p2p.Peer) error {
-			ts.msh.SetZeroBlockLayer(context.Background(), got)
-			return nil
-		})
+	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr)
 
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.True(t, ts.syncer.ListenToATXGossip())
@@ -410,11 +406,7 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 	require.False(t, ts.syncer.IsSynced(context.Background()))
 
 	for lid := lyr; lid.Before(current); lid = lid.Add(1) {
-		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid).DoAndReturn(
-			func(_ context.Context, got types.LayerID, _ ...p2p.Peer) error {
-				ts.msh.SetZeroBlockLayer(context.Background(), got)
-				return nil
-			})
+		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 	}
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	// node should be in gossip sync state
@@ -435,11 +427,7 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 	current := lyr.Add(1)
 	ts.mTicker.advanceToLayer(current)
 	ts.mDataFetcher.EXPECT().PollMaliciousProofs(gomock.Any())
-	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr).DoAndReturn(
-		func(_ context.Context, got types.LayerID, _ ...p2p.Peer) error {
-			ts.msh.SetZeroBlockLayer(context.Background(), got)
-			return nil
-		})
+	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr)
 
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	// node should be in gossip sync state
@@ -459,11 +447,7 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 	require.False(t, ts.syncer.IsSynced(context.Background()))
 
 	for lid := lyr; lid.Before(current); lid = lid.Add(1) {
-		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid).DoAndReturn(
-			func(_ context.Context, got types.LayerID, _ ...p2p.Peer) error {
-				ts.msh.SetZeroBlockLayer(context.Background(), got)
-				return nil
-			})
+		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 	}
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	// the node should enter gossipSync again
@@ -473,6 +457,25 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 	require.False(t, ts.syncer.IsSynced(context.Background()))
 
 	waitOutGossipSync(t, current, ts)
+}
+
+func TestNetworkHasNoData(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+	lyr := startWithSyncedState(t, ts)
+	require.True(t, ts.syncer.IsSynced(context.Background()))
+
+	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).AnyTimes()
+	for lid := lyr.Add(1); lid < lyr.Add(outOfSyncThreshold+1); lid++ {
+		ts.mTicker.advanceToLayer(lid)
+		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), gomock.Any())
+		require.True(t, ts.syncer.synchronize(context.Background()))
+		require.True(t, ts.syncer.dataSynced())
+		require.True(t, ts.syncer.ListenToATXGossip())
+		require.True(t, ts.syncer.ListenToGossip())
+		require.True(t, ts.syncer.IsSynced(context.Background()))
+	}
+	// the network hasn't received any data
+	require.Greater(t, ts.syncer.ticker.CurrentLayer()-ts.msh.LatestLayer(), outOfSyncThreshold)
 }
 
 // test the case where the node was originally synced, and somehow gets out of sync, but
@@ -498,11 +501,7 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 	require.False(t, ts.syncer.IsSynced(context.Background()))
 
 	for lid := lyr; lid.Before(current); lid = lid.Add(1) {
-		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid).DoAndReturn(
-			func(_ context.Context, got types.LayerID, _ ...p2p.Peer) error {
-				ts.msh.SetZeroBlockLayer(context.Background(), got)
-				return nil
-			})
+		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 	}
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.True(t, ts.syncer.dataSynced())
@@ -526,11 +525,7 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, ts *testSyncer) {
 	lyr := current
 	current = current.Add(1)
 	ts.mTicker.advanceToLayer(current)
-	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr).DoAndReturn(
-		func(_ context.Context, got types.LayerID, _ ...p2p.Peer) error {
-			ts.msh.SetZeroBlockLayer(context.Background(), got)
-			return nil
-		})
+	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr)
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
@@ -540,11 +535,7 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, ts *testSyncer) {
 	lyr = lyr.Add(1)
 	current = current.Add(1)
 	ts.mTicker.advanceToLayer(current)
-	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr).DoAndReturn(
-		func(_ context.Context, got types.LayerID, _ ...p2p.Peer) error {
-			ts.msh.SetZeroBlockLayer(context.Background(), got)
-			return nil
-		})
+	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr)
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.True(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
