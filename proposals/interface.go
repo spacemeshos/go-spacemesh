@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -25,7 +26,7 @@ type ballotDecoder interface {
 }
 
 type vrfVerifier interface {
-	Verify(types.NodeID, []byte, types.VrfSignature) bool
+	Verify(signing.Domain, types.NodeID, []byte, types.VrfSignature) bool
 }
 
 type nonceFetcher interface {

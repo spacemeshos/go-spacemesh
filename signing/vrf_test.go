@@ -17,10 +17,10 @@ func Fuzz_VRFSignAndVerify(f *testing.F) {
 		vrfSig, err := edSig.VRFSigner()
 		require.NoError(t, err, "failed to create VRF signer")
 
-		signature := vrfSig.Sign(message)
+		signature := vrfSig.Sign(HARE, message)
 		require.NoError(t, err, "failed to sign message")
 
-		ok := VRFVerify(edSig.NodeID(), message, signature)
+		ok := VRFVerify(HARE, edSig.NodeID(), message, signature)
 		require.True(t, ok, "failed to verify VRF signature")
 	})
 }
@@ -39,10 +39,10 @@ func Test_VRFSignAndVerify(t *testing.T) {
 	require.NoError(t, err, "failed to create VRF signer")
 
 	message := []byte("hello world")
-	signature := vrfSig.Sign(message)
+	signature := vrfSig.Sign(HARE, message)
 
 	vrfVerify := NewVRFVerifier()
-	ok := vrfVerify.Verify(signer.NodeID(), message, signature)
+	ok := vrfVerify.Verify(HARE, signer.NodeID(), message, signature)
 	require.True(t, ok, "failed to verify VRF signature")
 }
 
@@ -69,18 +69,21 @@ func Test_VRFVerifier(t *testing.T) {
 	require.NoError(t, err, "failed to create VRF signer")
 
 	// Act & Assert
-	sig := vrfSig.Sign([]byte("hello world"))
+	sig := vrfSig.Sign(HARE, []byte("hello world"))
 
-	ok := VRFVerify(signer.NodeID(), []byte("hello world"), sig)
+	ok := VRFVerify(HARE, signer.NodeID(), []byte("hello world"), sig)
 	require.True(t, ok, "failed to verify VRF signature")
 
-	ok = VRFVerify(signer.NodeID(), []byte("different message"), sig)
+	ok = VRFVerify(HARE, signer.NodeID(), []byte("different message"), sig)
+	require.False(t, ok, "VRF signature should not be verified")
+
+	ok = VRFVerify(ATX, signer.NodeID(), []byte("hello world"), sig)
 	require.False(t, ok, "VRF signature should not be verified")
 
 	var sig2 types.VrfSignature
 	copy(sig2[:], sig[:])
 	sig2[0] = ^sig2[0] // flip all bits of first byte in the signature
-	ok = VRFVerify(signer.NodeID(), []byte("hello world"), sig2)
+	ok = VRFVerify(HARE, signer.NodeID(), []byte("hello world"), sig2)
 	require.False(t, ok, "VRF signature should not be verified")
 }
 
@@ -100,7 +103,7 @@ func Test_VRF_LSB_evenly_distributed(t *testing.T) {
 		_, err := rand.Read(msg)
 		require.NoError(t, err, "failed to read random bytes")
 
-		sig := vrfSig.Sign(msg)
+		sig := vrfSig.Sign(HARE, msg)
 		lsb[sig.LSB()&1]++
 	}
 

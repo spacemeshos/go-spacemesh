@@ -9,6 +9,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	signing "github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // MockvrfSigner is a mock of vrfSigner interface.
@@ -63,17 +64,17 @@ func (mr *MockvrfSignerMockRecorder) NodeID() *gomock.Call {
 }
 
 // Sign mocks base method.
-func (m *MockvrfSigner) Sign(msg []byte) types.VrfSignature {
+func (m *MockvrfSigner) Sign(d signing.Domain, msg []byte) types.VrfSignature {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Sign", msg)
+	ret := m.ctrl.Call(m, "Sign", d, msg)
 	ret0, _ := ret[0].(types.VrfSignature)
 	return ret0
 }
 
 // Sign indicates an expected call of Sign.
-func (mr *MockvrfSignerMockRecorder) Sign(msg interface{}) *gomock.Call {
+func (mr *MockvrfSignerMockRecorder) Sign(d, msg interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sign", reflect.TypeOf((*MockvrfSigner)(nil).Sign), msg)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sign", reflect.TypeOf((*MockvrfSigner)(nil).Sign), d, msg)
 }
 
 // MockvrfVerifier is a mock of vrfVerifier interface.
@@ -100,17 +101,17 @@ func (m *MockvrfVerifier) EXPECT() *MockvrfVerifierMockRecorder {
 }
 
 // Verify mocks base method.
-func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool {
+func (m *MockvrfVerifier) Verify(domain signing.Domain, nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Verify", nodeID, msg, sig)
+	ret := m.ctrl.Call(m, "Verify", domain, nodeID, msg, sig)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockvrfVerifierMockRecorder) Verify(nodeID, msg, sig interface{}) *gomock.Call {
+func (mr *MockvrfVerifierMockRecorder) Verify(domain, nodeID, msg, sig interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), nodeID, msg, sig)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), domain, nodeID, msg, sig)
 }
 
 // MocknonceFetcher is a mock of nonceFetcher interface.
