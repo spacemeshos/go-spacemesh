@@ -141,40 +141,83 @@ type TrhesholdGradedGossiper interface {
 	// outputs the values that were part of messages sent at msgRound and
 	// reached the threshold at round. It also outputs the grade assigned which
 	// will be 5-(round-msgRound).
-	RetrieveThresholdMessages(msgRound, round AbsRound) (values [][]byte, grade uint8)
+	RetrieveThresholdMessages(msgRound, round AbsRound) (values []Hash20, grade uint8)
+}
+
+type Gradecaster interface {
+	// Threshold graded gossip takes outputs from graded gossip, which are in
+	// fact sets of values not single values, and returns sets of values that
+	// have reached the required threshold, along with the grade for that set.
+	ReceiveMsg(values []Hash20, msgRound AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
+	// Increment round increments the current round
+	IncRound() (v [][]byte, g uint8)
+
+	// Tuples of sid round and value are output once only, since they could
+	// only be output again in a later round with a lower grade. This function
+	// outputs the values that were part of messages sent at msgRound and
+	// reached the threshold at round. It also outputs the grade assigned which
+	// will be 5-(round-msgRound).
+	RetrieveThresholdMessages(msgRound, round AbsRound) (values []Hash20, grade uint8)
+}
+
+// ThresholdState holds the graded votes for a value and also records if this
+// value has been retrieved.
+type ThresholdState struct {
+	votes     [grades]uint16
+	retrieved bool
+}
+
+func (s *ThresholdState) Vote(grade uint8) {
+	// Grade is 1 indexed so we subtract 1
+	s.votes[grade-1]++
+}
+
+func (s *ThresholdState) CumulativeVote(minGrade uint8) uint16 {
+	var count uint16
+
+	// Grade is 1 indexed so we subtract 1
+	for i := minGrade - 1; i < grades; i++ {
+		count += s.votes[i]
+	}
+	return count
 }
 
 type testThresh struct {
-	count  map[AbsRound]map[Hash20][grades]uint16
+	count  map[AbsRound]map[Hash20]*ThresholdState
 	thresh uint16
 }
 
-// TODO need to make sure round is never -1
-// TODO figure out how to mark a value as having been done ? so we don't re-process it repeatedly
 func (t *testThresh) ReceiveMsg(values []Hash20, msgRound AbsRound, grade uint8) {
-	// make grade zero indexed
-	index := grade - 1
 	for _, v := range values {
-		counts := t.count[msgRound][v]
-		counts[index]++
+		// Get state for received Value
+		state, ok := t.count[msgRound][v]
+		if !ok {
+			state = &ThresholdState{}
+			t.count[msgRound][v] = state
+		}
+		// If the value has already been retrieved then skip any update
+		if state.retrieved {
+			continue
+		}
+		state.Vote(grade)
 	}
 }
 
-// Gets the messages that have met the threshold
+// Gets the messages belonging to msgRound that have met the threshold at round.
+// TODO need to make sure round is never -1
+// TODO do I allow messages to be retreived more than once?
 func (t *testThresh) RetrieveThresholdMessages(msgRound, round AbsRound) (values []Hash20, grade uint8) {
 	var result []Hash20
-	// This is the max index we consider to reach the threshold
-	s := int(grades - (round - msgRound))
-	for v, votes := range t.count[msgRound] {
-		var count uint16
-		for i := 0; i < s; i++ {
-			count += votes[i]
-		}
-		if count > t.thresh {
+	// The min grade allowed to be considered to reach the threshold at this
+	// round.
+	minGrade := grades + 1 - uint8((round - msgRound))
+	for v, state := range t.count[msgRound] {
+		if state.CumulativeVote(minGrade) > t.thresh {
+			state.retrieved = true
 			result = append(result, v)
 		}
 	}
-	return result, uint8(grades + 1 - s)
+	return result, minGrade
 }
 
 type ValueSet interface {
@@ -250,7 +293,7 @@ func HandleMsg(msg []byte) error {
 	}
 
 	// Somehow break down the value into its values
-	var values [][]byte
+	var values []Hash20
 	// Pass result to threshold gossip
 	tgg.ReceiveMsg(values, r, g)
 	return nil
@@ -260,21 +303,95 @@ type Protocol struct {
 	iteration   int8
 	hardLocked  bool
 	lockedValue []byte
-	values      [][]byte
-	validValues [][][]byte
-	round       AbsRound
-	tgg         TrhesholdGradedGossiper
+	values      []Hash20
+	// Each index "i" holds values considered valid up to round "i+1"
+	Vi [][]Hash20
+	// Each index "i" holds a map of sets of values from valid proposals
+	// indexed by their hash received in iteration "i"
+	Ti     []map[Hash20][]Hash20
+	Si     []Hash20
+	Shash  Hash20
+	S      []Hash20
+	round  AbsRound
+	tgg    TrhesholdGradedGossiper
+	active bool
+}
+
+func toHash(values []Hash20) Hash20 {
+	return Hash20{}
+}
+
+// Given a slice of candidate set hashes and a slice of sets of valid set hashes
+// returns the first candidate that appears in the valid hashes, along with it's set.
+func findMatch(candidates []Hash20, validSets []map[Hash20][]Hash20, j int8) (*Hash20, []Hash20) {
+	for i := 0; i <= int(j); i++ {
+		for _, v := range candidates {
+			set, ok := validSets[i][v]
+			if ok {
+				return &v, set
+			}
+		}
+	}
+	return nil, nil
+}
+
+func wrapRetreiveThresh(tgg TrhesholdGradedGossiper, round AbsRound) []Hash20 {
+	values, _ := tgg.RetrieveThresholdMessages(NewAbsRound(round.Iteration()-1, 5), round)
+	return values
 }
 
 func (p *Protocol) NextRound() *miniMsg {
 	if p.round >= 0 && p.round <= 3 {
-		p.validValues[p.round] = p.tgg.RetrieveThresholdMessages(msgRound, round)
+		p.Vi[p.round], _ = p.tgg.RetrieveThresholdMessages(-1, p.round)
 	}
+	j := p.round.Iteration()
 	switch p.round {
+	case -1:
 	case 0:
 	case 1:
 	case 2:
+		if !p.active {
+			return nil
+		}
+		// in the paper it says up to the beginning of round 2 if a message was
+		// received from threshold gossip with grade 2 or greater. But since
+		// I'm not delivering messages real time from thresh gossip to the
+		// protocol and I just look when i need the message, I look at the last
+		// possible point, so the returned grade will be 2 and therefore I
+		// don't need the grade. Will this cause problems for me do I need to
+		// allow for the same message to be retreived more than once?
+		//
+		// Hmm case 2 of round 6 asks if the protocol has received (commit R(j,
+		// 5), S, 5) from thresh gossip, could we just look again? Providing
+		// the right round as context. I think it works?
+		var setHash *Hash20
+		var set []Hash20
+		if j > 0 {
+			// Check if values recieved from thresh gossip, we can only do this
+			// safely if we know j > 0, so this can't be done before that
+			// check.
+			values, _ := p.tgg.RetrieveThresholdMessages(NewAbsRound(j-1, 5), p.round)
+			setHash, set = findMatch(values, p.Ti, j)
+		}
+		// If we didn't get a set from threshold gossip then use our local candidate
+		if setHash == nil {
+			h := toHash(p.Vi[4])
+			setHash = &h
+			set = p.Vi[4]
+		}
+
+		// Update instance variables
+		p.Shash = *setHash
+		p.S = set
+		// Return message to be sent to peers
+		return &miniMsg{
+			round:  p.round,
+			values: p.S,
+		}
 	case 3:
+	case 4:
+	case 5:
+	case 6:
 	}
 
 	p.round++
@@ -309,13 +426,21 @@ func (p *Protocol) DoNotify() *miniMsg {
 
 type miniMsg struct {
 	round  AbsRound
-	values [][]byte
+	values []Hash20
 }
 
 type AbsRound int8
 
+func NewAbsRound(j, r int8) AbsRound {
+	return AbsRound(j*7 + r)
+}
+
 func (r AbsRound) Type() MsgType {
 	return MsgType(r % 7)
+}
+
+func (r AbsRound) Iteration() int8 {
+	return int8(r) / 7
 }
 
 // To run this we just want a loop that pulls from 2 channels a timer channel and a channel of messages
