@@ -144,20 +144,20 @@ type TrhesholdGradedGossiper interface {
 	RetrieveThresholdMessages(msgRound, round AbsRound) (values []Hash20, grade uint8)
 }
 
+type GradecastedSet struct {
+	values []Hash20
+	grade  uint8
+}
+
 type Gradecaster interface {
-	// Threshold graded gossip takes outputs from graded gossip, which are in
-	// fact sets of values not single values, and returns sets of values that
-	// have reached the required threshold, along with the grade for that set.
 	ReceiveMsg(values []Hash20, msgRound AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
 	// Increment round increments the current round
 	IncRound() (v [][]byte, g uint8)
 
-	// Tuples of sid round and value are output once only, since they could
-	// only be output again in a later round with a lower grade. This function
-	// outputs the values that were part of messages sent at msgRound and
-	// reached the threshold at round. It also outputs the grade assigned which
-	// will be 5-(round-msgRound).
-	RetrieveThresholdMessages(msgRound, round AbsRound) (values []Hash20, grade uint8)
+	// Since gradecast always outputs at round r+3 it is asumed that callers
+	// Only call this function at msgRound + 3. Returns all sets of values output by
+	// gradcast at that msgRound + 3 along with their grading.
+	RetrieveGradecastedMessages(msgRound AbsRound) []GradecastedSet
 }
 
 // ThresholdState holds the graded votes for a value and also records if this
@@ -301,8 +301,8 @@ func HandleMsg(msg []byte) error {
 
 type Protocol struct {
 	iteration   int8
-	hardLocked  bool
-	lockedValue []byte
+	hardLocked  []bool
+	lockedValue []Hash20
 	values      []Hash20
 	// Each index "i" holds values considered valid up to round "i+1"
 	Vi [][]Hash20
@@ -314,6 +314,7 @@ type Protocol struct {
 	S      []Hash20
 	round  AbsRound
 	tgg    TrhesholdGradedGossiper
+	gc     Gradecaster
 	active bool
 }
 
@@ -340,13 +341,32 @@ func wrapRetreiveThresh(tgg TrhesholdGradedGossiper, round AbsRound) []Hash20 {
 	return values
 }
 
+func isSubset(subset, superset []Hash20) bool {
+	return true
+}
+
 func (p *Protocol) NextRound() *miniMsg {
 	if p.round >= 0 && p.round <= 3 {
 		p.Vi[p.round], _ = p.tgg.RetrieveThresholdMessages(-1, p.round)
 	}
+	// We are starting a new iteration build objects
+	if p.round.Round() == 0 {
+		p.Ti = append(p.Ti, make(map[Hash20][]Hash20))
+		p.Vi = append(p.Vi, nil)
+		p.hardLocked = append(p.hardLocked, false)
+		p.lockedValue = append(p.lockedValue, nil)
+	}
 	j := p.round.Iteration()
 	switch p.round {
 	case -1:
+		if !p.active {
+			return nil
+		}
+		// Gossip initial values
+		return &miniMsg{
+			round:  p.round,
+			values: p.Si,
+		}
 	case 0:
 	case 1:
 	case 2:
@@ -388,9 +408,30 @@ func (p *Protocol) NextRound() *miniMsg {
 			round:  p.round,
 			values: p.S,
 		}
-	case 3:
-	case 4:
 	case 5:
+		candidates := p.gc.RetrieveGradecastedMessages(NewAbsRound(j, 2))
+		for _, c := range candidates {
+			if c.grade < 1 {
+				continue
+			}
+			if isSubset(c.values, p.Vi[2]) {
+				// Add to valid proposals for this iteration
+				p.Ti[j][toHash(c.values)] = c.values
+			}
+		}
+		if !p.active {
+			return nil
+		}
+
+		var mm *miniMsg
+		if p.hardLocked[j] {
+			mm = &miniMsg{
+				round:  NewAbsRound(j, 5),
+				values: []Hash20{p.lockedValue[j]},
+			}
+		} else {
+		}
+		return mm
 	case 6:
 	}
 
@@ -433,6 +474,10 @@ type AbsRound int8
 
 func NewAbsRound(j, r int8) AbsRound {
 	return AbsRound(j*7 + r)
+}
+
+func (r AbsRound) Round() int8 {
+	return r % 7
 }
 
 func (r AbsRound) Type() MsgType {
