@@ -20,6 +20,8 @@ type Config struct {
 	MaxExceptions int    `mapstructure:"tortoise-max-exceptions"` // if candidate for base ballot has more than max exceptions it will be ignored
 	// number of layers to delay votes for blocks with bad beacon values during self-healing. ideally a full epoch.
 	BadBeaconVoteDelayLayers uint32 `mapstructure:"tortoise-delay-layers"`
+	// EnableTracer will write tortoise traces to the stderr.
+	EnableTracer bool `mapstructure:"tortoise-enable-tracer"`
 
 	LayerSize uint32
 }
@@ -42,8 +44,9 @@ type Tortoise struct {
 	ctx    context.Context
 	cfg    Config
 
-	mu   sync.Mutex
-	trtl *turtle
+	mu     sync.Mutex
+	trtl   *turtle
+	tracer *tracer
 }
 
 // Opt for configuring tortoise.
@@ -56,17 +59,17 @@ func WithLogger(logger log.Log) Opt {
 	}
 }
 
-// WithContext defines context for tortoise.
-func WithContext(ctx context.Context) Opt {
-	return func(t *Tortoise) {
-		t.ctx = ctx
-	}
-}
-
 // WithConfig defines protocol parameters.
 func WithConfig(cfg Config) Opt {
 	return func(t *Tortoise) {
 		t.cfg = cfg
+	}
+}
+
+// WithTracer enables tracing of every call to the tortoise.
+func WithTracer(opts ...TraceOpt) Opt {
+	return func(t *Tortoise) {
+		t.tracer = newTracer(opts...)
 	}
 }
 
@@ -87,6 +90,17 @@ func New(opts ...Opt) (*Tortoise, error) {
 		)
 	}
 	t.trtl = newTurtle(t.logger, t.cfg)
+	if t.tracer != nil {
+		t.tracer.On(&ConfigTrace{
+			Hdist:                    t.cfg.Hdist,
+			Zdist:                    t.cfg.Zdist,
+			WindowSize:               t.cfg.WindowSize,
+			MaxExceptions:            uint32(t.cfg.MaxExceptions),
+			BadBeaconVoteDelayLayers: t.cfg.BadBeaconVoteDelayLayers,
+			LayerSize:                t.cfg.LayerSize,
+			EpochSize:                types.GetLayersPerEpoch(),
+		})
+	}
 	return t, nil
 }
 
@@ -114,6 +128,9 @@ func (t *Tortoise) OnWeakCoin(lid types.LayerID, coin bool) {
 	} else {
 		layer.coinflip = against
 	}
+	if t.tracer != nil {
+		t.tracer.On(&WeakCoinTrace{Layer: lid, Coin: coin})
+	}
 }
 
 func (t *Tortoise) OnBeacon(eid types.EpochID, beacon types.Beacon) {
@@ -130,6 +147,9 @@ func (t *Tortoise) OnBeacon(eid types.EpochID, beacon types.Beacon) {
 	}
 	epoch := t.trtl.epoch(eid)
 	epoch.beacon = &beacon
+	if t.tracer != nil {
+		t.tracer.On(&BeaconTrace{Epoch: eid, Beacon: beacon})
+	}
 }
 
 type encodeConf struct {
@@ -167,6 +187,20 @@ func (t *Tortoise) EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*t
 	if err != nil {
 		errorsCounter.Inc()
 	}
+	if t.tracer != nil {
+		event := &EncodeVotesTrace{
+			Opinion: opinion,
+		}
+		if err != nil {
+			event.Error = err.Error()
+		}
+		if conf.current != nil {
+			event.Layer = *conf.current
+		} else {
+			event.Layer = t.trtl.last + 1
+		}
+		t.tracer.On(event)
+	}
 	return opinion, err
 }
 
@@ -179,15 +213,21 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 	start = time.Now()
 	t.trtl.onLayer(ctx, lid)
 	executeTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
+	if t.tracer != nil {
+		t.tracer.On(&TallyTrace{Layer: lid})
+	}
 }
 
 // OnAtx is expected to be called before ballots that use this atx.
-func (t *Tortoise) OnAtx(atx *types.ActivationTxHeader) {
+func (t *Tortoise) OnAtx(header *types.ActivationTxHeader) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitAtxDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	t.trtl.onAtx(atx)
+	t.trtl.onAtx(header)
+	if t.tracer != nil {
+		t.tracer.On(&AtxTrace{Header: header})
+	}
 }
 
 // OnBlock updates tortoise with information that data is available locally.
@@ -197,6 +237,9 @@ func (t *Tortoise) OnBlock(header types.BlockHeader) {
 	defer t.mu.Unlock()
 	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	t.trtl.onBlock(header, true, false)
+	if t.tracer != nil {
+		t.tracer.On(&BlockTrace{Header: header})
+	}
 }
 
 // OnValidBlock inserts block, updates that data is stored locally
@@ -207,6 +250,9 @@ func (t *Tortoise) OnValidBlock(header types.BlockHeader) {
 	defer t.mu.Unlock()
 	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	t.trtl.onBlock(header, true, true)
+	if t.tracer != nil {
+		t.tracer.On(&BlockTrace{Header: header, Valid: true})
+	}
 }
 
 // OnBallot should be called every time new ballot is received.
@@ -215,9 +261,13 @@ func (t *Tortoise) OnValidBlock(header types.BlockHeader) {
 func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if err := t.trtl.onBallot(ballot); err != nil {
+	err := t.trtl.onBallot(ballot)
+	if err != nil {
 		errorsCounter.Inc()
 		t.logger.With().Error("failed to save state from ballot", ballot.ID(), log.Err(err))
+	}
+	if t.tracer != nil {
+		t.tracer.On(&BallotTrace{Ballot: ballot, Malicious: ballot.IsMalicious()})
 	}
 }
 
@@ -237,6 +287,18 @@ func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
+	decoded, err := t.decodeBallot(ballot)
+	if t.tracer != nil {
+		ev := &DecodeBallotTrace{Ballot: ballot, Malicious: ballot.IsMalicious()}
+		if err != nil {
+			ev.Error = err.Error()
+		}
+		t.tracer.On(ev)
+	}
+	return decoded, err
+}
+
+func (t *Tortoise) decodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 	info, min, err := t.trtl.decodeBallot(ballot)
 	if err != nil {
 		errorsCounter.Inc()
@@ -266,6 +328,9 @@ func (t *Tortoise) StoreBallot(decoded *DecodedBallot) error {
 		decoded.info.malicious = true
 	}
 	t.trtl.storeBallot(decoded.info, decoded.minHint)
+	if t.tracer != nil {
+		t.tracer.On(&StoreBallotTrace{ID: decoded.ID(), Malicious: decoded.IsMalicious()})
+	}
 	return nil
 }
 
@@ -281,6 +346,9 @@ func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
 	defer t.mu.Unlock()
 	waitHareOutputDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	t.trtl.onHareOutput(lid, bid)
+	if t.tracer != nil {
+		t.tracer.On(&HareTrace{Layer: lid, Vote: bid})
+	}
 }
 
 // GetMissingActiveSet returns unknown atxs from the original list. It is done for a specific epoch
@@ -318,6 +386,12 @@ func (t *Tortoise) Updates() []result.Layer {
 		)
 	}
 	t.trtl.pending = 0
+	if t.tracer != nil {
+		t.tracer.On(&UpdatesTrace{ResultsTrace{
+			From: t.trtl.pending, To: t.trtl.processed,
+			Results: rst,
+		}})
+	}
 	return rst
 }
 
@@ -325,7 +399,18 @@ func (t *Tortoise) Updates() []result.Layer {
 func (t *Tortoise) Results(from, to types.LayerID) ([]result.Layer, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.results(from, to)
+	rst, err := t.results(from, to)
+	if t.tracer != nil {
+		ev := &ResultsTrace{
+			From: from, To: to,
+			Results: rst,
+		}
+		if err != nil {
+			ev.Error = err.Error()
+		}
+		t.tracer.On(ev)
+	}
+	return rst, err
 }
 
 func (t *Tortoise) results(from, to types.LayerID) ([]result.Layer, error) {

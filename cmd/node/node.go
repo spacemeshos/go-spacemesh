@@ -602,10 +602,16 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	if trtlCfg.BadBeaconVoteDelayLayers == 0 {
 		trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 	}
-	trtl, err := tortoise.Recover(app.cachedDB, beaconProtocol,
-		tortoise.WithContext(ctx),
+	trtlopts := []tortoise.Opt{
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
+	}
+	if trtlCfg.EnableTracer {
+		app.log.With().Info("tortoise will trace execution")
+		trtlopts = append(trtlopts, tortoise.WithTracer())
+	}
+	trtl, err := tortoise.Recover(
+		app.cachedDB, beaconProtocol, trtlopts...,
 	)
 	if err != nil {
 		return fmt.Errorf("can't recover tortoise state: %w", err)

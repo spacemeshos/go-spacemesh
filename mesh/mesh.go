@@ -219,15 +219,12 @@ func (msh *Mesh) setProcessedLayer(layerID types.LayerID) error {
 // the block in consensus, and reverts state before that layer
 // if such layer is found.
 func (msh *Mesh) ensureStateConsistent(ctx context.Context, results []result.Layer) error {
-	var (
-		changed types.LayerID
-		inState = msh.LatestLayerInState()
-	)
+	var changed types.LayerID
 	for _, layer := range results {
-		if layer.Layer > inState {
+		applied, err := layers.GetApplied(msh.cdb, layer.Layer)
+		if err != nil && errors.Is(err, sql.ErrNotFound) {
 			continue
 		}
-		applied, err := layers.GetApplied(msh.cdb, layer.Layer)
 		if err != nil {
 			return fmt.Errorf("get applied %v: %w", layer.Layer, err)
 		}
@@ -393,7 +390,9 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 			log.Context(ctx),
 			log.Stringer("applied", target),
 		)
-		msh.setLatestLayerInState(layer.Layer)
+		if layer.Layer > msh.LatestLayerInState() {
+			msh.setLatestLayerInState(layer.Layer)
+		}
 	}
 	return nil
 }

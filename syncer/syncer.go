@@ -282,9 +282,10 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 	oldState := s.syncState.Swap(newState).(syncState)
 	if oldState != newState {
 		s.logger.WithContext(ctx).With().Info("sync state change",
-			log.String("from_state", oldState.String()),
-			log.String("to_state", newState.String()),
+			log.String("from state", oldState.String()),
+			log.String("to state", newState.String()),
 			log.Stringer("current", s.ticker.CurrentLayer()),
+			log.Stringer("last synced", s.getLastSyncedLayer()),
 			log.Stringer("latest", s.mesh.LatestLayer()),
 			log.Stringer("processed", s.mesh.ProcessedLayer()))
 		events.ReportNodeStatusUpdate()
@@ -471,12 +472,12 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 	return nil
 }
 
-func isTooFarBehind(ctx context.Context, logger log.Log, current, latest types.LayerID) bool {
-	if current.After(latest) && current.Difference(latest) >= outOfSyncThreshold {
+func isTooFarBehind(ctx context.Context, logger log.Log, current, lastSynced types.LayerID) bool {
+	if current.After(lastSynced) && current.Difference(lastSynced) >= outOfSyncThreshold {
 		logger.WithContext(ctx).With().Info("node is too far behind",
 			log.Stringer("current", current),
-			log.Stringer("latest", latest),
-			log.Uint32("behind_threshold", outOfSyncThreshold))
+			log.Stringer("last synced", lastSynced),
+			log.Uint32("behind threshold", outOfSyncThreshold))
 		return true
 	}
 	return false
@@ -489,8 +490,7 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 		s.setSyncState(ctx, synced)
 		return
 	}
-	latest := s.mesh.LatestLayer()
-	if isTooFarBehind(ctx, s.logger, current, latest) {
+	if isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer()) {
 		s.setSyncState(ctx, notSynced)
 	}
 }
@@ -510,8 +510,7 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	// network outage.
 	switch currSyncState {
 	case synced:
-		latest := s.mesh.LatestLayer()
-		if !success && isTooFarBehind(ctx, s.logger, current, latest) {
+		if !success && isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer()) {
 			s.setSyncState(ctx, notSynced)
 		}
 	case gossipSync:
