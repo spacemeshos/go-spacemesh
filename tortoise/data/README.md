@@ -13,20 +13,7 @@ To download the trace:
 
 Note that whole execution might be very large, and you will have to tweak period to download trace in one go. Alternatively you can use [logcli](https://grafana.com/docs/loki/latest/tools/logcli/).
 
-Lists of traces
-===
-
-<Add a short note a
-bout trace and how you collected it here>
-
-| name | source |
-| ---  | ---    |
-| partition_70_30_ex_1 | {namespace="test-ugma", pod="smesher-2-84564c8cc-rzl7h"} |
-| partition_70_30_ex_2 | {namespace="test-ugma", pod="smesher-23-8665c485bc-4m8j2"}|
-| failed_nodes_ex_1 | {namespace="test-tzch", pod="smesher-45-5c6856cf69-rmmjt"} |
-| partitin_50_ex_1 | {namespace="test-bxvs", pod="smesher-3-6d49fb7cb8-dqd78"} |
-| partition_50_ex_2 | {namespace="test-bxvs",pod="smesher-27-7c5dff6888-q7sl5"}|
-
+If trace is downloaded from a system test, please prefix it with a name of system tests and smesher number, so that it can be recovered if it won't be compatible.
 
 How to run?
 ===
