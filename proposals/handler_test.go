@@ -708,8 +708,8 @@ func TestBallot_Success(t *testing.T) {
 			return true, nil
 		})
 	th.mm.EXPECT().AddBallot(context.Background(), b).Return(nil, nil)
-	decoded := &tortoise.DecodedBallot{Ballot: b}
-	th.md.EXPECT().DecodeBallot(b).Return(decoded, nil)
+	decoded := &tortoise.DecodedBallot{BallotTortoiseData: b.ToTortoiseData()}
+	th.md.EXPECT().DecodeBallot(decoded.BallotTortoiseData).Return(decoded, nil)
 	th.md.EXPECT().StoreBallot(decoded).Return(nil)
 	require.NoError(t, th.HandleSyncedBallot(context.Background(), peer, data))
 }
@@ -741,8 +741,8 @@ func TestBallot_MaliciousProofIgnoredInSyncFlow(t *testing.T) {
 			return true, nil
 		})
 	th.mm.EXPECT().AddBallot(context.Background(), b).Return(&types.MalfeasanceProof{Layer: lid}, nil)
-	decoded := &tortoise.DecodedBallot{Ballot: b}
-	th.md.EXPECT().DecodeBallot(b).Return(decoded, nil)
+	decoded := &tortoise.DecodedBallot{BallotTortoiseData: b.ToTortoiseData()}
+	th.md.EXPECT().DecodeBallot(decoded.BallotTortoiseData).Return(decoded, nil)
 	th.md.EXPECT().StoreBallot(decoded).Return(nil)
 	require.NoError(t, th.HandleSyncedBallot(context.Background(), peer, data))
 }
@@ -798,8 +798,8 @@ func TestBallot_DecodeBeforeVotesConsistency(t *testing.T) {
 	th.md.EXPECT().GetMissingActiveSet(gomock.Any(), types.ATXIDList{b.AtxID}).Return(types.ATXIDList{b.AtxID})
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 
-	decoded := &tortoise.DecodedBallot{Ballot: b}
-	th.md.EXPECT().DecodeBallot(b).Return(decoded, expected)
+	decoded := &tortoise.DecodedBallot{BallotTortoiseData: b.ToTortoiseData()}
+	th.md.EXPECT().DecodeBallot(decoded.BallotTortoiseData).Return(decoded, expected)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), peer, data), expected)
 }
 
@@ -818,8 +818,8 @@ func TestBallot_DecodedStoreFailure(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
 
-	decoded := &tortoise.DecodedBallot{Ballot: b}
-	th.md.EXPECT().DecodeBallot(b).Return(decoded, nil)
+	decoded := &tortoise.DecodedBallot{BallotTortoiseData: b.ToTortoiseData()}
+	th.md.EXPECT().DecodeBallot(decoded.BallotTortoiseData).Return(decoded, nil)
 	th.mm.EXPECT().AddBallot(context.Background(), b).Return(nil, nil)
 	th.md.EXPECT().StoreBallot(decoded).Return(expected)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), peer, data), expected)

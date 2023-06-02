@@ -46,6 +46,17 @@ func (atxh *ActivationTxHeader) GetWeight() uint64 {
 	return getWeight(uint64(atxh.EffectiveNumUnits), atxh.TickCount)
 }
 
+func (atxh *ActivationTxHeader) ToData() *AtxTortoiseData {
+	return &AtxTortoiseData{
+		ID:          atxh.ID,
+		Smesher:     atxh.NodeID,
+		TargetEpoch: atxh.TargetEpoch(),
+		BaseHeight:  atxh.BaseTickHeight,
+		Height:      atxh.TickHeight(),
+		Weight:      atxh.GetWeight(),
+	}
+}
+
 func getWeight(numUnits, tickCount uint64) uint64 {
 	return safeMul(numUnits, tickCount)
 }

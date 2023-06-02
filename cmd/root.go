@@ -192,6 +192,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.Tortoise.MaxExceptions, "number of exceptions tolerated for a base ballot")
 	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.BadBeaconVoteDelayLayers, "tortoise-delay-layers",
 		cfg.Tortoise.BadBeaconVoteDelayLayers, "number of layers to ignore a ballot with a different beacon")
+	cmd.PersistentFlags().BoolVar(&cfg.Tortoise.EnableTracer, "tortoise-enable-tracer",
+		cfg.Tortoise.EnableTracer, "recovrd every tortoise input/output into the loggin output")
 
 	// TODO(moshababo): add usage desc
 	cmd.PersistentFlags().Uint64Var(&cfg.POST.LabelsPerUnit, "post-labels-per-unit",

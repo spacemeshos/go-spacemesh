@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -35,6 +36,14 @@ func (id *BallotID) EncodeScale(e *scale.Encoder) (int, error) {
 // DecodeScale implements scale codec interface.
 func (id *BallotID) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, id[:])
+}
+
+func (id *BallotID) MarshalText() ([]byte, error) {
+	return util.Base64Encode(id[:]), nil
+}
+
+func (id *BallotID) UnmarshalText(buf []byte) error {
+	return util.Base64Decode(id[:], buf)
 }
 
 // Ballot contains the smeshers signed vote on the mesh history.
@@ -152,13 +161,13 @@ type InnerBallot struct {
 //	see https://github.com/spacemeshos/go-spacemesh/issues/2369.
 type Votes struct {
 	// Base ballot.
-	Base BallotID
+	Base BallotID `json:"base"`
 	// Support block id at a particular layer and height.
-	Support []Vote `scale:"max=10000"` // sliding vote window size is 10k layers, vote for one block per layer
+	Support []Vote `scale:"max=10000" json:"support,omitempty"` // sliding vote window size is 10k layers, vote for one block per layer
 	// Against previously supported block.
-	Against []Vote `scale:"max=10000"` // sliding vote window size is 10k layers, vote for one block per layer
+	Against []Vote `scale:"max=10000" json:"against,omitempty"` // sliding vote window size is 10k layers, vote for one block per layer
 	// Abstain on layers until they are terminated.
-	Abstain []LayerID `scale:"max=10000"` // sliding vote window size is 10k layers, vote to abstain on any layer
+	Abstain []LayerID `scale:"max=10000" json:"abstain,omitempty"` // sliding vote window size is 10k layers, vote to abstain on any layer
 }
 
 // MarshalLogObject implements logging interface.
@@ -186,9 +195,9 @@ func (v *Votes) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 type BlockHeader struct {
-	ID      BlockID
-	LayerID LayerID
-	Height  uint64
+	ID      BlockID `json:"id"`
+	LayerID LayerID `json:"lid"`
+	Height  uint64  `json:"height"`
 }
 
 // MarshalLogObject implements logging interface.
@@ -205,8 +214,8 @@ type Vote = BlockHeader
 
 // Opinion is a tuple from opinion hash and votes that decode to opinion hash.
 type Opinion struct {
-	Hash Hash32
-	Votes
+	Hash  Hash32 `json:"hash"`
+	Votes `json:",inline"`
 }
 
 // MarshalLogObject implements logging interface.
@@ -304,6 +313,30 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("beacon", beacon.ShortString())
 	encoder.AddObject("votes", &b.Votes)
 	return nil
+}
+
+func (b *Ballot) ToTortoiseData() *BallotTortoiseData {
+	data := &BallotTortoiseData{
+		ID:            b.ID(),
+		Layer:         b.Layer,
+		Eligibilities: uint32(len(b.EligibilityProofs)),
+		AtxID:         b.AtxID,
+		Opinion: Opinion{
+			Votes: b.Votes,
+			Hash:  b.OpinionHash,
+		},
+		Malicious: b.malicious,
+	}
+	if b.EpochData != nil {
+		data.EpochData = &ReferenceData{
+			Beacon:        b.EpochData.Beacon,
+			Eligibilities: uint32(b.EpochData.EligibilityCount),
+			ActiveSet:     b.ActiveSet,
+		}
+	} else {
+		data.Ref = &b.RefBallot
+	}
+	return data
 }
 
 // ToBallotIDs turns a list of Ballot into a list of BallotID.
