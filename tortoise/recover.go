@@ -56,7 +56,7 @@ func Recover(db *datastore.CachedDB, beacon system.BeaconGetter, opts ...Opt) (*
 
 func recoverEpoch(epoch types.EpochID, trtl *Tortoise, db *datastore.CachedDB, beacondb system.BeaconGetter) error {
 	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
-		trtl.OnAtx(header)
+		trtl.OnAtx(header.ToData())
 		return true
 	}); err != nil {
 		return err
@@ -101,7 +101,7 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, b
 		return err
 	}
 	for _, ballot := range ballotsrst {
-		trtl.OnBallot(ballot)
+		trtl.OnBallot(ballot.ToTortoiseData())
 	}
 	coin, err := layers.GetWeakCoin(db, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {

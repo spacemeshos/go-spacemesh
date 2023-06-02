@@ -130,13 +130,13 @@ type traceEvent interface {
 }
 
 type ConfigTrace struct {
-	Hdist                    uint32
-	Zdist                    uint32
-	WindowSize               uint32
-	MaxExceptions            uint32
-	BadBeaconVoteDelayLayers uint32
-	LayerSize                uint32
-	EpochSize                uint32 // this field is not set in the original config
+	Hdist                    uint32 `json:"hdist"`
+	Zdist                    uint32 `json:"zdist"`
+	WindowSize               uint32 `json:"window"`
+	MaxExceptions            uint32 `json:"exceptions"`
+	BadBeaconVoteDelayLayers uint32 `json:"delay"`
+	LayerSize                uint32 `json:"layer-size"`
+	EpochSize                uint32 `json:"epoch-size"` // this field is not set in the original config
 }
 
 func (c *ConfigTrace) Type() eventType {
@@ -165,7 +165,7 @@ func (c *ConfigTrace) Run(r *traceRunner) error {
 }
 
 type AtxTrace struct {
-	Header *types.ActivationTxHeader
+	Header *types.AtxTortoiseData `json:",inline"`
 }
 
 func (a *AtxTrace) Type() eventType {
@@ -182,8 +182,8 @@ func (a *AtxTrace) Run(r *traceRunner) error {
 }
 
 type WeakCoinTrace struct {
-	Layer types.LayerID
-	Coin  bool
+	Layer types.LayerID `json:"lid"`
+	Coin  bool          `json:"coin"`
 }
 
 func (w *WeakCoinTrace) Type() eventType {
@@ -200,8 +200,8 @@ func (w *WeakCoinTrace) Run(r *traceRunner) error {
 }
 
 type BeaconTrace struct {
-	Epoch  types.EpochID
-	Beacon types.Beacon
+	Epoch  types.EpochID `json:"epoch"`
+	Beacon types.Beacon  `json:"beacon"`
 }
 
 func (b *BeaconTrace) Type() eventType {
@@ -218,8 +218,7 @@ func (b *BeaconTrace) Run(r *traceRunner) error {
 }
 
 type BallotTrace struct {
-	Ballot    *types.Ballot
-	Malicious bool
+	Ballot *types.BallotTortoiseData `json:",inline"`
 }
 
 func (b *BallotTrace) Type() eventType {
@@ -231,20 +230,13 @@ func (b *BallotTrace) New() traceEvent {
 }
 
 func (b *BallotTrace) Run(r *traceRunner) error {
-	if err := b.Ballot.Initialize(); err != nil {
-		return err
-	}
-	if b.Malicious {
-		b.Ballot.SetMalicious()
-	}
 	r.trt.OnBallot(b.Ballot)
 	return nil
 }
 
 type DecodeBallotTrace struct {
-	Ballot    *types.Ballot
-	Malicious bool
-	Error     string `scale:"max=100000"`
+	Ballot *types.BallotTortoiseData `json:",inline"`
+	Error  string                    `json:"e"`
 
 	// TODO(dshulyak) want to assert decoding results somehow
 }
@@ -258,12 +250,6 @@ func (d *DecodeBallotTrace) New() traceEvent {
 }
 
 func (b *DecodeBallotTrace) Run(r *traceRunner) error {
-	if err := b.Ballot.Initialize(); err != nil {
-		return err
-	}
-	if b.Malicious {
-		b.Ballot.SetMalicious()
-	}
 	decoded, err := r.trt.DecodeBallot(b.Ballot)
 	if r.assertErrors {
 		if err := assertErrors(err, b.Error); err != nil {
@@ -271,14 +257,14 @@ func (b *DecodeBallotTrace) Run(r *traceRunner) error {
 		}
 	}
 	if err == nil {
-		r.pending[decoded.ID()] = decoded
+		r.pending[decoded.ID] = decoded
 	}
 	return nil
 }
 
 type StoreBallotTrace struct {
-	ID        types.BallotID
-	Malicious bool
+	ID        types.BallotID `json:"id"`
+	Malicious bool           `json:"mal"`
 }
 
 func (s *StoreBallotTrace) Type() eventType {
@@ -303,9 +289,9 @@ func (s *StoreBallotTrace) Run(r *traceRunner) error {
 }
 
 type EncodeVotesTrace struct {
-	Layer   types.LayerID
-	Opinion *types.Opinion
-	Error   string `scale:"max=100000"`
+	Layer   types.LayerID  `json:"lid"`
+	Opinion *types.Opinion `json:"opinion"`
+	Error   string         `json:"e"`
 }
 
 func (e *EncodeVotesTrace) Type() eventType {
@@ -332,7 +318,7 @@ func (e *EncodeVotesTrace) Run(r *traceRunner) error {
 }
 
 type TallyTrace struct {
-	Layer types.LayerID
+	Layer types.LayerID `json:"lid"`
 }
 
 func (t *TallyTrace) Type() eventType {
@@ -349,8 +335,8 @@ func (t *TallyTrace) Run(r *traceRunner) error {
 }
 
 type HareTrace struct {
-	Layer types.LayerID
-	Vote  types.BlockID
+	Layer types.LayerID `json:"lid"`
+	Vote  types.BlockID `json:"vote"`
 }
 
 func (h *HareTrace) Type() eventType {
@@ -367,9 +353,10 @@ func (h *HareTrace) Run(r *traceRunner) error {
 }
 
 type ResultsTrace struct {
-	From, To types.LayerID
-	Error    string         `scale:"max=100000"`
-	Results  []result.Layer `scale:"max=100000"`
+	From    types.LayerID  `json:"from"`
+	To      types.LayerID  `json:"to"`
+	Error   string         `json:"e"`
+	Results []result.Layer `json:"results"`
 }
 
 func (r *ResultsTrace) Type() eventType {
@@ -396,7 +383,7 @@ func (r *ResultsTrace) Run(rt *traceRunner) error {
 }
 
 type UpdatesTrace struct {
-	ResultsTrace
+	ResultsTrace `json:",inline"`
 }
 
 func (u *UpdatesTrace) Type() eventType {
@@ -416,8 +403,8 @@ func (u *UpdatesTrace) Run(r *traceRunner) error {
 }
 
 type BlockTrace struct {
-	Header types.BlockHeader
-	Valid  bool
+	Header types.BlockHeader `json:",inline"`
+	Valid  bool              `json:"v"`
 }
 
 func (b *BlockTrace) Type() eventType {

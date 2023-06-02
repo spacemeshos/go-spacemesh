@@ -96,7 +96,7 @@ clear-test-cache:
 	go clean -testcache
 .PHONY: clear-test-cache
 
-test: get-libs
+test: get-libs lfs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -race -timeout 5m -p 1 $(UNIT_TESTS)
 .PHONY: test
 
@@ -197,3 +197,7 @@ endif
 fuzz:
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" ./scripts/fuzz.sh $(FUZZTIME)
 .PHONY: fuzz
+
+lfs:
+	git lfs install
+.PHONY: lfs

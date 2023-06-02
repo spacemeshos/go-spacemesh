@@ -228,6 +228,7 @@ func (msh *Mesh) ensureStateConsistent(ctx context.Context, results []result.Lay
 		if err != nil {
 			return fmt.Errorf("get applied %v: %w", layer.Layer, err)
 		}
+
 		if bid := layer.FirstValid(); bid != applied {
 			msh.logger.With().Debug("incorrect block applied",
 				log.Context(ctx),
@@ -322,7 +323,7 @@ func missingBlocks(results []result.Layer) []types.BlockID {
 	var response []types.BlockID
 	for _, layer := range results {
 		for _, block := range layer.Blocks {
-			if (block.Valid || block.Hare) && !block.Data {
+			if (block.Valid || block.Hare || block.Local) && !block.Data {
 				response = append(response, block.Header.ID)
 			}
 		}

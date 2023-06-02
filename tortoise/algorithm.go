@@ -219,7 +219,7 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 }
 
 // OnAtx is expected to be called before ballots that use this atx.
-func (t *Tortoise) OnAtx(header *types.ActivationTxHeader) {
+func (t *Tortoise) OnAtx(header *types.AtxTortoiseData) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -258,22 +258,25 @@ func (t *Tortoise) OnValidBlock(header types.BlockHeader) {
 // OnBallot should be called every time new ballot is received.
 // Dependencies (base ballot, ref ballot, active set and its own atx) must
 // be processed before ballot.
-func (t *Tortoise) OnBallot(ballot *types.Ballot) {
+func (t *Tortoise) OnBallot(ballot *types.BallotTortoiseData) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	err := t.trtl.onBallot(ballot)
 	if err != nil {
 		errorsCounter.Inc()
-		t.logger.With().Error("failed to save state from ballot", ballot.ID(), log.Err(err))
+		t.logger.With().Error("failed to save state from ballot", ballot.ID, log.Err(err))
 	}
 	if t.tracer != nil {
-		t.tracer.On(&BallotTrace{Ballot: ballot, Malicious: ballot.IsMalicious()})
+		t.tracer.On(&BallotTrace{Ballot: ballot})
+	}
+	if t.tracer != nil {
+		t.tracer.On(&BallotTrace{Ballot: ballot})
 	}
 }
 
 // DecodedBallot created after unwrapping exceptions list and computing internal opinion.
 type DecodedBallot struct {
-	*types.Ballot
+	*types.BallotTortoiseData
 	info *ballotInfo
 	// after validation is finished we need to add new vote targets
 	// for tortoise from the decoded votes. minHint identifies the boundary
@@ -282,14 +285,14 @@ type DecodedBallot struct {
 }
 
 // DecodeBallot decodes ballot if it wasn't processed earlier.
-func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
+func (t *Tortoise) DecodeBallot(ballot *types.BallotTortoiseData) (*DecodedBallot, error) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	decoded, err := t.decodeBallot(ballot)
 	if t.tracer != nil {
-		ev := &DecodeBallotTrace{Ballot: ballot, Malicious: ballot.IsMalicious()}
+		ev := &DecodeBallotTrace{Ballot: ballot}
 		if err != nil {
 			ev.Error = err.Error()
 		}
@@ -298,7 +301,7 @@ func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 	return decoded, err
 }
 
-func (t *Tortoise) decodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
+func (t *Tortoise) decodeBallot(ballot *types.BallotTortoiseData) (*DecodedBallot, error) {
 	info, min, err := t.trtl.decodeBallot(ballot)
 	if err != nil {
 		errorsCounter.Inc()
@@ -306,16 +309,16 @@ func (t *Tortoise) decodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 	}
 	if info == nil {
 		errorsCounter.Inc()
-		return nil, fmt.Errorf("can't decode ballot %s", ballot.ID())
+		return nil, fmt.Errorf("can't decode ballot %s", ballot.ID)
 	}
-	if info.opinion() != ballot.OpinionHash {
+	if info.opinion() != ballot.Opinion.Hash {
 		errorsCounter.Inc()
 		return nil, fmt.Errorf(
 			"computed opinion hash %s doesn't match signed %s for ballot %s",
-			info.opinion().ShortString(), ballot.OpinionHash.ShortString(), ballot.ID(),
+			info.opinion().ShortString(), ballot.Opinion.Hash.ShortString(), ballot.ID,
 		)
 	}
-	return &DecodedBallot{Ballot: ballot, info: info, minHint: min}, nil
+	return &DecodedBallot{BallotTortoiseData: ballot, info: info, minHint: min}, nil
 }
 
 // StoreBallot stores previously decoded ballot.
@@ -324,12 +327,12 @@ func (t *Tortoise) StoreBallot(decoded *DecodedBallot) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	if decoded.IsMalicious() {
+	if decoded.Malicious {
 		decoded.info.malicious = true
 	}
 	t.trtl.storeBallot(decoded.info, decoded.minHint)
 	if t.tracer != nil {
-		t.tracer.On(&StoreBallotTrace{ID: decoded.ID(), Malicious: decoded.IsMalicious()})
+		t.tracer.On(&StoreBallotTrace{ID: decoded.ID, Malicious: decoded.Malicious})
 	}
 	return nil
 }
@@ -428,6 +431,7 @@ func (t *Tortoise) results(from, to types.LayerID) ([]result.Layer, error) {
 				Hare:    block.hare == support,
 				Valid:   block.validity == support,
 				Invalid: block.validity == against,
+				Local:   crossesThreshold(block.margin, t.trtl.localThreshold) == support,
 			})
 		}
 		rst = append(rst, result.Layer{

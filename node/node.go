@@ -640,7 +640,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		app.Config.TickSize,
 		goldenATXID,
 		validator,
-		[]activation.AtxReceiver{trtl, beaconProtocol},
+		[]activation.AtxReceiver{&atxReceiver{trtl}, beaconProtocol},
 		app.addLogger(ATXHandlerLogger, lg),
 		poetCfg,
 	)
@@ -1356,4 +1356,12 @@ func (w tortoiseWeakCoin) Set(lid types.LayerID, value bool) error {
 	}
 	w.tortoise.OnWeakCoin(lid, value)
 	return nil
+}
+
+type atxReceiver struct {
+	tortoise *tortoise.Tortoise
+}
+
+func (a *atxReceiver) OnAtx(header *types.ActivationTxHeader) {
+	a.tortoise.OnAtx(header.ToData())
 }

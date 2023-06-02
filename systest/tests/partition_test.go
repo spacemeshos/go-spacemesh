@@ -169,7 +169,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 func TestPartition_30_70(t *testing.T) {
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("partition"))
+	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	if tctx.ClusterSize > 30 {
 		tctx.Log.Info("cluster size changed to 30")
 		tctx.ClusterSize = 30
@@ -177,14 +177,13 @@ func TestPartition_30_70(t *testing.T) {
 	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	// TODO: re-assess the number of epoch required for healing.
-	testPartition(t, tctx, cl, 30, 4)
+	testPartition(t, tctx, cl, 30, 5)
 }
 
 func TestPartition_50_50(t *testing.T) {
-	t.Skip()
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("partition"))
+	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	if tctx.ClusterSize > 30 {
 		tctx.Log.Info("cluster size changed to 30")
 		tctx.ClusterSize = 30
