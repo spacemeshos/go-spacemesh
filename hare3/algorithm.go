@@ -541,32 +541,6 @@ func (p *Protocol) NextRound() *miniMsg {
 	return nil
 }
 
-// Preround returns a set of values to send in the preround.
-func (p *Protocol) DoPreround() *miniMsg {
-	return &miniMsg{-1, p.values}
-}
-
-func (p *Protocol) DoHardLock() *miniMsg {
-	return nil
-}
-
-func (p *Protocol) DoSoftlock() *miniMsg {
-	return nil
-}
-
-// propose and commit both return iteration and value that can be used to send a message of the appropriate type.
-func (p *Protocol) DoPropose() *miniMsg {
-	return nil
-}
-
-func (p *Protocol) DoCommit() *miniMsg {
-	return nil
-}
-
-func (p *Protocol) DoNotify() *miniMsg {
-	return nil
-}
-
 type miniMsg struct {
 	round  AbsRound
 	values []Hash20
