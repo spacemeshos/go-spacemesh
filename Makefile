@@ -2,7 +2,7 @@ LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.
 include Makefile-libs.Inc
 
 DOCKER_HUB ?= spacemeshos
-UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v cmd/ | grep -v genvm/cmd)
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v cmd/node | grep -v cmd/gen-p2p-identity | grep -v cmd/trace | grep -v genvm/cmd)
 
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
@@ -80,7 +80,7 @@ gen-p2p-identity:
 .PHONY: gen-p2p-identity
 
 go-spacemesh: get-libs
-	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
+	cd cmd/node ; go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
 .PHONY: go-spacemesh gen-p2p-identity
 
 bootstrapper:

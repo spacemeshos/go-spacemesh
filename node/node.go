@@ -35,7 +35,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
@@ -51,6 +50,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/node/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
@@ -203,12 +203,6 @@ var (
 func init() {
 	appLog = log.NewNop()
 	grpclog = grpc_logsettable.ReplaceGrpcLoggerV2()
-}
-
-// Service is a general service interface that specifies the basic start/stop functionality.
-type Service interface {
-	Start(ctx context.Context) error
-	Close()
 }
 
 func loadConfig(c *cobra.Command) (*config.Config, error) {
