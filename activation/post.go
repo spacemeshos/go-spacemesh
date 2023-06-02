@@ -2,8 +2,10 @@ package activation
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	reflect "reflect"
 	"runtime"
 	"sync"
 
@@ -30,6 +32,29 @@ type PostConfig struct {
 	K2            uint32   `mapstructure:"post-k2"`
 	K3            uint32   `mapstructure:"post-k3"`
 	PowDifficulty [32]byte `mapstructure:"post-pow-difficulty"`
+}
+
+// Decodes a hex string representation of PoW difficulty into a [32]byte.
+func DecodePowDifficulty(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
+	if f.Kind() != reflect.String {
+		return data, nil
+	}
+
+	if t != reflect.TypeOf([32]byte{}) {
+		return data, nil
+	}
+
+	length := hex.DecodedLen(len(data.(string)))
+	if length != 32 {
+		return data, nil
+	}
+
+	var dst [32]byte
+	if _, err := hex.Decode(dst[:], []byte(data.(string))); err != nil {
+		return data, nil
+	}
+
+	return dst, nil
 }
 
 // PostSetupOpts are the options used to initiate a Post setup data creation session,
