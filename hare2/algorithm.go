@@ -18,25 +18,27 @@
 // gradedGossip.
 //
 // E.G.
-// instead of
-// func threshGossip(x) {
-//    ...
-//    gradedGossip(y)
-//    ...
-// }
-// func gradedGossip(y) {
-//    ...
-//    networkGossip(z)
-//    ...
-// }
-// We do
+// # instead of
+//
+//	func threshGossip(x) {
+//	   ...
+//	   gradedGossip(y)
+//	   ...
+//	}
+//
+//	func gradedGossip(y) {
+//	   ...
+//	   networkGossip(z)
+//	   ...
+//	}
+//
+// # We do
 //
 // y := threshGossip(x)
 // z := gradedGossip(y)
 // networkGossip(z)
 //
 // Additionally there is no use of concurrency in this package.
-
 package hare2
 
 import (
@@ -77,8 +79,9 @@ func (m *Wrapper) DecodeScale(d *scale.Decoder) (int, error) {
 }
 
 type Msg struct {
-	sid, value, key []byte
-	round           int8
+	sid, key []byte
+	values   []Hash20
+	round    int8
 }
 
 func (m *Msg) DecodeScale(d *scale.Decoder) (int, error) {
@@ -98,7 +101,7 @@ type GradedGossiper interface {
 	// key) and grade and processes them. If a non nil v is returned the
 	// originally received input message should be forwarded to all neighbors
 	// and (sid, value, key, grade) is considered to have been output.
-	ReceiveMsg(vk Hash20, value []byte, round AbsRound, grade uint8) (v []byte)
+	ReceiveMsg(vk Hash20, setHash Hash20, round AbsRound, grade uint8) (v []byte)
 }
 
 type TrhesholdGradedGossiper interface {
@@ -148,16 +151,19 @@ func gradeKey5(key []byte) uint8 {
 	return 0
 }
 
+type Handler struct {
+	ng  NetworkGossiper
+	gc  Gradecaster
+	gg  GradedGossiper
+	tgg TrhesholdGradedGossiper
+}
+
 // Can we remove sid from the protocols, probably, say we have a separate instance for each sid.
 //
 // TODO remove notion of sid from this method so assume we have a separate
 // method that does the decoding key verifying ... etc and we jump into this
 // method with just the required params at the point we grade keys.
-func HandleMsg(msg []byte) error {
-	var ng NetworkGossiper
-	var gc Gradecaster
-	var gg GradedGossiper
-	var tgg TrhesholdGradedGossiper
+func (h *Handler) HandleMsg(msg []byte) error {
 	w := &Wrapper{}
 
 	// These three cases we are dropping the message.
@@ -183,26 +189,27 @@ func HandleMsg(msg []byte) error {
 		g = gradeKey5(m.key)
 	}
 	vk := hashBytes(m.key)
-	v := gg.ReceiveMsg(vk, m.value, r, g)
+	valuesHash := toHash(m.values)
+	v := h.gg.ReceiveMsg(vk, valuesHash, r, g)
 	if v == nil {
 		// Equivocation we drop the message
 		return nil
 	}
 	// Send the message to peers
-	ng.Gossip(msg)
-
-	if r.Type() == Propose {
-		// Somehow break down the value into its values
-		var values []Hash20
-		// Send to gradecast
-		gc.ReceiveMsg(vk, values, r, g)
-		return nil
+	err = h.ng.Gossip(msg)
+	if err != nil {
+		return err
 	}
-	// Somehow break down the value into its values
-	var values []Hash20
 
-	// Pass result to threshold gossip
-	tgg.ReceiveMsg(vk, values, r, g)
+	// Only proposals are gradecasted, all other message types are passed to
+	// threshold gossip.
+	if r.Type() == Propose {
+		// Send to gradecast
+		h.gc.ReceiveMsg(vk, m.values, r, g)
+	} else {
+		// Pass result to threshold gossip
+		h.tgg.ReceiveMsg(vk, m.values, r, g)
+	}
 	return nil
 }
 
