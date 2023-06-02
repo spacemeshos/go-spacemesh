@@ -77,7 +77,7 @@ get-profiler: get-postrs-profiler
 .PHONY: get-profiler
 
 gen-p2p-identity:
-	cd $@ ; go build -o $(BIN_DIR)$@$(EXE) .
+	cd cmd/gen-p2p-identity ; go build -o $(BIN_DIR)$@$(EXE) .
 .PHONY: gen-p2p-identity
 
 go-spacemesh: get-libs
@@ -85,7 +85,7 @@ go-spacemesh: get-libs
 .PHONY: go-spacemesh gen-p2p-identity
 
 bootstrapper:
-	echo $(BIN_DIR) ; cd cmd/bootstrapper ;  go build -o $(BIN_DIR)go-$@$(EXE) .
+	cd cmd/bootstrapper ;  go build -o $(BIN_DIR)go-$@$(EXE) .
 .PHONY: bootstrapper
 
 tidy:
