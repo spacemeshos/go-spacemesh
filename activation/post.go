@@ -35,17 +35,14 @@ type PostConfig struct {
 }
 
 // Decodes a hex string representation of PoW difficulty into a [32]byte.
-func DecodePowDifficulty(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
+func DecodePowDifficulty(f reflect.Type, t reflect.Type, data any) (any, error) {
 	if f.Kind() != reflect.String {
 		return data, nil
 	}
-
 	if t != reflect.TypeOf([32]byte{}) {
 		return data, nil
 	}
-
-	length := hex.DecodedLen(len(data.(string)))
-	if length != 32 {
+	if hex.DecodedLen(len(data.(string))) != 32 {
 		return data, nil
 	}
 
