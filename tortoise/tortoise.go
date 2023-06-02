@@ -378,6 +378,7 @@ func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) error {
 }
 
 func (t *turtle) verifyLayers() {
+	// TODO(dshulyak) simplify processing of layers and notifications
 	var (
 		logger = t.logger.WithFields(
 			log.Stringer("last layer", t.last),
@@ -402,12 +403,19 @@ func (t *turtle) verifyLayers() {
 			}
 			success = t.full.verify(logger, target)
 		}
+
+		layer := t.layer(target)
 		if !success {
+			// notify mesh in two additional cases:
+			// - if layer was verified, and became undecided
+			// - if layer is undecided outside hdist distance
+			if target < t.verified || !withinDistance(t.Hdist, target, t.last) {
+				t.pending = types.MinLayer(t.pending, target)
+			}
 			break
 		}
 
 		verified = target
-		layer := t.layer(target)
 		if len(layer.blocks) == 0 && !layer.emitted && layer.hareTerminated {
 			layer.emitted = true
 			t.changedOpinion.min = types.MinLayer(t.changedOpinion.min, target)
