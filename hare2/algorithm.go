@@ -1,4 +1,4 @@
-package hare3
+package hare2
 
 import (
 	"github.com/spacemeshos/go-scale"
