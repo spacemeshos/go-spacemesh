@@ -37,35 +37,25 @@ const (
 	notCompleted = false
 )
 
-// procReport is the termination report of the CP.
-type procReport struct {
+// report is the termination report of the CP.
+type report struct {
 	id        types.LayerID // layer id
 	set       *Set          // agreed-upon set
-	coinflip  bool          // weak coin value
 	completed bool          // whether the CP completed
 }
 
-func (cpo procReport) ID() types.LayerID {
-	return cpo.id
-}
-
-func (cpo procReport) Set() *Set {
-	return cpo.set
-}
-
-func (cpo procReport) Coinflip() bool {
-	return cpo.coinflip
-}
-
-func (cpo procReport) Completed() bool {
-	return cpo.completed
-}
-
 func (proc *consensusProcess) report(completed bool) {
-	proc.comm.report <- procReport{proc.layer, proc.value, proc.preRoundTracker.coinflip, completed}
+	proc.comm.report <- report{id: proc.layer, set: proc.value, completed: completed}
 }
 
-var _ TerminationOutput = (*procReport)(nil)
+type wcReport struct {
+	id       types.LayerID
+	coinflip bool
+}
+
+func (proc *consensusProcess) reportWeakCoin() {
+	proc.comm.wc <- wcReport{id: proc.layer, coinflip: proc.preRoundTracker.coinflip}
+}
 
 // State holds the current state of the consensus process (aka the participant).
 type State struct {
@@ -161,7 +151,8 @@ type communication struct {
 	// to this mchOut
 	mchOut chan<- *types.MalfeasanceGossip
 	// if the consensus process terminates, output the result to report
-	report chan TerminationOutput
+	report chan report
+	wc     chan wcReport
 }
 
 // consensusProcess is an entity (a single participant) in the Hare protocol.
@@ -343,6 +334,7 @@ PreRound:
 		logger.With().Info("preround ended",
 			log.Int("set_size", proc.value.Size()))
 	}
+	proc.reportWeakCoin()
 	proc.advanceToNextRound(ctx) // K was initialized to -1, K should be 0
 
 	// start first iteration
