@@ -2,6 +2,8 @@ package hare3
 
 import (
 	"github.com/spacemeshos/go-scale"
+	"golang.org/x/exp/slices"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 )
 
@@ -226,19 +228,18 @@ func HandleMsg(msg []byte) error {
 }
 
 type Protocol struct {
-	iteration   int8
-	hardLocked  []bool
-	lockedValue []*Hash20
-	values      []Hash20
+	// round encodes both interation and current iteration round in a single value.
+	round AbsRound
+	// Each index "i" holds an indication of whether iteration "i" is hard locked
+	hardLocked []bool
+	// Each index "i" holds the locked value for iteration "i"
+	Li []*Hash20
 	// Each index "i" holds values considered valid up to round "i+1"
 	Vi [][]Hash20
 	// Each index "i" holds a map of sets of values from valid proposals
 	// indexed by their hash received in iteration "i"
 	Ti     []map[Hash20][]Hash20
 	Si     []Hash20
-	Shash  Hash20
-	S      []Hash20
-	round  AbsRound
 	tgg    TrhesholdGradedGossiper
 	gc     Gradecaster
 	lc     LeaderChecker
@@ -253,15 +254,31 @@ func hashBytes(v []byte) Hash20 {
 	return Hash20{}
 }
 
-// Given a slice of candidate set hashes and a slice of sets of valid set hashes
-// returns the first candidate that appears in the valid hashes, along with it's set.
-func findMatch(candidates []Hash20, validSets []map[Hash20][]Hash20, j int8) (*Hash20, []Hash20) {
-	for i := 0; i <= int(j); i++ {
+// Given a slice of candidate set hashes and a slice of sets of valid set
+// hashes, one set per iteration, returns the first candidate that appears in
+// the valid hashes along with it's set of any iteration before j.
+func matchInPreviousIterations(candidates []Hash20, validSets []map[Hash20][]Hash20, j int8) (*Hash20, []Hash20) {
+	for i := 0; i < int(j); i++ {
+		validIteration := validSets[i]
 		for _, v := range candidates {
-			set, ok := validSets[i][v]
+			set, ok := validIteration[v]
 			if ok {
 				return &v, set
 			}
+		}
+	}
+	return nil, nil
+}
+
+// Given a slice of candidate set hashes and a slice of sets of valid set
+// hashes, one per iteration, returns the first candidate that appears in the
+// valid hashes, along with it's set of iteration j.
+func matchInIteration(candidates []Hash20, validSets []map[Hash20][]Hash20, j int8) (*Hash20, []Hash20) {
+	validJ := validSets[j]
+	for _, v := range candidates {
+		set, ok := validJ[v]
+		if ok {
+			return &v, set
 		}
 	}
 	return nil, nil
@@ -272,6 +289,7 @@ func isSubset(subset, superset []Hash20) bool {
 }
 
 func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
+	defer func() { p.round++ }()
 	if p.round >= 0 && p.round <= 3 {
 		p.Vi[p.round] = p.tgg.RetrieveThresholdMessages(-1, 5-uint8(p.round))
 	}
@@ -280,7 +298,7 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 		p.Ti = append(p.Ti, make(map[Hash20][]Hash20))
 		p.Vi = append(p.Vi, nil)
 		p.hardLocked = append(p.hardLocked, false)
-		p.lockedValue = append(p.lockedValue, nil)
+		p.Li = append(p.Li, nil)
 	}
 	j := p.round.Iteration()
 	switch p.round {
@@ -294,45 +312,48 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 			values: p.Si,
 		}, nil
 	case 0:
+		if j > 0 {
+			values := p.tgg.RetrieveThresholdMessages(NewAbsRound(j-1, 5), 4)
+			setHash, _ := matchInPreviousIterations(values, p.Ti, j)
+			if setHash != nil {
+				p.Li[j] = setHash
+				p.hardLocked[j] = true
+
+			}
+		}
 	case 1:
+		if j > 0 {
+			// If a commit from the previous iteration reached threshold with
+			// at least grade 3 and it's value was added to valid values in any
+			// iteration then set the lock to that value.
+			values := p.tgg.RetrieveThresholdMessages(NewAbsRound(j-1, 5), 3)
+			setHash, _ := matchInPreviousIterations(values, p.Ti, j)
+			if setHash != nil {
+				p.Li[j] = setHash
+			}
+		}
+		return nil, nil
 	case 2:
 		if !p.active {
 			return nil, nil
 		}
-		// in the paper it says up to the beginning of round 2 if a message was
-		// received from threshold gossip with grade 2 or greater. But since
-		// I'm not delivering messages real time from thresh gossip to the
-		// protocol and I just look when i need the message, I look at the last
-		// possible point, so the returned grade will be 2 and therefore I
-		// don't need the grade. Will this cause problems for me do I need to
-		// allow for the same message to be retreived more than once?
-		//
-		// Hmm case 2 of round 6 asks if the protocol has received (commit R(j,
-		// 5), S, 5) from thresh gossip, could we just look again? Providing
-		// the right round as context. I think it works?
-		var setHash *Hash20
 		var set []Hash20
 		if j > 0 {
 			// Check if values received from thresh gossip, we can only do this
 			// safely if we know j > 0, so this can't be done before that
 			// check.
 			values := p.tgg.RetrieveThresholdMessages(NewAbsRound(j-1, 5), 2)
-			setHash, set = findMatch(values, p.Ti, j)
+			_, set = matchInPreviousIterations(values, p.Ti, j)
 		}
 		// If we didn't get a set from threshold gossip then use our local candidate
-		if setHash == nil {
-			h := toHash(p.Vi[4])
-			setHash = &h
+		if set == nil {
 			set = p.Vi[4]
 		}
 
-		// Update instance variables
-		p.Shash = *setHash
-		p.S = set
-		// Return message to be sent to peers
+		// Send proposal to peers
 		return &miniMsg{
 			round:  p.round,
-			values: p.S,
+			values: set,
 		}, nil
 	case 5:
 		candidates := p.gc.RetrieveGradecastedMessages(NewAbsRound(j, 2))
@@ -353,7 +374,7 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 		if p.hardLocked[j] {
 			mm = &miniMsg{
 				round:  NewAbsRound(j, 5),
-				values: []Hash20{*p.lockedValue[j]},
+				values: []Hash20{*p.Li[j]},
 			}
 		} else {
 			for _, c := range candidates {
@@ -387,25 +408,19 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 					// Check for received message
 					lastIterationCommit := NewAbsRound(j-1, 5)
 					values := p.tgg.RetrieveThresholdMessages(lastIterationCommit, 1)
-					found := false
-					for _, v := range values {
-						if v == candidateHash {
-							found = true
-							break
-						}
-					}
+
 					// If the candidate is not superset of highest graded
 					// values and no commit for that candidate was received in
 					// the previous iteration with grade >= 1 then we go to the
 					// next candidate.
-					if !found {
+					if !slices.Contains(values, candidateHash) {
 						continue
 					}
 				}
 				// Locked value for this iteration is nil or matches set
 				//
 				// Round 5 condition h
-				if !(p.lockedValue[j] == nil || *p.lockedValue[j] == candidateHash) {
+				if !(p.Li[j] == nil || *p.Li[j] == candidateHash) {
 					continue
 				}
 				mm = &miniMsg{
@@ -417,44 +432,27 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 		}
 		return mm, nil
 	case 6:
-		var mm *miniMsg
-		var result []Hash20
-		values := p.tgg.RetrieveThresholdMessages(NewAbsRound(j-1, 6), 5)
-	OUTER:
 		// Case 1
-		for _, v := range values {
-			for i := 0; i <= int(j); i++ {
-				set, ok := p.Ti[i][v]
-				if ok {
-					result = set
-					mm = &miniMsg{
-						round:  NewAbsRound(j, 6),
-						values: []Hash20{v},
-					}
-					break OUTER
-				}
-			}
+		values := p.tgg.RetrieveThresholdMessages(NewAbsRound(j-1, 6), 5)
+		resultHash, result := matchInPreviousIterations(values, p.Ti, j)
+		if resultHash != nil {
+			return &miniMsg{
+				round:  NewAbsRound(j, 6),
+				values: []Hash20{*resultHash},
+			}, result
 		}
 		// Case 2
-		// If we did not yet set mm then
-		if mm == nil && p.active {
+		if p.active {
 			values := p.tgg.RetrieveThresholdMessages(NewAbsRound(j, 5), 5)
-			for _, v := range values {
-				_, ok := p.Ti[j][v]
-				if ok {
-					mm = &miniMsg{
-						round:  NewAbsRound(j, 6),
-						values: []Hash20{v},
-					}
-					break
-				}
-			}
+			setHash, _ := matchInIteration(values, p.Ti, j)
+			return &miniMsg{
+				round:  NewAbsRound(j, 6),
+				values: []Hash20{*setHash},
+			}, nil
 
 		}
-		return mm, result
 	}
 
-	p.round++
 	return nil, nil
 }
 
