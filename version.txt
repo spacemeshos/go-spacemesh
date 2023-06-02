@@ -1,1 +1,1 @@
-v0.0.0-unreleased
+v0.3.6-beta.0
