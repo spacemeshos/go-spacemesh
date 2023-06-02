@@ -47,8 +47,12 @@ type Consensus interface {
 type TerminationOutput interface {
 	ID() types.LayerID
 	Set() *Set
-	Coinflip() bool
 	Completed() bool
+}
+
+type WeakCoinOutput interface {
+	ID() types.LayerID
+	Coinflip() bool
 }
 
 // RoundClock is a timer interface.
@@ -119,6 +123,7 @@ type Hare struct {
 	networkDelta time.Duration
 
 	outputChan chan TerminationOutput
+	wcChan     chan WeakCoinOutput
 	mu         sync.Mutex
 	lastLayer  types.LayerID
 	outputs    map[types.LayerID][]types.ProposalID
@@ -182,6 +187,7 @@ func New(
 
 	h.networkDelta = conf.WakeupDelta
 	h.outputChan = make(chan TerminationOutput, h.config.Hdist)
+	h.wcChan = make(chan WeakCoinOutput, h.config.Hdist)
 	h.outputs = make(map[types.LayerID][]types.ProposalID, h.config.Hdist) // we keep results about LayerBuffer past layers
 	h.cps = make(map[types.LayerID]Consensus, h.config.LimitConcurrent)
 	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing *signing.EdSigner, nonce *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
@@ -392,6 +398,7 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		inbox:  ch,
 		mchOut: h.mchMalfeasance,
 		report: h.outputChan,
+		wc:     h.wcChan,
 	}
 	props := goodProposals(ctx, h.Log, h.msh, h.nodeID, lid, beacon)
 	preNumProposals.Add(float64(len(props)))
@@ -547,23 +554,21 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 	h.WithContext(ctx).With().Info("starting collection loop")
 	for {
 		select {
-		case out := <-h.outputChan:
-			layerID := out.ID()
-			coin := out.Coinflip()
-			ctx := log.WithNewSessionID(ctx)
-
-			// collect coinflip, regardless of success
+		case wc := <-h.wcChan:
 			h.With().Debug("recording weak coin result for layer",
 				log.Context(ctx),
-				layerID,
-				log.Bool("weak_coin", coin))
-			if err := h.weakCoin.Set(layerID, coin); err != nil {
+				wc.ID(),
+				log.Bool("weak_coin", wc.Coinflip()))
+			if err := h.weakCoin.Set(wc.ID(), wc.Coinflip()); err != nil {
 				h.With().Error("failed to set weak coin for layer",
 					log.Context(ctx),
-					layerID,
+					wc.ID(),
 					log.Err(err),
 				)
 			}
+		case out := <-h.outputChan:
+			layerID := out.ID()
+			ctx := log.WithNewSessionID(ctx)
 			if err := h.collectOutput(ctx, out); err != nil {
 				h.With().Warning("error collecting output from hare",
 					log.Context(ctx),

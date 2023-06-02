@@ -51,13 +51,16 @@ func (m mockReport) Coinflip() bool {
 type mockConsensusProcess struct {
 	started chan struct{}
 	t       chan TerminationOutput
+	w       chan WeakCoinOutput
 	id      types.LayerID
 	set     *Set
 }
 
 func (mcp *mockConsensusProcess) Start() {
 	close(mcp.started)
-	mcp.t <- mockReport{mcp.id, mcp.set, true, false}
+	mr := mockReport{mcp.id, mcp.set, true, false}
+	mcp.t <- mr
+	mcp.w <- mr
 }
 
 func (mcp *mockConsensusProcess) Stop() {}
@@ -71,11 +74,12 @@ func (mcp *mockConsensusProcess) SetInbox(_ any) {
 
 var _ Consensus = (*mockConsensusProcess)(nil)
 
-func newMockConsensusProcess(_ config.Config, instanceID types.LayerID, s *Set, _ Rolacle, _ *signing.EdSigner, _ pubsub.Publisher, outputChan chan TerminationOutput, started chan struct{}) *mockConsensusProcess {
+func newMockConsensusProcess(_ config.Config, instanceID types.LayerID, s *Set, _ Rolacle, _ *signing.EdSigner, _ pubsub.Publisher, outputChan chan TerminationOutput, wcChan chan WeakCoinOutput, started chan struct{}) *mockConsensusProcess {
 	mcp := new(mockConsensusProcess)
 	mcp.started = started
 	mcp.id = instanceID
 	mcp.t = outputChan
+	mcp.w = wcChan
 	mcp.set = s
 	return mcp
 }
@@ -225,6 +229,7 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 
 	h.mockCoin.EXPECT().Set(lyrID, mo.Coinflip())
 	h.outputChan <- mo
+	h.wcChan <- mo
 	lo := <-h.blockGenCh
 	require.Equal(t, lyrID, lo.Layer)
 	require.Empty(t, lo.Proposals)
@@ -313,7 +318,7 @@ func TestHare_onTick(t *testing.T) {
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
 	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
-		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, startedChan)
+		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, comm.wc, startedChan)
 		close(createdChan)
 		return nmcp
 	}
@@ -384,7 +389,7 @@ func TestHare_onTick_notMining(t *testing.T) {
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
 	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
-		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, startedChan)
+		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, comm.wc, startedChan)
 		close(createdChan)
 		return nmcp
 	}
@@ -647,21 +652,29 @@ func TestHare_WeakCoin(t *testing.T) {
 
 	// complete + coin flip true
 	h.mockCoin.EXPECT().Set(layerID, true)
-	h.outputChan <- mockReport{layerID, set, true, true}
+	mr := mockReport{layerID, set, true, true}
+	h.outputChan <- mr
+	h.wcChan <- mr
 	require.NoError(t, waitForMsg())
 
 	// incomplete + coin flip true
 	h.mockCoin.EXPECT().Set(layerID, true)
-	h.outputChan <- mockReport{layerID, set, false, true}
+	mr = mockReport{layerID, set, false, true}
+	h.outputChan <- mr
+	h.wcChan <- mr
 	require.Error(t, waitForMsg())
 
 	// complete + coin flip false
 	h.mockCoin.EXPECT().Set(layerID, false)
-	h.outputChan <- mockReport{layerID, set, true, false}
+	mr = mockReport{layerID, set, true, false}
+	h.outputChan <- mr
+	h.wcChan <- mr
 	require.NoError(t, waitForMsg())
 
 	// incomplete + coin flip false
 	h.mockCoin.EXPECT().Set(layerID, false)
-	h.outputChan <- mockReport{layerID, set, false, false}
+	mr = mockReport{layerID, set, false, false}
+	h.outputChan <- mr
+	h.wcChan <- mr
 	require.Error(t, waitForMsg())
 }
