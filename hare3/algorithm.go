@@ -5,166 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 )
 
-// Hare 2 below --------------------------------------------------
-
-// Don't really want this to be part of the impl because it introduces errors
-// that we don't want or really need.
-//
-// Although actually if we look at how hare handles sending message errors it
-// just logs them, so we could do the same and not expose the error, which
-// probably makes more sense than trying to propagate up an action (send or
-// drop with possibly a message ) from the algorithm to pass to some network
-// component
-// type NetworkGossiper interface {
-// 	NetworkGossip([]byte) error
-// }
-
-// type Action uint32
-
-// const (
-// 	send Action = iota
-// 	drop
-// )
-
-// type ByzantineGossip interface {
-// 	Gossip([]byte) (action Action, output []byte)
-// }
-
-//--------------------------------------------------
-// Take 2 below
-
-// type NetworkGossiper interface {
-// 	NetworkGossip([]byte)
-// }
-
-// type ByzantineGossiper interface {
-// 	Gossip([]byte) (output []byte)
-// }
-
-// type ThresholdGossiper interface {
-// 	Gossip([]byte) (output []byte)
-// }
-
-// messages have iteration round
-
-// Hmm can i have three receive interfaces and three send internfaces and then hook them up in differing order
-// Seems I need to have 2 flows to account for the threshold and gradecast systems.
-// E.G ByzantineReceiver -> ThresholdReceiver -> ProtocolReceiver
-//     ByzantineReceiver -> GradecastSender -> ProtocolReceiver
-//     ProtocolSender -> ThresholdSender -> ByzantineSender
-//     ProtocolSender -> GradecastSender -> ByzantineSender
-
-//--------------------------------------------------
-
-// Take 3 below
-
-// so actually rather than the above approach I am now leaning towards not
-// nesting the protocols and simply connecting them up to provide the output of
-// one to the next. This keeps things nice and flat and very isolated.
-
-// I'm going to remove signature verification from these protocols to keep them
-// simple, we assume signature verification is done up front.
-
-// Hare 3 below --------------------------------------------------
-
-// Hare 3 is pretty similare just with an underlying PKI grading protocol.
-
-// type GradedGossiper interface {
-// 	// Gossip takes the given sid (session id) value and verification key (key)
-// 	Gossip(sid, value, key, sig []byte) (s, v, k []byte, grade uint8)
-// }
-
-// But we want to take signatures out so that we don't deal with errors
-
-type KeyGrader any
-
-// not sure exactly what to put here, but the output should be the grade of key
-
-type Wrapper struct {
-	msg, sig []byte
-}
-
-func (m *Wrapper) DecodeScale(d *scale.Decoder) (int, error) {
-	return 0, nil
-}
-
-type (
-	MsgType uint8
-	Hash20  [20]byte
-)
-
-const (
-	Preround MsgType = iota
-	Propose
-	Commit
-	Notify
-
-	grades = 5
-)
-
-type Msg struct {
-	sid, value, key []byte
-	round           int8
-}
-
-func (m *Msg) DecodeScale(d *scale.Decoder) (int, error) {
-	return 0, nil
-}
-
-type NetworkGossiper interface {
-	// ReceiveMsg takes the given sid (session id) value, key (verification
-	// key) and grade and processes them. If a non nil v is returned the
-	// originally received input message should be forwarded to all neighbors
-	// and (sid, value, key, grade) is considered to have been output.
-	Gossip(msg []byte) error
-}
-
-// TODO remove some params from here need to combine the value and round
-type GradedGossiper interface {
-	// ReceiveMsg takes the given sid (session id) value, key (verification
-	// key) and grade and processes them. If a non nil v is returned the
-	// originally received input message should be forwarded to all neighbors
-	// and (sid, value, key, grade) is considered to have been output.
-	ReceiveMsg(vk Hash20, value []byte, round AbsRound, grade uint8) (v []byte)
-}
-
-type TrhesholdGradedGossiper interface {
-	// Threshold graded gossip takes outputs from graded gossip, which are in
-	// fact sets of values not single values, and returns sets of values that
-	// have reached the required threshold, along with the grade for that set.
-	ReceiveMsg(vk Hash20, values []Hash20, msgRound AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
-	// Increment round increments the current round
-	IncRound() (v [][]byte, g uint8)
-
-	// Tuples of sid round and value are output once only, since they could
-	// only be output again in a later round with a lower grade. This function
-	// outputs the values that were part of messages sent at msgRound and
-	// reached the threshold at round. It also outputs the grade assigned which
-	// will be 5-(round-msgRound).
-	RetrieveThresholdMessages(msgRound, round AbsRound) (values []Hash20, grade uint8)
-}
-
-type LeaderChecker interface {
-	IsLeader(vk Hash20, round AbsRound) bool
-}
-
-type GradecastedSet struct {
-	vk     Hash20
-	values []Hash20
-	grade  uint8
-}
-
-type Gradecaster interface {
-	ReceiveMsg(vk Hash20, values []Hash20, msgRound AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
-	// Increment round increments the current round
-	IncRound() (v [][]byte, g uint8)
-
-	// Since gradecast always outputs at round r+3 it is asumed that callers
-	// Only call this function at msgRound + 3. Returns all sets of values output by
-	// gradcast at that msgRound + 3 along with their grading.
-	RetrieveGradecastedMessages(msgRound AbsRound) []GradecastedSet
-}
-
 // ThresholdState holds the graded votes for a value and also records if this
 // value has been retrieved.
 type ThresholdState struct {
@@ -225,13 +65,94 @@ func (t *testThresh) RetrieveThresholdMessages(msgRound, round AbsRound) (values
 	return result, minGrade
 }
 
-type ValueSet interface {
+// I'm going to remove signature verification from these protocols to keep them
+// simple, we assume signature verification is done up front.
+
+// Also I'm trying to ensure that any processing that could result in an error
+// is also removed from the protocols.
+
+// not sure exactly what to put here, but the output should be the grade of key
+
+type Wrapper struct {
+	msg, sig []byte
+}
+
+func (m *Wrapper) DecodeScale(d *scale.Decoder) (int, error) {
+	return 0, nil
+}
+
+type (
+	MsgType uint8
+	Hash20  [20]byte
+)
+
+const (
+	Preround MsgType = iota
+	Propose
+	Commit
+	Notify
+
+	grades = 5
+)
+
+type Msg struct {
+	sid, value, key []byte
+	round           int8
+}
+
+func (m *Msg) DecodeScale(d *scale.Decoder) (int, error) {
+	return 0, nil
+}
+
+type NetworkGossiper interface {
+	// ReceiveMsg takes the given sid (session id) value, key (verification
+	// key) and grade and processes them. If a non nil v is returned the
+	// originally received input message should be forwarded to all neighbors
+	// and (sid, value, key, grade) is considered to have been output.
+	Gossip(msg []byte) error
+}
+
+type GradedGossiper interface {
+	// ReceiveMsg takes the given sid (session id) value, key (verification
+	// key) and grade and processes them. If a non nil v is returned the
+	// originally received input message should be forwarded to all neighbors
+	// and (sid, value, key, grade) is considered to have been output.
+	ReceiveMsg(vk Hash20, value []byte, round AbsRound, grade uint8) (v []byte)
+}
+
+type TrhesholdGradedGossiper interface {
 	// Threshold graded gossip takes outputs from graded gossip, which are in
 	// fact sets of values not single values, and returns sets of values that
 	// have reached the required threshold, along with the grade for that set.
-	Hash() []byte
+	ReceiveMsg(vk Hash20, values []Hash20, msgRound AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
+
+	// Tuples of sid round and value are output once only, since they could
+	// only be output again in a later round with a lower grade. This function
+	// outputs the values that were part of messages sent at msgRound and
+	// reached the threshold at round. It also outputs the grade assigned which
+	// will be 5-(round-msgRound).
+	RetrieveThresholdMessages(msgRound AbsRound, minGrade uint8) (values []Hash20)
+}
+
+type GradecastedSet struct {
+	vk     Hash20
+	values []Hash20
+	grade  uint8
+}
+
+type Gradecaster interface {
+	ReceiveMsg(vk Hash20, values []Hash20, msgRound AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
 	// Increment round increments the current round
-	Values() [][]byte
+	IncRound() (v [][]byte, g uint8)
+
+	// Since gradecast always outputs at round r+3 it is asumed that callers
+	// Only call this function at msgRound + 3. Returns all sets of values output by
+	// gradcast at that msgRound + 3 along with their grading.
+	RetrieveGradecastedMessages(msgRound AbsRound) []GradecastedSet
+}
+
+type LeaderChecker interface {
+	IsLeader(vk Hash20, round AbsRound) bool
 }
 
 func verify(sig, data []byte) error {
@@ -245,11 +166,6 @@ func gradeKey3(key []byte) uint8 {
 func gradeKey5(key []byte) uint8 {
 	return 0
 }
-
-// with int8 we have a max iterations of 17 before we overflow.
-// func absRound(iteration int8, round int8) int8 {
-// 	return 7*iteration + round
-// }
 
 // Can we remove sid from the protocols, probably, say we have a separate instance for each sid.
 //
@@ -351,18 +267,13 @@ func findMatch(candidates []Hash20, validSets []map[Hash20][]Hash20, j int8) (*H
 	return nil, nil
 }
 
-func wrapRetreiveThresh(tgg TrhesholdGradedGossiper, round AbsRound) []Hash20 {
-	values, _ := tgg.RetrieveThresholdMessages(NewAbsRound(round.Iteration()-1, 5), round)
-	return values
-}
-
 func isSubset(subset, superset []Hash20) bool {
 	return true
 }
 
 func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 	if p.round >= 0 && p.round <= 3 {
-		p.Vi[p.round], _ = p.tgg.RetrieveThresholdMessages(-1, p.round)
+		p.Vi[p.round] = p.tgg.RetrieveThresholdMessages(-1, 5-uint8(p.round))
 	}
 	// We are starting a new iteration build objects
 	if p.round.Round() == 0 {
@@ -405,7 +316,7 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 			// Check if values received from thresh gossip, we can only do this
 			// safely if we know j > 0, so this can't be done before that
 			// check.
-			values, _ := p.tgg.RetrieveThresholdMessages(NewAbsRound(j-1, 5), p.round)
+			values := p.tgg.RetrieveThresholdMessages(NewAbsRound(j-1, 5), 2)
 			setHash, set = findMatch(values, p.Ti, j)
 		}
 		// If we didn't get a set from threshold gossip then use our local candidate
@@ -445,7 +356,6 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 				values: []Hash20{*p.lockedValue[j]},
 			}
 		} else {
-		OUTER5:
 			for _, c := range candidates {
 				candidateHash := toHash(c.values)
 				// Check to see if valid proposal for this iteration
@@ -474,15 +384,22 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 				// this set with grade >= 1.
 				// Round 5 condition g
 				if !isSubset(p.Vi[5], c.values) {
-					continue
-				}
-				lastIterationCommit := NewAbsRound(j-1, 5)
-				// By adding grades to lastIterationCommit we retrieve messages
-				// that passed the threshold with grade 1
-				values, _ := p.tgg.RetrieveThresholdMessages(lastIterationCommit, lastIterationCommit+grades)
-				for _, v := range values {
-					if v != candidateHash {
-						break OUTER5
+					// Check for received message
+					lastIterationCommit := NewAbsRound(j-1, 5)
+					values := p.tgg.RetrieveThresholdMessages(lastIterationCommit, 1)
+					found := false
+					for _, v := range values {
+						if v == candidateHash {
+							found = true
+							break
+						}
+					}
+					// If the candidate is not superset of highest graded
+					// values and no commit for that candidate was received in
+					// the previous iteration with grade >= 1 then we go to the
+					// next candidate.
+					if !found {
+						continue
 					}
 				}
 				// Locked value for this iteration is nil or matches set
@@ -502,8 +419,7 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 	case 6:
 		var mm *miniMsg
 		var result []Hash20
-		lastIterationNotify := NewAbsRound(j-1, 6)
-		values, _ := p.tgg.RetrieveThresholdMessages(lastIterationNotify, lastIterationNotify+1)
+		values := p.tgg.RetrieveThresholdMessages(NewAbsRound(j-1, 6), 5)
 	OUTER6:
 		// Case 1
 		for _, v := range values {
@@ -522,7 +438,7 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 		// Case 2
 		// If we did not yet set mm then
 		if mm == nil && p.active {
-			values, _ := p.tgg.RetrieveThresholdMessages(NewAbsRound(j, 5), p.round)
+			values := p.tgg.RetrieveThresholdMessages(NewAbsRound(j, 5), 5)
 			for _, v := range values {
 				_, ok := p.Ti[j][v]
 				if ok {
@@ -547,6 +463,7 @@ type miniMsg struct {
 	values []Hash20
 }
 
+// with int8 we have a max iterations of 17 before we overflow.
 type AbsRound int8
 
 func NewAbsRound(j, r int8) AbsRound {
