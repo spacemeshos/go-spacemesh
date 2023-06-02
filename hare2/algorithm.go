@@ -1,3 +1,42 @@
+// package hare2 has an improved version of hare that solves the problem of
+// excessive bandwidth usage and also allows for partial agreement over the set
+// of participants.
+//
+// The design of this pacakge strives to remove any extraneous information from
+// the protocol's implementation so as to simplify the logic, and reduce the
+// dependencies of this package. To this end for the most part the protocol
+// does not contain or handle any errors (except for Handle), all error
+// generating code has been extracted.
+//
+// It also strives to reduce nesting/deep call stacks, so instead of nesting
+// objects inside each other we compose their functionality, this makes testing
+// individual components easier because they do less and it removes the need to
+// mock in many cases, it also aids at keeping the code error free, since there
+// is less chance that we need to handle an error from a nested component and
+// finally keeps the code flexible, since if we want to change where the output
+// of threshGossip goes we don't need to modify threshGossip or re-implement
+// gradedGossip.
+//
+// E.G.
+// instead of
+// func threshGossip(x) {
+//    ...
+//    gradedGossip(y)
+//    ...
+// }
+// func gradedGossip(y) {
+//    ...
+//    networkGossip(z)
+//    ...
+// }
+// We do
+//
+// y := threshGossip(x)
+// z := gradedGossip(y)
+// networkGossip(z)
+//
+// Additionally there is no use of concurrency in this package.
+
 package hare2
 
 import (
@@ -7,66 +46,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 )
 
-// ThresholdState holds the graded votes for a value and also records if this
-// value has been retrieved.
-type ThresholdState struct {
-	votes     [grades]uint16
-	retrieved bool
-}
-
-func (s *ThresholdState) Vote(grade uint8) {
-	// Grade is 1 indexed so we subtract 1
-	s.votes[grade-1]++
-}
-
-func (s *ThresholdState) CumulativeVote(minGrade uint8) uint16 {
-	var count uint16
-
-	// Grade is 1 indexed so we subtract 1
-	for i := minGrade - 1; i < grades; i++ {
-		count += s.votes[i]
-	}
-	return count
-}
-
-type testThresh struct {
-	count  map[AbsRound]map[Hash20]*ThresholdState
-	thresh uint16
-}
-
-func (t *testThresh) ReceiveMsg(values []Hash20, msgRound AbsRound, grade uint8) {
-	for _, v := range values {
-		// Get state for received Value
-		state, ok := t.count[msgRound][v]
-		if !ok {
-			state = &ThresholdState{}
-			t.count[msgRound][v] = state
-		}
-		// If the value has already been retrieved then skip any update
-		if state.retrieved {
-			continue
-		}
-		state.Vote(grade)
-	}
-}
-
-// Gets the messages belonging to msgRound that have met the threshold at round.
-// TODO need to make sure round is never -1
-// TODO do I allow messages to be retreived more than once?
-func (t *testThresh) RetrieveThresholdMessages(msgRound, round AbsRound) (values []Hash20, grade uint8) {
-	var result []Hash20
-	// The min grade allowed to be considered to reach the threshold at this
-	// round.
-	minGrade := grades + 1 - uint8((round - msgRound))
-	for v, state := range t.count[msgRound] {
-		if state.CumulativeVote(minGrade) > t.thresh {
-			state.retrieved = true
-			result = append(result, v)
-		}
-	}
-	return result, minGrade
-}
-
 // I'm going to remove signature verification from these protocols to keep them
 // simple, we assume signature verification is done up front.
 
@@ -74,14 +53,6 @@ func (t *testThresh) RetrieveThresholdMessages(msgRound, round AbsRound) (values
 // is also removed from the protocols.
 
 // not sure exactly what to put here, but the output should be the grade of key
-
-type Wrapper struct {
-	msg, sig []byte
-}
-
-func (m *Wrapper) DecodeScale(d *scale.Decoder) (int, error) {
-	return 0, nil
-}
 
 type (
 	MsgType uint8
@@ -96,6 +67,14 @@ const (
 
 	grades = 5
 )
+
+type Wrapper struct {
+	msg, sig []byte
+}
+
+func (m *Wrapper) DecodeScale(d *scale.Decoder) (int, error) {
+	return 0, nil
+}
 
 type Msg struct {
 	sid, value, key []byte
