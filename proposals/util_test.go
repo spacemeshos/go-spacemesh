@@ -59,7 +59,7 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 func TestComputeWeightPerEligibility_EmptyRefBallotID(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	signer, err := signing.NewEdSigner(
-		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
+		signing.WithKeyFromRand(rand.New(rand.NewSource(1000))),
 	)
 	require.NoError(t, err)
 	beacon := types.Beacon{1, 1, 1}
@@ -76,7 +76,7 @@ func TestComputeWeightPerEligibility_EmptyRefBallotID(t *testing.T) {
 func TestComputeWeightPerEligibility_FailToGetRefBallot(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	signer, err := signing.NewEdSigner(
-		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
+		signing.WithKeyFromRand(rand.New(rand.NewSource(1000))),
 	)
 	require.NoError(t, err)
 	beacon := types.Beacon{1, 1, 1}
