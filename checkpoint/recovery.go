@@ -197,6 +197,7 @@ func RecoverWithDb(
 		return nil, fmt.Errorf("get last checkpoint: %w", err)
 	}
 	if oldRestore >= restore {
+		types.SetEffectiveGenesis(oldRestore.Uint32())
 		return nil, nil
 	}
 	logger.With().Info("recover from uri", log.String("uri", uri))

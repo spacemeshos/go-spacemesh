@@ -177,7 +177,7 @@ func TestRecoverFromHttp(t *testing.T) {
 		{
 			name:   "url unreachable",
 			uri:    "http://nowhere/snapshot-15",
-			expErr: "Temporary failure in name resolution",
+			expErr: "dial tcp: lookup nowhere",
 		},
 		{
 			name:   "ftp",
@@ -236,10 +236,12 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	}
 	url := fmt.Sprintf("%s/snapshot-15", ts.URL)
 	db := sql.InMemory()
+	types.SetEffectiveGenesis(0)
 	require.NoError(t, recovery.SetCheckpoint(db, types.LayerID(recoverLayer)))
 	newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg, types.NodeID{2, 3, 4}, url, types.LayerID(recoverLayer))
 	require.NoError(t, err)
 	require.Nil(t, newdb)
+	require.EqualValues(t, recoverLayer, types.GetEffectiveGenesis())
 }
 
 func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
