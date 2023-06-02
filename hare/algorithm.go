@@ -37,48 +37,24 @@ const (
 	notCompleted = false
 )
 
-// procReport is the termination report of the CP.
-type procReport struct {
+// report is the termination report of the CP.
+type report struct {
 	id        types.LayerID // layer id
 	set       *Set          // agreed-upon set
 	completed bool          // whether the CP completed
 }
 
-func (cpo procReport) ID() types.LayerID {
-	return cpo.id
-}
-
-func (cpo procReport) Set() *Set {
-	return cpo.set
-}
-
-func (cpo procReport) Completed() bool {
-	return cpo.completed
-}
-
 func (proc *consensusProcess) report(completed bool) {
-	proc.comm.report <- procReport{proc.layer, proc.value, completed}
+	proc.comm.report <- report{id: proc.layer, set: proc.value, completed: completed}
 }
 
-var _ TerminationOutput = (*procReport)(nil)
-
-type weakCoinReport struct {
+type wcReport struct {
 	id       types.LayerID
 	coinflip bool
 }
 
-func (wcr weakCoinReport) ID() types.LayerID {
-	return wcr.id
-}
-
-func (wcr weakCoinReport) Coinflip() bool {
-	return wcr.coinflip
-}
-
-var _ WeakCoinOutput = (*weakCoinReport)(nil)
-
 func (proc *consensusProcess) reportWeakCoin() {
-	proc.comm.wc <- weakCoinReport{id: proc.layer, coinflip: proc.preRoundTracker.coinflip}
+	proc.comm.wc <- wcReport{id: proc.layer, coinflip: proc.preRoundTracker.coinflip}
 }
 
 // State holds the current state of the consensus process (aka the participant).
@@ -175,8 +151,8 @@ type communication struct {
 	// to this mchOut
 	mchOut chan<- *types.MalfeasanceGossip
 	// if the consensus process terminates, output the result to report
-	report chan TerminationOutput
-	wc     chan WeakCoinOutput
+	report chan report
+	wc     chan wcReport
 }
 
 // consensusProcess is an entity (a single participant) in the Hare protocol.

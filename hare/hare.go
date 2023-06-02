@@ -43,18 +43,6 @@ type Consensus interface {
 	Stop()
 }
 
-// TerminationOutput represents an output of a consensus process.
-type TerminationOutput interface {
-	ID() types.LayerID
-	Set() *Set
-	Completed() bool
-}
-
-type WeakCoinOutput interface {
-	ID() types.LayerID
-	Coinflip() bool
-}
-
 // RoundClock is a timer interface.
 type RoundClock interface {
 	AwaitWakeup() <-chan struct{}
@@ -122,8 +110,8 @@ type Hare struct {
 
 	networkDelta time.Duration
 
-	outputChan chan TerminationOutput
-	wcChan     chan WeakCoinOutput
+	outputChan chan report
+	wcChan     chan wcReport
 	mu         sync.Mutex
 	lastLayer  types.LayerID
 	outputs    map[types.LayerID][]types.ProposalID
@@ -186,8 +174,8 @@ func New(
 	h.weakCoin = weakCoin
 
 	h.networkDelta = conf.WakeupDelta
-	h.outputChan = make(chan TerminationOutput, h.config.Hdist)
-	h.wcChan = make(chan WeakCoinOutput, h.config.Hdist)
+	h.outputChan = make(chan report, h.config.Hdist)
+	h.wcChan = make(chan wcReport, h.config.Hdist)
 	h.outputs = make(map[types.LayerID][]types.ProposalID, h.config.Hdist) // we keep results about LayerBuffer past layers
 	h.cps = make(map[types.LayerID]Consensus, h.config.LimitConcurrent)
 	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing *signing.EdSigner, nonce *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
@@ -272,14 +260,14 @@ func (h *Hare) oldestResultInBufferLocked() types.LayerID {
 var ErrTooLate = errors.New("consensus process finished too late")
 
 // records the provided output.
-func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
-	layerID := output.ID()
+func (h *Hare) collectOutput(ctx context.Context, output report) error {
+	layerID := output.id
 
 	var pids []types.ProposalID
-	if output.Completed() {
+	if output.completed {
 		consensusOkCnt.Inc()
-		h.WithContext(ctx).With().Info("hare terminated with success", layerID, log.Int("num_proposals", output.Set().Size()))
-		set := output.Set()
+		h.WithContext(ctx).With().Info("hare terminated with success", layerID, log.Int("num_proposals", output.set.Size()))
+		set := output.set
 		postNumProposals.Add(float64(set.Size()))
 		pids = set.ToSlice()
 		select {
@@ -557,17 +545,17 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 		case wc := <-h.wcChan:
 			h.With().Debug("recording weak coin result for layer",
 				log.Context(ctx),
-				wc.ID(),
-				log.Bool("weak_coin", wc.Coinflip()))
-			if err := h.weakCoin.Set(wc.ID(), wc.Coinflip()); err != nil {
+				wc.id,
+				log.Bool("weak_coin", wc.coinflip))
+			if err := h.weakCoin.Set(wc.id, wc.coinflip); err != nil {
 				h.With().Error("failed to set weak coin for layer",
 					log.Context(ctx),
-					wc.ID(),
+					wc.id,
 					log.Err(err),
 				)
 			}
 		case out := <-h.outputChan:
-			layerID := out.ID()
+			layerID := out.id
 			ctx := log.WithNewSessionID(ctx)
 			if err := h.collectOutput(ctx, out); err != nil {
 				h.With().Warning("error collecting output from hare",
@@ -576,8 +564,8 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 					log.Err(err),
 				)
 			}
-			h.broker.Unregister(ctx, out.ID())
-			h.removeCP(ctx, out.ID())
+			h.broker.Unregister(ctx, out.id)
+			h.removeCP(ctx, out.id)
 		case <-h.ctx.Done():
 			return
 		}
