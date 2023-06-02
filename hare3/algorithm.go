@@ -420,7 +420,7 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 		var mm *miniMsg
 		var result []Hash20
 		values := p.tgg.RetrieveThresholdMessages(NewAbsRound(j-1, 6), 5)
-	OUTER6:
+	OUTER:
 		// Case 1
 		for _, v := range values {
 			for i := 0; i <= int(j); i++ {
@@ -431,7 +431,7 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 						round:  NewAbsRound(j, 6),
 						values: []Hash20{v},
 					}
-					break OUTER6
+					break OUTER
 				}
 			}
 		}
