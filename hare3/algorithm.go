@@ -402,7 +402,7 @@ func (p *Protocol) NextRound() *miniMsg {
 		var setHash *Hash20
 		var set []Hash20
 		if j > 0 {
-			// Check if values recieved from thresh gossip, we can only do this
+			// Check if values received from thresh gossip, we can only do this
 			// safely if we know j > 0, so this can't be done before that
 			// check.
 			values, _ := p.tgg.RetrieveThresholdMessages(NewAbsRound(j-1, 5), p.round)
@@ -445,7 +445,7 @@ func (p *Protocol) NextRound() *miniMsg {
 				values: []Hash20{*p.lockedValue[j]},
 			}
 		} else {
-		OUTER:
+		OUTER5:
 			for _, c := range candidates {
 				candidateHash := toHash(c.values)
 				// Check to see if valid proposal for this iteration
@@ -477,12 +477,12 @@ func (p *Protocol) NextRound() *miniMsg {
 					continue
 				}
 				lastIterationCommit := NewAbsRound(j-1, 5)
-				// By adding grades to lastIterationCommit we retreive messages
+				// By adding grades to lastIterationCommit we retrieve messages
 				// that passed the threshold with grade 1
 				values, _ := p.tgg.RetrieveThresholdMessages(lastIterationCommit, lastIterationCommit+grades)
 				for _, v := range values {
 					if v != candidateHash {
-						break OUTER
+						break OUTER5
 					}
 				}
 				// Locked value for this iteration is nil or matches set
@@ -500,6 +500,41 @@ func (p *Protocol) NextRound() *miniMsg {
 		}
 		return mm
 	case 6:
+		var mm *miniMsg
+		lastIterationNotify := NewAbsRound(j-1, 6)
+		values, _ := p.tgg.RetrieveThresholdMessages(lastIterationNotify, lastIterationNotify+1)
+	OUTER6:
+		// Case 1
+		for _, v := range values {
+			for i := 0; i <= int(j); i++ {
+				_, ok := p.Ti[i][v]
+				if ok {
+					mm = &miniMsg{
+						round:  NewAbsRound(j, 6),
+						values: []Hash20{v},
+					}
+					break OUTER6
+				}
+			}
+		}
+		// Case 2
+		// If we did not yet set mm then
+		if mm == nil && p.active {
+			values, _ := p.tgg.RetrieveThresholdMessages(NewAbsRound(j, 5), p.round)
+			for _, v := range values {
+				_, ok := p.Ti[j][v]
+				if ok {
+					mm = &miniMsg{
+						round:  NewAbsRound(j, 6),
+						values: []Hash20{v},
+					}
+					break
+				}
+			}
+
+		}
+		return mm
+
 	}
 
 	p.round++
