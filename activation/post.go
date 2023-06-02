@@ -23,13 +23,13 @@ type PostSetupProvider initialization.Provider
 
 // PostConfig is the configuration of the Post protocol, used for data creation, proofs generation and validation.
 type PostConfig struct {
-	MinNumUnits     uint32 `mapstructure:"post-min-numunits"`
-	MaxNumUnits     uint32 `mapstructure:"post-max-numunits"`
-	LabelsPerUnit   uint64 `mapstructure:"post-labels-per-unit"`
-	K1              uint32 `mapstructure:"post-k1"`
-	K2              uint32 `mapstructure:"post-k2"`
-	K3              uint32 `mapstructure:"post-k3"`
-	K2PowDifficulty uint64 `mapstructure:"post-k2pow-difficulty"`
+	MinNumUnits   uint32   `mapstructure:"post-min-numunits"`
+	MaxNumUnits   uint32   `mapstructure:"post-max-numunits"`
+	LabelsPerUnit uint64   `mapstructure:"post-labels-per-unit"`
+	K1            uint32   `mapstructure:"post-k1"`
+	K2            uint32   `mapstructure:"post-k2"`
+	K3            uint32   `mapstructure:"post-k3"`
+	PowDifficulty [32]byte `mapstructure:"post-pow-difficulty"`
 }
 
 // PostSetupOpts are the options used to initiate a Post setup data creation session,
@@ -50,12 +50,15 @@ type PostProvingOpts struct {
 	Threads uint `mapstructure:"smeshing-opts-proving-threads"`
 	// Number of nonces tried in parallel in POST proving process.
 	Nonces uint `mapstructure:"smeshing-opts-proving-nonces"`
+	// Flags used in the PoW computation.
+	Flags config.PowFlags `mapstructure:"smeshing-opts-proving-powflags"`
 }
 
 func DefaultPostProvingOpts() PostProvingOpts {
 	return PostProvingOpts{
 		Threads: 1,
 		Nonces:  16,
+		Flags:   config.DefaultProvingPowFlags(),
 	}
 }
 
@@ -63,6 +66,8 @@ func DefaultPostProvingOpts() PostProvingOpts {
 type PostProofVerifyingOpts struct {
 	// Number of workers spawned to verify proofs.
 	Workers int `mapstructure:"smeshing-opts-verifying-workers"`
+	// Flags used for the PoW verification.
+	Flags config.PowFlags `mapstructure:"smeshing-opts-verifying-powflags"`
 }
 
 func DefaultPostVerifyingOpts() PostProofVerifyingOpts {
@@ -72,6 +77,7 @@ func DefaultPostVerifyingOpts() PostProofVerifyingOpts {
 	}
 	return PostProofVerifyingOpts{
 		Workers: workers,
+		Flags:   config.DefaultVerifyingPowFlags(),
 	}
 }
 
@@ -389,6 +395,7 @@ func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte
 		proving.WithDataSource(config.Config(mgr.cfg), mgr.id.Bytes(), mgr.commitmentAtxId.Bytes(), mgr.lastOpts.DataDir),
 		proving.WithNonces(mgr.provingOpts.Nonces),
 		proving.WithThreads(mgr.provingOpts.Threads),
+		proving.WithPowFlags(mgr.provingOpts.Flags),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate proof: %w", err)

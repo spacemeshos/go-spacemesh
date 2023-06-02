@@ -587,8 +587,11 @@ func TestValidator_Validate(t *testing.T) {
 	opts := []verifying.OptionFunc{verifying.WithLabelScryptParams(postProvider.opts.Scrypt)}
 
 	logger := logtest.New(t).WithName("validator")
-	v := NewValidator(poetDb, postProvider.cfg, logger, NewPostVerifier(postProvider.cfg, logger))
-	_, err := v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
+	verifier, err := NewPostVerifier(postProvider.cfg, logger, nil)
+	r.NoError(err)
+	defer verifier.Close()
+	v := NewValidator(poetDb, postProvider.cfg, logger, verifier)
+	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
 	r.NoError(err)
 
 	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, types.BytesToHash([]byte("lerner")), postProvider.opts.NumUnits, opts...)

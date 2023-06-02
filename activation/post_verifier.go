@@ -33,20 +33,29 @@ type postVerifierWorker struct {
 	channel  <-chan *verifyPostJob
 }
 
-type verifierFunc func(context.Context, *shared.Proof, *shared.ProofMetadata, ...verifying.OptionFunc) error
+type postVerifier struct {
+	inner  *verifying.ProofVerifier
+	logger log.Log
+	cfg    config.Config
+}
 
-func (f verifierFunc) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
-	return f(ctx, p, m, opts...)
+func (v *postVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
+	v.logger.WithContext(ctx).Debug("verifying post", log.FieldNamed("proof_node_id", types.BytesToNodeID(m.NodeId)))
+	return v.inner.Verify(p, m, v.cfg, v.logger.Zap(), opts...)
+}
+
+func (v *postVerifier) Close() error {
+	return v.inner.Close()
 }
 
 // NewPostVerifier creates a new post verifier.
-func NewPostVerifier(cfg PostConfig, logger log.Log) PostVerifier {
-	c := config.Config(cfg)
-	verify := func(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
-		logger.WithContext(ctx).Debug("verifying post", log.FieldNamed("proof_node_id", types.BytesToNodeID(m.NodeId)))
-		return verifying.Verify(p, m, c, logger.Zap(), opts...)
+func NewPostVerifier(cfg PostConfig, logger log.Log, powFlags *config.PowFlags) (PostVerifier, error) {
+	verifier, err := verifying.NewProofVerifier(powFlags)
+	if err != nil {
+		return nil, err
 	}
-	return verifierFunc(verify)
+
+	return &postVerifier{logger: logger, inner: verifier, cfg: config.Config(cfg)}, nil
 }
 
 // NewOffloadingPostVerifier creates a new post proof verifier with the given number of workers.
@@ -104,6 +113,15 @@ func (v *OffloadingPostVerifier) Verify(ctx context.Context, p *shared.Proof, m 
 	case <-ctx.Done():
 		return fmt.Errorf("waiting for verification result: %w", ctx.Err())
 	}
+}
+
+func (v *OffloadingPostVerifier) Close() error {
+	for _, worker := range v.workers {
+		if err := worker.verifier.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (w *postVerifierWorker) start(ctx context.Context) error {

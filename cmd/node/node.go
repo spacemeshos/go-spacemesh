@@ -545,9 +545,14 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 
 	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
 	postVerifiers := make([]activation.PostVerifier, 0, app.Config.SMESHING.VerifyingOpts.Workers)
+	lg.Debug("creating post verifier")
+	verifier, err := activation.NewPostVerifier(app.Config.POST, nipostValidatorLogger, &app.Config.SMESHING.VerifyingOpts.Flags)
+	lg.With().Debug("created post verifier", log.Err(err))
+	if err != nil {
+		return err
+	}
 	for i := 0; i < app.Config.SMESHING.VerifyingOpts.Workers; i++ {
-		logger := nipostValidatorLogger.Named(fmt.Sprintf("worker-%d", i))
-		postVerifiers = append(postVerifiers, activation.NewPostVerifier(app.Config.POST, logger))
+		postVerifiers = append(postVerifiers, verifier)
 	}
 	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
 
@@ -1117,6 +1122,10 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 	if app.dbMetrics != nil {
 		app.dbMetrics.Close()
+	}
+
+	if app.postVerifier != nil {
+		app.postVerifier.Close()
 	}
 
 	events.CloseEventReporter()

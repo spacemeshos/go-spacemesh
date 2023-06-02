@@ -195,10 +195,13 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.NoError(err)
 
 	// Verify the proof
-	err = verifying.Verify(&shared.Proof{
+	verifier, err := verifying.NewProofVerifier(nil)
+	req.NoError(err)
+	defer verifier.Close()
+	err = verifier.Verify(&shared.Proof{
 		Nonce:   p.Nonce,
 		Indices: p.Indices,
-		K2Pow:   p.K2Pow,
+		Pow:     p.Pow,
 	}, &shared.ProofMetadata{
 		NodeId:          mgr.id.Bytes(),
 		CommitmentAtxId: mgr.goldenATXID.Bytes(),
@@ -425,7 +428,9 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 	goldenATXID := types.ATXID{2, 3, 4}
 
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := NewPostSetupManager(id, cfg, logtest.New(tb), cdb, goldenATXID, DefaultPostProvingOpts())
+	provingOpts := DefaultPostProvingOpts()
+	provingOpts.Flags = config.RecommendedPowFlags()
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(tb), cdb, goldenATXID, provingOpts)
 	require.NoError(tb, err)
 
 	return &testPostManager{
