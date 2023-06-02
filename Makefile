@@ -58,7 +58,6 @@ all: install build
 .PHONY: all
 
 install:
-	go run scripts/check-go-version.go --major 1 --minor 19
 	go mod download
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.52.0
 	go install github.com/spacemeshos/go-scale/scalegen@v1.1.9
