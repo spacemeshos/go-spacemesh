@@ -360,7 +360,7 @@ func isSubset(subset, superset []Hash20) bool {
 	return true
 }
 
-func (p *Protocol) NextRound() *miniMsg {
+func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 	if p.round >= 0 && p.round <= 3 {
 		p.Vi[p.round], _ = p.tgg.RetrieveThresholdMessages(-1, p.round)
 	}
@@ -375,18 +375,18 @@ func (p *Protocol) NextRound() *miniMsg {
 	switch p.round {
 	case -1:
 		if !p.active {
-			return nil
+			return nil, nil
 		}
 		// Gossip initial values
 		return &miniMsg{
 			round:  p.round,
 			values: p.Si,
-		}
+		}, nil
 	case 0:
 	case 1:
 	case 2:
 		if !p.active {
-			return nil
+			return nil, nil
 		}
 		// in the paper it says up to the beginning of round 2 if a message was
 		// received from threshold gossip with grade 2 or greater. But since
@@ -422,7 +422,7 @@ func (p *Protocol) NextRound() *miniMsg {
 		return &miniMsg{
 			round:  p.round,
 			values: p.S,
-		}
+		}, nil
 	case 5:
 		candidates := p.gc.RetrieveGradecastedMessages(NewAbsRound(j, 2))
 		for _, c := range candidates {
@@ -435,7 +435,7 @@ func (p *Protocol) NextRound() *miniMsg {
 			}
 		}
 		if !p.active {
-			return nil
+			return nil, nil
 		}
 
 		var mm *miniMsg
@@ -498,17 +498,19 @@ func (p *Protocol) NextRound() *miniMsg {
 				break
 			}
 		}
-		return mm
+		return mm, nil
 	case 6:
 		var mm *miniMsg
+		var result []Hash20
 		lastIterationNotify := NewAbsRound(j-1, 6)
 		values, _ := p.tgg.RetrieveThresholdMessages(lastIterationNotify, lastIterationNotify+1)
 	OUTER6:
 		// Case 1
 		for _, v := range values {
 			for i := 0; i <= int(j); i++ {
-				_, ok := p.Ti[i][v]
+				set, ok := p.Ti[i][v]
 				if ok {
+					result = set
 					mm = &miniMsg{
 						round:  NewAbsRound(j, 6),
 						values: []Hash20{v},
@@ -533,12 +535,11 @@ func (p *Protocol) NextRound() *miniMsg {
 			}
 
 		}
-		return mm
-
+		return mm, result
 	}
 
 	p.round++
-	return nil
+	return nil, nil
 }
 
 type miniMsg struct {
