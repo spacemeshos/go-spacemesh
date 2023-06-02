@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 var (
@@ -52,7 +53,7 @@ type Message struct {
 	Round        types.RoundID
 	Unit         uint32
 	NodeID       types.NodeID
-	VrfSignature types.VrfSignature
+	VRFSignature types.VrfSignature
 }
 
 type VrfMessage struct {
@@ -232,8 +233,8 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 		return fmt.Errorf("failed to get vrf nonce for node %s: %w", message.NodeID, err)
 	}
 	buf := wc.encodeProposal(message.Epoch, nonce, message.Round, message.Unit)
-	if !wc.verifier.Verify(message.NodeID, buf, message.VrfSignature) {
-		return fmt.Errorf("signature is invalid signature %x", message.VrfSignature)
+	if !wc.verifier.Verify(signing.BEACON_PROPOSAL, message.NodeID, buf, message.VRFSignature) {
+		return fmt.Errorf("signature is invalid signature %x", message.VRFSignature)
 	}
 
 	allowance := wc.allowance.MinerAllowance(wc.epoch, message.NodeID)
@@ -241,7 +242,7 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d (allowed %d)", message.NodeID, message.Unit, allowance)
 	}
 
-	return wc.updateSmallest(ctx, message.VrfSignature)
+	return wc.updateSmallest(ctx, message.VRFSignature)
 }
 
 func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) ([]byte, types.VrfSignature) {
@@ -253,7 +254,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 	var smallest *types.VrfSignature
 	for unit := uint32(0); unit < minerAllowance; unit++ {
 		proposal := wc.encodeProposal(epoch, nonce, round, unit)
-		signature := wc.signer.Sign(proposal)
+		signature := wc.signer.Sign(signing.BEACON_PROPOSAL, proposal)
 		if wc.aboveThreshold(signature) {
 			continue
 		}
@@ -263,7 +264,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 				Round:        round,
 				Unit:         unit,
 				NodeID:       wc.signer.NodeID(),
-				VrfSignature: signature,
+				VRFSignature: signature,
 			}
 			msg, err := codec.Encode(&message)
 			if err != nil {

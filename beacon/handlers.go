@@ -194,7 +194,7 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 		return fmt.Errorf("[proposal] get VRF nonce (miner ID %s): %w", m.NodeID, err)
 	}
 	currentEpochProposal := buildProposal(logger, m.EpochID, nonce)
-	if !pd.vrfVerifier.Verify(m.NodeID, currentEpochProposal, m.VRFSignature) {
+	if !pd.vrfVerifier.Verify(signing.BEACON_PROPOSAL, m.NodeID, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
 		logger.With().Warning("[proposal] failed to verify VRF signature")
 		return fmt.Errorf("[proposal] verify VRF (miner ID %s): %w", m.NodeID, errVRFNotVerified)
@@ -260,7 +260,7 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 	if err != nil {
 		pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound).With().Fatal("failed to serialize first voting message", log.Err(err))
 	}
-	if !pd.edVerifier.Verify(signing.BEACON, m.SmesherID, messageBytes, m.Signature) {
+	if !pd.edVerifier.Verify(signing.BEACON_FIRST_MSG, m.SmesherID, messageBytes, m.Signature) {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
 	if err = pd.registerVoted(m.EpochID, m.SmesherID, types.FirstRound); err != nil {
@@ -360,7 +360,7 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 	if err != nil {
 		pd.logger.With().Fatal("failed to serialize voting message", log.Err(err))
 	}
-	if !pd.edVerifier.Verify(signing.BEACON, m.SmesherID, messageBytes, m.Signature) {
+	if !pd.edVerifier.Verify(signing.BEACON_FOLLOWUP_MSG, m.SmesherID, messageBytes, m.Signature) {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
 	if err := pd.registerVoted(m.EpochID, m.SmesherID, m.RoundID); err != nil {

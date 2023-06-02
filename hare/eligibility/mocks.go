@@ -9,6 +9,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	signing "github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // Mockcache is a mock of cache interface.
@@ -87,17 +88,17 @@ func (m *MockvrfVerifier) EXPECT() *MockvrfVerifierMockRecorder {
 }
 
 // Verify mocks base method.
-func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool {
+func (m *MockvrfVerifier) Verify(d signing.Domain, nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Verify", nodeID, msg, sig)
+	ret := m.ctrl.Call(m, "Verify", d, nodeID, msg, sig)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockvrfVerifierMockRecorder) Verify(nodeID, msg, sig interface{}) *gomock.Call {
+func (mr *MockvrfVerifierMockRecorder) Verify(d, nodeID, msg, sig interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), nodeID, msg, sig)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), d, nodeID, msg, sig)
 }
 
 // MocknonceFetcher is a mock of nonceFetcher interface.
