@@ -81,6 +81,9 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 
 	s := getStream(conns[0], pubsub.GossipSubID_v11, network.DirOutbound)
 
+	require.True(t, app1.syncer.IsSynced(ctx))
+	require.True(t, app2.syncer.IsSynced(ctx))
+
 	protocol := ps.ProposalProtocol
 	// Send a message that doesn't result in ValidationReject.
 	p := types.Proposal{}
