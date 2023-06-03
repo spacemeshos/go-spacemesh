@@ -35,7 +35,7 @@ func WithLog(logger log.Log) Opt {
 }
 
 const (
-	hsprotocol    = "/handshake/1"
+	hsprotocol    = "handshake/1"
 	streamTimeout = 10 * time.Second
 )
 
@@ -63,7 +63,7 @@ func New(h host.Host, genesisID types.Hash20, opts ...Opt) *Handshake {
 	for _, opt := range opts {
 		opt(hs)
 	}
-	h.SetStreamHandler(protocol.ID(hsprotocol), hs.handler)
+	h.SetStreamHandler(hsprotocol, hs.handler)
 	emitter, err := h.EventBus().Emitter(new(EventHandshakeComplete))
 	if err != nil {
 		hs.logger.With().Panic("failed to initialize emitter for handshake", log.Err(err))
