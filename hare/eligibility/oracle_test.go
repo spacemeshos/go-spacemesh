@@ -587,6 +587,28 @@ func TestActives(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, createMapWithSize(numMiners+1), got.set)
 	})
+	t.Run("recover at epoch start", func(t *testing.T) {
+		numMiners++
+		o := defaultOracle(t)
+		o.mBeacon.EXPECT().GetBeacon(gomock.Any()).AnyTimes()
+		layer := types.EpochID(4).FirstLayer()
+		old := types.GetEffectiveGenesis()
+		types.SetEffectiveGenesis(layer.Uint32() - 1)
+		t.Cleanup(func() {
+			types.SetEffectiveGenesis(old.Uint32())
+		})
+		createLayerData(t, o.cdb, layer, numMiners)
+		fallback := types.RandomActiveSet(numMiners + 1)
+		createActiveSet(t, o.cdb, types.EpochID(3).FirstLayer(), fallback)
+		o.UpdateActiveSet(layer.GetEpoch(), fallback)
+
+		got, err := o.actives(context.Background(), layer)
+		require.NoError(t, err)
+		require.Equal(t, createMapWithSize(numMiners+1), got.set)
+		got2, err := o.actives(context.Background(), layer+1)
+		require.NoError(t, err)
+		require.Equal(t, got2, got)
+	})
 }
 
 func TestActives_ConcurrentCalls(t *testing.T) {

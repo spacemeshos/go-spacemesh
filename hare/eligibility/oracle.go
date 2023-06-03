@@ -377,8 +377,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 	targetEpoch := targetLayer.GetEpoch()
 	// the first bootstrap data targets first epoch after genesis (epoch 2)
 	// and the epoch where checkpoint recovery happens
-	if targetEpoch != 2 &&
-		targetEpoch > types.GetEffectiveGenesis().GetEpoch() &&
+	if targetEpoch > types.GetEffectiveGenesis().Add(1).GetEpoch() &&
 		targetLayer.Difference(targetEpoch.FirstLayer()) < o.cfg.ConfidenceParam {
 		targetEpoch -= 1
 	}
