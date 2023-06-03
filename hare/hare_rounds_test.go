@@ -92,7 +92,7 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 
 	for i := 0; i < nodes; i++ {
 		host := mesh.Hosts()[i]
-		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), host, "", pubsub.DefaultConfig())
 		require.NoError(t, err)
 		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.LayerID(1), err: errors.New("fake err")}
 

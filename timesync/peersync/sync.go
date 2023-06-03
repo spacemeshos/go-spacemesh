@@ -10,6 +10,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -18,7 +19,7 @@ import (
 )
 
 const (
-	protocolName = "/peersync/1.0/"
+	protocolName = "peersync/1.0/"
 )
 
 var (
@@ -113,20 +114,21 @@ func WithConfig(config Config) Option {
 }
 
 // New creates Sync instance and returns pointer.
-func New(h host.Host, peers getPeers, opts ...Option) *Sync {
+func New(h host.Host, peers getPeers, prefix string, opts ...Option) *Sync {
 	sync := &Sync{
-		log:    log.NewNop(),
-		ctx:    context.Background(),
-		time:   systemTime{},
-		h:      h,
-		config: DefaultConfig(),
-		peers:  peers,
+		log:      log.NewNop(),
+		ctx:      context.Background(),
+		time:     systemTime{},
+		protocol: protocol.ID(fmt.Sprintf("%s/%s", prefix, protocolName)),
+		h:        h,
+		config:   DefaultConfig(),
+		peers:    peers,
 	}
 	for _, opt := range opts {
 		opt(sync)
 	}
 	sync.ctx, sync.cancel = context.WithCancel(sync.ctx)
-	h.SetStreamHandler(protocolName, sync.streamHandler)
+	h.SetStreamHandler(sync.protocol, sync.streamHandler)
 	return sync
 }
 
@@ -134,11 +136,12 @@ func New(h host.Host, peers getPeers, opts ...Option) *Sync {
 type Sync struct {
 	errCnt uint32
 
-	config Config
-	log    log.Log
-	time   Time
-	h      host.Host
-	peers  getPeers
+	config   Config
+	log      log.Log
+	time     Time
+	protocol protocol.ID
+	h        host.Host
+	peers    getPeers
 
 	eg     errgroup.Group
 	ctx    context.Context
@@ -266,7 +269,7 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2p.Peer) (time.D
 		go func(pid p2p.Peer) {
 			defer wg.Done()
 			logger := s.log.WithFields(log.String("pid", pid.Pretty())).With()
-			stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), pid, protocolName)
+			stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), pid, s.protocol)
 			if err != nil {
 				logger.Warning("failed to create new stream", log.Err(err))
 				return

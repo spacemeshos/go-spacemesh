@@ -35,7 +35,7 @@ func WithLog(logger log.Log) Opt {
 }
 
 const (
-	hsprotocol    = "/handshake/1"
+	hsprotocol    = "handshake/1"
 	streamTimeout = 10 * time.Second
 )
 
@@ -52,18 +52,19 @@ type HandshakeAck struct {
 }
 
 // New instantiates handshake protocol for the host.
-func New(h host.Host, genesisID types.Hash20, opts ...Opt) *Handshake {
+func New(h host.Host, genesisID types.Hash20, prefix string, opts ...Opt) *Handshake {
 	ctx, cancel := context.WithCancel(context.Background())
 	hs := &Handshake{
 		logger:    log.NewNop(),
 		genesisID: genesisID,
+		protocol:  protocol.ID(fmt.Sprintf("%s/%s", prefix, hsprotocol)),
 		h:         h,
 		cancel:    cancel,
 	}
 	for _, opt := range opts {
 		opt(hs)
 	}
-	h.SetStreamHandler(protocol.ID(hsprotocol), hs.handler)
+	h.SetStreamHandler(hs.protocol, hs.handler)
 	emitter, err := h.EventBus().Emitter(new(EventHandshakeComplete))
 	if err != nil {
 		hs.logger.With().Panic("failed to initialize emitter for handshake", log.Err(err))
@@ -83,6 +84,7 @@ type Handshake struct {
 
 	emitter   event.Emitter
 	genesisID types.Hash20
+	protocol  protocol.ID
 	h         host.Host
 
 	cancel context.CancelFunc
@@ -131,7 +133,7 @@ func (h *Handshake) Stop() {
 
 // Request handshake with a peer.
 func (h *Handshake) Request(ctx context.Context, pid peer.ID) error {
-	stream, err := h.h.NewStream(network.WithNoDial(ctx, "existing connection"), pid, protocol.ID(hsprotocol))
+	stream, err := h.h.NewStream(network.WithNoDial(ctx, "existing connection"), pid, h.protocol)
 	if err != nil {
 		return fmt.Errorf("failed to init stream: %w", err)
 	}
@@ -166,7 +168,7 @@ func (h *Handshake) handler(stream network.Stream) {
 		return
 	}
 	if h.genesisID != msg.GenesisID {
-		h.logger.Warning("network id mismatch",
+		h.logger.With().Warning("network id mismatch",
 			log.Stringer("genesis id", h.genesisID),
 			log.Stringer("peer genesis id", msg.GenesisID),
 			log.String("peer-id", stream.Conn().RemotePeer().String()),

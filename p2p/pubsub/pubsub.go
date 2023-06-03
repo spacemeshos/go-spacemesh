@@ -91,7 +91,7 @@ type Config struct {
 }
 
 // New creates PubSub instance.
-func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*PubSub, error) {
+func New(ctx context.Context, logger log.Log, h host.Host, prefix string, cfg Config) (*PubSub, error) {
 	// TODO(dshulyak) refactor code to accept options
 	opts := getOptions(cfg)
 	ps, err := pubsub.NewGossipSub(ctx, h, opts...)
@@ -99,10 +99,11 @@ func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*PubSub,
 		return nil, fmt.Errorf("failed to initialize gossipsub instance: %w", err)
 	}
 	return &PubSub{
-		logger: logger,
-		pubsub: ps,
-		topics: map[string]*pubsub.Topic{},
-		host:   h,
+		logger:      logger,
+		pubsub:      ps,
+		topics:      map[string]*pubsub.Topic{},
+		host:        h,
+		topicPrefix: prefix,
 	}, nil
 }
 
@@ -145,7 +146,7 @@ func ChainGossipHandler(handlers ...GossipHandler) GossipHandler {
 	}
 }
 
-// DropPeerValidationReject wraps a gossip handler to provide a handler that drops a
+// DropPeerOnValidationReject wraps a gossip handler to provide a handler that drops a
 // peer if the wrapped handler returns ErrValidationReject.
 func DropPeerOnValidationReject(handler GossipHandler, h host.Host, logger log.Log) GossipHandler {
 	return func(ctx context.Context, peer peer.ID, data []byte) error {

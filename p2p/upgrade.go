@@ -62,6 +62,11 @@ type Host struct {
 
 	discovery *peerexchange.Discovery
 	hs        *handshake.Handshake
+	prefix    string
+}
+
+func (h *Host) Prefix() string {
+	return h.prefix
 }
 
 // TODO(dshulyak) IsBootnode should be a configuration option.
@@ -79,12 +84,13 @@ func isBootnode(h host.Host, bootnodes []string) (bool, error) {
 }
 
 // Upgrade creates Host instance from host.Host.
-func Upgrade(h host.Host, genesisID types.Hash20, opts ...Opt) (*Host, error) {
+func Upgrade(h host.Host, genesisID types.Hash20, prefix string, opts ...Opt) (*Host, error) {
 	fh := &Host{
 		ctx:    context.Background(),
 		cfg:    DefaultConfig(),
 		logger: log.NewNop(),
 		Host:   h,
+		prefix: prefix,
 	}
 	for _, opt := range opts {
 		opt(fh)
@@ -94,7 +100,7 @@ func Upgrade(h host.Host, genesisID types.Hash20, opts ...Opt) (*Host, error) {
 	if err != nil {
 		return nil, fmt.Errorf("check node as bootnode: %w", err)
 	}
-	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
+	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, prefix, pubsub.Config{
 		Flood:          cfg.Flood,
 		IsBootnode:     bootnode,
 		MaxMessageSize: cfg.MaxMessageSize,
@@ -111,7 +117,7 @@ func Upgrade(h host.Host, genesisID types.Hash20, opts ...Opt) (*Host, error) {
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
 	}
-	fh.hs = handshake.New(fh, genesisID, handshake.WithLog(fh.logger))
+	fh.hs = handshake.New(fh, genesisID, prefix, handshake.WithLog(fh.logger))
 	if fh.nodeReporter != nil {
 		fh.Network().Notify(&network.NotifyBundle{
 			ConnectedF: func(network.Network, network.Conn) {

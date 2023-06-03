@@ -47,12 +47,32 @@ func TestSyncGetOffset(t *testing.T) {
 		tm.EXPECT().Now().Return(responseReceive).AnyTimes()
 		for _, h := range mesh.Hosts()[1:] {
 			peers = append(peers, h.ID())
-			_ = New(h, nil, WithTime(adjustedTime(peerResponse)))
+			_ = New(h, nil, "prefix", WithTime(adjustedTime(peerResponse)))
 		}
-		sync := New(mesh.Hosts()[0], nil, WithTime(tm))
+		sync := New(mesh.Hosts()[0], nil, "prefix", WithTime(tm))
 		offset, err := sync.GetOffset(context.TODO(), 0, peers)
 		require.NoError(t, err)
 		require.Equal(t, 5*time.Second, offset)
+	})
+
+	t.Run("wrong prefix", func(t *testing.T) {
+		mesh, err := mocknet.FullMeshConnected(4)
+		require.NoError(t, err)
+
+		ctrl := gomock.NewController(t)
+		tm := mocks.NewMockTime(ctrl)
+		peers := []p2p.Peer{}
+		tm.EXPECT().Now().Return(roundStartTime)
+		tm.EXPECT().Now().Return(responseReceive).AnyTimes()
+		for _, h := range mesh.Hosts()[1:] {
+			peers = append(peers, h.ID())
+			_ = New(h, nil, "prefix", WithTime(adjustedTime(peerResponse)))
+		}
+
+		sync := New(mesh.Hosts()[0], nil, "wrong prefix", WithTime(tm))
+		offset, err := sync.GetOffset(context.TODO(), 0, peers)
+		require.ErrorIs(t, err, ErrTimesyncFailed)
+		require.Empty(t, offset)
 	})
 
 	t.Run("Failure", func(t *testing.T) {
@@ -68,7 +88,7 @@ func TestSyncGetOffset(t *testing.T) {
 			peers = append(peers, h.ID())
 		}
 
-		sync := New(mesh.Hosts()[0], nil, WithTime(tm))
+		sync := New(mesh.Hosts()[0], nil, "prefix", WithTime(tm))
 		offset, err := sync.GetOffset(context.TODO(), 0, peers)
 		require.ErrorIs(t, err, ErrTimesyncFailed)
 		require.Empty(t, offset)
@@ -96,7 +116,7 @@ func TestSyncTerminateOnError(t *testing.T) {
 	getter := mocks.NewMockgetPeers(ctrl)
 	tm := mocks.NewMockTime(ctrl)
 
-	sync := New(mesh.Hosts()[0], getter,
+	sync := New(mesh.Hosts()[0], getter, "",
 		WithTime(tm),
 		WithConfig(config),
 	)
@@ -106,7 +126,7 @@ func TestSyncTerminateOnError(t *testing.T) {
 	peers := []p2p.Peer{}
 	for _, h := range mesh.Hosts()[1:] {
 		peers = append(peers, h.ID())
-		_ = New(h, nil, WithTime(adjustedTime(peerResponse)))
+		_ = New(h, nil, "", WithTime(adjustedTime(peerResponse)))
 	}
 	getter.EXPECT().GetPeers().Return(peers)
 
@@ -138,7 +158,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 	require.NoError(t, err)
 	hosts := []*p2p.Host{}
 	for _, h := range mesh.Hosts() {
-		fh, err := p2p.Upgrade(h, genesisID)
+		fh, err := p2p.Upgrade(h, genesisID, "")
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = fh.Stop() })
 		hosts = append(hosts, fh)
@@ -146,7 +166,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 	require.NoError(t, mesh.ConnectAllButSelf())
 
 	for i, delay := range delays {
-		sync := New(hosts[i], hosts[i],
+		sync := New(hosts[i], hosts[i], "",
 			WithConfig(config),
 			WithTime(delayedTime(delay)),
 			WithLog(logtest.New(t).Named(hosts[i].ID().Pretty())),

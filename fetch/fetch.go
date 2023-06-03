@@ -191,12 +191,12 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, 
 	}
 	if len(f.servers) == 0 {
 		h := newHandler(cdb, bs, msh, b, f.logger)
-		f.servers[atxProtocol] = server.New(host, atxProtocol, h.handleEpochInfoReq, srvOpts...)
-		f.servers[lyrDataProtocol] = server.New(host, lyrDataProtocol, h.handleLayerDataReq, srvOpts...)
-		f.servers[lyrOpnsProtocol] = server.New(host, lyrOpnsProtocol, h.handleLayerOpinionsReq, srvOpts...)
-		f.servers[hashProtocol] = server.New(host, hashProtocol, h.handleHashReq, srvOpts...)
-		f.servers[meshHashProtocol] = server.New(host, meshHashProtocol, h.handleMeshHashReq, srvOpts...)
-		f.servers[malProtocol] = server.New(host, malProtocol, h.handleMaliciousIDsReq, srvOpts...)
+		f.servers[atxProtocol] = server.New(host, makeProtocol(host.Prefix(), atxProtocol), h.handleEpochInfoReq, srvOpts...)
+		f.servers[lyrDataProtocol] = server.New(host, makeProtocol(host.Prefix(), lyrDataProtocol), h.handleLayerDataReq, srvOpts...)
+		f.servers[lyrOpnsProtocol] = server.New(host, makeProtocol(host.Prefix(), lyrOpnsProtocol), h.handleLayerOpinionsReq, srvOpts...)
+		f.servers[hashProtocol] = server.New(host, makeProtocol(host.Prefix(), hashProtocol), h.handleHashReq, srvOpts...)
+		f.servers[meshHashProtocol] = server.New(host, makeProtocol(host.Prefix(), meshHashProtocol), h.handleMeshHashReq, srvOpts...)
+		f.servers[malProtocol] = server.New(host, makeProtocol(host.Prefix(), malProtocol), h.handleMaliciousIDsReq, srvOpts...)
 	}
 	return f
 }
@@ -210,6 +210,10 @@ type dataValidators struct {
 	txBlock     SyncValidator
 	txProposal  SyncValidator
 	malfeasance SyncValidator
+}
+
+func makeProtocol(prefix, protocol string) string {
+	return fmt.Sprintf("%s/%s", prefix, protocol)
 }
 
 // SetValidators sets the handlers to validate various mesh data fetched from peers.

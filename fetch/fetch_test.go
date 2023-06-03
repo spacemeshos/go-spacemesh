@@ -324,16 +324,17 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	p2pconf := p2p.DefaultConfig()
 	p2pconf.Listen = "/ip4/127.0.0.1/tcp/0"
 	p2pconf.DataDir = t.TempDir()
+	prefix := "/prefix"
 
 	// Good host
 	genesisID := types.Hash20{}
-	h, err := p2p.New(ctx, lg, p2pconf, genesisID)
+	h, err := p2p.New(ctx, lg, p2pconf, genesisID, prefix)
 	require.NoError(t, err)
 	t.Cleanup(func() { h.Close() })
 
 	// Bad host, will send a message that results in validation reject
 	p2pconf.DataDir = t.TempDir()
-	badPeerHost, err := p2p.New(ctx, lg, p2pconf, genesisID)
+	badPeerHost, err := p2p.New(ctx, lg, p2pconf, genesisID, prefix)
 	require.NoError(t, err)
 	t.Cleanup(func() { badPeerHost.Close() })
 
@@ -361,7 +362,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 		}
 		return result, nil
 	}
-	server.New(badPeerHost, hashProtocol, badPeerHandler)
+	server.New(badPeerHost, makeProtocol(prefix, hashProtocol), badPeerHandler)
 
 	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, h,
 		WithContext(ctx),

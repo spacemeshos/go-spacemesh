@@ -232,7 +232,7 @@ func TestConsensus_MultipleIterations(t *testing.T) {
 	i := 0
 	creationFunc := func() {
 		host := mesh.Hosts()[i]
-		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), host, "", pubsub.DefaultConfig())
 		require.NoError(t, err)
 		p2pm := &p2pManipulator{nd: ps, stalledLayer: instanceID1, err: errors.New("fake err")}
 		sig, err := signing.NewEdSigner()
@@ -265,7 +265,7 @@ func TestConsensusFixedOracle(t *testing.T) {
 	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	creationFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], "", pubsub.DefaultConfig())
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
@@ -299,7 +299,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	creationFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], "", pubsub.DefaultConfig())
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
@@ -341,7 +341,7 @@ func TestAllDifferentSet(t *testing.T) {
 	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	creationFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], "", pubsub.DefaultConfig())
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
@@ -382,7 +382,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	honestFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], "", pubsub.DefaultConfig())
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
@@ -397,7 +397,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 
 	// create dishonest
 	dishonestFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], "", pubsub.DefaultConfig())
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
@@ -440,7 +440,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	honestFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], "", pubsub.DefaultConfig())
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
@@ -455,7 +455,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 
 	// create dishonest
 	dishonestFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], "", pubsub.DefaultConfig())
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
@@ -534,7 +534,7 @@ func TestEquivocation(t *testing.T) {
 	require.NoError(t, err)
 	mchs := make([]chan *types.MalfeasanceGossip, 0, totalNodes)
 	dishonestFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], "", pubsub.DefaultConfig())
 		require.NoError(t, err)
 		tcp := createConsensusProcess(t, ctx, badGuy, false, cfg, oracle,
 			&equivocatePubSub{ps: ps, sig: badGuy},
@@ -548,7 +548,7 @@ func TestEquivocation(t *testing.T) {
 	test.Create(1, dishonestFunc)
 
 	honestFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], "", pubsub.DefaultConfig())
 		require.NoError(t, err)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)

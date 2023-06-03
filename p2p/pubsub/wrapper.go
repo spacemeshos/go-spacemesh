@@ -21,12 +21,19 @@ type PubSub struct {
 	pubsub *pubsub.PubSub
 	host   host.Host
 
+	topicPrefix string
+
 	mu     sync.RWMutex
 	topics map[string]*pubsub.Topic
 }
 
+func makeTopic(prefix, protocol string) string {
+	return fmt.Sprintf("%s/%s", prefix, protocol)
+}
+
 // Register handler for topic.
-func (ps *PubSub) Register(topic string, handler GossipHandler) {
+func (ps *PubSub) Register(protocol string, handler GossipHandler) {
+	topic := makeTopic(ps.topicPrefix, protocol)
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	if _, exist := ps.topics[topic]; exist {
@@ -63,7 +70,8 @@ func (ps *PubSub) Register(topic string, handler GossipHandler) {
 }
 
 // Publish message to the topic.
-func (ps *PubSub) Publish(ctx context.Context, topic string, msg []byte) error {
+func (ps *PubSub) Publish(ctx context.Context, protocol string, msg []byte) error {
+	topic := makeTopic(ps.topicPrefix, protocol)
 	ps.mu.RLock()
 	defer ps.mu.RUnlock()
 	topich := ps.topics[topic]
@@ -78,5 +86,5 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, msg []byte) error {
 
 // ProtocolPeers returns list of peers that are communicating in a given protocol.
 func (ps *PubSub) ProtocolPeers(protocol string) []peer.ID {
-	return ps.pubsub.ListPeers(protocol)
+	return ps.pubsub.ListPeers(makeTopic(ps.topicPrefix, protocol))
 }

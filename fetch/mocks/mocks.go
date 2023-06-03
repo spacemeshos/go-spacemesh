@@ -225,3 +225,17 @@ func (mr *MockhostMockRecorder) ID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ID", reflect.TypeOf((*Mockhost)(nil).ID))
 }
+
+// Prefix mocks base method.
+func (m *Mockhost) Prefix() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Prefix")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// Prefix indicates an expected call of Prefix.
+func (mr *MockhostMockRecorder) Prefix() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Prefix", reflect.TypeOf((*Mockhost)(nil).Prefix))
+}

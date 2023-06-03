@@ -25,7 +25,7 @@ func TestGossip(t *testing.T) {
 
 	for _, h := range mesh.Hosts() {
 		h := h
-		ps, err := New(ctx, logtest.New(t), h, Config{Flood: true, IsBootnode: true})
+		ps, err := New(ctx, logtest.New(t), h, "prefix", Config{Flood: true, IsBootnode: true})
 		require.NoError(t, err)
 		pubsubs = append(pubsubs, ps)
 		ps.Register(topic, func(ctx context.Context, pid peer.ID, msg []byte) error {
