@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -199,6 +200,8 @@ func TestRecoverFromHttp(t *testing.T) {
 				DbFile:         "test.sql",
 				PreserveOwnAtx: true,
 			}
+			bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
+			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 			db := sql.InMemory()
 			newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg, types.NodeID{2, 3, 4}, tc.uri, types.LayerID(recoverLayer))
 			if len(tc.expErr) > 0 {
@@ -212,6 +215,9 @@ func TestRecoverFromHttp(t *testing.T) {
 			restore, err := recovery.CheckpointInfo(newdb)
 			require.NoError(t, err)
 			require.EqualValues(t, recoverLayer, restore)
+			exist, err := afero.Exists(fs, bsdir)
+			require.NoError(t, err)
+			require.False(t, exist)
 		})
 	}
 }
@@ -234,6 +240,8 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 		DbFile:         "test.sql",
 		PreserveOwnAtx: true,
 	}
+	bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
+	require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 	url := fmt.Sprintf("%s/snapshot-15", ts.URL)
 	db := sql.InMemory()
 	types.SetEffectiveGenesis(0)
@@ -242,6 +250,9 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, newdb)
 	require.EqualValues(t, recoverLayer, types.GetEffectiveGenesis())
+	exist, err := afero.Exists(fs, bsdir)
+	require.NoError(t, err)
+	require.True(t, exist)
 }
 
 func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
