@@ -138,11 +138,18 @@ func gradeKey5(key []byte) uint8 {
 	return 0
 }
 
+type Message struct {
+	ID     Hash20
+	Values []Hash20
+	Round  uint8
+	Grade  uint8
+}
+
 // Handler performs message handling, there is a hanlder per instance of each
 // hare protocol, and as such the handler does not need to be aware of the
 // session id. It is also assumed that some higher level handler performs the
-// actions of message decoding and signature verification, leaving this handler
-// to handle the decoded messsage inputs.
+// actions of message decoding and signature verification and key grading,
+// leaving this handler to handle the decoded messsage inputs.
 type Handler struct {
 	gc  Gradecaster
 	gg  GradedGossiper
@@ -151,16 +158,9 @@ type Handler struct {
 
 // HandleMsg handles an incoming message, it returns a boolean indicating
 // whether the message should be regossiped to peers.
-func (h *Handler) HandleMsg(rawMsg, vk []byte, values []Hash20, round uint8) bool {
-	var g uint8
+func (h *Handler) HandleMsg(id Hash20, values []Hash20, round AbsRound, grade uint8) bool {
 	r := AbsRound(round)
-	switch r.Type() {
-	case Propose:
-		g = gradeKey3(vk)
-	default:
-		g = gradeKey5(vk)
-	}
-	id := hashBytes(vk)
+	g := grade
 	valuesHash := toHash(values)
 	var result GradedGossipResult
 	var gradedGossipValues []Hash20
@@ -214,10 +214,6 @@ func toHash(values []Hash20) Hash20 {
 	return Hash20{}
 }
 
-func hashBytes(v []byte) Hash20 {
-	return Hash20{}
-}
-
 // Given a slice of candidate set hashes and a slice of sets of valid set
 // hashes, one set per iteration, returns the first candidate that appears in
 // the valid hashes along with it's set of any iteration before j.
@@ -252,7 +248,7 @@ func isSubset(subset, superset []Hash20) bool {
 	return true
 }
 
-func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
+func (p *Protocol) NextRound() (toSend *OutputMessage, output []Hash20) {
 	defer func() { p.round++ }()
 	if p.round >= 0 && p.round <= 3 {
 		p.Vi[p.round] = p.tgg.RetrieveThresholdMessages(-1, 5-uint8(p.round))
@@ -271,7 +267,7 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 			return nil, nil
 		}
 		// Gossip initial values
-		return &miniMsg{
+		return &OutputMessage{
 			round:  p.round,
 			values: p.Si,
 		}, nil
@@ -315,7 +311,7 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 		}
 
 		// Send proposal to peers
-		return &miniMsg{
+		return &OutputMessage{
 			round:  p.round,
 			values: set,
 		}, nil
@@ -334,9 +330,9 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 			return nil, nil
 		}
 
-		var mm *miniMsg
+		var mm *OutputMessage
 		if p.hardLocked[j] {
-			mm = &miniMsg{
+			mm = &OutputMessage{
 				round:  NewAbsRound(j, 5),
 				values: []Hash20{*p.Li[j]},
 			}
@@ -387,7 +383,7 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 				if !(p.Li[j] == nil || *p.Li[j] == candidateHash) {
 					continue
 				}
-				mm = &miniMsg{
+				mm = &OutputMessage{
 					round:  NewAbsRound(j, 5),
 					values: []Hash20{candidateHash},
 				}
@@ -400,7 +396,7 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 		values := p.tgg.RetrieveThresholdMessages(NewAbsRound(j-1, 6), 5)
 		resultHash, result := matchInPreviousIterations(values, p.Ti, j)
 		if resultHash != nil {
-			return &miniMsg{
+			return &OutputMessage{
 				round:  NewAbsRound(j, 6),
 				values: []Hash20{*resultHash},
 			}, result
@@ -409,7 +405,7 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 		if p.active {
 			values := p.tgg.RetrieveThresholdMessages(NewAbsRound(j, 5), 5)
 			setHash, _ := matchInIteration(values, p.Ti, j)
-			return &miniMsg{
+			return &OutputMessage{
 				round:  NewAbsRound(j, 6),
 				values: []Hash20{*setHash},
 			}, nil
@@ -420,7 +416,7 @@ func (p *Protocol) NextRound() (toSend *miniMsg, output []Hash20) {
 	return nil, nil
 }
 
-type miniMsg struct {
+type OutputMessage struct {
 	round  AbsRound
 	values []Hash20
 }
