@@ -198,7 +198,7 @@ func RecoverWithDb(
 		return nil, fmt.Errorf("get last checkpoint: %w", err)
 	}
 	if oldRestore >= restore {
-		types.SetEffectiveGenesis(oldRestore.Uint32())
+		types.SetEffectiveGenesis(oldRestore.Uint32() - 1)
 		return nil, nil
 	}
 	if err = fs.RemoveAll(filepath.Join(cfg.DataDir, bootstrap.DirName)); err != nil {

@@ -249,7 +249,7 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg, types.NodeID{2, 3, 4}, url, types.LayerID(recoverLayer))
 	require.NoError(t, err)
 	require.Nil(t, newdb)
-	require.EqualValues(t, recoverLayer, types.GetEffectiveGenesis())
+	require.EqualValues(t, recoverLayer-1, types.GetEffectiveGenesis())
 	exist, err := afero.Exists(fs, bsdir)
 	require.NoError(t, err)
 	require.True(t, exist)
