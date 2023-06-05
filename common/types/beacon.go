@@ -42,6 +42,14 @@ func (b Beacon) Field() log.Field {
 	return log.String("beacon", b.ShortString())
 }
 
+func (b *Beacon) MarshalText() ([]byte, error) {
+	return util.Base64Encode(b[:]), nil
+}
+
+func (b *Beacon) UnmarshalText(buf []byte) error {
+	return util.Base64Decode(b[:], buf)
+}
+
 // BytesToBeacon sets the first BeaconSize bytes of b to the Beacon's data.
 func BytesToBeacon(b []byte) Beacon {
 	var beacon Beacon

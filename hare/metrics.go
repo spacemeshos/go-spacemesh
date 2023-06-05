@@ -45,4 +45,11 @@ var (
 		[]string{},
 		prometheus.ExponentialBuckets(4, 2, 3),
 	).WithLabelValues()
+
+	processesGauge = metrics.NewGauge(
+		"processes",
+		namespace,
+		"number of hare processes",
+		[]string{},
+	).WithLabelValues()
 )

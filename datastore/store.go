@@ -334,5 +334,6 @@ func getHeader(vatx *types.VerifiedActivationTx) *types.ActivationTxHeader {
 
 		BaseTickHeight: vatx.BaseTickHeight(),
 		TickCount:      vatx.TickCount(),
+		Golden:         vatx.Golden(),
 	}
 }

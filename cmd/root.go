@@ -6,10 +6,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/spacemeshos/go-spacemesh/cmd/flags"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
+	"github.com/spacemeshos/go-spacemesh/node/flags"
 )
 
 var cfg = config.DefaultConfig()
@@ -22,6 +22,12 @@ func ResetConfig() {
 func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringP("preset", "p", "",
 		fmt.Sprintf("preset overwrites default values of the config. options %+s", presets.Options()))
+
+	/** ======================== Checkpoint Flags ========================== **/
+	cmd.PersistentFlags().StringVar(&cfg.Recovery.Uri,
+		"recovery-uri", cfg.Recovery.Uri, "reset the node state based on the supplied checkpoint file")
+	cmd.PersistentFlags().Uint32Var(&cfg.Recovery.Restore,
+		"recovery-layer", cfg.Recovery.Restore, "restart the mesh with the checkpoint file at this layer")
 
 	/** ======================== BaseConfig Flags ========================== **/
 	cmd.PersistentFlags().StringVarP(&cfg.BaseConfig.ConfigFile,
@@ -186,6 +192,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.Tortoise.MaxExceptions, "number of exceptions tolerated for a base ballot")
 	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.BadBeaconVoteDelayLayers, "tortoise-delay-layers",
 		cfg.Tortoise.BadBeaconVoteDelayLayers, "number of layers to ignore a ballot with a different beacon")
+	cmd.PersistentFlags().BoolVar(&cfg.Tortoise.EnableTracer, "tortoise-enable-tracer",
+		cfg.Tortoise.EnableTracer, "recovrd every tortoise input/output into the loggin output")
 
 	// TODO(moshababo): add usage desc
 	cmd.PersistentFlags().Uint64Var(&cfg.POST.LabelsPerUnit, "post-labels-per-unit",

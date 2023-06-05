@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	errMalformedData         = errors.New("malformed data")
+	errMalformedData         = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
 	errInitialize            = errors.New("failed to initialize")
 	errInvalidATXID          = errors.New("ballot has invalid ATXID")
 	errMissingEpochData      = errors.New("epoch data is missing in ref ballot")
@@ -134,22 +134,6 @@ func NewHandler(
 	return b
 }
 
-// HandleProposal is the gossip receiver for Proposal.
-func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
-	err := h.handleProposalData(ctx, peer, msg)
-	switch {
-	case err == nil:
-		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedData):
-		return pubsub.ValidationReject
-	case errors.Is(err, errKnownProposal):
-		return pubsub.ValidationIgnore
-	default:
-		h.logger.WithContext(ctx).With().Warning("failed to process proposal gossip", log.Err(err))
-		return pubsub.ValidationIgnore
-	}
-}
-
 // HandleSyncedBallot handles Ballot data from sync.
 func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []byte) error {
 	logger := h.logger.WithContext(ctx)
@@ -159,6 +143,9 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []
 	if err := codec.Decode(data, &b); err != nil {
 		logger.With().Error("malformed ballot", log.Err(err))
 		return errMalformedData
+	}
+	if b.Layer <= types.GetEffectiveGenesis() {
+		return fmt.Errorf("ballot before effective genesis: layer %v", b.Layer)
 	}
 
 	if !h.edVerifier.Verify(signing.BALLOT, b.SmesherID, b.SignedBytes(), b.Signature) {
@@ -217,14 +204,24 @@ func collectHashes(a any) []types.Hash32 {
 
 // HandleSyncedProposal handles Proposal data from sync.
 func (h *Handler) HandleSyncedProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
-	err := h.handleProposalData(ctx, peer, data)
+	err := h.HandleProposal(ctx, peer, data)
 	if errors.Is(err, errKnownProposal) {
 		return nil
 	}
 	return err
 }
 
-func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []byte) error {
+// HandleProposal is the gossip receiver for Proposal.
+func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
+	err := h.handleProposal(ctx, peer, data)
+	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownProposal) {
+		h.logger.WithContext(ctx).With().Warning("failed to process proposal gossip", log.Err(err))
+	}
+	return err
+}
+
+// HandleProposal is the gossip receiver for Proposal.
+func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
 	receivedTime := time.Now()
 	logger := h.logger.WithContext(ctx)
 
@@ -233,6 +230,9 @@ func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []
 	if err := codec.Decode(data, &p); err != nil {
 		logger.With().Error("malformed proposal", log.Err(err))
 		return errMalformedData
+	}
+	if p.Layer <= types.GetEffectiveGenesis() {
+		return fmt.Errorf("proposal before effective genesis: layer %v", p.Layer)
 	}
 
 	latency := receivedTime.Sub(h.clock.LayerToTime(p.Layer))
@@ -303,7 +303,7 @@ func (h *Handler) handleProposalData(ctx context.Context, peer p2p.Peer, data []
 		return fmt.Errorf("save proposal: %w", err)
 	}
 	proposalDuration.WithLabelValues(dbSave).Observe(float64(time.Since(t5)))
-	logger.With().Info("added proposal to database")
+	logger.With().Debug("added proposal to database")
 
 	t6 := time.Now()
 	if err := h.mesh.AddTXsFromProposal(ctx, p.Layer, p.ID(), p.TxIDs); err != nil {
@@ -360,7 +360,7 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 	}
 	ballotDuration.WithLabelValues(dbSave).Observe(float64(time.Since(t1)))
 	if err := h.decoder.StoreBallot(decoded); err != nil {
-		return nil, fmt.Errorf("store decoded ballot %s: %w", decoded.ID(), err)
+		return nil, fmt.Errorf("store decoded ballot %s: %w", decoded.ID, err)
 	}
 	reportVotesMetrics(b)
 	return proof, nil
@@ -386,7 +386,7 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.L
 	t2 := time.Now()
 	// ballot can be decoded only if all dependencies (blocks, ballots, atxs) were downloaded
 	// and added to the tortoise.
-	decoded, err := h.decoder.DecodeBallot(b)
+	decoded, err := h.decoder.DecodeBallot(b.ToTortoiseData())
 	if err != nil {
 		return nil, fmt.Errorf("decode ballot %s: %w", b.ID(), err)
 	}

@@ -44,7 +44,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
-	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
@@ -54,6 +53,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
+
+const layersPerEpoch = 3
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+
+	res := m.Run()
+	os.Exit(res)
+}
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r := require.New(t)
@@ -437,8 +445,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	h, err := p2p.Upgrade(mesh.Hosts()[0], cfg.Genesis.GenesisID())
 	require.NoError(t, err)
 	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
-		path, eligibility.New(logtest.New(t)),
-		poetHarness.HTTPPoetClient, clock, h, edSgn,
+		path, poetHarness.HTTPPoetClient, clock, h, edSgn,
 	)
 	require.NoError(t, err)
 
@@ -559,6 +566,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	r.NoError(err)
+	app.edSgn = signer
 	address := wallet.Address(signer.PublicKey().Bytes())
 
 	appCtx, appCancel := context.WithCancel(context.Background())
@@ -612,6 +620,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	}()
 
 	<-app.Started()
+	require.True(t, app.syncer.IsSynced(ctx))
 	conn, err := grpc.Dial(
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -941,7 +950,7 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 
 // initSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle,
+func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string,
 	poetClient *activation.HTTPPoetClient, clock *timesync.NodeClock, host *p2p.Host, edSgn *signing.EdSigner,
 ) (*App, error) {
 	smApp := New(WithLog(lg))
@@ -954,22 +963,16 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	smApp.Config.SMESHING.Opts.DataDir, _ = os.MkdirTemp("", "sm-app-test-post-datadir")
 
 	smApp.host = host
-
-	vrfSigner, err := edSgn.VRFSigner()
-	if err != nil {
+	smApp.edSgn = edSgn
+	smApp.clock = clock
+	if err := smApp.setupDBs(context.Background(), lg, storePath); err != nil {
 		return nil, err
 	}
 
-	if err = smApp.setupDBs(context.Background(), lg, storePath); err != nil {
-		return nil, err
-	}
-
-	smApp.nodeID = edSgn.NodeID()
 	types.SetLayersPerEpoch(smApp.Config.LayersPerEpoch)
-	err = smApp.initServices(context.Background(), edSgn, []activation.PoetProvingServiceClient{poetClient}, vrfSigner, clock)
-	if err != nil {
+	if err := smApp.initServices(context.Background(), []activation.PoetProvingServiceClient{poetClient}); err != nil {
 		return nil, err
 	}
 
-	return smApp, err
+	return smApp, nil
 }

@@ -65,9 +65,10 @@ func verifyLayer(logger log.Log, blocks []*blockInfo, getDecision func(*blockInf
 		decisions = make([]sign, 0, len(blocks))
 		supported *blockInfo
 	)
-	for _, block := range blocks {
+	for i, block := range blocks {
 		decision := getDecision(block)
 		logger.With().Debug("decision for a block",
+			log.Int("ith", i),
 			block.id,
 			block.layer,
 			log.Stringer("decision", decision),

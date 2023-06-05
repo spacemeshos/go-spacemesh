@@ -51,7 +51,7 @@ var (
 	errZeroCommitteeSize = errors.New("zero committee size")
 	errEmptyActiveSet    = errors.New("empty active set")
 	errZeroTotalWeight   = errors.New("zero total weight")
-	errMinerNotActive    = errors.New("miner not active in epoch")
+	ErrNotActive         = errors.New("oracle: miner is not active in epoch")
 )
 
 type cachedActiveSet struct {
@@ -180,7 +180,7 @@ func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.
 			log.String("actives", fmt.Sprintf("%v", actives)),
 			layer, log.Stringer("id.Key", id),
 		)
-		return 0, errMinerNotActive
+		return 0, fmt.Errorf("%w: %v", ErrNotActive, id)
 	}
 	return w, nil
 }
@@ -207,7 +207,6 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	// this is cheap in case the node is not eligible
 	minerWeight, err := o.minerWeight(ctx, layer, id)
 	if err != nil {
-		logger.With().Error("failed to get miner weight", log.Err(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
@@ -218,7 +217,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	}
 
 	// validate message
-	if !o.vrfVerifier.Verify(id, msg, vrfSig) {
+	if !o.vrfVerifier.Verify(signing.HARE, id, msg, vrfSig) {
 		logger.With().Debug("eligibility: a node did not pass vrf signature verification",
 			log.FieldNamed("sender_vrf_nonce", nonce),
 		)
@@ -367,7 +366,7 @@ func (o *Oracle) Proof(ctx context.Context, nonce types.VRFPostIndex, layer type
 	if err != nil {
 		return types.EmptyVrfSignature, err
 	}
-	return o.vrfSigner.Sign(msg), nil
+	return o.vrfSigner.Sign(signing.HARE, msg), nil
 }
 
 // Returns a map of all active node IDs in the specified layer id.
@@ -377,23 +376,23 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 	}
 	targetEpoch := targetLayer.GetEpoch()
 	// the first bootstrap data targets first epoch after genesis (epoch 2)
-	if targetEpoch != (types.GetEffectiveGenesis().GetEpoch()+1) &&
+	// and the epoch where checkpoint recovery happens
+	if targetEpoch > types.GetEffectiveGenesis().Add(1).GetEpoch() &&
 		targetLayer.Difference(targetEpoch.FirstLayer()) < o.cfg.ConfidenceParam {
 		targetEpoch -= 1
 	}
-	logger := o.WithContext(ctx).WithFields(
-		log.FieldNamed("target_layer", targetLayer),
-		log.FieldNamed("target_layer_epoch", targetLayer.GetEpoch()),
-		log.FieldNamed("target_epoch", targetEpoch),
+	o.WithContext(ctx).With().Debug("hare oracle getting active set",
+		log.Stringer("target_layer", targetLayer),
+		log.Stringer("target_layer_epoch", targetLayer.GetEpoch()),
+		log.Stringer("target_epoch", targetEpoch),
 	)
-	logger.Debug("hare oracle getting active set")
 
 	o.lock.Lock()
 	defer o.lock.Unlock()
 	if value, exists := o.activesCache.Get(targetEpoch); exists {
 		return value.(*cachedActiveSet), nil
 	}
-	activeSet, err := o.computeActiveSet(logger, targetEpoch)
+	activeSet, err := o.computeActiveSet(ctx, targetEpoch)
 	if err != nil {
 		return nil, err
 	}
@@ -409,7 +408,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 	for _, weight := range activeWeights {
 		aset.total += weight
 	}
-	logger.With().Info("got hare active set", log.Int("count", len(activeWeights)))
+	o.WithContext(ctx).With().Info("got hare active set", log.Int("count", len(activeWeights)))
 	o.activesCache.Add(targetEpoch, aset)
 	return aset, nil
 }
@@ -430,10 +429,13 @@ func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]ty
 	return activeSet, nil
 }
 
-func (o *Oracle) computeActiveSet(logger log.Log, targetEpoch types.EpochID) ([]types.ATXID, error) {
+func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]types.ATXID, error) {
 	activeSet, ok := o.fallback[targetEpoch]
 	if ok {
-		logger.With().Info("using fallback active set", log.Int("size", len(activeSet)))
+		o.WithContext(ctx).With().Info("using fallback active set",
+			targetEpoch,
+			log.Int("size", len(activeSet)),
+		)
 		return activeSet, nil
 	}
 	bid, err := certificates.FirstInEpoch(o.cdb, targetEpoch)
@@ -513,7 +515,6 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID types
 	}()
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
-		o.WithContext(ctx).With().Error("error getting active set", layer, log.Err(err))
 		return false, err
 	}
 	_, exist := actives.set[edID]

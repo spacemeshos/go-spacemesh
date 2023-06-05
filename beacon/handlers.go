@@ -27,44 +27,33 @@ const (
 )
 
 var (
-	errVRFNotVerified     = errors.New("proposal failed vrf verification")
-	errAlreadyProposed    = errors.New("already proposed")
-	errAlreadyVoted       = errors.New("already voted")
-	errMinerNotActive     = errors.New("miner ATX not found in previous epoch")
-	errProtocolNotRunning = errors.New("beacon protocol not running")
-	errEpochNotActive     = errors.New("epoch not active")
-	errMalformedMessage   = errors.New("malformed msg")
-	errUntimelyMessage    = errors.New("untimely msg")
+	errVRFNotVerified         = errors.New("proposal failed vrf verification")
+	errAlreadyProposed        = errors.New("already proposed")
+	errAlreadyVoted           = errors.New("already voted")
+	errMinerNotActive         = errors.New("miner ATX not found in previous epoch")
+	errProtocolNotRunning     = errors.New("beacon protocol not running")
+	errEpochNotActive         = errors.New("epoch not active")
+	errMalformedMessage       = fmt.Errorf("%w: malformed msg", pubsub.ErrValidationReject)
+	errUntimelyMessage        = errors.New("untimely msg")
+	errBeaconProtocolInactive = errors.New("beacon protocol inactive")
 )
 
 // HandleWeakCoinProposal handles weakcoin proposal from gossip.
-func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
-	if pd.isClosed() || !pd.isInProtocol() {
-		return pubsub.ValidationIgnore
+func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, peer p2p.Peer, msg []byte) error {
+	if !pd.isInProtocol() {
+		return errBeaconProtocolInactive
 	}
 
 	return pd.weakCoin.HandleProposal(ctx, peer, msg)
 }
 
 // HandleProposal handles beacon proposal from gossip.
-func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) error {
 	if pd.isClosed() {
-		return pubsub.ValidationIgnore
+		return errors.New("beacon protocol closed")
 	}
 
 	receivedTime := time.Now()
-	err := pd.handleProposal(ctx, peer, msg, receivedTime)
-	switch {
-	case err == nil:
-		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedMessage):
-		return pubsub.ValidationReject
-	default:
-		return pubsub.ValidationIgnore
-	}
-}
-
-func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg []byte, receivedTime time.Time) error {
 	logger := pd.logger.WithContext(ctx)
 
 	var m ProposalMessage
@@ -205,7 +194,7 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 		return fmt.Errorf("[proposal] get VRF nonce (miner ID %s): %w", m.NodeID, err)
 	}
 	currentEpochProposal := buildProposal(logger, m.EpochID, nonce)
-	if !pd.vrfVerifier.Verify(m.NodeID, currentEpochProposal, m.VRFSignature) {
+	if !pd.vrfVerifier.Verify(signing.BEACON_PROPOSAL, m.NodeID, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
 		logger.With().Warning("[proposal] failed to verify VRF signature")
 		return fmt.Errorf("[proposal] verify VRF (miner ID %s): %w", m.NodeID, errVRFNotVerified)
@@ -220,28 +209,16 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 }
 
 // HandleFirstVotes handles beacon first votes from gossip.
-func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, msg []byte) error {
 	if pd.isClosed() || !pd.isInProtocol() {
 		pd.logger.WithContext(ctx).Debug("beacon protocol shutting down or not running, dropping msg")
-		return pubsub.ValidationIgnore
+		return errBeaconProtocolInactive
 	}
 
-	logger := pd.logger.WithContext(ctx).WithFields(log.Stringer("sender", peer))
-	logger.Debug("new first votes")
-	err := pd.handleFirstVotes(ctx, peer, msg)
-	switch {
-	case err == nil:
-		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedMessage):
-		return pubsub.ValidationReject
-	default:
-		return pubsub.ValidationIgnore
-	}
-}
-
-func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, msg []byte) error {
-	receivedTime := time.Now()
 	logger := pd.logger.WithContext(ctx).WithFields(types.FirstRound, log.Stringer("sender", peer))
+	logger.Debug("new first votes")
+
+	receivedTime := time.Now()
 
 	var m FirstVotingMessage
 	if err := codec.Decode(msg, &m); err != nil {
@@ -283,7 +260,7 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 	if err != nil {
 		pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound).With().Fatal("failed to serialize first voting message", log.Err(err))
 	}
-	if !pd.edVerifier.Verify(signing.BEACON, m.SmesherID, messageBytes, m.Signature) {
+	if !pd.edVerifier.Verify(signing.BEACON_FIRST_MSG, m.SmesherID, messageBytes, m.Signature) {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
 	if err = pd.registerVoted(m.EpochID, m.SmesherID, types.FirstRound); err != nil {
@@ -330,29 +307,16 @@ func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, nodeID types.Nod
 }
 
 // HandleFollowingVotes handles beacon following votes from gossip.
-func (pd *ProtocolDriver) HandleFollowingVotes(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+func (pd *ProtocolDriver) HandleFollowingVotes(ctx context.Context, peer p2p.Peer, msg []byte) error {
 	receivedTime := time.Now()
 
 	if pd.isClosed() || !pd.isInProtocol() {
 		pd.logger.WithContext(ctx).Debug("beacon protocol shutting down or not running, dropping msg")
-		return pubsub.ValidationIgnore
+		return errBeaconProtocolInactive
 	}
 
 	logger := pd.logger.WithContext(ctx).WithFields(log.String("sender", peer.String()))
 	logger.Debug("new following votes")
-	err := pd.handleFollowingVotes(ctx, peer, msg, receivedTime)
-	switch {
-	case err == nil:
-		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedMessage):
-		return pubsub.ValidationReject
-	default:
-		return pubsub.ValidationIgnore
-	}
-}
-
-func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Peer, msg []byte, receivedTime time.Time) error {
-	logger := pd.logger.WithContext(ctx).WithFields(log.String("sender", peer.String()))
 
 	var m FollowingVotingMessage
 	if err := codec.Decode(msg, &m); err != nil {
@@ -396,7 +360,7 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 	if err != nil {
 		pd.logger.With().Fatal("failed to serialize voting message", log.Err(err))
 	}
-	if !pd.edVerifier.Verify(signing.BEACON, m.SmesherID, messageBytes, m.Signature) {
+	if !pd.edVerifier.Verify(signing.BEACON_FOLLOWUP_MSG, m.SmesherID, messageBytes, m.Signature) {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
 	if err := pd.registerVoted(m.EpochID, m.SmesherID, m.RoundID); err != nil {

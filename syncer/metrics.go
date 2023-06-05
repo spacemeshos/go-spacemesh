@@ -77,4 +77,11 @@ var (
 		"number of missing block requested",
 		[]string{},
 	).WithLabelValues()
+
+	syncedLayer = metrics.NewGauge(
+		"layer",
+		namespace,
+		"synced layer",
+		[]string{},
+	).WithLabelValues()
 )

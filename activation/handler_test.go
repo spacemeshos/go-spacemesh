@@ -930,7 +930,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 		require.NoError(t, err)
 
 		require.NoError(t, atxHdlr.HandleAtxData(context.Background(), p2p.NoPeer, buf))
-		require.Equal(t, pubsub.ValidationIgnore, atxHdlr.HandleGossipAtx(context.Background(), "", buf))
+		require.Error(t, atxHdlr.HandleGossipAtx(context.Background(), "", buf))
 	})
 
 	t.Run("atx with invalid signature", func(t *testing.T) {

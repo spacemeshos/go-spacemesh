@@ -207,10 +207,11 @@ func (pb *ProposalBuilder) createProposal(
 	txIDs []types.TransactionID,
 	opinion types.Opinion,
 ) (*types.Proposal, error) {
-	logger := pb.logger.WithContext(ctx).WithFields(layerID, layerID.GetEpoch())
-
 	if !layerID.After(types.GetEffectiveGenesis()) {
-		logger.With().Fatal("attempt to create proposal during genesis", layerID)
+		pb.logger.With().Fatal("attempt to create proposal during genesis",
+			log.Context(ctx),
+			layerID,
+		)
 	}
 
 	ib := &types.InnerBallot{
@@ -223,12 +224,14 @@ func (pb *ProposalBuilder) createProposal(
 	refBallot, err := ballots.GetRefBallot(pb.cdb, epoch, pb.signer.NodeID())
 	if err != nil {
 		if !errors.Is(err, sql.ErrNotFound) {
-			logger.With().Error("failed to get ref ballot", log.Err(err))
 			return nil, fmt.Errorf("get ref ballot: %w", err)
 		}
 
-		logger.With().Debug("creating ballot with active set (reference ballot in epoch)",
-			log.Int("active_set_size", len(epochEligibility.ActiveSet)))
+		pb.logger.With().Debug("creating ballot with active set (reference ballot in epoch)",
+			log.Context(ctx),
+			layerID,
+			log.Int("active_set_size", len(epochEligibility.ActiveSet)),
+		)
 		ib.RefBallot = types.EmptyBallotID
 		ib.EpochData = &types.EpochData{
 			ActiveSetHash:    epochEligibility.ActiveSet.Hash(),
@@ -236,8 +239,11 @@ func (pb *ProposalBuilder) createProposal(
 			EligibilityCount: epochEligibility.Slots,
 		}
 	} else {
-		logger.With().Debug("creating ballot with reference ballot (no active set)",
-			log.Named("ref_ballot", refBallot))
+		pb.logger.With().Debug("creating ballot with reference ballot (no active set)",
+			log.Context(ctx),
+			layerID,
+			log.Named("ref_ballot", refBallot),
+		)
 		ib.RefBallot = refBallot
 	}
 
@@ -249,7 +255,7 @@ func (pb *ProposalBuilder) createProposal(
 				EligibilityProofs: epochEligibility.Proofs[layerID],
 			},
 			TxIDs:    txIDs,
-			MeshHash: pb.decideMeshHash(logger, layerID),
+			MeshHash: pb.decideMeshHash(ctx, layerID),
 		},
 	}
 	if p.EpochData != nil {
@@ -259,9 +265,18 @@ func (pb *ProposalBuilder) createProposal(
 	p.SmesherID = pb.signer.NodeID()
 	p.Signature = pb.signer.Sign(signing.BALLOT, p.SignedBytes())
 	if err := p.Initialize(); err != nil {
-		logger.With().Fatal("proposal failed to initialize", log.Err(err))
+		pb.logger.With().Fatal("proposal failed to initialize",
+			log.Context(ctx),
+			layerID,
+			log.Err(err),
+		)
 	}
-	logger.Event().Info("proposal created", p.ID(), log.Int("num_txs", len(p.TxIDs)))
+	pb.logger.Event().Info("proposal created",
+		log.Context(ctx),
+		layerID,
+		p.ID(),
+		log.Int("num txs", len(p.TxIDs)),
+	)
 	return p, nil
 }
 
@@ -270,7 +285,7 @@ func (pb *ProposalBuilder) createProposal(
 // - the node has hare output for every layer i such that N-hdist <= i <= N.
 // this is done such that when the node is generating the block based on hare output,
 // it can do optimistic filtering if the majority of the proposals agreed on the mesh hash.
-func (pb *ProposalBuilder) decideMeshHash(logger log.Log, current types.LayerID) types.Hash32 {
+func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.LayerID) types.Hash32 {
 	var minVerified types.LayerID
 	if current.Uint32() > pb.cfg.hdist+1 {
 		minVerified = current.Sub(pb.cfg.hdist + 1)
@@ -281,31 +296,46 @@ func (pb *ProposalBuilder) decideMeshHash(logger log.Log, current types.LayerID)
 	}
 	verified := pb.tortoise.LatestComplete()
 	if minVerified.After(verified) {
-		logger.With().Warning("layers outside hdist not verified",
-			log.Stringer("min_verified", minVerified),
-			log.Stringer("latest_verified", verified))
+		pb.logger.With().Warning("layers outside hdist not verified",
+			log.Context(ctx),
+			current,
+			log.Stringer("min verified", minVerified),
+			log.Stringer("latest verified", verified))
 		return types.EmptyLayerHash
 	}
-	logger.With().Debug("verified layer meets optimistic filtering threshold",
-		log.Stringer("min_verified", minVerified),
-		log.Stringer("latest_verified", verified))
+	pb.logger.With().Debug("verified layer meets optimistic filtering threshold",
+		log.Context(ctx),
+		current,
+		log.Stringer("min verified", minVerified),
+		log.Stringer("latest verified", verified),
+	)
 
 	for lid := minVerified.Add(1); lid.Before(current); lid = lid.Add(1) {
 		_, err := certificates.GetHareOutput(pb.cdb, lid)
 		if err != nil {
-			logger.With().Warning("missing hare output for layer within hdist",
+			pb.logger.With().Warning("missing hare output for layer within hdist",
+				log.Context(ctx),
+				current,
 				log.Stringer("missing_layer", lid),
-				log.Err(err))
+				log.Err(err),
+			)
 			return types.EmptyLayerHash
 		}
 	}
-	logger.With().Debug("hare outputs meet optimistic filtering threshold",
+	pb.logger.With().Debug("hare outputs meet optimistic filtering threshold",
+		log.Context(ctx),
+		current,
 		log.Stringer("from", minVerified.Add(1)),
-		log.Stringer("to", current.Sub(1)))
+		log.Stringer("to", current.Sub(1)),
+	)
 
 	mesh, err := layers.GetAggregatedHash(pb.cdb, current.Sub(1))
 	if err != nil {
-		logger.With().Warning("failed to get mesh hash", log.Err(err))
+		pb.logger.With().Warning("failed to get mesh hash",
+			log.Context(ctx),
+			current,
+			log.Err(err),
+		)
 		return types.EmptyLayerHash
 	}
 	return mesh
@@ -316,19 +346,15 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		beacon types.Beacon
 		err    error
 		epoch  = layerID.GetEpoch()
-		logger = pb.logger.WithContext(ctx).WithFields(layerID, epoch)
 	)
 
-	if layerID.GetEpoch().IsGenesis() {
-		logger.Info("not building proposal: genesis")
+	if layerID <= types.GetEffectiveGenesis() {
 		return errGenesis
 	}
 	if !pb.syncer.IsSynced(ctx) {
-		logger.Info("not building proposal: not synced")
 		return errNotSynced
 	}
 	if beacon, err = pb.beaconProvider.GetBeacon(epoch); err != nil {
-		logger.With().Warning("beacon not available for epoch", log.Err(err))
 		return errNoBeacon
 	}
 
@@ -336,42 +362,35 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 
 	count, err := ballots.CountByPubkeyLayer(pb.cdb, layerID, pb.signer.NodeID())
 	if err != nil {
-		logger.With().Error("count ballots in a layer for public key", log.Err(err))
 		return err
 	} else if count != 0 {
-		logger.With().Error("smesher already created a proposal in this layer",
-			log.Int("count", count),
-		)
 		return errDuplicateLayer
 	}
 
 	nonce, err := pb.nonceFetcher.VRFNonce(pb.signer.NodeID(), layerID.GetEpoch())
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
-			logger.With().Info("miner has no valid vrf nonce, not building proposal")
+			pb.logger.WithContext(ctx).With().Info("miner has no valid vrf nonce, not building proposal", layerID)
 			return nil
-		} else {
-			logger.With().Error("failed to get VRF nonce", log.Err(err))
 		}
 		return err
 	}
 	epochEligibility, err := pb.proposalOracle.GetProposalEligibility(layerID, beacon, nonce)
 	if err != nil {
 		if errors.Is(err, errMinerHasNoATXInPreviousEpoch) {
-			logger.Info("miner has no ATX in previous epoch")
 			return fmt.Errorf("miner no ATX: %w", err)
 		}
-		logger.With().Error("failed to check for proposal eligibility", log.Err(err))
 		return fmt.Errorf("proposal eligibility: %w", err)
 	}
 	proofs := epochEligibility.Proofs[layerID]
 	if len(proofs) == 0 {
-		logger.Debug("not eligible for proposal in layer")
+		pb.logger.WithContext(ctx).With().Debug("not eligible for proposal in layer", layerID)
 		return nil
 	}
-	logger.With().Info("eligible for proposals in layer",
+	pb.logger.WithContext(ctx).With().Debug("eligible for proposals in layer",
+		layerID,
 		epochEligibility.Atx,
-		log.Int("num_proposals", len(proofs)),
+		log.Int("num proposals", len(proofs)),
 	)
 
 	pb.tortoise.TallyVotes(ctx, layerID)
@@ -379,13 +398,16 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	// there are some dependencies in the tests
 	opinion, err := pb.tortoise.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(layerID))
 	if err != nil {
-		return fmt.Errorf("get base ballot: %w", err)
+		pb.logger.WithContext(ctx).With().Error("failed to encode votes",
+			layerID,
+			log.Err(err),
+		)
+		return fmt.Errorf("encode votes: %w", err)
 	}
 
 	txList := pb.conState.SelectProposalTXs(layerID, len(proofs))
 	p, err := pb.createProposal(ctx, layerID, epochEligibility, beacon, txList, *opinion)
 	if err != nil {
-		logger.With().Error("failed to create new proposal", log.Err(err))
 		return err
 	}
 
@@ -402,10 +424,10 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		// proposal is sent over the network
 		data, err := codec.Encode(p)
 		if err != nil {
-			logger.With().Panic("failed to serialize proposal", log.Err(err))
+			pb.logger.WithContext(newCtx).With().Fatal("failed to serialize proposal", log.Err(err))
 		}
 		if err = pb.publisher.Publish(newCtx, pubsub.ProposalProtocol, data); err != nil {
-			logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
+			pb.logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
 		}
 		events.ReportProposal(events.ProposalCreated, p)
 		return nil
@@ -427,7 +449,9 @@ func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
 			}
 			next = current.Add(1)
 			lyrCtx := log.WithNewSessionID(ctx)
-			_ = pb.handleLayer(lyrCtx, current)
+			if err := pb.handleLayer(lyrCtx, current); err != nil && !errors.Is(err, errGenesis) {
+				pb.logger.WithContext(lyrCtx).With().Warning("failed to build proposal", current, log.Err(err))
+			}
 		}
 	}
 }

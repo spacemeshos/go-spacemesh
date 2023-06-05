@@ -122,21 +122,15 @@ func (b *Broker) validateTiming(ctx context.Context, m *Message) error {
 }
 
 // HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
-func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
+func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) error {
 	select {
 	case <-ctx.Done():
-		return pubsub.ValidationIgnore
+		return errClosed
 	case <-b.ctx.Done():
-		return pubsub.ValidationIgnore
+		return errClosed
 	default:
-		if err := b.handleMessage(ctx, msg); err != nil {
-			return pubsub.ValidationIgnore
-		}
 	}
-	return pubsub.ValidationAccept
-}
 
-func (b *Broker) handleMessage(ctx context.Context, msg []byte) error {
 	h := types.CalcMessageHash12(msg, pubsub.HareProtocol)
 	logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.getLatestLayer()), h)
 	hareMsg, err := MessageFromBuffer(msg)

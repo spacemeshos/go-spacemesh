@@ -202,24 +202,26 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, 
 }
 
 type dataValidators struct {
-	atx         AtxValidator
-	poet        PoetValidator
-	ballot      BallotValidator
-	block       BlockValidator
-	proposal    ProposalValidator
-	tx          TxValidator
-	malfeasance MalfeasanceValidator
+	atx         SyncValidator
+	poet        SyncValidator
+	ballot      SyncValidator
+	block       SyncValidator
+	proposal    SyncValidator
+	txBlock     SyncValidator
+	txProposal  SyncValidator
+	malfeasance SyncValidator
 }
 
 // SetValidators sets the handlers to validate various mesh data fetched from peers.
 func (f *Fetch) SetValidators(
-	atx AtxValidator,
-	poet PoetValidator,
-	ballot BallotValidator,
-	block BlockValidator,
-	prop ProposalValidator,
-	tx TxValidator,
-	mal MalfeasanceValidator,
+	atx SyncValidator,
+	poet SyncValidator,
+	ballot SyncValidator,
+	block SyncValidator,
+	prop SyncValidator,
+	txBlock SyncValidator,
+	txProposal SyncValidator,
+	mal SyncValidator,
 ) {
 	f.validators = &dataValidators{
 		atx:         atx,
@@ -227,7 +229,8 @@ func (f *Fetch) SetValidators(
 		ballot:      ballot,
 		block:       block,
 		proposal:    prop,
-		tx:          tx,
+		txBlock:     txBlock,
+		txProposal:  txProposal,
 		malfeasance: mal,
 	}
 }
@@ -455,6 +458,9 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	peer2requests := make(map[p2p.Peer][]RequestMessage)
 	peers := f.host.GetPeers()
+	if len(peers) == 0 {
+		panic("no peers")
+	}
 
 	for _, req := range requests {
 		p, exists := f.hashToPeers.GetRandom(req.Hash, req.Hint, rng)

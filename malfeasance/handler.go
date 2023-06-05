@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-var errMalformedData = errors.New("malformed data")
+var errMalformedData = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
 type Handler struct {
@@ -42,23 +42,7 @@ func NewHandler(
 }
 
 // HandleMalfeasanceProof is the gossip receiver for MalfeasanceProof.
-func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
-	err := h.handleProof(ctx, peer, msg)
-	switch {
-	case err == nil:
-		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedData):
-		return pubsub.ValidationReject
-	default:
-		return pubsub.ValidationIgnore
-	}
-}
-
-func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, peer p2p.Peer, msg []byte) error {
-	return h.handleProof(ctx, peer, msg)
-}
-
-func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, data []byte) error {
+func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, data []byte) error {
 	var (
 		p         types.MalfeasanceGossip
 		nodeID    types.NodeID

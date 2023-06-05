@@ -2,8 +2,10 @@ package weakcoin_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 
@@ -19,6 +21,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(3)
+
+	res := m.Run()
+	os.Exit(res)
+}
 
 func noopBroadcaster(tb testing.TB, ctrl *gomock.Controller) *mocks.MockPublisher {
 	tb.Helper()
@@ -37,7 +46,7 @@ func encoded(tb testing.TB, msg weakcoin.Message) []byte {
 func staticSigner(tb testing.TB, ctrl *gomock.Controller, nodeId types.NodeID, sig types.VrfSignature) *weakcoin.MockvrfSigner {
 	tb.Helper()
 	signer := weakcoin.NewMockvrfSigner(ctrl)
-	signer.EXPECT().Sign(gomock.Any()).Return(sig).AnyTimes()
+	signer.EXPECT().Sign(signing.BEACON_PROPOSAL, gomock.Any()).Return(sig).AnyTimes()
 	signer.EXPECT().NodeID().Return(nodeId).AnyTimes()
 	signer.EXPECT().LittleEndian().Return(true).AnyTimes()
 	return signer
@@ -46,7 +55,7 @@ func staticSigner(tb testing.TB, ctrl *gomock.Controller, nodeId types.NodeID, s
 func sigVerifier(tb testing.TB, ctrl *gomock.Controller) *weakcoin.MockvrfVerifier {
 	tb.Helper()
 	verifier := weakcoin.NewMockvrfVerifier(ctrl)
-	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+	verifier.EXPECT().Verify(signing.BEACON_PROPOSAL, gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 	return verifier
 }
 
@@ -84,7 +93,7 @@ func TestWeakCoin(t *testing.T) {
 		nodeSig          types.VrfSignature
 		mining, expected bool
 		msg              []byte
-		result           pubsub.ValidationResult
+		result           func(error) bool
 	}{
 		{
 			desc:     "node not mining",
@@ -96,9 +105,9 @@ func TestWeakCoin(t *testing.T) {
 				Round:        round,
 				Unit:         1,
 				NodeID:       zeroLSBMiner,
-				VrfSignature: zeroLSBSig,
+				VRFSignature: zeroLSBSig,
 			}),
-			result: pubsub.ValidationAccept,
+			result: nilErr,
 		},
 		{
 			desc:     "node mining",
@@ -110,9 +119,9 @@ func TestWeakCoin(t *testing.T) {
 				Round:        round,
 				Unit:         1,
 				NodeID:       zeroLSBMiner,
-				VrfSignature: zeroLSBSig,
+				VRFSignature: zeroLSBSig,
 			}),
-			result: pubsub.ValidationIgnore,
+			result: isErr,
 		},
 		{
 			desc:     "node mining but exceed threshold",
@@ -124,9 +133,9 @@ func TestWeakCoin(t *testing.T) {
 				Round:        round,
 				Unit:         1,
 				NodeID:       zeroLSBMiner,
-				VrfSignature: zeroLSBSig,
+				VRFSignature: zeroLSBSig,
 			}),
-			result: pubsub.ValidationAccept,
+			result: nilErr,
 		},
 		{
 			desc:     "node only miner",
@@ -150,7 +159,7 @@ func TestWeakCoin(t *testing.T) {
 			var wc *weakcoin.WeakCoin
 			mockPublisher := mocks.NewMockPublisher(ctrl)
 			mockPublisher.EXPECT().Publish(gomock.Any(), pubsub.BeaconWeakCoinProtocol, gomock.Any()).DoAndReturn(
-				func(ctx context.Context, _ string, msg []byte) pubsub.ValidationResult {
+				func(ctx context.Context, _ string, msg []byte) error {
 					return wc.HandleProposal(ctx, "", msg)
 				},
 			).AnyTimes()
@@ -176,7 +185,7 @@ func TestWeakCoin(t *testing.T) {
 			}
 
 			if len(tc.msg) > 0 {
-				require.Equal(t, tc.result, wc.HandleProposal(context.Background(), "", tc.msg))
+				require.True(t, tc.result(wc.HandleProposal(context.Background(), "", tc.msg)))
 			}
 			wc.FinishRound(context.Background())
 
@@ -208,7 +217,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 		startedEpoch types.EpochID
 		startedRound types.RoundID
 		msg          []byte
-		expected     pubsub.ValidationResult
+		expected     func(error) bool
 	}{
 		{
 			desc:         "ValidProposal",
@@ -219,16 +228,16 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Round:        round,
 				Unit:         allowance,
 				NodeID:       oneLSBMiner,
-				VrfSignature: oneLSBSig,
+				VRFSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationAccept,
+			expected: nilErr,
 		},
 		{
 			desc:         "Malformed",
 			startedEpoch: epoch,
 			startedRound: round,
 			msg:          []byte{1, 2, 3},
-			expected:     pubsub.ValidationReject,
+			expected:     isValidationRejectErr,
 		},
 		{
 			desc:         "ExceedAllowance",
@@ -239,9 +248,9 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Round:        round,
 				Unit:         allowance + 1,
 				NodeID:       oneLSBMiner,
-				VrfSignature: oneLSBSig,
+				VRFSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationIgnore,
+			expected: isErr,
 		},
 		{
 			desc:         "ExceedThreshold",
@@ -252,9 +261,9 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Round:        round,
 				Unit:         allowance,
 				NodeID:       highLSBMiner,
-				VrfSignature: higherThreshold,
+				VRFSignature: higherThreshold,
 			}),
-			expected: pubsub.ValidationIgnore,
+			expected: isErr,
 		},
 		{
 			desc:         "PreviousEpoch",
@@ -265,9 +274,9 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Round:        round,
 				Unit:         allowance,
 				NodeID:       oneLSBMiner,
-				VrfSignature: oneLSBSig,
+				VRFSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationIgnore,
+			expected: isErr,
 		},
 		{
 			desc:         "NextEpoch",
@@ -278,9 +287,9 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Round:        round,
 				Unit:         allowance,
 				NodeID:       oneLSBMiner,
-				VrfSignature: oneLSBSig,
+				VRFSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationIgnore,
+			expected: isErr,
 		},
 		{
 			desc:         "PreviousRound",
@@ -291,9 +300,9 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Round:        round - 1,
 				Unit:         allowance,
 				NodeID:       oneLSBMiner,
-				VrfSignature: oneLSBSig,
+				VRFSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationIgnore,
+			expected: isErr,
 		},
 		{
 			desc:         "NextRound",
@@ -304,9 +313,9 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Round:        round + 1,
 				Unit:         allowance,
 				NodeID:       oneLSBMiner,
-				VrfSignature: oneLSBSig,
+				VRFSignature: oneLSBSig,
 			}),
-			expected: pubsub.ValidationAccept,
+			expected: nilErr,
 		},
 	}
 	for _, tc := range tcs {
@@ -330,7 +339,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			wc.StartEpoch(context.Background(), tc.startedEpoch)
 			wc.StartRound(context.Background(), tc.startedRound, nil)
 
-			require.Equal(t, tc.expected, wc.HandleProposal(context.Background(), "", tc.msg))
+			require.True(t, tc.expected(wc.HandleProposal(context.Background(), "", tc.msg)))
 			wc.FinishRound(context.Background())
 		})
 	}
@@ -370,14 +379,14 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 			Round:        nextRound,
 			Unit:         1,
 			NodeID:       oneLSBMiner,
-			VrfSignature: oneLSBSig,
+			VRFSignature: oneLSBSig,
 		}))
 	}
 	wc.HandleProposal(context.Background(), "", encoded(t, weakcoin.Message{
 		Epoch:        epoch,
 		Round:        nextRound,
 		Unit:         1,
-		VrfSignature: zeroLSBSig,
+		VRFSignature: zeroLSBSig,
 	}))
 	wc.FinishRound(context.Background())
 	wc.StartRound(context.Background(), nextRound, nil)
@@ -399,7 +408,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	broadcaster.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, data []byte) error {
 		var msg weakcoin.Message
 		require.NoError(t, codec.Decode(data, &msg))
-		sig = msg.VrfSignature
+		sig = msg.VRFSignature
 		return nil
 	}).AnyTimes()
 
@@ -433,7 +442,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	instance.StartRound(context.Background(), round, &nonce)
 
 	require.Equal(t,
-		"78f523319fd2cdf3812a3bc3905561acb2f7f1b7e47de71f92811d7bb82460e5999a048051cefa2d1b6f3f16656de83c2756b7539b33fa563a3e8fea5130235e66e8dce914d69bd40f13174f3914ad07",
+		"94494c2c55a388acd03acd64b21912c4cb6e8dca56da5979bbab9b23be790ed948eda672dc28b8e379ec041aa46511b2dd4f9143ed8d512bf6386454d43f3b4ed9f7748b09ee92730975d094dc8c3501",
 		sig.String(),
 	)
 }
@@ -521,4 +530,16 @@ func FuzzMessageConsistency(f *testing.F) {
 
 func FuzzMessageStateSafety(f *testing.F) {
 	tester.FuzzSafety[weakcoin.Message](f)
+}
+
+func nilErr(err error) bool {
+	return err == nil
+}
+
+func isErr(err error) bool {
+	return err != nil
+}
+
+func isValidationRejectErr(err error) bool {
+	return errors.Is(err, pubsub.ErrValidationReject)
 }

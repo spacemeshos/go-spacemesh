@@ -28,9 +28,9 @@ func TestGossip(t *testing.T) {
 		ps, err := New(ctx, logtest.New(t), h, Config{Flood: true, IsBootnode: true})
 		require.NoError(t, err)
 		pubsubs = append(pubsubs, ps)
-		ps.Register(topic, func(ctx context.Context, pid peer.ID, msg []byte) ValidationResult {
+		ps.Register(topic, func(ctx context.Context, pid peer.ID, msg []byte) error {
 			received <- msg
-			return ValidationAccept
+			return nil
 		})
 	}
 	// connect after initializng gossip sub protocol for every peer. otherwise stream initialize

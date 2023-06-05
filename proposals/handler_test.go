@@ -708,8 +708,8 @@ func TestBallot_Success(t *testing.T) {
 			return true, nil
 		})
 	th.mm.EXPECT().AddBallot(context.Background(), b).Return(nil, nil)
-	decoded := &tortoise.DecodedBallot{Ballot: b}
-	th.md.EXPECT().DecodeBallot(b).Return(decoded, nil)
+	decoded := &tortoise.DecodedBallot{BallotTortoiseData: b.ToTortoiseData()}
+	th.md.EXPECT().DecodeBallot(decoded.BallotTortoiseData).Return(decoded, nil)
 	th.md.EXPECT().StoreBallot(decoded).Return(nil)
 	require.NoError(t, th.HandleSyncedBallot(context.Background(), peer, data))
 }
@@ -741,8 +741,8 @@ func TestBallot_MaliciousProofIgnoredInSyncFlow(t *testing.T) {
 			return true, nil
 		})
 	th.mm.EXPECT().AddBallot(context.Background(), b).Return(&types.MalfeasanceProof{Layer: lid}, nil)
-	decoded := &tortoise.DecodedBallot{Ballot: b}
-	th.md.EXPECT().DecodeBallot(b).Return(decoded, nil)
+	decoded := &tortoise.DecodedBallot{BallotTortoiseData: b.ToTortoiseData()}
+	th.md.EXPECT().DecodeBallot(decoded.BallotTortoiseData).Return(decoded, nil)
 	th.md.EXPECT().StoreBallot(decoded).Return(nil)
 	require.NoError(t, th.HandleSyncedBallot(context.Background(), peer, data))
 }
@@ -798,8 +798,8 @@ func TestBallot_DecodeBeforeVotesConsistency(t *testing.T) {
 	th.md.EXPECT().GetMissingActiveSet(gomock.Any(), types.ATXIDList{b.AtxID}).Return(types.ATXIDList{b.AtxID})
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 
-	decoded := &tortoise.DecodedBallot{Ballot: b}
-	th.md.EXPECT().DecodeBallot(b).Return(decoded, expected)
+	decoded := &tortoise.DecodedBallot{BallotTortoiseData: b.ToTortoiseData()}
+	th.md.EXPECT().DecodeBallot(decoded.BallotTortoiseData).Return(decoded, expected)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), peer, data), expected)
 }
 
@@ -818,8 +818,8 @@ func TestBallot_DecodedStoreFailure(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
 
-	decoded := &tortoise.DecodedBallot{Ballot: b}
-	th.md.EXPECT().DecodeBallot(b).Return(decoded, nil)
+	decoded := &tortoise.DecodedBallot{BallotTortoiseData: b.ToTortoiseData()}
+	th.md.EXPECT().DecodeBallot(decoded.BallotTortoiseData).Return(decoded, nil)
 	th.mm.EXPECT().AddBallot(context.Background(), b).Return(nil, nil)
 	th.md.EXPECT().StoreBallot(decoded).Return(expected)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), peer, data), expected)
@@ -831,7 +831,7 @@ func TestProposal_MalformedData(t *testing.T) {
 	data, err := codec.Encode(&p.InnerProposal)
 	require.NoError(t, err)
 	require.ErrorIs(t, th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data), errMalformedData)
-	require.Equal(t, pubsub.ValidationReject, th.HandleProposal(context.Background(), "", data))
+	require.ErrorIs(t, th.HandleProposal(context.Background(), "", data), pubsub.ErrValidationReject)
 	checkProposal(t, th.cdb, p, false)
 }
 
@@ -843,7 +843,7 @@ func TestProposal_BadSignature(t *testing.T) {
 	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
 	require.ErrorContains(t, got, "failed to verify proposal signature")
 
-	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
+	require.Error(t, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)
 }
 
@@ -855,7 +855,7 @@ func TestProposal_AtxFromDifferentSmesher(t *testing.T) {
 	got := th.HandleSyncedProposal(context.Background(), "", data)
 	require.ErrorIs(t, got, errWrongSmesherID)
 
-	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
+	require.Error(t, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)
 }
 
@@ -880,7 +880,7 @@ func TestProposal_InconsistentSmeshers(t *testing.T) {
 	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
 	require.ErrorContains(t, got, "failed to verify proposal signature")
 
-	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
+	require.Error(t, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)
 }
 
@@ -892,7 +892,7 @@ func TestProposal_KnownProposal(t *testing.T) {
 	require.NoError(t, proposals.Add(th.cdb, p))
 	data := encodeProposal(t, p)
 	require.NoError(t, th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data))
-	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
+	require.Error(t, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, true)
 }
 
@@ -1046,7 +1046,7 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(2)
-	var res1, res2 pubsub.ValidationResult
+	var res1, res2 error
 	go func() {
 		defer wg.Done()
 		res1 = th.HandleProposal(context.Background(), peer, data)
@@ -1056,11 +1056,11 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 		res2 = th.HandleProposal(context.Background(), peer, data)
 	}()
 	wg.Wait()
-	if res1 == pubsub.ValidationAccept {
-		require.Equal(t, pubsub.ValidationIgnore, res2)
+	if res1 == nil {
+		require.Error(t, res2)
 	} else {
-		require.Equal(t, pubsub.ValidationIgnore, res1)
-		require.Equal(t, pubsub.ValidationAccept, res2)
+		require.Error(t, res1)
+		require.Equal(t, nil, res2)
 	}
 	checkProposal(t, th.cdb, p, true)
 }
@@ -1124,7 +1124,7 @@ func TestProposal_BroadcastMaliciousGossip(t *testing.T) {
 			return nil
 		})
 	data := encodeProposal(t, pMal)
-	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), peer, data))
+	require.Error(t, th.HandleProposal(context.Background(), peer, data))
 	checkProposal(t, th.cdb, pMal, true)
 }
 
@@ -1181,10 +1181,10 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 			th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).Return(nil, nil)
 			th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil)
 			if tc.propFetched {
-				require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), peer, data))
+				require.Error(t, th.HandleProposal(context.Background(), peer, data))
 			} else {
 				th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.Layer, p.ID(), p.TxIDs).Return(nil).Times(1)
-				require.Equal(t, pubsub.ValidationAccept, th.HandleProposal(context.Background(), peer, data))
+				require.Equal(t, nil, th.HandleProposal(context.Background(), peer, data))
 			}
 			checkProposal(t, th.cdb, p, true)
 		})

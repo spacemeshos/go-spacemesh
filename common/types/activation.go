@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -54,6 +55,14 @@ func (t *ATXID) EncodeScale(e *scale.Encoder) (int, error) {
 // DecodeScale implements scale codec interface.
 func (t *ATXID) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, t[:])
+}
+
+func (t *ATXID) MarshalText() ([]byte, error) {
+	return util.Base64Encode(t[:]), nil
+}
+
+func (t *ATXID) UnmarshalText(buf []byte) error {
+	return util.Base64Decode(t[:], buf)
 }
 
 // EmptyATXID is a canonical empty ATXID.
@@ -159,6 +168,8 @@ type ActivationTx struct {
 
 	SmesherID NodeID
 	Signature EdSignature
+
+	golden bool
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
@@ -182,6 +193,17 @@ func NewActivationTx(
 		},
 	}
 	return atx
+}
+
+// Golden returns true if atx is from a checkpoint snapshot.
+// a golden ATX is not verifiable, and is only allowed to be prev atx or positioning atx.
+func (atx *ActivationTx) Golden() bool {
+	return atx.golden
+}
+
+// SetGolden set atx to golden.
+func (atx *ActivationTx) SetGolden() {
+	atx.golden = true
 }
 
 // SignedBytes returns a signed data of the ActivationTx.
@@ -288,7 +310,7 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 	if atx.effectiveNumUnits == 0 {
 		return nil, fmt.Errorf("effective num units not set")
 	}
-	if atx.received.IsZero() {
+	if !atx.Golden() && atx.received.IsZero() {
 		return nil, fmt.Errorf("received time not set")
 	}
 	vAtx := &VerifiedActivationTx{

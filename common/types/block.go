@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -45,6 +46,14 @@ func (id *BlockID) DecodeScale(d *scale.Decoder) (int, error) {
 
 func (id *BlockID) IsEmpty() bool {
 	return *id == EmptyBlockID
+}
+
+func (id *BlockID) MarshalText() ([]byte, error) {
+	return util.Base64Encode(id[:]), nil
+}
+
+func (id *BlockID) UnmarshalText(buf []byte) error {
+	return util.Base64Decode(id[:], buf)
 }
 
 // Block contains the content of a layer on the mesh history.

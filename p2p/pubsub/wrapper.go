@@ -2,11 +2,13 @@ package pubsub
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -17,6 +19,7 @@ import (
 type PubSub struct {
 	logger log.Log
 	pubsub *pubsub.PubSub
+	host   host.Host
 
 	mu     sync.RWMutex
 	topics map[string]*pubsub.Topic
@@ -29,12 +32,21 @@ func (ps *PubSub) Register(topic string, handler GossipHandler) {
 	if _, exist := ps.topics[topic]; exist {
 		ps.logger.Panic("already registered a topic %s", topic)
 	}
+	// Drop peers on ValidationRejectErr
+	handler = DropPeerOnValidationReject(handler, ps.host, ps.logger)
 	ps.pubsub.RegisterTopicValidator(topic, func(ctx context.Context, pid peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
 		start := time.Now()
-		rst := handler(log.WithNewRequestID(ctx), pid, msg.Data)
-		metrics.ProcessedMessagesDuration.WithLabelValues(topic, castResult(rst)).
+		err := handler(log.WithNewRequestID(ctx), pid, msg.Data)
+		metrics.ProcessedMessagesDuration.WithLabelValues(topic, castResult(err)).
 			Observe(float64(time.Since(start)))
-		return rst
+		switch {
+		case errors.Is(err, ErrValidationReject):
+			return pubsub.ValidationReject
+		case err != nil:
+			return pubsub.ValidationIgnore
+		default:
+			return pubsub.ValidationAccept
+		}
 	})
 	topich, err := ps.pubsub.Join(topic)
 	if err != nil {

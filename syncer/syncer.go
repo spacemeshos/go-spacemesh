@@ -179,7 +179,7 @@ func NewSyncer(
 	s.isBusy.Store(0)
 	s.targetSyncedLayer.Store(types.LayerID(0))
 	s.lastLayerSynced.Store(s.mesh.ProcessedLayer())
-	s.lastEpochSynced.Store(types.EpochID(0))
+	s.lastEpochSynced.Store(types.GetEffectiveGenesis().GetEpoch() - 1)
 	return s
 }
 
@@ -222,8 +222,7 @@ func (s *Syncer) Start(ctx context.Context) {
 	s.syncOnce.Do(func() {
 		s.logger.WithContext(ctx).Info("starting syncer loop")
 		s.eg.Go(func() error {
-			if s.ticker.CurrentLayer().Uint32() <= 1 {
-				s.setATXSynced()
+			if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
 				s.setSyncState(ctx, synced)
 			}
 			for {
@@ -282,9 +281,10 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 	oldState := s.syncState.Swap(newState).(syncState)
 	if oldState != newState {
 		s.logger.WithContext(ctx).With().Info("sync state change",
-			log.String("from_state", oldState.String()),
-			log.String("to_state", newState.String()),
+			log.String("from state", oldState.String()),
+			log.String("to state", newState.String()),
 			log.Stringer("current", s.ticker.CurrentLayer()),
+			log.Stringer("last synced", s.getLastSyncedLayer()),
 			log.Stringer("latest", s.mesh.LatestLayer()),
 			log.Stringer("processed", s.mesh.ProcessedLayer()))
 		events.ReportNodeStatusUpdate()
@@ -332,6 +332,7 @@ func (s *Syncer) getTargetSyncedLayer() types.LayerID {
 
 func (s *Syncer) setLastSyncedLayer(lid types.LayerID) {
 	s.lastLayerSynced.Store(lid)
+	syncedLayer.Set(float64(lid))
 }
 
 func (s *Syncer) getLastSyncedLayer() types.LayerID {
@@ -421,7 +422,8 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("latest", s.mesh.LatestLayer()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
-		log.Stringer("processed", s.mesh.ProcessedLayer()))
+		log.Stringer("processed", s.mesh.ProcessedLayer()),
+	)
 	return success
 }
 
@@ -447,6 +449,17 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 		return nil
 	}
 
+	// after recovering from a checkpoint, we want to be aggressive syncing atx from peers
+	// as a form of regossip for atxs that didn't make it into the checkpoint data.
+	if types.FirstEffectiveGenesis() != types.GetEffectiveGenesis() &&
+		(s.ticker.CurrentLayer() < types.GetEffectiveGenesis() ||
+			s.ticker.CurrentLayer().GetEpoch() == types.GetEffectiveGenesis().GetEpoch()) {
+		// sync atxs for the first recovery epoch
+		if err := s.fetchATXsForEpoch(ctx, types.GetEffectiveGenesis().GetEpoch()+1); err != nil {
+			return err
+		}
+	}
+
 	// steady state atx syncing
 	curr := s.ticker.CurrentLayer()
 	if float64((curr - curr.GetEpoch().FirstLayer()).Uint32()) >= float64(types.GetLayersPerEpoch())*s.cfg.EpochEndFraction {
@@ -458,12 +471,12 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 	return nil
 }
 
-func isTooFarBehind(ctx context.Context, logger log.Log, current, latest types.LayerID) bool {
-	if current.After(latest) && current.Difference(latest) >= outOfSyncThreshold {
+func isTooFarBehind(ctx context.Context, logger log.Log, current, lastSynced types.LayerID) bool {
+	if current.After(lastSynced) && current.Difference(lastSynced) >= outOfSyncThreshold {
 		logger.WithContext(ctx).With().Info("node is too far behind",
 			log.Stringer("current", current),
-			log.Stringer("latest", latest),
-			log.Uint32("behind_threshold", outOfSyncThreshold))
+			log.Stringer("last synced", lastSynced),
+			log.Uint32("behind threshold", outOfSyncThreshold))
 		return true
 	}
 	return false
@@ -471,13 +484,14 @@ func isTooFarBehind(ctx context.Context, logger log.Log, current, latest types.L
 
 func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 	current := s.ticker.CurrentLayer()
-	if current.Uint32() <= 1 {
-		s.setATXSynced()
+	if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
 		s.setSyncState(ctx, synced)
+		if current.GetEpoch() == 0 {
+			s.setATXSynced()
+		}
 		return
 	}
-	latest := s.mesh.LatestLayer()
-	if isTooFarBehind(ctx, s.logger, current, latest) {
+	if isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer()) {
 		s.setSyncState(ctx, notSynced)
 	}
 }
@@ -497,8 +511,7 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	// network outage.
 	switch currSyncState {
 	case synced:
-		latest := s.mesh.LatestLayer()
-		if !success && isTooFarBehind(ctx, s.logger, current, latest) {
+		if !success && isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer()) {
 			s.setSyncState(ctx, notSynced)
 		}
 	case gossipSync:
@@ -538,7 +551,6 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...
 // fetching ATXs published the specified epoch.
 func (s *Syncer) fetchATXsForEpoch(ctx context.Context, epoch types.EpochID) error {
 	if err := s.dataFetcher.GetEpochATXs(ctx, epoch); err != nil {
-		s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", epoch, log.Err(err))
 		return err
 	}
 	s.setLastAtxEpoch(epoch)

@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	signing "github.com/spacemeshos/go-spacemesh/signing"
 	tortoise "github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -127,7 +128,7 @@ func (m *MockballotDecoder) EXPECT() *MockballotDecoderMockRecorder {
 }
 
 // DecodeBallot mocks base method.
-func (m *MockballotDecoder) DecodeBallot(arg0 *types.Ballot) (*tortoise.DecodedBallot, error) {
+func (m *MockballotDecoder) DecodeBallot(arg0 *types.BallotTortoiseData) (*tortoise.DecodedBallot, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DecodeBallot", arg0)
 	ret0, _ := ret[0].(*tortoise.DecodedBallot)
@@ -193,17 +194,17 @@ func (m *MockvrfVerifier) EXPECT() *MockvrfVerifierMockRecorder {
 }
 
 // Verify mocks base method.
-func (m *MockvrfVerifier) Verify(arg0 types.NodeID, arg1 []byte, arg2 types.VrfSignature) bool {
+func (m *MockvrfVerifier) Verify(arg0 signing.Domain, arg1 types.NodeID, arg2 []byte, arg3 types.VrfSignature) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Verify", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Verify", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockvrfVerifierMockRecorder) Verify(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockvrfVerifierMockRecorder) Verify(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), arg0, arg1, arg2, arg3)
 }
 
 // MocknonceFetcher is a mock of nonceFetcher interface.

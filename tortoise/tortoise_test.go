@@ -869,7 +869,7 @@ func TestDecodeVotes(t *testing.T) {
 		hasher.WriteSupport(supported, 0)
 		ballot.OpinionHash = hasher.Hash()
 		ballot.Votes.Support = []types.Vote{{ID: supported, LayerID: ballot.Layer - 1}}
-		_, err = tortoise.DecodeBallot(&ballot)
+		_, err = tortoise.decodeBallot(ballot.ToTortoiseData())
 		require.NoError(t, err)
 	})
 }
@@ -986,6 +986,30 @@ func tortoiseVotingWithCurrent(tortoise voter) sim.VotesGenerator {
 	}
 }
 
+func TestOnBeacon(t *testing.T) {
+	cfg := defaultTestConfig()
+	tortoise, err := New(WithConfig(cfg), WithLogger(logtest.New(t)))
+	require.NoError(t, err)
+
+	genesis := types.GetEffectiveGenesis()
+	tortoise.OnBeacon(genesis.GetEpoch()-1, types.Beacon{1})
+	require.Nil(t, tortoise.trtl.epoch(genesis.GetEpoch()-1).beacon)
+	tortoise.OnBeacon(genesis.GetEpoch(), types.Beacon{1})
+	require.Equal(t, types.Beacon{1}, *tortoise.trtl.epoch(genesis.GetEpoch()).beacon)
+
+	newGenesis := genesis.Add(types.GetLayersPerEpoch()*10 + types.GetLayersPerEpoch()/2)
+	types.SetEffectiveGenesis(newGenesis.Uint32())
+	defer func() {
+		types.SetEffectiveGenesis(genesis.Uint32())
+	}()
+	tortoise, err = New(WithConfig(cfg), WithLogger(logtest.New(t)))
+	require.NoError(t, err)
+	tortoise.OnBeacon(newGenesis.GetEpoch()-1, types.Beacon{2})
+	require.Nil(t, tortoise.trtl.epoch(newGenesis.GetEpoch()-1).beacon)
+	tortoise.OnBeacon(newGenesis.GetEpoch(), types.Beacon{2})
+	require.Equal(t, types.Beacon{2}, *tortoise.trtl.epoch(newGenesis.GetEpoch()).beacon)
+}
+
 func TestBaseBallotGenesis(t *testing.T) {
 	ctx := context.Background()
 
@@ -1040,6 +1064,7 @@ func TestBaseBallotEvictedBlock(t *testing.T) {
 		sim.WithSequence(2),
 	) {
 		last = lid
+		tortoise.Updates() // drain pending
 		tortoise.TallyVotes(ctx, lid)
 		verified = tortoise.LatestComplete()
 	}
@@ -1505,7 +1530,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				header.PublishEpoch = lid.GetEpoch() - 1
 				header.BaseTickHeight = 0
 				header.TickCount = 1
-				trtl.OnAtx(header)
+				trtl.OnAtx(header.ToData())
 				atxids = append(atxids, atxID)
 			}
 
@@ -1539,7 +1564,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				ballot.SmesherID = sig.NodeID()
 				blts = append(blts, ballot)
 
-				trtl.OnBallot(ballot)
+				trtl.OnBallot(ballot.ToTortoiseData())
 				ref := trtl.trtl.ballotRefs[ballot.ID()]
 				require.Equal(t, b.ExpectedWeight, ref.weight.Float())
 			}
@@ -1603,8 +1628,8 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	s1.Merge(s2)
 	require.NoError(t, s1.GetState(0).DB.IterateEpochATXHeaders(
 		partitionEnd.GetEpoch(), func(header *types.ActivationTxHeader) bool {
-			tortoise1.OnAtx(header)
-			tortoise2.OnAtx(header)
+			tortoise1.OnAtx(header.ToData())
+			tortoise2.OnAtx(header.ToData())
 			return true
 		}))
 	for lid := partitionStart; !lid.After(partitionEnd); lid = lid.Add(1) {
@@ -1617,8 +1642,8 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 		mergedBallots, err := ballots.Layer(s1.GetState(0).DB, lid)
 		require.NoError(t, err)
 		for _, ballot := range mergedBallots {
-			tortoise1.OnBallot(ballot)
-			tortoise2.OnBallot(ballot)
+			tortoise1.OnBallot(ballot.ToTortoiseData())
+			tortoise2.OnBallot(ballot.ToTortoiseData())
 		}
 	}
 
@@ -1794,7 +1819,7 @@ func TestLateBaseBallot(t *testing.T) {
 	base.EligibilityProofs[0].J++
 	require.NoError(t, base.Initialize())
 	base.SmesherID = blts[0].SmesherID
-	tortoise.OnBallot(&base)
+	tortoise.OnBallot(base.ToTortoiseData())
 
 	for _, last = range sim.GenLayers(s,
 		sim.WithSequence(1, sim.WithVoteGenerator(voteWithBaseBallot(base.ID()))),
@@ -1907,6 +1932,12 @@ func TestStateManagement(t *testing.T) {
 		verified = tortoise.LatestComplete()
 	}
 	require.Equal(t, last.Sub(1), verified)
+	require.Equal(t, types.GetEffectiveGenesis()-1, tortoise.trtl.evicted,
+		"should not be evicted unless pending is drained",
+	)
+
+	tortoise.Updates()
+	tortoise.TallyVotes(ctx, last)
 
 	evicted := tortoise.trtl.evicted
 	require.Equal(t, verified.Sub(window).Sub(1), evicted)
@@ -2253,7 +2284,7 @@ func TestSwitchMode(t *testing.T) {
 		// add an atx to increase optimistic threshold in verifying tortoise to trigger a switch
 		header := &types.ActivationTxHeader{ID: types.ATXID{1}, EffectiveNumUnits: 1, TickCount: 200}
 		header.PublishEpoch = types.EpochID(1)
-		tortoise.OnAtx(header)
+		tortoise.OnAtx(header.ToData())
 		// feed ballots that vote against previously validated layer
 		// without the fix they would be ignored
 		for i := 1; i <= 16; i++ {
@@ -2261,7 +2292,7 @@ func TestSwitchMode(t *testing.T) {
 			ballot.InnerBallot = template.InnerBallot
 			ballot.EligibilityProofs = template.EligibilityProofs
 			ballot.ActiveSet = template.ActiveSet
-			tortoise.OnBallot(&ballot)
+			tortoise.OnBallot(ballot.ToTortoiseData())
 		}
 		tortoise.TallyVotes(ctx, last)
 		events = tortoise.Updates()
@@ -2313,7 +2344,7 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		ballot.Votes.Support = nil
 		ballot.Votes.Against = nil
 
-		tortoise.OnBallot(&ballot)
+		tortoise.OnBallot(ballot.ToTortoiseData())
 
 		info := tortoise.trtl.ballotRefs[id]
 		hasher := opinionhash.New()
@@ -2351,7 +2382,7 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		ballot.SetID(id)
 		ballot.Votes.Abstain = []types.LayerID{types.GetEffectiveGenesis().Add(1)}
 
-		tortoise.OnBallot(ballot)
+		tortoise.OnBallot(ballot.ToTortoiseData())
 
 		info := tortoise.trtl.ballotRefs[id]
 		hasher := opinionhash.New()
@@ -2537,7 +2568,7 @@ func TestCountOnBallot(t *testing.T) {
 		ballot.EligibilityProofs = blts[0].EligibilityProofs
 		// unset support to be consistent with local opinion
 		ballot.Votes.Support = nil
-		tortoise.OnBallot(&ballot)
+		tortoise.OnBallot(ballot.ToTortoiseData())
 	}
 	tortoise.TallyVotes(ctx, last)
 }
@@ -2568,7 +2599,7 @@ func TestOnBallotBeforeTallyVotes(t *testing.T) {
 		blts, err := ballots.Layer(s.GetState(0).DB, last)
 		require.NoError(t, err)
 		for _, ballot := range blts {
-			tortoise.OnBallot(ballot)
+			tortoise.OnBallot(ballot.ToTortoiseData())
 		}
 		tortoise.TallyVotes(ctx, last)
 	}
@@ -2729,7 +2760,7 @@ func TestEncodeVotes(t *testing.T) {
 			TickCount:         1,
 		}
 		header.PublishEpoch = lid.GetEpoch() - 1
-		tortoise.OnAtx(header)
+		tortoise.OnAtx(header.ToData())
 		tortoise.OnBeacon(lid.GetEpoch(), types.EmptyBeacon)
 
 		ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}}
@@ -2749,7 +2780,7 @@ func TestEncodeVotes(t *testing.T) {
 		hasher.WriteSupport(block.ID(), block.TickHeight)
 		hasher.Sum(ballot.OpinionHash[:0])
 
-		decoded, err := tortoise.DecodeBallot(&ballot)
+		decoded, err := tortoise.decodeBallot(ballot.ToTortoiseData())
 		require.NoError(t, err)
 		require.NoError(t, tortoise.StoreBallot(decoded))
 
@@ -2828,7 +2859,7 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 		ballot.InnerBallot = ballots[0].InnerBallot
 		ballot.EligibilityProofs = ballots[0].EligibilityProofs
 		ballot.Votes.Base = ballots[1].ID()
-		_, err = tortoise.DecodeBallot(&ballot)
+		_, err = tortoise.decodeBallot(ballot.ToTortoiseData())
 		require.ErrorContains(t, err, "votes for ballot")
 	})
 }
@@ -2845,7 +2876,7 @@ func TestMissingActiveSet(t *testing.T) {
 		atx := &types.ActivationTxHeader{}
 		atx.ID = atxid
 		atx.PublishEpoch = epoch - 1
-		tortoise.OnAtx(atx)
+		tortoise.OnAtx(atx.ToData())
 	}
 	t.Run("empty", func(t *testing.T) {
 		require.Equal(t, aset, tortoise.GetMissingActiveSet(epoch+1, aset))
@@ -2901,7 +2932,7 @@ func BenchmarkOnBallot(b *testing.B) {
 			ballot := types.NewExistingBallot(id, types.EmptyEdSignature, types.EmptyNodeID, modified.Layer)
 			ballot.InnerBallot = modified.InnerBallot
 			ballot.EligibilityProofs = modified.EligibilityProofs
-			tortoise.OnBallot(&ballot)
+			tortoise.OnBallot(ballot.ToTortoiseData())
 
 			b.StopTimer()
 			delete(tortoise.trtl.ballotRefs, ballot.ID())
