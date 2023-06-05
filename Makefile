@@ -199,5 +199,5 @@ fuzz:
 .PHONY: fuzz
 
 lfs:
-	git lfs install
+	@git lfs install
 .PHONY: lfs
