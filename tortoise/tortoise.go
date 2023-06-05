@@ -416,7 +416,7 @@ func (t *turtle) verifyLayers() {
 		}
 
 		verified = target
-		if len(layer.blocks) == 0 && !layer.emitted && layer.hareTerminated {
+		if len(layer.blocks) == 0 && !layer.emitted {
 			layer.emitted = true
 			t.changedOpinion.min = types.MinLayer(t.changedOpinion.min, target)
 			t.changedOpinion.max = types.MaxLayer(t.changedOpinion.max, target)
