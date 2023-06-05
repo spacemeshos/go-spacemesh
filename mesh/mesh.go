@@ -383,10 +383,12 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 		}); err != nil {
 			return err
 		}
-		events.ReportLayerUpdate(events.LayerUpdate{
-			LayerID: layer.Layer,
-			Status:  events.LayerStatusTypeApplied,
-		})
+		if layer.Verified {
+			events.ReportLayerUpdate(events.LayerUpdate{
+				LayerID: layer.Layer,
+				Status:  events.LayerStatusTypeApplied,
+			})
+		}
 		msh.logger.With().Debug("state persisted",
 			log.Context(ctx),
 			log.Stringer("applied", target),
@@ -584,6 +586,7 @@ func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error 
 		return err
 	}
 	return nil
+
 }
 
 // GetATXs uses GetFullAtx to return a list of atxs corresponding to atxIds requested.
