@@ -203,11 +203,14 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	h.mockCoin.EXPECT().Set(lyrID, false)
-	h.outputChan <- report{id: lyrID, set: NewEmptySet(0), completed: true}
 	h.wcChan <- wcReport{id: lyrID, coinflip: false}
+	h.outputChan <- report{id: lyrID, set: NewEmptySet(0), completed: true}
 	lo := <-h.blockGenCh
 	require.Equal(t, lyrID, lo.Layer)
 	require.Empty(t, lo.Proposals)
+	require.Eventually(t, func() bool {
+		return len(h.wcChan) == 0
+	}, time.Second, 100*time.Millisecond)
 }
 
 func TestHare_malfeasanceLoop(t *testing.T) {
