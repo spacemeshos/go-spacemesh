@@ -455,7 +455,7 @@ func TestEpochGap(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		activeset = append(
 			activeset,
-			s.smesher(i).atx(1, new(aopt).height(10).weight(100)),
+			s.smesher(i).atx(1, new(aopt).height(1).weight(10)),
 		)
 	}
 	s.beacon(1, "a")
@@ -479,13 +479,10 @@ func TestEpochGap(t *testing.T) {
 			)
 		}
 	}
-	s.tally(epochSize)
-	s.updates(t, rst.next(epochSize))
-	rst = new(results)
 	for i := epochSize + 1; i <= 2*epochSize; i++ {
 		rst = rst.next(i)
-		s.tally(i)
 	}
+	s.tally(2*epochSize + 1)
 	s.updates(t, rst)
 	s.run(s.tortoise(t))
 }
