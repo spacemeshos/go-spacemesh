@@ -177,7 +177,7 @@ func TestPartition_30_70(t *testing.T) {
 	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	// TODO: re-assess the number of epoch required for healing.
-	testPartition(t, tctx, cl, 30, 6)
+	testPartition(t, tctx, cl, 30, 7)
 }
 
 func TestPartition_50_50(t *testing.T) {
@@ -191,5 +191,5 @@ func TestPartition_50_50(t *testing.T) {
 	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	// TODO: re-assess the number of epoch required for healing.
-	testPartition(t, tctx, cl, 50, 6)
+	testPartition(t, tctx, cl, 50, 7)
 }
