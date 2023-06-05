@@ -28,8 +28,8 @@ func TestMain(m *testing.M) {
 
 const (
 	epochLayers      = 3
-	grpcPort         = 9092
-	jsonport         = 9093
+	grpcPort         = 9992
+	jsonport         = 9993
 	target           = "localhost"
 	activeSetSize    = 11
 	bitcoinResponse1 = `
@@ -199,9 +199,10 @@ func TestGenerator_Generate(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			targetEpoch := types.EpochID(3)
-			require.NoError(t, g.Generate(ctx, targetEpoch, tc.beacon, tc.actives))
+			persisted, err := g.Generate(ctx, targetEpoch, tc.beacon, tc.actives)
+			require.NoError(t, err)
 
-			got, err := afero.ReadFile(fs, PersistedFilename())
+			got, err := afero.ReadFile(fs, persisted)
 			require.NoError(t, err)
 			require.NotEmpty(t, got)
 			if tc.beacon && tc.actives {

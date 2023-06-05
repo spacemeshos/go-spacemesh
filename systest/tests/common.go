@@ -1,5 +1,6 @@
 package tests
 
+//lint:file-ignore U1000 func waitAll is unused
 import (
 	"context"
 	"errors"
