@@ -60,7 +60,7 @@ const (
 	DropMessage
 
 	// d is the degree parameter of both the graded gossip and threshold gossip
-	// pprotocols, it is the number of different grades that can be assigned.
+	// pprotocols, it is highest grade that can be assigned, grades start at 0.
 	d = 5
 )
 
@@ -118,19 +118,14 @@ type LeaderChecker interface {
 	IsLeader(vk Hash20, round AbsRound) bool
 }
 
+// gradeKey3 returns a grade from 0-3.
 func gradeKey3(key []byte) uint8 {
 	return 0
 }
 
+// gradeKey5 returns a grade from 0-5.
 func gradeKey5(key []byte) uint8 {
 	return 0
-}
-
-type Message struct {
-	ID     Hash20
-	Values []Hash20
-	Round  uint8
-	Grade  uint8
 }
 
 // Handler performs message handling, there is a handler per instance of each
