@@ -617,7 +617,7 @@ func TestActives_ConcurrentCalls(t *testing.T) {
 	layer := types.LayerID(100)
 	createLayerData(t, o.cdb, layer.Sub(defLayersPerEpoch), 5)
 
-	mc := NewMockcache(gomock.NewController(t))
+	mc := NewMockactiveSetCache(gomock.NewController(t))
 	firstCall := true
 	mc.EXPECT().Get(layer.GetEpoch() - 1).DoAndReturn(
 		func(key any) (any, bool) {
