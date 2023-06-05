@@ -195,7 +195,7 @@ func (h *Handler) HandleMsg(vk []byte, values []Hash20, round int8) bool {
 }
 
 type Protocol struct {
-	// round encodes both interation and current iteration round in a single value.
+	// round encodes both iteration and round in a single value.
 	round AbsRound
 	// Each index "i" holds an indication of whether iteration "i" is hard locked
 	hardLocked []bool
