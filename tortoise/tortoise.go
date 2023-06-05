@@ -58,7 +58,6 @@ func newTurtle(logger log.Log, config Config) *turtle {
 	t.layers[genesis] = &layerInfo{
 		lid:            genesis,
 		hareTerminated: true,
-		emitted:        true,
 	}
 	t.verifying = newVerifying(config, t.state)
 	t.full = newFullTortoise(config, t.state)
@@ -416,7 +415,7 @@ func (t *turtle) verifyLayers() {
 		}
 
 		verified = target
-		if len(layer.blocks) == 0 && !layer.emitted {
+		if len(layer.blocks) == 0 && !layer.emitted && layer.hareTerminated {
 			layer.emitted = true
 			t.changedOpinion.min = types.MinLayer(t.changedOpinion.min, target)
 			t.changedOpinion.max = types.MaxLayer(t.changedOpinion.max, target)
