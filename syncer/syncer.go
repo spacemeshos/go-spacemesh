@@ -223,7 +223,6 @@ func (s *Syncer) Start(ctx context.Context) {
 		s.logger.WithContext(ctx).Info("starting syncer loop")
 		s.eg.Go(func() error {
 			if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
-				s.setATXSynced()
 				s.setSyncState(ctx, synced)
 			}
 			for {
@@ -485,9 +484,11 @@ func isTooFarBehind(ctx context.Context, logger log.Log, current, lastSynced typ
 
 func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 	current := s.ticker.CurrentLayer()
-	if current.Uint32() <= 1 {
-		s.setATXSynced()
+	if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
 		s.setSyncState(ctx, synced)
+		if current.GetEpoch() == 0 {
+			s.setATXSynced()
+		}
 		return
 	}
 	if isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer()) {

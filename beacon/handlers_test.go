@@ -1382,3 +1382,13 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	// not be considered duplicate gossip messages.
 	require.NotEqual(t, data1, data2)
 }
+
+func TestTracker(t *testing.T) {
+	track := newVotesTracker()
+	for i := 0; i < 1000; i++ {
+		require.True(t, track.register(types.RoundID(i)), i)
+	}
+	for i := 0; i < 1000; i++ {
+		require.False(t, track.register(types.RoundID(i)), i)
+	}
+}
