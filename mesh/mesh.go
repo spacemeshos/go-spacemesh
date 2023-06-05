@@ -586,7 +586,6 @@ func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error 
 		return err
 	}
 	return nil
-
 }
 
 // GetATXs uses GetFullAtx to return a list of atxs corresponding to atxIds requested.
