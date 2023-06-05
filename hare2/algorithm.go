@@ -43,14 +43,6 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-// I'm going to remove signature verification from these protocols to keep them
-// simple, we assume signature verification is done up front.
-
-// Also I'm trying to ensure that any processing that could result in an error
-// is also removed from the protocols.
-
-// not sure exactly what to put here, but the output should be the grade of key
-
 type (
 	MsgType            uint8
 	GradedGossipResult uint8
