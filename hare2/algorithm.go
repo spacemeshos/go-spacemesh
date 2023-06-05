@@ -2,7 +2,7 @@
 // excessive bandwidth usage and also allows for partial agreement over the set
 // of participants.
 //
-// The design of this pacakge strives to remove any extraneous information from
+// The design of this package strives to remove any extraneous information from
 // the protocol's implementation so as to simplify the logic, and reduce the
 // dependencies of this package. To this end for the most part the protocol
 // does not contain or handle any errors (except for Handle), all error
@@ -57,8 +57,9 @@ import (
 // not sure exactly what to put here, but the output should be the grade of key
 
 type (
-	MsgType uint8
-	Hash20  [20]byte
+	MsgType            uint8
+	GradedGossipResult uint8
+	Hash20             [20]byte
 )
 
 const (
@@ -67,7 +68,13 @@ const (
 	Commit
 	Notify
 
-	grades = 5
+	SendValue GradedGossipResult = iota
+	SendEquivocationProof
+	DropMessage
+
+	// d is the degree parameter of both the graded gossip and threshold gossip
+	// pprotocols, it is the number of different grades that can be assigned.
+	d = 5
 )
 
 type Wrapper struct {
@@ -89,32 +96,32 @@ func (m *Msg) DecodeScale(d *scale.Decoder) (int, error) {
 }
 
 type NetworkGossiper interface {
-	// ReceiveMsg takes the given sid (session id) value, key (verification
-	// key) and grade and processes them. If a non nil v is returned the
-	// originally received input message should be forwarded to all neighbors
-	// and (sid, value, key, grade) is considered to have been output.
 	Gossip(msg []byte) error
 }
 
+// GradedGossiper works as a filter, for the given messsge inputs it returns
+// one of 3 results indicating what action to take with the message it was
+// invoked for.
 type GradedGossiper interface {
-	// ReceiveMsg takes the given sid (session id) value, key (verification
-	// key) and grade and processes them. If a non nil v is returned the
-	// originally received input message should be forwarded to all neighbors
-	// and (sid, value, key, grade) is considered to have been output.
-	ReceiveMsg(vk Hash20, setHash Hash20, round AbsRound, grade uint8) (v []byte)
+	// ReceiveMsg accepts an id idenifying the originator of the message, a
+	// hash identifying the value in the message the message round and a grade.
+	// It returns a value indicating what action to take with the message.
+	ReceiveMsg(id Hash20, valueHash Hash20, round AbsRound, grade uint8) GradedGossipResult
 }
 
+// TrhesholdGradedGossiper acts as a specialized value store, it ingests
+// messages and provides a mechanism to retrieve values that appeared in some
+// threshold of ingested messages with a given grade.
 type TrhesholdGradedGossiper interface {
-	// Threshold graded gossip takes outputs from graded gossip, which are in
-	// fact sets of values not single values, and returns sets of values that
-	// have reached the required threshold, along with the grade for that set.
-	ReceiveMsg(vk Hash20, values []Hash20, msgRound AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
+	// ReceiveMsg ingests the given message inputs, for later retrieval through
+	// RetrieveThresholdMessages. The inputs are the id of the message
+	// originator, the values contained in the message, the message round and a
+	// grade.
+	ReceiveMsg(id Hash20, values []Hash20, msgRound AbsRound, grade uint8)
 
-	// Tuples of sid round and value are output once only, since they could
-	// only be output again in a later round with a lower grade. This function
-	// outputs the values that were part of messages sent at msgRound and
-	// reached the threshold at round. It also outputs the grade assigned which
-	// will be 5-(round-msgRound).
+	// This function outputs the values that were part of messages sent at
+	// msgRound and reached the threshold with grade at least minGrade by round
+	// "msgRound + d + 1 - minGrade".
 	RetrieveThresholdMessages(msgRound AbsRound, minGrade uint8) (values []Hash20)
 }
 
@@ -124,14 +131,21 @@ type GradecastedSet struct {
 	grade  uint8
 }
 
+// Gradecaster acts as a specialized value store, it ingests messages that can
+// be retrieved after 3 rounds. Retrieved messages will be graded either 1 or 2
+// based on the input grade and when they were ingested relative to the
+// msgRound. Messages received too late or with insufficient grades will not be
+// retrievable.
 type Gradecaster interface {
-	ReceiveMsg(vk Hash20, values []Hash20, msgRound AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
-	// Increment round increments the current round
-	IncRound() (v [][]byte, g uint8)
+	// ReceiveMsg ingests the given message inputs, for later retrieval through
+	// RetrieveGradecastedMessages. The inputs are the id of the message
+	// originator, the values contained in the message, the message round and a
+	// grade.
+	ReceiveMsg(id Hash20, values []Hash20, msgRound AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
 
-	// Since gradecast always outputs at round r+3 it is asumed that callers
-	// Only call this function at msgRound + 3. Returns all sets of values output by
-	// gradcast at that msgRound + 3 along with their grading.
+	// Since gradecast always outputs at msgRound+3 it is asumed that callers
+	// Only call this function at msgRound+3. Returns all sets of values output
+	// by gradcast at msgRound+3 along with their grading.
 	RetrieveGradecastedMessages(msgRound AbsRound) []GradecastedSet
 }
 
@@ -190,25 +204,36 @@ func (h *Handler) HandleMsg(msg []byte) error {
 	}
 	vk := hashBytes(m.key)
 	valuesHash := toHash(m.values)
-	v := h.gg.ReceiveMsg(vk, valuesHash, r, g)
-	if v == nil {
-		// Equivocation we drop the message
+	var values []Hash20
+	var result GradedGossipResult
+	result = h.gg.ReceiveMsg(vk, valuesHash, r, g)
+	switch result {
+	case DropMessage:
+		// Indicates prior equivocation, drop the message.
 		return nil
+	case SendEquivocationProof:
+		// Indicates new instance of equivocation notify gradcast or threshold
+		// gossip with nil values.
+		values = nil
+	case SendValue:
+		// Indicates valid message, set values to message values.
+		values = m.values
 	}
-	// Send the message to peers
+	// Forward original message to peers
 	err = h.ng.Gossip(msg)
 	if err != nil {
 		return err
 	}
 
+	// Pass results to gradecast or threshold gossip.
 	// Only proposals are gradecasted, all other message types are passed to
 	// threshold gossip.
 	if r.Type() == Propose {
 		// Send to gradecast
-		h.gc.ReceiveMsg(vk, m.values, r, g)
+		h.gc.ReceiveMsg(vk, values, r, g)
 	} else {
 		// Pass result to threshold gossip
-		h.tgg.ReceiveMsg(vk, m.values, r, g)
+		h.tgg.ReceiveMsg(vk, values, r, g)
 	}
 	return nil
 }
