@@ -678,7 +678,6 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	bscfg := app.Config.Bootstrap
 	bscfg.DataDir = app.Config.DataDir()
 	bscfg.Interval = app.Config.LayerDuration / 5
-	bscfg.ConfidenceParam = app.Config.HareEligibility.ConfidenceParam
 	app.updater = bootstrap.New(
 		app.clock,
 		bootstrap.WithConfig(bscfg),
@@ -893,7 +892,10 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 	app.eg.Go(func() error {
 		ch := app.updater.Subscribe()
-		app.updater.Start(ctx)
+		if err := app.updater.Start(ctx); err != nil {
+			appErr <- err
+			return nil
+		}
 		for update := range ch {
 			select {
 			case <-ctx.Done():

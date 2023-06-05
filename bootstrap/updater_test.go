@@ -229,7 +229,7 @@ func TestStartClose(t *testing.T) {
 	ch := updater.Subscribe()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	updater.Start(ctx)
+	require.NoError(t, updater.Start(ctx))
 	t.Cleanup(updater.Close)
 
 	var got *bootstrap.VerifiedUpdate
@@ -497,72 +497,41 @@ func TestNoNewUpdate(t *testing.T) {
 }
 
 func TestRequiredEpochs(t *testing.T) {
-	confidenceParam := uint32(3)
-	tcs := []struct {
-		desc     string
-		current  types.LayerID
-		expected []string
-	}{
-		{
-			desc:    "within confidence params",
-			current: current.FirstLayer().Add(confidenceParam - 1),
-			expected: []string{
-				"/epoch-2-update-bs",
-				"/epoch-2-update-bc",
-				"/epoch-2-update-as",
-				"/epoch-3-update-bs",
-				"/epoch-3-update-bc",
-				"/epoch-3-update-as",
-				"/epoch-4-update-bs",
-				"/epoch-4-update-bc",
-				"/epoch-4-update-as",
-			},
-		},
-		{
-			desc:    "outside confidence params",
-			current: current.FirstLayer().Add(confidenceParam),
-			expected: []string{
-				"/epoch-3-update-bs",
-				"/epoch-3-update-bc",
-				"/epoch-3-update-as",
-				"/epoch-4-update-bs",
-				"/epoch-4-update-bc",
-				"/epoch-4-update-as",
-			},
-		},
+	expected := []string{
+		"/epoch-2-update-bs",
+		"/epoch-2-update-bc",
+		"/epoch-2-update-as",
+		"/epoch-3-update-bs",
+		"/epoch-3-update-bc",
+		"/epoch-3-update-as",
+		"/epoch-4-update-bs",
+		"/epoch-4-update-bc",
+		"/epoch-4-update-as",
 	}
-	for _, tc := range tcs {
-		tc := tc
-		t.Run(tc.desc, func(t *testing.T) {
-			t.Parallel()
+	fs := afero.NewMemMapFs()
+	var queried []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodGet, r.Method)
+		queried = append(queried, r.URL.String())
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+	cfg := bootstrap.DefaultConfig()
+	cfg.URL = ts.URL
+	mc := bootstrap.NewMocklayerClock(gomock.NewController(t))
+	mc.EXPECT().CurrentLayer().Return(current.FirstLayer())
+	updater := bootstrap.New(
+		mc,
+		bootstrap.WithConfig(cfg),
+		bootstrap.WithLogger(logtest.New(t)),
+		bootstrap.WithFilesystem(fs),
+		bootstrap.WithHttpClient(ts.Client()),
+	)
 
-			fs := afero.NewMemMapFs()
-			var queried []string
-			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				require.Equal(t, http.MethodGet, r.Method)
-				queried = append(queried, r.URL.String())
-				w.WriteHeader(http.StatusNotFound)
-			}))
-			defer ts.Close()
-			cfg := bootstrap.DefaultConfig()
-			cfg.URL = ts.URL
-			cfg.ConfidenceParam = confidenceParam
-			mc := bootstrap.NewMocklayerClock(gomock.NewController(t))
-			mc.EXPECT().CurrentLayer().Return(tc.current)
-			updater := bootstrap.New(
-				mc,
-				bootstrap.WithConfig(cfg),
-				bootstrap.WithLogger(logtest.New(t)),
-				bootstrap.WithFilesystem(fs),
-				bootstrap.WithHttpClient(ts.Client()),
-			)
-
-			ch := updater.Subscribe()
-			require.NoError(t, updater.DoIt(context.Background()))
-			require.Empty(t, ch)
-			require.Equal(t, tc.expected, queried)
-		})
-	}
+	ch := updater.Subscribe()
+	require.NoError(t, updater.DoIt(context.Background()))
+	require.Empty(t, ch)
+	require.Equal(t, expected, queried)
 }
 
 func TestIntegration(t *testing.T) {

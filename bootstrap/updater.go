@@ -58,18 +58,16 @@ type Config struct {
 	URL     string `mapstructure:"bootstrap-url"`
 	Version string `mapstructure:"bootstrap-version"`
 
-	DataDir         string
-	Interval        time.Duration
-	ConfidenceParam uint32
+	DataDir  string
+	Interval time.Duration
 }
 
 func DefaultConfig() Config {
 	return Config{
-		URL:             DefaultURL,
-		Version:         "https://spacemesh.io/bootstrap.schema.json.1.0",
-		DataDir:         os.TempDir(),
-		Interval:        30 * time.Second,
-		ConfidenceParam: 5,
+		URL:      DefaultURL,
+		Version:  "https://spacemesh.io/bootstrap.schema.json.1.0",
+		DataDir:  os.TempDir(),
+		Interval: 30 * time.Second,
 	}
 }
 
@@ -137,7 +135,7 @@ func (u *Updater) Subscribe() chan *VerifiedUpdate {
 }
 
 func (u *Updater) Load(ctx context.Context) error {
-	loaded, err := load(u.fs, u.cfg, u.clock.CurrentLayer())
+	loaded, err := load(u.fs, u.cfg, u.clock.CurrentLayer().GetEpoch())
 	if err != nil {
 		return err
 	}
@@ -212,17 +210,17 @@ func (u *Updater) downloaded(epoch types.EpochID, suffix string) bool {
 }
 
 func (u *Updater) DoIt(ctx context.Context) error {
-	current := u.clock.CurrentLayer()
+	current := u.clock.CurrentLayer().GetEpoch()
 	defer func() {
 		if err := u.prune(current); err != nil {
 			u.logger.With().Error("failed to prune",
 				log.Context(ctx),
-				log.Uint32("current epoch", current.GetEpoch().Uint32()),
+				log.Uint32("current epoch", current.Uint32()),
 				log.Err(err),
 			)
 		}
 	}()
-	for _, epoch := range requiredEpochs(current, u.cfg.ConfidenceParam) {
+	for _, epoch := range requiredEpochs(current) {
 		verified, cached, err := u.checkEpochUpdate(ctx, epoch, SuffixBoostrap)
 		if err != nil {
 			return err
@@ -400,7 +398,7 @@ func validateData(cfg Config, update *Update) (*VerifiedUpdate, error) {
 	return verified, nil
 }
 
-func load(fs afero.Fs, cfg Config, current types.LayerID) ([]*VerifiedUpdate, error) {
+func load(fs afero.Fs, cfg Config, current types.EpochID) ([]*VerifiedUpdate, error) {
 	dir := bootstrapDir(cfg.DataDir)
 	_, err := fs.Stat(dir)
 	if errors.Is(err, os.ErrNotExist) {
@@ -409,7 +407,7 @@ func load(fs afero.Fs, cfg Config, current types.LayerID) ([]*VerifiedUpdate, er
 		return nil, fmt.Errorf("read bootstrap dir %v: %w", dir, err)
 	}
 	var loaded []*VerifiedUpdate
-	for _, epoch := range requiredEpochs(current, cfg.ConfidenceParam) {
+	for _, epoch := range requiredEpochs(current) {
 		edir := epochDir(cfg.DataDir, epoch)
 		files, err := afero.ReadDir(fs, edir)
 		if errors.Is(err, os.ErrNotExist) {
@@ -434,20 +432,13 @@ func load(fs afero.Fs, cfg Config, current types.LayerID) ([]*VerifiedUpdate, er
 	return loaded, nil
 }
 
-func requiredEpochs(current types.LayerID, confidenceParam uint32) []types.EpochID {
-	var required []types.EpochID
-	epoch := current.GetEpoch()
-	// for hare active set, we need the active set from the previous epoch within confidence param
-	if current.Difference(epoch.FirstLayer()) < confidenceParam {
-		required = append(required, epoch-1)
-	}
-	required = append(required, []types.EpochID{epoch, epoch + 1}...)
-	return required
+func requiredEpochs(current types.EpochID) []types.EpochID {
+	return []types.EpochID{current - 1, current, current + 1}
 }
 
-func (u *Updater) prune(current types.LayerID) error {
+func (u *Updater) prune(current types.EpochID) error {
 	toKeep := map[string]struct{}{}
-	required := requiredEpochs(current, u.cfg.ConfidenceParam)
+	required := requiredEpochs(current)
 	for _, epoch := range required {
 		toKeep[strconv.Itoa(int(epoch))] = struct{}{}
 	}
