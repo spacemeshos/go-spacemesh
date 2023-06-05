@@ -1,21 +1,19 @@
 // package hare2 has an improved version of hare that solves the problem of
-// excessive bandwidth usage and also allows for partial agreement over the set
-// of participants.
+// excessive bandwidth usage and makes allowance for having only partial
+// agreement over the set of participants.
 //
 // The design of this package strives to remove any extraneous information from
 // the protocol's implementation so as to simplify the logic, and reduce the
-// dependencies of this package. To this end for the most part the protocol
-// does not contain or handle any errors (except for Handle), all error
-// generating code has been extracted.
+// dependencies of this package. To this end the protocol does not contain or
+// handle any errors, all error generating code has been pushed outside of the
+// protocol.
 //
 // It also strives to reduce nesting/deep call stacks, so instead of nesting
 // objects inside each other we compose their functionality, this makes testing
 // individual components easier because they do less and it removes the need to
-// mock in many cases, it also aids at keeping the code error free, since there
-// is less chance that we need to handle an error from a nested component and
-// finally keeps the code flexible, since if we want to change where the output
-// of threshGossip goes we don't need to modify threshGossip or re-implement
-// gradedGossip.
+// mock in many cases, it also aids at keeping the code flexible, since, for
+// example, if we want to change where the output of threshGossip goes we don't
+// need to modify threshGossip or re-implement gradedGossip.
 //
 // E.G.
 // # instead of
@@ -42,10 +40,7 @@
 package hare2
 
 import (
-	"github.com/spacemeshos/go-scale"
 	"golang.org/x/exp/slices"
-
-	"github.com/spacemeshos/go-spacemesh/codec"
 )
 
 // I'm going to remove signature verification from these protocols to keep them
@@ -76,28 +71,6 @@ const (
 	// pprotocols, it is the number of different grades that can be assigned.
 	d = 5
 )
-
-type Wrapper struct {
-	msg, sig []byte
-}
-
-func (m *Wrapper) DecodeScale(d *scale.Decoder) (int, error) {
-	return 0, nil
-}
-
-type Msg struct {
-	sid, key []byte
-	values   []Hash20
-	round    int8
-}
-
-func (m *Msg) DecodeScale(d *scale.Decoder) (int, error) {
-	return 0, nil
-}
-
-type NetworkGossiper interface {
-	Gossip(msg []byte) error
-}
 
 // GradedGossiper works as a filter, for the given messsge inputs it returns
 // one of 3 results indicating what action to take with the message it was
@@ -165,64 +138,44 @@ func gradeKey5(key []byte) uint8 {
 	return 0
 }
 
+// Handler performs message handling, there is a hanlder per instance of each
+// hare protocol, and as such the handler does not need to be aware of the
+// session id. It is also assumed that some higher level handler performs the
+// actions of message decoding and signature verification, leaving this handler
+// to handle the decoded messsage inputs.
 type Handler struct {
-	ng  NetworkGossiper
 	gc  Gradecaster
 	gg  GradedGossiper
 	tgg TrhesholdGradedGossiper
 }
 
-// Can we remove sid from the protocols, probably, say we have a separate instance for each sid.
-//
-// TODO remove notion of sid from this method so assume we have a separate
-// method that does the decoding key verifying ... etc and we jump into this
-// method with just the required params at the point we grade keys.
-func (h *Handler) HandleMsg(msg []byte) error {
-	w := &Wrapper{}
-
-	// These three cases we are dropping the message.
-	err := codec.Decode(msg, w)
-	if err != nil {
-		return err
-	}
-	err = verify(w.sig, w.msg)
-	if err != nil {
-		return err
-	}
-	m := &Msg{}
-	err = codec.Decode(msg, m)
-	if err != nil {
-		return err
-	}
+// HandleMsg handles an incoming message, it returns a boolean indicating
+// whether the message should be regossiped to peers.
+func (h *Handler) HandleMsg(rawMsg, vk []byte, values []Hash20, round uint8) bool {
 	var g uint8
-	r := AbsRound(m.round)
+	r := AbsRound(round)
 	switch r.Type() {
 	case Propose:
-		g = gradeKey3(m.key)
+		g = gradeKey3(vk)
 	default:
-		g = gradeKey5(m.key)
+		g = gradeKey5(vk)
 	}
-	vk := hashBytes(m.key)
-	valuesHash := toHash(m.values)
-	var values []Hash20
+	id := hashBytes(vk)
+	valuesHash := toHash(values)
 	var result GradedGossipResult
-	result = h.gg.ReceiveMsg(vk, valuesHash, r, g)
+	var gradedGossipValues []Hash20
+	result = h.gg.ReceiveMsg(id, valuesHash, r, g)
 	switch result {
 	case DropMessage:
 		// Indicates prior equivocation, drop the message.
-		return nil
+		return false
 	case SendEquivocationProof:
 		// Indicates new instance of equivocation notify gradcast or threshold
 		// gossip with nil values.
-		values = nil
+		gradedGossipValues = nil
 	case SendValue:
 		// Indicates valid message, set values to message values.
-		values = m.values
-	}
-	// Forward original message to peers
-	err = h.ng.Gossip(msg)
-	if err != nil {
-		return err
+		gradedGossipValues = values
 	}
 
 	// Pass results to gradecast or threshold gossip.
@@ -230,12 +183,12 @@ func (h *Handler) HandleMsg(msg []byte) error {
 	// threshold gossip.
 	if r.Type() == Propose {
 		// Send to gradecast
-		h.gc.ReceiveMsg(vk, values, r, g)
+		h.gc.ReceiveMsg(id, gradedGossipValues, r, g)
 	} else {
 		// Pass result to threshold gossip
-		h.tgg.ReceiveMsg(vk, values, r, g)
+		h.tgg.ReceiveMsg(id, gradedGossipValues, r, g)
 	}
-	return nil
+	return true
 }
 
 type Protocol struct {
