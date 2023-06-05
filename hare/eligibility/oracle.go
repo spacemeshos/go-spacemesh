@@ -7,7 +7,7 @@ import (
 	"math"
 	"sync"
 
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/spacemeshos/fixed"
 	"golang.org/x/exp/maps"
 
@@ -68,7 +68,7 @@ type Oracle struct {
 	vrfVerifier    vrfVerifier
 	nonceFetcher   nonceFetcher
 	layersPerEpoch uint32
-	activesCache   cache
+	activesCache   activeSetCache
 	fallback       map[types.EpochID][]types.ATXID
 	cfg            config.Config
 	log.Log
@@ -106,7 +106,7 @@ func New(
 	logger log.Log,
 	opts ...Opt,
 ) *Oracle {
-	ac, err := lru.New(activesCacheSize)
+	ac, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
 	if err != nil {
 		logger.With().Fatal("failed to create lru cache for active set", log.Err(err))
 	}
@@ -390,7 +390,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 	o.lock.Lock()
 	defer o.lock.Unlock()
 	if value, exists := o.activesCache.Get(targetEpoch); exists {
-		return value.(*cachedActiveSet), nil
+		return value, nil
 	}
 	activeSet, err := o.computeActiveSet(ctx, targetEpoch)
 	if err != nil {
