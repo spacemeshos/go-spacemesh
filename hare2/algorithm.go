@@ -114,7 +114,7 @@ type Gradecaster interface {
 	// RetrieveGradecastedMessages. The inputs are the id of the message
 	// originator, the values contained in the message, the message round and a
 	// grade.
-	ReceiveMsg(id Hash20, values []Hash20, msgRound AbsRound, grade uint8) // (sid, r, v, d + 1 − s)
+	ReceiveMsg(id Hash20, values []Hash20, msgRound AbsRound, grade uint8)
 
 	// Since gradecast always outputs at msgRound+3 it is asumed that callers
 	// Only call this function at msgRound+3. Returns all sets of values output
@@ -124,10 +124,6 @@ type Gradecaster interface {
 
 type LeaderChecker interface {
 	IsLeader(vk Hash20, round AbsRound) bool
-}
-
-func verify(sig, data []byte) error {
-	return nil
 }
 
 func gradeKey3(key []byte) uint8 {
@@ -145,11 +141,11 @@ type Message struct {
 	Grade  uint8
 }
 
-// Handler performs message handling, there is a hanlder per instance of each
+// Handler performs message handling, there is a handler per instance of each
 // hare protocol, and as such the handler does not need to be aware of the
 // session id. It is also assumed that some higher level handler performs the
 // actions of message decoding and signature verification and key grading,
-// leaving this handler to handle the decoded messsage inputs.
+// leaving this handler to handle the decoded message inputs.
 type Handler struct {
 	gc  Gradecaster
 	gg  GradedGossiper
@@ -158,13 +154,20 @@ type Handler struct {
 
 // HandleMsg handles an incoming message, it returns a boolean indicating
 // whether the message should be regossiped to peers.
-func (h *Handler) HandleMsg(id Hash20, values []Hash20, round AbsRound, grade uint8) bool {
+func (h *Handler) HandleMsg(vk []byte, values []Hash20, round int8) bool {
 	r := AbsRound(round)
-	g := grade
+	var g uint8
+	switch r.Type() {
+	case Propose:
+		g = gradeKey3(vk)
+	default:
+		g = gradeKey5(vk)
+	}
+	id := hashBytes(vk)
 	valuesHash := toHash(values)
-	var result GradedGossipResult
+
 	var gradedGossipValues []Hash20
-	result = h.gg.ReceiveMsg(id, valuesHash, r, g)
+	result := h.gg.ReceiveMsg(id, valuesHash, r, g)
 	switch result {
 	case DropMessage:
 		// Indicates prior equivocation, drop the message.
@@ -414,6 +417,10 @@ func (p *Protocol) NextRound() (toSend *OutputMessage, output []Hash20) {
 	}
 
 	return nil, nil
+}
+
+func hashBytes(v []byte) Hash20 {
+	return Hash20{}
 }
 
 type OutputMessage struct {
