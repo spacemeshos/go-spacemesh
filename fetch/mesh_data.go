@@ -228,32 +228,28 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 	}
 }
 
-func iterateLayers(req *MeshHashRequest) ([]types.LayerID, error) {
-	// TODO(mafa): there is MaxHashesInReq config in syncer that could be passed here instead of hardcoding this value
-	if req.Steps == 0 || req.Steps > 100 {
+func iterateLayers(req *MeshHashRequest, maxHashes int) ([]types.LayerID, error) {
+	if req.By == 0 {
 		return nil, fmt.Errorf("%w: %v", errBadRequest, req)
 	}
 
-	// check for overflow
-	if req.Delta == 0 || (req.Delta*req.Steps)/req.Delta != req.Steps {
+	if req.To.Before(req.From) {
 		return nil, fmt.Errorf("%w: %v", errBadRequest, req)
 	}
 
-	var diff uint32
-	if req.To.After(req.From) {
-		diff = req.To.Difference(req.From)
-	}
-	if diff == 0 || diff > req.Delta*req.Steps || diff < req.Delta*(req.Steps-1) {
+	diff := req.To.Difference(req.From)
+	count := diff/req.By + 1
+	if count > uint32(maxHashes) {
 		return nil, fmt.Errorf("%w: %v", errBadRequest, req)
 	}
 
-	lids := make([]types.LayerID, req.Steps+1)
+	lids := make([]types.LayerID, count+1)
 	lids[0] = req.From
-	for i := uint32(1); i <= req.Steps; i++ {
-		lids[i] = lids[i-1].Add(req.Delta)
+	for i := uint32(1); i <= count; i++ {
+		lids[i] = lids[i-1].Add(req.By)
 	}
-	if lids[req.Steps].After(req.To) {
-		lids[req.Steps] = req.To
+	if lids[count].After(req.To) {
+		lids[count] = req.To
 	}
 	return lids, nil
 }
@@ -261,7 +257,8 @@ func iterateLayers(req *MeshHashRequest) ([]types.LayerID, error) {
 func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHashRequest) (*MeshHashes, error) {
 	f.logger.WithContext(ctx).With().Debug("requesting mesh hashes from peer",
 		log.Stringer("peer", peer),
-		log.Object("req", req))
+		log.Object("req", req),
+	)
 
 	var (
 		done    = make(chan error, 1)
@@ -272,7 +269,7 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 	if err != nil {
 		f.logger.Fatal("failed to encode mesh hash request", log.Err(err))
 	}
-	lids, err := iterateLayers(req)
+	lids, err := iterateLayers(req, f.cfg.MaxHashesInReq)
 	if err != nil {
 		return nil, err
 	}

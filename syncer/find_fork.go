@@ -291,19 +291,19 @@ func (ff *ForkFinder) sendRequest(ctx context.Context, logger log.Log, peer p2p.
 		}
 	}
 	req := &fetch.MeshHashRequest{
-		From:  bnd.from.layer,
-		To:    bnd.to.layer,
-		Delta: delta,
-		Steps: steps,
+		From: bnd.from.layer,
+		To:   bnd.to.layer,
+		By:   delta,
 	}
-	logger.With().Debug("sending request", log.Uint32("delta", delta), log.Uint32("steps", steps))
+	logger.With().Debug("sending request", log.Uint32("delta", delta))
 	mh, err := ff.fetcher.PeerMeshHashes(ctx, peer, req)
 	if err != nil {
 		return nil, fmt.Errorf("find fork hash req: %w", err)
 	}
 	logger.With().Debug("received response",
 		log.Int("num_layers", len(mh.Layers)),
-		log.Int("num_hashes", len(mh.Hashes)))
+		log.Int("num_hashes", len(mh.Hashes)),
+	)
 	if len(mh.Layers) != len(mh.Hashes) || uint32(len(mh.Layers)) != steps+1 {
 		return nil, errors.New("inconsistent layers for mesh hashes")
 	}
@@ -318,7 +318,8 @@ func (ff *ForkFinder) sendRequest(ctx context.Context, logger log.Log, peer p2p.
 			log.Stringer("hash_from", bnd.from.hash),
 			log.Stringer("hash_to", bnd.to.hash),
 			log.Stringer("peer_hash_from", mh.Hashes[0]),
-			log.Stringer("peer_hash_to", mh.Hashes[steps]))
+			log.Stringer("peer_hash_to", mh.Hashes[steps]),
+		)
 		ff.Purge(false, peer)
 		return nil, ErrPeerMeshChangedMidSession
 	}

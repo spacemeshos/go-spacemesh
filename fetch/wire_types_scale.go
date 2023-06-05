@@ -173,14 +173,7 @@ func (t *MeshHashRequest) EncodeScale(enc *scale.Encoder) (total int, err error)
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.Delta))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.Steps))
+		n, err := scale.EncodeCompact32(enc, uint32(t.By))
 		if err != nil {
 			return total, err
 		}
@@ -212,15 +205,7 @@ func (t *MeshHashRequest) DecodeScale(dec *scale.Decoder) (total int, err error)
 			return total, err
 		}
 		total += n
-		t.Delta = uint32(field)
-	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Steps = uint32(field)
+		t.By = uint32(field)
 	}
 	return total, nil
 }

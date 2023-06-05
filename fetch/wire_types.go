@@ -35,15 +35,14 @@ type ResponseBatch struct {
 }
 
 type MeshHashRequest struct {
-	From, To     types.LayerID
-	Delta, Steps uint32
+	From, To types.LayerID
+	By       uint32
 }
 
 func (r *MeshHashRequest) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("from", r.From.Uint32())
 	encoder.AddUint32("to", r.To.Uint32())
-	encoder.AddUint32("delta", r.Delta)
-	encoder.AddUint32("steps", r.Steps)
+	encoder.AddUint32("by", r.By)
 	return nil
 }
 

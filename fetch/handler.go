@@ -20,15 +20,17 @@ import (
 type handler struct {
 	logger log.Log
 	cdb    *datastore.CachedDB
+	cfg    Config
 	bs     *datastore.BlobStore
 	msh    meshProvider
 	beacon system.BeaconGetter
 }
 
-func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, lg log.Log) *handler {
+func newHandler(cdb *datastore.CachedDB, cfg Config, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, lg log.Log) *handler {
 	return &handler{
 		logger: lg,
 		cdb:    cdb,
+		cfg:    cfg,
 		bs:     bs,
 		msh:    m,
 		beacon: b,
@@ -209,7 +211,7 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 		h.logger.WithContext(ctx).With().Warning("failed to parse mesh hash request", log.Err(err))
 		return nil, errBadRequest
 	}
-	lids, err := iterateLayers(&req)
+	lids, err := iterateLayers(&req, h.cfg.MaxHashesInReq)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Debug("failed to iterate layers", log.Err(err))
 		return nil, err

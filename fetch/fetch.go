@@ -81,6 +81,7 @@ type Config struct {
 	MaxRetriesForPeer    int
 	BatchSize, QueueSize int
 	RequestTimeout       time.Duration // in seconds
+	MaxHashesInReq       int
 	MaxRetriesForRequest int
 }
 
@@ -92,6 +93,7 @@ func DefaultConfig() Config {
 		QueueSize:            20,
 		BatchSize:            20,
 		RequestTimeout:       time.Second * time.Duration(10),
+		MaxHashesInReq:       100,
 		MaxRetriesForRequest: 100,
 	}
 }
@@ -190,7 +192,7 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, 
 		server.WithLog(f.logger),
 	}
 	if len(f.servers) == 0 {
-		h := newHandler(cdb, bs, msh, b, f.logger)
+		h := newHandler(cdb, f.cfg, bs, msh, b, f.logger)
 		f.servers[atxProtocol] = server.New(host, atxProtocol, h.handleEpochInfoReq, srvOpts...)
 		f.servers[lyrDataProtocol] = server.New(host, lyrDataProtocol, h.handleLayerDataReq, srvOpts...)
 		f.servers[lyrOpnsProtocol] = server.New(host, lyrOpnsProtocol, h.handleLayerOpinionsReq, srvOpts...)
@@ -399,7 +401,8 @@ func (f *Fetch) failAfterRetry(hash types.Hash32) {
 	if req.retries > f.cfg.MaxRetriesForRequest {
 		f.logger.WithContext(req.ctx).With().Warning("gave up on hash after max retries",
 			log.Stringer("hash", req.hash),
-			log.Int("retries", req.retries))
+			log.Int("retries", req.retries),
+		)
 		req.promise.err = errExceedMaxRetries
 		close(req.promise.completed)
 	} else {

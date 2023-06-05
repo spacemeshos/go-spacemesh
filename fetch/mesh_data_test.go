@@ -50,9 +50,9 @@ func (f *testFetch) expectTransactionCall(times int) *gomock.Call {
 
 func (f *testFetch) testGetTxs(tids []types.TransactionID) error {
 	if f.method == txsForBlock {
-		return f.GetBlockTxs(context.TODO(), tids)
+		return f.GetBlockTxs(context.Background(), tids)
 	} else if f.method == txsForProposal {
-		return f.GetProposalTxs(context.TODO(), tids)
+		return f.GetProposalTxs(context.Background(), tids)
 	}
 	return nil
 }
@@ -184,7 +184,7 @@ func TestFetch_getHashes(t *testing.T) {
 					return nil
 				}).Times(len(peers))
 
-			got := f.getHashes(context.TODO(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+			got := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
 			if len(tc.fetchErrs) > 0 || tc.hdlrErr != nil {
 				require.NotEmpty(t, got)
 			} else {
@@ -203,7 +203,7 @@ func TestFetch_GetMalfeasanceProofs(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.GetMalfeasanceProofs(context.TODO(), nodeIDs))
+	require.NoError(t, f.GetMalfeasanceProofs(context.Background(), nodeIDs))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }
@@ -221,7 +221,7 @@ func TestFetch_GetBlocks(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.GetBlocks(context.TODO(), blockIDs))
+	require.NoError(t, f.GetBlocks(context.Background(), blockIDs))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }
@@ -239,7 +239,7 @@ func TestFetch_GetBallots(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.GetBallots(context.TODO(), ballotIDs))
+	require.NoError(t, f.GetBallots(context.Background(), ballotIDs))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }
@@ -304,7 +304,7 @@ func TestFetch_GetProposals(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.GetProposals(context.TODO(), proposalIDs))
+	require.NoError(t, f.GetProposals(context.Background(), proposalIDs))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }
@@ -406,7 +406,7 @@ func TestGetPoetProof(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.GetPoetProof(context.TODO(), h))
+	require.NoError(t, f.GetPoetProof(context.Background(), h))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }
@@ -465,7 +465,7 @@ func TestFetch_GetMaliciousIDs(t *testing.T) {
 						return nil
 					})
 			}
-			require.NoError(t, f.GetMaliciousIDs(context.TODO(), peers, okFunc, errFunc))
+			require.NoError(t, f.GetMaliciousIDs(context.Background(), peers, okFunc, errFunc))
 			wg.Wait()
 			require.Len(t, oks, expOk)
 			require.Len(t, errs, expErr)
@@ -527,7 +527,7 @@ func TestFetch_GetLayerData(t *testing.T) {
 						return nil
 					})
 			}
-			require.NoError(t, f.GetLayerData(context.TODO(), peers, types.LayerID(111), okFunc, errFunc))
+			require.NoError(t, f.GetLayerData(context.Background(), peers, types.LayerID(111), okFunc, errFunc))
 			wg.Wait()
 			require.Len(t, oks, expOk)
 			require.Len(t, errs, expErr)
@@ -589,7 +589,7 @@ func TestFetch_GetLayerOpinions(t *testing.T) {
 						return nil
 					})
 			}
-			require.NoError(t, f.GetLayerOpinions(context.TODO(), peers, types.LayerID(111), okFunc, errFunc))
+			require.NoError(t, f.GetLayerOpinions(context.Background(), peers, types.LayerID(111), okFunc, errFunc))
 			wg.Wait()
 			require.Len(t, oks, expOk)
 			require.Len(t, errs, expErr)
@@ -642,7 +642,7 @@ func Test_PeerEpochInfo(t *testing.T) {
 					}
 					return nil
 				})
-			got, err := f.PeerEpochInfo(context.TODO(), peer, types.EpochID(111))
+			got, err := f.PeerEpochInfo(context.Background(), peer, types.EpochID(111))
 			require.ErrorIs(t, err, tc.err)
 			if tc.err == nil {
 				require.Equal(t, expected, got)
@@ -656,13 +656,13 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 	errUnknown := errors.New("unknown")
 	tt := []struct {
 		name     string
-		params   [4]uint32 // from, to, delta, steps
+		params   [3]uint32 // from, to, by
 		expected []types.LayerID
 		err      error
 	}{
 		{
 			name:   "success",
-			params: [4]uint32{7, 23, 5, 4},
+			params: [3]uint32{7, 23, 5},
 			expected: []types.LayerID{
 				types.LayerID(7),
 				types.LayerID(12),
@@ -673,7 +673,7 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 		},
 		{
 			name:   "failure",
-			params: [4]uint32{7, 23, 5, 4},
+			params: [3]uint32{7, 23, 5},
 			err:    errUnknown,
 		},
 	}
@@ -685,10 +685,9 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 
 			f := createFetch(t)
 			req := &MeshHashRequest{
-				From:  types.LayerID(tc.params[0]),
-				To:    types.LayerID(tc.params[1]),
-				Delta: tc.params[2],
-				Steps: tc.params[3],
+				From: types.LayerID(tc.params[0]),
+				To:   types.LayerID(tc.params[1]),
+				By:   tc.params[2],
 			}
 			var expected MeshHashes
 			if tc.err == nil {
@@ -713,7 +712,7 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 					}
 					return nil
 				})
-			got, err := f.PeerMeshHashes(context.TODO(), peer, req)
+			got, err := f.PeerMeshHashes(context.Background(), peer, req)
 			if tc.err == nil {
 				require.NoError(t, err)
 				require.Equal(t, expected, *got)
@@ -727,20 +726,20 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 func FuzzMeshHashRequest(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleMeshHashReq(context.TODO(), data)
+		h.handleMeshHashReq(context.Background(), data)
 	})
 }
 
 func FuzzLayerInfo(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleEpochInfoReq(context.TODO(), data)
+		h.handleEpochInfoReq(context.Background(), data)
 	})
 }
 
 func FuzzHashReq(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleHashReq(context.TODO(), data)
+		h.handleHashReq(context.Background(), data)
 	})
 }
