@@ -19,33 +19,33 @@ type smesher struct {
 	reg registry
 
 	id       int
-	defaults types.ActivationTxHeader
+	defaults types.AtxTortoiseData
 	atxs     map[uint32]*atxAction
 }
 
-type atxOpt func(*types.ActivationTxHeader)
+type atxOpt func(*types.AtxTortoiseData)
 
 type aopt struct {
 	opts []atxOpt
 }
 
 func (a *aopt) base(val uint64) *aopt {
-	a.opts = append(a.opts, func(header *types.ActivationTxHeader) {
-		header.BaseTickHeight = val
+	a.opts = append(a.opts, func(header *types.AtxTortoiseData) {
+		header.BaseHeight = val
 	})
 	return a
 }
 
-func (a *aopt) ticks(val uint64) *aopt {
-	a.opts = append(a.opts, func(header *types.ActivationTxHeader) {
-		header.TickCount = val
+func (a *aopt) height(val uint64) *aopt {
+	a.opts = append(a.opts, func(header *types.AtxTortoiseData) {
+		header.Height = val
 	})
 	return a
 }
 
-func (a *aopt) units(val uint32) *aopt {
-	a.opts = append(a.opts, func(header *types.ActivationTxHeader) {
-		header.EffectiveNumUnits = val
+func (a *aopt) weight(val uint64) *aopt {
+	a.opts = append(a.opts, func(header *types.AtxTortoiseData) {
+		header.Weight = val
 	})
 	return a
 }
@@ -58,7 +58,7 @@ func (s *smesher) atx(epoch uint32, opts ...*aopt) *atxAction {
 	}
 	header := s.defaults
 	header.ID = hash.Sum([]byte(strconv.Itoa(s.id)), []byte(strconv.Itoa(int(epoch))))
-	header.PublishEpoch = types.EpochID(epoch)
+	header.TargetEpoch = types.EpochID(epoch) + 1
 	for _, opt := range opts {
 		for _, o := range opt.opts {
 			o(&header)
@@ -77,21 +77,21 @@ func (s *smesher) atx(epoch uint32, opts ...*aopt) *atxAction {
 type atxAction struct {
 	reg registry
 
-	header    types.ActivationTxHeader
+	header    types.AtxTortoiseData
 	ballots   map[uint32]*ballotAction
 	reference *ballotAction
 }
 
-type ballotOpt func(*types.Ballot)
+type ballotOpt func(*types.BallotTortoiseData)
 
 type bopt struct {
 	opts []ballotOpt
 }
 
 func (b *bopt) beacon(value string) *bopt {
-	b.opts = append(b.opts, func(ballot *types.Ballot) {
+	b.opts = append(b.opts, func(ballot *types.BallotTortoiseData) {
 		if ballot.EpochData == nil {
-			ballot.EpochData = &types.EpochData{}
+			ballot.EpochData = &types.ReferenceData{}
 		}
 		copy(ballot.EpochData.Beacon[:], value)
 	})
@@ -99,16 +99,19 @@ func (b *bopt) beacon(value string) *bopt {
 }
 
 func (b *bopt) eligibilities(value int) *bopt {
-	b.opts = append(b.opts, func(ballot *types.Ballot) {
-		ballot.EligibilityProofs = make([]types.VotingEligibility, value)
+	b.opts = append(b.opts, func(ballot *types.BallotTortoiseData) {
+		ballot.Eligibilities = uint32(value)
 	})
 	return b
 }
 
 func (b *bopt) activeset(values ...*atxAction) *bopt {
-	b.opts = append(b.opts, func(ballot *types.Ballot) {
+	b.opts = append(b.opts, func(ballot *types.BallotTortoiseData) {
 		for _, val := range values {
-			ballot.ActiveSet = append(ballot.ActiveSet, val.header.ID)
+			if ballot.EpochData == nil {
+				ballot.EpochData = &types.ReferenceData{}
+			}
+			ballot.EpochData.ActiveSet = append(ballot.EpochData.ActiveSet, val.header.ID)
 		}
 	})
 	return b
@@ -120,7 +123,7 @@ type evotes struct {
 }
 
 func (e *evotes) base(base *ballotAction) *evotes {
-	e.votes.Base = base.ballot.ID()
+	e.votes.Base = base.ballot.ID
 	return e
 }
 
@@ -150,15 +153,15 @@ func (e *evotes) against(lid uint32, id string, height uint64) *evotes {
 }
 
 func (b *bopt) votes(value *evotes) *bopt {
-	b.opts = append(b.opts, func(ballot *types.Ballot) {
-		ballot.Votes = value.votes
+	b.opts = append(b.opts, func(ballot *types.BallotTortoiseData) {
+		ballot.Opinion.Votes = value.votes
 	})
 	return b
 }
 
 func (b *bopt) malicious() *bopt {
-	b.opts = append(b.opts, func(ballot *types.Ballot) {
-		ballot.SetMalicious()
+	b.opts = append(b.opts, func(ballot *types.BallotTortoiseData) {
+		ballot.Malicious = true
 	})
 	return b
 }
@@ -172,13 +175,11 @@ func (a *atxAction) ballot(n int, opts ...*bopt) *ballotAction {
 	if val, exist := a.ballots[lid]; exist {
 		return val
 	}
-	b := types.Ballot{}
+	b := types.BallotTortoiseData{}
 	b.AtxID = a.header.ID
 	b.Layer = types.LayerID(lid)
 	hs := hash.Sum(a.header.ID[:], []byte(strconv.Itoa(int(lid))))
-	id := types.BallotID{}
-	copy(id[:], hs[:])
-	b.SetID(id)
+	copy(b.ID[:], hs[:])
 	for _, opt := range opts {
 		for _, o := range opt.opts {
 			o(&b)
@@ -188,7 +189,7 @@ func (a *atxAction) ballot(n int, opts ...*bopt) *ballotAction {
 	if a.reference == nil {
 		a.reference = val
 	} else {
-		val.ballot.RefBallot = a.reference.ballot.ID()
+		val.ballot.Ref = &a.reference.ballot.ID
 	}
 	a.reg.register(val)
 	a.ballots[lid] = val
@@ -196,7 +197,7 @@ func (a *atxAction) ballot(n int, opts ...*bopt) *ballotAction {
 }
 
 type ballotAction struct {
-	ballot types.Ballot
+	ballot types.BallotTortoiseData
 }
 
 func (b *ballotAction) execute(trt *Tortoise) {
@@ -421,7 +422,7 @@ func TestSanity(t *testing.T) {
 	for i := 0; i < n; i++ {
 		activeset = append(
 			activeset,
-			s.smesher(i).atx(1, new(aopt).ticks(100).units(4)),
+			s.smesher(i).atx(1, new(aopt).height(100).weight(400)),
 		)
 	}
 	s.beacon(1, "a")
@@ -454,7 +455,7 @@ func TestEpochGap(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		activeset = append(
 			activeset,
-			s.smesher(i).atx(1, new(aopt).ticks(10).units(1)),
+			s.smesher(i).atx(1, new(aopt).height(10).weight(100)),
 		)
 	}
 	s.beacon(1, "a")
