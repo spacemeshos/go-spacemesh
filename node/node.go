@@ -675,10 +675,12 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	app.hOracle = eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
-	app.Config.Bootstrap.DataDir = app.Config.DataDir()
-	app.Config.Bootstrap.Interval = app.Config.LayerDuration / 5
+	bscfg := app.Config.Bootstrap
+	bscfg.DataDir = app.Config.DataDir()
+	bscfg.Interval = app.Config.LayerDuration / 5
 	app.updater = bootstrap.New(
-		bootstrap.WithConfig(app.Config.Bootstrap),
+		app.clock,
+		bootstrap.WithConfig(bscfg),
 		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
 	)
 
@@ -890,7 +892,10 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 	app.eg.Go(func() error {
 		ch := app.updater.Subscribe()
-		app.updater.Start(ctx)
+		if err := app.updater.Start(ctx); err != nil {
+			appErr <- err
+			return nil
+		}
 		for update := range ch {
 			select {
 			case <-ctx.Done():

@@ -58,6 +58,7 @@ all: install build
 .PHONY: all
 
 install:
+	git lfs install
 	go mod download
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.52.0
 	go install github.com/spacemeshos/go-scale/scalegen@v1.1.9
@@ -96,7 +97,7 @@ clear-test-cache:
 	go clean -testcache
 .PHONY: clear-test-cache
 
-test: get-libs lfs
+test: get-libs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -race -timeout 5m -p 1 $(UNIT_TESTS)
 .PHONY: test
 
@@ -197,7 +198,3 @@ endif
 fuzz:
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" ./scripts/fuzz.sh $(FUZZTIME)
 .PHONY: fuzz
-
-lfs:
-	git lfs install
-.PHONY: lfs

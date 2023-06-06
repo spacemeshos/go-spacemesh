@@ -7,9 +7,9 @@ import (
 
 //go:generate mockgen -package=eligibility -destination=./mocks.go -source=./interface.go
 
-type cache interface {
-	Add(key, value any) (evicted bool)
-	Get(key any) (value any, ok bool)
+type activeSetCache interface {
+	Add(key types.EpochID, value *cachedActiveSet) (evicted bool)
+	Get(key types.EpochID) (value *cachedActiveSet, ok bool)
 }
 
 type vrfVerifier interface {

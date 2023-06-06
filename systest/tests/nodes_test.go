@@ -113,6 +113,7 @@ func TestAddNodes(t *testing.T) {
 }
 
 func TestFailedNodes(t *testing.T) {
+	t.Skip("https://github.com/spacemeshos/go-spacemesh/issues/4468")
 	t.Parallel()
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
