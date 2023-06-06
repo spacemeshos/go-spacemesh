@@ -1,9 +1,6 @@
 package eligibility
 
-import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/signing"
-)
+import "github.com/spacemeshos/go-spacemesh/common/types"
 
 //go:generate mockgen -package=eligibility -destination=./mocks.go -source=./interface.go
 
@@ -13,7 +10,7 @@ type activeSetCache interface {
 }
 
 type vrfVerifier interface {
-	Verify(d signing.Domain, nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool
+	Verify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool
 }
 
 type nonceFetcher interface {

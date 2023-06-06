@@ -6,7 +6,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 //go:generate mockgen -package=beacon -destination=./mocks.go -source=./interface.go
@@ -32,13 +31,13 @@ type layerClock interface {
 }
 
 type vrfSigner interface {
-	Sign(d signing.Domain, msg []byte) types.VrfSignature
+	Sign(msg []byte) types.VrfSignature
 	NodeID() types.NodeID
 	LittleEndian() bool
 }
 
 type vrfVerifier interface {
-	Verify(d signing.Domain, nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool
+	Verify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool
 }
 
 type nonceFetcher interface {

@@ -13,29 +13,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type Domain byte
+type domain byte
 
 const (
-	ATX Domain = iota
-	BEACON_FIRST_MSG
-	BEACON_FOLLOWUP_MSG
-	BEACON_PROPOSAL
+	ATX domain = iota
+	BEACON
 	BALLOT
 	HARE
 	POET
 )
 
 // String returns the string representation of a domain.
-func (d Domain) String() string {
+func (d domain) String() string {
 	switch d {
 	case ATX:
 		return "ATX"
-	case BEACON_FIRST_MSG:
-		return "BEACON_FIRST_MSG"
-	case BEACON_FOLLOWUP_MSG:
-		return "BEACON_FOLLOWUP_MSG"
-	case BEACON_PROPOSAL:
-		return "BEACON_PROPOSAL"
+	case BEACON:
+		return "BEACON"
 	case BALLOT:
 		return "BALLOT"
 	case HARE:
@@ -126,7 +120,7 @@ func NewEdSigner(opts ...EdSignerOptionFunc) (*EdSigner, error) {
 }
 
 // Sign signs the provided message.
-func (es *EdSigner) Sign(d Domain, m []byte) types.EdSignature {
+func (es *EdSigner) Sign(d domain, m []byte) types.EdSignature {
 	msg := make([]byte, 0, len(es.prefix)+1+len(m))
 	msg = append(msg, es.prefix...)
 	msg = append(msg, byte(d))

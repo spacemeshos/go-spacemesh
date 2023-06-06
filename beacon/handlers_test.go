@@ -73,7 +73,7 @@ func createProposal(t *testing.T, vrfSigner *signing.VRFSigner, epoch types.Epoc
 		VRFSignature: sig,
 	}
 	if corruptSignature {
-		msg.VRFSignature = vrfSigner.Sign(signing.BEACON_PROPOSAL, types.RandomBytes(32))
+		msg.VRFSignature = vrfSigner.Sign(types.RandomBytes(32))
 	}
 	return msg
 }
@@ -120,9 +120,9 @@ func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-	msg.Signature = signer.Sign(signing.BEACON_FIRST_MSG, encoded)
+	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	if corruptSignature {
-		msg.Signature = signer.Sign(signing.BEACON_FIRST_MSG, encoded[1:])
+		msg.Signature = signer.Sign(signing.BEACON, encoded[1:])
 	}
 	msg.SmesherID = signer.NodeID()
 	return msg
@@ -160,9 +160,9 @@ func createFollowingVote(t *testing.T, signer *signing.EdSigner, epoch types.Epo
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-	msg.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encoded)
+	msg.Signature = signer.Sign(signing.BEACON, encoded)
 	if corruptSignature {
-		msg.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encoded[1:])
+		msg.Signature = signer.Sign(signing.BEACON, encoded[1:])
 	}
 	msg.SmesherID = signer.NodeID()
 	return msg
@@ -500,7 +500,7 @@ func Test_handleProposal_BadVrfSignature(t *testing.T) {
 	require.NoError(t, err)
 
 	mVerifier := NewMockvrfVerifier(tpd.ctrl)
-	mVerifier.EXPECT().Verify(signing.BEACON_PROPOSAL, gomock.Any(), gomock.Any(), gomock.Any()).Return(false)
+	mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(false)
 	tpd.vrfVerifier = mVerifier
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
@@ -1336,7 +1336,7 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	if err != nil {
 		logger.With().Panic("failed to serialize msg1.FollowingVotingMessageBody for signing", log.Err(err))
 	}
-	msg1.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encodedMsg1FollowingVotingMessageBody)
+	msg1.Signature = signer.Sign(signing.BEACON, encodedMsg1FollowingVotingMessageBody)
 
 	data1, err := codec.Encode(&msg1)
 	require.NoError(t, err)
@@ -1351,7 +1351,7 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	if err != nil {
 		logger.With().Panic("failed to serialize msg2.FollowingVotingMessageBody for signing", log.Err(err))
 	}
-	msg2.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encodedMsg2FollowingVotingMessageBody)
+	msg2.Signature = signer.Sign(signing.BEACON, encodedMsg2FollowingVotingMessageBody)
 
 	data2, err := codec.Encode(&msg2)
 	require.NoError(t, err)
@@ -1364,7 +1364,7 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	if err != nil {
 		logger.With().Panic("failed to serialize msg1.FollowingVotingMessageBody for signing", log.Err(err))
 	}
-	msg1.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encodedMsg1FollowingVotingMessageBody)
+	msg1.Signature = signer.Sign(signing.BEACON, encodedMsg1FollowingVotingMessageBody)
 	data1, err = codec.Encode(&msg1)
 	require.NoError(t, err)
 
@@ -1373,7 +1373,7 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	if err != nil {
 		logger.With().Panic("failed to serialize msg2.FollowingVotingMessageBody for signing", log.Err(err))
 	}
-	msg2.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encodedMsg2FollowingVotingMessageBody)
+	msg2.Signature = signer.Sign(signing.BEACON, encodedMsg2FollowingVotingMessageBody)
 
 	data2, err = codec.Encode(&msg2)
 	require.NoError(t, err)
