@@ -1,4 +1,4 @@
-// package hare2 has an improved version of hare that solves the problem of
+// package hare3 has an improved version of hare that solves the problem of
 // excessive bandwidth usage and makes allowance for having only partial
 // agreement over the set of participants.
 //
@@ -37,7 +37,7 @@
 // networkGossip(z)
 //
 // Additionally there is no use of concurrency in this package.
-package hare2
+package hare3
 
 import (
 	"golang.org/x/exp/slices"

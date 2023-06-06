@@ -3,18 +3,18 @@ package runner
 import (
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/hare2"
+	"github.com/spacemeshos/go-spacemesh/hare3"
 )
 
 type ProtocolRunner struct {
 	messages  chan MultiMsg
-	handler   hare2.Handler
-	protocol  hare2.Protocol
+	handler   hare3.Handler
+	protocol  hare3.Protocol
 	roundTime time.Duration
 	gossiper  NetworkGossiper
 }
 
-func (r *ProtocolRunner) Run() []hare2.Hash20 {
+func (r *ProtocolRunner) Run() []hare3.Hash20 {
 	t := time.NewTicker(r.roundTime)
 	defer t.Stop()
 	for {
@@ -55,7 +55,7 @@ type MultiMsg struct {
 
 type Msg struct {
 	sid, key []byte
-	values   []hare2.Hash20
+	values   []hare3.Hash20
 	round    int8
 }
 
@@ -63,7 +63,7 @@ type NetworkGossiper interface {
 	Gossip(msg []byte) error
 }
 
-func buildEncodedOutputMessgae(m *hare2.OutputMessage) ([]byte, error) {
+func buildEncodedOutputMessgae(m *hare3.OutputMessage) ([]byte, error) {
 	return nil, nil
 }
 
