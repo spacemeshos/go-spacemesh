@@ -46,7 +46,7 @@ func encoded(tb testing.TB, msg weakcoin.Message) []byte {
 func staticSigner(tb testing.TB, ctrl *gomock.Controller, nodeId types.NodeID, sig types.VrfSignature) *weakcoin.MockvrfSigner {
 	tb.Helper()
 	signer := weakcoin.NewMockvrfSigner(ctrl)
-	signer.EXPECT().Sign(signing.BEACON_PROPOSAL, gomock.Any()).Return(sig).AnyTimes()
+	signer.EXPECT().Sign(gomock.Any()).Return(sig).AnyTimes()
 	signer.EXPECT().NodeID().Return(nodeId).AnyTimes()
 	signer.EXPECT().LittleEndian().Return(true).AnyTimes()
 	return signer
@@ -55,7 +55,7 @@ func staticSigner(tb testing.TB, ctrl *gomock.Controller, nodeId types.NodeID, s
 func sigVerifier(tb testing.TB, ctrl *gomock.Controller) *weakcoin.MockvrfVerifier {
 	tb.Helper()
 	verifier := weakcoin.NewMockvrfVerifier(ctrl)
-	verifier.EXPECT().Verify(signing.BEACON_PROPOSAL, gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 	return verifier
 }
 
@@ -442,7 +442,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	instance.StartRound(context.Background(), round, &nonce)
 
 	require.Equal(t,
-		"94494c2c55a388acd03acd64b21912c4cb6e8dca56da5979bbab9b23be790ed948eda672dc28b8e379ec041aa46511b2dd4f9143ed8d512bf6386454d43f3b4ed9f7748b09ee92730975d094dc8c3501",
+		"78f523319fd2cdf3812a3bc3905561acb2f7f1b7e47de71f92811d7bb82460e5999a048051cefa2d1b6f3f16656de83c2756b7539b33fa563a3e8fea5130235e66e8dce914d69bd40f13174f3914ad07",
 		sig.String(),
 	)
 }
