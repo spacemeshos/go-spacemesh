@@ -52,7 +52,7 @@ type Config struct {
 }
 
 // New initializes libp2p host configured for spacemesh.
-func New(_ context.Context, logger log.Log, cfg Config, genesisID types.Hash20, opts ...Opt) (*Host, error) {
+func New(_ context.Context, logger log.Log, cfg Config, genesisID types.Hash20, prologue []byte, opts ...Opt) (*Host, error) {
 	logger.Info("starting libp2p host with config %+v", cfg)
 	key, err := EnsureIdentity(cfg.DataDir)
 	if err != nil {
@@ -81,7 +81,7 @@ func New(_ context.Context, logger log.Log, cfg Config, genesisID types.Hash20, 
 			if err != nil {
 				return nil, err
 			}
-			return tp.WithSessionOptions(noise.Prologue(genesisID[:]))
+			return tp.WithSessionOptions(noise.Prologue(prologue))
 		}),
 		libp2p.Muxer("/yamux/1.0.0", &streamer),
 
