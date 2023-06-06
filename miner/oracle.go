@@ -149,7 +149,7 @@ func (o *Oracle) calcEligibilityProofs(atx *types.ActivationTxHeader, epoch type
 		if err != nil {
 			o.log.With().Fatal("failed to serialize VRF msg", log.Err(err))
 		}
-		vrfSig := o.vrfSigner.Sign(signing.HARE, message)
+		vrfSig := o.vrfSigner.Sign(message)
 		eligibleLayer := proposals.CalcEligibleLayer(epoch, o.layersPerEpoch, vrfSig)
 		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.VotingEligibility{
 			J:   counter,

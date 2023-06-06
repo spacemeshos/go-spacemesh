@@ -217,7 +217,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	}
 
 	// validate message
-	if !o.vrfVerifier.Verify(signing.HARE, id, msg, vrfSig) {
+	if !o.vrfVerifier.Verify(id, msg, vrfSig) {
 		logger.With().Debug("eligibility: a node did not pass vrf signature verification",
 			log.FieldNamed("sender_vrf_nonce", nonce),
 		)
@@ -366,7 +366,7 @@ func (o *Oracle) Proof(ctx context.Context, nonce types.VRFPostIndex, layer type
 	if err != nil {
 		return types.EmptyVrfSignature, err
 	}
-	return o.vrfSigner.Sign(signing.HARE, msg), nil
+	return o.vrfSigner.Sign(msg), nil
 }
 
 // Returns a map of all active node IDs in the specified layer id.

@@ -46,7 +46,7 @@ func encoded(tb testing.TB, msg weakcoin.Message) []byte {
 func staticSigner(tb testing.TB, ctrl *gomock.Controller, nodeId types.NodeID, sig types.VrfSignature) *weakcoin.MockvrfSigner {
 	tb.Helper()
 	signer := weakcoin.NewMockvrfSigner(ctrl)
-	signer.EXPECT().Sign(signing.BEACON_PROPOSAL, gomock.Any()).Return(sig).AnyTimes()
+	signer.EXPECT().Sign(gomock.Any()).Return(sig).AnyTimes()
 	signer.EXPECT().NodeID().Return(nodeId).AnyTimes()
 	signer.EXPECT().LittleEndian().Return(true).AnyTimes()
 	return signer
@@ -55,7 +55,7 @@ func staticSigner(tb testing.TB, ctrl *gomock.Controller, nodeId types.NodeID, s
 func sigVerifier(tb testing.TB, ctrl *gomock.Controller) *weakcoin.MockvrfVerifier {
 	tb.Helper()
 	verifier := weakcoin.NewMockvrfVerifier(ctrl)
-	verifier.EXPECT().Verify(signing.BEACON_PROPOSAL, gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 	return verifier
 }
 

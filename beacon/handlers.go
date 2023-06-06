@@ -193,7 +193,7 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 		return fmt.Errorf("[proposal] get VRF nonce (miner ID %s): %w", m.NodeID, err)
 	}
 	currentEpochProposal := buildProposal(logger, m.EpochID, nonce)
-	if !pd.vrfVerifier.Verify(signing.BEACON_PROPOSAL, m.NodeID, currentEpochProposal, m.VRFSignature) {
+	if !pd.vrfVerifier.Verify(m.NodeID, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
 		logger.With().Warning("[proposal] failed to verify VRF signature")
 		return fmt.Errorf("[proposal] verify VRF (miner ID %s): %w", m.NodeID, errVRFNotVerified)

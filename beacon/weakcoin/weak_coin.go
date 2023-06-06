@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 var (
@@ -233,7 +232,7 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 		return fmt.Errorf("failed to get vrf nonce for node %s: %w", message.NodeID, err)
 	}
 	buf := wc.encodeProposal(message.Epoch, nonce, message.Round, message.Unit)
-	if !wc.verifier.Verify(signing.BEACON_PROPOSAL, message.NodeID, buf, message.VRFSignature) {
+	if !wc.verifier.Verify(message.NodeID, buf, message.VRFSignature) {
 		return fmt.Errorf("signature is invalid signature %x", message.VRFSignature)
 	}
 
@@ -254,7 +253,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 	var smallest *types.VrfSignature
 	for unit := uint32(0); unit < minerAllowance; unit++ {
 		proposal := wc.encodeProposal(epoch, nonce, round, unit)
-		signature := wc.signer.Sign(signing.BEACON_PROPOSAL, proposal)
+		signature := wc.signer.Sign(proposal)
 		if wc.aboveThreshold(signature) {
 			continue
 		}
