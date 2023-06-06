@@ -198,6 +198,9 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 			latestSame = &layerHash{layer: lid, hash: hash}
 			ff.updateAgreement(peer, latestSame, time.Now())
 			lid = lid.Add(delta)
+			if lid.After(bnd.to.layer) {
+				lid = bnd.to.layer
+			}
 		}
 		if latestSame == nil || oldestDiff == nil {
 			// every layer hash is different/same from node's. this can only happen when
