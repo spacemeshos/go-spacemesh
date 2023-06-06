@@ -99,24 +99,26 @@ func storeNodeHashes(t *testing.T, db *sql.Database, diverge, max int) {
 
 func serveHashReq(t *testing.T, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
 	var (
-		lids   = []types.LayerID{req.From}
-		hashes = []types.Hash32{layerHash(int(req.From.Uint32()), true)}
+		lids   = []types.LayerID{}
+		hashes = []types.Hash32{}
 		count  uint32
-		lid    = req.From.Add(req.By)
 	)
-	for ; ; lid = lid.Add(req.By) {
-		count++
-		if !lid.Before(req.To) {
-			lids = append(lids, req.To)
-			hashes = append(hashes, layerHash(int(req.To.Uint32()), true))
-			break
-		}
+	for lid := req.From; lid.Before(req.To); lid = lid.Add(req.By) {
 		lids = append(lids, lid)
 		hashes = append(hashes, layerHash(int(lid.Uint32()), true))
+		count++
 	}
-	require.Equal(t, len(lids), len(hashes))
-	expCount := req.To.Difference(req.From)/req.By + 2
-	require.Equal(t, expCount, count, fmt.Sprintf("exp: %v, got %v", expCount, count))
+
+	lids = append(lids, req.To)
+	hashes = append(hashes, layerHash(int(req.To.Uint32()), true))
+	count++
+
+	expCount := req.To.Difference(req.From)/req.By + 1
+	if req.To.Difference(req.From)%req.By != 0 {
+		// last layer is not a multiple of By, so we expect one more hash
+		expCount++
+	}
+	require.Equal(t, expCount, count, fmt.Sprintf("%#v; count exp: %v, got %v", req, expCount, count))
 	mh := &fetch.MeshHashes{
 		Layers: lids,
 		Hashes: hashes,

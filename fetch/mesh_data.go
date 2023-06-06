@@ -239,17 +239,21 @@ func iterateLayers(req *MeshHashRequest, maxHashes int) ([]types.LayerID, error)
 
 	diff := req.To.Difference(req.From)
 	count := diff/req.By + 1
+	if diff%req.By != 0 {
+		// last layer is not a multiple of By, so we need to add it
+		count++
+	}
 	if count > uint32(maxHashes) {
 		return nil, fmt.Errorf("%w: %v", errBadRequest, req)
 	}
 
-	lids := make([]types.LayerID, count+1)
+	lids := make([]types.LayerID, count)
 	lids[0] = req.From
-	for i := uint32(1); i <= count; i++ {
+	for i := uint32(1); i < count; i++ {
 		lids[i] = lids[i-1].Add(req.By)
 	}
-	if lids[count].After(req.To) {
-		lids[count] = req.To
+	if lids[count-1].After(req.To) {
+		lids[count-1] = req.To
 	}
 	return lids, nil
 }
