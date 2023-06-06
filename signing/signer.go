@@ -16,12 +16,14 @@ import (
 type Domain byte
 
 const (
-	ATX Domain = iota
-	BEACON_FIRST_MSG
-	BEACON_FOLLOWUP_MSG
-	BALLOT
-	HARE
-	POET
+	ATX Domain = 0
+
+	BALLOT = 2
+	HARE   = 3
+	POET   = 4
+
+	BEACON_FIRST_MSG    = 10
+	BEACON_FOLLOWUP_MSG = 11
 )
 
 // String returns the string representation of a domain.
@@ -29,16 +31,16 @@ func (d Domain) String() string {
 	switch d {
 	case ATX:
 		return "ATX"
-	case BEACON_FIRST_MSG:
-		return "BEACON_FIRST_MSG"
-	case BEACON_FOLLOWUP_MSG:
-		return "BEACON_FOLLOWUP_MSG"
 	case BALLOT:
 		return "BALLOT"
 	case HARE:
 		return "HARE"
 	case POET:
 		return "POET"
+	case BEACON_FIRST_MSG:
+		return "BEACON_FIRST_MSG"
+	case BEACON_FOLLOWUP_MSG:
+		return "BEACON_FOLLOWUP_MSG"
 	default:
 		return "UNKNOWN"
 	}
