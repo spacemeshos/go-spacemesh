@@ -383,10 +383,12 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 		}); err != nil {
 			return err
 		}
-		events.ReportLayerUpdate(events.LayerUpdate{
-			LayerID: layer.Layer,
-			Status:  events.LayerStatusTypeApplied,
-		})
+		if layer.Verified {
+			events.ReportLayerUpdate(events.LayerUpdate{
+				LayerID: layer.Layer,
+				Status:  events.LayerStatusTypeApplied,
+			})
+		}
 
 		msh.logger.With().Debug("state persisted",
 			log.Context(ctx),
