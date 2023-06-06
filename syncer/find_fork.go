@@ -288,6 +288,10 @@ func (ff *ForkFinder) sendRequest(ctx context.Context, logger log.Log, peer p2p.
 		By:   delta,
 	}
 	count := int(dist/delta + 1)
+	if dist%delta != 0 {
+		// last layer is not a multiple of By, so we need to add it
+		count++
+	}
 	logger.With().Debug("sending request", log.Uint32("delta", delta))
 	mh, err := ff.fetcher.PeerMeshHashes(ctx, peer, req)
 	if err != nil {
@@ -299,12 +303,12 @@ func (ff *ForkFinder) sendRequest(ctx context.Context, logger log.Log, peer p2p.
 	if count != len(mh.Hashes) {
 		return nil, errors.New("inconsistent layers for mesh hashes")
 	}
-	if mh.Hashes[0] != bnd.from.hash || mh.Hashes[count] != bnd.to.hash {
+	if mh.Hashes[0] != bnd.from.hash || mh.Hashes[count-1] != bnd.to.hash {
 		logger.With().Warning("peer boundary hashes have changed",
 			log.Stringer("hash_from", bnd.from.hash),
 			log.Stringer("hash_to", bnd.to.hash),
 			log.Stringer("peer_hash_from", mh.Hashes[0]),
-			log.Stringer("peer_hash_to", mh.Hashes[count]),
+			log.Stringer("peer_hash_to", mh.Hashes[count-1]),
 		)
 		ff.Purge(false, peer)
 		return nil, ErrPeerMeshChangedMidSession

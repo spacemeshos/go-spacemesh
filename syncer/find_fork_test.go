@@ -141,7 +141,7 @@ func TestForkFinder_FindFork_Permutation(t *testing.T) {
 				}).AnyTimes()
 
 			fork, err := tf.FindFork(context.Background(), peer, types.LayerID(uint32(lid)), layerHash(lid, true))
-			require.NoError(t, err)
+			require.NoError(t, err, fmt.Sprintf("maxHashes: %v, lid: %v", maxHashes, lid))
 			require.EqualValues(t, expected, fork.Uint32())
 		}
 	}
