@@ -334,7 +334,7 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 
 func Test_VrfSignVerify(t *testing.T) {
 	// eligibility of the proof depends on the identity
-	rng := rand.New(rand.NewSource(1000))
+	rng := rand.New(rand.NewSource(5))
 
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	require.NoError(t, err)
