@@ -111,7 +111,7 @@ func (s *state) registerProposed(logger log.Log, nodeID types.NodeID) error {
 func (s *state) registerVoted(nodeID types.NodeID, round types.RoundID) error {
 	tracker, exists := s.hasVoted[nodeID]
 	if !exists {
-		tracker = newVotesTracker(uint32(s.cfg.RoundsNumber))
+		tracker = newVotesTracker()
 		s.hasVoted[nodeID] = tracker
 	}
 	if !tracker.register(round) {

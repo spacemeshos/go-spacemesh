@@ -54,6 +54,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
+const layersPerEpoch = 3
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+
+	res := m.Run()
+	os.Exit(res)
+}
+
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r := require.New(t)
 
@@ -611,6 +620,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	}()
 
 	<-app.Started()
+	require.True(t, app.syncer.IsSynced(ctx))
 	conn, err := grpc.Dial(
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
