@@ -55,8 +55,9 @@ type Message struct {
 	VRFSignature types.VrfSignature
 }
 
+// VrfMessage is the payload for the signature of `Message`.
 type VrfMessage struct {
-	Type  types.EligibilityType
+	Type  types.EligibilityType // always types.EligibilityBeaconWC
 	Nonce types.VRFPostIndex
 	Epoch types.EpochID
 	Round types.RoundID

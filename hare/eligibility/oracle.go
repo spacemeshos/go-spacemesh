@@ -135,9 +135,9 @@ func New(
 
 //go:generate scalegen -types VrfMessage
 
-// VrfMessage is a verification message.
+// VrfMessage is a verification message. It is also the payload for the signature in `types.HareEligibility`.
 type VrfMessage struct {
-	Type   types.EligibilityType
+	Type   types.EligibilityType // always types.EligibilityHare
 	Nonce  types.VRFPostIndex
 	Beacon types.Beacon
 	Round  uint32
