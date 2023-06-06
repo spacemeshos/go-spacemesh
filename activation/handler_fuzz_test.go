@@ -76,6 +76,6 @@ func Fuzz_Handler(f *testing.F) {
 		h := newTestAtxHandler(t)
 		h.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 
-		h.handleAtxData(context.Background(), p2p.NoPeer, data)
+		h.HandleAtxData(context.Background(), p2p.NoPeer, data)
 	})
 }
