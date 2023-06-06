@@ -140,7 +140,8 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 	logger := ff.logger.WithContext(ctx).WithFields(
 		log.Stringer("diff_layer", diffLid),
 		log.Stringer("diff_hash", diffHash),
-		log.Stringer("peer", peer))
+		log.Stringer("peer", peer),
+	)
 	logger.With().Info("begin fork finding with peer")
 
 	bnd, err := ff.setupBoundary(peer, &layerHash{layer: diffLid, hash: diffHash})
@@ -168,15 +169,17 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 			return 0, err
 		}
 
-		ownHashes, err := layers.GetAggHashes(ff.db, mh.Layers)
+		dist := bnd.to.layer.Difference(bnd.from.layer)
+		delta := dist/uint32(ff.maxHashesInReq) + 1
+		ownHashes, err := layers.GetAggHashes(ff.db, bnd.from.layer, bnd.to.layer, delta)
 		if err != nil {
 			lg.With().Error("failed own hashes lookup", log.Err(err))
 			return 0, err
 		}
 
+		lid := bnd.from.layer
 		var latestSame, oldestDiff *layerHash
 		for i, hash := range mh.Hashes {
-			lid := mh.Layers[i]
 			ownHash := ownHashes[i]
 			if ownHash != hash {
 				if latestSame != nil && lid == latestSame.layer.Add(1) {
@@ -185,7 +188,8 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 						log.Stringer("fork", latestSame.layer),
 						log.Stringer("fork_hash", latestSame.hash),
 						log.Stringer("after_fork", lid),
-						log.Stringer("after_fork_hash", hash))
+						log.Stringer("after_fork_hash", hash),
+					)
 					return latestSame.layer, nil
 				}
 				oldestDiff = &layerHash{layer: lid, hash: hash}
@@ -193,6 +197,7 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 			}
 			latestSame = &layerHash{layer: lid, hash: hash}
 			ff.updateAgreement(peer, latestSame, time.Now())
+			lid = lid.Add(delta)
 		}
 		if latestSame == nil || oldestDiff == nil {
 			// every layer hash is different/same from node's. this can only happen when
@@ -275,50 +280,31 @@ func (ff *ForkFinder) sendRequest(ctx context.Context, logger log.Log, peer p2p.
 		logger.With().Fatal("invalid args", log.Object("boundary", bnd))
 	}
 
-	var delta, steps uint32
 	dist := bnd.to.layer.Difference(bnd.from.layer)
-	if dist+1 <= ff.maxHashesInReq {
-		steps = dist
-		delta = 1
-	} else {
-		steps = uint32(ff.maxHashesInReq) - 1
-		delta = dist / steps
-		if dist%steps > 0 {
-			delta++
-		}
-		// adjustment to delta may reduce the number of steps required
-		for ; delta*(steps-1) >= dist; steps-- {
-		}
-	}
+	delta := dist/uint32(ff.maxHashesInReq) + 1
 	req := &fetch.MeshHashRequest{
 		From: bnd.from.layer,
 		To:   bnd.to.layer,
 		By:   delta,
 	}
+	count := int(dist/delta + 1)
 	logger.With().Debug("sending request", log.Uint32("delta", delta))
 	mh, err := ff.fetcher.PeerMeshHashes(ctx, peer, req)
 	if err != nil {
 		return nil, fmt.Errorf("find fork hash req: %w", err)
 	}
 	logger.With().Debug("received response",
-		log.Int("num_layers", len(mh.Layers)),
 		log.Int("num_hashes", len(mh.Hashes)),
 	)
-	if len(mh.Layers) != len(mh.Hashes) || uint32(len(mh.Layers)) != steps+1 {
+	if count != len(mh.Hashes) {
 		return nil, errors.New("inconsistent layers for mesh hashes")
 	}
-	if mh.Layers[0] != bnd.from.layer || mh.Layers[steps] != bnd.to.layer {
-		logger.With().Warning("invalid boundary in response",
-			log.Stringer("rsp_from", mh.Layers[0]),
-			log.Stringer("rsp_to", mh.Layers[steps]))
-		return nil, errors.New("invalid boundary in response")
-	}
-	if mh.Hashes[0] != bnd.from.hash || mh.Hashes[steps] != bnd.to.hash {
+	if mh.Hashes[0] != bnd.from.hash || mh.Hashes[count] != bnd.to.hash {
 		logger.With().Warning("peer boundary hashes have changed",
 			log.Stringer("hash_from", bnd.from.hash),
 			log.Stringer("hash_to", bnd.to.hash),
 			log.Stringer("peer_hash_from", mh.Hashes[0]),
-			log.Stringer("peer_hash_to", mh.Hashes[steps]),
+			log.Stringer("peer_hash_to", mh.Hashes[count]),
 		)
 		ff.Purge(false, peer)
 		return nil, ErrPeerMeshChangedMidSession

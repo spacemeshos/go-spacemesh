@@ -228,36 +228,6 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 	}
 }
 
-func iterateLayers(req *MeshHashRequest, maxHashes int) ([]types.LayerID, error) {
-	if req.By == 0 {
-		return nil, fmt.Errorf("%w: %v", errBadRequest, req)
-	}
-
-	if req.To.Before(req.From) {
-		return nil, fmt.Errorf("%w: %v", errBadRequest, req)
-	}
-
-	diff := req.To.Difference(req.From)
-	count := diff/req.By + 1
-	if diff%req.By != 0 {
-		// last layer is not a multiple of By, so we need to add it
-		count++
-	}
-	if count > uint32(maxHashes) {
-		return nil, fmt.Errorf("%w: %v", errBadRequest, req)
-	}
-
-	lids := make([]types.LayerID, count)
-	lids[0] = req.From
-	for i := uint32(1); i < count; i++ {
-		lids[i] = lids[i-1].Add(req.By)
-	}
-	if lids[count-1].After(req.To) {
-		lids[count-1] = req.To
-	}
-	return lids, nil
-}
-
 func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHashRequest) (*MeshHashes, error) {
 	f.logger.WithContext(ctx).With().Debug("requesting mesh hashes from peer",
 		log.Stringer("peer", peer),
@@ -272,10 +242,6 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 	reqData, err := codec.Encode(req)
 	if err != nil {
 		f.logger.Fatal("failed to encode mesh hash request", log.Err(err))
-	}
-	lids, err := iterateLayers(req, f.cfg.MaxHashesInReq)
-	if err != nil {
-		return nil, err
 	}
 
 	okCB := func(data []byte) {
@@ -297,7 +263,6 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 			return nil, err
 		}
 		return &MeshHashes{
-			Layers: lids,
 			Hashes: hashes,
 		}, nil
 	case <-ctx.Done():

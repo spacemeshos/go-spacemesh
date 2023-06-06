@@ -3,6 +3,7 @@ package fetch
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -211,28 +212,45 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 		h.logger.WithContext(ctx).With().Warning("failed to parse mesh hash request", log.Err(err))
 		return nil, errBadRequest
 	}
-	lids, err := iterateLayers(&req, h.cfg.MaxHashesInReq)
-	if err != nil {
+	if err := h.validateReq(req); err != nil {
 		h.logger.WithContext(ctx).With().Debug("failed to iterate layers", log.Err(err))
 		return nil, err
 	}
-	if len(lids) > 0 {
-		hashes, err = layers.GetAggHashes(h.cdb, lids)
-		if err != nil {
-			h.logger.WithContext(ctx).With().Warning("failed to get mesh hashes", log.Err(err))
-			return nil, err
-		}
+	hashes, err = layers.GetAggHashes(h.cdb, req.From, req.To, req.By)
+	if err != nil {
+		h.logger.WithContext(ctx).With().Warning("failed to get mesh hashes", log.Err(err))
+		return nil, err
 	}
 	data, err = codec.EncodeSlice(hashes)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Fatal("failed to serialize hashes", log.Err(err))
 	}
 	h.logger.WithContext(ctx).With().Debug("returning response for mesh hashes",
-		log.Array("layers", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-			for _, lid := range lids {
-				encoder.AppendUint32(lid.Uint32())
-			}
-			return nil
-		})))
+		log.Stringer("layer_from", req.From),
+		log.Stringer("layer_to", req.To),
+		log.Uint32("by", req.By),
+		log.Int("count_hashes", len(hashes)),
+	)
 	return data, nil
+}
+
+func (h *handler) validateReq(req MeshHashRequest) error {
+	if req.By == 0 {
+		return fmt.Errorf("%w: %v", errBadRequest, req)
+	}
+
+	if req.To.Before(req.From) {
+		return fmt.Errorf("%w: %v", errBadRequest, req)
+	}
+
+	diff := req.To.Difference(req.From)
+	count := diff/req.By + 1
+	if diff%req.By != 0 {
+		// last layer is not a multiple of By, so we need to add it
+		count++
+	}
+	if count > uint32(h.cfg.MaxHashesInReq) {
+		return fmt.Errorf("%w: %v", errBadRequest, req)
+	}
+	return nil
 }

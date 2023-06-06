@@ -212,13 +212,6 @@ func (t *MeshHashRequest) DecodeScale(dec *scale.Decoder) (total int, err error)
 
 func (t *MeshHashes) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Layers, 1000)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := scale.EncodeStructSliceWithLimit(enc, t.Hashes, 1000)
 		if err != nil {
 			return total, err
@@ -229,14 +222,6 @@ func (t *MeshHashes) EncodeScale(enc *scale.Encoder) (total int, err error) {
 }
 
 func (t *MeshHashes) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.LayerID](dec, 1000)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Layers = field
-	}
 	{
 		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 1000)
 		if err != nil {

@@ -657,19 +657,13 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 	tt := []struct {
 		name     string
 		params   [3]uint32 // from, to, by
-		expected []types.LayerID
+		expected int
 		err      error
 	}{
 		{
-			name:   "success",
-			params: [3]uint32{7, 23, 5},
-			expected: []types.LayerID{
-				types.LayerID(7),
-				types.LayerID(12),
-				types.LayerID(17),
-				types.LayerID(22),
-				types.LayerID(23),
-			},
+			name:     "success",
+			params:   [3]uint32{7, 23, 5},
+			expected: 5,
 		},
 		{
 			name:   "failure",
@@ -691,11 +685,10 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 			}
 			var expected MeshHashes
 			if tc.err == nil {
-				hashes := make([]types.Hash32, len(tc.expected))
+				hashes := make([]types.Hash32, tc.expected)
 				for i := range hashes {
 					hashes[i] = types.RandomHash()
 				}
-				expected.Layers = tc.expected
 				expected.Hashes = hashes
 			}
 			reqData, err := codec.Encode(req)

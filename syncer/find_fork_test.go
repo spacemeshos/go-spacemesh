@@ -99,17 +99,14 @@ func storeNodeHashes(t *testing.T, db *sql.Database, diverge, max int) {
 
 func serveHashReq(t *testing.T, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
 	var (
-		lids   = []types.LayerID{}
 		hashes = []types.Hash32{}
 		count  uint32
 	)
 	for lid := req.From; lid.Before(req.To); lid = lid.Add(req.By) {
-		lids = append(lids, lid)
 		hashes = append(hashes, layerHash(int(lid.Uint32()), true))
 		count++
 	}
 
-	lids = append(lids, req.To)
 	hashes = append(hashes, layerHash(int(req.To.Uint32()), true))
 	count++
 
@@ -120,7 +117,6 @@ func serveHashReq(t *testing.T, req *fetch.MeshHashRequest) (*fetch.MeshHashes, 
 	}
 	require.Equal(t, expCount, count, fmt.Sprintf("%#v; count exp: %v, got %v", req, expCount, count))
 	mh := &fetch.MeshHashes{
-		Layers: lids,
 		Hashes: hashes,
 	}
 	return mh, nil
@@ -168,7 +164,6 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 		tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
 				mh := &fetch.MeshHashes{
-					Layers: []types.LayerID{types.LayerID(35), types.LayerID(36), types.LayerID(37)},
 					Hashes: []types.Hash32{types.RandomHash(), types.RandomHash(), types.RandomHash()},
 				}
 				return mh, nil
@@ -192,11 +187,10 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 		tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
 				mh := &fetch.MeshHashes{
-					Layers: []types.LayerID{types.LayerID(35), types.LayerID(36), types.LayerID(37)},
 					Hashes: []types.Hash32{lastAgreedHash, types.RandomHash(), lastDiffHash},
 				}
 				// changes the node's own hash for lastAgreedLid
-				for _, lid := range mh.Layers {
+				for _, lid := range []types.LayerID{types.LayerID(35), types.LayerID(36), types.LayerID(37)} {
 					require.NoError(t, layers.SetMeshHash(tf.db, lid, types.RandomHash()))
 				}
 				return mh, nil
