@@ -11,6 +11,7 @@ import (
 
 	"github.com/natefinch/atomic"
 	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
