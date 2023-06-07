@@ -387,6 +387,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	syncFunc := func() bool {
 		if s.cfg.Standalone {
 			s.setLastSyncedLayer(s.ticker.CurrentLayer().Sub(1))
+			s.setATXSynced()
 			return true
 		}
 		if len(s.dataFetcher.GetPeers()) == 0 {
