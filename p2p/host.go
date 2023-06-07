@@ -7,9 +7,12 @@ import (
 
 	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
+	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 
@@ -49,7 +52,7 @@ type Config struct {
 }
 
 // New initializes libp2p host configured for spacemesh.
-func New(_ context.Context, logger log.Log, cfg Config, genesisID types.Hash20, opts ...Opt) (*Host, error) {
+func New(_ context.Context, logger log.Log, cfg Config, genesisID types.Hash20, prologue []byte, opts ...Opt) (*Host, error) {
 	logger.Info("starting libp2p host with config %+v", cfg)
 	key, err := EnsureIdentity(cfg.DataDir)
 	if err != nil {
@@ -73,7 +76,13 @@ func New(_ context.Context, logger log.Log, cfg Config, genesisID types.Hash20, 
 		libp2p.DisableRelay(),
 
 		libp2p.Transport(tcp.NewTCPTransport),
-		libp2p.Security(noise.ID, noise.New),
+		libp2p.Security(noise.ID, func(id protocol.ID, privkey crypto.PrivKey, muxers []tptu.StreamMuxer) (*noise.SessionTransport, error) {
+			tp, err := noise.New(id, privkey, muxers)
+			if err != nil {
+				return nil, err
+			}
+			return tp.WithSessionOptions(noise.Prologue(prologue))
+		}),
 		libp2p.Muxer("/yamux/1.0.0", &streamer),
 
 		libp2p.ConnectionManager(cm),
