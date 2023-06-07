@@ -326,14 +326,13 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	p2pconf.DataDir = t.TempDir()
 
 	// Good host
-	genesisID := types.Hash20{}
-	h, err := p2p.New(ctx, lg, p2pconf, genesisID, []byte{})
+	h, err := p2p.New(ctx, lg, p2pconf, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { h.Close() })
 
 	// Bad host, will send a message that results in validation reject
 	p2pconf.DataDir = t.TempDir()
-	badPeerHost, err := p2p.New(ctx, lg, p2pconf, genesisID, []byte{})
+	badPeerHost, err := p2p.New(ctx, lg, p2pconf, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { badPeerHost.Close() })
 

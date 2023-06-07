@@ -442,7 +442,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	h, err := p2p.Upgrade(mesh.Hosts()[0], cfg.Genesis.GenesisID())
+	h, err := p2p.Upgrade(mesh.Hosts()[0])
 	require.NoError(t, err)
 	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
 		path, poetHarness.HTTPPoetClient, clock, h, edSgn,

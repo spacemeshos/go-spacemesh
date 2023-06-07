@@ -7,7 +7,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
@@ -19,9 +18,9 @@ func TestPrologue(t *testing.T) {
 	cfg2.DataDir = t.TempDir()
 	cfg2.Listen = "/ip4/127.0.0.1/tcp/0"
 
-	h1, err := New(context.Background(), logtest.New(t), cfg1, types.Hash20{1}, []byte("red"))
+	h1, err := New(context.Background(), logtest.New(t), cfg1, []byte("red"))
 	require.NoError(t, err)
-	h2, err := New(context.Background(), logtest.New(t), cfg2, types.Hash20{1}, []byte("blue"))
+	h2, err := New(context.Background(), logtest.New(t), cfg2, []byte("blue"))
 	require.NoError(t, err)
 	err = h1.Connect(context.Background(), peer.AddrInfo{
 		ID:    h2.ID(),
