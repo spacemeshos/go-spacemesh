@@ -710,6 +710,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		SyncCertDistance: app.Config.Tortoise.Hdist,
 		MaxHashesInReq:   100,
 		MaxStaleDuration: time.Hour,
+		Standalone:       app.Config.Standalone,
 	}
 	newSyncer := syncer.NewSyncer(app.cachedDB, app.clock, beaconProtocol, msh, trtl, fetcher, patrol, app.certifier,
 		syncer.WithConfig(syncerConf),

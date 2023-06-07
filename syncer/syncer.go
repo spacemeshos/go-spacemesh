@@ -27,6 +27,7 @@ type Config struct {
 	SyncCertDistance uint32
 	MaxHashesInReq   uint32
 	MaxStaleDuration time.Duration
+	Standalone       bool
 }
 
 // DefaultConfig for the syncer.
@@ -384,6 +385,10 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	// https://github.com/spacemeshos/go-spacemesh/issues/3970
 	// https://github.com/spacemeshos/go-spacemesh/issues/3987
 	syncFunc := func() bool {
+		if s.cfg.Standalone {
+			s.setLastSyncedLayer(s.ticker.CurrentLayer().Sub(1))
+			return true
+		}
 		if len(s.dataFetcher.GetPeers()) == 0 {
 			return false
 		}
