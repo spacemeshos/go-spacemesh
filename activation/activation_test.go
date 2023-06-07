@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/post/shared"
 )
 
 // ========== Vars / Consts ==========
@@ -1080,8 +1082,8 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any())
-	require.NoError(t, tab.generateProof(context.Background()))
+	tab.mpost.EXPECT().GenerateProof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostMetadata{}, nil)
+	require.NoError(t, tab.generateInitialPost(context.Background()))
 
 	posEpoch := postGenesisEpoch + 1
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
@@ -1101,7 +1103,21 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	assertLastAtx(require.New(t), tab.nodeID, types.BytesToHash(poetByte), atx, vPrevAtx, vPrevAtx, layersPerEpoch)
 
 	// GenerateProof() should not be called again
-	require.NoError(t, tab.generateProof(context.Background()))
+	require.NoError(t, tab.generateInitialPost(context.Background()))
+}
+
+func TestBuilder_InitialPostIsPersisted(t *testing.T) {
+	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+	tab.mpost.EXPECT().GenerateProof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostMetadata{}, nil)
+	require.NoError(t, tab.generateInitialPost(context.Background()))
+
+	// GenerateProof() should not be called again
+	require.NoError(t, tab.generateInitialPost(context.Background()))
+
+	// Remove the persisted post file and try again
+	require.NoError(t, os.Remove(filepath.Join(tab.nipostBuilder.DataDir(), postFilename)))
+	tab.mpost.EXPECT().GenerateProof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostMetadata{}, nil)
+	require.NoError(t, tab.generateInitialPost(context.Background()))
 }
 
 func TestBuilder_UpdatePoets(t *testing.T) {
