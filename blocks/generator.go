@@ -38,8 +38,8 @@ type Generator struct {
 	cert     certifier
 	patrol   layerPatrol
 
-	hareCh      chan hare.LayerOutput
-	hareOutputs map[types.LayerID]*proposalMetadata
+	hareCh           chan hare.LayerOutput
+	optimisticOutput map[types.LayerID]*proposalMetadata
 }
 
 // Config is the config for Generator.
@@ -103,16 +103,16 @@ func NewGenerator(
 	opts ...GeneratorOpt,
 ) *Generator {
 	g := &Generator{
-		logger:      log.NewNop(),
-		cfg:         defaultConfig(),
-		ctx:         context.Background(),
-		cdb:         cdb,
-		msh:         m,
-		executor:    exec,
-		fetcher:     f,
-		cert:        c,
-		patrol:      p,
-		hareOutputs: map[types.LayerID]*proposalMetadata{},
+		logger:           log.NewNop(),
+		cfg:              defaultConfig(),
+		ctx:              context.Background(),
+		cdb:              cdb,
+		msh:              m,
+		executor:         exec,
+		fetcher:          f,
+		cert:             c,
+		patrol:           p,
+		optimisticOutput: map[types.LayerID]*proposalMetadata{},
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -160,9 +160,11 @@ func (g *Generator) run() error {
 					log.Err(err),
 				)
 			}
-			g.processOptimisticLayers(maxLayer)
+			if len(g.optimisticOutput) > 0 {
+				g.processOptimisticLayers(maxLayer)
+			}
 		case <-time.After(g.cfg.GenBlockInterval):
-			if len(g.hareOutputs) > 0 {
+			if len(g.optimisticOutput) > 0 {
 				g.processOptimisticLayers(maxLayer)
 			}
 		}
@@ -207,7 +209,7 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) (*types.Block, error
 	}
 
 	if md != nil && md.optFilter {
-		g.hareOutputs[out.Layer] = md
+		g.optimisticOutput[out.Layer] = md
 		return nil, nil
 	}
 
@@ -246,11 +248,11 @@ func (g *Generator) processOptimisticLayers(max types.LayerID) {
 	}
 	next := lastApplied.Add(1)
 	for lid := next; lid <= max; lid++ {
-		md, ok := g.hareOutputs[lid]
+		md, ok := g.optimisticOutput[lid]
 		if !ok {
 			return
 		}
-		delete(g.hareOutputs, lid)
+		delete(g.optimisticOutput, lid)
 
 		block, err := g.genBlockOptimistic(md.ctx, md)
 		if err != nil {
