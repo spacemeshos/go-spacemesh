@@ -22,13 +22,6 @@ import (
 
 var errInvalidATXID = errors.New("proposal ATXID invalid")
 
-type blockGenInfo struct {
-	ctx   context.Context
-	lid   types.LayerID
-	md    *proposalMetadata
-	block *types.Block
-}
-
 // Generator generates a block from proposals.
 type Generator struct {
 	logger log.Log
@@ -46,7 +39,7 @@ type Generator struct {
 	patrol   layerPatrol
 
 	hareCh      chan hare.LayerOutput
-	hareOutputs map[types.LayerID]*blockGenInfo
+	hareOutputs map[types.LayerID]*proposalMetadata
 }
 
 // Config is the config for Generator.
@@ -119,7 +112,7 @@ func NewGenerator(
 		fetcher:     f,
 		cert:        c,
 		patrol:      p,
-		hareOutputs: map[types.LayerID]*blockGenInfo{},
+		hareOutputs: map[types.LayerID]*proposalMetadata{},
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -159,20 +152,18 @@ func (g *Generator) run() error {
 				log.Int("num_proposals", len(out.Proposals)),
 			)
 			maxLayer = types.MaxLayer(maxLayer, out.Layer)
-			bi, err := g.processHareOutput(out)
+			_, err := g.processHareOutput(out)
 			if err != nil {
 				g.logger.With().Error("failed to process hare output",
 					log.Context(out.Ctx),
 					out.Layer,
 					log.Err(err),
 				)
-				continue
 			}
-			g.hareOutputs[out.Layer] = bi
-			g.processLayers(maxLayer)
+			g.processOptimisticLayers(maxLayer)
 		case <-time.After(g.cfg.GenBlockInterval):
 			if len(g.hareOutputs) > 0 {
-				g.processLayers(maxLayer)
+				g.processOptimisticLayers(maxLayer)
 			}
 		}
 	}
@@ -193,7 +184,7 @@ func (g *Generator) getProposals(pids []types.ProposalID) ([]*types.Proposal, er
 	return result, nil
 }
 
-func (g *Generator) processHareOutput(out hare.LayerOutput) (*blockGenInfo, error) {
+func (g *Generator) processHareOutput(out hare.LayerOutput) (*types.Block, error) {
 	var md *proposalMetadata
 	if len(out.Proposals) > 0 {
 		// fetch proposals from peers if not locally available
@@ -209,41 +200,45 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) (*blockGenInfo, erro
 			return nil, fmt.Errorf("preprocess get layer %d proposals: %w", out.Layer, err)
 		}
 
-		md, err = getProposalMetadata(g.logger, g.cdb, g.cfg, out.Layer, props)
+		md, err = getProposalMetadata(out.Ctx, g.logger, g.cdb, g.cfg, out.Layer, props)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	bi := &blockGenInfo{
-		ctx: out.Ctx,
-		lid: out.Layer,
+	if md != nil && md.optFilter {
+		g.hareOutputs[out.Layer] = md
+		return nil, nil
 	}
+
+	var (
+		block      *types.Block
+		hareOutput types.BlockID
+	)
 	if md != nil {
-		if md.optFilter {
-			// save the metadata for generating block in-situ
-			bi.md = md
-		} else {
-			bi.block = &types.Block{
-				InnerBlock: types.InnerBlock{
-					LayerIndex: md.lid,
-					TickHeight: md.tickHeight,
-					Rewards:    md.rewards,
-					TxIDs:      md.tids,
-				},
-			}
-			bi.block.Initialize()
+		block = &types.Block{
+			InnerBlock: types.InnerBlock{
+				LayerIndex: md.lid,
+				TickHeight: md.tickHeight,
+				Rewards:    md.rewards,
+				TxIDs:      md.tids,
+			},
 		}
+		block.Initialize()
+		hareOutput = block.ID()
+		g.logger.With().Info("generated block", out.Layer, block.ID())
 	}
-	if md == nil || !md.optFilter {
-		if err := g.saveAndCertify(out.Ctx, out.Layer, bi.block); err != nil {
-			return nil, err
-		}
+	if err := g.saveAndCertify(out.Ctx, out.Layer, block); err != nil {
+		return block, err
 	}
-	return bi, nil
+	if err := g.msh.ProcessLayerPerHareOutput(out.Ctx, out.Layer, hareOutput, false); err != nil {
+		return block, err
+	}
+	g.patrol.CompleteHare(out.Layer)
+	return block, nil
 }
 
-func (g *Generator) processLayers(max types.LayerID) {
+func (g *Generator) processOptimisticLayers(max types.LayerID) {
 	lastApplied, err := layers.GetLastApplied(g.cdb)
 	if err != nil {
 		g.logger.Error("failed to get latest applied layer", log.Err(err))
@@ -251,43 +246,33 @@ func (g *Generator) processLayers(max types.LayerID) {
 	}
 	next := lastApplied.Add(1)
 	for lid := next; lid <= max; lid++ {
-		bi, ok := g.hareOutputs[next]
-		if !ok { // hare hasn't terminated
+		md, ok := g.hareOutputs[lid]
+		if !ok {
 			return
 		}
-		hareOutput := types.EmptyBlockID
-		executed := false
-		if bi.md != nil {
-			if !bi.md.optFilter {
-				g.logger.Fatal("metadata is only expected in optimistic filtering")
-			}
-			bi.block, err = g.genBlockOptimistic(bi.ctx, bi.md)
-			if err != nil {
-				failGenCnt.Inc()
-				g.logger.With().Error("failed to optimistically generate block",
-					log.Context(bi.ctx),
-					lid,
-					log.Err(err),
-				)
-				return
-			}
-			executed = true
-		}
-		if bi.block != nil {
-			hareOutput = bi.block.ID()
-		}
-		if err = g.msh.ProcessLayerPerHareOutput(bi.ctx, lid, hareOutput, executed); err != nil {
-			g.logger.With().Error("mesh failed to process layer",
-				log.Context(bi.ctx),
+		delete(g.hareOutputs, lid)
+
+		block, err := g.genBlockOptimistic(md.ctx, md)
+		if err != nil {
+			failGenCnt.Inc()
+			g.logger.With().Error("failed to optimistically generate block",
+				log.Context(md.ctx),
 				lid,
-				log.Stringer("hare output", hareOutput),
-				log.Bool("executed", executed),
 				log.Err(err),
 			)
 			return
 		}
-		delete(g.hareOutputs, lid)
-		g.patrol.CompleteHare(next)
+		g.logger.With().Info("generated block (optimistic)", lid, block.ID())
+		if err = g.msh.ProcessLayerPerHareOutput(md.ctx, lid, block.ID(), true); err != nil {
+			g.logger.With().Error("mesh failed to process optimistic layer",
+				log.Context(md.ctx),
+				lid,
+				log.Stringer("hare output", block.ID()),
+				log.Err(err),
+			)
+			return
+		}
+		g.patrol.CompleteHare(lid)
 	}
 }
 

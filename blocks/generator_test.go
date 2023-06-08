@@ -8,7 +8,6 @@ import (
 	"math/big"
 	"math/rand"
 	"sort"
-	"sync"
 	"testing"
 	"time"
 
@@ -230,45 +229,69 @@ func Test_StartStop(t *testing.T) {
 	tg.Stop()
 }
 
-func Test_SerialProcessing(t *testing.T) {
+func genData(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, optimistic bool) hare.LayerOutput {
+	numTXs := 1000
+	numProposals := 10
+	txIDs := createAndSaveTxs(t, numTXs, cdb)
+	signers, atxes := createATXs(t, cdb, (lid.GetEpoch() - 1).FirstLayer(), numProposals)
+	activeSet := types.ToATXIDs(atxes)
+	var meshHash types.Hash32
+	if optimistic {
+		meshHash = types.RandomHash()
+	}
+	require.NoError(t, layers.SetMeshHash(cdb, lid.Sub(1), meshHash))
+	plist := createProposals(t, cdb, lid, meshHash, signers, activeSet, txIDs)
+	return hare.LayerOutput{
+		Ctx:       context.Background(),
+		Layer:     lid,
+		Proposals: types.ToProposalIDs(plist),
+	}
+}
+
+func Test_SerialExecution(t *testing.T) {
 	tg := createTestGenerator(t)
 	tg.Start()
-	defer tg.Stop()
+	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), gomock.Any()).AnyTimes()
+	layerID := types.GetEffectiveGenesis().Add(100)
+	require.NoError(t, layers.SetApplied(tg.cdb, layerID-1, types.EmptyBlockID))
 
-	numLayers := 4
-	var wg sync.WaitGroup
-	wg.Add(numLayers)
-	for i := uint32(1); i <= uint32(numLayers); i++ {
-		lid := types.LayerID(i)
-		tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), lid, types.EmptyBlockID)
-		tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), lid, types.EmptyBlockID)
-		tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lid, types.EmptyBlockID, false).Do(
-			func(_ context.Context, gotL types.LayerID, gotB types.BlockID, _ bool) error {
-				require.NoError(t, layers.SetApplied(tg.cdb, gotL, gotB))
-				wg.Done()
-				return nil
-			})
-		tg.mockPatrol.EXPECT().CompleteHare(lid)
-	}
+	// hare output in the following order
+	// layerID + 3
+	// layerID + 1 (optimistic)
+	// layerID + 2
+	// layerID (optimistic)
 
-	tg.hareCh <- hare.LayerOutput{
-		Ctx:   context.Background(),
-		Layer: types.LayerID(3),
-	}
-	tg.hareCh <- hare.LayerOutput{
-		Ctx:   context.Background(),
-		Layer: types.LayerID(4),
-	}
-	tg.hareCh <- hare.LayerOutput{
-		Ctx:   context.Background(),
-		Layer: types.LayerID(2),
-	}
-	tg.hareCh <- hare.LayerOutput{
-		Ctx:   context.Background(),
-		Layer: types.LayerID(1),
-	}
+	lid := layerID + 3
+	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
+	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), lid, gomock.Any())
+	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), lid, gomock.Any())
+	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lid, gomock.Any(), false)
+	tg.mockPatrol.EXPECT().CompleteHare(lid)
+	tg.hareCh <- genData(t, tg.cdb, lid, false)
 
-	wg.Wait()
+	// nothing happens
+	tg.hareCh <- genData(t, tg.cdb, layerID+1, true)
+
+	lid = layerID + 2
+	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
+	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), lid, gomock.Any())
+	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), lid, gomock.Any())
+	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lid, gomock.Any(), false)
+	tg.mockPatrol.EXPECT().CompleteHare(lid)
+	tg.hareCh <- genData(t, tg.cdb, lid, false)
+
+	for _, lyr := range []types.LayerID{layerID, layerID + 1} {
+		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), lyr, uint64(baseTickHeight), gomock.Any(), gomock.Any()).
+			Return(types.NewExistingBlock(types.RandomBlockID(), types.InnerBlock{LayerIndex: lyr}), nil)
+		tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
+		tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), lyr, gomock.Any())
+		tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), lyr, gomock.Any())
+		tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyr, gomock.Any(), true)
+		tg.mockPatrol.EXPECT().CompleteHare(lyr)
+	}
+	tg.hareCh <- genData(t, tg.cdb, layerID, true)
+	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
+	tg.Stop()
 }
 
 func Test_run(t *testing.T) {
@@ -568,31 +591,37 @@ func Test_processHareOutput_UnequalHeight(t *testing.T) {
 		Proposals: types.ToProposalIDs(pList),
 	}
 	tg.mockFetch.EXPECT().GetProposals(ho.Ctx, ho.Proposals)
-	var got types.BlockID
+	var block *types.Block
 	tg.mockMesh.EXPECT().AddBlockWithTXs(ho.Ctx, gomock.Any()).DoAndReturn(
 		func(_ context.Context, b *types.Block) error {
-			got = b.ID()
+			block = b
 			return nil
 		})
 	tg.mockCert.EXPECT().RegisterForCert(ho.Ctx, layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, bid types.BlockID) error {
-			require.Equal(t, got, bid)
+			require.Equal(t, block.ID(), bid)
 			return nil
 		})
 	tg.mockCert.EXPECT().CertifyIfEligible(ho.Ctx, gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ log.Log, _ types.LayerID, bid types.BlockID) error {
-			require.Equal(t, got, bid)
+			require.Equal(t, block.ID(), bid)
 			return eligibility.ErrNotActive
 		})
-	bi, err := tg.processHareOutput(ho)
+	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any(), false).DoAndReturn(
+		func(_ context.Context, _ types.LayerID, bid types.BlockID, _ bool) error {
+			require.Equal(t, block.ID(), bid)
+			return nil
+		})
+	tg.mockPatrol.EXPECT().CompleteHare(layerID)
+	got, err := tg.processHareOutput(ho)
 	require.NoError(t, err)
-	require.NotNil(t, bi.block)
-	require.Equal(t, maxHeight, bi.block.TickHeight)
-	require.Len(t, bi.block.Rewards, numProposals)
+	require.Equal(t, block, got)
+	require.Equal(t, maxHeight, got.TickHeight)
+	require.Len(t, got.Rewards, numProposals)
 	// numUnit is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1 eligibility
 	// the expected weight for each eligibility is `numUnit` * 1/3
 	expWeight := new(big.Rat).SetInt64(numUnit * 1 / 3)
-	checkRewards(t, atxes, expWeight, bi.block.Rewards)
+	checkRewards(t, atxes, expWeight, got.Rewards)
 }
 
 func Test_processHareOutput_bad_state(t *testing.T) {
@@ -609,9 +638,9 @@ func Test_processHareOutput_bad_state(t *testing.T) {
 			Proposals: types.ToProposalIDs([]*types.Proposal{p}),
 		}
 		tg.mockFetch.EXPECT().GetProposals(ho.Ctx, ho.Proposals)
-		bi, err := tg.processHareOutput(ho)
+		got, err := tg.processHareOutput(ho)
 		require.ErrorIs(t, err, errProposalTxMissing)
-		require.Nil(t, bi)
+		require.Nil(t, got)
 	})
 
 	t.Run("tx header missing", func(t *testing.T) {
@@ -626,9 +655,9 @@ func Test_processHareOutput_bad_state(t *testing.T) {
 			Proposals: types.ToProposalIDs([]*types.Proposal{p}),
 		}
 		tg.mockFetch.EXPECT().GetProposals(ho.Ctx, ho.Proposals)
-		bi, err := tg.processHareOutput(ho)
+		got, err := tg.processHareOutput(ho)
 		require.ErrorIs(t, err, errProposalTxHdrMissing)
-		require.Nil(t, bi)
+		require.Nil(t, got)
 	})
 }
 
@@ -649,39 +678,43 @@ func Test_processHareOutput_EmptyProposals(t *testing.T) {
 		Proposals: types.ToProposalIDs(plist),
 	}
 	tg.mockFetch.EXPECT().GetProposals(ho.Ctx, ho.Proposals)
-	var got types.BlockID
+	var block *types.Block
 	tg.mockMesh.EXPECT().AddBlockWithTXs(ho.Ctx, gomock.Any()).DoAndReturn(
 		func(_ context.Context, b *types.Block) error {
-			got = b.ID()
+			block = b
 			return nil
 		})
 	tg.mockCert.EXPECT().RegisterForCert(ho.Ctx, lid, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, bid types.BlockID) error {
-			require.Equal(t, got, bid)
+			require.Equal(t, block.ID(), bid)
 			return nil
 		})
 	tg.mockCert.EXPECT().CertifyIfEligible(ho.Ctx, gomock.Any(), lid, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ log.Log, _ types.LayerID, bid types.BlockID) error {
-			require.Equal(t, got, bid)
+			require.Equal(t, block.ID(), bid)
 			return eligibility.ErrNotActive
 		})
-	bi, err := tg.processHareOutput(ho)
+	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lid, gomock.Any(), false).DoAndReturn(
+		func(_ context.Context, _ types.LayerID, bid types.BlockID, _ bool) error {
+			require.Equal(t, block.ID(), bid)
+			return nil
+		})
+	tg.mockPatrol.EXPECT().CompleteHare(lid)
+	got, err := tg.processHareOutput(ho)
 	require.NoError(t, err)
-	require.NotNil(t, bi)
-	require.NotNil(t, bi.block)
-	require.Equal(t, lid, bi.block.LayerIndex)
-	require.Empty(t, bi.block.TxIDs)
-	require.Len(t, bi.block.Rewards, numProposals)
+	require.Equal(t, block, got)
+	require.Equal(t, lid, got.LayerIndex)
+	require.Empty(t, got.TxIDs)
+	require.Len(t, got.Rewards, numProposals)
 	// numUint is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1 eligibility
 	// the expected weight for each eligibility is `numUnit` * 1/3
 	expWeight := new(big.Rat).SetInt64(numUnit * 1 / 3)
-	checkRewards(t, atxes, expWeight, bi.block.Rewards)
+	checkRewards(t, atxes, expWeight, got.Rewards)
 }
 
 func Test_processHareOutput_StableBlockID(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
-	// create multiple proposals with overlapping TXs
 	numTXs := 1000
 	numProposals := 10
 	txIDs := createAndSaveTxs(t, numTXs, tg.cdb)
@@ -697,13 +730,13 @@ func Test_processHareOutput_StableBlockID(t *testing.T) {
 	tg.mockMesh.EXPECT().AddBlockWithTXs(ho1.Ctx, gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(ho1.Ctx, layerID, gomock.Any())
 	tg.mockCert.EXPECT().CertifyIfEligible(ho1.Ctx, gomock.Any(), layerID, gomock.Any()).Return(eligibility.ErrNotActive)
-	bi1, err := tg.processHareOutput(ho1)
+	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any(), false)
+	tg.mockPatrol.EXPECT().CompleteHare(layerID)
+	got1, err := tg.processHareOutput(ho1)
 	require.NoError(t, err)
-	require.NotNil(t, bi1)
-	require.NotNil(t, bi1.block)
-	require.NotEqual(t, types.EmptyBlockID, bi1.block.ID())
-	require.Equal(t, layerID, bi1.block.LayerIndex)
-	require.Len(t, bi1.block.TxIDs, numTXs)
+	require.NotNil(t, got1)
+	require.Equal(t, layerID, got1.LayerIndex)
+	require.Len(t, got1.TxIDs, numTXs)
 
 	// reorder the proposals
 	ordered := plist[numProposals/2 : numProposals]
@@ -718,10 +751,12 @@ func Test_processHareOutput_StableBlockID(t *testing.T) {
 	tg.mockMesh.EXPECT().AddBlockWithTXs(ho2.Ctx, gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(ho2.Ctx, layerID, gomock.Any())
 	tg.mockCert.EXPECT().CertifyIfEligible(ho2.Ctx, gomock.Any(), layerID, gomock.Any()).Return(eligibility.ErrNotActive)
-	bi2, err := tg.processHareOutput(ho2)
+	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any(), false)
+	tg.mockPatrol.EXPECT().CompleteHare(layerID)
+	got2, err := tg.processHareOutput(ho2)
 	require.NoError(t, err)
-	require.NotNil(t, bi2)
-	require.Equal(t, bi1.block, bi2.block)
+	require.NotNil(t, got2)
+	require.Equal(t, got1, got2)
 }
 
 func Test_processHareOutput_SameATX(t *testing.T) {
@@ -742,15 +777,14 @@ func Test_processHareOutput_SameATX(t *testing.T) {
 		Proposals: types.ToProposalIDs(plist),
 	}
 	tg.mockFetch.EXPECT().GetProposals(ho.Ctx, ho.Proposals)
-	bi, err := tg.processHareOutput(ho)
+	got, err := tg.processHareOutput(ho)
 	require.ErrorIs(t, err, errDuplicateATX)
-	require.Nil(t, bi)
+	require.Nil(t, got)
 }
 
 func Test_processHareOutput_EmptyATXID(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
-	// create multiple proposals with overlapping TXs
 	numTXs := 1000
 	numProposals := 10
 	txIDs := createAndSaveTxs(t, numTXs, tg.cdb)
@@ -765,9 +799,9 @@ func Test_processHareOutput_EmptyATXID(t *testing.T) {
 		Proposals: types.ToProposalIDs(plist),
 	}
 	tg.mockFetch.EXPECT().GetProposals(ho.Ctx, ho.Proposals)
-	bi, err := tg.processHareOutput(ho)
+	got, err := tg.processHareOutput(ho)
 	require.ErrorIs(t, err, errInvalidATXID)
-	require.Nil(t, bi)
+	require.Nil(t, got)
 }
 
 func Test_processHareOutput_MultipleEligibilities(t *testing.T) {
@@ -790,16 +824,17 @@ func Test_processHareOutput_MultipleEligibilities(t *testing.T) {
 	tg.mockMesh.EXPECT().AddBlockWithTXs(ho.Ctx, gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(ho.Ctx, layerID, gomock.Any())
 	tg.mockCert.EXPECT().CertifyIfEligible(ho.Ctx, gomock.Any(), layerID, gomock.Any()).Return(eligibility.ErrNotActive)
-	bi, err := tg.processHareOutput(ho)
+	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any(), false)
+	tg.mockPatrol.EXPECT().CompleteHare(layerID)
+	got, err := tg.processHareOutput(ho)
 	require.NoError(t, err)
-	require.NotNil(t, bi)
-	require.NotNil(t, bi.block)
-	require.Len(t, bi.block.Rewards, len(plist))
+	require.NotNil(t, got)
+	require.Len(t, got.Rewards, len(plist))
 	sort.Slice(plist, func(i, j int) bool {
 		return bytes.Compare(plist[i].AtxID.Bytes(), plist[j].AtxID.Bytes()) < 0
 	})
 	totalWeight := new(big.Rat)
-	for i, r := range bi.block.Rewards {
+	for i, r := range got.Rewards {
 		require.Equal(t, plist[i].AtxID, r.AtxID)
 		got := r.Weight.ToBigRat()
 		// numUint is the ATX weight. eligible slots per epoch is 3 for each atx

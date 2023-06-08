@@ -2,6 +2,7 @@ package blocks
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -36,6 +37,7 @@ type meshState struct {
 }
 
 type proposalMetadata struct {
+	ctx        context.Context
 	lid        types.LayerID
 	proposals  []*types.Proposal
 	tids       []types.TransactionID
@@ -45,6 +47,7 @@ type proposalMetadata struct {
 }
 
 func getProposalMetadata(
+	ctx context.Context,
 	logger log.Log,
 	cdb *datastore.CachedDB,
 	cfg Config,
@@ -53,6 +56,7 @@ func getProposalMetadata(
 ) (*proposalMetadata, error) {
 	var (
 		md = &proposalMetadata{
+			ctx:       ctx,
 			lid:       lid,
 			proposals: proposals,
 		}
