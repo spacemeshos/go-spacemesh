@@ -194,10 +194,27 @@ func (g *Generator) getProposals(pids []types.ProposalID) ([]*types.Proposal, er
 }
 
 func (g *Generator) processHareOutput(out hare.LayerOutput) (*blockGenInfo, error) {
-	md, err := g.preprocess(out)
-	if err != nil {
-		return nil, err
+	var md *proposalMetadata
+	if len(out.Proposals) > 0 {
+		// fetch proposals from peers if not locally available
+		if err := g.fetcher.GetProposals(out.Ctx, out.Proposals); err != nil {
+			failFetchCnt.Inc()
+			return nil, fmt.Errorf("preprocess fetch layer %d proposals: %w", out.Layer, err)
+		}
+
+		// now all proposals should be in local DB
+		props, err := g.getProposals(out.Proposals)
+		if err != nil {
+			failErrCnt.Inc()
+			return nil, fmt.Errorf("preprocess get layer %d proposals: %w", out.Layer, err)
+		}
+
+		md, err = getProposalMetadata(g.logger, g.cdb, g.cfg, out.Layer, props)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	bi := &blockGenInfo{
 		ctx: out.Ctx,
 		lid: out.Layer,
@@ -219,32 +236,11 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) (*blockGenInfo, erro
 		}
 	}
 	if md == nil || !md.optFilter {
-		if err = g.postProcess(out.Ctx, out.Layer, bi.block); err != nil {
+		if err := g.saveAndCertify(out.Ctx, out.Layer, bi.block); err != nil {
 			return nil, err
 		}
 	}
 	return bi, nil
-}
-
-func (g *Generator) preprocess(out hare.LayerOutput) (*proposalMetadata, error) {
-	if len(out.Proposals) == 0 {
-		return nil, nil
-	}
-
-	// fetch proposals from peers if not locally available
-	if err := g.fetcher.GetProposals(out.Ctx, out.Proposals); err != nil {
-		failFetchCnt.Inc()
-		return nil, fmt.Errorf("preprocess fetch layer %d proposals: %w", out.Layer, err)
-	}
-
-	// now all proposals should be in local DB
-	props, err := g.getProposals(out.Proposals)
-	if err != nil {
-		failErrCnt.Inc()
-		return nil, fmt.Errorf("preprocess get layer %d proposals: %w", out.Layer, err)
-	}
-
-	return getProposalMetadata(g.logger, g.cdb, g.cfg, out.Layer, props)
 }
 
 func (g *Generator) processLayers(max types.LayerID) {
@@ -295,7 +291,7 @@ func (g *Generator) processLayers(max types.LayerID) {
 	}
 }
 
-func (g *Generator) postProcess(ctx context.Context, lid types.LayerID, block *types.Block) error {
+func (g *Generator) saveAndCertify(ctx context.Context, lid types.LayerID, block *types.Block) error {
 	hareOutput := types.EmptyBlockID
 	if block != nil {
 		if err := g.msh.AddBlockWithTXs(ctx, block); err != nil {
@@ -334,7 +330,7 @@ func (g *Generator) genBlockOptimistic(ctx context.Context, md *proposalMetadata
 		failGenCnt.Inc()
 		return nil, fmt.Errorf("execute in situ: %w", err)
 	}
-	if err = g.postProcess(ctx, md.lid, block); err != nil {
+	if err = g.saveAndCertify(ctx, md.lid, block); err != nil {
 		return nil, fmt.Errorf("post-process block (optimistic): %w", err)
 	}
 	return block, nil
