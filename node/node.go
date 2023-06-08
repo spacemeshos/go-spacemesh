@@ -21,6 +21,8 @@ import (
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
+	poetconfig "github.com/spacemeshos/poet/config"
+	"github.com/spacemeshos/poet/server"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -66,8 +68,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/txs"
-	poetconfig "github.com/spacemeshos/poet/config"
-	"github.com/spacemeshos/poet/server"
 )
 
 const (
