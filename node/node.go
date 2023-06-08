@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -65,6 +66,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/txs"
+	poetconfig "github.com/spacemeshos/poet/config"
+	"github.com/spacemeshos/poet/server"
 )
 
 const (
@@ -890,6 +893,52 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	return nil
 }
 
+func (app *App) launchStandalone(ctx context.Context) error {
+	if !app.Config.Standalone {
+		return nil
+	}
+	if len(app.Config.PoETServers) != 1 {
+		return fmt.Errorf("to launch in a standalone mode provide single local address for poet: %v", app.Config.PoETServers)
+	}
+	value := types.Beacon{}
+	genesis := app.Config.Genesis.GenesisID()
+	copy(value[:], genesis[:])
+	epoch := types.GetEffectiveGenesis().GetEpoch() + 1
+	app.log.With().Warning("using standalone mode for bootstarapping beacon",
+		log.Uint32("epoch", epoch.Uint32()),
+		log.Stringer("beacon", value),
+	)
+	if err := app.beaconProtocol.UpdateBeacon(epoch, value); err != nil {
+		return fmt.Errorf("update standalone beacon: %w", err)
+	}
+	cfg := poetconfig.DefaultConfig()
+	cfg.PoetDir = filepath.Join(app.Config.DataDir(), "poet")
+	cfg.DataDir = cfg.PoetDir
+	cfg.LogDir = cfg.PoetDir
+	parsed, err := url.Parse(app.Config.PoETServers[0])
+	if err != nil {
+		return err
+	}
+	cfg.RawRESTListener = parsed.Host
+	cfg.Service.Genesis = app.Config.Genesis.GenesisTime
+	cfg.Service.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
+	cfg.Service.CycleGap = app.Config.POET.CycleGap
+	cfg.Service.PhaseShift = app.Config.POET.PhaseShift
+	srv, err := server.New(ctx, *cfg)
+	if err != nil {
+		return fmt.Errorf("init poet server: %w", err)
+	}
+	app.log.With().Warning("lauching poet in standalone mode", log.Any("config", cfg))
+	app.eg.Go(func() error {
+		if err := srv.Start(ctx); err != nil {
+			app.log.With().Error("poet server failed", log.Err(err))
+			return err
+		}
+		return nil
+	})
+	return nil
+}
+
 func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 	app.eg.Go(func() error {
 		ch := app.updater.Subscribe()
@@ -1309,6 +1358,10 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	if err := app.startAPIServices(ctx); err != nil {
+		return err
+	}
+
+	if err := app.launchStandalone(ctx); err != nil {
 		return err
 	}
 
