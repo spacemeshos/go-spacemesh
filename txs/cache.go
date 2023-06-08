@@ -508,7 +508,7 @@ func (c *Cache) BuildFromTXs(rst []*types.MeshTransaction, blockSeed []byte) err
 			acctsAdded++
 		}
 	}
-	c.logger.Info("added pending tx for %d accounts", acctsAdded)
+	c.logger.Debug("added pending tx for %d accounts", acctsAdded)
 	return nil
 }
 
@@ -790,7 +790,7 @@ func (c *Cache) GetMempool(logger log.Log) map[types.Address][]*NanoTX {
 	defer c.mu.Unlock()
 
 	all := make(map[types.Address][]*NanoTX)
-	logger.With().Info("cache has pending accounts", log.Int("num_acct", len(c.pending)))
+	logger.With().Debug("cache has pending accounts", log.Int("num_acct", len(c.pending)))
 	for addr, accCache := range c.pending {
 		txs := accCache.getMempool(logger.WithFields(addr))
 		if len(txs) > 0 {
