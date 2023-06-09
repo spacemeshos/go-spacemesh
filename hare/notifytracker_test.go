@@ -110,7 +110,7 @@ func TestNotifyTracker_NotificationsCount(t *testing.T) {
 	tracker.OnNotify(context.Background(), m2)
 	ci := tracker.NotificationsCount(s)
 	require.Equal(t, CountInfo{hCount: 1, dhCount: 1, numHonest: 1, numDishonest: 1}, *ci)
-	require.False(t, ci.Meet(2))
+	require.True(t, ci.Meet(2))
 	require.Empty(t, mch)
 
 	// add a known equivocator
