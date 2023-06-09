@@ -590,8 +590,8 @@ github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d h1:ivLphqrvV
 github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d/go.mod h1:bMv7iXffBCPAHFivV6XM2l2SWXIfDoXkw4ND9yhgyfI=
 github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a h1:p/BRpvEHGqd4oYBp+B/vG3Z3RWdb7vAZCz8xsecS92M=
 github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a/go.mod h1:3SkkvXHU4Vm7yjpfgPu97PcZVvWweBmx0FOLRW7ek+g=
-github.com/spacemeshos/go-libp2p-asn-util v0.0.0-20230416062424-4582c091784a h1:XaCGzuNIqP/OkWhpg8ayh9tv6Jz5xWA7y1NETSI/LFY=
-github.com/spacemeshos/go-libp2p-asn-util v0.0.0-20230416062424-4582c091784a/go.mod h1:LIIqvQFJ1Z94jmMib7wJPgQ50cE2IBwSMGQD4B0lhrA=
+github.com/spacemeshos/go-libp2p-asn-util v0.0.0-20230609075739-acc6343714da h1:ScM8uo6XywSp0IxPmbXHl3iNZj8wJZhSX0q6vzREHoQ=
+github.com/spacemeshos/go-libp2p-asn-util v0.0.0-20230609075739-acc6343714da/go.mod h1:LIIqvQFJ1Z94jmMib7wJPgQ50cE2IBwSMGQD4B0lhrA=
 github.com/spacemeshos/go-scale v1.1.7 h1:nxoNju55EesKjhyXuus3cMM2OZSePYXyn5hY/5rDIwo=
 github.com/spacemeshos/go-scale v1.1.7/go.mod h1:AxKr+yCe5qn7EsM5ZAygGdulxVVfU+Fe2bc4PsnNakM=
 github.com/spacemeshos/merkle-tree v0.2.1 h1:BSs/zt1n3ceZcpWdcqNFRvTeAWDlc0W+bql0XQH/Gz4=

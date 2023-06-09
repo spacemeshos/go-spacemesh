@@ -209,4 +209,4 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace github.com/libp2p/go-libp2p-asn-util v0.2.0 => github.com/spacemeshos/go-libp2p-asn-util v0.0.0-20230416062424-4582c091784a
+replace github.com/libp2p/go-libp2p-asn-util v0.2.0 => github.com/spacemeshos/go-libp2p-asn-util v0.0.0-20230609075739-acc6343714da
