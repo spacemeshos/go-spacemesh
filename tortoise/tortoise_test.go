@@ -198,9 +198,9 @@ func TestAbstainLateBlock(t *testing.T) {
 	tortoise.TallyVotes(ctx, last)
 
 	events := tortoise.Updates()
-	require.Len(t, events, 3)
-	require.Equal(t, events[0].Layer, last.Sub(2))
-	for _, v := range events[0].Blocks {
+	require.Len(t, events, 4)
+	require.Equal(t, events[1].Layer, last.Sub(2))
+	for _, v := range events[1].Blocks {
 		require.True(t, v.Valid)
 	}
 
@@ -2262,10 +2262,11 @@ func TestSwitchMode(t *testing.T) {
 			tortoise.TallyVotes(ctx, last)
 		}
 		events := tortoise.Updates()
-		require.Len(t, events, int(cfg.Hdist)+1)
-		for i := 0; i < int(cfg.Hdist); i++ {
+		require.Len(t, events, int(cfg.Hdist)+2) // hdist, genesis and last processed
+		require.Empty(t, events[0].Blocks)
+		for i := 1; i <= int(cfg.Hdist); i++ {
 			layer := events[i]
-			require.Equal(t, nohare.Add(uint32(i)), layer.Layer)
+			require.Equal(t, nohare.Add(uint32(i-1)), layer.Layer)
 			for _, v := range layer.Blocks {
 				require.True(t, v.Valid)
 			}

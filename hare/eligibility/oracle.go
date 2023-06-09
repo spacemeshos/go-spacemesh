@@ -7,7 +7,7 @@ import (
 	"math"
 	"sync"
 
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/spacemeshos/fixed"
 	"golang.org/x/exp/maps"
 
@@ -68,7 +68,7 @@ type Oracle struct {
 	vrfVerifier    vrfVerifier
 	nonceFetcher   nonceFetcher
 	layersPerEpoch uint32
-	activesCache   cache
+	activesCache   activeSetCache
 	fallback       map[types.EpochID][]types.ATXID
 	cfg            config.Config
 	log.Log
@@ -106,7 +106,7 @@ func New(
 	logger log.Log,
 	opts ...Opt,
 ) *Oracle {
-	ac, err := lru.New(activesCacheSize)
+	ac, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
 	if err != nil {
 		logger.With().Fatal("failed to create lru cache for active set", log.Err(err))
 	}
@@ -135,9 +135,9 @@ func New(
 
 //go:generate scalegen -types VrfMessage
 
-// VrfMessage is a verification message.
+// VrfMessage is a verification message. It is also the payload for the signature in `types.HareEligibility`.
 type VrfMessage struct {
-	Type   types.EligibilityType
+	Type   types.EligibilityType // always types.EligibilityHare
 	Nonce  types.VRFPostIndex
 	Beacon types.Beacon
 	Round  uint32
@@ -217,7 +217,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	}
 
 	// validate message
-	if !o.vrfVerifier.Verify(signing.HARE, id, msg, vrfSig) {
+	if !o.vrfVerifier.Verify(id, msg, vrfSig) {
 		logger.With().Debug("eligibility: a node did not pass vrf signature verification",
 			log.FieldNamed("sender_vrf_nonce", nonce),
 		)
@@ -366,7 +366,7 @@ func (o *Oracle) Proof(ctx context.Context, nonce types.VRFPostIndex, layer type
 	if err != nil {
 		return types.EmptyVrfSignature, err
 	}
-	return o.vrfSigner.Sign(signing.HARE, msg), nil
+	return o.vrfSigner.Sign(msg), nil
 }
 
 // Returns a map of all active node IDs in the specified layer id.
@@ -390,7 +390,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 	o.lock.Lock()
 	defer o.lock.Unlock()
 	if value, exists := o.activesCache.Get(targetEpoch); exists {
-		return value.(*cachedActiveSet), nil
+		return value, nil
 	}
 	activeSet, err := o.computeActiveSet(ctx, targetEpoch)
 	if err != nil {

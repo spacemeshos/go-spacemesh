@@ -10,8 +10,6 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestIsBootnode(t *testing.T) {
@@ -59,7 +57,7 @@ func TestConnectionsNotifier(t *testing.T) {
 	// we count events - not peers
 	for i, host := range mesh.Hosts() {
 		i := i
-		_, err := Upgrade(host, types.Hash20{}, WithNodeReporter(func() { counter[i].Add(1) }))
+		_, err := Upgrade(host, WithNodeReporter(func() { counter[i].Add(1) }))
 		require.NoError(t, err)
 	}
 

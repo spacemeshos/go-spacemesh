@@ -148,7 +148,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 	ctrl := gomock.NewController(t)
 	mbc := mocks.NewMockBeaconCollector(ctrl)
 	vrfVerifier := proposals.NewMockvrfVerifier(ctrl)
-	vrfVerifier.EXPECT().Verify(signing.HARE, gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+	vrfVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
 	nonceFetcher := proposals.NewMocknonceFetcher(ctrl)
 	nonce := types.VRFPostIndex(rand.Uint64())

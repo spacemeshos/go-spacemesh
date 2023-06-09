@@ -73,7 +73,7 @@ func createProposal(t *testing.T, vrfSigner *signing.VRFSigner, epoch types.Epoc
 		VRFSignature: sig,
 	}
 	if corruptSignature {
-		msg.VRFSignature = vrfSigner.Sign(signing.BEACON_PROPOSAL, types.RandomBytes(32))
+		msg.VRFSignature = vrfSigner.Sign(types.RandomBytes(32))
 	}
 	return msg
 }
@@ -500,7 +500,7 @@ func Test_handleProposal_BadVrfSignature(t *testing.T) {
 	require.NoError(t, err)
 
 	mVerifier := NewMockvrfVerifier(tpd.ctrl)
-	mVerifier.EXPECT().Verify(signing.BEACON_PROPOSAL, gomock.Any(), gomock.Any(), gomock.Any()).Return(false)
+	mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(false)
 	tpd.vrfVerifier = mVerifier
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
@@ -1381,4 +1381,14 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	// with EpochID, voting messages from the same miner with the same bit vector will
 	// not be considered duplicate gossip messages.
 	require.NotEqual(t, data1, data2)
+}
+
+func TestTracker(t *testing.T) {
+	track := newVotesTracker()
+	for i := 0; i < 1000; i++ {
+		require.True(t, track.register(types.RoundID(i)), i)
+	}
+	for i := 0; i < 1000; i++ {
+		require.False(t, track.register(types.RoundID(i)), i)
+	}
 }

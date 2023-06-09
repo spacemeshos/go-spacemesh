@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/afero"
 
+	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -197,8 +198,11 @@ func RecoverWithDb(
 		return nil, fmt.Errorf("get last checkpoint: %w", err)
 	}
 	if oldRestore >= restore {
-		types.SetEffectiveGenesis(oldRestore.Uint32())
+		types.SetEffectiveGenesis(oldRestore.Uint32() - 1)
 		return nil, nil
+	}
+	if err = fs.RemoveAll(filepath.Join(cfg.DataDir, bootstrap.DirName)); err != nil {
+		return nil, fmt.Errorf("remove old bootstrap data: %w", err)
 	}
 	logger.With().Info("recover from uri", log.String("uri", uri))
 	cpfile, err := copyToLocalFile(ctx, logger, fs, cfg.DataDir, uri, restore)

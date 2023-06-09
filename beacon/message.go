@@ -8,9 +8,9 @@ import (
 
 //go:generate scalegen
 
-// ProposalVrfMessage is a message for buildProposal below.
+// ProposalVrfMessage is the payload for the VRF Signature in `ProposalMessage`.
 type ProposalVrfMessage struct {
-	Type  types.EligibilityType
+	Type  types.EligibilityType // always types.EligibilityBeacon
 	Nonce types.VRFPostIndex
 	Epoch types.EpochID
 }

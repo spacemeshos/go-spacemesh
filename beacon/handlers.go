@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"math/bits"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -194,7 +193,7 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 		return fmt.Errorf("[proposal] get VRF nonce (miner ID %s): %w", m.NodeID, err)
 	}
 	currentEpochProposal := buildProposal(logger, m.EpochID, nonce)
-	if !pd.vrfVerifier.Verify(signing.BEACON_PROPOSAL, m.NodeID, currentEpochProposal, m.VRFSignature) {
+	if !pd.vrfVerifier.Verify(m.NodeID, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
 		logger.With().Warning("[proposal] failed to verify VRF signature")
 		return fmt.Errorf("[proposal] verify VRF (miner ID %s): %w", m.NodeID, errVRFNotVerified)
@@ -475,39 +474,20 @@ func (pd *ProtocolDriver) registerVoted(epoch types.EpochID, nodeID types.NodeID
 	return pd.states[epoch].registerVoted(nodeID, round)
 }
 
-const wordSize = 64
-
-func newVotesTracker(limit uint32) *votesTracker {
-	b := bits.Len32(limit)
-	words := b / wordSize
-	if b%wordSize != 0 {
-		words += 1
-	}
-	return &votesTracker{words: make([]uint64, words)}
+func newVotesTracker() *votesTracker {
+	return &votesTracker{votes: new(big.Int)}
 }
 
 type votesTracker struct {
-	words []uint64
+	votes *big.Int
 }
 
 func (v *votesTracker) register(round types.RoundID) bool {
-	word := uint64(round) / wordSize
-	if word >= uint64(len(v.words)) {
-		return false
-	}
-	position := uint64(1) << (uint64(round) % wordSize)
-	if v.words[word]&position > 0 {
-		return false
-	}
-	v.words[word] |= position
-	return true
+	rst := !v.voted(round)
+	v.votes.SetBit(v.votes, int(round), 1)
+	return rst
 }
 
 func (v *votesTracker) voted(round types.RoundID) bool {
-	word := uint64(round) / wordSize
-	if word >= uint64(len(v.words)) {
-		return false
-	}
-	position := uint64(1) << (uint64(round) % wordSize)
-	return v.words[word]&position > 0
+	return v.votes.Bit(int(round)) > 0
 }

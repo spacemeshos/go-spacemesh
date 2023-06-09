@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
@@ -63,8 +64,8 @@ const checkpointdata = `{
 }
 `
 
-func query(t *testing.T, ctx context.Context) []byte {
-	return queryUrl(t, ctx, fmt.Sprintf("http://localhost:%d", port))
+func query(t *testing.T, ctx context.Context, update string) []byte {
+	return queryUrl(t, ctx, fmt.Sprintf("http://localhost:%d/%s", port, update))
 }
 
 func queryCheckpoint(t *testing.T, ctx context.Context) []byte {
@@ -122,14 +123,14 @@ func TestServer(t *testing.T) {
 	srv.Start(ctx, ch, np)
 
 	for _, epoch := range epochs {
-		fname := PersistedFilename()
+		fname := PersistedFilename(epoch, bootstrap.SuffixBoostrap)
 		require.Eventually(t, func() bool {
 			_, err := fs.Stat(fname)
 			return err == nil
 		}, 5*time.Second, 100*time.Millisecond)
 		require.Empty(t, ch)
 
-		data := query(t, ctx)
+		data := query(t, ctx, bootstrap.UpdateName(epoch, bootstrap.SuffixBoostrap))
 		verifyUpdate(t, data, epoch, hex.EncodeToString(epochBeacon(epoch).Bytes()), activeSetSize)
 		require.NoError(t, fs.Remove(fname))
 	}
