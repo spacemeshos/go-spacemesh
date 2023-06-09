@@ -904,7 +904,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	genesis := app.Config.Genesis.GenesisID()
 	copy(value[:], genesis[:])
 	epoch := types.GetEffectiveGenesis().GetEpoch() + 1
-	app.log.With().Warning("using standalone mode for bootstarapping beacon",
+	app.log.With().Warning("using standalone mode for bootstrapping beacon",
 		log.Uint32("epoch", epoch.Uint32()),
 		log.Stringer("beacon", value),
 	)
