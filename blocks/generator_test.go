@@ -268,9 +268,11 @@ func Test_SerialExecution(t *testing.T) {
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lid, gomock.Any(), false)
 	tg.mockPatrol.EXPECT().CompleteHare(lid)
 	tg.hareCh <- genData(t, tg.cdb, lid, false)
+	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 
 	// nothing happens
 	tg.hareCh <- genData(t, tg.cdb, layerID+1, true)
+	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 
 	lid = layerID + 2
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
@@ -279,6 +281,7 @@ func Test_SerialExecution(t *testing.T) {
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lid, gomock.Any(), false)
 	tg.mockPatrol.EXPECT().CompleteHare(lid)
 	tg.hareCh <- genData(t, tg.cdb, lid, false)
+	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 
 	for _, lyr := range []types.LayerID{layerID, layerID + 1} {
 		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), lyr, uint64(baseTickHeight), gomock.Any(), gomock.Any()).
@@ -421,6 +424,7 @@ func Test_run_FetchFailed(t *testing.T) {
 		func(_ context.Context, _ []types.ProposalID) error {
 			return errors.New("unknown")
 		})
+	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 	tg.Stop()
@@ -442,6 +446,7 @@ func Test_run_DiffHasFromConsensus(t *testing.T) {
 	require.NoError(t, layers.SetMeshHash(tg.cdb, layerID.Sub(1), types.RandomHash()))
 
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
+	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 	tg.Stop()
@@ -460,12 +465,13 @@ func Test_run_ExecuteFailed(t *testing.T) {
 	pids := types.ToProposalIDs(plist)
 	require.NoError(t, layers.SetMeshHash(tg.cdb, layerID.Sub(1), meshHash))
 
-	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids).AnyTimes()
+	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
 	tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, lid types.LayerID, tickHeight uint64, rewards []types.AnyReward, tids []types.TransactionID) (*types.Block, error) {
 			require.Len(t, tids, len(txIDs))
 			return nil, errors.New("unknown")
-		}).AnyTimes()
+		})
+	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 	tg.Stop()
@@ -484,10 +490,11 @@ func Test_run_AddBlockFailed(t *testing.T) {
 	pids := types.ToProposalIDs(plist)
 	require.NoError(t, layers.SetMeshHash(tg.cdb, layerID.Sub(1), meshHash))
 
-	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids).AnyTimes()
+	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
 	block := types.NewExistingBlock(types.BlockID{1, 2, 3}, types.InnerBlock{LayerIndex: layerID})
-	tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).Return(block, nil).AnyTimes()
-	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).Return(errors.New("unknown")).AnyTimes()
+	tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).Return(block, nil)
+	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).Return(errors.New("unknown"))
+	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 	tg.Stop()
@@ -506,7 +513,7 @@ func Test_run_RegisterCertFailureIgnored(t *testing.T) {
 	pids := types.ToProposalIDs(plist)
 	require.NoError(t, layers.SetMeshHash(tg.cdb, layerID.Sub(1), meshHash))
 
-	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids).AnyTimes()
+	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
 	block := types.NewExistingBlock(types.BlockID{1, 2, 3}, types.InnerBlock{LayerIndex: layerID})
 	tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).Return(block, nil)
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
@@ -532,7 +539,7 @@ func Test_run_CertifyFailureIgnored(t *testing.T) {
 	pids := types.ToProposalIDs(plist)
 	require.NoError(t, layers.SetMeshHash(tg.cdb, layerID.Sub(1), meshHash))
 
-	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids).AnyTimes()
+	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
 	block := types.NewExistingBlock(types.BlockID{1, 2, 3}, types.InnerBlock{LayerIndex: layerID})
 	tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).Return(block, nil)
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
@@ -558,13 +565,14 @@ func Test_run_ProcessLayerFailed(t *testing.T) {
 	pids := types.ToProposalIDs(plist)
 	require.NoError(t, layers.SetMeshHash(tg.cdb, layerID.Sub(1), meshHash))
 
-	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids).AnyTimes()
+	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
 	block := types.NewExistingBlock(types.BlockID{1, 2, 3}, types.InnerBlock{LayerIndex: layerID})
-	tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).Return(block, nil).AnyTimes()
-	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).AnyTimes()
-	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, gomock.Any()).AnyTimes()
-	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any()).AnyTimes()
-	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID(), true).Return(errors.New("unknown")).AnyTimes()
+	tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).Return(block, nil)
+	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
+	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, gomock.Any())
+	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any())
+	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID(), true).Return(errors.New("unknown"))
+	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 	tg.Stop()
@@ -638,6 +646,7 @@ func Test_processHareOutput_bad_state(t *testing.T) {
 			Proposals: types.ToProposalIDs([]*types.Proposal{p}),
 		}
 		tg.mockFetch.EXPECT().GetProposals(ho.Ctx, ho.Proposals)
+		tg.mockPatrol.EXPECT().CompleteHare(layerID)
 		got, err := tg.processHareOutput(ho)
 		require.ErrorIs(t, err, errProposalTxMissing)
 		require.Nil(t, got)
@@ -655,6 +664,7 @@ func Test_processHareOutput_bad_state(t *testing.T) {
 			Proposals: types.ToProposalIDs([]*types.Proposal{p}),
 		}
 		tg.mockFetch.EXPECT().GetProposals(ho.Ctx, ho.Proposals)
+		tg.mockPatrol.EXPECT().CompleteHare(layerID)
 		got, err := tg.processHareOutput(ho)
 		require.ErrorIs(t, err, errProposalTxHdrMissing)
 		require.Nil(t, got)
@@ -777,6 +787,7 @@ func Test_processHareOutput_SameATX(t *testing.T) {
 		Proposals: types.ToProposalIDs(plist),
 	}
 	tg.mockFetch.EXPECT().GetProposals(ho.Ctx, ho.Proposals)
+	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	got, err := tg.processHareOutput(ho)
 	require.ErrorIs(t, err, errDuplicateATX)
 	require.Nil(t, got)
@@ -799,6 +810,7 @@ func Test_processHareOutput_EmptyATXID(t *testing.T) {
 		Proposals: types.ToProposalIDs(plist),
 	}
 	tg.mockFetch.EXPECT().GetProposals(ho.Ctx, ho.Proposals)
+	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	got, err := tg.processHareOutput(ho)
 	require.ErrorIs(t, err, errInvalidATXID)
 	require.Nil(t, got)

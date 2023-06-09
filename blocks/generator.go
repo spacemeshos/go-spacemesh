@@ -189,21 +189,26 @@ func (g *Generator) getProposals(pids []types.ProposalID) ([]*types.Proposal, er
 func (g *Generator) processHareOutput(out hare.LayerOutput) (*types.Block, error) {
 	var md *proposalMetadata
 	if len(out.Proposals) > 0 {
-		// fetch proposals from peers if not locally available
-		if err := g.fetcher.GetProposals(out.Ctx, out.Proposals); err != nil {
-			failFetchCnt.Inc()
-			return nil, fmt.Errorf("preprocess fetch layer %d proposals: %w", out.Layer, err)
+		getMetadata := func() error {
+			// fetch proposals from peers if not locally available
+			if err := g.fetcher.GetProposals(out.Ctx, out.Proposals); err != nil {
+				failFetchCnt.Inc()
+				return fmt.Errorf("preprocess fetch layer %d proposals: %w", out.Layer, err)
+			}
+			// now all proposals should be in local DB
+			props, err := g.getProposals(out.Proposals)
+			if err != nil {
+				failErrCnt.Inc()
+				return fmt.Errorf("preprocess get layer %d proposals: %w", out.Layer, err)
+			}
+			md, err = getProposalMetadata(out.Ctx, g.logger, g.cdb, g.cfg, out.Layer, props)
+			if err != nil {
+				return err
+			}
+			return nil
 		}
-
-		// now all proposals should be in local DB
-		props, err := g.getProposals(out.Proposals)
-		if err != nil {
-			failErrCnt.Inc()
-			return nil, fmt.Errorf("preprocess get layer %d proposals: %w", out.Layer, err)
-		}
-
-		md, err = getProposalMetadata(out.Ctx, g.logger, g.cdb, g.cfg, out.Layer, props)
-		if err != nil {
+		if err := getMetadata(); err != nil {
+			g.patrol.CompleteHare(out.Layer)
 			return nil, err
 		}
 	}
@@ -213,6 +218,7 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) (*types.Block, error
 		return nil, nil
 	}
 
+	defer g.patrol.CompleteHare(out.Layer)
 	var (
 		block      *types.Block
 		hareOutput types.BlockID
@@ -236,7 +242,6 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) (*types.Block, error
 	if err := g.msh.ProcessLayerPerHareOutput(out.Ctx, out.Layer, hareOutput, false); err != nil {
 		return block, err
 	}
-	g.patrol.CompleteHare(out.Layer)
 	return block, nil
 }
 
@@ -254,27 +259,27 @@ func (g *Generator) processOptimisticLayers(max types.LayerID) {
 		}
 		delete(g.optimisticOutput, lid)
 
-		block, err := g.genBlockOptimistic(md.ctx, md)
-		if err != nil {
-			failGenCnt.Inc()
-			g.logger.With().Error("failed to optimistically generate block",
+		doit := func() error {
+			defer g.patrol.CompleteHare(lid)
+			block, err := g.genBlockOptimistic(md.ctx, md)
+			if err != nil {
+				failGenCnt.Inc()
+				return err
+			}
+			g.logger.With().Info("generated block (optimistic)", lid, block.ID())
+			if err = g.msh.ProcessLayerPerHareOutput(md.ctx, lid, block.ID(), true); err != nil {
+				return err
+			}
+			return nil
+		}
+		if err = doit(); err != nil {
+			g.logger.With().Error("failed to process optimistic layer",
 				log.Context(md.ctx),
 				lid,
 				log.Err(err),
 			)
 			return
 		}
-		g.logger.With().Info("generated block (optimistic)", lid, block.ID())
-		if err = g.msh.ProcessLayerPerHareOutput(md.ctx, lid, block.ID(), true); err != nil {
-			g.logger.With().Error("mesh failed to process optimistic layer",
-				log.Context(md.ctx),
-				lid,
-				log.Stringer("hare output", block.ID()),
-				log.Err(err),
-			)
-			return
-		}
-		g.patrol.CompleteHare(lid)
 	}
 }
 
