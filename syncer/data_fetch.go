@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 var (
@@ -34,7 +33,6 @@ type request[T any, R any] struct {
 
 type dataResponse struct {
 	ballots map[types.BallotID]struct{}
-	blocks  map[types.BlockID]struct{}
 }
 
 type opinionResponse struct {
@@ -55,18 +53,22 @@ type (
 type DataFetch struct {
 	fetcher
 
-	logger log.Log
-	msh    meshProvider
-	ids    idProvider
+	logger    log.Log
+	msh       meshProvider
+	ids       idProvider
+	asCache   activeSetCache
+	atxSynced map[types.EpochID]map[p2p.Peer]struct{}
 }
 
 // NewDataFetch creates a new DataFetch instance.
-func NewDataFetch(msh meshProvider, fetch fetcher, ids idProvider, lg log.Log) *DataFetch {
+func NewDataFetch(msh meshProvider, fetch fetcher, ids idProvider, cache activeSetCache, lg log.Log) *DataFetch {
 	return &DataFetch{
-		fetcher: fetch,
-		logger:  lg,
-		msh:     msh,
-		ids:     ids,
+		fetcher:   fetch,
+		logger:    lg,
+		msh:       msh,
+		ids:       ids,
+		asCache:   cache,
+		atxSynced: map[types.EpochID]map[p2p.Peer]struct{}{},
 	}
 }
 
@@ -137,7 +139,6 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers 
 		peers: peers,
 		response: dataResponse{
 			ballots: map[types.BallotID]struct{}{},
-			blocks:  map[types.BlockID]struct{}{},
 		},
 		ch: make(chan peerResult[fetch.LayerData], len(peers)),
 	}
@@ -175,9 +176,6 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers 
 			// all peer responded
 			if success {
 				candidateErr = nil
-			}
-			if candidateErr == nil && len(req.response.blocks) == 0 {
-				d.msh.SetZeroBlockLayer(ctx, req.lid)
 			}
 			return candidateErr
 		case <-ctx.Done():
@@ -239,9 +237,6 @@ func registerLayerHashes(fetcher fetcher, peer p2p.Peer, data *fetch.LayerData) 
 	for _, ballotID := range data.Ballots {
 		layerHashes = append(layerHashes, ballotID.AsHash32())
 	}
-	for _, blkID := range data.Blocks {
-		layerHashes = append(layerHashes, blkID.AsHash32())
-	}
 	if len(layerHashes) == 0 {
 		return
 	}
@@ -290,14 +285,6 @@ func fetchLayerData(ctx context.Context, logger log.Log, fetcher fetcher, req *d
 			ballotsToFetch = append(ballotsToFetch, ballotID)
 		}
 	}
-	var blocksToFetch []types.BlockID
-	for _, blkID := range data.Blocks {
-		if _, ok := req.response.blocks[blkID]; !ok {
-			// not yet fetched
-			req.response.blocks[blkID] = struct{}{}
-			blocksToFetch = append(blocksToFetch, blkID)
-		}
-	}
 
 	if len(ballotsToFetch) > 0 {
 		logger.With().Debug("fetching new ballots", log.Int("to_fetch", len(ballotsToFetch)))
@@ -311,21 +298,6 @@ func fetchLayerData(ctx context.Context, logger log.Log, fetcher fetcher, req *d
 				})),
 				log.Err(err))
 			// syntactically invalid ballots are expected from malicious peers
-		}
-	}
-
-	if len(blocksToFetch) > 0 {
-		logger.With().Debug("fetching new blocks", log.Int("to_fetch", len(blocksToFetch)))
-		if err := fetcher.GetBlocks(ctx, blocksToFetch); err != nil {
-			logger.With().Warning("failed fetching new blocks",
-				log.Array("block_ids", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-					for _, bid := range blocksToFetch {
-						encoder.AppendString(bid.String())
-					}
-					return nil
-				})),
-				log.Err(err))
-			// syntactically invalid blocks are expected from malicious peers
 		}
 	}
 }
@@ -405,20 +377,55 @@ func (d *DataFetch) receiveOpinions(ctx context.Context, req *opinionRequest, pe
 	}
 }
 
-// GetEpochATXs fetches all ATXs in the specified epoch from a peer.
+// GetEpochATXs fetches all ATXs published in the specified epoch from a peer.
 func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error {
 	peers := d.fetcher.GetPeers()
 	if len(peers) == 0 {
 		return errNoPeers
 	}
-	peer := peers[rand.Intn(len(peers))]
+	peer := p2p.NoPeer
+	if _, ok := d.atxSynced[epoch]; !ok {
+		d.atxSynced[epoch] = map[p2p.Peer]struct{}{}
+		delete(d.atxSynced, epoch-1)
+	}
+	for _, p := range peers {
+		if _, ok := d.atxSynced[epoch][p]; !ok {
+			peer = p
+			break
+		}
+	}
+	if peer == p2p.NoPeer {
+		d.logger.WithContext(ctx).With().Debug("synced atxs from all peers",
+			epoch,
+			log.Int("peers", len(peers)),
+		)
+		return nil
+	}
+
 	ed, err := d.fetcher.PeerEpochInfo(ctx, peer, epoch)
 	if err != nil {
 		return fmt.Errorf("get epoch info (peer %v): %w", peer, err)
 	}
+	if len(ed.AtxIDs) == 0 {
+		d.logger.WithContext(ctx).With().Debug("peer have zero atx",
+			epoch,
+			log.Stringer("peer", peer),
+		)
+		return nil
+	}
+	d.atxSynced[epoch][peer] = struct{}{}
 	d.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
-	if err := d.fetcher.GetAtxs(ctx, ed.AtxIDs); err != nil {
-		return fmt.Errorf("get ATXs: %w", err)
+	missing := d.asCache.GetMissingActiveSet(epoch+1, ed.AtxIDs)
+	d.logger.WithContext(ctx).With().Debug("fetching atxs",
+		epoch,
+		log.Stringer("peer", peer),
+		log.Int("total", len(ed.AtxIDs)),
+		log.Int("missing", len(missing)),
+	)
+	if len(missing) > 0 {
+		if err := d.fetcher.GetAtxs(ctx, missing); err != nil {
+			return fmt.Errorf("get ATXs: %w", err)
+		}
 	}
 	return nil
 }

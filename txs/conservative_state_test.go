@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -18,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -38,7 +39,9 @@ const (
 
 func newTx(tb testing.TB, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
 	tb.Helper()
-	dest := types.Address{byte(rand.Int()), byte(rand.Int()), byte(rand.Int()), byte(rand.Int())}
+	var dest types.Address
+	_, err := rand.Read(dest[:])
+	require.NoError(tb, err)
 	return newTxWthRecipient(tb, dest, nonce, amount, fee, signer)
 }
 
@@ -65,10 +68,12 @@ type testConState struct {
 	logger log.Log
 	db     *sql.Database
 	mvm    *MockvmState
+
+	id peer.ID
 }
 
 func (t *testConState) handler() *TxHandler {
-	return NewTxHandler(t, t.logger)
+	return NewTxHandler(t, t.id, t.logger)
 }
 
 func createTestState(t *testing.T, gasLimit uint64) *testConState {
@@ -80,13 +85,20 @@ func createTestState(t *testing.T, gasLimit uint64) *testConState {
 		NumTXsPerProposal: numTXsInProposal,
 	}
 	logger := logtest.New(t)
+	_, pub, err := crypto.GenerateEd25519Key(nil)
+	require.NoError(t, err)
+	id, err := peer.IDFromPublicKey(pub)
+	require.NoError(t, err)
+
 	return &testConState{
 		ConservativeState: NewConservativeState(mvm, db,
 			WithCSConfig(cfg),
-			WithLogger(logger)),
+			WithLogger(logger),
+		),
 		logger: logger,
 		db:     db,
 		mvm:    mvm,
+		id:     id,
 	}
 }
 
@@ -544,7 +556,7 @@ func TestConsistentHandling(t *testing.T) {
 			failed.EXPECT().Parse().Times(1).Return(nil, errors.New("test"))
 			instances[1].mvm.EXPECT().Validation(txs[i].RawTx).Times(1).Return(failed)
 
-			require.Equal(t, pubsub.ValidationAccept, instances[0].handler().HandleGossipTransaction(context.Background(), "", txs[i].Raw))
+			require.Equal(t, nil, instances[0].handler().HandleGossipTransaction(context.Background(), p2p.NoPeer, txs[i].Raw))
 			require.NoError(t, instances[1].handler().HandleBlockTransaction(context.Background(), p2p.NoPeer, txs[i].Raw))
 		}
 		block := types.NewExistingBlock(types.BlockID{byte(lid)},

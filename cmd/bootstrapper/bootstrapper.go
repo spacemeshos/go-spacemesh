@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -22,6 +23,11 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+)
+
+const (
+	retries       = 3
+	retryInterval = 3 * time.Second
 )
 
 var (
@@ -47,7 +53,7 @@ func init() {
 	// options specific to one-time execution
 	cmd.PersistentFlags().BoolVar(&genBeacon, "beacon", false, "generate beacon")
 	cmd.PersistentFlags().BoolVar(&genActiveSet, "actives", false, "generate active set")
-	cmd.PersistentFlags().StringVar(&out, "out", "gs://my-bucket/spacemesh-fallback", "gs URI for upload")
+	cmd.PersistentFlags().StringVar(&out, "out", "gs://my-bucket", "gs URI for upload")
 	cmd.PersistentFlags().StringVar(&creds, "creds", "", "path to gcloud credential file")
 
 	// for systests only
@@ -69,6 +75,19 @@ var cmd = &cobra.Command{
 	Use:   "bootstrapper",
 	Short: "generate bootstrapping data",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return fmt.Errorf("epoch not specfiied")
+		}
+		var targetEpochs []types.EpochID
+		epochs := strings.Split(args[0], ",")
+		for _, e := range epochs {
+			epoch, err := strconv.Atoi(e)
+			if err != nil {
+				return fmt.Errorf("cannot convert %v to epoch: %w", e, err)
+			}
+			targetEpochs = append(targetEpochs, types.EpochID(epoch))
+		}
+
 		log.JSONLog(true)
 		lvl, err := zap.ParseAtomicLevel(strings.ToLower(logLevel))
 		if err != nil {
@@ -84,17 +103,18 @@ var cmd = &cobra.Command{
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer cancel()
 		if serveUpdate {
-			return runServer(ctx, logger, g)
+			srv := NewServer(g, genFallback, port,
+				WithSrvFilesystem(afero.NewOsFs()),
+				WithSrvLogger(logger.WithName("server")),
+				WithBootstrapEpochs(targetEpochs),
+			)
+			return runServer(ctx, srv)
 		}
 
+		if len(targetEpochs) != 1 {
+			return fmt.Errorf("too many epochs specified")
+		}
 		// one-time execution
-		if len(args) == 0 {
-			return fmt.Errorf("epoch not specfiied")
-		}
-		targetEpoch, err := strconv.Atoi(args[0])
-		if err != nil {
-			return fmt.Errorf("cannot convert %v to epoch: %w", args[0], err)
-		}
 		if !genBeacon && !genActiveSet {
 			return fmt.Errorf("no action specified via --beacon or --actives")
 		}
@@ -104,19 +124,19 @@ var cmd = &cobra.Command{
 		if genActiveSet && len(spacemeshEndpoint) == 0 {
 			return fmt.Errorf("missing spacemesh endpoint for active set generation")
 		}
-		bucket, path, err := parseToGsBucket(out)
+		gsBucket, gsPath, err := parseToGsBucket(out)
 		if err != nil {
 			return fmt.Errorf("parse output uri %v: %w", out, err)
 		}
-		if err = g.Generate(ctx, types.EpochID(targetEpoch), genBeacon, genActiveSet); err != nil {
+		persisted, err := g.Generate(ctx, targetEpochs[0], genBeacon, genActiveSet)
+		if err != nil {
 			return err
 		}
-		return upload(ctx, bucket, path)
+		return upload(ctx, persisted, gsBucket, gsPath)
 	},
 }
 
-func upload(ctx context.Context, bucket, path string) error {
-	filename := PersistedFilename()
+func upload(ctx context.Context, filename, gsBucket, gsPath string) error {
 	r, err := os.Open(filename)
 	if err != nil {
 		return fmt.Errorf("open generated file %v: %w", filename, err)
@@ -129,7 +149,8 @@ func upload(ctx context.Context, bucket, path string) error {
 	if err != nil {
 		return fmt.Errorf("create gs client: %w", err)
 	}
-	w := client.Bucket(bucket).Object(path).NewWriter(ctx)
+	objPath := fmt.Sprintf("%s/%s", gsPath, filepath.Base(filename))
+	w := client.Bucket(gsBucket).Object(objPath).NewWriter(ctx)
 	if _, err = io.Copy(w, r); err != nil {
 		return fmt.Errorf("copy to gs object (%v): %w", out, err)
 	}
@@ -157,15 +178,26 @@ func parseToGsBucket(gsPath string) (bucket, path string, err error) {
 	return parsed.Host, parsed.Path[1:], nil
 }
 
-func runServer(ctx context.Context, logger log.Log, gen *Generator) error {
-	params, err := queryNetworkParams(ctx, spacemeshEndpoint)
+func runServer(ctx context.Context, srv *Server) error {
+	var (
+		params *NetworkParam
+		err    error
+	)
+	for i := 0; i < retries; i++ {
+		params, err = queryNetworkParams(ctx, spacemeshEndpoint)
+		if err != nil {
+			select {
+			case <-time.After(retryInterval):
+				continue
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		break
+	}
 	if err != nil {
 		return fmt.Errorf("query network params %v: %w", spacemeshEndpoint, err)
 	}
-	if time.Now().After(params.Genesis) {
-		return fmt.Errorf("missed genesis %v", params.Genesis)
-	}
-	srv := NewServer(afero.NewOsFs(), gen, genFallback, port, logger.WithName("server"))
 	ch := make(chan error, 100)
 	srv.Start(ctx, ch, params)
 	select {
@@ -202,7 +234,7 @@ func queryNetworkParams(ctx context.Context, endpoint string) (*NetworkParam, er
 	}
 	return &NetworkParam{
 		Genesis:      time.Unix(int64(genResp.Unixtime.Value), 0),
-		LyrsPerEpoch: lyrResp.Numlayers.Value,
+		LyrsPerEpoch: lyrResp.Numlayers.Number,
 		LyrDuration:  time.Second * time.Duration(durResp.Duration.Value),
 		Offset:       epochOffset,
 	}, nil

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	lru "github.com/hashicorp/golang-lru/v2"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -23,32 +25,52 @@ const (
 	malfeasanceCacheSize = 1000
 )
 
+type VrfNonceKey struct {
+	ID    types.NodeID
+	Epoch types.EpochID
+}
+
 // CachedDB is simply a database injected with cache.
 type CachedDB struct {
 	*sql.Database
 	logger log.Log
 
-	atxHdrCache   *Cache[types.ATXID, types.ActivationTxHeader]
-	vrfNonceCache *Cache[VrfNonceKey, types.VRFPostIndex]
+	atxHdrCache   *lru.Cache[types.ATXID, *types.ActivationTxHeader]
+	vrfNonceCache *lru.Cache[VrfNonceKey, *types.VRFPostIndex]
 
 	// used to coordinate db update and cache
 	mu               sync.Mutex
-	malfeasanceCache *Cache[types.NodeID, types.MalfeasanceProof]
+	malfeasanceCache *lru.Cache[types.NodeID, *types.MalfeasanceProof]
 }
 
 // NewCachedDB create an instance of a CachedDB.
 func NewCachedDB(db *sql.Database, lg log.Log) *CachedDB {
+	atxHdrCache, err := lru.New[types.ATXID, *types.ActivationTxHeader](atxHdrCacheSize)
+	if err != nil {
+		lg.Fatal("failed to create atx cache", err)
+	}
+
+	malfeasanceCache, err := lru.New[types.NodeID, *types.MalfeasanceProof](malfeasanceCacheSize)
+	if err != nil {
+		lg.Fatal("failed to create malfeasance cache", err)
+	}
+
+	vrfNonceCache, err := lru.New[VrfNonceKey, *types.VRFPostIndex](atxHdrCacheSize)
+	if err != nil {
+		lg.Fatal("failed to create vrf nonce cache", err)
+	}
+
 	return &CachedDB{
 		Database:         db,
 		logger:           lg,
-		atxHdrCache:      NewAtxCache(atxHdrCacheSize),
-		malfeasanceCache: NewMalfeasanceCache(malfeasanceCacheSize),
-		vrfNonceCache:    NewVRFNonceCache(atxHdrCacheSize),
+		atxHdrCache:      atxHdrCache,
+		malfeasanceCache: malfeasanceCache,
+		vrfNonceCache:    vrfNonceCache,
 	}
 }
 
 func (db *CachedDB) MalfeasanceCacheSize() int {
-	return db.malfeasanceCache.lru.Len()
+	return db.malfeasanceCache.Len()
 }
 
 // IsMalicious returns true if the NodeID is malicious.
@@ -334,5 +356,6 @@ func getHeader(vatx *types.VerifiedActivationTx) *types.ActivationTxHeader {
 
 		BaseTickHeight: vatx.BaseTickHeight(),
 		TickCount:      vatx.TickCount(),
+		Golden:         vatx.Golden(),
 	}
 }

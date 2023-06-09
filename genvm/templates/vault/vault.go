@@ -2,7 +2,6 @@ package vault
 
 import (
 	"errors"
-	"math/big"
 
 	"github.com/spacemeshos/go-scale"
 
@@ -14,6 +13,11 @@ var (
 	ErrNotOwner = errors.New("vault: not an owner")
 	// ErrAmountNotAvailable if Spend overlows available amount (see method with the same name).
 	ErrAmountNotAvailable = errors.New("vault: amount not available")
+)
+
+const (
+	VAULT_STATE_SIZE = core.ACCOUNT_HEADER_SIZE + 56
+	DRAINED_SIZE     = 8
 )
 
 //go:generate scalegen
@@ -39,10 +43,10 @@ func (v *Vault) Available(lid core.LayerID) uint64 {
 	if !lid.Before(v.VestingEnd) {
 		return v.TotalAmount
 	}
-	incremental := new(big.Int).SetUint64(v.TotalAmount - v.InitialUnlockAmount)
-	incremental.Mul(incremental, new(big.Int).SetUint64(uint64(lid.Difference(v.VestingStart))))
-	incremental.Quo(incremental, new(big.Int).SetUint64(uint64(v.VestingEnd.Difference(v.VestingStart))))
-	return v.InitialUnlockAmount + incremental.Uint64()
+	incremental := v.TotalAmount - v.InitialUnlockAmount
+	incremental *= uint64(lid.Difference(v.VestingStart))
+	incremental /= uint64(v.VestingEnd.Difference(v.VestingStart))
+	return v.InitialUnlockAmount + incremental
 }
 
 // Spend transaction.
@@ -51,6 +55,9 @@ func (v *Vault) Spend(host core.Host, to core.Address, amount uint64) error {
 		return ErrNotOwner
 	}
 	available := v.Available(host.Layer())
+	if available > v.TotalAmount {
+		panic("wrong math")
+	}
 	if amount > available-v.DrainedSoFar {
 		return ErrAmountNotAvailable
 	}
@@ -66,11 +73,15 @@ func (v *Vault) MaxSpend(uint8, any) (uint64, error) {
 	return 0, nil
 }
 
-func (v *Vault) BaseGas(method uint8) uint64 {
+func (v *Vault) BaseGas(uint8) uint64 {
 	return 0
 }
 
-func (v *Vault) FixedGas(method uint8) uint64 {
+func (v *Vault) LoadGas() uint64 {
+	return 0
+}
+
+func (v *Vault) ExecGas(uint8) uint64 {
 	return 0
 }
 

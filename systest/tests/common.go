@@ -1,5 +1,6 @@
 package tests
 
+//lint:file-ignore U1000 func waitAll is unused
 import (
 	"context"
 	"errors"
@@ -27,8 +28,7 @@ const (
 	attempts = 3
 )
 
-func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.SugaredLogger, cl *cluster.Cluster, first, stop uint32, batch, amount int) {
-	receiver := types.GenerateAddress([]byte{11, 1, 1})
+func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.SugaredLogger, cl *cluster.Cluster, first, stop uint32, receiver types.Address, batch, amount int) {
 	for i := 0; i < cl.Accounts(); i++ {
 		i := i
 		client := cl.Client(i % cl.Total())
@@ -183,6 +183,27 @@ func waitGenesis(ctx *testcontext.Context, node *cluster.NodeClient) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-time.After(genesis.Sub(now)):
+		return nil
+	}
+}
+
+func waitLayer(ctx *testcontext.Context, node *cluster.NodeClient, lid uint32) error {
+	svc := pb.NewMeshServiceClient(node)
+	resp, err := svc.GenesisTime(ctx, &pb.GenesisTimeRequest{})
+	if err != nil {
+		return err
+	}
+	lyrTime := time.Unix(int64(resp.Unixtime.Value), 0).Add(time.Duration(lid) * testcontext.LayerDuration.Get(ctx.Parameters))
+
+	now := time.Now()
+	if !lyrTime.After(now) {
+		return nil
+	}
+	ctx.Log.Debugw("waiting for layer", "now", now, "layer time", lyrTime, "layer", lid)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(lyrTime.Sub(now)):
 		return nil
 	}
 }

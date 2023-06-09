@@ -12,6 +12,7 @@ import (
 )
 
 func TestServer(t *testing.T) {
+	const limit = 1024
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
@@ -33,9 +34,9 @@ func TestServer(t *testing.T) {
 		WithTimeout(100 * time.Millisecond),
 		WithContext(ctx),
 	}
-	client := New(mesh.Hosts()[0], proto, handler, opts...)
-	_ = New(mesh.Hosts()[1], proto, handler, opts...)
-	_ = New(mesh.Hosts()[2], proto, errhandler, opts...)
+	client := New(mesh.Hosts()[0], proto, handler, append(opts, WithRequestSizeLimit(2*limit))...)
+	_ = New(mesh.Hosts()[1], proto, handler, append(opts, WithRequestSizeLimit(limit))...)
+	_ = New(mesh.Hosts()[2], proto, errhandler, append(opts, WithRequestSizeLimit(limit))...)
 
 	respHandler := func(msg []byte) {
 		select {
@@ -56,6 +57,7 @@ func TestServer(t *testing.T) {
 			require.FailNow(t, "timed out while waiting for message response")
 		case response := <-respch:
 			require.Equal(t, request, response)
+			require.NotEmpty(t, mesh.Hosts()[2].Network().ConnsToPeer(mesh.Hosts()[0].ID()))
 		}
 	})
 	t.Run("ReceiveError", func(t *testing.T) {
@@ -78,6 +80,15 @@ func TestServer(t *testing.T) {
 	})
 	t.Run("NotConnected", func(t *testing.T) {
 		require.ErrorIs(t, client.Request(ctx, "unknown", request, respHandler, respErrHandler), ErrNotConnected)
+	})
+	t.Run("limit overflow", func(t *testing.T) {
+		require.NoError(t, client.Request(ctx, mesh.Hosts()[2].ID(), make([]byte, limit+1), respHandler, respErrHandler))
+		select {
+		case <-time.After(time.Second):
+			require.FailNow(t, "timed out while waiting for error response")
+		case err := <-errch:
+			require.Error(t, err)
+		}
 	})
 }
 

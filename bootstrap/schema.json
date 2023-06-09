@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://spacemesh.io/checkpoint.schema.json.1.0",
+  "$id": "https://spacemesh.io/bootstrap.schema.json.1.0",
   "title": "epoch data",
   "description": "epoch data for bootstrapping and fallback",
   "type": "object",
@@ -12,12 +12,8 @@
     },
     "data": {
       "type": "object",
-      "required": ["id", "epoch"],
+      "required": ["epoch"],
       "properties": {
-        "id": {
-          "type": "integer",
-          "exclusiveMinimum": 0
-        },
         "epoch": {
           "type": "object",
           "properties": {

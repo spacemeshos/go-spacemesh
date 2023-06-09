@@ -26,44 +26,33 @@ const (
 )
 
 var (
-	errVRFNotVerified     = errors.New("proposal failed vrf verification")
-	errAlreadyProposed    = errors.New("already proposed")
-	errAlreadyVoted       = errors.New("already voted")
-	errMinerNotActive     = errors.New("miner ATX not found in previous epoch")
-	errProtocolNotRunning = errors.New("beacon protocol not running")
-	errEpochNotActive     = errors.New("epoch not active")
-	errMalformedMessage   = errors.New("malformed msg")
-	errUntimelyMessage    = errors.New("untimely msg")
+	errVRFNotVerified         = errors.New("proposal failed vrf verification")
+	errAlreadyProposed        = errors.New("already proposed")
+	errAlreadyVoted           = errors.New("already voted")
+	errMinerNotActive         = errors.New("miner ATX not found in previous epoch")
+	errProtocolNotRunning     = errors.New("beacon protocol not running")
+	errEpochNotActive         = errors.New("epoch not active")
+	errMalformedMessage       = fmt.Errorf("%w: malformed msg", pubsub.ErrValidationReject)
+	errUntimelyMessage        = errors.New("untimely msg")
+	errBeaconProtocolInactive = errors.New("beacon protocol inactive")
 )
 
 // HandleWeakCoinProposal handles weakcoin proposal from gossip.
-func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
-	if pd.isClosed() || !pd.isInProtocol() {
-		return pubsub.ValidationIgnore
+func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, peer p2p.Peer, msg []byte) error {
+	if !pd.isInProtocol() {
+		return errBeaconProtocolInactive
 	}
 
 	return pd.weakCoin.HandleProposal(ctx, peer, msg)
 }
 
 // HandleProposal handles beacon proposal from gossip.
-func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) error {
 	if pd.isClosed() {
-		return pubsub.ValidationIgnore
+		return errors.New("beacon protocol closed")
 	}
 
 	receivedTime := time.Now()
-	err := pd.handleProposal(ctx, peer, msg, receivedTime)
-	switch {
-	case err == nil:
-		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedMessage):
-		return pubsub.ValidationReject
-	default:
-		return pubsub.ValidationIgnore
-	}
-}
-
-func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg []byte, receivedTime time.Time) error {
 	logger := pd.logger.WithContext(ctx)
 
 	var m ProposalMessage
@@ -219,28 +208,16 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 }
 
 // HandleFirstVotes handles beacon first votes from gossip.
-func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, msg []byte) error {
 	if pd.isClosed() || !pd.isInProtocol() {
 		pd.logger.WithContext(ctx).Debug("beacon protocol shutting down or not running, dropping msg")
-		return pubsub.ValidationIgnore
+		return errBeaconProtocolInactive
 	}
 
-	logger := pd.logger.WithContext(ctx).WithFields(log.Stringer("sender", peer))
-	logger.Debug("new first votes")
-	err := pd.handleFirstVotes(ctx, peer, msg)
-	switch {
-	case err == nil:
-		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedMessage):
-		return pubsub.ValidationReject
-	default:
-		return pubsub.ValidationIgnore
-	}
-}
-
-func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, msg []byte) error {
-	receivedTime := time.Now()
 	logger := pd.logger.WithContext(ctx).WithFields(types.FirstRound, log.Stringer("sender", peer))
+	logger.Debug("new first votes")
+
+	receivedTime := time.Now()
 
 	var m FirstVotingMessage
 	if err := codec.Decode(msg, &m); err != nil {
@@ -278,18 +255,14 @@ func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, m
 }
 
 func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMessage) (types.NodeID, error) {
-	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound)
 	messageBytes, err := codec.Encode(&m.FirstVotingMessageBody)
 	if err != nil {
-		logger.With().Fatal("failed to serialize first voting message", log.Err(err))
+		pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound).With().Fatal("failed to serialize first voting message", log.Err(err))
 	}
-
-	if !pd.edVerifier.Verify(signing.BEACON, m.SmesherID, messageBytes, m.Signature) {
+	if !pd.edVerifier.Verify(signing.BEACON_FIRST_MSG, m.SmesherID, messageBytes, m.Signature) {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
-
-	logger = logger.WithFields(log.Stringer("smesher", m.SmesherID))
-	if err = pd.registerVoted(logger, m.EpochID, m.SmesherID, types.FirstRound); err != nil {
+	if err = pd.registerVoted(m.EpochID, m.SmesherID, types.FirstRound); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] register proposal (miner ID %v): %w", types.FirstRound, m.SmesherID.ShortString(), err)
 	}
 	return m.SmesherID, nil
@@ -333,29 +306,16 @@ func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, nodeID types.Nod
 }
 
 // HandleFollowingVotes handles beacon following votes from gossip.
-func (pd *ProtocolDriver) HandleFollowingVotes(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+func (pd *ProtocolDriver) HandleFollowingVotes(ctx context.Context, peer p2p.Peer, msg []byte) error {
 	receivedTime := time.Now()
 
 	if pd.isClosed() || !pd.isInProtocol() {
 		pd.logger.WithContext(ctx).Debug("beacon protocol shutting down or not running, dropping msg")
-		return pubsub.ValidationIgnore
+		return errBeaconProtocolInactive
 	}
 
 	logger := pd.logger.WithContext(ctx).WithFields(log.String("sender", peer.String()))
 	logger.Debug("new following votes")
-	err := pd.handleFollowingVotes(ctx, peer, msg, receivedTime)
-	switch {
-	case err == nil:
-		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedMessage):
-		return pubsub.ValidationReject
-	default:
-		return pubsub.ValidationIgnore
-	}
-}
-
-func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Peer, msg []byte, receivedTime time.Time) error {
-	logger := pd.logger.WithContext(ctx).WithFields(log.String("sender", peer.String()))
 
 	var m FollowingVotingMessage
 	if err := codec.Decode(msg, &m); err != nil {
@@ -395,21 +355,16 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 }
 
 func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingVotingMessage) (types.NodeID, error) {
-	round := m.RoundID
 	messageBytes, err := codec.Encode(&m.FollowingVotingMessageBody)
 	if err != nil {
 		pd.logger.With().Fatal("failed to serialize voting message", log.Err(err))
 	}
-
-	if !pd.edVerifier.Verify(signing.BEACON, m.SmesherID, messageBytes, m.Signature) {
+	if !pd.edVerifier.Verify(signing.BEACON_FOLLOWUP_MSG, m.SmesherID, messageBytes, m.Signature) {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
-
-	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, round, log.Stringer("smesher", m.SmesherID))
-	if err := pd.registerVoted(logger, m.EpochID, m.SmesherID, m.RoundID); err != nil {
+	if err := pd.registerVoted(m.EpochID, m.SmesherID, m.RoundID); err != nil {
 		return types.EmptyNodeID, err
 	}
-
 	return m.SmesherID, nil
 }
 
@@ -510,11 +465,29 @@ func (pd *ProtocolDriver) registerProposed(logger log.Log, epoch types.EpochID, 
 	return pd.states[epoch].registerProposed(logger, nodeID)
 }
 
-func (pd *ProtocolDriver) registerVoted(logger log.Log, epoch types.EpochID, nodeID types.NodeID, round types.RoundID) error {
+func (pd *ProtocolDriver) registerVoted(epoch types.EpochID, nodeID types.NodeID, round types.RoundID) error {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	if _, ok := pd.states[epoch]; !ok {
 		return errEpochNotActive
 	}
-	return pd.states[epoch].registerVoted(logger, nodeID, round)
+	return pd.states[epoch].registerVoted(nodeID, round)
+}
+
+func newVotesTracker() *votesTracker {
+	return &votesTracker{votes: new(big.Int)}
+}
+
+type votesTracker struct {
+	votes *big.Int
+}
+
+func (v *votesTracker) register(round types.RoundID) bool {
+	rst := !v.voted(round)
+	v.votes.SetBit(v.votes, int(round), 1)
+	return rst
+}
+
+func (v *votesTracker) voted(round types.RoundID) bool {
+	return v.votes.Bit(int(round)) > 0
 }

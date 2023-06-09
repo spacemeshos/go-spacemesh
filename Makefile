@@ -2,7 +2,7 @@ LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.
 include Makefile-libs.Inc
 
 DOCKER_HUB ?= spacemeshos
-UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests)
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v cmd/node | grep -v cmd/gen-p2p-identity | grep -v cmd/trace | grep -v genvm/cmd)
 
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
@@ -58,46 +58,39 @@ all: install build
 .PHONY: all
 
 install:
-	go run scripts/check-go-version.go --major 1 --minor 19
+	git lfs install
 	go mod download
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.52.0
-	go install github.com/spacemeshos/go-scale/scalegen@v1.1.6
+	go install github.com/spacemeshos/go-scale/scalegen@v1.1.9
 	go install github.com/golang/mock/mockgen
 	go install gotest.tools/gotestsum@v1.9.0
 	go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
 .PHONY: install
 
-build: go-spacemesh
+build: go-spacemesh get-profiler
 .PHONY: build
 
-get-libs: get-gpu-setup get-postrs-lib
+get-libs: get-postrs-lib
 .PHONY: get-libs
 
+get-profiler: get-postrs-profiler
+.PHONY: get-profiler
+
 gen-p2p-identity:
-	cd $@ ; go build -o $(BIN_DIR)$@$(EXE) .
+	cd cmd/gen-p2p-identity ; go build -o $(BIN_DIR)$@$(EXE) .
+.PHONY: gen-p2p-identity
+
 go-spacemesh: get-libs
-	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
+	cd cmd/node ; go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
 .PHONY: go-spacemesh gen-p2p-identity
+
 bootstrapper:
-	echo $(BIN_DIR) ; cd cmd/bootstrapper ;  go build -o $(BIN_DIR)go-$@$(EXE) .
+	cd cmd/bootstrapper ;  go build -o $(BIN_DIR)go-$@$(EXE) .
 .PHONY: bootstrapper
 
 tidy:
 	go mod tidy
 .PHONY: tidy
-
-ifeq ($(HOST_OS),$(filter $(HOST_OS),linux darwin))
-windows:
-	CC=x86_64-w64-mingw32-gcc $(MAKE) GOOS=$@ GOARCH=amd64 BIN_DIR=$(PROJ_DIR)build/ go-spacemesh
-.PHONY: windows
-endif
-
-# available only for linux host because CGO usage
-ifeq ($(HOST_OS),linux)
-docker-local-build: go-spacemesh
-	cd build; DOCKER_BUILDKIT=1 docker build -f ../Dockerfile.prebuiltBinary -t $(DOCKER_IMAGE) .
-.PHONY: docker-local-build
-endif
 
 # Clear tests cache
 clear-test-cache:
@@ -186,9 +179,6 @@ endif
 	docker tag $(DOCKER_IMAGE) $(DOCKER_HUB)/$(DOCKER_IMAGE)
 	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE)
 .PHONY: dockerpush-only
-
-docker-local-push: docker-local-build dockerpush-only
-.PHONY: docker-local-push
 
 dockerbuild-bs:
 	DOCKER_BUILDKIT=1 docker build -t $(DOCKER_BS_IMAGE) -f ./bootstrap.Dockerfile .

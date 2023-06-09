@@ -11,31 +11,31 @@ import (
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// Mockcache is a mock of cache interface.
-type Mockcache struct {
+// MockactiveSetCache is a mock of activeSetCache interface.
+type MockactiveSetCache struct {
 	ctrl     *gomock.Controller
-	recorder *MockcacheMockRecorder
+	recorder *MockactiveSetCacheMockRecorder
 }
 
-// MockcacheMockRecorder is the mock recorder for Mockcache.
-type MockcacheMockRecorder struct {
-	mock *Mockcache
+// MockactiveSetCacheMockRecorder is the mock recorder for MockactiveSetCache.
+type MockactiveSetCacheMockRecorder struct {
+	mock *MockactiveSetCache
 }
 
-// NewMockcache creates a new mock instance.
-func NewMockcache(ctrl *gomock.Controller) *Mockcache {
-	mock := &Mockcache{ctrl: ctrl}
-	mock.recorder = &MockcacheMockRecorder{mock}
+// NewMockactiveSetCache creates a new mock instance.
+func NewMockactiveSetCache(ctrl *gomock.Controller) *MockactiveSetCache {
+	mock := &MockactiveSetCache{ctrl: ctrl}
+	mock.recorder = &MockactiveSetCacheMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *Mockcache) EXPECT() *MockcacheMockRecorder {
+func (m *MockactiveSetCache) EXPECT() *MockactiveSetCacheMockRecorder {
 	return m.recorder
 }
 
 // Add mocks base method.
-func (m *Mockcache) Add(key, value any) bool {
+func (m *MockactiveSetCache) Add(key types.EpochID, value *cachedActiveSet) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Add", key, value)
 	ret0, _ := ret[0].(bool)
@@ -43,24 +43,24 @@ func (m *Mockcache) Add(key, value any) bool {
 }
 
 // Add indicates an expected call of Add.
-func (mr *MockcacheMockRecorder) Add(key, value interface{}) *gomock.Call {
+func (mr *MockactiveSetCacheMockRecorder) Add(key, value interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*Mockcache)(nil).Add), key, value)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockactiveSetCache)(nil).Add), key, value)
 }
 
 // Get mocks base method.
-func (m *Mockcache) Get(key any) (any, bool) {
+func (m *MockactiveSetCache) Get(key types.EpochID) (*cachedActiveSet, bool) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", key)
-	ret0, _ := ret[0].(any)
+	ret0, _ := ret[0].(*cachedActiveSet)
 	ret1, _ := ret[1].(bool)
 	return ret0, ret1
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockcacheMockRecorder) Get(key interface{}) *gomock.Call {
+func (mr *MockactiveSetCacheMockRecorder) Get(key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*Mockcache)(nil).Get), key)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockactiveSetCache)(nil).Get), key)
 }
 
 // MockvrfVerifier is a mock of vrfVerifier interface.

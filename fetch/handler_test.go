@@ -32,7 +32,7 @@ type testHandler struct {
 	mb  *smocks.MockBeaconGetter
 }
 
-func createTestHandler(t *testing.T) *testHandler {
+func createTestHandler(t testing.TB) *testHandler {
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	ctrl := gomock.NewController(t)
@@ -102,7 +102,7 @@ func TestHandleLayerDataReq(t *testing.T) {
 
 			lid := types.LayerID(111)
 			th := createTestHandler(t)
-			blts, blks := createLayer(t, th.cdb, lid)
+			blts, _ := createLayer(t, th.cdb, lid)
 
 			lidBytes, err := codec.Encode(&lid)
 			require.NoError(t, err)
@@ -113,7 +113,6 @@ func TestHandleLayerDataReq(t *testing.T) {
 			err = codec.Decode(out, &got)
 			require.NoError(t, err)
 			require.ElementsMatch(t, blts, got.Ballots)
-			require.ElementsMatch(t, blks, got.Blocks)
 		})
 	}
 }

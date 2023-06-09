@@ -28,7 +28,7 @@ func TestPoetsFailures(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	tctx.Log.Debug("TestPoetsFailures start")
 
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	tctx.Log.Debug("Obtained cluster")
 
@@ -98,19 +98,19 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	close(createdch)
 
 	created := map[uint32][]*pb.Proposal{}
-	beacons := map[uint64]map[string]struct{}{}
+	beacons := map[uint32]map[string]struct{}{}
 	for proposal := range createdch {
 		created[proposal.Layer.Number] = append(created[proposal.Layer.Number], proposal)
 		if edata := proposal.GetData(); edata != nil {
-			if _, exist := beacons[proposal.Epoch.Value]; !exist {
-				beacons[proposal.Epoch.Value] = map[string]struct{}{}
+			if _, exist := beacons[proposal.Epoch.Number]; !exist {
+				beacons[proposal.Epoch.Number] = map[string]struct{}{}
 			}
 			tctx.Log.Desugar().Debug("new beacon",
 				zap.String("smesher", prettyHex(proposal.Smesher.Id)),
 				zap.String("beacon", prettyHex(edata.Beacon)),
-				zap.Uint64("epoch", proposal.Epoch.Value),
+				zap.Uint32("epoch", proposal.Epoch.Number),
 			)
-			beacons[proposal.Epoch.Value][prettyHex(edata.Beacon)] = struct{}{}
+			beacons[proposal.Epoch.Number][prettyHex(edata.Beacon)] = struct{}{}
 		}
 	}
 
@@ -129,7 +129,7 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 	}
 	logger := tctx.Log.Named("TestNodesUsingDifferentPoets")
 
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	logger.Debug("Obtained cluster")
 
@@ -185,13 +185,13 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 	require.NoError(t, eg.Wait())
 	close(createdch)
 
-	type EpochSet = map[uint64]struct{}
+	type EpochSet = map[uint32]struct{}
 	smeshers := map[string]EpochSet{}
 	for proposal := range createdch {
 		if smesher, ok := smeshers[string(proposal.Smesher.Id)]; !ok {
-			smeshers[string(proposal.Smesher.Id)] = EpochSet{proposal.Epoch.Value: struct{}{}}
+			smeshers[string(proposal.Smesher.Id)] = EpochSet{proposal.Epoch.Number: struct{}{}}
 		} else {
-			smesher[proposal.Epoch.Value] = struct{}{}
+			smesher[proposal.Epoch.Number] = struct{}{}
 		}
 	}
 

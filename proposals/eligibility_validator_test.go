@@ -343,7 +343,7 @@ func TestCheckEligibility_BadCounter(t *testing.T) {
 func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	tv := createTestValidator(t)
 	signer, err := signing.NewEdSigner(
-		signing.WithKeyFromRand(rand.New(rand.NewSource(1128))),
+		signing.WithKeyFromRand(rand.New(rand.NewSource(1003))),
 	)
 	require.NoError(t, err)
 

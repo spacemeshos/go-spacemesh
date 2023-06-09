@@ -4,18 +4,27 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math/rand"
 	"runtime"
 	"testing"
 	"time"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
+	vm "github.com/spacemeshos/go-spacemesh/genvm"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
+	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 func TestTransactionService_StreamResults(t *testing.T) {
@@ -38,7 +47,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 		return nil
 	}))
 
-	svc := NewTransactionService(db, nil, nil, nil, nil)
+	svc := NewTransactionService(db, nil, nil, nil, nil, nil)
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	conn := dialGrpc(ctx, t, cfg.PublicListener)
@@ -153,7 +162,7 @@ func BenchmarkStreamResults(b *testing.B) {
 	}
 	require.NoError(b, tx.Commit())
 	require.NoError(b, tx.Release())
-	svc := NewTransactionService(db, nil, nil, nil, nil)
+	svc := NewTransactionService(db, nil, nil, nil, nil, nil)
 	b.Cleanup(launchServer(b, cfg, svc))
 
 	conn := dialGrpc(ctx, b, cfg.PublicListener)
@@ -184,5 +193,103 @@ func BenchmarkStreamResults(b *testing.B) {
 		runtime.ReadMemStats(&stats)
 		b.Logf("memory requested %v", stats.Sys)
 		require.Equal(b, maxcount, n)
+	}
+}
+
+type parseExpectation func(tb testing.TB, resp *pb.ParseTransactionResponse, err error)
+
+func expectParseError(code codes.Code, message string) parseExpectation {
+	return func(tb testing.TB, resp *pb.ParseTransactionResponse, err error) {
+		s, ok := status.FromError(err)
+		require.True(tb, ok)
+		assert.Equal(tb, code, s.Code())
+		assert.Contains(tb, s.Message(), message)
+	}
+}
+
+func parseOk() parseExpectation {
+	return func(tb testing.TB, resp *pb.ParseTransactionResponse, err error) {
+		require.NoError(tb, err)
+		require.NotEmpty(tb, resp)
+	}
+}
+
+func TestParseTransactions(t *testing.T) {
+	db := sql.InMemory()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+	vminst := vm.New(db)
+	t.Cleanup(launchServer(t, cfg, NewTransactionService(db, nil, nil, txs.NewConservativeState(vminst, db), nil, nil)))
+	var (
+		conn     = dialGrpc(ctx, t, cfg.PublicListener)
+		client   = pb.NewTransactionServiceClient(conn)
+		keys     = make([]signing.PrivateKey, 4)
+		accounts = make([]types.Account, len(keys))
+		rng      = rand.New(rand.NewSource(10101))
+	)
+	for i := range keys {
+		pub, priv, err := ed25519.GenerateKey(rng)
+		require.NoError(t, err)
+		keys[i] = signing.PrivateKey(priv)
+		accounts[i] = types.Account{Address: wallet.Address(pub), Balance: 1e12}
+	}
+	require.NoError(t, vminst.ApplyGenesis(accounts))
+	_, _, err := vminst.Apply(vm.ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
+		[]types.Transaction{{RawTx: types.NewRawTx(wallet.SelfSpawn(keys[0], 0))}}, nil)
+	require.NoError(t, err)
+	mangled := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+	mangled[len(mangled)-1] -= 1
+
+	for _, tc := range []struct {
+		desc   string
+		tx     []byte
+		verify bool
+		expect parseExpectation
+	}{
+		{
+			"empty",
+			nil,
+			false,
+			expectParseError(codes.InvalidArgument, "empty"),
+		},
+		{
+			"malformed",
+			[]byte("something"),
+			false,
+			expectParseError(codes.InvalidArgument, "malformed tx"),
+		},
+		{
+			"not spawned",
+			wallet.Spend(keys[2], accounts[3].Address, 100, 0),
+			false,
+			expectParseError(codes.NotFound, "not spawned"),
+		},
+		{
+			"all good",
+			wallet.Spend(keys[0], accounts[3].Address, 100, 0),
+			false,
+			parseOk(),
+		},
+		{
+			"all good with verification",
+			wallet.Spend(keys[0], accounts[3].Address, 100, 0),
+			true,
+			parseOk(),
+		},
+		{
+			"mangled signature",
+			mangled,
+			true,
+			expectParseError(codes.InvalidArgument, "signature is invalid"),
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			resp, err := client.ParseTransaction(context.Background(), &pb.ParseTransactionRequest{
+				Transaction: tc.tx,
+				Verify:      tc.verify,
+			})
+			tc.expect(t, resp, err)
+		})
 	}
 }

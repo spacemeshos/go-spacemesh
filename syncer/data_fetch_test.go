@@ -20,26 +20,27 @@ import (
 
 type testDataFetch struct {
 	*syncer.DataFetch
-	mMesh    *mocks.MockmeshProvider
-	mFetcher *mocks.Mockfetcher
-	mIDs     *mocks.MockidProvider
+	mMesh     *mocks.MockmeshProvider
+	mFetcher  *mocks.Mockfetcher
+	mIDs      *mocks.MockidProvider
+	mAtxCache *mocks.MockactiveSetCache
 }
 
 func newTestDataFetch(t *testing.T) *testDataFetch {
 	ctrl := gomock.NewController(t)
 	lg := logtest.New(t)
 	tl := &testDataFetch{
-		mMesh:    mocks.NewMockmeshProvider(ctrl),
-		mFetcher: mocks.NewMockfetcher(ctrl),
-		mIDs:     mocks.NewMockidProvider(ctrl),
+		mMesh:     mocks.NewMockmeshProvider(ctrl),
+		mFetcher:  mocks.NewMockfetcher(ctrl),
+		mIDs:      mocks.NewMockidProvider(ctrl),
+		mAtxCache: mocks.NewMockactiveSetCache(ctrl),
 	}
-	tl.DataFetch = syncer.NewDataFetch(tl.mMesh, tl.mFetcher, tl.mIDs, lg)
+	tl.DataFetch = syncer.NewDataFetch(tl.mMesh, tl.mFetcher, tl.mIDs, tl.mAtxCache, lg)
 	return tl
 }
 
 const (
 	numBallots   = 10
-	numBlocks    = 3
 	numMalicious = 11
 )
 
@@ -71,13 +72,8 @@ func generateLayerContent(t *testing.T) []byte {
 	for i := 0; i < numBallots; i++ {
 		ballotIDs = append(ballotIDs, types.RandomBallotID())
 	}
-	blockIDs := make([]types.BlockID, 0, numBlocks)
-	for i := 0; i < numBlocks; i++ {
-		blockIDs = append(blockIDs, types.RandomBlockID())
-	}
 	lb := fetch.LayerData{
 		Ballots: ballotIDs,
-		Blocks:  blockIDs,
 	}
 	out, err := codec.Encode(&lb)
 	require.NoError(t, err)
@@ -87,7 +83,6 @@ func generateLayerContent(t *testing.T) []byte {
 func generateEmptyLayer(t *testing.T) []byte {
 	lb := fetch.LayerData{
 		Ballots: []types.BallotID{},
-		Blocks:  []types.BlockID{},
 	}
 	out, err := codec.Encode(&lb)
 	require.NoError(t, err)
@@ -147,20 +142,6 @@ func TestDataFetch_PollLayerData(t *testing.T) {
 	peers := GenPeers(numPeers)
 	layerID := types.LayerID(10)
 	errUnknown := errors.New("unknown")
-	t.Run("all peers have zero blocks", func(t *testing.T) {
-		t.Parallel()
-		td := newTestDataFetch(t)
-		td.mFetcher.EXPECT().GetPeers().Return(peers)
-		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers, layerID, gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, _ []p2p.Peer, _ types.LayerID, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
-				for _, peer := range peers {
-					okCB(generateEmptyLayer(t), peer)
-				}
-				return nil
-			})
-		td.mMesh.EXPECT().SetZeroBlockLayer(gomock.Any(), layerID)
-		require.NoError(t, td.PollLayerData(context.TODO(), layerID))
-	})
 	newTestDataFetchWithMocks := func(*testing.T) *testDataFetch {
 		td := newTestDataFetch(t)
 		td.mFetcher.EXPECT().GetPeers().Return(peers)
@@ -178,7 +159,6 @@ func TestDataFetch_PollLayerData(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetchWithMocks(t)
 		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers)
-		td.mFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers)
 		require.NoError(t, td.PollLayerData(context.TODO(), layerID))
 	})
 	t.Run("ballots failure ignored", func(t *testing.T) {
@@ -186,15 +166,12 @@ func TestDataFetch_PollLayerData(t *testing.T) {
 		td := newTestDataFetchWithMocks(t)
 		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Return(errUnknown)
 		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers - 1)
-		td.mFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers)
 		require.NoError(t, td.PollLayerData(context.TODO(), layerID))
 	})
 	t.Run("blocks failure ignored", func(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetchWithMocks(t)
 		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers)
-		td.mFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(errUnknown)
-		td.mFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers - 1)
 		require.NoError(t, td.PollLayerData(context.TODO(), layerID))
 	})
 }
@@ -232,7 +209,6 @@ func TestDataFetch_PollLayerData_PeerErrors(t *testing.T) {
 				}
 				return nil
 			})
-		td.mMesh.EXPECT().SetZeroBlockLayer(gomock.Any(), layerID)
 		require.NoError(t, td.PollLayerData(context.TODO(), layerID))
 	})
 }
@@ -325,6 +301,9 @@ func TestDataFetch_GetEpochATXs(t *testing.T) {
 				AtxIDs: types.RandomActiveSet(11),
 			}
 			td.mFetcher.EXPECT().GetPeers().Return(peers)
+			if tc.getErr == nil {
+				td.mAtxCache.EXPECT().GetMissingActiveSet(epoch+1, ed.AtxIDs).Return(ed.AtxIDs[1:])
+			}
 			td.mFetcher.EXPECT().PeerEpochInfo(gomock.Any(), gomock.Any(), epoch).DoAndReturn(
 				func(_ context.Context, peer p2p.Peer, _ types.EpochID) (*fetch.EpochData, error) {
 					require.Contains(t, peers, peer)
@@ -332,7 +311,7 @@ func TestDataFetch_GetEpochATXs(t *testing.T) {
 						return nil, tc.getErr
 					} else {
 						td.mFetcher.EXPECT().RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
-						td.mFetcher.EXPECT().GetAtxs(gomock.Any(), ed.AtxIDs).Return(tc.fetchErr)
+						td.mFetcher.EXPECT().GetAtxs(gomock.Any(), ed.AtxIDs[1:]).Return(tc.fetchErr)
 						return ed, nil
 					}
 				})

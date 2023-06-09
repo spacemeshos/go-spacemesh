@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -22,13 +22,15 @@ var (
 
 // TxHandler handles the transactions received via gossip or sync.
 type TxHandler struct {
+	self   peer.ID
 	logger log.Log
 	state  conservativeState
 }
 
 // NewTxHandler returns a new TxHandler.
-func NewTxHandler(s conservativeState, l log.Log) *TxHandler {
+func NewTxHandler(s conservativeState, id peer.ID, l log.Log) *TxHandler {
 	return &TxHandler{
+		self:   id,
 		logger: l,
 		state:  s,
 	}
@@ -52,27 +54,31 @@ func updateMetrics(err error, counter *prometheus.CounterVec) {
 }
 
 // HandleGossipTransaction handles data received on the transactions gossip channel.
-func (th *TxHandler) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
-	err := th.handleTransaction(ctx, msg)
-	defer updateMetrics(err, gossipTxCount)
+func (th *TxHandler) HandleGossipTransaction(ctx context.Context, peer p2p.Peer, msg []byte) error {
+	if peer == th.self {
+		return nil
+	}
+
+	err := th.VerifyAndCacheTx(ctx, msg)
+	updateMetrics(err, gossipTxCount)
 	if err != nil {
 		th.logger.WithContext(ctx).With().Warning("failed to handle tx", log.Err(err))
-		return pubsub.ValidationIgnore
+		return err
 	}
-	return pubsub.ValidationAccept
+	return nil
 }
 
 // HandleProposalTransaction handles data received on the transactions synced as a part of proposal.
 func (th *TxHandler) HandleProposalTransaction(ctx context.Context, _ p2p.Peer, msg []byte) error {
-	err := th.handleTransaction(ctx, msg)
-	defer updateMetrics(err, proposalTxCount)
-	if err == nil || errors.Is(err, errDuplicateTX) {
+	err := th.VerifyAndCacheTx(ctx, msg)
+	updateMetrics(err, proposalTxCount)
+	if errors.Is(err, errDuplicateTX) {
 		return nil
 	}
 	return err
 }
 
-func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
+func (th *TxHandler) VerifyAndCacheTx(ctx context.Context, msg []byte) error {
 	raw := types.NewRawTx(msg)
 	tx, err := th.state.GetMeshTransaction(raw.ID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
@@ -96,7 +102,8 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 	if err := th.state.AddToCache(ctx, &types.Transaction{RawTx: raw, TxHeader: header}); err != nil {
 		th.logger.WithContext(ctx).With().Warning("failed to add tx to conservative cache",
 			raw.ID,
-			log.Err(err))
+			log.Err(err),
+		)
 		return err
 	}
 	return nil

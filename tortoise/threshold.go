@@ -1,13 +1,11 @@
 package tortoise
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/spacemeshos/fixed"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 )
 
 const (
@@ -19,14 +17,6 @@ const (
 	// global threshold is set in a such way so that if adversary
 	// cancels their weight (adversarialWeightFraction) - honest nodes should still cross local threshold.
 )
-
-func getBallotHeight(cdb *datastore.CachedDB, ballot *types.Ballot) (uint64, error) {
-	atx, err := cdb.GetAtxHeader(ballot.AtxID)
-	if err != nil {
-		return 0, fmt.Errorf("read atx for ballot height: %w", err)
-	}
-	return atx.TickHeight(), nil
-}
 
 func getMedian(heights []uint64) uint64 {
 	if len(heights) == 0 {

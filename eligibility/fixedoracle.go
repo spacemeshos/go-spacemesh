@@ -206,7 +206,8 @@ func (fo *FixedRolacle) eligible(ctx context.Context, layer types.LayerID, round
 	if committeeSize > total {
 		fo.logger.WithContext(ctx).With().Warning("committee size bigger than the number of clients",
 			log.Int("committee_size", committeeSize),
-			log.Int("num_clients", total))
+			log.Int("num_clients", total),
+		)
 		size = total
 	}
 

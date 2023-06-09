@@ -1,3 +1,9 @@
+CREATE TABLE recovery
+(
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    restore INT NOT NULL
+);
+
 CREATE TABLE blocks
 (
     id       CHAR(20) PRIMARY KEY,
@@ -10,6 +16,7 @@ CREATE INDEX blocks_by_layer ON blocks (layer, id asc);
 CREATE TABLE ballots
 (
     id        CHAR(20) PRIMARY KEY,
+    atx       CHAR(32) NOT NULL,
     layer     INT NOT NULL,
     pubkey    VARCHAR,
     ballot    BLOB
@@ -103,15 +110,18 @@ CREATE TABLE atxs
     id                  CHAR(32) PRIMARY KEY,
     epoch               INT NOT NULL,
     effective_num_units INT NOT NULL,
+    commitment_atx      CHAR(32),
     nonce               UNSIGNED LONG INT,
     base_tick_height    UNSIGNED LONG INT,
     tick_count          UNSIGNED LONG INT,
-    smesher             CHAR(32),
+    sequence            UNSIGNED LONG INT,
+    pubkey              CHAR(32),
+    coinbase            CHAR(24),
     atx                 BLOB,
     received            INT NOT NULL
 ) WITHOUT ROWID;
-CREATE INDEX atxs_by_smesher_by_epoch_desc ON atxs (smesher, epoch desc);
-CREATE INDEX atxs_by_epoch_by_pubkey ON atxs (epoch, smesher);
+CREATE INDEX atxs_by_pubkey_by_epoch_desc ON atxs (pubkey, epoch desc);
+CREATE INDEX atxs_by_epoch_by_pubkey ON atxs (epoch, pubkey);
 
 CREATE TABLE proposals
 (
@@ -136,17 +146,10 @@ CREATE TABLE poets
 
 CREATE INDEX poets_by_service_id_by_round_id ON poets (service_id, round_id);
 
-CREATE TABLE kvstore
-(
-    id VARCHAR PRIMARY KEY,
-    value BLOB
-) WITHOUT ROWID;
-
 CREATE TABLE accounts
 (
     address        CHAR(24),
     balance        UNSIGNED LONG INT,
-    initialized    BOOL,
     next_nonce     UNSIGNED LONG INT,
     layer_updated  UNSIGNED LONG INT,
     template       CHAR(24),
@@ -154,4 +157,4 @@ CREATE TABLE accounts
     PRIMARY KEY (address, layer_updated DESC)
 );
 
-CREATE INDEX accounts_by_layer_udated ON accounts (layer_updated);
+CREATE INDEX accounts_by_layer_updated ON accounts (layer_updated);

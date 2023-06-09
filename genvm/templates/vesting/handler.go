@@ -15,11 +15,6 @@ func init() {
 	TemplateAddress[len(TemplateAddress)-1] = 3
 }
 
-const (
-	BaseGas  = multisig.BaseGas
-	FixedGas = multisig.FixedGas
-)
-
 // MethodDrainVault is used to relay a call to drain a vault.
 const MethodDrainVault = 17
 

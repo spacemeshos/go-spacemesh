@@ -15,14 +15,14 @@ import (
 )
 
 // HandleProposal defines method to handle Beacon Weak Coin Messages from gossip.
-func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) error {
 	receivedTime := time.Now()
 	logger := wc.logger.WithContext(ctx)
 
 	var message Message
 	if err := codec.Decode(msg, &message); err != nil {
 		logger.With().Warning("malformed weak coin message", log.Err(err))
-		return pubsub.ValidationReject
+		return pubsub.ErrValidationReject
 	}
 
 	latency := receivedTime.Sub(wc.msgTime.WeakCoinProposalSendTime(message.Epoch, message.Round))
@@ -37,14 +37,14 @@ func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byt
 				log.Err(err),
 			)
 		}
-		return pubsub.ValidationIgnore
+		return err
 	}
-	return pubsub.ValidationAccept
+	return nil
 }
 
 func (wc *WeakCoin) receiveMessage(ctx context.Context, message Message) error {
-	if wc.aboveThreshold(message.VrfSignature) {
-		return fmt.Errorf("proposal %s is above threshold", message.VrfSignature)
+	if wc.aboveThreshold(message.VRFSignature) {
+		return fmt.Errorf("proposal %s is above threshold", message.VRFSignature)
 	}
 
 	wc.mu.Lock()

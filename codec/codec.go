@@ -2,12 +2,15 @@ package codec
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
 
 	"github.com/spacemeshos/go-scale"
 )
+
+var ErrShortRead = errors.New("decode from buffer: not all bytes were consumed")
 
 // Encodable is an interface that must be implemented by a struct to be encoded.
 type Encodable = scale.Encodable
@@ -50,21 +53,24 @@ func putEncoderBuffer(b *bytes.Buffer) {
 func Encode(value Encodable) ([]byte, error) {
 	b := getEncoderBuffer()
 	defer putEncoderBuffer(b)
-	_, err := EncodeTo(b, value)
+	n, err := EncodeTo(b, value)
 	if err != nil {
 		return nil, err
 	}
-	buf := make([]byte, len(b.Bytes()))
+	buf := make([]byte, n)
 	copy(buf, b.Bytes())
 	return buf, nil
 }
 
 // Decode value from a byte buffer.
 func Decode(buf []byte, value Decodable) error {
-	if _, err := DecodeFrom(bytes.NewBuffer(buf), value); err != nil {
+	n, err := DecodeFrom(bytes.NewBuffer(buf), value)
+	if err != nil {
 		return fmt.Errorf("decode from buffer: %w", err)
 	}
-
+	if n != len(buf) {
+		return ErrShortRead
+	}
 	return nil
 }
 

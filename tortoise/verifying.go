@@ -42,8 +42,8 @@ func (v *verifying) countBallot(logger log.Log, ballot *ballotInfo) {
 	logger.With().Debug("count ballot in verifying mode",
 		ballot.layer,
 		ballot.id,
-		log.Stringer("ballot opinion", ballot.opinion()),
-		log.Stringer("local opinion", prev.opinion),
+		log.ShortStringer("ballot opinion", ballot.opinion()),
+		log.ShortStringer("local opinion", prev.opinion),
 		log.Bool("bad beacon", ballot.conditions.badBeacon),
 		log.Stringer("weight", ballot.weight),
 		log.Uint64("reference height", prev.verifying.referenceHeight),
@@ -99,6 +99,9 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		return false
 	} else {
 		logger.With().Debug("crosses global threshold")
+	}
+	if len(layer.blocks) == 0 {
+		logger.With().Debug("candidate layer is empty")
 	}
 	return verifyLayer(
 		logger,

@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/spacemeshos/economics/constants"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -78,12 +79,20 @@ func TestAvailable(t *testing.T) {
 			expect:  10 + (100-10)*7/8,
 		},
 		{
-			desc:   "use big int to avoid overflow",
-			start:  2,
-			end:    10,
-			lid:    4,
-			total:  math.MaxUint64,
-			expect: math.MaxUint64 / 4, // math.MaxUint64 * 2 / 8
+			desc:   "max values don't overflow",
+			start:  constants.VestStart,
+			end:    constants.VestEnd,
+			lid:    constants.VestEnd - 1,
+			total:  constants.TotalVaulted,
+			expect: 20288543279774,
+		},
+		{
+			desc:   "after vest end",
+			start:  constants.VestStart,
+			end:    constants.VestEnd,
+			lid:    2 * constants.VestEnd,
+			total:  constants.TotalVaulted,
+			expect: constants.TotalVaulted,
 		},
 		{
 			desc:    "initial max uint64",

@@ -6,10 +6,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/spacemeshos/go-spacemesh/cmd/flags"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
+	"github.com/spacemeshos/go-spacemesh/node/flags"
 )
 
 var cfg = config.DefaultConfig()
@@ -23,11 +23,19 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringP("preset", "p", "",
 		fmt.Sprintf("preset overwrites default values of the config. options %+s", presets.Options()))
 
+	/** ======================== Checkpoint Flags ========================== **/
+	cmd.PersistentFlags().StringVar(&cfg.Recovery.Uri,
+		"recovery-uri", cfg.Recovery.Uri, "reset the node state based on the supplied checkpoint file")
+	cmd.PersistentFlags().Uint32Var(&cfg.Recovery.Restore,
+		"recovery-layer", cfg.Recovery.Restore, "restart the mesh with the checkpoint file at this layer")
+
 	/** ======================== BaseConfig Flags ========================== **/
 	cmd.PersistentFlags().StringVarP(&cfg.BaseConfig.ConfigFile,
 		"config", "c", cfg.BaseConfig.ConfigFile, "Set Load configuration from file")
 	cmd.PersistentFlags().StringVarP(&cfg.BaseConfig.DataDirParent, "data-folder", "d",
 		cfg.BaseConfig.DataDirParent, "Specify data directory for spacemesh")
+	cmd.PersistentFlags().StringVar(&cfg.BaseConfig.FileLock,
+		"filelock", cfg.BaseConfig.FileLock, "Filesystem lock to prevent running more than one instance.")
 	cmd.PersistentFlags().StringVar(&cfg.LOGGING.Encoder, "log-encoder",
 		cfg.LOGGING.Encoder, "Log as JSON instead of plain text")
 	cmd.PersistentFlags().BoolVar(&cfg.CollectMetrics, "metrics",
@@ -60,8 +68,6 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&cfg.ProfilerName, "profiler-name",
 		cfg.ProfilerName, "the name to use when sending profiles")
 
-	cmd.PersistentFlags().IntVar(&cfg.SyncRequestTimeout, "sync-request-timeout",
-		cfg.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")
 	cmd.PersistentFlags().IntVar(&cfg.TxsPerProposal, "txs-per-proposal",
 		cfg.TxsPerProposal, "the number of transactions to select per proposal")
 	cmd.PersistentFlags().Uint64Var(&cfg.BlockGasLimit, "block-gas-limit",
@@ -149,8 +155,6 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().Uint32Var(&cfg.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
 		cfg.HareEligibility.ConfidenceParam, "The relative layer (with respect to the current layer) we are confident to have consensus about")
-	cmd.PersistentFlags().Uint32Var(&cfg.HareEligibility.EpochOffset, "eligibility-epoch-offset",
-		cfg.HareEligibility.EpochOffset, "The constant layer (within an epoch) for which we traverse its view for the purpose of counting consensus active set")
 
 	/**======================== Beacon Flags ========================== **/
 
@@ -188,6 +192,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.Tortoise.MaxExceptions, "number of exceptions tolerated for a base ballot")
 	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.BadBeaconVoteDelayLayers, "tortoise-delay-layers",
 		cfg.Tortoise.BadBeaconVoteDelayLayers, "number of layers to ignore a ballot with a different beacon")
+	cmd.PersistentFlags().BoolVar(&cfg.Tortoise.EnableTracer, "tortoise-enable-tracer",
+		cfg.Tortoise.EnableTracer, "recovrd every tortoise input/output into the loggin output")
 
 	// TODO(moshababo): add usage desc
 	cmd.PersistentFlags().Uint64Var(&cfg.POST.LabelsPerUnit, "post-labels-per-unit",
@@ -204,8 +210,6 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.POST.K3, "subset of labels to verify in a proof")
 	cmd.PersistentFlags().Uint64Var(&cfg.POST.K2PowDifficulty, "post-k2pow-difficulty",
 		cfg.POST.K2PowDifficulty, "difficulty of K2 proof of work")
-	cmd.PersistentFlags().Uint64Var(&cfg.POST.K3PowDifficulty, "post-k3pow-difficulty",
-		cfg.POST.K3PowDifficulty, "difficulty of K3 proof of work")
 
 	/**======================== Smeshing Flags ========================== **/
 
@@ -221,8 +225,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.SMESHING.Opts.NumUnits, "")
 	cmd.PersistentFlags().Uint64Var(&cfg.SMESHING.Opts.MaxFileSize, "smeshing-opts-maxfilesize",
 		cfg.SMESHING.Opts.MaxFileSize, "")
-	cmd.PersistentFlags().IntVar(&cfg.SMESHING.Opts.ComputeProviderID, "smeshing-opts-provider",
-		cfg.SMESHING.Opts.ComputeProviderID, "")
+	cmd.PersistentFlags().IntVar(&cfg.SMESHING.Opts.ProviderID, "smeshing-opts-provider",
+		cfg.SMESHING.Opts.ProviderID, "")
 	cmd.PersistentFlags().BoolVar(&cfg.SMESHING.Opts.Throttle, "smeshing-opts-throttle",
 		cfg.SMESHING.Opts.Throttle, "")
 

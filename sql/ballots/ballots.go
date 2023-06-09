@@ -42,12 +42,13 @@ func Add(db sql.Executor, ballot *types.Ballot) error {
 	if err != nil {
 		return fmt.Errorf("encode ballot %s: %w", ballot.ID(), err)
 	}
-	if _, err := db.Exec(`insert into ballots 
-		(id, layer, pubkey, ballot) 
-		values (?1, ?2, ?4, ?5);`,
+	if _, err := db.Exec(`insert into ballots
+		(id, atx, layer, pubkey, ballot)
+		values (?1, ?2, ?3, ?4, ?5);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, ballot.ID().Bytes())
-			stmt.BindInt64(2, int64(ballot.Layer))
+			stmt.BindBytes(2, ballot.AtxID.Bytes())
+			stmt.BindInt64(3, int64(ballot.Layer))
 			stmt.BindBytes(4, ballot.SmesherID.Bytes())
 			stmt.BindBytes(5, bytes)
 		}, nil); err != nil {
@@ -221,4 +222,81 @@ func LatestLayer(db sql.Executor) (types.LayerID, error) {
 		return lid, fmt.Errorf("latest layer: %w", err)
 	}
 	return lid, nil
+}
+
+func FirstInEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID) (*types.Ballot, error) {
+	var (
+		bid     types.BallotID
+		ballot  types.Ballot
+		nodeID  types.NodeID
+		rows, n int
+		err     error
+	)
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, atx.Bytes())
+		stmt.BindInt64(2, int64(epoch.FirstLayer()))
+		stmt.BindInt64(3, int64((epoch+1).FirstLayer()-1))
+	}
+	dec := func(stmt *sql.Statement) bool {
+		stmt.ColumnBytes(0, bid[:])
+		stmt.ColumnBytes(1, nodeID[:])
+		if n, err = codec.DecodeFrom(stmt.ColumnReader(2), &ballot); err != nil {
+			if err != io.EOF {
+				err = fmt.Errorf("ballot by atx %s: %w", atx, err)
+				return false
+			}
+		} else if n == 0 {
+			err = fmt.Errorf("ballot by atx missing data %s", atx)
+			return false
+		}
+		ballot.SetID(bid)
+		ballot.SmesherID = nodeID
+		return true
+	}
+	rows, err = db.Exec(`
+		select id, pubkey, ballot from ballots where atx = ?1 and layer between ?2 and ?3
+		order by layer asc, id asc limit 1;`, enc, dec)
+	if err != nil {
+		return nil, fmt.Errorf("ballot by atx %s: %w", atx, err)
+	}
+	if rows == 0 {
+		return nil, sql.ErrNotFound
+	}
+	return &ballot, err
+}
+
+func AllFirstInEpoch(db sql.Executor, epoch types.EpochID) ([]*types.Ballot, error) {
+	var (
+		err error
+		rst []*types.Ballot
+	)
+	enc := func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(epoch.FirstLayer()))
+		stmt.BindInt64(2, int64((epoch+1).FirstLayer()-1))
+	}
+	dec := func(stmt *sql.Statement) bool {
+		var (
+			bid    types.BallotID
+			ballot types.Ballot
+		)
+		stmt.ColumnBytes(0, bid[:])
+		if _, err = codec.DecodeFrom(stmt.ColumnReader(1), &ballot); err != nil && err != io.EOF {
+			err = fmt.Errorf("decode ballot: %w", err)
+			return false
+		} else {
+			err = nil
+		}
+		ballot.SetID(bid)
+		rst = append(rst, &ballot)
+		return true
+	}
+	if _, err := db.Exec(`
+		select id, ballot, min(layer) from ballots where layer between ?1 and ?2
+		group by pubkey;`, enc, dec); err != nil {
+		return nil, fmt.Errorf("query first ballots in epoch %d: %w", epoch, err)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return rst, nil
 }

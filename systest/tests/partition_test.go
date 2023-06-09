@@ -57,7 +57,8 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	// start sending transactions
 	tctx.Log.Debug("sending transactions...")
 	eg2, ctx2 := errgroup.WithContext(tctx)
-	sendTransactions(ctx2, eg2, nil, cl, first, stop, 10, 100)
+	receiver := types.GenerateAddress([]byte{11, 1, 1})
+	sendTransactions(ctx2, eg2, nil, cl, first, stop, receiver, 10, 100)
 
 	type stateUpdate struct {
 		layer  uint32
@@ -173,10 +174,10 @@ func TestPartition_30_70(t *testing.T) {
 		tctx.Log.Info("cluster size changed to 30")
 		tctx.ClusterSize = 30
 	}
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	// TODO: re-assess the number of epoch required for healing.
-	testPartition(t, tctx, cl, 30, 4)
+	testPartition(t, tctx, cl, 30, 6)
 }
 
 func TestPartition_50_50(t *testing.T) {
@@ -187,8 +188,8 @@ func TestPartition_50_50(t *testing.T) {
 		tctx.Log.Info("cluster size changed to 30")
 		tctx.ClusterSize = 30
 	}
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	// TODO: re-assess the number of epoch required for healing.
-	testPartition(t, tctx, cl, 50, 5)
+	testPartition(t, tctx, cl, 50, 6)
 }

@@ -11,15 +11,17 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
+	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -46,7 +48,7 @@ type Config struct {
 	Genesis         *GenesisConfig        `mapstructure:"genesis"`
 	Tortoise        tortoise.Config       `mapstructure:"tortoise"`
 	P2P             p2p.Config            `mapstructure:"p2p"`
-	API             apiConfig.Config      `mapstructure:"api"`
+	API             grpcserver.Config     `mapstructure:"api"`
 	HARE            hareConfig.Config     `mapstructure:"hare"`
 	HareEligibility eligConfig.Config     `mapstructure:"hare-eligibility"`
 	Beacon          beacon.Config         `mapstructure:"beacon"`
@@ -58,6 +60,8 @@ type Config struct {
 	LOGGING         LoggerConfig          `mapstructure:"logging"`
 	FETCH           fetch.Config          `mapstructure:"fetch"`
 	Bootstrap       bootstrap.Config      `mapstructure:"bootstrap"`
+	Sync            syncer.Config         `mapstructure:"syncer"`
+	Recovery        checkpoint.Config     `mapstructure:"recovery"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -69,6 +73,7 @@ func (cfg *Config) DataDir() string {
 // BaseConfig defines the default configuration options for spacemesh app.
 type BaseConfig struct {
 	DataDirParent string `mapstructure:"data-folder"`
+	FileLock      string `mapstructure:"filelock"`
 
 	ConfigFile string `mapstructure:"config"`
 
@@ -77,6 +82,8 @@ type BaseConfig struct {
 
 	MetricsPush       string `mapstructure:"metrics-push"`
 	MetricsPushPeriod int    `mapstructure:"metrics-push-period"`
+	MetricsPushUser   string `mapstructure:"metrics-push-user"`
+	MetricsPushPass   string `mapstructure:"metrics-push-pass"`
 
 	ProfilerName string `mapstructure:"profiler-name"`
 	ProfilerURL  string `mapstructure:"profiler-url"`
@@ -91,10 +98,6 @@ type BaseConfig struct {
 	PoETServers []string `mapstructure:"poet-server"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
-
-	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // ms the timeout for direct request in the sync
-
-	SyncInterval int `mapstructure:"sync-interval"` // sync interval in seconds
 
 	PublishEventsURL string `mapstructure:"events-url"`
 
@@ -111,9 +114,11 @@ type BaseConfig struct {
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
 type SmeshingConfig struct {
-	Start           bool                     `mapstructure:"smeshing-start"`
-	CoinbaseAccount string                   `mapstructure:"smeshing-coinbase"`
-	Opts            activation.PostSetupOpts `mapstructure:"smeshing-opts"`
+	Start           bool                              `mapstructure:"smeshing-start"`
+	CoinbaseAccount string                            `mapstructure:"smeshing-coinbase"`
+	Opts            activation.PostSetupOpts          `mapstructure:"smeshing-opts"`
+	ProvingOpts     activation.PostProvingOpts        `mapstructure:"smeshing-proving-opts"`
+	VerifyingOpts   activation.PostProofVerifyingOpts `mapstructure:"smeshing-verifying-opts"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node.
@@ -124,7 +129,7 @@ func DefaultConfig() Config {
 		Genesis:         DefaultGenesisConfig(),
 		Tortoise:        tortoise.DefaultConfig(),
 		P2P:             p2p.DefaultConfig(),
-		API:             apiConfig.DefaultConfig(),
+		API:             grpcserver.DefaultConfig(),
 		HARE:            hareConfig.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
 		Beacon:          beacon.DefaultConfig(),
@@ -136,6 +141,8 @@ func DefaultConfig() Config {
 		FETCH:           fetch.DefaultConfig(),
 		LOGGING:         defaultLoggingConfig(),
 		Bootstrap:       bootstrap.DefaultConfig(),
+		Sync:            syncer.DefaultConfig(),
+		Recovery:        checkpoint.DefaultConfig(),
 	}
 }
 
@@ -144,7 +151,7 @@ func DefaultTestConfig() Config {
 	conf := DefaultConfig()
 	conf.BaseConfig = defaultTestConfig()
 	conf.P2P = p2p.DefaultConfig()
-	conf.API = apiConfig.DefaultTestConfig()
+	conf.API = grpcserver.DefaultTestConfig()
 	conf.Address = types.DefaultTestAddressConfig()
 	return conf
 }
@@ -153,6 +160,7 @@ func DefaultTestConfig() Config {
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		DataDirParent:       defaultDataDir,
+		FileLock:            filepath.Join(os.TempDir(), "spacemesh.lock"),
 		CollectMetrics:      false,
 		MetricsPort:         1010,
 		MetricsPush:         "", // "" = doesn't push
@@ -164,8 +172,6 @@ func defaultBaseConfig() BaseConfig {
 		LayerDuration:       30 * time.Second,
 		LayersPerEpoch:      3,
 		PoETServers:         []string{"127.0.0.1"},
-		SyncRequestTimeout:  2000,
-		SyncInterval:        10,
 		TxsPerProposal:      100,
 		BlockGasLimit:       math.MaxUint64,
 		OptFilterThreshold:  90,
@@ -180,6 +186,8 @@ func DefaultSmeshingConfig() SmeshingConfig {
 		Start:           false,
 		CoinbaseAccount: "",
 		Opts:            activation.DefaultPostSetupOpts(),
+		ProvingOpts:     activation.DefaultPostProvingOpts(),
+		VerifyingOpts:   activation.DefaultPostVerifyingOpts(),
 	}
 }
 

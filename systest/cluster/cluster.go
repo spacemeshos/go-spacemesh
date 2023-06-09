@@ -28,6 +28,7 @@ import (
 var errNotInitialized = errors.New("cluster: not initialized")
 
 const (
+	initBalance      = 100000000000000000
 	defaultExtraData = "systest"
 	poetApp          = "poet"
 	bootnodeApp      = "boot"
@@ -81,6 +82,12 @@ func WithBootstrapperFlag(flag DeploymentFlag) Opt {
 	}
 }
 
+func WithBootstrapEpochs(epochs []int) Opt {
+	return func(c *Cluster) {
+		c.bootstrapEpochs = epochs
+	}
+}
+
 // Reuse will try to recover cluster from the given namespace, if not found
 // it will create a new one.
 func Reuse(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
@@ -91,10 +98,27 @@ func Reuse(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 		}
 		return nil, err
 	}
+	if cl.Total() < cctx.ClusterSize {
+		cctx.Log.Infow("scaling cluster", "total", cl.Total(), "target", cctx.ClusterSize)
+		if err := cl.AddSmeshers(cctx, cctx.ClusterSize-cl.Total()); err != nil {
+			return nil, err
+		}
+	}
 	return cl, nil
 }
 
-// Default deployes bootnodes, one poet and the smeshers according to the cluster size.
+func ReuseWait(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
+	cl, err := Reuse(cctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	if err := cl.WaitAllTimeout(cctx.BootstrapDuration); err != nil {
+		return nil, err
+	}
+	return cl, nil
+}
+
+// Default deploys bootnodes, one poet and the smeshers according to the cluster size.
 func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	cl := New(cctx, opts...)
 	bsize := defaultBootnodes(cctx.ClusterSize)
@@ -119,6 +143,7 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 		smesherFlags:      map[string]DeploymentFlag{},
 		poetFlags:         map[string]DeploymentFlag{},
 		bootstrapperFlags: map[string]DeploymentFlag{},
+		bootstrapEpochs:   []int{2},
 	}
 	genesis := GenesisTime(time.Now().Add(cctx.BootstrapDuration))
 	cluster.addFlag(genesis)
@@ -152,6 +177,8 @@ type Cluster struct {
 	clients       []*NodeClient
 	poets         []*NodeClient
 	bootstrappers []*NodeClient
+
+	bootstrapEpochs []int
 }
 
 // GenesisID computes id from the configuration.
@@ -301,7 +328,15 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 		cctx.Log.Debugw("discovered existing poets", "name", poet.Name)
 	}
 
-	cctx.Log.Debugw("discovered cluster", "bootnodes", c.bootnodes, "smeshers", c.smeshers, "poets", len(c.poets))
+	c.bootstrappers, err = discoverNodes(cctx, bootstrapperApp)
+	if err != nil {
+		return err
+	}
+	for _, bs := range c.bootstrappers {
+		cctx.Log.Debugw("discovered existing bootstrapper", "name", bs.Name)
+	}
+
+	cctx.Log.Debugw("discovered cluster", "bootnodes", c.bootnodes, "smeshers", c.smeshers, "poets", len(c.poets), "bootstrappers", len(c.bootstrappers))
 	if err := c.accounts.Recover(cctx); err != nil {
 		return err
 	}
@@ -395,7 +430,7 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 }
 
 // AddSmeshers ...
-func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int) error {
+func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int, extras ...DeploymentFlag) error {
 	if err := c.resourceControl(tctx, n); err != nil {
 		return err
 	}
@@ -409,6 +444,7 @@ func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int) error {
 	}
 	flags = append(flags, Bootnodes(endpoints...))
 	flags = append(flags, StartSmeshing(true))
+	flags = append(flags, extras...)
 	clients, err := deployNodes(tctx, smesherApp, c.nextSmesher(), c.nextSmesher()+n, flags)
 	if err != nil {
 		return err
@@ -435,11 +471,20 @@ func (c *Cluster) AddBootstrapper(cctx *testcontext.Context, i int) error {
 		Name:  "--spacemesh-endpoint",
 		Value: fmt.Sprintf("dns:///%s:9092", c.clients[0].Name),
 	})
-	bs, err := deployBootstrapper(cctx, fmt.Sprintf("%s-%d", bootstrapperApp, i), flags...)
+	bs, err := deployBootstrapper(cctx, fmt.Sprintf("%s-%d", bootstrapperApp, i), c.bootstrapEpochs, flags...)
 	if err != nil {
 		return err
 	}
 	c.bootstrappers = append(c.bootstrappers, bs)
+	return nil
+}
+
+func (c *Cluster) DeleteBootstrappers(cctx *testcontext.Context) error {
+	for _, client := range c.bootstrappers {
+		if err := deleteServiceAndPod(cctx, client.Name); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -460,7 +505,7 @@ func (c *Cluster) DeletePoet(cctx *testcontext.Context, i int) error {
 	if poet == nil {
 		return nil
 	}
-	if err := deletePoet(cctx, poet.Name); err != nil {
+	if err := deleteServiceAndPod(cctx, poet.Name); err != nil {
 		return err
 	}
 	c.poets = append(c.poets[0:i], c.poets[i+1:]...)
@@ -512,23 +557,51 @@ func (c *Cluster) Client(i int) *NodeClient {
 	return c.clients[i]
 }
 
-// CloseClients closes connections to clients.
-func (c *Cluster) CloseClients() error {
-	var eg errgroup.Group
-	for _, client := range c.clients {
-		eg.Go(client.Close)
-	}
-	return eg.Wait()
+func (c *Cluster) Bootstrapper(i int) *NodeClient {
+	return c.bootstrappers[i]
 }
 
 // Wait for i-th client to be up.
 func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
-	nc, err := waitNode(tctx, c.Client(i).Name)
-	if err != nil {
-		return err
+	_, err := c.Client(i).Resolve(tctx)
+	return err
+}
+
+// WaitAll waits till (bootnode, smesher, poet, bootstrapper) pods are up.
+func (c *Cluster) WaitAll(ctx context.Context) error {
+	var eg errgroup.Group
+	wait := func(clients []*NodeClient) {
+		for i := range c.clients {
+			client := c.clients[i]
+			eg.Go(func() error {
+				_, err := client.Resolve(ctx)
+				return err
+			})
+		}
 	}
-	c.clients[i] = nc
-	return nil
+	wait(c.clients)
+	wait(c.poets)
+	wait(c.bootstrappers)
+	return eg.Wait()
+}
+
+func (c *Cluster) WaitAllTimeout(timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return c.WaitAll(ctx)
+}
+
+// CloseClients closes connections to clients.
+func (c *Cluster) CloseClients() {
+	var eg errgroup.Group
+	for _, client := range c.clients {
+		client := client
+		eg.Go(func() error {
+			client.Close()
+			return nil
+		})
+	}
+	eg.Wait()
 }
 
 // Account contains address and private key.
@@ -603,7 +676,7 @@ func (a *accounts) Recover(ctx *testcontext.Context) error {
 func genGenesis(signers []*signer) (rst map[string]uint64) {
 	rst = map[string]uint64{}
 	for _, sig := range signers {
-		rst[sig.Address().String()] = 100000000000000000
+		rst[sig.Address().String()] = initBalance
 	}
 	return
 }
@@ -635,7 +708,7 @@ func genSigner() *signer {
 func extractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]string, error) {
 	var (
 		rst          = make([]string, len(nodes))
-		rctx, cancel = context.WithTimeout(tctx, 10*time.Second)
+		rctx, cancel = context.WithTimeout(tctx, 5*time.Minute)
 		eg, ctx      = errgroup.WithContext(rctx)
 	)
 	defer cancel()
@@ -643,12 +716,16 @@ func extractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]stri
 		i := i
 		n := nodes[i]
 		eg.Go(func() error {
+			ip, err := n.Resolve(ctx)
+			if err != nil {
+				return err
+			}
 			dbg := pb.NewDebugServiceClient(n)
 			info, err := dbg.NetworkInfo(ctx, &emptypb.Empty{})
 			if err != nil {
 				return err
 			}
-			rst[i] = p2pEndpoint(n.Node, info.Id)
+			rst[i] = p2pEndpoint(n.Node, ip, info.Id)
 			return nil
 		})
 	}
@@ -705,11 +782,11 @@ func fillNetworkConfig(ctx *testcontext.Context, node *NodeClient) error {
 	if err != nil {
 		return fmt.Errorf("query layers duration from %v: %w", node.Name, err)
 	}
-	ctx.Log.Debugw("queried layers per epoch", "layers", resp1.Numlayers.Value)
+	ctx.Log.Debugw("queried layers per epoch", "layers", resp1.Numlayers.Number)
 	ctx.Log.Debugw("queried layer duration", "duration", resp2.Duration.Value)
 	parameters.New()
 	configs := map[string]string{}
-	configs[testcontext.ParamLayersPerEpoch] = fmt.Sprintf("%d", resp1.Numlayers.Value)
+	configs[testcontext.ParamLayersPerEpoch] = fmt.Sprintf("%d", resp1.Numlayers.Number)
 	configs[testcontext.ParamLayerDuration] = fmt.Sprintf("%ds", resp2.Duration.Value)
 	ctx.Parameters.Update(configs)
 	ctx.Log.Debugw("updated param layers per epoch", "layers", testcontext.LayersPerEpoch.Get(ctx.Parameters))

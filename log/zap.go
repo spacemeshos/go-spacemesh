@@ -88,6 +88,22 @@ func Stringer(name string, val fmt.Stringer) Field {
 	return Field(zap.Stringer(name, val))
 }
 
+type ShortString interface {
+	ShortString() string
+}
+
+type shortStringAdapter struct {
+	val ShortString
+}
+
+func (a shortStringAdapter) String() string {
+	return a.val.ShortString()
+}
+
+func ShortStringer(name string, val ShortString) Field {
+	return Field(zap.Stringer(name, shortStringAdapter{val: val}))
+}
+
 // Binary will encode binary content in base64 when logged.
 func Binary(name string, val []byte) Field {
 	return Field(zap.Binary(name, val))
@@ -160,6 +176,27 @@ func Inline(object ObjectMarshaller) Field {
 // Array for logging array efficiently.
 func Array(name string, array ArrayMarshaler) Field {
 	return Field(zap.Array(name, array))
+}
+
+// Context inlines requestId and sessionId fields if they are present.
+func Context(ctx context.Context) Field {
+	return Field(zap.Inline(&marshalledContext{Context: ctx}))
+}
+
+type marshalledContext struct {
+	context.Context
+}
+
+func (c *marshalledContext) MarshalLogObject(encoder ObjectEncoder) error {
+	if c.Context != nil {
+		if ctxRequestID, ok := ExtractRequestID(c.Context); ok {
+			encoder.AddString("requestId", ctxRequestID)
+		}
+		if ctxSessionID, ok := ExtractSessionID(c.Context); ok {
+			encoder.AddString("sessionId", ctxSessionID)
+		}
+	}
+	return nil
 }
 
 // LoggableField as an interface to enable every type to be used as a log field.

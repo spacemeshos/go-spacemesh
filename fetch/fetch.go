@@ -202,24 +202,26 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, 
 }
 
 type dataValidators struct {
-	atx         AtxValidator
-	poet        PoetValidator
-	ballot      BallotValidator
-	block       BlockValidator
-	proposal    ProposalValidator
-	tx          TxValidator
-	malfeasance MalfeasanceValidator
+	atx         SyncValidator
+	poet        SyncValidator
+	ballot      SyncValidator
+	block       SyncValidator
+	proposal    SyncValidator
+	txBlock     SyncValidator
+	txProposal  SyncValidator
+	malfeasance SyncValidator
 }
 
 // SetValidators sets the handlers to validate various mesh data fetched from peers.
 func (f *Fetch) SetValidators(
-	atx AtxValidator,
-	poet PoetValidator,
-	ballot BallotValidator,
-	block BlockValidator,
-	prop ProposalValidator,
-	tx TxValidator,
-	mal MalfeasanceValidator,
+	atx SyncValidator,
+	poet SyncValidator,
+	ballot SyncValidator,
+	block SyncValidator,
+	prop SyncValidator,
+	txBlock SyncValidator,
+	txProposal SyncValidator,
+	mal SyncValidator,
 ) {
 	f.validators = &dataValidators{
 		atx:         atx,
@@ -227,7 +229,8 @@ func (f *Fetch) SetValidators(
 		ballot:      ballot,
 		block:       block,
 		proposal:    prop,
-		tx:          tx,
+		txBlock:     txBlock,
+		txProposal:  txProposal,
 		malfeasance: mal,
 	}
 }
@@ -384,6 +387,14 @@ func (f *Fetch) failAfterRetry(hash types.Hash32) {
 		f.logger.With().Error("hash missing from ongoing requests", log.Stringer("hash", hash))
 		return
 	}
+
+	// first check if we have it locally from gossips
+	if _, err := f.bs.Get(req.hint, hash.Bytes()); err == nil {
+		close(req.promise.completed)
+		delete(f.ongoing, hash)
+		return
+	}
+
 	req.retries++
 	if req.retries > f.cfg.MaxRetriesForRequest {
 		f.logger.WithContext(req.ctx).With().Warning("gave up on hash after max retries",
@@ -447,6 +458,9 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	peer2requests := make(map[p2p.Peer][]RequestMessage)
 	peers := f.host.GetPeers()
+	if len(peers) == 0 {
+		panic("no peers")
+	}
 
 	for _, req := range requests {
 		p, exists := f.hashToPeers.GetRandom(req.Hash, req.Hint, rng)
@@ -612,6 +626,9 @@ func (f *Fetch) getHash(ctx context.Context, hash types.Hash32, h datastore.Hint
 
 // RegisterPeerHashes registers provided peer for a list of hashes.
 func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
+	if peer == f.host.ID() {
+		return
+	}
 	f.hashToPeers.RegisterPeerHashes(peer, hashes)
 }
 

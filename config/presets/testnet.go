@@ -3,6 +3,8 @@ package presets
 import (
 	"time"
 
+	"github.com/spacemeshos/post/initialization"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 )
@@ -38,7 +40,6 @@ func testnet() config.Config {
 	conf.LayerAvgSize = 50
 	conf.LayerDuration = 120 * time.Second
 	conf.LayersPerEpoch = 60
-	conf.SyncRequestTimeout = 60_000
 
 	conf.Tortoise.Hdist = 60
 	conf.Tortoise.Zdist = 10
@@ -53,7 +54,7 @@ func testnet() config.Config {
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
-	conf.SMESHING.Opts.ComputeProviderID = 1
+	conf.SMESHING.Opts.ProviderID = int(initialization.CPUProviderID())
 	conf.SMESHING.Opts.NumUnits = 2
 	conf.SMESHING.Opts.Throttle = true
 
@@ -66,5 +67,6 @@ func testnet() config.Config {
 	conf.Beacon.VotingRoundDuration = 50 * time.Second
 	conf.Beacon.WeakCoinRoundDuration = 10 * time.Second
 
+	conf.Recovery.RecoverFromDefaultDir = false
 	return conf
 }

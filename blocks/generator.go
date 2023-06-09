@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare"
+	heligibility "github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbproposals "github.com/spacemeshos/go-spacemesh/sql/proposals"
@@ -144,7 +145,7 @@ func (g *Generator) run() error {
 		case <-g.ctx.Done():
 			return fmt.Errorf("context done: %w", g.ctx.Err())
 		case out := <-g.hareCh:
-			g.logger.WithContext(out.Ctx).With().Info("received hare output",
+			g.logger.WithContext(out.Ctx).With().Debug("received hare output",
 				out.Layer,
 				log.Int("num_proposals", len(out.Proposals)))
 			g.hareOutputs[out.Layer] = out
@@ -168,7 +169,7 @@ func (g *Generator) tryGenBlock() {
 		if out, ok := g.hareOutputs[next]; !ok {
 			break
 		} else {
-			g.logger.WithContext(out.Ctx).With().Info("ready to process hare output", next)
+			g.logger.WithContext(out.Ctx).With().Debug("ready to process hare output", next)
 			_ = g.processHareOutput(out)
 			delete(g.hareOutputs, next)
 			g.patrol.CompleteHare(next)
@@ -204,7 +205,7 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) error {
 		// fetch proposals from peers if not locally available
 		if err := g.fetcher.GetProposals(ctx, out.Proposals); err != nil {
 			failFetchCnt.Inc()
-			logger.With().Error("failed to fetch proposals", log.Err(err))
+			logger.With().Warning("failed to fetch proposals", log.Err(err))
 			return err
 		}
 
@@ -238,7 +239,11 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) error {
 	}
 
 	if err := g.cert.CertifyIfEligible(ctx, logger.WithFields(hareOutput), out.Layer, hareOutput); err != nil {
-		logger.With().Warning("failed to certify block", hareOutput, log.Err(err))
+		if errors.Is(err, heligibility.ErrNotActive) {
+			logger.With().Debug("smesher is not active", log.Err(err))
+		} else {
+			logger.With().Warning("failed to certify block", hareOutput, log.Err(err))
+		}
 	}
 
 	if err := g.msh.ProcessLayerPerHareOutput(ctx, out.Layer, hareOutput, executed); err != nil {
@@ -277,7 +282,7 @@ func (g *Generator) generateBlock(ctx context.Context, logger log.Log, lid types
 		},
 	}
 	b.Initialize()
-	logger.With().Info("block generated", log.Inline(b))
+	logger.With().Debug("block generated", log.Inline(b))
 	return b, false, nil
 }
 
@@ -293,11 +298,11 @@ func (g *Generator) genBlockOptimistic(ctx context.Context, logger log.Log, md *
 			return nil, false, err
 		}
 	}
-	logger.With().Info("executing txs in situ", log.Int("num_txs", len(tids)))
+	logger.With().Debug("executing txs in situ", log.Int("num_txs", len(tids)))
 	block, err := g.executor.ExecuteOptimistic(ctx, md.lid, md.tickHeight, md.rewards, tids)
 	if err != nil {
 		return nil, false, fmt.Errorf("execute in situ: %w", err)
 	}
-	logger.With().Info("block generated and executed", log.Inline(block))
+	logger.With().Debug("block generated and executed", log.Inline(block))
 	return block, true, nil
 }

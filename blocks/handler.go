@@ -9,13 +9,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var (
-	errMalformedData  = errors.New("malformed data")
+	errMalformedData  = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
 	errInvalidRewards = errors.New("invalid rewards")
 	errDuplicateTX    = errors.New("duplicate TxID in proposal")
 )
@@ -64,6 +65,9 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, peer p2p.Peer, data []b
 	}
 	// set the block ID when received
 	b.Initialize()
+	if b.LayerIndex <= types.GetEffectiveGenesis() {
+		return fmt.Errorf("block before effective genesis: layer %v", b.LayerIndex)
+	}
 
 	if err := ValidateRewards(b.Rewards); err != nil {
 		return fmt.Errorf("%w: %s", errInvalidRewards, err.Error())

@@ -197,7 +197,7 @@ func (s *Sync) run() error {
 		prs := s.peers.GetPeers()
 		timeout := s.config.RoundRetryInterval
 		if len(prs) >= s.config.RequiredResponses {
-			s.log.With().Info("starting time sync round with peers",
+			s.log.With().Debug("starting time sync round with peers",
 				log.Uint64("round", round),
 				log.Int("peers_count", len(prs)),
 				log.Uint32("errors_count", atomic.LoadUint32(&s.errCnt)),
@@ -207,7 +207,7 @@ func (s *Sync) run() error {
 			cancel()
 			if err == nil {
 				if offset > s.config.MaxClockOffset || (offset < 0 && -offset > s.config.MaxClockOffset) {
-					s.log.With().Error("peers offset is larger than max allowed clock difference",
+					s.log.With().Warning("peers offset is larger than max allowed clock difference",
 						log.Uint64("round", round),
 						log.Duration("offset", offset),
 						log.Duration("max_offset", s.config.MaxClockOffset),
@@ -219,13 +219,14 @@ func (s *Sync) run() error {
 						}
 					}
 				} else {
-					s.log.With().Info("peers offset is within max allowed clock difference",
+					s.log.With().Debug("peers offset is within max allowed clock difference",
 						log.Uint64("round", round),
 						log.Duration("offset", offset),
 						log.Duration("max_offset", s.config.MaxClockOffset),
 					)
 					atomic.StoreUint32(&s.errCnt, 0)
 				}
+				offsetGauge.Set(offset.Seconds())
 				timeout = s.config.RoundInterval
 			} else {
 				s.log.With().Error("failed to fetch offset from peers", log.Err(err))

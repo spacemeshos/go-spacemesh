@@ -9,9 +9,9 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/spacemeshos/go-spacemesh/cmd/flags"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/node/flags"
 )
 
 var (
@@ -149,6 +149,10 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
 
 			ff = reflect.TypeOf(appCFG.Bootstrap)
 			elem = reflect.ValueOf(&appCFG.Bootstrap).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appCFG.Recovery)
+			elem = reflect.ValueOf(&appCFG.Recovery).Elem()
 			assignFields(ff, elem, name)
 		}
 	})

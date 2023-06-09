@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync/mocks"
@@ -129,7 +128,6 @@ func TestSyncSimulateMultiple(t *testing.T) {
 	config.MaxClockOffset = 1 * time.Second
 	config.MaxOffsetErrors = 2
 	config.RoundInterval = 0
-	genesisID := types.Hash20{1}
 
 	delays := []time.Duration{0, 1200 * time.Millisecond, 1900 * time.Millisecond, 10 * time.Second}
 	instances := []*Sync{}
@@ -138,7 +136,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 	require.NoError(t, err)
 	hosts := []*p2p.Host{}
 	for _, h := range mesh.Hosts() {
-		fh, err := p2p.Upgrade(h, genesisID)
+		fh, err := p2p.Upgrade(h)
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = fh.Stop() })
 		hosts = append(hosts, fh)

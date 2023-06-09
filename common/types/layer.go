@@ -11,15 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-const (
-	// LayerIDSize in bytes.
-	LayerIDSize = 4
-
-	// BootstrapBeacon is the hex value of the beacon used during genesis.
-	// TODO: make this a config.
-	BootstrapBeacon = "0x333c04dd151a2a6831c039cb9a651df29198be8a04e16ce861d4b6a34a11c954" // sha256("bootstrap")
-)
-
 var (
 	layersPerEpoch uint32
 	// effectiveGenesis marks when actual proposals would start being created in the network. It takes into account
@@ -33,7 +24,11 @@ var (
 // SetLayersPerEpoch sets global parameter of layers per epoch, all conversions from layer to epoch use this param.
 func SetLayersPerEpoch(layers uint32) {
 	atomic.StoreUint32(&layersPerEpoch, layers)
-	atomic.StoreUint32(&effectiveGenesis, layers*2-1)
+	SetEffectiveGenesis(layers*2 - 1)
+}
+
+func SetEffectiveGenesis(layer uint32) {
+	atomic.StoreUint32(&effectiveGenesis, layer)
 }
 
 // GetLayersPerEpoch returns number of layers per epoch.
@@ -41,7 +36,13 @@ func GetLayersPerEpoch() uint32 {
 	return atomic.LoadUint32(&layersPerEpoch)
 }
 
-// GetEffectiveGenesis returns when actual proposals would be created.
+// FirstEffectiveGenesis returns the first effective genesis layer.
+func FirstEffectiveGenesis() LayerID {
+	return LayerID(GetLayersPerEpoch()*2 - 1)
+}
+
+// GetEffectiveGenesis returns the last layer of genesis.
+// this value can change after a checkpoint recovery.
 func GetEffectiveGenesis() LayerID {
 	return LayerID(atomic.LoadUint32(&effectiveGenesis))
 }
@@ -225,4 +226,24 @@ func NewLayer(layerIndex LayerID) *Layer {
 		ballots: make([]*Ballot, 0, 10),
 		blocks:  make([]*Block, 0, 3),
 	}
+}
+
+// MinLayer returs minimal nonzero layer.
+func MinLayer(i, j LayerID) LayerID {
+	if i == 0 {
+		return j
+	} else if j == 0 {
+		return i
+	} else if i < j {
+		return i
+	}
+	return j
+}
+
+// MaxLayer returs max layer.
+func MaxLayer(i, j LayerID) LayerID {
+	if i > j {
+		return i
+	}
+	return j
 }

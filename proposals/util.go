@@ -17,9 +17,9 @@ var (
 
 //go:generate scalegen -types VrfMessage
 
-// VrfMessage is a verification message.
+// VrfMessage is a verification message. It is the payload for the signature in `VotingEligibility`.
 type VrfMessage struct {
-	Type    types.EligibilityType
+	Type    types.EligibilityType // always types.EligibilityVoting
 	Beacon  types.Beacon
 	Epoch   types.EpochID
 	Nonce   types.VRFPostIndex

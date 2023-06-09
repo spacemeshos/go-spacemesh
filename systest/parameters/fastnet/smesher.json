@@ -1,17 +1,17 @@
 {
     "preset": "fastnet",
     "poet": {
-        "phase-shift": "20s",
-        "cycle-gap": "20s",
-        "grace-period": "5s"
+        "phase-shift": "30s",
+        "cycle-gap": "30s",
+        "grace-period": "10s"
     },
-    "logging": {
-        "trtl": "debug"
+    "tortoise": {
+        "tortoise-enable-tracer": true
     },
     "api": {
         "grpc-public-services": [
             "debug", "global", "mesh", "node",
-            "transaction", "activation", "smesher"
+            "transaction", "activation", "admin", "smesher"
         ],
         "grpc-private-services": []
     }

@@ -117,6 +117,9 @@ type Certifier struct {
 
 	mu          sync.Mutex
 	certifyMsgs map[types.LayerID]map[types.BlockID]*certInfo
+	certCount   map[types.EpochID]int
+
+	collector *collector
 }
 
 // NewCertifier creates new block certifier.
@@ -146,6 +149,7 @@ func NewCertifier(
 		beacon:      b,
 		tortoise:    tortoise,
 		certifyMsgs: make(map[types.LayerID]map[types.BlockID]*certInfo),
+		certCount:   map[types.EpochID]int{},
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -153,6 +157,7 @@ func NewCertifier(
 	if c.nonceFetcher == nil {
 		c.nonceFetcher = defaultFetcher{cdb: db}
 	}
+	c.collector = newCollector(c)
 
 	c.ctx, c.cancel = context.WithCancel(c.ctx)
 	return c
@@ -227,7 +232,7 @@ func (c *Certifier) createIfNeeded(lid types.LayerID, bid types.BlockID) {
 // RegisterForCert register to generate a certificate for the specified layer/block.
 func (c *Certifier) RegisterForCert(ctx context.Context, lid types.LayerID, bid types.BlockID) error {
 	logger := c.logger.WithContext(ctx).WithFields(lid, bid)
-	logger.Info("certifier registered")
+	logger.Debug("certifier registered")
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -259,7 +264,6 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 
 	eligibilityCount, err := c.oracle.CalcEligibility(ctx, lid, eligibility.CertifyRound, c.cfg.CommitteeSize, c.nodeID, nonce, proof)
 	if err != nil {
-		logger.With().Error("failed to check eligibility to certify", log.Err(err))
 		return err
 	}
 	if eligibilityCount == 0 { // not eligible
@@ -286,24 +290,6 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 		return err
 	}
 	return nil
-}
-
-// HandleCertifyMessage is the gossip receiver for certify message.
-func (c *Certifier) HandleCertifyMessage(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
-	if c.isShuttingDown() {
-		return pubsub.ValidationIgnore
-	}
-
-	err := c.handleRawCertifyMsg(ctx, msg)
-	switch {
-	case err == nil:
-		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedData):
-		c.logger.WithContext(ctx).With().Warning("malformed cert msg", log.Stringer("peer", peer), log.Err(err))
-		return pubsub.ValidationReject
-	default:
-		return pubsub.ValidationIgnore
-	}
 }
 
 // NumCached returns the number of layers being cached in memory.
@@ -341,7 +327,8 @@ func (c *Certifier) validateCert(ctx context.Context, logger log.Log, cert *type
 		logger.With().Warning("certificate not meeting threshold",
 			log.Int("num_msgs", len(cert.Signatures)),
 			log.Int("threshold", c.cfg.CertifyThreshold),
-			log.Uint16("eligibility_count", eligibilityCnt))
+			log.Uint16("eligibility_count", eligibilityCnt),
+		)
 		return errInvalidCert
 	}
 	return nil
@@ -368,7 +355,20 @@ func (c *Certifier) expected(lid types.LayerID) bool {
 	return !lid.Before(start) && !lid.After(current.Add(c.cfg.LayerBuffer))
 }
 
-func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error {
+func (c *Certifier) HandleCertifyMessage(ctx context.Context, peer p2p.Peer, data []byte) error {
+	err := c.handleCertifyMessage(ctx, peer, data)
+	if err != nil && errors.Is(err, errMalformedData) {
+		c.logger.WithContext(ctx).With().Warning("malformed cert msg", log.Stringer("peer", peer), log.Err(err))
+	}
+	return err
+}
+
+// HandleCertifyMessage is the gossip receiver for certify message.
+func (c *Certifier) handleCertifyMessage(ctx context.Context, peer p2p.Peer, data []byte) error {
+	if c.isShuttingDown() {
+		return errors.New("certifier shutting down")
+	}
+
 	logger := c.logger.WithContext(ctx)
 	var msg types.CertifyMessage
 	if err := codec.Decode(data, &msg); err != nil {
@@ -431,7 +431,8 @@ func (c *Certifier) saveMessage(ctx context.Context, logger log.Log, msg types.C
 	c.certifyMsgs[lid][bid].totalEligibility += msg.EligibilityCnt
 	logger.With().Debug("saved certify msg",
 		log.Uint16("eligibility_count", c.certifyMsgs[lid][bid].totalEligibility),
-		log.Int("num_msg", len(c.certifyMsgs[lid][bid].signatures)))
+		log.Int("num_msg", len(c.certifyMsgs[lid][bid].signatures)),
+	)
 
 	if c.certifyMsgs[lid][bid].registered {
 		return c.tryGenCert(ctx, logger, lid, bid)
@@ -460,7 +461,8 @@ func (c *Certifier) tryGenCert(ctx context.Context, logger log.Log, lid types.La
 
 	logger.With().Info("generating certificate",
 		log.Uint16("eligibility_count", c.certifyMsgs[lid][bid].totalEligibility),
-		log.Int("num_msg", len(c.certifyMsgs[lid][bid].signatures)))
+		log.Int("num_msg", len(c.certifyMsgs[lid][bid].signatures)),
+	)
 	cert := &types.Certificate{
 		BlockID:    bid,
 		Signatures: c.certifyMsgs[lid][bid].signatures,
@@ -513,8 +515,24 @@ func (c *Certifier) checkAndSave(ctx context.Context, logger log.Log, lid types.
 		c.tortoise.OnHareOutput(lid, types.EmptyBlockID)
 		return errMultipleCerts
 	}
+	c.addCertCount(lid.GetEpoch())
 	c.tortoise.OnHareOutput(lid, cert.BlockID)
 	return nil
+}
+
+func (c *Certifier) addCertCount(epoch types.EpochID) {
+	c.certCount[epoch]++
+	delete(c.certCount, epoch-2)
+}
+
+func (c *Certifier) CertCount() map[types.EpochID]int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	result := map[types.EpochID]int{}
+	for epoch, count := range c.certCount {
+		result[epoch] = count
+	}
+	return result
 }
 
 func (c *Certifier) save(ctx context.Context, lid types.LayerID, cert *types.Certificate, valid, invalid []types.BlockID) error {

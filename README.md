@@ -133,7 +133,7 @@ _Note: we need to use eval to interpret the commands since there are spaces in
 the values of the variables so the shell can't correctly split them as
 arguments._
 
-1. Setting the variables on the same line as the `go` command (e.g., `eval $(make print-env) go build`). This affects the environment for that command invocation only.
+1. Setting the variables on the same line as the `go` command (e.g., `eval $(make print-env) go build ./...`). This affects the environment for that command invocation only.
 2. Exporting the variables in the shell's environment (e.g., `eval export $(make print-env)`). The variables will persist for the duration of that shell (and will be passed to subshells).
 3. Setting the variables in the go environment (e.g., `eval go env -w $(make print-env)`). Persistently adds these values to Go's environment for any future runs.
 
@@ -196,16 +196,39 @@ You specify these parameters by providing go-spacemesh with a json config file. 
     **Example:**
 
     ```bash
-    ./go-spacemesh --listen /ip4/0.0.0.0/tcp/7513 --config ./tn1.json -d ./sm_data --smeshing-coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --smeshing-start --smeshing-opts-datadir ./post_data
+    ./go-spacemesh --listen /ip4/0.0.0.0/tcp/7513 --config ./tn1.json -d ./sm_data --smeshing-coinbase stest1qqqqqqp3qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqql50dsa --smeshing-start --smeshing-opts-datadir ./post_data
     ```
 
 4. Use the CLI wallet to check your coinbase account balance and to transact
 
 ---
 
+### Smeshing
+
+To be able to initialize your PoST using your Graphics card you will need to install the tools necessary to enable OpenCL support on your system.
+The exact steps to do this will vary based on your OS and GPU. In general you will need to install the OpenCL runtime for your GPU and ICD loader.
+
+A good starting point to get more info is <https://wiki.archlinux.org/title/GPGPU>.
+
+If your system doesn't have a GPU or you can use a generic runtime instead. Be aware that we do not recommend this for initialization of PoST.
+On Ubuntu you need to install the following packages:
+
+```bash
+apt-get update
+apt-get install libpocl2
+```
+
+on Windows you can use Intel OpenAPI:
+
+```bash
+choco install opencl-intel-cpu-runtime
+```
+
+---
+
 ### Testing
 
-*NOTE*: if tests are hanging try running `ulimit -n 400`. some tests require that to work.
+_NOTE_: if tests are hanging try running `ulimit -n 400`. some tests require that to work.
 
 ```bash
 TEST_LOG_LEVEL="" make test

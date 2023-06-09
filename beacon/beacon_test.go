@@ -5,17 +5,20 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -159,11 +162,11 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 			for _, node := range testNodes {
 				switch protocol {
 				case pubsub.BeaconProposalProtocol:
-					require.NoError(t, node.handleProposal(ctx, p2p.Peer(node.nodeID.ShortString()), data, time.Now()))
+					require.NoError(t, node.HandleProposal(ctx, p2p.Peer(node.nodeID.ShortString()), data))
 				case pubsub.BeaconFirstVotesProtocol:
-					require.NoError(t, node.handleFirstVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+					require.NoError(t, node.HandleFirstVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
 				case pubsub.BeaconFollowingVotesProtocol:
-					require.NoError(t, node.handleFollowingVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data, time.Now()))
+					require.NoError(t, node.HandleFollowingVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
 				case pubsub.BeaconWeakCoinProtocol:
 				}
 			}
@@ -174,9 +177,11 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	current := atxPublishLid.Add(1)
 	dbs := make([]*datastore.CachedDB, 0, numNodes)
 	cfg := NodeSimUnitTestConfig()
+	bootstrap := types.Beacon{1, 2, 3, 4}
 	now := time.Now()
 	for i := 0; i < numNodes; i++ {
 		node := newTestDriver(t, cfg, publisher)
+		require.NoError(t, node.UpdateBeacon(types.EpochID(2), bootstrap))
 		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 		node.mClock.EXPECT().CurrentLayer().Return(current).AnyTimes()
 		node.mClock.EXPECT().LayerToTime(current).Return(now).AnyTimes()
@@ -185,12 +190,9 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 
 		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
 		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
-		got, err := node.GetBeacon(types.EpochID(1))
+		got, err := node.GetBeacon(types.EpochID(2))
 		require.NoError(t, err)
-		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
-		got, err = node.GetBeacon(types.EpochID(2))
-		require.NoError(t, err)
-		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
+		require.Equal(t, bootstrap, got)
 	}
 	for i, node := range testNodes {
 		if i == 0 {
@@ -231,8 +233,10 @@ func TestBeacon_NoProposals(t *testing.T) {
 	dbs := make([]*datastore.CachedDB, 0, numNodes)
 	cfg := NodeSimUnitTestConfig()
 	now := time.Now()
+	bootstrap := types.Beacon{1, 2, 3, 4}
 	for i := 0; i < numNodes; i++ {
 		node := newTestDriver(t, cfg, publisher)
+		require.NoError(t, node.UpdateBeacon(types.EpochID(2), bootstrap))
 		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 		node.mClock.EXPECT().CurrentLayer().Return(current).AnyTimes()
 		node.mClock.EXPECT().LayerToTime(current).Return(now).AnyTimes()
@@ -241,12 +245,9 @@ func TestBeacon_NoProposals(t *testing.T) {
 
 		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
 		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
-		got, err := node.GetBeacon(types.EpochID(1))
+		got, err := node.GetBeacon(types.EpochID(2))
 		require.NoError(t, err)
-		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
-		got, err = node.GetBeacon(types.EpochID(2))
-		require.NoError(t, err)
-		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
+		require.Equal(t, bootstrap, got)
 	}
 	for _, node := range testNodes {
 		for _, db := range dbs {
@@ -269,6 +270,16 @@ func TestBeacon_NoProposals(t *testing.T) {
 	}
 }
 
+func getNoWait(tb testing.TB, results <-chan result.Beacon) result.Beacon {
+	select {
+	case rst := <-results:
+		return rst
+	default:
+	}
+	require.Fail(tb, "beacon is not available")
+	return result.Beacon{}
+}
+
 func TestBeaconNotSynced(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
@@ -277,8 +288,17 @@ func TestBeaconNotSynced(t *testing.T) {
 	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(2)), errNodeNotSynced)
 
 	got, err := tpd.GetBeacon(types.EpochID(2))
+	require.Equal(t, errBeaconNotCalculated, err)
+	require.Equal(t, types.EmptyBeacon, got)
+
+	bootstrap := types.Beacon{1, 2, 3, 4}
+	require.NoError(t, tpd.UpdateBeacon(types.EpochID(2), bootstrap))
+	got, err = tpd.GetBeacon(types.EpochID(2))
+	require.Equal(t, got, getNoWait(t, tpd.Results()).Beacon)
+
 	require.NoError(t, err)
-	require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
+	require.Equal(t, bootstrap, got)
+
 	got, err = tpd.GetBeacon(types.EpochID(3))
 	require.Equal(t, errBeaconNotCalculated, err)
 	require.Equal(t, types.EmptyBeacon, got)
@@ -307,13 +327,6 @@ func TestBeaconNoATXInPreviousEpoch(t *testing.T) {
 	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
 	tpd.mClock.EXPECT().LayerToTime(types.EpochID(2).FirstLayer()).Return(time.Now())
 	require.ErrorIs(t, errZeroEpochWeight, tpd.onNewEpoch(context.Background(), types.EpochID(2)))
-
-	got, err := tpd.GetBeacon(types.EpochID(2))
-	require.NoError(t, err)
-	require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
-	got, err = tpd.GetBeacon(types.EpochID(3))
-	require.Equal(t, errBeaconNotCalculated, err)
-	require.Equal(t, types.EmptyBeacon, got)
 }
 
 func TestBeaconWithMetrics(t *testing.T) {
@@ -326,7 +339,6 @@ func TestBeaconWithMetrics(t *testing.T) {
 	tpd.mClock.EXPECT().LayerToTime((gLayer.GetEpoch() + 1).FirstLayer()).Return(time.Now()).AnyTimes()
 	tpd.Start(context.Background())
 
-	epoch3Beacon := types.HexToBeacon("0xaf1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262")
 	epoch := types.EpochID(3)
 	for i := types.EpochID(2); i < epoch; i++ {
 		lid := i.FirstLayer().Sub(1)
@@ -349,46 +361,35 @@ func TestBeaconWithMetrics(t *testing.T) {
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		tpd.recordBeacon(thisEpoch, &b, beacon2, fixed.New64(1))
 
-		numCalculated := 0
-		numObserved := 0
-		numObservedWeight := 0
-		allMetrics, err := prometheus.DefaultGatherer.Gather()
+		count := layer.OrdinalInEpoch() + 1
+		expected := fmt.Sprintf(`
+			# HELP spacemesh_beacons_beacon_observed_total Number of beacons collected from blocks for each epoch and value
+			# TYPE spacemesh_beacons_beacon_observed_total counter
+			spacemesh_beacons_beacon_observed_total{beacon="%s",epoch="%d"} %d
+			spacemesh_beacons_beacon_observed_total{beacon="%s",epoch="%d"} %d
+			`,
+			beacon1.ShortString(), thisEpoch, count,
+			beacon2.ShortString(), thisEpoch, count,
+		)
+		err := testutil.GatherAndCompare(prometheus.DefaultGatherer, strings.NewReader(expected), "spacemesh_beacons_beacon_observed_total")
 		require.NoError(t, err)
-		for _, m := range allMetrics {
-			switch *m.Name {
-			case "spacemesh_beacons_beacon_calculated_weight":
-				require.Equal(t, 1, len(m.Metric))
-				numCalculated++
-				beaconStr := epoch3Beacon.ShortString()
-				expected := fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beaconStr, thisEpoch+1, 0)
-				require.Equal(t, expected, m.Metric[0].String())
-			case "spacemesh_beacons_beacon_observed_total":
-				require.Equal(t, 2, len(m.Metric))
-				numObserved = numObserved + 2
-				count := layer.OrdinalInEpoch() + 1
-				expected := []string{
-					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon1.ShortString(), thisEpoch, count),
-					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon2.ShortString(), thisEpoch, count),
-				}
-				for _, subM := range m.Metric {
-					require.Contains(t, expected, subM.String())
-				}
-			case "spacemesh_beacons_beacon_observed_weight":
-				require.Equal(t, 2, len(m.Metric))
-				numObservedWeight = numObservedWeight + 2
-				weight := layer.OrdinalInEpoch() + 1
-				expected := []string{
-					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon1.ShortString(), thisEpoch, weight),
-					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon2.ShortString(), thisEpoch, weight),
-				}
-				for _, subM := range m.Metric {
-					require.Contains(t, expected, subM.String())
-				}
-			}
-		}
-		require.Equal(t, 0, numCalculated, layer)
-		require.Equal(t, 2, numObserved, layer)
-		require.Equal(t, 2, numObservedWeight, layer)
+
+		weight := layer.OrdinalInEpoch() + 1
+		expected = fmt.Sprintf(`
+			# HELP spacemesh_beacons_beacon_observed_weight Weight of beacons collected from blocks for each epoch and value
+			# TYPE spacemesh_beacons_beacon_observed_weight counter
+			spacemesh_beacons_beacon_observed_weight{beacon="%s",epoch="%d"} %d
+			spacemesh_beacons_beacon_observed_weight{beacon="%s",epoch="%d"} %d
+			`,
+			beacon1.ShortString(), thisEpoch, weight,
+			beacon2.ShortString(), thisEpoch, weight,
+		)
+		err = testutil.GatherAndCompare(prometheus.DefaultGatherer, strings.NewReader(expected), "spacemesh_beacons_beacon_observed_weight")
+		require.NoError(t, err)
+
+		calcWeightCount, err := testutil.GatherAndCount(prometheus.DefaultGatherer, "spacemesh_beacons_beacon_calculated_weight")
+		require.NoError(t, err)
+		require.Zero(t, calcWeightCount)
 	}
 
 	tpd.Close()
