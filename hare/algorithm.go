@@ -141,7 +141,7 @@ func (ci *CountInfo) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 func (ci *CountInfo) Meet(threshold int) bool {
 	// at least one honest party with good message
-	return ci.hCount > 0 && ci.hCount+ci.keCount >= threshold
+	return ci.hCount > 0 && ci.hCount+ci.dhCount+ci.keCount >= threshold
 }
 
 type communication struct {
