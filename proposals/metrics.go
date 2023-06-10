@@ -82,3 +82,38 @@ var (
 		prometheus.ExponentialBuckets(1_000_000, 4, 10),
 	)
 )
+
+const (
+	// labels for each type of error.
+	eMalformed = "mal"
+	eInit      = "int"
+	eKnown     = "known"
+	eTooOld    = "old"
+	eBadSigP   = "sigp"
+	eBadSigB   = "sigb"
+	eBadData   = "data"
+	eAvail     = "avail"
+	eVote      = "vote"
+	eElig      = "elig"
+	ePublish   = "pub"
+)
+
+var (
+	processErrors = metrics.NewCounter(
+		"errs",
+		subsystem,
+		"number of errors",
+		[]string{"kind"},
+	)
+	malformed      = processErrors.WithLabelValues(eMalformed)
+	failedInit     = processErrors.WithLabelValues(eInit)
+	known          = processErrors.WithLabelValues(eKnown)
+	preGenesis     = processErrors.WithLabelValues(eTooOld)
+	badSigProposal = processErrors.WithLabelValues(eBadSigP)
+	badSigBallot   = processErrors.WithLabelValues(eBadSigB)
+	badData        = processErrors.WithLabelValues(eBadData)
+	unavailRef     = processErrors.WithLabelValues(eAvail)
+	badVote        = processErrors.WithLabelValues(eVote)
+	notEligible    = processErrors.WithLabelValues(eElig)
+	failedPublish  = processErrors.WithLabelValues(ePublish)
+)
