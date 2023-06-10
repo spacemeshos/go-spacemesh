@@ -185,7 +185,9 @@ func (n *NodeClient) Invoke(ctx context.Context, method string, args any, reply 
 	err = conn.Invoke(ctx, method, args, reply, opts...)
 	if err != nil {
 		s, _ := status.FromError(err)
-		if s.Code() != codes.InvalidArgument {
+		if s.Code() != codes.InvalidArgument && s.Code() != codes.Canceled {
+			// check for app error. this is not exhaustive.
+			// the goal is to reset connection if pods were redeployed and changed IP
 			n.resetConn(conn)
 		}
 	}

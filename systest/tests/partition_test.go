@@ -60,7 +60,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	tctx.Log.Debug("sending transactions...")
 	eg2, ctx2 := errgroup.WithContext(tctx)
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
-	sendTransactions(ctx2, eg2, nil, cl, first, stop, receiver, 10, 100)
+	require.NoError(t, sendTransactions(ctx2, eg2, tctx.Log, cl, first, stop, receiver, 10, 100))
 
 	type stateUpdate struct {
 		layer  uint32
