@@ -74,6 +74,7 @@ func (cfg *Config) DataDir() string {
 type BaseConfig struct {
 	DataDirParent string `mapstructure:"data-folder"`
 	FileLock      string `mapstructure:"filelock"`
+	Standalone    bool   `mapstructure:"standalone"`
 
 	ConfigFile string `mapstructure:"config"`
 
