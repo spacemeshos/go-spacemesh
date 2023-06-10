@@ -61,6 +61,8 @@ func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.Sugar
 				logger.Debugw("submitting transactions",
 					"layer", layer.Layer.Number.Number,
 					"client", client.Name,
+					"account", i,
+					"nonce", nonce,
 					"batch", batch,
 				)
 			}
@@ -74,7 +76,7 @@ func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.Sugar
 						break
 					}
 					if logger != nil {
-						logger.Warnw("failed to spend", "client", spendClient.Name, "err", err.Error())
+						logger.Warnw("failed to spend", "client", spendClient.Name, "account", i, "nonce", nonce+uint64(j), "err", err.Error())
 					}
 					spendClient = cl.Client((i + k + 1) % cl.Total())
 				}

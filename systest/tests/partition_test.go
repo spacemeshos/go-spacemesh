@@ -48,6 +48,8 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 			"percentage", pct,
 			"split", startSplit,
 			"rejoin", rejoin,
+			"last", last,
+			"stop", stop,
 			"left", left,
 			"right", right,
 		)
@@ -116,7 +118,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 		}
 		latestStates[update.client][update.layer] = update.hash
 	}
-	for layer := uint32(layersPerEpoch * 2); layer <= last; layer++ {
+	for layer := layersPerEpoch * 2; layer <= last; layer++ {
 		tctx.Log.Debugw("client states",
 			"layer", layer,
 			"num_states", len(hashes[layer]),
@@ -139,7 +141,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	for i := 1; i < cl.Total(); i++ {
 		clientState := latestStates[cl.Client(i).Name]
 		agree := true
-		for layer := uint32(layersPerEpoch * 2); layer <= last; layer++ {
+		for layer := layersPerEpoch * 2; layer <= last; layer++ {
 			if clientState[layer] != refState[layer] {
 				tctx.Log.Errorw("client state differs from ref state",
 					"client", cl.Client(i).Name,
