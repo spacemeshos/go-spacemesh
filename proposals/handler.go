@@ -215,7 +215,7 @@ func (h *Handler) HandleSyncedProposal(ctx context.Context, peer p2p.Peer, data 
 func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
 	err := h.handleProposal(ctx, peer, data)
 	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownProposal) {
-		h.logger.WithContext(ctx).With().Warning("failed to process proposal gossip", log.Err(err))
+		h.logger.WithContext(ctx).With().Debug("failed to process proposal gossip", log.Err(err))
 	}
 	return err
 }
@@ -280,7 +280,7 @@ func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte
 	t3 := time.Now()
 	proof, err := h.processBallot(ctx, logger, &p.Ballot)
 	if err != nil && !errors.Is(err, errKnownBallot) && !errors.Is(err, errMaliciousBallot) {
-		logger.With().Warning("failed to process ballot", log.Err(err))
+		logger.With().Debug("failed to process ballot", log.Err(err))
 		return err
 	}
 	proposalDuration.WithLabelValues(ballot).Observe(float64(time.Since(t3)))
@@ -378,7 +378,7 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.L
 
 	t1 := time.Now()
 	if err := h.checkBallotDataAvailability(ctx, b); err != nil {
-		logger.With().Warning("ballot data availability check failed", log.Err(err))
+		logger.With().Debug("ballot data availability check failed", log.Err(err))
 		return nil, err
 	}
 	ballotDuration.WithLabelValues(fetchRef).Observe(float64(time.Since(t1)))
