@@ -83,21 +83,6 @@ var (
 	)
 )
 
-const (
-	// labels for each type of error.
-	eMalformed = "mal"
-	eInit      = "int"
-	eKnown     = "known"
-	eTooOld    = "old"
-	eBadSigP   = "sigp"
-	eBadSigB   = "sigb"
-	eBadData   = "data"
-	eAvail     = "avail"
-	eVote      = "vote"
-	eElig      = "elig"
-	ePublish   = "pub"
-)
-
 var (
 	processErrors = metrics.NewCounter(
 		"errs",
@@ -105,15 +90,15 @@ var (
 		"number of errors",
 		[]string{"kind"},
 	)
-	malformed      = processErrors.WithLabelValues(eMalformed)
-	failedInit     = processErrors.WithLabelValues(eInit)
-	known          = processErrors.WithLabelValues(eKnown)
-	preGenesis     = processErrors.WithLabelValues(eTooOld)
-	badSigProposal = processErrors.WithLabelValues(eBadSigP)
-	badSigBallot   = processErrors.WithLabelValues(eBadSigB)
-	badData        = processErrors.WithLabelValues(eBadData)
-	unavailRef     = processErrors.WithLabelValues(eAvail)
-	badVote        = processErrors.WithLabelValues(eVote)
-	notEligible    = processErrors.WithLabelValues(eElig)
-	failedPublish  = processErrors.WithLabelValues(ePublish)
+	malformed      = processErrors.WithLabelValues("mal")
+	failedInit     = processErrors.WithLabelValues("init")
+	known          = processErrors.WithLabelValues("known")
+	preGenesis     = processErrors.WithLabelValues("genesis")
+	badSigProposal = processErrors.WithLabelValues("sigp")
+	badSigBallot   = processErrors.WithLabelValues("sigb")
+	badData        = processErrors.WithLabelValues("data")
+	unavailRef     = processErrors.WithLabelValues("avail")
+	badVote        = processErrors.WithLabelValues("vote")
+	notEligible    = processErrors.WithLabelValues("elig")
+	failedPublish  = processErrors.WithLabelValues("pub")
 )
