@@ -12,7 +12,9 @@ import (
 
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -182,7 +184,12 @@ func (n *NodeClient) Invoke(ctx context.Context, method string, args any, reply 
 	}
 	err = conn.Invoke(ctx, method, args, reply, opts...)
 	if err != nil {
-		n.resetConn(conn)
+		s, _ := status.FromError(err)
+		if s.Code() != codes.InvalidArgument && s.Code() != codes.Canceled {
+			// check for app error. this is not exhaustive.
+			// the goal is to reset connection if pods were redeployed and changed IP
+			n.resetConn(conn)
+		}
 	}
 	return err
 }
