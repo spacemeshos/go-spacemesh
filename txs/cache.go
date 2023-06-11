@@ -238,7 +238,7 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*NanoTX,
 	for _, nonce := range sortedNonce {
 		best := findBest(nonce2TXs[nonce], balance, blockSeed)
 		if best == nil {
-			logger.With().Warning("no feasible transactions at nonce",
+			logger.With().Debug("no feasible transactions at nonce",
 				log.Uint64("nonce", nonce),
 				log.Uint64("balance", balance))
 			continue
@@ -287,7 +287,7 @@ func findBest(ntxs []*NanoTX, balance uint64, blockSeed []byte) *NanoTX {
 //   - nonce not present: add to cache.
 func (ac *accountCache) add(logger log.Log, tx *types.Transaction, received time.Time) error {
 	if tx.Nonce < ac.startNonce {
-		logger.With().Warning("nonce too small",
+		logger.With().Debug("nonce too small",
 			tx.ID,
 			log.Uint64("next_nonce", ac.startNonce),
 			log.Uint64("tx_nonce", tx.Nonce))
@@ -361,7 +361,7 @@ func (ac *accountCache) getMempool(logger log.Log) []*NanoTX {
 		if !found && cand.layer() == 0 {
 			found = true
 		} else if found && cand.layer() != 0 {
-			logger.With().Warning("some proposals/blocks packed txs out of order",
+			logger.With().Debug("some proposals/blocks packed txs out of order",
 				cand.id(),
 				cand.layer(),
 				cand.block(),
@@ -439,7 +439,7 @@ func groupTXsByPrincipal(logger log.Log, mtxs []*types.MeshTransaction) map[type
 		if len(byPrincipal[principal][mtx.Nonce]) < maxTXsPerNonce {
 			byPrincipal[principal][mtx.Nonce] = append(byPrincipal[principal][mtx.Nonce], NewNanoTX(mtx))
 		} else {
-			logger.With().Warning("too many txs in same nonce. ignoring tx",
+			logger.With().Debug("too many txs in same nonce. ignoring tx",
 				mtx.ID,
 				principal,
 				log.Uint64("nonce", mtx.Nonce),
@@ -501,14 +501,14 @@ func (c *Cache) BuildFromTXs(rst []*types.MeshTransaction, blockSeed []byte) err
 			return err
 		}
 		if c.pending[principal].shouldEvict() {
-			c.logger.With().Warning("account has pending txs but none feasible",
+			c.logger.With().Debug("account has pending txs but none feasible",
 				principal,
 				log.Array("batch", nonceMarshaller(nonce2TXs)))
 		} else {
 			acctsAdded++
 		}
 	}
-	c.logger.Info("added pending tx for %d accounts", acctsAdded)
+	c.logger.Debug("added pending tx for %d accounts", acctsAdded)
 	return nil
 }
 
@@ -790,7 +790,7 @@ func (c *Cache) GetMempool(logger log.Log) map[types.Address][]*NanoTX {
 	defer c.mu.Unlock()
 
 	all := make(map[types.Address][]*NanoTX)
-	logger.With().Info("cache has pending accounts", log.Int("num_acct", len(c.pending)))
+	logger.With().Debug("cache has pending accounts", log.Int("num_acct", len(c.pending)))
 	for addr, accCache := range c.pending {
 		txs := accCache.getMempool(logger.WithFields(addr))
 		if len(txs) > 0 {
