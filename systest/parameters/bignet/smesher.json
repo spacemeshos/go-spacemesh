@@ -34,9 +34,9 @@
         "post-labels-per-unit": 1280,
         "post-max-numunits": 4,
         "post-min-numunits": 2,
-        "post-k1": 273,
-        "post-k2": 300,
-        "post-k3": 100,
-        "post-pow-difficulty": 469112881707866048
+        "post-k1": 26,
+        "post-k2": 37,
+        "post-k3": 37,
+        "post-k2pow-difficulty": 469112881707866048
     }
 }
