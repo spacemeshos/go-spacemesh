@@ -137,6 +137,7 @@ type ConfigTrace struct {
 	BadBeaconVoteDelayLayers uint32 `json:"delay"`
 	LayerSize                uint32 `json:"layer-size"`
 	EpochSize                uint32 `json:"epoch-size"` // this field is not set in the original config
+	EffectiveGenesis         uint32 `json:"effective-genesis"`
 }
 
 func (c *ConfigTrace) Type() eventType {
@@ -149,6 +150,7 @@ func (c *ConfigTrace) New() traceEvent {
 
 func (c *ConfigTrace) Run(r *traceRunner) error {
 	types.SetLayersPerEpoch(c.EpochSize)
+	types.SetEffectiveGenesis(c.EffectiveGenesis)
 	trt, err := New(append(r.opts, WithConfig(Config{
 		Hdist:                    c.Hdist,
 		Zdist:                    c.Zdist,

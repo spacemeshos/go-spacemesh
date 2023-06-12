@@ -58,7 +58,6 @@ func newTurtle(logger log.Log, config Config) *turtle {
 	t.layers[genesis] = &layerInfo{
 		lid:            genesis,
 		hareTerminated: true,
-		emitted:        true,
 	}
 	t.verifying = newVerifying(config, t.state)
 	t.full = newFullTortoise(config, t.state)
@@ -413,6 +412,8 @@ func (t *turtle) verifyLayers() {
 				t.pending = types.MinLayer(t.pending, target)
 			}
 			break
+		} else if target > t.verified {
+			t.pending = types.MinLayer(t.pending, target)
 		}
 
 		verified = target
@@ -444,7 +445,6 @@ func (t *turtle) verifyLayers() {
 				log.Stringer("emitted", block.emitted),
 			)
 			block.emitted = block.validity
-			t.pending = types.MinLayer(t.pending, target)
 		}
 	}
 	t.verified = verified
