@@ -2,18 +2,18 @@ package tortoise
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-
-	"github.com/stretchr/testify/require"
+	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 )
-
-const size = 50
 
 type smesher struct {
 	reg registry
@@ -27,13 +27,6 @@ type atxOpt func(*types.AtxTortoiseData)
 
 type aopt struct {
 	opts []atxOpt
-}
-
-func (a *aopt) base(val uint64) *aopt {
-	a.opts = append(a.opts, func(header *types.AtxTortoiseData) {
-		header.BaseHeight = val
-	})
-	return a
 }
 
 func (a *aopt) height(val uint64) *aopt {
@@ -82,14 +75,14 @@ type atxAction struct {
 	reference *ballotAction
 }
 
-type ballotOpt func(*types.BallotTortoiseData)
+type ballotOpt func(*ballotAction)
 
 type bopt struct {
 	opts []ballotOpt
 }
 
 func (b *bopt) beacon(value string) *bopt {
-	b.opts = append(b.opts, func(ballot *types.BallotTortoiseData) {
+	b.opts = append(b.opts, func(ballot *ballotAction) {
 		if ballot.EpochData == nil {
 			ballot.EpochData = &types.ReferenceData{}
 		}
@@ -99,14 +92,14 @@ func (b *bopt) beacon(value string) *bopt {
 }
 
 func (b *bopt) eligibilities(value int) *bopt {
-	b.opts = append(b.opts, func(ballot *types.BallotTortoiseData) {
+	b.opts = append(b.opts, func(ballot *ballotAction) {
 		ballot.Eligibilities = uint32(value)
 	})
 	return b
 }
 
 func (b *bopt) activeset(values ...*atxAction) *bopt {
-	b.opts = append(b.opts, func(ballot *types.BallotTortoiseData) {
+	b.opts = append(b.opts, func(ballot *ballotAction) {
 		for _, val := range values {
 			if ballot.EpochData == nil {
 				ballot.EpochData = &types.ReferenceData{}
@@ -119,11 +112,13 @@ func (b *bopt) activeset(values ...*atxAction) *bopt {
 
 // encoded votes
 type evotes struct {
-	votes types.Votes
+	baseBallot *ballotAction
+	votes      types.Votes
 }
 
 func (e *evotes) base(base *ballotAction) *evotes {
-	e.votes.Base = base.ballot.ID
+	e.votes.Base = base.ID
+	e.baseBallot = base
 	return e
 }
 
@@ -153,14 +148,15 @@ func (e *evotes) against(lid uint32, id string, height uint64) *evotes {
 }
 
 func (b *bopt) votes(value *evotes) *bopt {
-	b.opts = append(b.opts, func(ballot *types.BallotTortoiseData) {
+	b.opts = append(b.opts, func(ballot *ballotAction) {
+		ballot.base = value.baseBallot
 		ballot.Opinion.Votes = value.votes
 	})
 	return b
 }
 
 func (b *bopt) malicious() *bopt {
-	b.opts = append(b.opts, func(ballot *types.BallotTortoiseData) {
+	b.opts = append(b.opts, func(ballot *ballotAction) {
 		ballot.Malicious = true
 	})
 	return b
@@ -180,36 +176,131 @@ func (a *atxAction) ballot(n int, opts ...*bopt) *ballotAction {
 	b.Layer = types.LayerID(lid)
 	hs := hash.Sum(a.header.ID[:], []byte(strconv.Itoa(int(lid))))
 	copy(b.ID[:], hs[:])
+
+	val := &ballotAction{BallotTortoiseData: b}
 	for _, opt := range opts {
 		for _, o := range opt.opts {
-			o(&b)
+			o(val)
 		}
 	}
-	val := &ballotAction{ballot: b}
 	if a.reference == nil {
 		a.reference = val
 	} else {
-		val.ballot.Ref = &a.reference.ballot.ID
+		val.Ref = &a.reference.ID
 	}
+	if (val.Opinion.Hash == types.Hash32{}) {
+		val.Opinion.Hash = val.computeOpinion()
+	}
+
 	a.reg.register(val)
 	a.ballots[lid] = val
 	return val
 }
 
 type ballotAction struct {
-	ballot types.BallotTortoiseData
+	types.BallotTortoiseData
+	base *ballotAction
+}
+
+func (b *ballotAction) computeOpinion() types.Hash32 {
+	votes := make([][]types.Vote, b.BallotTortoiseData.Layer.
+		Difference(types.GetEffectiveGenesis()),
+	) // vote on every layer before the ballot till effective genesis
+	for i := range votes {
+		votes[i] = []types.Vote{} // against by default
+	}
+	b.decodeVotes(votes)
+	hasher := opinionhash.New()
+	rst := types.Hash32{}
+	for i, layer := range votes {
+		if i != 0 {
+			hasher.WritePrevious(rst)
+		}
+		if layer == nil {
+			hasher.WriteAbstain()
+		}
+		if len(layer) > 0 {
+			sort.Slice(layer, func(i, j int) bool {
+				if layer[i].Height < layer[j].Height {
+					return true
+				}
+				return layer[i].ID.Compare(layer[j].ID)
+			})
+		}
+		for _, vote := range layer {
+			hasher.WriteSupport(vote.ID, vote.Height)
+		}
+		hasher.Sum(rst[:0])
+		hasher.Reset()
+	}
+	return rst
+}
+
+func (b *ballotAction) decodeVotes(votes [][]types.Vote) {
+	if b.base != nil {
+		b.base.decodeVotes(votes)
+	}
+	genesis := types.GetEffectiveGenesis()
+	for _, vote := range b.Opinion.Support {
+		pos := vote.LayerID.Difference(genesis)
+		matches := false
+		for _, existing := range votes[pos] {
+			if existing == vote {
+				matches = true
+			}
+		}
+		if !matches {
+			votes[pos] = append(votes[pos], vote)
+		}
+	}
+	for _, vote := range b.Opinion.Against {
+		pos := vote.LayerID.Difference(genesis)
+		for i, existing := range votes[pos] {
+			if existing == vote {
+				votes[pos] = append(votes[pos][:i], votes[pos][i:]...)
+				break
+			}
+		}
+	}
+	for _, vote := range b.Opinion.Abstain {
+		pos := vote.Difference(genesis)
+		votes[pos] = nil
+	}
 }
 
 func (b *ballotAction) execute(trt *Tortoise) {
-	trt.OnBallot(&b.ballot)
+	decoded, err := trt.DecodeBallot(&b.BallotTortoiseData)
+	if err != nil {
+		panic(err)
+	}
+	if err := trt.StoreBallot(decoded); err != nil {
+		panic(err)
+	}
 }
 
 type action interface {
 	execute(*Tortoise)
 }
 
+func newSession(tb testing.TB) *session {
+	effective := types.GetEffectiveGenesis()
+	epochSize := types.GetLayersPerEpoch()
+	tb.Cleanup(func() {
+		types.SetEffectiveGenesis(effective.Uint32())
+		types.SetLayersPerEpoch(epochSize)
+	})
+	s := &session{tb: tb}
+	return s.
+		withLayerSize(50).
+		withEpochSize(10)
+}
+
 type session struct {
-	config *Config
+	tb               testing.TB
+	epochSize        int
+	effectiveGenesis int
+	layerSize        int
+	config           *Config
 
 	smeshers map[int]*smesher
 	actions  []action
@@ -327,6 +418,7 @@ const (
 	valid
 	invalid
 	data
+	local
 )
 
 func (r *results) block(id string, height uint64, fields uint) *results {
@@ -336,6 +428,7 @@ func (r *results) block(id string, height uint64, fields uint) *results {
 		Invalid: fields&invalid > 0,
 		Hare:    fields&hare > 0,
 		Data:    fields&data > 0,
+		Local:   fields&local > 0,
 	}
 	copy(block.Header.ID[:], id)
 	block.Header.LayerID = rst.Layer
@@ -363,7 +456,8 @@ func (s *session) updates(tb testing.TB, expect *results) {
 	s.register(&updateActions{tb, expect.results})
 }
 
-func (s *session) run(trt *Tortoise) {
+func (s *session) run() {
+	trt := s.tortoise()
 	for _, a := range s.actions {
 		a.execute(trt)
 	}
@@ -376,40 +470,53 @@ func (s *session) ensureConfig() {
 	}
 }
 
-func (s *session) hdist(val uint32) *session {
+func (s *session) withEpochSize(val uint32) *session {
+	s.epochSize = int(val)
+	types.SetLayersPerEpoch(val)
+	return s
+}
+
+func (s *session) withEffectiveGenesis(val uint32) *session {
+	s.effectiveGenesis = int(val)
+	types.SetEffectiveGenesis(val)
+	return s
+}
+
+func (s *session) withHdist(val uint32) *session {
 	s.ensureConfig()
 	s.config.Hdist = val
 	return s
 }
 
-func (s *session) zdist(val uint32) *session {
+func (s *session) withZdist(val uint32) *session {
 	s.ensureConfig()
 	s.config.Zdist = val
 	return s
 }
 
-func (s *session) window(val uint32) *session {
+func (s *session) withWindow(val uint32) *session {
 	s.ensureConfig()
 	s.config.WindowSize = val
 	return s
 }
 
-func (s *session) layersize(val uint32) *session {
+func (s *session) withLayerSize(val uint32) *session {
 	s.ensureConfig()
+	s.layerSize = int(val)
 	s.config.LayerSize = val
 	return s
 }
 
-func (s *session) delay(val uint32) *session {
+func (s *session) withDelay(val uint32) *session {
 	s.ensureConfig()
 	s.config.BadBeaconVoteDelayLayers = val
 	return s
 }
 
-func (s *session) tortoise(tb testing.TB) *Tortoise {
+func (s *session) tortoise() *Tortoise {
 	s.ensureConfig()
-	trt, err := New(WithLogger(logtest.New(tb)), WithConfig(*s.config))
-	require.NoError(tb, err)
+	trt, err := New(WithLogger(logtest.New(s.tb)), WithConfig(*s.config))
+	require.NoError(s.tb, err)
 	return trt
 }
 
@@ -418,7 +525,7 @@ func TestSanity(t *testing.T) {
 		n = 5
 	)
 	var activeset []*atxAction
-	s := new(session)
+	s := newSession(t)
 	for i := 0; i < n; i++ {
 		activeset = append(
 			activeset,
@@ -430,28 +537,55 @@ func TestSanity(t *testing.T) {
 		s.smesher(i).atx(1).ballot(1, new(bopt).
 			beacon("a").
 			activeset(activeset...).
-			eligibilities(size/n))
+			eligibilities(s.layerSize/n))
 	}
 	s.tally(1)
 	s.hareblock(1, "aa", 0)
 	for i := 0; i < n; i++ {
 		s.smesher(i).atx(1).ballot(2, new(bopt).
-			eligibilities(size/n).
+			eligibilities(s.layerSize/n).
 			votes(new(evotes).support(1, "aa", 0)),
 		)
 	}
 	s.block(2, "bb", 0)
 	s.tally(2)
 	s.updates(t, new(results).
+		verified(0).
 		verified(1).block("aa", 0, valid|hare|data).
 		next(2).block("bb", 0, data),
 	)
-	s.run(s.tortoise(t))
+	s.run()
+}
+
+func TestOpinion(t *testing.T) {
+	s := newSession(t)
+	var activeset []*atxAction
+	activeset = append(activeset,
+		s.smesher(0).atx(1, new(aopt).height(100).weight(2000)),
+	)
+	s.beacon(1, "a")
+	s.smesher(0).atx(1).ballot(1, new(bopt).
+		eligibilities(s.layerSize).
+		beacon("a").
+		activeset(activeset...),
+	)
+	for i := 2; i < s.epochSize; i++ {
+		id := strconv.Itoa(i)
+		s.hareblock(i-1, id, 0)
+		s.smesher(0).atx(1).ballot(i, new(bopt).
+			eligibilities(s.layerSize).
+			votes(new(evotes).
+				base(s.smesher(0).atx(1).ballot(i-1)).
+				support(i-1, id, 0)),
+		)
+	}
+	s.tally(s.epochSize)
+	s.run()
 }
 
 func TestEpochGap(t *testing.T) {
 	var activeset []*atxAction
-	s := new(session)
+	s := newSession(t).withEpochSize(4)
 	for i := 0; i < 2; i++ {
 		activeset = append(
 			activeset,
@@ -463,26 +597,27 @@ func TestEpochGap(t *testing.T) {
 		s.smesher(i).atx(1).ballot(1, new(bopt).
 			beacon("a").
 			activeset(activeset...).
-			eligibilities(size/2))
+			eligibilities(s.layerSize/2))
 	}
-	rst := new(results)
-	for l := 2; l <= epochSize; l++ {
+	rst := new(results).
+		verified(0)
+	for l := 2; l <= s.epochSize; l++ {
 		id := strconv.Itoa(l - 1)
 		s.hareblock(l-1, id, 0)
 		rst = rst.verified(l-1).block(id, 0, hare|data|valid)
 		for i := 0; i < 2; i++ {
 			s.smesher(i).atx(1).ballot(l, new(bopt).
-				eligibilities(size/2).
+				eligibilities(s.layerSize/2).
 				votes(new(evotes).
 					base(s.smesher(i).atx(1).ballot(l-1)).
-					support(l-1, strconv.Itoa(l-1), 0)),
+					support(l-1, id, 0)),
 			)
 		}
 	}
-	for i := epochSize + 1; i <= 2*epochSize; i++ {
+	for i := s.epochSize; i <= 2*s.epochSize; i++ {
 		rst = rst.next(i)
 	}
-	s.tally(2*epochSize + 1)
+	s.tally(2 * s.epochSize)
 	s.updates(t, rst)
-	s.run(s.tortoise(t))
+	s.run()
 }
