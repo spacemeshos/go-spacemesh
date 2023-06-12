@@ -88,3 +88,25 @@ func TestPostVerifierVerifyAfterStop(t *testing.T) {
 		require.ErrorIs(t, err, context.Canceled)
 	}
 }
+
+func TestPostVerifierReturnsOnCtxCanceledWhenBlockedVerifying(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	v := activation.NewOffloadingPostVerifier(
+		[]activation.PostVerifier{
+			// empty list of verifiers - no one will verify the proof
+		}, log.NewDefault(t.Name()))
+
+	var eg errgroup.Group
+	eg.Go(func() error {
+		v.Start(ctx)
+		return nil
+	})
+
+	cancel()
+	err := v.Verify(ctx, &shared.Proof{}, &shared.ProofMetadata{})
+	require.ErrorIs(t, err, context.Canceled)
+
+	require.NoError(t, eg.Wait())
+}
