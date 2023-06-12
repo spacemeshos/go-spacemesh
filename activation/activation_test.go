@@ -260,7 +260,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 
 	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
 	tab.mpost.EXPECT().StartSession(gomock.Any()).AnyTimes()
-	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes()
+	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes().Return(&types.Post{}, &types.PostMetadata{}, nil)
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
 	require.NoError(t, tab.StartSmeshing(coinbase, postSetupOpts))
 	require.Equal(t, coinbase, tab.Coinbase())
