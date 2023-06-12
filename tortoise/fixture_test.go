@@ -2,6 +2,8 @@ package tortoise
 
 import (
 	"context"
+	"fmt"
+	"math/rand"
 	"sort"
 	"strconv"
 	"testing"
@@ -75,6 +77,14 @@ type atxAction struct {
 	reference *ballotAction
 }
 
+func (a *atxAction) String() string {
+	return fmt.Sprintf("atx %v", a.header.ID)
+}
+
+func (*atxAction) deps() []action {
+	return nil
+}
+
 type ballotOpt func(*ballotAction)
 
 type bopt struct {
@@ -100,6 +110,7 @@ func (b *bopt) eligibilities(value int) *bopt {
 
 func (b *bopt) activeset(values ...*atxAction) *bopt {
 	b.opts = append(b.opts, func(ballot *ballotAction) {
+		ballot.activeset = values
 		for _, val := range values {
 			if ballot.EpochData == nil {
 				ballot.EpochData = &types.ReferenceData{}
@@ -139,7 +150,7 @@ func (e *evotes) support(lid int, id string, height uint64) *evotes {
 
 func (e *evotes) against(lid uint32, id string, height uint64) *evotes {
 	vote := types.Vote{
-		LayerID: types.GetEffectiveGenesis() + types.LayerID(lid),
+		LayerID: types.GetEffectiveGenesis().Add(lid),
 		Height:  height,
 	}
 	copy(vote.ID[:], id)
@@ -177,7 +188,9 @@ func (a *atxAction) ballot(n int, opts ...*bopt) *ballotAction {
 	hs := hash.Sum(a.header.ID[:], []byte(strconv.Itoa(int(lid))))
 	copy(b.ID[:], hs[:])
 
-	val := &ballotAction{BallotTortoiseData: b}
+	val := &ballotAction{
+		BallotTortoiseData: b,
+	}
 	for _, opt := range opts {
 		for _, o := range opt.opts {
 			o(val)
@@ -187,9 +200,20 @@ func (a *atxAction) ballot(n int, opts ...*bopt) *ballotAction {
 		a.reference = val
 	} else {
 		val.Ref = &a.reference.ID
+		val.before = append(val.before, a.reference)
 	}
 	if (val.Opinion.Hash == types.Hash32{}) {
 		val.Opinion.Hash = val.computeOpinion()
+	}
+
+	if val.base != nil {
+		val.before = append(val.before, val.base)
+	}
+	for _, atx := range val.activeset {
+		val.before = append(val.before, atx)
+	}
+	if len(val.activeset) == 0 {
+		val.before = append(val.before, a)
 	}
 
 	a.reg.register(val)
@@ -199,7 +223,17 @@ func (a *atxAction) ballot(n int, opts ...*bopt) *ballotAction {
 
 type ballotAction struct {
 	types.BallotTortoiseData
-	base *ballotAction
+	base      *ballotAction
+	activeset []*atxAction
+	before    []action
+}
+
+func (b *ballotAction) String() string {
+	return fmt.Sprintf("ballot %v", b.ID)
+}
+
+func (b *ballotAction) deps() []action {
+	return b.before
 }
 
 func (b *ballotAction) computeOpinion() types.Hash32 {
@@ -280,6 +314,8 @@ func (b *ballotAction) execute(trt *Tortoise) {
 
 type action interface {
 	execute(*Tortoise)
+	deps() []action
+	String() string
 }
 
 func newSession(tb testing.TB) *session {
@@ -327,7 +363,16 @@ func (s *session) register(actions ...action) {
 }
 
 type tallyAction struct {
-	lid uint32
+	lid    uint32
+	before []action
+}
+
+func (t *tallyAction) deps() []action {
+	return t.before
+}
+
+func (t *tallyAction) String() string {
+	return fmt.Sprintf("tally %d", t.lid)
 }
 
 func (t *tallyAction) execute(trt *Tortoise) {
@@ -335,49 +380,79 @@ func (t *tallyAction) execute(trt *Tortoise) {
 }
 
 func (s *session) tally(lid int) {
-	s.register(&tallyAction{uint32(types.GetEffectiveGenesis()) + uint32(lid)})
+	s.register(&tallyAction{uint32(types.GetEffectiveGenesis()) + uint32(lid), nil})
+}
+
+// tallyWait will not be ordered before any other action that was registered
+// before tallyWait
+func (s *session) tallyWait(lid int) {
+	deps := make([]action, len(s.actions))
+	copy(deps, s.actions)
+	s.register(&tallyAction{uint32(types.GetEffectiveGenesis()) + uint32(lid), deps})
 }
 
 type hareAction struct {
-	lid   types.LayerID
-	block string
+	block *blockAction
+}
+
+func (h *hareAction) String() string {
+	return fmt.Sprintf("hare %d/%s", h.block.LayerID, h.block.ID)
 }
 
 func (h *hareAction) execute(trt *Tortoise) {
-	id := types.BlockID{}
-	copy(id[:], h.block)
-	trt.OnHareOutput(h.lid, id)
+	trt.OnHareOutput(h.block.LayerID, h.block.ID)
+}
+
+func (h *hareAction) deps() []action {
+	return []action{h.block}
 }
 
 type blockAction struct {
-	header types.BlockHeader
+	types.BlockHeader
+}
+
+func (b *blockAction) String() string {
+	return fmt.Sprintf("block %+v", b.BlockHeader)
 }
 
 func (b *blockAction) execute(trt *Tortoise) {
-	trt.OnBlock(b.header)
+	trt.OnBlock(b.BlockHeader)
 }
 
-func (s *session) hare(lid int, id string) {
-	s.register(&hareAction{lid: types.GetEffectiveGenesis() + types.LayerID(lid), block: id})
+func (*blockAction) deps() []action {
+	return nil
 }
 
-func (s *session) block(lid int, id string, height uint64) {
+func (s *session) hare(block *blockAction) {
+	s.register(&hareAction{block})
+}
+
+func (s *session) block(lid int, id string, height uint64) *blockAction {
 	header := types.BlockHeader{
 		LayerID: types.GetEffectiveGenesis() + types.LayerID(lid),
 		Height:  height,
 	}
 	copy(header.ID[:], id)
-	s.register(&blockAction{header})
+	val := &blockAction{header}
+	s.register(val)
+	return val
 }
 
 func (s *session) hareblock(lid int, id string, height uint64) {
-	s.block(lid, id, height)
-	s.hare(lid, id)
+	s.hare(s.block(lid, id, height))
 }
 
 type beaconAction struct {
 	epoch  uint32
 	beacon types.Beacon
+}
+
+func (b *beaconAction) String() string {
+	return fmt.Sprintf("beacon %d / %v", b.epoch, b.beacon)
+}
+
+func (*beaconAction) deps() []action {
+	return nil
 }
 
 func (b *beaconAction) execute(trt *Tortoise) {
@@ -438,8 +513,17 @@ func (r *results) block(id string, height uint64, fields uint) *results {
 }
 
 type updateActions struct {
-	tb     testing.TB
-	expect []result.Layer
+	tb      testing.TB
+	expect  []result.Layer
+	actions []action
+}
+
+func (u *updateActions) String() string {
+	return "updates"
+}
+
+func (u *updateActions) deps() []action {
+	return u.actions
 }
 
 func (u *updateActions) execute(trt *Tortoise) {
@@ -453,14 +537,62 @@ func (u *updateActions) execute(trt *Tortoise) {
 }
 
 func (s *session) updates(tb testing.TB, expect *results) {
-	s.register(&updateActions{tb, expect.results})
+	deps := make([]action, len(s.actions))
+	copy(deps, s.actions)
+	s.register(&updateActions{tb, expect.results, deps})
 }
 
 func (s *session) run() {
+	s.runActions(s.actions)
+}
+
+func (s *session) runActions(actions []action) {
 	trt := s.tortoise()
-	for _, a := range s.actions {
+	for _, a := range actions {
 		a.execute(trt)
 	}
+}
+
+func (s *session) randomGraph() {
+	// TODO(dshulyak) compute and execute all topological paths
+	// or optionally a subset of them if all takes too long
+	rst := []action{}
+	empty := []action{}
+	forward := map[action]map[action]struct{}{}
+	reverse := map[action]map[action]struct{}{}
+	for _, act := range s.actions {
+		for _, dep := range act.deps() {
+			if reverse[act] == nil {
+				reverse[act] = map[action]struct{}{}
+			}
+			if forward[dep] == nil {
+				forward[dep] = map[action]struct{}{}
+			}
+			reverse[act][dep] = struct{}{}
+			forward[dep][act] = struct{}{}
+		}
+		if len(act.deps()) == 0 {
+			empty = append(empty, act)
+		}
+	}
+	rand.Shuffle(len(empty), func(i, j int) {
+		empty[i], empty[j] = empty[j], empty[i]
+	})
+	for len(empty) > 0 {
+		act := empty[0]
+		empty = empty[1:]
+		rst = append(rst, act)
+		for dep := range forward[act] {
+			delete(reverse[dep], act)
+			if len(reverse[dep]) == 0 {
+				delete(reverse, dep)
+				empty = append(empty, dep)
+			}
+		}
+		delete(forward, act)
+	}
+	require.Empty(s.tb, reverse, "all dependencies must be satifisied")
+	s.runActions(rst)
 }
 
 func (s *session) ensureConfig() {
@@ -521,9 +653,7 @@ func (s *session) tortoise() *Tortoise {
 }
 
 func TestSanity(t *testing.T) {
-	const (
-		n = 5
-	)
+	const n = 2
 	var activeset []*atxAction
 	s := newSession(t)
 	for i := 0; i < n; i++ {
@@ -539,7 +669,6 @@ func TestSanity(t *testing.T) {
 			activeset(activeset...).
 			eligibilities(s.layerSize/n))
 	}
-	s.tally(1)
 	s.hareblock(1, "aa", 0)
 	for i := 0; i < n; i++ {
 		s.smesher(i).atx(1).ballot(2, new(bopt).
@@ -547,14 +676,16 @@ func TestSanity(t *testing.T) {
 			votes(new(evotes).support(1, "aa", 0)),
 		)
 	}
-	s.block(2, "bb", 0)
-	s.tally(2)
+	s.hareblock(2, "bb", 0)
+	s.tallyWait(2)
 	s.updates(t, new(results).
 		verified(0).
 		verified(1).block("aa", 0, valid|hare|data).
-		next(2).block("bb", 0, data),
+		next(2).block("bb", 0, hare|data),
 	)
-	s.run()
+	for i := 0; i < 10; i++ {
+		s.randomGraph()
+	}
 }
 
 func TestOpinion(t *testing.T) {
@@ -579,8 +710,8 @@ func TestOpinion(t *testing.T) {
 				support(i-1, id, 0)),
 		)
 	}
-	s.tally(s.epochSize)
-	s.run()
+	s.tallyWait(s.epochSize)
+	s.randomGraph()
 }
 
 func TestEpochGap(t *testing.T) {
@@ -617,7 +748,7 @@ func TestEpochGap(t *testing.T) {
 	for i := s.epochSize; i <= 2*s.epochSize; i++ {
 		rst = rst.next(i)
 	}
-	s.tally(2 * s.epochSize)
+	s.tallyWait(2 * s.epochSize)
 	s.updates(t, rst)
-	s.run()
+	s.randomGraph()
 }
