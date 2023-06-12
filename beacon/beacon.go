@@ -1108,7 +1108,7 @@ func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 
 func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, epoch types.EpochID, nonce types.VRFPostIndex) types.VrfSignature {
 	p := buildProposal(logger, epoch, nonce)
-	vrfSig := signer.Sign(signing.BEACON_PROPOSAL, p)
+	vrfSig := signer.Sign(p)
 	proposal := ProposalFromVrf(vrfSig)
 	logger.WithContext(ctx).With().Debug("calculated beacon proposal",
 		epoch,

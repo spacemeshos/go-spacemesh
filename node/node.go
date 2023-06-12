@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -20,6 +21,8 @@ import (
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
+	poetconfig "github.com/spacemeshos/poet/config"
+	"github.com/spacemeshos/poet/server"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -398,6 +401,13 @@ func (app *App) introduction() {
 
 // Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
 func (app *App) Initialize() (err error) {
+	lockdir := filepath.Dir(app.Config.FileLock)
+	if _, err := os.Stat(lockdir); errors.Is(err, os.ErrNotExist) {
+		err := os.Mkdir(lockdir, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("creating dir %s for lock %s: %w", lockdir, app.Config.FileLock, err)
+		}
+	}
 	fl := flock.New(app.Config.FileLock)
 	locked, err := fl.TryLock()
 	if err != nil {
@@ -710,6 +720,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		SyncCertDistance: app.Config.Tortoise.Hdist,
 		MaxHashesInReq:   uint32(app.Config.FETCH.MaxHashesInReq),
 		MaxStaleDuration: time.Hour,
+		Standalone:       app.Config.Standalone,
 	}
 	newSyncer := syncer.NewSyncer(app.cachedDB, app.clock, beaconProtocol, msh, trtl, fetcher, patrol, app.certifier,
 		syncer.WithConfig(syncerConf),
@@ -887,6 +898,52 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		)
 	}
 
+	return nil
+}
+
+func (app *App) launchStandalone(ctx context.Context) error {
+	if !app.Config.Standalone {
+		return nil
+	}
+	if len(app.Config.PoETServers) != 1 {
+		return fmt.Errorf("to launch in a standalone mode provide single local address for poet: %v", app.Config.PoETServers)
+	}
+	value := types.Beacon{}
+	genesis := app.Config.Genesis.GenesisID()
+	copy(value[:], genesis[:])
+	epoch := types.GetEffectiveGenesis().GetEpoch() + 1
+	app.log.With().Warning("using standalone mode for bootstrapping beacon",
+		log.Uint32("epoch", epoch.Uint32()),
+		log.Stringer("beacon", value),
+	)
+	if err := app.beaconProtocol.UpdateBeacon(epoch, value); err != nil {
+		return fmt.Errorf("update standalone beacon: %w", err)
+	}
+	cfg := poetconfig.DefaultConfig()
+	cfg.PoetDir = filepath.Join(app.Config.DataDir(), "poet")
+	cfg.DataDir = cfg.PoetDir
+	cfg.LogDir = cfg.PoetDir
+	parsed, err := url.Parse(app.Config.PoETServers[0])
+	if err != nil {
+		return err
+	}
+	cfg.RawRESTListener = parsed.Host
+	cfg.Service.Genesis = app.Config.Genesis.GenesisTime
+	cfg.Service.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
+	cfg.Service.CycleGap = app.Config.POET.CycleGap
+	cfg.Service.PhaseShift = app.Config.POET.PhaseShift
+	srv, err := server.New(ctx, *cfg)
+	if err != nil {
+		return fmt.Errorf("init poet server: %w", err)
+	}
+	app.log.With().Warning("lauching poet in standalone mode", log.Any("config", cfg))
+	app.eg.Go(func() error {
+		if err := srv.Start(ctx); err != nil {
+			app.log.With().Error("poet server failed", log.Err(err))
+			return err
+		}
+		return nil
+	})
 	return nil
 }
 
@@ -1275,7 +1332,11 @@ func (app *App) Start(ctx context.Context) error {
 	p2plog := app.addLogger(P2PLogger, lg)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
-	app.host, err = p2p.New(ctx, p2plog, cfg, app.Config.Genesis.GenesisID(),
+	prologue := fmt.Sprintf("%x-%v",
+		app.Config.Genesis.GenesisID(),
+		types.GetEffectiveGenesis(),
+	)
+	app.host, err = p2p.New(ctx, p2plog, cfg, []byte(prologue),
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {
@@ -1304,6 +1365,10 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	if err := app.startAPIServices(ctx); err != nil {
+		return err
+	}
+
+	if err := app.launchStandalone(ctx); err != nil {
 		return err
 	}
 

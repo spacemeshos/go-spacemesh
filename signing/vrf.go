@@ -14,10 +14,7 @@ type VRFSigner struct {
 }
 
 // Sign signs a message for VRF purposes.
-func (s VRFSigner) Sign(d Domain, m []byte) types.VrfSignature {
-	msg := make([]byte, 0, 1+len(m))
-	msg = append(msg, byte(d))
-	msg = append(msg, m...)
+func (s VRFSigner) Sign(msg []byte) types.VrfSignature {
 	return *(*[types.VrfSignatureSize]byte)(ecvrf.Prove(s.privateKey, msg))
 }
 
@@ -36,22 +33,19 @@ func (s VRFSigner) LittleEndian() bool {
 	return true
 }
 
-type VRFVerifier func(Domain, types.NodeID, []byte, types.VrfSignature) bool
+type VRFVerifier func(types.NodeID, []byte, types.VrfSignature) bool
 
 func NewVRFVerifier() VRFVerifier {
 	return VRFVerify
 }
 
 // Verify verifies that a signature matches public key and message.
-func (v VRFVerifier) Verify(d Domain, nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool {
-	return v(d, nodeID, msg, sig)
+func (v VRFVerifier) Verify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool {
+	return v(nodeID, msg, sig)
 }
 
 // VRFVerify verifies that a signature matches public key and message.
-func VRFVerify(d Domain, nodeID types.NodeID, m []byte, sig types.VrfSignature) bool {
-	msg := make([]byte, 0, 1+len(m))
-	msg = append(msg, byte(d))
-	msg = append(msg, m...)
+func VRFVerify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool {
 	valid, _ := ecvrf.Verify(nodeID.Bytes(), sig[:], msg)
 	return valid
 }
