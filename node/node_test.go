@@ -54,6 +54,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
+const layersPerEpoch = 3
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+
+	res := m.Run()
+	os.Exit(res)
+}
+
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r := require.New(t)
 
@@ -433,7 +442,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	h, err := p2p.Upgrade(mesh.Hosts()[0], cfg.Genesis.GenesisID())
+	h, err := p2p.Upgrade(mesh.Hosts()[0])
 	require.NoError(t, err)
 	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
 		path, poetHarness.HTTPPoetClient, clock, h, edSgn,
@@ -611,6 +620,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	}()
 
 	<-app.Started()
+	require.True(t, app.syncer.IsSynced(ctx))
 	conn, err := grpc.Dial(
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -874,16 +884,24 @@ func TestGenesisConfig(t *testing.T) {
 }
 
 func TestFlock(t *testing.T) {
-	app := New()
-	app.Config = getTestDefaultConfig(t)
+	t.Run("sanity", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig(t)
 
-	require.NoError(t, app.Initialize())
-	app1 := *app
-	require.ErrorContains(t, app1.Initialize(), "only one spacemesh instance")
-	app.Cleanup(context.Background())
-	require.NoError(t, app.Initialize())
-	require.NoError(t, os.Remove(filepath.Join(app.Config.FileLock)))
-	require.NoError(t, app.Initialize())
+		require.NoError(t, app.Initialize())
+		app1 := *app
+		require.ErrorContains(t, app1.Initialize(), "only one spacemesh instance")
+		app.Cleanup(context.Background())
+		require.NoError(t, app.Initialize())
+		require.NoError(t, os.Remove(filepath.Join(app.Config.FileLock)))
+		require.NoError(t, app.Initialize())
+	})
+	t.Run("dir doesn't exist", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig(t)
+		app.Config.FileLock = filepath.Join(t.TempDir(), "newdir", "LOCK")
+		require.NoError(t, app.Initialize())
+	})
 }
 
 func getTestDefaultConfig(tb testing.TB) *config.Config {

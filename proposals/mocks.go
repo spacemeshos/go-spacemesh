@@ -127,7 +127,7 @@ func (m *MockballotDecoder) EXPECT() *MockballotDecoderMockRecorder {
 }
 
 // DecodeBallot mocks base method.
-func (m *MockballotDecoder) DecodeBallot(arg0 *types.Ballot) (*tortoise.DecodedBallot, error) {
+func (m *MockballotDecoder) DecodeBallot(arg0 *types.BallotTortoiseData) (*tortoise.DecodedBallot, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DecodeBallot", arg0)
 	ret0, _ := ret[0].(*tortoise.DecodedBallot)

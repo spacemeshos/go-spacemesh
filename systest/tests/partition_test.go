@@ -48,6 +48,8 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 			"percentage", pct,
 			"split", startSplit,
 			"rejoin", rejoin,
+			"last", last,
+			"stop", stop,
 			"left", left,
 			"right", right,
 		)
@@ -58,7 +60,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	tctx.Log.Debug("sending transactions...")
 	eg2, ctx2 := errgroup.WithContext(tctx)
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
-	sendTransactions(ctx2, eg2, nil, cl, first, stop, receiver, 10, 100)
+	require.NoError(t, sendTransactions(ctx2, eg2, tctx.Log, cl, first, stop, receiver, 10, 100))
 
 	type stateUpdate struct {
 		layer  uint32
@@ -116,7 +118,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 		}
 		latestStates[update.client][update.layer] = update.hash
 	}
-	for layer := uint32(layersPerEpoch * 2); layer <= last; layer++ {
+	for layer := layersPerEpoch * 2; layer <= last; layer++ {
 		tctx.Log.Debugw("client states",
 			"layer", layer,
 			"num_states", len(hashes[layer]),
@@ -139,7 +141,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	for i := 1; i < cl.Total(); i++ {
 		clientState := latestStates[cl.Client(i).Name]
 		agree := true
-		for layer := uint32(layersPerEpoch * 2); layer <= last; layer++ {
+		for layer := layersPerEpoch * 2; layer <= last; layer++ {
 			if clientState[layer] != refState[layer] {
 				tctx.Log.Errorw("client state differs from ref state",
 					"client", cl.Client(i).Name,
@@ -169,7 +171,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 func TestPartition_30_70(t *testing.T) {
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("partition"))
+	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	if tctx.ClusterSize > 30 {
 		tctx.Log.Info("cluster size changed to 30")
 		tctx.ClusterSize = 30
@@ -177,14 +179,13 @@ func TestPartition_30_70(t *testing.T) {
 	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	// TODO: re-assess the number of epoch required for healing.
-	testPartition(t, tctx, cl, 30, 4)
+	testPartition(t, tctx, cl, 30, 6)
 }
 
 func TestPartition_50_50(t *testing.T) {
-	t.Skip()
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("partition"))
+	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	if tctx.ClusterSize > 30 {
 		tctx.Log.Info("cluster size changed to 30")
 		tctx.ClusterSize = 30
@@ -192,5 +193,5 @@ func TestPartition_50_50(t *testing.T) {
 	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	// TODO: re-assess the number of epoch required for healing.
-	testPartition(t, tctx, cl, 50, 5)
+	testPartition(t, tctx, cl, 50, 6)
 }

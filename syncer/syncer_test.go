@@ -308,7 +308,7 @@ func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.True(t, ts.syncer.IsSynced(context.Background()))
 
 	current := gLayer.Add(2)
 	ts.mTicker.advanceToLayer(current)
@@ -320,6 +320,40 @@ func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
 	require.True(t, ts.syncer.ListenToGossip())
 	require.True(t, ts.syncer.IsSynced(context.Background()))
 	return current
+}
+
+func TestSyncAtxs_Genesis(t *testing.T) {
+	tcs := []struct {
+		desc              string
+		epoch, lastSynced types.EpochID
+	}{
+		{
+			desc:       "no atx expected",
+			epoch:      0,
+			lastSynced: 0,
+		},
+		{
+			desc:       "first atx epoch",
+			epoch:      1,
+			lastSynced: 1,
+		},
+	}
+	for _, tc := range tcs {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			ts := newSyncerWithoutSyncTimer(t)
+			ts.mTicker.advanceToLayer(tc.epoch.FirstLayer() + 1)
+			if tc.lastSynced > 0 {
+				require.False(t, ts.syncer.ListenToATXGossip())
+				for epoch := types.EpochID(1); epoch <= tc.lastSynced; epoch++ {
+					ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), epoch)
+				}
+			}
+			require.True(t, ts.syncer.synchronize(context.Background()))
+			require.True(t, ts.syncer.ListenToATXGossip())
+			require.Equal(t, tc.lastSynced, ts.syncer.lastAtxEpoch())
+		})
+	}
 }
 
 func TestSyncAtxs(t *testing.T) {
@@ -344,6 +378,7 @@ func TestSyncAtxs(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			ts := newSyncerWithoutSyncTimer(t)
 			lyr := startWithSyncedState(t, ts)
+			require.LessOrEqual(t, lyr, tc.current)
 
 			require.Equal(t, lyr.GetEpoch()-1, ts.syncer.lastAtxEpoch())
 			ts.mTicker.advanceToLayer(tc.current)

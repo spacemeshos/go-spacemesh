@@ -179,7 +179,8 @@ func createConsensusProcess(
 	broker.mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
 	broker.Start(ctx)
 	network.Register(pubsub.HareProtocol, broker.HandleMessage)
-	output := make(chan TerminationOutput, 1)
+	output := make(chan report, 1)
+	wc := make(chan wcReport, 1)
 	oracle.Register(isHonest, sig.NodeID())
 	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(tb, err)
@@ -191,6 +192,7 @@ func createConsensusProcess(
 		inbox:  c,
 		mchOut: mch,
 		report: output,
+		wc:     wc,
 	}
 	proc := newConsensusProcess(
 		ctx,

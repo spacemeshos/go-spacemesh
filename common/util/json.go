@@ -17,6 +17,7 @@
 package util
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -169,6 +170,24 @@ func mapError(err error) error {
 	}
 	if errors.Is(err, hex.ErrLength) {
 		return ErrOddLength
+	}
+	return err
+}
+
+func Base64Encode(src []byte) []byte {
+	n := base64.StdEncoding.EncodedLen(len(src))
+	dst := make([]byte, n)
+	base64.StdEncoding.Encode(dst, src)
+	return dst
+}
+
+func Base64Decode(dst, src []byte) error {
+	n, err := base64.StdEncoding.Decode(dst, src)
+	if err != nil {
+		return err
+	}
+	if n != len(dst) {
+		return fmt.Errorf("incomplete decoding: %d != %d", n, len(src))
 	}
 	return err
 }

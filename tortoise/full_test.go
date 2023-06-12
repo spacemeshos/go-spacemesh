@@ -334,7 +334,7 @@ func TestFullCountVotes(t *testing.T) {
 					TickCount:         tc.activeset[i].TickCount,
 				}
 				header.PublishEpoch = 1
-				tortoise.OnAtx(header)
+				tortoise.OnAtx(header.ToData())
 				activeset = append(activeset, atxid)
 			}
 
@@ -400,7 +400,7 @@ func TestFullCountVotes(t *testing.T) {
 				consensus.processed = lid
 				consensus.last = lid
 				for _, ballot := range layerBallots {
-					require.NoError(t, consensus.onBallot(ballot))
+					require.NoError(t, consensus.onBallot(ballot.ToTortoiseData()))
 				}
 				consensus.full.countVotes(logger)
 			}

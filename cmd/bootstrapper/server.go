@@ -8,15 +8,20 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/spf13/afero"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
+
+const fileRegex = "/epoch-(?P<Epoch>[0-9]+)-update-(?P<Suffix>[a-z]+)"
 
 type NetworkParam struct {
 	Genesis      time.Time
@@ -46,6 +51,7 @@ type Server struct {
 	gen             *Generator
 	genFallback     bool
 	bootstrapEpochs []types.EpochID
+	regex           *regexp.Regexp
 }
 
 type SrvOpt func(*Server)
@@ -76,6 +82,7 @@ func NewServer(gen *Generator, fallback bool, port int, opts ...SrvOpt) *Server 
 		gen:             gen,
 		genFallback:     fallback,
 		bootstrapEpochs: []types.EpochID{2},
+		regex:           regexp.MustCompile(fileRegex),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -144,19 +151,25 @@ func (s *Server) GenBootstrap(ctx context.Context, epoch types.EpochID) error {
 	if err != nil {
 		return err
 	}
-	return s.gen.GenUpdate(epoch, epochBeacon(epoch), actives)
+	suffix := bootstrap.SuffixBoostrap
+	_, err = s.gen.GenUpdate(epoch, epochBeacon(epoch), actives, suffix)
+	return err
 }
 
 func (s *Server) GenFallbackBeacon(_ context.Context, epoch types.EpochID) error {
-	return s.gen.GenUpdate(epoch, epochBeacon(epoch), nil)
+	suffix := bootstrap.SuffixBeacon
+	_, err := s.gen.GenUpdate(epoch, epochBeacon(epoch), nil, suffix)
+	return err
 }
 
 func (s *Server) GenFallbackActiveSet(ctx context.Context, epoch types.EpochID) error {
+	suffix := bootstrap.SuffixActiveSet
 	actives, err := getPartialActiveSet(ctx, s.gen.SmEndpoint(), epoch)
 	if err != nil {
 		return err
 	}
-	return s.gen.GenUpdate(epoch, types.EmptyBeacon, actives)
+	_, err = s.gen.GenUpdate(epoch, types.EmptyBeacon, actives, suffix)
+	return err
 }
 
 // in systests, we want to be sure the nodes use the fallback data unconditionally
@@ -213,8 +226,23 @@ func (s *Server) Stop(ctx context.Context) {
 	_ = s.eg.Wait()
 }
 
-func (s *Server) handle(w http.ResponseWriter, _ *http.Request) {
-	s.servefile(PersistedFilename(), w)
+func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
+	matches := s.regex.FindStringSubmatch(r.URL.String())
+	if len(matches) != 3 {
+		s.logger.With().Error("unrecognized url", log.String("url", r.URL.String()))
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	e, err := strconv.Atoi(matches[1])
+	if err != nil {
+		s.logger.With().Error("unrecognized url", log.String("url", r.URL.String()), log.Err(err))
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	epoch := types.EpochID(e)
+	suffix := matches[2]
+	serveFile := PersistedFilename(epoch, suffix)
+	s.servefile(serveFile, w)
 }
 
 func (s *Server) handleCheckpoint(w http.ResponseWriter, _ *http.Request) {
@@ -224,6 +252,7 @@ func (s *Server) handleCheckpoint(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) servefile(f string, w http.ResponseWriter) {
 	data, err := afero.ReadFile(s.fs, f)
 	if err != nil && errors.Is(err, afero.ErrFileNotFound) {
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 	if err != nil {

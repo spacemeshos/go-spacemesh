@@ -4,7 +4,7 @@ import (
 	"math/rand"
 	"sync"
 
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -14,7 +14,7 @@ import (
 
 // HashPeersCache holds lru cache of peers to pull hash from.
 type HashPeersCache struct {
-	*lru.Cache
+	*lru.Cache[types.Hash32, HashPeers]
 	// mu protects cache update for the same key.
 	mu sync.Mutex
 }
@@ -24,7 +24,7 @@ type HashPeers map[p2p.Peer]struct{}
 
 // NewHashPeersCache creates a new hash-to-peers cache.
 func NewHashPeersCache(size int) *HashPeersCache {
-	cache, err := lru.New(size)
+	cache, err := lru.New[types.Hash32, HashPeers](size)
 	if err != nil {
 		log.Panic("could not initialize cache ", err)
 	}
@@ -37,7 +37,7 @@ func (hpc *HashPeersCache) get(hash types.Hash32) (HashPeers, bool) {
 	if !found {
 		return nil, false
 	}
-	return item.(HashPeers), true
+	return item, true
 }
 
 // getWithStats is the same as get but also updates cache stats (still non-thread-safe).

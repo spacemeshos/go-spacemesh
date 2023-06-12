@@ -105,7 +105,7 @@ func TestWeakCoin(t *testing.T) {
 				Round:        round,
 				Unit:         1,
 				NodeID:       zeroLSBMiner,
-				VrfSignature: zeroLSBSig,
+				VRFSignature: zeroLSBSig,
 			}),
 			result: nilErr,
 		},
@@ -119,7 +119,7 @@ func TestWeakCoin(t *testing.T) {
 				Round:        round,
 				Unit:         1,
 				NodeID:       zeroLSBMiner,
-				VrfSignature: zeroLSBSig,
+				VRFSignature: zeroLSBSig,
 			}),
 			result: isErr,
 		},
@@ -133,7 +133,7 @@ func TestWeakCoin(t *testing.T) {
 				Round:        round,
 				Unit:         1,
 				NodeID:       zeroLSBMiner,
-				VrfSignature: zeroLSBSig,
+				VRFSignature: zeroLSBSig,
 			}),
 			result: nilErr,
 		},
@@ -228,7 +228,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Round:        round,
 				Unit:         allowance,
 				NodeID:       oneLSBMiner,
-				VrfSignature: oneLSBSig,
+				VRFSignature: oneLSBSig,
 			}),
 			expected: nilErr,
 		},
@@ -248,7 +248,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Round:        round,
 				Unit:         allowance + 1,
 				NodeID:       oneLSBMiner,
-				VrfSignature: oneLSBSig,
+				VRFSignature: oneLSBSig,
 			}),
 			expected: isErr,
 		},
@@ -261,7 +261,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Round:        round,
 				Unit:         allowance,
 				NodeID:       highLSBMiner,
-				VrfSignature: higherThreshold,
+				VRFSignature: higherThreshold,
 			}),
 			expected: isErr,
 		},
@@ -274,7 +274,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Round:        round,
 				Unit:         allowance,
 				NodeID:       oneLSBMiner,
-				VrfSignature: oneLSBSig,
+				VRFSignature: oneLSBSig,
 			}),
 			expected: isErr,
 		},
@@ -287,7 +287,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Round:        round,
 				Unit:         allowance,
 				NodeID:       oneLSBMiner,
-				VrfSignature: oneLSBSig,
+				VRFSignature: oneLSBSig,
 			}),
 			expected: isErr,
 		},
@@ -300,7 +300,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Round:        round - 1,
 				Unit:         allowance,
 				NodeID:       oneLSBMiner,
-				VrfSignature: oneLSBSig,
+				VRFSignature: oneLSBSig,
 			}),
 			expected: isErr,
 		},
@@ -313,7 +313,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				Round:        round + 1,
 				Unit:         allowance,
 				NodeID:       oneLSBMiner,
-				VrfSignature: oneLSBSig,
+				VRFSignature: oneLSBSig,
 			}),
 			expected: nilErr,
 		},
@@ -379,14 +379,14 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 			Round:        nextRound,
 			Unit:         1,
 			NodeID:       oneLSBMiner,
-			VrfSignature: oneLSBSig,
+			VRFSignature: oneLSBSig,
 		}))
 	}
 	wc.HandleProposal(context.Background(), "", encoded(t, weakcoin.Message{
 		Epoch:        epoch,
 		Round:        nextRound,
 		Unit:         1,
-		VrfSignature: zeroLSBSig,
+		VRFSignature: zeroLSBSig,
 	}))
 	wc.FinishRound(context.Background())
 	wc.StartRound(context.Background(), nextRound, nil)
@@ -408,7 +408,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	broadcaster.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, data []byte) error {
 		var msg weakcoin.Message
 		require.NoError(t, codec.Decode(data, &msg))
-		sig = msg.VrfSignature
+		sig = msg.VRFSignature
 		return nil
 	}).AnyTimes()
 

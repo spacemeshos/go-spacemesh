@@ -98,6 +98,17 @@ Before building we need to set up the golang environment. Do this by running:
 make install
 ```
 
+### How to run standalone node?
+
+After you got a binary standalone fully functional network can be launched
+with a simple command:
+
+> ./build/go-spacemesh --preset=standalone --genesis-time=2023-06-08T5:30:00.000Z
+
+Network will use short epochs (1 minute), and 10 layers within the epoch (each 6s). Poet is launched in the same process in this mode. So expect that it will periodically hog 1 core. Minimal smeshig is enabled in order for consensus to work.
+
+Public GRPC API are launched on 0.0.0.0:10092. Private - 0.0.0.0:10093.
+
 ### Building
 
 To build `go-spacemesh` for your current system architecture, from the project root directory, use:
@@ -133,7 +144,7 @@ _Note: we need to use eval to interpret the commands since there are spaces in
 the values of the variables so the shell can't correctly split them as
 arguments._
 
-1. Setting the variables on the same line as the `go` command (e.g., `eval $(make print-env) go build`). This affects the environment for that command invocation only.
+1. Setting the variables on the same line as the `go` command (e.g., `eval $(make print-env) go build ./...`). This affects the environment for that command invocation only.
 2. Exporting the variables in the shell's environment (e.g., `eval export $(make print-env)`). The variables will persist for the duration of that shell (and will be passed to subshells).
 3. Setting the variables in the go environment (e.g., `eval go env -w $(make print-env)`). Persistently adds these values to Go's environment for any future runs.
 

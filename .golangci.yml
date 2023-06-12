@@ -223,7 +223,7 @@ linters-settings:
     alias:
       - pkg: "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
         alias: chaos
-      - pkg: "github.com/hashicorp/golang-lru"
+      - pkg: "github.com/hashicorp/golang-lru/v2"
         alias: lru
       - pkg: "github.com/grpc-ecosystem/go-grpc-middleware"
         alias: grpcmw

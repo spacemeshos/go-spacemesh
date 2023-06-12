@@ -27,6 +27,7 @@ type Config struct {
 	SyncCertDistance uint32
 	MaxHashesInReq   uint32
 	MaxStaleDuration time.Duration
+	Standalone       bool
 }
 
 // DefaultConfig for the syncer.
@@ -223,7 +224,6 @@ func (s *Syncer) Start(ctx context.Context) {
 		s.logger.WithContext(ctx).Info("starting syncer loop")
 		s.eg.Go(func() error {
 			if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
-				s.setATXSynced()
 				s.setSyncState(ctx, synced)
 			}
 			for {
@@ -385,6 +385,11 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	// https://github.com/spacemeshos/go-spacemesh/issues/3970
 	// https://github.com/spacemeshos/go-spacemesh/issues/3987
 	syncFunc := func() bool {
+		if s.cfg.Standalone {
+			s.setLastSyncedLayer(s.ticker.CurrentLayer().Sub(1))
+			s.setATXSynced()
+			return true
+		}
 		if len(s.dataFetcher.GetPeers()) == 0 {
 			return false
 		}
@@ -485,9 +490,11 @@ func isTooFarBehind(ctx context.Context, logger log.Log, current, lastSynced typ
 
 func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 	current := s.ticker.CurrentLayer()
-	if current.Uint32() <= 1 {
-		s.setATXSynced()
+	if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
 		s.setSyncState(ctx, synced)
+		if current.GetEpoch() == 0 {
+			s.setATXSynced()
+		}
 		return
 	}
 	if isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer()) {

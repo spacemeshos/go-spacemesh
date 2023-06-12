@@ -30,6 +30,9 @@ jobs:
             echo "OUTNAME=${{ runner.os }}" >> $GITHUB_ENV
           fi
 
+      - name: Check out Git repository
+        uses: actions/checkout@v3
+
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
@@ -49,9 +52,6 @@ jobs:
         shell: bash
         env:
           ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
-
-      - name: Check out Git repository
-        uses: actions/checkout@v3
 
       - name: Read version.txt
         id: version

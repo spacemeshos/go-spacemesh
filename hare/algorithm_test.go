@@ -313,7 +313,8 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config, inbox 
 	edPubkey := edSigner.PublicKey()
 	nid := types.BytesToNodeID(edPubkey.Bytes())
 	oracle.Register(true, nid)
-	output := make(chan TerminationOutput, 1)
+	output := make(chan report, 1)
+	wc := make(chan wcReport, 1)
 	nonce := types.VRFPostIndex(rand.Uint64())
 
 	sq := mocks.NewMockstateQuerier(gomock.NewController(tb))
@@ -322,6 +323,7 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config, inbox 
 		inbox:  inbox,
 		mchOut: make(chan *types.MalfeasanceGossip),
 		report: output,
+		wc:     wc,
 	}
 	return newConsensusProcess(
 		context.Background(),
@@ -575,17 +577,6 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	// make sure we wait enough for the go routine to be executed
 	r.Eventually(func() bool { return len(proc.pending) == 0 },
 		time.Second, 100*time.Millisecond, "expected proc.pending to have zero length")
-}
-
-func TestProcOutput_Id(t *testing.T) {
-	po := procReport{instanceID1, nil, false, false}
-	require.Equal(t, po.ID(), instanceID1)
-}
-
-func TestProcOutput_Set(t *testing.T) {
-	es := NewDefaultEmptySet()
-	po := procReport{instanceID1, es, false, false}
-	require.True(t, es.Equals(po.Set()))
 }
 
 func TestIterationFromCounter(t *testing.T) {

@@ -8,10 +8,10 @@ import (
 )
 
 type Layer struct {
-	Layer    types.LayerID
-	Verified bool
-	Opinion  types.Hash32
-	Blocks   []Block
+	Layer    types.LayerID `json:"lid"`
+	Verified bool          `json:"v"`
+	Opinion  types.Hash32  `json:"opinion"`
+	Blocks   []Block       `json:"blocks"`
 }
 
 // FirstValid returns first block that crossed positive tortoise threshold,
@@ -48,10 +48,12 @@ func (l *Layer) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 type Block struct {
-	Header         types.Vote
-	Valid, Invalid bool
-	Hare           bool
-	Data           bool
+	Header  types.Vote `json:"header"`
+	Valid   bool       `json:"v"`
+	Local   bool       `json:"l"` // set to true if block crossed local threshold
+	Invalid bool       `json:"i"`
+	Hare    bool       `json:"h"`
+	Data    bool       `json:"d"`
 }
 
 func (b *Block) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -60,5 +62,6 @@ func (b *Block) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddBool("invalid", b.Invalid)
 	encoder.AddBool("hare", b.Hare)
 	encoder.AddBool("data", b.Data)
+	encoder.AddBool("local", b.Local)
 	return nil
 }

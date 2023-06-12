@@ -183,6 +183,10 @@ func Context(ctx context.Context) Field {
 	return Field(zap.Inline(&marshalledContext{Context: ctx}))
 }
 
+func Any(key string, value any) Field {
+	return Field(zap.Any(key, value))
+}
+
 type marshalledContext struct {
 	context.Context
 }

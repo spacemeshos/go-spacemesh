@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"math/bits"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -260,7 +259,7 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 	if err != nil {
 		pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound).With().Fatal("failed to serialize first voting message", log.Err(err))
 	}
-	if !pd.edVerifier.Verify(signing.BEACON, m.SmesherID, messageBytes, m.Signature) {
+	if !pd.edVerifier.Verify(signing.BEACON_FIRST_MSG, m.SmesherID, messageBytes, m.Signature) {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
 	if err = pd.registerVoted(m.EpochID, m.SmesherID, types.FirstRound); err != nil {
@@ -360,7 +359,7 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 	if err != nil {
 		pd.logger.With().Fatal("failed to serialize voting message", log.Err(err))
 	}
-	if !pd.edVerifier.Verify(signing.BEACON, m.SmesherID, messageBytes, m.Signature) {
+	if !pd.edVerifier.Verify(signing.BEACON_FOLLOWUP_MSG, m.SmesherID, messageBytes, m.Signature) {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
 	if err := pd.registerVoted(m.EpochID, m.SmesherID, m.RoundID); err != nil {
@@ -475,39 +474,20 @@ func (pd *ProtocolDriver) registerVoted(epoch types.EpochID, nodeID types.NodeID
 	return pd.states[epoch].registerVoted(nodeID, round)
 }
 
-const wordSize = 64
-
-func newVotesTracker(limit uint32) *votesTracker {
-	b := bits.Len32(limit)
-	words := b / wordSize
-	if b%wordSize != 0 {
-		words += 1
-	}
-	return &votesTracker{words: make([]uint64, words)}
+func newVotesTracker() *votesTracker {
+	return &votesTracker{votes: new(big.Int)}
 }
 
 type votesTracker struct {
-	words []uint64
+	votes *big.Int
 }
 
 func (v *votesTracker) register(round types.RoundID) bool {
-	word := uint64(round) / wordSize
-	if word >= uint64(len(v.words)) {
-		return false
-	}
-	position := uint64(1) << (uint64(round) % wordSize)
-	if v.words[word]&position > 0 {
-		return false
-	}
-	v.words[word] |= position
-	return true
+	rst := !v.voted(round)
+	v.votes.SetBit(v.votes, int(round), 1)
+	return rst
 }
 
 func (v *votesTracker) voted(round types.RoundID) bool {
-	word := uint64(round) / wordSize
-	if word >= uint64(len(v.words)) {
-		return false
-	}
-	position := uint64(1) << (uint64(round) % wordSize)
-	return v.words[word]&position > 0
+	return v.votes.Bit(int(round)) > 0
 }

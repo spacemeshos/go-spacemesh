@@ -257,6 +257,10 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		PublishEpoch: postGenesisEpoch + 2,
 		Sequence:     1,
 	}
+	challenge3 := types.NIPostChallenge{
+		PublishEpoch: postGenesisEpoch + 2,
+		Sequence:     2,
+	}
 
 	poetProver := defaultPoetServiceMock(t, []byte("poet"))
 	poetProver.EXPECT().Proof(gomock.Any(), "").AnyTimes().Return(
@@ -265,6 +269,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		}, []types.Member{
 			types.Member(challenge.Hash()),
 			types.Member(challenge2.Hash()),
+			types.Member(challenge3.Hash()),
 		}, nil,
 	)
 
@@ -283,7 +288,6 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
 	req.NoError(err)
 	req.NotNil(nipost)
-	req.Equal(types.NIPostBuilderState{NIPost: &types.NIPost{}}, *nb.state)
 
 	poetDb = NewMockpoetDbAPI(ctrl)
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
@@ -294,7 +298,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	nb = NewNIPostBuilder(nodeID, postProvider, []PoetProvingServiceClient{poetProver}, poetDb, dir, logtest.New(t), sig, PoetConfig{}, mclock)
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).Return(nil, nil, fmt.Errorf("error")).Times(1)
 	// check that proof ref is not called again
-	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge)
+	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge2)
 	req.Nil(nipost)
 	req.Error(err)
 
@@ -306,14 +310,14 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	nb = NewNIPostBuilder(nodeID, postProvider, []PoetProvingServiceClient{poetProver}, poetDb, dir, logtest.New(t), sig, PoetConfig{}, mclock)
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).Times(1)
 	// check that proof ref is not called again
-	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge)
+	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge2)
 	req.NoError(err)
 	req.NotNil(nipost)
 
-	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 	// test state not loading if other challenge provided
+	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).Times(1)
-	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge2)
+	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge3)
 	req.NoError(err)
 	req.NotNil(nipost)
 }

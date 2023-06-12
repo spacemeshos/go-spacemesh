@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -20,6 +21,8 @@ import (
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
+	poetconfig "github.com/spacemeshos/poet/config"
+	"github.com/spacemeshos/poet/server"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -35,7 +38,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
@@ -51,6 +53,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/node/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
@@ -203,12 +206,6 @@ var (
 func init() {
 	appLog = log.NewNop()
 	grpclog = grpc_logsettable.ReplaceGrpcLoggerV2()
-}
-
-// Service is a general service interface that specifies the basic start/stop functionality.
-type Service interface {
-	Start(ctx context.Context) error
-	Close()
 }
 
 func loadConfig(c *cobra.Command) (*config.Config, error) {
@@ -405,6 +402,13 @@ func (app *App) introduction() {
 
 // Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
 func (app *App) Initialize() (err error) {
+	lockdir := filepath.Dir(app.Config.FileLock)
+	if _, err := os.Stat(lockdir); errors.Is(err, os.ErrNotExist) {
+		err := os.Mkdir(lockdir, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("creating dir %s for lock %s: %w", lockdir, app.Config.FileLock, err)
+		}
+	}
 	fl := flock.New(app.Config.FileLock)
 	locked, err := fl.TryLock()
 	if err != nil {
@@ -652,7 +656,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		app.Config.TickSize,
 		goldenATXID,
 		validator,
-		[]activation.AtxReceiver{trtl, beaconProtocol},
+		[]activation.AtxReceiver{&atxReceiver{trtl}, beaconProtocol},
 		app.addLogger(ATXHandlerLogger, lg),
 		poetCfg,
 	)
@@ -687,10 +691,12 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	app.hOracle = eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
-	app.Config.Bootstrap.DataDir = app.Config.DataDir()
-	app.Config.Bootstrap.Interval = app.Config.LayerDuration / 5
+	bscfg := app.Config.Bootstrap
+	bscfg.DataDir = app.Config.DataDir()
+	bscfg.Interval = app.Config.LayerDuration / 5
 	app.updater = bootstrap.New(
-		bootstrap.WithConfig(app.Config.Bootstrap),
+		app.clock,
+		bootstrap.WithConfig(bscfg),
 		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
 	)
 
@@ -720,6 +726,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		SyncCertDistance: app.Config.Tortoise.Hdist,
 		MaxHashesInReq:   100,
 		MaxStaleDuration: time.Hour,
+		Standalone:       app.Config.Standalone,
 	}
 	newSyncer := syncer.NewSyncer(app.cachedDB, app.clock, beaconProtocol, msh, trtl, fetcher, patrol, app.certifier,
 		syncer.WithConfig(syncerConf),
@@ -899,10 +906,59 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	return nil
 }
 
+func (app *App) launchStandalone(ctx context.Context) error {
+	if !app.Config.Standalone {
+		return nil
+	}
+	if len(app.Config.PoETServers) != 1 {
+		return fmt.Errorf("to launch in a standalone mode provide single local address for poet: %v", app.Config.PoETServers)
+	}
+	value := types.Beacon{}
+	genesis := app.Config.Genesis.GenesisID()
+	copy(value[:], genesis[:])
+	epoch := types.GetEffectiveGenesis().GetEpoch() + 1
+	app.log.With().Warning("using standalone mode for bootstrapping beacon",
+		log.Uint32("epoch", epoch.Uint32()),
+		log.Stringer("beacon", value),
+	)
+	if err := app.beaconProtocol.UpdateBeacon(epoch, value); err != nil {
+		return fmt.Errorf("update standalone beacon: %w", err)
+	}
+	cfg := poetconfig.DefaultConfig()
+	cfg.PoetDir = filepath.Join(app.Config.DataDir(), "poet")
+	cfg.DataDir = cfg.PoetDir
+	cfg.LogDir = cfg.PoetDir
+	parsed, err := url.Parse(app.Config.PoETServers[0])
+	if err != nil {
+		return err
+	}
+	cfg.RawRESTListener = parsed.Host
+	cfg.Service.Genesis = app.Config.Genesis.GenesisTime
+	cfg.Service.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
+	cfg.Service.CycleGap = app.Config.POET.CycleGap
+	cfg.Service.PhaseShift = app.Config.POET.PhaseShift
+	srv, err := server.New(ctx, *cfg)
+	if err != nil {
+		return fmt.Errorf("init poet server: %w", err)
+	}
+	app.log.With().Warning("lauching poet in standalone mode", log.Any("config", cfg))
+	app.eg.Go(func() error {
+		if err := srv.Start(ctx); err != nil {
+			app.log.With().Error("poet server failed", log.Err(err))
+			return err
+		}
+		return nil
+	})
+	return nil
+}
+
 func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 	app.eg.Go(func() error {
 		ch := app.updater.Subscribe()
-		app.updater.Start(ctx)
+		if err := app.updater.Start(ctx); err != nil {
+			appErr <- err
+			return nil
+		}
 		for update := range ch {
 			select {
 			case <-ctx.Done():
@@ -1285,7 +1341,11 @@ func (app *App) Start(ctx context.Context) error {
 	p2plog := app.addLogger(P2PLogger, lg)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
-	app.host, err = p2p.New(ctx, p2plog, cfg, app.Config.Genesis.GenesisID(),
+	prologue := fmt.Sprintf("%x-%v",
+		app.Config.Genesis.GenesisID(),
+		types.GetEffectiveGenesis(),
+	)
+	app.host, err = p2p.New(ctx, p2plog, cfg, []byte(prologue),
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {
@@ -1314,6 +1374,10 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	if err := app.startAPIServices(ctx); err != nil {
+		return err
+	}
+
+	if err := app.launchStandalone(ctx); err != nil {
 		return err
 	}
 
@@ -1372,4 +1436,12 @@ func (w tortoiseWeakCoin) Set(lid types.LayerID, value bool) error {
 	}
 	w.tortoise.OnWeakCoin(lid, value)
 	return nil
+}
+
+type atxReceiver struct {
+	tortoise *tortoise.Tortoise
+}
+
+func (a *atxReceiver) OnAtx(header *types.ActivationTxHeader) {
+	a.tortoise.OnAtx(header.ToData())
 }

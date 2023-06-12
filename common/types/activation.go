@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -54,6 +55,14 @@ func (t *ATXID) EncodeScale(e *scale.Encoder) (int, error) {
 // DecodeScale implements scale codec interface.
 func (t *ATXID) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, t[:])
+}
+
+func (t *ATXID) MarshalText() ([]byte, error) {
+	return util.Base64Encode(t[:]), nil
+}
+
+func (t *ATXID) UnmarshalText(buf []byte) error {
+	return util.Base64Decode(t[:], buf)
 }
 
 // EmptyATXID is a canonical empty ATXID.

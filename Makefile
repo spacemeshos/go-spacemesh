@@ -2,7 +2,7 @@ LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.
 include Makefile-libs.Inc
 
 DOCKER_HUB ?= spacemeshos
-UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests)
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v cmd/node | grep -v cmd/gen-p2p-identity | grep -v cmd/trace | grep -v genvm/cmd)
 
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
@@ -58,7 +58,7 @@ all: install build
 .PHONY: all
 
 install:
-	go run scripts/check-go-version.go --major 1 --minor 19
+	git lfs install
 	go mod download
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.52.0
 	go install github.com/spacemeshos/go-scale/scalegen@v1.1.9
@@ -77,15 +77,15 @@ get-profiler: get-postrs-profiler
 .PHONY: get-profiler
 
 gen-p2p-identity:
-	cd $@ ; go build -o $(BIN_DIR)$@$(EXE) .
+	cd cmd/gen-p2p-identity ; go build -o $(BIN_DIR)$@$(EXE) .
 .PHONY: gen-p2p-identity
 
 go-spacemesh: get-libs
-	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
+	cd cmd/node ; go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
 .PHONY: go-spacemesh gen-p2p-identity
 
 bootstrapper:
-	echo $(BIN_DIR) ; cd cmd/bootstrapper ;  go build -o $(BIN_DIR)go-$@$(EXE) .
+	cd cmd/bootstrapper ;  go build -o $(BIN_DIR)go-$@$(EXE) .
 .PHONY: bootstrapper
 
 tidy:

@@ -120,9 +120,9 @@ func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-	msg.Signature = signer.Sign(signing.BEACON, encoded)
+	msg.Signature = signer.Sign(signing.BEACON_FIRST_MSG, encoded)
 	if corruptSignature {
-		msg.Signature = signer.Sign(signing.BEACON, encoded[1:])
+		msg.Signature = signer.Sign(signing.BEACON_FIRST_MSG, encoded[1:])
 	}
 	msg.SmesherID = signer.NodeID()
 	return msg
@@ -160,9 +160,9 @@ func createFollowingVote(t *testing.T, signer *signing.EdSigner, epoch types.Epo
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-	msg.Signature = signer.Sign(signing.BEACON, encoded)
+	msg.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encoded)
 	if corruptSignature {
-		msg.Signature = signer.Sign(signing.BEACON, encoded[1:])
+		msg.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encoded[1:])
 	}
 	msg.SmesherID = signer.NodeID()
 	return msg
@@ -1336,7 +1336,7 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	if err != nil {
 		logger.With().Panic("failed to serialize msg1.FollowingVotingMessageBody for signing", log.Err(err))
 	}
-	msg1.Signature = signer.Sign(signing.BEACON, encodedMsg1FollowingVotingMessageBody)
+	msg1.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encodedMsg1FollowingVotingMessageBody)
 
 	data1, err := codec.Encode(&msg1)
 	require.NoError(t, err)
@@ -1351,7 +1351,7 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	if err != nil {
 		logger.With().Panic("failed to serialize msg2.FollowingVotingMessageBody for signing", log.Err(err))
 	}
-	msg2.Signature = signer.Sign(signing.BEACON, encodedMsg2FollowingVotingMessageBody)
+	msg2.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encodedMsg2FollowingVotingMessageBody)
 
 	data2, err := codec.Encode(&msg2)
 	require.NoError(t, err)
@@ -1364,7 +1364,7 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	if err != nil {
 		logger.With().Panic("failed to serialize msg1.FollowingVotingMessageBody for signing", log.Err(err))
 	}
-	msg1.Signature = signer.Sign(signing.BEACON, encodedMsg1FollowingVotingMessageBody)
+	msg1.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encodedMsg1FollowingVotingMessageBody)
 	data1, err = codec.Encode(&msg1)
 	require.NoError(t, err)
 
@@ -1373,7 +1373,7 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	if err != nil {
 		logger.With().Panic("failed to serialize msg2.FollowingVotingMessageBody for signing", log.Err(err))
 	}
-	msg2.Signature = signer.Sign(signing.BEACON, encodedMsg2FollowingVotingMessageBody)
+	msg2.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encodedMsg2FollowingVotingMessageBody)
 
 	data2, err = codec.Encode(&msg2)
 	require.NoError(t, err)
@@ -1381,4 +1381,14 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	// with EpochID, voting messages from the same miner with the same bit vector will
 	// not be considered duplicate gossip messages.
 	require.NotEqual(t, data1, data2)
+}
+
+func TestTracker(t *testing.T) {
+	track := newVotesTracker()
+	for i := 0; i < 1000; i++ {
+		require.True(t, track.register(types.RoundID(i)), i)
+	}
+	for i := 0; i < 1000; i++ {
+		require.False(t, track.register(types.RoundID(i)), i)
+	}
 }
