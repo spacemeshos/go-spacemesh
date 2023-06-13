@@ -46,7 +46,7 @@ func (a *aopt) weight(val uint64) *aopt {
 }
 
 // atx accepts publish epoch and atx fields that are relevant for tortoise
-// as options
+// as options.
 func (s *smesher) atx(epoch uint32, opts ...*aopt) *atxAction {
 	if val, exists := s.atxs[epoch]; exists {
 		return val
@@ -121,7 +121,7 @@ func (b *bopt) activeset(values ...*atxAction) *bopt {
 	return b
 }
 
-// encoded votes
+// encoded votes.
 type evotes struct {
 	baseBallot *ballotAction
 	votes      types.Votes
@@ -162,13 +162,6 @@ func (b *bopt) votes(value *evotes) *bopt {
 	b.opts = append(b.opts, func(ballot *ballotAction) {
 		ballot.base = value.baseBallot
 		ballot.Opinion.Votes = value.votes
-	})
-	return b
-}
-
-func (b *bopt) malicious() *bopt {
-	b.opts = append(b.opts, func(ballot *ballotAction) {
-		ballot.Malicious = true
 	})
 	return b
 }
@@ -328,15 +321,18 @@ func newSession(tb testing.TB) *session {
 	s := &session{tb: tb}
 	return s.
 		withLayerSize(50).
-		withEpochSize(10)
+		withEpochSize(10).
+		withHdist(10).
+		withZdist(8).
+		withDelay(10).
+		withWindow(30)
 }
 
 type session struct {
-	tb               testing.TB
-	epochSize        int
-	effectiveGenesis int
-	layerSize        int
-	config           *Config
+	tb        testing.TB
+	epochSize int
+	layerSize int
+	config    *Config
 
 	smeshers map[int]*smesher
 	actions  []action
@@ -384,7 +380,7 @@ func (s *session) tally(lid int) {
 }
 
 // tallyWait will not be ordered before any other action that was registered
-// before tallyWait
+// before tallyWait.
 func (s *session) tallyWait(lid int) {
 	deps := make([]action, len(s.actions))
 	copy(deps, s.actions)
@@ -459,7 +455,7 @@ func (b *beaconAction) execute(trt *Tortoise) {
 	trt.OnBeacon(types.EpochID(b.epoch), b.beacon)
 }
 
-// beacon accepts publish epoch and value of the beacon
+// beacon accepts publish epoch and value of the beacon.
 func (s *session) beacon(epoch uint32, value string) *beaconAction {
 	beacon := &beaconAction{epoch: epoch + 1}
 	copy(beacon.beacon[:], value)
@@ -542,7 +538,7 @@ func (s *session) updates(tb testing.TB, expect *results) {
 	s.register(&updateActions{tb, expect.results, deps})
 }
 
-func (s *session) run() {
+func (s *session) runInorder() {
 	s.runActions(s.actions)
 }
 
@@ -553,7 +549,13 @@ func (s *session) runActions(actions []action) {
 	}
 }
 
-func (s *session) randomGraph() {
+func (s *session) runRandomTopoN(n int) {
+	for i := 0; i < n; i++ {
+		s.runRandomTopo()
+	}
+}
+
+func (s *session) runRandomTopo() {
 	// TODO(dshulyak) compute and execute all topological paths
 	// or optionally a subset of them if all takes too long
 	rst := []action{}
@@ -605,12 +607,6 @@ func (s *session) ensureConfig() {
 func (s *session) withEpochSize(val uint32) *session {
 	s.epochSize = int(val)
 	types.SetLayersPerEpoch(val)
-	return s
-}
-
-func (s *session) withEffectiveGenesis(val uint32) *session {
-	s.effectiveGenesis = int(val)
-	types.SetEffectiveGenesis(val)
 	return s
 }
 
@@ -669,6 +665,7 @@ func TestSanity(t *testing.T) {
 			activeset(activeset...).
 			eligibilities(s.layerSize/n))
 	}
+	s.tally(1)
 	s.hareblock(1, "aa", 0)
 	for i := 0; i < n; i++ {
 		s.smesher(i).atx(1).ballot(2, new(bopt).
@@ -683,9 +680,48 @@ func TestSanity(t *testing.T) {
 		verified(1).block("aa", 0, valid|hare|data).
 		next(2).block("bb", 0, hare|data),
 	)
-	for i := 0; i < 10; i++ {
-		s.randomGraph()
+	t.Run("inorder", func(t *testing.T) { s.runInorder() })
+	t.Run("random", func(t *testing.T) { s.runRandomTopoN(100) })
+}
+
+func TestDisagreement(t *testing.T) {
+	const n = 5
+	var activeset []*atxAction
+	s := newSession(t)
+	for i := 0; i < n; i++ {
+		activeset = append(
+			activeset,
+			s.smesher(i).atx(1, new(aopt).height(100).weight(400)),
+		)
 	}
+	s.beacon(1, "a")
+	for i := 0; i < n; i++ {
+		s.smesher(i).atx(1).ballot(1, new(bopt).
+			beacon("a").
+			activeset(activeset...).
+			eligibilities(s.layerSize/n))
+	}
+	s.hareblock(1, "aa", 0)
+	for i := 0; i < n; i++ {
+		v := new(evotes)
+		if i < n/2 {
+			v = v.support(1, "aa", 0)
+		} else if n == n/2 {
+			v = v.abstain(1)
+		} else {
+			v = v.against(1, "aa", 0)
+		}
+		s.smesher(i).atx(1).ballot(2, new(bopt).
+			eligibilities(s.layerSize/n).
+			votes(v),
+		)
+	}
+	s.tallyWait(1)
+	s.updates(t, new(results).
+		verified(0).
+		next(1).block("aa", 0, hare|data),
+	)
+	s.runInorder()
 }
 
 func TestOpinion(t *testing.T) {
@@ -711,7 +747,8 @@ func TestOpinion(t *testing.T) {
 		)
 	}
 	s.tallyWait(s.epochSize)
-	s.randomGraph()
+	s.runRandomTopo()
+	s.runInorder()
 }
 
 func TestEpochGap(t *testing.T) {
@@ -750,5 +787,5 @@ func TestEpochGap(t *testing.T) {
 	}
 	s.tallyWait(2 * s.epochSize)
 	s.updates(t, rst)
-	s.randomGraph()
+	s.runRandomTopo()
 }
