@@ -267,7 +267,8 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 		return nil
 	}
 	// ...and if we don't have an initial POST persisted already.
-	if _, err := loadPost(b.nipostBuilder.DataDir()); err == nil {
+	if post, err := loadPost(b.nipostBuilder.DataDir()); err == nil {
+		b.initialPost = post
 		return nil
 	}
 
