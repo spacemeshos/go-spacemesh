@@ -1,6 +1,8 @@
 package fetch
 
 import (
+	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -8,6 +10,8 @@ import (
 )
 
 //go:generate scalegen
+
+const MaxHashesInReq = 1000
 
 // RequestMessage is sent to the peer for hash query.
 type RequestMessage struct {
@@ -37,6 +41,37 @@ type ResponseBatch struct {
 type MeshHashRequest struct {
 	From, To types.LayerID
 	By       uint32
+}
+
+func (r *MeshHashRequest) Count() uint {
+	diff := r.To.Difference(r.From)
+	count := uint(diff/r.By + 1)
+	if diff%r.By != 0 {
+		// last layer is not a multiple of By, so we need to add it
+		count++
+	}
+	return count
+}
+
+func (r *MeshHashRequest) Validate() error {
+	if r.By == 0 {
+		return fmt.Errorf("%w: By must not be zero", errBadRequest)
+	}
+
+	if r.To.Before(r.From) {
+		return fmt.Errorf("%w: To before From", errBadRequest)
+	}
+
+	diff := r.To.Difference(r.From)
+	count := diff/r.By + 1
+	if diff%r.By != 0 {
+		// last layer is not a multiple of By, so we need to add it
+		count++
+	}
+	if count > MaxHashesInReq {
+		return fmt.Errorf("%w: number of layers requested exceeds maximum for one request", errBadRequest)
+	}
+	return nil
 }
 
 func (r *MeshHashRequest) MarshalLogObject(encoder log.ObjectEncoder) error {

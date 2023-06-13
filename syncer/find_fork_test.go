@@ -110,11 +110,7 @@ func serveHashReq(t *testing.T, req *fetch.MeshHashRequest) (*fetch.MeshHashes, 
 	hashes = append(hashes, layerHash(int(req.To.Uint32()), true))
 	count++
 
-	expCount := req.To.Difference(req.From)/req.By + 1
-	if req.To.Difference(req.From)%req.By != 0 {
-		// last layer is not a multiple of By, so we expect one more hash
-		expCount++
-	}
+	expCount := req.Count()
 	require.Equal(t, expCount, count, fmt.Sprintf("%#v; count exp: %v, got %v", req, expCount, count))
 	mh := &fetch.MeshHashes{
 		Hashes: hashes,

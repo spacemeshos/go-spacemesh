@@ -290,11 +290,7 @@ func (ff *ForkFinder) sendRequest(ctx context.Context, logger log.Log, peer p2p.
 		To:   bnd.to.layer,
 		By:   delta,
 	}
-	count := int(dist/delta + 1)
-	if dist%delta != 0 {
-		// last layer is not a multiple of By, so we need to add it
-		count++
-	}
+	count := req.Count()
 	logger.With().Debug("sending request", log.Uint32("delta", delta))
 	mh, err := ff.fetcher.PeerMeshHashes(ctx, peer, req)
 	if err != nil {
@@ -303,7 +299,7 @@ func (ff *ForkFinder) sendRequest(ctx context.Context, logger log.Log, peer p2p.
 	logger.With().Debug("received response",
 		log.Int("num_hashes", len(mh.Hashes)),
 	)
-	if count != len(mh.Hashes) {
+	if int(count) != len(mh.Hashes) {
 		return nil, errors.New("inconsistent layers for mesh hashes")
 	}
 	if mh.Hashes[0] != bnd.from.hash || mh.Hashes[count-1] != bnd.to.hash {

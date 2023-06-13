@@ -3,7 +3,6 @@ package fetch
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -212,8 +211,8 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 		h.logger.WithContext(ctx).With().Warning("failed to parse mesh hash request", log.Err(err))
 		return nil, errBadRequest
 	}
-	if err := h.validateReq(req); err != nil {
-		h.logger.WithContext(ctx).With().Debug("failed to iterate layers", log.Err(err))
+	if err := req.Validate(); err != nil {
+		h.logger.WithContext(ctx).With().Debug("failed to validate mesh hash request", log.Err(err))
 		return nil, err
 	}
 	hashes, err = layers.GetAggHashes(h.cdb, req.From, req.To, req.By)
@@ -232,25 +231,4 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 		log.Int("count_hashes", len(hashes)),
 	)
 	return data, nil
-}
-
-func (h *handler) validateReq(req MeshHashRequest) error {
-	if req.By == 0 {
-		return fmt.Errorf("%w: %v", errBadRequest, req)
-	}
-
-	if req.To.Before(req.From) {
-		return fmt.Errorf("%w: %v", errBadRequest, req)
-	}
-
-	diff := req.To.Difference(req.From)
-	count := diff/req.By + 1
-	if diff%req.By != 0 {
-		// last layer is not a multiple of By, so we need to add it
-		count++
-	}
-	if count > uint32(h.cfg.MaxHashesInReq) {
-		return fmt.Errorf("%w: %v", errBadRequest, req)
-	}
-	return nil
 }
