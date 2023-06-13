@@ -100,7 +100,7 @@ func storeNodeHashes(t *testing.T, db *sql.Database, diverge, max int) {
 func serveHashReq(t *testing.T, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
 	var (
 		hashes = []types.Hash32{}
-		count  uint32
+		count  uint
 	)
 	for lid := req.From; lid.Before(req.To); lid = lid.Add(req.By) {
 		hashes = append(hashes, layerHash(int(lid.Uint32()), true))
