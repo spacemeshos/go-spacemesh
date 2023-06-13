@@ -38,6 +38,15 @@ type ResponseBatch struct {
 	Responses []ResponseMessage `scale:"max=1000"` // depends on fetch config `BatchSize` which defaults to 20, more than 1000 seems unlikely
 }
 
+// MeshHashRequest is used ForkFinder to request the hashes of layers from
+// a peer to find the layer at which a divergence occurred in the local mesh of
+// the node.
+//
+// From and To define the beginning and end layer to request. By defines the
+// increment between layers to limit the number of hashes in the response, e.g.
+// 2 means only every other hash is requested. On the requester side the number
+// of hashes in the response is limited by `MaxHashesInReq` in `syncer.Config`,
+// on the responder side it is limited by `fetch.MaxHashesInReq`.
 type MeshHashRequest struct {
 	From, To types.LayerID
 	By       uint32

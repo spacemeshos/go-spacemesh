@@ -81,7 +81,6 @@ type Config struct {
 	MaxRetriesForPeer    int
 	BatchSize, QueueSize int
 	RequestTimeout       time.Duration // in seconds
-	MaxHashesInReq       int
 	MaxRetriesForRequest int
 }
 
@@ -93,7 +92,6 @@ func DefaultConfig() Config {
 		QueueSize:            20,
 		BatchSize:            20,
 		RequestTimeout:       time.Second * time.Duration(10),
-		MaxHashesInReq:       100,
 		MaxRetriesForRequest: 100,
 	}
 }

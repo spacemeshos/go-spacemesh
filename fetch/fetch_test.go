@@ -68,7 +68,6 @@ func createFetch(tb testing.TB) *testFetch {
 		3,
 		1000,
 		time.Second * time.Duration(3),
-		100,
 		3,
 	}
 	lg := logtest.New(tb)
@@ -320,7 +319,6 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 		3,
 		1000,
 		time.Second * time.Duration(3),
-		100,
 		3,
 	}
 	p2pconf := p2p.DefaultConfig()
