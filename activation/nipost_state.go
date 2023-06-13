@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/natefinch/atomic"
+	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -18,6 +19,7 @@ import (
 const (
 	challengeFilename = "nipost_challenge.bin"
 	builderFilename   = "nipost_builder_state.bin"
+	postFilename      = "post.bin"
 	crc64Size         = 8
 )
 
@@ -57,26 +59,43 @@ func read(path string) ([]byte, error) {
 	return data[:end], nil
 }
 
-func saveNipostChallenge(dir string, ch *types.NIPostChallenge) error {
-	if _, err := os.Stat(dir); err != nil {
-		return fmt.Errorf("post dir not created: %w", err)
-	}
-	data, err := codec.Encode(ch)
+func load(filename string, dst scale.Decodable) error {
+	data, err := read(filename)
 	if err != nil {
-		return fmt.Errorf("encode nipost challenge: %w", err)
+		return fmt.Errorf("reading file: %w", err)
 	}
-	return write(filepath.Join(dir, challengeFilename), data)
+
+	if err := codec.Decode(data, dst); err != nil {
+		return fmt.Errorf("decoding: %w", err)
+	}
+	return nil
+}
+
+func save(filename string, src scale.Encodable) error {
+	if _, err := os.Stat(filepath.Dir(filename)); err != nil {
+		return err
+	}
+	data, err := codec.Encode(src)
+	if err != nil {
+		return fmt.Errorf("encoding: %w", err)
+	}
+	if err := write(filename, data); err != nil {
+		return fmt.Errorf("writing file: %w", err)
+	}
+	return nil
+}
+
+func saveNipostChallenge(dir string, ch *types.NIPostChallenge) error {
+	if err := save(filepath.Join(dir, challengeFilename), ch); err != nil {
+		return fmt.Errorf("saving nipost challenge: %w", err)
+	}
+	return nil
 }
 
 func loadNipostChallenge(dir string) (*types.NIPostChallenge, error) {
-	filename := filepath.Join(dir, challengeFilename)
-	data, err := read(filename)
-	if err != nil {
-		return nil, err
-	}
 	var ch types.NIPostChallenge
-	if err = codec.Decode(data, &ch); err != nil {
-		return nil, fmt.Errorf("decode nipost challenge: %w", err)
+	if err := load(filepath.Join(dir, challengeFilename), &ch); err != nil {
+		return nil, fmt.Errorf("loading nipost challenge: %w", err)
 	}
 	return &ch, nil
 }
@@ -84,31 +103,37 @@ func loadNipostChallenge(dir string) (*types.NIPostChallenge, error) {
 func discardNipostChallenge(dir string) error {
 	filename := filepath.Join(dir, challengeFilename)
 	if err := os.Remove(filename); err != nil {
-		return fmt.Errorf("discard nipst challenge: %w", err)
+		return fmt.Errorf("discarding nipost challenge: %w", err)
 	}
 	return nil
 }
 
 func saveBuilderState(dir string, state *types.NIPostBuilderState) error {
-	if _, err := os.Stat(dir); err != nil {
-		return fmt.Errorf("post dir not created: %w", err)
+	if err := save(filepath.Join(dir, builderFilename), state); err != nil {
+		return fmt.Errorf("saving builder state: %w", err)
 	}
-	data, err := codec.Encode(state)
-	if err != nil {
-		return fmt.Errorf("encode builder state: %w", err)
-	}
-	return write(filepath.Join(dir, builderFilename), data)
+	return nil
 }
 
 func loadBuilderState(dir string) (*types.NIPostBuilderState, error) {
-	filename := filepath.Join(dir, builderFilename)
-	data, err := read(filename)
-	if err != nil {
-		return nil, err
-	}
 	var state types.NIPostBuilderState
-	if err = codec.Decode(data, &state); err != nil {
-		return nil, fmt.Errorf("decode builder state: %w", err)
+	if err := load(filepath.Join(dir, builderFilename), &state); err != nil {
+		return nil, fmt.Errorf("loading builder state: %w", err)
 	}
 	return &state, nil
+}
+
+func savePost(dir string, post *types.Post) error {
+	if err := save(filepath.Join(dir, postFilename), post); err != nil {
+		return fmt.Errorf("saving post: %w", err)
+	}
+	return nil
+}
+
+func loadPost(dir string) (*types.Post, error) {
+	var post types.Post
+	if err := load(filepath.Join(dir, postFilename), &post); err != nil {
+		return nil, fmt.Errorf("loading post: %w", err)
+	}
+	return &post, nil
 }

@@ -50,26 +50,26 @@ func Test_getBlockTXs(t *testing.T) {
 
 	blockSeed := types.RandomHash().Bytes()
 	// no pruning
-	got, err := getBlockTXs(logtest.New(t), &proposalMetadata{mtxs: mtxs}, blockSeed, 0)
+	got, err := getBlockTXs(logtest.New(t), mtxs, blockSeed, 0)
 	require.NoError(t, err)
 	require.Len(t, got, len(mtxs))
 	checkInNonceOrder(t, got, byTid)
 
 	// make sure order is stable
-	got2, err := getBlockTXs(logtest.New(t), &proposalMetadata{mtxs: mtxs}, blockSeed, 0)
+	got2, err := getBlockTXs(logtest.New(t), mtxs, blockSeed, 0)
 	require.NoError(t, err)
 	require.Equal(t, got, got2)
 
 	// pruning
 	expSize := len(mtxs) / 2
 	gasLimit := uint64(expSize) * defaultGas
-	got, err = getBlockTXs(logtest.New(t), &proposalMetadata{mtxs: mtxs}, blockSeed, gasLimit)
+	got, err = getBlockTXs(logtest.New(t), mtxs, blockSeed, gasLimit)
 	require.NoError(t, err)
 	require.Len(t, got, expSize)
 	checkInNonceOrder(t, got, byTid)
 
 	// make sure order is stable
-	got2, err = getBlockTXs(logtest.New(t), &proposalMetadata{mtxs: mtxs}, blockSeed, gasLimit)
+	got2, err = getBlockTXs(logtest.New(t), mtxs, blockSeed, gasLimit)
 	require.NoError(t, err)
 	require.Equal(t, got, got2)
 
@@ -77,12 +77,12 @@ func Test_getBlockTXs(t *testing.T) {
 	for _, mtx := range mtxs {
 		mtx.LayerID = types.LayerID(11)
 	}
-	got, err = getBlockTXs(logtest.New(t), &proposalMetadata{mtxs: mtxs}, blockSeed, 0)
+	got, err = getBlockTXs(logtest.New(t), mtxs, blockSeed, 0)
 	require.NoError(t, err)
 	require.Empty(t, got)
 
 	// empty block
-	got, err = getBlockTXs(logtest.New(t), &proposalMetadata{}, blockSeed, 0)
+	got, err = getBlockTXs(logtest.New(t), nil, blockSeed, 0)
 	require.NoError(t, err)
 	require.Empty(t, got)
 }
