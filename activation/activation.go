@@ -71,7 +71,6 @@ type Builder struct {
 	nipostBuilder     nipostBuilder
 	postSetupProvider postSetupProvider
 	initialPost       *types.Post
-	initialPostMeta   *types.PostMetadata
 
 	// smeshingMutex protects `StartSmeshing` and `StopSmeshing` from concurrent access
 	smeshingMutex sync.Mutex
@@ -275,7 +274,7 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 	// Create the initial post and save it.
 	startTime := time.Now()
 	var err error
-	b.initialPost, b.initialPostMeta, err = b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge)
+	b.initialPost, _, err = b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge)
 	if err != nil {
 		return fmt.Errorf("post execution: %w", err)
 	}
