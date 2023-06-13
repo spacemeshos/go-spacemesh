@@ -389,7 +389,7 @@ func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *te
 
 	// add an atx by the same node
 	commitmentAtx := types.RandomATXID()
-	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, nil, 1, nil, nil)
+	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, nil, 1, nil)
 	atx.CommitmentATX = &commitmentAtx
 	addAtx(t, mgr.cdb, mgr.signer, atx)
 

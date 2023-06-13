@@ -286,7 +286,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		challenge := newChallenge(0, types.EmptyATXID, prevAtx.ID(), types.LayerID(1012).GetEpoch(), &ctxID)
 		atx := newAtx(t, sig, challenge, &types.NIPost{}, 100, coinbase)
 		atx.InitialPost = initialPost
-		atx.InitialPostIndices = initialPost.Indices
 		atx.VRFNonce = new(types.VRFPostIndex)
 		*atx.VRFNonce = 1
 		atx.InnerActivationTx.NodeID = new(types.NodeID)
@@ -294,7 +293,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.NIPost = newNIPostWithChallenge(t, atx.NIPostChallenge.Hash(), poetRef)
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
-		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 		validator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 		validator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).Times(1)
@@ -335,11 +334,10 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		challenge := newChallenge(0, types.EmptyATXID, posAtx.ID(), types.LayerID(1012).GetEpoch(), &cATX)
 		atx := newAtx(t, sig, challenge, npst, 100, coinbase)
 		atx.InitialPost = initialPost
-		atx.InitialPostIndices = initialPost.Indices
 		atx.InnerActivationTx.NodeID = new(types.NodeID)
 		*atx.InnerActivationTx.NodeID = sig.NodeID()
 
-		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("bad initial nipost")).Times(1)
+		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("bad initial nipost")).Times(1)
 
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.EqualError(t, err, "bad initial nipost")
@@ -350,7 +348,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		challenge := newChallenge(0, types.EmptyATXID, posAtx.ID(), types.LayerID(1012).GetEpoch(), &ctxID)
 		atx := newAtx(t, sig, challenge, &types.NIPost{}, 100, coinbase)
 		atx.InitialPost = initialPost
-		atx.InitialPostIndices = initialPost.Indices
 
 		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.ErrorContains(t, err, "NodeID is missing")
@@ -361,13 +358,12 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		challenge := newChallenge(0, types.EmptyATXID, posAtx.ID(), types.LayerID(1012).GetEpoch(), &ctxID)
 		atx := newAtx(t, sig, challenge, &types.NIPost{}, 100, coinbase)
 		atx.InitialPost = initialPost
-		atx.InitialPostIndices = initialPost.Indices
 		atx.InnerActivationTx.NodeID = new(types.NodeID)
 		*atx.InnerActivationTx.NodeID = sig.NodeID()
 		atx.NIPost = newNIPostWithChallenge(t, atx.NIPostChallenge.Hash(), poetRef)
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
-		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
@@ -379,7 +375,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		challenge := newChallenge(0, types.EmptyATXID, posAtx.ID(), types.LayerID(1012).GetEpoch(), &ctxID)
 		atx := newAtx(t, sig, challenge, &types.NIPost{}, 100, coinbase)
 		atx.InitialPost = initialPost
-		atx.InitialPostIndices = initialPost.Indices
 		atx.VRFNonce = new(types.VRFPostIndex)
 		*atx.VRFNonce = 1
 		atx.InnerActivationTx.NodeID = new(types.NodeID)
@@ -387,7 +382,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.NIPost = newNIPostWithChallenge(t, atx.NIPostChallenge.Hash(), poetRef)
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
-		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 		validator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(errors.New("invalid VRF nonce"))
 		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
@@ -398,7 +393,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	t.Run("prevAtx not declared but initial Post not included", func(t *testing.T) {
 		challenge := newChallenge(0, types.EmptyATXID, posAtx.ID(), types.LayerID(1012).GetEpoch(), nil)
 		atx := newAtx(t, sig, challenge, &types.NIPost{}, 100, coinbase)
-		atx.InitialPostIndices = []byte{}
 		atx.CommitmentATX = &goldenATXID
 
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
@@ -410,13 +404,12 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		challenge := newChallenge(0, types.EmptyATXID, posAtx.ID(), types.LayerID(1012).GetEpoch(), &cATX)
 		atx := newAtx(t, sig, challenge, npst, 100, coinbase)
 		atx.InitialPost = initialPost
-		atx.InitialPostIndices = initialPost.Indices
 		atx.VRFNonce = new(types.VRFPostIndex)
 		*atx.VRFNonce = 1
 		atx.InnerActivationTx.NodeID = new(types.NodeID)
 		*atx.InnerActivationTx.NodeID = sig.NodeID()
 
-		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("failed post validation")).Times(1)
 
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
@@ -1080,9 +1073,9 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atx1 := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PositioningATX:     goldenATXID,
-				InitialPostIndices: []byte{1},
-				PublishEpoch:       types.LayerID(1).GetEpoch().Add(layersPerEpoch),
+				PositioningATX: goldenATXID,
+				InitialPost:    &types.Post{Indices: []byte{1}},
+				PublishEpoch:   types.LayerID(1).GetEpoch().Add(layersPerEpoch),
 
 				CommitmentATX: &goldenATXID,
 			},
@@ -1091,9 +1084,8 @@ func TestHandler_AtxWeight(t *testing.T) {
 				Post:         &types.Post{},
 				PostMetadata: &types.PostMetadata{},
 			},
-			InitialPost: &types.Post{Indices: []byte{1}},
-			VRFNonce:    &nonce,
-			NodeID:      &nodeId,
+			VRFNonce: &nonce,
+			NodeID:   &nodeId,
 		},
 	}
 	require.NoError(t, SignAndFinalizeAtx(sig, atx1))
@@ -1108,7 +1100,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	mvalidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	mvalidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	mvalidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
-	mvalidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	mvalidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	mvalidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	receiver1.EXPECT().OnAtx(gomock.Any()).Times(1)
 	receiver2.EXPECT().OnAtx(gomock.Any()).Times(1)
