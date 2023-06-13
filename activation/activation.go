@@ -248,7 +248,7 @@ func (b *Builder) SmesherID() types.NodeID {
 }
 
 func (b *Builder) run(ctx context.Context) {
-	if err := b.generateProof(ctx); err != nil {
+	if err := b.generateInitialPost(ctx); err != nil {
 		b.log.Error("Failed to generate proof: %s", err)
 		return
 	}
@@ -261,19 +261,28 @@ func (b *Builder) run(ctx context.Context) {
 	b.loop(ctx)
 }
 
-func (b *Builder) generateProof(ctx context.Context) error {
-	// don't generate the commitment every time smeshing is starting, but once only.
-	if _, err := b.cdb.GetLastAtx(b.nodeID); err != nil {
-		// Once initialized, run the execution phase with zero-challenge,
-		// to create the initial proof (the commitment).
-		startTime := time.Now()
-		b.initialPost, b.initialPostMeta, err = b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge)
-		if err != nil {
-			return fmt.Errorf("post execution: %w", err)
-		}
-		metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
+func (b *Builder) generateInitialPost(ctx context.Context) error {
+	// Generate the initial POST if we don't have an ATX...
+	if _, err := b.cdb.GetLastAtx(b.nodeID); err == nil {
+		return nil
+	}
+	// ...and if we don't have an initial POST persisted already.
+	if _, err := loadPost(b.nipostBuilder.DataDir()); err == nil {
+		return nil
 	}
 
+	// Create the initial post and save it.
+	startTime := time.Now()
+	var err error
+	b.initialPost, b.initialPostMeta, err = b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge)
+	if err != nil {
+		return fmt.Errorf("post execution: %w", err)
+	}
+	metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
+
+	if err := savePost(b.nipostBuilder.DataDir(), b.initialPost); err != nil {
+		b.log.With().Warning("failed to save initial post: %w", log.Err(err))
+	}
 	return nil
 }
 
