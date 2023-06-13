@@ -99,6 +99,7 @@ func New(opts ...Opt) (*Tortoise, error) {
 			BadBeaconVoteDelayLayers: t.cfg.BadBeaconVoteDelayLayers,
 			LayerSize:                t.cfg.LayerSize,
 			EpochSize:                types.GetLayersPerEpoch(),
+			EffectiveGenesis:         types.GetEffectiveGenesis().Uint32(),
 		})
 	}
 	return t, nil
