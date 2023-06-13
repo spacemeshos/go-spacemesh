@@ -143,7 +143,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		Nonce:   0,
 		Indices: make([]byte, 10),
 	}
-	b.initialPostMeta = &types.PostMetadata{}
 	tab.Builder = b
 	dir := tb.TempDir()
 	tab.mnipost.EXPECT().DataDir().Return(dir).AnyTimes()
