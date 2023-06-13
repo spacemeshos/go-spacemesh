@@ -11,7 +11,7 @@ import (
 
 //go:generate scalegen
 
-const MaxHashesInReq = 1000
+const MaxHashesInReq = 100
 
 // RequestMessage is sent to the peer for hash query.
 type RequestMessage struct {
