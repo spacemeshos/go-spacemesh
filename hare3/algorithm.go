@@ -40,6 +40,8 @@
 package hare3
 
 import (
+	"sync"
+
 	"golang.org/x/exp/slices"
 )
 
@@ -140,19 +142,23 @@ type Handler struct {
 	gg  GradedGossiper
 	tgg TrhesholdGradedGossiper
 	gc  Gradecaster
+	mu  *sync.Mutex
 }
 
-func NewHandler(gg GradedGossiper, tgg TrhesholdGradedGossiper, gc Gradecaster) *Handler {
+func NewHandler(gg GradedGossiper, tgg TrhesholdGradedGossiper, gc Gradecaster, protocolMu *sync.Mutex) *Handler {
 	return &Handler{
 		gg:  gg,
 		tgg: tgg,
 		gc:  gc,
+		mu:  protocolMu,
 	}
 }
 
 // HandleMsg handles an incoming message, it returns a boolean indicating
 // whether the message should be regossiped to peers.
 func (h *Handler) HandleMsg(vk []byte, values []Hash20, round int8) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	r := AbsRound(round)
 	var g uint8
 	switch r.Type() {
@@ -214,18 +220,22 @@ type Protocol struct {
 	tgg TrhesholdGradedGossiper
 	gc  Gradecaster
 	lc  LeaderChecker
+	mu  *sync.Mutex
 }
 
-func NewProtocol(tgg TrhesholdGradedGossiper, gc Gradecaster, lc LeaderChecker) *Protocol {
+func NewProtocol(tgg TrhesholdGradedGossiper, gc Gradecaster, lc LeaderChecker, protocolMu *sync.Mutex) *Protocol {
 	return &Protocol{
 		round: AbsRound(-1),
 		tgg:   tgg,
 		gc:    gc,
 		lc:    lc,
+		mu:    protocolMu,
 	}
 }
 
 func (p *Protocol) Round() AbsRound {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	return p.round
 }
 
@@ -270,6 +280,8 @@ func isSubset(subset, superset []Hash20) bool {
 // NextRound processes the next round of the protocol, active indicates whether
 // this participant is active for this round.
 func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []Hash20) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	defer func() { p.round++ }()
 	if p.round >= 0 && p.round <= 3 {
 		p.Vi[p.round] = p.tgg.RetrieveThresholdMessages(-1, 5-uint8(p.round))

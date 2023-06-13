@@ -12,30 +12,24 @@ type ProtocolRunner struct {
 	clock    RoundClock
 	protocol hare3.Protocol
 	maxRound hare3.AbsRound
-	messages chan MsgEnvelope
 	gossiper NetworkGossiper
-	handler  hare3.Handler
 }
 
 func NewProtocolRunner(
 	clock RoundClock,
 	protocol *hare3.Protocol,
 	iterationLimit int8,
-	messages chan MsgEnvelope,
 	gossiper NetworkGossiper,
-	handler hare3.Handler,
 ) *ProtocolRunner {
 	return &ProtocolRunner{
 		clock:    clock,
 		protocol: *protocol,
 		maxRound: hare3.NewAbsRound(iterationLimit, 0),
-		messages: messages,
 		gossiper: gossiper,
-		handler:  handler,
 	}
 }
 
-// Run waits for successive rounds from the clock and handles messages received from the network
+// Run waits for successive rounds from the clock and drives the protocol round by round.
 func (r *ProtocolRunner) Run(ctx context.Context) ([]hare3.Hash20, error) {
 	// ok want to actually use a lock here
 	for {
@@ -59,32 +53,10 @@ func (r *ProtocolRunner) Run(ctx context.Context) ([]hare3.Hash20, error) {
 			if output != nil {
 				return output, nil
 			}
-		case envelope := <-r.messages:
-			// It is assumed that messages received here have had their
-			// signature verified by the broker and that the broker made use of
-			// the message sid to route the message to this instance.
-			m := envelope.Message
-			select {
-			// Communicate back to the broker whether or not the message should be gossiped.
-			case envelope.Gossip <- r.handler.HandleMsg(m.Key, m.Values, m.Round):
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
 	}
-}
-
-type MsgEnvelope struct {
-	Gossip  chan<- bool
-	Message Msg
-}
-
-type Msg struct {
-	Key    []byte
-	Values []hare3.Hash20
-	Round  int8
 }
 
 type NetworkGossiper interface {
@@ -93,9 +65,6 @@ type NetworkGossiper interface {
 
 func buildEncodedOutputMessgae(m *hare3.OutputMessage) ([]byte, error) {
 	return nil, nil
-}
-
-func logerr(err error) {
 }
 
 // RoundClock is a timer interface.
