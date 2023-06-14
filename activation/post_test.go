@@ -1,7 +1,10 @@
 package activation
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
+	"reflect"
 	"testing"
 	"time"
 
@@ -439,4 +442,43 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 		signer:           sig,
 		cdb:              cdb,
 	}
+}
+
+func TestDecodingPowDifficulty(t *testing.T) {
+	t.Parallel()
+	expected := bytes.Repeat([]byte{0x01, 0x02, 0x03, 0x04}, 8)
+	encoded := hex.EncodeToString(expected)
+	t.Run("parse 32B hex", func(t *testing.T) {
+		t.Parallel()
+		res, err := DecodePowDifficulty(reflect.TypeOf(""), reflect.TypeOf([32]byte{}), encoded)
+		require.NoError(t, err)
+		arr, ok := res.([32]byte)
+		require.True(t, ok)
+		require.Equal(t, expected, arr[:])
+	})
+	t.Run("input too short", func(t *testing.T) {
+		t.Parallel()
+		res, err := DecodePowDifficulty(reflect.TypeOf(""), reflect.TypeOf([32]byte{}), "0")
+		require.NoError(t, err)
+		require.Equal(t, "0", res)
+	})
+	t.Run("different input type", func(t *testing.T) {
+		t.Parallel()
+		res, err := DecodePowDifficulty(reflect.TypeOf(1), reflect.TypeOf([32]byte{}), encoded)
+		require.NoError(t, err)
+		require.Equal(t, encoded, res)
+	})
+	t.Run("different output type", func(t *testing.T) {
+		t.Parallel()
+		res, err := DecodePowDifficulty(reflect.TypeOf(""), reflect.TypeOf(1), encoded)
+		require.NoError(t, err)
+		require.Equal(t, encoded, res)
+	})
+	t.Run("not a hex string", func(t *testing.T) {
+		t.Parallel()
+		encoded = encoded[:len(encoded)-1] + "G"
+		res, err := DecodePowDifficulty(reflect.TypeOf(""), reflect.TypeOf([32]byte{}), encoded)
+		require.NoError(t, err)
+		require.Equal(t, encoded, res)
+	})
 }
