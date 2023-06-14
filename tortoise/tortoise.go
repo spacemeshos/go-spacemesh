@@ -388,29 +388,26 @@ func (t *turtle) verifyLayers() {
 		logger = t.logger.WithFields(
 			log.Stringer("last layer", t.last),
 		)
-		verified = maxLayer(t.evicted, types.GetEffectiveGenesis())
+		verified  = maxLayer(t.evicted, types.GetEffectiveGenesis())
+		nverified types.LayerID
 	)
-	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
-		success := t.verifying.verify(logger, target)
-		if success && t.isFull {
+	if t.isFull {
+		nverified = t.runFull(logger)
+		if nverified == t.processed-1 && nverified == t.runVerifying(logger) {
 			t.switchModes(logger)
 		}
-		if !success && (t.isFull || !withinDistance(t.Hdist, target, t.last)) {
-			if !t.isFull {
-				t.switchModes(logger)
-				for counted := maxLayer(t.full.counted.Add(1), t.evicted.Add(1)); !counted.After(t.processed); counted = counted.Add(1) {
-					for _, ballot := range t.ballots[counted] {
-						t.full.countBallot(logger, ballot)
-					}
-					t.full.countDelayed(logger, counted)
-					t.full.counted = counted
-				}
-			}
-			success = t.full.verify(logger, target)
+	} else {
+		nverified = t.runVerifying(logger)
+		// count all votes if next layer after verified is outside hdist
+		if !withinDistance(t.Hdist, nverified+1, t.last) {
+			fmt.Println(nverified, t.last)
+			nverified = t.runFull(logger)
 		}
+	}
 
+	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
 		layer := t.layer(target)
-		if !success {
+		if nverified < target {
 			// notify mesh in two additional cases:
 			// - if layer was verified, and became undecided
 			// - if layer is undecided outside hdist distance
@@ -461,6 +458,38 @@ func (t *turtle) verifyLayers() {
 		t.changedOpinion.min = 0
 		t.changedOpinion.max = 0
 	}
+}
+
+func (t *turtle) runVerifying(logger log.Log) types.LayerID {
+	rst := t.evicted
+	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
+		if !t.verifying.verify(logger, target) {
+			return rst
+		}
+		rst = target
+	}
+	return rst
+}
+
+func (t *turtle) runFull(logger log.Log) types.LayerID {
+	if !t.isFull {
+		t.switchModes(logger)
+		for counted := maxLayer(t.full.counted.Add(1), t.evicted.Add(1)); !counted.After(t.processed); counted = counted.Add(1) {
+			for _, ballot := range t.ballots[counted] {
+				t.full.countBallot(logger, ballot)
+			}
+			t.full.countDelayed(logger, counted)
+			t.full.counted = counted
+		}
+	}
+	rst := t.evicted
+	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
+		if !t.full.verify(logger, target) {
+			return rst
+		}
+		rst = target
+	}
+	return rst
 }
 
 func (t *turtle) computeEpochHeight(epoch types.EpochID) {
