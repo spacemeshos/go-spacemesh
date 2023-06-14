@@ -15,8 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
-const MaxHashesInReq = 100
-
 var (
 	ErrPeerMeshChangedMidSession = errors.New("peer mesh changed mid session")
 	ErrNodeMeshChangedMidSession = errors.New("node mesh changed mid session")
@@ -170,7 +168,7 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 		}
 
 		dist := bnd.to.layer.Difference(bnd.from.layer)
-		delta := dist/uint32(MaxHashesInReq) + 1
+		delta := dist/uint32(fetch.MaxHashesInReq) + 1
 		ownHashes, err := layers.GetAggHashes(ff.db, bnd.from.layer, bnd.to.layer, delta)
 		if err != nil {
 			lg.With().Error("failed own hashes lookup", log.Err(err))
@@ -284,7 +282,7 @@ func (ff *ForkFinder) sendRequest(ctx context.Context, logger log.Log, peer p2p.
 	}
 
 	dist := bnd.to.layer.Difference(bnd.from.layer)
-	delta := dist/uint32(MaxHashesInReq) + 1
+	delta := dist/uint32(fetch.MaxHashesInReq) + 1
 	req := &fetch.MeshHashRequest{
 		From: bnd.from.layer,
 		To:   bnd.to.layer,

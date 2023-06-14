@@ -43,10 +43,9 @@ type ResponseBatch struct {
 // the node.
 //
 // From and To define the beginning and end layer to request. By defines the
-// increment between layers to limit the number of hashes in the response, e.g.
-// 2 means only every other hash is requested. On the requester side the number
-// of hashes in the response is limited by `MaxHashesInReq` in `syncer.Config`,
-// on the responder side it is limited by `fetch.MaxHashesInReq`.
+// increment between layers to limit the number of hashes in the response,
+// e.g. 2 means only every other hash is requested. The number of hashes in
+// the response is limited by `fetch.MaxHashesInReq`.
 type MeshHashRequest struct {
 	From, To types.LayerID
 	Step     uint32
