@@ -292,9 +292,10 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 	t.logger.With().Debug("on layer", last)
 	defer t.evict(ctx)
 	if last.After(t.last) {
+		update := t.last.GetEpoch() != last.GetEpoch()
 		t.last = last
 		lastLayer.Set(float64(t.last))
-		if t.last.FirstInEpoch() {
+		if update {
 			epoch := t.epoch(last.GetEpoch())
 			t.localThreshold = epoch.weight.
 				Div(fixed.New(localThresholdFraction)).
@@ -400,7 +401,6 @@ func (t *turtle) verifyLayers() {
 		nverified = t.runVerifying(logger)
 		// count all votes if next layer after verified is outside hdist
 		if !withinDistance(t.Hdist, nverified+1, t.last) {
-			fmt.Println(nverified, t.last)
 			nverified = t.runFull(logger)
 		}
 	}

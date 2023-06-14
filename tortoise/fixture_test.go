@@ -332,6 +332,7 @@ type session struct {
 	tb        testing.TB
 	epochSize int
 	layerSize int
+	hdist     int
 	config    *Config
 
 	smeshers map[int]*smesher
@@ -538,6 +539,30 @@ func (s *session) updates(tb testing.TB, expect *results) {
 	s.register(&updateActions{tb, expect.results, deps})
 }
 
+type modeAction struct {
+	tb      testing.TB
+	actions []action
+	expect  Mode
+}
+
+func (m *modeAction) deps() []action {
+	return m.actions
+}
+
+func (m *modeAction) String() string {
+	return fmt.Sprintf("expect mode %s", m.expect)
+}
+
+func (m *modeAction) execute(t *Tortoise) {
+	require.Equal(m.tb, m.expect, t.Mode())
+}
+
+func (s *session) mode(tb testing.TB, m Mode) {
+	deps := make([]action, len(s.actions))
+	copy(deps, s.actions)
+	s.register(&modeAction{tb, deps, m})
+}
+
 func (s *session) runInorder() {
 	s.runActions(s.actions)
 }
@@ -612,6 +637,7 @@ func (s *session) withEpochSize(val uint32) *session {
 
 func (s *session) withHdist(val uint32) *session {
 	s.ensureConfig()
+	s.hdist = int(val)
 	s.config.Hdist = val
 	return s
 }

@@ -444,3 +444,27 @@ func (t *Tortoise) results(from, to types.LayerID) ([]result.Layer, error) {
 	}
 	return rst, nil
 }
+
+type Mode int
+
+func (m Mode) String() string {
+	if m == 0 {
+		return "verifying"
+	}
+	return "full"
+}
+
+const (
+	Verifying = 0
+	Full      = 1
+)
+
+// Mode returns 0 for verifyying
+func (t *Tortoise) Mode() Mode {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.trtl.isFull {
+		return Full
+	}
+	return Verifying
+}
