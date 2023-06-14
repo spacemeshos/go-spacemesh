@@ -587,7 +587,7 @@ func TestValidator_Validate(t *testing.T) {
 	opts := []verifying.OptionFunc{verifying.WithLabelScryptParams(postProvider.opts.Scrypt)}
 
 	logger := logtest.New(t).WithName("validator")
-	verifier, err := NewPostVerifier(postProvider.cfg, logger, nil)
+	verifier, err := NewPostVerifier(postProvider.cfg, logger)
 	r.NoError(err)
 	defer verifier.Close()
 	v := NewValidator(poetDb, postProvider.cfg, logger, verifier)

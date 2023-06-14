@@ -49,8 +49,8 @@ func (v *postVerifier) Close() error {
 }
 
 // NewPostVerifier creates a new post verifier.
-func NewPostVerifier(cfg PostConfig, logger log.Log, powFlags *config.PowFlags) (PostVerifier, error) {
-	verifier, err := verifying.NewProofVerifier(powFlags)
+func NewPostVerifier(cfg PostConfig, logger log.Log, opts ...verifying.OptionFunc) (PostVerifier, error) {
+	verifier, err := verifying.NewProofVerifier(opts...)
 	if err != nil {
 		return nil, err
 	}

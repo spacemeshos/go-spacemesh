@@ -195,7 +195,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.NoError(err)
 
 	// Verify the proof
-	verifier, err := verifying.NewProofVerifier(nil)
+	verifier, err := verifying.NewProofVerifier()
 	req.NoError(err)
 	defer verifier.Close()
 	err = verifier.Verify(&shared.Proof{

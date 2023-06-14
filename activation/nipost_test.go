@@ -122,7 +122,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	postCfg := DefaultPostConfig()
 	logger := logtest.New(t).WithName("validator")
 	nipost := buildNIPost(t, postProvider, postCfg, challenge, poetDb)
-	verifier, err := NewPostVerifier(postCfg, logger, nil)
+	verifier, err := NewPostVerifier(postCfg, logger)
 	r.NoError(err)
 	defer verifier.Close()
 	v := NewValidator(
@@ -226,7 +226,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	r.NotNil(nipost)
 
 	logger := logtest.New(t).WithName("validator")
-	verifier, err := NewPostVerifier(postProvider.cfg, logger, nil)
+	verifier, err := NewPostVerifier(postProvider.cfg, logger)
 	r.NoError(err)
 	defer verifier.Close()
 	v := NewValidator(poetDb, postProvider.cfg, logger, verifier)

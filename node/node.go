@@ -23,6 +23,7 @@ import (
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	poetconfig "github.com/spacemeshos/poet/config"
 	"github.com/spacemeshos/poet/server"
+	"github.com/spacemeshos/post/verifying"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -551,7 +552,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
 	postVerifiers := make([]activation.PostVerifier, 0, app.Config.SMESHING.VerifyingOpts.Workers)
 	lg.Debug("creating post verifier")
-	verifier, err := activation.NewPostVerifier(app.Config.POST, nipostValidatorLogger, &app.Config.SMESHING.VerifyingOpts.Flags)
+	verifier, err := activation.NewPostVerifier(app.Config.POST, nipostValidatorLogger, verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags))
 	lg.With().Debug("created post verifier", log.Err(err))
 	if err != nil {
 		return err

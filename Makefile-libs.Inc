@@ -49,7 +49,7 @@ else
 	endif
 endif
 
-POSTRS_SETUP_REV = 0.2.0-rc2
+POSTRS_SETUP_REV = 0.2.0-rc4
 POSTRS_SETUP_ZIP = libpost-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SETUP_URL_ZIP ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SETUP_ZIP)
 POSTRS_PROFILER_ZIP = profiler-$(platform)-v$(POSTRS_SETUP_REV).zip
