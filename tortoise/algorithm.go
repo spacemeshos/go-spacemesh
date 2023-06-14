@@ -459,7 +459,7 @@ const (
 	Full      = 1
 )
 
-// Mode returns 0 for verifyying
+// Mode returns 0 for verifying.
 func (t *Tortoise) Mode() Mode {
 	t.mu.Lock()
 	defer t.mu.Unlock()
