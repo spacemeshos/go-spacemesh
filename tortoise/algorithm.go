@@ -29,12 +29,12 @@ type Config struct {
 // DefaultConfig for Tortoise.
 func DefaultConfig() Config {
 	return Config{
-		LayerSize:                30,
+		LayerSize:                50,
 		Hdist:                    10,
 		Zdist:                    8,
 		WindowSize:               1000,
 		BadBeaconVoteDelayLayers: 0,
-		MaxExceptions:            30 * 100, // 100 layers of average size
+		MaxExceptions:            50 * 100, // 100 layers of average size
 	}
 }
 
@@ -315,8 +315,8 @@ func (t *Tortoise) decodeBallot(ballot *types.BallotTortoiseData) (*DecodedBallo
 	if info.opinion() != ballot.Opinion.Hash {
 		errorsCounter.Inc()
 		return nil, fmt.Errorf(
-			"computed opinion hash %s doesn't match signed %s for ballot %s",
-			info.opinion().ShortString(), ballot.Opinion.Hash.ShortString(), ballot.ID,
+			"computed opinion hash %s doesn't match signed %s for ballot %d / %s",
+			info.opinion().ShortString(), ballot.Opinion.Hash.ShortString(), ballot.Layer, ballot.ID,
 		)
 	}
 	return &DecodedBallot{BallotTortoiseData: ballot, info: info, minHint: min}, nil
