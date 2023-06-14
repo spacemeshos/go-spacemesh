@@ -850,7 +850,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(proposalListener.HandleSyncedProposal, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleBlockTransaction, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleProposalTransaction, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(malfeasanceHandler.HandleMalfeasanceProof, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(malfeasanceHandler.HandleSyncedMalfeasanceProof, app.host, lg)),
 	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
