@@ -42,13 +42,13 @@ package hare3
 import (
 	"sync"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"golang.org/x/exp/slices"
 )
 
 type (
 	MsgType            int
 	GradedGossipResult uint8
-	Hash20             [20]byte
 )
 
 const (
@@ -76,7 +76,7 @@ type GradedGossiper interface {
 	// ReceiveMsg accepts an id idenifying the originator of the message, a
 	// hash identifying the value in the message the message round and a grade.
 	// It returns a value indicating what action to take with the message.
-	ReceiveMsg(id Hash20, valueHash Hash20, round AbsRound, grade uint8) GradedGossipResult
+	ReceiveMsg(id types.Hash20, valueHash types.Hash20, round AbsRound, grade uint8) GradedGossipResult
 }
 
 // TrhesholdGradedGossiper acts as a specialized value store, it ingests
@@ -87,17 +87,17 @@ type TrhesholdGradedGossiper interface {
 	// RetrieveThresholdMessages. The inputs are the id of the message
 	// originator, the values contained in the message, the message round and a
 	// grade.
-	ReceiveMsg(id Hash20, values []Hash20, msgRound AbsRound, grade uint8)
+	ReceiveMsg(id types.Hash20, values []types.Hash20, msgRound AbsRound, grade uint8)
 
 	// This function outputs the values that were part of messages sent at
 	// msgRound and reached the threshold with grade at least minGrade by round
 	// "msgRound + d + 1 - minGrade".
-	RetrieveThresholdMessages(msgRound AbsRound, minGrade uint8) (values []Hash20)
+	RetrieveThresholdMessages(msgRound AbsRound, minGrade uint8) (values []types.Hash20)
 }
 
 type GradecastedSet struct {
-	vk     Hash20
-	values []Hash20
+	vk     types.Hash20
+	values []types.Hash20
 	grade  uint8
 }
 
@@ -111,7 +111,7 @@ type Gradecaster interface {
 	// RetrieveGradecastedMessages. The inputs are the id of the message
 	// originator, the values contained in the message, the message round and a
 	// grade.
-	ReceiveMsg(id Hash20, values []Hash20, msgRound AbsRound, grade uint8)
+	ReceiveMsg(id types.Hash20, values []types.Hash20, msgRound AbsRound, grade uint8)
 
 	// Since gradecast always outputs at msgRound+3 it is asumed that callers
 	// Only call this function at msgRound+3. Returns all sets of values output
@@ -120,7 +120,7 @@ type Gradecaster interface {
 }
 
 type LeaderChecker interface {
-	IsLeader(vk Hash20, round AbsRound) bool
+	IsLeader(vk types.Hash20, round AbsRound) bool
 }
 
 // gradeKey3 returns a grade from 0-3.
@@ -156,7 +156,7 @@ func NewHandler(gg GradedGossiper, tgg TrhesholdGradedGossiper, gc Gradecaster, 
 
 // HandleMsg handles an incoming message, it returns a boolean indicating
 // whether the message should be regossiped to peers.
-func (h *Handler) HandleMsg(vk []byte, values []Hash20, round int8) bool {
+func (h *Handler) HandleMsg(vk []byte, values []types.Hash20, round int8) (shouldRelay bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	r := AbsRound(round)
@@ -170,7 +170,7 @@ func (h *Handler) HandleMsg(vk []byte, values []Hash20, round int8) bool {
 	id := hashBytes(vk)
 	valuesHash := toHash(values)
 
-	var gradedGossipValues []Hash20
+	var gradedGossipValues []types.Hash20
 	// Nil values signifies a message from a known malicious actor, in this
 	// case we skip passing the message to graded gossip, since we effectively
 	// have the output, which is equivocation, we still need to forward the
@@ -210,13 +210,13 @@ type Protocol struct {
 	// Each index "i" holds an indication of whether iteration "i" is hard locked
 	hardLocked []bool
 	// Each index "i" holds the locked value for iteration "i"
-	Li []*Hash20
+	Li []*types.Hash20
 	// Each index "i" holds values considered valid up to round "i+1"
-	Vi [][]Hash20
+	Vi [][]types.Hash20
 	// Each index "i" holds a map of sets of values from valid proposals
 	// indexed by their hash received in iteration "i"
-	Ti  []map[Hash20][]Hash20
-	Si  []Hash20
+	Ti  []map[types.Hash20][]types.Hash20
+	Si  []types.Hash20
 	tgg TrhesholdGradedGossiper
 	gc  Gradecaster
 	lc  LeaderChecker
@@ -239,14 +239,14 @@ func (p *Protocol) Round() AbsRound {
 	return p.round
 }
 
-func toHash(values []Hash20) Hash20 {
-	return Hash20{}
+func toHash(values []types.Hash20) types.Hash20 {
+	return types.Hash20{}
 }
 
 // Given a slice of candidate set hashes and a slice of sets of valid set
 // hashes, one set per iteration, returns the first candidate that appears in
 // the valid hashes along with it's set of any iteration before j.
-func matchInPreviousIterations(candidates []Hash20, validSets []map[Hash20][]Hash20, j int8) (*Hash20, []Hash20) {
+func matchInPreviousIterations(candidates []types.Hash20, validSets []map[types.Hash20][]types.Hash20, j int8) (*types.Hash20, []types.Hash20) {
 	for i := 0; i < int(j); i++ {
 		validIteration := validSets[i]
 		for _, v := range candidates {
@@ -262,7 +262,7 @@ func matchInPreviousIterations(candidates []Hash20, validSets []map[Hash20][]Has
 // Given a slice of candidate set hashes and a slice of sets of valid set
 // hashes, one per iteration, returns the first candidate that appears in the
 // valid hashes, along with it's set of iteration j.
-func matchInIteration(candidates []Hash20, validSets []map[Hash20][]Hash20, j int8) (*Hash20, []Hash20) {
+func matchInIteration(candidates []types.Hash20, validSets []map[types.Hash20][]types.Hash20, j int8) (*types.Hash20, []types.Hash20) {
 	validJ := validSets[j]
 	for _, v := range candidates {
 		set, ok := validJ[v]
@@ -273,13 +273,13 @@ func matchInIteration(candidates []Hash20, validSets []map[Hash20][]Hash20, j in
 	return nil, nil
 }
 
-func isSubset(subset, superset []Hash20) bool {
+func isSubset(subset, superset []types.Hash20) bool {
 	return true
 }
 
 // NextRound processes the next round of the protocol, active indicates whether
 // this participant is active for this round.
-func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []Hash20) {
+func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types.Hash20) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	defer func() { p.round++ }()
@@ -288,7 +288,7 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []Hash2
 	}
 	// We are starting a new iteration build objects
 	if p.round.Round() == 0 {
-		p.Ti = append(p.Ti, make(map[Hash20][]Hash20))
+		p.Ti = append(p.Ti, make(map[types.Hash20][]types.Hash20))
 		p.Vi = append(p.Vi, nil)
 		p.hardLocked = append(p.hardLocked, false)
 		p.Li = append(p.Li, nil)
@@ -330,7 +330,7 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []Hash2
 		if !active {
 			return nil, nil
 		}
-		var set []Hash20
+		var set []types.Hash20
 		if j > 0 {
 			// Check if values received from thresh gossip, we can only do this
 			// safely if we know j > 0, so this can't be done before that
@@ -367,7 +367,7 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []Hash2
 		if p.hardLocked[j] {
 			mm = &OutputMessage{
 				round:  NewAbsRound(j, 5),
-				values: []Hash20{*p.Li[j]},
+				values: []types.Hash20{*p.Li[j]},
 			}
 		} else {
 			for _, c := range candidates {
@@ -418,7 +418,7 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []Hash2
 				}
 				mm = &OutputMessage{
 					round:  NewAbsRound(j, 5),
-					values: []Hash20{candidateHash},
+					values: []types.Hash20{candidateHash},
 				}
 				break
 			}
@@ -431,7 +431,7 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []Hash2
 		if resultHash != nil {
 			return &OutputMessage{
 				round:  NewAbsRound(j, 6),
-				values: []Hash20{*resultHash},
+				values: []types.Hash20{*resultHash},
 			}, result
 		}
 		// Case 2
@@ -440,7 +440,7 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []Hash2
 			setHash, _ := matchInIteration(values, p.Ti, j)
 			return &OutputMessage{
 				round:  NewAbsRound(j, 6),
-				values: []Hash20{*setHash},
+				values: []types.Hash20{*setHash},
 			}, nil
 
 		}
@@ -449,13 +449,13 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []Hash2
 	return nil, nil
 }
 
-func hashBytes(v []byte) Hash20 {
-	return Hash20{}
+func hashBytes(v []byte) types.Hash20 {
+	return types.Hash20{}
 }
 
 type OutputMessage struct {
 	round  AbsRound
-	values []Hash20
+	values []types.Hash20
 }
 
 // with int8 we have a max iterations of 17 before we overflow.

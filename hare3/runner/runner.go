@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 )
 
@@ -30,7 +31,7 @@ func NewProtocolRunner(
 }
 
 // Run waits for successive rounds from the clock and drives the protocol round by round.
-func (r *ProtocolRunner) Run(ctx context.Context) ([]hare3.Hash20, error) {
+func (r *ProtocolRunner) Run(ctx context.Context) ([]types.Hash20, error) {
 	// ok want to actually use a lock here
 	for {
 		if r.protocol.Round() == r.maxRound {
