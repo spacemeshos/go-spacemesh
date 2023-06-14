@@ -294,6 +294,12 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 	if last.After(t.last) {
 		t.last = last
 		lastLayer.Set(float64(t.last))
+		if t.last.FirstInEpoch() {
+			epoch := t.epoch(last.GetEpoch())
+			t.localThreshold = epoch.weight.
+				Div(fixed.New(localThresholdFraction)).
+				Div(fixed.New64(int64(types.GetLayersPerEpoch())))
+		}
 	}
 	if err := t.drainRetriable(); err != nil {
 		return
