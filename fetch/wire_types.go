@@ -1,6 +1,8 @@
 package fetch
 
 import (
+	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -8,6 +10,8 @@ import (
 )
 
 //go:generate scalegen
+
+const MaxHashesInReq = 100
 
 // RequestMessage is sent to the peer for hash query.
 type RequestMessage struct {
@@ -34,22 +38,53 @@ type ResponseBatch struct {
 	Responses []ResponseMessage `scale:"max=1000"` // depends on fetch config `BatchSize` which defaults to 20, more than 1000 seems unlikely
 }
 
+// MeshHashRequest is used by ForkFinder to request the hashes of layers from
+// a peer to find the layer at which a divergence occurred in the local mesh of
+// the node.
+//
+// From and To define the beginning and end layer to request. By defines the
+// increment between layers to limit the number of hashes in the response,
+// e.g. 2 means only every other hash is requested. The number of hashes in
+// the response is limited by `fetch.MaxHashesInReq`.
 type MeshHashRequest struct {
-	From, To     types.LayerID
-	Delta, Steps uint32
+	From, To types.LayerID
+	Step     uint32
+}
+
+func (r *MeshHashRequest) Count() uint {
+	diff := r.To.Difference(r.From)
+	count := uint(diff/r.Step + 1)
+	if diff%r.Step != 0 {
+		// last layer is not a multiple of By, so we need to add it
+		count++
+	}
+	return count
+}
+
+func (r *MeshHashRequest) Validate() error {
+	if r.Step == 0 {
+		return fmt.Errorf("%w: By must not be zero", errBadRequest)
+	}
+
+	if r.To.Before(r.From) {
+		return fmt.Errorf("%w: To before From", errBadRequest)
+	}
+
+	if r.Count() > MaxHashesInReq {
+		return fmt.Errorf("%w: number of layers requested exceeds maximum for one request", errBadRequest)
+	}
+	return nil
 }
 
 func (r *MeshHashRequest) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("from", r.From.Uint32())
 	encoder.AddUint32("to", r.To.Uint32())
-	encoder.AddUint32("delta", r.Delta)
-	encoder.AddUint32("steps", r.Steps)
+	encoder.AddUint32("by", r.Step)
 	return nil
 }
 
 type MeshHashes struct {
-	Layers []types.LayerID `scale:"max=1000"` // depends on syncer Config `MaxHashesInReq`, defaults to 100, 1000 is a safe upper bound
-	Hashes []types.Hash32  `scale:"max=1000"` // depends on syncer Config `MaxHashesInReq`, defaults to 100, 1000 is a safe upper bound
+	Hashes []types.Hash32 `scale:"max=1000"` // depends on syncer Config `MaxHashesInReq`, defaults to 100, 1000 is a safe upper bound
 }
 
 type MaliciousIDs struct {

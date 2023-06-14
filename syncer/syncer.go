@@ -25,7 +25,6 @@ type Config struct {
 	EpochEndFraction float64
 	HareDelayLayers  uint32
 	SyncCertDistance uint32
-	MaxHashesInReq   uint32
 	MaxStaleDuration time.Duration
 	Standalone       bool
 }
@@ -37,7 +36,6 @@ func DefaultConfig() Config {
 		EpochEndFraction: 0.8,
 		HareDelayLayers:  10,
 		SyncCertDistance: 10,
-		MaxHashesInReq:   5,
 		MaxStaleDuration: time.Second,
 	}
 }
@@ -173,7 +171,7 @@ func NewSyncer(
 		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, cache, s.logger)
 	}
 	if s.forkFinder == nil {
-		s.forkFinder = NewForkFinder(s.logger, cdb.Database, fetcher, s.cfg.MaxHashesInReq, s.cfg.MaxStaleDuration)
+		s.forkFinder = NewForkFinder(s.logger, cdb.Database, fetcher, s.cfg.MaxStaleDuration)
 	}
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
