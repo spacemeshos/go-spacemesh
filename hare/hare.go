@@ -192,7 +192,7 @@ func New(
 	if h.msh == nil {
 		h.msh = defaultMesh{CachedDB: cdb}
 	}
-	h.broker = newBroker(h.msh, edVerifier, ev, stateQ, syncState, h.mchMalfeasance, conf.LimitConcurrent, logger)
+	h.broker = newBroker(h.msh, edVerifier, ev, stateQ, syncState, publisher, conf.LimitConcurrent, logger)
 
 	return h
 }

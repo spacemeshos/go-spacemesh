@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -260,8 +261,6 @@ func TestBroker_Send(t *testing.T) {
 func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 	ctx := context.Background()
 	broker := buildBroker(t, t.Name())
-	mch := make(chan *types.MalfeasanceGossip, 1)
-	broker.mchOut = mch
 	mev := &mockEligibilityValidator{valid: 1}
 	broker.roleValidator = mev
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
@@ -305,10 +304,14 @@ func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 			Eligibility: msg.Eligibility,
 		},
 	}
+	broker.mockPublisher.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, data []byte) error {
+			var gotG types.MalfeasanceGossip
+			require.NoError(t, codec.Decode(data, &gotG))
+			require.Equal(t, *gossip, gotG)
+			return nil
+		})
 	require.Error(t, broker.HandleMessage(ctx, "", data))
-	require.Len(t, mch, 1)
-	gotG := <-mch
-	require.EqualValues(t, gossip, gotG)
 	require.Len(t, inbox, 1)
 	got = <-inbox
 	em, ok := got.(*types.HareEligibilityGossip)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -33,7 +34,7 @@ type Broker struct {
 	roleValidator validator                // provides eligibility validation
 	stateQuerier  stateQuerier             // provides activeness check
 	nodeSyncState system.SyncStateProvider // provider function to check if the node is currently synced
-	mchOut        chan<- *types.MalfeasanceGossip
+	publisher     pubsub.Publisher
 	outbox        map[types.LayerID]chan any
 	pending       map[types.LayerID][]any // the buffer of pending early messages for the next layer
 	latestLayer   types.LayerID           // the latest layer to attempt register (successfully or unsuccessfully)
@@ -51,7 +52,7 @@ func newBroker(
 	roleValidator validator,
 	stateQuerier stateQuerier,
 	syncState system.SyncStateProvider,
-	mch chan<- *types.MalfeasanceGossip,
+	publisher pubsub.Publisher,
 	limit int,
 	log log.Log,
 ) *Broker {
@@ -62,7 +63,7 @@ func newBroker(
 		roleValidator: roleValidator,
 		stateQuerier:  stateQuerier,
 		nodeSyncState: syncState,
-		mchOut:        mch,
+		publisher:     publisher,
 		outbox:        make(map[types.LayerID]chan any),
 		pending:       make(map[types.LayerID][]any),
 		latestLayer:   types.GetEffectiveGenesis(),
@@ -242,13 +243,20 @@ func (b *Broker) handleMaliciousHareMessage(
 			Eligibility: msg.Eligibility,
 		},
 	}
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-b.ctx.Done():
-		return errClosed
-	case b.mchOut <- gossip:
-		// causes the node to gossip the malfeasance and eligibility proof
+	gossipBytes, err := codec.Encode(gossip)
+	if err != nil {
+		b.Log.With().Fatal("failed to encode MalfeasanceGossip (broker)",
+			log.Context(ctx),
+			gossip.Eligibility.NodeID,
+			log.Err(err),
+		)
+	}
+	if err = b.publisher.Publish(ctx, pubsub.MalfeasanceProof, gossipBytes); err != nil {
+		b.Log.With().Error("failed to gossip MalfeasanceProof (broker)",
+			log.Context(ctx),
+			gossip.Eligibility.NodeID,
+			log.Err(err),
+		)
 	}
 
 	toRelay := gossip.Eligibility
