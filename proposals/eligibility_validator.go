@@ -27,14 +27,15 @@ var (
 // Validator validates the eligibility of a Ballot.
 // the validation focuses on eligibility only and assumes the Ballot to be valid otherwise.
 type Validator struct {
-	avgLayerSize   uint32
-	layersPerEpoch uint32
-	cdb            *datastore.CachedDB
-	mesh           meshProvider
-	beacons        system.BeaconCollector
-	logger         log.Log
-	vrfVerifier    vrfVerifier
-	nonceFetcher   nonceFetcher
+	minActiveSetWeight uint64
+	avgLayerSize       uint32
+	layersPerEpoch     uint32
+	cdb                *datastore.CachedDB
+	mesh               meshProvider
+	beacons            system.BeaconCollector
+	logger             log.Log
+	vrfVerifier        vrfVerifier
+	nonceFetcher       nonceFetcher
 }
 
 type defaultFetcher struct {
@@ -60,16 +61,17 @@ func WithNonceFetcher(nf nonceFetcher) ValidatorOpt {
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
+	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
 ) *Validator {
 	v := &Validator{
-		avgLayerSize:   avgLayerSize,
-		layersPerEpoch: layersPerEpoch,
-		cdb:            cdb,
-		mesh:           m,
-		beacons:        bc,
-		logger:         lg,
-		vrfVerifier:    vrfVerifier,
+		minActiveSetWeight: minActiveSetWeight,
+		avgLayerSize:       avgLayerSize,
+		layersPerEpoch:     layersPerEpoch,
+		cdb:                cdb,
+		mesh:               m,
+		beacons:            bc,
+		logger:             lg,
+		vrfVerifier:        vrfVerifier,
 	}
 	for _, opt := range opts {
 		opt(v)
@@ -141,7 +143,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 
 	atxWeight = owned.GetWeight()
 
-	numEligibleSlots, err := GetNumEligibleSlots(atxWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
+	numEligibleSlots, err := GetNumEligibleSlots(atxWeight, v.minActiveSetWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
 	if err != nil {
 		return false, err
 	}

@@ -82,7 +82,7 @@ func createTestValidator(tb testing.TB) *testValidator {
 	lg := logtest.New(tb)
 
 	return &testValidator{
-		Validator: NewEligibilityValidator(layerAvgSize, layersPerEpoch, datastore.NewCachedDB(sql.InMemory(), lg), ms.mbc, ms.mm, lg, ms.mvrf,
+		Validator: NewEligibilityValidator(layerAvgSize, layersPerEpoch, 0, datastore.NewCachedDB(sql.InMemory(), lg), ms.mbc, ms.mm, lg, ms.mvrf,
 			WithNonceFetcher(ms.mNonce),
 		),
 		mockSet: ms,
@@ -91,7 +91,7 @@ func createTestValidator(tb testing.TB) *testValidator {
 
 func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXIDList, beacon types.Beacon) []*types.Ballot {
 	totalWeight := uint64(len(activeSet)-1)*uint64(defaultATXUnit) + uint64(testedATXUnit)
-	slots, err := GetNumEligibleSlots(uint64(testedATXUnit), totalWeight, layerAvgSize, layersPerEpoch)
+	slots, err := GetNumEligibleSlots(uint64(testedATXUnit), 0, totalWeight, layerAvgSize, layersPerEpoch)
 	require.NoError(tb, err)
 	require.Equal(tb, eligibleSlots, slots)
 	eligibilityProofs := map[types.LayerID][]types.VotingEligibility{}
@@ -499,5 +499,43 @@ func TestCheckEligibility_AtxNotIncluded(t *testing.T) {
 
 	eligibile, err := tv.CheckEligibility(context.Background(), ballot)
 	require.ErrorContains(t, err, "is not included into the active set")
+	require.False(t, eligibile)
+}
+
+func TestCheckEligibility_MinActiveSetWeight(t *testing.T) {
+	tv := createTestValidator(t)
+
+	atx := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NumUnits: 2,
+		},
+	}
+	atx.PositioningATX = types.ATXID{2}
+	atx.SetID(types.ATXID{1})
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Time{}.Add(1))
+	vatx, err := atx.Verify(0, 100)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(tv.cdb, vatx))
+
+	tv.minActiveSetWeight = 2 * vatx.GetWeight()
+
+	ballot := &types.Ballot{}
+	ballot.EligibilityProofs = []types.VotingEligibility{{}}
+	ballot.SetID(types.BallotID{1})
+	ballot.AtxID = vatx.ID()
+	ballot.Layer = vatx.TargetEpoch().FirstLayer()
+	activeSet := types.ATXIDList{vatx.ID()}
+	computed, err := GetNumEligibleSlots(vatx.GetWeight(), 0, vatx.GetWeight(), tv.avgLayerSize, tv.layersPerEpoch)
+	require.NoError(t, err)
+	ballot.EpochData = &types.EpochData{
+		ActiveSetHash:    activeSet.Hash(),
+		Beacon:           types.Beacon{1},
+		EligibilityCount: computed,
+	}
+	ballot.ActiveSet = activeSet
+
+	eligibile, err := tv.CheckEligibility(context.Background(), ballot)
+	require.ErrorContains(t, err, "ballot has incorrect eligibility count: expected 15, got: 30")
 	require.False(t, eligibile)
 }

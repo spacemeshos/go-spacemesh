@@ -22,6 +22,10 @@ type Config struct {
 	BadBeaconVoteDelayLayers uint32 `mapstructure:"tortoise-delay-layers"`
 	// EnableTracer will write tortoise traces to the stderr.
 	EnableTracer bool `mapstructure:"tortoise-enable-tracer"`
+	// MinimalActiveSetWeight denotes weight that will replace weight
+	// recorded in the first ballot, if that weight is less than minimal
+	// for purposes of eligibility computation.
+	MinimalActiveSetWeight uint64 `mapstructure:"tortoise-activeset-weight"`
 
 	LayerSize uint32
 }

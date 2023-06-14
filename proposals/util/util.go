@@ -29,12 +29,19 @@ func CalcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint32, vrfSig 
 	return epochNumber.FirstLayer().Add(uint32(eligibleLayerOffset))
 }
 
+func maxWeight(a, b uint64) uint64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 // GetNumEligibleSlots calculates the number of eligible slots for a smesher in an epoch.
-func GetNumEligibleSlots(weight, totalWeight uint64, committeeSize uint32, layersPerEpoch uint32) (uint32, error) {
+func GetNumEligibleSlots(weight, minWeight, totalWeight uint64, committeeSize uint32, layersPerEpoch uint32) (uint32, error) {
 	if totalWeight == 0 {
 		return 0, ErrZeroTotalWeight
 	}
-	numberOfEligibleBlocks := weight * uint64(committeeSize) * uint64(layersPerEpoch) / totalWeight // TODO: ensure no overflow
+	numberOfEligibleBlocks := weight * uint64(committeeSize) * uint64(layersPerEpoch) / maxWeight(minWeight, totalWeight) // TODO: ensure no overflow
 	if numberOfEligibleBlocks == 0 {
 		numberOfEligibleBlocks = 1
 	}
@@ -49,10 +56,10 @@ func ComputeWeightPerEligibility(
 	layersPerEpoch uint32,
 ) (*big.Rat, error) {
 	var (
-		refBallot        = ballot
-		hdr              *types.ActivationTxHeader
-		err              error
-		total, atxWeight uint64
+		refBallot = ballot
+		hdr       *types.ActivationTxHeader
+		err       error
+		atxWeight uint64
 	)
 	if ballot.EpochData == nil {
 		if ballot.RefBallot == types.EmptyBallotID {
@@ -71,22 +78,16 @@ func ComputeWeightPerEligibility(
 		if err != nil {
 			return nil, fmt.Errorf("%w: missing atx %s in active set of %s (for %s)", err, atxID, refBallot.ID(), ballot.ID())
 		}
-		weight := hdr.GetWeight()
-		total += weight
 		if atxID == ballot.AtxID {
-			atxWeight = weight
+			atxWeight = hdr.GetWeight()
+			break
 		}
 	}
 	if atxWeight == 0 {
 		return nil, fmt.Errorf("atx id %v is not found in the active set of the reference ballot %v with atxid %v", ballot.AtxID, refBallot.ID(), refBallot.AtxID)
 	}
-
-	expNumSlots, err := GetNumEligibleSlots(atxWeight, total, layerSize, layersPerEpoch)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute num eligibility for atx %s: %w", ballot.AtxID, err)
-	}
 	return new(big.Rat).SetFrac(
 		new(big.Int).SetUint64(atxWeight),
-		new(big.Int).SetUint64(uint64(expNumSlots)),
+		new(big.Int).SetUint64(uint64(refBallot.EpochData.EligibilityCount)),
 	), nil
 }

@@ -665,11 +665,12 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	proposalListener := proposals.NewHandler(app.cachedDB, app.edVerifier, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, app.clock,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
-			LayerSize:      layerSize,
-			LayersPerEpoch: layersPerEpoch,
-			GoldenATXID:    goldenATXID,
-			MaxExceptions:  trtlCfg.MaxExceptions,
-			Hdist:          trtlCfg.Hdist,
+			LayerSize:              layerSize,
+			LayersPerEpoch:         layersPerEpoch,
+			GoldenATXID:            goldenATXID,
+			MaxExceptions:          trtlCfg.MaxExceptions,
+			Hdist:                  trtlCfg.Hdist,
+			MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
 		}),
 	)
 
@@ -775,6 +776,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		miner.WithNodeID(app.edSgn.NodeID()),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
+		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
