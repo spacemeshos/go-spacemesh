@@ -681,7 +681,7 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 			req := &MeshHashRequest{
 				From: types.LayerID(tc.params[0]),
 				To:   types.LayerID(tc.params[1]),
-				By:   tc.params[2],
+				Step: tc.params[2],
 			}
 			var expected MeshHashes
 			if tc.err == nil {

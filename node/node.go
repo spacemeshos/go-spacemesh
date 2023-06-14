@@ -718,7 +718,6 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		EpochEndFraction: 0.8,
 		HareDelayLayers:  app.Config.Tortoise.Zdist,
 		SyncCertDistance: app.Config.Tortoise.Hdist,
-		MaxHashesInReq:   100,
 		MaxStaleDuration: time.Hour,
 		Standalone:       app.Config.Standalone,
 	}

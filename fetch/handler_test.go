@@ -213,7 +213,7 @@ func TestHandleMeshHashReq(t *testing.T) {
 			req := &MeshHashRequest{
 				From: types.LayerID(tc.params[0]),
 				To:   types.LayerID(tc.params[1]),
-				By:   tc.params[2],
+				Step: tc.params[2],
 			}
 			if !tc.hashMissing {
 				for lid := req.From; !lid.After(req.To); lid = lid.Add(1) {
@@ -228,7 +228,7 @@ func TestHandleMeshHashReq(t *testing.T) {
 				require.NoError(t, err)
 				got, err := codec.DecodeSlice[types.Hash32](resp)
 				require.NoError(t, err)
-				require.EqualValues(t, len(got), req.To.Difference(req.From)/req.By+2)
+				require.EqualValues(t, len(got), req.To.Difference(req.From)/req.Step+2)
 			} else {
 				require.ErrorIs(t, err, tc.err)
 			}

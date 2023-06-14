@@ -38,7 +38,7 @@ type ResponseBatch struct {
 	Responses []ResponseMessage `scale:"max=1000"` // depends on fetch config `BatchSize` which defaults to 20, more than 1000 seems unlikely
 }
 
-// MeshHashRequest is used ForkFinder to request the hashes of layers from
+// MeshHashRequest is used by ForkFinder to request the hashes of layers from
 // a peer to find the layer at which a divergence occurred in the local mesh of
 // the node.
 //
@@ -49,13 +49,13 @@ type ResponseBatch struct {
 // on the responder side it is limited by `fetch.MaxHashesInReq`.
 type MeshHashRequest struct {
 	From, To types.LayerID
-	By       uint32
+	Step     uint32
 }
 
 func (r *MeshHashRequest) Count() uint {
 	diff := r.To.Difference(r.From)
-	count := uint(diff/r.By + 1)
-	if diff%r.By != 0 {
+	count := uint(diff/r.Step + 1)
+	if diff%r.Step != 0 {
 		// last layer is not a multiple of By, so we need to add it
 		count++
 	}
@@ -63,7 +63,7 @@ func (r *MeshHashRequest) Count() uint {
 }
 
 func (r *MeshHashRequest) Validate() error {
-	if r.By == 0 {
+	if r.Step == 0 {
 		return fmt.Errorf("%w: By must not be zero", errBadRequest)
 	}
 
@@ -71,13 +71,7 @@ func (r *MeshHashRequest) Validate() error {
 		return fmt.Errorf("%w: To before From", errBadRequest)
 	}
 
-	diff := r.To.Difference(r.From)
-	count := diff/r.By + 1
-	if diff%r.By != 0 {
-		// last layer is not a multiple of By, so we need to add it
-		count++
-	}
-	if count > MaxHashesInReq {
+	if r.Count() > MaxHashesInReq {
 		return fmt.Errorf("%w: number of layers requested exceeds maximum for one request", errBadRequest)
 	}
 	return nil
@@ -86,7 +80,7 @@ func (r *MeshHashRequest) Validate() error {
 func (r *MeshHashRequest) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("from", r.From.Uint32())
 	encoder.AddUint32("to", r.To.Uint32())
-	encoder.AddUint32("by", r.By)
+	encoder.AddUint32("by", r.Step)
 	return nil
 }
 

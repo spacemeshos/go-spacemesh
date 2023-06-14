@@ -215,7 +215,7 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 		h.logger.WithContext(ctx).With().Debug("failed to validate mesh hash request", log.Err(err))
 		return nil, err
 	}
-	hashes, err = layers.GetAggHashes(h.cdb, req.From, req.To, req.By)
+	hashes, err = layers.GetAggHashes(h.cdb, req.From, req.To, req.Step)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Warning("failed to get mesh hashes", log.Err(err))
 		return nil, err
@@ -227,7 +227,7 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 	h.logger.WithContext(ctx).With().Debug("returning response for mesh hashes",
 		log.Stringer("layer_from", req.From),
 		log.Stringer("layer_to", req.To),
-		log.Uint32("by", req.By),
+		log.Uint32("by", req.Step),
 		log.Int("count_hashes", len(hashes)),
 	)
 	return data, nil
