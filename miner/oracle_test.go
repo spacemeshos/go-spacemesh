@@ -221,7 +221,6 @@ func TestOracle_EligibilityCached(t *testing.T) {
 }
 
 func TestOracle_MinimalActiveSetWeight(t *testing.T) {
-
 	avgLayerSize := uint32(10)
 	layersPerEpoch := uint32(20)
 
