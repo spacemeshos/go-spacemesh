@@ -40,7 +40,7 @@ type postVerifier struct {
 }
 
 func (v *postVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
-	v.logger.WithContext(ctx).Debug("verifying post", log.FieldNamed("proof_node_id", types.BytesToNodeID(m.NodeId)))
+	v.logger.WithContext(ctx).With().Debug("verifying post", log.FieldNamed("proof_node_id", types.BytesToNodeID(m.NodeId)))
 	return v.inner.Verify(p, m, v.cfg, v.logger.Zap(), opts...)
 }
 
