@@ -52,7 +52,7 @@ func maxLayer(i, j types.LayerID) types.LayerID {
 	return j
 }
 
-func verifyLayer(logger *zap.Logger, blocks []*blockInfo, getDecision func(*blockInfo) sign) bool {
+func verifyLayer(logger *zap.Logger, blocks []*blockInfo, getDecision func(*blockInfo) sign) (bool, bool) {
 	// order blocks by height in ascending order
 	// if there is a support before any abstain
 	// and a previous height is lower than the current one
@@ -82,7 +82,7 @@ func verifyLayer(logger *zap.Logger, blocks []*blockInfo, getDecision func(*bloc
 			if supported != nil && block.height > supported.height {
 				decision = against
 			} else {
-				return false
+				return false, false
 			}
 		} else if decision == support {
 			supported = block
@@ -96,23 +96,21 @@ func verifyLayer(logger *zap.Logger, blocks []*blockInfo, getDecision func(*bloc
 		}
 		blocks[i].validity = decision
 	}
-	if changes {
-		logger.Info("candidate layer is verified",
-			zap.Array("blocks",
-				log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-					for i := range blocks {
-						encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
-							encoder.AddString("decision", blocks[i].validity.String())
-							encoder.AddString("id", blocks[i].id.String())
-							encoder.AddString("weight", blocks[i].margin.String())
-							encoder.AddUint64("height", blocks[i].height)
-							encoder.AddBool("data", blocks[i].data)
-							return nil
-						}))
-					}
-					return nil
-				})),
-		)
-	}
-	return true
+	return true, changes
+}
+
+func zapBlocks(blocks []*blockInfo) zap.Field {
+	return zap.Array("blocks", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for i := range blocks {
+			encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+				encoder.AddString("decision", blocks[i].validity.String())
+				encoder.AddString("id", blocks[i].id.String())
+				encoder.AddString("weight", blocks[i].margin.String())
+				encoder.AddUint64("height", blocks[i].height)
+				encoder.AddBool("data", blocks[i].data)
+				return nil
+			}))
+		}
+		return nil
+	}))
 }

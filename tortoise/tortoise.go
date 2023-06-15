@@ -129,8 +129,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 		return nil, err
 	}
 	var (
-		logger = t.logger.With(log.ZContext(ctx))
-		err    error
+		err error
 
 		current = t.last.Add(1)
 	)
@@ -153,7 +152,8 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 			opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
 			if err == nil {
 				metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last - base.layer))
-				logger.Info("encoded votes",
+				t.logger.Info("encoded votes",
+					log.ZContext(ctx),
 					zap.Stringer("base ballot", base.id),
 					zap.Stringer("base layer", base.layer),
 					zap.Stringer("voting layer", current),
@@ -161,7 +161,8 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 				)
 				return opinion, nil
 			}
-			logger.Debug("failed to encode votes using base ballot id",
+			t.logger.Debug("failed to encode votes using base ballot id",
+				log.ZContext(ctx),
 				zap.Stringer("ballot", base.id),
 				zap.Error(err),
 				zap.Stringer("current layer", current),
@@ -181,11 +182,6 @@ func (t *turtle) encodeVotes(
 	start types.LayerID,
 	current types.LayerID,
 ) (*types.Opinion, error) {
-	logger := t.logger.With(
-		log.ZContext(ctx),
-		zap.Stringer("base layer", base.layer),
-		zap.Stringer("current layer", current),
-	)
 	votes := types.Votes{
 		Base: base.id,
 	}
@@ -199,7 +195,12 @@ func (t *turtle) encodeVotes(
 			return nil, fmt.Errorf("ballot %s can't be used as a base ballot", base.id)
 		}
 		if lvote.vote != abstain && !layer.hareTerminated {
-			logger.Debug("voting abstain on the layer", zap.Uint32("lid", lvote.lid.Uint32()))
+			t.logger.Debug("voting abstain on the layer",
+				log.ZContext(ctx),
+				zap.Stringer("base layer", base.layer),
+				zap.Stringer("current layer", current),
+				zap.Uint32("lid", lvote.lid.Uint32()),
+			)
 			votes.Abstain = append(votes.Abstain, lvote.lid)
 			continue
 		}
@@ -215,14 +216,26 @@ func (t *turtle) encodeVotes(
 			}
 			switch vote {
 			case support:
-				logger.Debug("support before base ballot", zap.Inline(block))
+				t.logger.Debug("support before base ballot",
+					log.ZContext(ctx),
+					zap.Stringer("base layer", base.layer),
+					zap.Stringer("current layer", current),
+					zap.Inline(block))
 				votes.Support = append(votes.Support, block.header())
 			case against:
-				logger.Debug("explicit against overwrites base ballot opinion", zap.Inline(block))
+				t.logger.Debug("explicit against overwrites base ballot opinion",
+					log.ZContext(ctx),
+					zap.Stringer("base layer", base.layer),
+					zap.Stringer("current layer", current),
+					zap.Inline(block))
 				votes.Against = append(votes.Against, block.header())
 			case abstain:
-				logger.Error("layers that are not terminated should have been encoded earlier",
-					zap.Inline(block), zap.Stringer("reason", reason),
+				t.logger.Error("layers that are not terminated should have been encoded earlier",
+					log.ZContext(ctx),
+					zap.Stringer("base layer", base.layer),
+					zap.Stringer("current layer", current),
+					zap.Inline(block),
+					zap.Stringer("reason", reason),
 				)
 			}
 		}
@@ -231,7 +244,7 @@ func (t *turtle) encodeVotes(
 	for lid := base.layer; lid.Before(current); lid = lid.Add(1) {
 		layer := t.layer(lid)
 		if !layer.hareTerminated {
-			logger.Debug("voting abstain on the layer", zap.Uint32("lid", lid.Uint32()))
+			t.logger.Debug("voting abstain on the layer", zap.Uint32("lid", lid.Uint32()))
 			votes.Abstain = append(votes.Abstain, lid)
 			continue
 		}
@@ -242,13 +255,17 @@ func (t *turtle) encodeVotes(
 			}
 			switch vote {
 			case support:
-				logger.Debug("support after base ballot", zap.Inline(block), zap.Stringer("reason", reason))
+				t.logger.Debug("support after base ballot",
+					log.ZContext(ctx),
+					zap.Inline(block),
+					zap.Stringer("reason", reason))
 				votes.Support = append(votes.Support, block.header())
 			case against:
-				logger.Debug("implicit against after base ballot", zap.Inline(block), zap.Stringer("reason", reason))
+				t.logger.Debug("implicit against after base ballot",
+					log.ZContext(ctx), zap.Inline(block), zap.Stringer("reason", reason))
 			case abstain:
-				logger.With().Error("layers that are not terminated should have been encoded earlier",
-					zap.Inline(block), zap.Stringer("reason", reason),
+				t.logger.Error("layers that are not terminated should have been encoded earlier",
+					log.ZContext(ctx), zap.Inline(block), zap.Stringer("reason", reason),
 				)
 			}
 		}
@@ -318,7 +335,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 			t.full.counted = process
 		}
 		for _, ballot := range t.ballots[process] {
-			if err := t.countBallot(t.logger, ballot); err != nil {
+			if err := t.countBallot(ballot); err != nil {
 				if errors.Is(err, errBeaconUnavailable) {
 					t.retryLater(ballot)
 				} else {
@@ -366,29 +383,25 @@ func (t *turtle) switchModes() {
 	)
 }
 
-func (t *turtle) countBallot(logger *zap.Logger, ballot *ballotInfo) error {
-	bad, err := t.compareBeacons(logger, ballot.id, ballot.layer, ballot.reference.beacon)
+func (t *turtle) countBallot(ballot *ballotInfo) error {
+	bad, err := t.compareBeacons(ballot.id, ballot.layer, ballot.reference.beacon)
 	if err != nil {
 		return fmt.Errorf("%w: %s", errBeaconUnavailable, err.Error())
 	}
 	ballot.conditions.badBeacon = bad
-	t.verifying.countBallot(logger, ballot)
+	t.verifying.countBallot(t.logger, ballot)
 	if !ballot.layer.After(t.full.counted) {
-		t.full.countBallot(logger, ballot)
+		t.full.countBallot(t.logger, ballot)
 	}
 	return nil
 }
 
 func (t *turtle) verifyLayers() {
 	// TODO(dshulyak) simplify processing of layers and notifications
-	var (
-		zaplog = t.logger.With(
-			zap.Stringer("last layer", t.last),
-		)
-		verified = maxLayer(t.evicted, types.GetEffectiveGenesis())
-	)
+	var verified = maxLayer(t.evicted, types.GetEffectiveGenesis())
+
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
-		success := t.verifying.verify(zaplog, target)
+		success := t.verifying.verify(t.logger, target)
 		if success && t.isFull {
 			t.switchModes()
 		}
@@ -397,13 +410,13 @@ func (t *turtle) verifyLayers() {
 				t.switchModes()
 				for counted := maxLayer(t.full.counted.Add(1), t.evicted.Add(1)); !counted.After(t.processed); counted = counted.Add(1) {
 					for _, ballot := range t.ballots[counted] {
-						t.full.countBallot(zaplog, ballot)
+						t.full.countBallot(t.logger, ballot)
 					}
-					t.full.countDelayed(zaplog, counted)
+					t.full.countDelayed(t.logger, counted)
 					t.full.counted = counted
 				}
 			}
-			success = t.full.verify(zaplog, target)
+			success = t.full.verify(t.logger, target)
 		}
 
 		layer := t.layer(target)
@@ -440,11 +453,12 @@ func (t *turtle) verifyLayers() {
 				t.changedOpinion.max = types.MaxLayer(t.changedOpinion.max, target)
 			}
 			if block.validity == abstain {
-				zaplog.With().Fatal("bug: layer should not be verified if there is an undecided block",
+				t.logger.Fatal("bug: layer should not be verified if there is an undecided block",
 					zap.Uint32("target", target.Uint32()),
 					zap.Stringer("block", block.id))
 			}
-			zaplog.Debug("update validity",
+			t.logger.Debug("update validity",
+				zap.Stringer("last layer", t.last),
 				zap.Uint32("lid", block.layer.Uint32()),
 				zap.Stringer("block", block.id),
 				zap.Stringer("validity", block.validity),
@@ -457,7 +471,11 @@ func (t *turtle) verifyLayers() {
 	t.verified = verified
 	verifiedLayer.Set(float64(t.verified))
 	if t.changedOpinion.min != 0 && !withinDistance(t.Hdist, t.changedOpinion.max, t.last) {
-		zaplog.Debug("changed opinion outside hdist", zap.Stringer("from", t.changedOpinion.min), zap.Stringer("to", t.changedOpinion.max))
+		t.logger.Debug("changed opinion outside hdist",
+			zap.Stringer("last layer", t.last),
+			zap.Stringer("from", t.changedOpinion.min),
+			zap.Stringer("to", t.changedOpinion.max),
+		)
 		t.onOpinionChange(t.changedOpinion.min)
 		t.changedOpinion.min = 0
 		t.changedOpinion.max = 0
@@ -723,7 +741,7 @@ func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) {
 		}
 	}
 	if !ballot.layer.After(t.processed) {
-		if err := t.countBallot(t.logger, ballot); err != nil {
+		if err := t.countBallot(ballot); err != nil {
 			if errors.Is(err, errBeaconUnavailable) {
 				t.retryLater(ballot)
 			} else {
@@ -742,13 +760,13 @@ func (t *turtle) onBallot(ballot *types.BallotTortoiseData) error {
 	return nil
 }
 
-func (t *turtle) compareBeacons(logger *zap.Logger, bid types.BallotID, lid types.LayerID, beacon types.Beacon) (bool, error) {
+func (t *turtle) compareBeacons(bid types.BallotID, lid types.LayerID, beacon types.Beacon) (bool, error) {
 	epoch := t.epoch(lid.GetEpoch())
 	if epoch.beacon == nil {
 		return false, errBeaconUnavailable
 	}
 	if beacon != *epoch.beacon {
-		logger.Debug("ballot has different beacon",
+		t.logger.Debug("ballot has different beacon",
 			zap.Uint32("layer_id", lid.Uint32()),
 			zap.Stringer("block", bid),
 			log.ZShortStringer("ballot_beacon", beacon),
@@ -765,7 +783,7 @@ func (t *turtle) retryLater(ballot *ballotInfo) {
 
 func (t *turtle) drainRetriable() error {
 	for front := t.retriable.Front(); front != nil; {
-		if err := t.countBallot(t.logger, front.Value.(*ballotInfo)); err != nil {
+		if err := t.countBallot(front.Value.(*ballotInfo)); err != nil {
 			// if beacon is still unavailable - exit and wait for the next call
 			// to drain this queue
 			if errors.Is(err, errBeaconUnavailable) {

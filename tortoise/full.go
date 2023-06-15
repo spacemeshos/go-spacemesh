@@ -58,13 +58,6 @@ func (f *full) countBallot(logger *zap.Logger, ballot *ballotInfo) {
 			case against:
 				block.margin = block.margin.Sub(ballot.weight)
 			}
-			logger.Debug("counted votes from ballot",
-				zap.Stringer("id", ballot.id),
-				zap.Uint32("lid", ballot.layer.Uint32()),
-				zap.Stringer("block", block.id),
-				zap.Stringer("vote", vote),
-				zap.Stringer("margin", block.margin),
-			)
 		}
 		if empty {
 			layer.empty = layer.empty.Add(ballot.weight)
@@ -104,7 +97,7 @@ func (f *full) countDelayed(logger *zap.Logger, lid types.LayerID) {
 	delete(f.delayed, lid)
 	for _, ballot := range delayed {
 		delayedBallots.Dec()
-		f.countBallot(logger.With(zap.Bool("delayed", true)), ballot)
+		f.countBallot(logger, ballot)
 	}
 }
 
@@ -122,27 +115,23 @@ func (f *full) verify(logger *zap.Logger, lid types.LayerID) bool {
 	layer := f.state.layer(lid)
 	empty := crossesThreshold(layer.empty, threshold) == support
 
-	logger = logger.With(
-		zap.String("verifier", "full"),
-		zap.Stringer("counted layer", f.counted),
-		zap.Stringer("candidate layer", lid),
-		zap.Stringer("local threshold", f.localThreshold),
-		zap.Stringer("global threshold", threshold),
-		zap.Stringer("empty weight", layer.empty),
-		zap.Bool("is empty", empty),
-	)
 	if len(layer.blocks) == 0 {
 		if empty {
-			logger.Debug("candidate layer is empty")
+			logger.Debug("candidate layer is empty",
+				zap.Uint32("candidate layer", lid.Uint32()),
+				zap.Float64("global threshold", threshold.Float()),
+				zap.Float64("empty weight", layer.empty.Float()),
+			)
 		} else {
 			logger.Debug("margin is too low to terminate layer as empty",
-				zap.Uint32("lid", lid.Uint32()),
-				zap.Stringer("margin", layer.empty),
+				zap.Uint32("candidate layer", lid.Uint32()),
+				zap.Float64("global threshold", threshold.Float()),
+				zap.Float64("empty weight", layer.empty.Float()),
 			)
 		}
 		return empty
 	}
-	return verifyLayer(
+	rst, changes := verifyLayer(
 		logger,
 		layer.blocks,
 		func(block *blockInfo) sign {
@@ -153,6 +142,19 @@ func (f *full) verify(logger *zap.Logger, lid types.LayerID) bool {
 			return decision
 		},
 	)
+	if changes {
+		logger.Info("candidate layer is verified",
+			zapBlocks(layer.blocks),
+			zap.String("verifier", "full"),
+			zap.Uint32("counted layer", f.counted.Uint32()),
+			zap.Uint32("candidate layer", lid.Uint32()),
+			zap.Float64("local threshold", f.localThreshold.Float()),
+			zap.Float64("global threshold", threshold.Float()),
+			zap.Float64("empty weight", layer.empty.Float()),
+			zap.Bool("is empty", empty),
+		)
+	}
+	return rst
 }
 
 func (f *full) shouldBeDelayed(logger *zap.Logger, ballot *ballotInfo) bool {

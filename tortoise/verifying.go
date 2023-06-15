@@ -41,12 +41,12 @@ func (v *verifying) countBallot(logger *zap.Logger, ballot *ballotInfo) {
 		prev.opinion != ballot.opinion() ||
 		prev.verifying.referenceHeight > ballot.reference.height)
 	logger.Debug("count ballot in verifying mode",
-		zap.Stringer("lid", ballot.layer),
+		zap.Uint32("lid", ballot.layer.Uint32()),
 		zap.Stringer("ballot", ballot.id),
 		log.ZShortStringer("ballot opinion", ballot.opinion()),
 		log.ZShortStringer("local opinion", prev.opinion),
 		zap.Bool("bad beacon", ballot.conditions.badBeacon),
-		zap.Stringer("weight", ballot.weight),
+		zap.Float64("weight", ballot.weight.Float()),
 		zap.Uint64("reference height", prev.verifying.referenceHeight),
 		zap.Uint64("ballot height", ballot.reference.height),
 		zap.Bool("counted", counted),
@@ -86,26 +86,29 @@ func (v *verifying) verify(logger *zap.Logger, lid types.LayerID) bool {
 	}
 
 	threshold := v.globalThreshold(v.Config, lid)
-	zaplog := logger.With(
-		zap.String("verifier", "verifying"),
-		zap.Stringer("candidate layer", lid),
-		zap.Stringer("margin", margin),
-		zap.Stringer("uncounted", uncounted),
-		zap.Stringer("total good weight", v.totalGoodWeight),
-		zap.Stringer("good uncounted", layer.verifying.goodUncounted),
-		zap.Stringer("global threshold", threshold),
-	)
 	if crossesThreshold(margin, threshold) != support {
-		zaplog.Debug("doesn't cross global threshold")
+		logger.Debug("doesn't cross global threshold",
+			zap.Uint32("candidate layer", lid.Uint32()),
+			zap.Float64("margin", margin.Float()),
+			zap.Float64("global threshold", threshold.Float()),
+		)
 		return false
 	} else {
-		zaplog.Debug("crosses global threshold")
+		logger.Debug("crosses global threshold",
+			zap.Uint32("candidate layer", lid.Uint32()),
+			zap.Float64("margin", margin.Float()),
+			zap.Float64("global threshold", threshold.Float()),
+		)
 	}
 	if len(layer.blocks) == 0 {
-		zaplog.Debug("candidate layer is empty")
+		logger.Debug("candidate layer is empty",
+			zap.Uint32("candidate layer", lid.Uint32()),
+			zap.Float64("margin", margin.Float()),
+			zap.Float64("global threshold", threshold.Float()),
+		)
 	}
-	return verifyLayer(
-		zaplog,
+	rst, changes := verifyLayer(
+		logger,
 		layer.blocks,
 		func(block *blockInfo) sign {
 			if block.height > layer.verifying.referenceHeight {
@@ -115,4 +118,17 @@ func (v *verifying) verify(logger *zap.Logger, lid types.LayerID) bool {
 			return decision
 		},
 	)
+	if changes {
+		logger.Info("candidate layer is verified",
+			zapBlocks(layer.blocks),
+			zap.String("verifier", "verifying"),
+			zap.Uint32("candidate layer", lid.Uint32()),
+			zap.Float64("margin", margin.Float()),
+			zap.Float64("global threshold", threshold.Float()),
+			zap.Float64("uncounted", uncounted.Float()),
+			zap.Float64("total good weight", v.totalGoodWeight.Float()),
+			zap.Float64("good uncounted", layer.verifying.goodUncounted.Float()),
+		)
+	}
+	return rst
 }
