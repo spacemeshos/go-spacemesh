@@ -476,7 +476,7 @@ func TestDecodingPowDifficulty(t *testing.T) {
 	})
 	t.Run("not a hex string", func(t *testing.T) {
 		t.Parallel()
-		encoded = encoded[:len(encoded)-1] + "G"
+		encoded := encoded[:len(encoded)-1] + "G"
 		res, err := DecodePowDifficulty(reflect.TypeOf(""), reflect.TypeOf([32]byte{}), encoded)
 		require.NoError(t, err)
 		require.Equal(t, encoded, res)
