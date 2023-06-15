@@ -771,16 +771,15 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 
 	trtl := defaultAlgorithm(t)
 
-	logger := logtest.New(t)
 	trtl.OnBeacon(layerID.GetEpoch(), epochBeacon)
-	badBeacon, err := trtl.trtl.compareBeacons(logger, ballot.ID(), ballot.Layer, epochBeacon)
+	badBeacon, err := trtl.trtl.compareBeacons(ballot.ID(), ballot.Layer, epochBeacon)
 	assert.NoError(t, err)
 	assert.False(t, badBeacon)
 
 	// bad beacon
 	beacon := types.RandomBeacon()
 	require.NotEqual(t, epochBeacon, beacon)
-	badBeacon, err = trtl.trtl.compareBeacons(logger, ballot.ID(), ballot.Layer, beacon)
+	badBeacon, err = trtl.trtl.compareBeacons(ballot.ID(), ballot.Layer, beacon)
 	assert.NoError(t, err)
 	assert.True(t, badBeacon)
 }
