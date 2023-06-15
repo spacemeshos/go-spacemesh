@@ -156,7 +156,7 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 	require.NoError(tb, err)
 	mpub := pubsubmocks.NewMockPublisher(ctrl)
 	return &testBroker{
-		Broker: newBroker(mockMesh, edVerifier, &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
+		Broker: newBroker(config.DefaultConfig(), mockMesh, edVerifier, &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
 			mpub, limit, logtest.New(tb).WithName(testName)),
 		mockMesh:      mockMesh,
 		mockSyncS:     mockSyncS,
@@ -337,6 +337,7 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config, inbox 
 		sq,
 		edSigner,
 		edVerifier,
+		NewEligibilityTracker(cfg.N),
 		types.BytesToNodeID(edPubkey.Bytes()),
 		&nonce,
 		noopPubSub(tb),

@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -29,6 +30,7 @@ type Broker struct {
 	log.Log
 	mu sync.RWMutex
 
+	cfg           config.Config
 	msh           mesh
 	edVerifier    *signing.EdVerifier
 	roleValidator validator                // provides eligibility validation
@@ -36,6 +38,7 @@ type Broker struct {
 	nodeSyncState system.SyncStateProvider // provider function to check if the node is currently synced
 	publisher     pubsub.Publisher
 	outbox        map[types.LayerID]chan any
+	trackers      map[types.LayerID]*EligibilityTracker
 	pending       map[types.LayerID][]any // the buffer of pending early messages for the next layer
 	latestLayer   types.LayerID           // the latest layer to attempt register (successfully or unsuccessfully)
 	minDeleted    types.LayerID
@@ -47,6 +50,7 @@ type Broker struct {
 }
 
 func newBroker(
+	cfg config.Config,
 	msh mesh,
 	edVerifier *signing.EdVerifier,
 	roleValidator validator,
@@ -58,12 +62,14 @@ func newBroker(
 ) *Broker {
 	b := &Broker{
 		Log:           log,
+		cfg:           cfg,
 		msh:           msh,
 		edVerifier:    edVerifier,
 		roleValidator: roleValidator,
 		stateQuerier:  stateQuerier,
 		nodeSyncState: syncState,
 		publisher:     publisher,
+		trackers:      map[types.LayerID]*EligibilityTracker{},
 		outbox:        make(map[types.LayerID]chan any),
 		pending:       make(map[types.LayerID][]any),
 		latestLayer:   types.GetEffectiveGenesis(),
@@ -198,9 +204,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 		// - gossip its malfeasance + eligibility proofs to the network
 		// - relay the eligibility proof to the consensus process
 		// - return error so the node don't relay messages from malicious parties
-		if err := b.handleMaliciousHareMessage(ctx, logger, hareMsg.SmesherID, proof, hareMsg, isEarly); err != nil {
-			return err
-		}
+		b.handleMaliciousHareMessage(ctx, hareMsg.SmesherID, proof, hareMsg)
 		return fmt.Errorf("known malicious %v", hareMsg.SmesherID.String())
 	}
 
@@ -228,12 +232,23 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 
 func (b *Broker) handleMaliciousHareMessage(
 	ctx context.Context,
-	logger log.Log,
 	nodeID types.NodeID,
 	proof *types.MalfeasanceProof,
 	msg *Message,
-	early bool,
-) error {
+) {
+	// do not re-gossip known eligibility proof
+	reGossip := func() bool {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		if _, ok := b.trackers[msg.Layer]; !ok {
+			b.trackers[msg.Layer] = NewEligibilityTracker(b.cfg.N)
+		}
+		return !b.trackers[msg.Layer].Track(nodeID, msg.Round, msg.Eligibility.Count, false)
+	}()
+	if !reGossip {
+		return
+	}
+
 	gossip := &types.MalfeasanceGossip{
 		MalfeasanceProof: *proof,
 		Eligibility: &types.HareEligibilityGossip{
@@ -243,6 +258,7 @@ func (b *Broker) handleMaliciousHareMessage(
 			Eligibility: msg.Eligibility,
 		},
 	}
+
 	gossipBytes, err := codec.Encode(gossip)
 	if err != nil {
 		b.Log.With().Fatal("failed to encode MalfeasanceGossip (broker)",
@@ -258,25 +274,6 @@ func (b *Broker) handleMaliciousHareMessage(
 			log.Err(err),
 		)
 	}
-
-	toRelay := gossip.Eligibility
-	if early {
-		return b.handleEarlyMessage(logger, msg.Layer, nodeID, toRelay)
-	}
-
-	out := b.getInbox(msg.Layer)
-	if out == nil {
-		b.Log.WithContext(ctx).With().Debug("consensus not running for layer", msg.Layer)
-		return nil
-	}
-	b.Log.WithContext(ctx).With().Debug("broker forwarding hare eligibility to consensus process",
-		log.Int("queue_size", len(out)))
-	select {
-	case out <- toRelay:
-	case <-ctx.Done():
-	case <-b.ctx.Done():
-	}
-	return nil
 }
 
 func (b *Broker) HandleEligibility(ctx context.Context, em *types.HareEligibilityGossip) bool {
@@ -356,44 +353,53 @@ func (b *Broker) handleEarlyMessage(logger log.Log, layer types.LayerID, nodeID 
 	return nil
 }
 
-func (b *Broker) cleanOldLayers() {
+func (b *Broker) CleanOldLayers(current types.LayerID) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	for i := b.minDeleted.Add(1); i.Before(b.latestLayer); i = i.Add(1) {
-		_, exist := b.outbox[i]
-
-		if !exist { // unregistered
-			b.minDeleted = b.minDeleted.Add(1)
+	for i := b.minDeleted + 1; i <= current; i++ {
+		if _, exist := b.outbox[i]; !exist { // unregistered
+			b.minDeleted = i
 		} else { // encountered first still running layer
 			break
+		}
+	}
+	for lid := range b.trackers {
+		if lid <= b.minDeleted {
+			delete(b.trackers, lid)
 		}
 	}
 }
 
 // Register a layer to receive messages
 // Note: the registering instance is assumed to be started and accepting messages.
-func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any, error) {
-	b.setLatestLayer(ctx, id)
+func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any, *EligibilityTracker, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if !id.After(b.latestLayer) { // should expect to update only newer layers
+		b.WithContext(ctx).With().Error("tried to update a previous layer",
+			log.Stringer("this_layer", id),
+			log.Stringer("prev_layer", b.latestLayer))
+	}
+
+	b.latestLayer = id
 
 	// check to see if the node is still synced
 	if !b.Synced(ctx, id) {
-		return nil, errInstanceNotSynced
+		return nil, nil, errInstanceNotSynced
 	}
-	return b.createNewInbox(id), nil
-}
-
-func (b *Broker) createNewInbox(id types.LayerID) chan any {
-	b.mu.Lock()
-	defer b.mu.Unlock()
 
 	if len(b.outbox) >= b.limit {
 		// unregister the earliest layer to make space for the new layer
 		// cannot call unregister here because unregister blocks and this would cause a deadlock
-		instance := b.minDeleted.Add(1)
-		delete(b.outbox, instance)
-		b.minDeleted = instance
-		b.With().Info("unregistered layer due to maximum concurrent processes", instance)
+		min := types.LayerID(0)
+		for lid := range b.outbox {
+			min = types.MinLayer(min, lid)
+		}
+		delete(b.outbox, min)
+		b.minDeleted = min
+		b.With().Info("unregistered layer due to maximum concurrent processes", min)
 	}
 	outboxCh := make(chan any, inboxCapacity)
 	b.outbox[id] = outboxCh
@@ -401,19 +407,17 @@ func (b *Broker) createNewInbox(id types.LayerID) chan any {
 		outboxCh <- mOut
 	}
 	delete(b.pending, id)
-	return outboxCh
-}
-
-func (b *Broker) cleanupInstance(id types.LayerID) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	delete(b.outbox, id)
+	if _, ok := b.trackers[id]; !ok {
+		b.trackers[id] = NewEligibilityTracker(b.cfg.N)
+	}
+	return outboxCh, b.trackers[id], nil
 }
 
 // Unregister a layer from receiving messages.
 func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
-	b.cleanupInstance(id)
-	b.cleanOldLayers()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	delete(b.outbox, id)
 	b.WithContext(ctx).With().Debug("hare broker unregistered layer", id)
 }
 
