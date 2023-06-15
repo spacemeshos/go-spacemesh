@@ -87,6 +87,7 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 								Round:   m1.Round,
 								MsgHash: types.BytesToHash(m1.HashBytes()),
 							},
+							SmesherID: m1.SmesherID,
 							Signature: m1.Signature,
 						},
 						{
@@ -95,6 +96,7 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 								Round:   m2.Round,
 								MsgHash: types.BytesToHash(m2.HashBytes()),
 							},
+							SmesherID: m2.SmesherID,
 							Signature: m2.Signature,
 						},
 					},
