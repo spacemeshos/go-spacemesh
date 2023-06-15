@@ -109,6 +109,7 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 		},
 	}
 	gossip := <-mch
+	verifyMalfeasanceProof(t, signer, gossip)
 	require.Equal(t, expected, *gossip)
 
 	interSet := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{5})

@@ -62,10 +62,12 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Message) {
 		st.eTracker.Track(msg.SmesherID, msg.Round, msg.Eligibility.Count, false)
 		old := &types.HareProofMsg{
 			InnerMsg:  prevMetadata,
+			SmesherID: msg.SmesherID,
 			Signature: prev.Signature,
 		}
 		this := &types.HareProofMsg{
 			InnerMsg:  metadata,
+			SmesherID: msg.SmesherID,
 			Signature: msg.Signature,
 		}
 		if err := reportEquivocation(ctx, msg.SmesherID, old, this, &msg.Eligibility, st.malCh); err != nil {

@@ -62,6 +62,7 @@ func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Message) {
 				Round:   pt.proposal.Round,
 				MsgHash: types.BytesToHash(pt.proposal.HashBytes()),
 			},
+			SmesherID: pt.proposal.SmesherID,
 			Signature: pt.proposal.Signature,
 		}
 		this := &types.HareProofMsg{
@@ -70,6 +71,7 @@ func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Message) {
 				Round:   msg.Round,
 				MsgHash: types.BytesToHash(msg.HashBytes()),
 			},
+			SmesherID: msg.SmesherID,
 			Signature: msg.Signature,
 		}
 		if err := reportEquivocation(ctx, msg.SmesherID, prev, this, &msg.Eligibility, pt.malCh); err != nil {
@@ -115,6 +117,7 @@ func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Message) {
 					Round:   pt.proposal.Round,
 					MsgHash: types.BytesToHash(pt.proposal.HashBytes()),
 				},
+				SmesherID: pt.proposal.SmesherID,
 				Signature: pt.proposal.Signature,
 			}
 			this := &types.HareProofMsg{
@@ -123,6 +126,7 @@ func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Message) {
 					Round:   msg.Round,
 					MsgHash: types.BytesToHash(msg.HashBytes()),
 				},
+				SmesherID: msg.SmesherID,
 				Signature: msg.Signature,
 			}
 			if err := reportEquivocation(ctx, msg.SmesherID, prev, this, &msg.Eligibility, pt.malCh); err != nil {
