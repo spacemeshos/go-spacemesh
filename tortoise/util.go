@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"go.uber.org/zap"
 )
 
 const (
@@ -51,7 +52,7 @@ func maxLayer(i, j types.LayerID) types.LayerID {
 	return j
 }
 
-func verifyLayer(logger log.Log, blocks []*blockInfo, getDecision func(*blockInfo) sign) bool {
+func verifyLayer(logger *zap.Logger, blocks []*blockInfo, getDecision func(*blockInfo) sign) bool {
 	// order blocks by height in ascending order
 	// if there is a support before any abstain
 	// and a previous height is lower than the current one
@@ -67,13 +68,13 @@ func verifyLayer(logger log.Log, blocks []*blockInfo, getDecision func(*blockInf
 	)
 	for i, block := range blocks {
 		decision := getDecision(block)
-		logger.With().Debug("decision for a block",
-			log.Int("ith", i),
-			block.id,
-			block.layer,
-			log.Stringer("decision", decision),
-			log.Stringer("weight", block.margin),
-			log.Uint64("height", block.height),
+		logger.Debug("decision for a block",
+			zap.Int("ith", i),
+			zap.Stringer("block", block.id),
+			zap.Stringer("lid", block.layer),
+			zap.Stringer("decision", decision),
+			zap.Stringer("weight", block.margin),
+			zap.Uint64("height", block.height),
 		)
 
 		if decision == abstain {
@@ -96,8 +97,8 @@ func verifyLayer(logger log.Log, blocks []*blockInfo, getDecision func(*blockInf
 		blocks[i].validity = decision
 	}
 	if changes {
-		logger.With().Info("candidate layer is verified",
-			log.Array("blocks",
+		logger.Info("candidate layer is verified",
+			zap.Array("blocks",
 				log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 					for i := range blocks {
 						encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {

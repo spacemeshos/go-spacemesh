@@ -771,7 +771,7 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 
 	trtl := defaultAlgorithm(t)
 
-	logger := logtest.New(t)
+	logger := logtest.Zap(t)
 	trtl.OnBeacon(layerID.GetEpoch(), epochBeacon)
 	badBeacon, err := trtl.trtl.compareBeacons(logger, ballot.ID(), ballot.Layer, epochBeacon)
 	assert.NoError(t, err)

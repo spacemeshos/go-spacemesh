@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"go.uber.org/zap"
 )
 
 func newFullTortoise(config Config, state *state) *full {
@@ -29,7 +29,7 @@ type full struct {
 	delayed map[types.LayerID][]*ballotInfo
 }
 
-func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
+func (f *full) countBallot(logger *zap.Logger, ballot *ballotInfo) {
 	start := time.Now()
 	if f.shouldBeDelayed(logger, ballot) {
 		return
@@ -58,12 +58,12 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 			case against:
 				block.margin = block.margin.Sub(ballot.weight)
 			}
-			logger.With().Debug("counted votes from ballot",
-				log.Stringer("id", ballot.id),
-				log.Uint32("lid", ballot.layer.Uint32()),
-				log.Stringer("block", block.id),
-				log.Stringer("vote", vote),
-				log.Stringer("margin", block.margin),
+			logger.Debug("counted votes from ballot",
+				zap.Stringer("id", ballot.id),
+				zap.Uint32("lid", ballot.layer.Uint32()),
+				zap.Stringer("block", block.id),
+				zap.Stringer("vote", vote),
+				zap.Stringer("margin", block.margin),
 			)
 		}
 		if empty {
@@ -96,7 +96,7 @@ func (f *full) countForLateBlock(block *blockInfo) {
 	lateBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
-func (f *full) countDelayed(logger log.Log, lid types.LayerID) {
+func (f *full) countDelayed(logger *zap.Logger, lid types.LayerID) {
 	delayed, exist := f.delayed[lid]
 	if !exist {
 		return
@@ -104,11 +104,11 @@ func (f *full) countDelayed(logger log.Log, lid types.LayerID) {
 	delete(f.delayed, lid)
 	for _, ballot := range delayed {
 		delayedBallots.Dec()
-		f.countBallot(logger.WithFields(log.Bool("delayed", true)), ballot)
+		f.countBallot(logger.With(zap.Bool("delayed", true)), ballot)
 	}
 }
 
-func (f *full) countVotes(logger log.Log) {
+func (f *full) countVotes(logger *zap.Logger) {
 	for lid := f.counted.Add(1); !lid.After(f.processed); lid = lid.Add(1) {
 		for _, ballot := range f.ballots[lid] {
 			f.countBallot(logger, ballot)
@@ -117,27 +117,27 @@ func (f *full) countVotes(logger log.Log) {
 	f.counted = f.processed
 }
 
-func (f *full) verify(logger log.Log, lid types.LayerID) bool {
+func (f *full) verify(logger *zap.Logger, lid types.LayerID) bool {
 	threshold := f.globalThreshold(f.Config, lid)
 	layer := f.state.layer(lid)
 	empty := crossesThreshold(layer.empty, threshold) == support
 
-	logger = logger.WithFields(
-		log.String("verifier", "full"),
-		log.Stringer("counted layer", f.counted),
-		log.Stringer("candidate layer", lid),
-		log.Stringer("local threshold", f.localThreshold),
-		log.Stringer("global threshold", threshold),
-		log.Stringer("empty weight", layer.empty),
-		log.Bool("is empty", empty),
+	logger = logger.With(
+		zap.String("verifier", "full"),
+		zap.Stringer("counted layer", f.counted),
+		zap.Stringer("candidate layer", lid),
+		zap.Stringer("local threshold", f.localThreshold),
+		zap.Stringer("global threshold", threshold),
+		zap.Stringer("empty weight", layer.empty),
+		zap.Bool("is empty", empty),
 	)
 	if len(layer.blocks) == 0 {
 		if empty {
-			logger.With().Debug("candidate layer is empty")
+			logger.Debug("candidate layer is empty")
 		} else {
-			logger.With().Debug("margin is too low to terminate layer as empty",
-				lid,
-				log.Stringer("margin", layer.empty),
+			logger.Debug("margin is too low to terminate layer as empty",
+				zap.Uint32("lid", lid.Uint32()),
+				zap.Stringer("margin", layer.empty),
 			)
 		}
 		return empty
@@ -155,7 +155,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	)
 }
 
-func (f *full) shouldBeDelayed(logger log.Log, ballot *ballotInfo) bool {
+func (f *full) shouldBeDelayed(logger *zap.Logger, ballot *ballotInfo) bool {
 	if !ballot.conditions.badBeacon {
 		return false
 	}
@@ -163,10 +163,10 @@ func (f *full) shouldBeDelayed(logger log.Log, ballot *ballotInfo) bool {
 	if !delay.After(f.last) {
 		return false
 	}
-	logger.With().Debug("ballot is delayed",
-		log.Stringer("id", ballot.id),
-		log.Uint32("ballot lid", ballot.layer.Uint32()),
-		log.Uint32("counted at", delay.Uint32()),
+	logger.Debug("ballot is delayed",
+		zap.Stringer("id", ballot.id),
+		zap.Uint32("ballot lid", ballot.layer.Uint32()),
+		zap.Uint32("counted at", delay.Uint32()),
 	)
 	delayedBallots.Inc()
 	f.delayed[delay] = append(f.delayed[delay], ballot)
