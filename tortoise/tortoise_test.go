@@ -3054,3 +3054,16 @@ func TestUpdates(t *testing.T) {
 		require.Equal(t, id, updates[0].Blocks[0].Header.ID)
 	})
 }
+
+func TestDuplicateBallot(t *testing.T) {
+	s := newSession(t)
+	s.smesher(0).atx(1, new(aopt).height(10).weight(2))
+	s.beacon(1, "a")
+	ballot := s.smesher(0).atx(1).ballot(1, new(bopt).
+		activeset(s.smesher(0).atx(1)).
+		beacon("a").
+		eligibilities(1),
+	)
+	s.register(ballot)
+	s.runInorder()
+}

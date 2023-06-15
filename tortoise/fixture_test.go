@@ -108,6 +108,12 @@ func (b *bopt) eligibilities(value int) *bopt {
 	return b
 }
 
+func (b *bopt) id(id types.BallotID) *bopt {
+	b.opts = append(b.opts, func(ballot *ballotAction) {
+		ballot.ID = id
+	})
+}
+
 func (b *bopt) activeset(values ...*atxAction) *bopt {
 	b.opts = append(b.opts, func(ballot *ballotAction) {
 		ballot.activeset = values
