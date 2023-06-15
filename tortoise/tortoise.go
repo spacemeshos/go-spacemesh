@@ -398,7 +398,7 @@ func (t *turtle) countBallot(ballot *ballotInfo) error {
 
 func (t *turtle) verifyLayers() {
 	// TODO(dshulyak) simplify processing of layers and notifications
-	var verified = maxLayer(t.evicted, types.GetEffectiveGenesis())
+	verified := maxLayer(t.evicted, types.GetEffectiveGenesis())
 
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
 		success := t.verifying.verify(t.logger, target)

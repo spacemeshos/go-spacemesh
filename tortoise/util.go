@@ -3,9 +3,10 @@ package tortoise
 import (
 	"sort"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 const (
@@ -100,9 +101,9 @@ func verifyLayer(logger *zap.Logger, blocks []*blockInfo, getDecision func(*bloc
 }
 
 func zapBlocks(blocks []*blockInfo) zap.Field {
-	return zap.Array("blocks", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+	return zap.Array("blocks", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 		for i := range blocks {
-			encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+			encoder.AppendObject(zapcore.ObjectMarshalerFunc(func(encoder zapcore.ObjectEncoder) error {
 				encoder.AddString("decision", blocks[i].validity.String())
 				encoder.AddString("id", blocks[i].id.String())
 				encoder.AddString("weight", blocks[i].margin.String())

@@ -3,8 +3,9 @@ package tortoise
 import (
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"go.uber.org/zap"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func newFullTortoise(config Config, state *state) *full {

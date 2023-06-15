@@ -3,9 +3,10 @@ package tortoise
 import (
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"go.uber.org/zap"
 )
 
 func newVerifying(config Config, state *state) *verifying {
