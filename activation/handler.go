@@ -496,12 +496,6 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	epochStart := h.clock.LayerToTime(atx.PublishEpoch.FirstLayer())
 	poetRoundEnd := epochStart.Add(h.poetCfg.PhaseShift - h.poetCfg.CycleGap)
 	latency := receivedTime.Sub(poetRoundEnd)
-	if latency < 0 {
-		// received an ATX from the future, ignore
-		
-		return fmt.Errorf("received ATX from the future: %w", errMalformedData)
-	}
-
 	metrics.ReportMessageLatency(pubsub.AtxProtocol, pubsub.AtxProtocol, latency)
 
 	atx.SetReceived(receivedTime.Local())
@@ -526,11 +520,15 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 
 	h.registerHashes(&atx, peer) // TODO(mafa): should this be done after the ATX was validated?
 	if err := h.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
-		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %w", atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
+		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %w",
+			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err,
+		)
 	}
 
 	if err := h.FetchAtxReferences(ctx, &atx); err != nil {
-		return fmt.Errorf("received atx (%v) with missing references of prev or pos id %v, %v: %w", atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), err)
+		return fmt.Errorf("received atx (%v) with missing references of prev or pos id %v, %v: %w",
+			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), err,
+		)
 	}
 
 	vAtx, err := h.SyntacticallyValidateAtx(ctx, &atx)
