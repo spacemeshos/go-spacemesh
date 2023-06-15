@@ -162,6 +162,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
 //
+//   - The PublishEpoch is less than or equal to the current epoch + 1.
 //   - If the sequence number is non-zero: PrevATX points to a syntactically valid ATX whose sequence number is one less
 //     than the current ATXs sequence number.
 //   - If the sequence number is zero: PrevATX is empty.
@@ -176,6 +177,11 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		commitmentATX *types.ATXID
 		err           error
 	)
+
+	current := h.clock.CurrentLayer()
+	if atx.PublishEpoch > current.GetEpoch()+1 {
+		return nil, fmt.Errorf("atx publish epoch is too far in the future: %d > %d", atx.PublishEpoch, current.GetEpoch()+1)
+	}
 
 	if atx.PrevATXID == types.EmptyATXID {
 		if err := h.validateInitialAtx(ctx, atx); err != nil {
@@ -492,7 +498,7 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	latency := receivedTime.Sub(poetRoundEnd)
 	if latency < 0 {
 		// received an ATX from the future, ignore
-		// TODO(mafa): generate malfeasance proof?
+		
 		return fmt.Errorf("received ATX from the future: %w", errMalformedData)
 	}
 
@@ -518,7 +524,7 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())
 	}
 
-	h.registerHashes(&atx, peer)
+	h.registerHashes(&atx, peer) // TODO(mafa): should this be done after the ATX was validated?
 	if err := h.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
 		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %w", atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
 	}
