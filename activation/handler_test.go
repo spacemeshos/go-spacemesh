@@ -32,8 +32,6 @@ import (
 
 const layersPerEpochBig = 1000
 
-const testTickSize = 1
-
 func newMerkleProof(t testing.TB, challenge types.Hash32, otherLeafs []types.Hash32) (types.MerkleProof, types.Hash32) {
 	t.Helper()
 	tree, err := merkle.NewTreeBuilder().
@@ -101,9 +99,7 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID) *testHandler {
 	mReceiver1 := NewMockAtxReceiver(ctrl)
 	mReceiver2 := NewMockAtxReceiver(ctrl)
 
-	testTickSize := uint64(1)
-
-	atxHdlr := NewHandler(cdb, verifier, mclock, mpub, mockFetch, types.GetLayersPerEpoch(), testTickSize, goldenATXID, mValidator, []AtxReceiver{mReceiver1, mReceiver2}, lg, PoetConfig{})
+	atxHdlr := NewHandler(cdb, verifier, mclock, mpub, mockFetch, types.GetLayersPerEpoch(), 1, goldenATXID, mValidator, []AtxReceiver{mReceiver1, mReceiver2}, lg, PoetConfig{})
 	return &testHandler{
 		Handler: atxHdlr,
 
