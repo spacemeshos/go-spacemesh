@@ -10,6 +10,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
+func TestEligibilityTracker_Track(t *testing.T) {
+	et := hare.NewEligibilityTracker(3)
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	round := uint32(3)
+	require.False(t, et.Dishonest(sig.NodeID(), round))
+	require.False(t, et.Track(sig.NodeID(), round, 1, true))
+	require.False(t, et.Dishonest(sig.NodeID(), round))
+	require.False(t, et.Track(sig.NodeID(), round, 1, false))
+	require.True(t, et.Dishonest(sig.NodeID(), round))
+	require.True(t, et.Track(sig.NodeID(), round, 1, true))
+	require.True(t, et.Dishonest(sig.NodeID(), round))
+}
+
 func TestEligibilityTracker(t *testing.T) {
 	const (
 		totalNodes        = 5
@@ -27,7 +41,8 @@ func TestEligibilityTracker(t *testing.T) {
 		require.NoError(t, err)
 		nodeIDs[sig.NodeID()] = honest
 		for _, r := range rounds {
-			et.Track(sig.NodeID(), r, count, honest)
+			require.False(t, et.Track(sig.NodeID(), r, count, honest))
+			require.Equal(t, !honest, et.Dishonest(sig.NodeID(), r))
 		}
 	}
 	for _, r := range rounds {
@@ -50,7 +65,9 @@ func TestEligibilityTracker(t *testing.T) {
 	// update everyone to be honest have no effect
 	for key := range nodeIDs {
 		for _, r := range rounds {
-			et.Track(key, r, count, true)
+			dishonest := et.Dishonest(key, r)
+			require.Equal(t, dishonest, et.Track(key, r, count, true))
+			require.Equal(t, dishonest, et.Dishonest(key, r))
 		}
 	}
 	for _, r := range rounds {

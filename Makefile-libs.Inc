@@ -49,21 +49,21 @@ else
 	endif
 endif
 
-POSTRS_SETUP_REV = 0.1.14
+POSTRS_SETUP_REV = 0.2.1
 POSTRS_SETUP_ZIP = libpost-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SETUP_URL_ZIP ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SETUP_ZIP)
 POSTRS_PROFILER_ZIP = profiler-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_PROFILER_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_PROFILER_ZIP)
 
 ifeq ($(platform), windows)
-	POSTRS_SETUP_LIBS = prover.h post.dll
+	POSTRS_SETUP_LIBS = post.h post.dll
 	POSTRS_PROFILER_BIN = profiler.exe
 else
 	POSTRS_PROFILER_BIN = profiler
 	ifeq ($(platform), $(filter $(platform), macos macos-m1))
-		POSTRS_SETUP_LIBS = prover.h libpost.dylib
+		POSTRS_SETUP_LIBS = post.h libpost.dylib
 	else
-		POSTRS_SETUP_LIBS = prover.h libpost.so
+		POSTRS_SETUP_LIBS = post.h libpost.so
 	endif
 endif
 

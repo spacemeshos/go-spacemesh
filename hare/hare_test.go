@@ -198,7 +198,7 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	require.NoError(t, h.Start(context.Background()))
 
 	lyrID := types.LayerID(8)
-	_, err := h.broker.Register(context.Background(), lyrID)
+	_, _, err := h.broker.Register(context.Background(), lyrID)
 	require.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -303,7 +303,7 @@ func TestHare_onTick(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, comm.wc, startedChan)
 		close(createdChan)
 		return nmcp
@@ -374,7 +374,7 @@ func TestHare_onTick_notMining(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, comm.wc, startedChan)
 		close(createdChan)
 		return nmcp
