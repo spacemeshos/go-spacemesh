@@ -451,6 +451,7 @@ func TestHare_goodProposal(t *testing.T) {
 		name        string
 		beacons     [3]types.Beacon
 		baseHeights [3]uint64
+		malicious   [3]bool
 		refBallot   []int
 		expected    []int
 	}{
@@ -484,6 +485,19 @@ func TestHare_goodProposal(t *testing.T) {
 			beacons:     [3]types.Beacon{beacon, beacon, beacon},
 			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
 		},
+		{
+			name:        "all malicious",
+			beacons:     [3]types.Beacon{nodeBeacon, nodeBeacon, nodeBeacon},
+			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
+			malicious:   [3]bool{true, true, true},
+		},
+		{
+			name:        "some malicious",
+			beacons:     [3]types.Beacon{nodeBeacon, nodeBeacon, nodeBeacon},
+			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
+			malicious:   [3]bool{false, true, true},
+			expected:    []int{0},
+		},
 	}
 
 	for _, tc := range tt {
@@ -499,7 +513,11 @@ func TestHare_goodProposal(t *testing.T) {
 				randomProposal(lyrID, tc.beacons[2]),
 			}
 			for i, p := range pList {
-				mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: tc.baseHeights[i], TickCount: 1}, nil)
+				if tc.malicious[i] {
+					p.SetMalicious()
+				} else {
+					mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: tc.baseHeights[i], TickCount: 1}, nil)
+				}
 			}
 			nodeID := types.NodeID{1, 2, 3}
 			mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch(), nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: nodeBaseHeight, TickCount: 1}, nil)

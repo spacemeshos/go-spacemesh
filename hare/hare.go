@@ -471,6 +471,12 @@ func goodProposals(ctx context.Context, logger log.Log, msh mesh, nodeID types.N
 		ownTickHeight = ownHdr.TickHeight()
 	}
 	for _, p := range props {
+		if p.IsMalicious() {
+			logger.With().Warning("not voting on proposal from malicious identity",
+				log.Stringer("id", p.ID()),
+			)
+			continue
+		}
 		if ownHdr != nil {
 			hdr, err := msh.GetAtxHeader(p.AtxID)
 			if err != nil {
