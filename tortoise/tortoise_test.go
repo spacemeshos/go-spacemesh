@@ -3058,12 +3058,22 @@ func TestUpdates(t *testing.T) {
 func TestDuplicateBallot(t *testing.T) {
 	s := newSession(t)
 	s.smesher(0).atx(1, new(aopt).height(10).weight(2))
-	s.beacon(1, "a")
-	ballot := s.smesher(0).atx(1).ballot(1, new(bopt).
+	id := types.BallotID{1}
+	s.smesher(0).atx(1).rawballot(id, 1, new(bopt).
 		activeset(s.smesher(0).atx(1)).
-		beacon("a").
 		eligibilities(1),
 	)
-	s.register(ballot)
+	s.smesher(0).atx(1).rawballot(id, 1, new(bopt).
+		activeset(s.smesher(0).atx(1)).
+		eligibilities(1).assert(
+		func(db *DecodedBallot, err error) {
+			require.NotEmpty(t, db)
+			require.NoError(t, err)
+		},
+		func(err error) {
+			require.ErrorContains(t, err, "tortoise: ballot exists")
+		},
+	),
+	)
 	s.runInorder()
 }
