@@ -518,7 +518,7 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())
 	}
 
-	h.registerHashes(&atx, peer) // TODO(mafa): should this be done after the ATX was validated?
+	h.registerHashes(&atx, peer)
 	if err := h.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
 		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %w",
 			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err,
