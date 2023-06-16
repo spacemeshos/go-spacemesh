@@ -41,19 +41,35 @@ func NewHandler(
 	}
 }
 
-// HandleMalfeasanceProof is the gossip receiver for MalfeasanceProof.
+// HandleSyncedMalfeasanceProof is the sync validator for MalfeasanceProof.
+func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, peer p2p.Peer, data []byte) error {
+	var p types.MalfeasanceProof
+	if err := codec.Decode(data, &p); err != nil {
+		numMalformed.Inc()
+		h.logger.With().Error("malformed message (sync)", log.Context(ctx), log.Err(err))
+		return errMalformedData
+	}
+	return h.handle(ctx, peer, &types.MalfeasanceGossip{MalfeasanceProof: p})
+}
+
+// HandleMalfeasanceProof is the gossip receiver for MalfeasanceGossip.
 func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, data []byte) error {
+	var p types.MalfeasanceGossip
+	if err := codec.Decode(data, &p); err != nil {
+		numMalformed.Inc()
+		h.logger.With().Error("malformed message", log.Context(ctx), log.Err(err))
+		return errMalformedData
+	}
+	return h.handle(ctx, peer, &p)
+}
+
+func (h *Handler) handle(ctx context.Context, peer p2p.Peer, p *types.MalfeasanceGossip) error {
 	var (
-		p         types.MalfeasanceGossip
 		nodeID    types.NodeID
 		malicious bool
 		err       error
 	)
 	logger := h.logger.WithContext(ctx)
-	if err = codec.Decode(data, &p); err != nil {
-		logger.With().Error("malformed message", log.Err(err))
-		return errMalformedData
-	}
 	switch p.Proof.Type {
 	case types.HareEquivocation:
 		nodeID, err = h.validateHareEquivocation(logger, &p.MalfeasanceProof)
@@ -67,7 +83,7 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 
 	if err != nil {
 		h.logger.WithContext(ctx).With().Warning("failed to validate malfeasance proof",
-			log.Inline(&p),
+			log.Inline(p),
 			log.Err(err),
 		)
 		return err
@@ -75,10 +91,10 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 
 	// msg is valid
 	if p.Eligibility != nil {
-		if err = h.validateHareEligibility(ctx, logger, nodeID, &p); err != nil {
+		if err = h.validateHareEligibility(ctx, logger, nodeID, p); err != nil {
 			h.logger.WithContext(ctx).With().Warning("failed to validate hare eligibility",
 				log.Stringer("smesher", nodeID),
-				log.Inline(&p),
+				log.Inline(p),
 				log.Err(err),
 			)
 			return err
@@ -101,7 +117,7 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 	if err = h.cdb.AddMalfeasanceProof(nodeID, &p.MalfeasanceProof, nil); err != nil {
 		h.logger.WithContext(ctx).With().Error("failed to save MalfeasanceProof",
 			log.Stringer("smesher", nodeID),
-			log.Inline(&p),
+			log.Inline(p),
 			log.Err(err),
 		)
 		return fmt.Errorf("add malfeasance proof: %w", err)
@@ -109,7 +125,7 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 	updateMetrics(p.Proof)
 	h.logger.WithContext(ctx).With().Info("new malfeasance proof",
 		log.Stringer("smesher", nodeID),
-		log.Inline(&p),
+		log.Inline(p),
 	)
 	return nil
 }
