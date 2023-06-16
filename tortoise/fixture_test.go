@@ -62,7 +62,7 @@ func (s *smesher) atx(epoch uint32, opts ...*aopt) *atxAction {
 	val := &atxAction{
 		reg:     s.reg,
 		header:  header,
-		ballots: map[uint32]*ballotAction{},
+		ballots: map[types.BallotID]*ballotAction{},
 	}
 	s.reg.register(val)
 	s.atxs[epoch] = val
@@ -73,7 +73,7 @@ type atxAction struct {
 	reg registry
 
 	header    types.AtxTortoiseData
-	ballots   map[uint32]*ballotAction
+	ballots   map[types.BallotID]*ballotAction
 	reference *ballotAction
 }
 
@@ -170,16 +170,12 @@ func (a *atxAction) execute(trt *Tortoise) {
 	trt.OnAtx(&a.header)
 }
 
-func (a *atxAction) ballot(n int, opts ...*bopt) *ballotAction {
+func (a *atxAction) rawballot(id types.BallotID, n int, opts ...*bopt) *ballotAction {
 	lid := uint32(n) + types.GetEffectiveGenesis().Uint32()
-	if val, exist := a.ballots[lid]; exist {
-		return val
-	}
 	b := types.BallotTortoiseData{}
 	b.AtxID = a.header.ID
 	b.Layer = types.LayerID(lid)
-	hs := hash.Sum(a.header.ID[:], []byte(strconv.Itoa(int(lid))))
-	copy(b.ID[:], hs[:])
+	b.ID = id
 
 	val := &ballotAction{
 		BallotTortoiseData: b,
@@ -210,8 +206,18 @@ func (a *atxAction) ballot(n int, opts ...*bopt) *ballotAction {
 	}
 
 	a.reg.register(val)
-	a.ballots[lid] = val
+	a.ballots[id] = val
 	return val
+}
+
+func (a *atxAction) ballot(n int, opts ...*bopt) *ballotAction {
+	hs := hash.Sum(a.header.ID[:], []byte(strconv.Itoa(int(n))))
+	var id types.BallotID
+	copy(id[:], hs[:])
+	if val, exist := a.ballots[id]; exist {
+		return val
+	}
+	return a.rawballot(id, n, opts...)
 }
 
 type ballotAction struct {
@@ -236,7 +242,7 @@ func (b *ballotAction) computeOpinion() types.Hash32 {
 	for i := range votes {
 		votes[i] = []types.Vote{} // against by default
 	}
-	b.decodeVotesInto(votes)
+	b.decodeVotes(votes)
 	hasher := opinionhash.New()
 	rst := types.Hash32{}
 	for i, layer := range votes {
@@ -263,9 +269,9 @@ func (b *ballotAction) computeOpinion() types.Hash32 {
 	return rst
 }
 
-func (b *ballotAction) decodeVotesInto(votes [][]types.Vote) {
+func (b *ballotAction) decodeVotes(votes [][]types.Vote) {
 	if b.base != nil {
-		b.base.decodeVotesInto(votes)
+		b.base.decodeVotes(votes)
 	}
 	genesis := types.GetEffectiveGenesis()
 	for _, vote := range b.Opinion.Support {
@@ -274,7 +280,6 @@ func (b *ballotAction) decodeVotesInto(votes [][]types.Vote) {
 		for _, existing := range votes[pos] {
 			if existing == vote {
 				matches = true
-				break
 			}
 		}
 		if !matches {
@@ -285,7 +290,7 @@ func (b *ballotAction) decodeVotesInto(votes [][]types.Vote) {
 		pos := vote.LayerID.Difference(genesis)
 		for i, existing := range votes[pos] {
 			if existing == vote {
-				votes[pos] = append(votes[pos][:i], votes[pos][i+1:]...)
+				votes[pos] = append(votes[pos][:i], votes[pos][i:]...)
 				break
 			}
 		}
@@ -333,6 +338,7 @@ type session struct {
 	tb        testing.TB
 	epochSize int
 	layerSize int
+	hdist     int
 	config    *Config
 
 	smeshers map[int]*smesher
@@ -539,6 +545,30 @@ func (s *session) updates(tb testing.TB, expect *results) {
 	s.register(&updateActions{tb, expect.results, deps})
 }
 
+type modeAction struct {
+	tb      testing.TB
+	actions []action
+	expect  Mode
+}
+
+func (m *modeAction) deps() []action {
+	return m.actions
+}
+
+func (m *modeAction) String() string {
+	return fmt.Sprintf("expect mode %s", m.expect)
+}
+
+func (m *modeAction) execute(t *Tortoise) {
+	require.Equal(m.tb, m.expect, t.Mode())
+}
+
+func (s *session) mode(tb testing.TB, m Mode) {
+	deps := make([]action, len(s.actions))
+	copy(deps, s.actions)
+	s.register(&modeAction{tb, deps, m})
+}
+
 func (s *session) runInorder() {
 	s.runActions(s.actions)
 }
@@ -613,6 +643,7 @@ func (s *session) withEpochSize(val uint32) *session {
 
 func (s *session) withHdist(val uint32) *session {
 	s.ensureConfig()
+	s.hdist = int(val)
 	s.config.Hdist = val
 	return s
 }

@@ -311,9 +311,10 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 	t.logger.Debug("on layer", zap.Uint32("last", last.Uint32()))
 	defer t.evict(ctx)
 	if last.After(t.last) {
+		update := t.last.GetEpoch() != last.GetEpoch()
 		t.last = last
 		lastLayer.Set(float64(t.last))
-		if t.last.FirstInEpoch() {
+		if update {
 			epoch := t.epoch(last.GetEpoch())
 			t.localThreshold = epoch.weight.
 				Div(fixed.New(localThresholdFraction)).
@@ -404,29 +405,26 @@ func (t *turtle) countBallot(ballot *ballotInfo) error {
 
 func (t *turtle) verifyLayers() {
 	// TODO(dshulyak) simplify processing of layers and notifications
-	verified := maxLayer(t.evicted, types.GetEffectiveGenesis())
-
-	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
-		success := t.verifying.verify(t.logger, target)
-		if success && t.isFull {
+	var (
+		verified  = maxLayer(t.evicted, types.GetEffectiveGenesis())
+		nverified types.LayerID
+	)
+	if t.isFull {
+		nverified = t.runFull()
+		if nverified == t.processed-1 && nverified == t.runVerifying() {
 			t.switchModes()
 		}
-		if !success && (t.isFull || !withinDistance(t.Hdist, target, t.last)) {
-			if !t.isFull {
-				t.switchModes()
-				for counted := maxLayer(t.full.counted.Add(1), t.evicted.Add(1)); !counted.After(t.processed); counted = counted.Add(1) {
-					for _, ballot := range t.ballots[counted] {
-						t.full.countBallot(t.logger, ballot)
-					}
-					t.full.countDelayed(t.logger, counted)
-					t.full.counted = counted
-				}
-			}
-			success = t.full.verify(t.logger, target)
+	} else {
+		nverified = t.runVerifying()
+		// count all votes if next layer after verified is outside hdist
+		if !withinDistance(t.Hdist, nverified+1, t.last) {
+			nverified = t.runFull()
 		}
+	}
 
+	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
 		layer := t.layer(target)
-		if !success {
+		if nverified < target {
 			// notify mesh in two additional cases:
 			// - if layer was verified, and became undecided
 			// - if layer is undecided outside hdist distance
@@ -486,6 +484,38 @@ func (t *turtle) verifyLayers() {
 		t.changedOpinion.min = 0
 		t.changedOpinion.max = 0
 	}
+}
+
+func (t *turtle) runVerifying() types.LayerID {
+	rst := t.evicted
+	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
+		if !t.verifying.verify(t.logger, target) {
+			return rst
+		}
+		rst = target
+	}
+	return rst
+}
+
+func (t *turtle) runFull() types.LayerID {
+	if !t.isFull {
+		t.switchModes()
+		for counted := maxLayer(t.full.counted.Add(1), t.evicted.Add(1)); !counted.After(t.processed); counted = counted.Add(1) {
+			for _, ballot := range t.ballots[counted] {
+				t.full.countBallot(t.logger, ballot)
+			}
+			t.full.countDelayed(t.logger, counted)
+			t.full.counted = counted
+		}
+	}
+	rst := t.evicted
+	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
+		if !t.full.verify(t.logger, target) {
+			return rst
+		}
+		rst = target
+	}
+	return rst
 }
 
 func (t *turtle) computeEpochHeight(epoch types.EpochID) {
