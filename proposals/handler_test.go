@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -29,7 +28,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -46,6 +44,7 @@ type mockSet struct {
 	mpub   *pubsubmock.MockPublisher
 	mf     *mocks.MockFetcher
 	mbc    *mocks.MockBeaconCollector
+	mclock *MocklayerClock
 	mm     *MockmeshProvider
 	mv     *MockeligibilityValidator
 	md     *MockballotDecoder
@@ -56,6 +55,12 @@ type mockSet struct {
 func (ms *mockSet) decodeAnyBallots() *mockSet {
 	ms.md.EXPECT().DecodeBallot(gomock.Any()).AnyTimes()
 	ms.md.EXPECT().StoreBallot(gomock.Any()).AnyTimes()
+	return ms
+}
+
+func (ms *mockSet) setCurrentLayer(layer types.LayerID) *mockSet {
+	ms.mclock.EXPECT().CurrentLayer().Return(layer).AnyTimes()
+	ms.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now().Add(-5 * time.Second)).AnyTimes()
 	return ms
 }
 
@@ -70,6 +75,7 @@ func fullMockSet(tb testing.TB) *mockSet {
 		mpub:   pubsubmock.NewMockPublisher(ctrl),
 		mf:     mocks.NewMockFetcher(ctrl),
 		mbc:    mocks.NewMockBeaconCollector(ctrl),
+		mclock: NewMocklayerClock(ctrl),
 		mm:     NewMockmeshProvider(ctrl),
 		mv:     NewMockeligibilityValidator(ctrl),
 		md:     NewMockballotDecoder(ctrl),
@@ -84,15 +90,8 @@ func createTestHandler(t *testing.T) *testHandler {
 	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	clock, err := timesync.NewClock(
-		timesync.WithLayerDuration(time.Minute),
-		timesync.WithTickInterval(time.Second),
-		timesync.WithGenesisTime(time.Now()),
-		timesync.WithLogger(log.NewNop()),
-	)
-	require.NoError(t, err)
 	return &testHandler{
-		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), edVerifier, ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf, clock,
+		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), edVerifier, ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf, ms.mclock,
 			WithLogger(logtest.New(t)),
 			WithConfig(Config{
 				LayerSize:      layerAvgSize,
@@ -110,6 +109,7 @@ func createTestHandler(t *testing.T) *testHandler {
 func createTestHandlerNoopDecoder(t *testing.T) *testHandler {
 	th := createTestHandler(t)
 	th.mockSet.decodeAnyBallots()
+	th.mockSet.setCurrentLayer(100*types.LayerID(types.GetLayersPerEpoch()) + 1)
 	return th
 }
 
@@ -294,6 +294,24 @@ func TestBallot_KnownBallot(t *testing.T) {
 	peer := p2p.Peer("buddy")
 	th.mf.EXPECT().RegisterPeerHashes(peer, collectHashes(*b))
 	require.NoError(t, th.HandleSyncedBallot(context.Background(), peer, data))
+}
+
+func TestBallot_BeforeEffectiveGenesis(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	b := types.RandomBallot()
+	b.Layer = types.GetEffectiveGenesis()
+	b = signAndInit(t, b)
+	data := encodeBallot(t, b)
+	require.ErrorContains(t, th.HandleSyncedBallot(context.Background(), "", data), "ballot before effective genesis")
+}
+
+func TestBallot_FromFuture(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	b := types.RandomBallot()
+	b.Layer = th.clock.CurrentLayer() * 2
+	b = signAndInit(t, b)
+	data := encodeBallot(t, b)
+	require.ErrorContains(t, th.HandleSyncedBallot(context.Background(), "", data), "ballot from future")
 }
 
 func TestBallot_EmptyATXID(t *testing.T) {
@@ -684,6 +702,7 @@ func TestBallot_NotEligible(t *testing.T) {
 func TestBallot_Success(t *testing.T) {
 	th := createTestHandler(t)
 	lid := types.LayerID(100)
+	th.mockSet.setCurrentLayer(lid)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -717,6 +736,7 @@ func TestBallot_Success(t *testing.T) {
 func TestBallot_MaliciousProofIgnoredInSyncFlow(t *testing.T) {
 	th := createTestHandler(t)
 	lid := types.LayerID(100)
+	th.mockSet.setCurrentLayer(lid)
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -783,6 +803,7 @@ func TestBallot_RefBallot(t *testing.T) {
 func TestBallot_DecodeBeforeVotesConsistency(t *testing.T) {
 	th := createTestHandler(t)
 	b := createBallot(t)
+	th.mockSet.setCurrentLayer(b.Layer)
 	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	b.Votes.Against = b.Votes.Support
 	for _, bid := range b.Votes.Support {
@@ -806,6 +827,7 @@ func TestBallot_DecodeBeforeVotesConsistency(t *testing.T) {
 func TestBallot_DecodedStoreFailure(t *testing.T) {
 	th := createTestHandler(t)
 	b := createBallot(t)
+	th.mockSet.setCurrentLayer(b.Layer)
 	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, b.SmesherID)
 	b.Votes.Support = nil // just to avoid creating blocks
 	expected := errors.New("test")
@@ -832,6 +854,30 @@ func TestProposal_MalformedData(t *testing.T) {
 	require.NoError(t, err)
 	require.ErrorIs(t, th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data), errMalformedData)
 	require.ErrorIs(t, th.HandleProposal(context.Background(), "", data), pubsub.ErrValidationReject)
+	checkProposal(t, th.cdb, p, false)
+}
+
+func TestProposal_BeforeEffectiveGenesis(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	p := createProposal(t)
+	p.Layer = types.GetEffectiveGenesis()
+	data := encodeProposal(t, p)
+	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
+	require.ErrorContains(t, got, "proposal before effective genesis")
+
+	require.Error(t, th.HandleProposal(context.Background(), "", data))
+	checkProposal(t, th.cdb, p, false)
+}
+
+func TestProposal_FromFuture(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	p := createProposal(t)
+	p.Layer = th.clock.CurrentLayer() * 2
+	data := encodeProposal(t, p)
+	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
+	require.ErrorContains(t, got, "proposal from future")
+
+	require.Error(t, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)
 }
 

@@ -21,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -58,7 +57,7 @@ type Handler struct {
 	mesh       meshProvider
 	validator  eligibilityValidator
 	decoder    ballotDecoder
-	clock      *timesync.NodeClock
+	clock      layerClock
 }
 
 // Config defines configuration for the handler.
@@ -111,7 +110,7 @@ func NewHandler(
 	m meshProvider,
 	decoder ballotDecoder,
 	verifier vrfVerifier,
-	clock *timesync.NodeClock,
+	clock layerClock,
 	opts ...Opt,
 ) *Handler {
 	b := &Handler{
@@ -146,6 +145,10 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []
 	}
 	if b.Layer <= types.GetEffectiveGenesis() {
 		return fmt.Errorf("ballot before effective genesis: layer %v", b.Layer)
+	}
+	if b.Layer.GetEpoch() > h.clock.CurrentLayer().GetEpoch()+1 {
+		badData.Inc()
+		return fmt.Errorf("ballot from future epoch: %v", b.Layer.GetEpoch())
 	}
 
 	if !h.edVerifier.Verify(signing.BALLOT, b.SmesherID, b.SignedBytes(), b.Signature) {
@@ -234,6 +237,10 @@ func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte
 	if p.Layer <= types.GetEffectiveGenesis() {
 		preGenesis.Inc()
 		return fmt.Errorf("proposal before effective genesis: layer %v", p.Layer)
+	}
+	if p.Layer.GetEpoch() > h.clock.CurrentLayer().GetEpoch()+1 {
+		badData.Inc()
+		return fmt.Errorf("proposal from future epoch: %v", p.Layer.GetEpoch())
 	}
 
 	latency := receivedTime.Sub(h.clock.LayerToTime(p.Layer))

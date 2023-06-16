@@ -2,6 +2,7 @@ package proposals
 
 import (
 	"context"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
@@ -30,4 +31,9 @@ type vrfVerifier interface {
 
 type nonceFetcher interface {
 	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
+}
+
+type layerClock interface {
+	CurrentLayer() types.LayerID
+	LayerToTime(types.LayerID) time.Time
 }
