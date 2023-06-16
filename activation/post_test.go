@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"reflect"
 	"testing"
 	"time"
 
@@ -444,41 +443,34 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 	}
 }
 
-func TestDecodingPowDifficulty(t *testing.T) {
+func TestSettingPowDifficulty(t *testing.T) {
 	t.Parallel()
 	expected := bytes.Repeat([]byte{0x01, 0x02, 0x03, 0x04}, 8)
 	encoded := hex.EncodeToString(expected)
 	t.Run("parse 32B hex", func(t *testing.T) {
 		t.Parallel()
-		res, err := DecodePowDifficulty(reflect.TypeOf(""), reflect.TypeOf(PowDifficulty{}), encoded)
+		d := PowDifficulty{}
+		err := d.Set(encoded)
 		require.NoError(t, err)
-		diff, ok := res.(PowDifficulty)
-		require.True(t, ok)
-		require.Equal(t, expected, diff[:])
+		require.Equal(t, expected, d[:])
 	})
 	t.Run("input too short", func(t *testing.T) {
 		t.Parallel()
-		res, err := DecodePowDifficulty(reflect.TypeOf(""), reflect.TypeOf(PowDifficulty{}), "0")
-		require.Error(t, err)
-		require.Nil(t, res)
+		d := PowDifficulty{}
+		require.Error(t, d.Set("123"))
+		require.Equal(t, PowDifficulty{}, d)
 	})
-	t.Run("different input type", func(t *testing.T) {
+	t.Run("input too long", func(t *testing.T) {
 		t.Parallel()
-		res, err := DecodePowDifficulty(reflect.TypeOf(1), reflect.TypeOf(PowDifficulty{}), encoded)
-		require.NoError(t, err)
-		require.Equal(t, encoded, res)
-	})
-	t.Run("different output type", func(t *testing.T) {
-		t.Parallel()
-		res, err := DecodePowDifficulty(reflect.TypeOf(""), reflect.TypeOf(1), encoded)
-		require.NoError(t, err)
-		require.Equal(t, encoded, res)
+		d := PowDifficulty{}
+		require.Error(t, d.Set(hex.EncodeToString(bytes.Repeat([]byte{0x01}, 33))))
+		require.Equal(t, PowDifficulty{}, d)
 	})
 	t.Run("not a hex string", func(t *testing.T) {
 		t.Parallel()
 		encoded := encoded[:len(encoded)-1] + "G"
-		res, err := DecodePowDifficulty(reflect.TypeOf(""), reflect.TypeOf(PowDifficulty{}), encoded)
-		require.Error(t, err)
-		require.Nil(t, res)
+		d := PowDifficulty{}
+		require.Error(t, d.Set(encoded))
+		require.Equal(t, PowDifficulty{}, d)
 	})
 }

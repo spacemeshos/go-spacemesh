@@ -239,7 +239,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
 		mapstructureutil.BigRatDecodeFunc(),
-		activation.DecodePowDifficulty,
+		mapstructure.TextUnmarshallerHookFunc(),
 	)
 
 	// load config if it was loaded to the viper

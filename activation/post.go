@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"reflect"
 	"runtime"
 	"sync"
 
@@ -54,30 +53,27 @@ func (d PowDifficulty) String() string {
 	return fmt.Sprintf("%X", d[:])
 }
 
+// Set implements pflag.Value.Set.
+func (f *PowDifficulty) Set(value string) error {
+	return f.UnmarshalText([]byte(value))
+}
+
+// Type implements pflag.Value.Type.
+func (PowDifficulty) Type() string {
+	return "PowDifficulty"
+}
+
 func (d *PowDifficulty) UnmarshalText(text []byte) error {
 	decodedLen := hex.DecodedLen(len(text))
 	if decodedLen != 32 {
 		return fmt.Errorf("expected 32 bytes, got %d", decodedLen)
 	}
-	_, err := hex.Decode(d[:], text)
-	return err
-}
-
-// Decodes a hex string representation of PoW difficulty into a [32]byte.
-func DecodePowDifficulty(f reflect.Type, t reflect.Type, data any) (any, error) {
-	if f.Kind() != reflect.String {
-		return data, nil
+	var dst [32]byte
+	if _, err := hex.Decode(dst[:], text); err != nil {
+		return err
 	}
-	if t != reflect.TypeOf(PowDifficulty{}) {
-		return data, nil
-	}
-
-	var dst PowDifficulty
-	if err := dst.UnmarshalText([]byte(data.(string))); err != nil {
-		return nil, err
-	}
-
-	return dst, nil
+	*d = PowDifficulty(dst)
+	return nil
 }
 
 // PostSetupOpts are the options used to initiate a Post setup data creation session,
