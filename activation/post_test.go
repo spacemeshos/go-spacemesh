@@ -450,21 +450,21 @@ func TestDecodingPowDifficulty(t *testing.T) {
 	encoded := hex.EncodeToString(expected)
 	t.Run("parse 32B hex", func(t *testing.T) {
 		t.Parallel()
-		res, err := DecodePowDifficulty(reflect.TypeOf(""), reflect.TypeOf([32]byte{}), encoded)
+		res, err := DecodePowDifficulty(reflect.TypeOf(""), reflect.TypeOf(PowDifficulty{}), encoded)
 		require.NoError(t, err)
-		arr, ok := res.([32]byte)
+		diff, ok := res.(PowDifficulty)
 		require.True(t, ok)
-		require.Equal(t, expected, arr[:])
+		require.Equal(t, expected, diff[:])
 	})
 	t.Run("input too short", func(t *testing.T) {
 		t.Parallel()
-		res, err := DecodePowDifficulty(reflect.TypeOf(""), reflect.TypeOf([32]byte{}), "0")
-		require.NoError(t, err)
-		require.Equal(t, "0", res)
+		res, err := DecodePowDifficulty(reflect.TypeOf(""), reflect.TypeOf(PowDifficulty{}), "0")
+		require.Error(t, err)
+		require.Nil(t, res)
 	})
 	t.Run("different input type", func(t *testing.T) {
 		t.Parallel()
-		res, err := DecodePowDifficulty(reflect.TypeOf(1), reflect.TypeOf([32]byte{}), encoded)
+		res, err := DecodePowDifficulty(reflect.TypeOf(1), reflect.TypeOf(PowDifficulty{}), encoded)
 		require.NoError(t, err)
 		require.Equal(t, encoded, res)
 	})
@@ -477,8 +477,8 @@ func TestDecodingPowDifficulty(t *testing.T) {
 	t.Run("not a hex string", func(t *testing.T) {
 		t.Parallel()
 		encoded := encoded[:len(encoded)-1] + "G"
-		res, err := DecodePowDifficulty(reflect.TypeOf(""), reflect.TypeOf([32]byte{}), encoded)
-		require.NoError(t, err)
-		require.Equal(t, encoded, res)
+		res, err := DecodePowDifficulty(reflect.TypeOf(""), reflect.TypeOf(PowDifficulty{}), encoded)
+		require.Error(t, err)
+		require.Nil(t, res)
 	})
 }

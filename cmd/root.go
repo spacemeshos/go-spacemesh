@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
@@ -16,6 +17,20 @@ var cfg = config.DefaultConfig()
 
 func ResetConfig() {
 	cfg = config.DefaultConfig()
+}
+
+type powDifficultyFlag struct {
+	*activation.PowDifficulty
+}
+
+// Set implements pflag.Value.Set.
+func (f powDifficultyFlag) Set(value string) error {
+	return f.UnmarshalText([]byte(value))
+}
+
+// Type implements pflag.Value.Type.
+func (powDifficultyFlag) Type() string {
+	return "PowDifficulty"
 }
 
 // AddCommands adds cobra commands to the app.
@@ -209,7 +224,9 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.K3, "post-k3",
 		cfg.POST.K3, "subset of labels to verify in a proof")
 	cmd.PersistentFlags().Uint64Var(&cfg.POST.K2PowDifficulty, "post-k2pow-difficulty",
-		cfg.POST.K2PowDifficulty, "difficulty of K2 proof of work")
+		cfg.POST.K2PowDifficulty, "difficulty of scrypt-based proof of work")
+
+	cmd.PersistentFlags().VarP(powDifficultyFlag{&cfg.POST.PowDifficulty}, "post-pow-difficulty", "", "difficulty of randomx-based proof of work")
 
 	/**======================== Smeshing Flags ========================== **/
 

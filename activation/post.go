@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	reflect "reflect"
+	"reflect"
 	"runtime"
 	"sync"
 
@@ -25,14 +25,42 @@ type PostSetupProvider initialization.Provider
 
 // PostConfig is the configuration of the Post protocol, used for data creation, proofs generation and validation.
 type PostConfig struct {
-	MinNumUnits     uint32   `mapstructure:"post-min-numunits"`
-	MaxNumUnits     uint32   `mapstructure:"post-max-numunits"`
-	LabelsPerUnit   uint64   `mapstructure:"post-labels-per-unit"`
-	K1              uint32   `mapstructure:"post-k1"`
-	K2              uint32   `mapstructure:"post-k2"`
-	K3              uint32   `mapstructure:"post-k3"`
-	K2PowDifficulty uint64   `mapstructure:"post-k2pow-difficulty"`
-	PowDifficulty   [32]byte `mapstructure:"post-pow-difficulty"`
+	MinNumUnits     uint32        `mapstructure:"post-min-numunits"`
+	MaxNumUnits     uint32        `mapstructure:"post-max-numunits"`
+	LabelsPerUnit   uint64        `mapstructure:"post-labels-per-unit"`
+	K1              uint32        `mapstructure:"post-k1"`
+	K2              uint32        `mapstructure:"post-k2"`
+	K3              uint32        `mapstructure:"post-k3"`
+	K2PowDifficulty uint64        `mapstructure:"post-k2pow-difficulty"`
+	PowDifficulty   PowDifficulty `mapstructure:"post-pow-difficulty"`
+}
+
+func (c PostConfig) ToConfig() config.Config {
+	return config.Config{
+		MinNumUnits:     c.MinNumUnits,
+		MaxNumUnits:     c.MaxNumUnits,
+		LabelsPerUnit:   c.LabelsPerUnit,
+		K1:              c.K1,
+		K2:              c.K2,
+		K3:              c.K3,
+		K2PowDifficulty: c.K2PowDifficulty,
+		PowDifficulty:   [32]byte(c.PowDifficulty),
+	}
+}
+
+type PowDifficulty [32]byte
+
+func (d PowDifficulty) String() string {
+	return fmt.Sprintf("%X", d[:])
+}
+
+func (d *PowDifficulty) UnmarshalText(text []byte) error {
+	decodedLen := hex.DecodedLen(len(text))
+	if decodedLen != 32 {
+		return fmt.Errorf("expected 32 bytes, got %d", decodedLen)
+	}
+	_, err := hex.Decode(d[:], text)
+	return err
 }
 
 // Decodes a hex string representation of PoW difficulty into a [32]byte.
@@ -40,16 +68,13 @@ func DecodePowDifficulty(f reflect.Type, t reflect.Type, data any) (any, error) 
 	if f.Kind() != reflect.String {
 		return data, nil
 	}
-	if t != reflect.TypeOf([32]byte{}) {
-		return data, nil
-	}
-	if hex.DecodedLen(len(data.(string))) != 32 {
+	if t != reflect.TypeOf(PowDifficulty{}) {
 		return data, nil
 	}
 
-	var dst [32]byte
-	if _, err := hex.Decode(dst[:], []byte(data.(string))); err != nil {
-		return data, nil
+	var dst PowDifficulty
+	if err := dst.UnmarshalText([]byte(data.(string))); err != nil {
+		return nil, err
 	}
 
 	return dst, nil
@@ -129,7 +154,17 @@ var (
 
 // DefaultPostConfig defines the default configuration for Post.
 func DefaultPostConfig() PostConfig {
-	return (PostConfig)(config.DefaultConfig())
+	cfg := config.DefaultConfig()
+	return PostConfig{
+		MinNumUnits:     cfg.MinNumUnits,
+		MaxNumUnits:     cfg.MaxNumUnits,
+		LabelsPerUnit:   cfg.LabelsPerUnit,
+		K1:              cfg.K1,
+		K2:              cfg.K2,
+		K3:              cfg.K3,
+		K2PowDifficulty: cfg.K2PowDifficulty,
+		PowDifficulty:   PowDifficulty(cfg.PowDifficulty),
+	}
 }
 
 // DefaultPostSetupOpts defines the default options for Post setup.
@@ -326,7 +361,7 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 	newInit, err := initialization.NewInitializer(
 		initialization.WithNodeId(mgr.id.Bytes()),
 		initialization.WithCommitmentAtxId(mgr.commitmentAtxId.Bytes()),
-		initialization.WithConfig(config.Config(mgr.cfg)),
+		initialization.WithConfig(mgr.cfg.ToConfig()),
 		initialization.WithInitOpts(config.InitOpts(opts)),
 		initialization.WithLogger(mgr.logger.Zap()),
 	)
@@ -414,8 +449,8 @@ func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte
 	}
 	mgr.mu.Unlock()
 
-	proof, proofMetadata, err := proving.Generate(ctx, challenge, config.Config(mgr.cfg), mgr.logger.Zap(),
-		proving.WithDataSource(config.Config(mgr.cfg), mgr.id.Bytes(), mgr.commitmentAtxId.Bytes(), mgr.lastOpts.DataDir),
+	proof, proofMetadata, err := proving.Generate(ctx, challenge, mgr.cfg.ToConfig(), mgr.logger.Zap(),
+		proving.WithDataSource(mgr.cfg.ToConfig(), mgr.id.Bytes(), mgr.commitmentAtxId.Bytes(), mgr.lastOpts.DataDir),
 		proving.WithNonces(mgr.provingOpts.Nonces),
 		proving.WithThreads(mgr.provingOpts.Threads),
 		proving.WithPowFlags(mgr.provingOpts.Flags),

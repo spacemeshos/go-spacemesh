@@ -34,18 +34,14 @@ type postVerifierWorker struct {
 }
 
 type postVerifier struct {
-	inner  *verifying.ProofVerifier
+	*verifying.ProofVerifier
 	logger log.Log
 	cfg    config.Config
 }
 
 func (v *postVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
 	v.logger.WithContext(ctx).With().Debug("verifying post", log.FieldNamed("proof_node_id", types.BytesToNodeID(m.NodeId)))
-	return v.inner.Verify(p, m, v.cfg, v.logger.Zap(), opts...)
-}
-
-func (v *postVerifier) Close() error {
-	return v.inner.Close()
+	return v.ProofVerifier.Verify(p, m, v.cfg, v.logger.Zap(), opts...)
 }
 
 // NewPostVerifier creates a new post verifier.
@@ -55,7 +51,7 @@ func NewPostVerifier(cfg PostConfig, logger log.Log, opts ...verifying.OptionFun
 		return nil, err
 	}
 
-	return &postVerifier{logger: logger, inner: verifier, cfg: config.Config(cfg)}, nil
+	return &postVerifier{logger: logger, ProofVerifier: verifier, cfg: cfg.ToConfig()}, nil
 }
 
 // NewOffloadingPostVerifier creates a new post proof verifier with the given number of workers.

@@ -38,7 +38,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	init, err := initialization.NewInitializer(
 		initialization.WithNodeId(nodeId.Bytes()),
 		initialization.WithCommitmentAtxId(commitmentAtxId.Bytes()),
-		initialization.WithConfig((config.Config)(postCfg)),
+		initialization.WithConfig(postCfg.ToConfig()),
 		initialization.WithInitOpts((config.InitOpts)(initOpts)),
 	)
 	r.NoError(err)
