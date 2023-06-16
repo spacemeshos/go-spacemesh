@@ -452,6 +452,7 @@ func TestHare_goodProposal(t *testing.T) {
 		beacons     [3]types.Beacon
 		baseHeights [3]uint64
 		malicious   [3]bool
+		atxids      [3]*types.ATXID
 		refBallot   []int
 		expected    []int
 	}{
@@ -498,6 +499,13 @@ func TestHare_goodProposal(t *testing.T) {
 			malicious:   [3]bool{false, true, true},
 			expected:    []int{0},
 		},
+		{
+			name:        "reusing atxids",
+			beacons:     [3]types.Beacon{nodeBeacon, nodeBeacon, nodeBeacon},
+			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
+			atxids:      [3]*types.ATXID{{1}, {1}},
+			expected:    []int{2},
+		},
 	}
 
 	for _, tc := range tt {
@@ -515,6 +523,8 @@ func TestHare_goodProposal(t *testing.T) {
 			for i, p := range pList {
 				if tc.malicious[i] {
 					p.SetMalicious()
+				} else if tc.atxids[i] != nil {
+					p.AtxID = *tc.atxids[i]
 				} else {
 					mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: tc.baseHeights[i], TickCount: 1}, nil)
 				}

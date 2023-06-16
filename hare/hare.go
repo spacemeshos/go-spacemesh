@@ -470,10 +470,21 @@ func goodProposals(ctx context.Context, logger log.Log, msh mesh, nodeID types.N
 	if ownHdr != nil {
 		ownTickHeight = ownHdr.TickHeight()
 	}
+	atxs := map[types.ATXID]int{}
+	for _, p := range props {
+		atxs[p.AtxID]++
+	}
 	for _, p := range props {
 		if p.IsMalicious() {
 			logger.With().Warning("not voting on proposal from malicious identity",
 				log.Stringer("id", p.ID()),
+			)
+			continue
+		}
+		if atxs[p.AtxID] > 1 {
+			logger.With().Warning("proposal with same atx added twice in the recorded set",
+				log.Stringer("id", p.ID()),
+				log.Stringer("atxid", p.AtxID),
 			)
 			continue
 		}
