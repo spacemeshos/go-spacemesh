@@ -236,7 +236,7 @@ func (b *ballotAction) computeOpinion() types.Hash32 {
 	for i := range votes {
 		votes[i] = []types.Vote{} // against by default
 	}
-	b.decodeVotes(votes)
+	b.decodeVotesInto(votes)
 	hasher := opinionhash.New()
 	rst := types.Hash32{}
 	for i, layer := range votes {
@@ -263,9 +263,9 @@ func (b *ballotAction) computeOpinion() types.Hash32 {
 	return rst
 }
 
-func (b *ballotAction) decodeVotes(votes [][]types.Vote) {
+func (b *ballotAction) decodeVotesInto(votes [][]types.Vote) {
 	if b.base != nil {
-		b.base.decodeVotes(votes)
+		b.base.decodeVotesInto(votes)
 	}
 	genesis := types.GetEffectiveGenesis()
 	for _, vote := range b.Opinion.Support {
@@ -274,6 +274,7 @@ func (b *ballotAction) decodeVotes(votes [][]types.Vote) {
 		for _, existing := range votes[pos] {
 			if existing == vote {
 				matches = true
+				break
 			}
 		}
 		if !matches {
@@ -284,7 +285,7 @@ func (b *ballotAction) decodeVotes(votes [][]types.Vote) {
 		pos := vote.LayerID.Difference(genesis)
 		for i, existing := range votes[pos] {
 			if existing == vote {
-				votes[pos] = append(votes[pos][:i], votes[pos][i:]...)
+				votes[pos] = append(votes[pos][:i], votes[pos][i+1:]...)
 				break
 			}
 		}
