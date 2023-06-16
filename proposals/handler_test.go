@@ -314,15 +314,6 @@ func TestBallot_EmptyATXID(t *testing.T) {
 	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), "", data), errInvalidATXID)
 }
 
-func TestBallot_ATXFromWrongEpoch(t *testing.T) {
-	th := createTestHandlerNoopDecoder(t)
-	b := createRefBallot(t)
-	b = signAndInit(t, b)
-	createAtx(t, th.cdb.Database, b.Layer.GetEpoch(), b.AtxID, b.SmesherID)
-	data := encodeBallot(t, b)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), "", data), errInvalidATXID)
-}
-
 func TestBallot_GoldenATXID(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := types.RandomBallot()
@@ -617,16 +608,6 @@ func TestBallot_BallotsNotAvailable(t *testing.T) {
 	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), peer, data), errUnknown)
 }
 
-func TestBallot_AtxFromDifferentSmesher(t *testing.T) {
-	th := createTestHandlerNoopDecoder(t)
-	b := createBallot(t)
-	createAtx(t, th.cdb.Database, b.Layer.GetEpoch()-1, b.AtxID, types.NodeID{1, 2, 3})
-	data := encodeBallot(t, b)
-
-	peer := p2p.Peer("buddy")
-	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), peer, data), errWrongSmesherID)
-}
-
 func TestBallot_ATXsNotAvailable(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
@@ -876,30 +857,6 @@ func TestProposal_BadSignature(t *testing.T) {
 	data := encodeProposal(t, p)
 	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
 	require.ErrorContains(t, got, "failed to verify proposal signature")
-
-	require.Error(t, th.HandleProposal(context.Background(), "", data))
-	checkProposal(t, th.cdb, p, false)
-}
-
-func TestProposal_ATXFromWrongEpoch(t *testing.T) {
-	th := createTestHandlerNoopDecoder(t)
-	p := createProposal(t)
-	createAtx(t, th.cdb.Database, p.Layer.GetEpoch(), p.AtxID, p.SmesherID)
-	data := encodeProposal(t, p)
-	got := th.HandleSyncedProposal(context.Background(), "", data)
-	require.ErrorIs(t, got, errInvalidATXID)
-
-	require.Error(t, th.HandleProposal(context.Background(), "", data))
-	checkProposal(t, th.cdb, p, false)
-}
-
-func TestProposal_AtxFromDifferentSmesher(t *testing.T) {
-	th := createTestHandlerNoopDecoder(t)
-	p := createProposal(t)
-	createAtx(t, th.cdb.Database, p.Layer.GetEpoch()-1, p.AtxID, types.NodeID{1, 2, 3})
-	data := encodeProposal(t, p)
-	got := th.HandleSyncedProposal(context.Background(), "", data)
-	require.ErrorIs(t, got, errWrongSmesherID)
 
 	require.Error(t, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)

@@ -160,16 +160,6 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []
 	if b.AtxID == types.EmptyATXID || b.AtxID == h.cfg.GoldenATXID {
 		return errInvalidATXID
 	}
-	hdr, err := h.cdb.GetAtxHeader(b.AtxID)
-	if err != nil {
-		return fmt.Errorf("ballot atx hdr %w", err)
-	}
-	if hdr.NodeID != b.SmesherID {
-		return fmt.Errorf("%w: expected %v, got %v", errWrongSmesherID, b.SmesherID, hdr.NodeID)
-	}
-	if hdr.TargetEpoch() != b.Layer.GetEpoch() {
-		return fmt.Errorf("%w: ballot atx epoch %v, ballot epoch %v", errInvalidATXID, hdr.TargetEpoch(), b.Layer.GetEpoch())
-	}
 	ballotDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
 
 	t1 := time.Now()
@@ -261,19 +251,6 @@ func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte
 	if p.AtxID == types.EmptyATXID || p.AtxID == h.cfg.GoldenATXID {
 		badData.Inc()
 		return errInvalidATXID
-	}
-	hdr, err := h.cdb.GetAtxHeader(p.AtxID)
-	if err != nil {
-		badData.Inc()
-		return fmt.Errorf("proposal atx hdr %w", err)
-	}
-	if hdr.NodeID != p.SmesherID {
-		badData.Inc()
-		return fmt.Errorf("%w: expected %v, got %v", errWrongSmesherID, p.SmesherID, hdr.NodeID)
-	}
-	if hdr.TargetEpoch() != p.Layer.GetEpoch() {
-		badData.Inc()
-		return fmt.Errorf("%w: proposal atx epoch %v, proposal epoch %v", errInvalidATXID, hdr.TargetEpoch(), p.Layer.GetEpoch())
 	}
 	proposalDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
 
