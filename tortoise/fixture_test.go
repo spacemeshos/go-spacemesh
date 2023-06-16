@@ -166,14 +166,6 @@ func (b *bopt) votes(value *evotes) *bopt {
 	return b
 }
 
-func (b *bopt) assert(onDecode func(*DecodedBallot, error), onStore func(error)) *bopt {
-	b.opts = append(b.opts, func(ballot *ballotAction) {
-		ballot.onDecoded = onDecode
-		ballot.onStored = onStore
-	})
-	return b
-}
-
 func (a *atxAction) execute(trt *Tortoise) {
 	trt.OnAtx(&a.header)
 }
@@ -233,9 +225,6 @@ type ballotAction struct {
 	base      *ballotAction
 	activeset []*atxAction
 	before    []action
-
-	onDecoded func(*DecodedBallot, error)
-	onStored  func(error)
 }
 
 func (b *ballotAction) String() string {
@@ -314,11 +303,7 @@ func (b *ballotAction) decodeVotes(votes [][]types.Vote) {
 
 func (b *ballotAction) execute(trt *Tortoise) {
 	decoded, err := trt.DecodeBallot(&b.BallotTortoiseData)
-
 	if err != nil {
-		if b.onDecoded != nil {
-
-		}
 		panic(err)
 	}
 	if err := trt.StoreBallot(decoded); err != nil {
