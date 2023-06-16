@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -61,7 +62,7 @@ func TestBroker_Received(t *testing.T) {
 	t.Cleanup(broker.Close)
 
 	lid := types.LayerID(1)
-	inbox, err := broker.Register(context.Background(), lid)
+	inbox, _, err := broker.Register(context.Background(), lid)
 	assert.Nil(t, err)
 
 	serMsg := createMessage(t, lid)
@@ -90,7 +91,7 @@ func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	broker.mu.RUnlock()
 
 	// this statement should cause inbox1 to be unregistered
-	inbox5, _ := broker.Register(context.Background(), instanceID5)
+	inbox5, _, _ := broker.Register(context.Background(), instanceID5)
 	broker.mu.RLock()
 	assert.Equal(t, 4, len(broker.outbox))
 	broker.mu.RUnlock()
@@ -102,7 +103,7 @@ func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	assert.Nil(t, broker.outbox[instanceID1])
 	broker.mu.RUnlock()
 
-	inbox6, _ := broker.Register(context.Background(), instanceID6)
+	inbox6, _, _ := broker.Register(context.Background(), instanceID6)
 	broker.mu.RLock()
 	assert.Equal(t, 4, len(broker.outbox))
 	broker.mu.RUnlock()
@@ -175,11 +176,11 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
 
-	inbox1, err := broker.Register(context.Background(), instanceID1)
+	inbox1, _, err := broker.Register(context.Background(), instanceID1)
 	require.NoError(t, err)
-	inbox2, err := broker.Register(context.Background(), instanceID2)
+	inbox2, _, err := broker.Register(context.Background(), instanceID2)
 	require.NoError(t, err)
-	inbox3, err := broker.Register(context.Background(), instanceID3)
+	inbox3, _, err := broker.Register(context.Background(), instanceID3)
 	require.NoError(t, err)
 
 	var wg sync.WaitGroup
@@ -260,8 +261,6 @@ func TestBroker_Send(t *testing.T) {
 func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 	ctx := context.Background()
 	broker := buildBroker(t, t.Name())
-	mch := make(chan *types.MalfeasanceGossip, 1)
-	broker.mchOut = mch
 	mev := &mockEligibilityValidator{valid: 1}
 	broker.roleValidator = mev
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
@@ -270,7 +269,7 @@ func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 	broker.Start(ctx)
 	t.Cleanup(broker.Close)
 
-	inbox, err := broker.Register(context.Background(), instanceID1)
+	inbox, et, err := broker.Register(context.Background(), instanceID1)
 	require.NoError(t, err)
 
 	signer, err := signing.NewEdSigner()
@@ -285,6 +284,8 @@ func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 	msg, ok := got.(*Message)
 	require.True(t, ok)
 	require.EqualValues(t, m, msg)
+
+	require.False(t, et.Dishonest(signer.NodeID(), m.Round))
 
 	proof := types.MalfeasanceProof{
 		Layer: types.LayerID(1111),
@@ -305,15 +306,20 @@ func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 			Eligibility: msg.Eligibility,
 		},
 	}
-	require.Error(t, broker.HandleMessage(ctx, "", data))
-	require.Len(t, mch, 1)
-	gotG := <-mch
-	require.EqualValues(t, gossip, gotG)
-	require.Len(t, inbox, 1)
-	got = <-inbox
-	em, ok := got.(*types.HareEligibilityGossip)
-	require.True(t, ok)
-	require.EqualValues(t, gossip.Eligibility, em)
+	broker.mockPublisher.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, data []byte) error {
+			var gotG types.MalfeasanceGossip
+			require.NoError(t, codec.Decode(data, &gotG))
+			require.Equal(t, *gossip, gotG)
+			return nil
+		})
+	require.ErrorContains(t, broker.HandleMessage(ctx, "", data), "known malicious")
+	require.True(t, et.Dishonest(signer.NodeID(), gossip.Eligibility.Round))
+
+	// receive the same gossip should not cause the eligibility to get gossiped again
+	broker.mockMesh.EXPECT().GetMalfeasanceProof(signer.NodeID()).Return(&proof, nil)
+	require.ErrorContains(t, broker.HandleMessage(ctx, "", data), "known malicious")
+	require.True(t, et.Dishonest(signer.NodeID(), gossip.Eligibility.Round))
 }
 
 func TestBroker_HandleEligibility(t *testing.T) {
@@ -344,7 +350,7 @@ func TestBroker_HandleEligibility(t *testing.T) {
 
 	t.Run("node not synced", func(t *testing.T) {
 		broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
-		inbox, err = broker.Register(context.Background(), instanceID1)
+		inbox, _, err = broker.Register(context.Background(), instanceID1)
 		require.ErrorIs(t, err, errInstanceNotSynced)
 		require.Nil(t, inbox)
 	})
@@ -352,7 +358,7 @@ func TestBroker_HandleEligibility(t *testing.T) {
 	t.Run("beacon not synced", func(t *testing.T) {
 		broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
 		broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(false)
-		inbox, err = broker.Register(context.Background(), instanceID1)
+		inbox, _, err = broker.Register(context.Background(), instanceID1)
 		require.ErrorIs(t, err, errInstanceNotSynced)
 		require.Nil(t, inbox)
 	})
@@ -361,7 +367,7 @@ func TestBroker_HandleEligibility(t *testing.T) {
 		errUnknown := errors.New("blah")
 		broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
 		broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true)
-		inbox, err = broker.Register(context.Background(), instanceID1)
+		inbox, _, err = broker.Register(context.Background(), instanceID1)
 		require.NoError(t, err)
 		require.NotNil(t, inbox)
 		broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, errUnknown)
@@ -372,7 +378,7 @@ func TestBroker_HandleEligibility(t *testing.T) {
 	t.Run("identity not active", func(t *testing.T) {
 		broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
 		broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true)
-		inbox, err = broker.Register(context.Background(), instanceID1)
+		inbox, _, err = broker.Register(context.Background(), instanceID1)
 		require.NoError(t, err)
 		require.NotNil(t, inbox)
 		broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
@@ -383,7 +389,7 @@ func TestBroker_HandleEligibility(t *testing.T) {
 	t.Run("identity not eligible", func(t *testing.T) {
 		broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
 		broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true)
-		inbox, err = broker.Register(context.Background(), instanceID1)
+		inbox, _, err = broker.Register(context.Background(), instanceID1)
 		require.NoError(t, err)
 		require.NotNil(t, inbox)
 		broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
@@ -394,7 +400,7 @@ func TestBroker_HandleEligibility(t *testing.T) {
 	t.Run("identity eligible", func(t *testing.T) {
 		broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
 		broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true)
-		inbox, err = broker.Register(context.Background(), instanceID1)
+		inbox, _, err = broker.Register(context.Background(), instanceID1)
 		require.NoError(t, err)
 		require.NotNil(t, inbox)
 		broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
@@ -471,7 +477,7 @@ func TestBroker_Register3(t *testing.T) {
 	broker.HandleMessage(context.Background(), "", mustEncode(t, m))
 	time.Sleep(1 * time.Millisecond)
 	client := mockClient{instanceID1}
-	ch, _ := broker.Register(context.Background(), client.id)
+	ch, _, _ := broker.Register(context.Background(), client.id)
 	timer := time.NewTimer(2 * time.Second)
 	for {
 		select {
@@ -491,7 +497,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 	broker.mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any())
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
-	inbox, _ := broker.Register(context.Background(), instanceID1)
+	inbox, _, _ := broker.Register(context.Background(), instanceID1)
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -565,7 +571,7 @@ func TestBroker_Register4(t *testing.T) {
 	b.Start(context.Background())
 	t.Cleanup(b.Close)
 
-	c, e := b.Register(context.Background(), instanceID1)
+	c, _, e := b.Register(context.Background(), instanceID1)
 	r.NoError(e)
 
 	b.mu.RLock()
@@ -573,7 +579,7 @@ func TestBroker_Register4(t *testing.T) {
 	b.mu.RUnlock()
 
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
-	_, e = b.Register(context.Background(), instanceID2)
+	_, _, e = b.Register(context.Background(), instanceID2)
 	r.NotNil(e)
 }
 
@@ -595,13 +601,13 @@ func TestBroker_eventLoop(t *testing.T) {
 	r.Error(b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
-	_, e := b.Register(context.Background(), instanceID1)
+	_, _, e := b.Register(context.Background(), instanceID1)
 	r.NotNil(e)
 
 	// synced
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	c, e := b.Register(context.Background(), instanceID1)
+	c, _, e := b.Register(context.Background(), instanceID1)
 	r.Nil(e)
 	r.Equal(nil, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 	recM := <-c
@@ -621,7 +627,7 @@ func TestBroker_eventLoop(t *testing.T) {
 	m.SmesherID = signer.NodeID()
 	r.Error(b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 
-	c, e = b.Register(context.Background(), instanceID3)
+	c, _, e = b.Register(context.Background(), instanceID3)
 	r.Nil(e)
 	r.Equal(nil, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 	recM = <-c
@@ -655,25 +661,67 @@ func Test_validate(t *testing.T) {
 	r.ErrorIs(e, errFutureMsg)
 }
 
-func TestBroker_clean(t *testing.T) {
+func minDeleted(b *testBroker) types.LayerID {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.minDeleted
+}
+
+func hasTracker(b *testBroker, lid types.LayerID) bool {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	_, ok := b.trackers[lid]
+	return ok
+}
+
+func TestBroker_CleanOldLayers(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
+	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 
-	ten := instanceID0.Add(10)
-	b.setLatestLayer(context.Background(), ten.Sub(1))
+	require.Equal(t, types.GetEffectiveGenesis(), minDeleted(b))
 
+	plusFive := types.GetEffectiveGenesis().Add(5)
+	plusTen := types.GetEffectiveGenesis().Add(10)
+	b.Register(context.Background(), plusFive)
+	b.Register(context.Background(), plusTen)
+
+	b.CleanOldLayers(plusTen)
+	r.Equal(plusFive-1, minDeleted(b))
+
+	b.Unregister(context.Background(), plusFive)
+	b.CleanOldLayers(plusTen)
+	r.Equal(plusTen-1, minDeleted(b))
+
+	// received lots of spam from past and future
+	past := plusFive - 4
+	future := plusTen + 10
 	b.mu.Lock()
-	b.outbox[5] = make(chan any)
+	for lid := past; lid <= future; lid++ {
+		b.trackers[lid] = NewEligibilityTracker(10)
+	}
 	b.mu.Unlock()
 
-	b.cleanOldLayers()
-	r.Equal(ten.Sub(2), b.minDeleted)
+	b.CleanOldLayers(plusTen)
+	require.Equal(t, plusTen-1, minDeleted(b))
+	for lid := types.LayerID(0); lid < plusTen; lid++ {
+		require.False(t, hasTracker(b, lid), lid)
+	}
+	for lid := plusTen; lid <= future; lid++ {
+		require.True(t, hasTracker(b, lid))
+	}
 
-	b.mu.Lock()
-	delete(b.outbox, 5)
-	b.mu.Unlock()
+	b.Unregister(context.Background(), plusTen)
+	b.CleanOldLayers(plusTen)
+	require.Equal(t, plusTen, minDeleted(b))
+	require.False(t, hasTracker(b, plusTen))
 
-	b.cleanOldLayers()
+	for lid := plusTen + 1; lid <= future; lid++ {
+		require.True(t, hasTracker(b, lid))
+		b.CleanOldLayers(lid)
+		require.False(t, hasTracker(b, lid))
+	}
 }
 
 func TestBroker_Flow(t *testing.T) {
@@ -700,7 +748,7 @@ func TestBroker_Flow(t *testing.T) {
 	m1 := builder.Sign(signer1).Build()
 	b.HandleMessage(context.Background(), "", mustEncode(t, m1))
 
-	ch1, e := b.Register(context.Background(), instanceID1)
+	ch1, _, e := b.Register(context.Background(), instanceID1)
 	r.NoError(e)
 	<-ch1
 
@@ -715,7 +763,7 @@ func TestBroker_Flow(t *testing.T) {
 		SetValues(NewDefaultEmptySet()).
 		SetEligibilityCount(1)
 	m2 := builder.Sign(signer2).Build()
-	ch2, e := b.Register(context.Background(), instanceID2)
+	ch2, _, e := b.Register(context.Background(), instanceID2)
 	r.NoError(e)
 
 	b.HandleMessage(context.Background(), "", mustEncode(t, m1))
@@ -727,12 +775,14 @@ func TestBroker_Flow(t *testing.T) {
 	b.Register(context.Background(), instanceID3)
 	b.Register(context.Background(), instanceID4)
 	b.Unregister(context.Background(), instanceID2)
-	r.Equal(instanceID0, b.minDeleted)
+	b.CleanOldLayers(instanceID4)
+	r.Equal(instanceID0, minDeleted(b))
 
 	// check still receiving msgs on ch1
 	b.HandleMessage(context.Background(), "", mustEncode(t, m1))
 	<-ch1
 
 	b.Unregister(context.Background(), instanceID1)
-	r.Equal(instanceID2, b.minDeleted)
+	b.CleanOldLayers(instanceID4)
+	r.Equal(instanceID2, minDeleted(b))
 }
