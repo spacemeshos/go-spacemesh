@@ -367,6 +367,7 @@ func (b *Broker) CleanOldLayers(current types.LayerID) {
 	for lid := range b.trackers {
 		if lid <= b.minDeleted {
 			delete(b.trackers, lid)
+			delete(b.pending, lid)
 		}
 	}
 }
