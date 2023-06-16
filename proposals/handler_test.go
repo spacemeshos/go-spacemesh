@@ -305,20 +305,20 @@ func TestBallot_BeforeEffectiveGenesis(t *testing.T) {
 	require.ErrorContains(t, th.HandleSyncedBallot(context.Background(), "", data), "ballot before effective genesis")
 }
 
-func TestBallot_FromFuture(t *testing.T) {
-	th := createTestHandlerNoopDecoder(t)
-	b := types.RandomBallot()
-	b.Layer = th.clock.CurrentLayer() * 2
-	b = signAndInit(t, b)
-	data := encodeBallot(t, b)
-	require.ErrorContains(t, th.HandleSyncedBallot(context.Background(), "", data), "ballot from future")
-}
-
 func TestBallot_EmptyATXID(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := types.RandomBallot()
 	b.AtxID = types.EmptyATXID
 	b = signAndInit(t, b)
+	data := encodeBallot(t, b)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), "", data), errInvalidATXID)
+}
+
+func TestBallot_ATXFromWrongEpoch(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	b := createRefBallot(t)
+	b = signAndInit(t, b)
+	createAtx(t, th.cdb.Database, b.Layer.GetEpoch(), b.AtxID, b.SmesherID)
 	data := encodeBallot(t, b)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), "", data), errInvalidATXID)
 }
@@ -869,18 +869,6 @@ func TestProposal_BeforeEffectiveGenesis(t *testing.T) {
 	checkProposal(t, th.cdb, p, false)
 }
 
-func TestProposal_FromFuture(t *testing.T) {
-	th := createTestHandlerNoopDecoder(t)
-	p := createProposal(t)
-	p.Layer = th.clock.CurrentLayer() * 2
-	data := encodeProposal(t, p)
-	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
-	require.ErrorContains(t, got, "proposal from future")
-
-	require.Error(t, th.HandleProposal(context.Background(), "", data))
-	checkProposal(t, th.cdb, p, false)
-}
-
 func TestProposal_BadSignature(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
@@ -888,6 +876,18 @@ func TestProposal_BadSignature(t *testing.T) {
 	data := encodeProposal(t, p)
 	got := th.HandleSyncedProposal(context.Background(), p2p.NoPeer, data)
 	require.ErrorContains(t, got, "failed to verify proposal signature")
+
+	require.Error(t, th.HandleProposal(context.Background(), "", data))
+	checkProposal(t, th.cdb, p, false)
+}
+
+func TestProposal_ATXFromWrongEpoch(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	p := createProposal(t)
+	createAtx(t, th.cdb.Database, p.Layer.GetEpoch(), p.AtxID, p.SmesherID)
+	data := encodeProposal(t, p)
+	got := th.HandleSyncedProposal(context.Background(), "", data)
+	require.ErrorIs(t, got, errInvalidATXID)
 
 	require.Error(t, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)
