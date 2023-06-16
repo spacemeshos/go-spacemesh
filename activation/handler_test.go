@@ -218,7 +218,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 
-		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.NoError(t, err)
 	})
 
@@ -241,7 +241,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 
-		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.NoError(t, err)
 	})
 
@@ -305,7 +305,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid VRF"))
 
-		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.ErrorContains(t, err, "invalid VRFNonce")
 	})
 
@@ -337,7 +337,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil)
 		atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 
-		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.NoError(t, err)
 	})
 
@@ -353,7 +353,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
 
-		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.ErrorContains(t, err, "atx publish epoch is too far in the future")
 	})
 
@@ -431,7 +431,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
 
-		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.ErrorContains(t, err, "NodeID is missing")
 	})
 
@@ -457,7 +457,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 
-		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.ErrorContains(t, err, "VRFNonce is missing")
 	})
 
@@ -486,7 +486,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid VRF nonce"))
 		atxHdlr.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 
-		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.ErrorContains(t, err, "invalid VRF nonce")
 	})
 
@@ -568,7 +568,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
 
-		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.EqualError(t, err, "prevATX declared, but NodeID is included")
 	})
 }
