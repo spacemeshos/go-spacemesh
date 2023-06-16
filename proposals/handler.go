@@ -42,7 +42,6 @@ var (
 	errKnownProposal         = errors.New("known proposal")
 	errKnownBallot           = errors.New("known ballot")
 	errMaliciousBallot       = errors.New("malicious ballot")
-	errWrongSmesherID        = errors.New("ballot atx from a different smesher")
 )
 
 // Handler processes Proposal from gossip and, if deems it valid, propagates it to peers.
