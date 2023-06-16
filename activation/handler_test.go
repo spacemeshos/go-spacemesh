@@ -86,6 +86,7 @@ func TestHandler_processBlockATXs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	validator := NewMocknipostValidator(ctrl)
 	receiver := NewMockAtxReceiver(ctrl)
+	receiver.EXPECT().OnAtx(gomock.Any()).AnyTimes()
 	mclock := NewMocklayerClock(ctrl)
 	mpub := pubsubmocks.NewMockPublisher(ctrl)
 	goldenATXID := types.ATXID{2, 3, 4}
@@ -589,6 +590,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 
 	// Act & Assert
 	atx1 := newActivationTx(t, sig, 0, types.EmptyATXID, types.EmptyATXID, nil, types.LayerID(layersPerEpoch).GetEpoch(), 0, 100, coinbase, 100, &types.NIPost{})
+	receiver.EXPECT().OnAtx(gomock.Any())
 	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx1))
 
 	// processing an already stored ATX returns no error
@@ -600,6 +602,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	// another atx for the same epoch is considered malicious
 	atx2 := newActivationTx(t, sig, 1, atx1.ID(), atx1.ID(), nil, types.LayerID(layersPerEpoch+1).GetEpoch(), 0, 100, coinbase, 100, &types.NIPost{})
 	var got types.MalfeasanceGossip
+	receiver.EXPECT().OnAtx(gomock.Any())
 	mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			require.NoError(t, codec.Decode(data, &got))
@@ -620,6 +623,7 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	validator := NewMocknipostValidator(ctrl)
 	receiver := NewMockAtxReceiver(ctrl)
+	receiver.EXPECT().OnAtx(gomock.Any()).AnyTimes()
 	mclock := NewMocklayerClock(ctrl)
 	mpub := pubsubmocks.NewMockPublisher(ctrl)
 
@@ -844,6 +848,7 @@ func TestHandler_AwaitAtx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	validator := NewMocknipostValidator(ctrl)
 	receiver := NewMockAtxReceiver(ctrl)
+	receiver.EXPECT().OnAtx(gomock.Any()).AnyTimes()
 	mclock := NewMocklayerClock(ctrl)
 	mpub := pubsubmocks.NewMockPublisher(ctrl)
 	goldenATXID := types.ATXID{2, 3, 4}
@@ -901,6 +906,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	validator := NewMocknipostValidator(ctrl)
 	receiver := NewMockAtxReceiver(ctrl)
+	receiver.EXPECT().OnAtx(gomock.Any()).Times(1)
 	mclock := NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	mpub := pubsubmocks.NewMockPublisher(ctrl)

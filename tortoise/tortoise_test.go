@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -771,16 +772,15 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 
 	trtl := defaultAlgorithm(t)
 
-	logger := logtest.New(t)
 	trtl.OnBeacon(layerID.GetEpoch(), epochBeacon)
-	badBeacon, err := trtl.trtl.compareBeacons(logger, ballot.ID(), ballot.Layer, epochBeacon)
+	badBeacon, err := trtl.trtl.compareBeacons(ballot.ID(), ballot.Layer, epochBeacon)
 	assert.NoError(t, err)
 	assert.False(t, badBeacon)
 
 	// bad beacon
 	beacon := types.RandomBeacon()
 	require.NotEqual(t, epochBeacon, beacon)
-	badBeacon, err = trtl.trtl.compareBeacons(logger, ballot.ID(), ballot.Layer, beacon)
+	badBeacon, err = trtl.trtl.compareBeacons(ballot.ID(), ballot.Layer, beacon)
 	assert.NoError(t, err)
 	assert.True(t, badBeacon)
 }
@@ -3053,4 +3053,56 @@ func TestUpdates(t *testing.T) {
 		require.False(t, updates[0].Blocks[0].Valid)
 		require.Equal(t, id, updates[0].Blocks[0].Header.ID)
 	})
+}
+
+func TestSwitch(t *testing.T) {
+	s := newSession(t).
+		withHdist(4).
+		withZdist(2)
+	const smeshers = 4
+	var (
+		elig      = s.layerSize / smeshers
+		activeset []*atxAction
+	)
+	for i := 0; i < smeshers; i++ {
+		activeset = append(
+			activeset,
+			s.smesher(i).atx(1, new(aopt).height(10).weight(100)),
+		)
+	}
+	s.beacon(1, "a")
+	for i := 0; i < smeshers; i++ {
+		s.smesher(i).atx(1).ballot(1, new(bopt).
+			beacon("a").
+			activeset(activeset...).
+			eligibilities(elig))
+	}
+
+	for lid := 2; lid <= s.hdist; lid++ {
+		for i := 0; i < smeshers; i++ {
+			votes := new(evotes).
+				base(s.smesher(i).atx(1).ballot(lid-1)).
+				support(lid-1, strconv.Itoa(lid-1), 0)
+			s.smesher(i).atx(1).ballot(lid,
+				new(bopt).eligibilities(elig).votes(votes),
+			)
+		}
+	}
+	nonverified := new(results)
+	for lid := 2; lid <= s.hdist; lid++ {
+		nonverified = nonverified.next(lid-1).block(strconv.Itoa(lid-1), 0, 0)
+	}
+	verified := new(results).verified(0)
+	for lid := 2; lid <= s.hdist; lid++ {
+		verified = verified.verified(lid-1).block(strconv.Itoa(lid-1), 0, valid|local)
+	}
+	verified.next(s.hdist)
+	s.tallyWait(s.hdist - 1)
+	s.mode(t, Verifying)
+	s.updates(t, nonverified)
+	s.tallyWait(s.hdist)
+	s.mode(t, Full)
+	s.updates(t, verified)
+	t.Run("inorder", func(t *testing.T) { s.runInorder() })
+	t.Run("random", func(t *testing.T) { s.runRandomTopoN(100) })
 }

@@ -40,4 +40,5 @@ var (
 	numInvalidProofsATX    = numInvalidProofs.WithLabelValues(multiATXs)
 	numInvalidProofsBallot = numInvalidProofs.WithLabelValues(multiBallots)
 	numInvalidProofsHare   = numInvalidProofs.WithLabelValues(hareEquivocate)
+	numMalformed           = numInvalidProofs.WithLabelValues("mal")
 )
