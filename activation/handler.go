@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -379,7 +380,9 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 						Data: &atxProof,
 					},
 				}
-				if err = h.cdb.AddMalfeasanceProof(atx.SmesherID, proof, dbtx); err != nil {
+				if err = malfeasance.ValidateAndSave(ctx, h.log, h.cdb, dbtx, h.edVerifier, nil, &types.MalfeasanceGossip{
+					MalfeasanceProof: *proof,
+				}); err != nil && !errors.Is(err, malfeasance.ErrKnownProof) {
 					return fmt.Errorf("adding malfeasance proof: %w", err)
 				}
 				h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",

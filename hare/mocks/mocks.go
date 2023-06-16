@@ -10,7 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	sql "github.com/spacemeshos/go-spacemesh/sql"
+	datastore "github.com/spacemeshos/go-spacemesh/datastore"
 )
 
 // MocklayerPatrol is a mock of layerPatrol interface.
@@ -192,20 +192,6 @@ func (m *Mockmesh) EXPECT() *MockmeshMockRecorder {
 	return m.recorder
 }
 
-// AddMalfeasanceProof mocks base method.
-func (m *Mockmesh) AddMalfeasanceProof(arg0 types.NodeID, arg1 *types.MalfeasanceProof, arg2 *sql.Tx) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddMalfeasanceProof", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddMalfeasanceProof indicates an expected call of AddMalfeasanceProof.
-func (mr *MockmeshMockRecorder) AddMalfeasanceProof(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMalfeasanceProof", reflect.TypeOf((*Mockmesh)(nil).AddMalfeasanceProof), arg0, arg1, arg2)
-}
-
 // Ballot mocks base method.
 func (m *Mockmesh) Ballot(arg0 types.BallotID) (*types.Ballot, error) {
 	m.ctrl.T.Helper()
@@ -219,6 +205,20 @@ func (m *Mockmesh) Ballot(arg0 types.BallotID) (*types.Ballot, error) {
 func (mr *MockmeshMockRecorder) Ballot(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ballot", reflect.TypeOf((*Mockmesh)(nil).Ballot), arg0)
+}
+
+// Cache mocks base method.
+func (m *Mockmesh) Cache() *datastore.CachedDB {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Cache")
+	ret0, _ := ret[0].(*datastore.CachedDB)
+	return ret0
+}
+
+// Cache indicates an expected call of Cache.
+func (mr *MockmeshMockRecorder) Cache() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cache", reflect.TypeOf((*Mockmesh)(nil).Cache))
 }
 
 // GetAtxHeader mocks base method.
@@ -264,21 +264,6 @@ func (m *Mockmesh) GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceP
 func (mr *MockmeshMockRecorder) GetMalfeasanceProof(nodeID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProof", reflect.TypeOf((*Mockmesh)(nil).GetMalfeasanceProof), nodeID)
-}
-
-// IsMalicious mocks base method.
-func (m *Mockmesh) IsMalicious(arg0 types.NodeID) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsMalicious", arg0)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// IsMalicious indicates an expected call of IsMalicious.
-func (mr *MockmeshMockRecorder) IsMalicious(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsMalicious", reflect.TypeOf((*Mockmesh)(nil).IsMalicious), arg0)
 }
 
 // Proposals mocks base method.
