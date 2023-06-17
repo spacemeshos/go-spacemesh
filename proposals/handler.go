@@ -369,6 +369,9 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 	}
 	ballotDuration.WithLabelValues(dbSave).Observe(float64(time.Since(t1)))
 	if err := h.decoder.StoreBallot(decoded); err != nil {
+		if errors.Is(err, tortoise.ErrBallotExists) {
+			return nil, fmt.Errorf("%w: %s", errKnownBallot, b.ID())
+		}
 		return nil, fmt.Errorf("store decoded ballot %s: %w", decoded.ID, err)
 	}
 	reportVotesMetrics(b)

@@ -18,7 +18,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
 
-var errBeaconUnavailable = errors.New("beacon unavailable")
+var (
+	errBeaconUnavailable = errors.New("beacon unavailable")
+	ErrBallotExists      = errors.New("tortoise: ballot exists")
+)
 
 type turtle struct {
 	Config
@@ -651,8 +654,8 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 	if !ballot.Layer.After(t.evicted) {
 		return nil, 0, nil
 	}
-	if _, exist := t.state.ballotRefs[ballot.ID]; exist {
-		return nil, 0, nil
+	if info, exist := t.state.ballotRefs[ballot.ID]; exist {
+		return info, 0, nil
 	}
 
 	t.logger.Debug("on ballot",
@@ -760,9 +763,12 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 	return binfo, min, nil
 }
 
-func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) {
+func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) error {
 	if !ballot.layer.After(t.evicted) {
-		return
+		return nil
+	}
+	if _, exists := t.ballotRefs[ballot.id]; exists {
+		return fmt.Errorf("%w: %s", ErrBallotExists, ballot.id)
 	}
 
 	t.state.addBallot(ballot)
@@ -785,6 +791,7 @@ func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) {
 			}
 		}
 	}
+	return nil
 }
 
 func (t *turtle) onBallot(ballot *types.BallotTortoiseData) error {
@@ -792,8 +799,7 @@ func (t *turtle) onBallot(ballot *types.BallotTortoiseData) error {
 	if decoded == nil || err != nil {
 		return err
 	}
-	t.storeBallot(decoded, min)
-	return nil
+	return t.storeBallot(decoded, min)
 }
 
 func (t *turtle) compareBeacons(bid types.BallotID, lid types.LayerID, beacon types.Beacon) (bool, error) {
