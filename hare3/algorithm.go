@@ -73,10 +73,11 @@ const (
 // one of 3 results indicating what action to take with the message it was
 // invoked for.
 type GradedGossiper interface {
-	// ReceiveMsg accepts an id idenifying the originator of the message, a
-	// hash identifying the value in the message the message round and a grade.
-	// It returns a value indicating what action to take with the message.
-	ReceiveMsg(id types.Hash20, valueHash types.Hash20, round AbsRound, grade uint8) GradedGossipResult
+	// ReceiveMsg accepts a hash identifying the message an id idenifying the
+	// originator of the message, a hash identifying the value in the message
+	// the message round and a grade. It returns a value indicating what action
+	// to take with the message.
+	ReceiveMsg(hash, id, valueHash types.Hash20, round AbsRound, grade uint8) (result GradedGossipResult, equivocationHash types.Hash20)
 }
 
 // TrhesholdGradedGossiper acts as a specialized value store, it ingests
@@ -156,7 +157,7 @@ func NewHandler(gg GradedGossiper, tgg TrhesholdGradedGossiper, gc Gradecaster, 
 
 // HandleMsg handles an incoming message, it returns a boolean indicating
 // whether the message should be regossiped to peers.
-func (h *Handler) HandleMsg(vk []byte, values []types.Hash20, round int8) (shouldRelay bool) {
+func (h *Handler) HandleMsg(hash types.Hash20, vk []byte, round int8, values []types.Hash20) (bool, *types.Hash20) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	r := AbsRound(round)
@@ -171,21 +172,24 @@ func (h *Handler) HandleMsg(vk []byte, values []types.Hash20, round int8) (shoul
 	valuesHash := toHash(values)
 
 	var gradedGossipValues []types.Hash20
+	var equivocationHash *types.Hash20
 	// Nil values signifies a message from a known malicious actor, in this
 	// case we skip passing the message to graded gossip, since we effectively
 	// have the output, which is equivocation, we still need to forward the
 	// original message to the network though so that they also insert it into
 	// their protocols.
 	if values != nil {
-		result := h.gg.ReceiveMsg(id, valuesHash, r, g)
+		result, eHash := h.gg.ReceiveMsg(hash, id, valuesHash, r, g)
 		switch result {
 		case DropMessage:
 			// Indicates prior equivocation, drop the message.
-			return false
+			return false, nil
 		case SendEquivocationProof:
 			// Indicates new instance of equivocation notify gradecast or threshold
 			// gossip with nil values.
 			gradedGossipValues = nil
+			// Set the equivocationHash so that the caller can look up the message.
+			equivocationHash = &eHash
 		case SendValue:
 			// Indicates valid message, set values to message values.
 			gradedGossipValues = values
@@ -201,7 +205,7 @@ func (h *Handler) HandleMsg(vk []byte, values []types.Hash20, round int8) (shoul
 		// Pass result to threshold gossip
 		h.tgg.ReceiveMsg(id, gradedGossipValues, r, g)
 	}
-	return true
+	return true, equivocationHash
 }
 
 type Protocol struct {

@@ -98,11 +98,24 @@ func (h Hash20) ToHash32() (h32 Hash32) {
 	return
 }
 
+// ToHash12 returns a Hash12 whose first bytes are the first 12 bytes of this Hash20.
+func (h Hash20) ToHash12() (h12 Hash12) {
+	copy(h12[:], h[:])
+	return
+}
+
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash20) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
 
 // CalcHash12 returns the 12-byte prefix of the blake3 sum of the given byte slice.
 func CalcHash12(data []byte) (h Hash12) {
+	h32 := hash.Sum(data)
+	copy(h[:], h32[:])
+	return
+}
+
+// CalcHash20 returns the 20-byte prefix of the blake3 sum of the given byte slice.
+func CalcHash20(data []byte) (h Hash20) {
 	h32 := hash.Sum(data)
 	copy(h[:], h32[:])
 	return
@@ -155,6 +168,11 @@ func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash
 // CalcMessageHash12 returns the 12-byte blake3 sum of the given msg suffixed with protocol.
 func CalcMessageHash12(msg []byte, protocol string) Hash12 {
 	return CalcHash12(append(msg, protocol...))
+}
+
+// CalcMessageHash20 returns the 20-byte blake3 sum of the given msg suffixed with protocol.
+func CalcMessageHash20(msg []byte, protocol string) Hash20 {
+	return CalcHash20(append(msg, protocol...))
 }
 
 var hashT = reflect.TypeOf(Hash32{})
