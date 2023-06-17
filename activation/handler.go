@@ -385,7 +385,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 						Data: &atxProof,
 					},
 				}
-        if err := malfeasance.ValidateAndSave(ctx, h.log, h.cdb, dbtx, h.edVerifier, nil, &types.MalfeasanceGossip{
+				if err := malfeasance.ValidateAndSave(ctx, h.log, h.cdb, dbtx, h.edVerifier, nil, &types.MalfeasanceGossip{
 					MalfeasanceProof: *proof,
 				}); err != nil && !errors.Is(err, malfeasance.ErrKnownProof) {
 					return fmt.Errorf("adding malfeasance proof: %w", err)
