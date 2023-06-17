@@ -335,11 +335,15 @@ func (t *Tortoise) StoreBallot(decoded *DecodedBallot) error {
 	if decoded.Malicious {
 		decoded.info.malicious = true
 	}
-	t.trtl.storeBallot(decoded.info, decoded.minHint)
+	err := t.trtl.storeBallot(decoded.info, decoded.minHint)
 	if t.tracer != nil {
-		t.tracer.On(&StoreBallotTrace{ID: decoded.ID, Malicious: decoded.Malicious})
+		ev := &StoreBallotTrace{ID: decoded.ID, Malicious: decoded.Malicious}
+		if err != nil {
+			ev.Error = err.Error()
+		}
+		t.tracer.On(ev)
 	}
-	return nil
+	return err
 }
 
 // OnHareOutput should be called when hare terminated or certificate for a block

@@ -144,7 +144,6 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 		atx.ID(),
 		atx.PublishEpoch,
 		log.Stringer("smesher", atx.SmesherID),
-		atx.PublishEpoch,
 	)
 	if err := h.ContextuallyValidateAtx(atx); err != nil {
 		h.log.WithContext(ctx).With().Warning("atx failed contextual validation",
@@ -164,6 +163,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
 //
+//   - The PublishEpoch is less than or equal to the current epoch + 1.
 //   - If the sequence number is non-zero: PrevATX points to a syntactically valid ATX whose sequence number is one less
 //     than the current ATXs sequence number.
 //   - If the sequence number is zero: PrevATX is empty.
@@ -178,6 +178,11 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		commitmentATX *types.ATXID
 		err           error
 	)
+
+	current := h.clock.CurrentLayer()
+	if atx.PublishEpoch > current.GetEpoch()+1 {
+		return nil, fmt.Errorf("atx publish epoch is too far in the future: %d > %d", atx.PublishEpoch, current.GetEpoch()+1)
+	}
 
 	if atx.PrevATXID == types.EmptyATXID {
 		if err := h.validateInitialAtx(ctx, atx); err != nil {
@@ -354,7 +359,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		return fmt.Errorf("checking if node is malicious: %w", err)
 	}
 	var proof *types.MalfeasanceProof
-	if err = h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
+	if err := h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		if !malicious {
 			prev, err := atxs.GetByEpochAndNodeID(dbtx, atx.PublishEpoch, atx.SmesherID)
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
@@ -380,7 +385,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 						Data: &atxProof,
 					},
 				}
-				if err = malfeasance.ValidateAndSave(ctx, h.log, h.cdb, dbtx, h.edVerifier, nil, &types.MalfeasanceGossip{
+        if err := malfeasance.ValidateAndSave(ctx, h.log, h.cdb, dbtx, h.edVerifier, nil, &types.MalfeasanceGossip{
 					MalfeasanceProof: *proof,
 				}); err != nil && !errors.Is(err, malfeasance.ErrKnownProof) {
 					return fmt.Errorf("adding malfeasance proof: %w", err)
@@ -392,7 +397,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				)
 			}
 		}
-		if err = atxs.Add(dbtx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		if err := atxs.Add(dbtx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
 		return nil
@@ -518,22 +523,24 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 
 	h.registerHashes(&atx, peer)
 	if err := h.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
-		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
-			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
+		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %w",
+			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err,
+		)
 	}
 
 	if err := h.FetchAtxReferences(ctx, &atx); err != nil {
-		return fmt.Errorf("received atx (%v) with missing references of prev or pos id %v, %v, %v",
-			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
+		return fmt.Errorf("received atx (%v) with missing references of prev or pos id %v, %v: %w",
+			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), err,
+		)
 	}
 
 	vAtx, err := h.SyntacticallyValidateAtx(ctx, &atx)
 	if err != nil {
-		return fmt.Errorf("received syntactically invalid atx %v: %v", atx.ShortString(), err)
+		return fmt.Errorf("received syntactically invalid atx %v: %w", atx.ShortString(), err)
 	}
 	err = h.ProcessAtx(ctx, vAtx)
 	if err != nil {
-		return fmt.Errorf("cannot process atx %v: %v", atx.ShortString(), err)
+		return fmt.Errorf("cannot process atx %v: %w", atx.ShortString(), err)
 		// TODO(anton): blacklist peer
 	}
 	events.ReportNewActivation(vAtx)
