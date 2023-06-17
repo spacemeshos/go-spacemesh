@@ -29,6 +29,7 @@ type consensusFactory func(
 	types.LayerID,
 	*Set,
 	Rolacle,
+	*EligibilityTracker,
 	*signing.EdSigner,
 	*types.VRFPostIndex,
 	pubsub.Publisher,
@@ -178,8 +179,8 @@ func New(
 	h.wcChan = make(chan wcReport, h.config.Hdist)
 	h.outputs = make(map[types.LayerID][]types.ProposalID, h.config.Hdist) // we keep results about LayerBuffer past layers
 	h.cps = make(map[types.LayerID]Consensus, h.config.LimitConcurrent)
-	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing *signing.EdSigner, nonce *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
-		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, edVerifier, nid, nonce, p2p, comm, ev, clock, logger)
+	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, signing *signing.EdSigner, nonce *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, edVerifier, et, nid, nonce, p2p, comm, ev, clock, logger)
 	}
 
 	h.nodeID = nid
@@ -192,7 +193,7 @@ func New(
 	if h.msh == nil {
 		h.msh = defaultMesh{CachedDB: cdb}
 	}
-	h.broker = newBroker(h.msh, edVerifier, ev, stateQ, syncState, h.mchMalfeasance, conf.LimitConcurrent, logger)
+	h.broker = newBroker(h.config, h.msh, edVerifier, ev, stateQ, syncState, publisher, conf.LimitConcurrent, logger)
 
 	return h
 }
@@ -378,7 +379,7 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		nonce = &nnc
 	}
 
-	ch, err := h.broker.Register(ctx, lid)
+	ch, et, err := h.broker.Register(ctx, lid)
 	if err != nil {
 		return false, fmt.Errorf("broker register: %w", err)
 	}
@@ -391,7 +392,7 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 	props := goodProposals(ctx, h.Log, h.msh, h.nodeID, lid, beacon)
 	preNumProposals.Add(float64(len(props)))
 	set := NewSet(props)
-	cp := h.factory(ctx, h.config, lid, set, h.rolacle, h.sign, nonce, h.publisher, comm, clock)
+	cp := h.factory(ctx, h.config, lid, set, h.rolacle, et, h.sign, nonce, h.publisher, comm, clock)
 
 	h.With().Debug("starting hare",
 		log.Context(ctx),
@@ -470,7 +471,25 @@ func goodProposals(ctx context.Context, logger log.Log, msh mesh, nodeID types.N
 	if ownHdr != nil {
 		ownTickHeight = ownHdr.TickHeight()
 	}
+	atxs := map[types.ATXID]int{}
 	for _, p := range props {
+		atxs[p.AtxID]++
+	}
+	for _, p := range props {
+		if p.IsMalicious() {
+			logger.With().Warning("not voting on proposal from malicious identity",
+				log.Stringer("id", p.ID()),
+			)
+			continue
+		}
+		if n := atxs[p.AtxID]; n > 1 {
+			logger.With().Warning("proposal with same atx added several times in the recorded set",
+				log.Int("n", n),
+				log.Stringer("id", p.ID()),
+				log.Stringer("atxid", p.AtxID),
+			)
+			continue
+		}
 		if ownHdr != nil {
 			hdr, err := msh.GetAtxHeader(p.AtxID)
 			if err != nil {
@@ -586,6 +605,7 @@ func (h *Hare) tickLoop(ctx context.Context) {
 			if err != nil && !errors.Is(err, context.Canceled) {
 				h.With().Warning("hare failed", log.Context(ctx), layer, log.Err(err))
 			}
+			h.broker.CleanOldLayers(layer)
 		case <-h.ctx.Done():
 			return
 		}

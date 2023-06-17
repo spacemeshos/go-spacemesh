@@ -79,6 +79,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Message) {
 			pre.eTracker.Track(msg.SmesherID, msg.Round, msg.Eligibility.Count, false)
 			this := &types.HareProofMsg{
 				InnerMsg:  metadata,
+				SmesherID: msg.SmesherID,
 				Signature: msg.Signature,
 			}
 			if err := reportEquivocation(ctx, msg.SmesherID, prev.HareProofMsg, this, &msg.Eligibility, pre.malCh); err != nil {
@@ -105,6 +106,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Message) {
 	pre.preRound[msg.SmesherID].Set = alreadyTracked.Union(sToTrack)
 	pre.preRound[msg.SmesherID].HareProofMsg = &types.HareProofMsg{
 		InnerMsg:  metadata,
+		SmesherID: msg.SmesherID,
 		Signature: msg.Signature,
 	}
 }

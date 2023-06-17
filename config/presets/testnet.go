@@ -3,6 +3,7 @@ package presets
 import (
 	"time"
 
+	postCfg "github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -45,9 +46,9 @@ func testnet() config.Config {
 	conf.Tortoise.Zdist = 10
 	conf.Tortoise.BadBeaconVoteDelayLayers = 30
 
-	conf.POST.K1 = 273
-	conf.POST.K2 = 300
-	conf.POST.K3 = 100
+	conf.POST.K1 = 26
+	conf.POST.K2 = 37
+	conf.POST.K3 = 37
 	conf.POST.LabelsPerUnit = 20 * 1024 / 16 // 20 kB units
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
@@ -57,6 +58,8 @@ func testnet() config.Config {
 	conf.SMESHING.Opts.ProviderID = int(initialization.CPUProviderID())
 	conf.SMESHING.Opts.NumUnits = 2
 	conf.SMESHING.Opts.Throttle = true
+	// Override proof of work flags to use light mode (less memory intensive)
+	conf.SMESHING.ProvingOpts.Flags = postCfg.RecommendedPowFlags()
 
 	conf.Beacon.FirstVotingRoundDuration = 3 * time.Minute
 	conf.Beacon.GracePeriodDuration = 10 * time.Second

@@ -198,7 +198,7 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	require.NoError(t, h.Start(context.Background()))
 
 	lyrID := types.LayerID(8)
-	_, err := h.broker.Register(context.Background(), lyrID)
+	_, _, err := h.broker.Register(context.Background(), lyrID)
 	require.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -295,7 +295,7 @@ func TestHare_onTick(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, comm.wc, startedChan)
 		close(createdChan)
 		return nmcp
@@ -366,7 +366,7 @@ func TestHare_onTick_notMining(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, comm.wc, startedChan)
 		close(createdChan)
 		return nmcp
@@ -451,6 +451,8 @@ func TestHare_goodProposal(t *testing.T) {
 		name        string
 		beacons     [3]types.Beacon
 		baseHeights [3]uint64
+		malicious   [3]bool
+		atxids      [3]*types.ATXID
 		refBallot   []int
 		expected    []int
 	}{
@@ -484,6 +486,26 @@ func TestHare_goodProposal(t *testing.T) {
 			beacons:     [3]types.Beacon{beacon, beacon, beacon},
 			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
 		},
+		{
+			name:        "all malicious",
+			beacons:     [3]types.Beacon{nodeBeacon, nodeBeacon, nodeBeacon},
+			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
+			malicious:   [3]bool{true, true, true},
+		},
+		{
+			name:        "some malicious",
+			beacons:     [3]types.Beacon{nodeBeacon, nodeBeacon, nodeBeacon},
+			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
+			malicious:   [3]bool{false, true, true},
+			expected:    []int{0},
+		},
+		{
+			name:        "reusing atxids",
+			beacons:     [3]types.Beacon{nodeBeacon, nodeBeacon, nodeBeacon},
+			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
+			atxids:      [3]*types.ATXID{{1}, {1}},
+			expected:    []int{2},
+		},
 	}
 
 	for _, tc := range tt {
@@ -499,7 +521,13 @@ func TestHare_goodProposal(t *testing.T) {
 				randomProposal(lyrID, tc.beacons[2]),
 			}
 			for i, p := range pList {
-				mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: tc.baseHeights[i], TickCount: 1}, nil)
+				if tc.malicious[i] {
+					p.SetMalicious()
+				} else if tc.atxids[i] != nil {
+					p.AtxID = *tc.atxids[i]
+				} else {
+					mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: tc.baseHeights[i], TickCount: 1}, nil)
+				}
 			}
 			nodeID := types.NodeID{1, 2, 3}
 			mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch(), nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: nodeBaseHeight, TickCount: 1}, nil)

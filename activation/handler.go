@@ -396,6 +396,13 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	}); err != nil {
 		return fmt.Errorf("store atx: %w", err)
 	}
+	header, err := h.cdb.GetAtxHeader(atx.ID())
+	if err != nil {
+		return fmt.Errorf("get header for processed atx %s: %w", atx.ID(), err)
+	}
+	for _, r := range h.atxReceivers {
+		r.OnAtx(header)
+	}
 
 	// notify subscribers
 	if ch, found := h.atxChannels[atx.ID()]; found {
@@ -525,13 +532,6 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	if err != nil {
 		return fmt.Errorf("cannot process atx %v: %v", atx.ShortString(), err)
 		// TODO(anton): blacklist peer
-	}
-	header, err := h.cdb.GetAtxHeader(vAtx.ID())
-	if err != nil {
-		return fmt.Errorf("get header for processed atx %s: %w", vAtx.ID(), err)
-	}
-	for _, r := range h.atxReceivers {
-		r.OnAtx(header)
 	}
 	events.ReportNewActivation(vAtx)
 	logger.With().Info("new atx", log.Inline(vAtx), log.Int("size", len(msg)))
