@@ -222,31 +222,40 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 	lid := types.LayerID(11)
 	round := uint32(3)
 
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	cdb := datastore.NewCachedDB(sql.InMemory(), h.Log)
+	createIdentity(t, cdb.Database, sig)
+	proof := &types.HareProof{
+		Messages: [2]types.HareProofMsg{
+			{
+				InnerMsg: types.HareMetadata{
+					Layer:   lid,
+					Round:   round,
+					MsgHash: types.RandomHash(),
+				},
+				SmesherID: sig.NodeID(),
+				Signature: types.RandomEdSignature(),
+			},
+			{
+				InnerMsg: types.HareMetadata{
+					Layer:   lid,
+					Round:   round,
+					MsgHash: types.RandomHash(),
+				},
+				SmesherID: sig.NodeID(),
+				Signature: types.RandomEdSignature(),
+			},
+		},
+	}
+	proof.Messages[0].Signature = sig.Sign(signing.HARE, proof.Messages[0].SignedBytes())
+	proof.Messages[1].Signature = sig.Sign(signing.HARE, proof.Messages[1].SignedBytes())
 	gossip := types.MalfeasanceGossip{
 		MalfeasanceProof: types.MalfeasanceProof{
 			Layer: lid,
 			Proof: types.Proof{
 				Type: types.HareEquivocation,
-				Data: &types.HareProof{
-					Messages: [2]types.HareProofMsg{
-						{
-							InnerMsg: types.HareMetadata{
-								Layer:   lid,
-								Round:   round,
-								MsgHash: types.RandomHash(),
-							},
-							Signature: types.RandomEdSignature(),
-						},
-						{
-							InnerMsg: types.HareMetadata{
-								Layer:   lid,
-								Round:   round,
-								MsgHash: types.RandomHash(),
-							},
-							Signature: types.RandomEdSignature(),
-						},
-					},
-				},
+				Data: proof,
 			},
 		},
 		Eligibility: &types.HareEligibilityGossip{
@@ -263,8 +272,7 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 	data, err := codec.Encode(&gossip)
 	require.NoError(t, err)
 	done := make(chan struct{})
-	mockMesh.EXPECT().IsMalicious(gossip.Eligibility.NodeID).Return(false, nil)
-	mockMesh.EXPECT().AddMalfeasanceProof(gossip.Eligibility.NodeID, &gossip.MalfeasanceProof, nil).Return(nil)
+	mockMesh.EXPECT().Cache().Return(cdb).AnyTimes()
 	mpubsub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, data).DoAndReturn(
 		func(_ context.Context, _ string, _ []byte) error {
 			close(done)

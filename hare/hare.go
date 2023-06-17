@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -80,6 +81,10 @@ func (m defaultMesh) Ballot(bid types.BallotID) (*types.Ballot, error) {
 	return ballots.Get(m, bid)
 }
 
+func (m defaultMesh) Cache() *datastore.CachedDB {
+	return m.CachedDB
+}
+
 // Opt for configuring beacon protocol.
 type Opt func(*Hare)
 
@@ -120,7 +125,8 @@ type Hare struct {
 
 	factory consensusFactory
 
-	nodeID types.NodeID
+	nodeID      types.NodeID
+	sigVerifier malfeasance.SigVerifier
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -184,6 +190,7 @@ func New(
 	}
 
 	h.nodeID = nid
+	h.sigVerifier = edVerifier
 	h.ctx, h.cancel = context.WithCancel(context.Background())
 
 	for _, opt := range opts {
@@ -625,21 +632,8 @@ func (h *Hare) malfeasanceLoop(ctx context.Context) {
 			if gossip.Eligibility == nil {
 				h.WithContext(ctx).Fatal("missing hare eligibility")
 			}
-			if malicious, err := h.msh.IsMalicious(gossip.Eligibility.NodeID); err != nil {
-				h.With().Error("failed to check identity",
-					log.Context(ctx),
-					gossip.Eligibility.NodeID,
-					log.Err(err),
-				)
-				continue
-			} else if malicious {
-				h.With().Debug("known malicious identity",
-					log.Context(ctx),
-					gossip.Eligibility.NodeID,
-				)
-				continue
-			}
-			if err := h.msh.AddMalfeasanceProof(gossip.Eligibility.NodeID, &gossip.MalfeasanceProof, nil); err != nil {
+			if err := malfeasance.ValidateAndSave(
+				ctx, h.Log, h.msh.Cache(), h.msh.Cache(), h.sigVerifier, nil, gossip); err != nil && !errors.Is(err, malfeasance.ErrKnownProof) {
 				h.With().Error("failed to save MalfeasanceProof",
 					log.Context(ctx),
 					gossip.Eligibility.NodeID,
