@@ -175,7 +175,7 @@ func validateHareEligibility(
 	cp consensusProtocol,
 	gossip *types.MalfeasanceGossip,
 ) error {
-	if gossip == nil || gossip.Eligibility == nil {
+	if cp == nil || gossip == nil || gossip.Eligibility == nil {
 		logger.WithContext(ctx).Fatal("invalid input")
 	}
 
@@ -211,10 +211,10 @@ func validateHareEquivocation(
 		if !edVerifier.Verify(signing.HARE, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
 			return types.EmptyNodeID, errors.New("invalid signature")
 		}
-		if err := checkIdentityExists(db, msg.SmesherID); err != nil {
-			return types.EmptyNodeID, fmt.Errorf("check identity in hare malfeasance %v: %w", msg.SmesherID, err)
-		}
 		if firstNid == types.EmptyNodeID {
+			if err := checkIdentityExists(db, msg.SmesherID); err != nil {
+				return types.EmptyNodeID, fmt.Errorf("check identity in hare malfeasance %v: %w", msg.SmesherID, err)
+			}
 			firstNid = msg.SmesherID
 			firstMsg = msg
 		} else if msg.SmesherID == firstNid {
@@ -258,10 +258,10 @@ func validateMultipleATXs(
 		if !edVerifier.Verify(signing.ATX, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
 			return types.EmptyNodeID, errors.New("invalid signature")
 		}
-		if err := checkIdentityExists(db, msg.SmesherID); err != nil {
-			return types.EmptyNodeID, fmt.Errorf("check identity in atx malfeasance %v: %w", msg.SmesherID, err)
-		}
 		if firstNid == types.EmptyNodeID {
+			if err := checkIdentityExists(db, msg.SmesherID); err != nil {
+				return types.EmptyNodeID, fmt.Errorf("check identity in atx malfeasance %v: %w", msg.SmesherID, err)
+			}
 			firstNid = msg.SmesherID
 			firstMsg = msg
 		} else if msg.SmesherID == firstNid {
@@ -305,10 +305,10 @@ func validateMultipleBallots(
 		if !edVerifier.Verify(signing.BALLOT, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
 			return types.EmptyNodeID, errors.New("invalid signature")
 		}
-		if err = checkIdentityExists(db, msg.SmesherID); err != nil {
-			return types.EmptyNodeID, fmt.Errorf("check identity in ballot malfeasance %v: %w", msg.SmesherID, err)
-		}
 		if firstNid == types.EmptyNodeID {
+			if err = checkIdentityExists(db, msg.SmesherID); err != nil {
+				return types.EmptyNodeID, fmt.Errorf("check identity in ballot malfeasance %v: %w", msg.SmesherID, err)
+			}
 			firstNid = msg.SmesherID
 			firstMsg = msg
 		} else if msg.SmesherID == firstNid {
