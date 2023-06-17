@@ -481,8 +481,9 @@ func goodProposals(ctx context.Context, logger log.Log, msh mesh, nodeID types.N
 			)
 			continue
 		}
-		if atxs[p.AtxID] > 1 {
-			logger.With().Warning("proposal with same atx added twice in the recorded set",
+		if n := atxs[p.AtxID]; n > 1 {
+			logger.With().Warning("proposal with same atx added several times in the recorded set",
+				log.Int("n", n),
 				log.Stringer("id", p.ID()),
 				log.Stringer("atxid", p.AtxID),
 			)
