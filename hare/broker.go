@@ -61,6 +61,22 @@ func (h *messageStore) buildMalfeasanceProof(a, b types.Hash20) *types.Malfeasan
 	}
 }
 
+func (b *Broker) handleEarlyMessages(msgs map[types.Hash20]*Message, handler *hare3.Handler) {
+	for k, v := range msgs {
+		id, round, values := parts(v)
+		handler.HandleMsg(k, id, round, values)
+		proof, err := b.msh.GetMalfeasanceProof(v.SmesherID)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			b.With().Panic("re-handling early messages, failed to check malicious identity", log.Stringer("smesher", v.SmesherID), log.Err(err))
+		}
+		if proof != nil {
+			// The way we signify a message from a know malfeasant identity to the
+			// protocol is a message without values.
+			handler.HandleMsg(k, id, round, values)
+		}
+	}
+}
+
 // Broker is the dispatcher of incoming Hare messages.
 // The broker validates that the sender is eligible and active and forwards the message to the corresponding outbox.
 type Broker struct {
@@ -216,8 +232,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	id, round, values := parts(hareMsg)
 	proof, err := b.msh.GetMalfeasanceProof(hareMsg.SmesherID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		logger.With().Error("failed to check malicious identity", log.Stringer("smesher", hareMsg.SmesherID), log.Err(err))
-		return err
+		logger.With().Panic("failed to check malicious identity", log.Stringer("smesher", hareMsg.SmesherID), log.Err(err))
 	}
 
 	if proof != nil {
@@ -276,6 +291,8 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (*hare3.Handler
 		msgs = newMessageStore()
 		b.messages[id] = msgs
 		b.handlers[id] = hare3.NewHandler(nil, nil, nil, nil)
+	} else {
+		b.handleEarlyMessages(msgs.messages, b.handlers[id])
 	}
 
 	return b.handlers[id], nil
