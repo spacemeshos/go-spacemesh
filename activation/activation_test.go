@@ -345,6 +345,9 @@ func TestBuilder_StartSmeshingAvoidsPanickingIfPrepareInitializerReturnsError(t 
 		require.Fail(t, "test timed out or failed")
 	}
 
+	tab.stop()
+	tab.eg.Wait()
+
 	// Now verify that a panic does not occur if PrepareInitializer returns an error
 	l = log.NewMockLogger(gomock.NewController(t))
 	tab = newTestBuilder(t)
@@ -366,6 +369,7 @@ func TestBuilder_StartSmeshingAvoidsPanickingIfPrepareInitializerReturnsError(t 
 	goroutineCount := runtime.NumGoroutine()
 	tab.StartSmeshing(tab.coinbase, PostSetupOpts{})
 	require.Equal(t, goroutineCount, runtime.NumGoroutine())
+	tab.eg.Wait()
 }
 
 func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
