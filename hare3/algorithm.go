@@ -76,8 +76,9 @@ type GradedGossiper interface {
 	// ReceiveMsg accepts a hash identifying the message an id idenifying the
 	// originator of the message, a hash identifying the value in the message
 	// the message round and a grade. It returns a value indicating what action
-	// to take with the message.
-	ReceiveMsg(hash, id, valueHash types.Hash20, round AbsRound, grade uint8) (result GradedGossipResult, equivocationHash types.Hash20)
+	// to take with the message and the hash of an equivocating message if
+	// equivocation was detected.
+	ReceiveMsg(hash, id, valueHash types.Hash20, round AbsRound, grade uint8) (result GradedGossipResult, equivocationHash *types.Hash20)
 }
 
 // TrhesholdGradedGossiper acts as a specialized value store, it ingests
@@ -174,27 +175,29 @@ func (h *Handler) HandleMsg(hash types.Hash20, vk []byte, round int8, values []t
 
 	var gradedGossipValues []types.Hash20
 	var equivocationHash *types.Hash20
-	// Nil values signifies a message from a known malicious actor, in this
-	// case we skip passing the message to graded gossip, since we effectively
-	// have the output, which is equivocation, we still need to forward the
-	// original message to the network though so that they also insert it into
-	// their protocols.
-	if values != nil {
-		result, eHash := h.gg.ReceiveMsg(hash, id, valuesHash, r, g)
-		switch result {
-		case DropMessage:
-			// Indicates prior equivocation, drop the message.
-			return false, nil
-		case SendEquivocationProof:
-			// Indicates new instance of equivocation notify gradecast or threshold
-			// gossip with nil values.
-			gradedGossipValues = nil
-			// Set the equivocationHash so that the caller can look up the message.
-			equivocationHash = &eHash
-		case SendValue:
-			// Indicates valid message, set values to message values.
-			gradedGossipValues = values
-		}
+	// Nil values signifies a message from a known malicious actor, however we
+	// still need to forward the first such message per identity to the network
+	// though so that they also insert it into their protocols. So we need an
+	// outcome that is send equivocation proof but without a nil equivocaton
+	// hash to handle this case. Internally the implementation will track to
+	// see if there was a previous outcome with nil values and if so will drop
+	// the message. This then covers the case where we get a second message
+	// from a prior known equivocator or we get a third message from an
+	// identity equivocating in this round.
+	result, eHash := h.gg.ReceiveMsg(hash, id, valuesHash, r, g)
+	switch result {
+	case DropMessage:
+		// Indicates prior equivocation, drop the message.
+		return false, nil
+	case SendEquivocationProof:
+		// Indicates new instance of equivocation notify gradecast or threshold
+		// gossip with nil values.
+		gradedGossipValues = nil
+		// Set the equivocationHash so that the caller can look up the message.
+		equivocationHash = eHash
+	case SendValue:
+		// Indicates valid message, set values to message values.
+		gradedGossipValues = values
 	}
 	// Pass results to gradecast or threshold gossip.
 	// Only proposals are gradecasted, all other message types are passed to
