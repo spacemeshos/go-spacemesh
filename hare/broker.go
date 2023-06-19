@@ -21,49 +21,30 @@ type validator interface {
 	ValidateEligibilityGossip(context.Context, *types.HareEligibilityGossip) bool
 }
 
-type handler struct {
-	*hare3.Handler
+type messageStore struct {
 	messages map[types.Hash20]*Message
 	mu       sync.Mutex
 }
 
-func newHandler() *handler {
-	return &handler{
+func newMessageStore() *messageStore {
+	return &messageStore{
 		messages: make(map[types.Hash20]*Message),
 	}
 }
 
-func (h *handler) storeMessage(hash types.Hash20, m *Message) {
+func (h *messageStore) storeMessage(hash types.Hash20, m *Message) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.messages[hash] = m
 }
 
-func (h *handler) retreiveMessage(hash types.Hash20) *Message {
+func (h *messageStore) retreiveMessage(hash types.Hash20) *Message {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.messages[hash]
 }
 
-// func (h *handler) processEarlyMessages() []*types.MalfeasanceProof {
-// 	// TODO I realised that this is not sufficient, we need to send these
-// 	// messages through the real handler. It would be nice not to decode them
-// 	// again, so I should probably extract out a section without decoding.
-// 	h.mu.Lock()
-// 	defer h.mu.Unlock()
-// 	for k, v := range h.messages {
-
-// 		id, round, vals := parts(v)
-// 		_, equivocation := h.Handler.HandleMsg(k, id, round, vals)
-// 		if equivocation != nil {
-// 			equivocations = append(equivocations, []types.Hash20{k, *equivocation})
-// 		}
-// 		// TODO do equivocation sending, send on mch
-// 	}
-// 	return equivocations
-// }
-
-func (h *handler) buildMalfeasanceProof(a, b types.Hash20) *types.MalfeasanceProof {
+func (h *messageStore) buildMalfeasanceProof(a, b types.Hash20) *types.MalfeasanceProof {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -108,7 +89,8 @@ type Broker struct {
 	// So put messages in messages, including early messages, when we start we
 	// iterate the messages and push them into the handler and when we need
 	// messages for constructing a malfeasance proof we have them right there.
-	handlers map[types.LayerID]*handler
+	messages map[types.LayerID]*messageStore
+	handlers map[types.LayerID]*hare3.Handler
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -131,7 +113,7 @@ func newBroker(
 		roleValidator: roleValidator,
 		stateQuerier:  stateQuerier,
 		nodeSyncState: syncState,
-		handlers:      make(map[types.LayerID]*handler),
+		messages:      make(map[types.LayerID]*messageStore),
 		latestLayer:   types.GetEffectiveGenesis(),
 	}
 	b.ctx, b.cancel = context.WithCancel(context.Background())
@@ -200,20 +182,9 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 		return errNotSynced
 	}
 
-	// handler, msgEarly := b.getHandler(msgHash, hareMsg, latestLayer)
-	// if handler == nil {
-	// 	if msgEarly {
-	// 		logger.With().Debug("early message detected", msgLayer.Field())
-	// 		return nil
-	// 	}
-	// 	logger.With().Debug("broker received a message to a consensus process that is not registered",
-	// 		msgLayer.Field())
-	// 	return errors.New("consensus process not registered")
-	// }
-
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	h := b.handlers[hareMsg.Layer]
+	msgs := b.messages[hareMsg.Layer]
 
 	// nil handler - is early
 	// nil handler - is not early - reject
@@ -221,7 +192,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 
 	early := hareMsg.Layer == latestLayer+1
 	// Do a quick exit if this message is not early and not for a registered layer
-	if h == nil && !early {
+	if msgs == nil && !early {
 		return errors.New("consensus process not registered")
 	}
 	// NOTE We need to process the rest of the validation here in the case that
@@ -285,21 +256,25 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	id, round, values := parts(hareMsg)
 
 	if proof != nil {
-		if handler.hasProof(hareMsg.Round, hareMsg.SmesherID) {
-			// We already handled a message from this malfeasant identity this round, so we drop this one.
-			logger.With().Debug("message validation failed: equivocating message from prior known malfeasant identity", log.Stringer("smesher", hareMsg.SmesherID))
-			return errors.New("equivocating message from prior known malfeasant identity")
-		}
+		// NOTE I think we don't need the below logic because this will now be covered by the handler.
+		// if messageStore.hasProof(hareMsg.Round, hareMsg.SmesherID) {
+		// 	// We already handled a message from this malfeasant identity this round, so we drop this one.
+		// 	logger.With().Debug("message validation failed: equivocating message from prior known malfeasant identity", log.Stringer("smesher", hareMsg.SmesherID))
+		// 	return errors.New("equivocating message from prior known malfeasant identity")
+		// }
 		// The way we signify a malfeasance proof to the protocol is a message without values.
 		values = nil
 	}
 
 	if early {
-		if h == nil {
-			h = newHandler()
-			b.handlers[hareMsg.Layer] = h
+		if msgs == nil {
+			msgs = newMessageStore()
+			b.messages[hareMsg.Layer] = msgs
+			// TODO actually build the handler
+			b.handlers[hareMsg.Layer] = hare3.NewHandler(nil, nil, nil, nil)
 		}
 	}
+	handler := b.handlers[hareMsg.Layer]
 
 	// Need to get my logic for handling malfeasant messages down.
 	// 1. First message from pre known malfeasant identity - relay because others need to count it
@@ -363,10 +338,10 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	// Store the early messages and process them when the hare process starts, that means that we'll need to publish those early messages ourselves.
 	// Do some processing of early messages and then just do the last bit when the protocol starts.
 
-	shouldRelay, equivocationHash := handler.HandleMsg(msgHash, id, round, values)
+	shouldRelay, equivocationHash := handler.HandleMsg(hash, id, round, values)
 	// If we detect a new equivocation then store it.
 	if equivocationHash != nil {
-		proof := handler.buildMalfeasanceProof(msgHash, *equivocationHash)
+		proof := msgs.buildMalfeasanceProof(hash, *equivocationHash)
 		err := b.msh.AddMalfeasanceProof(hareMsg.SmesherID, proof, nil)
 		if err != nil {
 			logger.With().Error("faild to add newly discovered malfeasance proof to mesh", log.Err(err))
@@ -382,72 +357,35 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	return nil
 }
 
-// getHandler returns the handler for this layer if it has been registered, in
-// the case that a handler is registered or the message is considered early
-// then the message will also be stored.
-func (b *Broker) getHandler(hash types.Hash20, msg *Message, latestLayer types.LayerID) (handler *handler, isEarly bool) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	h := b.handlers[msg.Layer]
-	// If the handler has already been registered then return it.
-	if h != nil && h.Handler != nil {
-		h.storeMessage(hash, msg)
-		return h, false
-	}
-
-	// If the message is early we want to store it so that it can be processed
-	// when a handler is registerd for this layer. Early messagges must be
-	// stored before b.mu.Unlock, to ensure that calls to Register see all
-	// early messages.
-	if msg.Layer == latestLayer+1 {
-		// Build the handler if we didn't already
-		if h == nil {
-			h = newHandler()
-			b.handlers[msg.Layer] = h
-		}
-		h.storeMessage(hash, msg)
-		return nil, true
-	}
-	// No handler and the message wasn't early
-	return nil, false
-}
-
 // Register a layer to receive messages
 // Note: the registering instance is assumed to be started and accepting messages.
-func (b *Broker) Register(ctx context.Context, id types.LayerID, hareHandler *hare3.Handler) error {
+func (b *Broker) Register(ctx context.Context, id types.LayerID) (*hare3.Handler, error) {
 	b.mu.Lock()
 	b.mu.Unlock()
 
 	// check to see if the node is still synced
 	if !b.Synced(ctx, id) {
-		return errInstanceNotSynced
+		return nil, errInstanceNotSynced
 	}
 
 	if !id.After(b.latestLayer) { // should expect to update only newer layer
-		return fmt.Errorf("tried to update to a previous layer, broker at: %v, given layer %v", b.latestLayer, id)
+		return nil, fmt.Errorf("tried to update to a previous layer, broker at: %v, given layer %v", b.latestLayer, id)
 	}
 	b.latestLayer = id
-	h := b.handlers[id]
-	if h == nil {
-		h = newHandler()
-		b.handlers[id] = h
-	}
-	h.Handler = hareHandler
-
-	// Handle any early messages
-	for k, v := range h.messages {
-		// Hmm what do we do with early messages in the case of equivocation?
-		// Previously we did all the validation with an early message, so we'd only add them if they passed all validation .. we would add them if known malicious, also because we still needed the message.
-		b.HandleDecodedMessage(ctx, k, v)
+	msgs := b.messages[id]
+	if msgs == nil {
+		msgs = newMessageStore()
+		b.messages[id] = msgs
+		b.handlers[id] = hare3.NewHandler(nil, nil, nil, nil)
 	}
 
-	return nil
+	return b.handlers[id], nil
 }
 
 func (b *Broker) cleanupInstance(id types.LayerID) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	delete(b.handlers, id)
+	delete(b.messages, id)
 }
 
 // Unregister a layer from receiving messages.
