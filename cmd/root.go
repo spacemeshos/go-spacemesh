@@ -80,8 +80,9 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().IntVar(&cfg.DatabaseConnections, "db-connections",
 		cfg.DatabaseConnections, "configure number of active connections to enable parallel read requests")
-	cmd.PersistentFlags().BoolVar(&cfg.P2P.Flood, "db-latency-metering",
+	cmd.PersistentFlags().BoolVar(&cfg.DatabaseLatencyMetering, "db-latency-metering",
 		cfg.DatabaseLatencyMetering, "if enabled collect latency histogram for every database query")
+
 	/** ======================== P2P Flags ========================== **/
 
 	cmd.PersistentFlags().StringVar(&cfg.P2P.Listen, "listen",
@@ -90,6 +91,11 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.P2P.Flood, "flood created messages to all peers")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.DisableNatPort, "disable-natport",
 		cfg.P2P.DisableNatPort, "disable nat port-mapping (if enabled upnp protocol is used to negotiate external port with router)")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.DisableReusePort,
+		"disable-reuseport",
+		cfg.P2P.DisableReusePort,
+		"disables SO_REUSEPORT for tcp sockets. Try disabling this if your node can't reach bootnodes in the network",
+	)
 	cmd.PersistentFlags().IntVar(&cfg.P2P.LowPeers, "low-peers",
 		cfg.P2P.LowPeers, "low watermark for the number of connections")
 	cmd.PersistentFlags().IntVar(&cfg.P2P.HighPeers, "high-peers",
