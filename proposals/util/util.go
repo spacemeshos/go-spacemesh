@@ -41,11 +41,11 @@ func GetNumEligibleSlots(weight, minWeight, totalWeight uint64, committeeSize ui
 	if totalWeight == 0 {
 		return 0, ErrZeroTotalWeight
 	}
-	numberOfEligibleBlocks := weight * uint64(committeeSize) * uint64(layersPerEpoch) / maxWeight(minWeight, totalWeight) // TODO: ensure no overflow
-	if numberOfEligibleBlocks == 0 {
-		numberOfEligibleBlocks = 1
+	numEligible := weight * uint64(committeeSize) * uint64(layersPerEpoch) / maxWeight(minWeight, totalWeight) // TODO: ensure no overflow
+	if numEligible == 0 {
+		numEligible = 1
 	}
-	return uint32(numberOfEligibleBlocks), nil
+	return uint32(numEligible), nil
 }
 
 // ComputeWeightPerEligibility computes the ballot weight per eligibility w.r.t the active set recorded in its reference ballot.
