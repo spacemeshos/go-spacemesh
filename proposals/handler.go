@@ -61,11 +61,12 @@ type Handler struct {
 
 // Config defines configuration for the handler.
 type Config struct {
-	LayerSize      uint32
-	LayersPerEpoch uint32
-	GoldenATXID    types.ATXID
-	MaxExceptions  int
-	Hdist          uint32
+	LayerSize              uint32
+	LayersPerEpoch         uint32
+	GoldenATXID            types.ATXID
+	MaxExceptions          int
+	Hdist                  uint32
+	MinimalActiveSetWeight uint64
 }
 
 // defaultConfig for BlockHandler.
@@ -127,7 +128,7 @@ func NewHandler(
 		opt(b)
 	}
 	if b.validator == nil {
-		b.validator = NewEligibilityValidator(b.cfg.LayerSize, b.cfg.LayersPerEpoch, cdb, bc, m, b.logger, verifier)
+		b.validator = NewEligibilityValidator(b.cfg.LayerSize, b.cfg.LayersPerEpoch, b.cfg.MinimalActiveSetWeight, cdb, bc, m, b.logger, verifier)
 	}
 	return b
 }
