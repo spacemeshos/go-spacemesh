@@ -905,7 +905,9 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 			peersync.WithConfig(app.Config.TIME.Peersync),
 		)
 	}
-
+	if err := app.host.Start(); err != nil {
+		return err
+	}
 	return nil
 }
 
