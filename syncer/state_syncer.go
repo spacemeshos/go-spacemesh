@@ -63,10 +63,6 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 
 		// layers should be processed in order. once we skip one layer, there is no point
 		// continuing with later layers. return on error
-		if _, err := s.beacon.GetBeacon(lid.GetEpoch()); err != nil {
-			s.logger.WithContext(ctx).With().Debug("beacon not available", lid)
-			return errBeaconNotAvailable
-		}
 
 		if s.patrol.IsHareInCharge(lid) {
 			lag := types.LayerID(0)

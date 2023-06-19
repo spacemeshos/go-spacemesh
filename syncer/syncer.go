@@ -74,9 +74,8 @@ func (s syncState) String() string {
 }
 
 var (
-	errHareInCharge       = errors.New("hare in charge of layer")
-	errATXsNotSynced      = errors.New("ATX not synced")
-	errBeaconNotAvailable = errors.New("beacon not available")
+	errHareInCharge  = errors.New("hare in charge of layer")
+	errATXsNotSynced = errors.New("ATX not synced")
 )
 
 // Option is a type to configure a syncer.
