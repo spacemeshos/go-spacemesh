@@ -20,17 +20,15 @@ import (
 type handler struct {
 	logger log.Log
 	cdb    *datastore.CachedDB
-	cfg    Config
 	bs     *datastore.BlobStore
 	msh    meshProvider
 	beacon system.BeaconGetter
 }
 
-func newHandler(cdb *datastore.CachedDB, cfg Config, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, lg log.Log) *handler {
+func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, lg log.Log) *handler {
 	return &handler{
 		logger: lg,
 		cdb:    cdb,
-		cfg:    cfg,
 		bs:     bs,
 		msh:    m,
 		beacon: b,
@@ -211,24 +209,28 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 		h.logger.WithContext(ctx).With().Warning("failed to parse mesh hash request", log.Err(err))
 		return nil, errBadRequest
 	}
-	if err := req.Validate(); err != nil {
-		h.logger.WithContext(ctx).With().Debug("failed to validate mesh hash request", log.Err(err))
+	lids, err := iterateLayers(&req)
+	if err != nil {
+		h.logger.WithContext(ctx).With().Debug("failed to iterate layers", log.Err(err))
 		return nil, err
 	}
-	hashes, err = layers.GetAggHashes(h.cdb, req.From, req.To, req.Step)
-	if err != nil {
-		h.logger.WithContext(ctx).With().Warning("failed to get mesh hashes", log.Err(err))
-		return nil, err
+	if len(lids) > 0 {
+		hashes, err = layers.GetAggHashes(h.cdb, lids)
+		if err != nil {
+			h.logger.WithContext(ctx).With().Warning("failed to get mesh hashes", log.Err(err))
+			return nil, err
+		}
 	}
 	data, err = codec.EncodeSlice(hashes)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Fatal("failed to serialize hashes", log.Err(err))
 	}
 	h.logger.WithContext(ctx).With().Debug("returning response for mesh hashes",
-		log.Stringer("layer_from", req.From),
-		log.Stringer("layer_to", req.To),
-		log.Uint32("by", req.Step),
-		log.Int("count_hashes", len(hashes)),
-	)
+		log.Array("layers", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+			for _, lid := range lids {
+				encoder.AppendUint32(lid.Uint32())
+			}
+			return nil
+		})))
 	return data, nil
 }

@@ -35,12 +35,11 @@ type testHandler struct {
 func createTestHandler(t testing.TB) *testHandler {
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	cfg := DefaultConfig()
 	ctrl := gomock.NewController(t)
 	mm := mocks.NewMockmeshProvider(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	return &testHandler{
-		handler: newHandler(cdb, cfg, datastore.NewBlobStore(cdb.Database), mm, mb, lg),
+		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), mm, mb, lg),
 		cdb:     cdb,
 		mm:      mm,
 		mb:      mb,
@@ -173,33 +172,33 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 func TestHandleMeshHashReq(t *testing.T) {
 	tt := []struct {
 		name        string
-		params      [3]uint32 // from, to, delta, steps
+		params      [4]uint32 // from, to, delta, steps
 		hashMissing bool
 		err         error
 	}{
 		{
 			name:   "success",
-			params: [3]uint32{7, 23, 5},
+			params: [4]uint32{7, 23, 5, 4},
 		},
 		{
 			name:        "hash missing",
-			params:      [3]uint32{7, 23, 5},
+			params:      [4]uint32{7, 23, 5, 4},
 			hashMissing: true,
 			err:         sql.ErrNotFound,
 		},
 		{
-			name:   "from > to",
-			params: [3]uint32{23, 7, 5},
+			name:   "bad boundary",
+			params: [4]uint32{23, 23, 5, 4},
 			err:    errBadRequest,
 		},
 		{
-			name:   "by == 0",
-			params: [3]uint32{7, 23, 0},
+			name:   "not enough steps",
+			params: [4]uint32{7, 23, 5, 3},
 			err:    errBadRequest,
 		},
 		{
-			name:   "count > 100",
-			params: [3]uint32{7, 124, 1},
+			name:   "too many steps",
+			params: [4]uint32{7, 23, 5, 5},
 			err:    errBadRequest,
 		},
 	}
@@ -211,9 +210,10 @@ func TestHandleMeshHashReq(t *testing.T) {
 
 			th := createTestHandler(t)
 			req := &MeshHashRequest{
-				From: types.LayerID(tc.params[0]),
-				To:   types.LayerID(tc.params[1]),
-				Step: tc.params[2],
+				From:  types.LayerID(tc.params[0]),
+				To:    types.LayerID(tc.params[1]),
+				Delta: tc.params[2],
+				Steps: tc.params[3],
 			}
 			if !tc.hashMissing {
 				for lid := req.From; !lid.After(req.To); lid = lid.Add(1) {
@@ -223,12 +223,12 @@ func TestHandleMeshHashReq(t *testing.T) {
 			reqData, err := codec.Encode(req)
 			require.NoError(t, err)
 
-			resp, err := th.handleMeshHashReq(context.Background(), reqData)
+			resp, err := th.handleMeshHashReq(context.TODO(), reqData)
 			if tc.err == nil {
 				require.NoError(t, err)
 				got, err := codec.DecodeSlice[types.Hash32](resp)
 				require.NoError(t, err)
-				require.EqualValues(t, len(got), req.To.Difference(req.From)/req.Step+2)
+				require.EqualValues(t, len(got), req.Steps+1)
 			} else {
 				require.ErrorIs(t, err, tc.err)
 			}

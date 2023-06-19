@@ -726,13 +726,13 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		EpochEndFraction: 0.8,
 		HareDelayLayers:  app.Config.Tortoise.Zdist,
 		SyncCertDistance: app.Config.Tortoise.Hdist,
+		MaxHashesInReq:   100,
 		MaxStaleDuration: time.Hour,
 		Standalone:       app.Config.Standalone,
 	}
 	newSyncer := syncer.NewSyncer(app.cachedDB, app.clock, beaconProtocol, msh, trtl, fetcher, patrol, app.certifier,
 		syncer.WithConfig(syncerConf),
-		syncer.WithLogger(app.addLogger(SyncLogger, lg)),
-	)
+		syncer.WithLogger(app.addLogger(SyncLogger, lg)))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
 
