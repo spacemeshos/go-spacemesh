@@ -21,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -43,7 +42,6 @@ var (
 	errKnownProposal         = errors.New("known proposal")
 	errKnownBallot           = errors.New("known ballot")
 	errMaliciousBallot       = errors.New("malicious ballot")
-	errWrongSmesherID        = errors.New("ballot atx from a different smesher")
 )
 
 // Handler processes Proposal from gossip and, if deems it valid, propagates it to peers.
@@ -58,7 +56,7 @@ type Handler struct {
 	mesh       meshProvider
 	validator  eligibilityValidator
 	decoder    ballotDecoder
-	clock      *timesync.NodeClock
+	clock      layerClock
 }
 
 // Config defines configuration for the handler.
@@ -112,7 +110,7 @@ func NewHandler(
 	m meshProvider,
 	decoder ballotDecoder,
 	verifier vrfVerifier,
-	clock *timesync.NodeClock,
+	clock layerClock,
 	opts ...Opt,
 ) *Handler {
 	b := &Handler{
@@ -161,11 +159,6 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []
 
 	if b.AtxID == types.EmptyATXID || b.AtxID == h.cfg.GoldenATXID {
 		return errInvalidATXID
-	}
-	if hdr, err := h.cdb.GetAtxHeader(b.AtxID); err != nil {
-		return fmt.Errorf("ballot atx hdr %w", err)
-	} else if hdr.NodeID != b.SmesherID {
-		return fmt.Errorf("%w: expected %v, got %v", errWrongSmesherID, b.SmesherID, hdr.NodeID)
 	}
 	ballotDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
 
@@ -258,13 +251,6 @@ func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte
 	if p.AtxID == types.EmptyATXID || p.AtxID == h.cfg.GoldenATXID {
 		badData.Inc()
 		return errInvalidATXID
-	}
-	if hdr, err := h.cdb.GetAtxHeader(p.AtxID); err != nil {
-		badData.Inc()
-		return fmt.Errorf("proposal atx hdr %w", err)
-	} else if hdr.NodeID != p.SmesherID {
-		badData.Inc()
-		return fmt.Errorf("%w: expected %v, got %v", errWrongSmesherID, p.SmesherID, hdr.NodeID)
 	}
 	proposalDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
 
@@ -370,6 +356,9 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 	}
 	ballotDuration.WithLabelValues(dbSave).Observe(float64(time.Since(t1)))
 	if err := h.decoder.StoreBallot(decoded); err != nil {
+		if errors.Is(err, tortoise.ErrBallotExists) {
+			return nil, fmt.Errorf("%w: %s", errKnownBallot, b.ID())
+		}
 		return nil, fmt.Errorf("store decoded ballot %s: %w", decoded.ID, err)
 	}
 	reportVotesMetrics(b)

@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 
@@ -11,6 +12,10 @@ import (
 )
 
 const testLogLevel = "TEST_LOG_LEVEL"
+
+func Zap(tb testing.TB, override ...zapcore.Level) *zap.Logger {
+	return New(tb, override...).Zap()
+}
 
 // New creates log.Log instance that will use testing.TB.Log internally.
 func New(tb testing.TB, override ...zapcore.Level) log.Log {

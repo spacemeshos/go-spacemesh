@@ -77,8 +77,7 @@ func TestData(t *testing.T) {
 		}
 		t.Run(entry.Name(), func(t *testing.T) {
 			t.Parallel()
-			require.NoError(t, RunTrace(filepath.Join(data, entry.Name()), nil,
-				WithLogger(logtest.New(t))))
+			require.NoError(t, RunTrace(filepath.Join(data, entry.Name()), nil, WithLogger(logtest.New(t))))
 		})
 	}
 }
