@@ -694,7 +694,7 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 		if err != nil {
 			return nil, 0, err
 		}
-		expected, err := util.GetNumEligibleSlots(atx.weight, total, t.LayerSize, types.GetLayersPerEpoch())
+		expected, err := util.GetNumEligibleSlots(atx.weight, t.MinimalActiveSetWeight, total, t.LayerSize, types.GetLayersPerEpoch())
 		if err != nil {
 			return nil, 0, err
 		}

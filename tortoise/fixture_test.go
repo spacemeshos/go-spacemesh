@@ -691,6 +691,12 @@ func (s *session) withDelay(val uint32) *session {
 	return s
 }
 
+func (s *session) withMinActiveSetWeight(weight uint64) *session {
+	s.ensureConfig()
+	s.config.MinimalActiveSetWeight = weight
+	return s
+}
+
 func (s *session) tortoise() *Tortoise {
 	s.ensureConfig()
 	trt, err := New(WithLogger(logtest.New(s.tb)), WithConfig(*s.config))

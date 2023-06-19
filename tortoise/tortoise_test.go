@@ -3055,6 +3055,22 @@ func TestUpdates(t *testing.T) {
 	})
 }
 
+func TestMinimalActiveSetWeight(t *testing.T) {
+	s := newSession(t).
+		withMinActiveSetWeight(1000)
+
+	s.smesher(0).atx(1, new(aopt).height(10).weight(2))
+	s.beacon(1, "a")
+	s.smesher(0).atx(1).ballot(1, new(bopt).
+		activeset(s.smesher(0).atx(1)).
+		beacon("a").
+		eligibilities(1),
+	)
+	s.tallyWait(1)
+	s.updates(t, new(results).verified(0).next(1))
+	s.runInorder()
+}
+
 func TestDuplicateBallot(t *testing.T) {
 	s := newSession(t)
 	s.smesher(0).atx(1, new(aopt).height(10).weight(2))

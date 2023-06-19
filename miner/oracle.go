@@ -32,9 +32,10 @@ type EpochEligibility struct {
 
 // Oracle provides proposal eligibility proofs for the miner.
 type Oracle struct {
-	avgLayerSize   uint32
-	layersPerEpoch uint32
-	cdb            *datastore.CachedDB
+	avgLayerSize       uint32
+	layersPerEpoch     uint32
+	minActiveSetWeight uint64
+	cdb                *datastore.CachedDB
 
 	vrfSigner *signing.VRFSigner
 	nodeID    types.NodeID
@@ -44,15 +45,16 @@ type Oracle struct {
 	cache *EpochEligibility
 }
 
-func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, nodeID types.NodeID, log log.Log) *Oracle {
+func newMinerOracle(layerSize, layersPerEpoch uint32, minActiveSetWeight uint64, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, nodeID types.NodeID, log log.Log) *Oracle {
 	return &Oracle{
-		avgLayerSize:   layerSize,
-		layersPerEpoch: layersPerEpoch,
-		cdb:            cdb,
-		vrfSigner:      vrfSigner,
-		nodeID:         nodeID,
-		log:            log,
-		cache:          &EpochEligibility{},
+		avgLayerSize:       layerSize,
+		layersPerEpoch:     layersPerEpoch,
+		minActiveSetWeight: minActiveSetWeight,
+		cdb:                cdb,
+		vrfSigner:          vrfSigner,
+		nodeID:             nodeID,
+		log:                log,
+		cache:              &EpochEligibility{},
 	}
 }
 
@@ -138,7 +140,7 @@ func (o *Oracle) calcEligibilityProofs(atx *types.ActivationTxHeader, epoch type
 		log.Uint64("total weight", totalWeight),
 	)
 
-	numEligibleSlots, err := proposals.GetNumEligibleSlots(weight, totalWeight, o.avgLayerSize, o.layersPerEpoch)
+	numEligibleSlots, err := proposals.GetNumEligibleSlots(weight, o.minActiveSetWeight, totalWeight, o.avgLayerSize, o.layersPerEpoch)
 	if err != nil {
 		return nil, fmt.Errorf("oracle get num slots: %w", err)
 	}
@@ -162,6 +164,7 @@ func (o *Oracle) calcEligibilityProofs(atx *types.ActivationTxHeader, epoch type
 		epoch,
 		beacon,
 		log.Uint64("weight", weight),
+		log.Uint64("min activeset weight", o.minActiveSetWeight),
 		log.Uint64("total weight", totalWeight),
 		log.Uint32("total num slots", numEligibleSlots),
 		log.Int("num layers eligible", len(eligibilityProofs)),
