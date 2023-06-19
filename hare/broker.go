@@ -45,23 +45,23 @@ func (h *handler) retreiveMessage(hash types.Hash20) *Message {
 	return h.messages[hash]
 }
 
-func (h *handler) processEarlyMessages() []*types.MalfeasanceProof {
-	// TODO I realised that this is not sufficient, we need to send these
-	// messages through the real handler. It would be nice not to decode them
-	// again, so I should probably extract out a section without decoding.
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	for k, v := range h.messages {
+// func (h *handler) processEarlyMessages() []*types.MalfeasanceProof {
+// 	// TODO I realised that this is not sufficient, we need to send these
+// 	// messages through the real handler. It would be nice not to decode them
+// 	// again, so I should probably extract out a section without decoding.
+// 	h.mu.Lock()
+// 	defer h.mu.Unlock()
+// 	for k, v := range h.messages {
 
-		id, round, vals := parts(v)
-		_, equivocation := h.Handler.HandleMsg(k, id, round, vals)
-		if equivocation != nil {
-			equivocations = append(equivocations, []types.Hash20{k, *equivocation})
-		}
-		// TODO do equivocation sending, send on mch
-	}
-	return equivocations
-}
+// 		id, round, vals := parts(v)
+// 		_, equivocation := h.Handler.HandleMsg(k, id, round, vals)
+// 		if equivocation != nil {
+// 			equivocations = append(equivocations, []types.Hash20{k, *equivocation})
+// 		}
+// 		// TODO do equivocation sending, send on mch
+// 	}
+// 	return equivocations
+// }
 
 func (h *handler) buildMalfeasanceProof(a, b types.Hash20) *types.MalfeasanceProof {
 	h.mu.Lock()
@@ -177,18 +177,15 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	default:
 	}
 
+	latestLayer := b.getLatestLayer()
 	hash := types.CalcMessageHash20(msg, pubsub.HareProtocol)
+	logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.getLatestLayer()), hash.ToHash12())
 	hareMsg, err := MessageFromBuffer(msg)
 	if err != nil {
+		logger.With().Error("failed to build message", hash.ToHash12(), log.Err(err))
 		b.WithContext(ctx).With().Error("failed to build message", hash.ToHash12(), log.Err(err))
 		return err
 	}
-	return b.HandleDecodedMessage(ctx, hash, hareMsg)
-}
-
-func (b *Broker) HandleDecodedMessage(ctx context.Context, msgHash types.Hash20, hareMsg *Message) error {
-	latestLayer := b.getLatestLayer()
-	logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", latestLayer), msgHash.ToHash12())
 	logger = logger.WithFields(log.Inline(hareMsg))
 
 	if hareMsg.InnerMessage == nil {
@@ -222,7 +219,7 @@ func (b *Broker) HandleDecodedMessage(ctx context.Context, msgHash types.Hash20,
 	// nil handler - is not early - reject
 	// if its early then the handler could be nil, otherwise handler is non nil.
 
-	early := hareMsg.Layer = latestLayer+1
+	early := hareMsg.Layer == latestLayer+1
 	// Do a quick exit if this message is not early and not for a registered layer
 	if h == nil && !early {
 		return errors.New("consensus process not registered")
@@ -284,6 +281,9 @@ func (b *Broker) HandleDecodedMessage(ctx context.Context, msgHash types.Hash20,
 		logger.With().Error("failed to check malicious identity", log.Stringer("smesher", hareMsg.SmesherID), log.Err(err))
 		return err
 	}
+
+	id, round, values := parts(hareMsg)
+
 	if proof != nil {
 		if handler.hasProof(hareMsg.Round, hareMsg.SmesherID) {
 			// We already handled a message from this malfeasant identity this round, so we drop this one.
@@ -294,7 +294,24 @@ func (b *Broker) HandleDecodedMessage(ctx context.Context, msgHash types.Hash20,
 		values = nil
 	}
 
-	id, round, values := parts(hareMsg)
+	if early {
+		if h == nil {
+			h = newHandler()
+			b.handlers[hareMsg.Layer] = h
+		}
+	}
+
+	// Need to get my logic for handling malfeasant messages down.
+	// 1. First message from pre known malfeasant identity - relay because others need to count it
+	// 2. Second messge from pre known malfeasant identity - don't relay its done.
+	// 3. A detected equivocating message - do relay so othere can detect the equivoction.
+	// 4. A further 3rd or more equivocating message (which will also show up as the first message from a pre-known malfeasant identity, since we'll put a proof in the mesh)
+	//
+	// How to handle case 4 we can just put the message throught the protocol again, that will work, if we don't nullify it as we are doing with malfeasant identities.
+	// How then to consistently deal with case, actually its ok we can put the message into graded gossip with null values but still use it to check equivocation. But then we need to handle 2 different cases.
+	// So a null value equivocation is not forwarded but a valid value equivocation is. Or more consistently if the current value of a slot (round[identity]) is null then we do not forward the message.
+	//
+	// Ok I think that's it. So if the output for a slot is null in graded gossip, any further messages are not relayed.
 
 	// How do we want to handle the known maliciouos identities? Do we need to
 	// gossip, well if a node dropped out of a layer or two then it wont know
@@ -319,12 +336,12 @@ func (b *Broker) HandleDecodedMessage(ctx context.Context, msgHash types.Hash20,
 	//
 	// NOTE But we can't do that, because we need to know the set of proposals we have in order to process messages, do we though? Actually maybe that is not needed for the handler!!! Yeah it's not.
 	// We only need the values for the protocol when we actually run it, we can build the handler earlier, and actually have that fed back to hare to build the protocol.
-	// 
+	//
 	// So yes a protocol factory would work in the broker, really we just need the handler part.
 	//
 	//---------------------------------------------------- So this is it!
 	// We fully process early messages through the handler and we will know if we need to relay them at that point. At some point later the protocol will be run with the contents of the handler.
-	// 
+	//
 	// lets build a table of what forwarding action we take for each situation.
 	//
 	// 1. A good message with no equivoction - Relay
@@ -345,10 +362,6 @@ func (b *Broker) HandleDecodedMessage(ctx context.Context, msgHash types.Hash20,
 	// Split the graded gossiper from the rest of the protocol and invoke that when a message is received and save the result for when the hare process starts.
 	// Store the early messages and process them when the hare process starts, that means that we'll need to publish those early messages ourselves.
 	// Do some processing of early messages and then just do the last bit when the protocol starts.
-
-
-
-
 
 	shouldRelay, equivocationHash := handler.HandleMsg(msgHash, id, round, values)
 	// If we detect a new equivocation then store it.

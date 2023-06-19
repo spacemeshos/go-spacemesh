@@ -160,6 +160,7 @@ func NewHandler(gg GradedGossiper, tgg TrhesholdGradedGossiper, gc Gradecaster, 
 func (h *Handler) HandleMsg(hash types.Hash20, vk []byte, round int8, values []types.Hash20) (bool, *types.Hash20) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	// TODO max round check
 	r := AbsRound(round)
 	var g uint8
 	switch r.Type() {
