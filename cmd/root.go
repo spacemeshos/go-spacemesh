@@ -96,6 +96,16 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.P2P.DisableReusePort,
 		"disables SO_REUSEPORT for tcp sockets. Try disabling this if your node can't reach bootnodes in the network",
 	)
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.Metrics,
+		"p2p-metrics",
+		cfg.P2P.Metrics,
+		"enable extended metrics collection from libp2p components",
+	)
+	cmd.PersistentFlags().IntVar(&cfg.P2P.AcceptQueue,
+		"p2p-accept-queue",
+		cfg.P2P.AcceptQueue,
+		"number of connections that are fully setup before accepting new connections",
+	)
 	cmd.PersistentFlags().IntVar(&cfg.P2P.LowPeers, "low-peers",
 		cfg.P2P.LowPeers, "low watermark for the number of connections")
 	cmd.PersistentFlags().IntVar(&cfg.P2P.HighPeers, "high-peers",
