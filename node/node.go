@@ -23,6 +23,7 @@ import (
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	poetconfig "github.com/spacemeshos/poet/config"
 	"github.com/spacemeshos/poet/server"
+	"github.com/spacemeshos/post/verifying"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -238,6 +239,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
 		mapstructureutil.BigRatDecodeFunc(),
+		mapstructure.TextUnmarshallerHookFunc(),
 	)
 
 	// load config if it was loaded to the viper
@@ -549,9 +551,14 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 
 	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
 	postVerifiers := make([]activation.PostVerifier, 0, app.Config.SMESHING.VerifyingOpts.Workers)
+	lg.Debug("creating post verifier")
+	verifier, err := activation.NewPostVerifier(app.Config.POST, nipostValidatorLogger, verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags))
+	lg.With().Debug("created post verifier", log.Err(err))
+	if err != nil {
+		return err
+	}
 	for i := 0; i < app.Config.SMESHING.VerifyingOpts.Workers; i++ {
-		logger := nipostValidatorLogger.Named(fmt.Sprintf("worker-%d", i))
-		postVerifiers = append(postVerifiers, activation.NewPostVerifier(app.Config.POST, logger))
+		postVerifiers = append(postVerifiers, verifier)
 	}
 	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
 
@@ -629,7 +636,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	})
 
 	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(ExecutorLogger, lg))
-	msh, err := mesh.NewMesh(app.cachedDB, app.clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
+	msh, err := mesh.NewMesh(app.cachedDB, app.clock, app.edVerifier, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
@@ -665,11 +672,12 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	proposalListener := proposals.NewHandler(app.cachedDB, app.edVerifier, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, app.clock,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
-			LayerSize:      layerSize,
-			LayersPerEpoch: layersPerEpoch,
-			GoldenATXID:    goldenATXID,
-			MaxExceptions:  trtlCfg.MaxExceptions,
-			Hdist:          trtlCfg.Hdist,
+			LayerSize:              layerSize,
+			LayersPerEpoch:         layersPerEpoch,
+			GoldenATXID:            goldenATXID,
+			MaxExceptions:          trtlCfg.MaxExceptions,
+			Hdist:                  trtlCfg.Hdist,
+			MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
 		}),
 	)
 
@@ -718,13 +726,13 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		EpochEndFraction: 0.8,
 		HareDelayLayers:  app.Config.Tortoise.Zdist,
 		SyncCertDistance: app.Config.Tortoise.Hdist,
-		MaxHashesInReq:   100,
 		MaxStaleDuration: time.Hour,
 		Standalone:       app.Config.Standalone,
 	}
 	newSyncer := syncer.NewSyncer(app.cachedDB, app.clock, beaconProtocol, msh, trtl, fetcher, patrol, app.certifier,
 		syncer.WithConfig(syncerConf),
-		syncer.WithLogger(app.addLogger(SyncLogger, lg)))
+		syncer.WithLogger(app.addLogger(SyncLogger, lg)),
+	)
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
 
@@ -775,6 +783,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		miner.WithNodeID(app.edSgn.NodeID()),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
+		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
@@ -850,7 +859,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(proposalListener.HandleSyncedProposal, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleBlockTransaction, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleProposalTransaction, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(malfeasanceHandler.HandleMalfeasanceProof, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(malfeasanceHandler.HandleSyncedMalfeasanceProof, app.host, lg)),
 	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
@@ -896,7 +905,9 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 			peersync.WithConfig(app.Config.TIME.Peersync),
 		)
 	}
-
+	if err := app.host.Start(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1173,6 +1184,10 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 	if app.dbMetrics != nil {
 		app.dbMetrics.Close()
+	}
+
+	if app.postVerifier != nil {
+		app.postVerifier.Close()
 	}
 
 	events.CloseEventReporter()

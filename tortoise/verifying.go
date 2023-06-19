@@ -3,6 +3,8 @@ package tortoise
 import (
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -32,23 +34,23 @@ func (v *verifying) resetWeights(voted types.LayerID) {
 	}
 }
 
-func (v *verifying) countBallot(logger log.Log, ballot *ballotInfo) {
+func (v *verifying) countBallot(logger *zap.Logger, ballot *ballotInfo) {
 	start := time.Now()
 
 	prev := v.layer(ballot.layer.Sub(1))
 	counted := !(ballot.conditions.badBeacon ||
 		prev.opinion != ballot.opinion() ||
 		prev.verifying.referenceHeight > ballot.reference.height)
-	logger.With().Debug("count ballot in verifying mode",
-		ballot.layer,
-		ballot.id,
-		log.ShortStringer("ballot opinion", ballot.opinion()),
-		log.ShortStringer("local opinion", prev.opinion),
-		log.Bool("bad beacon", ballot.conditions.badBeacon),
-		log.Stringer("weight", ballot.weight),
-		log.Uint64("reference height", prev.verifying.referenceHeight),
-		log.Uint64("ballot height", ballot.reference.height),
-		log.Bool("counted", counted),
+	logger.Debug("count ballot in verifying mode",
+		zap.Uint32("lid", ballot.layer.Uint32()),
+		zap.Stringer("ballot", ballot.id),
+		log.ZShortStringer("ballot opinion", ballot.opinion()),
+		log.ZShortStringer("local opinion", prev.opinion),
+		zap.Bool("bad beacon", ballot.conditions.badBeacon),
+		zap.Float64("weight", ballot.weight.Float()),
+		zap.Uint64("reference height", prev.verifying.referenceHeight),
+		zap.Uint64("ballot height", ballot.reference.height),
+		zap.Bool("counted", counted),
 	)
 	if !counted {
 		return
@@ -62,16 +64,16 @@ func (v *verifying) countBallot(logger log.Log, ballot *ballotInfo) {
 	vcountBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
-func (v *verifying) countVotes(logger log.Log, ballots []*ballotInfo) {
+func (v *verifying) countVotes(logger *zap.Logger, ballots []*ballotInfo) {
 	for _, ballot := range ballots {
 		v.countBallot(logger, ballot)
 	}
 }
 
-func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
+func (v *verifying) verify(logger *zap.Logger, lid types.LayerID) bool {
 	layer := v.layer(lid)
 	if !layer.hareTerminated {
-		logger.With().Debug("hare is not terminated")
+		logger.Debug("hare is not terminated")
 		return false
 	}
 
@@ -85,25 +87,28 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	}
 
 	threshold := v.globalThreshold(v.Config, lid)
-	logger = logger.WithFields(
-		log.String("verifier", "verifying"),
-		log.Stringer("candidate layer", lid),
-		log.Stringer("margin", margin),
-		log.Stringer("uncounted", uncounted),
-		log.Stringer("total good weight", v.totalGoodWeight),
-		log.Stringer("good uncounted", layer.verifying.goodUncounted),
-		log.Stringer("global threshold", threshold),
-	)
 	if crossesThreshold(margin, threshold) != support {
-		logger.With().Debug("doesn't cross global threshold")
+		logger.Debug("doesn't cross global threshold",
+			zap.Uint32("candidate layer", lid.Uint32()),
+			zap.Float64("margin", margin.Float()),
+			zap.Float64("global threshold", threshold.Float()),
+		)
 		return false
 	} else {
-		logger.With().Debug("crosses global threshold")
+		logger.Debug("crosses global threshold",
+			zap.Uint32("candidate layer", lid.Uint32()),
+			zap.Float64("margin", margin.Float()),
+			zap.Float64("global threshold", threshold.Float()),
+		)
 	}
 	if len(layer.blocks) == 0 {
-		logger.With().Debug("candidate layer is empty")
+		logger.Debug("candidate layer is empty",
+			zap.Uint32("candidate layer", lid.Uint32()),
+			zap.Float64("margin", margin.Float()),
+			zap.Float64("global threshold", threshold.Float()),
+		)
 	}
-	return verifyLayer(
+	rst, changes := verifyLayer(
 		logger,
 		layer.blocks,
 		func(block *blockInfo) sign {
@@ -114,4 +119,17 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 			return decision
 		},
 	)
+	if changes {
+		logger.Info("candidate layer is verified",
+			zapBlocks(layer.blocks),
+			zap.String("verifier", "verifying"),
+			zap.Uint32("candidate layer", lid.Uint32()),
+			zap.Float64("margin", margin.Float()),
+			zap.Float64("global threshold", threshold.Float()),
+			zap.Float64("uncounted", uncounted.Float()),
+			zap.Float64("total good weight", v.totalGoodWeight.Float()),
+			zap.Float64("good uncounted", layer.verifying.goodUncounted.Float()),
+		)
+	}
+	return rst
 }

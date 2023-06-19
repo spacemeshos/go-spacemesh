@@ -397,7 +397,7 @@ func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact64(enc, p.K2Pow)
+		n, err := scale.EncodeCompact64(enc, p.Pow)
 		if err != nil {
 			return total, err
 		}
@@ -430,7 +430,7 @@ func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		p.K2Pow = field
+		p.Pow = field
 	}
 	return total, nil
 }

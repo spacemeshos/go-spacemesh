@@ -38,6 +38,7 @@ func TestDiscovery_CrawlMesh(t *testing.T) {
 		cfg.Bootnodes = append(cfg.Bootnodes, bootnode.String())
 		instance, err := New(logger, h, cfg)
 		require.NoError(t, err)
+		instance.StartScan()
 		t.Cleanup(instance.Stop)
 	}
 

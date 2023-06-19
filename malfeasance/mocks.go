@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	signing "github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // MockconsensusProtocol is a mock of consensusProtocol interface.
@@ -45,4 +46,41 @@ func (m *MockconsensusProtocol) HandleEligibility(arg0 context.Context, arg1 *ty
 func (mr *MockconsensusProtocolMockRecorder) HandleEligibility(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleEligibility", reflect.TypeOf((*MockconsensusProtocol)(nil).HandleEligibility), arg0, arg1)
+}
+
+// MockSigVerifier is a mock of SigVerifier interface.
+type MockSigVerifier struct {
+	ctrl     *gomock.Controller
+	recorder *MockSigVerifierMockRecorder
+}
+
+// MockSigVerifierMockRecorder is the mock recorder for MockSigVerifier.
+type MockSigVerifierMockRecorder struct {
+	mock *MockSigVerifier
+}
+
+// NewMockSigVerifier creates a new mock instance.
+func NewMockSigVerifier(ctrl *gomock.Controller) *MockSigVerifier {
+	mock := &MockSigVerifier{ctrl: ctrl}
+	mock.recorder = &MockSigVerifierMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockSigVerifier) EXPECT() *MockSigVerifierMockRecorder {
+	return m.recorder
+}
+
+// Verify mocks base method.
+func (m *MockSigVerifier) Verify(arg0 signing.Domain, arg1 types.NodeID, arg2 []byte, arg3 types.EdSignature) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Verify", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Verify indicates an expected call of Verify.
+func (mr *MockSigVerifierMockRecorder) Verify(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockSigVerifier)(nil).Verify), arg0, arg1, arg2, arg3)
 }

@@ -61,10 +61,11 @@ type ProposalBuilder struct {
 
 // config defines configuration for the ProposalBuilder.
 type config struct {
-	layerSize      uint32
-	layersPerEpoch uint32
-	hdist          uint32
-	nodeID         types.NodeID
+	layerSize          uint32
+	layersPerEpoch     uint32
+	hdist              uint32
+	minActiveSetWeight uint64
+	nodeID             types.NodeID
 }
 
 type defaultFetcher struct {
@@ -93,6 +94,12 @@ func WithLayerSize(size uint32) Opt {
 func WithLayerPerEpoch(layers uint32) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.cfg.layersPerEpoch = layers
+	}
+}
+
+func WithMinimalActiveSetWeight(weight uint64) Opt {
+	return func(pb *ProposalBuilder) {
+		pb.cfg.minActiveSetWeight = weight
 	}
 }
 
@@ -162,7 +169,7 @@ func NewProposalBuilder(
 	}
 
 	if pb.proposalOracle == nil {
-		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, cdb, vrfSigner, pb.cfg.nodeID, pb.logger)
+		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, pb.cfg.minActiveSetWeight, cdb, vrfSigner, pb.cfg.nodeID, pb.logger)
 	}
 
 	if pb.nonceFetcher == nil {

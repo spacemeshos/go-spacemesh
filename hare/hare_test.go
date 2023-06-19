@@ -198,7 +198,7 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	require.NoError(t, h.Start(context.Background()))
 
 	lyrID := types.LayerID(8)
-	_, err := h.broker.Register(context.Background(), lyrID)
+	_, _, err := h.broker.Register(context.Background(), lyrID)
 	require.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -222,31 +222,40 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 	lid := types.LayerID(11)
 	round := uint32(3)
 
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	cdb := datastore.NewCachedDB(sql.InMemory(), h.Log)
+	createIdentity(t, cdb.Database, sig)
+	proof := &types.HareProof{
+		Messages: [2]types.HareProofMsg{
+			{
+				InnerMsg: types.HareMetadata{
+					Layer:   lid,
+					Round:   round,
+					MsgHash: types.RandomHash(),
+				},
+				SmesherID: sig.NodeID(),
+				Signature: types.RandomEdSignature(),
+			},
+			{
+				InnerMsg: types.HareMetadata{
+					Layer:   lid,
+					Round:   round,
+					MsgHash: types.RandomHash(),
+				},
+				SmesherID: sig.NodeID(),
+				Signature: types.RandomEdSignature(),
+			},
+		},
+	}
+	proof.Messages[0].Signature = sig.Sign(signing.HARE, proof.Messages[0].SignedBytes())
+	proof.Messages[1].Signature = sig.Sign(signing.HARE, proof.Messages[1].SignedBytes())
 	gossip := types.MalfeasanceGossip{
 		MalfeasanceProof: types.MalfeasanceProof{
 			Layer: lid,
 			Proof: types.Proof{
 				Type: types.HareEquivocation,
-				Data: &types.HareProof{
-					Messages: [2]types.HareProofMsg{
-						{
-							InnerMsg: types.HareMetadata{
-								Layer:   lid,
-								Round:   round,
-								MsgHash: types.RandomHash(),
-							},
-							Signature: types.RandomEdSignature(),
-						},
-						{
-							InnerMsg: types.HareMetadata{
-								Layer:   lid,
-								Round:   round,
-								MsgHash: types.RandomHash(),
-							},
-							Signature: types.RandomEdSignature(),
-						},
-					},
-				},
+				Data: proof,
 			},
 		},
 		Eligibility: &types.HareEligibilityGossip{
@@ -263,8 +272,7 @@ func TestHare_malfeasanceLoop(t *testing.T) {
 	data, err := codec.Encode(&gossip)
 	require.NoError(t, err)
 	done := make(chan struct{})
-	mockMesh.EXPECT().IsMalicious(gossip.Eligibility.NodeID).Return(false, nil)
-	mockMesh.EXPECT().AddMalfeasanceProof(gossip.Eligibility.NodeID, &gossip.MalfeasanceProof, nil).Return(nil)
+	mockMesh.EXPECT().Cache().Return(cdb).AnyTimes()
 	mpubsub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, data).DoAndReturn(
 		func(_ context.Context, _ string, _ []byte) error {
 			close(done)
@@ -295,7 +303,7 @@ func TestHare_onTick(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, comm.wc, startedChan)
 		close(createdChan)
 		return nmcp
@@ -366,7 +374,7 @@ func TestHare_onTick_notMining(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, comm.wc, startedChan)
 		close(createdChan)
 		return nmcp
@@ -451,6 +459,8 @@ func TestHare_goodProposal(t *testing.T) {
 		name        string
 		beacons     [3]types.Beacon
 		baseHeights [3]uint64
+		malicious   [3]bool
+		atxids      [3]*types.ATXID
 		refBallot   []int
 		expected    []int
 	}{
@@ -484,6 +494,26 @@ func TestHare_goodProposal(t *testing.T) {
 			beacons:     [3]types.Beacon{beacon, beacon, beacon},
 			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
 		},
+		{
+			name:        "all malicious",
+			beacons:     [3]types.Beacon{nodeBeacon, nodeBeacon, nodeBeacon},
+			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
+			malicious:   [3]bool{true, true, true},
+		},
+		{
+			name:        "some malicious",
+			beacons:     [3]types.Beacon{nodeBeacon, nodeBeacon, nodeBeacon},
+			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
+			malicious:   [3]bool{false, true, true},
+			expected:    []int{0},
+		},
+		{
+			name:        "reusing atxids",
+			beacons:     [3]types.Beacon{nodeBeacon, nodeBeacon, nodeBeacon},
+			baseHeights: [3]uint64{nodeBaseHeight, nodeBaseHeight, nodeBaseHeight},
+			atxids:      [3]*types.ATXID{{1}, {1}},
+			expected:    []int{2},
+		},
 	}
 
 	for _, tc := range tt {
@@ -499,7 +529,13 @@ func TestHare_goodProposal(t *testing.T) {
 				randomProposal(lyrID, tc.beacons[2]),
 			}
 			for i, p := range pList {
-				mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: tc.baseHeights[i], TickCount: 1}, nil)
+				if tc.malicious[i] {
+					p.SetMalicious()
+				} else if tc.atxids[i] != nil {
+					p.AtxID = *tc.atxids[i]
+				} else {
+					mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: tc.baseHeights[i], TickCount: 1}, nil)
+				}
 			}
 			nodeID := types.NodeID{1, 2, 3}
 			mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch(), nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: nodeBaseHeight, TickCount: 1}, nil)

@@ -22,15 +22,8 @@ func TestSmeshing(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
-
-	t.Run("Proposals", func(t *testing.T) {
-		t.Parallel()
-		testSmeshing(t, tctx, cl)
-	})
-	t.Run("Transactions", func(t *testing.T) {
-		t.Parallel()
-		testTransactions(t, tctx, cl, 8)
-	})
+	testSmeshing(t, tctx, cl)
+	testTransactions(t, tctx, cl, 8)
 }
 
 func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {

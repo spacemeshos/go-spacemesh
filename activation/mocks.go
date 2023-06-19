@@ -73,6 +73,20 @@ func (m *MockPostVerifier) EXPECT() *MockPostVerifierMockRecorder {
 	return m.recorder
 }
 
+// Close mocks base method.
+func (m *MockPostVerifier) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockPostVerifierMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockPostVerifier)(nil).Close))
+}
+
 // Verify mocks base method.
 func (m_2 *MockPostVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
 	m_2.ctrl.T.Helper()

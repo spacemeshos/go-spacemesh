@@ -61,6 +61,7 @@ func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Message) bool {
 		nt.eTracker.Track(msg.SmesherID, msg.Round, msg.Eligibility.Count, false)
 		this := &types.HareProofMsg{
 			InnerMsg:  metadata,
+			SmesherID: msg.SmesherID,
 			Signature: msg.Signature,
 		}
 		if err := reportEquivocation(ctx, msg.SmesherID, prev, this, &msg.Eligibility, nt.malCh); err != nil {
@@ -75,6 +76,7 @@ func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Message) bool {
 	// keep msg for pub
 	nt.notifies[msg.SmesherID] = &types.HareProofMsg{
 		InnerMsg:  metadata,
+		SmesherID: msg.SmesherID,
 		Signature: msg.Signature,
 	}
 

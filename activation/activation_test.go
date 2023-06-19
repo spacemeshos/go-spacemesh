@@ -33,8 +33,6 @@ const (
 	layersPerEpoch                 = 10
 	layerDuration                  = time.Second
 	postGenesisEpoch types.EpochID = 2
-
-	testTickSize = 1
 )
 
 func TestMain(m *testing.M) {
@@ -69,13 +67,13 @@ func newActivationTx(
 	prevATX types.ATXID,
 	positioningATX types.ATXID,
 	cATX *types.ATXID,
-	PublishEpoch types.EpochID,
+	publishEpoch types.EpochID,
 	startTick, numTicks uint64,
 	coinbase types.Address,
 	numUnits uint32,
 	nipost *types.NIPost,
 ) *types.VerifiedActivationTx {
-	challenge := newChallenge(sequence, prevATX, positioningATX, PublishEpoch, cATX)
+	challenge := newChallenge(sequence, prevATX, positioningATX, publishEpoch, cATX)
 	atx := newAtx(t, sig, challenge, nipost, numUnits, coinbase)
 	if sequence == 0 {
 		nodeID := sig.NodeID()
@@ -143,7 +141,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		Nonce:   0,
 		Indices: make([]byte, 10),
 	}
-	b.initialPostMeta = &types.PostMetadata{}
 	tab.Builder = b
 	dir := tb.TempDir()
 	tab.mnipost.EXPECT().DataDir().Return(dir).AnyTimes()

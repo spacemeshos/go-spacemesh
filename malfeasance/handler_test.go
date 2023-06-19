@@ -783,6 +783,7 @@ func TestHandler_CrossDomain(t *testing.T) {
 
 	msg, err := codec.Encode(&types.MalfeasanceGossip{
 		MalfeasanceProof: types.MalfeasanceProof{
+			Layer: types.LayerID(11),
 			Proof: types.Proof{
 				Type: types.MultipleBallots,
 				Data: &types.BallotProof{
@@ -808,4 +809,167 @@ func TestHandler_CrossDomain(t *testing.T) {
 	malicious, err := identities.IsMalicious(db, sig.NodeID())
 	require.NoError(t, err)
 	require.False(t, malicious)
+}
+
+func TestHandler_HandleSyncedMalfeasanceProof_multipleATXs(t *testing.T) {
+	db := sql.InMemory()
+	lg := logtest.New(t)
+	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	sigVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
+
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	createIdentity(t, db, sig)
+
+	malicious, err := identities.IsMalicious(db, sig.NodeID())
+	require.NoError(t, err)
+	require.False(t, malicious)
+
+	lid := types.LayerID(11)
+	ap := types.AtxProof{
+		Messages: [2]types.AtxProofMsg{
+			{
+				InnerMsg: types.ATXMetadata{
+					PublishEpoch: types.EpochID(3),
+					MsgHash:      types.RandomHash(),
+				},
+			},
+			{
+				InnerMsg: types.ATXMetadata{
+					PublishEpoch: types.EpochID(3),
+					MsgHash:      types.RandomHash(),
+				},
+			},
+		},
+	}
+
+	ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
+	ap.Messages[0].SmesherID = sig.NodeID()
+	ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
+	ap.Messages[1].SmesherID = sig.NodeID()
+	proof := types.MalfeasanceProof{
+		Layer: lid,
+		Proof: types.Proof{
+			Type: types.MultipleATXs,
+			Data: &ap,
+		},
+	}
+	data, err := codec.Encode(&proof)
+	require.NoError(t, err)
+	require.NoError(t, h.HandleSyncedMalfeasanceProof(context.Background(), "peer", data))
+
+	malicious, err = identities.IsMalicious(db, sig.NodeID())
+	require.NoError(t, err)
+	require.True(t, malicious)
+}
+
+func TestHandler_HandleSyncedMalfeasanceProof_multipleBallots(t *testing.T) {
+	db := sql.InMemory()
+	lg := logtest.New(t)
+	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	sigVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
+
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	createIdentity(t, db, sig)
+
+	malicious, err := identities.IsMalicious(db, sig.NodeID())
+	require.NoError(t, err)
+	require.False(t, malicious)
+
+	lid := types.LayerID(11)
+	bp := types.BallotProof{
+		Messages: [2]types.BallotProofMsg{
+			{
+				InnerMsg: types.BallotMetadata{
+					Layer:   lid,
+					MsgHash: types.RandomHash(),
+				},
+			},
+			{
+				InnerMsg: types.BallotMetadata{
+					Layer:   lid,
+					MsgHash: types.RandomHash(),
+				},
+			},
+		},
+	}
+	bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
+	bp.Messages[0].SmesherID = sig.NodeID()
+	bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
+	bp.Messages[1].SmesherID = sig.NodeID()
+	proof := types.MalfeasanceProof{
+		Layer: lid,
+		Proof: types.Proof{
+			Type: types.MultipleBallots,
+			Data: &bp,
+		},
+	}
+	data, err := codec.Encode(&proof)
+	require.NoError(t, err)
+	require.NoError(t, h.HandleSyncedMalfeasanceProof(context.Background(), "peer", data))
+
+	malicious, err = identities.IsMalicious(db, sig.NodeID())
+	require.NoError(t, err)
+	require.True(t, malicious)
+}
+
+func TestHandler_HandleSyncedMalfeasanceProof_hareEquivocation(t *testing.T) {
+	db := sql.InMemory()
+	lg := logtest.New(t)
+	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	sigVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
+
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	createIdentity(t, db, sig)
+
+	malicious, err := identities.IsMalicious(db, sig.NodeID())
+	require.NoError(t, err)
+	require.False(t, malicious)
+
+	lid := types.LayerID(11)
+	hp := types.HareProof{
+		Messages: [2]types.HareProofMsg{
+			{
+				InnerMsg: types.HareMetadata{
+					Layer:   lid,
+					Round:   3,
+					MsgHash: types.RandomHash(),
+				},
+			},
+			{
+				InnerMsg: types.HareMetadata{
+					Layer:   lid,
+					Round:   3,
+					MsgHash: types.RandomHash(),
+				},
+			},
+		},
+	}
+	hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
+	hp.Messages[0].SmesherID = sig.NodeID()
+	hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
+	hp.Messages[1].SmesherID = sig.NodeID()
+
+	proof := types.MalfeasanceProof{
+		Layer: lid,
+		Proof: types.Proof{
+			Type: types.HareEquivocation,
+			Data: &hp,
+		},
+	}
+	data, err := codec.Encode(&proof)
+	require.NoError(t, err)
+	require.NoError(t, h.HandleSyncedMalfeasanceProof(context.Background(), "peer", data))
+
+	malicious, err = identities.IsMalicious(db, sig.NodeID())
+	require.NoError(t, err)
+	require.True(t, malicious)
 }

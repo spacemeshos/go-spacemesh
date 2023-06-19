@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -29,9 +30,10 @@ import (
 
 // Mesh is the logic layer above our mesh.DB database.
 type Mesh struct {
-	logger log.Log
-	cdb    *datastore.CachedDB
-	clock  layerClock
+	logger      log.Log
+	cdb         *datastore.CachedDB
+	clock       layerClock
+	sigVerifier malfeasance.SigVerifier
 
 	executor *Executor
 	conState conservativeState
@@ -53,11 +55,12 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(cdb *datastore.CachedDB, c layerClock, trtl system.Tortoise, exec *Executor, state conservativeState, logger log.Log) (*Mesh, error) {
+func NewMesh(cdb *datastore.CachedDB, c layerClock, v malfeasance.SigVerifier, trtl system.Tortoise, exec *Executor, state conservativeState, logger log.Log) (*Mesh, error) {
 	msh := &Mesh{
 		logger:              logger,
 		cdb:                 cdb,
 		clock:               c,
+		sigVerifier:         v,
 		trtl:                trtl,
 		executor:            exec,
 		conState:            state,
@@ -550,8 +553,10 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 						Data: &ballotProof,
 					},
 				}
-				if err = msh.cdb.AddMalfeasanceProof(ballot.SmesherID, proof, dbtx); err != nil {
-					return err
+				if err = malfeasance.ValidateAndSave(ctx, msh.logger, msh.cdb, dbtx, msh.sigVerifier, nil, &types.MalfeasanceGossip{
+					MalfeasanceProof: *proof,
+				}); err != nil && !errors.Is(err, malfeasance.ErrKnownProof) {
+					return fmt.Errorf("validate malfeasance proof: %w", err)
 				}
 				ballot.SetMalicious()
 				msh.logger.With().Warning("smesher produced more than one ballot in the same layer",

@@ -44,6 +44,7 @@ type Discovery struct {
 	host   host.Host
 	cfg    Config
 
+	ctx    context.Context
 	cancel context.CancelFunc
 	eg     errgroup.Group
 
@@ -60,6 +61,7 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		cfg:    config,
 		logger: logger,
 		host:   h,
+		ctx:    ctx,
 		cancel: cancel,
 		book:   book.New(),
 	}
@@ -103,8 +105,13 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 			return nil, err
 		}
 	}
-	d.scanPeers(ctx)
 	return d, nil
+}
+
+// StartScan starts background goroutine to connect with known peers
+// and scan for new ones.
+func (d *Discovery) StartScan() {
+	d.scanPeers(d.ctx)
 }
 
 func (d *Discovery) recovery(ctx context.Context) error {
@@ -203,7 +210,6 @@ func (d *Discovery) scanPeers(ctx context.Context) {
 				}
 				return err
 			}
-
 		}
 	})
 }

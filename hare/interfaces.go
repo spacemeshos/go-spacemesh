@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interfaces.go
@@ -34,9 +34,8 @@ type mesh interface {
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 	Proposals(types.LayerID) ([]*types.Proposal, error)
 	Ballot(types.BallotID) (*types.Ballot, error)
-	IsMalicious(types.NodeID) (bool, error)
-	AddMalfeasanceProof(types.NodeID, *types.MalfeasanceProof, *sql.Tx) error
 	GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error)
+	Cache() *datastore.CachedDB
 }
 
 type weakCoin interface {

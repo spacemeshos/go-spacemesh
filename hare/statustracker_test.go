@@ -3,12 +3,20 @@ package hare
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 func buildStatusMsg(sig *signing.EdSigner, s *Set, ki uint32) *Message {
@@ -202,6 +210,7 @@ func TestStatusTracker_Equivocate_Fail(t *testing.T) {
 								Round:   m1.Round,
 								MsgHash: types.BytesToHash(m1.HashBytes()),
 							},
+							SmesherID: m1.SmesherID,
 							Signature: m1.Signature,
 						},
 						{
@@ -210,6 +219,7 @@ func TestStatusTracker_Equivocate_Fail(t *testing.T) {
 								Round:   m2.Round,
 								MsgHash: types.BytesToHash(m2.HashBytes()),
 							},
+							SmesherID: m2.SmesherID,
 							Signature: m2.Signature,
 						},
 					},
@@ -224,6 +234,7 @@ func TestStatusTracker_Equivocate_Fail(t *testing.T) {
 		},
 	}
 	gossip := <-mch
+	verifyMalfeasanceProof(t, sig, gossip)
 	require.Equal(t, expected, *gossip)
 	require.False(t, tracker.IsSVPReady())
 	require.NotNil(t, tracker.tally)
@@ -275,6 +286,7 @@ func TestStatusTracker_Equivocate_Pass(t *testing.T) {
 								Round:   m1.Round,
 								MsgHash: types.BytesToHash(m1.HashBytes()),
 							},
+							SmesherID: m1.SmesherID,
 							Signature: m1.Signature,
 						},
 						{
@@ -283,6 +295,7 @@ func TestStatusTracker_Equivocate_Pass(t *testing.T) {
 								Round:   m2.Round,
 								MsgHash: types.BytesToHash(m2.HashBytes()),
 							},
+							SmesherID: m2.SmesherID,
 							Signature: m2.Signature,
 						},
 					},
@@ -296,12 +309,41 @@ func TestStatusTracker_Equivocate_Pass(t *testing.T) {
 			Eligibility: m2.Eligibility,
 		},
 	}
+
 	gossip := <-mch
+	verifyMalfeasanceProof(t, sigBad, gossip)
 	require.Equal(t, expected, *gossip)
 	require.True(t, tracker.IsSVPReady())
 	require.NotNil(t, tracker.tally)
 	expTally := CountInfo{hCount: 2, dhCount: 1, numHonest: 2, numDishonest: 1}
 	require.Equal(t, expTally, *tracker.tally)
+}
+
+func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
+	challenge := types.NIPostChallenge{
+		PublishEpoch: types.EpochID(1),
+	}
+	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil)
+	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(db, vAtx))
+}
+
+func verifyMalfeasanceProof(t *testing.T, sig *signing.EdSigner, gossip *types.MalfeasanceGossip) {
+	edVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
+	lg := logtest.New(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+	createIdentity(t, cdb.Database, sig)
+	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	mcp.EXPECT().HandleEligibility(gomock.Any(), gomock.Any()).AnyTimes()
+	malVerifier := malfeasance.NewHandler(cdb, lg, "host", mcp, edVerifier)
+	data, err := codec.Encode(gossip)
+	require.NoError(t, err)
+	require.NoError(t, malVerifier.HandleMalfeasanceProof(context.Background(), "self", data))
 }
 
 func TestStatusTracker_WithKnownEquivocator(t *testing.T) {

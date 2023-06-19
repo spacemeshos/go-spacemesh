@@ -2,7 +2,9 @@ package p2p
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
@@ -52,6 +54,11 @@ type Host struct {
 	ctx    context.Context
 	cfg    Config
 	logger log.Log
+
+	closed struct {
+		sync.Mutex
+		closed bool
+	}
 
 	host.Host
 	*pubsub.PubSub
@@ -131,8 +138,24 @@ func (fh *Host) PeerCount() uint64 {
 	return uint64(len(fh.Host.Network().Peers()))
 }
 
+func (fh *Host) Start() error {
+	fh.closed.Lock()
+	defer fh.closed.Unlock()
+	if fh.closed.closed {
+		return errors.New("p2p: closed")
+	}
+	fh.discovery.StartScan()
+	return nil
+}
+
 // Stop background workers and release external resources.
 func (fh *Host) Stop() error {
+	fh.closed.Lock()
+	defer fh.closed.Unlock()
+	if fh.closed.closed {
+		return errors.New("p2p: closed")
+	}
+	fh.closed.closed = true
 	fh.discovery.Stop()
 	if err := fh.Host.Close(); err != nil {
 		return fmt.Errorf("failed to close libp2p host: %w", err)

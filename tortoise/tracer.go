@@ -267,6 +267,7 @@ func (b *DecodeBallotTrace) Run(r *traceRunner) error {
 type StoreBallotTrace struct {
 	ID        types.BallotID `json:"id"`
 	Malicious bool           `json:"mal"`
+	Error     string         `json:"e,omitempty"`
 }
 
 func (s *StoreBallotTrace) Type() eventType {
@@ -286,7 +287,12 @@ func (s *StoreBallotTrace) Run(r *traceRunner) error {
 		pending.SetMalicious()
 	}
 	delete(r.pending, s.ID)
-	r.trt.StoreBallot(pending)
+	err := r.trt.StoreBallot(pending)
+	if r.assertErrors {
+		if err := assertErrors(err, s.Error); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

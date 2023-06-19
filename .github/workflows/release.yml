@@ -32,6 +32,8 @@ jobs:
 
       - name: Check out Git repository
         uses: actions/checkout@v3
+        with:
+          lfs: true
 
       - name: Setup Go
         uses: actions/setup-go@v4
@@ -75,7 +77,7 @@ jobs:
         run: |
           mkdir $OUTNAME
           mv ./build/* $OUTNAME
-          rm -f $OUTNAME/prover.h
+          rm -f $OUTNAME/post.h
           zip -r $OUTNAME.zip $OUTNAME
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v0

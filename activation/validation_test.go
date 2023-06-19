@@ -39,7 +39,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	init, err := initialization.NewInitializer(
 		initialization.WithNodeId(nodeId.Bytes()),
 		initialization.WithCommitmentAtxId(commitmentAtxId.Bytes()),
-		initialization.WithConfig((config.Config)(postCfg)),
+		initialization.WithConfig(postCfg.ToConfig()),
 		initialization.WithInitOpts((config.InitOpts)(initOpts)),
 	)
 	r.NoError(err)
@@ -324,7 +324,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		}, nil)
 
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
-		require.EqualError(t, err, "prevATX declared, but initial Post indices is included in challenge")
+		require.EqualError(t, err, "prevATX declared, but initial Post is included in challenge")
 	})
 
 	t.Run("challenge contains commitment atx", func(t *testing.T) {
@@ -578,8 +578,11 @@ func TestValidator_Validate(t *testing.T) {
 	opts := []verifying.OptionFunc{verifying.WithLabelScryptParams(postProvider.opts.Scrypt)}
 
 	logger := logtest.New(t).WithName("validator")
-	v := NewValidator(poetDb, postProvider.cfg, logger, NewPostVerifier(postProvider.cfg, logger))
-	_, err := v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
+	verifier, err := NewPostVerifier(postProvider.cfg, logger)
+	r.NoError(err)
+	defer verifier.Close()
+	v := NewValidator(poetDb, postProvider.cfg, logger, verifier)
+	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
 	r.NoError(err)
 
 	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, types.BytesToHash([]byte("lerner")), postProvider.opts.NumUnits, opts...)

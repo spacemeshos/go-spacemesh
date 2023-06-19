@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/spacemeshos/post/shared"
@@ -17,6 +18,7 @@ type AtxReceiver interface {
 }
 
 type PostVerifier interface {
+	io.Closer
 	Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error
 }
 type nipostValidator interface {
