@@ -8,7 +8,9 @@ import (
 	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/libp2p/go-libp2p/core/transport"
 	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
@@ -40,6 +42,8 @@ type Config struct {
 	GracePeersShutdown time.Duration
 	MaxMessageSize     int
 
+	// see https://lwn.net/Articles/542629/ for reuseport explanation
+	DisableReusePort bool     `mapstructure:"disable-reuseport"`
 	DisableNatPort   bool     `mapstructure:"disable-natport"`
 	Flood            bool     `mapstructure:"flood"`
 	Listen           string   `mapstructure:"listen"`
@@ -74,7 +78,13 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 		libp2p.UserAgent("go-spacemesh"),
 		libp2p.DisableRelay(),
 
-		libp2p.Transport(tcp.NewTCPTransport),
+		libp2p.Transport(func(upgrader transport.Upgrader, rcmgr network.ResourceManager) (transport.Transport, error) {
+			opts := []tcp.Option{}
+			if cfg.DisableReusePort {
+				opts = append(opts, tcp.DisableReuseport())
+			}
+			return tcp.NewTCPTransport(upgrader, rcmgr, opts...)
+		}),
 		libp2p.Security(noise.ID, func(id protocol.ID, privkey crypto.PrivKey, muxers []tptu.StreamMuxer) (*noise.SessionTransport, error) {
 			tp, err := noise.New(id, privkey, muxers)
 			if err != nil {
