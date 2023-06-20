@@ -175,8 +175,8 @@ func (mev *mockEligibilityValidator) ValidateEligibilityGossip(context.Context, 
 	return atomic.LoadInt32(&mev.valid) != 0
 }
 
-// We assert the the theshold X is met a long as there is one honest vote and
-// the sum of honest, dishonest and known equivocator is >= X.
+// We assert the the theshold X is met a long as there is at least one honest
+// vote and the sum of honest, dishonest and known equivocator is >= X.
 func TestCountInfoMeetsTrheshold(t *testing.T) {
 	c := &CountInfo{}
 	c.IncHonest(1)
