@@ -96,7 +96,7 @@ func (im *InnerMessage) HashBytes() []byte {
 	h := hash.New()
 	_, err := codec.EncodeTo(h, im)
 	if err != nil {
-		log.Fatal("failed to encode InnerMsg for hashing", log.Err(err))
+		log.With().Fatal("failed to encode InnerMsg for hashing", log.Err(err))
 	}
 	return h.Sum(nil)
 }
