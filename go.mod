@@ -4,11 +4,11 @@ go 1.19
 
 require (
 	cloud.google.com/go/storage v1.30.1
-	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20220102081255-38c8b72a9924
 	github.com/benbjohnson/clock v1.3.5
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20230531032220-a757362a12e1
 	github.com/cosmos/btcutil v1.0.5
+	github.com/go-llsqlite/llsqlite v0.0.0-20230612031458-a9e271fe723a
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.3

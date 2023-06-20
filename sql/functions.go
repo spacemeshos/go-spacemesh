@@ -3,7 +3,7 @@ package sql
 import (
 	"fmt"
 
-	"crawshaw.io/sqlite"
+	"github.com/go-llsqlite/llsqlite"
 )
 
 func registerFunctions(conn *sqlite.Conn) error {
