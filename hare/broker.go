@@ -295,6 +295,8 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (*hare3.Handler
 		b.handleEarlyMessages(msgs.messages, b.handlers[id])
 	}
 
+	// we return the handler so that we can extract the relevant sub protocols
+	// from it for use by the main protocol.
 	return b.handlers[id], nil
 }
 
