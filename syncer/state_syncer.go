@@ -42,9 +42,11 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 	}
 
 	s.logger.WithContext(ctx).With().Debug("processing synced layers",
+		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()),
 		log.Stringer("in_state", s.mesh.LatestLayerInState()),
-		log.Stringer("last_synced", s.getLastSyncedLayer()))
+		log.Stringer("last_synced", s.getLastSyncedLayer()),
+	)
 
 	start := minLayer(s.mesh.LatestLayerInState(), s.mesh.ProcessedLayer())
 	start = minLayer(start, s.getLastSyncedLayer())
@@ -71,7 +73,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 				lag = current.Sub(lid.Uint32())
 			}
 			if lag.Uint32() < s.cfg.HareDelayLayers {
-				s.logger.Debug("skip validating layer: hare still working", lid)
+				s.logger.WithContext(ctx).With().Debug("skipping layer: hare still working", lid)
 				return errHareInCharge
 			}
 		}
@@ -104,8 +106,10 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 	}
 	s.logger.WithContext(ctx).With().Debug("end of state sync",
 		log.Bool("state_synced", s.stateSynced()),
-		log.Stringer("last_synced", s.getLastSyncedLayer()),
+		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()),
+		log.Stringer("in_state", s.mesh.LatestLayerInState()),
+		log.Stringer("last_synced", s.getLastSyncedLayer()),
 	)
 	return nil
 }
