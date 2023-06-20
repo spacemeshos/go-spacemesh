@@ -26,6 +26,9 @@ type Migrations func(Executor) error
 func embeddedMigrations(db Executor) error {
 	var migrations []migration
 	fs.WalkDir(embedded, "migrations", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return fmt.Errorf("walkdir %s: %w", path, err)
+		}
 		if d.IsDir() {
 			return nil
 		}
