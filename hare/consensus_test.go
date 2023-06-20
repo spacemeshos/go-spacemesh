@@ -184,7 +184,7 @@ func createConsensusProcess(
 	oracle.Register(isHonest, sig.NodeID())
 	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(tb, err)
-	c, err := broker.Register(ctx, layer)
+	c, et, err := broker.Register(ctx, layer)
 	require.NoError(tb, err)
 	nonce := types.VRFPostIndex(1)
 	mch := make(chan *types.MalfeasanceGossip, cfg.N)
@@ -203,6 +203,7 @@ func createConsensusProcess(
 		broker.mockStateQ,
 		sig,
 		edVerifier,
+		et,
 		sig.NodeID(),
 		&nonce,
 		network,

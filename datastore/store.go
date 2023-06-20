@@ -122,7 +122,7 @@ func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProo
 	return proof, err
 }
 
-func (db *CachedDB) AddMalfeasanceProof(id types.NodeID, proof *types.MalfeasanceProof, dbtx *sql.Tx) error {
+func (db *CachedDB) AddMalfeasanceProof(id types.NodeID, proof *types.MalfeasanceProof, exec sql.Executor) error {
 	if id == types.EmptyNodeID {
 		log.Fatal("invalid argument to AddMalfeasanceProof")
 	}
@@ -130,11 +130,6 @@ func (db *CachedDB) AddMalfeasanceProof(id types.NodeID, proof *types.Malfeasanc
 	encoded, err := codec.Encode(proof)
 	if err != nil {
 		db.logger.Fatal("failed to encode MalfeasanceProof")
-	}
-
-	var exec sql.Executor = db
-	if dbtx != nil {
-		exec = dbtx
 	}
 
 	db.mu.Lock()

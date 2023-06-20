@@ -199,6 +199,7 @@ func newConsensusProcess(
 	stateQuerier stateQuerier,
 	signing *signing.EdSigner,
 	edVerifier *signing.EdVerifier,
+	et *EligibilityTracker,
 	nid types.NodeID,
 	nonce *types.VRFPostIndex,
 	p2p pubsub.Publisher,
@@ -224,7 +225,7 @@ func newConsensusProcess(
 		pending:   make(map[types.NodeID]*Message, cfg.N),
 		Log:       logger,
 		mTracker:  newMsgsTracker(),
-		eTracker:  NewEligibilityTracker(cfg.N),
+		eTracker:  et,
 		clock:     clock,
 	}
 	proc.ctx, proc.cancel = context.WithCancel(ctx)

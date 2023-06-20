@@ -37,12 +37,15 @@ const (
 	numUnit        = 12
 	defaultGas     = 100
 	baseTickHeight = 3
+
+	layerSize = 10
+	epochSize = 3
 )
 
 func testConfig() Config {
 	return Config{
-		LayerSize:          10,
-		LayersPerEpoch:     3,
+		LayerSize:          layerSize,
+		LayersPerEpoch:     epochSize,
 		GenBlockInterval:   10 * time.Millisecond,
 		BlockGasLimit:      math.MaxUint64,
 		OptFilterThreshold: 90,
@@ -190,9 +193,12 @@ func createProposal(
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
 				InnerBallot: types.InnerBallot{
-					Layer:     lid,
-					AtxID:     atxID,
-					EpochData: &types.EpochData{Beacon: types.RandomBeacon()},
+					Layer: lid,
+					AtxID: atxID,
+					EpochData: &types.EpochData{
+						Beacon:           types.RandomBeacon(),
+						EligibilityCount: uint32(layerSize * epochSize / len(activeSet)),
+					},
 				},
 				EligibilityProofs: make([]types.VotingEligibility, numEligibility),
 				ActiveSet:         activeSet,

@@ -85,7 +85,7 @@ func TestMalfeasanceProof_Honest(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, cdb.AddMalfeasanceProof(nodeID2, proof, nil))
+	require.NoError(t, cdb.AddMalfeasanceProof(nodeID2, proof, cdb))
 	bad, err = cdb.IsMalicious(nodeID2)
 	require.NoError(t, err)
 	require.True(t, bad)
@@ -112,7 +112,7 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 	}
 
 	nodeID1 := types.NodeID{1}
-	require.NoError(t, cdb.AddMalfeasanceProof(nodeID1, proof, nil))
+	require.NoError(t, cdb.AddMalfeasanceProof(nodeID1, proof, cdb))
 	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
 
 	got, err := cdb.GetMalfeasanceProof(nodeID1)

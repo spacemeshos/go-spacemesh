@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"runtime"
@@ -23,13 +24,56 @@ type PostSetupProvider initialization.Provider
 
 // PostConfig is the configuration of the Post protocol, used for data creation, proofs generation and validation.
 type PostConfig struct {
-	MinNumUnits     uint32 `mapstructure:"post-min-numunits"`
-	MaxNumUnits     uint32 `mapstructure:"post-max-numunits"`
-	LabelsPerUnit   uint64 `mapstructure:"post-labels-per-unit"`
-	K1              uint32 `mapstructure:"post-k1"`
-	K2              uint32 `mapstructure:"post-k2"`
-	K3              uint32 `mapstructure:"post-k3"`
-	K2PowDifficulty uint64 `mapstructure:"post-k2pow-difficulty"`
+	MinNumUnits     uint32        `mapstructure:"post-min-numunits"`
+	MaxNumUnits     uint32        `mapstructure:"post-max-numunits"`
+	LabelsPerUnit   uint64        `mapstructure:"post-labels-per-unit"`
+	K1              uint32        `mapstructure:"post-k1"`
+	K2              uint32        `mapstructure:"post-k2"`
+	K3              uint32        `mapstructure:"post-k3"`
+	K2PowDifficulty uint64        `mapstructure:"post-k2pow-difficulty"`
+	PowDifficulty   PowDifficulty `mapstructure:"post-pow-difficulty"`
+}
+
+func (c PostConfig) ToConfig() config.Config {
+	return config.Config{
+		MinNumUnits:     c.MinNumUnits,
+		MaxNumUnits:     c.MaxNumUnits,
+		LabelsPerUnit:   c.LabelsPerUnit,
+		K1:              c.K1,
+		K2:              c.K2,
+		K3:              c.K3,
+		K2PowDifficulty: c.K2PowDifficulty,
+		PowDifficulty:   [32]byte(c.PowDifficulty),
+	}
+}
+
+type PowDifficulty [32]byte
+
+func (d PowDifficulty) String() string {
+	return fmt.Sprintf("%X", d[:])
+}
+
+// Set implements pflag.Value.Set.
+func (f *PowDifficulty) Set(value string) error {
+	return f.UnmarshalText([]byte(value))
+}
+
+// Type implements pflag.Value.Type.
+func (PowDifficulty) Type() string {
+	return "PowDifficulty"
+}
+
+func (d *PowDifficulty) UnmarshalText(text []byte) error {
+	decodedLen := hex.DecodedLen(len(text))
+	if decodedLen != 32 {
+		return fmt.Errorf("expected 32 bytes, got %d", decodedLen)
+	}
+	var dst [32]byte
+	if _, err := hex.Decode(dst[:], text); err != nil {
+		return err
+	}
+	*d = PowDifficulty(dst)
+	return nil
 }
 
 // PostSetupOpts are the options used to initiate a Post setup data creation session,
@@ -50,12 +94,15 @@ type PostProvingOpts struct {
 	Threads uint `mapstructure:"smeshing-opts-proving-threads"`
 	// Number of nonces tried in parallel in POST proving process.
 	Nonces uint `mapstructure:"smeshing-opts-proving-nonces"`
+	// Flags used in the PoW computation.
+	Flags config.PowFlags `mapstructure:"smeshing-opts-proving-powflags"`
 }
 
 func DefaultPostProvingOpts() PostProvingOpts {
 	return PostProvingOpts{
 		Threads: 1,
 		Nonces:  16,
+		Flags:   config.DefaultProvingPowFlags(),
 	}
 }
 
@@ -63,6 +110,8 @@ func DefaultPostProvingOpts() PostProvingOpts {
 type PostProofVerifyingOpts struct {
 	// Number of workers spawned to verify proofs.
 	Workers int `mapstructure:"smeshing-opts-verifying-workers"`
+	// Flags used for the PoW verification.
+	Flags config.PowFlags `mapstructure:"smeshing-opts-verifying-powflags"`
 }
 
 func DefaultPostVerifyingOpts() PostProofVerifyingOpts {
@@ -72,6 +121,7 @@ func DefaultPostVerifyingOpts() PostProofVerifyingOpts {
 	}
 	return PostProofVerifyingOpts{
 		Workers: workers,
+		Flags:   config.DefaultVerifyingPowFlags(),
 	}
 }
 
@@ -100,7 +150,17 @@ var (
 
 // DefaultPostConfig defines the default configuration for Post.
 func DefaultPostConfig() PostConfig {
-	return (PostConfig)(config.DefaultConfig())
+	cfg := config.DefaultConfig()
+	return PostConfig{
+		MinNumUnits:     cfg.MinNumUnits,
+		MaxNumUnits:     cfg.MaxNumUnits,
+		LabelsPerUnit:   cfg.LabelsPerUnit,
+		K1:              cfg.K1,
+		K2:              cfg.K2,
+		K3:              cfg.K3,
+		K2PowDifficulty: cfg.K2PowDifficulty,
+		PowDifficulty:   PowDifficulty(cfg.PowDifficulty),
+	}
 }
 
 // DefaultPostSetupOpts defines the default options for Post setup.
@@ -297,7 +357,7 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 	newInit, err := initialization.NewInitializer(
 		initialization.WithNodeId(mgr.id.Bytes()),
 		initialization.WithCommitmentAtxId(mgr.commitmentAtxId.Bytes()),
-		initialization.WithConfig(config.Config(mgr.cfg)),
+		initialization.WithConfig(mgr.cfg.ToConfig()),
 		initialization.WithInitOpts(config.InitOpts(opts)),
 		initialization.WithLogger(mgr.logger.Zap()),
 	)
@@ -385,10 +445,11 @@ func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte
 	}
 	mgr.mu.Unlock()
 
-	proof, proofMetadata, err := proving.Generate(ctx, challenge, config.Config(mgr.cfg), mgr.logger.Zap(),
-		proving.WithDataSource(config.Config(mgr.cfg), mgr.id.Bytes(), mgr.commitmentAtxId.Bytes(), mgr.lastOpts.DataDir),
+	proof, proofMetadata, err := proving.Generate(ctx, challenge, mgr.cfg.ToConfig(), mgr.logger.Zap(),
+		proving.WithDataSource(mgr.cfg.ToConfig(), mgr.id.Bytes(), mgr.commitmentAtxId.Bytes(), mgr.lastOpts.DataDir),
 		proving.WithNonces(mgr.provingOpts.Nonces),
 		proving.WithThreads(mgr.provingOpts.Threads),
+		proving.WithPowFlags(mgr.provingOpts.Flags),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate proof: %w", err)

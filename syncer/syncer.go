@@ -25,7 +25,6 @@ type Config struct {
 	EpochEndFraction float64
 	HareDelayLayers  uint32
 	SyncCertDistance uint32
-	MaxHashesInReq   uint32
 	MaxStaleDuration time.Duration
 	Standalone       bool
 }
@@ -37,7 +36,6 @@ func DefaultConfig() Config {
 		EpochEndFraction: 0.8,
 		HareDelayLayers:  10,
 		SyncCertDistance: 10,
-		MaxHashesInReq:   5,
 		MaxStaleDuration: time.Second,
 	}
 }
@@ -76,9 +74,8 @@ func (s syncState) String() string {
 }
 
 var (
-	errHareInCharge       = errors.New("hare in charge of layer")
-	errATXsNotSynced      = errors.New("ATX not synced")
-	errBeaconNotAvailable = errors.New("beacon not available")
+	errHareInCharge  = errors.New("hare in charge of layer")
+	errATXsNotSynced = errors.New("ATX not synced")
 )
 
 // Option is a type to configure a syncer.
@@ -173,7 +170,7 @@ func NewSyncer(
 		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, cache, s.logger)
 	}
 	if s.forkFinder == nil {
-		s.forkFinder = NewForkFinder(s.logger, cdb.Database, fetcher, s.cfg.MaxHashesInReq, s.cfg.MaxStaleDuration)
+		s.forkFinder = NewForkFinder(s.logger, cdb.Database, fetcher, s.cfg.MaxStaleDuration)
 	}
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
@@ -378,7 +375,8 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("latest", s.mesh.LatestLayer()),
 		log.Stringer("in_state", s.mesh.LatestLayerInState()),
-		log.Stringer("processed", s.mesh.ProcessedLayer()))
+		log.Stringer("processed", s.mesh.ProcessedLayer()),
+	)
 
 	s.setStateBeforeSync(ctx)
 	// TODO
@@ -424,10 +422,11 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	s.setStateAfterSync(ctx, success)
 	s.logger.WithContext(ctx).With().Debug("finished sync run",
 		log.Bool("success", success),
-		log.String("sync_state", s.getSyncState().String()),
+		log.Stringer("sync_state", s.getSyncState()),
+		log.Stringer("last_synced", s.getLastSyncedLayer()),
 		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("latest", s.mesh.LatestLayer()),
-		log.Stringer("last_synced", s.getLastSyncedLayer()),
+		log.Stringer("in_state", s.mesh.LatestLayerInState()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()),
 	)
 	return success

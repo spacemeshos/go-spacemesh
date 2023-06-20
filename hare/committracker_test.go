@@ -163,6 +163,7 @@ func TestCommitTracker_OnCommitEquivocate(t *testing.T) {
 								Round:   msg1.Round,
 								MsgHash: types.BytesToHash(msg1.InnerMessage.HashBytes()),
 							},
+							SmesherID: msg1.SmesherID,
 							Signature: msg1.Signature,
 						},
 						{
@@ -171,6 +172,7 @@ func TestCommitTracker_OnCommitEquivocate(t *testing.T) {
 								Round:   msg2.Round,
 								MsgHash: types.BytesToHash(msg2.InnerMessage.HashBytes()),
 							},
+							SmesherID: msg2.SmesherID,
 							Signature: msg2.Signature,
 						},
 					},
@@ -185,6 +187,7 @@ func TestCommitTracker_OnCommitEquivocate(t *testing.T) {
 		},
 	}
 	gossip := <-mch
+	verifyMalfeasanceProof(t, signer, gossip)
 	require.Equal(t, expected, *gossip)
 	et.ForEach(commitRound, func(nodeID types.NodeID, cred *Cred) {
 		require.Equal(t, signer.NodeID(), nodeID)
