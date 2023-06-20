@@ -315,7 +315,7 @@ func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte
 		}
 		encodedProof, err := codec.Encode(&gossip)
 		if err != nil {
-			h.logger.Fatal("failed to encode MalfeasanceGossip", log.Err(err))
+			h.logger.With().Fatal("failed to encode MalfeasanceGossip", log.Err(err))
 		}
 		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
 			failedPublish.Inc()

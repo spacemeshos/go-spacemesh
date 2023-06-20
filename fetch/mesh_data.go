@@ -241,7 +241,7 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 	)
 	reqData, err := codec.Encode(req)
 	if err != nil {
-		f.logger.Fatal("failed to encode mesh hash request", log.Err(err))
+		f.logger.With().Fatal("failed to encode mesh hash request", log.Err(err))
 	}
 
 	okCB := func(data []byte) {
