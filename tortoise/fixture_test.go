@@ -53,6 +53,7 @@ func (s *smesher) atx(epoch uint32, opts ...*aopt) *atxAction {
 	}
 	header := s.defaults
 	header.ID = hash.Sum([]byte(strconv.Itoa(s.id)), []byte(strconv.Itoa(int(epoch))))
+	header.Smesher = hash.Sum([]byte(strconv.Itoa(s.id)))
 	header.TargetEpoch = types.EpochID(epoch) + 1
 	for _, opt := range opts {
 		for _, o := range opt.opts {
@@ -181,6 +182,7 @@ func (a *atxAction) execute(trt *Tortoise) {
 func (a *atxAction) rawballot(id types.BallotID, n int, opts ...*bopt) *ballotAction {
 	lid := uint32(n) + types.GetEffectiveGenesis().Uint32()
 	b := types.BallotTortoiseData{}
+	b.Smesher = a.header.Smesher
 	b.AtxID = a.header.ID
 	b.Layer = types.LayerID(lid)
 	b.ID = id

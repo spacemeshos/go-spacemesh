@@ -525,7 +525,9 @@ func (t *turtle) computeEpochHeight(epoch types.EpochID) {
 	einfo := t.epoch(epoch)
 	heights := make([]uint64, 0, len(einfo.atxs))
 	for _, info := range einfo.atxs {
-		heights = append(heights, info.height)
+		if info.weight != 0 {
+			heights = append(heights, info.height)
+		}
 	}
 	einfo.height = getMedian(heights)
 }
@@ -626,18 +628,24 @@ func (t *turtle) onAtx(atx *types.AtxTortoiseData) {
 	start := time.Now()
 	epoch := t.epoch(atx.TargetEpoch)
 	if _, exist := epoch.atxs[atx.ID]; !exist {
+		mal := t.isMalfeasant(atx.Smesher)
 		t.logger.Debug("on atx",
 			zap.Stringer("id", atx.ID),
 			zap.Uint32("epoch", uint32(atx.TargetEpoch)),
 			zap.Uint64("weight", atx.Weight),
 			zap.Uint64("height", atx.Height),
+			zap.Bool("malfeasant", mal),
 		)
-		epoch.atxs[atx.ID] = atxInfo{weight: atx.Weight, height: atx.Height}
-		if atx.Weight > math.MaxInt64 {
-			// atx weight is not expected to overflow int64
-			t.logger.Fatal("fixme: atx size overflows int64", zap.Uint64("weight", atx.Weight))
+		info := atxInfo{weight: atx.Weight, height: atx.Height}
+		if mal {
+			info.weight = 0
+			info.height = 0
 		}
-		epoch.weight = epoch.weight.Add(fixed.New64(int64(atx.Weight)))
+		epoch.atxs[atx.ID] = info
+		if atx.Weight > math.MaxInt64 {
+			t.logger.Panic("fixme: atx size is not expected to overflow int64", zap.Uint64("weight", info.weight))
+		}
+		epoch.weight = epoch.weight.Add(fixed.New64(int64(info.weight)))
 		atxsNumber.Inc()
 	}
 	if atx.TargetEpoch == t.last.GetEpoch() {
@@ -728,18 +736,14 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 		},
 		reference: refinfo,
 		layer:     ballot.Layer,
+		malicious: ballot.Malicious || t.isMalfeasant(ballot.Smesher),
 	}
 
-	if !ballot.Malicious {
+	if !binfo.malicious {
 		binfo.weight = fixed.DivUint64(
 			refinfo.weight.Num().Uint64(),
 			refinfo.weight.Denom().Uint64(),
 		).Mul(fixed.New(int(ballot.Eligibilities)))
-	} else {
-		binfo.malicious = true
-		t.logger.Warn("ballot from malicious identity will have zeroed weight",
-			zap.Uint32("lid", ballot.Layer.Uint32()),
-			zap.Stringer("ballot", ballot.ID))
 	}
 
 	t.logger.Debug("computed weight and height for ballot",

@@ -69,6 +69,10 @@ type (
 
 		// to efficiently find base and reference ballots
 		ballotRefs map[types.BallotID]*ballotInfo
+
+		// malnodes is a collection with all nodes that equivocated in history.
+		// each node id is 32 bytes. 100 000 of such nodes is only about ~3MB
+		malnodes map[types.NodeID]struct{}
 	}
 )
 
@@ -78,6 +82,7 @@ func newState() *state {
 		layers:     map[types.LayerID]*layerInfo{},
 		ballots:    map[types.LayerID][]*ballotInfo{},
 		ballotRefs: map[types.BallotID]*ballotInfo{},
+		malnodes:   map[types.NodeID]struct{}{},
 	}
 }
 
@@ -159,6 +164,15 @@ func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) {
 		block.height > layer.verifying.referenceHeight {
 		layer.verifying.referenceHeight = block.height
 	}
+}
+
+func (s *state) isMalfeasant(id types.NodeID) bool {
+	_, exists := s.malnodes[id]
+	return exists
+}
+
+func (s *state) makrMalfeasant(id types.NodeID) {
+	s.malnodes[id] = struct{}{}
 }
 
 type layerInfo struct {
