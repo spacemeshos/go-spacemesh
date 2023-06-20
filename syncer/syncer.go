@@ -76,9 +76,8 @@ func (s syncState) String() string {
 }
 
 var (
-	errHareInCharge       = errors.New("hare in charge of layer")
-	errATXsNotSynced      = errors.New("ATX not synced")
-	errBeaconNotAvailable = errors.New("beacon not available")
+	errHareInCharge  = errors.New("hare in charge of layer")
+	errATXsNotSynced = errors.New("ATX not synced")
 )
 
 // Option is a type to configure a syncer.
@@ -378,7 +377,8 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("latest", s.mesh.LatestLayer()),
 		log.Stringer("in_state", s.mesh.LatestLayerInState()),
-		log.Stringer("processed", s.mesh.ProcessedLayer()))
+		log.Stringer("processed", s.mesh.ProcessedLayer()),
+	)
 
 	s.setStateBeforeSync(ctx)
 	// TODO
@@ -424,10 +424,11 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	s.setStateAfterSync(ctx, success)
 	s.logger.WithContext(ctx).With().Debug("finished sync run",
 		log.Bool("success", success),
-		log.String("sync_state", s.getSyncState().String()),
+		log.Stringer("sync_state", s.getSyncState()),
+		log.Stringer("last_synced", s.getLastSyncedLayer()),
 		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("latest", s.mesh.LatestLayer()),
-		log.Stringer("last_synced", s.getLastSyncedLayer()),
+		log.Stringer("in_state", s.mesh.LatestLayerInState()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()),
 	)
 	return success
