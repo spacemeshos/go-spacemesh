@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
-	"path"
+	"io/fs"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,26 +24,27 @@ type migration struct {
 type Migrations func(Executor) error
 
 func embeddedMigrations(db Executor) error {
-	files, err := embedded.ReadDir("migrations")
-	if err != nil {
-		return fmt.Errorf("readdir migrations: %w", err)
-	}
 	var migrations []migration
-	for _, file := range files {
-		parts := strings.Split(file.Name(), "_")
+	fs.WalkDir(embedded, "migrations", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return fmt.Errorf("walkdir %s: %w", path, err)
+		}
+		if d.IsDir() {
+			return nil
+		}
+		parts := strings.Split(d.Name(), "_")
 		if len(parts) < 1 {
-			return fmt.Errorf("invalid migration %s", file.Name())
+			return fmt.Errorf("invalid migration %s", d.Name())
 		}
 		order, err := strconv.Atoi(parts[0])
 		if err != nil {
-			return fmt.Errorf("invalid migration %s: %w", file.Name(), err)
+			return fmt.Errorf("invalid migration %s: %w", d.Name(), err)
 		}
-		fpath := path.Join("migrations", file.Name())
-		content, err := embedded.ReadFile(fpath)
+		f, err := embedded.Open(path)
 		if err != nil {
-			return fmt.Errorf("readfile %s: %w", fpath, err)
+			return fmt.Errorf("readfile %s: %w", path, err)
 		}
-		scanner := bufio.NewScanner(bytes.NewBuffer(content))
+		scanner := bufio.NewScanner(f)
 		scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
 			if i := bytes.Index(data, []byte(";")); i >= 0 {
 				return i + 1, data[0 : i+1], nil
@@ -52,10 +53,11 @@ func embeddedMigrations(db Executor) error {
 		})
 		migrations = append(migrations, migration{
 			order:   order,
-			name:    file.Name(),
+			name:    d.Name(),
 			content: scanner,
 		})
-	}
+		return nil
+	})
 	sort.Slice(migrations, func(i, j int) bool {
 		return migrations[i].order < migrations[j].order
 	})

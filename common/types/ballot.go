@@ -261,7 +261,7 @@ func (b *Ballot) HashInnerBytes() []byte {
 	h := hash.New()
 	_, err := codec.EncodeTo(h, &b.InnerBallot)
 	if err != nil {
-		log.Fatal("failed to encode InnerBallot for hashing", log.Err(err))
+		log.With().Fatal("failed to encode InnerBallot for hashing", log.Err(err))
 	}
 	return h.Sum(nil)
 }
