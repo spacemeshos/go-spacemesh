@@ -381,6 +381,55 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	require.NoError(t, ts.syncer.processLayers(context.Background()))
 }
 
+func TestProcessLayers_NoHashResolutionForNewlySyncedNode(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+	ts.syncer.setATXSynced()
+	current := types.GetEffectiveGenesis().Add(131)
+	ts.mTicker.advanceToLayer(current)
+	for lid := types.GetEffectiveGenesis().Add(1); lid.Before(current); lid = lid.Add(1) {
+		ts.msh.SetZeroBlockLayer(context.Background(), lid)
+		ts.mTortoise.EXPECT().OnHareOutput(lid, types.EmptyBlockID)
+		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
+		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.ROpinion(lid, types.RandomHash())))
+		ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
+		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
+		ts.mVm.EXPECT().GetStateRoot()
+		require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.Background(), lid, types.EmptyBlockID, false))
+	}
+	instate := ts.syncer.mesh.LatestLayerInState()
+	require.Equal(t, current.Sub(1), instate)
+	// now make the node's state out of sync
+	current += 10
+	ts.mTicker.advanceToLayer(current)
+	ts.syncer.setLastSyncedLayer(current)
+	_, err := layers.GetAggregatedHash(ts.cdb, instate.Sub(1))
+	require.NoError(t, err)
+	numPeers := 3
+	opns := make([]*fetch.LayerOpinion, 0, numPeers)
+	for i := 0; i < numPeers; i++ {
+		opn := &fetch.LayerOpinion{PrevAggHash: types.RandomHash()}
+		opn.SetPeer(p2p.Peer(strconv.Itoa(i)))
+		opns = append(opns, opn)
+	}
+	for lid := instate; lid <= current; lid++ {
+		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid)
+		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(opns, nil)
+		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
+		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.ROpinion(lid.Sub(1), opns[2].PrevAggHash)))
+		if lid != instate && lid != current {
+			ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
+			ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
+			ts.mVm.EXPECT().GetStateRoot()
+		}
+	}
+	// only the last layer will trigger hash resolution
+	for i := range opns {
+		ts.mForkFinder.EXPECT().NeedResync(current.Sub(1), opns[i].PrevAggHash).Return(false)
+	}
+	ts.mForkFinder.EXPECT().Purge(true)
+	require.NoError(t, ts.syncer.processLayers(context.Background()))
+}
+
 func TestProcessLayers_SucceedOnRetry(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
 	ts.syncer.setATXSynced()

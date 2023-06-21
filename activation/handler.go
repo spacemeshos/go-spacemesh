@@ -230,7 +230,7 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 		return fmt.Errorf("no prevATX declared, but NodeID is missing")
 	}
 
-	if err := h.nipostValidator.InitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, h.goldenATXID, atx.InitialPost.Indices); err != nil {
+	if err := h.nipostValidator.InitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, h.goldenATXID); err != nil {
 		return err
 	}
 

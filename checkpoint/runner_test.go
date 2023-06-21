@@ -18,7 +18,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	types.SetLayersPerEpoch(1)
+	types.SetLayersPerEpoch(2)
 	res := m.Run()
 	os.Exit(res)
 }
