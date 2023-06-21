@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"crawshaw.io/sqlite"
-	"crawshaw.io/sqlite/sqlitex"
+	"github.com/go-llsqlite/llsqlite"
+	"github.com/go-llsqlite/llsqlite/sqlitex"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

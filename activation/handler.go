@@ -428,7 +428,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		}
 		encodedProof, err := codec.Encode(&gossip)
 		if err != nil {
-			h.log.Fatal("failed to encode MalfeasanceGossip", log.Err(err))
+			h.log.With().Fatal("failed to encode MalfeasanceGossip", log.Err(err))
 		}
 		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
 			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))

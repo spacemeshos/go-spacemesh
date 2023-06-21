@@ -123,11 +123,10 @@ func BenchmarkVerify(b *testing.B) {
 			}
 			sig := prepSigFromKeys(b, signed, privates, pullSeqRefs(variant.K)...)
 			raw := append(message, sig...)
-			dec := scale.NewDecoder(nil)
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				dec.Reset(bytes.NewReader(sig))
+				dec := scale.NewDecoder(bytes.NewReader(sig))
 				if !ms.Verify(&core.Context{GenesisID: empty}, raw, dec) {
 					b.Fatal("all signatures must be valid")
 				}

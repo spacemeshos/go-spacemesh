@@ -4,11 +4,11 @@ go 1.19
 
 require (
 	cloud.google.com/go/storage v1.30.1
-	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20220102081255-38c8b72a9924
 	github.com/benbjohnson/clock v1.3.5
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20230531032220-a757362a12e1
 	github.com/cosmos/btcutil v1.0.5
+	github.com/go-llsqlite/llsqlite v0.0.0-20230612031458-a9e271fe723a
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.3
@@ -36,7 +36,7 @@ require (
 	github.com/spacemeshos/api/release/go v1.12.0
 	github.com/spacemeshos/economics v0.1.0
 	github.com/spacemeshos/fixed v0.1.0
-	github.com/spacemeshos/go-scale v1.1.9
+	github.com/spacemeshos/go-scale v1.1.10
 	github.com/spacemeshos/merkle-tree v0.2.2
 	github.com/spacemeshos/poet v0.8.5
 	github.com/spacemeshos/post v0.7.1
@@ -182,7 +182,7 @@ require (
 	go.uber.org/fx v1.19.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.9.0 // indirect
-	golang.org/x/mod v0.10.0 // indirect
+	golang.org/x/mod v0.11.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
 	golang.org/x/sys v0.8.0 // indirect
