@@ -553,7 +553,7 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 						Data: &ballotProof,
 					},
 				}
-				if err = malfeasance.ValidateAndSave(ctx, msh.logger, msh.cdb, dbtx, msh.sigVerifier, nil, &types.MalfeasanceGossip{
+				if err = malfeasance.ValidateAndSave(ctx, msh.logger, msh.cdb, dbtx, msh.sigVerifier, nil, nil, &types.MalfeasanceGossip{
 					MalfeasanceProof: *proof,
 				}); err != nil && !errors.Is(err, malfeasance.ErrKnownProof) {
 					return fmt.Errorf("validate malfeasance proof: %w", err)

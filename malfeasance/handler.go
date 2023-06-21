@@ -29,6 +29,7 @@ type Handler struct {
 	self       p2p.Peer
 	cp         consensusProtocol
 	edVerifier SigVerifier
+	tortoise   tortoise
 }
 
 func NewHandler(
@@ -37,6 +38,7 @@ func NewHandler(
 	self p2p.Peer,
 	cp consensusProtocol,
 	edVerifier SigVerifier,
+	tortoise tortoise,
 ) *Handler {
 	return &Handler{
 		logger:     lg,
@@ -44,6 +46,7 @@ func NewHandler(
 		self:       self,
 		cp:         cp,
 		edVerifier: edVerifier,
+		tortoise:   tortoise,
 	}
 }
 
@@ -55,7 +58,7 @@ func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, _ p2p.Peer, 
 		h.logger.With().Error("malformed message (sync)", log.Context(ctx), log.Err(err))
 		return errMalformedData
 	}
-	return ValidateAndSave(ctx, h.logger, h.cdb, h.cdb, h.edVerifier, h.cp, &types.MalfeasanceGossip{MalfeasanceProof: p})
+	return ValidateAndSave(ctx, h.logger, h.cdb, h.cdb, h.edVerifier, h.cp, h.tortoise, &types.MalfeasanceGossip{MalfeasanceProof: p})
 }
 
 // HandleMalfeasanceProof is the gossip receiver for MalfeasanceGossip.
@@ -72,7 +75,7 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 		updateMetrics(p.Proof)
 		return nil
 	}
-	return ValidateAndSave(ctx, h.logger, h.cdb, h.cdb, h.edVerifier, h.cp, &p)
+	return ValidateAndSave(ctx, h.logger, h.cdb, h.cdb, h.edVerifier, h.cp, h.tortoise, &p)
 }
 
 func ValidateAndSave(
@@ -82,6 +85,7 @@ func ValidateAndSave(
 	exec sql.Executor,
 	edVerifier SigVerifier,
 	cp consensusProtocol,
+	trt tortoise,
 	p *types.MalfeasanceGossip,
 ) error {
 	var (
@@ -138,6 +142,7 @@ func ValidateAndSave(
 		)
 		return fmt.Errorf("add malfeasance proof: %w", err)
 	}
+	trt.OnMalfeasance(nodeID)
 	updateMetrics(p.Proof)
 	logger.WithContext(ctx).With().Info("new malfeasance proof",
 		log.Stringer("smesher", nodeID),
