@@ -142,7 +142,11 @@ func ValidateAndSave(
 		)
 		return fmt.Errorf("add malfeasance proof: %w", err)
 	}
-	trt.OnMalfeasance(nodeID)
+	// note(dshulyak) this can be nil on the hare codepath
+	// i don't know how to make it work without huge refactoring
+	if trt != nil {
+		trt.OnMalfeasance(nodeID)
+	}
 	updateMetrics(p.Proof)
 	logger.WithContext(ctx).With().Info("new malfeasance proof",
 		log.Stringer("smesher", nodeID),

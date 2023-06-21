@@ -657,7 +657,8 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		app.Config.TickSize,
 		goldenATXID,
 		validator,
-		[]activation.AtxReceiver{&atxReceiver{trtl}, beaconProtocol},
+		beaconProtocol,
+		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
 		poetCfg,
 	)
@@ -850,6 +851,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		app.host.ID(),
 		app.hare,
 		app.edVerifier,
+		trtl,
 	)
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(atxHandler.HandleAtxData, app.host, lg)),
@@ -1441,12 +1443,4 @@ func (w tortoiseWeakCoin) Set(lid types.LayerID, value bool) error {
 	}
 	w.tortoise.OnWeakCoin(lid, value)
 	return nil
-}
-
-type atxReceiver struct {
-	tortoise *tortoise.Tortoise
-}
-
-func (a *atxReceiver) OnAtx(header *types.ActivationTxHeader) {
-	a.tortoise.OnAtx(header.ToData())
 }

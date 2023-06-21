@@ -46,7 +46,8 @@ type Handler struct {
 	tickSize        uint64
 	goldenATXID     types.ATXID
 	nipostValidator nipostValidator
-	atxReceivers    []AtxReceiver
+	beacon          AtxReceiver
+	tortoise        system.Tortoise
 	log             log.Log
 	mu              sync.Mutex
 	atxChannels     map[types.ATXID]*atxChan
@@ -65,7 +66,8 @@ func NewHandler(
 	tickSize uint64,
 	goldenATXID types.ATXID,
 	nipostValidator nipostValidator,
-	atxReceivers []AtxReceiver,
+	beacon AtxReceiver,
+	tortoise system.Tortoise,
 	log log.Log,
 	poetCfg PoetConfig,
 ) *Handler {
@@ -78,10 +80,11 @@ func NewHandler(
 		tickSize:        tickSize,
 		goldenATXID:     goldenATXID,
 		nipostValidator: nipostValidator,
-		atxReceivers:    atxReceivers,
 		log:             log,
 		atxChannels:     make(map[types.ATXID]*atxChan),
 		fetcher:         fetcher,
+		beacon:          beacon,
+		tortoise:        tortoise,
 		poetCfg:         poetCfg,
 	}
 }
@@ -385,7 +388,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 						Data: &atxProof,
 					},
 				}
-				if err := malfeasance.ValidateAndSave(ctx, h.log, h.cdb, dbtx, h.edVerifier, nil, nil, &types.MalfeasanceGossip{
+				if err := malfeasance.ValidateAndSave(ctx, h.log, h.cdb, dbtx, h.edVerifier, nil, h.tortoise, &types.MalfeasanceGossip{
 					MalfeasanceProof: *proof,
 				}); err != nil && !errors.Is(err, malfeasance.ErrKnownProof) {
 					return fmt.Errorf("adding malfeasance proof: %w", err)
@@ -408,9 +411,8 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	if err != nil {
 		return fmt.Errorf("get header for processed atx %s: %w", atx.ID(), err)
 	}
-	for _, r := range h.atxReceivers {
-		r.OnAtx(header)
-	}
+	h.beacon.OnAtx(header)
+	h.tortoise.OnAtx(header.ToData())
 
 	// notify subscribers
 	if ch, found := h.atxChannels[atx.ID()]; found {

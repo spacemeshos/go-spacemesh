@@ -50,6 +50,18 @@ func (mr *MockTortoiseMockRecorder) LatestComplete() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestComplete", reflect.TypeOf((*MockTortoise)(nil).LatestComplete))
 }
 
+// OnAtx mocks base method.
+func (m *MockTortoise) OnAtx(arg0 *types.AtxTortoiseData) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "OnAtx", arg0)
+}
+
+// OnAtx indicates an expected call of OnAtx.
+func (mr *MockTortoiseMockRecorder) OnAtx(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnAtx", reflect.TypeOf((*MockTortoise)(nil).OnAtx), arg0)
+}
+
 // OnBlock mocks base method.
 func (m *MockTortoise) OnBlock(arg0 types.BlockHeader) {
 	m.ctrl.T.Helper()
