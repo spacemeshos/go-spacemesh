@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
 
 var (
@@ -86,20 +87,25 @@ func ValidateAndSave(
 	if err != nil {
 		return err
 	}
-	malicious, err := cdb.IsMalicious(nodeID)
-	if err != nil {
-		return fmt.Errorf("check known malicious: %w", err)
-	} else if malicious {
-		logger.WithContext(ctx).With().Debug("known malicious identity", log.Stringer("smesher", nodeID))
-		return ErrKnownProof
-	}
-	if err := cdb.AddMalfeasanceProof(nodeID, &p.MalfeasanceProof, cdb); err != nil {
+	if err := cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
+		malicious, err := identities.IsMalicious(dbtx, nodeID)
+		if err != nil {
+			return fmt.Errorf("check known malicious: %w", err)
+		} else if malicious {
+			logger.WithContext(ctx).With().Debug("known malicious identity", log.Stringer("smesher", nodeID))
+			return ErrKnownProof
+		}
+		if err := cdb.AddMalfeasanceProof(nodeID, &p.MalfeasanceProof, dbtx); err != nil {
+			return fmt.Errorf("add malfeasance proof: %w", err)
+		}
+		return nil
+	}); err != nil {
 		logger.WithContext(ctx).With().Error("failed to save MalfeasanceProof",
 			log.Stringer("smesher", nodeID),
 			log.Inline(p),
 			log.Err(err),
 		)
-		return fmt.Errorf("add malfeasance proof: %w", err)
+		return err
 	}
 	updateMetrics(p.Proof)
 	logger.WithContext(ctx).With().Info("new malfeasance proof",
