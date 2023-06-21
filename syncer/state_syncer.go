@@ -79,19 +79,21 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		}
 
 		if opinions, err := s.fetchOpinions(ctx, lid); err == nil {
-			if err = s.checkMeshAgreement(ctx, lid, opinions); err != nil && errors.Is(err, errMeshHashDiverged) {
-				s.logger.WithContext(ctx).With().Debug("mesh hash diverged, trying to reach agreement",
-					lid,
-					log.Stringer("diverged", lid.Sub(1)),
-				)
-				if err = s.ensureMeshAgreement(ctx, lid, opinions, resyncPeers); err != nil {
-					s.logger.WithContext(ctx).With().Debug("failed to reach mesh agreement with peers",
+			if s.stateSynced() {
+				if err = s.checkMeshAgreement(ctx, lid, opinions); err != nil && errors.Is(err, errMeshHashDiverged) {
+					s.logger.WithContext(ctx).With().Debug("mesh hash diverged, trying to reach agreement",
 						lid,
-						log.Err(err),
+						log.Stringer("diverged", lid.Sub(1)),
 					)
-					hashResolve.Inc()
-				} else {
-					hashResolveFail.Inc()
+					if err = s.ensureMeshAgreement(ctx, lid, opinions, resyncPeers); err != nil {
+						s.logger.WithContext(ctx).With().Debug("failed to reach mesh agreement with peers",
+							lid,
+							log.Err(err),
+						)
+						hashResolve.Inc()
+					} else {
+						hashResolveFail.Inc()
+					}
 				}
 			}
 			if err = s.adopt(ctx, lid, opinions); err != nil {
