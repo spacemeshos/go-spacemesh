@@ -332,6 +332,8 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.Nil(t, saved)
 
 	// second one will create a MalfeasanceProof
+
+	tm.mockTortoise.EXPECT().OnMalfeasance(sig.NodeID())
 	malProof, err = tm.AddBallot(context.Background(), blts[1])
 	require.NoError(t, err)
 	require.NotNil(t, malProof)

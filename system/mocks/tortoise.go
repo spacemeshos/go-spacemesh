@@ -74,6 +74,18 @@ func (mr *MockTortoiseMockRecorder) OnHareOutput(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnHareOutput", reflect.TypeOf((*MockTortoise)(nil).OnHareOutput), arg0, arg1)
 }
 
+// OnMalfeasance mocks base method.
+func (m *MockTortoise) OnMalfeasance(arg0 types.NodeID) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "OnMalfeasance", arg0)
+}
+
+// OnMalfeasance indicates an expected call of OnMalfeasance.
+func (mr *MockTortoiseMockRecorder) OnMalfeasance(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnMalfeasance", reflect.TypeOf((*MockTortoise)(nil).OnMalfeasance), arg0)
+}
+
 // OnWeakCoin mocks base method.
 func (m *MockTortoise) OnWeakCoin(arg0 types.LayerID, arg1 bool) {
 	m.ctrl.T.Helper()
