@@ -61,6 +61,8 @@ func (h *messageStore) buildMalfeasanceProof(a, b types.Hash20) *types.Malfeasan
 	}
 }
 
+// I don't think we need to do this since actually the things that resulted in the new malfeasance proofs should have already had the requisite effect.
+// But what we do need to do is update the tgg component to consider malfeasance proofs to be roundless.
 func (b *Broker) handleEarlyMessages(msgs map[types.Hash20]*Message, handler *hare3.Handler) {
 	for k, v := range msgs {
 		id, round, values := parts(v)
