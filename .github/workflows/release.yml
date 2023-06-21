@@ -67,6 +67,8 @@ jobs:
       # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
       - name: Build go-spacemesh
         shell: bash
+        env:
+          SDKROOT: "/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk"
         run: |
           make install
           make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
