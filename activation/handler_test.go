@@ -123,8 +123,8 @@ func TestHandler_processBlockATXs(t *testing.T) {
 
 	goldenATXID := types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(t, goldenATXID)
-	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any()).AnyTimes()
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any()).AnyTimes()
 
 	sig, err := signing.NewEdSigner()
 	r.NoError(err)
