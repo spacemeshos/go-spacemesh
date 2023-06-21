@@ -62,11 +62,10 @@ func TestGet_HappyPath(t *testing.T) {
 		ActivationTx: &types.ActivationTx{
 			InnerActivationTx: types.InnerActivationTx{
 				NIPostChallenge: types.NIPostChallenge{
-					Sequence:           rand.Uint64(),
-					PrevATXID:          types.RandomATXID(),
-					PublishEpoch:       0,
-					PositioningATX:     types.RandomATXID(),
-					InitialPostIndices: types.RandomBytes(7),
+					Sequence:       rand.Uint64(),
+					PrevATXID:      types.RandomATXID(),
+					PublishEpoch:   0,
+					PositioningATX: types.RandomATXID(),
 				},
 				Coinbase: types.GenerateAddress(types.RandomBytes(32)),
 				NumUnits: rand.Uint32(),
