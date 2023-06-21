@@ -632,8 +632,7 @@ func (h *Hare) malfeasanceLoop(ctx context.Context) {
 			if gossip.Eligibility == nil {
 				h.WithContext(ctx).Fatal("missing hare eligibility")
 			}
-			if err := malfeasance.ValidateAndSave(
-				ctx, h.Log, h.msh.Cache(), h.msh.Cache(), h.sigVerifier, nil, gossip); err != nil && !errors.Is(err, malfeasance.ErrKnownProof) {
+			if err := h.msh.Cache().AddMalfeasanceProof(gossip.Eligibility.NodeID, &gossip.MalfeasanceProof, h.msh.Cache()); err != nil {
 				h.With().Error("failed to save MalfeasanceProof",
 					log.Context(ctx),
 					gossip.Eligibility.NodeID,

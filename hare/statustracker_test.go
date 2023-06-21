@@ -5,11 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -338,12 +336,9 @@ func verifyMalfeasanceProof(t *testing.T, sig *signing.EdSigner, gossip *types.M
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	createIdentity(t, cdb.Database, sig)
-	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
-	mcp.EXPECT().HandleEligibility(gomock.Any(), gomock.Any()).AnyTimes()
-	malVerifier := malfeasance.NewHandler(cdb, lg, "host", mcp, edVerifier)
-	data, err := codec.Encode(gossip)
+	nodeID, err := malfeasance.Validate(context.Background(), lg, cdb, edVerifier, nil, gossip)
 	require.NoError(t, err)
-	require.NoError(t, malVerifier.HandleMalfeasanceProof(context.Background(), "self", data))
+	require.Equal(t, sig.NodeID(), nodeID)
 }
 
 func TestStatusTracker_WithKnownEquivocator(t *testing.T) {
