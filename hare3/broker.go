@@ -1,4 +1,4 @@
-package hare
+package hare3
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hare3"
+	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -16,22 +16,42 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
+var errNilInner = errors.New("nil inner message")
+
+// stateQuerier provides a query to check if an Ed public key is active on the current consensus view.
+// It returns true if the identity is active and false otherwise.
+// An error is set iff the identity could not be checked for activeness.
+type stateQuerier interface {
+	IsIdentityActiveOnConsensusView(context.Context, types.NodeID, types.LayerID) (bool, error)
+}
+
+type mesh interface {
+	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
+	GetEpochAtx(types.EpochID, types.NodeID) (*types.ActivationTxHeader, error)
+	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
+	Proposals(types.LayerID) ([]*types.Proposal, error)
+	Ballot(types.BallotID) (*types.Ballot, error)
+	IsMalicious(types.NodeID) (bool, error)
+	AddMalfeasanceProof(types.NodeID, *types.MalfeasanceProof, *sql.Tx) error
+	GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error)
+}
+
 type validator interface {
-	Validate(context.Context, *Message) bool
+	Validate(context.Context, *hare.Message) bool
 	ValidateEligibilityGossip(context.Context, *types.HareEligibilityGossip) bool
 }
 
 type messageStore struct {
-	messages map[types.Hash20]*Message
+	messages map[types.Hash20]*hare.Message
 }
 
 func newMessageStore() *messageStore {
 	return &messageStore{
-		messages: make(map[types.Hash20]*Message),
+		messages: make(map[types.Hash20]*hare.Message),
 	}
 }
 
-func (h *messageStore) storeMessage(hash types.Hash20, m *Message) {
+func (h *messageStore) storeMessage(hash types.Hash20, m *hare.Message) {
 	h.messages[hash] = m
 }
 
@@ -78,7 +98,7 @@ type Broker struct {
 	// iterate the messages and push them into the handler and when we need
 	// messages for constructing a malfeasance proof we have them right there.
 	messages map[types.LayerID]*messageStore
-	handlers map[types.LayerID]*hare3.Handler
+	handlers map[types.LayerID]*Handler
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -126,7 +146,7 @@ var (
 	errClosed            = errors.New("closed")
 )
 
-func parts(msg *Message) (id []byte, round int8, values []types.Hash20) {
+func parts(msg *hare.Message) (id []byte, round int8, values []types.Hash20) {
 	values = make([]types.Hash20, len(msg.Values))
 	for i := range msg.Values {
 		values[i] = types.Hash20(msg.Values[i])
@@ -162,7 +182,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	latestLayer := b.getLatestLayer()
 	hash := types.CalcMessageHash20(msg, pubsub.HareProtocol)
 	logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.getLatestLayer()), hash.ToHash12())
-	hareMsg, err := MessageFromBuffer(msg)
+	hareMsg, err := hare.MessageFromBuffer(msg)
 	if err != nil {
 		logger.With().Error("failed to build message", hash.ToHash12(), log.Err(err))
 		b.WithContext(ctx).With().Error("failed to build message", hash.ToHash12(), log.Err(err))
@@ -231,7 +251,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 			msgs = newMessageStore()
 			b.messages[hareMsg.Layer] = msgs
 			// TODO actually build the handler
-			b.handlers[hareMsg.Layer] = hare3.NewHandler(nil, nil, nil, nil)
+			b.handlers[hareMsg.Layer] = NewHandler(nil, nil, nil, nil)
 		}
 	}
 	shouldRelay, equivocationHash := b.handlers[hareMsg.Layer].HandleMsg(hash, id, round, values)
@@ -257,7 +277,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 
 // Register a layer to receive messages
 // Note: the registering instance is assumed to be started and accepting messages.
-func (b *Broker) Register(ctx context.Context, id types.LayerID) (*hare3.Handler, error) {
+func (b *Broker) Register(ctx context.Context, id types.LayerID) (*Handler, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -274,7 +294,7 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (*hare3.Handler
 	if msgs == nil {
 		msgs = newMessageStore()
 		b.messages[id] = msgs
-		b.handlers[id] = hare3.NewHandler(nil, nil, nil, nil)
+		b.handlers[id] = NewHandler(nil, nil, nil, nil)
 	} else {
 		b.handleEarlyMessages(msgs.messages, b.handlers[id])
 	}
@@ -289,7 +309,7 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (*hare3.Handler
 // was detected to be malfeasant in the previous layer. This will just update
 // the value held for the message in the protocol in the case that a sender has
 // been detected to be malfeasant since the early message was processed.
-func (b *Broker) handleEarlyMessages(msgs map[types.Hash20]*Message, handler *hare3.Handler) {
+func (b *Broker) handleEarlyMessages(msgs map[types.Hash20]*hare.Message, handler *Handler) {
 	for k, v := range msgs {
 		id, round, values := parts(v)
 		handler.HandleMsg(k, id, round, values)
@@ -329,4 +349,35 @@ func (b *Broker) getLatestLayer() types.LayerID {
 	defer b.mu.RUnlock()
 
 	return b.latestLayer
+}
+
+// Upon receiving a protocol message, we try to build the full message.
+// The full message consists of the original message and the extracted public key.
+// An extracted public key is considered valid if it represents an active identity for a consensus view.
+func checkIdentity(ctx context.Context, logger log.Log, hareMsg *hare.Message, querier stateQuerier) error {
+	logger = logger.WithContext(ctx)
+
+	// query if identity is active
+	res, err := querier.IsIdentityActiveOnConsensusView(ctx, hareMsg.SmesherID, hareMsg.Layer)
+	if err != nil {
+		logger.With().Error("failed to check if identity is active",
+			log.Stringer("smesher", hareMsg.SmesherID),
+			log.Err(err),
+			hareMsg.Layer,
+			log.String("msg_type", hareMsg.Type.String()),
+		)
+		return fmt.Errorf("check active identity: %w", err)
+	}
+
+	// check query result
+	if !res {
+		logger.With().Warning("identity is not active",
+			log.Stringer("smesher", hareMsg.SmesherID),
+			hareMsg.Layer,
+			log.String("msg_type", hareMsg.Type.String()),
+		)
+		return errors.New("inactive identity")
+	}
+
+	return nil
 }
