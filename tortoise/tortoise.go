@@ -525,7 +525,7 @@ func (t *turtle) computeEpochHeight(epoch types.EpochID) {
 	einfo := t.epoch(epoch)
 	heights := make([]uint64, 0, len(einfo.atxs))
 	for _, info := range einfo.atxs {
-		if info.weight != 0 {
+		if !info.malfeasant {
 			heights = append(heights, info.height)
 		}
 	}
@@ -636,16 +636,18 @@ func (t *turtle) onAtx(atx *types.AtxTortoiseData) {
 			zap.Uint64("height", atx.Height),
 			zap.Bool("malfeasant", mal),
 		)
-		info := atxInfo{weight: atx.Weight, height: atx.Height}
-		if mal {
-			info.weight = 0
-			info.height = 0
+		info := atxInfo{
+			weight:     atx.Weight,
+			height:     atx.Height,
+			malfeasant: mal,
 		}
 		epoch.atxs[atx.ID] = info
 		if atx.Weight > math.MaxInt64 {
 			t.logger.Panic("fixme: atx size is not expected to overflow int64", zap.Uint64("weight", info.weight))
 		}
-		epoch.weight = epoch.weight.Add(fixed.New64(int64(info.weight)))
+		if !mal {
+			epoch.weight = epoch.weight.Add(fixed.New64(int64(info.weight)))
+		}
 		atxsNumber.Inc()
 	}
 	if atx.TargetEpoch == t.last.GetEpoch() {

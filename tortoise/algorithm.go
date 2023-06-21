@@ -148,6 +148,9 @@ func (t *Tortoise) OnWeakCoin(lid types.LayerID, coin bool) {
 func (t *Tortoise) OnMalfeasance(id types.NodeID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.trtl.isMalfeasant(id) {
+		return
+	}
 	t.logger.Debug("on malfeasence", zap.Stringer("id", id))
 	t.trtl.makrMalfeasant(id)
 	if t.tracer != nil {

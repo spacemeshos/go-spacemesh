@@ -26,8 +26,9 @@ type (
 	}
 
 	atxInfo struct {
-		weight uint64
-		height uint64
+		weight     uint64
+		height     uint64
+		malfeasant bool
 	}
 
 	epochInfo struct {
