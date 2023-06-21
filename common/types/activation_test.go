@@ -46,7 +46,7 @@ func TestActivation_BadMsgHash(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: types.EpochID(11),
 	}
-	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil, nil)
+	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil)
 	atx.Signature = types.RandomEdSignature()
 	atx.SmesherID = types.RandomNodeID()
 	atx.SetID(types.RandomATXID())

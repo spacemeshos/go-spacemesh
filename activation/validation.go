@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -169,17 +168,13 @@ func (*Validator) VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrf
 	return nil
 }
 
-func (*Validator) InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID, expectedPostIndices []byte) error {
+func (*Validator) InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error {
 	if challenge.Sequence != 0 {
 		return fmt.Errorf("no prevATX declared, but sequence number not zero")
 	}
 
-	if challenge.InitialPostIndices == nil {
-		return fmt.Errorf("no prevATX declared, but initial Post indices is not included in challenge")
-	}
-
-	if !bytes.Equal(expectedPostIndices, challenge.InitialPostIndices) {
-		return fmt.Errorf("initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
+	if challenge.InitialPost == nil {
+		return fmt.Errorf("no prevATX declared, but initial Post is not included in challenge")
 	}
 
 	if challenge.CommitmentATX == nil {
@@ -222,8 +217,8 @@ func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProv
 		return fmt.Errorf("sequence number is not one more than prev sequence number")
 	}
 
-	if challenge.InitialPostIndices != nil {
-		return fmt.Errorf("prevATX declared, but initial Post indices is included in challenge")
+	if challenge.InitialPost != nil {
+		return fmt.Errorf("prevATX declared, but initial Post is included in challenge")
 	}
 
 	if challenge.CommitmentATX != nil {
