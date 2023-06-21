@@ -61,24 +61,6 @@ func (h *messageStore) buildMalfeasanceProof(a, b types.Hash20) *types.Malfeasan
 	}
 }
 
-// I don't think we need to do this since actually the things that resulted in the new malfeasance proofs should have already had the requisite effect.
-// But what we do need to do is update the tgg component to consider malfeasance proofs to be roundless.
-func (b *Broker) handleEarlyMessages(msgs map[types.Hash20]*Message, handler *hare3.Handler) {
-	for k, v := range msgs {
-		id, round, values := parts(v)
-		handler.HandleMsg(k, id, round, values)
-		proof, err := b.msh.GetMalfeasanceProof(v.SmesherID)
-		if err != nil && !errors.Is(err, sql.ErrNotFound) {
-			b.With().Panic("re-handling early messages, failed to check malicious identity", log.Stringer("smesher", v.SmesherID), log.Err(err))
-		}
-		if proof != nil {
-			// The way we signify a message from a know malfeasant identity to the
-			// protocol is a message without values.
-			handler.HandleMsg(k, id, round, values)
-		}
-	}
-}
-
 // Broker is the dispatcher of incoming Hare messages.
 // The broker validates that the sender is eligible and active and forwards the message to the corresponding outbox.
 type Broker struct {
@@ -300,6 +282,27 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (*hare3.Handler
 	// we return the handler so that we can extract the relevant sub protocols
 	// from it for use by the main protocol.
 	return b.handlers[id], nil
+}
+
+// Malfeasance detections that happened in the previous layer are not passed to
+// the early layer, so we need to re-handle early messages in case their sender
+// was detected to be malfeasant in the previous layer. This will just update
+// the value held for the message in the protocol in the case that a sender has
+// been detected to be malfeasant since the early message was processed.
+func (b *Broker) handleEarlyMessages(msgs map[types.Hash20]*Message, handler *hare3.Handler) {
+	for k, v := range msgs {
+		id, round, values := parts(v)
+		handler.HandleMsg(k, id, round, values)
+		proof, err := b.msh.GetMalfeasanceProof(v.SmesherID)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			b.With().Panic("re-handling early messages, failed to check malicious identity", log.Stringer("smesher", v.SmesherID), log.Err(err))
+		}
+		if proof != nil {
+			// The way we signify a message from a know malfeasant identity to the
+			// protocol is a message without values.
+			handler.HandleMsg(k, id, round, values)
+		}
+	}
 }
 
 // Unregister a layer from receiving messages.
