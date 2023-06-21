@@ -78,7 +78,7 @@ type GradedGossiper interface {
 	// the message round and a grade. It returns a value indicating what action
 	// to take with the message and the hash of an equivocating message if
 	// equivocation was detected.
-	ReceiveMsg(hash, id, valueHash types.Hash20, round AbsRound, grade uint8) (result GradedGossipResult, equivocationHash *types.Hash20)
+	ReceiveMsg(hash, id types.Hash20, valueHash *types.Hash20, round AbsRound, grade uint8) (result GradedGossipResult, equivocationHash *types.Hash20)
 }
 
 // TrhesholdGradedGossiper acts as a specialized value store, it ingests
@@ -171,10 +171,21 @@ func (h *Handler) HandleMsg(hash types.Hash20, vk []byte, round int8, values []t
 		g = gradeKey5(vk)
 	}
 	id := hashBytes(vk)
-	valuesHash := toHash(values)
+	var valuesHash *types.Hash20
+
+	// if Values is equal to nil, it is an indication of equivocation, so we leave valuesHash nil to indicate equivocation to graded gossip
+	if values != nil {
+		h := toHash(values)
+		valuesHash = &h
+	}
 
 	var gradedGossipValues []types.Hash20
 	var equivocationHash *types.Hash20
+	// We now have a new rule as explained by Tal, that in fact malfeasance
+	// proofs are essentially roundless, i.e. they affect all rounds, so we
+	// should just store a map of identity to malfeasance proof inside gg and
+	// then check it on exit whenever a messge goes through.
+	//
 	// Nil values signifies a message from a known malicious actor, however we
 	// still need to forward the first such message per identity to the network
 	// though so that they also insert it into their protocols. So we need an
@@ -484,5 +495,3 @@ func (r AbsRound) Type() MsgType {
 func (r AbsRound) Iteration() int8 {
 	return int8(r) / 7
 }
-
-// To run this we just want a loop that pulls from 2 channels a timer channel and a channel of messages
