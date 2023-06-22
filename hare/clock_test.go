@@ -6,8 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
 func TestClock_AwaitWakeup(t *testing.T) {
@@ -28,14 +26,10 @@ func TestClock_AwaitWakeup(t *testing.T) {
 }
 
 func TestClock_AwaitRound(t *testing.T) {
-	if util.IsWindows() && util.IsCi() {
-		t.Skip("Skipping test in Windows on CI (https://github.com/spacemeshos/go-spacemesh/issues/3628)")
-	}
-
 	r := require.New(t)
 
-	tolerance := 5 * time.Millisecond
-	waitTime := 20 * time.Millisecond
+	tolerance := 20 * time.Millisecond
+	waitTime := 80 * time.Millisecond
 
 	wakeupDelta := 10 * time.Second
 	roundDuration := 30 * time.Second

@@ -13,7 +13,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -206,9 +205,6 @@ func Test_HandleProposal_InitEpoch(t *testing.T) {
 }
 
 func Test_HandleProposal_Success(t *testing.T) {
-	if util.IsWindows() && util.IsCi() {
-		t.Skip("Skipping test in Windows on CI (https://github.com/spacemeshos/go-spacemesh/issues/3630)")
-	}
 	t.Parallel()
 
 	const epoch = types.EpochID(10)

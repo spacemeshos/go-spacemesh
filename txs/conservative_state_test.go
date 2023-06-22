@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -179,9 +178,6 @@ func TestSelectProposalTXs_ExhaustGas(t *testing.T) {
 }
 
 func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
-	if util.IsWindows() {
-		t.Skip("Skipping test in Windows (https://github.com/spacemeshos/go-spacemesh/issues/3624)")
-	}
 	tcs := createConservativeState(t)
 	numTXs := numTXsInProposal - 1
 	lid := types.LayerID(97)

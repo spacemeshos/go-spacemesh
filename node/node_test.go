@@ -41,7 +41,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -412,10 +411,6 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 // E2E app test of the stream endpoints in the NodeService.
 func TestSpacemeshApp_NodeService(t *testing.T) {
-	if util.IsWindows() {
-		t.Skip("Skipping test in Windows (https://github.com/spacemeshos/go-spacemesh/issues/3626)")
-	}
-
 	// errlog should be used only for testing.
 	logger := logtest.New(t)
 	errlog := log.RegisterHooks(logtest.New(t, zap.ErrorLevel), events.EventHook())
