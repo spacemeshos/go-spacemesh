@@ -158,7 +158,7 @@ jobs:
       - name: Clear test cache
         run: make clear-test-cache
       - name: unit tests
-        timeout-minutes: 25
+        timeout-minutes: 30
         env:
           GOTESTSUM_FORMAT: standard-verbose
           GOTESTSUM_JUNITFILE: unit-tests.xml
@@ -185,9 +185,9 @@ jobs:
           - windows-latest
         include:
           - os: macos-latest
-            allow-failure: "true"
+            allow-failure: "false"
           - os: windows-latest
-            allow-failure: "true"
+            allow-failure: "false"
     steps:
       - name: disable TCP/UDP offload
         if: ${{ matrix.os == 'macos-latest' }}
@@ -215,7 +215,7 @@ jobs:
       - name: Clear test cache
         run: make clear-test-cache
       - name: unit tests
-        timeout-minutes: 25
+        timeout-minutes: 30
         env:
           GOTESTSUM_FORMAT: standard-verbose
           GOTESTSUM_JUNITFILE: unit-tests.xml
