@@ -172,9 +172,6 @@ func Recover(
 	if err != nil {
 		return err
 	}
-	if err = db.Close(); err != nil {
-		return fmt.Errorf("close old db: %w", err)
-	}
 	if newdb != nil {
 		if err = newdb.Close(); err != nil {
 			return fmt.Errorf("close new db: %w", err)
