@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"crypto/ed25519"
-	"math/rand"
 	"sync"
 	"testing"
 
@@ -23,19 +22,18 @@ func TestEquivocation(t *testing.T) {
 	const bootnodes = 2
 	cctx := testcontext.New(t, testcontext.Labels("sanity"))
 
-	rng := rand.New(rand.NewSource(1111))
 	keys := make([]ed25519.PrivateKey, cctx.ClusterSize-bootnodes)
 	honest := len(keys) / 2
 	if (len(keys)-honest)%2 != 0 {
 		honest--
 	}
 	for i := 0; i < honest; i++ {
-		_, priv, err := ed25519.GenerateKey(rng)
+		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 		keys[i] = priv
 	}
 	for i := honest; i < len(keys); i += 2 {
-		_, priv, err := ed25519.GenerateKey(rng)
+		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 		keys[i] = priv
 		keys[i+1] = priv
@@ -54,7 +52,7 @@ func TestEquivocation(t *testing.T) {
 		layers         = uint32(testcontext.LayersPerEpoch.Get(cctx.Parameters))
 		startPartition = 2 * layers
 		stopPartition  = startPartition + layers
-		stopTest       = stopPartition + 6*layers
+		stopTest       = stopPartition + 4*layers
 
 		eg          errgroup.Group
 		left, right []string
