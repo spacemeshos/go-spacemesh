@@ -76,11 +76,11 @@ func TestEquivocation(t *testing.T) {
 
 	var (
 		mu      sync.Mutex
-		results = map[string]map[int]types.Hash32{}
+		results = map[string]map[int]string{}
 	)
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
-		results[client.Name] = map[int]types.Hash32{}
+		results[client.Name] = map[int]string{}
 		watchLayers(cctx, &eg, client, func(resp *pb.LayerStreamResponse) (bool, error) {
 			if resp.Layer.Status != pb.Layer_LAYER_STATUS_APPLIED {
 				return true, nil
@@ -89,11 +89,12 @@ func TestEquivocation(t *testing.T) {
 				return false, nil
 			}
 			num := int(resp.Layer.Number.Number)
-			consensus := types.BytesToHash(resp.Layer.Hash)
+			consensus := types.BytesToHash(resp.Layer.Hash).ShortString()
 			cctx.Log.Debugw("consensus hash collected",
 				"client", client.Name,
 				"layer", num,
-				"state", consensus.ShortString())
+				"consensus", consensus,
+			)
 			mu.Lock()
 			results[client.Name][num] = consensus
 			mu.Unlock()
