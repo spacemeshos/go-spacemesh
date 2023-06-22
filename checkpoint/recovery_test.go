@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -108,53 +110,51 @@ func TestReadCheckpointAndDie(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	tt := []struct {
-		name   string
-		uri    string
-		expErr string
-	}{
-		{
-			name: "all good",
-			uri:  fmt.Sprintf("%s/snapshot-15", ts.URL),
-		},
-		{
-			name:   "file does not exist",
-			uri:    "file:///snapshot-15",
-			expErr: "no such file or directory",
-		},
-		{
-			name:   "invalid uri",
-			uri:    fmt.Sprintf("%s^/snapshot-15", ts.URL),
-			expErr: "parse recovery URI",
-		},
-	}
+	t.Run("all good", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-
-			dataDir := t.TempDir()
-			if len(tc.expErr) > 0 {
-				err := checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, tc.uri, types.LayerID(recoverLayer))
-				require.ErrorContains(t, err, tc.expErr)
-			} else {
-				require.Panics(t, func() {
-					checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, tc.uri, types.LayerID(recoverLayer))
-				})
-			}
-
-			fname := checkpoint.RecoveryFilename(dataDir, filepath.Base(tc.uri), types.LayerID(recoverLayer))
-			got, err := os.ReadFile(fname)
-			if len(tc.expErr) > 0 {
-				require.ErrorIs(t, err, os.ErrNotExist)
-			} else {
-				require.NoError(t, err)
-				require.True(t, bytes.Equal([]byte(checkpointdata), got))
-			}
+		uri := fmt.Sprintf("%s/snapshot-15", ts.URL)
+		dataDir := t.TempDir()
+		require.Panics(t, func() {
+			checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, uri, types.LayerID(recoverLayer))
 		})
-	}
+
+		fname := checkpoint.RecoveryFilename(dataDir, filepath.Base(uri), types.LayerID(recoverLayer))
+		got, err := os.ReadFile(fname)
+		require.NoError(t, err)
+		require.True(t, bytes.Equal([]byte(checkpointdata), got))
+	})
+
+	t.Run("file does not exist", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		uri := "file:///snapshot-15"
+		dataDir := t.TempDir()
+		got := checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, uri, types.LayerID(recoverLayer))
+		want := &fs.PathError{}
+		require.ErrorAs(t, got, &want)
+
+		fname := checkpoint.RecoveryFilename(dataDir, filepath.Base(uri), types.LayerID(recoverLayer))
+		_, err := os.ReadFile(fname)
+		require.ErrorIs(t, err, os.ErrNotExist)
+	})
+
+	t.Run("invalid uri", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		uri := fmt.Sprintf("%s^/snapshot-15", ts.URL)
+		dataDir := t.TempDir()
+		got := checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, uri, types.LayerID(recoverLayer))
+		want := &url.Error{}
+		require.ErrorAs(t, got, &want)
+
+		fname := checkpoint.RecoveryFilename(dataDir, filepath.Base(uri), types.LayerID(recoverLayer))
+		_, err := os.ReadFile(fname)
+		require.ErrorIs(t, err, os.ErrNotExist)
+	})
 }
 
 func TestRecoverFromHttp(t *testing.T) {
