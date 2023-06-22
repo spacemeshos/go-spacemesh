@@ -63,6 +63,7 @@ func (g *GenesisConfig) LoadFromFile(filename string) error {
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 	return json.NewDecoder(f).Decode(g)
 }
 
@@ -72,6 +73,7 @@ func (g *GenesisConfig) WriteToFile(filename string) error {
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 	return json.NewEncoder(f).Encode(g)
 }
 

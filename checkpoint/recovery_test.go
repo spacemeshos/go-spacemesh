@@ -210,8 +210,9 @@ func TestRecoverFromHttp(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.NotNil(t, newdb)
-			exras := verifyDbContent(t, newdb)
-			require.Empty(t, exras)
+			defer newdb.Close()
+			extras := verifyDbContent(t, newdb)
+			require.Empty(t, extras)
 			restore, err := recovery.CheckpointInfo(newdb)
 			require.NoError(t, err)
 			require.EqualValues(t, recoverLayer, restore)
@@ -292,6 +293,8 @@ func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
 			olddb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 			require.NoError(t, err)
 			require.NotNil(t, olddb)
+			defer olddb.Close()
+
 			nid := types.NodeID{1, 2, 3}
 			prev := newvatx(t, newatx(types.ATXID{12}, &types.ATXID{1}, 2, 0, 123, nid.Bytes()))
 			require.NoError(t, atxs.Add(olddb, prev))
@@ -471,7 +474,7 @@ func TestRecover(t *testing.T) {
 				PreserveOwnAtx: true,
 			}
 
-			uri := fmt.Sprintf("file://%s", src)
+			uri := fmt.Sprintf("file://%s", filepath.ToSlash(src))
 			err := checkpoint.Recover(ctx, logtest.New(t), fs, cfg, types.NodeID{2, 3, 4}, uri, types.LayerID(recoverLayer))
 			if tc.fail {
 				require.Error(t, err)
