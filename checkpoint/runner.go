@@ -45,7 +45,7 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID)
 		if err != nil {
 			return nil, fmt.Errorf("atxs snapshot commitment: %w", err)
 		}
-		vrfNonce, err := atxs.VRFNonce(tx, catx.SmesherID, snapshot.GetEpoch())
+		vrfNonce, err := atxs.VRFNonce(tx, catx.SmesherID, catx.Epoch+1)
 		if err != nil {
 			return nil, fmt.Errorf("atxs snapshot nonce: %w", err)
 		}

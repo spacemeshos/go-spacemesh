@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -175,6 +176,44 @@ func (mev *mockEligibilityValidator) Validate(ctx context.Context, msg *Message)
 
 func (mev *mockEligibilityValidator) ValidateEligibilityGossip(context.Context, *types.HareEligibilityGossip) bool {
 	return atomic.LoadInt32(&mev.valid) != 0
+}
+
+// We assert that the threshold X is met as long as there is at least one
+// honest vote and the sum of honest, dishonest and known equivocator is >= X.
+func TestCountInfoMeetsTrheshold(t *testing.T) {
+	c := &CountInfo{}
+	c.IncHonest(1)
+	assert.True(t, c.Meet(1))
+	assert.False(t, c.Meet(2))
+
+	c = &CountInfo{}
+	c.IncDishonest(1)
+	assert.False(t, c.Meet(1))
+
+	c = &CountInfo{}
+	c.IncKnownEquivocator(1)
+	assert.False(t, c.Meet(1))
+
+	c = &CountInfo{}
+	c.IncKnownEquivocator(1)
+	c.IncDishonest(1)
+	assert.False(t, c.Meet(1))
+
+	c = &CountInfo{}
+	c.IncHonest(1)
+	c.IncKnownEquivocator(1)
+	assert.True(t, c.Meet(2))
+
+	c = &CountInfo{}
+	c.IncHonest(1)
+	c.IncDishonest(1)
+	assert.True(t, c.Meet(2))
+
+	c = &CountInfo{}
+	c.IncHonest(1)
+	c.IncDishonest(1)
+	c.IncKnownEquivocator(1)
+	assert.True(t, c.Meet(3))
 }
 
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
