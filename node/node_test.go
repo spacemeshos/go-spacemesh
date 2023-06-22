@@ -684,6 +684,7 @@ func TestInitialize_BadTortoiseParams(t *testing.T) {
 	conf.FileLock = filepath.Join(t.TempDir(), "LOCK")
 	app := New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
+	app.Cleanup(context.Background())
 
 	conf = config.DefaultTestConfig()
 	conf.DataDirParent = t.TempDir()
@@ -696,11 +697,12 @@ func TestInitialize_BadTortoiseParams(t *testing.T) {
 	tconf.DataDirParent = t.TempDir()
 	app = New(WithLog(logtest.New(t)), WithConfig(tconf))
 	require.NoError(t, app.Initialize())
+	app.Cleanup(context.Background())
 
 	conf.Tortoise.Zdist = 5
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	err := app.Initialize()
-	assert.EqualError(t, err, "incompatible tortoise hare params")
+	require.EqualError(t, err, "incompatible tortoise hare params")
 }
 
 func TestConfig_Preset(t *testing.T) {
@@ -841,30 +843,39 @@ func TestGenesisConfig(t *testing.T) {
 		app.Config.DataDirParent = t.TempDir()
 
 		require.NoError(t, app.Initialize())
+		t.Cleanup(func() { app.Cleanup(context.Background()) })
+
 		var existing config.GenesisConfig
 		require.NoError(t, existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)))
 		require.Empty(t, existing.Diff(app.Config.Genesis))
 	})
+
 	t.Run("no error if no diff", func(t *testing.T) {
 		app := New()
 		app.Config = getTestDefaultConfig(t)
 		app.Config.DataDirParent = t.TempDir()
 
 		require.NoError(t, app.Initialize())
+		t.Cleanup(func() { app.Cleanup(context.Background()) })
+
 		app.Cleanup(context.Background())
 		require.NoError(t, app.Initialize())
 	})
+
 	t.Run("fatal error on a diff", func(t *testing.T) {
 		app := New()
 		app.Config = getTestDefaultConfig(t)
 		app.Config.DataDirParent = t.TempDir()
 
 		require.NoError(t, app.Initialize())
+		t.Cleanup(func() { app.Cleanup(context.Background()) })
+
 		app.Config.Genesis.ExtraData = "changed"
 		app.Cleanup(context.Background())
 		err := app.Initialize()
 		require.ErrorContains(t, err, "genesis config")
 	})
+
 	t.Run("not valid time", func(t *testing.T) {
 		app := New()
 		app.Config = getTestDefaultConfig(t)
@@ -889,6 +900,8 @@ func TestFlock(t *testing.T) {
 		app.Config = getTestDefaultConfig(t)
 
 		require.NoError(t, app.Initialize())
+		t.Cleanup(func() { app.Cleanup(context.Background()) })
+
 		app1 := *app
 		require.ErrorContains(t, app1.Initialize(), "only one spacemesh instance")
 		app.Cleanup(context.Background())
@@ -896,11 +909,14 @@ func TestFlock(t *testing.T) {
 		require.NoError(t, os.Remove(filepath.Join(app.Config.FileLock)))
 		require.NoError(t, app.Initialize())
 	})
+
 	t.Run("dir doesn't exist", func(t *testing.T) {
 		app := New()
 		app.Config = getTestDefaultConfig(t)
 		app.Config.FileLock = filepath.Join(t.TempDir(), "newdir", "LOCK")
+
 		require.NoError(t, app.Initialize())
+		t.Cleanup(func() { app.Cleanup(context.Background()) })
 	})
 }
 
