@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -53,7 +54,7 @@ func TestEquivocation(t *testing.T) {
 		layers         = uint32(testcontext.LayersPerEpoch.Get(cctx.Parameters))
 		startPartition = 2 * layers
 		stopPartition  = startPartition + layers
-		stopTest       = stopPartition + 4*layers
+		stopTest       = stopPartition + 6*layers
 
 		eg          errgroup.Group
 		left, right []string
@@ -104,7 +105,7 @@ func TestEquivocation(t *testing.T) {
 	eg.Wait()
 	reference := results[cl.Client(0).Name]
 	for i := 1; i < cl.Total(); i++ {
-		require.Equal(t, reference, results[cl.Client(i).Name],
+		assert.Equal(t, reference, results[cl.Client(i).Name],
 			"reference: %v, client: %v", cl.Client(0).Name, cl.Client(i).Name)
 	}
 }
