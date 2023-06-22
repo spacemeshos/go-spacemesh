@@ -301,8 +301,7 @@ func recoverFromLocalFile(
 	if err != nil {
 		return nil, err
 	}
-	err = db.Close()
-	if err != nil {
+	if err := db.Close(); err != nil {
 		return nil, fmt.Errorf("close old db: %w", err)
 	}
 
