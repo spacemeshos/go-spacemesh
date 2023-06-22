@@ -103,7 +103,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: 
+        os:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
           - macos-latest
