@@ -109,7 +109,7 @@ func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, 
 	}
 	dst := RecoveryFilename(dataDir, filepath.Base(parsed.String()), restore)
 	if parsed.Scheme == "file" {
-		src := parsed.Host + parsed.Path
+		src := filepath.Join(parsed.Host, parsed.Path)
 		_, err = fs.Stat(src)
 		if err != nil {
 			return "", fmt.Errorf("stat checkpoint file %v: %w", src, err)
