@@ -169,6 +169,7 @@ func Recover(
 	if err != nil {
 		return fmt.Errorf("open old database: %w", err)
 	}
+	defer db.Close()
 	newdb, err := RecoverWithDb(ctx, logger, db, fs, cfg, nodeID, uri, restore)
 	if err != nil {
 		return err

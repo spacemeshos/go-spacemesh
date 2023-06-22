@@ -405,14 +405,14 @@ func TestRecover(t *testing.T) {
 	tt := []struct {
 		name           string
 		fname, oldFile string
-		dir   string
+		dir            string
 		missing, fail  bool
 		invalidData    []byte
 	}{
 		{
-			name:    "from local file",
-			dir:     "checkpoint",
-			fname:   "snapshot-15",
+			name:  "from local file",
+			dir:   "checkpoint",
+			fname: "snapshot-15",
 		},
 		{
 			name:    "old recovery file",
@@ -428,9 +428,9 @@ func TestRecover(t *testing.T) {
 			fail:    true,
 		},
 		{
-			name:    "from recovery file",
-			dir:     "recovery",
-			fname:   "snapshot-15-restore-18",
+			name:  "from recovery file",
+			dir:   "recovery",
+			fname: "snapshot-15-restore-18",
 		},
 		{
 			name:        "invalid data",
