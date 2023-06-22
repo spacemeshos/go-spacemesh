@@ -76,3 +76,16 @@ type RoundClock interface {
 	RoundEnd(round uint32) time.Time
 	AwaitEndOfRound(round uint32) <-chan struct{}
 }
+
+type LayerClock interface {
+	LayerToTime(types.LayerID) time.Time
+	AwaitLayer(types.LayerID) chan struct{}
+	CurrentLayer() types.LayerID
+}
+
+type HareRunner struct {
+	clock    RoundClock
+	protocol hare3.Protocol
+	maxRound hare3.AbsRound
+	gossiper NetworkGossiper
+}
