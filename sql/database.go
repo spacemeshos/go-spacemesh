@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"crawshaw.io/sqlite"
@@ -142,6 +143,9 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 type Database struct {
 	pool *sqlitex.Pool
 
+	closed   bool
+	closeMux sync.Mutex
+
 	latency *prometheus.HistogramVec
 }
 
@@ -226,9 +230,15 @@ func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, e
 
 // Close closes all pooled connections.
 func (db *Database) Close() error {
+	db.closeMux.Lock()
+	defer db.closeMux.Unlock()
+	if db.closed {
+		return nil
+	}
 	if err := db.pool.Close(); err != nil {
 		return fmt.Errorf("close pool %w", err)
 	}
+	db.closed = true
 	return nil
 }
 
