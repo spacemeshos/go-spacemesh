@@ -1200,8 +1200,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 
 	var data []byte
 	if len(app.Config.TestConfig.SmesherKey) > 0 {
-		log.With().Error("!!!TESTING!!! using pre-configured smesher key",
-			log.String("key", app.Config.TestConfig.SmesherKey))
+		log.With().Error("!!!TESTING!!! using pre-configured smesher key")
 		data = []byte(app.Config.TestConfig.SmesherKey)
 	} else {
 		var err error
