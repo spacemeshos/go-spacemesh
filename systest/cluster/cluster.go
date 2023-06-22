@@ -411,12 +411,10 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 	if err := c.persist(cctx); err != nil {
 		return err
 	}
-	flags := []DeploymentFlag{}
-	for _, flag := range c.smesherFlags {
-		flags = append(flags, flag)
-	}
-	flags = append(flags, StartSmeshing(false))
-	clients, err := deployNodes(cctx, bootnodeApp, c.bootnodes, c.bootnodes+n, flags)
+	clients, err := deployNodes(cctx, bootnodeApp, c.bootnodes, c.bootnodes+n,
+		WithFlags(maps.Values(c.smesherFlags)...),
+		WithFlags(StartSmeshing(false)),
+	)
 	if err != nil {
 		return err
 	}
@@ -429,8 +427,27 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 	return fillNetworkConfig(cctx, clients[0])
 }
 
+type SmesherDeploymentConfig struct {
+	flags []DeploymentFlag
+	keys  []ed25519.PrivateKey
+}
+
+type DeploymentOpt func(cfg *SmesherDeploymentConfig)
+
+func WithFlags(flags ...DeploymentFlag) DeploymentOpt {
+	return func(cfg *SmesherDeploymentConfig) {
+		cfg.flags = append(cfg.flags, flags...)
+	}
+}
+
+func WithSmeshers(keys []ed25519.PrivateKey) DeploymentOpt {
+	return func(cfg *SmesherDeploymentConfig) {
+		cfg.keys = keys
+	}
+}
+
 // AddSmeshers ...
-func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int, extras ...DeploymentFlag) error {
+func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int, opts ...DeploymentOpt) error {
 	if err := c.resourceControl(tctx, n); err != nil {
 		return err
 	}
@@ -442,10 +459,8 @@ func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int, extras ...Deploy
 	if err != nil {
 		return fmt.Errorf("extracting p2p endpoints %w", err)
 	}
-	flags = append(flags, Bootnodes(endpoints...))
-	flags = append(flags, StartSmeshing(true))
-	flags = append(flags, extras...)
-	clients, err := deployNodes(tctx, smesherApp, c.nextSmesher(), c.nextSmesher()+n, flags)
+	clients, err := deployNodes(tctx, smesherApp, c.nextSmesher(), c.nextSmesher()+n,
+		append(opts, WithFlags(flags...), WithFlags(Bootnodes(endpoints...), StartSmeshing(true)))...)
 	if err != nil {
 		return err
 	}

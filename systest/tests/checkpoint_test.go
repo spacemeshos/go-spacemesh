@@ -151,10 +151,10 @@ func TestCheckpoint(t *testing.T) {
 
 	tctx.Log.Infow("adding smesher with checkpoint url",
 		"checkpoint url", queryUrl, "restore layer", restoreLayer)
-	require.NoError(t, cl.AddSmeshers(tctx, addedLater,
+	require.NoError(t, cl.AddSmeshers(tctx, addedLater, cluster.WithFlags(
 		cluster.DeploymentFlag{Name: "--recovery-uri", Value: queryUrl},
 		cluster.DeploymentFlag{Name: "--recovery-layer", Value: strconv.Itoa(int(restoreLayer))},
-	))
+	)))
 
 	tctx.Log.Infow("waiting for all miners to be smeshing", "last epoch", lastEpoch)
 	ensureSmeshing(t, tctx, cl, lastEpoch)

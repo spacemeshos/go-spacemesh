@@ -267,6 +267,11 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&cfg.Bootstrap.Version, "bootstrap-version",
 		cfg.Bootstrap.Version, "the update version of the bootstrap data")
 
+	/**======================== testing related flags ========================== **/
+	cmd.PersistentFlags().StringVar(&cfg.TestConfig.SmesherKey, "testing-smesher-key",
+		"", "import private smesher key for testing",
+	)
+
 	// Bind Flags to config
 	err := viper.BindPFlags(cmd.PersistentFlags())
 	if err != nil {
