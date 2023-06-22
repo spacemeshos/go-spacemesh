@@ -81,6 +81,9 @@ func TestEquivocation(t *testing.T) {
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
 		watchLayers(cctx, &eg, client, func(resp *pb.LayerStreamResponse) (bool, error) {
+			if resp.Layer.Status != pb.Layer_LAYER_STATUS_APPLIED {
+				return true, nil
+			}
 			if resp.Layer.Number.Number > stopTest {
 				return false, nil
 			}
