@@ -293,7 +293,6 @@ func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
 			olddb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 			require.NoError(t, err)
 			require.NotNil(t, olddb)
-			defer olddb.Close()
 
 			nid := types.NodeID{1, 2, 3}
 			prev := newvatx(t, newatx(types.ATXID{12}, &types.ATXID{1}, 2, 0, 123, nid.Bytes()))
