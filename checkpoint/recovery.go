@@ -302,6 +302,10 @@ func recoverFromLocalFile(
 	if err != nil {
 		return nil, err
 	}
+	err = db.Close()
+	if err != nil {
+		return nil, fmt.Errorf("close old db: %w", err)
+	}
 
 	// all is ready. backup the old data and create new.
 	backupDir, err := backupOldDb(fs, cfg.DataDir, cfg.DbFile)
