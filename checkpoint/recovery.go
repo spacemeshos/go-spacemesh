@@ -34,7 +34,7 @@ type Config struct {
 	Restore uint32 `mapstructure:"recovery-layer"`
 
 	// set to false if atxs are not compatible before and after the checkpoint recovery.
-	PreserveOwnAtx bool
+	PreserveOwnAtx bool `mapstructure:"preserve-own-atx"`
 
 	// only set for systests. recovery from file in $DataDir/recovery
 	RecoverFromDefaultDir bool
