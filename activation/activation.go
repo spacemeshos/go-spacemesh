@@ -399,7 +399,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 			return nil, fmt.Errorf("failed to get commitment ATX: %w", err)
 		}
 		challenge.CommitmentATX = &commitmentAtx
-		challenge.InitialPost = b.initialPost
+		challenge.InitialPostIndices = b.initialPost.Indices
 	} else {
 		challenge.PrevATXID = prevAtx.ID
 		challenge.Sequence = prevAtx.Sequence + 1
@@ -581,10 +581,12 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	case <-b.syncer.RegisterForATXSynced():
 	}
 
+	var initialPost *types.Post
 	var nonce *types.VRFPostIndex
 	var nodeID *types.NodeID
 	if challenge.PrevATXID == types.EmptyATXID {
 		nodeID = &b.nodeID
+		initialPost = b.initialPost
 		nonce, err = b.postSetupProvider.VRFNonce()
 		if err != nil {
 			return nil, fmt.Errorf("build atx: %w", err)
@@ -596,6 +598,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 		b.Coinbase(),
 		nipost,
 		b.postSetupProvider.LastOpts().NumUnits,
+		initialPost,
 		nonce,
 	)
 	atx.InnerActivationTx.NodeID = nodeID

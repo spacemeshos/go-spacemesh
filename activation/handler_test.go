@@ -322,6 +322,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 			Nonce:   0,
 			Indices: make([]byte, 10),
 		}
+		atx.InitialPostIndices = atx.InitialPost.Indices
 		atx.VRFNonce = new(types.VRFPostIndex)
 		*atx.VRFNonce = 1
 		atx.InnerActivationTx.NodeID = new(types.NodeID)
@@ -330,7 +331,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
-		atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+		atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil)
@@ -403,11 +404,12 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 			Nonce:   0,
 			Indices: make([]byte, 10),
 		}
+		atx.InitialPostIndices = atx.InitialPost.Indices
 		atx.InnerActivationTx.NodeID = new(types.NodeID)
 		*atx.InnerActivationTx.NodeID = sig.NodeID()
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
-		atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("bad initial nipost"))
+		atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("bad initial nipost"))
 
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.EqualError(t, err, "bad initial nipost")
@@ -425,6 +427,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 			Nonce:   0,
 			Indices: make([]byte, 10),
 		}
+		atx.InitialPostIndices = atx.InitialPost.Indices
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
 
@@ -444,13 +447,14 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 			Nonce:   0,
 			Indices: make([]byte, 10),
 		}
+		atx.InitialPostIndices = atx.InitialPost.Indices
 		atx.InnerActivationTx.NodeID = new(types.NodeID)
 		*atx.InnerActivationTx.NodeID = sig.NodeID()
 		atx.NIPost = newNIPostWithChallenge(t, atx.NIPostChallenge.Hash(), poetRef)
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
-		atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+		atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
@@ -469,6 +473,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 			Nonce:   0,
 			Indices: make([]byte, 10),
 		}
+		atx.InitialPostIndices = atx.InitialPost.Indices
 		atx.VRFNonce = new(types.VRFPostIndex)
 		*atx.VRFNonce = 1
 		atx.InnerActivationTx.NodeID = new(types.NodeID)
@@ -477,7 +482,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
-		atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+		atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid VRF nonce"))
 		atxHdlr.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 
@@ -492,6 +497,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 		challenge := newChallenge(0, types.EmptyATXID, posAtx.ID(), currentLayer.GetEpoch(), nil)
 		atx := newAtx(t, sig, challenge, &types.NIPost{}, 100, types.GenerateAddress([]byte("aaaa")))
+		atx.InitialPostIndices = []byte{}
 		atx.CommitmentATX = &goldenATXID
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
@@ -512,13 +518,14 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 			Nonce:   0,
 			Indices: make([]byte, 10),
 		}
+		atx.InitialPostIndices = atx.InitialPost.Indices
 		atx.VRFNonce = new(types.VRFPostIndex)
 		*atx.VRFNonce = 1
 		atx.InnerActivationTx.NodeID = new(types.NodeID)
 		*atx.InnerActivationTx.NodeID = sig.NodeID()
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
-		atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+		atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("failed post validation"))
 
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
@@ -1138,18 +1145,19 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atx1 := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PositioningATX: goldenATXID,
-				InitialPost:    &types.Post{Indices: []byte{1}},
-				PublishEpoch:   1,
-				CommitmentATX:  &goldenATXID,
+				PositioningATX:     goldenATXID,
+				InitialPostIndices: []byte{1},
+				PublishEpoch:       1,
+				CommitmentATX:      &goldenATXID,
 			},
 			NumUnits: units,
 			NIPost: &types.NIPost{
 				Post:         &types.Post{},
 				PostMetadata: &types.PostMetadata{},
 			},
-			VRFNonce: &nonce,
-			NodeID:   &nodeId,
+			InitialPost: &types.Post{Indices: []byte{1}},
+			VRFNonce:    &nonce,
+			NodeID:      &nodeId,
 		},
 	}
 	require.NoError(t, SignAndFinalizeAtx(sig, atx1))
@@ -1166,7 +1174,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 	atxHdlr.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 	atxHdlr.mValidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil)
-	atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mReceivers[0].EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mReceivers[1].EXPECT().OnAtx(gomock.Any())

@@ -22,8 +22,8 @@ func TestMain(m *testing.M) {
 func TestCodec_MultipleATXs(t *testing.T) {
 	epoch := types.EpochID(11)
 
-	a1 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{1, 2, 3}, nil, 10, nil)
-	a2 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{3, 2, 1}, nil, 11, nil)
+	a1 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{1, 2, 3}, nil, 10, nil, nil)
+	a2 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{3, 2, 1}, nil, 11, nil, nil)
 
 	var atxProof types.AtxProof
 	for i, a := range []*types.ActivationTx{a1, a2} {

@@ -72,6 +72,7 @@ func createATX(t testing.TB, db sql.Executor, cb types.Address) types.ATXID {
 		cb,
 		nil,
 		11,
+		nil,
 		&nonce,
 	)
 

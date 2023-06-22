@@ -136,6 +136,7 @@ func createModifiedATXs(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerI
 			nil,
 			numUnit,
 			nil,
+			nil,
 		)
 		atx.SetEffectiveNumUnits(numUnit)
 		atx.SetReceived(time.Now())
