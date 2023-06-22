@@ -42,8 +42,9 @@ package hare3
 import (
 	"sync"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"golang.org/x/exp/slices"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type (

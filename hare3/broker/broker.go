@@ -1,4 +1,4 @@
-package hare3
+package broker
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare"
+	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -57,7 +58,7 @@ func (h *messageStore) storeMessage(hash types.Hash20, m *hare.Message) {
 
 func (h *messageStore) buildMalfeasanceProof(a, b types.Hash20) *types.MalfeasanceProof {
 	proofMsg := func(hash types.Hash20) types.HareProofMsg {
-		msg := h.messages[a]
+		msg := h.messages[hash]
 
 		return types.HareProofMsg{
 			InnerMsg: types.HareMetadata{
@@ -98,7 +99,7 @@ type Broker struct {
 	// iterate the messages and push them into the handler and when we need
 	// messages for constructing a malfeasance proof we have them right there.
 	messages map[types.LayerID]*messageStore
-	handlers map[types.LayerID]*Handler
+	handlers map[types.LayerID]*hare3.Handler
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -251,7 +252,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 			msgs = newMessageStore()
 			b.messages[hareMsg.Layer] = msgs
 			// TODO actually build the handler
-			b.handlers[hareMsg.Layer] = NewHandler(nil, nil, nil, nil)
+			b.handlers[hareMsg.Layer] = hare3.NewHandler(nil, nil, nil, nil)
 		}
 	}
 	shouldRelay, equivocationHash := b.handlers[hareMsg.Layer].HandleMsg(hash, id, round, values)
@@ -277,7 +278,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 
 // Register a layer to receive messages
 // Note: the registering instance is assumed to be started and accepting messages.
-func (b *Broker) Register(ctx context.Context, id types.LayerID) (*Handler, error) {
+func (b *Broker) Register(ctx context.Context, id types.LayerID) (*hare3.Handler, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -294,7 +295,7 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (*Handler, erro
 	if msgs == nil {
 		msgs = newMessageStore()
 		b.messages[id] = msgs
-		b.handlers[id] = NewHandler(nil, nil, nil, nil)
+		b.handlers[id] = hare3.NewHandler(nil, nil, nil, nil)
 	} else {
 		b.handleEarlyMessages(msgs.messages, b.handlers[id])
 	}
@@ -309,7 +310,7 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (*Handler, erro
 // was detected to be malfeasant in the previous layer. This will just update
 // the value held for the message in the protocol in the case that a sender has
 // been detected to be malfeasant since the early message was processed.
-func (b *Broker) handleEarlyMessages(msgs map[types.Hash20]*hare.Message, handler *Handler) {
+func (b *Broker) handleEarlyMessages(msgs map[types.Hash20]*hare.Message, handler *hare3.Handler) {
 	for k, v := range msgs {
 		id, round, values := parts(v)
 		handler.HandleMsg(k, id, round, values)
