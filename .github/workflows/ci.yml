@@ -214,6 +214,10 @@ jobs:
         run: make install
       - name: Clear test cache
         run: make clear-test-cache
+      - name: quick tests
+        run: |
+          make go-env-test
+          go test -v -timeout 5m ./checkpoint/...
       - name: unit tests
         timeout-minutes: 30
         env:
