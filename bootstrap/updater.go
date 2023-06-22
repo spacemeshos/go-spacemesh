@@ -78,6 +78,7 @@ type Updater struct {
 	fs     afero.Fs
 	client *http.Client
 	once   sync.Once
+	stop   context.CancelFunc
 	eg     errgroup.Group
 
 	mu          sync.Mutex
@@ -154,6 +155,8 @@ func (u *Updater) Start(ctx context.Context) error {
 		return fmt.Errorf("data dir not set %s", u.cfg.DataDir)
 	}
 	u.once.Do(func() {
+		ctx, cancel := context.WithCancel(ctx)
+		u.stop = cancel
 		u.eg.Go(func() error {
 			if err := u.Load(ctx); err != nil {
 				return err
@@ -181,13 +184,15 @@ func (u *Updater) Start(ctx context.Context) error {
 	return nil
 }
 
-func (u *Updater) Close() {
+func (u *Updater) Close() error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	for _, ch := range u.subscribers {
 		close(ch)
 	}
-	_ = u.eg.Wait()
+	u.subscribers = nil
+	u.stop()
+	return u.eg.Wait()
 }
 
 func (u *Updater) addUpdate(epoch types.EpochID, suffix string) {

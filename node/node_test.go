@@ -444,11 +444,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	appCtx, appCancel := context.WithCancel(context.Background())
-	defer appCancel()
-
 	run := func(c *cobra.Command, args []string) {
-		defer app.Cleanup(context.Background())
 		require.NoError(t, cmd.EnsureCLIFlags(c, app.Config))
 
 		// Give the error channel a buffer
@@ -464,7 +460,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		require.NoError(t, app.Start(appCtx))
+		require.NoError(t, app.Start(context.Background()))
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
@@ -542,7 +538,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	}
 
 	// This stops the app
-	appCancel() // stop the app
+	app.Cleanup(context.Background())
 
 	// Wait for everything to stop cleanly before ending test
 	eg.Wait()
@@ -900,8 +896,6 @@ func TestFlock(t *testing.T) {
 		app1 := *app
 		require.ErrorContains(t, app1.Initialize(), "only one spacemesh instance")
 		app.Cleanup(context.Background())
-		require.NoError(t, app.Initialize())
-		require.NoError(t, os.Remove(filepath.Join(app.Config.FileLock)))
 		require.NoError(t, app.Initialize())
 	})
 

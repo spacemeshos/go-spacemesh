@@ -145,11 +145,11 @@ func GetCommand() *cobra.Command {
 					return fmt.Errorf("could not retrieve identity: %w", err)
 				}
 
-				if err = app.LoadCheckpoint(ctx); err != nil {
+				if err := app.LoadCheckpoint(ctx); err != nil {
 					return err
 				}
 
-				if err = app.Initialize(); err != nil {
+				if err := app.Initialize(); err != nil {
 					return err
 				}
 				// This blocks until the context is finished or until an error is produced
@@ -402,7 +402,7 @@ func (app *App) introduction() {
 }
 
 // Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
-func (app *App) Initialize() (err error) {
+func (app *App) Initialize() error {
 	lockdir := filepath.Dir(app.Config.FileLock)
 	if _, err := os.Stat(lockdir); errors.Is(err, os.ErrNotExist) {
 		err := os.Mkdir(lockdir, os.ModePerm)
@@ -423,17 +423,21 @@ func (app *App) Initialize() (err error) {
 	var existing config.GenesisConfig
 	if err := existing.LoadFromFile(gpath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
+			app.fileLock.Unlock()
 			return fmt.Errorf("failed to load genesis config at %s: %w", gpath, err)
 		}
 		if err := app.Config.Genesis.Validate(); err != nil {
+			app.fileLock.Unlock()
 			return err
 		}
 		if err := app.Config.Genesis.WriteToFile(gpath); err != nil {
+			app.fileLock.Unlock()
 			return fmt.Errorf("failed to write genesis config to %s: %w", gpath, err)
 		}
 	} else {
 		diff := existing.Diff(app.Config.Genesis)
 		if len(diff) > 0 {
+			app.fileLock.Unlock()
 			return fmt.Errorf("genesis config was updated after initializing a node, if you know that update is required delete config at %s.\ndiff:\n%s", gpath, diff)
 		}
 	}
@@ -451,6 +455,7 @@ func (app *App) Initialize() (err error) {
 			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
 			log.Duration("hare_round_duration", app.Config.HARE.RoundDuration))
 
+		app.fileLock.Unlock()
 		return errors.New("incompatible tortoise hare params")
 	}
 
@@ -1357,10 +1362,10 @@ func (app *App) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
 
-	if err = app.setupDBs(ctx, lg, app.Config.DataDir()); err != nil {
+	if err := app.setupDBs(ctx, lg, app.Config.DataDir()); err != nil {
 		return err
 	}
-	if err = app.initServices(ctx, poetClients); err != nil {
+	if err := app.initServices(ctx, poetClients); err != nil {
 		return fmt.Errorf("cannot start services: %w", err)
 	}
 

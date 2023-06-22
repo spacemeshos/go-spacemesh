@@ -227,10 +227,8 @@ func TestStartClose(t *testing.T) {
 		bootstrap.WithFilesystem(fs),
 	)
 	ch := updater.Subscribe()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	require.NoError(t, updater.Start(ctx))
-	t.Cleanup(updater.Close)
+	require.NoError(t, updater.Start(context.Background()))
+	defer updater.Close()
 
 	var got *bootstrap.VerifiedUpdate
 	require.Eventually(t, func() bool {
@@ -242,7 +240,7 @@ func TestStartClose(t *testing.T) {
 		}
 	}, time.Second, 100*time.Millisecond)
 	checkUpdate1(t, got)
-	cancel()
+	updater.Close()
 }
 
 func TestPrune(t *testing.T) {
