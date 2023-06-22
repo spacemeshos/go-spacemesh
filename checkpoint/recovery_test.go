@@ -405,26 +405,23 @@ func TestRecover(t *testing.T) {
 	tt := []struct {
 		name           string
 		fname, oldFile string
-		dataDir, dir   string
+		dir   string
 		missing, fail  bool
 		invalidData    []byte
 	}{
 		{
 			name:    "from local file",
-			dataDir: t.TempDir(),
 			dir:     "checkpoint",
 			fname:   "snapshot-15",
 		},
 		{
 			name:    "old recovery file",
-			dataDir: t.TempDir(),
 			dir:     "checkpoint",
 			fname:   "snapshot-15",
 			oldFile: "snapshot-10",
 		},
 		{
 			name:    "file does not exist",
-			dataDir: t.TempDir(),
 			dir:     "checkpoint",
 			fname:   "snapshot-15",
 			missing: true,
@@ -432,14 +429,12 @@ func TestRecover(t *testing.T) {
 		},
 		{
 			name:    "from recovery file",
-			dataDir: t.TempDir(),
 			dir:     "recovery",
 			fname:   "snapshot-15-restore-18",
 		},
 		{
 			name:        "invalid data",
 			fname:       "snapshot-15-restore-18",
-			dataDir:     t.TempDir(),
 			dir:         "recovery",
 			missing:     false,
 			invalidData: []byte("invalid"),
@@ -453,12 +448,13 @@ func TestRecover(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
+			dataDir := t.TempDir()
 			fs := afero.NewMemMapFs()
 			if tc.oldFile != "" {
-				old := filepath.Join(checkpoint.RecoveryDir(tc.dataDir), tc.oldFile)
+				old := filepath.Join(checkpoint.RecoveryDir(dataDir), tc.oldFile)
 				require.NoError(t, afero.WriteFile(fs, old, []byte{1, 2, 3}, 0o600))
 			}
-			src := filepath.Join(tc.dataDir, tc.dir, tc.fname)
+			src := filepath.Join(dataDir, tc.dir, tc.fname)
 			if !tc.missing {
 				if tc.invalidData != nil {
 					require.NoError(t, afero.WriteFile(fs, src, tc.invalidData, 0o600))
@@ -468,7 +464,7 @@ func TestRecover(t *testing.T) {
 			}
 			cfg := &checkpoint.RecoverConfig{
 				GoldenAtx:      types.ATXID{1},
-				DataDir:        tc.dataDir,
+				DataDir:        dataDir,
 				DbFile:         "test.sql",
 				PreserveOwnAtx: true,
 			}
@@ -480,7 +476,7 @@ func TestRecover(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			db, err := sql.Open("file:" + filepath.Join(tc.dataDir, cfg.DbFile))
+			db, err := sql.Open("file:" + filepath.Join(dataDir, cfg.DbFile))
 			require.NoError(t, err)
 			require.NotNil(t, db)
 			t.Cleanup(func() { require.NoError(t, db.Close()) })
@@ -490,7 +486,7 @@ func TestRecover(t *testing.T) {
 			require.NoError(t, err)
 			require.EqualValues(t, recoverLayer, restore)
 
-			files, err := afero.Glob(fs, fmt.Sprintf("%s*", checkpoint.RecoveryDir(tc.dataDir)))
+			files, err := afero.Glob(fs, fmt.Sprintf("%s*", checkpoint.RecoveryDir(dataDir)))
 			require.NoError(t, err)
 			if tc.oldFile != "" {
 				require.Len(t, files, 2)
