@@ -843,10 +843,10 @@ func TestGenesisConfig(t *testing.T) {
 		app.Config.DataDirParent = t.TempDir()
 
 		require.NoError(t, app.Initialize())
-		t.Cleanup(func() { app.Cleanup(context.Background()) })
-
 		app.Cleanup(context.Background())
+
 		require.NoError(t, app.Initialize())
+		app.Cleanup(context.Background())
 	})
 
 	t.Run("fatal error on a diff", func(t *testing.T) {

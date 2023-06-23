@@ -78,7 +78,7 @@ type Updater struct {
 	fs     afero.Fs
 	client *http.Client
 	once   sync.Once
-	stop   context.CancelFunc
+	stop   chan struct{}
 	eg     errgroup.Group
 
 	mu          sync.Mutex
@@ -119,6 +119,7 @@ func New(clock layerClock, opts ...Opt) *Updater {
 		clock:   clock,
 		fs:      afero.NewOsFs(),
 		client:  &http.Client{},
+		stop:    make(chan struct{}),
 		updates: map[types.EpochID]map[string]struct{}{},
 	}
 	for _, opt := range opts {
@@ -127,7 +128,7 @@ func New(clock layerClock, opts ...Opt) *Updater {
 	return u
 }
 
-func (u *Updater) Subscribe() chan *VerifiedUpdate {
+func (u *Updater) Subscribe() <-chan *VerifiedUpdate {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	ch := make(chan *VerifiedUpdate, 10)
@@ -144,21 +145,19 @@ func (u *Updater) Load(ctx context.Context) error {
 		if err = u.updateAndNotify(ctx, verified); err != nil {
 			return err
 		}
-		u.logger.With().Info("loaded boostrap file", log.Inline(verified))
+		u.logger.With().Info("loaded bootstrap file", log.Inline(verified))
 		u.addUpdate(verified.Data.Epoch, verified.Persisted[len(verified.Persisted)-suffixLen:])
 	}
 	return nil
 }
 
-func (u *Updater) Start(ctx context.Context) error {
+func (u *Updater) Start() error {
 	if len(u.cfg.DataDir) == 0 {
 		return fmt.Errorf("data dir not set %s", u.cfg.DataDir)
 	}
 	u.once.Do(func() {
-		ctx, cancel := context.WithCancel(ctx)
-		u.stop = cancel
 		u.eg.Go(func() error {
-			if err := u.Load(ctx); err != nil {
+			if err := u.Load(context.Background()); err != nil {
 				return err
 			}
 			wait := time.Duration(0)
@@ -168,10 +167,10 @@ func (u *Updater) Start(ctx context.Context) error {
 			)
 			for {
 				select {
-				case <-ctx.Done():
-					return ctx.Err()
+				case <-u.stop:
+					return nil
 				case <-time.After(wait):
-					ctx := log.WithNewSessionID(ctx)
+					ctx := log.WithNewSessionID(context.Background())
 					if err := u.DoIt(ctx); err != nil {
 						updateFailureCount.Add(1)
 						u.logger.With().Debug("failed to get bootstrap update", log.Err(err))
@@ -186,13 +185,20 @@ func (u *Updater) Start(ctx context.Context) error {
 
 func (u *Updater) Close() error {
 	u.mu.Lock()
+	defer u.mu.Unlock()
+
+	select {
+	case <-u.stop: // prevent calling Close twice from a panic
+	default:
+		close(u.stop)
+	}
+
+	err := u.eg.Wait()
 	for _, ch := range u.subscribers {
 		close(ch)
 	}
 	u.subscribers = nil
-	u.mu.Unlock()
-	u.stop()
-	return u.eg.Wait()
+	return err
 }
 
 func (u *Updater) addUpdate(epoch types.EpochID, suffix string) {

@@ -227,7 +227,7 @@ func TestStartClose(t *testing.T) {
 		bootstrap.WithFilesystem(fs),
 	)
 	ch := updater.Subscribe()
-	require.NoError(t, updater.Start(context.Background()))
+	require.NoError(t, updater.Start())
 	defer updater.Close()
 
 	var got *bootstrap.VerifiedUpdate
@@ -240,7 +240,7 @@ func TestStartClose(t *testing.T) {
 		}
 	}, time.Second, 100*time.Millisecond)
 	checkUpdate1(t, got)
-	updater.Close()
+	require.NoError(t, updater.Close())
 }
 
 func TestPrune(t *testing.T) {
