@@ -560,26 +560,20 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 }
 
 func (t *turtle) onOpinionChange(lid types.LayerID) {
-	var changed types.LayerID
 	for recompute := lid; !recompute.After(t.processed); recompute = recompute.Add(1) {
 		layer := t.layer(recompute)
 		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
 		if opinion != layer.opinion {
-			changed = types.MinLayer(changed, lid)
-		} else {
-			break
+			t.pending = types.MinLayer(t.pending, lid)
 		}
 		t.logger.Debug("computed local opinion",
 			zap.Uint32("lid", layer.lid.Uint32()),
 			log.ZShortStringer("local opinion", layer.opinion))
 	}
-	if changed != 0 {
-		t.pending = types.MinLayer(t.pending, changed)
-		t.verifying.resetWeights(changed)
-		for target := changed.Add(1); !target.After(t.processed); target = target.Add(1) {
-			t.verifying.countVotes(t.logger, t.ballots[target])
-		}
+	t.verifying.resetWeights(lid)
+	for target := lid.Add(1); !target.After(t.processed); target = target.Add(1) {
+		t.verifying.countVotes(t.logger, t.ballots[target])
 	}
 }
 
