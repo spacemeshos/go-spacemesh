@@ -380,7 +380,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 					zap.Uint32("hdist", t.Hdist),
 				)
 			} else {
-				t.onOpinionChange(process.Sub(t.Hdist))
+				t.onOpinionChange(process.Sub(t.Hdist), true)
 			}
 		}
 	}
@@ -448,9 +448,15 @@ func (t *turtle) verifyLayers() {
 		}
 		verified = target
 	}
+	t.logger.Debug("verified layer",
+		zap.Uint32("last", t.last.Uint32()),
+		zap.Uint32("processed", t.last.Uint32()),
+		zap.Uint32("verified", verified.Uint32()),
+		zap.Uint32("changed", changed.Uint32()),
+	)
 	if changed != 0 {
 		t.pending = types.MinLayer(t.pending, changed)
-		t.onOpinionChange(changed)
+		t.onOpinionChange(changed, false)
 	}
 	t.verified = verified
 	verifiedLayer.Set(float64(t.verified))
@@ -574,25 +580,29 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 			zap.Stringer("previous", previous),
 			zap.Stringer("new", bid),
 		)
-		t.onOpinionChange(lid)
+		t.onOpinionChange(lid, true)
 	}
 	addHareOutput.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
-func (t *turtle) onOpinionChange(lid types.LayerID) {
+func (t *turtle) onOpinionChange(lid types.LayerID, early bool) {
 	var changed types.LayerID
 	for recompute := lid; !recompute.After(t.processed); recompute = recompute.Add(1) {
 		layer := t.layer(recompute)
 		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
+		t.logger.Debug("computed local opinion",
+			zap.Uint32("last", t.last.Uint32()),
+			zap.Uint32("lid", layer.lid.Uint32()),
+			log.ZShortStringer("previos", opinion),
+			log.ZShortStringer("new", layer.opinion),
+			zapBlocks(layer.blocks),
+		)
 		if opinion != layer.opinion {
-			changed = types.MinLayer(changed, lid)
-		} else {
+			changed = types.MinLayer(changed, recompute)
+		} else if early {
 			break
 		}
-		t.logger.Debug("computed local opinion",
-			zap.Uint32("lid", layer.lid.Uint32()),
-			log.ZShortStringer("local opinion", layer.opinion))
 	}
 	if changed != 0 {
 		t.pending = types.MinLayer(t.pending, changed)
