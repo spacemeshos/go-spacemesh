@@ -112,7 +112,6 @@ func newBroker(
 	roleValidator validator,
 	stateQuerier stateQuerier,
 	syncState system.SyncStateProvider,
-	limit int,
 	log log.Log,
 ) *Broker {
 	b := &Broker{
