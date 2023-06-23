@@ -53,9 +53,9 @@ func newTurtle(logger *zap.Logger, config Config) *turtle {
 	}
 	genesis := types.GetEffectiveGenesis()
 
+	t.pending = genesis
 	t.last = genesis
 	t.processed = genesis
-	t.verified = genesis
 	t.evicted = genesis.Sub(1)
 
 	t.epochs[genesis.GetEpoch()] = &epochInfo{atxs: map[types.ATXID]atxInfo{}}
@@ -373,6 +373,16 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 				t.onHareOutput(terminated, types.EmptyBlockID)
 			}
 		}
+		if process.After(types.LayerID(t.Hdist)) {
+			if !process.Sub(t.Hdist).After(t.evicted) {
+				t.logger.Error("tortoise wasn't called for long period of time. restart node to re-enable verifying tortoise",
+					zap.Uint32("window", t.WindowSize),
+					zap.Uint32("hdist", t.Hdist),
+				)
+			} else {
+				t.onOpinionChange(process.Sub(t.Hdist))
+			}
+		}
 	}
 	t.verifyLayers()
 }
@@ -407,55 +417,61 @@ func (t *turtle) countBallot(ballot *ballotInfo) error {
 }
 
 func (t *turtle) verifyLayers() {
-	// TODO(dshulyak) simplify processing of layers and notifications
 	var (
-		verified  = maxLayer(t.evicted, types.GetEffectiveGenesis())
-		nverified types.LayerID
+		verified           = maxLayer(t.evicted, types.GetEffectiveGenesis())
+		nverified, changed types.LayerID
 	)
 	if t.isFull {
-		nverified = t.runFull()
-		if nverified == t.processed-1 && nverified == t.runVerifying() {
+		nverified, changed = t.runFull()
+		vverified, vchanged := t.runVerifying()
+		if nverified == t.processed-1 && nverified == vverified {
 			t.switchModes()
+			changed = types.MinLayer(changed, vchanged)
 		}
 	} else {
-		nverified = t.runVerifying()
+		nverified, changed = t.runVerifying()
 		// count all votes if next layer after verified is outside hdist
 		if !withinDistance(t.Hdist, nverified+1, t.last) {
-			nverified = t.runFull()
+			fverified, fchanged := t.runFull()
+			nverified = fverified
+			changed = types.MinLayer(changed, fchanged)
 		}
 	}
-
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
 		if nverified < target {
-			// notify mesh in two additional cases:
-			// - if layer was verified, and became undecided
-			// - if layer is undecided outside hdist distance
-			if target < t.verified || !withinDistance(t.Hdist, target, t.last) {
-				t.pending = types.MinLayer(t.pending, target)
+			if target < t.verified {
+				changed = types.MinLayer(changed, target)
 			}
 			break
 		} else if target > t.verified {
-			t.pending = types.MinLayer(t.pending, target)
+			changed = types.MinLayer(changed, target)
 		}
 		verified = target
 	}
+	if changed != 0 {
+		t.pending = types.MinLayer(t.pending, changed)
+		t.onOpinionChange(changed)
+	}
 	t.verified = verified
-	t.onOpinionChange(t.evicted.Add(1))
 	verifiedLayer.Set(float64(t.verified))
 }
 
-func (t *turtle) runVerifying() types.LayerID {
-	rst := t.evicted
+func (t *turtle) runVerifying() (verified, changed types.LayerID) {
+	verified = t.evicted
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
-		if !t.verifying.verify(t.logger, target) {
-			return rst
+		v, c := t.verifying.verify(t.logger, target)
+		if !v {
+			return verified, changed
 		}
-		rst = target
+		if c {
+			changed = types.MinLayer(changed, target)
+		}
+		verified = target
 	}
-	return rst
+	return verified, changed
 }
 
-func (t *turtle) runFull() types.LayerID {
+func (t *turtle) runFull() (verified, changed types.LayerID) {
 	if !t.isFull {
 		t.switchModes()
 		for counted := maxLayer(t.full.counted.Add(1), t.evicted.Add(1)); !counted.After(t.processed); counted = counted.Add(1) {
@@ -466,14 +482,18 @@ func (t *turtle) runFull() types.LayerID {
 			t.full.counted = counted
 		}
 	}
-	rst := t.evicted
+	verified = t.evicted
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
-		if !t.full.verify(t.logger, target) {
-			return rst
+		v, c := t.full.verify(t.logger, target)
+		if !v {
+			return verified, changed
 		}
-		rst = target
+		if c {
+			changed = types.MinLayer(changed, target)
+		}
+		verified = target
 	}
-	return rst
+	return verified, changed
 }
 
 func (t *turtle) computeEpochHeight(epoch types.EpochID) {
@@ -560,20 +580,26 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 }
 
 func (t *turtle) onOpinionChange(lid types.LayerID) {
+	var changed types.LayerID
 	for recompute := lid; !recompute.After(t.processed); recompute = recompute.Add(1) {
 		layer := t.layer(recompute)
 		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
 		if opinion != layer.opinion {
-			t.pending = types.MinLayer(t.pending, lid)
+			changed = types.MinLayer(changed, lid)
+		} else {
+			break
 		}
 		t.logger.Debug("computed local opinion",
 			zap.Uint32("lid", layer.lid.Uint32()),
 			log.ZShortStringer("local opinion", layer.opinion))
 	}
-	t.verifying.resetWeights(lid)
-	for target := lid.Add(1); !target.After(t.processed); target = target.Add(1) {
-		t.verifying.countVotes(t.logger, t.ballots[target])
+	if changed != 0 {
+		t.pending = types.MinLayer(t.pending, changed)
+		t.verifying.resetWeights(lid)
+		for target := lid.Add(1); !target.After(t.processed); target = target.Add(1) {
+			t.verifying.countVotes(t.logger, t.ballots[target])
+		}
 	}
 }
 

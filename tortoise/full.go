@@ -111,7 +111,7 @@ func (f *full) countVotes(logger *zap.Logger) {
 	f.counted = f.processed
 }
 
-func (f *full) verify(logger *zap.Logger, lid types.LayerID) bool {
+func (f *full) verify(logger *zap.Logger, lid types.LayerID) (bool, bool) {
 	threshold := f.globalThreshold(f.Config, lid)
 	layer := f.state.layer(lid)
 	empty := crossesThreshold(layer.empty, threshold) == support
@@ -130,7 +130,7 @@ func (f *full) verify(logger *zap.Logger, lid types.LayerID) bool {
 				zap.Float64("empty weight", layer.empty.Float()),
 			)
 		}
-		return empty
+		return empty, false
 	}
 	rst, changes := verifyLayer(
 		logger,
@@ -155,7 +155,7 @@ func (f *full) verify(logger *zap.Logger, lid types.LayerID) bool {
 			zap.Bool("is empty", empty),
 		)
 	}
-	return rst
+	return rst, changes
 }
 
 func (f *full) shouldBeDelayed(logger *zap.Logger, ballot *ballotInfo) bool {
