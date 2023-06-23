@@ -55,7 +55,7 @@ func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, _ p2p.Peer, 
 		h.logger.With().Error("malformed message (sync)", log.Context(ctx), log.Err(err))
 		return errMalformedData
 	}
-	return ValidateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, &types.MalfeasanceGossip{MalfeasanceProof: p})
+	return validateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, &types.MalfeasanceGossip{MalfeasanceProof: p})
 }
 
 // HandleMalfeasanceProof is the gossip receiver for MalfeasanceGossip.
@@ -72,10 +72,10 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 		updateMetrics(p.Proof)
 		return nil
 	}
-	return ValidateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, &p)
+	return validateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, &p)
 }
 
-func ValidateAndSave(
+func validateAndSave(
 	ctx context.Context,
 	logger log.Log,
 	cdb *datastore.CachedDB,
