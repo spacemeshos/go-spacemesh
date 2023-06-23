@@ -186,11 +186,11 @@ func (u *Updater) Start(ctx context.Context) error {
 
 func (u *Updater) Close() error {
 	u.mu.Lock()
-	defer u.mu.Unlock()
 	for _, ch := range u.subscribers {
 		close(ch)
 	}
 	u.subscribers = nil
+	u.mu.Unlock()
 	u.stop()
 	return u.eg.Wait()
 }
