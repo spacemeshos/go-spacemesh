@@ -614,7 +614,7 @@ func (t *turtle) onOpinionChange(lid types.LayerID) {
 		}
 		t.logger.Debug("computed local opinion",
 			zap.Uint32("lid", layer.lid.Uint32()),
-			zap.Stringer("local opinion", layer.opinion))
+			log.ZShortStringer("local opinion", layer.opinion))
 	}
 	t.verifying.resetWeights(lid)
 	for target := lid.Add(1); !target.After(t.processed); target = target.Add(1) {
