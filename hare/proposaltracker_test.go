@@ -15,7 +15,9 @@ func buildProposalMsg(sig *signing.EdSigner, s *Set, signature types.VrfSignatur
 	builder := newMessageBuilder().SetRoleProof(signature)
 	builder.SetType(proposal).SetLayer(instanceID1).SetRoundCounter(proposalRound).SetCommittedRound(ki).SetValues(s).SetSVP(buildSVP(ki, NewSetFromValues(types.ProposalID{1})))
 	builder.SetEligibilityCount(1)
-	return builder.Sign(sig).Build()
+	m := builder.Sign(sig).Build()
+	m.signedHash = types.BytesToHash(m.InnerMessage.HashBytes())
+	return m
 }
 
 func BuildProposalMsg(sig *signing.EdSigner, s *Set) *Message {

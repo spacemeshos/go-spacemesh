@@ -63,11 +63,10 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Message) {
 	sToTrack := NewSet(msg.Values)         // assume track all Values
 	alreadyTracked := NewDefaultEmptySet() // assume nothing tracked so far
 
-	msgHash := types.BytesToHash(msg.HashBytes())
 	metadata := types.HareMetadata{
 		Layer:   msg.Layer,
 		Round:   msg.Round,
-		MsgHash: msgHash,
+		MsgHash: msg.signedHash,
 	}
 	if prev, exist := pre.preRound[msg.SmesherID]; exist { // not first pre-round msg from this sender
 		if prev.InnerMsg.Equivocation(&metadata) {

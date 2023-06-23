@@ -172,6 +172,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 		isEarly = true
 	}
 
+	hareMsg.signedHash = types.BytesToHash(hareMsg.InnerMessage.HashBytes())
 	if !b.edVerifier.Verify(signing.HARE, hareMsg.SmesherID, hareMsg.SignedBytes(), hareMsg.Signature) {
 		logger.With().Error("failed to verify signature",
 			log.Int("sig_len", len(hareMsg.Signature)),
