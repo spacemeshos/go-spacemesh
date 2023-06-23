@@ -157,10 +157,10 @@ func (u *Updater) Start() error {
 	}
 	u.once.Do(func() {
 		u.eg.Go(func() error {
-			if err := u.Load(context.Background()); err != nil {
+			ctx := log.WithNewSessionID(context.Background())
+			if err := u.Load(ctx); err != nil {
 				return err
 			}
-			wait := time.Duration(0)
 			u.logger.With().Info("start listening to update",
 				log.String("source", u.cfg.URL),
 				log.Duration("interval", u.cfg.Interval),
@@ -169,14 +169,12 @@ func (u *Updater) Start() error {
 				select {
 				case <-u.stop:
 					return nil
-				case <-time.After(wait):
-					ctx := log.WithNewSessionID(context.Background())
+				case <-time.After(u.cfg.Interval):
 					if err := u.DoIt(ctx); err != nil {
 						updateFailureCount.Add(1)
 						u.logger.With().Debug("failed to get bootstrap update", log.Err(err))
 					}
 				}
-				wait = u.cfg.Interval
 			}
 		})
 	})
@@ -184,16 +182,15 @@ func (u *Updater) Start() error {
 }
 
 func (u *Updater) Close() error {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-
 	select {
 	case <-u.stop: // prevent calling Close twice from a panic
 	default:
 		close(u.stop)
 	}
-
 	err := u.eg.Wait()
+
+	u.mu.Lock()
+	defer u.mu.Unlock()
 	for _, ch := range u.subscribers {
 		close(ch)
 	}
