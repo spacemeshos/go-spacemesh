@@ -594,7 +594,7 @@ func (t *turtle) onOpinionChange(lid types.LayerID, early bool) {
 		t.logger.Debug("computed local opinion",
 			zap.Uint32("last", t.last.Uint32()),
 			zap.Uint32("lid", layer.lid.Uint32()),
-			log.ZShortStringer("previos", opinion),
+			log.ZShortStringer("previous", opinion),
 			log.ZShortStringer("new", layer.opinion),
 			zapBlocks(layer.blocks),
 		)

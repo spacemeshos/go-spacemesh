@@ -7,14 +7,15 @@ import (
 	"testing"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/systest/chaos"
-	"github.com/spacemeshos/go-spacemesh/systest/cluster"
-	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/systest/chaos"
+	"github.com/spacemeshos/go-spacemesh/systest/cluster"
+	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
 func TestEquivocation(t *testing.T) {
