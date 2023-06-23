@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -417,7 +416,11 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	// Use a unique port
 	port := 1240
-	path := t.TempDir()
+
+	app := New(WithLog(logger))
+	app.Config = getTestDefaultConfig(t)
+	app.Config.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
+	app.Config.SMESHING.Opts.DataDir, _ = os.MkdirTemp("", "sm-app-test-post-datadir")
 
 	clock, err := timesync.NewClock(
 		timesync.WithLayerDuration(1*time.Second),
@@ -426,23 +429,20 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		timesync.WithLogger(logtest.New(t)),
 	)
 	require.NoError(t, err)
-	mesh, err := mocknet.WithNPeers(1)
-	require.NoError(t, err)
-	cfg := getTestDefaultConfig(t)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-	poetHarness, err := activation.NewHTTPPoetTestHarness(ctx, t.TempDir())
-	require.NoError(t, err)
+	app.clock = clock
 
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(t, err)
+	app.edSgn = edSgn
+
+	mesh, err := mocknet.WithNPeers(1)
+	require.NoError(t, err)
 	h, err := p2p.Upgrade(mesh.Hosts()[0])
 	require.NoError(t, err)
-	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
-		path, poetHarness.HTTPPoetClient, clock, h, edSgn,
-	)
-	require.NoError(t, err)
+	app.host = h
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	run := func(c *cobra.Command, args []string) {
 		require.NoError(t, cmd.EnsureCLIFlags(c, app.Config))
@@ -454,17 +454,13 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// Speed things up a little
 		app.Config.Sync.Interval = time.Second
 		app.Config.LayerDuration = 2 * time.Second
-		app.Config.DataDirParent = path
-		app.Config.LOGGING = cfg.LOGGING
+		app.Config.DataDirParent = t.TempDir()
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
 		require.NoError(t, app.Start(context.Background()))
 	}
-
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
 	// If there's an error in the args, it will return immediately.
@@ -959,33 +955,4 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
 	return cfg
-}
-
-// initSingleInstance initializes a node instance with given
-// configuration and parameters, it does not stop the instance.
-func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string,
-	poetClient *activation.HTTPPoetClient, clock *timesync.NodeClock, host *p2p.Host, edSgn *signing.EdSigner,
-) (*App, error) {
-	smApp := New(WithLog(lg))
-	smApp.Config = &cfg
-	smApp.Config.Genesis.GenesisTime = genesisTime
-
-	coinbaseAddressBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(coinbaseAddressBytes, uint32(i+1))
-	smApp.Config.SMESHING.CoinbaseAccount = types.GenerateAddress(coinbaseAddressBytes).String()
-	smApp.Config.SMESHING.Opts.DataDir, _ = os.MkdirTemp("", "sm-app-test-post-datadir")
-
-	smApp.host = host
-	smApp.edSgn = edSgn
-	smApp.clock = clock
-	if err := smApp.setupDBs(context.Background(), lg, storePath); err != nil {
-		return nil, err
-	}
-
-	types.SetLayersPerEpoch(smApp.Config.LayersPerEpoch)
-	if err := smApp.initServices(context.Background(), []activation.PoetProvingServiceClient{poetClient}); err != nil {
-		return nil, err
-	}
-
-	return smApp, nil
 }
