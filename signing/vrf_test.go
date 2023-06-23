@@ -101,7 +101,7 @@ func Test_VRF_LSB_evenly_distributed(t *testing.T) {
 		require.NoError(t, err, "failed to read random bytes")
 
 		sig := vrfSig.Sign(msg)
-		lsb[sig.LSB()&1]++
+		lsb[sig.LSB()]++
 	}
 
 	// Assert

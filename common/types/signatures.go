@@ -84,7 +84,7 @@ func (s *VrfSignature) Cmp(x *VrfSignature) int {
 	return 0
 }
 
-// LSB returns the least significant byte of the signature.
+// LSB returns the least significant bit of the signature, so either 0 or 1.
 func (s *VrfSignature) LSB() byte {
-	return s[0]
+	return s[0] & 1
 }
