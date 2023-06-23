@@ -190,6 +190,10 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
           Disable-NetAdapterChecksumOffload -Name * -TcpIPv4 -UdpIPv4 -TcpIPv6 -UdpIPv6
+      - name: disable Windows Defender - Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
       - name: checkout
         uses: actions/checkout@v3
         with:

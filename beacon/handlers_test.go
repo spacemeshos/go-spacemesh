@@ -246,7 +246,6 @@ func Test_HandleProposal_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
-	// tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart)
 	mockChecker.EXPECT().PassThreshold(gomock.Any()).Return(true)
 	res = tpd.HandleProposal(context.Background(), "peerID", msgBytes2)
 	require.Equal(t, nil, res)
