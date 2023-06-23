@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -710,6 +711,9 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			require.NoError(t, codec.Decode(data, &got))
+			nodeID, err := malfeasance.Validate(context.Background(), atxHdlr.log, atxHdlr.cdb, atxHdlr.edVerifier, nil, &got)
+			require.NoError(t, err)
+			require.Equal(t, sig.NodeID(), nodeID)
 			return nil
 		})
 	require.ErrorIs(t, atxHdlr.ProcessAtx(context.Background(), atx2), errMaliciousATX)
