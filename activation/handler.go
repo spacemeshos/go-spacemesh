@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -384,7 +385,11 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 						Data: &atxProof,
 					},
 				}
-				if err := h.cdb.AddMalfeasanceProof(atx.SmesherID, proof, dbtx); err != nil {
+				encoded, err := codec.Encode(proof)
+				if err != nil {
+					h.log.With().Panic("failed to encode MalfeasanceProof", log.Err(err))
+				}
+				if err := identities.SetMalicious(dbtx, atx.SmesherID, encoded); err != nil {
 					return fmt.Errorf("add malfeasance proof: %w", err)
 				}
 				h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
@@ -400,6 +405,9 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		return nil
 	}); err != nil {
 		return fmt.Errorf("store atx: %w", err)
+	}
+	if proof != nil {
+		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
 	}
 	header, err := h.cdb.GetAtxHeader(atx.ID())
 	if err != nil {

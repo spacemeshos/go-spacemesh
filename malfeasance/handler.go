@@ -95,9 +95,14 @@ func ValidateAndSave(
 			logger.WithContext(ctx).With().Debug("known malicious identity", log.Stringer("smesher", nodeID))
 			return ErrKnownProof
 		}
-		if err := cdb.AddMalfeasanceProof(nodeID, &p.MalfeasanceProof, dbtx); err != nil {
+		encoded, err := codec.Encode(&p.MalfeasanceProof)
+		if err != nil {
+			logger.With().Panic("failed to encode MalfeasanceProof", log.Err(err))
+		}
+		if err := identities.SetMalicious(dbtx, nodeID, encoded); err != nil {
 			return fmt.Errorf("add malfeasance proof: %w", err)
 		}
+		cdb.CacheMalfeasanceProof(nodeID, &p.MalfeasanceProof)
 		return nil
 	}); err != nil {
 		logger.WithContext(ctx).With().Error("failed to save MalfeasanceProof",

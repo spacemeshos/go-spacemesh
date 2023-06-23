@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -630,9 +631,13 @@ func (h *Hare) malfeasanceLoop(ctx context.Context) {
 		select {
 		case gossip := <-h.mchMalfeasance:
 			if gossip.Eligibility == nil {
-				h.WithContext(ctx).Fatal("missing hare eligibility")
+				h.WithContext(ctx).Panic("missing hare eligibility")
 			}
-			if err := h.msh.Cache().AddMalfeasanceProof(gossip.Eligibility.NodeID, &gossip.MalfeasanceProof, h.msh.Cache()); err != nil {
+			encoded, err := codec.Encode(&gossip.MalfeasanceProof)
+			if err != nil {
+				h.WithContext(ctx).With().Panic("failed to encode MalfeasanceProof", log.Err(err))
+			}
+			if err := identities.SetMalicious(h.msh.Cache(), gossip.Eligibility.NodeID, encoded); err != nil {
 				h.With().Error("failed to save MalfeasanceProof",
 					log.Context(ctx),
 					gossip.Eligibility.NodeID,
@@ -640,6 +645,7 @@ func (h *Hare) malfeasanceLoop(ctx context.Context) {
 				)
 				continue
 			}
+			h.msh.Cache().CacheMalfeasanceProof(gossip.Eligibility.NodeID, &gossip.MalfeasanceProof)
 			gossipBytes, err := codec.Encode(gossip)
 			if err != nil {
 				h.With().Fatal("failed to encode MalfeasanceGossip",
