@@ -534,6 +534,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	}
 
 	// This stops the app
+	<-app.Started()
 	app.Cleanup(context.Background())
 
 	// Wait for everything to stop cleanly before ending test
