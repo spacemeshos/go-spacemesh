@@ -140,6 +140,11 @@ func GetCommand() *cobra.Command {
 					return fmt.Errorf("ensure folders exist: %w", err)
 				}
 
+				if err := app.Lock(); err != nil {
+					return fmt.Errorf("failed to get exclusive file lock: %w", err)
+				}
+				defer app.Unlock()
+
 				/* Create or load miner identity */
 				if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
 					return fmt.Errorf("could not retrieve identity: %w", err)
@@ -393,7 +398,7 @@ func (app *App) LoadCheckpoint(ctx context.Context) error {
 	return checkpoint.Recover(ctx, app.log, afero.NewOsFs(), cfg, app.edSgn.NodeID(), checkpointFile, restore)
 }
 
-func (app *App) Started() chan struct{} {
+func (app *App) Started() <-chan struct{} {
 	return app.started
 }
 
@@ -401,8 +406,7 @@ func (app *App) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
-// Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
-func (app *App) Initialize() error {
+func (app *App) Lock() error {
 	lockdir := filepath.Dir(app.Config.FileLock)
 	if _, err := os.Stat(lockdir); errors.Is(err, os.ErrNotExist) {
 		err := os.Mkdir(lockdir, os.ModePerm)
@@ -418,26 +422,38 @@ func (app *App) Initialize() error {
 		return fmt.Errorf("only one spacemesh instance should be running (locking file %s)", fl.Path())
 	}
 	app.fileLock = fl
+	return nil
+}
 
+func (app *App) Unlock() {
+	if app.fileLock == nil {
+		return
+	}
+	if err := app.fileLock.Unlock(); err != nil {
+		log.With().Error("failed to unlock file",
+			log.String("path", app.fileLock.Path()),
+			log.Err(err),
+		)
+	}
+}
+
+// Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
+func (app *App) Initialize() error {
 	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
 	var existing config.GenesisConfig
 	if err := existing.LoadFromFile(gpath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			app.fileLock.Unlock()
 			return fmt.Errorf("failed to load genesis config at %s: %w", gpath, err)
 		}
 		if err := app.Config.Genesis.Validate(); err != nil {
-			app.fileLock.Unlock()
 			return err
 		}
 		if err := app.Config.Genesis.WriteToFile(gpath); err != nil {
-			app.fileLock.Unlock()
 			return fmt.Errorf("failed to write genesis config to %s: %w", gpath, err)
 		}
 	} else {
 		diff := existing.Diff(app.Config.Genesis)
 		if len(diff) > 0 {
-			app.fileLock.Unlock()
 			return fmt.Errorf("genesis config was updated after initializing a node, if you know that update is required delete config at %s.\ndiff:\n%s", gpath, diff)
 		}
 	}
@@ -455,7 +471,6 @@ func (app *App) Initialize() error {
 			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
 			log.Duration("hare_round_duration", app.Config.HARE.RoundDuration))
 
-		app.fileLock.Unlock()
 		return errors.New("incompatible tortoise hare params")
 	}
 
@@ -483,14 +498,6 @@ func (app *App) getAppInfo() string {
 // Cleanup stops all app services.
 func (app *App) Cleanup(ctx context.Context) {
 	log.Info("app cleanup starting...")
-	if app.fileLock != nil {
-		if err := app.fileLock.Unlock(); err != nil {
-			log.With().Error("failed to unlock file",
-				log.String("path", app.fileLock.Path()),
-				log.Err(err),
-			)
-		}
-	}
 	app.stopServices(ctx)
 	// add any other Cleanup tasks here....
 	log.Info("app cleanup completed")

@@ -886,13 +886,13 @@ func TestFlock(t *testing.T) {
 		app := New()
 		app.Config = getTestDefaultConfig(t)
 
-		require.NoError(t, app.Initialize())
-		t.Cleanup(func() { app.Cleanup(context.Background()) })
+		require.NoError(t, app.Lock())
+		t.Cleanup(app.Unlock)
 
 		app1 := *app
-		require.ErrorContains(t, app1.Initialize(), "only one spacemesh instance")
-		app.Cleanup(context.Background())
-		require.NoError(t, app.Initialize())
+		require.ErrorContains(t, app1.Lock(), "only one spacemesh instance")
+		app.Unlock()
+		require.NoError(t, app.Lock())
 	})
 
 	t.Run("dir doesn't exist", func(t *testing.T) {
@@ -900,8 +900,8 @@ func TestFlock(t *testing.T) {
 		app.Config = getTestDefaultConfig(t)
 		app.Config.FileLock = filepath.Join(t.TempDir(), "newdir", "LOCK")
 
-		require.NoError(t, app.Initialize())
-		t.Cleanup(func() { app.Cleanup(context.Background()) })
+		require.NoError(t, app.Lock())
+		t.Cleanup(app.Unlock)
 	})
 }
 
