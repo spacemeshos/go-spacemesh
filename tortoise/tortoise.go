@@ -426,7 +426,6 @@ func (t *turtle) verifyLayers() {
 	}
 
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
-		layer := t.layer(target)
 		if nverified < target {
 			// notify mesh in two additional cases:
 			// - if layer was verified, and became undecided
@@ -438,55 +437,11 @@ func (t *turtle) verifyLayers() {
 		} else if target > t.verified {
 			t.pending = types.MinLayer(t.pending, target)
 		}
-
 		verified = target
-		if len(layer.blocks) == 0 && !layer.emitted && layer.hareTerminated {
-			layer.emitted = true
-			t.changedOpinion.min = types.MinLayer(t.changedOpinion.min, target)
-			t.changedOpinion.max = types.MaxLayer(t.changedOpinion.max, target)
-			t.pending = types.MinLayer(t.pending, target)
-		}
-		for _, block := range layer.blocks {
-			if block.emitted == block.validity {
-				continue
-			}
-			// record range of layers where opinion has changed.
-			// once those layers fall out of hdist window - opinion can be recomputed
-			//
-			// we don't recompute opinion that matches hare opinion
-			// and we don't recompute more than necessary
-			if block.validity != block.hare || (block.emitted != block.validity && block.emitted != abstain) {
-				t.changedOpinion.min = types.MinLayer(t.changedOpinion.min, target)
-				t.changedOpinion.max = types.MaxLayer(t.changedOpinion.max, target)
-			}
-			if block.validity == abstain {
-				t.logger.Fatal("bug: layer should not be verified if there is an undecided block",
-					zap.Uint32("target", target.Uint32()),
-					zap.Stringer("block", block.id))
-			}
-			t.logger.Debug("update validity",
-				zap.Stringer("last layer", t.last),
-				zap.Uint32("lid", block.layer.Uint32()),
-				zap.Stringer("block", block.id),
-				zap.Stringer("validity", block.validity),
-				zap.Stringer("hare", block.hare),
-				zap.Stringer("emitted", block.emitted),
-			)
-			block.emitted = block.validity
-		}
 	}
 	t.verified = verified
+	t.onOpinionChange(t.evicted.Add(1))
 	verifiedLayer.Set(float64(t.verified))
-	if t.changedOpinion.min != 0 && !withinDistance(t.Hdist, t.changedOpinion.max, t.last) {
-		t.logger.Debug("changed opinion outside hdist",
-			zap.Stringer("last layer", t.last),
-			zap.Stringer("from", t.changedOpinion.min),
-			zap.Stringer("to", t.changedOpinion.max),
-		)
-		t.onOpinionChange(t.changedOpinion.min)
-		t.changedOpinion.min = 0
-		t.changedOpinion.max = 0
-	}
 }
 
 func (t *turtle) runVerifying() types.LayerID {
@@ -605,20 +560,26 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 }
 
 func (t *turtle) onOpinionChange(lid types.LayerID) {
+	var changed types.LayerID
 	for recompute := lid; !recompute.After(t.processed); recompute = recompute.Add(1) {
 		layer := t.layer(recompute)
 		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
 		if opinion != layer.opinion {
-			t.pending = types.MinLayer(t.pending, lid)
+			changed = types.MinLayer(changed, lid)
+		} else {
+			break
 		}
 		t.logger.Debug("computed local opinion",
 			zap.Uint32("lid", layer.lid.Uint32()),
 			log.ZShortStringer("local opinion", layer.opinion))
 	}
-	t.verifying.resetWeights(lid)
-	for target := lid.Add(1); !target.After(t.processed); target = target.Add(1) {
-		t.verifying.countVotes(t.logger, t.ballots[target])
+	if changed != 0 {
+		t.pending = types.MinLayer(t.pending, changed)
+		t.verifying.resetWeights(changed)
+		for target := changed.Add(1); !target.After(t.processed); target = target.Add(1) {
+			t.verifying.countVotes(t.logger, t.ballots[target])
+		}
 	}
 }
 
