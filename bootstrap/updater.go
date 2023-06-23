@@ -166,14 +166,14 @@ func (u *Updater) Start() error {
 				log.Duration("interval", u.cfg.Interval),
 			)
 			for {
+				if err := u.DoIt(ctx); err != nil {
+					updateFailureCount.Add(1)
+					u.logger.With().Debug("failed to get bootstrap update", log.Err(err))
+				}
 				select {
 				case <-u.stop:
 					return nil
 				case <-time.After(u.cfg.Interval):
-					if err := u.DoIt(ctx); err != nil {
-						updateFailureCount.Add(1)
-						u.logger.With().Debug("failed to get bootstrap update", log.Err(err))
-					}
 				}
 			}
 		})
