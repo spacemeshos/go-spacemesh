@@ -15,13 +15,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -385,10 +385,12 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 						Data: &atxProof,
 					},
 				}
-				if err := malfeasance.ValidateAndSave(ctx, h.log, h.cdb, dbtx, h.edVerifier, nil, &types.MalfeasanceGossip{
-					MalfeasanceProof: *proof,
-				}); err != nil && !errors.Is(err, malfeasance.ErrKnownProof) {
-					return fmt.Errorf("adding malfeasance proof: %w", err)
+				encoded, err := codec.Encode(proof)
+				if err != nil {
+					h.log.With().Panic("failed to encode MalfeasanceProof", log.Err(err))
+				}
+				if err := identities.SetMalicious(dbtx, atx.SmesherID, encoded); err != nil {
+					return fmt.Errorf("add malfeasance proof: %w", err)
 				}
 				h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
 					log.Stringer("smesher", atx.SmesherID),
@@ -403,6 +405,9 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		return nil
 	}); err != nil {
 		return fmt.Errorf("store atx: %w", err)
+	}
+	if proof != nil {
+		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
 	}
 	header, err := h.cdb.GetAtxHeader(atx.ID())
 	if err != nil {

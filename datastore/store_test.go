@@ -85,7 +85,7 @@ func TestMalfeasanceProof_Honest(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, cdb.AddMalfeasanceProof(nodeID2, proof, cdb))
+	cdb.CacheMalfeasanceProof(nodeID2, proof)
 	bad, err = cdb.IsMalicious(nodeID2)
 	require.NoError(t, err)
 	require.True(t, bad)
@@ -112,38 +112,12 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 	}
 
 	nodeID1 := types.NodeID{1}
-	require.NoError(t, cdb.AddMalfeasanceProof(nodeID1, proof, cdb))
+	cdb.CacheMalfeasanceProof(nodeID1, proof)
 	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
 
 	got, err := cdb.GetMalfeasanceProof(nodeID1)
 	require.NoError(t, err)
 	require.EqualValues(t, proof, got)
-
-	got, err = identities.GetMalfeasanceProof(db, nodeID1)
-	require.NoError(t, err)
-	require.EqualValues(t, proof, got)
-
-	nodeID2 := types.NodeID{2}
-	// secretly save the proof to database for a different id
-	encoded, err := codec.Encode(proof)
-	require.NoError(t, err)
-	require.NoError(t, identities.SetMalicious(db, nodeID2, encoded))
-	bad, err := identities.IsMalicious(db, nodeID2)
-	require.NoError(t, err)
-	require.True(t, bad)
-	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
-
-	// just asking for boolean will not cause it to cache
-	bad, err = cdb.IsMalicious(nodeID2)
-	require.NoError(t, err)
-	require.True(t, bad)
-	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
-
-	// but asking for real proof data will cause it to cache
-	got, err = cdb.GetMalfeasanceProof(nodeID2)
-	require.NoError(t, err)
-	require.EqualValues(t, proof, got)
-	require.Equal(t, 2, cdb.MalfeasanceCacheSize())
 }
 
 func TestIdentityExists(t *testing.T) {
