@@ -102,7 +102,6 @@ func ValidateAndSave(
 		if err := identities.SetMalicious(dbtx, nodeID, encoded); err != nil {
 			return fmt.Errorf("add malfeasance proof: %w", err)
 		}
-		cdb.CacheMalfeasanceProof(nodeID, &p.MalfeasanceProof)
 		return nil
 	}); err != nil {
 		logger.WithContext(ctx).With().Error("failed to save MalfeasanceProof",
@@ -112,6 +111,7 @@ func ValidateAndSave(
 		)
 		return err
 	}
+	cdb.CacheMalfeasanceProof(nodeID, &p.MalfeasanceProof)
 	updateMetrics(p.Proof)
 	logger.WithContext(ctx).With().Info("new malfeasance proof",
 		log.Stringer("smesher", nodeID),
