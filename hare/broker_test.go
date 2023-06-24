@@ -619,12 +619,14 @@ func TestBroker_eventLoop(t *testing.T) {
 	m.Layer = instanceID2
 	m.Signature = signer.Sign(signing.HARE, m.SignedBytes())
 	m.SmesherID = signer.NodeID()
+	m.signedHash = types.BytesToHash(m.InnerMessage.HashBytes())
 	r.Equal(nil, b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 
 	// future message
 	m.Layer = instanceID3
 	m.Signature = signer.Sign(signing.HARE, m.SignedBytes())
 	m.SmesherID = signer.NodeID()
+	m.signedHash = types.BytesToHash(m.InnerMessage.HashBytes())
 	r.Error(b.HandleMessage(context.Background(), "", mustEncode(t, m)))
 
 	c, _, e = b.Register(context.Background(), instanceID3)

@@ -60,7 +60,7 @@ func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Message) {
 			InnerMsg: types.HareMetadata{
 				Layer:   pt.proposal.Layer,
 				Round:   pt.proposal.Round,
-				MsgHash: types.BytesToHash(pt.proposal.HashBytes()),
+				MsgHash: pt.proposal.signedHash,
 			},
 			SmesherID: pt.proposal.SmesherID,
 			Signature: pt.proposal.Signature,
@@ -69,7 +69,7 @@ func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Message) {
 			InnerMsg: types.HareMetadata{
 				Layer:   msg.Layer,
 				Round:   msg.Round,
-				MsgHash: types.BytesToHash(msg.HashBytes()),
+				MsgHash: msg.signedHash,
 			},
 			SmesherID: msg.SmesherID,
 			Signature: msg.Signature,
@@ -115,7 +115,7 @@ func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Message) {
 				InnerMsg: types.HareMetadata{
 					Layer:   pt.proposal.Layer,
 					Round:   pt.proposal.Round,
-					MsgHash: types.BytesToHash(pt.proposal.HashBytes()),
+					MsgHash: pt.proposal.signedHash,
 				},
 				SmesherID: pt.proposal.SmesherID,
 				Signature: pt.proposal.Signature,
@@ -124,7 +124,7 @@ func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Message) {
 				InnerMsg: types.HareMetadata{
 					Layer:   msg.Layer,
 					Round:   msg.Round,
-					MsgHash: types.BytesToHash(msg.HashBytes()),
+					MsgHash: msg.signedHash,
 				},
 				SmesherID: msg.SmesherID,
 				Signature: msg.Signature,
