@@ -374,12 +374,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 			}
 		}
 		if process.After(types.LayerID(t.Hdist)) {
-			if !process.Sub(t.Hdist).After(t.evicted) {
-				t.logger.Error("tortoise wasn't called for long period of time. restart node to re-enable verifying tortoise",
-					zap.Uint32("window", t.WindowSize),
-					zap.Uint32("hdist", t.Hdist),
-				)
-			} else {
+			if process.Sub(t.Hdist).After(t.evicted) {
 				t.onOpinionChange(process.Sub(t.Hdist), true)
 			}
 		}
