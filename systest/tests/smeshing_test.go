@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"sort"
 	"testing"
 
@@ -12,6 +13,11 @@ import (
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/genvm/core"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
@@ -24,6 +30,54 @@ func TestSmeshing(t *testing.T) {
 	require.NoError(t, err)
 	testSmeshing(t, tctx, cl)
 	testTransactions(t, tctx, cl, 8)
+}
+
+type vestingAcc struct {
+	pks            []ed25519.PrivateKey
+	address, vault types.Address
+	start, end     int
+	total          int
+}
+
+func genKeys(tb testing.TB, n int) (pks []ed25519.PrivateKey, pubs []types.Hash32) {
+	tb.Helper()
+	for i := 0; i < n; i++ {
+		pub, pk, err := ed25519.GenerateKey(nil)
+		require.NoError(tb, err)
+		pks = append(pks, pk)
+		var hs types.Hash32
+		copy(hs[:], pub)
+		pubs = append(pubs, hs)
+	}
+	return pks, pubs
+}
+
+func prepareVesing(tb testing.TB, n int) (rst []vestingAcc) {
+	tb.Helper()
+	for i := 0; i < n; i++ {
+		pks, pubs := genKeys(tb, n)
+		vestingArgs := &multisig.SpawnArguments{
+			Required:   uint8(n/2 + 1),
+			PublicKeys: pubs,
+		}
+		vestingAddress := core.ComputePrincipal(vesting.TemplateAddress, vestingArgs)
+		vaultArgs := &vault.SpawnArguments{
+			Owner:               vestingAddress,
+			TotalAmount:         uint64(10e9),
+			InitialUnlockAmount: uint64(1e9),
+			VestingStart:        30,
+			VestingEnd:          20,
+		}
+		rst = append(rst, vestingAcc{
+			pks:     pks,
+			address: vestingAddress,
+			vault:   core.ComputePrincipal(vault.TemplateAddress, vaultArgs),
+			start:   int(vaultArgs.VestingStart),
+			end:     int(vaultArgs.VestingEnd),
+			total:   int(vaultArgs.TotalAmount),
+		})
+	}
+	return rst
 }
 
 func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
