@@ -356,7 +356,7 @@ func defaultRecoveryFile(dataDir string) (string, types.LayerID, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	return fmt.Sprintf("file://%s", files[0]), restore, nil
+	return fmt.Sprintf("file://%s", filepath.ToSlash(files[0])), restore, nil
 }
 
 func (app *App) LoadCheckpoint(ctx context.Context) error {
@@ -636,7 +636,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	})
 
 	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(ExecutorLogger, lg))
-	msh, err := mesh.NewMesh(app.cachedDB, app.clock, app.edVerifier, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
+	msh, err := mesh.NewMesh(app.cachedDB, app.clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}

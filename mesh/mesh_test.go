@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -58,7 +59,7 @@ func createTestMesh(t *testing.T) *testMesh {
 		mockTortoise: smocks.NewMockTortoise(ctrl),
 	}
 	exec := NewExecutor(db, tm.mockVM, tm.mockState, lg)
-	msh, err := NewMesh(db, tm.mockClock, nil, tm.mockTortoise, exec, tm.mockState, lg)
+	msh, err := NewMesh(db, tm.mockClock, tm.mockTortoise, exec, tm.mockState, lg)
 	require.NoError(t, err)
 	gLid := types.GetEffectiveGenesis()
 	checkLastAppliedInDB(t, msh, gLid)
@@ -114,7 +115,7 @@ func createIdentity(t *testing.T, db sql.Executor, sig *signing.EdSigner) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: types.EpochID(1),
 	}
-	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil, nil)
+	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil)
 	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
@@ -189,7 +190,7 @@ func TestMesh_FromGenesis(t *testing.T) {
 
 func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 	tm := createTestMesh(t)
-	msh, err := NewMesh(tm.cdb, tm.mockClock, nil, tm.mockTortoise, tm.executor, tm.mockState, logtest.New(t))
+	msh, err := NewMesh(tm.cdb, tm.mockClock, tm.mockTortoise, tm.executor, tm.mockState, logtest.New(t))
 	require.NoError(t, err)
 	gLid := types.GetEffectiveGenesis()
 	checkProcessedInDB(t, msh, gLid)
@@ -214,7 +215,7 @@ func TestMesh_WakeUp(t *testing.T) {
 	tm.mockVM.EXPECT().Revert(latestState)
 	tm.mockState.EXPECT().RevertCache(latestState)
 	tm.mockVM.EXPECT().GetStateRoot()
-	msh, err := NewMesh(tm.cdb, tm.mockClock, nil, tm.mockTortoise, tm.executor, tm.mockState, logtest.New(t))
+	msh, err := NewMesh(tm.cdb, tm.mockClock, tm.mockTortoise, tm.executor, tm.mockState, logtest.New(t))
 	require.NoError(t, err)
 	gotL := msh.LatestLayer()
 	require.Equal(t, latest, gotL)
@@ -299,9 +300,6 @@ func TestMesh_CallOnBlock(t *testing.T) {
 
 func TestMesh_MaliciousBallots(t *testing.T) {
 	tm := createTestMesh(t)
-	v, err := signing.NewEdVerifier()
-	require.NoError(t, err)
-	tm.sigVerifier = v
 
 	lid := types.LayerID(1)
 	sig, err := signing.NewEdSigner()
@@ -338,17 +336,11 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, malProof)
 	require.True(t, blts[1].IsMalicious())
-	require.EqualValues(t, types.MultipleBallots, malProof.Proof.Type)
-	proof, ok := malProof.Proof.Data.(*types.BallotProof)
-	require.True(t, ok)
-	require.Equal(t, blts[0].Layer, proof.Messages[0].InnerMsg.Layer)
-	require.Equal(t, blts[0].HashInnerBytes(), proof.Messages[0].InnerMsg.MsgHash.Bytes())
-	require.Equal(t, blts[0].Signature, proof.Messages[0].Signature)
-	require.Equal(t, blts[0].SmesherID, proof.Messages[0].SmesherID)
-	require.Equal(t, blts[1].Layer, proof.Messages[0].InnerMsg.Layer)
-	require.Equal(t, blts[1].HashInnerBytes(), proof.Messages[1].InnerMsg.MsgHash.Bytes())
-	require.Equal(t, blts[1].Signature, proof.Messages[1].Signature)
-	require.Equal(t, blts[1].SmesherID, proof.Messages[1].SmesherID)
+	edVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
+	nodeID, err := malfeasance.Validate(context.Background(), tm.logger, tm.cdb, edVerifier, nil, &types.MalfeasanceGossip{MalfeasanceProof: *malProof})
+	require.NoError(t, err)
+	require.Equal(t, sig.NodeID(), nodeID)
 	mal, err = identities.IsMalicious(tm.cdb, sig.NodeID())
 	require.NoError(t, err)
 	require.True(t, mal)

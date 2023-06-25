@@ -58,7 +58,7 @@ func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, _ p2p.Peer, 
 		h.logger.With().Error("malformed message (sync)", log.Context(ctx), log.Err(err))
 		return errMalformedData
 	}
-	return ValidateAndSave(ctx, h.logger, h.cdb, h.cdb, h.edVerifier, h.cp, h.tortoise, &types.MalfeasanceGossip{MalfeasanceProof: p})
+	return validateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, h.tortoise, &types.MalfeasanceGossip{MalfeasanceProof: p})
 }
 
 // HandleMalfeasanceProof is the gossip receiver for MalfeasanceGossip.
@@ -70,38 +70,87 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 		return errMalformedData
 	}
 	if peer == h.self {
+		id, err := Validate(ctx, h.logger, h.cdb, h.edVerifier, h.cp, &p)
+		if err != nil {
+			return err
+		}
+		h.tortoise.OnMalfeasance(id)
 		// node saves malfeasance proof eagerly/atomically with the malicious data.
 		// it has validated the proof before saving to db.
 		updateMetrics(p.Proof)
 		return nil
 	}
-	return ValidateAndSave(ctx, h.logger, h.cdb, h.cdb, h.edVerifier, h.cp, h.tortoise, &p)
+	return validateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, h.tortoise, &p)
 }
 
-func ValidateAndSave(
+func validateAndSave(
 	ctx context.Context,
 	logger log.Log,
 	cdb *datastore.CachedDB,
-	exec sql.Executor,
 	edVerifier SigVerifier,
 	cp consensusProtocol,
 	trt tortoise,
 	p *types.MalfeasanceGossip,
 ) error {
+	nodeID, err := Validate(ctx, logger, cdb, edVerifier, cp, p)
+	if err != nil {
+		return err
+	}
+	if err := cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
+		malicious, err := identities.IsMalicious(dbtx, nodeID)
+		if err != nil {
+			return fmt.Errorf("check known malicious: %w", err)
+		} else if malicious {
+			logger.WithContext(ctx).With().Debug("known malicious identity", log.Stringer("smesher", nodeID))
+			return ErrKnownProof
+		}
+		encoded, err := codec.Encode(&p.MalfeasanceProof)
+		if err != nil {
+			logger.With().Panic("failed to encode MalfeasanceProof", log.Err(err))
+		}
+		if err := identities.SetMalicious(dbtx, nodeID, encoded); err != nil {
+			return fmt.Errorf("add malfeasance proof: %w", err)
+		}
+		return nil
+	}); err != nil {
+		logger.WithContext(ctx).With().Error("failed to save MalfeasanceProof",
+			log.Stringer("smesher", nodeID),
+			log.Inline(p),
+			log.Err(err),
+		)
+		return err
+	}
+	trt.OnMalfeasance(nodeID)
+	cdb.CacheMalfeasanceProof(nodeID, &p.MalfeasanceProof)
+	updateMetrics(p.Proof)
+	logger.WithContext(ctx).With().Info("new malfeasance proof",
+		log.Stringer("smesher", nodeID),
+		log.Inline(p),
+	)
+	return nil
+}
+
+func Validate(
+	ctx context.Context,
+	logger log.Log,
+	cdb *datastore.CachedDB,
+	edVerifier SigVerifier,
+	cp consensusProtocol,
+	p *types.MalfeasanceGossip,
+) (types.NodeID, error) {
 	var (
-		nodeID    types.NodeID
-		malicious bool
-		err       error
+		nodeID types.NodeID
+		err    error
 	)
 	switch p.Proof.Type {
 	case types.HareEquivocation:
-		nodeID, err = validateHareEquivocation(ctx, logger, exec, edVerifier, &p.MalfeasanceProof)
+		nodeID, err = validateHareEquivocation(ctx, logger, cdb, edVerifier, &p.MalfeasanceProof)
 	case types.MultipleATXs:
-		nodeID, err = validateMultipleATXs(ctx, logger, exec, edVerifier, &p.MalfeasanceProof)
+		nodeID, err = validateMultipleATXs(ctx, logger, cdb, edVerifier, &p.MalfeasanceProof)
 	case types.MultipleBallots:
-		nodeID, err = validateMultipleBallots(ctx, logger, exec, edVerifier, &p.MalfeasanceProof)
+		nodeID, err = validateMultipleBallots(ctx, logger, cdb, edVerifier, &p.MalfeasanceProof)
 	default:
-		return errors.New("unknown malfeasance type")
+		return nodeID, errors.New("unknown malfeasance type")
 	}
 
 	if err != nil {
@@ -111,7 +160,7 @@ func ValidateAndSave(
 				log.Err(err),
 			)
 		}
-		return err
+		return nodeID, err
 	}
 
 	// msg is valid
@@ -123,36 +172,10 @@ func ValidateAndSave(
 				log.Inline(p),
 				log.Err(err),
 			)
-			return err
+			return nodeID, err
 		}
 	}
-
-	if malicious, err = identities.IsMalicious(exec, nodeID); err != nil {
-		return fmt.Errorf("check known malicious: %w", err)
-	} else if malicious {
-		logger.WithContext(ctx).With().Debug("known malicious identity", log.Stringer("smesher", nodeID))
-		return ErrKnownProof
-	}
-
-	if err = cdb.AddMalfeasanceProof(nodeID, &p.MalfeasanceProof, exec); err != nil {
-		logger.WithContext(ctx).With().Error("failed to save MalfeasanceProof",
-			log.Stringer("smesher", nodeID),
-			log.Inline(p),
-			log.Err(err),
-		)
-		return fmt.Errorf("add malfeasance proof: %w", err)
-	}
-	// note(dshulyak) this can be nil on the hare codepath
-	// i don't know how to make it work without huge refactoring
-	if trt != nil {
-		trt.OnMalfeasance(nodeID)
-	}
-	updateMetrics(p.Proof)
-	logger.WithContext(ctx).With().Info("new malfeasance proof",
-		log.Stringer("smesher", nodeID),
-		log.Inline(p),
-	)
-	return nil
+	return nodeID, nil
 }
 
 func updateMetrics(tp types.Proof) {

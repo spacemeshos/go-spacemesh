@@ -44,7 +44,9 @@ func BuildPreRoundMsg(sig *signing.EdSigner, s *Set, roleProof types.VrfSignatur
 	builder := newMessageBuilder()
 	builder.SetType(pre).SetLayer(instanceID1).SetRoundCounter(preRound).SetCommittedRound(ki).SetValues(s).SetRoleProof(roleProof)
 	builder.SetEligibilityCount(1)
-	return builder.Sign(sig).Build()
+	m := builder.Sign(sig).Build()
+	m.signedHash = types.BytesToHash(m.InnerMessage.HashBytes())
+	return m
 }
 
 func TestPreRoundTracker_OnPreRound(t *testing.T) {
@@ -223,6 +225,39 @@ func TestPreRoundTracker_CanProveValueAndSet_TooFewKnownEquivocators(t *testing.
 	require.False(t, tracker.CanProveValue(types.ProposalID{1}))
 	require.False(t, tracker.CanProveValue(types.ProposalID{2}))
 	require.False(t, tracker.CanProveSet(s))
+}
+
+// Checks that equivocating nodes detected due to receipt of equivocating
+// pre-round messages still contribute to the threshold calculation.
+func TestPreRoundTracker_CanProveSet_EquivocatingPreRoundMessages(t *testing.T) {
+	signer1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	signer2, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	s := NewSetFromValues(types.ProposalID{1})
+	s2 := NewSetFromValues(types.ProposalID{2})
+	et := NewEligibilityTracker(2)
+	mch := make(chan *types.MalfeasanceGossip, 2)
+	tracker := newPreRoundTracker(logtest.New(t), mch, et, 2, 2)
+	require.False(t, tracker.CanProveSet(s))
+
+	// Set up both participants to be eligible
+	m := BuildPreRoundMsg(signer1, s, types.EmptyVrfSignature)
+	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
+	m2 := BuildPreRoundMsg(signer2, s, types.EmptyVrfSignature)
+	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
+	m3 := BuildPreRoundMsg(signer2, s2, types.EmptyVrfSignature)
+
+	// One message
+	tracker.OnPreRound(context.Background(), m2)
+	require.False(t, tracker.CanProveSet(s))
+	// Equivocation should be detected
+	tracker.OnPreRound(context.Background(), m3)
+	require.False(t, tracker.CanProveSet(s))
+	// One further message should cause threshold to be passed.
+	tracker.OnPreRound(context.Background(), m)
+	require.True(t, tracker.CanProveSet(s))
 }
 
 func TestPreRoundTracker_CanProveValueAndSet_TooHonestVotes(t *testing.T) {

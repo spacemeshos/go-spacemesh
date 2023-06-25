@@ -122,24 +122,14 @@ func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProo
 	return proof, err
 }
 
-func (db *CachedDB) AddMalfeasanceProof(id types.NodeID, proof *types.MalfeasanceProof, exec sql.Executor) error {
+func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *types.MalfeasanceProof) {
 	if id == types.EmptyNodeID {
 		log.Fatal("invalid argument to AddMalfeasanceProof")
 	}
 
-	encoded, err := codec.Encode(proof)
-	if err != nil {
-		db.logger.Fatal("failed to encode MalfeasanceProof")
-	}
-
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	if err = identities.SetMalicious(exec, id, encoded); err != nil {
-		return err
-	}
-
 	db.malfeasanceCache.Add(id, proof)
-	return nil
 }
 
 // VRFNonce returns the VRF nonce of for the given node in the given epoch. This function is thread safe and will return an error if the

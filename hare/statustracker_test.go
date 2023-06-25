@@ -5,11 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -28,7 +26,9 @@ func buildStatusMsg(sig *signing.EdSigner, s *Set, ki uint32) *Message {
 		SetCommittedRound(ki).
 		SetValues(s).
 		SetEligibilityCount(1)
-	return builder.Sign(sig).Build()
+	m := builder.Sign(sig).Build()
+	m.signedHash = types.BytesToHash(m.InnerMessage.HashBytes())
+	return m
 }
 
 func BuildStatusMsg(sig *signing.EdSigner, s *Set) *Message {
@@ -323,7 +323,7 @@ func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: types.EpochID(1),
 	}
-	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil, nil)
+	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil)
 	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
@@ -338,15 +338,9 @@ func verifyMalfeasanceProof(t *testing.T, sig *signing.EdSigner, gossip *types.M
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	createIdentity(t, cdb.Database, sig)
-	ctrl := gomock.NewController(t)
-	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
-	trt := malfeasance.NewMocktortoise(ctrl)
-	mcp.EXPECT().HandleEligibility(gomock.Any(), gomock.Any()).AnyTimes()
-	trt.EXPECT().OnMalfeasance(sig.NodeID())
-	malVerifier := malfeasance.NewHandler(cdb, lg, "host", mcp, edVerifier, trt)
-	data, err := codec.Encode(gossip)
+	nodeID, err := malfeasance.Validate(context.Background(), lg, cdb, edVerifier, nil, gossip)
 	require.NoError(t, err)
-	require.NoError(t, malVerifier.HandleMalfeasanceProof(context.Background(), "self", data))
+	require.Equal(t, sig.NodeID(), nodeID)
 }
 
 func TestStatusTracker_WithKnownEquivocator(t *testing.T) {
@@ -406,6 +400,42 @@ func TestStatusTracker_NotEnoughKnownEquivocators(t *testing.T) {
 	require.NotNil(t, tracker.tally)
 	expTally := CountInfo{hCount: 1, keCount: lowThresh10 - 1, numHonest: 1, numKE: lowThresh10 - 1}
 	require.Equal(t, expTally, *tracker.tally)
+}
+
+// Checks that equivocating nodes detected due to receipt of equivocating
+// status messages still contribute to the threshold calculation.
+func TestStatusTracker_HasEnoughStatuses_EquivocatingStatusMessages(t *testing.T) {
+	signer1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	signer2, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	s := NewSetFromValues(types.ProposalID{1})
+	s2 := NewSetFromValues(types.ProposalID{2})
+	et := NewEligibilityTracker(2)
+	mch := make(chan *types.MalfeasanceGossip, 2)
+	tracker := newStatusTracker(logtest.New(t), statusRound, mch, et, 2, 2)
+	require.False(t, tracker.IsSVPReady())
+
+	// Set up both participants to be eligible
+	m := BuildStatusMsg(signer1, s)
+	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
+	m2 := BuildStatusMsg(signer2, s)
+	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
+	m3 := BuildStatusMsg(signer2, s2)
+
+	// One message
+	tracker.RecordStatus(context.Background(), m2)
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
+	require.False(t, tracker.IsSVPReady())
+	// Equivocation should be detected
+	tracker.RecordStatus(context.Background(), m3)
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
+	require.False(t, tracker.IsSVPReady())
+	// One further message should cause threshold to be passed.
+	tracker.RecordStatus(context.Background(), m)
+	tracker.AnalyzeStatusMessages(func(m *Message) bool { return true })
+	require.True(t, tracker.IsSVPReady())
 }
 
 func TestStatusTracker_NotEnoughHonestVote(t *testing.T) {

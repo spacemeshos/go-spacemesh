@@ -33,7 +33,7 @@ func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: types.EpochID(1),
 	}
-	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil, nil)
+	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil)
 	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
@@ -241,6 +241,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 
+		trt.EXPECT().OnMalfeasance(sig.NodeID())
 		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "self", data))
 		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
@@ -453,6 +454,7 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 
+		trt.EXPECT().OnMalfeasance(sig.NodeID())
 		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "self", data))
 		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
@@ -680,6 +682,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 
+		trt.EXPECT().OnMalfeasance(sig.NodeID())
 		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "self", data))
 		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
