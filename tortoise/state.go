@@ -54,11 +54,6 @@ type (
 		// last evicted layer
 		evicted types.LayerID
 
-		changedOpinion struct {
-			// sector of layers where opinion is different from previously computed opinion
-			min, max types.LayerID
-		}
-
 		epochs map[types.EpochID]*epochInfo
 		layers map[types.LayerID]*layerInfo
 		// ballots should not be referenced by other ballots
@@ -168,9 +163,6 @@ type layerInfo struct {
 	blocks         []*blockInfo
 	verifying      verifyingInfo
 	coinflip       sign
-
-	// used to track when opinion on empty layer has changed
-	emitted bool
 
 	opinion types.Hash32
 	// a pointer to the value stored on the previous layerInfo object
@@ -401,7 +393,6 @@ type blockInfo struct {
 	margin weight
 
 	validity sign
-	emitted  sign // same as validity field if event was emitted
 
 	data bool // set to true if block is available locally
 }
