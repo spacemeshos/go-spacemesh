@@ -112,10 +112,10 @@ jobs:
           label: sanity
           storage: premium-rwo=10Gi
           node_selector: cloud.google.com/gke-nodepool=gha
-          size: 50
-          bootstrap: 4m
+          size: 30
+          bootstrap: 2m
           level: info
-          clusters: 4
+          clusters: 8
         run: make -C systest run test_name=.
 
       - name: Delete pod
