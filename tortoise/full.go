@@ -59,6 +59,13 @@ func (f *full) countBallot(logger *zap.Logger, ballot *ballotInfo) {
 			case against:
 				block.margin = block.margin.Sub(ballot.weight)
 			}
+			logger.Debug("counting margin",
+				zap.Stringer("block", block.id),
+				zap.Stringer("vote", vote),
+				zap.Uint32("ballot layer", uint32(ballot.layer)),
+				zap.Stringer("ballot", ballot.id),
+				zap.Float64("margin", block.margin.Float()),
+			)
 		}
 		if empty {
 			layer.empty = layer.empty.Add(ballot.weight)
@@ -132,6 +139,10 @@ func (f *full) verify(logger *zap.Logger, lid types.LayerID) (bool, bool) {
 		}
 		return empty, false
 	}
+	logger.Debug("global treshold",
+		zap.Uint32("target", lid.Uint32()),
+		zap.Float64("threshold", threshold.Float()),
+	)
 	rst, changes := verifyLayer(
 		logger,
 		layer.blocks,
