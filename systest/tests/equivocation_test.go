@@ -24,9 +24,9 @@ func TestEquivocation(t *testing.T) {
 	cctx := testcontext.New(t, testcontext.Labels("sanity"))
 
 	keys := make([]ed25519.PrivateKey, cctx.ClusterSize-bootnodes)
-	honest := len(keys) / 2
+	honest := int(float64(len(keys)) * 0.6)
 	if (len(keys)-honest)%2 != 0 {
-		honest--
+		honest++
 	}
 	for i := 0; i < honest; i++ {
 		_, priv, err := ed25519.GenerateKey(nil)
