@@ -52,7 +52,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Message) {
 	if msg.Eligibility.Proof.Cmp(pre.bestVRF) == -1 {
 		pre.bestVRF = &msg.Eligibility.Proof
 		// store lowest-order bit as coin toss value
-		pre.coinflip = msg.Eligibility.Proof.LSB()&byte(1) == byte(1)
+		pre.coinflip = msg.Eligibility.Proof.LSB() == 1
 		pre.logger.With().Debug("got new best vrf value",
 			log.Stringer("smesher", msg.SmesherID),
 			log.Stringer("vrf", msg.Eligibility.Proof),
@@ -63,11 +63,10 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Message) {
 	sToTrack := NewSet(msg.Values)         // assume track all Values
 	alreadyTracked := NewDefaultEmptySet() // assume nothing tracked so far
 
-	msgHash := types.BytesToHash(msg.HashBytes())
 	metadata := types.HareMetadata{
 		Layer:   msg.Layer,
 		Round:   msg.Round,
-		MsgHash: msgHash,
+		MsgHash: msg.signedHash,
 	}
 	if prev, exist := pre.preRound[msg.SmesherID]; exist { // not first pre-round msg from this sender
 		if prev.InnerMsg.Equivocation(&metadata) {

@@ -318,7 +318,7 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 		logger.Warning("completed round without valid proposals")
 		return
 	}
-	coinflip := wc.smallest.LSB()&1 == 1
+	coinflip := wc.smallest.LSB() == 1
 
 	wc.coins[wc.round] = coinflip
 	logger.With().Info("completed round with beacon weak coin",

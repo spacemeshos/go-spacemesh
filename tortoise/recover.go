@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -22,9 +23,18 @@ func Recover(db *datastore.CachedDB, beacon system.BeaconGetter, opts ...Opt) (*
 	if err != nil {
 		return nil, err
 	}
+
 	layer, err := ballots.LatestLayer(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load latest known layer: %w", err)
+	}
+
+	malicious, err := identities.GetMalicious(db)
+	if err != nil {
+		return nil, fmt.Errorf("recover malicious %w", err)
+	}
+	for _, id := range malicious {
+		trtl.OnMalfeasance(id)
 	}
 
 	if types.GetEffectiveGenesis() != types.FirstEffectiveGenesis() {

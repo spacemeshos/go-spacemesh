@@ -15,8 +15,9 @@ func BuildCommitMsg(signer *signing.EdSigner, s *Set) *Message {
 	builder := newMessageBuilder()
 	builder.SetType(commit).SetLayer(instanceID1).SetRoundCounter(commitRound).SetCommittedRound(ki).SetValues(s)
 	builder.SetEligibilityCount(1)
-	builder = builder.Sign(signer)
-	return builder.Build()
+	m := builder.Sign(signer).Build()
+	m.signedHash = types.BytesToHash(m.InnerMessage.HashBytes())
+	return m
 }
 
 func TestCommitTracker_OnCommit(t *testing.T) {

@@ -18,4 +18,6 @@ type Tortoise interface {
 	LatestComplete() types.LayerID
 	Updates() []result.Layer
 	Results(from, to types.LayerID) ([]result.Layer, error)
+	OnMalfeasance(types.NodeID)
+	OnAtx(*types.AtxTortoiseData)
 }
