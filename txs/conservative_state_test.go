@@ -189,16 +189,21 @@ func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(uint64(0), nil).Times(1)
+
+		time.Sleep(20 * time.Millisecond) // to make sure received time is different for each TX (windows resolution is ~ 15ms)
 		tx1 := newTx(t, 0, defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(context.Background(), tx1))
 		// all the TXs with nonce 0 are pending in database
 		require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx1.ID}))
+
+		time.Sleep(20 * time.Millisecond)
 		tx2 := newTx(t, 1, defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(context.Background(), tx2))
 		expected = append(expected, tx2.ID)
 	}
-	got := tcs.SelectProposalTXs(lid, 1)
+
 	// no reshuffling happens when mempool is exhausted. two list should be exactly the same
+	got := tcs.SelectProposalTXs(lid, 1)
 	require.Equal(t, expected, got)
 
 	// the second call should have the same result since both exhaust the mempool
