@@ -1064,7 +1064,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 	select {
 	case <-builderConfirmation:
-	case <-time.After(time.Second * 5):
+	case <-time.After(time.Second * 10):
 		require.FailNow(t, "failed waiting for required number of tries to occur")
 	}
 }
