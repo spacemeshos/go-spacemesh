@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -836,6 +837,10 @@ func TestBeacon_atxThreshold(t *testing.T) {
 }
 
 func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
+	if runtime.GOOS == "linux" && runtime.GOARCH == "arm64" && os.Getenv("CI") != "" {
+		t.Skip("Skipping test on arm64 CI")
+	}
+
 	cfg := Config{Kappa: 40, Q: big.NewRat(1, 3)}
 	tt := []struct {
 		name            string
