@@ -223,7 +223,6 @@ func waitTransaction(ctx context.Context,
 			return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
 		}
 		return nil
-
 	})
 }
 

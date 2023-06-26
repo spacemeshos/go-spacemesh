@@ -336,7 +336,6 @@ func (v vestingAcc) drain(genesis types.Hash20, amount, nonce uint64) []byte {
 		}
 	}
 	return agg.Raw()
-
 }
 
 func genKeys(tb testing.TB, n int) (pks []ed25519.PrivateKey, pubs []ed25519.PublicKey) {
