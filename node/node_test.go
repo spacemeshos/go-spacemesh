@@ -533,8 +533,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		require.Contains(t, current.Msg, errmsg)
 	}
 
-	// This stops the app
-	<-app.Started()
+	// Cleanup stops all services and thereby the app
+	<-app.Started() // prevents races when app is not started yet
 	app.Cleanup(context.Background())
 
 	// Wait for everything to stop cleanly before ending test

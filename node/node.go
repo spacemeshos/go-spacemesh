@@ -406,6 +406,7 @@ func (app *App) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
+// Lock locks the app for exclusive use. It returns an error if the app is already locked.
 func (app *App) Lock() error {
 	lockdir := filepath.Dir(app.Config.FileLock)
 	if _, err := os.Stat(lockdir); errors.Is(err, os.ErrNotExist) {
@@ -425,6 +426,7 @@ func (app *App) Lock() error {
 	return nil
 }
 
+// Unlock unlocks the app. It is a no-op if the app is not locked.
 func (app *App) Unlock() {
 	if app.fileLock == nil {
 		return
@@ -437,7 +439,7 @@ func (app *App) Unlock() {
 	}
 }
 
-// Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
+// Initialize parses and validates the node configuration and sets up logging.
 func (app *App) Initialize() error {
 	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
 	var existing config.GenesisConfig
