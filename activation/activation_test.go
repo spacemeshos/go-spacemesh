@@ -12,6 +12,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -1015,6 +1016,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	retryInterval := 50 * time.Microsecond
 	genesis := time.Now()
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: 50 * time.Millisecond}), WithPoetRetryInterval(retryInterval))
+	tab.log = logtest.New(t, zap.InfoLevel)
 	posEpoch := types.EpochID(0)
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
 	poetBytes := []byte("66666")
