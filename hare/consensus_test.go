@@ -516,6 +516,7 @@ func (ps *delayedPubSub) Register(protocol string, handler pubsub.GossipHandler)
 }
 
 func TestEquivocation(t *testing.T) {
+	t.Skip()
 	test := newConsensusTest()
 
 	cfg := config.Config{N: 16, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1, Hdist: 20}

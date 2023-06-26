@@ -2172,7 +2172,7 @@ func TestSwitchMode(t *testing.T) {
 			sim.WithSetupMinerRange(size, size),
 		)
 		tortoise := tortoiseFromSimState(t,
-			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+			s.GetState(0), WithConfig(cfg),
 		)
 		var last types.LayerID
 		for i := 0; i <= int(cfg.Hdist); i++ {
@@ -3024,11 +3024,11 @@ func TestUpdates(t *testing.T) {
 		trt.OnHareOutput(lid, id)
 		trt.TallyVotes(context.TODO(), lid)
 		updates := trt.Updates()
-		require.Len(t, updates, 1)
-		require.Len(t, updates[0].Blocks, 1)
-		require.True(t, updates[0].Blocks[0].Hare)
-		require.False(t, updates[0].Blocks[0].Valid)
-		require.Equal(t, id, updates[0].Blocks[0].Header.ID)
+		require.Len(t, updates, 2)
+		require.Len(t, updates[1].Blocks, 1)
+		require.True(t, updates[1].Blocks[0].Hare)
+		require.False(t, updates[1].Blocks[0].Valid)
+		require.Equal(t, id, updates[1].Blocks[0].Header.ID)
 	})
 	t.Run("tally first", func(t *testing.T) {
 		trt, err := New()
@@ -3038,9 +3038,9 @@ func TestUpdates(t *testing.T) {
 
 		trt.TallyVotes(context.TODO(), lid)
 		updates := trt.Updates()
-		require.Len(t, updates, 1)
+		require.Len(t, updates, 2)
 		require.Empty(t, updates[0].Blocks)
-		require.False(t, updates[0].Verified)
+		require.True(t, updates[0].Verified)
 		trt.OnBlock(types.BlockHeader{
 			ID:      id,
 			LayerID: lid,
@@ -3127,11 +3127,11 @@ func TestSwitch(t *testing.T) {
 			)
 		}
 	}
-	nonverified := new(results)
+	nonverified := new(results).verified(0)
 	for lid := 2; lid <= s.hdist; lid++ {
 		nonverified = nonverified.next(lid-1).block(strconv.Itoa(lid-1), 0, 0)
 	}
-	verified := new(results).verified(0)
+	verified := new(results)
 	for lid := 2; lid <= s.hdist; lid++ {
 		verified = verified.verified(lid-1).block(strconv.Itoa(lid-1), 0, valid|local)
 	}

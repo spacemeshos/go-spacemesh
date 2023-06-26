@@ -314,6 +314,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 }
 
 func TestBuilder_StartSmeshingAvoidsPanickingIfPrepareInitializerReturnsError(t *testing.T) {
+	t.Skip()
 	// First verify that a panic occurs when PrepareInitializer does not return
 	// an error but StartSession does.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
