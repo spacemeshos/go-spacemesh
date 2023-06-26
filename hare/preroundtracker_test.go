@@ -44,7 +44,9 @@ func BuildPreRoundMsg(sig *signing.EdSigner, s *Set, roleProof types.VrfSignatur
 	builder := newMessageBuilder()
 	builder.SetType(pre).SetLayer(instanceID1).SetRoundCounter(preRound).SetCommittedRound(ki).SetValues(s).SetRoleProof(roleProof)
 	builder.SetEligibilityCount(1)
-	return builder.Sign(sig).Build()
+	m := builder.Sign(sig).Build()
+	m.signedHash = types.BytesToHash(m.InnerMessage.HashBytes())
+	return m
 }
 
 func TestPreRoundTracker_OnPreRound(t *testing.T) {

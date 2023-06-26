@@ -19,6 +19,14 @@ type Message struct {
 	Signature types.EdSignature
 
 	Eligibility types.HareEligibility
+
+	// capture the message hash signed by smesher.
+	// some redundant data were removed before signing to reduce network traffic.
+	// after the receiver verified the signature, the inner messages may be altered
+	// to add back redundant data. for example, Values in the nested messages
+	// of a Certificate are trimmed before gossipping and added back after signature is
+	// verified. we want to capture the original hash signed by the smesher.
+	signedHash types.Hash32
 }
 
 // MessageFromBuffer builds an Hare message from the provided bytes buffer.

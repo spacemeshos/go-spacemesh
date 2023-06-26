@@ -26,7 +26,9 @@ func buildStatusMsg(sig *signing.EdSigner, s *Set, ki uint32) *Message {
 		SetCommittedRound(ki).
 		SetValues(s).
 		SetEligibilityCount(1)
-	return builder.Sign(sig).Build()
+	m := builder.Sign(sig).Build()
+	m.signedHash = types.BytesToHash(m.InnerMessage.HashBytes())
+	return m
 }
 
 func BuildStatusMsg(sig *signing.EdSigner, s *Set) *Message {
