@@ -420,7 +420,7 @@ func TestHare_onTick_notMining(t *testing.T) {
 	require.ElementsMatch(t, types.ToProposalIDs(pList), out.Proposals)
 	select {
 	case <-wcSaved:
-	case <-time.After(10*time.Second):
+	case <-time.After(10 * time.Second):
 		require.Fail(t, "Weakcoin::Set has unexpectedly not been called")
 	}
 }
