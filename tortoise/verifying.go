@@ -70,11 +70,11 @@ func (v *verifying) countVotes(logger *zap.Logger, ballots []*ballotInfo) {
 	}
 }
 
-func (v *verifying) verify(logger *zap.Logger, lid types.LayerID) bool {
+func (v *verifying) verify(logger *zap.Logger, lid types.LayerID) (bool, bool) {
 	layer := v.layer(lid)
 	if !layer.hareTerminated {
 		logger.Debug("hare is not terminated")
-		return false
+		return false, false
 	}
 
 	margin := v.totalGoodWeight.
@@ -93,7 +93,7 @@ func (v *verifying) verify(logger *zap.Logger, lid types.LayerID) bool {
 			zap.Float64("margin", margin.Float()),
 			zap.Float64("global threshold", threshold.Float()),
 		)
-		return false
+		return false, false
 	} else {
 		logger.Debug("crosses global threshold",
 			zap.Uint32("candidate layer", lid.Uint32()),
@@ -131,5 +131,5 @@ func (v *verifying) verify(logger *zap.Logger, lid types.LayerID) bool {
 			zap.Float64("good uncounted", layer.verifying.goodUncounted.Float()),
 		)
 	}
-	return rst
+	return rst, changes
 }
