@@ -893,8 +893,6 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 	for _, tc := range tt {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
 			logger := logtest.New(t).WithName("proposal checker")
 			checker := createProposalChecker(logger, cfg, tc.wEarly, tc.wOntime)
 			var numEligible, numEligibleStrict int
