@@ -418,14 +418,11 @@ func TestHare_onTick_notMining(t *testing.T) {
 	out := <-h.blockGenCh
 	require.Equal(t, lyrID, out.Layer)
 	require.ElementsMatch(t, types.ToProposalIDs(pList), out.Proposals)
-	require.Eventually(t, func() bool {
-		select {
-		case <-wcSaved:
-			return true
-		default:
-			return false
-		}
-	}, 5*time.Second, 10*time.Millisecond)
+	select {
+	case <-wcSaved:
+	case <-time.After(10*time.Second):
+		require.Fail(t, "Weakcoin::Set has unexpectedly not been called")
+	}
 }
 
 func TestHare_onTick_NoBeacon(t *testing.T) {
