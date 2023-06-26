@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"math/rand"
+	"sort"
 	"testing"
 	"time"
 
@@ -116,7 +117,7 @@ func addBatch(tb testing.TB, tcs *testConState, numTXs int) ([]types.Transaction
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
 		tx := newTx(tb, nonce+5, defaultAmount, defaultFee, signer)
-		require.NoError(tb, tcs.AddToCache(context.Background(), tx))
+		require.NoError(tb, tcs.AddToCache(context.Background(), tx, time.Now()))
 		ids = append(ids, tx.ID)
 		txs = append(txs, tx)
 	}
@@ -135,11 +136,11 @@ func TestSelectProposalTXs(t *testing.T) {
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(uint64(1), nil).Times(1)
 		tx1 := newTx(t, 4, defaultAmount, defaultFee, signer)
-		require.NoError(t, tcs.AddToCache(context.Background(), tx1))
+		require.NoError(t, tcs.AddToCache(context.Background(), tx1, time.Now()))
 		// all the TXs with nonce 1 are pending in database
 		require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx1.ID}))
 		tx2 := newTx(t, 6, defaultAmount, defaultFee, signer)
-		require.NoError(t, tcs.AddToCache(context.Background(), tx2))
+		require.NoError(t, tcs.AddToCache(context.Background(), tx2, time.Now()))
 	}
 
 	got := tcs.SelectProposalTXs(lid, 1)
@@ -167,11 +168,11 @@ func TestSelectProposalTXs_ExhaustGas(t *testing.T) {
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(uint64(0), nil).Times(1)
 		tx1 := newTx(t, 0, defaultAmount, defaultFee, signer)
-		require.NoError(t, tcs.AddToCache(context.Background(), tx1))
+		require.NoError(t, tcs.AddToCache(context.Background(), tx1, time.Now()))
 		// all the TXs with nonce 0 are pending in database
 		require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx1.ID}))
 		tx2 := newTx(t, 1, defaultAmount, defaultFee, signer)
-		require.NoError(t, tcs.AddToCache(context.Background(), tx2))
+		require.NoError(t, tcs.AddToCache(context.Background(), tx2, time.Now()))
 	}
 	got := tcs.SelectProposalTXs(lid, 1)
 	require.Len(t, got, expSize)
@@ -182,25 +183,42 @@ func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
 	numTXs := numTXsInProposal - 1
 	lid := types.LayerID(97)
 	bid := types.BlockID{100}
+	now := time.Now().Add(-time.Duration(numTXs/2+1) * time.Second)
 	expected := make([]types.TransactionID, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
+		// to check if transaction with the same received timestamp are sorted correctly (lexicographically)
+		// we set the timestamp of every two transactions to be the same:
+		// e.g. 1st == 2nd, 3rd == 4th, etc.
+		received := now.Add(time.Duration(i/2) * time.Second)
+
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(uint64(0), nil).Times(1)
 
-		time.Sleep(20 * time.Millisecond) // to make sure received time is different for each TX (windows resolution is ~ 15ms)
 		tx1 := newTx(t, 0, defaultAmount, defaultFee, signer)
-		require.NoError(t, tcs.AddToCache(context.Background(), tx1))
+		require.NoError(t, tcs.AddToCache(context.Background(), tx1, received))
 		// all the TXs with nonce 0 are pending in database
 		require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx1.ID}))
 
-		time.Sleep(20 * time.Millisecond)
 		tx2 := newTx(t, 1, defaultAmount, defaultFee, signer)
-		require.NoError(t, tcs.AddToCache(context.Background(), tx2))
+		require.NoError(t, tcs.AddToCache(context.Background(), tx2, received.Add(5*time.Millisecond)))
 		expected = append(expected, tx2.ID)
 	}
+
+	sort.Slice(expected, func(i, j int) bool {
+		first := tcs.cache.cachedTXs[expected[i]]
+		second := tcs.cache.cachedTXs[expected[j]]
+
+		if first.Fee() != second.Fee() {
+			return first.Fee() > second.Fee()
+		}
+		if !first.Received.Equal(second.Received) {
+			return first.Received.Before(second.Received)
+		}
+		return first.ID.Compare(second.ID)
+	})
 
 	// no reshuffling happens when mempool is exhausted. two list should be exactly the same
 	got := tcs.SelectProposalTXs(lid, 1)
@@ -224,13 +242,13 @@ func TestSelectProposalTXs_SamePrincipal(t *testing.T) {
 	tcs.mvm.EXPECT().GetNonce(addr).Return(uint64(0), nil).Times(1)
 	for i := 0; i < numInBlock; i++ {
 		tx := newTx(t, uint64(i), defaultAmount, defaultFee, signer)
-		require.NoError(t, tcs.AddToCache(context.Background(), tx))
+		require.NoError(t, tcs.AddToCache(context.Background(), tx, time.Now()))
 		require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx.ID}))
 	}
 	expected := make([]types.TransactionID, 0, numTXsInProposal)
 	for i := 0; i < numTXs; i++ {
 		tx := newTx(t, uint64(numInBlock+i), defaultAmount, defaultFee, signer)
-		require.NoError(t, tcs.AddToCache(context.Background(), tx))
+		require.NoError(t, tcs.AddToCache(context.Background(), tx, time.Now()))
 		if i < numTXsInProposal {
 			expected = append(expected, tx.ID)
 		}
@@ -261,20 +279,20 @@ func TestSelectProposalTXs_TwoPrincipals(t *testing.T) {
 	allTXs := make(map[types.TransactionID]*types.Transaction)
 	for i := 0; i < numInDBs; i++ {
 		tx := newTx(t, uint64(i), defaultAmount, defaultFee, signer1)
-		require.NoError(t, tcs.AddToCache(context.Background(), tx))
+		require.NoError(t, tcs.AddToCache(context.Background(), tx, time.Now()))
 		require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx.ID}))
 		allTXs[tx.ID] = tx
 		tx = newTx(t, uint64(i), defaultAmount, defaultFee, signer2)
-		require.NoError(t, tcs.AddToCache(context.Background(), tx))
+		require.NoError(t, tcs.AddToCache(context.Background(), tx, time.Now()))
 		require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx.ID}))
 		allTXs[tx.ID] = tx
 	}
 	for i := 0; i < numTXs; i++ {
 		tx := newTx(t, uint64(numInDBs+i), defaultAmount, defaultFee, signer1)
-		require.NoError(t, tcs.AddToCache(context.Background(), tx))
+		require.NoError(t, tcs.AddToCache(context.Background(), tx, time.Now()))
 		allTXs[tx.ID] = tx
 		tx = newTx(t, uint64(numInDBs+i), defaultAmount, defaultFee, signer2)
-		require.NoError(t, tcs.AddToCache(context.Background(), tx))
+		require.NoError(t, tcs.AddToCache(context.Background(), tx, time.Now()))
 		allTXs[tx.ID] = tx
 	}
 	got := tcs.SelectProposalTXs(lid, 1)
@@ -304,10 +322,10 @@ func TestGetProjection(t *testing.T) {
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
 	tx1 := newTx(t, nonce, defaultAmount, defaultFee, signer)
-	require.NoError(t, tcs.AddToCache(context.Background(), tx1))
+	require.NoError(t, tcs.AddToCache(context.Background(), tx1, time.Now()))
 	require.NoError(t, tcs.LinkTXsWithBlock(types.LayerID(10), types.BlockID{100}, []types.TransactionID{tx1.ID}))
 	tx2 := newTx(t, nonce+1, defaultAmount, defaultFee, signer)
-	require.NoError(t, tcs.AddToCache(context.Background(), tx2))
+	require.NoError(t, tcs.AddToCache(context.Background(), tx2, time.Now()))
 
 	got, balance := tcs.GetProjection(addr)
 	require.EqualValues(t, nonce+2, got)
@@ -322,7 +340,7 @@ func TestAddToCache(t *testing.T) {
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
-	require.NoError(t, tcs.AddToCache(context.Background(), tx))
+	require.NoError(t, tcs.AddToCache(context.Background(), tx, time.Now()))
 	has := tcs.cache.Has(tx.ID)
 	require.True(t, has)
 	got, err := transactions.Get(tcs.db, tx.ID)
@@ -341,7 +359,7 @@ func TestAddToCache_BadNonceNotPersisted(t *testing.T) {
 	}
 	tcs.mvm.EXPECT().GetBalance(tx.Principal).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(tx.Nonce+1, nil).Times(1)
-	require.ErrorIs(t, tcs.AddToCache(context.Background(), tx), errBadNonce)
+	require.ErrorIs(t, tcs.AddToCache(context.Background(), tx, time.Now()), errBadNonce)
 	checkTXNotInDB(t, tcs.db, tx.ID)
 }
 
@@ -356,7 +374,7 @@ func TestAddToCache_NonceGap(t *testing.T) {
 	}
 	tcs.mvm.EXPECT().GetBalance(tx.Principal).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(tx.Nonce-2, nil).Times(1)
-	require.NoError(t, tcs.AddToCache(context.Background(), tx))
+	require.NoError(t, tcs.AddToCache(context.Background(), tx, time.Now()))
 	require.True(t, tcs.cache.Has(tx.ID))
 	require.False(t, tcs.cache.MoreInDB(tx.Principal))
 	checkTXStateFromDB(t, tcs.db, []*types.MeshTransaction{{Transaction: *tx}}, types.MEMPOOL)
@@ -370,7 +388,7 @@ func TestAddToCache_InsufficientBalance(t *testing.T) {
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultAmount, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
-	require.NoError(t, tcs.AddToCache(context.Background(), tx))
+	require.NoError(t, tcs.AddToCache(context.Background(), tx, time.Now()))
 	checkNoTX(t, tcs.cache, tx.ID)
 	require.True(t, tcs.cache.MoreInDB(addr))
 	checkTXStateFromDB(t, tcs.db, []*types.MeshTransaction{{Transaction: *tx}}, types.MEMPOOL)
@@ -387,7 +405,7 @@ func TestAddToCache_TooManyForOneAccount(t *testing.T) {
 	for i := 0; i <= maxTXsPerAcct; i++ {
 		tx := newTx(t, nonce+uint64(i), defaultAmount, defaultFee, signer)
 		mtxs = append(mtxs, &types.MeshTransaction{Transaction: *tx})
-		require.NoError(t, tcs.AddToCache(context.Background(), tx))
+		require.NoError(t, tcs.AddToCache(context.Background(), tx, time.Now()))
 	}
 	require.True(t, tcs.cache.MoreInDB(addr))
 	checkTXStateFromDB(t, tcs.db, mtxs, types.MEMPOOL)
@@ -401,7 +419,7 @@ func TestGetMeshTransaction(t *testing.T) {
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
-	require.NoError(t, tcs.AddToCache(context.Background(), tx))
+	require.NoError(t, tcs.AddToCache(context.Background(), tx, time.Now()))
 	mtx, err := tcs.GetMeshTransaction(tx.ID)
 	require.NoError(t, err)
 	require.Equal(t, types.MEMPOOL, mtx.State)

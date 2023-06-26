@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/prometheus/client_golang/prometheus"
@@ -99,7 +100,7 @@ func (th *TxHandler) VerifyAndCacheTx(ctx context.Context, msg []byte) error {
 	if !req.Verify() {
 		return fmt.Errorf("%w: %s", errVerify, raw.ID)
 	}
-	if err := th.state.AddToCache(ctx, &types.Transaction{RawTx: raw, TxHeader: header}); err != nil {
+	if err := th.state.AddToCache(ctx, &types.Transaction{RawTx: raw, TxHeader: header}, time.Now()); err != nil {
 		th.logger.WithContext(ctx).With().Warning("failed to add tx to conservative cache",
 			raw.ID,
 			log.Err(err),
