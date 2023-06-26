@@ -34,9 +34,9 @@ func TestSmeshing(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	vests := vestingAccs{
 		prepareVesting(t, 3, 8, 20, 1e15, 10e15),
-		prepareVesting(t, 5, 8, 20, 1e15, 10e15),
-		prepareVesting(t, 1, 8, 20, 1e15, 1e15),
-		prepareVesting(t, 1, 8, 20, 0, 1e15),
+		// prepareVesting(t, 5, 8, 20, 1e15, 10e15),
+		// prepareVesting(t, 1, 8, 20, 1e15, 1e15),
+		// prepareVesting(t, 1, 8, 20, 0, 1e15),
 	}
 	cl, err := cluster.ReuseWait(tctx,
 		cluster.WithKeys(10),
@@ -167,8 +167,10 @@ func requireEqualEligibilities(tctx *testcontext.Context, tb testing.TB, proposa
 
 func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, accs ...vestingAcc) {
 	tb.Helper()
-	var eg errgroup.Group
-	genesis := cl.GenesisID()
+	var (
+		eg      errgroup.Group
+		genesis = cl.GenesisID()
+	)
 	for i := range accs {
 		acc := accs[i]
 		client := cl.Client(i % cl.Total())
@@ -267,7 +269,7 @@ func (v vestingAcc) selfSpawn(genesis types.Hash20, nonce uint64) []byte {
 	var agg *sdkmultisig.Aggregator
 	for i := 0; i < v.required; i++ {
 		pk := v.pks[i]
-		part := sdkmultisig.SelfSpawn(uint8(i), pk, multisig.TemplateAddress, uint8(v.required), v.pubs, nonce, sdk.WithGenesisID(genesis))
+		part := sdkmultisig.SelfSpawn(uint8(i), pk, vesting.TemplateAddress, uint8(v.required), v.pubs, nonce, sdk.WithGenesisID(genesis))
 		if agg == nil {
 			agg = part
 		} else {

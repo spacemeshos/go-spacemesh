@@ -218,12 +218,12 @@ func waitTransaction(ctx context.Context,
 		if err != nil {
 			return err
 		}
-		for {
-			_, err := rsts.Recv()
-			if err != nil {
-				return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
-			}
+		_, err = rsts.Recv()
+		if err != nil {
+			return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
 		}
+		return nil
+
 	})
 }
 
