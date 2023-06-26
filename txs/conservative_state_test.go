@@ -183,13 +183,13 @@ func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
 	numTXs := numTXsInProposal - 1
 	lid := types.LayerID(97)
 	bid := types.BlockID{100}
-	now := time.Now()
+	now := time.Now().Add(-time.Duration(numTXs/2+1) * time.Second)
 	expected := make([]types.TransactionID, 0, numTXs)
-	for i := numTXs - 1; i >= 0; i-- {
+	for i := 0; i < numTXs; i++ {
 		// to check if transaction with the same received timestamp are sorted correctly (lexicographically)
 		// we set the timestamp of every two transactions to be the same:
 		// e.g. 1st == 2nd, 3rd == 4th, etc.
-		received := now.Add(-time.Duration(i/2) * time.Second)
+		received := now.Add(time.Duration(i/2) * time.Second)
 
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
