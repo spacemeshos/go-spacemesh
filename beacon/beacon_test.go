@@ -740,7 +740,6 @@ func TestBeacon_findMajorityBeacon_NotEnoughBallots(t *testing.T) {
 }
 
 func TestBeacon_findMajorityBeacon_NoBeacon(t *testing.T) {
-
 	pd := &ProtocolDriver{
 		logger:         logtest.New(t).WithName("Beacon"),
 		config:         UnitTestConfig(),

@@ -1012,9 +1012,9 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 }
 
 func TestBuilder_RetryPublishActivationTx(t *testing.T) {
-	retryInterval := 25 * time.Microsecond
+	retryInterval := 50 * time.Microsecond
 	genesis := time.Now()
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: 10 * time.Millisecond}), WithPoetRetryInterval(retryInterval))
+	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: 50 * time.Millisecond}), WithPoetRetryInterval(retryInterval))
 	posEpoch := types.EpochID(0)
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
 	poetBytes := []byte("66666")
@@ -1069,7 +1069,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 	select {
 	case <-builderConfirmation:
-	case <-time.After(time.Second * 10):
+	case <-time.After(5 * time.Second):
 		require.FailNowf(t, "failed waiting for required number of tries", "only tried %d times", tries)
 	}
 }
