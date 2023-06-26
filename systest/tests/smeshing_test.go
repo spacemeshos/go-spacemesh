@@ -186,22 +186,26 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 			ctx, cancel := context.WithTimeout(tctx, 10*time.Minute)
 			defer cancel()
 			var nonce uint64
-			id1, err := submitTransaction(ctx, acc.selfSpawn(genesis, nonce), client)
+			id, err := submitTransaction(ctx, acc.selfSpawn(genesis, nonce), client)
 			if err != nil {
 				return fmt.Errorf("selfspawn multisig: %w", err)
 			}
 			nonce++
-			id2, err := submitTransaction(ctx, acc.spawnVault(genesis, nonce), client)
-			if err != nil {
-				return fmt.Errorf("spawn vault: %w", err)
-			}
+
 			initial, err := currentBalance(ctx, client, acc.address)
 			if err != nil {
 				return err
 			}
+			waitTransaction(ctx, &subeg, client, id)
+			if err := subeg.Wait(); err != nil {
+				return err
+			}
+			id, err = submitTransaction(ctx, acc.spawnVault(genesis, nonce), client)
+			if err != nil {
+				return fmt.Errorf("spawn vault: %w", err)
+			}
 			nonce++
-			waitTransaction(ctx, &subeg, client, id1)
-			waitTransaction(ctx, &subeg, client, id2)
+			waitTransaction(ctx, &subeg, client, id)
 			if err := subeg.Wait(); err != nil {
 				return err
 			}
