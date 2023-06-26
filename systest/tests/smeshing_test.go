@@ -186,12 +186,12 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 			var nonce uint64
 			id1, err := submitTransaction(ctx, acc.selfSpawn(genesis, nonce), client)
 			if err != nil {
-				return err
+				return fmt.Errorf("selfspawn multisig: %w", err)
 			}
 			nonce++
 			id2, err := submitTransaction(ctx, acc.spawnVault(genesis, nonce), client)
 			if err != nil {
-				return err
+				return fmt.Errorf("spawn vault: %w", err)
 			}
 			initial, err := currentBalance(ctx, client, acc.address)
 			if err != nil {
@@ -214,7 +214,7 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 				}
 				id, err := submitTransaction(ctx, acc.drain(genesis, uint64(step), nonce), client)
 				if err != nil {
-					return err
+					return fmt.Errorf("drain: %w", err)
 				}
 				nonce++
 				waitTransaction(ctx, &subeg, client, id)
