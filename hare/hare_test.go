@@ -303,7 +303,7 @@ func TestHare_onTick(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, comm.wc, startedChan)
 		close(createdChan)
 		return nmcp
@@ -322,7 +322,6 @@ func TestHare_onTick(t *testing.T) {
 		mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil)
 	}
 	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch(), h.nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil)
-	mockMesh.EXPECT().VRFNonce(h.nodeID, lyrID.GetEpoch()).Return(types.VRFPostIndex(1), nil)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
 	h.mockCoin.EXPECT().Set(lyrID, gomock.Any())
 
@@ -376,7 +375,7 @@ func TestHare_onTick_notMining(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, _ *types.VRFPostIndex, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, comm.wc, startedChan)
 		close(createdChan)
 		return nmcp
@@ -392,7 +391,6 @@ func TestHare_onTick_notMining(t *testing.T) {
 		randomProposal(lyrID, beacon),
 	}
 	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch(), h.nodeID).Return(nil, sql.ErrNotFound)
-	mockMesh.EXPECT().VRFNonce(h.nodeID, lyrID.GetEpoch()).Return(types.VRFPostIndex(1), nil)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
 	h.mockCoin.EXPECT().Set(lyrID, gomock.Any())
 

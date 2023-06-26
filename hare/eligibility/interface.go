@@ -14,7 +14,3 @@ type activeSetCache interface {
 type vrfVerifier interface {
 	Verify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool
 }
-
-type nonceFetcher interface {
-	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
-}
