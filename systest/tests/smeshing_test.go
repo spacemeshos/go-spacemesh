@@ -43,8 +43,8 @@ func TestSmeshing(t *testing.T) {
 		cluster.WithGenesisBalances(vests.genesisBalances()...),
 	)
 	require.NoError(t, err)
-	// testSmeshing(t, tctx, cl)
-	// testTransactions(t, tctx, cl, 8)
+	testSmeshing(t, tctx, cl)
+	testTransactions(t, tctx, cl, 8)
 	testVesting(t, tctx, cl, vests...)
 }
 
@@ -239,7 +239,7 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 					return err
 				}
 			}
-			drained, err := currentBalance(ctx, client, acc.vault)
+			remaining, err := currentBalance(ctx, client, acc.vault)
 			if err != nil {
 				return err
 			}
@@ -253,11 +253,11 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 				"initial", initial,
 				"current", current,
 				"vested", acc.total,
-				"drained", drained,
+				"remaining", remaining,
 				"client", client.Name,
 			)
-			if drained != 0 {
-				return fmt.Errorf("vault at %v must be empty, instead has %d", acc.vault, drained)
+			if remaining != 0 {
+				return fmt.Errorf("vault at %v must be empty, instead has %d", acc.vault, remaining)
 			}
 			if delta := int(current - initial); delta+1e7 < acc.total {
 				return fmt.Errorf("account at %v should drain all values from vault (compensated for tx gas), instead has %d", acc.address, delta)
