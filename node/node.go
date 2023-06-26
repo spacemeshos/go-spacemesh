@@ -1010,7 +1010,7 @@ func (app *App) startServices(ctx context.Context, appErr chan error) error {
 		app.postVerifier.Start(ctx)
 		return nil
 	})
-	app.syncer.Start(ctx)
+	app.syncer.Start()
 	app.beaconProtocol.Start(ctx)
 
 	app.blockGen.Start()

@@ -218,11 +218,11 @@ func (s *Syncer) IsBeaconSynced(epoch types.EpochID) bool {
 }
 
 // Start starts the main sync loop that tries to sync data for every SyncInterval.
-func (s *Syncer) Start(ctx context.Context) {
+func (s *Syncer) Start() {
 	s.syncOnce.Do(func() {
-		s.logger.WithContext(ctx).Info("starting syncer loop")
-		ctx, cancel := context.WithCancel(ctx)
+		ctx, cancel := context.WithCancel(context.Background())
 		s.stop = cancel
+		s.logger.WithContext(ctx).Info("starting syncer loop")
 		s.eg.Go(func() error {
 			if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
 				s.setSyncState(ctx, synced)
