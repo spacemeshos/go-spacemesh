@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals/util"
-	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
 
 var (
@@ -154,7 +153,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 			var opinion *types.Opinion
 			opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
 			if err == nil {
-				metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last - base.layer))
+				layerDistanceToBaseBallot.Observe(float64(t.last - base.layer))
 				t.logger.Info("encoded votes",
 					log.ZContext(ctx),
 					zap.Stringer("base ballot", base.id),

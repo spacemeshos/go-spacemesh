@@ -153,6 +153,7 @@ func (t *Tortoise) OnMalfeasance(id types.NodeID) {
 	}
 	t.logger.Debug("on malfeasence", zap.Stringer("id", id))
 	t.trtl.makrMalfeasant(id)
+	malfeasantNumber.Inc()
 	if t.tracer != nil {
 		t.tracer.On(&MalfeasanceTrace{ID: id})
 	}
