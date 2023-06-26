@@ -166,7 +166,6 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	cluster.addFlag(genesis)
 	cluster.addFlag(GenesisExtraData(defaultExtraData))
 	cluster.addFlag(MinPeers(minPeers(cctx.ClusterSize)))
-	cluster.addFlag(Accounts(cluster.genesisBalances))
 
 	cluster.addPoetFlag(genesis)
 	cluster.addPoetFlag(PoetRestListen(poetPort))
@@ -174,6 +173,7 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	for _, opt := range opts {
 		opt(cluster)
 	}
+	cluster.addFlag(Accounts(cluster.genesisBalances))
 	return cluster
 }
 

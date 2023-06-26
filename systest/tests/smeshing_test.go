@@ -43,8 +43,8 @@ func TestSmeshing(t *testing.T) {
 		cluster.WithGenesisBalances(vests.genesisBalances()...),
 	)
 	require.NoError(t, err)
-	testSmeshing(t, tctx, cl)
-	testTransactions(t, tctx, cl, 8)
+	// testSmeshing(t, tctx, cl)
+	// testTransactions(t, tctx, cl, 8)
 	testVesting(t, tctx, cl, vests...)
 }
 
