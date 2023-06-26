@@ -341,6 +341,15 @@ func getNonce(ctx context.Context, client *cluster.NodeClient, address types.Add
 	return resp.AccountWrapper.StateProjected.Counter, nil
 }
 
+func currentBalance(ctx context.Context, client *cluster.NodeClient, address types.Address) (uint64, error) {
+	gstate := pb.NewGlobalStateServiceClient(client)
+	resp, err := gstate.Account(ctx, &pb.AccountRequest{AccountId: &pb.AccountId{Address: address.String()}})
+	if err != nil {
+		return 0, err
+	}
+	return resp.AccountWrapper.StateCurrent.Balance.Value, nil
+}
+
 func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()

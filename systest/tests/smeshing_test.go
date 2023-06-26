@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 	"testing"
 	"time"
@@ -32,10 +33,10 @@ func TestSmeshing(t *testing.T) {
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	vests := vestingAccs{
-		prepareVesting(t, 3, 10, 24, 1e9, 10e9),
-		prepareVesting(t, 1, 10, 24, 1e9, 8e9),
-		prepareVesting(t, 1, 10, 24, 1e9, 1e9),
-		prepareVesting(t, 1, 10, 24, 0, 1e9),
+		prepareVesting(t, 3, 8, 20, 1e15, 10e15),
+		prepareVesting(t, 5, 8, 20, 1e15, 10e15),
+		prepareVesting(t, 1, 8, 20, 1e15, 1e15),
+		prepareVesting(t, 1, 8, 20, 0, 1e15),
 	}
 	cl, err := cluster.ReuseWait(tctx,
 		cluster.WithKeys(10),
@@ -192,6 +193,10 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 			if err != nil {
 				return err
 			}
+			initial, err := currentBalance(ctx, client, acc.address)
+			if err != nil {
+				return err
+			}
 			nonce++
 			waitTransaction(ctx, &subeg, client, id1)
 			waitTransaction(ctx, &subeg, client, id2)
@@ -201,6 +206,12 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 			leftover := acc.total
 			for leftover > 0 {
 				step := acc.total / (acc.end - acc.start)
+				if leftover > step {
+					leftover -= step
+				} else {
+					step = leftover
+					leftover = 0
+				}
 				id, err := submitTransaction(ctx, acc.drain(genesis, uint64(step), nonce), client)
 				if err != nil {
 					return err
@@ -210,6 +221,20 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 				if err := subeg.Wait(); err != nil {
 					return err
 				}
+			}
+			drained, err := currentBalance(ctx, client, acc.vault)
+			if err != nil {
+				return err
+			}
+			if drained != 0 {
+				return fmt.Errorf("vault at %v must be empty, instead has %d", acc.vault, drained)
+			}
+			current, err := currentBalance(ctx, client, acc.address)
+			if err != nil {
+				return err
+			}
+			if delta := int(current - initial); delta+1e7 < acc.total {
+				return fmt.Errorf("account at %v should drain all values from vault (compensated for tx gas), instead has %d", acc.address, delta)
 			}
 			return nil
 		})
