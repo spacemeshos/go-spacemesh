@@ -395,8 +395,6 @@ func TestBeaconWithMetrics(t *testing.T) {
 }
 
 func TestBeacon_BeaconsWithDatabase(t *testing.T) {
-	t.Parallel()
-
 	pd := &ProtocolDriver{
 		logger:  logtest.New(t).WithName("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
@@ -443,8 +441,6 @@ func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 }
 
 func TestBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
-	t.Parallel()
-
 	pd := &ProtocolDriver{
 		logger:  logtest.New(t).WithName("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
@@ -458,8 +454,6 @@ func TestBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 }
 
 func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
-	t.Parallel()
-
 	pd := &ProtocolDriver{
 		logger:         logtest.New(t).WithName("Beacon"),
 		cdb:            datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
@@ -496,8 +490,6 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 }
 
 func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
-	t.Parallel()
-
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 	beacon3 := types.RandomBeacon()
@@ -531,8 +523,6 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 	for _, tc := range tt {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
 			// making sure the math in test arguments are correct
 			total := fixed.New64(0)
 			beaconWeights := make(map[types.Beacon]fixed.Fixed)
@@ -586,8 +576,6 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 }
 
 func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
-	t.Parallel()
-
 	pd := &ProtocolDriver{
 		logger:         logtest.New(t).WithName("Beacon"),
 		config:         UnitTestConfig(),
@@ -619,8 +607,6 @@ func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 }
 
 func TestBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
-	t.Parallel()
-
 	epoch := types.EpochID(3)
 	beacon := types.RandomBeacon()
 	beaconFromBallots := types.RandomBeacon()
@@ -652,8 +638,6 @@ func TestBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
 }
 
 func TestBeacon_findMajorityBeacon(t *testing.T) {
-	t.Parallel()
-
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 	beacon3 := types.RandomBeacon()
@@ -688,8 +672,6 @@ func TestBeacon_findMajorityBeacon(t *testing.T) {
 }
 
 func TestBeacon_findMajorityBeacon_plurality(t *testing.T) {
-	t.Parallel()
-
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 	beacon3 := types.RandomBeacon()
@@ -724,8 +706,6 @@ func TestBeacon_findMajorityBeacon_plurality(t *testing.T) {
 }
 
 func TestBeacon_findMajorityBeacon_NotEnoughBallots(t *testing.T) {
-	t.Parallel()
-
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 	beacon3 := types.RandomBeacon()
@@ -760,7 +740,6 @@ func TestBeacon_findMajorityBeacon_NotEnoughBallots(t *testing.T) {
 }
 
 func TestBeacon_findMajorityBeacon_NoBeacon(t *testing.T) {
-	t.Parallel()
 
 	pd := &ProtocolDriver{
 		logger:         logtest.New(t).WithName("Beacon"),
@@ -774,8 +753,6 @@ func TestBeacon_findMajorityBeacon_NoBeacon(t *testing.T) {
 }
 
 func TestBeacon_setBeacon(t *testing.T) {
-	t.Parallel()
-
 	tpd := setUpProtocolDriver(t)
 	epoch := types.EpochID(5)
 	beacon := types.RandomBeacon()
@@ -788,8 +765,6 @@ func TestBeacon_setBeacon(t *testing.T) {
 }
 
 func TestBeacon_atxThresholdFraction(t *testing.T) {
-	t.Parallel()
-
 	kappa := 40
 	q := big.NewRat(1, 3)
 	tt := []struct {
@@ -817,8 +792,6 @@ func TestBeacon_atxThresholdFraction(t *testing.T) {
 	for _, tc := range tt {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
 			threshold := atxThresholdFraction(kappa, q, tc.w)
 			expected, ok := new(big.Float).SetString(tc.threshold)
 			require.True(t, ok)
@@ -828,8 +801,6 @@ func TestBeacon_atxThresholdFraction(t *testing.T) {
 }
 
 func TestBeacon_atxThreshold(t *testing.T) {
-	t.Parallel()
-
 	kappa := 40
 	q := big.NewRat(1, 3)
 	tt := []struct {
@@ -857,8 +828,6 @@ func TestBeacon_atxThreshold(t *testing.T) {
 	for _, tc := range tt {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
 			threshold := atxThreshold(kappa, q, tc.w)
 			expected, ok := new(big.Int).SetString(tc.threshold, 10)
 			require.True(t, ok)
@@ -917,8 +886,6 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 }
 
 func TestBeacon_buildProposal(t *testing.T) {
-	t.Parallel()
-
 	tt := []struct {
 		name   string
 		epoch  types.EpochID
@@ -934,8 +901,6 @@ func TestBeacon_buildProposal(t *testing.T) {
 	for _, tc := range tt {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
 			result := buildProposal(logtest.New(t), tc.epoch, types.VRFPostIndex(1))
 			require.Equal(t, tc.result, string(result))
 		})
@@ -943,8 +908,6 @@ func TestBeacon_buildProposal(t *testing.T) {
 }
 
 func TestBeacon_getSignedProposal(t *testing.T) {
-	t.Parallel()
-
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	vrfSigner, err := edSgn.VRFSigner()
@@ -970,8 +933,6 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 	for _, tc := range tt {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
 			result := buildSignedProposal(context.Background(), logtest.New(t), vrfSigner, tc.epoch, types.VRFPostIndex(1))
 			require.Equal(t, tc.result, result)
 		})
