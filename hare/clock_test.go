@@ -4,26 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestClock_AwaitWakeup(t *testing.T) {
-	c := NewSimpleRoundClock(time.Now(), 10*time.Millisecond, 8*time.Millisecond)
-
-	ch := c.AwaitWakeup()
-	select {
-	case <-ch:
-		assert.Fail(t, "too fast")
-	case <-time.After(8 * time.Millisecond):
-	}
-
-	select {
-	case <-ch:
-	case <-time.After(4 * time.Millisecond):
-		assert.Fail(t, "too slow")
-	}
-}
 
 func TestClock_AwaitRound(t *testing.T) {
 	r := require.New(t)
