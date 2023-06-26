@@ -134,7 +134,8 @@ type Syncer struct {
 	// awaitATXSyncedCh is the list of subscribers' channels to notify when this node enters ATX synced state
 	awaitATXSyncedCh chan struct{}
 
-	eg errgroup.Group
+	eg   errgroup.Group
+	stop context.CancelFunc
 }
 
 // NewSyncer creates a new Syncer instance.
@@ -185,6 +186,7 @@ func NewSyncer(
 func (s *Syncer) Close() {
 	s.syncTimer.Stop()
 	s.validateTimer.Stop()
+	s.stop()
 	s.logger.With().Info("waiting for syncer goroutines to finish")
 	err := s.eg.Wait()
 	s.logger.With().Info("all syncer goroutines finished", log.Err(err))
@@ -216,8 +218,10 @@ func (s *Syncer) IsBeaconSynced(epoch types.EpochID) bool {
 }
 
 // Start starts the main sync loop that tries to sync data for every SyncInterval.
-func (s *Syncer) Start(ctx context.Context) {
+func (s *Syncer) Start() {
 	s.syncOnce.Do(func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		s.stop = cancel
 		s.logger.WithContext(ctx).Info("starting syncer loop")
 		s.eg.Go(func() error {
 			if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {

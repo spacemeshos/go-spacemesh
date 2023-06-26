@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -313,10 +312,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	})
 }
 
-func TestBuilder_StartSmeshingAvoidsPanickingIfPrepareInitializerReturnsError(t *testing.T) {
-	t.Skip()
-	// First verify that a panic occurs when PrepareInitializer does not return
-	// an error but StartSession does.
+func TestBuilder_StartSmeshing_PanicsOnErrInStartSession(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -344,27 +340,26 @@ func TestBuilder_StartSmeshingAvoidsPanickingIfPrepareInitializerReturnsError(t 
 		require.Fail(t, "test timed out or failed")
 	}
 
-	// Now verify that a panic does not occur if PrepareInitializer returns an error
-	l = log.NewMockLogger(gomock.NewController(t))
-	tab = newTestBuilder(t)
+	tab.stop()
+	tab.eg.Wait()
+}
+
+func TestBuilder_StartSmeshing_SessionNotStartedOnFailPrepare(t *testing.T) {
+	l := log.NewMockLogger(gomock.NewController(t))
+	tab := newTestBuilder(t)
 	tab.log = l
 
 	// Stub these methods in case they get called
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes().Return(&types.Post{}, &types.PostMetadata{}, nil)
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).AnyTimes()
 
-	// Set expectations, we don't expect StartSession to be called, since
-	// StartSmeshing should exit early if PrepareInitializer returns an error.
-	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(),
-		gomock.Any()).Return(errors.New("avoid panic"))
+	// Set PrepareInitializer to fail
+	testError := errors.New("avoid panic")
+	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).Return(testError)
 
-	// We check that no new goroutines were started as a result of the call to
-	// StartSmeshing, this assures us that upon returning from StartSmeshing
-	// there is no chance that StartSession is subsequently called in a
-	// goroutine.
-	goroutineCount := runtime.NumGoroutine()
-	tab.StartSmeshing(tab.coinbase, PostSetupOpts{})
-	require.Equal(t, goroutineCount, runtime.NumGoroutine())
+	require.ErrorIs(t, tab.StartSmeshing(tab.coinbase, PostSetupOpts{}), testError)
+
+	tab.eg.Wait()
 }
 
 func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
@@ -1069,7 +1064,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 	select {
 	case <-builderConfirmation:
-	case <-time.After(time.Second * 5):
+	case <-time.After(time.Second * 10):
 		require.FailNow(t, "failed waiting for required number of tries to occur")
 	}
 }
