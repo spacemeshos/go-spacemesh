@@ -128,12 +128,18 @@ func New(clock layerClock, opts ...Opt) *Updater {
 	return u
 }
 
-func (u *Updater) Subscribe() <-chan *VerifiedUpdate {
+func (u *Updater) Subscribe() (<-chan *VerifiedUpdate, error) {
+	select {
+	case <-u.stop: // prevent subscribing after closing
+		return nil, errors.New("updater has been closed")
+	default:
+	}
+
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	ch := make(chan *VerifiedUpdate, 10)
 	u.subscribers = append(u.subscribers, ch)
-	return ch
+	return ch, nil
 }
 
 func (u *Updater) Load(ctx context.Context) error {
@@ -183,7 +189,7 @@ func (u *Updater) Start() error {
 
 func (u *Updater) Close() error {
 	select {
-	case <-u.stop: // prevent calling Close twice from a panic
+	case <-u.stop: // prevent closing the channel twice
 	default:
 		close(u.stop)
 	}

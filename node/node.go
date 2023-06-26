@@ -971,7 +971,11 @@ func (app *App) launchStandalone(ctx context.Context) error {
 
 func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 	app.eg.Go(func() error {
-		ch := app.updater.Subscribe()
+		ch, err := app.updater.Subscribe()
+		if err != nil {
+			appErr <- err
+			return nil
+		}
 		if err := app.updater.Start(); err != nil {
 			appErr <- err
 			return nil
