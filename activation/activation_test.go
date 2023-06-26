@@ -1012,7 +1012,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 }
 
 func TestBuilder_RetryPublishActivationTx(t *testing.T) {
-	retryInterval := 10 * time.Microsecond
+	retryInterval := 25 * time.Microsecond
 	genesis := time.Now()
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: 10 * time.Millisecond}), WithPoetRetryInterval(retryInterval))
 	posEpoch := types.EpochID(0)
@@ -1038,18 +1038,22 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 	expectedTries := 3
 	tries := 0
+	var last time.Time
 	builderConfirmation := make(chan struct{})
-	// TODO(dshulyak) maybe measure time difference between attempts. It should be no less than retryInterval
-	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).Times(expectedTries).DoAndReturn(
 		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, time.Duration, error) {
+			now := time.Now()
+			if now.Sub(last) < retryInterval {
+				require.FailNow(t, "retry interval not respected")
+			}
+
 			tries++
-			if tries == expectedTries {
-				close(builderConfirmation)
-			} else if tries < expectedTries {
+			if tries < expectedTries {
 				return nil, 0, ErrPoetServiceUnstable
 			}
+			close(builderConfirmation)
 			return newNIPostWithChallenge(t, challenge.Hash(), poetBytes), 0, nil
-		}).Times(expectedTries)
+		})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	runnerExit := make(chan struct{})
