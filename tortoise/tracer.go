@@ -79,6 +79,7 @@ func RunTrace(path string, breakpoint func(), opts ...Opt) error {
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 	dec := json.NewDecoder(bufio.NewReaderSize(f, 1<<20))
 	enum := newEventEnum()
 	runner := &traceRunner{

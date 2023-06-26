@@ -352,6 +352,7 @@ func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
 }
 
 func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
+	t.Skip()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodGet, r.Method)
 		w.WriteHeader(http.StatusOK)

@@ -178,7 +178,8 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 		)
 		return fmt.Errorf("verify ed25519 signature")
 	}
-	// create msg
+	hareMsg.signedHash = types.BytesToHash(hareMsg.InnerMessage.HashBytes())
+
 	if err := checkIdentity(ctx, b.Log, hareMsg, b.stateQuerier); err != nil {
 		logger.With().Warning("message validation failed: could not construct msg", log.Err(err))
 		return err

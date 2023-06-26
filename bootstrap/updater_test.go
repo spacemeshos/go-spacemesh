@@ -13,6 +13,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -161,7 +162,8 @@ func TestLoad(t *testing.T) {
 				bootstrap.WithLogger(logtest.New(t)),
 				bootstrap.WithFilesystem(fs),
 			)
-			ch := updater.Subscribe()
+			ch, err := updater.Subscribe()
+			require.NoError(t, err)
 			require.NoError(t, updater.Load(context.Background()))
 			if len(tc.resultFuncs) > 0 {
 				require.Len(t, ch, len(tc.resultFuncs))
@@ -201,7 +203,8 @@ func TestLoadedNotDownloadedAgain(t *testing.T) {
 		bootstrap.WithLogger(logtest.New(t)),
 		bootstrap.WithFilesystem(fs),
 	)
-	ch := updater.Subscribe()
+	ch, err := updater.Subscribe()
+	require.NoError(t, err)
 	require.NoError(t, updater.Load(context.Background()))
 	require.Len(t, ch, 3)
 	for i := 0; i < 3; i++ {
@@ -226,11 +229,10 @@ func TestStartClose(t *testing.T) {
 		bootstrap.WithLogger(logtest.New(t)),
 		bootstrap.WithFilesystem(fs),
 	)
-	ch := updater.Subscribe()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	require.NoError(t, updater.Start(ctx))
-	t.Cleanup(updater.Close)
+	ch, err := updater.Subscribe()
+	require.NoError(t, err)
+	require.NoError(t, updater.Start())
+	defer updater.Close()
 
 	var got *bootstrap.VerifiedUpdate
 	require.Eventually(t, func() bool {
@@ -242,7 +244,7 @@ func TestStartClose(t *testing.T) {
 		}
 	}, time.Second, 100*time.Millisecond)
 	checkUpdate1(t, got)
-	cancel()
+	require.NoError(t, updater.Close())
 }
 
 func TestPrune(t *testing.T) {
@@ -337,7 +339,8 @@ func TestDoIt(t *testing.T) {
 				bootstrap.WithFilesystem(fs),
 				bootstrap.WithHttpClient(ts.Client()),
 			)
-			ch := updater.Subscribe()
+			ch, err := updater.Subscribe()
+			require.NoError(t, err)
 			require.NoError(t, updater.DoIt(context.Background()))
 			require.Len(t, ch, len(tc.checkers))
 			for i, checker := range tc.checkers {
@@ -374,7 +377,8 @@ func TestEmptyResponse(t *testing.T) {
 		bootstrap.WithHttpClient(ts.Client()),
 	)
 
-	ch := updater.Subscribe()
+	ch, err := updater.Subscribe()
+	require.NoError(t, err)
 	require.NoError(t, updater.DoIt(context.Background()))
 	require.Empty(t, ch)
 	require.Equal(t, 9, numQ)
@@ -446,7 +450,8 @@ func TestGetInvalidUpdate(t *testing.T) {
 				bootstrap.WithHttpClient(ts.Client()),
 			)
 
-			ch := updater.Subscribe()
+			ch, err := updater.Subscribe()
+			require.NoError(t, err)
 			require.ErrorIs(t, updater.DoIt(context.Background()), tc.err)
 			require.Empty(t, ch)
 		})
@@ -479,7 +484,8 @@ func TestNoNewUpdate(t *testing.T) {
 		bootstrap.WithHttpClient(ts.Client()),
 	)
 
-	ch := updater.Subscribe()
+	ch, err := updater.Subscribe()
+	require.NoError(t, err)
 	require.NoError(t, updater.DoIt(context.Background()))
 	require.Len(t, ch, 1)
 	got := <-ch
@@ -528,7 +534,8 @@ func TestRequiredEpochs(t *testing.T) {
 		bootstrap.WithHttpClient(ts.Client()),
 	)
 
-	ch := updater.Subscribe()
+	ch, err := updater.Subscribe()
+	require.NoError(t, err)
 	require.NoError(t, updater.DoIt(context.Background()))
 	require.Empty(t, ch)
 	require.Equal(t, expected, queried)
@@ -549,7 +556,8 @@ func TestIntegration(t *testing.T) {
 		bootstrap.WithLogger(logtest.New(t)),
 		bootstrap.WithFilesystem(fs),
 	)
-	ch := updater.Subscribe()
+	ch, err := updater.Subscribe()
+	require.NoError(t, err)
 	require.NoError(t, updater.DoIt(context.Background()))
 	require.Len(t, ch, 3)
 	got := <-ch
@@ -567,4 +575,36 @@ func TestIntegration(t *testing.T) {
 
 	require.NoError(t, updater.DoIt(context.Background()))
 	require.Empty(t, ch)
+}
+
+func TestClose(t *testing.T) {
+	cfg := bootstrap.DefaultConfig()
+	fs := afero.NewMemMapFs()
+
+	mc := bootstrap.NewMocklayerClock(gomock.NewController(t))
+	updater := bootstrap.New(
+		mc,
+		bootstrap.WithConfig(cfg),
+		bootstrap.WithLogger(logtest.New(t)),
+		bootstrap.WithFilesystem(fs),
+	)
+	ch, err := updater.Subscribe()
+	require.NoError(t, err)
+	require.NotNil(t, ch)
+
+	// close on multiple goroutines without error or race
+	var eg errgroup.Group
+	for i := 0; i < 10; i++ {
+		eg.Go(func() error {
+			require.NoError(t, updater.Close())
+			return nil
+		})
+	}
+
+	eg.Wait()
+
+	// subscribe after close
+	ch, err = updater.Subscribe()
+	require.Error(t, err)
+	require.Nil(t, ch)
 }
