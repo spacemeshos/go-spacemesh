@@ -34,9 +34,9 @@ func TestSmeshing(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	vests := vestingAccs{
 		prepareVesting(t, 3, 8, 20, 1e15, 10e15),
-		// prepareVesting(t, 5, 8, 20, 1e15, 10e15),
-		// prepareVesting(t, 1, 8, 20, 1e15, 1e15),
-		// prepareVesting(t, 1, 8, 20, 0, 1e15),
+		prepareVesting(t, 5, 8, 20, 1e15, 10e15),
+		prepareVesting(t, 1, 8, 20, 1e15, 1e15),
+		prepareVesting(t, 1, 8, 20, 0, 1e15),
 	}
 	cl, err := cluster.ReuseWait(tctx,
 		cluster.WithKeys(10),
@@ -196,6 +196,10 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 			if err != nil {
 				return err
 			}
+			tctx.Log.Debugw("submitted selfspawn",
+				"address", acc.address,
+				"initial", initial,
+			)
 			waitTransaction(ctx, &subeg, client, id)
 			if err := subeg.Wait(); err != nil {
 				return err
@@ -205,6 +209,9 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 				return fmt.Errorf("spawn vault: %w", err)
 			}
 			nonce++
+			tctx.Log.Debugw("submitted spawn vault",
+				"address", acc.vault,
+			)
 			waitTransaction(ctx, &subeg, client, id)
 			if err := subeg.Wait(); err != nil {
 				return err
@@ -218,6 +225,10 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 					step = leftover
 					leftover = 0
 				}
+				tctx.Log.Debugw("submitted drain vault",
+					"amount", step,
+					"leftover", leftover,
+				)
 				id, err := submitTransaction(ctx, acc.drain(genesis, uint64(step), nonce), client)
 				if err != nil {
 					return fmt.Errorf("drain: %w", err)
@@ -232,12 +243,21 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 			if err != nil {
 				return err
 			}
-			if drained != 0 {
-				return fmt.Errorf("vault at %v must be empty, instead has %d", acc.vault, drained)
-			}
 			current, err := currentBalance(ctx, client, acc.address)
 			if err != nil {
 				return err
+			}
+			tctx.Log.Infow("results for account after tests",
+				"vest", acc.address,
+				"vault", acc.vault,
+				"initial", initial,
+				"current", current,
+				"vested", acc.total,
+				"drained", drained,
+				"client", client.Name,
+			)
+			if drained != 0 {
+				return fmt.Errorf("vault at %v must be empty, instead has %d", acc.vault, drained)
 			}
 			if delta := int(current - initial); delta+1e7 < acc.total {
 				return fmt.Errorf("account at %v should drain all values from vault (compensated for tx gas), instead has %d", acc.address, delta)
