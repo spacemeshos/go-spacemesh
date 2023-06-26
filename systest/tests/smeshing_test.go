@@ -2,10 +2,12 @@ package tests
 
 import (
 	"bytes"
-	"crypto/ed25519"
+	"context"
 	"sort"
 	"testing"
+	"time"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,6 +17,9 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
+	sdkmultisig "github.com/spacemeshos/go-spacemesh/genvm/sdk/multisig"
+	sdkvesting "github.com/spacemeshos/go-spacemesh/genvm/sdk/vesting"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
@@ -26,58 +31,20 @@ func TestSmeshing(t *testing.T) {
 	t.Parallel()
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
-	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
+	vests := vestingAccs{
+		prepareVesting(t, 3, 10, 24, 1e9, 10e9),
+		prepareVesting(t, 1, 10, 24, 1e9, 8e9),
+		prepareVesting(t, 1, 10, 24, 1e9, 1e9),
+		prepareVesting(t, 1, 10, 24, 0, 1e9),
+	}
+	cl, err := cluster.ReuseWait(tctx,
+		cluster.WithKeys(10),
+		cluster.WithGenesisBalances(vests.genesisBalances()...),
+	)
 	require.NoError(t, err)
 	testSmeshing(t, tctx, cl)
 	testTransactions(t, tctx, cl, 8)
-}
-
-type vestingAcc struct {
-	pks            []ed25519.PrivateKey
-	address, vault types.Address
-	start, end     int
-	total          int
-}
-
-func genKeys(tb testing.TB, n int) (pks []ed25519.PrivateKey, pubs []types.Hash32) {
-	tb.Helper()
-	for i := 0; i < n; i++ {
-		pub, pk, err := ed25519.GenerateKey(nil)
-		require.NoError(tb, err)
-		pks = append(pks, pk)
-		var hs types.Hash32
-		copy(hs[:], pub)
-		pubs = append(pubs, hs)
-	}
-	return pks, pubs
-}
-
-func prepareVesing(tb testing.TB, n int) (rst []vestingAcc) {
-	tb.Helper()
-	for i := 0; i < n; i++ {
-		pks, pubs := genKeys(tb, n)
-		vestingArgs := &multisig.SpawnArguments{
-			Required:   uint8(n/2 + 1),
-			PublicKeys: pubs,
-		}
-		vestingAddress := core.ComputePrincipal(vesting.TemplateAddress, vestingArgs)
-		vaultArgs := &vault.SpawnArguments{
-			Owner:               vestingAddress,
-			TotalAmount:         uint64(10e9),
-			InitialUnlockAmount: uint64(1e9),
-			VestingStart:        30,
-			VestingEnd:          20,
-		}
-		rst = append(rst, vestingAcc{
-			pks:     pks,
-			address: vestingAddress,
-			vault:   core.ComputePrincipal(vault.TemplateAddress, vaultArgs),
-			start:   int(vaultArgs.VestingStart),
-			end:     int(vaultArgs.VestingEnd),
-			total:   int(vaultArgs.TotalAmount),
-		})
-	}
-	return rst
+	testVesting(t, tctx, cl, vests...)
 }
 
 func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
@@ -194,5 +161,174 @@ func requireEqualEligibilities(tctx *testcontext.Context, tb testing.TB, proposa
 		} else {
 			assert.Equal(tb, referenceEligibilities, eligibilities, prettyHex([]byte(smesher)))
 		}
+	}
+}
+
+func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, accs ...vestingAcc) {
+	tb.Helper()
+	var eg errgroup.Group
+	genesis := cl.GenesisID()
+	for i := range accs {
+		acc := accs[i]
+		client := cl.Client(i % cl.Total())
+		eg.Go(func() error {
+			var subeg errgroup.Group
+			watchLayers(tctx, &subeg, client, func(layer *pb.LayerStreamResponse) (bool, error) {
+				return layer.Layer.Number.Number < uint32(acc.start), nil
+			})
+			if err := subeg.Wait(); err != nil {
+				return err
+			}
+
+			ctx, cancel := context.WithTimeout(tctx, 10*time.Minute)
+			defer cancel()
+			var nonce uint64
+			id1, err := submitTransaction(ctx, acc.selfSpawn(genesis, nonce), client)
+			if err != nil {
+				return err
+			}
+			nonce++
+			id2, err := submitTransaction(ctx, acc.spawnVault(genesis, nonce), client)
+			if err != nil {
+				return err
+			}
+			nonce++
+			waitTransaction(ctx, &subeg, client, id1)
+			waitTransaction(ctx, &subeg, client, id2)
+			if err := subeg.Wait(); err != nil {
+				return err
+			}
+			leftover := acc.total
+			for leftover > 0 {
+				step := acc.total / (acc.end - acc.start)
+				id, err := submitTransaction(ctx, acc.drain(genesis, uint64(step), nonce), client)
+				if err != nil {
+					return err
+				}
+				nonce++
+				waitTransaction(ctx, &subeg, client, id)
+				if err := subeg.Wait(); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+	require.NoError(tb, eg.Wait())
+}
+
+type vestingAccs []vestingAcc
+
+func (v vestingAccs) genesisBalances() (rst []cluster.GenAccount) {
+	for _, acc := range v {
+		rst = append(rst,
+			cluster.GenAccount{Address: acc.address, Balance: 1e8},
+			cluster.GenAccount{Address: acc.vault, Balance: uint64(acc.total)},
+		)
+	}
+	return rst
+}
+
+type vestingAcc struct {
+	required       int
+	pks            []ed25519.PrivateKey
+	pubs           []ed25519.PublicKey
+	address, vault types.Address
+	start, end     int
+	initial, total int
+}
+
+func (v vestingAcc) selfSpawn(genesis types.Hash20, nonce uint64) []byte {
+	var agg *sdkmultisig.Aggregator
+	for i := 0; i < v.required; i++ {
+		pk := v.pks[i]
+		part := sdkmultisig.SelfSpawn(uint8(i), pk, multisig.TemplateAddress, uint8(v.required), v.pubs, nonce, sdk.WithGenesisID(genesis))
+		if agg == nil {
+			agg = part
+		} else {
+			agg.Add(*part.Part(uint8(i)))
+		}
+	}
+	return agg.Raw()
+}
+
+func (v vestingAcc) spawnVault(genesis types.Hash20, nonce uint64) []byte {
+	args := vault.SpawnArguments{
+		Owner:               v.address,
+		InitialUnlockAmount: uint64(v.initial),
+		TotalAmount:         uint64(v.total),
+		VestingStart:        types.LayerID(v.start),
+		VestingEnd:          types.LayerID(v.end),
+	}
+	var agg *sdkmultisig.Aggregator
+	for i := 0; i < v.required; i++ {
+		pk := v.pks[i]
+		part := sdkmultisig.Spawn(uint8(i), pk, v.address, vault.TemplateAddress, &args, nonce, sdk.WithGenesisID(genesis))
+		if agg == nil {
+			agg = part
+		} else {
+			agg.Add(*part.Part(uint8(i)))
+		}
+	}
+	return agg.Raw()
+}
+
+func (v vestingAcc) drain(genesis types.Hash20, amount, nonce uint64) []byte {
+	var agg *sdkvesting.Aggregator
+	for i := 0; i < v.required; i++ {
+		pk := v.pks[i]
+		part := sdkvesting.DrainVault(uint8(i), pk, v.address, v.vault, v.address, amount, nonce, sdk.WithGenesisID(genesis))
+		if agg == nil {
+			agg = part
+		} else {
+			agg.Add(*part.Part(uint8(i)))
+		}
+	}
+	return agg.Raw()
+
+}
+
+func genKeys(tb testing.TB, n int) (pks []ed25519.PrivateKey, pubs []ed25519.PublicKey) {
+	tb.Helper()
+	for i := 0; i < n; i++ {
+		pub, pk, err := ed25519.GenerateKey(nil)
+		require.NoError(tb, err)
+		pks = append(pks, pk)
+		pubs = append(pubs, pub)
+	}
+	return pks, pubs
+}
+
+func prepareVesting(tb testing.TB, keys, start, end, initial, total int) vestingAcc {
+	tb.Helper()
+	pks, pubs := genKeys(tb, keys)
+	var hashes []types.Hash32
+	for _, pub := range pubs {
+		var hs types.Hash32
+		copy(hs[:], pub)
+		hashes = append(hashes, hs)
+	}
+	vestingArgs := &multisig.SpawnArguments{
+		Required:   uint8(keys/2 + 1),
+		PublicKeys: hashes,
+	}
+	vestingAddress := core.ComputePrincipal(vesting.TemplateAddress, vestingArgs)
+	vaultArgs := &vault.SpawnArguments{
+		Owner:               vestingAddress,
+		InitialUnlockAmount: uint64(initial),
+		TotalAmount:         uint64(total),
+		VestingStart:        types.LayerID(start),
+		VestingEnd:          types.LayerID(end),
+	}
+	return vestingAcc{
+		required: int(vestingArgs.Required),
+		pks:      pks,
+		pubs:     pubs,
+		address:  vestingAddress,
+		vault:    core.ComputePrincipal(vault.TemplateAddress, vaultArgs),
+		start:    start,
+		end:      end,
+		initial:  initial,
+		total:    total,
 	}
 }

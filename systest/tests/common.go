@@ -207,6 +207,26 @@ func waitLayer(ctx *testcontext.Context, node *cluster.NodeClient, lid uint32) e
 	}
 }
 
+func waitTransaction(ctx context.Context,
+	eg *errgroup.Group,
+	client *cluster.NodeClient,
+	id []byte,
+) {
+	eg.Go(func() error {
+		api := pb.NewTransactionServiceClient(client)
+		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true, Id: id})
+		if err != nil {
+			return err
+		}
+		for {
+			_, err := rsts.Recv()
+			if err != nil {
+				return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
+			}
+		}
+	})
+}
+
 func watchTransactionResults(ctx context.Context,
 	eg *errgroup.Group,
 	client *cluster.NodeClient,
