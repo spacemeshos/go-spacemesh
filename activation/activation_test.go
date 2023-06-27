@@ -1015,7 +1015,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	retryInterval := 50 * time.Microsecond
 	genesis := time.Now()
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: 50 * time.Millisecond}), WithPoetRetryInterval(retryInterval))
+	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: 150 * time.Millisecond}), WithPoetRetryInterval(retryInterval))
 	tab.log = logtest.New(t, zap.InfoLevel)
 	posEpoch := types.EpochID(0)
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
