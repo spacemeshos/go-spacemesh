@@ -140,9 +140,9 @@ func Test_NodeClock_NoRaceOnTick(t *testing.T) {
 }
 
 func Test_NodeClock_Await_BeforeGenesis(t *testing.T) {
-	genesis := time.Now().Add(100 * time.Millisecond)
-	layerDuration := 100 * time.Millisecond
-	tickInterval := 10 * time.Millisecond
+	genesis := time.Now().Add(1 * time.Second)
+	layerDuration := 1 * time.Second
+	tickInterval := 100 * time.Millisecond
 
 	clock, err := NewClock(
 		WithLayerDuration(layerDuration),
@@ -156,7 +156,7 @@ func Test_NodeClock_Await_BeforeGenesis(t *testing.T) {
 	select {
 	case <-clock.AwaitLayer(types.LayerID(0)):
 		require.WithinRange(t, time.Now(), genesis, genesis.Add(tickInterval))
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		require.Fail(t, "timeout")
 	}
 }

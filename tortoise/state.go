@@ -26,8 +26,9 @@ type (
 	}
 
 	atxInfo struct {
-		weight uint64
-		height uint64
+		weight     uint64
+		height     uint64
+		malfeasant bool
 	}
 
 	epochInfo struct {
@@ -54,11 +55,6 @@ type (
 		// last evicted layer
 		evicted types.LayerID
 
-		changedOpinion struct {
-			// sector of layers where opinion is different from previously computed opinion
-			min, max types.LayerID
-		}
-
 		epochs map[types.EpochID]*epochInfo
 		layers map[types.LayerID]*layerInfo
 		// ballots should not be referenced by other ballots
@@ -69,6 +65,10 @@ type (
 
 		// to efficiently find base and reference ballots
 		ballotRefs map[types.BallotID]*ballotInfo
+
+		// malnodes is a collection with all nodes that equivocated in history.
+		// each node id is 32 bytes. 100 000 of such nodes is only about ~3MB
+		malnodes map[types.NodeID]struct{}
 	}
 )
 
@@ -78,6 +78,7 @@ func newState() *state {
 		layers:     map[types.LayerID]*layerInfo{},
 		ballots:    map[types.LayerID][]*ballotInfo{},
 		ballotRefs: map[types.BallotID]*ballotInfo{},
+		malnodes:   map[types.NodeID]struct{}{},
 	}
 }
 
@@ -161,6 +162,15 @@ func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) {
 	}
 }
 
+func (s *state) isMalfeasant(id types.NodeID) bool {
+	_, exists := s.malnodes[id]
+	return exists
+}
+
+func (s *state) makrMalfeasant(id types.NodeID) {
+	s.malnodes[id] = struct{}{}
+}
+
 type layerInfo struct {
 	lid            types.LayerID
 	empty          weight
@@ -168,9 +178,6 @@ type layerInfo struct {
 	blocks         []*blockInfo
 	verifying      verifyingInfo
 	coinflip       sign
-
-	// used to track when opinion on empty layer has changed
-	emitted bool
 
 	opinion types.Hash32
 	// a pointer to the value stored on the previous layerInfo object
@@ -401,7 +408,6 @@ type blockInfo struct {
 	margin weight
 
 	validity sign
-	emitted  sign // same as validity field if event was emitted
 
 	data bool // set to true if block is available locally
 }

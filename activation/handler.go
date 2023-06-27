@@ -15,13 +15,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -46,7 +46,8 @@ type Handler struct {
 	tickSize        uint64
 	goldenATXID     types.ATXID
 	nipostValidator nipostValidator
-	atxReceivers    []AtxReceiver
+	beacon          AtxReceiver
+	tortoise        system.Tortoise
 	log             log.Log
 	mu              sync.Mutex
 	atxChannels     map[types.ATXID]*atxChan
@@ -65,7 +66,8 @@ func NewHandler(
 	tickSize uint64,
 	goldenATXID types.ATXID,
 	nipostValidator nipostValidator,
-	atxReceivers []AtxReceiver,
+	beacon AtxReceiver,
+	tortoise system.Tortoise,
 	log log.Log,
 	poetCfg PoetConfig,
 ) *Handler {
@@ -78,10 +80,11 @@ func NewHandler(
 		tickSize:        tickSize,
 		goldenATXID:     goldenATXID,
 		nipostValidator: nipostValidator,
-		atxReceivers:    atxReceivers,
 		log:             log,
 		atxChannels:     make(map[types.ATXID]*atxChan),
 		fetcher:         fetcher,
+		beacon:          beacon,
+		tortoise:        tortoise,
 		poetCfg:         poetCfg,
 	}
 }
@@ -385,11 +388,14 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 						Data: &atxProof,
 					},
 				}
-				if err := malfeasance.ValidateAndSave(ctx, h.log, h.cdb, dbtx, h.edVerifier, nil, &types.MalfeasanceGossip{
-					MalfeasanceProof: *proof,
-				}); err != nil && !errors.Is(err, malfeasance.ErrKnownProof) {
-					return fmt.Errorf("adding malfeasance proof: %w", err)
+				encoded, err := codec.Encode(proof)
+				if err != nil {
+					h.log.With().Panic("failed to encode MalfeasanceProof", log.Err(err))
 				}
+				if err := identities.SetMalicious(dbtx, atx.SmesherID, encoded); err != nil {
+					return fmt.Errorf("add malfeasance proof: %w", err)
+				}
+
 				h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
 					log.Stringer("smesher", atx.SmesherID),
 					log.Object("prev", prev),
@@ -404,13 +410,16 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	}); err != nil {
 		return fmt.Errorf("store atx: %w", err)
 	}
+	if proof != nil {
+		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
+		h.tortoise.OnMalfeasance(atx.SmesherID)
+	}
 	header, err := h.cdb.GetAtxHeader(atx.ID())
 	if err != nil {
 		return fmt.Errorf("get header for processed atx %s: %w", atx.ID(), err)
 	}
-	for _, r := range h.atxReceivers {
-		r.OnAtx(header)
-	}
+	h.beacon.OnAtx(header)
+	h.tortoise.OnAtx(header.ToData())
 
 	// notify subscribers
 	if ch, found := h.atxChannels[atx.ID()]; found {

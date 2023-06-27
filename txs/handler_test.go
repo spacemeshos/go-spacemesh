@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -118,8 +119,8 @@ func gossipExpectations(t *testing.T, fee uint64, hasErr, parseErr, addErr error
 		if parseErr == nil && fee != 0 {
 			req.EXPECT().Verify().Times(1).Return(verify)
 			if verify {
-				cstate.EXPECT().AddToCache(gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ context.Context, got *types.Transaction) error {
+				cstate.EXPECT().AddToCache(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, got *types.Transaction, _ time.Time) error {
 						assert.Equal(t, tx.ID, got.ID) // causing ID to be calculated
 						assert.Equal(t, tx, got)
 						return addErr

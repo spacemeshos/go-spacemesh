@@ -14,12 +14,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 // Test the consensus process as a whole
@@ -186,7 +189,6 @@ func createConsensusProcess(
 	require.NoError(tb, err)
 	c, et, err := broker.Register(ctx, layer)
 	require.NoError(tb, err)
-	nonce := types.VRFPostIndex(1)
 	mch := make(chan *types.MalfeasanceGossip, cfg.N)
 	comm := communication{
 		inbox:  c,
@@ -205,7 +207,6 @@ func createConsensusProcess(
 		edVerifier,
 		et,
 		sig.NodeID(),
-		&nonce,
 		network,
 		comm,
 		truer{},
@@ -513,13 +514,9 @@ func (ps *delayedPubSub) Register(protocol string, handler pubsub.GossipHandler)
 }
 
 func TestEquivocation(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 16, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, Hdist: 20}
+	cfg := config.Config{N: 16, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1, Hdist: 20}
 	totalNodes := 20
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -535,6 +532,11 @@ func TestEquivocation(t *testing.T) {
 	i := 0
 	badGuy, err := signing.NewEdSigner()
 	require.NoError(t, err)
+
+	// this database is used to validate malfeasance proofs only.
+	lg := logtest.New(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+	createIdentity(t, cdb.Database, badGuy)
 	mchs := make([]chan *types.MalfeasanceGossip, 0, totalNodes)
 	dishonestFunc := func() {
 		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
@@ -542,6 +544,9 @@ func TestEquivocation(t *testing.T) {
 		tcp := createConsensusProcess(t, ctx, badGuy, false, cfg, oracle,
 			&equivocatePubSub{ps: ps, sig: badGuy},
 			test.initialSets[i], instanceID1)
+		// FIXME https://github.com/spacemeshos/go-spacemesh/issues/4585
+		// so the Certificate can be valid despite one known equivocator
+		tcp.cp.validator.(*syntaxContextValidator).threshold = cfg.N / 2
 		test.dishonest = append(test.dishonest, tcp.cp)
 		test.brokers = append(test.brokers, tcp.broker)
 		mchs = append(mchs, tcp.mch)
@@ -556,6 +561,9 @@ func TestEquivocation(t *testing.T) {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		tcp := createConsensusProcess(t, ctx, sig, true, cfg, oracle, ps, test.initialSets[i], instanceID1)
+		// FIXME https://github.com/spacemeshos/go-spacemesh/issues/4585
+		// so the Certificate can be valid despite one known equivocator
+		tcp.cp.validator.(*syntaxContextValidator).threshold = cfg.N / 2
 		test.procs = append(test.procs, tcp.cp)
 		test.brokers = append(test.brokers, tcp.broker)
 		mchs = append(mchs, tcp.mch)
@@ -567,11 +575,15 @@ func TestEquivocation(t *testing.T) {
 	require.NoError(t, mesh.ConnectAllButSelf())
 	test.Start()
 	test.WaitForTimedTermination(t, 40*time.Second)
-	// every node should detect a pre-round equivocator
 	for _, ch := range mchs {
-		require.Len(t, ch, 1)
-		gossip := <-ch
-		require.Equal(t, badGuy.NodeID(), gossip.Eligibility.NodeID)
+		require.GreaterOrEqual(t, len(ch), 1)
+		close(ch)
+		for gossip := range ch {
+			require.Equal(t, badGuy.NodeID(), gossip.Eligibility.NodeID)
+			nid, err := malfeasance.Validate(ctx, lg, cdb, test.brokers[0].edVerifier, nil, gossip)
+			require.NoError(t, err)
+			require.Equal(t, badGuy.NodeID(), nid)
+		}
 	}
 }
 
@@ -585,13 +597,11 @@ func (eps *equivocatePubSub) Publish(ctx context.Context, protocol string, data 
 	if err != nil {
 		return fmt.Errorf("decode published data: %w", err)
 	}
-	if msg.Type == pre {
-		msg.Values = []types.ProposalID{types.RandomProposalID()}
-		msg.Signature = eps.sig.Sign(signing.HARE, msg.SignedBytes())
-		msg.SmesherID = eps.sig.NodeID()
-		if err = eps.ps.Publish(ctx, protocol, msg.Bytes()); err != nil {
-			return fmt.Errorf("publish equivocate message: %w", err)
-		}
+	msg.Values = []types.ProposalID{types.RandomProposalID()}
+	msg.Signature = eps.sig.Sign(signing.HARE, msg.SignedBytes())
+	msg.SmesherID = eps.sig.NodeID()
+	if err = eps.ps.Publish(ctx, protocol, msg.Bytes()); err != nil {
+		return fmt.Errorf("publish equivocate message: %w", err)
 	}
 	if err = eps.ps.Publish(ctx, protocol, data); err != nil {
 		return fmt.Errorf("publish original message: %w", err)

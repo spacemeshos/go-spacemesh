@@ -7,8 +7,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
@@ -70,4 +72,31 @@ func TestRecoverEmpty(t *testing.T) {
 	tortoise, err := Recover(s.GetState(0).DB, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
 	require.NoError(t, err)
 	require.NotNil(t, tortoise)
+}
+
+func TestRecoverWithOpinion(t *testing.T) {
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+
+	trt := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	for _, lid := range sim.GenLayers(s, sim.WithSequence(10)) {
+		trt.TallyVotes(context.Background(), lid)
+	}
+	var last result.Layer
+	for _, rst := range trt.Updates() {
+		if rst.Verified {
+			require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, rst.Layer, rst.Opinion))
+		}
+		last = rst
+	}
+	tortoise, err := Recover(s.GetState(0).DB, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
+	require.NoError(t, err)
+	require.NotNil(t, tortoise)
+	updates := tortoise.Updates()
+	require.Len(t, updates, 1)
+	require.Equal(t, updates[0], last)
 }

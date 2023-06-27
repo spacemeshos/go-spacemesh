@@ -29,6 +29,7 @@ ifeq ($(GOOS),windows)
 	platform := windows
 	export PATH := $(PATH):$(PROJ_DIR)build
 	EXE := .exe
+	CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-Bstatic -lpthread -Wl,-Bdynamic
 else
 	TEMP := /tmp
 	ifeq ($(GOOS),darwin)

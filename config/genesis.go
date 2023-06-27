@@ -59,20 +59,22 @@ func (g *GenesisConfig) Diff(other *GenesisConfig) string {
 
 // LoadFromFile loads config from file.
 func (g *GenesisConfig) LoadFromFile(filename string) error {
-	buf, err := os.ReadFile(filename)
+	f, err := os.Open(filename)
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(buf, g)
+	defer f.Close()
+	return json.NewDecoder(f).Decode(g)
 }
 
 // WriteToFile writes config content to file.
 func (g *GenesisConfig) WriteToFile(filename string) error {
-	buf, err := json.Marshal(g)
+	f, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filename, buf, 0o644)
+	defer f.Close()
+	return json.NewEncoder(f).Encode(g)
 }
 
 // ToAccounts creates list of types.Account instance from config.

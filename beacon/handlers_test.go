@@ -13,7 +13,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -206,9 +205,6 @@ func Test_HandleProposal_InitEpoch(t *testing.T) {
 }
 
 func Test_HandleProposal_Success(t *testing.T) {
-	if util.IsWindows() && util.IsCi() {
-		t.Skip("Skipping test in Windows on CI (https://github.com/spacemeshos/go-spacemesh/issues/3630)")
-	}
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
@@ -232,25 +228,24 @@ func Test_HandleProposal_Success(t *testing.T) {
 		signer2.NodeID(): createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer2, 10, epochStart.Add(-2*time.Minute)),
 	}
 	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, mockChecker)
+	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 
 	msg1 := createProposal(t, vrfSigner1, epoch, false)
 	msgBytes1, err := codec.Encode(msg1)
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
-	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 	mockChecker.EXPECT().PassStrictThreshold(gomock.Any()).Return(true)
 	res := tpd.HandleProposal(context.Background(), "peerID", msgBytes1)
 	require.Equal(t, nil, res)
 
-	require.NoError(t, tpd.markProposalPhaseFinished(epoch, time.Now()))
+	require.NoError(t, tpd.markProposalPhaseFinished(epoch, time.Now().Add(-20*time.Millisecond)))
 
 	msg2 := createProposal(t, vrfSigner2, epoch, false)
 	msgBytes2, err := codec.Encode(msg2)
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
-	// tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart)
 	mockChecker.EXPECT().PassThreshold(gomock.Any()).Return(true)
 	res = tpd.HandleProposal(context.Background(), "peerID", msgBytes2)
 	require.Equal(t, nil, res)

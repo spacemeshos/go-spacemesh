@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -80,7 +81,8 @@ type testHandler struct {
 	mpub       *pubsubmocks.MockPublisher
 	mockFetch  *mocks.MockFetcher
 	mValidator *MocknipostValidator
-	mReceivers []*MockAtxReceiver
+	mbeacon    *MockAtxReceiver
+	mtortoise  *mocks.MockTortoise
 }
 
 func newTestHandler(tb testing.TB, goldenATXID types.ATXID) *testHandler {
@@ -96,10 +98,10 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID) *testHandler {
 	mockFetch := mocks.NewMockFetcher(ctrl)
 	mValidator := NewMocknipostValidator(ctrl)
 
-	mReceiver1 := NewMockAtxReceiver(ctrl)
-	mReceiver2 := NewMockAtxReceiver(ctrl)
+	mbeacon := NewMockAtxReceiver(ctrl)
+	mtortoise := mocks.NewMockTortoise(ctrl)
 
-	atxHdlr := NewHandler(cdb, verifier, mclock, mpub, mockFetch, types.GetLayersPerEpoch(), 1, goldenATXID, mValidator, []AtxReceiver{mReceiver1, mReceiver2}, lg, PoetConfig{})
+	atxHdlr := NewHandler(cdb, verifier, mclock, mpub, mockFetch, types.GetLayersPerEpoch(), 1, goldenATXID, mValidator, mbeacon, mtortoise, lg, PoetConfig{})
 	return &testHandler{
 		Handler: atxHdlr,
 
@@ -107,7 +109,8 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID) *testHandler {
 		mpub:       mpub,
 		mockFetch:  mockFetch,
 		mValidator: mValidator,
-		mReceivers: []*MockAtxReceiver{mReceiver1, mReceiver2},
+		mbeacon:    mbeacon,
+		mtortoise:  mtortoise,
 	}
 }
 
@@ -121,8 +124,8 @@ func TestHandler_processBlockATXs(t *testing.T) {
 
 	goldenATXID := types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(t, goldenATXID)
-	atxHdlr.mReceivers[0].EXPECT().OnAtx(gomock.Any()).AnyTimes()
-	atxHdlr.mReceivers[1].EXPECT().OnAtx(gomock.Any()).AnyTimes()
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any()).AnyTimes()
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any()).AnyTimes()
 
 	sig, err := signing.NewEdSigner()
 	r.NoError(err)
@@ -692,8 +695,8 @@ func TestHandler_ProcessAtx(t *testing.T) {
 
 	// Act & Assert
 	atx1 := newActivationTx(t, sig, 0, types.EmptyATXID, types.EmptyATXID, nil, types.LayerID(layersPerEpoch).GetEpoch(), 0, 100, coinbase, 100, &types.NIPost{})
-	atxHdlr.mReceivers[0].EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mReceivers[1].EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
 	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx1))
 
 	// processing an already stored ATX returns no error
@@ -705,11 +708,15 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	// another atx for the same epoch is considered malicious
 	atx2 := newActivationTx(t, sig, 1, atx1.ID(), atx1.ID(), nil, types.LayerID(layersPerEpoch+1).GetEpoch(), 0, 100, coinbase, 100, &types.NIPost{})
 	var got types.MalfeasanceGossip
-	atxHdlr.mReceivers[0].EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mReceivers[1].EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnMalfeasance(gomock.Any())
 	atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			require.NoError(t, codec.Decode(data, &got))
+			nodeID, err := malfeasance.Validate(context.Background(), atxHdlr.log, atxHdlr.cdb, atxHdlr.edVerifier, nil, &got)
+			require.NoError(t, err)
+			require.Equal(t, sig.NodeID(), nodeID)
 			return nil
 		})
 	require.ErrorIs(t, atxHdlr.ProcessAtx(context.Background(), atx2), errMaliciousATX)
@@ -733,8 +740,8 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	atx1 := newActivationTx(t, sig, 0, types.EmptyATXID, types.EmptyATXID, nil, types.LayerID(layersPerEpoch).GetEpoch(), 0, 100, coinbase, 100, &types.NIPost{})
 	nonce1 := types.VRFPostIndex(123)
 	atx1.VRFNonce = &nonce1
-	atxHdlr.mReceivers[0].EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mReceivers[1].EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
 	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx1))
 
 	got, err := atxs.VRFNonce(atxHdlr.cdb, sig.NodeID(), atx1.TargetEpoch())
@@ -745,8 +752,8 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	atx2 := newActivationTx(t, sig, 1, atx1.ID(), atx1.ID(), nil, types.LayerID(2*layersPerEpoch).GetEpoch(), 0, 100, coinbase, 100, &types.NIPost{})
 	nonce2 := types.VRFPostIndex(456)
 	atx2.VRFNonce = &nonce2
-	atxHdlr.mReceivers[0].EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mReceivers[1].EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
 	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx2))
 
 	got, err = atxs.VRFNonce(atxHdlr.cdb, sig.NodeID(), atx2.TargetEpoch())
@@ -814,8 +821,8 @@ func BenchmarkNewActivationDb(b *testing.B) {
 
 	goldenATXID := types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(b, goldenATXID)
-	atxHdlr.mReceivers[0].EXPECT().OnAtx(gomock.Any()).AnyTimes()
-	atxHdlr.mReceivers[1].EXPECT().OnAtx(gomock.Any()).AnyTimes()
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
 
 	const (
 		numOfMiners = 300
@@ -920,8 +927,8 @@ func TestHandler_AwaitAtx(t *testing.T) {
 
 	goldenATXID := types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(t, goldenATXID)
-	atxHdlr.mReceivers[0].EXPECT().OnAtx(gomock.Any()).AnyTimes()
-	atxHdlr.mReceivers[1].EXPECT().OnAtx(gomock.Any()).AnyTimes()
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
 
 	sig, err := signing.NewEdSigner()
 	r.NoError(err)
@@ -997,8 +1004,8 @@ func TestHandler_HandleAtxData(t *testing.T) {
 
 		atx := newActivationTx(t, sig, 0, types.EmptyATXID, types.EmptyATXID, nil, 0, 0, 0, types.Address{2, 4, 5}, 2, nil)
 
-		atxHdlr.mReceivers[0].EXPECT().OnAtx(gomock.Any())
-		atxHdlr.mReceivers[1].EXPECT().OnAtx(gomock.Any())
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
 		require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx))
 
 		buf, err := codec.Encode(atx)
@@ -1029,8 +1036,8 @@ func TestHandler_HandleAtxData(t *testing.T) {
 func BenchmarkGetAtxHeaderWithConcurrentProcessAtx(b *testing.B) {
 	goldenATXID := types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(b, goldenATXID)
-	atxHdlr.mReceivers[0].EXPECT().OnAtx(gomock.Any()).AnyTimes()
-	atxHdlr.mReceivers[1].EXPECT().OnAtx(gomock.Any()).AnyTimes()
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
 
 	var (
 		stop uint64
@@ -1168,8 +1175,8 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil)
 	atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	atxHdlr.mReceivers[0].EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mReceivers[1].EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
 	require.NoError(t, atxHdlr.HandleAtxData(context.Background(), peer, buf))
 
 	stored1, err := atxHdlr.cdb.GetAtxHeader(atx1.ID())
@@ -1211,8 +1218,8 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil)
 	atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	atxHdlr.mReceivers[0].EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mReceivers[1].EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
 	require.NoError(t, atxHdlr.HandleAtxData(context.Background(), peer, buf))
 
 	stored2, err := atxHdlr.cdb.GetAtxHeader(atx2.ID())

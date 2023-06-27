@@ -11,18 +11,19 @@ import (
 	"go.uber.org/atomic"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -30,10 +31,9 @@ import (
 
 // Mesh is the logic layer above our mesh.DB database.
 type Mesh struct {
-	logger      log.Log
-	cdb         *datastore.CachedDB
-	clock       layerClock
-	sigVerifier malfeasance.SigVerifier
+	logger log.Log
+	cdb    *datastore.CachedDB
+	clock  layerClock
 
 	executor *Executor
 	conState conservativeState
@@ -55,12 +55,11 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(cdb *datastore.CachedDB, c layerClock, v malfeasance.SigVerifier, trtl system.Tortoise, exec *Executor, state conservativeState, logger log.Log) (*Mesh, error) {
+func NewMesh(cdb *datastore.CachedDB, c layerClock, trtl system.Tortoise, exec *Executor, state conservativeState, logger log.Log) (*Mesh, error) {
 	msh := &Mesh{
 		logger:              logger,
 		cdb:                 cdb,
 		clock:               c,
-		sigVerifier:         v,
 		trtl:                trtl,
 		executor:            exec,
 		conState:            state,
@@ -553,10 +552,12 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 						Data: &ballotProof,
 					},
 				}
-				if err = malfeasance.ValidateAndSave(ctx, msh.logger, msh.cdb, dbtx, msh.sigVerifier, nil, &types.MalfeasanceGossip{
-					MalfeasanceProof: *proof,
-				}); err != nil && !errors.Is(err, malfeasance.ErrKnownProof) {
-					return fmt.Errorf("validate malfeasance proof: %w", err)
+				encoded, err := codec.Encode(proof)
+				if err != nil {
+					msh.logger.With().Panic("failed to encode MalfeasanceProof", log.Err(err))
+				}
+				if err := identities.SetMalicious(dbtx, ballot.SmesherID, encoded); err != nil {
+					return fmt.Errorf("add malfeasance proof: %w", err)
 				}
 				ballot.SetMalicious()
 				msh.logger.With().Warning("smesher produced more than one ballot in the same layer",
@@ -572,6 +573,10 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 		return nil
 	}); err != nil {
 		return nil, err
+	}
+	if proof != nil {
+		msh.cdb.CacheMalfeasanceProof(ballot.SmesherID, proof)
+		msh.trtl.OnMalfeasance(ballot.SmesherID)
 	}
 	return proof, nil
 }

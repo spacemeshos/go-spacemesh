@@ -26,7 +26,15 @@ func (pq priorityQueue) Len() int { return len(pq) }
 // Less implements head.Interface.
 func (pq priorityQueue) Less(i, j int) bool {
 	// We want Pop to give us the highest, not lowest, fee, so we use greater than here.
-	return pq[i].Fee() > pq[j].Fee() || (pq[i].Fee() == pq[j].Fee() && pq[i].Received.Before(pq[j].Received))
+	if pq[i].Fee() != pq[j].Fee() {
+		return pq[i].Fee() > pq[j].Fee()
+	}
+	// if fees are equal, we want the older tx first
+	if !pq[i].Received.Equal(pq[j].Received) {
+		return pq[i].Received.Before(pq[j].Received)
+	}
+	// if fees and timestamps are equal, we want the tx with the lower ID first
+	return pq[i].ID.Compare(pq[j].ID)
 }
 
 // Swap implements head.Interface.

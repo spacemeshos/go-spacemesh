@@ -88,7 +88,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 	ts.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
 	var err error
 	exec := mesh.NewExecutor(ts.cdb, ts.mVm, ts.mConState, lg)
-	ts.msh, err = mesh.NewMesh(ts.cdb, ts.mTicker, nil, ts.mTortoise, exec, ts.mConState, lg)
+	ts.msh, err = mesh.NewMesh(ts.cdb, ts.mTicker, ts.mTortoise, exec, ts.mConState, lg)
 	require.NoError(t, err)
 
 	cfg := Config{
@@ -123,7 +123,7 @@ func TestStartAndShutdown(t *testing.T) {
 	require.False(t, ts.syncer.ListenToGossip())
 
 	// the node is synced when current layer is <= 1
-	ts.syncer.Start(ctx)
+	ts.syncer.Start()
 
 	ts.mForkFinder.EXPECT().Purge(false).AnyTimes()
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), gomock.Any()).AnyTimes()
@@ -142,7 +142,7 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	ts.mTicker.advanceToLayer(current)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ts.syncer.Start(ctx)
+	ts.syncer.Start()
 
 	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).AnyTimes()
 	ts.mDataFetcher.EXPECT().PollMaliciousProofs(gomock.Any())

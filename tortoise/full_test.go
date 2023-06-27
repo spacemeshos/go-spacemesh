@@ -544,7 +544,8 @@ func TestFullVerify(t *testing.T) {
 				}
 				layer.blocks = append(layer.blocks, block)
 			}
-			require.Equal(t, tc.validity != nil, full.verify(logtest.Zap(t), target))
+			v, _ := full.verify(logtest.Zap(t), target)
+			require.Equal(t, tc.validity != nil, v)
 			if tc.validity != nil {
 				for i, expect := range tc.validity {
 					require.Equal(t, expect, layer.blocks[i].validity)

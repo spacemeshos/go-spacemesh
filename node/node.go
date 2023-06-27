@@ -140,16 +140,21 @@ func GetCommand() *cobra.Command {
 					return fmt.Errorf("ensure folders exist: %w", err)
 				}
 
+				if err := app.Lock(); err != nil {
+					return fmt.Errorf("failed to get exclusive file lock: %w", err)
+				}
+				defer app.Unlock()
+
 				/* Create or load miner identity */
 				if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
 					return fmt.Errorf("could not retrieve identity: %w", err)
 				}
 
-				if err = app.LoadCheckpoint(ctx); err != nil {
+				if err := app.LoadCheckpoint(ctx); err != nil {
 					return err
 				}
 
-				if err = app.Initialize(); err != nil {
+				if err := app.Initialize(); err != nil {
 					return err
 				}
 				// This blocks until the context is finished or until an error is produced
@@ -356,7 +361,7 @@ func defaultRecoveryFile(dataDir string) (string, types.LayerID, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	return fmt.Sprintf("file://%s", files[0]), restore, nil
+	return fmt.Sprintf("file://%s", filepath.ToSlash(files[0])), restore, nil
 }
 
 func (app *App) LoadCheckpoint(ctx context.Context) error {
@@ -393,7 +398,7 @@ func (app *App) LoadCheckpoint(ctx context.Context) error {
 	return checkpoint.Recover(ctx, app.log, afero.NewOsFs(), cfg, app.edSgn.NodeID(), checkpointFile, restore)
 }
 
-func (app *App) Started() chan struct{} {
+func (app *App) Started() <-chan struct{} {
 	return app.started
 }
 
@@ -401,8 +406,8 @@ func (app *App) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
-// Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
-func (app *App) Initialize() (err error) {
+// Lock locks the app for exclusive use. It returns an error if the app is already locked.
+func (app *App) Lock() error {
 	lockdir := filepath.Dir(app.Config.FileLock)
 	if _, err := os.Stat(lockdir); errors.Is(err, os.ErrNotExist) {
 		err := os.Mkdir(lockdir, os.ModePerm)
@@ -418,7 +423,24 @@ func (app *App) Initialize() (err error) {
 		return fmt.Errorf("only one spacemesh instance should be running (locking file %s)", fl.Path())
 	}
 	app.fileLock = fl
+	return nil
+}
 
+// Unlock unlocks the app. It is a no-op if the app is not locked.
+func (app *App) Unlock() {
+	if app.fileLock == nil {
+		return
+	}
+	if err := app.fileLock.Unlock(); err != nil {
+		log.With().Error("failed to unlock file",
+			log.String("path", app.fileLock.Path()),
+			log.Err(err),
+		)
+	}
+}
+
+// Initialize parses and validates the node configuration and sets up logging.
+func (app *App) Initialize() error {
 	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
 	var existing config.GenesisConfig
 	if err := existing.LoadFromFile(gpath); err != nil {
@@ -478,14 +500,6 @@ func (app *App) getAppInfo() string {
 // Cleanup stops all app services.
 func (app *App) Cleanup(ctx context.Context) {
 	log.Info("app cleanup starting...")
-	if app.fileLock != nil {
-		if err := app.fileLock.Unlock(); err != nil {
-			log.With().Error("failed to unlock file",
-				log.String("path", app.fileLock.Path()),
-				log.Err(err),
-			)
-		}
-	}
 	app.stopServices(ctx)
 	// add any other Cleanup tasks here....
 	log.Info("app cleanup completed")
@@ -636,7 +650,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	})
 
 	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(ExecutorLogger, lg))
-	msh, err := mesh.NewMesh(app.cachedDB, app.clock, app.edVerifier, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
+	msh, err := mesh.NewMesh(app.cachedDB, app.clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
@@ -657,7 +671,8 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		app.Config.TickSize,
 		goldenATXID,
 		validator,
-		[]activation.AtxReceiver{&atxReceiver{trtl}, beaconProtocol},
+		beaconProtocol,
+		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
 		poetCfg,
 	)
@@ -850,6 +865,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		app.host.ID(),
 		app.hare,
 		app.edVerifier,
+		trtl,
 	)
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(atxHandler.HandleAtxData, app.host, lg)),
@@ -959,8 +975,12 @@ func (app *App) launchStandalone(ctx context.Context) error {
 
 func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 	app.eg.Go(func() error {
-		ch := app.updater.Subscribe()
-		if err := app.updater.Start(ctx); err != nil {
+		ch, err := app.updater.Subscribe()
+		if err != nil {
+			appErr <- err
+			return nil
+		}
+		if err := app.updater.Start(); err != nil {
 			appErr <- err
 			return nil
 		}
@@ -992,7 +1012,7 @@ func (app *App) startServices(ctx context.Context, appErr chan error) error {
 		app.postVerifier.Start(ctx)
 		return nil
 	})
-	app.syncer.Start(ctx)
+	app.syncer.Start()
 	app.beaconProtocol.Start(ctx)
 
 	app.blockGen.Start()
@@ -1357,10 +1377,10 @@ func (app *App) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
 
-	if err = app.setupDBs(ctx, lg, app.Config.DataDir()); err != nil {
+	if err := app.setupDBs(ctx, lg, app.Config.DataDir()); err != nil {
 		return err
 	}
-	if err = app.initServices(ctx, poetClients); err != nil {
+	if err := app.initServices(ctx, poetClients); err != nil {
 		return fmt.Errorf("cannot start services: %w", err)
 	}
 
@@ -1441,12 +1461,4 @@ func (w tortoiseWeakCoin) Set(lid types.LayerID, value bool) error {
 	}
 	w.tortoise.OnWeakCoin(lid, value)
 	return nil
-}
-
-type atxReceiver struct {
-	tortoise *tortoise.Tortoise
-}
-
-func (a *atxReceiver) OnAtx(header *types.ActivationTxHeader) {
-	a.tortoise.OnAtx(header.ToData())
 }

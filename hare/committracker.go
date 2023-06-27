@@ -62,7 +62,7 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Message) {
 	metadata := types.HareMetadata{
 		Layer:   msg.Layer,
 		Round:   msg.Round,
-		MsgHash: types.BytesToHash(msg.HashBytes()),
+		MsgHash: msg.signedHash,
 	}
 	if prev, ok := ct.seenSenders[msg.SmesherID]; ok {
 		if !prev.InnerMsg.Equivocation(&metadata) {

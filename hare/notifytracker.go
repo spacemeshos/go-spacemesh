@@ -45,7 +45,7 @@ func (nt *notifyTracker) OnNotify(ctx context.Context, msg *Message) bool {
 	metadata := types.HareMetadata{
 		Layer:   msg.Layer,
 		Round:   msg.Round,
-		MsgHash: types.BytesToHash(msg.HashBytes()),
+		MsgHash: msg.signedHash,
 	}
 
 	if prev, exist := nt.notifies[msg.SmesherID]; exist { // already seenSenders
