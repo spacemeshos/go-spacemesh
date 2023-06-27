@@ -193,7 +193,7 @@ func publishAtx(
 	ch := make(chan struct{})
 	close(ch)
 	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
-		func(got types.LayerID) chan struct{} {
+		func(got types.LayerID) <-chan struct{} {
 			// advance to publish layer
 			if currLayer.Before(got) {
 				*currLayer = got
@@ -484,7 +484,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
 	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
-		func(got types.LayerID) chan struct{} {
+		func(got types.LayerID) <-chan struct{} {
 			// advance to publish layer
 			if currLayer.Before(got) {
 				currLayer = got
@@ -580,7 +580,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	done := make(chan struct{})
 	close(done)
 	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
-		func(got types.LayerID) chan struct{} {
+		func(got types.LayerID) <-chan struct{} {
 			// advance to publish layer
 			if currLayer.Before(got) {
 				currLayer = got
@@ -698,13 +698,13 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 			genesis := time.Now().Add(-time.Duration(currentLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(layer))
 		}).AnyTimes()
-	tab.mclock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(layer types.LayerID) chan struct{} {
+	tab.mclock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(layer types.LayerID) <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
 		return ch
 	}).Times(1)
 
-	tab.mclock.EXPECT().AwaitLayer(gomock.Not(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch))).DoAndReturn(func(types.LayerID) chan struct{} {
+	tab.mclock.EXPECT().AwaitLayer(gomock.Not(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch))).DoAndReturn(func(types.LayerID) <-chan struct{} {
 		ch := make(chan struct{})
 		return ch
 	}).Times(1)
@@ -783,13 +783,13 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 			genesis := time.Now().Add(-time.Duration(currentLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(layer))
 		}).AnyTimes()
-	tab.mclock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(types.LayerID) chan struct{} {
+	tab.mclock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(types.LayerID) <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
 		return ch
 	}).Times(1)
 
-	tab.mclock.EXPECT().AwaitLayer(gomock.Not(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch))).DoAndReturn(func(types.LayerID) chan struct{} {
+	tab.mclock.EXPECT().AwaitLayer(gomock.Not(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch))).DoAndReturn(func(types.LayerID) <-chan struct{} {
 		ch := make(chan struct{})
 		return ch
 	}).Times(1)
@@ -937,7 +937,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
 	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
-		func(got types.LayerID) chan struct{} {
+		func(got types.LayerID) <-chan struct{} {
 			// advance to publish layer
 			if currLayer.Before(got) {
 				currLayer = got

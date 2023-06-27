@@ -142,7 +142,7 @@ func TestStartStop(t *testing.T) {
 	ch := make(chan struct{}, 1)
 	tc.mClk.EXPECT().CurrentLayer().Return(lid).AnyTimes()
 	tc.mClk.EXPECT().AwaitLayer(gomock.Any()).DoAndReturn(
-		func(_ types.LayerID) chan struct{} {
+		func(_ types.LayerID) <-chan struct{} {
 			return ch
 		}).AnyTimes()
 	tc.Start()
@@ -587,7 +587,7 @@ func Test_OldLayersPruned(t *testing.T) {
 	pruned := make(chan struct{}, 1)
 	tc.mClk.EXPECT().CurrentLayer().Return(current).AnyTimes()
 	tc.mClk.EXPECT().AwaitLayer(gomock.Any()).DoAndReturn(
-		func(got types.LayerID) chan struct{} {
+		func(got types.LayerID) <-chan struct{} {
 			if got == current.Add(1) {
 				close(pruned)
 			}

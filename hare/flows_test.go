@@ -198,7 +198,7 @@ func (m *mockClock) LayerToTime(layer types.LayerID) time.Time {
 	return m.layerTime[layer]
 }
 
-func (m *mockClock) AwaitLayer(layer types.LayerID) chan struct{} {
+func (m *mockClock) AwaitLayer(layer types.LayerID) <-chan struct{} {
 	m.m.Lock()
 	defer m.m.Unlock()
 
