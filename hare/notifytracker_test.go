@@ -20,7 +20,9 @@ func BuildNotifyMsg(signing *signing.EdSigner, s *Set) *Message {
 	cert.AggMsgs.Messages = []Message{*BuildCommitMsg(signing, s)}
 	builder.SetCertificate(cert)
 	builder.SetEligibilityCount(1)
-	return builder.Sign(signing).Build()
+	m := builder.Sign(signing).Build()
+	m.signedHash = types.BytesToHash(m.InnerMessage.HashBytes())
+	return m
 }
 
 func TestNotifyTracker_OnNotify(t *testing.T) {
@@ -63,6 +65,7 @@ func TestNotifyTracker_OnNotify(t *testing.T) {
 								Round:   m1.Round,
 								MsgHash: types.BytesToHash(m1.HashBytes()),
 							},
+							SmesherID: m1.SmesherID,
 							Signature: m1.Signature,
 						},
 						{
@@ -71,6 +74,7 @@ func TestNotifyTracker_OnNotify(t *testing.T) {
 								Round:   m2.Round,
 								MsgHash: types.BytesToHash(m2.HashBytes()),
 							},
+							SmesherID: m2.SmesherID,
 							Signature: m2.Signature,
 						},
 					},
@@ -85,6 +89,7 @@ func TestNotifyTracker_OnNotify(t *testing.T) {
 		},
 	}
 	gossip := <-mch
+	verifyMalfeasanceProof(t, signer, gossip)
 	require.Equal(t, expected, *gossip)
 }
 
@@ -110,7 +115,7 @@ func TestNotifyTracker_NotificationsCount(t *testing.T) {
 	tracker.OnNotify(context.Background(), m2)
 	ci := tracker.NotificationsCount(s)
 	require.Equal(t, CountInfo{hCount: 1, dhCount: 1, numHonest: 1, numDishonest: 1}, *ci)
-	require.False(t, ci.Meet(2))
+	require.True(t, ci.Meet(2))
 	require.Empty(t, mch)
 
 	// add a known equivocator
@@ -120,6 +125,40 @@ func TestNotifyTracker_NotificationsCount(t *testing.T) {
 	ci = tracker.NotificationsCount(s)
 	require.Equal(t, CountInfo{hCount: 1, dhCount: 1, keCount: 1, numHonest: 1, numDishonest: 1, numKE: 1}, *ci)
 	require.True(t, ci.Meet(2))
+}
+
+// Checks that equivocating nodes detected due to receipt of equivocating
+// notify messages still contribute to the threshold calculation.
+func TestNotifyTracker_NotificationsCount_EquvocatingNotifyMessages(t *testing.T) {
+	threshold := 2
+	signer1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	signer2, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	s := NewSetFromValues(types.ProposalID{1})
+	s2 := NewSetFromValues(types.ProposalID{2})
+	et := NewEligibilityTracker(2)
+	mch := make(chan *types.MalfeasanceGossip, 2)
+	tracker := newNotifyTracker(logtest.New(t), notifyRound, mch, et, lowDefaultSize)
+	require.False(t, tracker.NotificationsCount(s).Meet(threshold))
+
+	// Set up both participants to be eligible
+	m := BuildNotifyMsg(signer1, s)
+	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
+	m2 := BuildNotifyMsg(signer2, s)
+	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
+	m3 := BuildNotifyMsg(signer2, s2)
+
+	// One message
+	tracker.OnNotify(context.Background(), m2)
+	require.False(t, tracker.NotificationsCount(s).Meet(threshold))
+	// Equivocation should be detected
+	tracker.OnNotify(context.Background(), m3)
+	require.False(t, tracker.NotificationsCount(s).Meet(threshold))
+	// One further message should cause threshold to be passed.
+	tracker.OnNotify(context.Background(), m)
+	require.True(t, tracker.NotificationsCount(s).Meet(threshold))
 }
 
 func TestNotifyTracker_NotificationsCount_TooFewKnownEquivocator(t *testing.T) {

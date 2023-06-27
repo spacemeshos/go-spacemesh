@@ -24,7 +24,7 @@ func TestTransactionIsolation(t *testing.T) {
 		WithLatencyMetering(true),
 	)
 
-	tx, err := db.Tx(context.TODO())
+	tx, err := db.Tx(context.Background())
 	require.NoError(t, err)
 
 	key := "dsada"

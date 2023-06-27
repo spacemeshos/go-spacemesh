@@ -10,7 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	sql "github.com/spacemeshos/go-spacemesh/sql"
+	datastore "github.com/spacemeshos/go-spacemesh/datastore"
 )
 
 // MocklayerPatrol is a mock of layerPatrol interface.
@@ -72,18 +72,18 @@ func (m *MockRolacle) EXPECT() *MockRolacleMockRecorder {
 }
 
 // CalcEligibility mocks base method.
-func (m *MockRolacle) CalcEligibility(arg0 context.Context, arg1 types.LayerID, arg2 uint32, arg3 int, arg4 types.NodeID, arg5 types.VRFPostIndex, arg6 types.VrfSignature) (uint16, error) {
+func (m *MockRolacle) CalcEligibility(arg0 context.Context, arg1 types.LayerID, arg2 uint32, arg3 int, arg4 types.NodeID, arg5 types.VrfSignature) (uint16, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CalcEligibility", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	ret := m.ctrl.Call(m, "CalcEligibility", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].(uint16)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CalcEligibility indicates an expected call of CalcEligibility.
-func (mr *MockRolacleMockRecorder) CalcEligibility(arg0, arg1, arg2, arg3, arg4, arg5, arg6 interface{}) *gomock.Call {
+func (mr *MockRolacleMockRecorder) CalcEligibility(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CalcEligibility", reflect.TypeOf((*MockRolacle)(nil).CalcEligibility), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CalcEligibility", reflect.TypeOf((*MockRolacle)(nil).CalcEligibility), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // IsIdentityActiveOnConsensusView mocks base method.
@@ -102,18 +102,18 @@ func (mr *MockRolacleMockRecorder) IsIdentityActiveOnConsensusView(arg0, arg1, a
 }
 
 // Proof mocks base method.
-func (m *MockRolacle) Proof(arg0 context.Context, arg1 types.VRFPostIndex, arg2 types.LayerID, arg3 uint32) (types.VrfSignature, error) {
+func (m *MockRolacle) Proof(arg0 context.Context, arg1 types.LayerID, arg2 uint32) (types.VrfSignature, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Proof", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "Proof", arg0, arg1, arg2)
 	ret0, _ := ret[0].(types.VrfSignature)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Proof indicates an expected call of Proof.
-func (mr *MockRolacleMockRecorder) Proof(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockRolacleMockRecorder) Proof(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MockRolacle)(nil).Proof), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MockRolacle)(nil).Proof), arg0, arg1, arg2)
 }
 
 // Validate mocks base method.
@@ -192,20 +192,6 @@ func (m *Mockmesh) EXPECT() *MockmeshMockRecorder {
 	return m.recorder
 }
 
-// AddMalfeasanceProof mocks base method.
-func (m *Mockmesh) AddMalfeasanceProof(arg0 types.NodeID, arg1 *types.MalfeasanceProof, arg2 *sql.Tx) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddMalfeasanceProof", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddMalfeasanceProof indicates an expected call of AddMalfeasanceProof.
-func (mr *MockmeshMockRecorder) AddMalfeasanceProof(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMalfeasanceProof", reflect.TypeOf((*Mockmesh)(nil).AddMalfeasanceProof), arg0, arg1, arg2)
-}
-
 // Ballot mocks base method.
 func (m *Mockmesh) Ballot(arg0 types.BallotID) (*types.Ballot, error) {
 	m.ctrl.T.Helper()
@@ -219,6 +205,20 @@ func (m *Mockmesh) Ballot(arg0 types.BallotID) (*types.Ballot, error) {
 func (mr *MockmeshMockRecorder) Ballot(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ballot", reflect.TypeOf((*Mockmesh)(nil).Ballot), arg0)
+}
+
+// Cache mocks base method.
+func (m *Mockmesh) Cache() *datastore.CachedDB {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Cache")
+	ret0, _ := ret[0].(*datastore.CachedDB)
+	return ret0
+}
+
+// Cache indicates an expected call of Cache.
+func (mr *MockmeshMockRecorder) Cache() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cache", reflect.TypeOf((*Mockmesh)(nil).Cache))
 }
 
 // GetAtxHeader mocks base method.
@@ -266,21 +266,6 @@ func (mr *MockmeshMockRecorder) GetMalfeasanceProof(nodeID interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProof", reflect.TypeOf((*Mockmesh)(nil).GetMalfeasanceProof), nodeID)
 }
 
-// IsMalicious mocks base method.
-func (m *Mockmesh) IsMalicious(arg0 types.NodeID) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsMalicious", arg0)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// IsMalicious indicates an expected call of IsMalicious.
-func (mr *MockmeshMockRecorder) IsMalicious(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsMalicious", reflect.TypeOf((*Mockmesh)(nil).IsMalicious), arg0)
-}
-
 // Proposals mocks base method.
 func (m *Mockmesh) Proposals(arg0 types.LayerID) ([]*types.Proposal, error) {
 	m.ctrl.T.Helper()
@@ -294,21 +279,6 @@ func (m *Mockmesh) Proposals(arg0 types.LayerID) ([]*types.Proposal, error) {
 func (mr *MockmeshMockRecorder) Proposals(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proposals", reflect.TypeOf((*Mockmesh)(nil).Proposals), arg0)
-}
-
-// VRFNonce mocks base method.
-func (m *Mockmesh) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (types.VRFPostIndex, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "VRFNonce", arg0, arg1)
-	ret0, _ := ret[0].(types.VRFPostIndex)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// VRFNonce indicates an expected call of VRFNonce.
-func (mr *MockmeshMockRecorder) VRFNonce(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*Mockmesh)(nil).VRFNonce), arg0, arg1)
 }
 
 // MockweakCoin is a mock of weakCoin interface.

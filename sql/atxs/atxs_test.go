@@ -303,7 +303,7 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	atx3, err := newAtx(sig2, withPublishEpoch(3))
 	require.NoError(t, err)
 
-	atx4, err := newAtx(sig2, withPublishEpoch(3))
+	atx4, err := newAtx(sig2, withPublishEpoch(4))
 	require.NoError(t, err)
 	atx4.Sequence = atx3.Sequence + 1
 	atx4.Signature = sig2.Sign(signing.ATX, atx4.SignedBytes())

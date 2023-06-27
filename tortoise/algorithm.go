@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -22,6 +24,10 @@ type Config struct {
 	BadBeaconVoteDelayLayers uint32 `mapstructure:"tortoise-delay-layers"`
 	// EnableTracer will write tortoise traces to the stderr.
 	EnableTracer bool `mapstructure:"tortoise-enable-tracer"`
+	// MinimalActiveSetWeight denotes weight that will replace weight
+	// recorded in the first ballot, if that weight is less than minimal
+	// for purposes of eligibility computation.
+	MinimalActiveSetWeight uint64 `mapstructure:"tortoise-activeset-weight"`
 
 	LayerSize uint32
 }
@@ -29,18 +35,18 @@ type Config struct {
 // DefaultConfig for Tortoise.
 func DefaultConfig() Config {
 	return Config{
-		LayerSize:                30,
+		LayerSize:                50,
 		Hdist:                    10,
 		Zdist:                    8,
 		WindowSize:               1000,
 		BadBeaconVoteDelayLayers: 0,
-		MaxExceptions:            30 * 100, // 100 layers of average size
+		MaxExceptions:            50 * 100, // 100 layers of average size
 	}
 }
 
 // Tortoise is a thread safe verifying tortoise wrapper, it just locks all actions.
 type Tortoise struct {
-	logger log.Log
+	logger *zap.Logger
 	ctx    context.Context
 	cfg    Config
 
@@ -55,7 +61,7 @@ type Opt func(t *Tortoise)
 // WithLogger defines logger for tortoise.
 func WithLogger(logger log.Log) Opt {
 	return func(t *Tortoise) {
-		t.logger = logger
+		t.logger = logger.Zap()
 	}
 }
 
@@ -77,16 +83,16 @@ func WithTracer(opts ...TraceOpt) Opt {
 func New(opts ...Opt) (*Tortoise, error) {
 	t := &Tortoise{
 		ctx:    context.Background(),
-		logger: log.NewNop(),
+		logger: log.NewNop().Zap(),
 		cfg:    DefaultConfig(),
 	}
 	for _, opt := range opts {
 		opt(t)
 	}
 	if t.cfg.Hdist < t.cfg.Zdist {
-		t.logger.With().Panic("hdist must be >= zdist",
-			log.Uint32("hdist", t.cfg.Hdist),
-			log.Uint32("zdist", t.cfg.Zdist),
+		t.logger.Panic("hdist must be >= zdist",
+			zap.Uint32("hdist", t.cfg.Hdist),
+			zap.Uint32("zdist", t.cfg.Zdist),
 		)
 	}
 	t.trtl = newTurtle(t.logger, t.cfg)
@@ -115,10 +121,10 @@ func (t *Tortoise) LatestComplete() types.LayerID {
 func (t *Tortoise) OnWeakCoin(lid types.LayerID, coin bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.logger.With().Debug("on weakcoin",
-		log.Uint32("layer_id", lid.Uint32()),
-		log.Uint32("evicted", t.trtl.evicted.Uint32()),
-		log.Bool("coin", coin),
+	t.logger.Debug("on weakcoin",
+		zap.Uint32("layer_id", lid.Uint32()),
+		zap.Uint32("evicted", t.trtl.evicted.Uint32()),
+		zap.Bool("coin", coin),
 	)
 	if lid <= t.trtl.evicted {
 		return
@@ -134,14 +140,33 @@ func (t *Tortoise) OnWeakCoin(lid types.LayerID, coin bool) {
 	}
 }
 
+// OnMalfeasance registers node id as malfeasent.
+// - ballots from this id will have zero weight
+// - atxs - will not be counted towards global/local threhsolds
+// If node registers equivocating ballot/atx it should
+// call OnMalfeasance before storing ballot/atx.
+func (t *Tortoise) OnMalfeasance(id types.NodeID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.trtl.isMalfeasant(id) {
+		return
+	}
+	t.logger.Debug("on malfeasence", zap.Stringer("id", id))
+	t.trtl.makrMalfeasant(id)
+	malfeasantNumber.Inc()
+	if t.tracer != nil {
+		t.tracer.On(&MalfeasanceTrace{ID: id})
+	}
+}
+
 func (t *Tortoise) OnBeacon(eid types.EpochID, beacon types.Beacon) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	firstInWindow := t.trtl.evicted.Add(1).GetEpoch()
-	t.logger.With().Debug("on beacon",
-		log.Uint32("epoch id", eid.Uint32()),
-		log.Uint32("first epoch", firstInWindow.Uint32()),
-		log.Stringer("beacon", beacon),
+	t.logger.Debug("on beacon",
+		zap.Uint32("epoch id", eid.Uint32()),
+		zap.Uint32("first epoch", firstInWindow.Uint32()),
+		zap.Stringer("beacon", beacon),
 	)
 	if eid < firstInWindow {
 		return
@@ -265,7 +290,9 @@ func (t *Tortoise) OnBallot(ballot *types.BallotTortoiseData) {
 	err := t.trtl.onBallot(ballot)
 	if err != nil {
 		errorsCounter.Inc()
-		t.logger.With().Error("failed to save state from ballot", ballot.ID, log.Err(err))
+		t.logger.Error("failed to save state from ballot",
+			zap.Stringer("ballot", ballot.ID),
+			zap.Error(err))
 	}
 	if t.tracer != nil {
 		t.tracer.On(&BallotTrace{Ballot: ballot})
@@ -315,8 +342,8 @@ func (t *Tortoise) decodeBallot(ballot *types.BallotTortoiseData) (*DecodedBallo
 	if info.opinion() != ballot.Opinion.Hash {
 		errorsCounter.Inc()
 		return nil, fmt.Errorf(
-			"computed opinion hash %s doesn't match signed %s for ballot %s",
-			info.opinion().ShortString(), ballot.Opinion.Hash.ShortString(), ballot.ID,
+			"computed opinion hash %s doesn't match signed %s for ballot %d / %s",
+			info.opinion().ShortString(), ballot.Opinion.Hash.ShortString(), ballot.Layer, ballot.ID,
 		)
 	}
 	return &DecodedBallot{BallotTortoiseData: ballot, info: info, minHint: min}, nil
@@ -331,11 +358,15 @@ func (t *Tortoise) StoreBallot(decoded *DecodedBallot) error {
 	if decoded.Malicious {
 		decoded.info.malicious = true
 	}
-	t.trtl.storeBallot(decoded.info, decoded.minHint)
+	err := t.trtl.storeBallot(decoded.info, decoded.minHint)
 	if t.tracer != nil {
-		t.tracer.On(&StoreBallotTrace{ID: decoded.ID, Malicious: decoded.Malicious})
+		ev := &StoreBallotTrace{ID: decoded.ID, Malicious: decoded.Malicious}
+		if err != nil {
+			ev.Error = err.Error()
+		}
+		t.tracer.On(ev)
 	}
-	return nil
+	return err
 }
 
 // OnHareOutput should be called when hare terminated or certificate for a block
@@ -383,10 +414,10 @@ func (t *Tortoise) Updates() []result.Layer {
 	}
 	rst, err := t.results(t.trtl.pending, t.trtl.processed)
 	if err != nil {
-		t.logger.With().Panic("unexpected error",
-			log.Uint32("pending", t.trtl.pending.Uint32()),
-			log.Uint32("processed", t.trtl.pending.Uint32()),
-			log.Err(err),
+		t.logger.Panic("unexpected error",
+			zap.Uint32("pending", t.trtl.pending.Uint32()),
+			zap.Uint32("processed", t.trtl.pending.Uint32()),
+			zap.Error(err),
 		)
 	}
 	t.trtl.pending = 0
@@ -443,4 +474,37 @@ func (t *Tortoise) results(from, to types.LayerID) ([]result.Layer, error) {
 		})
 	}
 	return rst, nil
+}
+
+type Mode int
+
+func (m Mode) String() string {
+	if m == 0 {
+		return "verifying"
+	}
+	return "full"
+}
+
+const (
+	Verifying = 0
+	Full      = 1
+)
+
+// Mode returns 0 for verifying.
+func (t *Tortoise) Mode() Mode {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.trtl.isFull {
+		return Full
+	}
+	return Verifying
+}
+
+// resetPending compares stored opinion with computed opinion and sets
+// pending layer to the layer above equal layer.
+// this method is meant to be used only in recovery from disk codepath.
+func (t *Tortoise) resetPending(lid types.LayerID, opinion types.Hash32) {
+	if t.trtl.layer(lid).opinion == opinion {
+		t.trtl.pending = lid + 1
+	}
 }

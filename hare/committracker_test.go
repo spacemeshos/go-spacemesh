@@ -15,8 +15,9 @@ func BuildCommitMsg(signer *signing.EdSigner, s *Set) *Message {
 	builder := newMessageBuilder()
 	builder.SetType(commit).SetLayer(instanceID1).SetRoundCounter(commitRound).SetCommittedRound(ki).SetValues(s)
 	builder.SetEligibilityCount(1)
-	builder = builder.Sign(signer)
-	return builder.Build()
+	m := builder.Sign(signer).Build()
+	m.signedHash = types.BytesToHash(m.InnerMessage.HashBytes())
+	return m
 }
 
 func TestCommitTracker_OnCommit(t *testing.T) {
@@ -163,6 +164,7 @@ func TestCommitTracker_OnCommitEquivocate(t *testing.T) {
 								Round:   msg1.Round,
 								MsgHash: types.BytesToHash(msg1.InnerMessage.HashBytes()),
 							},
+							SmesherID: msg1.SmesherID,
 							Signature: msg1.Signature,
 						},
 						{
@@ -171,6 +173,7 @@ func TestCommitTracker_OnCommitEquivocate(t *testing.T) {
 								Round:   msg2.Round,
 								MsgHash: types.BytesToHash(msg2.InnerMessage.HashBytes()),
 							},
+							SmesherID: msg2.SmesherID,
 							Signature: msg2.Signature,
 						},
 					},
@@ -185,6 +188,7 @@ func TestCommitTracker_OnCommitEquivocate(t *testing.T) {
 		},
 	}
 	gossip := <-mch
+	verifyMalfeasanceProof(t, signer, gossip)
 	require.Equal(t, expected, *gossip)
 	et.ForEach(commitRound, func(nodeID types.NodeID, cred *Cred) {
 		require.Equal(t, signer.NodeID(), nodeID)
@@ -233,6 +237,39 @@ func TestCommitTracker_HasEnoughCommits_KnownEquivocator(t *testing.T) {
 	et.Track(signer2.NodeID(), m.Round, m.Eligibility.Count, false)
 	require.True(t, tracker.HasEnoughCommits())
 	require.Empty(t, mch)
+}
+
+// Checks that equivocating nodes detected due to receipt of equivocating
+// commit messages still contribute to the threshold calculation.
+func TestCommitTracker_HasEnoughCommits_EquivocatingCommitMessages(t *testing.T) {
+	signer1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	signer2, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	s := NewSetFromValues(types.ProposalID{1})
+	s2 := NewSetFromValues(types.ProposalID{2})
+	et := NewEligibilityTracker(2)
+	mch := make(chan *types.MalfeasanceGossip, 2)
+	tracker := newCommitTracker(logtest.New(t), commitRound, mch, et, 2, 2, s)
+	require.False(t, tracker.HasEnoughCommits())
+
+	// Set up both participants to be eligible
+	m := BuildCommitMsg(signer1, s)
+	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
+	m2 := BuildCommitMsg(signer2, s)
+	et.Track(m2.SmesherID, m2.Round, m2.Eligibility.Count, true)
+	m3 := BuildCommitMsg(signer2, s2)
+
+	// One message
+	tracker.OnCommit(context.Background(), m2)
+	require.False(t, tracker.HasEnoughCommits())
+	// Equivocation should be detected
+	tracker.OnCommit(context.Background(), m3)
+	require.False(t, tracker.HasEnoughCommits())
+	// One further message should cause threshold to be passed.
+	tracker.OnCommit(context.Background(), m)
+	require.True(t, tracker.HasEnoughCommits())
 }
 
 func TestCommitTracker_HasEnoughCommits_TooFewKnownEquivocator(t *testing.T) {

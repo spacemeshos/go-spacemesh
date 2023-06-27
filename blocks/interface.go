@@ -23,15 +23,11 @@ type executor interface {
 }
 
 type layerClock interface {
-	AwaitLayer(layerID types.LayerID) chan struct{}
+	AwaitLayer(layerID types.LayerID) <-chan struct{}
 	CurrentLayer() types.LayerID
 }
 
 type certifier interface {
 	RegisterForCert(context.Context, types.LayerID, types.BlockID) error
 	CertifyIfEligible(context.Context, log.Log, types.LayerID, types.BlockID) error
-}
-
-type nonceFetcher interface {
-	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
 }

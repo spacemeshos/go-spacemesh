@@ -25,7 +25,6 @@ type Config struct {
 	EpochEndFraction float64
 	HareDelayLayers  uint32
 	SyncCertDistance uint32
-	MaxHashesInReq   uint32
 	MaxStaleDuration time.Duration
 	Standalone       bool
 }
@@ -37,7 +36,6 @@ func DefaultConfig() Config {
 		EpochEndFraction: 0.8,
 		HareDelayLayers:  10,
 		SyncCertDistance: 10,
-		MaxHashesInReq:   5,
 		MaxStaleDuration: time.Second,
 	}
 }
@@ -76,9 +74,8 @@ func (s syncState) String() string {
 }
 
 var (
-	errHareInCharge       = errors.New("hare in charge of layer")
-	errATXsNotSynced      = errors.New("ATX not synced")
-	errBeaconNotAvailable = errors.New("beacon not available")
+	errHareInCharge  = errors.New("hare in charge of layer")
+	errATXsNotSynced = errors.New("ATX not synced")
 )
 
 // Option is a type to configure a syncer.
@@ -137,7 +134,8 @@ type Syncer struct {
 	// awaitATXSyncedCh is the list of subscribers' channels to notify when this node enters ATX synced state
 	awaitATXSyncedCh chan struct{}
 
-	eg errgroup.Group
+	eg   errgroup.Group
+	stop context.CancelFunc
 }
 
 // NewSyncer creates a new Syncer instance.
@@ -173,7 +171,7 @@ func NewSyncer(
 		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, cache, s.logger)
 	}
 	if s.forkFinder == nil {
-		s.forkFinder = NewForkFinder(s.logger, cdb.Database, fetcher, s.cfg.MaxHashesInReq, s.cfg.MaxStaleDuration)
+		s.forkFinder = NewForkFinder(s.logger, cdb.Database, fetcher, s.cfg.MaxStaleDuration)
 	}
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
@@ -188,6 +186,7 @@ func NewSyncer(
 func (s *Syncer) Close() {
 	s.syncTimer.Stop()
 	s.validateTimer.Stop()
+	s.stop()
 	s.logger.With().Info("waiting for syncer goroutines to finish")
 	err := s.eg.Wait()
 	s.logger.With().Info("all syncer goroutines finished", log.Err(err))
@@ -219,8 +218,10 @@ func (s *Syncer) IsBeaconSynced(epoch types.EpochID) bool {
 }
 
 // Start starts the main sync loop that tries to sync data for every SyncInterval.
-func (s *Syncer) Start(ctx context.Context) {
+func (s *Syncer) Start() {
 	s.syncOnce.Do(func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		s.stop = cancel
 		s.logger.WithContext(ctx).Info("starting syncer loop")
 		s.eg.Go(func() error {
 			if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
@@ -378,7 +379,8 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("latest", s.mesh.LatestLayer()),
 		log.Stringer("in_state", s.mesh.LatestLayerInState()),
-		log.Stringer("processed", s.mesh.ProcessedLayer()))
+		log.Stringer("processed", s.mesh.ProcessedLayer()),
+	)
 
 	s.setStateBeforeSync(ctx)
 	// TODO
@@ -424,10 +426,11 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	s.setStateAfterSync(ctx, success)
 	s.logger.WithContext(ctx).With().Debug("finished sync run",
 		log.Bool("success", success),
-		log.String("sync_state", s.getSyncState().String()),
+		log.Stringer("sync_state", s.getSyncState()),
+		log.Stringer("last_synced", s.getLastSyncedLayer()),
 		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("latest", s.mesh.LatestLayer()),
-		log.Stringer("last_synced", s.getLastSyncedLayer()),
+		log.Stringer("in_state", s.mesh.LatestLayerInState()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()),
 	)
 	return success

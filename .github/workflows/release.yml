@@ -32,6 +32,8 @@ jobs:
 
       - name: Check out Git repository
         uses: actions/checkout@v3
+        with:
+          lfs: true
 
       - name: Setup Go
         uses: actions/setup-go@v4
@@ -62,7 +64,12 @@ jobs:
       - name: Add OpenCL support for Linux
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
-      # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
+
+      - name: Oveeride SDKROOT for macOS
+        if: ${{ contains(matrix.os, 'macos') && runner.arch == 'arm64' }}
+        run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> "$GITHUB_ENV"
+
+        # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
       - name: Build go-spacemesh
         shell: bash
         run: |
@@ -75,7 +82,7 @@ jobs:
         run: |
           mkdir $OUTNAME
           mv ./build/* $OUTNAME
-          rm -f $OUTNAME/prover.h
+          rm -f $OUTNAME/post.h
           zip -r $OUTNAME.zip $OUTNAME
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v0

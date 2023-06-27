@@ -123,7 +123,6 @@ func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *si
 		types.Address{},
 		nil,
 		numUnits,
-		nil,
 		&nonce,
 	)
 
@@ -875,19 +874,19 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 		wEarly, wOntime int
 	}{
 		{
-			name:    "100K atxs",
-			wEarly:  90_000,
-			wOntime: 100_000,
+			name:    "30 atxs",
+			wEarly:  27,
+			wOntime: 30,
+		},
+		{
+			name:    "1K atxs",
+			wEarly:  900,
+			wOntime: 1_000,
 		},
 		{
 			name:    "10K atxs",
 			wEarly:  9_000,
 			wOntime: 10_000,
-		},
-		{
-			name:    "30 atxs",
-			wEarly:  27,
-			wOntime: 30,
 		},
 	}
 

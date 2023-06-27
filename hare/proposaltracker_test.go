@@ -15,7 +15,9 @@ func buildProposalMsg(sig *signing.EdSigner, s *Set, signature types.VrfSignatur
 	builder := newMessageBuilder().SetRoleProof(signature)
 	builder.SetType(proposal).SetLayer(instanceID1).SetRoundCounter(proposalRound).SetCommittedRound(ki).SetValues(s).SetSVP(buildSVP(ki, NewSetFromValues(types.ProposalID{1})))
 	builder.SetEligibilityCount(1)
-	return builder.Sign(sig).Build()
+	m := builder.Sign(sig).Build()
+	m.signedHash = types.BytesToHash(m.InnerMessage.HashBytes())
+	return m
 }
 
 func BuildProposalMsg(sig *signing.EdSigner, s *Set) *Message {
@@ -51,6 +53,7 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 								Round:   m1.Round,
 								MsgHash: types.BytesToHash(m1.HashBytes()),
 							},
+							SmesherID: m1.SmesherID,
 							Signature: m1.Signature,
 						},
 						{
@@ -59,6 +62,7 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 								Round:   m2.Round,
 								MsgHash: types.BytesToHash(m2.HashBytes()),
 							},
+							SmesherID: m2.SmesherID,
 							Signature: m2.Signature,
 						},
 					},
@@ -73,6 +77,7 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 		},
 	}
 	gossip := <-mch
+	verifyMalfeasanceProof(t, signer, gossip)
 	require.Equal(t, expected, *gossip)
 	tracker.eTracker.ForEach(proposalRound, func(s types.NodeID, cred *Cred) {
 		require.Equal(t, m1.SmesherID, s)
@@ -126,6 +131,7 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 								Round:   m1.Round,
 								MsgHash: types.BytesToHash(m1.HashBytes()),
 							},
+							SmesherID: m1.SmesherID,
 							Signature: m1.Signature,
 						},
 						{
@@ -134,6 +140,7 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 								Round:   m2.Round,
 								MsgHash: types.BytesToHash(m2.HashBytes()),
 							},
+							SmesherID: m2.SmesherID,
 							Signature: m2.Signature,
 						},
 					},
@@ -148,6 +155,7 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 		},
 	}
 	gossip := <-mch
+	verifyMalfeasanceProof(t, signer, gossip)
 	require.Equal(t, expected, *gossip)
 	tracker.eTracker.ForEach(proposalRound, func(s types.NodeID, cred *Cred) {
 		require.Equal(t, m1.SmesherID, s)
@@ -200,6 +208,7 @@ func TestProposalTracker_ProposedSet(t *testing.T) {
 								Round:   m1.Round,
 								MsgHash: types.BytesToHash(m1.HashBytes()),
 							},
+							SmesherID: m1.SmesherID,
 							Signature: m1.Signature,
 						},
 						{
@@ -208,6 +217,7 @@ func TestProposalTracker_ProposedSet(t *testing.T) {
 								Round:   m2.Round,
 								MsgHash: types.BytesToHash(m2.HashBytes()),
 							},
+							SmesherID: m2.SmesherID,
 							Signature: m2.Signature,
 						},
 					},
@@ -222,6 +232,7 @@ func TestProposalTracker_ProposedSet(t *testing.T) {
 		},
 	}
 	gossip := <-mch
+	verifyMalfeasanceProof(t, signer2, gossip)
 	require.Equal(t, expected, *gossip)
 	tracker.eTracker.ForEach(proposalRound, func(s types.NodeID, cred *Cred) {
 		require.Equal(t, m1.SmesherID, s)

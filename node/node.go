@@ -23,6 +23,7 @@ import (
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	poetconfig "github.com/spacemeshos/poet/config"
 	"github.com/spacemeshos/poet/server"
+	"github.com/spacemeshos/post/verifying"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -139,16 +140,21 @@ func GetCommand() *cobra.Command {
 					return fmt.Errorf("ensure folders exist: %w", err)
 				}
 
+				if err := app.Lock(); err != nil {
+					return fmt.Errorf("failed to get exclusive file lock: %w", err)
+				}
+				defer app.Unlock()
+
 				/* Create or load miner identity */
 				if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
 					return fmt.Errorf("could not retrieve identity: %w", err)
 				}
 
-				if err = app.LoadCheckpoint(ctx); err != nil {
+				if err := app.LoadCheckpoint(ctx); err != nil {
 					return err
 				}
 
-				if err = app.Initialize(); err != nil {
+				if err := app.Initialize(); err != nil {
 					return err
 				}
 				// This blocks until the context is finished or until an error is produced
@@ -238,6 +244,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
 		mapstructureutil.BigRatDecodeFunc(),
+		mapstructure.TextUnmarshallerHookFunc(),
 	)
 
 	// load config if it was loaded to the viper
@@ -354,7 +361,7 @@ func defaultRecoveryFile(dataDir string) (string, types.LayerID, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	return fmt.Sprintf("file://%s", files[0]), restore, nil
+	return fmt.Sprintf("file://%s", filepath.ToSlash(files[0])), restore, nil
 }
 
 func (app *App) LoadCheckpoint(ctx context.Context) error {
@@ -391,7 +398,7 @@ func (app *App) LoadCheckpoint(ctx context.Context) error {
 	return checkpoint.Recover(ctx, app.log, afero.NewOsFs(), cfg, app.edSgn.NodeID(), checkpointFile, restore)
 }
 
-func (app *App) Started() chan struct{} {
+func (app *App) Started() <-chan struct{} {
 	return app.started
 }
 
@@ -399,8 +406,8 @@ func (app *App) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
-// Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
-func (app *App) Initialize() (err error) {
+// Lock locks the app for exclusive use. It returns an error if the app is already locked.
+func (app *App) Lock() error {
 	lockdir := filepath.Dir(app.Config.FileLock)
 	if _, err := os.Stat(lockdir); errors.Is(err, os.ErrNotExist) {
 		err := os.Mkdir(lockdir, os.ModePerm)
@@ -416,7 +423,24 @@ func (app *App) Initialize() (err error) {
 		return fmt.Errorf("only one spacemesh instance should be running (locking file %s)", fl.Path())
 	}
 	app.fileLock = fl
+	return nil
+}
 
+// Unlock unlocks the app. It is a no-op if the app is not locked.
+func (app *App) Unlock() {
+	if app.fileLock == nil {
+		return
+	}
+	if err := app.fileLock.Unlock(); err != nil {
+		log.With().Error("failed to unlock file",
+			log.String("path", app.fileLock.Path()),
+			log.Err(err),
+		)
+	}
+}
+
+// Initialize parses and validates the node configuration and sets up logging.
+func (app *App) Initialize() error {
 	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
 	var existing config.GenesisConfig
 	if err := existing.LoadFromFile(gpath); err != nil {
@@ -476,14 +500,6 @@ func (app *App) getAppInfo() string {
 // Cleanup stops all app services.
 func (app *App) Cleanup(ctx context.Context) {
 	log.Info("app cleanup starting...")
-	if app.fileLock != nil {
-		if err := app.fileLock.Unlock(); err != nil {
-			log.With().Error("failed to unlock file",
-				log.String("path", app.fileLock.Path()),
-				log.Err(err),
-			)
-		}
-	}
 	app.stopServices(ctx)
 	// add any other Cleanup tasks here....
 	log.Info("app cleanup completed")
@@ -549,9 +565,14 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 
 	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
 	postVerifiers := make([]activation.PostVerifier, 0, app.Config.SMESHING.VerifyingOpts.Workers)
+	lg.Debug("creating post verifier")
+	verifier, err := activation.NewPostVerifier(app.Config.POST, nipostValidatorLogger, verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags))
+	lg.With().Debug("created post verifier", log.Err(err))
+	if err != nil {
+		return err
+	}
 	for i := 0; i < app.Config.SMESHING.VerifyingOpts.Workers; i++ {
-		logger := nipostValidatorLogger.Named(fmt.Sprintf("worker-%d", i))
-		postVerifiers = append(postVerifiers, activation.NewPostVerifier(app.Config.POST, logger))
+		postVerifiers = append(postVerifiers, verifier)
 	}
 	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
 
@@ -650,7 +671,8 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		app.Config.TickSize,
 		goldenATXID,
 		validator,
-		[]activation.AtxReceiver{&atxReceiver{trtl}, beaconProtocol},
+		beaconProtocol,
+		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
 		poetCfg,
 	)
@@ -665,11 +687,12 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	proposalListener := proposals.NewHandler(app.cachedDB, app.edVerifier, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, app.clock,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
-			LayerSize:      layerSize,
-			LayersPerEpoch: layersPerEpoch,
-			GoldenATXID:    goldenATXID,
-			MaxExceptions:  trtlCfg.MaxExceptions,
-			Hdist:          trtlCfg.Hdist,
+			LayerSize:              layerSize,
+			LayersPerEpoch:         layersPerEpoch,
+			GoldenATXID:            goldenATXID,
+			MaxExceptions:          trtlCfg.MaxExceptions,
+			Hdist:                  trtlCfg.Hdist,
+			MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
 		}),
 	)
 
@@ -718,13 +741,13 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		EpochEndFraction: 0.8,
 		HareDelayLayers:  app.Config.Tortoise.Zdist,
 		SyncCertDistance: app.Config.Tortoise.Hdist,
-		MaxHashesInReq:   100,
 		MaxStaleDuration: time.Hour,
 		Standalone:       app.Config.Standalone,
 	}
 	newSyncer := syncer.NewSyncer(app.cachedDB, app.clock, beaconProtocol, msh, trtl, fetcher, patrol, app.certifier,
 		syncer.WithConfig(syncerConf),
-		syncer.WithLogger(app.addLogger(SyncLogger, lg)))
+		syncer.WithLogger(app.addLogger(SyncLogger, lg)),
+	)
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
 
@@ -775,6 +798,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		miner.WithNodeID(app.edSgn.NodeID()),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
+		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
@@ -841,6 +865,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		app.host.ID(),
 		app.hare,
 		app.edVerifier,
+		trtl,
 	)
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(atxHandler.HandleAtxData, app.host, lg)),
@@ -850,7 +875,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(proposalListener.HandleSyncedProposal, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleBlockTransaction, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleProposalTransaction, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(malfeasanceHandler.HandleMalfeasanceProof, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(malfeasanceHandler.HandleSyncedMalfeasanceProof, app.host, lg)),
 	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
@@ -896,7 +921,9 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 			peersync.WithConfig(app.Config.TIME.Peersync),
 		)
 	}
-
+	if err := app.host.Start(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -948,8 +975,12 @@ func (app *App) launchStandalone(ctx context.Context) error {
 
 func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 	app.eg.Go(func() error {
-		ch := app.updater.Subscribe()
-		if err := app.updater.Start(ctx); err != nil {
+		ch, err := app.updater.Subscribe()
+		if err != nil {
+			appErr <- err
+			return nil
+		}
+		if err := app.updater.Start(); err != nil {
 			appErr <- err
 			return nil
 		}
@@ -981,7 +1012,7 @@ func (app *App) startServices(ctx context.Context, appErr chan error) error {
 		app.postVerifier.Start(ctx)
 		return nil
 	})
-	app.syncer.Start(ctx)
+	app.syncer.Start()
 	app.beaconProtocol.Start(ctx)
 
 	app.blockGen.Start()
@@ -1175,6 +1206,10 @@ func (app *App) stopServices(ctx context.Context) {
 		app.dbMetrics.Close()
 	}
 
+	if app.postVerifier != nil {
+		app.postVerifier.Close()
+	}
+
 	events.CloseEventReporter()
 }
 
@@ -1342,10 +1377,10 @@ func (app *App) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
 
-	if err = app.setupDBs(ctx, lg, app.Config.DataDir()); err != nil {
+	if err := app.setupDBs(ctx, lg, app.Config.DataDir()); err != nil {
 		return err
 	}
-	if err = app.initServices(ctx, poetClients); err != nil {
+	if err := app.initServices(ctx, poetClients); err != nil {
 		return fmt.Errorf("cannot start services: %w", err)
 	}
 
@@ -1426,12 +1461,4 @@ func (w tortoiseWeakCoin) Set(lid types.LayerID, value bool) error {
 	}
 	w.tortoise.OnWeakCoin(lid, value)
 	return nil
-}
-
-type atxReceiver struct {
-	tortoise *tortoise.Tortoise
-}
-
-func (a *atxReceiver) OnAtx(header *types.ActivationTxHeader) {
-	a.tortoise.OnAtx(header.ToData())
 }

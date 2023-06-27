@@ -61,7 +61,7 @@ func TestFullBallotFilter(t *testing.T) {
 			config := Config{}
 			config.BadBeaconVoteDelayLayers = tc.distance
 			require.Equal(t, tc.expect, newFullTortoise(config, state).shouldBeDelayed(
-				logtest.New(t), &tc.ballot))
+				logtest.Zap(t), &tc.ballot))
 		})
 	}
 }
@@ -321,7 +321,7 @@ func TestFullCountVotes(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			logger := logtest.New(t)
+			logger := logtest.Zap(t)
 			tortoise := defaultAlgorithm(t)
 			var activeset []types.ATXID
 			for i := range tc.activeset {
@@ -544,7 +544,8 @@ func TestFullVerify(t *testing.T) {
 				}
 				layer.blocks = append(layer.blocks, block)
 			}
-			require.Equal(t, tc.validity != nil, full.verify(logtest.New(t), target))
+			v, _ := full.verify(logtest.Zap(t), target)
+			require.Equal(t, tc.validity != nil, v)
 			if tc.validity != nil {
 				for i, expect := range tc.validity {
 					require.Equal(t, expect, layer.blocks[i].validity)

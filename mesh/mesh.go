@@ -11,6 +11,7 @@ import (
 	"go.uber.org/atomic"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -22,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -550,8 +552,12 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 						Data: &ballotProof,
 					},
 				}
-				if err = msh.cdb.AddMalfeasanceProof(ballot.SmesherID, proof, dbtx); err != nil {
-					return err
+				encoded, err := codec.Encode(proof)
+				if err != nil {
+					msh.logger.With().Panic("failed to encode MalfeasanceProof", log.Err(err))
+				}
+				if err := identities.SetMalicious(dbtx, ballot.SmesherID, encoded); err != nil {
+					return fmt.Errorf("add malfeasance proof: %w", err)
 				}
 				ballot.SetMalicious()
 				msh.logger.With().Warning("smesher produced more than one ballot in the same layer",
@@ -567,6 +573,10 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 		return nil
 	}); err != nil {
 		return nil, err
+	}
+	if proof != nil {
+		msh.cdb.CacheMalfeasanceProof(ballot.SmesherID, proof)
+		msh.trtl.OnMalfeasance(ballot.SmesherID)
 	}
 	return proof, nil
 }

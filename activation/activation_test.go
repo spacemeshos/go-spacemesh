@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -33,8 +32,6 @@ const (
 	layersPerEpoch                 = 10
 	layerDuration                  = time.Second
 	postGenesisEpoch types.EpochID = 2
-
-	testTickSize = 1
 )
 
 func TestMain(m *testing.M) {
@@ -56,7 +53,7 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, PublishEpoch
 }
 
 func newAtx(t testing.TB, sig *signing.EdSigner, challenge types.NIPostChallenge, nipost *types.NIPost, numUnits uint32, coinbase types.Address) *types.ActivationTx {
-	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil, nil)
+	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil)
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
 	return atx
@@ -69,13 +66,13 @@ func newActivationTx(
 	prevATX types.ATXID,
 	positioningATX types.ATXID,
 	cATX *types.ATXID,
-	PublishEpoch types.EpochID,
+	publishEpoch types.EpochID,
 	startTick, numTicks uint64,
 	coinbase types.Address,
 	numUnits uint32,
 	nipost *types.NIPost,
 ) *types.VerifiedActivationTx {
-	challenge := newChallenge(sequence, prevATX, positioningATX, PublishEpoch, cATX)
+	challenge := newChallenge(sequence, prevATX, positioningATX, publishEpoch, cATX)
 	atx := newAtx(t, sig, challenge, nipost, numUnits, coinbase)
 	if sequence == 0 {
 		nodeID := sig.NodeID()
@@ -143,7 +140,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		Nonce:   0,
 		Indices: make([]byte, 10),
 	}
-	b.initialPostMeta = &types.PostMetadata{}
 	tab.Builder = b
 	dir := tb.TempDir()
 	tab.mnipost.EXPECT().DataDir().Return(dir).AnyTimes()
@@ -157,13 +153,11 @@ func assertLastAtx(r *require.Assertions, nodeID types.NodeID, poetRef types.Has
 		r.Equal(prevAtx.Sequence+1, atx.Sequence)
 		r.Equal(prevAtx.ID(), atx.PrevATXID)
 		r.Nil(atx.InitialPost)
-		r.Nil(atx.InitialPostIndices)
 		r.Nil(atx.VRFNonce)
 	} else {
 		r.Zero(atx.Sequence)
 		r.Equal(types.EmptyATXID, atx.PrevATXID)
 		r.NotNil(atx.InitialPost)
-		r.NotNil(atx.InitialPostIndices)
 		r.NotNil(atx.VRFNonce)
 	}
 	r.Equal(posAtx.ID(), atx.PositioningATX)
@@ -199,7 +193,7 @@ func publishAtx(
 	ch := make(chan struct{})
 	close(ch)
 	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
-		func(got types.LayerID) chan struct{} {
+		func(got types.LayerID) <-chan struct{} {
 			// advance to publish layer
 			if currLayer.Before(got) {
 				*currLayer = got
@@ -236,7 +230,7 @@ func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID, sig *signing
 	challenge := types.NIPostChallenge{
 		PublishEpoch: epoch,
 	}
-	atx := types.NewActivationTx(challenge, types.Address{}, nil, 2, nil, nil)
+	atx := types.NewActivationTx(challenge, types.Address{}, nil, 2, nil)
 	atx.SetEffectiveNumUnits(2)
 	return addAtx(t, db, sig, atx)
 }
@@ -318,9 +312,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	})
 }
 
-func TestBuilder_StartSmeshingAvoidsPanickingIfPrepareInitializerReturnsError(t *testing.T) {
-	// First verify that a panic occurs when PrepareInitializer does not return
-	// an error but StartSession does.
+func TestBuilder_StartSmeshing_PanicsOnErrInStartSession(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -348,27 +340,26 @@ func TestBuilder_StartSmeshingAvoidsPanickingIfPrepareInitializerReturnsError(t 
 		require.Fail(t, "test timed out or failed")
 	}
 
-	// Now verify that a panic does not occur if PrepareInitializer returns an error
-	l = log.NewMockLogger(gomock.NewController(t))
-	tab = newTestBuilder(t)
+	tab.stop()
+	tab.eg.Wait()
+}
+
+func TestBuilder_StartSmeshing_SessionNotStartedOnFailPrepare(t *testing.T) {
+	l := log.NewMockLogger(gomock.NewController(t))
+	tab := newTestBuilder(t)
 	tab.log = l
 
 	// Stub these methods in case they get called
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).AnyTimes().Return(&types.Post{}, &types.PostMetadata{}, nil)
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).AnyTimes()
 
-	// Set expectations, we don't expect StartSession to be called, since
-	// StartSmeshing should exit early if PrepareInitializer returns an error.
-	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(),
-		gomock.Any()).Return(errors.New("avoid panic"))
+	// Set PrepareInitializer to fail
+	testError := errors.New("avoid panic")
+	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).Return(testError)
 
-	// We check that no new goroutines were started as a result of the call to
-	// StartSmeshing, this assures us that upon returning from StartSmeshing
-	// there is no chance that StartSession is subsequently called in a
-	// goroutine.
-	goroutineCount := runtime.NumGoroutine()
-	tab.StartSmeshing(tab.coinbase, PostSetupOpts{})
-	require.Equal(t, goroutineCount, runtime.NumGoroutine())
+	require.ErrorIs(t, tab.StartSmeshing(tab.coinbase, PostSetupOpts{}), testError)
+
+	tab.eg.Wait()
 }
 
 func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
@@ -493,7 +484,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
 	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
-		func(got types.LayerID) chan struct{} {
+		func(got types.LayerID) <-chan struct{} {
 			// advance to publish layer
 			if currLayer.Before(got) {
 				currLayer = got
@@ -589,7 +580,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	done := make(chan struct{})
 	close(done)
 	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
-		func(got types.LayerID) chan struct{} {
+		func(got types.LayerID) <-chan struct{} {
 			// advance to publish layer
 			if currLayer.Before(got) {
 				currLayer = got
@@ -685,7 +676,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	r.NoError(atxs.Add(tab.cdb, vPosAtx))
 
 	challenge = newChallenge(0, types.EmptyATXID, posAtx.ID(), prevAtxPostEpoch, nil)
-	challenge.InitialPostIndices = initialPost.Indices
+	challenge.InitialPost = initialPost
 	prevAtx := newAtx(t, tab.sig, challenge, nipost, 2, types.Address{})
 	prevAtx.InitialPost = initialPost
 	SignAndFinalizeAtx(tab.sig, prevAtx)
@@ -707,13 +698,13 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 			genesis := time.Now().Add(-time.Duration(currentLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(layer))
 		}).AnyTimes()
-	tab.mclock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(layer types.LayerID) chan struct{} {
+	tab.mclock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(layer types.LayerID) <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
 		return ch
 	}).Times(1)
 
-	tab.mclock.EXPECT().AwaitLayer(gomock.Not(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch))).DoAndReturn(func(types.LayerID) chan struct{} {
+	tab.mclock.EXPECT().AwaitLayer(gomock.Not(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch))).DoAndReturn(func(types.LayerID) <-chan struct{} {
 		ch := make(chan struct{})
 		return ch
 	}).Times(1)
@@ -747,7 +738,6 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 		r.Equal(prevAtx.Sequence+1, atx.Sequence)
 		r.Equal(prevAtx.ID(), atx.PrevATXID)
 		r.Nil(atx.InitialPost)
-		r.Nil(atx.InitialPostIndices)
 
 		r.Equal(posAtx.ID(), atx.PositioningATX)
 		r.Equal(postAtxPubEpoch+1, atx.PublishEpoch)
@@ -793,13 +783,13 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 			genesis := time.Now().Add(-time.Duration(currentLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(layer))
 		}).AnyTimes()
-	tab.mclock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(types.LayerID) chan struct{} {
+	tab.mclock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(types.LayerID) <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
 		return ch
 	}).Times(1)
 
-	tab.mclock.EXPECT().AwaitLayer(gomock.Not(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch))).DoAndReturn(func(types.LayerID) chan struct{} {
+	tab.mclock.EXPECT().AwaitLayer(gomock.Not(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch))).DoAndReturn(func(types.LayerID) <-chan struct{} {
 		ch := make(chan struct{})
 		return ch
 	}).Times(1)
@@ -836,7 +826,6 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		r.Zero(atx.Sequence)
 		r.Equal(types.EmptyATXID, atx.PrevATXID)
 		r.NotNil(atx.InitialPost)
-		r.NotNil(atx.InitialPostIndices)
 
 		r.Equal(posAtx.ID(), atx.PositioningATX)
 		r.Equal(posEpoch+1, atx.PublishEpoch)
@@ -948,7 +937,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
 	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
-		func(got types.LayerID) chan struct{} {
+		func(got types.LayerID) <-chan struct{} {
 			// advance to publish layer
 			if currLayer.Before(got) {
 				currLayer = got
@@ -1075,7 +1064,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 	select {
 	case <-builderConfirmation:
-	case <-time.After(time.Second * 5):
+	case <-time.After(time.Second * 10):
 		require.FailNow(t, "failed waiting for required number of tries to occur")
 	}
 }

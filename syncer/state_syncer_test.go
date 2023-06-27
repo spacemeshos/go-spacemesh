@@ -46,7 +46,6 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 	adopted := make(map[types.LayerID]types.BlockID)
 	for lid := gLid.Add(1); lid.Before(current); lid = lid.Add(1) {
 		lid := lid
-		ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).DoAndReturn(
 			func(context.Context, types.LayerID) ([]*fetch.LayerOpinion, error) {
@@ -159,7 +158,6 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 				ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
 				ts.mVm.EXPECT().GetStateRoot()
 			}
-			ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
 			ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
 			ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(tc.opns, nil)
 			if tc.localCert == types.EmptyBlockID && hasCert {
@@ -184,18 +182,6 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 			require.True(t, ts.syncer.stateSynced())
 		})
 	}
-}
-
-func TestProcessLayers_BeaconNotAvailable(t *testing.T) {
-	ts := newSyncerWithoutSyncTimer(t)
-	ts.syncer.setATXSynced()
-	lastSynced := types.GetEffectiveGenesis().Add(1)
-	ts.syncer.setLastSyncedLayer(lastSynced)
-	ts.mTicker.advanceToLayer(lastSynced.Add(1))
-	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, errBeaconNotAvailable)
-	require.False(t, ts.syncer.stateSynced())
-	require.ErrorIs(t, ts.syncer.processLayers(context.Background()), errBeaconNotAvailable)
-	require.False(t, ts.syncer.stateSynced())
 }
 
 func TestProcessLayers_ATXsNotSynced(t *testing.T) {
@@ -231,12 +217,10 @@ func TestProcessLayers_HareIsStillWorking(t *testing.T) {
 	ts.mTicker.advanceToLayer(lastSynced.Add(1))
 
 	require.False(t, ts.syncer.stateSynced())
-	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(lastSynced).Return(true)
 	require.ErrorIs(t, ts.syncer.processLayers(context.Background()), errHareInCharge)
 	require.False(t, ts.syncer.stateSynced())
 
-	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(lastSynced).Return(false)
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced).Return(nil, nil)
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
@@ -257,7 +241,6 @@ func TestProcessLayers_HareTakesTooLong(t *testing.T) {
 	current := lastSynced.Add(1)
 	ts.mTicker.advanceToLayer(current)
 	for lid := glayer.Add(1); lid.Before(current); lid = lid.Add(1) {
-		ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
 		if lid == glayer.Add(1) {
 			ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(true)
 		} else {
@@ -280,7 +263,6 @@ func TestProcessLayers_OpinionsOptional(t *testing.T) {
 	lastSynced := types.GetEffectiveGenesis().Add(1)
 	ts.syncer.setLastSyncedLayer(lastSynced)
 	ts.mTicker.advanceToLayer(lastSynced.Add(1))
-	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(lastSynced).Return(false)
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced).Return(nil, errors.New("meh"))
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
@@ -335,7 +317,6 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	epoch := instate.GetEpoch()
 	errUnknown := errors.New("unknown")
 
-	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(instate).Return(false)
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), instate).Return(opns, nil)
 	ts.mForkFinder.EXPECT().UpdateAgreement(opns[1].Peer(), instate.Sub(1), prevHash, gomock.Any())
@@ -400,6 +381,55 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	require.NoError(t, ts.syncer.processLayers(context.Background()))
 }
 
+func TestProcessLayers_NoHashResolutionForNewlySyncedNode(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+	ts.syncer.setATXSynced()
+	current := types.GetEffectiveGenesis().Add(131)
+	ts.mTicker.advanceToLayer(current)
+	for lid := types.GetEffectiveGenesis().Add(1); lid.Before(current); lid = lid.Add(1) {
+		ts.msh.SetZeroBlockLayer(context.Background(), lid)
+		ts.mTortoise.EXPECT().OnHareOutput(lid, types.EmptyBlockID)
+		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
+		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.ROpinion(lid, types.RandomHash())))
+		ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
+		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
+		ts.mVm.EXPECT().GetStateRoot()
+		require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.Background(), lid, types.EmptyBlockID, false))
+	}
+	instate := ts.syncer.mesh.LatestLayerInState()
+	require.Equal(t, current.Sub(1), instate)
+	// now make the node's state out of sync
+	current += 10
+	ts.mTicker.advanceToLayer(current)
+	ts.syncer.setLastSyncedLayer(current)
+	_, err := layers.GetAggregatedHash(ts.cdb, instate.Sub(1))
+	require.NoError(t, err)
+	numPeers := 3
+	opns := make([]*fetch.LayerOpinion, 0, numPeers)
+	for i := 0; i < numPeers; i++ {
+		opn := &fetch.LayerOpinion{PrevAggHash: types.RandomHash()}
+		opn.SetPeer(p2p.Peer(strconv.Itoa(i)))
+		opns = append(opns, opn)
+	}
+	for lid := instate; lid <= current; lid++ {
+		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid)
+		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(opns, nil)
+		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
+		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.ROpinion(lid.Sub(1), opns[2].PrevAggHash)))
+		if lid != instate && lid != current {
+			ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
+			ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
+			ts.mVm.EXPECT().GetStateRoot()
+		}
+	}
+	// only the last layer will trigger hash resolution
+	for i := range opns {
+		ts.mForkFinder.EXPECT().NeedResync(current.Sub(1), opns[i].PrevAggHash).Return(false)
+	}
+	ts.mForkFinder.EXPECT().Purge(true)
+	require.NoError(t, ts.syncer.processLayers(context.Background()))
+}
+
 func TestProcessLayers_SucceedOnRetry(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
 	ts.syncer.setATXSynced()
@@ -407,7 +437,6 @@ func TestProcessLayers_SucceedOnRetry(t *testing.T) {
 	ts.mTicker.advanceToLayer(current)
 	ts.syncer.setLastSyncedLayer(current)
 
-	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), gomock.Any()).AnyTimes()
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()

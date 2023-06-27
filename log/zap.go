@@ -104,6 +104,10 @@ func ShortStringer(name string, val ShortString) Field {
 	return Field(zap.Stringer(name, shortStringAdapter{val: val}))
 }
 
+func ZShortStringer(name string, val ShortString) zap.Field {
+	return zap.Stringer(name, shortStringAdapter{val: val})
+}
+
 // Binary will encode binary content in base64 when logged.
 func Binary(name string, val []byte) Field {
 	return Field(zap.Binary(name, val))
@@ -181,6 +185,10 @@ func Array(name string, array ArrayMarshaler) Field {
 // Context inlines requestId and sessionId fields if they are present.
 func Context(ctx context.Context) Field {
 	return Field(zap.Inline(&marshalledContext{Context: ctx}))
+}
+
+func ZContext(ctx context.Context) zap.Field {
+	return zap.Inline(&marshalledContext{Context: ctx})
 }
 
 func Any(key string, value any) Field {

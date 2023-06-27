@@ -20,12 +20,12 @@ type Decodable = scale.Decodable
 
 // EncodeTo encodes value to a writer stream.
 func EncodeTo(w io.Writer, value Encodable) (int, error) {
-	return value.EncodeScale(scale.NewEncoder(w))
+	return value.EncodeScale(scale.NewEncoder(w, scale.WithEncodeMaxNested(6)))
 }
 
 // DecodeFrom decodes a value using data from a reader stream.
 func DecodeFrom(r io.Reader, value Decodable) (int, error) {
-	return value.DecodeScale(scale.NewDecoder(r))
+	return value.DecodeScale(scale.NewDecoder(r, scale.WithDecodeMaxNested(6)))
 }
 
 // TODO(dshulyak) this is a temporary solution to improve encoder allocations.

@@ -62,7 +62,7 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Message) {
 	metadata := types.HareMetadata{
 		Layer:   msg.Layer,
 		Round:   msg.Round,
-		MsgHash: types.BytesToHash(msg.HashBytes()),
+		MsgHash: msg.signedHash,
 	}
 	if prev, ok := ct.seenSenders[msg.SmesherID]; ok {
 		if !prev.InnerMsg.Equivocation(&metadata) {
@@ -77,6 +77,7 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Message) {
 		ct.eTracker.Track(msg.SmesherID, msg.Round, msg.Eligibility.Count, false)
 		this := &types.HareProofMsg{
 			InnerMsg:  metadata,
+			SmesherID: msg.SmesherID,
 			Signature: msg.Signature,
 		}
 		if err := reportEquivocation(ctx, msg.SmesherID, prev, this, &msg.Eligibility, ct.malCh); err != nil {
@@ -90,6 +91,7 @@ func (ct *commitTracker) OnCommit(ctx context.Context, msg *Message) {
 	}
 	ct.seenSenders[msg.SmesherID] = &types.HareProofMsg{
 		InnerMsg:  metadata,
+		SmesherID: msg.SmesherID,
 		Signature: msg.Signature,
 	}
 

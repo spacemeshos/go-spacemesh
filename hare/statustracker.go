@@ -39,7 +39,7 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Message) {
 	metadata := types.HareMetadata{
 		Layer:   msg.Layer,
 		Round:   msg.Round,
-		MsgHash: types.BytesToHash(msg.HashBytes()),
+		MsgHash: msg.signedHash,
 	}
 	if prev, exist := st.statuses[msg.SmesherID]; exist { // already handled this sender's status msg
 		st.logger.WithContext(ctx).With().Warning("duplicate status message detected",
@@ -48,7 +48,7 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Message) {
 		prevMetadata := types.HareMetadata{
 			Layer:   prev.Layer,
 			Round:   prev.Round,
-			MsgHash: types.BytesToHash(prev.HashBytes()),
+			MsgHash: prev.signedHash,
 		}
 		if !prevMetadata.Equivocation(&metadata) {
 			return
@@ -62,10 +62,12 @@ func (st *statusTracker) RecordStatus(ctx context.Context, msg *Message) {
 		st.eTracker.Track(msg.SmesherID, msg.Round, msg.Eligibility.Count, false)
 		old := &types.HareProofMsg{
 			InnerMsg:  prevMetadata,
+			SmesherID: msg.SmesherID,
 			Signature: prev.Signature,
 		}
 		this := &types.HareProofMsg{
 			InnerMsg:  metadata,
+			SmesherID: msg.SmesherID,
 			Signature: msg.Signature,
 		}
 		if err := reportEquivocation(ctx, msg.SmesherID, old, this, &msg.Eligibility, st.malCh); err != nil {

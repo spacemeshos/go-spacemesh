@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -45,7 +46,8 @@ type Handler struct {
 	tickSize        uint64
 	goldenATXID     types.ATXID
 	nipostValidator nipostValidator
-	atxReceivers    []AtxReceiver
+	beacon          AtxReceiver
+	tortoise        system.Tortoise
 	log             log.Log
 	mu              sync.Mutex
 	atxChannels     map[types.ATXID]*atxChan
@@ -64,7 +66,8 @@ func NewHandler(
 	tickSize uint64,
 	goldenATXID types.ATXID,
 	nipostValidator nipostValidator,
-	atxReceivers []AtxReceiver,
+	beacon AtxReceiver,
+	tortoise system.Tortoise,
 	log log.Log,
 	poetCfg PoetConfig,
 ) *Handler {
@@ -77,10 +80,11 @@ func NewHandler(
 		tickSize:        tickSize,
 		goldenATXID:     goldenATXID,
 		nipostValidator: nipostValidator,
-		atxReceivers:    atxReceivers,
 		log:             log,
 		atxChannels:     make(map[types.ATXID]*atxChan),
 		fetcher:         fetcher,
+		beacon:          beacon,
+		tortoise:        tortoise,
 		poetCfg:         poetCfg,
 	}
 }
@@ -143,7 +147,6 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 		atx.ID(),
 		atx.PublishEpoch,
 		log.Stringer("smesher", atx.SmesherID),
-		atx.PublishEpoch,
 	)
 	if err := h.ContextuallyValidateAtx(atx); err != nil {
 		h.log.WithContext(ctx).With().Warning("atx failed contextual validation",
@@ -163,6 +166,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
 //
+//   - The PublishEpoch is less than or equal to the current epoch + 1.
 //   - If the sequence number is non-zero: PrevATX points to a syntactically valid ATX whose sequence number is one less
 //     than the current ATXs sequence number.
 //   - If the sequence number is zero: PrevATX is empty.
@@ -177,6 +181,11 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		commitmentATX *types.ATXID
 		err           error
 	)
+
+	current := h.clock.CurrentLayer()
+	if atx.PublishEpoch > current.GetEpoch()+1 {
+		return nil, fmt.Errorf("atx publish epoch is too far in the future: %d > %d", atx.PublishEpoch, current.GetEpoch()+1)
+	}
 
 	if atx.PrevATXID == types.EmptyATXID {
 		if err := h.validateInitialAtx(ctx, atx); err != nil {
@@ -225,7 +234,7 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 		return fmt.Errorf("no prevATX declared, but NodeID is missing")
 	}
 
-	if err := h.nipostValidator.InitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, h.goldenATXID, atx.InitialPost.Indices); err != nil {
+	if err := h.nipostValidator.InitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, h.goldenATXID); err != nil {
 		return err
 	}
 
@@ -353,7 +362,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		return fmt.Errorf("checking if node is malicious: %w", err)
 	}
 	var proof *types.MalfeasanceProof
-	if err = h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
+	if err := h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		if !malicious {
 			prev, err := atxs.GetByEpochAndNodeID(dbtx, atx.PublishEpoch, atx.SmesherID)
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
@@ -379,9 +388,14 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 						Data: &atxProof,
 					},
 				}
-				if err = h.cdb.AddMalfeasanceProof(atx.SmesherID, proof, dbtx); err != nil {
-					return fmt.Errorf("adding malfeasance proof: %w", err)
+				encoded, err := codec.Encode(proof)
+				if err != nil {
+					h.log.With().Panic("failed to encode MalfeasanceProof", log.Err(err))
 				}
+				if err := identities.SetMalicious(dbtx, atx.SmesherID, encoded); err != nil {
+					return fmt.Errorf("add malfeasance proof: %w", err)
+				}
+
 				h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
 					log.Stringer("smesher", atx.SmesherID),
 					log.Object("prev", prev),
@@ -389,13 +403,23 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				)
 			}
 		}
-		if err = atxs.Add(dbtx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		if err := atxs.Add(dbtx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
 		return nil
 	}); err != nil {
 		return fmt.Errorf("store atx: %w", err)
 	}
+	if proof != nil {
+		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
+		h.tortoise.OnMalfeasance(atx.SmesherID)
+	}
+	header, err := h.cdb.GetAtxHeader(atx.ID())
+	if err != nil {
+		return fmt.Errorf("get header for processed atx %s: %w", atx.ID(), err)
+	}
+	h.beacon.OnAtx(header)
+	h.tortoise.OnAtx(header.ToData())
 
 	// notify subscribers
 	if ch, found := h.atxChannels[atx.ID()]; found {
@@ -413,7 +437,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		}
 		encodedProof, err := codec.Encode(&gossip)
 		if err != nil {
-			h.log.Fatal("failed to encode MalfeasanceGossip", log.Err(err))
+			h.log.With().Fatal("failed to encode MalfeasanceGossip", log.Err(err))
 		}
 		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
 			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))
@@ -508,30 +532,25 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 
 	h.registerHashes(&atx, peer)
 	if err := h.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
-		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
-			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
+		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %w",
+			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err,
+		)
 	}
 
 	if err := h.FetchAtxReferences(ctx, &atx); err != nil {
-		return fmt.Errorf("received atx (%v) with missing references of prev or pos id %v, %v, %v",
-			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
+		return fmt.Errorf("received atx (%v) with missing references of prev or pos id %v, %v: %w",
+			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), err,
+		)
 	}
 
 	vAtx, err := h.SyntacticallyValidateAtx(ctx, &atx)
 	if err != nil {
-		return fmt.Errorf("received syntactically invalid atx %v: %v", atx.ShortString(), err)
+		return fmt.Errorf("received syntactically invalid atx %v: %w", atx.ShortString(), err)
 	}
 	err = h.ProcessAtx(ctx, vAtx)
 	if err != nil {
-		return fmt.Errorf("cannot process atx %v: %v", atx.ShortString(), err)
+		return fmt.Errorf("cannot process atx %v: %w", atx.ShortString(), err)
 		// TODO(anton): blacklist peer
-	}
-	header, err := h.cdb.GetAtxHeader(vAtx.ID())
-	if err != nil {
-		return fmt.Errorf("get header for processed atx %s: %w", vAtx.ID(), err)
-	}
-	for _, r := range h.atxReceivers {
-		r.OnAtx(header)
 	}
 	events.ReportNewActivation(vAtx)
 	logger.With().Info("new atx", log.Inline(vAtx), log.Int("size", len(msg)))

@@ -42,9 +42,11 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 	}
 
 	s.logger.WithContext(ctx).With().Debug("processing synced layers",
+		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()),
 		log.Stringer("in_state", s.mesh.LatestLayerInState()),
-		log.Stringer("last_synced", s.getLastSyncedLayer()))
+		log.Stringer("last_synced", s.getLastSyncedLayer()),
+	)
 
 	start := minLayer(s.mesh.LatestLayerInState(), s.mesh.ProcessedLayer())
 	start = minLayer(start, s.getLastSyncedLayer())
@@ -63,10 +65,6 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 
 		// layers should be processed in order. once we skip one layer, there is no point
 		// continuing with later layers. return on error
-		if _, err := s.beacon.GetBeacon(lid.GetEpoch()); err != nil {
-			s.logger.WithContext(ctx).With().Debug("beacon not available", lid)
-			return errBeaconNotAvailable
-		}
 
 		if s.patrol.IsHareInCharge(lid) {
 			lag := types.LayerID(0)
@@ -75,25 +73,27 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 				lag = current.Sub(lid.Uint32())
 			}
 			if lag.Uint32() < s.cfg.HareDelayLayers {
-				s.logger.Debug("skip validating layer: hare still working", lid)
+				s.logger.WithContext(ctx).With().Debug("skipping layer: hare still working", lid)
 				return errHareInCharge
 			}
 		}
 
 		if opinions, err := s.fetchOpinions(ctx, lid); err == nil {
-			if err = s.checkMeshAgreement(ctx, lid, opinions); err != nil && errors.Is(err, errMeshHashDiverged) {
-				s.logger.WithContext(ctx).With().Debug("mesh hash diverged, trying to reach agreement",
-					lid,
-					log.Stringer("diverged", lid.Sub(1)),
-				)
-				if err = s.ensureMeshAgreement(ctx, lid, opinions, resyncPeers); err != nil {
-					s.logger.WithContext(ctx).With().Debug("failed to reach mesh agreement with peers",
+			if s.stateSynced() {
+				if err = s.checkMeshAgreement(ctx, lid, opinions); err != nil && errors.Is(err, errMeshHashDiverged) {
+					s.logger.WithContext(ctx).With().Debug("mesh hash diverged, trying to reach agreement",
 						lid,
-						log.Err(err),
+						log.Stringer("diverged", lid.Sub(1)),
 					)
-					hashResolve.Inc()
-				} else {
-					hashResolveFail.Inc()
+					if err = s.ensureMeshAgreement(ctx, lid, opinions, resyncPeers); err != nil {
+						s.logger.WithContext(ctx).With().Debug("failed to reach mesh agreement with peers",
+							lid,
+							log.Err(err),
+						)
+						hashResolve.Inc()
+					} else {
+						hashResolveFail.Inc()
+					}
 				}
 			}
 			if err = s.adopt(ctx, lid, opinions); err != nil {
@@ -108,8 +108,10 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 	}
 	s.logger.WithContext(ctx).With().Debug("end of state sync",
 		log.Bool("state_synced", s.stateSynced()),
-		log.Stringer("last_synced", s.getLastSyncedLayer()),
+		log.Stringer("current", s.ticker.CurrentLayer()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()),
+		log.Stringer("in_state", s.mesh.LatestLayerInState()),
+		log.Stringer("last_synced", s.getLastSyncedLayer()),
 	)
 	return nil
 }

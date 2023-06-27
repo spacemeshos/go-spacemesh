@@ -8,6 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
@@ -15,9 +16,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
@@ -106,6 +109,19 @@ func createBlock(t testing.TB, db sql.Executor, mesh *Mesh, layerID types.LayerI
 	b.Initialize()
 	require.NoError(t, blocks.Add(mesh.cdb, b))
 	return b
+}
+
+func createIdentity(t *testing.T, db sql.Executor, sig *signing.EdSigner) {
+	challenge := types.NIPostChallenge{
+		PublishEpoch: types.EpochID(1),
+	}
+	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil)
+	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(db, vAtx))
 }
 
 func createLayerBlocks(t *testing.T, db sql.Executor, mesh *Mesh, lyrID types.LayerID) []*types.Block {
@@ -284,58 +300,64 @@ func TestMesh_CallOnBlock(t *testing.T) {
 
 func TestMesh_MaliciousBallots(t *testing.T) {
 	tm := createTestMesh(t)
-	lid := types.LayerID(1)
-	nodeID := types.BytesToNodeID([]byte{1, 1, 1})
 
-	blts := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, lid),
-		types.NewExistingBallot(types.BallotID{2}, types.RandomEdSignature(), nodeID, lid),
-		types.NewExistingBallot(types.BallotID{3}, types.RandomEdSignature(), nodeID, lid),
+	lid := types.LayerID(1)
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	createIdentity(t, tm.cdb, sig)
+	var blts []*types.Ballot
+	for i := 0; i < 3; i++ {
+		b := &types.Ballot{
+			InnerBallot: types.InnerBallot{
+				Layer:       lid,
+				OpinionHash: types.RandomHash(),
+			},
+			SmesherID: sig.NodeID(),
+		}
+		b.Signature = sig.Sign(signing.BALLOT, b.SignedBytes())
+		require.NoError(t, b.Initialize())
+		blts = append(blts, b)
 	}
-	malProof, err := tm.AddBallot(context.Background(), &blts[0])
+	malProof, err := tm.AddBallot(context.Background(), blts[0])
 	require.NoError(t, err)
 	require.Nil(t, malProof)
 	require.False(t, blts[0].IsMalicious())
-	mal, err := identities.IsMalicious(tm.cdb, nodeID)
+	mal, err := identities.IsMalicious(tm.cdb, sig.NodeID())
 	require.NoError(t, err)
 	require.False(t, mal)
-	saved, err := identities.GetMalfeasanceProof(tm.cdb, nodeID)
+	saved, err := identities.GetMalfeasanceProof(tm.cdb, sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Nil(t, saved)
 
 	// second one will create a MalfeasanceProof
-	malProof, err = tm.AddBallot(context.Background(), &blts[1])
+
+	tm.mockTortoise.EXPECT().OnMalfeasance(sig.NodeID())
+	malProof, err = tm.AddBallot(context.Background(), blts[1])
 	require.NoError(t, err)
 	require.NotNil(t, malProof)
 	require.True(t, blts[1].IsMalicious())
-	require.EqualValues(t, types.MultipleBallots, malProof.Proof.Type)
-	proof, ok := malProof.Proof.Data.(*types.BallotProof)
-	require.True(t, ok)
-	require.Equal(t, blts[0].Layer, proof.Messages[0].InnerMsg.Layer)
-	require.Equal(t, blts[0].HashInnerBytes(), proof.Messages[0].InnerMsg.MsgHash.Bytes())
-	require.Equal(t, blts[0].Signature, proof.Messages[0].Signature)
-	require.Equal(t, blts[0].SmesherID, proof.Messages[0].SmesherID)
-	require.Equal(t, blts[1].Layer, proof.Messages[0].InnerMsg.Layer)
-	require.Equal(t, blts[1].HashInnerBytes(), proof.Messages[0].InnerMsg.MsgHash.Bytes())
-	require.Equal(t, blts[1].Signature, proof.Messages[1].Signature)
-	require.Equal(t, blts[1].SmesherID, proof.Messages[1].SmesherID)
-	mal, err = identities.IsMalicious(tm.cdb, nodeID)
+	edVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
+	nodeID, err := malfeasance.Validate(context.Background(), tm.logger, tm.cdb, edVerifier, nil, &types.MalfeasanceGossip{MalfeasanceProof: *malProof})
+	require.NoError(t, err)
+	require.Equal(t, sig.NodeID(), nodeID)
+	mal, err = identities.IsMalicious(tm.cdb, sig.NodeID())
 	require.NoError(t, err)
 	require.True(t, mal)
-	saved, err = identities.GetMalfeasanceProof(tm.cdb, nodeID)
+	saved, err = identities.GetMalfeasanceProof(tm.cdb, sig.NodeID())
 	require.NoError(t, err)
 	require.EqualValues(t, malProof, saved)
 	expected := malProof
 
 	// third one will NOT generate another MalfeasanceProof
-	malProof, err = tm.AddBallot(context.Background(), &blts[2])
+	malProof, err = tm.AddBallot(context.Background(), blts[2])
 	require.NoError(t, err)
 	require.Nil(t, malProof)
 	// but identity is still malicious
-	mal, err = identities.IsMalicious(tm.cdb, nodeID)
+	mal, err = identities.IsMalicious(tm.cdb, sig.NodeID())
 	require.NoError(t, err)
 	require.True(t, mal)
-	saved, err = identities.GetMalfeasanceProof(tm.cdb, nodeID)
+	saved, err = identities.GetMalfeasanceProof(tm.cdb, sig.NodeID())
 	require.NoError(t, err)
 	require.EqualValues(t, expected, saved)
 }

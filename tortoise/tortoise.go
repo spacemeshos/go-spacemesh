@@ -10,18 +10,21 @@ import (
 	"time"
 
 	"github.com/spacemeshos/fixed"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals/util"
-	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
 
-var errBeaconUnavailable = errors.New("beacon unavailable")
+var (
+	errBeaconUnavailable = errors.New("beacon unavailable")
+	ErrBallotExists      = errors.New("tortoise: ballot exists")
+)
 
 type turtle struct {
 	Config
-	logger log.Log
+	logger *zap.Logger
 
 	*state
 
@@ -41,7 +44,7 @@ type turtle struct {
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance.
-func newTurtle(logger log.Log, config Config) *turtle {
+func newTurtle(logger *zap.Logger, config Config) *turtle {
 	t := &turtle{
 		Config: config,
 		state:  newState(),
@@ -49,9 +52,9 @@ func newTurtle(logger log.Log, config Config) *turtle {
 	}
 	genesis := types.GetEffectiveGenesis()
 
+	t.pending = genesis
 	t.last = genesis
 	t.processed = genesis
-	t.verified = genesis
 	t.evicted = genesis.Sub(1)
 
 	t.epochs[genesis.GetEpoch()] = &epochInfo{atxs: map[types.ATXID]atxInfo{}}
@@ -84,10 +87,10 @@ func (t *turtle) evict(ctx context.Context) {
 	if !ok {
 		return
 	}
-	t.logger.With().Debug("evict in memory state",
-		log.Stringer("pending", t.pending),
-		log.Stringer("from_layer", t.evicted.Add(1)),
-		log.Stringer("upto_layer", windowStart),
+	t.logger.Debug("evict in memory state",
+		zap.Stringer("pending", t.pending),
+		zap.Stringer("from_layer", t.evicted.Add(1)),
+		zap.Stringer("upto_layer", windowStart),
 	)
 	if !windowStart.After(t.evicted) {
 		return
@@ -128,8 +131,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 		return nil, err
 	}
 	var (
-		logger = t.logger.WithContext(ctx)
-		err    error
+		err error
 
 		current = t.last.Add(1)
 	)
@@ -151,19 +153,21 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 			var opinion *types.Opinion
 			opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
 			if err == nil {
-				metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last - base.layer))
-				logger.With().Info("encoded votes",
-					log.Stringer("base ballot", base.id),
-					log.Stringer("base layer", base.layer),
-					log.Stringer("voting layer", current),
-					log.Inline(opinion),
+				layerDistanceToBaseBallot.Observe(float64(t.last - base.layer))
+				t.logger.Info("encoded votes",
+					log.ZContext(ctx),
+					zap.Stringer("base ballot", base.id),
+					zap.Stringer("base layer", base.layer),
+					zap.Stringer("voting layer", current),
+					zap.Inline(opinion),
 				)
 				return opinion, nil
 			}
-			logger.With().Debug("failed to encode votes using base ballot id",
-				base.id,
-				log.Err(err),
-				log.Stringer("current layer", current),
+			t.logger.Debug("failed to encode votes using base ballot id",
+				log.ZContext(ctx),
+				zap.Stringer("ballot", base.id),
+				zap.Error(err),
+				zap.Stringer("current layer", current),
 			)
 		}
 	}
@@ -180,10 +184,6 @@ func (t *turtle) encodeVotes(
 	start types.LayerID,
 	current types.LayerID,
 ) (*types.Opinion, error) {
-	logger := t.logger.WithContext(ctx).WithFields(
-		log.Stringer("base layer", base.layer),
-		log.Stringer("current layer", current),
-	)
 	votes := types.Votes{
 		Base: base.id,
 	}
@@ -197,7 +197,12 @@ func (t *turtle) encodeVotes(
 			return nil, fmt.Errorf("ballot %s can't be used as a base ballot", base.id)
 		}
 		if lvote.vote != abstain && !layer.hareTerminated {
-			logger.With().Debug("voting abstain on the layer", lvote.lid)
+			t.logger.Debug("voting abstain on the layer",
+				log.ZContext(ctx),
+				zap.Stringer("base layer", base.layer),
+				zap.Stringer("current layer", current),
+				zap.Uint32("lid", lvote.lid.Uint32()),
+			)
 			votes.Abstain = append(votes.Abstain, lvote.lid)
 			continue
 		}
@@ -213,14 +218,26 @@ func (t *turtle) encodeVotes(
 			}
 			switch vote {
 			case support:
-				logger.With().Debug("support before base ballot", log.Inline(block))
+				t.logger.Debug("support before base ballot",
+					log.ZContext(ctx),
+					zap.Stringer("base layer", base.layer),
+					zap.Stringer("current layer", current),
+					zap.Inline(block))
 				votes.Support = append(votes.Support, block.header())
 			case against:
-				logger.With().Debug("explicit against overwrites base ballot opinion", log.Inline(block))
+				t.logger.Debug("explicit against overwrites base ballot opinion",
+					log.ZContext(ctx),
+					zap.Stringer("base layer", base.layer),
+					zap.Stringer("current layer", current),
+					zap.Inline(block))
 				votes.Against = append(votes.Against, block.header())
 			case abstain:
-				logger.With().Error("layers that are not terminated should have been encoded earlier",
-					log.Inline(block), log.Stringer("reason", reason),
+				t.logger.Error("layers that are not terminated should have been encoded earlier",
+					log.ZContext(ctx),
+					zap.Stringer("base layer", base.layer),
+					zap.Stringer("current layer", current),
+					zap.Inline(block),
+					zap.Stringer("reason", reason),
 				)
 			}
 		}
@@ -229,7 +246,7 @@ func (t *turtle) encodeVotes(
 	for lid := base.layer; lid.Before(current); lid = lid.Add(1) {
 		layer := t.layer(lid)
 		if !layer.hareTerminated {
-			logger.With().Debug("voting abstain on the layer", lid)
+			t.logger.Debug("voting abstain on the layer", zap.Uint32("lid", lid.Uint32()))
 			votes.Abstain = append(votes.Abstain, lid)
 			continue
 		}
@@ -240,13 +257,17 @@ func (t *turtle) encodeVotes(
 			}
 			switch vote {
 			case support:
-				logger.With().Debug("support after base ballot", log.Inline(block), log.Stringer("reason", reason))
+				t.logger.Debug("support after base ballot",
+					log.ZContext(ctx),
+					zap.Inline(block),
+					zap.Stringer("reason", reason))
 				votes.Support = append(votes.Support, block.header())
 			case against:
-				logger.With().Debug("implicit against after base ballot", log.Inline(block), log.Stringer("reason", reason))
+				t.logger.Debug("implicit against after base ballot",
+					log.ZContext(ctx), zap.Inline(block), zap.Stringer("reason", reason))
 			case abstain:
-				logger.With().Error("layers that are not terminated should have been encoded earlier",
-					log.Inline(block), log.Stringer("reason", reason),
+				t.logger.Error("layers that are not terminated should have been encoded earlier",
+					log.ZContext(ctx), zap.Inline(block), zap.Stringer("reason", reason),
 				)
 			}
 		}
@@ -289,11 +310,18 @@ func (t *turtle) getFullVote(verified, current types.LayerID, block *blockInfo) 
 }
 
 func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
-	t.logger.With().Debug("on layer", last)
+	t.logger.Debug("on layer", zap.Uint32("last", last.Uint32()))
 	defer t.evict(ctx)
 	if last.After(t.last) {
+		update := t.last.GetEpoch() != last.GetEpoch()
 		t.last = last
 		lastLayer.Set(float64(t.last))
+		if update {
+			epoch := t.epoch(last.GetEpoch())
+			t.localThreshold = epoch.weight.
+				Div(fixed.New(localThresholdFraction)).
+				Div(fixed.New64(int64(types.GetLayersPerEpoch())))
+		}
 	}
 	if err := t.drainRetriable(); err != nil {
 		return
@@ -316,7 +344,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 			t.full.counted = process
 		}
 		for _, ballot := range t.ballots[process] {
-			if err := t.countBallot(t.logger, ballot); err != nil {
+			if err := t.countBallot(ballot); err != nil {
 				if errors.Is(err, errBeaconUnavailable) {
 					t.retryLater(ballot)
 				} else {
@@ -332,9 +360,9 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 			t.pending = types.MinLayer(t.pending, t.last)
 		}
 
-		t.logger.With().Debug("initial local opinion",
-			layer.lid,
-			log.Stringer("local opinion", layer.opinion))
+		t.logger.Debug("initial local opinion",
+			zap.Uint32("lid", layer.lid.Uint32()),
+			zap.Stringer("local opinion", layer.opinion))
 
 		// terminate layer that falls out of the zdist window and wasn't terminated
 		// by any other component
@@ -344,124 +372,137 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 				t.onHareOutput(terminated, types.EmptyBlockID)
 			}
 		}
+		if process.After(types.LayerID(t.Hdist)) {
+			if process.Sub(t.Hdist).After(t.evicted) {
+				t.onOpinionChange(process.Sub(t.Hdist), true)
+			}
+		}
 	}
 	t.verifyLayers()
 }
 
-func (t *turtle) switchModes(logger log.Log) {
+func (t *turtle) switchModes() {
 	t.isFull = !t.isFull
 	if t.isFull {
 		modeGauge.Set(1)
 	} else {
 		modeGauge.Set(0)
 	}
-	logger.With().Debug("switching tortoise mode",
-		log.Uint32("hdist", t.Hdist),
-		log.Stringer("processed_layer", t.processed),
-		log.Stringer("verified_layer", t.verified),
-		log.Bool("is full", t.isFull),
+	t.logger.Debug("switching tortoise mode",
+		zap.Uint32("last", t.last.Uint32()),
+		zap.Uint32("hdist", t.Hdist),
+		zap.Stringer("processed_layer", t.processed),
+		zap.Stringer("verified_layer", t.verified),
+		zap.Bool("is full", t.isFull),
 	)
 }
 
-func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) error {
-	bad, err := t.compareBeacons(t.logger, ballot.id, ballot.layer, ballot.reference.beacon)
+func (t *turtle) countBallot(ballot *ballotInfo) error {
+	bad, err := t.compareBeacons(ballot.id, ballot.layer, ballot.reference.beacon)
 	if err != nil {
 		return fmt.Errorf("%w: %s", errBeaconUnavailable, err.Error())
 	}
 	ballot.conditions.badBeacon = bad
-	t.verifying.countBallot(logger, ballot)
+	t.verifying.countBallot(t.logger, ballot)
 	if !ballot.layer.After(t.full.counted) {
-		t.full.countBallot(logger, ballot)
+		t.full.countBallot(t.logger, ballot)
 	}
 	return nil
 }
 
 func (t *turtle) verifyLayers() {
-	// TODO(dshulyak) simplify processing of layers and notifications
 	var (
-		logger = t.logger.WithFields(
-			log.Stringer("last layer", t.last),
-		)
-		verified = maxLayer(t.evicted, types.GetEffectiveGenesis())
+		verified           = maxLayer(t.evicted, types.GetEffectiveGenesis())
+		nverified, changed types.LayerID
 	)
+	if t.isFull {
+		nverified, changed = t.runFull()
+		vverified, vchanged := t.runVerifying()
+		if nverified == t.processed-1 && nverified == vverified {
+			t.switchModes()
+			changed = types.MinLayer(changed, vchanged)
+		}
+	} else {
+		nverified, changed = t.runVerifying()
+		// count all votes if next layer after verified is outside hdist
+		if !withinDistance(t.Hdist, nverified+1, t.last) {
+			fverified, fchanged := t.runFull()
+			nverified = fverified
+			changed = types.MinLayer(changed, fchanged)
+		}
+	}
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
-		success := t.verifying.verify(logger, target)
-		if success && t.isFull {
-			t.switchModes(logger)
-		}
-		if !success && (t.isFull || !withinDistance(t.Hdist, target, t.last)) {
-			if !t.isFull {
-				t.switchModes(logger)
-				for counted := maxLayer(t.full.counted.Add(1), t.evicted.Add(1)); !counted.After(t.processed); counted = counted.Add(1) {
-					for _, ballot := range t.ballots[counted] {
-						t.full.countBallot(logger, ballot)
-					}
-					t.full.countDelayed(logger, counted)
-					t.full.counted = counted
-				}
-			}
-			success = t.full.verify(logger, target)
-		}
-
-		layer := t.layer(target)
-		if !success {
-			// notify mesh in two additional cases:
-			// - if layer was verified, and became undecided
-			// - if layer is undecided outside hdist distance
-			if target < t.verified || !withinDistance(t.Hdist, target, t.last) {
-				t.pending = types.MinLayer(t.pending, target)
+		if nverified < target {
+			if target < t.verified {
+				changed = types.MinLayer(changed, target)
 			}
 			break
 		} else if target > t.verified {
-			t.pending = types.MinLayer(t.pending, target)
+			changed = types.MinLayer(changed, target)
 		}
-
 		verified = target
-		if len(layer.blocks) == 0 && !layer.emitted && layer.hareTerminated {
-			layer.emitted = true
-			t.changedOpinion.min = types.MinLayer(t.changedOpinion.min, target)
-			t.changedOpinion.max = types.MaxLayer(t.changedOpinion.max, target)
-			t.pending = types.MinLayer(t.pending, target)
-		}
-		for _, block := range layer.blocks {
-			if block.emitted == block.validity {
-				continue
-			}
-			// record range of layers where opinion has changed.
-			// once those layers fall out of hdist window - opinion can be recomputed
-			//
-			// we don't recompute opinion that matches hare opinion
-			// and we don't recompute more than necessary
-			if block.validity != block.hare || (block.emitted != block.validity && block.emitted != abstain) {
-				t.changedOpinion.min = types.MinLayer(t.changedOpinion.min, target)
-				t.changedOpinion.max = types.MaxLayer(t.changedOpinion.max, target)
-			}
-			if block.validity == abstain {
-				logger.With().Fatal("bug: layer should not be verified if there is an undecided block", target, block.id)
-			}
-			logger.With().Debug("update validity", block.layer, block.id,
-				log.Stringer("validity", block.validity),
-				log.Stringer("hare", block.hare),
-				log.Stringer("emitted", block.emitted),
-			)
-			block.emitted = block.validity
-		}
+	}
+	t.logger.Debug("verified layer",
+		zap.Uint32("last", t.last.Uint32()),
+		zap.Uint32("processed", t.last.Uint32()),
+		zap.Uint32("verified", verified.Uint32()),
+		zap.Uint32("changed", changed.Uint32()),
+	)
+	if changed != 0 {
+		t.pending = types.MinLayer(t.pending, changed)
+		t.onOpinionChange(changed, false)
 	}
 	t.verified = verified
 	verifiedLayer.Set(float64(t.verified))
-	if t.changedOpinion.min != 0 && !withinDistance(t.Hdist, t.changedOpinion.max, t.last) {
-		logger.With().Debug("changed opinion outside hdist", log.Stringer("from", t.changedOpinion.min), log.Stringer("to", t.changedOpinion.max))
-		t.onOpinionChange(t.changedOpinion.min)
-		t.changedOpinion.min = 0
-		t.changedOpinion.max = 0
+}
+
+func (t *turtle) runVerifying() (verified, changed types.LayerID) {
+	verified = t.evicted
+	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
+		v, c := t.verifying.verify(t.logger, target)
+		if !v {
+			return verified, changed
+		}
+		if c {
+			changed = types.MinLayer(changed, target)
+		}
+		verified = target
 	}
+	return verified, changed
+}
+
+func (t *turtle) runFull() (verified, changed types.LayerID) {
+	if !t.isFull {
+		t.switchModes()
+		for counted := maxLayer(t.full.counted.Add(1), t.evicted.Add(1)); !counted.After(t.processed); counted = counted.Add(1) {
+			for _, ballot := range t.ballots[counted] {
+				t.full.countBallot(t.logger, ballot)
+			}
+			t.full.countDelayed(t.logger, counted)
+			t.full.counted = counted
+		}
+	}
+	verified = t.evicted
+	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
+		v, c := t.full.verify(t.logger, target)
+		if !v {
+			return verified, changed
+		}
+		if c {
+			changed = types.MinLayer(changed, target)
+		}
+		verified = target
+	}
+	return verified, changed
 }
 
 func (t *turtle) computeEpochHeight(epoch types.EpochID) {
 	einfo := t.epoch(epoch)
 	heights := make([]uint64, 0, len(einfo.atxs))
 	for _, info := range einfo.atxs {
-		heights = append(heights, info.height)
+		if !info.malfeasant {
+			heights = append(heights, info.height)
+		}
 	}
 	einfo.height = getMedian(heights)
 }
@@ -477,7 +518,7 @@ func (t *turtle) onBlock(header types.BlockHeader, data bool, valid bool) {
 		}
 		return
 	}
-	t.logger.With().Debug("on data block", log.Inline(&header))
+	t.logger.Debug("on data block", zap.Inline(&header))
 
 	binfo := newBlockInfo(header)
 	binfo.data = data
@@ -504,7 +545,14 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 		previous types.BlockID
 		exists   bool
 	)
-	t.logger.With().Debug("on hare output", lid, bid, log.Bool("empty", bid == types.EmptyBlockID), log.Uint32("processed", t.processed.Uint32()), log.Uint32("hdist", t.Hdist), log.Uint32("last", t.last.Uint32()))
+	t.logger.Debug("on hare output",
+		zap.Uint32("lid", lid.Uint32()),
+		zap.Stringer("block", bid),
+		zap.Bool("empty", bid == types.EmptyBlockID),
+		zap.Uint32("processed", t.processed.Uint32()),
+		zap.Uint32("hdist", t.Hdist),
+		zap.Uint32("last", t.last.Uint32()),
+	)
 	layer.hareTerminated = true
 	for i := range layer.blocks {
 		block := layer.blocks[i]
@@ -522,32 +570,42 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 		return
 	}
 	if !lid.After(t.processed) && withinDistance(t.Config.Hdist, lid, t.last) {
-		t.logger.With().Debug("local opinion changed within hdist",
-			lid,
-			log.Stringer("verified", t.verified),
-			log.Stringer("previous", previous),
-			log.Stringer("new", bid),
+		t.logger.Debug("local opinion changed within hdist",
+			zap.Uint32("lid", lid.Uint32()),
+			zap.Stringer("verified", t.verified),
+			zap.Stringer("previous", previous),
+			zap.Stringer("new", bid),
 		)
-		t.onOpinionChange(lid)
+		t.onOpinionChange(lid, true)
 	}
 	addHareOutput.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
-func (t *turtle) onOpinionChange(lid types.LayerID) {
+func (t *turtle) onOpinionChange(lid types.LayerID, early bool) {
+	var changed types.LayerID
 	for recompute := lid; !recompute.After(t.processed); recompute = recompute.Add(1) {
 		layer := t.layer(recompute)
 		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
+		t.logger.Debug("computed local opinion",
+			zap.Uint32("last", t.last.Uint32()),
+			zap.Uint32("lid", layer.lid.Uint32()),
+			log.ZShortStringer("previous", opinion),
+			log.ZShortStringer("new", layer.opinion),
+			zapBlocks(layer.blocks),
+		)
 		if opinion != layer.opinion {
-			t.pending = types.MinLayer(t.pending, lid)
+			changed = types.MinLayer(changed, recompute)
+		} else if early {
+			break
 		}
-		t.logger.With().Debug("computed local opinion",
-			layer.lid,
-			log.Stringer("local opinion", layer.opinion))
 	}
-	t.verifying.resetWeights(lid)
-	for target := lid.Add(1); !target.After(t.processed); target = target.Add(1) {
-		t.verifying.countVotes(t.logger, t.ballots[target])
+	if changed != 0 {
+		t.pending = types.MinLayer(t.pending, changed)
+		t.verifying.resetWeights(lid)
+		for target := lid.Add(1); !target.After(t.processed); target = target.Add(1) {
+			t.verifying.countVotes(t.logger, t.ballots[target])
+		}
 	}
 }
 
@@ -555,18 +613,26 @@ func (t *turtle) onAtx(atx *types.AtxTortoiseData) {
 	start := time.Now()
 	epoch := t.epoch(atx.TargetEpoch)
 	if _, exist := epoch.atxs[atx.ID]; !exist {
-		t.logger.With().Debug("on atx",
-			log.Stringer("id", atx.ID),
-			log.Uint32("epoch", uint32(atx.TargetEpoch)),
-			log.Uint64("weight", atx.Weight),
-			log.Uint64("height", atx.Height),
+		mal := t.isMalfeasant(atx.Smesher)
+		t.logger.Debug("on atx",
+			zap.Stringer("id", atx.ID),
+			zap.Uint32("epoch", uint32(atx.TargetEpoch)),
+			zap.Uint64("weight", atx.Weight),
+			zap.Uint64("height", atx.Height),
+			zap.Bool("malfeasant", mal),
 		)
-		epoch.atxs[atx.ID] = atxInfo{weight: atx.Weight, height: atx.Height}
-		if atx.Weight > math.MaxInt64 {
-			// atx weight is not expected to overflow int64
-			t.logger.With().Fatal("fixme: atx size overflows int64", log.Uint64("weight", atx.Weight))
+		info := atxInfo{
+			weight:     atx.Weight,
+			height:     atx.Height,
+			malfeasant: mal,
 		}
-		epoch.weight = epoch.weight.Add(fixed.New64(int64(atx.Weight)))
+		epoch.atxs[atx.ID] = info
+		if atx.Weight > math.MaxInt64 {
+			t.logger.Panic("fixme: atx size is not expected to overflow int64", zap.Uint64("weight", info.weight))
+		}
+		if !mal {
+			epoch.weight = epoch.weight.Add(fixed.New64(int64(info.weight)))
+		}
 		atxsNumber.Inc()
 	}
 	if atx.TargetEpoch == t.last.GetEpoch() {
@@ -583,13 +649,13 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 	if !ballot.Layer.After(t.evicted) {
 		return nil, 0, nil
 	}
-	if _, exist := t.state.ballotRefs[ballot.ID]; exist {
-		return nil, 0, nil
+	if info, exist := t.state.ballotRefs[ballot.ID]; exist {
+		return info, 0, nil
 	}
 
-	t.logger.With().Debug("on ballot",
-		log.Inline(ballot),
-		log.Uint32("processed", t.processed.Uint32()),
+	t.logger.Debug("on ballot",
+		zap.Inline(ballot),
+		zap.Uint32("processed", t.processed.Uint32()),
 	)
 
 	var (
@@ -602,8 +668,8 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 	} else {
 		base = t.state.ballotRefs[ballot.Opinion.Votes.Base]
 		if base == nil {
-			t.logger.With().Warning("base ballot not in state",
-				log.Stringer("base", ballot.Opinion.Votes.Base),
+			t.logger.Warn("base ballot not in state",
+				zap.Stringer("base", ballot.Opinion.Votes.Base),
 			)
 			return nil, 0, nil
 		}
@@ -623,7 +689,7 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 		if err != nil {
 			return nil, 0, err
 		}
-		expected, err := util.GetNumEligibleSlots(atx.weight, total, t.LayerSize, types.GetLayersPerEpoch())
+		expected, err := util.GetNumEligibleSlots(atx.weight, t.MinimalActiveSetWeight, total, t.LayerSize, types.GetLayersPerEpoch())
 		if err != nil {
 			return nil, 0, err
 		}
@@ -636,8 +702,8 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 		ptr := *ballot.Ref
 		ref, exists := t.state.ballotRefs[ptr]
 		if !exists {
-			t.logger.With().Warning("ref ballot not in state",
-				log.Stringer("ref", ptr),
+			t.logger.Warn("ref ballot not in state",
+				zap.Stringer("ref", ptr),
 			)
 			return nil, 0, nil
 		}
@@ -657,23 +723,21 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 		},
 		reference: refinfo,
 		layer:     ballot.Layer,
+		malicious: ballot.Malicious || t.isMalfeasant(ballot.Smesher),
 	}
 
-	if !ballot.Malicious {
+	if !binfo.malicious {
 		binfo.weight = fixed.DivUint64(
 			refinfo.weight.Num().Uint64(),
 			refinfo.weight.Denom().Uint64(),
 		).Mul(fixed.New(int(ballot.Eligibilities)))
-	} else {
-		binfo.malicious = true
-		t.logger.With().Warning("ballot from malicious identity will have zeroed weight", ballot.Layer, ballot.ID)
 	}
 
-	t.logger.With().Debug("computed weight and height for ballot",
-		ballot.ID,
-		log.Stringer("weight", binfo.weight),
-		log.Uint64("height", refinfo.height),
-		log.Uint32("lid", ballot.Layer.Uint32()),
+	t.logger.Debug("computed weight and height for ballot",
+		zap.Stringer("ballot", ballot.ID),
+		zap.Stringer("weight", binfo.weight),
+		zap.Uint64("height", refinfo.height),
+		zap.Uint32("lid", ballot.Layer.Uint32()),
 	)
 
 	votes, min, err := decodeVotes(t.evicted, binfo.layer, base, ballot.Opinion.Votes)
@@ -681,17 +745,21 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 		return nil, 0, err
 	}
 	binfo.votes = votes
-	t.logger.With().Debug("decoded exceptions",
-		binfo.id, binfo.layer,
-		log.Stringer("opinion", binfo.opinion()),
+	t.logger.Debug("decoded exceptions",
+		zap.Stringer("block", binfo.id),
+		zap.Uint32("lid", binfo.layer.Uint32()),
+		zap.Stringer("opinion", binfo.opinion()),
 	)
 	decodeBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	return binfo, min, nil
 }
 
-func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) {
+func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) error {
 	if !ballot.layer.After(t.evicted) {
-		return
+		return nil
+	}
+	if _, exists := t.ballotRefs[ballot.id]; exists {
+		return fmt.Errorf("%w: %s", ErrBallotExists, ballot.id)
 	}
 
 	t.state.addBallot(ballot)
@@ -706,14 +774,15 @@ func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) {
 		}
 	}
 	if !ballot.layer.After(t.processed) {
-		if err := t.countBallot(t.logger, ballot); err != nil {
+		if err := t.countBallot(ballot); err != nil {
 			if errors.Is(err, errBeaconUnavailable) {
 				t.retryLater(ballot)
 			} else {
-				t.logger.Panic("unexpected error in counting ballots", log.Err(err))
+				t.logger.Panic("unexpected error in counting ballots", zap.Error(err))
 			}
 		}
 	}
+	return nil
 }
 
 func (t *turtle) onBallot(ballot *types.BallotTortoiseData) error {
@@ -721,21 +790,20 @@ func (t *turtle) onBallot(ballot *types.BallotTortoiseData) error {
 	if decoded == nil || err != nil {
 		return err
 	}
-	t.storeBallot(decoded, min)
-	return nil
+	return t.storeBallot(decoded, min)
 }
 
-func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, lid types.LayerID, beacon types.Beacon) (bool, error) {
+func (t *turtle) compareBeacons(bid types.BallotID, lid types.LayerID, beacon types.Beacon) (bool, error) {
 	epoch := t.epoch(lid.GetEpoch())
 	if epoch.beacon == nil {
 		return false, errBeaconUnavailable
 	}
 	if beacon != *epoch.beacon {
-		logger.With().Debug("ballot has different beacon",
-			log.Uint32("layer_id", lid.Uint32()),
-			log.Stringer("block", bid),
-			log.ShortStringer("ballot_beacon", beacon),
-			log.ShortStringer("epoch_beacon", epoch.beacon),
+		t.logger.Debug("ballot has different beacon",
+			zap.Uint32("layer_id", lid.Uint32()),
+			zap.Stringer("block", bid),
+			log.ZShortStringer("ballot_beacon", beacon),
+			log.ZShortStringer("epoch_beacon", epoch.beacon),
 		)
 		return true, nil
 	}
@@ -748,7 +816,7 @@ func (t *turtle) retryLater(ballot *ballotInfo) {
 
 func (t *turtle) drainRetriable() error {
 	for front := t.retriable.Front(); front != nil; {
-		if err := t.countBallot(t.logger, front.Value.(*ballotInfo)); err != nil {
+		if err := t.countBallot(front.Value.(*ballotInfo)); err != nil {
 			// if beacon is still unavailable - exit and wait for the next call
 			// to drain this queue
 			if errors.Is(err, errBeaconUnavailable) {

@@ -141,7 +141,7 @@ func (ci *CountInfo) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 func (ci *CountInfo) Meet(threshold int) bool {
 	// at least one honest party with good message
-	return ci.hCount > 0 && ci.hCount+ci.keCount >= threshold
+	return ci.hCount > 0 && ci.hCount+ci.dhCount+ci.keCount >= threshold
 }
 
 type communication struct {
@@ -171,7 +171,6 @@ type consensusProcess struct {
 	oracle           Rolacle // the roles oracle provider
 	signer           *signing.EdSigner
 	nid              types.NodeID
-	nonce            *types.VRFPostIndex
 	publisher        pubsub.Publisher
 	comm             communication
 	validator        messageValidator
@@ -199,8 +198,8 @@ func newConsensusProcess(
 	stateQuerier stateQuerier,
 	signing *signing.EdSigner,
 	edVerifier *signing.EdVerifier,
+	et *EligibilityTracker,
 	nid types.NodeID,
-	nonce *types.VRFPostIndex,
 	p2p pubsub.Publisher,
 	comm communication,
 	ev roleValidator,
@@ -217,14 +216,13 @@ func newConsensusProcess(
 		oracle:    oracle,
 		signer:    signing,
 		nid:       nid,
-		nonce:     nonce,
 		publisher: p2p,
 		cfg:       cfg,
 		comm:      comm,
 		pending:   make(map[types.NodeID]*Message, cfg.N),
 		Log:       logger,
 		mTracker:  newMsgsTracker(),
-		eTracker:  NewEligibilityTracker(cfg.N),
+		eTracker:  et,
 		clock:     clock,
 	}
 	proc.ctx, proc.cancel = context.WithCancel(ctx)
@@ -750,12 +748,9 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 
 // init a new message builder with the current state (s, k, ki) for this instance.
 func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error) {
-	if proc.nonce == nil {
-		proc.Log.Fatal("initDefaultBuilder: missing vrf nonce")
-	}
 	builder := newMessageBuilder().SetLayer(proc.layer)
 	builder = builder.SetRoundCounter(proc.getRound()).SetCommittedRound(proc.committedRound).SetValues(s)
-	proof, err := proc.oracle.Proof(context.TODO(), *proc.nonce, proc.layer, proc.getRound())
+	proof, err := proc.oracle.Proof(context.TODO(), proc.layer, proc.getRound())
 	if err != nil {
 		return nil, fmt.Errorf("init default builder: %w", err)
 	}
@@ -895,11 +890,6 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 		log.Uint32("current_round", proc.getRound()),
 		proc.layer)
 
-	if proc.nonce == nil {
-		logger.Debug("should not participate: identity missing vrf nonce")
-		return false
-	}
-
 	// query if identity is active
 	res, err := proc.oracle.IsIdentityActiveOnConsensusView(ctx, proc.signer.NodeID(), proc.layer)
 	if err != nil {
@@ -931,10 +921,7 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 // Returns the role matching the current round if eligible for this round, false otherwise.
 func (proc *consensusProcess) currentRole(ctx context.Context) role {
 	logger := proc.WithContext(ctx).WithFields(proc.layer)
-	if proc.nonce == nil {
-		logger.Fatal("currentRole: missing vrf nonce")
-	}
-	proof, err := proc.oracle.Proof(ctx, *proc.nonce, proc.layer, proc.getRound())
+	proof, err := proc.oracle.Proof(ctx, proc.layer, proc.getRound())
 	if err != nil {
 		logger.With().Error("failed to get eligibility proof from oracle", log.Err(err))
 		return passive
@@ -943,7 +930,7 @@ func (proc *consensusProcess) currentRole(ctx context.Context) role {
 	k := proc.getRound()
 
 	size := expectedCommitteeSize(k, proc.cfg.N, proc.cfg.ExpectedLeaders)
-	eligibilityCount, err := proc.oracle.CalcEligibility(ctx, proc.layer, k, size, proc.nid, *proc.nonce, proof)
+	eligibilityCount, err := proc.oracle.CalcEligibility(ctx, proc.layer, k, size, proc.nid, proof)
 	if err != nil {
 		logger.With().Error("failed to check eligibility", log.Err(err))
 		return passive

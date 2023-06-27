@@ -116,7 +116,7 @@ func TestVerifyingProcessLayer(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			logger := logtest.New(t)
+			logger := logtest.Zap(t)
 			v := newVerifying(Config{}, newState())
 			v.processed = start.Add(1).Add(uint32(len(tc.ballots)))
 
@@ -577,7 +577,7 @@ func TestVerifying_Verify(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			logger := logtest.New(t)
+			logger := logtest.Zap(t)
 
 			state := newState()
 			state.epochs = epochs
@@ -597,7 +597,8 @@ func TestVerifying_Verify(t *testing.T) {
 			v.totalGoodWeight = tc.totalWeight
 
 			iterateLayers(verified.Add(1), processed.Sub(1), func(lid types.LayerID) bool {
-				if !v.verify(logger, lid) {
+				v, _ := v.verify(logger, lid)
+				if !v {
 					return false
 				}
 				state.verified = lid

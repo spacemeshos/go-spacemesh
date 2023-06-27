@@ -73,6 +73,20 @@ func (m *MockPostVerifier) EXPECT() *MockPostVerifierMockRecorder {
 	return m.recorder
 }
 
+// Close mocks base method.
+func (m *MockPostVerifier) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockPostVerifierMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockPostVerifier)(nil).Close))
+}
+
 // Verify mocks base method.
 func (m_2 *MockPostVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
 	m_2.ctrl.T.Helper()
@@ -116,17 +130,17 @@ func (m *MocknipostValidator) EXPECT() *MocknipostValidatorMockRecorder {
 }
 
 // InitialNIPostChallenge mocks base method.
-func (m *MocknipostValidator) InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID, expectedPostIndices []byte) error {
+func (m *MocknipostValidator) InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InitialNIPostChallenge", challenge, atxs, goldenATXID, expectedPostIndices)
+	ret := m.ctrl.Call(m, "InitialNIPostChallenge", challenge, atxs, goldenATXID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InitialNIPostChallenge indicates an expected call of InitialNIPostChallenge.
-func (mr *MocknipostValidatorMockRecorder) InitialNIPostChallenge(challenge, atxs, goldenATXID, expectedPostIndices interface{}) *gomock.Call {
+func (mr *MocknipostValidatorMockRecorder) InitialNIPostChallenge(challenge, atxs, goldenATXID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InitialNIPostChallenge", reflect.TypeOf((*MocknipostValidator)(nil).InitialNIPostChallenge), challenge, atxs, goldenATXID, expectedPostIndices)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InitialNIPostChallenge", reflect.TypeOf((*MocknipostValidator)(nil).InitialNIPostChallenge), challenge, atxs, goldenATXID)
 }
 
 // NIPost mocks base method.
@@ -262,10 +276,10 @@ func (m *MocklayerClock) EXPECT() *MocklayerClockMockRecorder {
 }
 
 // AwaitLayer mocks base method.
-func (m *MocklayerClock) AwaitLayer(layerID types.LayerID) chan struct{} {
+func (m *MocklayerClock) AwaitLayer(layerID types.LayerID) <-chan struct{} {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AwaitLayer", layerID)
-	ret0, _ := ret[0].(chan struct{})
+	ret0, _ := ret[0].(<-chan struct{})
 	return ret0
 }
 
