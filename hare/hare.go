@@ -58,7 +58,7 @@ type RoundClock interface {
 // layer number to a clock time.
 type LayerClock interface {
 	LayerToTime(types.LayerID) time.Time
-	AwaitLayer(types.LayerID) chan struct{}
+	AwaitLayer(types.LayerID) <-chan struct{}
 	CurrentLayer() types.LayerID
 }
 

@@ -27,7 +27,7 @@ type eligibilityChecker interface {
 type layerClock interface {
 	LayerToTime(types.LayerID) time.Time
 	CurrentLayer() types.LayerID
-	AwaitLayer(types.LayerID) chan struct{}
+	AwaitLayer(types.LayerID) <-chan struct{}
 }
 
 type vrfSigner interface {
