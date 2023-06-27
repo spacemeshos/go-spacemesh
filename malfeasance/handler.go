@@ -29,6 +29,7 @@ type Handler struct {
 	self       p2p.Peer
 	cp         consensusProtocol
 	edVerifier SigVerifier
+	tortoise   tortoise
 }
 
 func NewHandler(
@@ -37,6 +38,7 @@ func NewHandler(
 	self p2p.Peer,
 	cp consensusProtocol,
 	edVerifier SigVerifier,
+	tortoise tortoise,
 ) *Handler {
 	return &Handler{
 		logger:     lg,
@@ -44,6 +46,7 @@ func NewHandler(
 		self:       self,
 		cp:         cp,
 		edVerifier: edVerifier,
+		tortoise:   tortoise,
 	}
 }
 
@@ -55,7 +58,7 @@ func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, _ p2p.Peer, 
 		h.logger.With().Error("malformed message (sync)", log.Context(ctx), log.Err(err))
 		return errMalformedData
 	}
-	return validateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, &types.MalfeasanceGossip{MalfeasanceProof: p})
+	return validateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, h.tortoise, &types.MalfeasanceGossip{MalfeasanceProof: p})
 }
 
 // HandleMalfeasanceProof is the gossip receiver for MalfeasanceGossip.
@@ -67,12 +70,17 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 		return errMalformedData
 	}
 	if peer == h.self {
+		id, err := Validate(ctx, h.logger, h.cdb, h.edVerifier, h.cp, &p)
+		if err != nil {
+			return err
+		}
+		h.tortoise.OnMalfeasance(id)
 		// node saves malfeasance proof eagerly/atomically with the malicious data.
 		// it has validated the proof before saving to db.
 		updateMetrics(p.Proof)
 		return nil
 	}
-	return validateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, &p)
+	return validateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, h.tortoise, &p)
 }
 
 func validateAndSave(
@@ -81,6 +89,7 @@ func validateAndSave(
 	cdb *datastore.CachedDB,
 	edVerifier SigVerifier,
 	cp consensusProtocol,
+	trt tortoise,
 	p *types.MalfeasanceGossip,
 ) error {
 	nodeID, err := Validate(ctx, logger, cdb, edVerifier, cp, p)
@@ -111,6 +120,7 @@ func validateAndSave(
 		)
 		return err
 	}
+	trt.OnMalfeasance(nodeID)
 	cdb.CacheMalfeasanceProof(nodeID, &p.MalfeasanceProof)
 	updateMetrics(p.Proof)
 	logger.WithContext(ctx).With().Info("new malfeasance proof",

@@ -140,6 +140,25 @@ func (t *Tortoise) OnWeakCoin(lid types.LayerID, coin bool) {
 	}
 }
 
+// OnMalfeasance registers node id as malfeasent.
+// - ballots from this id will have zero weight
+// - atxs - will not be counted towards global/local threhsolds
+// If node registers equivocating ballot/atx it should
+// call OnMalfeasance before storing ballot/atx.
+func (t *Tortoise) OnMalfeasance(id types.NodeID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.trtl.isMalfeasant(id) {
+		return
+	}
+	t.logger.Debug("on malfeasence", zap.Stringer("id", id))
+	t.trtl.makrMalfeasant(id)
+	malfeasantNumber.Inc()
+	if t.tracer != nil {
+		t.tracer.On(&MalfeasanceTrace{ID: id})
+	}
+}
+
 func (t *Tortoise) OnBeacon(eid types.EpochID, beacon types.Beacon) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

@@ -16,3 +16,7 @@ type consensusProtocol interface {
 type SigVerifier interface {
 	Verify(signing.Domain, types.NodeID, []byte, types.EdSignature) bool
 }
+
+type tortoise interface {
+	OnMalfeasance(types.NodeID)
+}

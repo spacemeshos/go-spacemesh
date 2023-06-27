@@ -13,6 +13,7 @@ type AtxTortoiseData struct {
 
 type BallotTortoiseData struct {
 	ID            BallotID       `json:"id"`
+	Smesher       NodeID         `json:"node"`
 	Layer         LayerID        `json:"lid"`
 	Eligibilities uint32         `json:"elig"`
 	AtxID         ATXID          `json:"atxid"`
@@ -28,6 +29,7 @@ func (b *BallotTortoiseData) SetMalicious() {
 
 func (b *BallotTortoiseData) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("id", b.ID.String())
+	encoder.AddString("smesher", b.Smesher.ShortString())
 	encoder.AddUint32("layer", b.Layer.Uint32())
 	encoder.AddString("atxid", b.AtxID.String())
 	encoder.AddObject("opinion", &b.Opinion)
