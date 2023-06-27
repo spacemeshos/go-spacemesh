@@ -70,6 +70,10 @@ const (
 	d = 5
 )
 
+func (mt MsgType) Round() AbsRound {
+	return AbsRound(mt)
+}
+
 // GradedGossiper works as a filter, for the given messsge inputs it returns
 // one of 3 results indicating what action to take with the message it was
 // invoked for.

@@ -37,6 +37,9 @@ func (r *ProtocolRunner) Run(ctx context.Context) ([]types.Hash20, error) {
 		if r.protocol.Round() == r.maxRound {
 			return nil, fmt.Errorf("hare protocol runner exceeded iteration limit of %d", r.maxRound.Iteration())
 		}
+		// The weak coin is calculated from pre-round messages we need to really be checking for the highest from gradecast i think.
+		if r.protocol.Round() == hare3.Preround.Round()+3 {
+		}
 		select {
 		// We await the beginning of the round, which is achieved by calling AwaitEndOfRound with (round - 1).
 		case <-r.clock.AwaitEndOfRound(uint32(r.protocol.Round() - 1)):

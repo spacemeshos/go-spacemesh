@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare3"
+	"github.com/spacemeshos/go-spacemesh/hare3/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -101,6 +102,8 @@ type Broker struct {
 	messages map[types.LayerID]*messageStore
 	handlers map[types.LayerID]*hare3.Handler
 
+	coinChooser *weakcoin.Chooser
+
 	ctx    context.Context
 	cancel context.CancelFunc
 	once   sync.Once
@@ -110,6 +113,7 @@ func newBroker(
 	msh mesh,
 	edVerifier *signing.EdVerifier,
 	roleValidator validator,
+	coinChooser *weakcoin.Chooser,
 	stateQuerier stateQuerier,
 	syncState system.SyncStateProvider,
 	log log.Log,
@@ -119,6 +123,7 @@ func newBroker(
 		msh:           msh,
 		edVerifier:    edVerifier,
 		roleValidator: roleValidator,
+		coinChooser:   coinChooser,
 		stateQuerier:  stateQuerier,
 		nodeSyncState: syncState,
 		messages:      make(map[types.LayerID]*messageStore),
@@ -257,12 +262,24 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	shouldRelay, equivocationHash := b.handlers[hareMsg.Layer].HandleMsg(hash, id, round, values)
 	// If we detect a new equivocation then store it.
 	if equivocationHash != nil {
-		proof := msgs.buildMalfeasanceProof(hash, *equivocationHash)
+		proof = msgs.buildMalfeasanceProof(hash, *equivocationHash)
 		err := b.msh.AddMalfeasanceProof(hareMsg.SmesherID, proof, nil)
 		if err != nil {
 			logger.With().Error("faild to add newly discovered malfeasance proof to mesh", log.Err(err))
 		}
 	}
+
+	// TODO change this `10` to preround, for now we just use the value.
+	if hareMsg.Type == 10 {
+		// If the message was not malfeasant we add it to the coinChooser,
+		// otherwise we remove the malfeasant identity from the coin chooser.
+		if proof == nil {
+			b.coinChooser.Add(hareMsg.SmesherID, hareMsg.Eligibility.Proof)
+		} else {
+			b.coinChooser.Remove(hareMsg.SmesherID)
+		}
+	}
+
 	// If this message shouldn't be relayed return an error to indicate this to the p2p system.
 	if !shouldRelay {
 		return errors.New("don't relay")
