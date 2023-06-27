@@ -5,7 +5,7 @@ import (
 	"errors"
 	"math"
 	"math/rand"
-	reflect "reflect"
+	"reflect"
 	"sort"
 	"testing"
 	"time"
@@ -164,7 +164,7 @@ func TestSelectProposalTXs(t *testing.T) {
 			m2[id] = struct{}{}
 		}
 		return !reflect.DeepEqual(m1, m2)
-	}, time.Second, 20*time.Millisecond)
+	}, 100*time.Millisecond, 20*time.Millisecond)
 }
 
 func TestSelectProposalTXs_ExhaustGas(t *testing.T) {
