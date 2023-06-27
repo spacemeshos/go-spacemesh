@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"math/rand"
+	"reflect"
 	"sort"
 	"testing"
 	"time"
@@ -146,12 +147,24 @@ func TestSelectProposalTXs(t *testing.T) {
 	got := tcs.SelectProposalTXs(lid, 1)
 	require.Len(t, got, numTXsInProposal)
 
-	// the second call should have different result than the first, as the transactions should be
-	// randomly selected
-	got2 := tcs.SelectProposalTXs(lid, 1)
-	require.Len(t, got2, numTXsInProposal)
-	require.NotSubset(t, got, got2)
-	require.NotSubset(t, got2, got)
+	// a second call should have different result than the first, as the transactions should be random
+	// since this depends on a seed of `time.Now()` it will only be eventually different on windows
+	// if the two consecutive calls to SelectProposalTXs are more than ~ 15ms apart
+	require.Eventually(t, func() bool {
+		got2 := tcs.SelectProposalTXs(lid, 1)
+		if len(got2) != numTXsInProposal {
+			return false
+		}
+		m1 := make(map[types.TransactionID]struct{})
+		m2 := make(map[types.TransactionID]struct{})
+		for _, id := range got {
+			m1[id] = struct{}{}
+		}
+		for _, id := range got2 {
+			m2[id] = struct{}{}
+		}
+		return !reflect.DeepEqual(m1, m2)
+	}, 100*time.Millisecond, 20*time.Millisecond)
 }
 
 func TestSelectProposalTXs_ExhaustGas(t *testing.T) {
