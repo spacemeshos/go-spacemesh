@@ -362,7 +362,6 @@ func TestHare_onTick(t *testing.T) {
 }
 
 func TestHare_onTick_notMining(t *testing.T) {
-	t.Skip()
 	cfg := config.DefaultConfig()
 	cfg.N = 2
 	cfg.RoundDuration = 1
@@ -374,6 +373,7 @@ func TestHare_onTick_notMining(t *testing.T) {
 	h.networkDelta = 0
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
+	wcSaved := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
 	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, comm.wc, startedChan)
@@ -392,7 +392,11 @@ func TestHare_onTick_notMining(t *testing.T) {
 	}
 	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch(), h.nodeID).Return(nil, sql.ErrNotFound)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
-	h.mockCoin.EXPECT().Set(lyrID, gomock.Any())
+	h.mockCoin.EXPECT().Set(lyrID, gomock.Any()).DoAndReturn(
+		func(_ types.LayerID, _ bool) error {
+			close(wcSaved)
+			return nil
+		})
 
 	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
 	h.beacons = mockBeacons
@@ -412,6 +416,11 @@ func TestHare_onTick_notMining(t *testing.T) {
 	out := <-h.blockGenCh
 	require.Equal(t, lyrID, out.Layer)
 	require.ElementsMatch(t, types.ToProposalIDs(pList), out.Proposals)
+	select {
+	case <-wcSaved:
+	case <-time.After(10 * time.Second):
+		require.Fail(t, "Weakcoin::Set has unexpectedly not been called")
+	}
 }
 
 func TestHare_onTick_NoBeacon(t *testing.T) {
