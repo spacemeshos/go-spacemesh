@@ -5,7 +5,6 @@ import (
 	"errors"
 	"math"
 	"math/rand"
-	"reflect"
 	"sort"
 	"testing"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
@@ -163,7 +163,7 @@ func TestSelectProposalTXs(t *testing.T) {
 		for _, id := range got2 {
 			m2[id] = struct{}{}
 		}
-		return !reflect.DeepEqual(m1, m2)
+		return !maps.Equal(m1, m2)
 	}, 100*time.Millisecond, 20*time.Millisecond)
 }
 
