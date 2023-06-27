@@ -66,33 +66,11 @@ type Oracle struct {
 	cdb            *datastore.CachedDB
 	vrfSigner      *signing.VRFSigner
 	vrfVerifier    vrfVerifier
-	nonceFetcher   nonceFetcher
 	layersPerEpoch uint32
 	activesCache   activeSetCache
 	fallback       map[types.EpochID][]types.ATXID
 	cfg            config.Config
 	log.Log
-}
-
-type defaultFetcher struct {
-	cdb *datastore.CachedDB
-}
-
-func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	nonce, err := f.cdb.VRFNonce(nodeID, epoch)
-	if err != nil {
-		return types.VRFPostIndex(0), fmt.Errorf("get vrf nonce: %w", err)
-	}
-	return nonce, nil
-}
-
-// Opt for configuring Validator.
-type Opt func(h *Oracle)
-
-func withNonceFetcher(nf nonceFetcher) Opt {
-	return func(h *Oracle) {
-		h.nonceFetcher = nf
-	}
 }
 
 // New returns a new eligibility oracle instance.
@@ -104,14 +82,13 @@ func New(
 	layersPerEpoch uint32,
 	cfg config.Config,
 	logger log.Log,
-	opts ...Opt,
 ) *Oracle {
 	ac, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
 	if err != nil {
 		logger.With().Fatal("failed to create lru cache for active set", log.Err(err))
 	}
 
-	o := &Oracle{
+	return &Oracle{
 		beacons:        beacons,
 		cdb:            db,
 		vrfVerifier:    vrfVerifier,
@@ -122,15 +99,6 @@ func New(
 		cfg:            cfg,
 		Log:            logger,
 	}
-	for _, opt := range opts {
-		opt(o)
-	}
-
-	if o.nonceFetcher == nil {
-		o.nonceFetcher = defaultFetcher{cdb: db}
-	}
-
-	return o
 }
 
 //go:generate scalegen -types VrfMessage
@@ -138,20 +106,19 @@ func New(
 // VrfMessage is a verification message. It is also the payload for the signature in `types.HareEligibility`.
 type VrfMessage struct {
 	Type   types.EligibilityType // always types.EligibilityHare
-	Nonce  types.VRFPostIndex
 	Beacon types.Beacon
 	Round  uint32
 	Layer  types.LayerID
 }
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round).
-func (o *Oracle) buildVRFMessage(ctx context.Context, nonce types.VRFPostIndex, layer types.LayerID, round uint32) ([]byte, error) {
+func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
 	beacon, err := o.beacons.GetBeacon(layer.GetEpoch())
 	if err != nil {
 		return nil, fmt.Errorf("get beacon: %w", err)
 	}
 
-	msg := VrfMessage{Type: types.EligibilityHare, Nonce: nonce, Beacon: beacon, Round: round, Layer: layer}
+	msg := VrfMessage{Type: types.EligibilityHare, Beacon: beacon, Round: round, Layer: layer}
 	buf, err := codec.Encode(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Fatal("failed to encode", log.Err(err))
@@ -189,7 +156,7 @@ func calcVrfFrac(vrfSig types.VrfSignature) fixed.Fixed {
 	return fixed.FracFromBytes(vrfSig[:8])
 }
 
-func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, nonce types.VRFPostIndex, vrfSig types.VrfSignature) (int, fixed.Fixed, fixed.Fixed, bool, error) {
+func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, vrfSig types.VrfSignature) (int, fixed.Fixed, fixed.Fixed, bool, error) {
 	logger := o.WithContext(ctx).WithFields(
 		layer,
 		layer.GetEpoch(),
@@ -210,7 +177,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
-	msg, err := o.buildVRFMessage(ctx, nonce, layer, round)
+	msg, err := o.buildVRFMessage(ctx, layer, round)
 	if err != nil {
 		logger.With().Warning("could not build vrf message", log.Err(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
@@ -218,9 +185,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 
 	// validate message
 	if !o.vrfVerifier.Verify(id, msg, vrfSig) {
-		logger.With().Debug("eligibility: a node did not pass vrf signature verification",
-			log.FieldNamed("sender_vrf_nonce", nonce),
-		)
+		logger.Debug("eligibility: a node did not pass vrf signature verification")
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, nil
 	}
 
@@ -264,16 +229,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 // Validate validates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is the role
 // proof and assuming commSize as the expected committee size.
 func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig types.VrfSignature, eligibilityCount uint16) (bool, error) {
-	nonce, err := o.nonceFetcher.VRFNonce(id, layer.GetEpoch())
-	if err != nil {
-		o.Log.WithContext(ctx).With().Warning("failed to find nonce for node",
-			log.Stringer("smesher", id),
-			log.Err(err),
-		)
-		return false, fmt.Errorf("nonce not found for node %s: %w", id, err)
-	}
-
-	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, nonce, sig)
+	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, sig)
 	if done || err != nil {
 		return false, err
 	}
@@ -315,10 +271,9 @@ func (o *Oracle) CalcEligibility(
 	round uint32,
 	committeeSize int,
 	id types.NodeID,
-	nonce types.VRFPostIndex,
 	vrfSig types.VrfSignature,
 ) (uint16, error) {
-	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, nonce, vrfSig)
+	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, vrfSig)
 	if done {
 		return 0, err
 	}
@@ -361,8 +316,8 @@ func (o *Oracle) CalcEligibility(
 }
 
 // Proof returns the role proof for the current Layer & Round.
-func (o *Oracle) Proof(ctx context.Context, nonce types.VRFPostIndex, layer types.LayerID, round uint32) (types.VrfSignature, error) {
-	msg, err := o.buildVRFMessage(ctx, nonce, layer, round)
+func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) (types.VrfSignature, error) {
+	msg, err := o.buildVRFMessage(ctx, layer, round)
 	if err != nil {
 		return types.EmptyVrfSignature, err
 	}

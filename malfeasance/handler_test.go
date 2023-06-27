@@ -45,11 +45,14 @@ func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
 func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
-	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+
+	ctrl := gomock.NewController(t)
+	trt := malfeasance.NewMocktortoise(ctrl)
+	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.LayerID(11)
@@ -207,6 +210,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		}
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
+		trt.EXPECT().OnMalfeasance(sig.NodeID())
 		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
@@ -237,6 +241,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 
+		trt.EXPECT().OnMalfeasance(sig.NodeID())
 		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "self", data))
 		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
@@ -247,11 +252,13 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
-	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	trt := malfeasance.NewMocktortoise(ctrl)
+	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.LayerID(11)
@@ -417,6 +424,7 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		}
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
+		trt.EXPECT().OnMalfeasance(sig.NodeID())
 		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
@@ -446,6 +454,7 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 
+		trt.EXPECT().OnMalfeasance(sig.NodeID())
 		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "self", data))
 		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
@@ -456,11 +465,13 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
-	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	trt := malfeasance.NewMocktortoise(ctrl)
+	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.LayerID(11)
@@ -641,6 +652,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		}
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
+		trt.EXPECT().OnMalfeasance(sig.NodeID())
 		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
@@ -670,6 +682,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 
+		trt.EXPECT().OnMalfeasance(sig.NodeID())
 		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "self", data))
 		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
@@ -680,11 +693,13 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
-	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	trt := malfeasance.NewMocktortoise(ctrl)
+	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -751,18 +766,21 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 				require.NotNil(t, got)
 				require.EqualValues(t, gs.Eligibility, got)
 			})
-		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+		trt.EXPECT().OnMalfeasance(sig.NodeID())
+		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 	})
 }
 
 func TestHandler_CrossDomain(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
-	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	trt := malfeasance.NewMocktortoise(ctrl)
+	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -814,11 +832,13 @@ func TestHandler_CrossDomain(t *testing.T) {
 func TestHandler_HandleSyncedMalfeasanceProof_multipleATXs(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
-	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	trt := malfeasance.NewMocktortoise(ctrl)
+	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -858,6 +878,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleATXs(t *testing.T) {
 	}
 	data, err := codec.Encode(&proof)
 	require.NoError(t, err)
+	trt.EXPECT().OnMalfeasance(sig.NodeID())
 	require.NoError(t, h.HandleSyncedMalfeasanceProof(context.Background(), "peer", data))
 
 	malicious, err = identities.IsMalicious(db, sig.NodeID())
@@ -868,11 +889,13 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleATXs(t *testing.T) {
 func TestHandler_HandleSyncedMalfeasanceProof_multipleBallots(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
-	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	trt := malfeasance.NewMocktortoise(ctrl)
+	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -911,6 +934,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleBallots(t *testing.T) {
 	}
 	data, err := codec.Encode(&proof)
 	require.NoError(t, err)
+	trt.EXPECT().OnMalfeasance(sig.NodeID())
 	require.NoError(t, h.HandleSyncedMalfeasanceProof(context.Background(), "peer", data))
 
 	malicious, err = identities.IsMalicious(db, sig.NodeID())
@@ -921,11 +945,13 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleBallots(t *testing.T) {
 func TestHandler_HandleSyncedMalfeasanceProof_hareEquivocation(t *testing.T) {
 	db := sql.InMemory()
 	lg := logtest.New(t)
-	mcp := malfeasance.NewMockconsensusProtocol(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	trt := malfeasance.NewMocktortoise(ctrl)
+	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -967,6 +993,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_hareEquivocation(t *testing.T) {
 	}
 	data, err := codec.Encode(&proof)
 	require.NoError(t, err)
+	trt.EXPECT().OnMalfeasance(sig.NodeID())
 	require.NoError(t, h.HandleSyncedMalfeasanceProof(context.Background(), "peer", data))
 
 	malicious, err = identities.IsMalicious(db, sig.NodeID())

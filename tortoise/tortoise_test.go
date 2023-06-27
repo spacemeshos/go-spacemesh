@@ -3145,3 +3145,73 @@ func TestSwitch(t *testing.T) {
 	t.Run("inorder", func(t *testing.T) { s.runInorder() })
 	t.Run("random", func(t *testing.T) { s.runRandomTopoN(100) })
 }
+
+func TestOnMalfeasance(t *testing.T) {
+	t.Run("atxs", func(t *testing.T) {
+		s := newSession(t)
+		const smeshers = 3
+		var (
+			elig      = s.layerSize / smeshers
+			activeset []*atxAction
+		)
+		for i := 0; i < smeshers; i++ {
+			activeset = append(
+				activeset,
+				s.smesher(i).atx(1, new(aopt).height(10).weight(100)),
+			)
+		}
+		s.beacon(1, "a")
+		for i := 0; i < smeshers; i++ {
+			s.smesher(i).atx(1).ballot(1, new(bopt).
+				beacon("a").
+				activeset(activeset...).
+				eligibilities(elig))
+		}
+		s.smesher(0).malfeasant() // without this call threshold will be very large, and s.updates fail
+		for i := 0; i < 10; i++ {
+			s.smesher(0).rawatx(types.ATXID{byte(i)}, 1, new(aopt).weight(100).height(10))
+		}
+		s.tally(1)
+		s.updates(t, new(results).verified(0).next(1))
+		s.runInorder()
+	})
+	t.Run("ballots", func(t *testing.T) {
+		s := newSession(t).
+			withHdist(1).
+			withZdist(1)
+		const smeshers = 3
+		var (
+			elig      = s.layerSize / smeshers
+			activeset []*atxAction
+		)
+		for i := 0; i < smeshers; i++ {
+			activeset = append(
+				activeset,
+				s.smesher(i).atx(1, new(aopt).height(10).weight(100)),
+			)
+		}
+		s.beacon(1, "a")
+		for i := 0; i < smeshers; i++ {
+			s.smesher(i).atx(1).ballot(1, new(bopt).
+				beacon("a").
+				activeset(activeset...).
+				eligibilities(elig))
+		}
+		for i := 0; i < smeshers; i++ {
+			s.smesher(i).atx(1).ballot(2, new(bopt).
+				votes(new(evotes).
+					base(s.smesher(i).atx(1).ballot(1)).
+					support(1, "a", 0)).
+				eligibilities(elig))
+		}
+		s.smesher(0).malfeasant() // without this call tally will be skewed by following ballots
+		for i := 0; i < 10; i++ {
+			s.smesher(0).atx(1).
+				rawballot(types.BallotID{'e', byte(i)}, 2,
+					new(bopt).eligibilities(elig))
+		}
+		s.tally(2)
+		s.updates(t, new(results).verified(0).verified(1).block("a", 0, valid|local).next(2))
+		s.runInorder()
+	})
+}

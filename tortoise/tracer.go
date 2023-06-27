@@ -122,6 +122,7 @@ const (
 	traceActiveset
 	traceResults
 	traceUpdates
+	traceMalfeasence
 )
 
 type traceEvent interface {
@@ -433,6 +434,23 @@ func (b *BlockTrace) Run(r *traceRunner) error {
 	return nil
 }
 
+type MalfeasanceTrace struct {
+	ID types.NodeID `json:"id"`
+}
+
+func (m *MalfeasanceTrace) Type() eventType {
+	return traceMalfeasence
+}
+
+func (m *MalfeasanceTrace) New() traceEvent {
+	return &MalfeasanceTrace{}
+}
+
+func (m *MalfeasanceTrace) Run(r *traceRunner) error {
+	r.trt.OnMalfeasance(m.ID)
+	return nil
+}
+
 func assertErrors(err error, expect string) error {
 	msg := ""
 	if err != nil {
@@ -459,6 +477,7 @@ func newEventEnum() eventEnum {
 	enum.Register(&HareTrace{})
 	enum.Register(&ResultsTrace{})
 	enum.Register(&UpdatesTrace{})
+	enum.Register(&MalfeasanceTrace{})
 	return enum
 }
 
