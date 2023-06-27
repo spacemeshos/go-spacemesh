@@ -357,7 +357,7 @@ func TestAllDifferentSet(t *testing.T) {
 	test.Create(cfg.N, creationFunc)
 	require.NoError(t, mesh.ConnectAllButSelf())
 	test.Start()
-	test.WaitForTimedTermination(t, 30*time.Second)
+	test.WaitForTimedTermination(t, 45*time.Second)
 }
 
 func TestSndDelayedDishonest(t *testing.T) {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -295,6 +296,10 @@ func TestHare_onTick(t *testing.T) {
 	cfg.N = 2
 	cfg.RoundDuration = 1
 	cfg.Hdist = 1
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	clock := newMockClock()
 	mockMesh := newMockMesh(t)
 	h := createTestHare(t, mockMesh, cfg, clock, noopPubSub(t), t.Name())
@@ -331,31 +336,39 @@ func TestHare_onTick(t *testing.T) {
 	h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyrID).Return(true, nil).Times(1)
 	mockBeacons.EXPECT().GetBeacon(lyrID.GetEpoch()).Return(beacon, nil).Times(1)
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
+	var eg errgroup.Group
+	eg.Go(func() error {
 		clock.advanceLayer()
-		<-createdChan
-		<-startedChan
-		wg.Done()
-	}()
 
-	wg.Wait()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-createdChan:
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-startedChan:
+		}
+		return nil
+	})
+	require.NoError(t, eg.Wait())
+
 	out := <-h.blockGenCh
 	require.Equal(t, lyrID, out.Layer)
 	require.ElementsMatch(t, types.ToProposalIDs(pList), out.Proposals)
 
 	lyrID = lyrID.Add(1)
 	// consensus process is closed, should not process any tick
-	wg.Add(1)
-	go func() {
+	eg.Go(func() error {
 		clock.advanceLayer()
+
 		h.Close()
-		wg.Done()
-	}()
+		return nil
+	})
+	eg.Wait()
 
 	// collect output one more time
-	wg.Wait()
 	res2, err := h.getResult(lyrID)
 	require.Equal(t, errNoResult, err)
 	require.Empty(t, res2)

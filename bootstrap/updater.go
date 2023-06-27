@@ -188,11 +188,14 @@ func (u *Updater) Start() error {
 }
 
 func (u *Updater) Close() error {
+	u.mu.Lock()
 	select {
 	case <-u.stop: // prevent closing the channel twice
 	default:
 		close(u.stop)
 	}
+	u.mu.Unlock()
+
 	err := u.eg.Wait()
 
 	u.mu.Lock()
