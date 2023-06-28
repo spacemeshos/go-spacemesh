@@ -38,7 +38,7 @@ require (
 	github.com/spacemeshos/fixed v0.1.0
 	github.com/spacemeshos/go-scale v1.1.10
 	github.com/spacemeshos/merkle-tree v0.2.2
-	github.com/spacemeshos/poet v0.8.5
+	github.com/spacemeshos/poet v0.8.6
 	github.com/spacemeshos/post v0.8.0
 	github.com/spf13/afero v1.9.5
 	github.com/spf13/cobra v1.7.0
@@ -134,7 +134,7 @@ require (
 	github.com/miekg/dns v1.1.53 // indirect
 	github.com/mikioh/tcpinfo v0.0.0-20190314235526-30a79bb1804b // indirect
 	github.com/mikioh/tcpopt v0.0.0-20190314235656-172688c1accc // indirect
-	github.com/minio/sha256-simd v1.0.0 // indirect
+	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
@@ -185,9 +185,9 @@ require (
 	golang.org/x/mod v0.11.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
-	golang.org/x/sys v0.8.0 // indirect
+	golang.org/x/sys v0.9.0 // indirect
 	golang.org/x/term v0.8.0 // indirect
-	golang.org/x/text v0.9.0 // indirect
+	golang.org/x/text v0.10.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.7.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
