@@ -324,6 +324,18 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) (
 	return o.vrfSigner.Sign(msg), nil
 }
 
+func (o *Oracle) ActiveMap(ctx context.Context, targetLayer types.LayerID) (map[types.NodeID]struct{}, error) {
+	result := make(map[types.NodeID]struct{})
+	cached, err := o.actives(ctx, targetLayer)
+	if err != nil {
+		return nil, err
+	}
+	for k := range cached.set {
+		result[k] = struct{}{}
+	}
+	return result, nil
+}
+
 // Returns a map of all active node IDs in the specified layer id.
 func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cachedActiveSet, error) {
 	if !targetLayer.After(types.GetEffectiveGenesis()) {

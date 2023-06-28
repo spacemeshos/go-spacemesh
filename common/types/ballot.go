@@ -55,10 +55,12 @@ type Ballot struct {
 	SmesherID NodeID
 	// Votes field is not signed.
 	Votes Votes
-	// the proof of the smeshers eligibility to vote and propose block content in this epoch.
-	// Eligibilities must be produced in the ascending order.
-	// the proofs are vrf signatures and need not be included in the ballot's signature.
-	EligibilityProofs []VotingEligibility `scale:"max=500"` // according to protocol there are 50 per layer, the rest is safety margin
+	// The proofs of the smeshers eligibility to vote and propose block content
+	// in the layer defined in InnerBallot. Ballots can have multiple
+	// eligibilities for a single layer. Eligibilities must be produced in the
+	// ascending order. the proofs are vrf signatures and need not be included
+	// in the ballot's signature.
+	EligibilityProofs []VotingEligibility `scale:"max=500"` // according to protocol there are 50 eligibilities per layer, the rest is safety margin
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
 	// only present in smesher's first ballot of the epoch
 	ActiveSet []ATXID `scale:"max=100000"`

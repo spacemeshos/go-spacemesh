@@ -294,18 +294,10 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 
 // Register a layer to receive messages
 // Note: the registering instance is assumed to be started and accepting messages.
-func (b *Broker) Register(ctx context.Context, id types.LayerID) (*hare3.Handler, error) {
+func (b *Broker) Register(ctx context.Context, id types.LayerID) *hare3.Handler {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	// check to see if the node is still synced
-	if !b.Synced(ctx, id) {
-		return nil, errInstanceNotSynced
-	}
-
-	if !id.After(b.latestLayer) { // should expect to update only newer layer
-		return nil, fmt.Errorf("tried to update to a previous layer, broker at: %v, given layer %v", b.latestLayer, id)
-	}
 	b.latestLayer = id
 	msgs := b.messages[id]
 	if msgs == nil {
@@ -318,7 +310,7 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (*hare3.Handler
 
 	// we return the handler so that we can extract the relevant sub protocols
 	// from it for use by the main protocol.
-	return b.handlers[id], nil
+	return b.handlers[id]
 }
 
 // Malfeasance detections that happened in the previous layer are not passed to
@@ -337,7 +329,7 @@ func (b *Broker) handleEarlyMessages(msgs map[types.Hash20]*hare.Message, handle
 		if proof != nil {
 			// The way we signify a message from a know malfeasant identity to the
 			// protocol is a message without values.
-			handler.HandleMsg(k, id, round, values)
+			handler.HandleMsg(k, id, round, nil)
 		}
 	}
 }

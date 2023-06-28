@@ -343,7 +343,15 @@ func (pd *ProtocolDriver) MinerAllowance(epoch types.EpochID, nodeID types.NodeI
 	return atx.NumUnits
 }
 
-// ReportBeaconFromBallot reports the beacon value in a ballot along with the smesher's weight unit.
+// ReportBeaconFromBallot reports the beacon value in a ballot along with the
+// smesher's weight unit, this is how the beacon value is synced in the case
+// that the node was not able to participate in the beacon protocol. Note that
+// only the first ballot of an epoch actually contains the beacon value, but
+// all ballots have a reference to the first ballot in an epoch. Once the total
+// eligibilites of the reported ballots within the given epoch reach
+// beacon.Config.BeaconSyncWeightUnits, the beacon value with the highest
+// eligibilities is used as the beacon. Once the beacon has been set further
+// calls to this method will not change the beacon.
 func (pd *ProtocolDriver) ReportBeaconFromBallot(epoch types.EpochID, ballot *types.Ballot, beacon types.Beacon, weightPer fixed.Fixed) {
 	pd.recordBeacon(epoch, ballot, beacon, weightPer)
 

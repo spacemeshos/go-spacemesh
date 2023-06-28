@@ -228,6 +228,10 @@ func (h *Handler) HandleMsg(hash types.Hash20, vk []byte, round int8, values []t
 	return true, equivocationHash
 }
 
+func (h *Handler) Protocol(lc LeaderChecker, si []types.Hash20) *Protocol {
+	return NewProtocol(h.tgg, h.gc, lc, h.mu, si)
+}
+
 type Protocol struct {
 	// round encodes both iteration and round in a single value.
 	round AbsRound
@@ -247,13 +251,14 @@ type Protocol struct {
 	mu  *sync.Mutex
 }
 
-func NewProtocol(tgg TrhesholdGradedGossiper, gc Gradecaster, lc LeaderChecker, protocolMu *sync.Mutex) *Protocol {
+func NewProtocol(tgg TrhesholdGradedGossiper, gc Gradecaster, lc LeaderChecker, protocolMu *sync.Mutex, si []types.Hash20) *Protocol {
 	return &Protocol{
 		round: AbsRound(-1),
 		tgg:   tgg,
 		gc:    gc,
 		lc:    lc,
 		mu:    protocolMu,
+		Si:    si,
 	}
 }
 
@@ -483,8 +488,13 @@ type OutputMessage struct {
 }
 
 // with int8 we have a max iterations of 17 before we overflow.
+// AbsRound (short for absolute round) represents a round of the hare protocol. The hare protocol progresses in interations and there are 7 rounds per iteration, exept for the first iteration which has a one off pre-round  the abs round starts at -1 and increments for each sucessive round.
+//
+// from the abs round both round and message type can be
+// the iteration and the round within that iteration can be derived.
 type AbsRound int8
 
+// NewAbsRound constructs a new AbsRound from the given iteration (j) and round (r).
 func NewAbsRound(j, r int8) AbsRound {
 	return AbsRound(j*7 + r)
 }

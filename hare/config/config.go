@@ -4,9 +4,11 @@ import "time"
 
 // Config is the configuration of the Hare.
 type Config struct {
-	N               int           `mapstructure:"hare-committee-size"`   // total number of active parties
-	RoundDuration   time.Duration `mapstructure:"hare-round-duration"`   // the duration of a single round
-	WakeupDelta     time.Duration `mapstructure:"hare-wakeup-delta"`     // the wakeup delta after tick
+	N             int           `mapstructure:"hare-committee-size"` // total number of active parties
+	RoundDuration time.Duration `mapstructure:"hare-round-duration"` // the duration of a single round
+	// WakeupDelta is the time allowed after a layer starts for proposals to
+	// propagate across the network before starting hare.
+	WakeupDelta     time.Duration `mapstructure:"hare-wakeup-delta"`
 	ExpectedLeaders int           `mapstructure:"hare-exp-leaders"`      // the expected number of leaders
 	LimitIterations int           `mapstructure:"hare-limit-iterations"` // limit on number of iterations
 	LimitConcurrent int           `mapstructure:"hare-limit-concurrent"` // limit number of concurrent CPs
