@@ -161,10 +161,10 @@ func (m *MocklayerClock) EXPECT() *MocklayerClockMockRecorder {
 }
 
 // AwaitLayer mocks base method.
-func (m *MocklayerClock) AwaitLayer(layerID types.LayerID) chan struct{} {
+func (m *MocklayerClock) AwaitLayer(layerID types.LayerID) <-chan struct{} {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AwaitLayer", layerID)
-	ret0, _ := ret[0].(chan struct{})
+	ret0, _ := ret[0].(<-chan struct{})
 	return ret0
 }
 
@@ -237,42 +237,4 @@ func (m *Mockcertifier) RegisterForCert(arg0 context.Context, arg1 types.LayerID
 func (mr *MockcertifierMockRecorder) RegisterForCert(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterForCert", reflect.TypeOf((*Mockcertifier)(nil).RegisterForCert), arg0, arg1, arg2)
-}
-
-// MocknonceFetcher is a mock of nonceFetcher interface.
-type MocknonceFetcher struct {
-	ctrl     *gomock.Controller
-	recorder *MocknonceFetcherMockRecorder
-}
-
-// MocknonceFetcherMockRecorder is the mock recorder for MocknonceFetcher.
-type MocknonceFetcherMockRecorder struct {
-	mock *MocknonceFetcher
-}
-
-// NewMocknonceFetcher creates a new mock instance.
-func NewMocknonceFetcher(ctrl *gomock.Controller) *MocknonceFetcher {
-	mock := &MocknonceFetcher{ctrl: ctrl}
-	mock.recorder = &MocknonceFetcherMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocknonceFetcher) EXPECT() *MocknonceFetcherMockRecorder {
-	return m.recorder
-}
-
-// VRFNonce mocks base method.
-func (m *MocknonceFetcher) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (types.VRFPostIndex, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "VRFNonce", arg0, arg1)
-	ret0, _ := ret[0].(types.VRFPostIndex)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// VRFNonce indicates an expected call of VRFNonce.
-func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknonceFetcher)(nil).VRFNonce), arg0, arg1)
 }

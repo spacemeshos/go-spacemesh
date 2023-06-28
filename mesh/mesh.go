@@ -576,6 +576,7 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 	}
 	if proof != nil {
 		msh.cdb.CacheMalfeasanceProof(ballot.SmesherID, proof)
+		msh.trtl.OnMalfeasance(ballot.SmesherID)
 	}
 	return proof, nil
 }

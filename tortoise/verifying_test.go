@@ -597,7 +597,8 @@ func TestVerifying_Verify(t *testing.T) {
 			v.totalGoodWeight = tc.totalWeight
 
 			iterateLayers(verified.Add(1), processed.Sub(1), func(lid types.LayerID) bool {
-				if !v.verify(logger, lid) {
+				v, _ := v.verify(logger, lid)
+				if !v {
 					return false
 				}
 				state.verified = lid

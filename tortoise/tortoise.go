@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals/util"
-	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
 
 var (
@@ -53,9 +52,9 @@ func newTurtle(logger *zap.Logger, config Config) *turtle {
 	}
 	genesis := types.GetEffectiveGenesis()
 
+	t.pending = genesis
 	t.last = genesis
 	t.processed = genesis
-	t.verified = genesis
 	t.evicted = genesis.Sub(1)
 
 	t.epochs[genesis.GetEpoch()] = &epochInfo{atxs: map[types.ATXID]atxInfo{}}
@@ -154,7 +153,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 			var opinion *types.Opinion
 			opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
 			if err == nil {
-				metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last - base.layer))
+				layerDistanceToBaseBallot.Observe(float64(t.last - base.layer))
 				t.logger.Info("encoded votes",
 					log.ZContext(ctx),
 					zap.Stringer("base ballot", base.id),
@@ -373,6 +372,11 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 				t.onHareOutput(terminated, types.EmptyBlockID)
 			}
 		}
+		if process.After(types.LayerID(t.Hdist)) {
+			if process.Sub(t.Hdist).After(t.evicted) {
+				t.onOpinionChange(process.Sub(t.Hdist), true)
+			}
+		}
 	}
 	t.verifyLayers()
 }
@@ -407,100 +411,67 @@ func (t *turtle) countBallot(ballot *ballotInfo) error {
 }
 
 func (t *turtle) verifyLayers() {
-	// TODO(dshulyak) simplify processing of layers and notifications
 	var (
-		verified  = maxLayer(t.evicted, types.GetEffectiveGenesis())
-		nverified types.LayerID
+		verified           = maxLayer(t.evicted, types.GetEffectiveGenesis())
+		nverified, changed types.LayerID
 	)
 	if t.isFull {
-		nverified = t.runFull()
-		if nverified == t.processed-1 && nverified == t.runVerifying() {
+		nverified, changed = t.runFull()
+		vverified, vchanged := t.runVerifying()
+		if nverified == t.processed-1 && nverified == vverified {
 			t.switchModes()
+			changed = types.MinLayer(changed, vchanged)
 		}
 	} else {
-		nverified = t.runVerifying()
+		nverified, changed = t.runVerifying()
 		// count all votes if next layer after verified is outside hdist
 		if !withinDistance(t.Hdist, nverified+1, t.last) {
-			nverified = t.runFull()
+			fverified, fchanged := t.runFull()
+			nverified = fverified
+			changed = types.MinLayer(changed, fchanged)
 		}
 	}
-
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
-		layer := t.layer(target)
 		if nverified < target {
-			// notify mesh in two additional cases:
-			// - if layer was verified, and became undecided
-			// - if layer is undecided outside hdist distance
-			if target < t.verified || !withinDistance(t.Hdist, target, t.last) {
-				t.pending = types.MinLayer(t.pending, target)
+			if target < t.verified {
+				changed = types.MinLayer(changed, target)
 			}
 			break
 		} else if target > t.verified {
-			t.pending = types.MinLayer(t.pending, target)
+			changed = types.MinLayer(changed, target)
 		}
-
 		verified = target
-		if len(layer.blocks) == 0 && !layer.emitted && layer.hareTerminated {
-			layer.emitted = true
-			t.changedOpinion.min = types.MinLayer(t.changedOpinion.min, target)
-			t.changedOpinion.max = types.MaxLayer(t.changedOpinion.max, target)
-			t.pending = types.MinLayer(t.pending, target)
-		}
-		for _, block := range layer.blocks {
-			if block.emitted == block.validity {
-				continue
-			}
-			// record range of layers where opinion has changed.
-			// once those layers fall out of hdist window - opinion can be recomputed
-			//
-			// we don't recompute opinion that matches hare opinion
-			// and we don't recompute more than necessary
-			if block.validity != block.hare || (block.emitted != block.validity && block.emitted != abstain) {
-				t.changedOpinion.min = types.MinLayer(t.changedOpinion.min, target)
-				t.changedOpinion.max = types.MaxLayer(t.changedOpinion.max, target)
-			}
-			if block.validity == abstain {
-				t.logger.Fatal("bug: layer should not be verified if there is an undecided block",
-					zap.Uint32("target", target.Uint32()),
-					zap.Stringer("block", block.id))
-			}
-			t.logger.Debug("update validity",
-				zap.Stringer("last layer", t.last),
-				zap.Uint32("lid", block.layer.Uint32()),
-				zap.Stringer("block", block.id),
-				zap.Stringer("validity", block.validity),
-				zap.Stringer("hare", block.hare),
-				zap.Stringer("emitted", block.emitted),
-			)
-			block.emitted = block.validity
-		}
+	}
+	t.logger.Debug("verified layer",
+		zap.Uint32("last", t.last.Uint32()),
+		zap.Uint32("processed", t.last.Uint32()),
+		zap.Uint32("verified", verified.Uint32()),
+		zap.Uint32("changed", changed.Uint32()),
+	)
+	if changed != 0 {
+		t.pending = types.MinLayer(t.pending, changed)
+		t.onOpinionChange(changed, false)
 	}
 	t.verified = verified
 	verifiedLayer.Set(float64(t.verified))
-	if t.changedOpinion.min != 0 && !withinDistance(t.Hdist, t.changedOpinion.max, t.last) {
-		t.logger.Debug("changed opinion outside hdist",
-			zap.Stringer("last layer", t.last),
-			zap.Stringer("from", t.changedOpinion.min),
-			zap.Stringer("to", t.changedOpinion.max),
-		)
-		t.onOpinionChange(t.changedOpinion.min)
-		t.changedOpinion.min = 0
-		t.changedOpinion.max = 0
-	}
 }
 
-func (t *turtle) runVerifying() types.LayerID {
-	rst := t.evicted
+func (t *turtle) runVerifying() (verified, changed types.LayerID) {
+	verified = t.evicted
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
-		if !t.verifying.verify(t.logger, target) {
-			return rst
+		v, c := t.verifying.verify(t.logger, target)
+		if !v {
+			return verified, changed
 		}
-		rst = target
+		if c {
+			changed = types.MinLayer(changed, target)
+		}
+		verified = target
 	}
-	return rst
+	return verified, changed
 }
 
-func (t *turtle) runFull() types.LayerID {
+func (t *turtle) runFull() (verified, changed types.LayerID) {
 	if !t.isFull {
 		t.switchModes()
 		for counted := maxLayer(t.full.counted.Add(1), t.evicted.Add(1)); !counted.After(t.processed); counted = counted.Add(1) {
@@ -511,21 +482,27 @@ func (t *turtle) runFull() types.LayerID {
 			t.full.counted = counted
 		}
 	}
-	rst := t.evicted
+	verified = t.evicted
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
-		if !t.full.verify(t.logger, target) {
-			return rst
+		v, c := t.full.verify(t.logger, target)
+		if !v {
+			return verified, changed
 		}
-		rst = target
+		if c {
+			changed = types.MinLayer(changed, target)
+		}
+		verified = target
 	}
-	return rst
+	return verified, changed
 }
 
 func (t *turtle) computeEpochHeight(epoch types.EpochID) {
 	einfo := t.epoch(epoch)
 	heights := make([]uint64, 0, len(einfo.atxs))
 	for _, info := range einfo.atxs {
-		heights = append(heights, info.height)
+		if !info.malfeasant {
+			heights = append(heights, info.height)
+		}
 	}
 	einfo.height = getMedian(heights)
 }
@@ -599,26 +576,36 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 			zap.Stringer("previous", previous),
 			zap.Stringer("new", bid),
 		)
-		t.onOpinionChange(lid)
+		t.onOpinionChange(lid, true)
 	}
 	addHareOutput.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
-func (t *turtle) onOpinionChange(lid types.LayerID) {
+func (t *turtle) onOpinionChange(lid types.LayerID, early bool) {
+	var changed types.LayerID
 	for recompute := lid; !recompute.After(t.processed); recompute = recompute.Add(1) {
 		layer := t.layer(recompute)
 		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
-		if opinion != layer.opinion {
-			t.pending = types.MinLayer(t.pending, lid)
-		}
 		t.logger.Debug("computed local opinion",
+			zap.Uint32("last", t.last.Uint32()),
 			zap.Uint32("lid", layer.lid.Uint32()),
-			zap.Stringer("local opinion", layer.opinion))
+			log.ZShortStringer("previous", opinion),
+			log.ZShortStringer("new", layer.opinion),
+			zapBlocks(layer.blocks),
+		)
+		if opinion != layer.opinion {
+			changed = types.MinLayer(changed, recompute)
+		} else if early {
+			break
+		}
 	}
-	t.verifying.resetWeights(lid)
-	for target := lid.Add(1); !target.After(t.processed); target = target.Add(1) {
-		t.verifying.countVotes(t.logger, t.ballots[target])
+	if changed != 0 {
+		t.pending = types.MinLayer(t.pending, changed)
+		t.verifying.resetWeights(lid)
+		for target := lid.Add(1); !target.After(t.processed); target = target.Add(1) {
+			t.verifying.countVotes(t.logger, t.ballots[target])
+		}
 	}
 }
 
@@ -626,18 +613,26 @@ func (t *turtle) onAtx(atx *types.AtxTortoiseData) {
 	start := time.Now()
 	epoch := t.epoch(atx.TargetEpoch)
 	if _, exist := epoch.atxs[atx.ID]; !exist {
+		mal := t.isMalfeasant(atx.Smesher)
 		t.logger.Debug("on atx",
 			zap.Stringer("id", atx.ID),
 			zap.Uint32("epoch", uint32(atx.TargetEpoch)),
 			zap.Uint64("weight", atx.Weight),
 			zap.Uint64("height", atx.Height),
+			zap.Bool("malfeasant", mal),
 		)
-		epoch.atxs[atx.ID] = atxInfo{weight: atx.Weight, height: atx.Height}
-		if atx.Weight > math.MaxInt64 {
-			// atx weight is not expected to overflow int64
-			t.logger.Fatal("fixme: atx size overflows int64", zap.Uint64("weight", atx.Weight))
+		info := atxInfo{
+			weight:     atx.Weight,
+			height:     atx.Height,
+			malfeasant: mal,
 		}
-		epoch.weight = epoch.weight.Add(fixed.New64(int64(atx.Weight)))
+		epoch.atxs[atx.ID] = info
+		if atx.Weight > math.MaxInt64 {
+			t.logger.Panic("fixme: atx size is not expected to overflow int64", zap.Uint64("weight", info.weight))
+		}
+		if !mal {
+			epoch.weight = epoch.weight.Add(fixed.New64(int64(info.weight)))
+		}
 		atxsNumber.Inc()
 	}
 	if atx.TargetEpoch == t.last.GetEpoch() {
@@ -728,18 +723,14 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 		},
 		reference: refinfo,
 		layer:     ballot.Layer,
+		malicious: ballot.Malicious || t.isMalfeasant(ballot.Smesher),
 	}
 
-	if !ballot.Malicious {
+	if !binfo.malicious {
 		binfo.weight = fixed.DivUint64(
 			refinfo.weight.Num().Uint64(),
 			refinfo.weight.Denom().Uint64(),
 		).Mul(fixed.New(int(ballot.Eligibilities)))
-	} else {
-		binfo.malicious = true
-		t.logger.Warn("ballot from malicious identity will have zeroed weight",
-			zap.Uint32("lid", ballot.Layer.Uint32()),
-			zap.Stringer("ballot", ballot.ID))
 	}
 
 	t.logger.Debug("computed weight and height for ballot",

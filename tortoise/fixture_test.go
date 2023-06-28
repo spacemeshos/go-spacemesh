@@ -22,7 +22,7 @@ type smesher struct {
 
 	id       int
 	defaults types.AtxTortoiseData
-	atxs     map[uint32]*atxAction
+	atxs     map[types.ATXID]*atxAction
 }
 
 type atxOpt func(*types.AtxTortoiseData)
@@ -45,14 +45,15 @@ func (a *aopt) weight(val uint64) *aopt {
 	return a
 }
 
-// atx accepts publish epoch and atx fields that are relevant for tortoise
-// as options.
-func (s *smesher) atx(epoch uint32, opts ...*aopt) *atxAction {
-	if val, exists := s.atxs[epoch]; exists {
-		return val
-	}
+func (s *smesher) malfeasant() {
+	smesher := hash.Sum([]byte(strconv.Itoa(s.id)))
+	s.reg.register(&malfeasantAction{id: smesher})
+}
+
+func (s *smesher) rawatx(id types.ATXID, epoch uint32, opts ...*aopt) *atxAction {
 	header := s.defaults
-	header.ID = hash.Sum([]byte(strconv.Itoa(s.id)), []byte(strconv.Itoa(int(epoch))))
+	header.ID = id
+	header.Smesher = hash.Sum([]byte(strconv.Itoa(s.id)))
 	header.TargetEpoch = types.EpochID(epoch) + 1
 	for _, opt := range opts {
 		for _, o := range opt.opts {
@@ -65,8 +66,34 @@ func (s *smesher) atx(epoch uint32, opts ...*aopt) *atxAction {
 		ballots: map[types.BallotID]*ballotAction{},
 	}
 	s.reg.register(val)
-	s.atxs[epoch] = val
+	s.atxs[id] = val
 	return val
+}
+
+// atx accepts publish epoch and atx fields that are relevant for tortoise
+// as options.
+func (s *smesher) atx(epoch uint32, opts ...*aopt) *atxAction {
+	id := hash.Sum([]byte(strconv.Itoa(s.id)), []byte(strconv.Itoa(int(epoch))))
+	if val, exists := s.atxs[id]; exists {
+		return val
+	}
+	return s.rawatx(id, epoch, opts...)
+}
+
+type malfeasantAction struct {
+	id types.NodeID
+}
+
+func (a *malfeasantAction) String() string {
+	return fmt.Sprintf("malfeasant %v", a.id)
+}
+
+func (*malfeasantAction) deps() []action {
+	return nil
+}
+
+func (a *malfeasantAction) execute(trt *Tortoise) {
+	trt.OnMalfeasance(a.id)
 }
 
 type atxAction struct {
@@ -181,6 +208,7 @@ func (a *atxAction) execute(trt *Tortoise) {
 func (a *atxAction) rawballot(id types.BallotID, n int, opts ...*bopt) *ballotAction {
 	lid := uint32(n) + types.GetEffectiveGenesis().Uint32()
 	b := types.BallotTortoiseData{}
+	b.Smesher = a.header.Smesher
 	b.AtxID = a.header.ID
 	b.Layer = types.LayerID(lid)
 	b.ID = id
@@ -374,7 +402,7 @@ func (s *session) smesher(id int) *smesher {
 	if val, exist := s.smeshers[id]; exist {
 		return val
 	}
-	val := &smesher{reg: s, id: id, atxs: map[uint32]*atxAction{}}
+	val := &smesher{reg: s, id: id, atxs: map[types.ATXID]*atxAction{}}
 	s.smeshers[id] = val
 	return val
 }

@@ -118,14 +118,14 @@ func TestBuilder_StartAndClose(t *testing.T) {
 
 	current := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(current)
-	b.mClock.EXPECT().AwaitLayer(current.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+	b.mClock.EXPECT().AwaitLayer(current.Add(1)).DoAndReturn(func(types.LayerID) <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
 		return ch
 	})
 
 	b.mClock.EXPECT().CurrentLayer().Return(current.Add(1))
-	b.mClock.EXPECT().AwaitLayer(current.Add(2)).DoAndReturn(func(types.LayerID) chan struct{} {
+	b.mClock.EXPECT().AwaitLayer(current.Add(2)).DoAndReturn(func(types.LayerID) <-chan struct{} {
 		return make(chan struct{})
 	})
 
@@ -144,7 +144,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
-	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) <-chan struct{} {
 		return make(chan struct{})
 	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
@@ -216,7 +216,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
-	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) <-chan struct{} {
 		return make(chan struct{})
 	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
@@ -451,7 +451,7 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
-	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) <-chan struct{} {
 		return make(chan struct{})
 	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
@@ -486,7 +486,7 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
-	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) <-chan struct{} {
 		return make(chan struct{})
 	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
@@ -523,7 +523,7 @@ func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
-	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) <-chan struct{} {
 		return make(chan struct{})
 	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
@@ -568,7 +568,7 @@ func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 5)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
-	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) <-chan struct{} {
 		return make(chan struct{})
 	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))
@@ -613,7 +613,7 @@ func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mClock.EXPECT().CurrentLayer().Return(layerID).AnyTimes()
-	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) chan struct{} {
+	b.mClock.EXPECT().AwaitLayer(layerID.Add(1)).DoAndReturn(func(types.LayerID) <-chan struct{} {
 		return make(chan struct{})
 	}).AnyTimes()
 	require.NoError(t, b.Start(context.Background()))

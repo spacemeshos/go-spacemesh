@@ -318,6 +318,7 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 func (b *Ballot) ToTortoiseData() *BallotTortoiseData {
 	data := &BallotTortoiseData{
 		ID:            b.ID(),
+		Smesher:       b.SmesherID,
 		Layer:         b.Layer,
 		Eligibilities: uint32(len(b.EligibilityProofs)),
 		AtxID:         b.AtxID,

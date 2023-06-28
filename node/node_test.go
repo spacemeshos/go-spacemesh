@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -41,7 +40,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -412,17 +410,17 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 // E2E app test of the stream endpoints in the NodeService.
 func TestSpacemeshApp_NodeService(t *testing.T) {
-	if util.IsWindows() {
-		t.Skip("Skipping test in Windows (https://github.com/spacemeshos/go-spacemesh/issues/3626)")
-	}
-
 	// errlog should be used only for testing.
 	logger := logtest.New(t)
 	errlog := log.RegisterHooks(logtest.New(t, zap.ErrorLevel), events.EventHook())
 
 	// Use a unique port
 	port := 1240
-	path := t.TempDir()
+
+	app := New(WithLog(logger))
+	app.Config = getTestDefaultConfig(t)
+	app.Config.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
+	app.Config.SMESHING.Opts.DataDir, _ = os.MkdirTemp("", "sm-app-test-post-datadir")
 
 	clock, err := timesync.NewClock(
 		timesync.WithLayerDuration(1*time.Second),
@@ -431,29 +429,22 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		timesync.WithLogger(logtest.New(t)),
 	)
 	require.NoError(t, err)
-	mesh, err := mocknet.WithNPeers(1)
-	require.NoError(t, err)
-	cfg := getTestDefaultConfig(t)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-	poetHarness, err := activation.NewHTTPPoetTestHarness(ctx, t.TempDir())
-	require.NoError(t, err)
+	app.clock = clock
 
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(t, err)
+	app.edSgn = edSgn
+
+	mesh, err := mocknet.WithNPeers(1)
+	require.NoError(t, err)
 	h, err := p2p.Upgrade(mesh.Hosts()[0])
 	require.NoError(t, err)
-	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
-		path, poetHarness.HTTPPoetClient, clock, h, edSgn,
-	)
-	require.NoError(t, err)
+	app.host = h
 
-	appCtx, appCancel := context.WithCancel(context.Background())
-	defer appCancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	run := func(c *cobra.Command, args []string) {
-		defer app.Cleanup(context.Background())
 		require.NoError(t, cmd.EnsureCLIFlags(c, app.Config))
 
 		// Give the error channel a buffer
@@ -463,17 +454,13 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// Speed things up a little
 		app.Config.Sync.Interval = time.Second
 		app.Config.LayerDuration = 2 * time.Second
-		app.Config.DataDirParent = path
-		app.Config.LOGGING = cfg.LOGGING
+		app.Config.DataDirParent = t.TempDir()
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		require.NoError(t, app.Start(appCtx))
+		require.NoError(t, app.Start(context.Background()))
 	}
-
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
 	// If there's an error in the args, it will return immediately.
@@ -546,8 +533,9 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		require.Contains(t, current.Msg, errmsg)
 	}
 
-	// This stops the app
-	appCancel() // stop the app
+	// Cleanup stops all services and thereby the app
+	<-app.Started() // prevents races when app is not started yet
+	app.Cleanup(context.Background())
 
 	// Wait for everything to stop cleanly before ending test
 	eg.Wait()
@@ -684,6 +672,7 @@ func TestInitialize_BadTortoiseParams(t *testing.T) {
 	conf.FileLock = filepath.Join(t.TempDir(), "LOCK")
 	app := New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
+	app.Cleanup(context.Background())
 
 	conf = config.DefaultTestConfig()
 	conf.DataDirParent = t.TempDir()
@@ -696,11 +685,12 @@ func TestInitialize_BadTortoiseParams(t *testing.T) {
 	tconf.DataDirParent = t.TempDir()
 	app = New(WithLog(logtest.New(t)), WithConfig(tconf))
 	require.NoError(t, app.Initialize())
+	app.Cleanup(context.Background())
 
 	conf.Tortoise.Zdist = 5
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	err := app.Initialize()
-	assert.EqualError(t, err, "incompatible tortoise hare params")
+	require.EqualError(t, err, "incompatible tortoise hare params")
 }
 
 func TestConfig_Preset(t *testing.T) {
@@ -841,10 +831,13 @@ func TestGenesisConfig(t *testing.T) {
 		app.Config.DataDirParent = t.TempDir()
 
 		require.NoError(t, app.Initialize())
+		t.Cleanup(func() { app.Cleanup(context.Background()) })
+
 		var existing config.GenesisConfig
 		require.NoError(t, existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)))
 		require.Empty(t, existing.Diff(app.Config.Genesis))
 	})
+
 	t.Run("no error if no diff", func(t *testing.T) {
 		app := New()
 		app.Config = getTestDefaultConfig(t)
@@ -852,19 +845,25 @@ func TestGenesisConfig(t *testing.T) {
 
 		require.NoError(t, app.Initialize())
 		app.Cleanup(context.Background())
+
 		require.NoError(t, app.Initialize())
+		app.Cleanup(context.Background())
 	})
+
 	t.Run("fatal error on a diff", func(t *testing.T) {
 		app := New()
 		app.Config = getTestDefaultConfig(t)
 		app.Config.DataDirParent = t.TempDir()
 
 		require.NoError(t, app.Initialize())
+		t.Cleanup(func() { app.Cleanup(context.Background()) })
+
 		app.Config.Genesis.ExtraData = "changed"
 		app.Cleanup(context.Background())
 		err := app.Initialize()
 		require.ErrorContains(t, err, "genesis config")
 	})
+
 	t.Run("not valid time", func(t *testing.T) {
 		app := New()
 		app.Config = getTestDefaultConfig(t)
@@ -888,19 +887,22 @@ func TestFlock(t *testing.T) {
 		app := New()
 		app.Config = getTestDefaultConfig(t)
 
-		require.NoError(t, app.Initialize())
+		require.NoError(t, app.Lock())
+		t.Cleanup(app.Unlock)
+
 		app1 := *app
-		require.ErrorContains(t, app1.Initialize(), "only one spacemesh instance")
-		app.Cleanup(context.Background())
-		require.NoError(t, app.Initialize())
-		require.NoError(t, os.Remove(filepath.Join(app.Config.FileLock)))
-		require.NoError(t, app.Initialize())
+		require.ErrorContains(t, app1.Lock(), "only one spacemesh instance")
+		app.Unlock()
+		require.NoError(t, app.Lock())
 	})
+
 	t.Run("dir doesn't exist", func(t *testing.T) {
 		app := New()
 		app.Config = getTestDefaultConfig(t)
 		app.Config.FileLock = filepath.Join(t.TempDir(), "newdir", "LOCK")
-		require.NoError(t, app.Initialize())
+
+		require.NoError(t, app.Lock())
+		t.Cleanup(app.Unlock)
 	})
 }
 
@@ -954,33 +956,4 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
 	return cfg
-}
-
-// initSingleInstance initializes a node instance with given
-// configuration and parameters, it does not stop the instance.
-func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string,
-	poetClient *activation.HTTPPoetClient, clock *timesync.NodeClock, host *p2p.Host, edSgn *signing.EdSigner,
-) (*App, error) {
-	smApp := New(WithLog(lg))
-	smApp.Config = &cfg
-	smApp.Config.Genesis.GenesisTime = genesisTime
-
-	coinbaseAddressBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(coinbaseAddressBytes, uint32(i+1))
-	smApp.Config.SMESHING.CoinbaseAccount = types.GenerateAddress(coinbaseAddressBytes).String()
-	smApp.Config.SMESHING.Opts.DataDir, _ = os.MkdirTemp("", "sm-app-test-post-datadir")
-
-	smApp.host = host
-	smApp.edSgn = edSgn
-	smApp.clock = clock
-	if err := smApp.setupDBs(context.Background(), lg, storePath); err != nil {
-		return nil, err
-	}
-
-	types.SetLayersPerEpoch(smApp.Config.LayersPerEpoch)
-	if err := smApp.initServices(context.Background(), []activation.PoetProvingServiceClient{poetClient}); err != nil {
-		return nil, err
-	}
-
-	return smApp, nil
 }

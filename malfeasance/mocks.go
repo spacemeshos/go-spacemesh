@@ -84,3 +84,38 @@ func (mr *MockSigVerifierMockRecorder) Verify(arg0, arg1, arg2, arg3 interface{}
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockSigVerifier)(nil).Verify), arg0, arg1, arg2, arg3)
 }
+
+// Mocktortoise is a mock of tortoise interface.
+type Mocktortoise struct {
+	ctrl     *gomock.Controller
+	recorder *MocktortoiseMockRecorder
+}
+
+// MocktortoiseMockRecorder is the mock recorder for Mocktortoise.
+type MocktortoiseMockRecorder struct {
+	mock *Mocktortoise
+}
+
+// NewMocktortoise creates a new mock instance.
+func NewMocktortoise(ctrl *gomock.Controller) *Mocktortoise {
+	mock := &Mocktortoise{ctrl: ctrl}
+	mock.recorder = &MocktortoiseMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mocktortoise) EXPECT() *MocktortoiseMockRecorder {
+	return m.recorder
+}
+
+// OnMalfeasance mocks base method.
+func (m *Mocktortoise) OnMalfeasance(arg0 types.NodeID) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "OnMalfeasance", arg0)
+}
+
+// OnMalfeasance indicates an expected call of OnMalfeasance.
+func (mr *MocktortoiseMockRecorder) OnMalfeasance(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnMalfeasance", reflect.TypeOf((*Mocktortoise)(nil).OnMalfeasance), arg0)
+}

@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmock "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -30,14 +29,13 @@ const defaultCnt = uint16(2)
 
 type testCertifier struct {
 	*Certifier
-	db            *datastore.CachedDB
-	nid           types.NodeID
-	mOracle       *hmocks.MockRolacle
-	mPub          *pubsubmock.MockPublisher
-	mClk          *mocks.MocklayerClock
-	mb            *smocks.MockBeaconGetter
-	mTortoise     *smocks.MockTortoise
-	mNonceFetcher *mocks.MocknonceFetcher
+	db        *datastore.CachedDB
+	nid       types.NodeID
+	mOracle   *hmocks.MockRolacle
+	mPub      *pubsubmock.MockPublisher
+	mClk      *mocks.MocklayerClock
+	mb        *smocks.MockBeaconGetter
+	mTortoise *smocks.MockTortoise
 }
 
 func newTestCertifier(t *testing.T) *testCertifier {
@@ -55,21 +53,18 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	mc := mocks.NewMocklayerClock(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	mtortoise := smocks.NewMockTortoise(ctrl)
-	mNonceFetcher := mocks.NewMocknonceFetcher(ctrl)
 	c := NewCertifier(db, mo, nid, signer, edVerifier, mp, mc, mb, mtortoise,
 		WithCertifierLogger(logtest.New(t)),
-		withNonceFetcher(mNonceFetcher),
 	)
 	return &testCertifier{
-		Certifier:     c,
-		db:            db,
-		nid:           nid,
-		mOracle:       mo,
-		mPub:          mp,
-		mClk:          mc,
-		mb:            mb,
-		mTortoise:     mtortoise,
-		mNonceFetcher: mNonceFetcher,
+		Certifier: c,
+		db:        db,
+		nid:       nid,
+		mOracle:   mo,
+		mPub:      mp,
+		mClk:      mc,
+		mb:        mb,
+		mTortoise: mtortoise,
 	}
 }
 
@@ -147,7 +142,7 @@ func TestStartStop(t *testing.T) {
 	ch := make(chan struct{}, 1)
 	tc.mClk.EXPECT().CurrentLayer().Return(lid).AnyTimes()
 	tc.mClk.EXPECT().AwaitLayer(gomock.Any()).DoAndReturn(
-		func(_ types.LayerID) chan struct{} {
+		func(_ types.LayerID) <-chan struct{} {
 			return ch
 		}).AnyTimes()
 	tc.Start()
@@ -592,7 +587,7 @@ func Test_OldLayersPruned(t *testing.T) {
 	pruned := make(chan struct{}, 1)
 	tc.mClk.EXPECT().CurrentLayer().Return(current).AnyTimes()
 	tc.mClk.EXPECT().AwaitLayer(gomock.Any()).DoAndReturn(
-		func(got types.LayerID) chan struct{} {
+		func(got types.LayerID) <-chan struct{} {
 			if got == current.Add(1) {
 				close(pruned)
 			}
@@ -615,10 +610,8 @@ func Test_CertifyIfEligible(t *testing.T) {
 	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	nonce := types.VRFPostIndex(rand.Uint64())
-	tc.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), b.LayerIndex.GetEpoch()).Return(nonce, nil)
-	tc.mOracle.EXPECT().Proof(gomock.Any(), nonce, b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
-	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, nonce, proof).Return(defaultCnt, nil)
+	tc.mOracle.EXPECT().Proof(gomock.Any(), b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
+	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, proof).Return(defaultCnt, nil)
 	tc.mPub.EXPECT().Publish(gomock.Any(), pubsub.BlockCertify, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
 			var msg types.CertifyMessage
@@ -640,10 +633,8 @@ func Test_CertifyIfEligible_NotEligible(t *testing.T) {
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 	proof := types.RandomVrfSignature()
-	nonce := types.VRFPostIndex(rand.Uint64())
-	tc.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), b.LayerIndex.GetEpoch()).Return(nonce, nil)
-	tc.mOracle.EXPECT().Proof(gomock.Any(), nonce, b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
-	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, nonce, proof).Return(uint16(0), nil)
+	tc.mOracle.EXPECT().Proof(gomock.Any(), b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
+	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, proof).Return(uint16(0), nil)
 	require.NoError(t, tc.CertifyIfEligible(context.Background(), tc.logger, b.LayerIndex, b.ID()))
 }
 
@@ -653,10 +644,8 @@ func Test_CertifyIfEligible_EligibilityErr(t *testing.T) {
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 	errUnknown := errors.New("unknown")
 	proof := types.RandomVrfSignature()
-	nonce := types.VRFPostIndex(rand.Uint64())
-	tc.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), b.LayerIndex.GetEpoch()).Return(nonce, nil)
-	tc.mOracle.EXPECT().Proof(gomock.Any(), nonce, b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
-	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, nonce, proof).Return(uint16(0), errUnknown)
+	tc.mOracle.EXPECT().Proof(gomock.Any(), b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
+	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, proof).Return(uint16(0), errUnknown)
 	require.ErrorIs(t, tc.CertifyIfEligible(context.Background(), tc.logger, b.LayerIndex, b.ID()), errUnknown)
 }
 
@@ -665,9 +654,7 @@ func Test_CertifyIfEligible_ProofErr(t *testing.T) {
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 	errUnknown := errors.New("unknown")
-	nonce := types.VRFPostIndex(rand.Uint64())
-	tc.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), b.LayerIndex.GetEpoch()).Return(nonce, nil)
-	tc.mOracle.EXPECT().Proof(gomock.Any(), nonce, b.LayerIndex, eligibility.CertifyRound).Return(types.EmptyVrfSignature, errUnknown)
+	tc.mOracle.EXPECT().Proof(gomock.Any(), b.LayerIndex, eligibility.CertifyRound).Return(types.EmptyVrfSignature, errUnknown)
 	require.ErrorIs(t, tc.CertifyIfEligible(context.Background(), tc.logger, b.LayerIndex, b.ID()), errUnknown)
 }
 

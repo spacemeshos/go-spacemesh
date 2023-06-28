@@ -189,10 +189,10 @@ func (m *MocklayerClock) EXPECT() *MocklayerClockMockRecorder {
 }
 
 // AwaitLayer mocks base method.
-func (m *MocklayerClock) AwaitLayer(arg0 types.LayerID) chan struct{} {
+func (m *MocklayerClock) AwaitLayer(arg0 types.LayerID) <-chan struct{} {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AwaitLayer", arg0)
-	ret0, _ := ret[0].(chan struct{})
+	ret0, _ := ret[0].(<-chan struct{})
 	return ret0
 }
 

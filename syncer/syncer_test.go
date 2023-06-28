@@ -123,7 +123,7 @@ func TestStartAndShutdown(t *testing.T) {
 	require.False(t, ts.syncer.ListenToGossip())
 
 	// the node is synced when current layer is <= 1
-	ts.syncer.Start(ctx)
+	ts.syncer.Start()
 
 	ts.mForkFinder.EXPECT().Purge(false).AnyTimes()
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), gomock.Any()).AnyTimes()
@@ -142,7 +142,7 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	ts.mTicker.advanceToLayer(current)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ts.syncer.Start(ctx)
+	ts.syncer.Start()
 
 	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).AnyTimes()
 	ts.mDataFetcher.EXPECT().PollMaliciousProofs(gomock.Any())

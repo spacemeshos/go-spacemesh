@@ -394,10 +394,10 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, recoverLayer, restore)
 
-	// sqlite create .sql, .sql-shm and .sql-wal files.
+	// sqlite create .sql and optionally .sql-shm and .sql-wal files.
 	files, err := filepath.Glob(fmt.Sprintf("%s/backup.*/%s*", cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
-	require.Greater(t, len(files), 1)
+	require.GreaterOrEqual(t, len(files), 1)
 }
 
 func TestRecover(t *testing.T) {
