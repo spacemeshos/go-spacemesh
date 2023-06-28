@@ -207,6 +207,25 @@ func waitLayer(ctx *testcontext.Context, node *cluster.NodeClient, lid uint32) e
 	}
 }
 
+func waitTransaction(ctx context.Context,
+	eg *errgroup.Group,
+	client *cluster.NodeClient,
+	id []byte,
+) {
+	eg.Go(func() error {
+		api := pb.NewTransactionServiceClient(client)
+		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true, Id: id})
+		if err != nil {
+			return err
+		}
+		_, err = rsts.Recv()
+		if err != nil {
+			return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
+		}
+		return nil
+	})
+}
+
 func watchTransactionResults(ctx context.Context,
 	eg *errgroup.Group,
 	client *cluster.NodeClient,
@@ -319,6 +338,15 @@ func getNonce(ctx context.Context, client *cluster.NodeClient, address types.Add
 		return 0, err
 	}
 	return resp.AccountWrapper.StateProjected.Counter, nil
+}
+
+func currentBalance(ctx context.Context, client *cluster.NodeClient, address types.Address) (uint64, error) {
+	gstate := pb.NewGlobalStateServiceClient(client)
+	resp, err := gstate.Account(ctx, &pb.AccountRequest{AccountId: &pb.AccountId{Address: address.String()}})
+	if err != nil {
+		return 0, err
+	}
+	return resp.AccountWrapper.StateCurrent.Balance.Value, nil
 }
 
 func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, client *cluster.NodeClient) error {
