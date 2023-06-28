@@ -15,6 +15,7 @@ import (
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -50,13 +51,14 @@ func newTestAtxHandler(t testing.TB) *testAtxHandler {
 	mclock := NewMocklayerClock(ctrl)
 	mpub := pubsubmocks.NewMockPublisher(ctrl)
 	mfetcher := smocks.NewMockFetcher(ctrl)
+	mtortoise := mocks.NewMockTortoise(ctrl)
 
 	testTickSize := uint64(1)
 	goldenATXID := types.ATXID{2, 3, 4}
 	poetCfg := PoetConfig{}
 
 	return &testAtxHandler{
-		Handler:      NewHandler(cdb, verifier, mclock, mpub, mfetcher, layersPerEpochBig, testTickSize, goldenATXID, mvalidator, []AtxReceiver{mreceiver}, lg, poetCfg),
+		Handler:      NewHandler(cdb, verifier, mclock, mpub, mfetcher, layersPerEpochBig, testTickSize, goldenATXID, mvalidator, mreceiver, mtortoise, lg, poetCfg),
 		cdb:          cdb,
 		verifier:     verifier,
 		testTickSize: testTickSize,

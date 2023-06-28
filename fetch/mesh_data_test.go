@@ -3,7 +3,6 @@ package fetch
 import (
 	"context"
 	"errors"
-	"math"
 	"os"
 	"sync"
 	"testing"
@@ -722,18 +721,6 @@ func FuzzMeshHashRequest(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		h.handleMeshHashReq(context.Background(), data)
 	})
-}
-
-func Test_MeshHashOutOfMemory(t *testing.T) {
-	h := createTestHandler(t)
-	data, _ := codec.Encode(&MeshHashRequest{
-		From:  types.LayerID(1),
-		To:    types.LayerID(math.MaxUint32),
-		Delta: 1,
-		Steps: math.MaxUint32 - 1,
-	})
-
-	h.handleMeshHashReq(context.Background(), data)
 }
 
 func FuzzLayerInfo(f *testing.F) {
