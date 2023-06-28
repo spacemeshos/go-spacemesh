@@ -24,26 +24,24 @@ type PostSetupProvider initialization.Provider
 
 // PostConfig is the configuration of the Post protocol, used for data creation, proofs generation and validation.
 type PostConfig struct {
-	MinNumUnits     uint32        `mapstructure:"post-min-numunits"`
-	MaxNumUnits     uint32        `mapstructure:"post-max-numunits"`
-	LabelsPerUnit   uint64        `mapstructure:"post-labels-per-unit"`
-	K1              uint32        `mapstructure:"post-k1"`
-	K2              uint32        `mapstructure:"post-k2"`
-	K3              uint32        `mapstructure:"post-k3"`
-	K2PowDifficulty uint64        `mapstructure:"post-k2pow-difficulty"`
-	PowDifficulty   PowDifficulty `mapstructure:"post-pow-difficulty"`
+	MinNumUnits   uint32        `mapstructure:"post-min-numunits"`
+	MaxNumUnits   uint32        `mapstructure:"post-max-numunits"`
+	LabelsPerUnit uint64        `mapstructure:"post-labels-per-unit"`
+	K1            uint32        `mapstructure:"post-k1"`
+	K2            uint32        `mapstructure:"post-k2"`
+	K3            uint32        `mapstructure:"post-k3"`
+	PowDifficulty PowDifficulty `mapstructure:"post-pow-difficulty"`
 }
 
 func (c PostConfig) ToConfig() config.Config {
 	return config.Config{
-		MinNumUnits:     c.MinNumUnits,
-		MaxNumUnits:     c.MaxNumUnits,
-		LabelsPerUnit:   c.LabelsPerUnit,
-		K1:              c.K1,
-		K2:              c.K2,
-		K3:              c.K3,
-		K2PowDifficulty: c.K2PowDifficulty,
-		PowDifficulty:   [32]byte(c.PowDifficulty),
+		MinNumUnits:   c.MinNumUnits,
+		MaxNumUnits:   c.MaxNumUnits,
+		LabelsPerUnit: c.LabelsPerUnit,
+		K1:            c.K1,
+		K2:            c.K2,
+		K3:            c.K3,
+		PowDifficulty: [32]byte(c.PowDifficulty),
 	}
 }
 
@@ -152,14 +150,13 @@ var (
 func DefaultPostConfig() PostConfig {
 	cfg := config.DefaultConfig()
 	return PostConfig{
-		MinNumUnits:     cfg.MinNumUnits,
-		MaxNumUnits:     cfg.MaxNumUnits,
-		LabelsPerUnit:   cfg.LabelsPerUnit,
-		K1:              cfg.K1,
-		K2:              cfg.K2,
-		K3:              cfg.K3,
-		K2PowDifficulty: cfg.K2PowDifficulty,
-		PowDifficulty:   PowDifficulty(cfg.PowDifficulty),
+		MinNumUnits:   cfg.MinNumUnits,
+		MaxNumUnits:   cfg.MaxNumUnits,
+		LabelsPerUnit: cfg.LabelsPerUnit,
+		K1:            cfg.K1,
+		K2:            cfg.K2,
+		K3:            cfg.K3,
+		PowDifficulty: PowDifficulty(cfg.PowDifficulty),
 	}
 }
 
