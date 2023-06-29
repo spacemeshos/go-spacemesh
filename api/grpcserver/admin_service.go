@@ -24,17 +24,19 @@ const chunksize = 1024
 
 // AdminService exposes endpoints for node administration.
 type AdminService struct {
-	logger  log.Log
-	db      *sql.Database
-	dataDir string
+	logger           log.Log
+	db               *sql.Database
+	dataDir          string
+	checkpointEpochs int
 }
 
 // NewAdminService creates a new admin grpc service.
-func NewAdminService(db *sql.Database, dataDir string, lg log.Log) *AdminService {
+func NewAdminService(db *sql.Database, dataDir string, lg log.Log, numEpochs int) *AdminService {
 	return &AdminService{
-		logger:  lg,
-		db:      db,
-		dataDir: dataDir,
+		logger:           lg,
+		db:               db,
+		dataDir:          dataDir,
+		checkpointEpochs: numEpochs,
 	}
 }
 
@@ -48,7 +50,7 @@ func (a AdminService) CheckpointStream(req *pb.CheckpointStreamRequest, stream p
 	// - on the client side (default limit on the receiving end)
 	// - locally as the node already loads db query result in memory
 	snapshot := types.LayerID(req.SnapshotLayer)
-	err := checkpoint.Generate(stream.Context(), afero.NewOsFs(), a.db, a.dataDir, snapshot)
+	err := checkpoint.Generate(stream.Context(), afero.NewOsFs(), a.db, a.dataDir, snapshot, a.checkpointEpochs)
 	if err != nil {
 		return status.Errorf(codes.Internal, fmt.Sprintf("failed to create checkpoint: %s", err.Error()))
 	}

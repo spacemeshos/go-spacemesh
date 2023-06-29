@@ -96,6 +96,8 @@ type BaseConfig struct {
 	LayerAvgSize   uint32        `mapstructure:"layer-average-size"`
 	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`
 
+	CheckpointEpochs int `mapstructure:"checkpoint-epochs"`
+
 	PoETServers []string `mapstructure:"poet-server"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`

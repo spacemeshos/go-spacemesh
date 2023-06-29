@@ -17,6 +17,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
+const numEpochs = 4
+
 func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(2)
 	res := m.Run()
@@ -153,7 +155,7 @@ func TestRunner_Generate(t *testing.T) {
 			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			err = checkpoint.Generate(ctx, fs, db, dir, snapshot)
+			err = checkpoint.Generate(ctx, fs, db, dir, snapshot, numEpochs)
 			if tc.fail {
 				require.Error(t, err)
 				return
@@ -204,7 +206,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			err = checkpoint.Generate(ctx, fs, db, dir, snapshot)
+			err = checkpoint.Generate(ctx, fs, db, dir, snapshot, numEpochs)
 			if tc.missingCommitment {
 				require.ErrorContains(t, err, "atxs snapshot commitment")
 			} else if tc.missingVrf {

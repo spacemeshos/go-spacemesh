@@ -41,6 +41,7 @@ func testnet() config.Config {
 	conf.LayerAvgSize = 50
 	conf.LayerDuration = 120 * time.Second
 	conf.LayersPerEpoch = 60
+	conf.CheckpointEpochs = 16
 
 	conf.Tortoise.Hdist = 60
 	conf.Tortoise.Zdist = 10

@@ -38,6 +38,7 @@ func fastnet() config.Config {
 	conf.LayerDuration = 15 * time.Second
 	conf.Sync.Interval = 5 * time.Second
 	conf.LayersPerEpoch = 4
+	conf.CheckpointEpochs = 20
 
 	conf.Tortoise.Hdist = 4
 	conf.Tortoise.Zdist = 2

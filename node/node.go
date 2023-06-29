@@ -1057,7 +1057,7 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 	case grpcserver.Node:
 		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
 	case grpcserver.Admin:
-		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.log.WithName("admin")), nil
+		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.log.WithName("admin"), app.Config.CheckpointEpochs), nil
 	case grpcserver.Smesher:
 		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
 	case grpcserver.Transaction:
