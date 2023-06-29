@@ -36,7 +36,9 @@
 // z := gradedGossip(y)
 // networkGossip(z)
 //
-// Additionally there is no use of concurrency in this package.
+// Additionally there is no use of concurrency in this package, however Handler
+// and Protocol share a mutex since they will be called from multiple
+// go-routines and they share state.
 package hare3
 
 import (
@@ -66,7 +68,7 @@ const (
 	DropMessage
 
 	// d is the degree parameter of both the graded gossip and threshold gossip
-	// pprotocols, it is highest grade that can be assigned, grades start at 0.
+	// protocols, it is highest grade that can be assigned, grades start at 0.
 	// TODO see if I actually need this.
 	// d = 5.
 )
@@ -75,11 +77,11 @@ func (mt MsgType) Round() AbsRound {
 	return AbsRound(mt)
 }
 
-// GradedGossiper works as a filter, for the given messsge inputs it returns
+// GradedGossiper works as a filter, for the given message inputs it returns
 // one of 3 results indicating what action to take with the message it was
 // invoked for.
 type GradedGossiper interface {
-	// ReceiveMsg accepts a hash identifying the message an id idenifying the
+	// ReceiveMsg accepts a hash identifying the message an id identifying the
 	// originator of the message, a hash identifying the value in the message
 	// the message round and a grade. It returns a value indicating what action
 	// to take with the message and the hash of an equivocating message if
@@ -121,7 +123,7 @@ type Gradecaster interface {
 	// grade.
 	ReceiveMsg(id types.Hash20, values []types.Hash20, msgRound AbsRound, grade uint8)
 
-	// Since gradecast always outputs at msgRound+3 it is asumed that callers
+	// Since gradecast always outputs at msgRound+3 it is assumed that callers
 	// Only call this function at msgRound+3. Returns all sets of values output
 	// by gradcast at msgRound+3 along with their grading.
 	RetrieveGradecastedMessages(msgRound AbsRound) []GradecastedSet
@@ -163,7 +165,7 @@ func NewHandler(gg GradedGossiper, tgg TrhesholdGradedGossiper, gc Gradecaster, 
 }
 
 // HandleMsg handles an incoming message, it returns a boolean indicating
-// whether the message should be regossiped to peers.
+// whether the message should be regossipped to peers.
 func (h *Handler) HandleMsg(hash types.Hash20, vk []byte, round int8, values []types.Hash20) (bool, *types.Hash20) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -190,12 +192,12 @@ func (h *Handler) HandleMsg(hash types.Hash20, vk []byte, round int8, values []t
 	// We now have a new rule as explained by Tal, that in fact malfeasance
 	// proofs are essentially roundless, i.e. they affect all rounds, so we
 	// should just store a map of identity to malfeasance proof inside gg and
-	// then check it on exit whenever a messge goes through.
+	// then check it on exit whenever a message goes through.
 	//
 	// Nil values signifies a message from a known malicious actor, however we
 	// still need to forward the first such message per identity to the network
 	// though so that they also insert it into their protocols. So we need an
-	// outcome that is send equivocation proof but with a nil equivocaton hash
+	// outcome that is send equivocation proof but with a nil equivocation hash
 	// in order to handle this case. Internally the implementation will track
 	// to see if there was a previous outcome with nil values and if so will
 	// drop the message. This then covers the case where we get a second
@@ -489,7 +491,7 @@ type OutputMessage struct {
 }
 
 // with int8 we have a max iterations of 17 before we overflow.
-// AbsRound (short for absolute round) represents a round of the hare protocol. The hare protocol progresses in interations and there are 7 rounds per iteration, except for the first iteration which has a one off pre-round  the abs round starts at -1 and increments for each successive round.
+// AbsRound (short for absolute round) represents a round of the hare protocol. The hare protocol progresses in iterations and there are 7 rounds per iteration, except for the first iteration which has a one off pre-round  the abs round starts at -1 and increments for each successive round.
 //
 // from the abs round both round and message type can be
 // the iteration and the round within that iteration can be derived.

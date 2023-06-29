@@ -162,10 +162,10 @@ func parts(msg *hare.Message) (id []byte, round int8, values []types.Hash20) {
 // message is dropped. Messages also undergo validation, if that is failed then
 // the message is also dropped. Additionally the hare handler will also drop
 // any messages for a given round where it has already seen at least one
-// eqivocating message for that round.
+// equivocating message for that round.
 //
 // An equivocating message is considered to be either a message from a
-// pre-known malfeasant identity (one for which we had a malfeasacne proof) or
+// pre-known malfeasant identity (one for which we had a malfeasance proof) or
 // any messages beyond the first for a given identity in a given round.
 func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) error {
 	select {

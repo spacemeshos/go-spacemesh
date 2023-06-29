@@ -61,7 +61,7 @@ func NewProtocolRunner(
 }
 
 // Run runs the protocol until it terminates and returns the result. If the
-// protocol exceeded the iteraion limit or the context expires an error will be
+// protocol exceeded the iteration limit or the context expires an error will be
 // returned and the result will be nil.
 func (r *ProtocolRunner) Run(ctx context.Context) ([]types.Hash20, error) {
 	// ok want to actually use a lock here
@@ -207,7 +207,7 @@ func (r *HareRunner) Run(ctx context.Context) {
 	}
 
 	for l := startLayer; ; l += 1 {
-		// copy the loop variable
+		// copy the loop variable, it's used in a go-routine below.
 		layer := l
 		select {
 		case <-r.clock.AwaitLayer(layer):
@@ -225,11 +225,11 @@ func (r *HareRunner) Run(ctx context.Context) {
 			// It seems like it could be possible for the beacon to be synced
 			// slowly as it can be reconstructed piecemeal from smeshers
 			// ballots. Well in fact ReportBeaconFromBallot takes ballots from
-			// any layer in the epoch and then adds up the weignt for that
+			// any layer in the epoch and then adds up the weight for that
 			// ballot value, and when the threshold is crossed we consider the
 			// beacon decided. But the actual value of the beacon comes from
 			// the first ballot (the reference ballot) and so we can end up
-			// with multiple ballots from the same smesher pusshing their
+			// with multiple ballots from the same smesher pushing their
 			// beacon value over the threshold. It seems what we really want is
 			// to get all the ref ballots and take the majority there (by
 			// storing them), oh we can't get all the ref ballots because they
@@ -256,16 +256,11 @@ func (r *HareRunner) Run(ctx context.Context) {
 				)
 				continue
 			}
-			actives, err := r.oracle.ActiveMap(ctx, layer)
-			if err != nil {
-				r.l.With().Error("aborting hare for layer, failed to retrieve active set", layer.Field(), log.Err(err))
-				continue
-			}
 			props := goodProposals(ctx, r.l, r.db, r.nodeID, layer, beacon)
 
 			// Execute layer
 			r.eg.Go(func() error {
-				result, err := r.runLayer(log.WithNewSessionID(ctx), layer, actives, props)
+				result, err := r.runLayer(log.WithNewSessionID(ctx), layer, props)
 				// We log the error, which is either ctx timeout or iteration exceeded
 				if err != nil {
 					r.l.With().Info("hare terminated without agreement", layer, log.Err(err))
@@ -289,14 +284,13 @@ func (r *HareRunner) Run(ctx context.Context) {
 	}
 }
 
-func (r *HareRunner) runLayer(
-	ctx context.Context,
-	layer types.LayerID,
-	actives map[types.NodeID]struct{},
-	props []types.ProposalID,
-) ([]types.ProposalID, error) {
+// runLayer constructs a ProtocolRunner and returns the output of its Run method.
+func (r *HareRunner) runLayer(ctx context.Context, layer types.LayerID, props []types.ProposalID) ([]types.ProposalID, error) {
+	// The broker may have already created a handler and coinChooser in
+	// response to early messages, that's why we get them from the broker.
 	handler, coinChooser := r.b.Register(ctx, layer)
 	roundClock := hare.NewSimpleRoundClock(r.clock.LayerToTime(layer), r.wakeupDelta, r.roundDuration)
+
 	initialSet := make([]types.Hash20, len(props))
 	for i := 0; i < len(props); i++ {
 		initialSet[i] = types.Hash20(props[i])
