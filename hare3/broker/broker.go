@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var errNilInner = errors.New("nil inner message")
@@ -91,10 +90,9 @@ type Broker struct {
 
 	msh           mesh
 	edVerifier    *signing.EdVerifier
-	roleValidator validator                // provides eligibility validation
-	stateQuerier  stateQuerier             // provides activeness check
-	nodeSyncState system.SyncStateProvider // provider function to check if the node is currently synced
-	latestLayer   types.LayerID            // the latest layer to attempt register (successfully or unsuccessfully)
+	roleValidator validator     // provides eligibility validation
+	stateQuerier  stateQuerier  // provides activeness check
+	latestLayer   types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
 
 	// So put messages in messages, including early messages, when we start we
 	// iterate the messages and push them into the handler and when we need
@@ -115,7 +113,6 @@ func newBroker(
 	roleValidator validator,
 	coinChooser *weakcoin.Chooser,
 	stateQuerier stateQuerier,
-	syncState system.SyncStateProvider,
 	log log.Log,
 ) *Broker {
 	b := &Broker{
@@ -125,7 +122,6 @@ func newBroker(
 		roleValidator: roleValidator,
 		coinChooser:   coinChooser,
 		stateQuerier:  stateQuerier,
-		nodeSyncState: syncState,
 		messages:      make(map[types.LayerID]*messageStore),
 		latestLayer:   types.GetEffectiveGenesis(),
 	}
@@ -201,11 +197,6 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	}
 
 	logger.Debug("broker received hare message")
-
-	msgLayer := hareMsg.Layer
-	if !b.Synced(ctx, msgLayer) {
-		return errNotSynced
-	}
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -341,11 +332,6 @@ func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 	delete(b.messages, id)
 	delete(b.handlers, id)
 	b.WithContext(ctx).With().Debug("hare broker unregistered layer", id)
-}
-
-// Synced returns true if the given layer is synced, false otherwise.
-func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
-	return b.nodeSyncState.IsSynced(ctx) && b.nodeSyncState.IsBeaconSynced(id.GetEpoch())
 }
 
 // Close closes broker.
