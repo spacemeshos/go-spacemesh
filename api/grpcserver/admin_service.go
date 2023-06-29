@@ -94,3 +94,7 @@ func (a AdminService) Recover(ctx context.Context, req *pb.RecoverRequest) (*emp
 	}
 	return &empty.Empty{}, nil
 }
+
+func (a AdminService) EventsStream(req *pb.EventStreamRequest, stream pb.AdminService_EventsStreamServer) error {
+	return nil
+}
