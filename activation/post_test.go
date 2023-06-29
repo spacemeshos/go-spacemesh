@@ -423,7 +423,6 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 
 	opts := DefaultPostSetupOpts()
 	opts.DataDir = tb.TempDir()
-	opts.NumUnits = cfg.MaxNumUnits
 	opts.ProviderID = int(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 

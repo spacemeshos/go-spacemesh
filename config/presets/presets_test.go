@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -28,7 +29,7 @@ func TestCanGeneratePOST(t *testing.T) {
 			mgr, err := activation.NewPostSetupManager(
 				types.EmptyNodeID,
 				params.POST,
-				logtest.New(t),
+				logtest.New(t, zapcore.DebugLevel).Named("post"),
 				cdb, goldenATXID,
 				activation.DefaultPostProvingOpts(),
 			)
