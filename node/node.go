@@ -23,7 +23,6 @@ import (
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	poetconfig "github.com/spacemeshos/poet/config"
 	"github.com/spacemeshos/poet/server"
-	"github.com/spacemeshos/poet/service"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -955,9 +954,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 		return err
 	}
 	cfg.RawRESTListener = parsed.Host
-	var genesisTime service.Genesis
-	genesisTime.UnmarshalFlag(app.Config.Genesis.GenesisTime)
-	cfg.Service.Genesis = genesisTime
+	cfg.Service.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime)
 	cfg.Service.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
 	cfg.Service.CycleGap = app.Config.POET.CycleGap
 	cfg.Service.PhaseShift = app.Config.POET.PhaseShift
