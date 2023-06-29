@@ -46,25 +46,32 @@ var allAccounts = []*types.Account{
 	{Layer: types.LayerID(7), Address: types.Address{4, 4}, NextNonce: 1, Balance: 31, TemplateAddress: &types.Address{3}, State: []byte("state47")},
 }
 
-func expectedCheckpoint(t *testing.T) *checkpoint.Checkpoint {
-	return &checkpoint.Checkpoint{
+func expectedCheckpoint(t *testing.T, numEpochs int) *checkpoint.Checkpoint {
+	result := &checkpoint.Checkpoint{
 		Version: "https://spacemesh.io/checkpoint.schema.json.1.0",
 		Data: checkpoint.InnerData{
 			CheckpointId: "snapshot-5",
-			Atxs: []checkpoint.ShortAtx{
-				toShortAtx(newvatx(t, allAtxs[3]), allAtxs[0].CommitmentATX, allAtxs[0].VRFNonce),
-				toShortAtx(newvatx(t, allAtxs[2]), allAtxs[0].CommitmentATX, allAtxs[0].VRFNonce),
-				toShortAtx(newvatx(t, allAtxs[4]), allAtxs[4].CommitmentATX, allAtxs[4].VRFNonce),
-				toShortAtx(newvatx(t, allAtxs[6]), allAtxs[5].CommitmentATX, allAtxs[5].VRFNonce),
-				toShortAtx(newvatx(t, allAtxs[5]), allAtxs[5].CommitmentATX, allAtxs[5].VRFNonce),
-			},
-			Accounts: []checkpoint.Account{
-				{types.Address{1, 1}.Bytes(), 111, 5, types.Address{2}.Bytes(), []byte("state15")},
-				{types.Address{2, 2}.Bytes(), 311, 14, types.Address{2}.Bytes(), []byte("state24")},
-				{types.Address{3, 3}.Bytes(), 124, 1, types.Address{3}.Bytes(), []byte("state35")},
-			},
 		},
 	}
+
+	switch numEpochs {
+	case 2:
+		result.Data.Atxs = []checkpoint.ShortAtx{
+			toShortAtx(newvatx(t, allAtxs[3]), allAtxs[0].CommitmentATX, allAtxs[0].VRFNonce),
+			toShortAtx(newvatx(t, allAtxs[2]), allAtxs[0].CommitmentATX, allAtxs[0].VRFNonce),
+			toShortAtx(newvatx(t, allAtxs[4]), allAtxs[4].CommitmentATX, allAtxs[4].VRFNonce),
+			toShortAtx(newvatx(t, allAtxs[6]), allAtxs[5].CommitmentATX, allAtxs[5].VRFNonce),
+			toShortAtx(newvatx(t, allAtxs[5]), allAtxs[5].CommitmentATX, allAtxs[5].VRFNonce),
+		}
+		result.Data.Accounts = []checkpoint.Account{
+			{types.Address{1, 1}.Bytes(), 111, 5, types.Address{2}.Bytes(), []byte("state15")},
+			{types.Address{2, 2}.Bytes(), 311, 14, types.Address{2}.Bytes(), []byte("state24")},
+			{types.Address{3, 3}.Bytes(), 124, 1, types.Address{3}.Bytes(), []byte("state35")},
+		}
+	default:
+		require.Fail(t, "unexpected numEpochs") // TODO(mafa): implement me, maybe by more general data generation
+	}
+	return result
 }
 
 func newatx(id types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfnonce uint64, pubkey []byte) *types.ActivationTx {
@@ -166,7 +173,7 @@ func TestRunner_Generate(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, checkpoint.ValidateSchema(persisted))
 			var got checkpoint.Checkpoint
-			expected := expectedCheckpoint(t)
+			expected := expectedCheckpoint(t, numEpochs)
 			require.NoError(t, json.Unmarshal(persisted, &got))
 			require.Equal(t, *expected, got)
 		})
