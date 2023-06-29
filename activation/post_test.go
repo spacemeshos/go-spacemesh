@@ -287,6 +287,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 
 	mgr := newTestPostManager(t)
 	mgr.opts.MaxFileSize = 4096
+	mgr.opts.NumUnits = mgr.cfg.MaxNumUnits
 
 	// Create data.
 	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
