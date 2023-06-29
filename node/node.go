@@ -387,6 +387,7 @@ func (app *App) LoadCheckpoint(ctx context.Context) error {
 	}
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      types.ATXID(app.Config.Genesis.GoldenATX()),
+		PostDataDir:    app.Config.SMESHING.Opts.DataDir,
 		DataDir:        app.Config.DataDir(),
 		DbFile:         dbFile,
 		PreserveOwnAtx: app.Config.Recovery.PreserveOwnAtx,

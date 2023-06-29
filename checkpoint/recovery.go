@@ -1,6 +1,7 @@
 package checkpoint
 
 import (
+	"container/list"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 
+	"github.com/spacemeshos/post/initialization"
 	"github.com/spf13/afero"
 
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
@@ -48,6 +50,7 @@ func DefaultConfig() Config {
 
 type RecoverConfig struct {
 	GoldenAtx      types.ATXID
+	PostDataDir    string
 	DataDir        string
 	DbFile         string
 	PreserveOwnAtx bool
@@ -216,65 +219,149 @@ type recoverydata struct {
 	atxs     []*atxs.CheckpointAtx
 }
 
-type ownAtxData struct {
-	atx      *types.VerifiedActivationTx
-	preserve []*types.VerifiedActivationTx
-	proof    []byte
-}
-
 func preserveOwnData(
+	logger log.Log,
 	db *sql.Database,
 	cfg *RecoverConfig,
 	nodeID types.NodeID,
 	data *recoverydata,
-) (ownAtxData, error) {
-	var own ownAtxData
+) ([]*types.VerifiedActivationTx, [][]byte, error) {
 	if !cfg.PreserveOwnAtx {
-		return own, nil
+		return nil, nil, nil
 	}
 	atxid, err := atxs.GetLastIDByNodeID(db, nodeID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return own, fmt.Errorf("query own last atx id: %w", err)
+		return nil, nil, fmt.Errorf("query own last atx id: %w", err)
 	}
+	var seed types.ATXID
+	var own bool
 	if atxid == types.EmptyATXID {
-		return own, nil
+		// check if any atx is being built
+		if cfg.PostDataDir == "" {
+			return nil, nil, nil
+		}
+		m, err := initialization.LoadMetadata(cfg.PostDataDir)
+		if err != nil {
+			return nil, nil, fmt.Errorf("read post metdata %s: %w", cfg.PostDataDir, err)
+		}
+		seed = types.ATXID(types.BytesToHash(m.CommitmentAtxId))
+		logger.With().Debug("found commitment atx from metadata", seed)
+	} else {
+		seed = atxid
+		logger.With().Debug("found own atx", seed)
+		own = true
 	}
-	all := map[types.ATXID]struct{}{}
+
+	all := map[types.ATXID]struct{}{cfg.GoldenAtx: {}, types.EmptyATXID: {}}
 	for _, catx := range data.atxs {
 		all[catx.ID] = struct{}{}
 	}
-	if _, ok := all[atxid]; ok {
-		return own, nil
+	if _, ok := all[seed]; ok {
+		return nil, nil, nil
+	}
+	seedAtx, err := atxs.Get(db, seed)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get seed atx: %w", err)
 	}
 
-	own.atx, err = atxs.Get(db, atxid)
-	if err != nil {
-		return own, fmt.Errorf("get own atx: %w", err)
-	}
-	own.preserve = append(own.preserve, own.atx)
-	deps := map[types.ATXID]struct{}{own.atx.PrevATXID: {}}
-	deps[own.atx.PositioningATX] = struct{}{}
-	if own.atx.CommitmentATX != nil {
-		deps[*own.atx.CommitmentATX] = struct{}{}
-	}
-	for id := range deps {
-		if id == types.EmptyATXID || id == cfg.GoldenAtx {
-			continue
-		}
-		if _, ok := all[id]; ok {
-			continue
-		}
-		dep, err := atxs.Get(db, id)
+	logger.With().Info("trying to preserve atx and deps",
+		seed,
+		log.Bool("own", own),
+	)
+	return collectDeps(logger, db, seedAtx, all)
+}
+
+func collectDeps(
+	logger log.Log,
+	db *sql.Database,
+	seed *types.VerifiedActivationTx,
+	all map[types.ATXID]struct{},
+) ([]*types.VerifiedActivationTx, [][]byte, error) {
+	var (
+		commitment    types.ATXID
+		commitmentAtx *types.VerifiedActivationTx
+		err           error
+	)
+	// there is only be one commitment atx for the whole chain
+	if seed.CommitmentATX != nil {
+		commitment = *seed.CommitmentATX
+	} else {
+		commitment, err = atxs.CommitmentATX(db, seed.SmesherID)
 		if err != nil {
-			return own, fmt.Errorf("get dep atx: %w", err)
+			return nil, nil, fmt.Errorf("get commitment atx for seed %v: %w", seed.ID(), err)
 		}
-		own.preserve = append(own.preserve, dep)
 	}
-	own.proof, err = poets.Get(db, types.PoetProofRef(own.atx.GetPoetProofRef()))
+	if _, ok := all[commitment]; !ok {
+		commitmentAtx, err = atxs.Get(db, commitment)
+		if err != nil {
+			if errors.Is(err, sql.ErrNotFound) {
+				logger.With().Warning("commitment atx not present for seed. cannot be preserved",
+					log.Stringer("seed", seed.ID()),
+					log.Stringer("commitment", commitment),
+				)
+				return nil, nil, nil
+			}
+			return nil, nil, fmt.Errorf("get commitment atx %v: %w", commitment, err)
+		}
+	}
+
+	queue := list.New()
+	queue.PushBack(seed)
+	deps := []*types.VerifiedActivationTx{seed}
+	if commitmentAtx != nil {
+		queue.PushBack(commitmentAtx)
+		deps = append(deps, commitmentAtx)
+		all[commitment] = struct{}{}
+	}
+	for {
+		if queue.Len() == 0 {
+			break
+		}
+		vatx := queue.Remove(queue.Front()).(*types.VerifiedActivationTx)
+		if vatx.Golden() {
+			logger.With().Warning("atx deps traced to previous snapshot. cannot be preserved",
+				log.Stringer("seed", seed.ID()),
+				log.Stringer("dep", vatx.ID()),
+			)
+			return nil, nil, nil
+		}
+		for _, id := range []types.ATXID{vatx.PrevATXID, vatx.PositioningATX} {
+			if _, ok := all[id]; !ok {
+				dep, err := atxs.Get(db, id)
+				if err != nil {
+					if errors.Is(err, sql.ErrNotFound) {
+						logger.With().Warning("atx dep not present. cannot be preserved",
+							log.Stringer("seed", seed.ID()),
+							log.Stringer("dep", id),
+						)
+						return nil, nil, nil
+					}
+					return nil, nil, fmt.Errorf("get dep atx %v: %w", id, err)
+				}
+				deps = append(deps, dep)
+				all[id] = struct{}{}
+				queue.PushBack(dep)
+				logger.With().Debug("added atx dep", dep.ID())
+			}
+		}
+	}
+	proofs, err := poetProofs(db, deps)
 	if err != nil {
-		return own, fmt.Errorf("get own atx proof: %w", err)
+		return nil, nil, err
 	}
-	return own, nil
+	return deps, proofs, nil
+}
+
+func poetProofs(db *sql.Database, vatxs []*types.VerifiedActivationTx) ([][]byte, error) {
+	var proofs [][]byte
+	for _, vatx := range vatxs {
+		proof, err := poets.Get(db, types.PoetProofRef(vatx.GetPoetProofRef()))
+		if err != nil {
+			return nil, fmt.Errorf("get atx proof (%v): %w", vatx.ID(), err)
+		}
+		proofs = append(proofs, proof)
+	}
+	return proofs, nil
 }
 
 func recoverFromLocalFile(
@@ -297,10 +384,17 @@ func recoverFromLocalFile(
 		log.Int("num_accounts", len(data.accounts)),
 		log.Int("num_atxs", len(data.atxs)),
 	)
-	own, err := preserveOwnData(db, cfg, nodeID, data)
+	deps, proofs, err := preserveOwnData(logger, db, cfg, nodeID, data)
 	if err != nil {
-		return nil, err
+		logger.With().Error("failed to preserve own atx", log.Err(err))
+		// continue to recover from checkpoint despite failure to preserve own atx
+	} else if len(deps) > 0 {
+		logger.With().Info("will preserve own atx",
+			log.Context(ctx),
+			log.Int("own atx deps", len(deps)),
+		)
 	}
+
 	if err := db.Close(); err != nil {
 		return nil, fmt.Errorf("close old db: %w", err)
 	}
@@ -323,7 +417,7 @@ func recoverFromLocalFile(
 		log.Context(ctx),
 		log.Int("num accounts", len(data.accounts)),
 		log.Int("num atxs", len(data.atxs)),
-		log.Int("own atx and deps", len(own.preserve)),
+		log.Int("own atx deps", len(deps)),
 	)
 	if err = newdb.WithTx(ctx, func(tx *sql.Tx) error {
 		for _, acct := range data.accounts {
@@ -347,8 +441,12 @@ func recoverFromLocalFile(
 				catx.SmesherID,
 			)
 		}
-		if len(own.preserve) != 0 {
-			for _, atx := range own.preserve {
+		if len(deps) > 0 {
+			logger.With().Info("preserving deps for own atx",
+				log.Context(ctx),
+				log.Int("num atx", len(deps)),
+			)
+			for i, atx := range deps {
 				if err = atxs.Add(tx, atx); err != nil {
 					return fmt.Errorf("preserve atx %s: %w", atx.ID().String(), err)
 				}
@@ -356,21 +454,22 @@ func recoverFromLocalFile(
 					log.Context(ctx),
 					atx.ID(),
 				)
+				proof := proofs[i]
+				ref := types.PoetProofRef(atx.GetPoetProofRef())
+				var proofMessage types.PoetProofMessage
+				if err = codec.Decode(proof, &proofMessage); err != nil {
+					return fmt.Errorf("deocde proof: %w", err)
+				}
+				if err = poets.Add(tx, ref, proof, proofMessage.PoetServiceID, proofMessage.RoundID); err != nil {
+					return fmt.Errorf("add atx proof %s: %w", atx.ID(), err)
+				}
+				logger.With().Info("poet proof saved",
+					log.Context(ctx),
+					atx.ID(),
+					log.String("poet service id", hex.EncodeToString(proofMessage.PoetServiceID)),
+					log.String("poet round id", proofMessage.RoundID),
+				)
 			}
-			ref := types.PoetProofRef(own.atx.GetPoetProofRef())
-			var proofMessage types.PoetProofMessage
-			if err = codec.Decode(own.proof, &proofMessage); err != nil {
-				return fmt.Errorf("deocde proof: %w", err)
-			}
-			if err = poets.Add(tx, ref, own.proof, proofMessage.PoetServiceID, proofMessage.RoundID); err != nil {
-				return fmt.Errorf("add own atx proof %s: %w", own.atx.ID().String(), err)
-			}
-			logger.With().Info("own atx proof saved",
-				log.Context(ctx),
-				log.String("poet service id", hex.EncodeToString(proofMessage.PoetServiceID)),
-				log.String("poet round id", proofMessage.RoundID),
-				own.atx.ID(),
-			)
 		}
 		if err = recovery.SetCheckpoint(tx, restore); err != nil {
 			return fmt.Errorf("save checkppoint info: %w", err)
