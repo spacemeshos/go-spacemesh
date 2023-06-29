@@ -294,9 +294,9 @@ func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, olddb)
 			nid := types.NodeID{1, 2, 3}
-			prev := newvatx(t, newatx(types.ATXID{12}, &types.ATXID{1}, 2, 0, 123, nid.Bytes()))
+			prev := newvATX(t, newATX(types.ATXID{12}, &types.ATXID{1}, 2, 0, 123, nid))
 			require.NoError(t, atxs.Add(olddb, prev))
-			atx := newatx(types.ATXID{13}, nil, 3, 1, 0, nid.Bytes())
+			atx := newATX(types.ATXID{13}, nil, 3, 1, 0, nid)
 			atx.PrevATXID = prev.ID()
 			atx.PositioningATX = prev.ID()
 			atx.NIPost = &types.NIPost{
@@ -304,7 +304,7 @@ func TestRecover_OwnAtxNotInCheckpoint(t *testing.T) {
 					Challenge: []byte{3, 4, 5},
 				},
 			}
-			vatx := newvatx(t, atx)
+			vatx := newvATX(t, atx)
 			require.NoError(t, atxs.Add(olddb, vatx))
 			proofMessage := &types.PoetProofMessage{
 				PoetProof: types.PoetProof{
@@ -377,8 +377,8 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	nid := types.BytesToNodeID(data)
 	data, err = hex.DecodeString("98e47278c1f58acfd2b670a730f28898f74eb140482a07b91ff81f9ff0b7d9f4")
 	require.NoError(t, err)
-	atx := newatx(types.ATXID(types.BytesToHash(data)), nil, 3, 1, 0, nid.Bytes())
-	require.NoError(t, atxs.Add(olddb, newvatx(t, atx)))
+	atx := newATX(types.ATXID(types.BytesToHash(data)), nil, 3, 1, 0, nid)
+	require.NoError(t, atxs.Add(olddb, newvATX(t, atx)))
 	require.NoError(t, olddb.Close())
 
 	url := fmt.Sprintf("%s/snapshot-15", ts.URL)

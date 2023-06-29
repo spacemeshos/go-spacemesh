@@ -25,14 +25,39 @@ func TestMain(m *testing.M) {
 	os.Exit(res)
 }
 
+var commitments = map[types.NodeID]*types.ATXID{
+	types.BytesToNodeID([]byte("smesher1")): {1},
+	types.BytesToNodeID([]byte("smesher2")): {2},
+	types.BytesToNodeID([]byte("smesher3")): {3},
+	types.BytesToNodeID([]byte("smesher4")): {4},
+}
+
+var vrfNonces = map[types.NodeID]types.VRFPostIndex{
+	types.BytesToNodeID([]byte("smesher1")): 123,
+	types.BytesToNodeID([]byte("smesher2")): 152,
+	types.BytesToNodeID([]byte("smesher3")): 211,
+	types.BytesToNodeID([]byte("smesher4")): 420,
+}
+
 var allAtxs = []*types.ActivationTx{
-	newatx(types.ATXID{12}, &types.ATXID{1}, 1, 0, 123, []byte("smesher1")),
-	newatx(types.ATXID{13}, nil, 2, 1, 0, []byte("smesher1")),
-	newatx(types.ATXID{14}, nil, 3, 2, 0, []byte("smesher1")),
-	newatx(types.ATXID{15}, nil, 4, 3, 0, []byte("smesher1")),
-	newatx(types.ATXID{23}, &types.ATXID{2}, 3, 0, 152, []byte("smesher2")),
-	newatx(types.ATXID{32}, &types.ATXID{3}, 2, 0, 211, []byte("smesher3")),
-	newatx(types.ATXID{34}, nil, 4, 1, 0, []byte("smesher3")),
+	// smesher 1 has had 7 ATXs, one in each epoch from 1 to 7
+	newATX(types.ATXID{11}, &types.ATXID{1}, 1, 0, 123, types.BytesToNodeID([]byte("smesher1"))),
+	newATX(types.ATXID{12}, nil, 2, 1, 0, types.BytesToNodeID([]byte("smesher1"))),
+	newATX(types.ATXID{13}, nil, 3, 2, 0, types.BytesToNodeID([]byte("smesher1"))),
+	newATX(types.ATXID{14}, nil, 4, 3, 0, types.BytesToNodeID([]byte("smesher1"))),
+	newATX(types.ATXID{15}, nil, 5, 4, 0, types.BytesToNodeID([]byte("smesher1"))),
+	newATX(types.ATXID{16}, nil, 6, 5, 0, types.BytesToNodeID([]byte("smesher1"))),
+	newATX(types.ATXID{17}, nil, 7, 6, 0, types.BytesToNodeID([]byte("smesher1"))),
+
+	// smesher 2 has had 1 ATX in epoch 7
+	newATX(types.ATXID{27}, &types.ATXID{2}, 7, 0, 152, types.BytesToNodeID([]byte("smesher2"))),
+
+	// smesher 4 has had 1 ATX in epoch 2
+	newATX(types.ATXID{32}, &types.ATXID{3}, 2, 0, 211, types.BytesToNodeID([]byte("smesher3"))),
+
+	// smesher 4 has had 1 ATX in epoch 3 and one in epoch 7
+	newATX(types.ATXID{43}, &types.ATXID{4}, 4, 0, 420, types.BytesToNodeID([]byte("smesher4"))),
+	newATX(types.ATXID{47}, nil, 7, 1, 0, types.BytesToNodeID([]byte("smesher4"))),
 }
 
 var allAccounts = []*types.Account{
@@ -46,7 +71,8 @@ var allAccounts = []*types.Account{
 	{Layer: types.LayerID(7), Address: types.Address{4, 4}, NextNonce: 1, Balance: 31, TemplateAddress: &types.Address{3}, State: []byte("state47")},
 }
 
-func expectedCheckpoint(t *testing.T, numEpochs int) *checkpoint.Checkpoint {
+func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numEpochs int) *checkpoint.Checkpoint {
+	t.Helper()
 	result := &checkpoint.Checkpoint{
 		Version: "https://spacemesh.io/checkpoint.schema.json.1.0",
 		Data: checkpoint.InnerData{
@@ -54,27 +80,52 @@ func expectedCheckpoint(t *testing.T, numEpochs int) *checkpoint.Checkpoint {
 		},
 	}
 
-	switch numEpochs {
-	case 2:
-		result.Data.Atxs = []checkpoint.ShortAtx{
-			toShortAtx(newvatx(t, allAtxs[3]), allAtxs[0].CommitmentATX, allAtxs[0].VRFNonce),
-			toShortAtx(newvatx(t, allAtxs[2]), allAtxs[0].CommitmentATX, allAtxs[0].VRFNonce),
-			toShortAtx(newvatx(t, allAtxs[4]), allAtxs[4].CommitmentATX, allAtxs[4].VRFNonce),
-			toShortAtx(newvatx(t, allAtxs[6]), allAtxs[5].CommitmentATX, allAtxs[5].VRFNonce),
-			toShortAtx(newvatx(t, allAtxs[5]), allAtxs[5].CommitmentATX, allAtxs[5].VRFNonce),
-		}
-		result.Data.Accounts = []checkpoint.Account{
-			{types.Address{1, 1}.Bytes(), 111, 5, types.Address{2}.Bytes(), []byte("state15")},
-			{types.Address{2, 2}.Bytes(), 311, 14, types.Address{2}.Bytes(), []byte("state24")},
-			{types.Address{3, 3}.Bytes(), 124, 1, types.Address{3}.Bytes(), []byte("state35")},
-		}
-	default:
-		require.Fail(t, "unexpected numEpochs") // TODO(mafa): implement me, maybe by more general data generation
+	if numEpochs < 1 {
+		require.Fail(t, "numEpochs must be at least 1")
 	}
+
+	firstEpoch := 7 - numEpochs
+	if firstEpoch < 1 {
+		firstEpoch = 1
+	}
+
+	// TODO (mafa): this isn't correct yet
+	// at the moment the last n of every identity will be persisted
+	// goal -> all atxs of last n epochs + last of every identity
+	for _, atx := range allAtxs {
+		if atx.PublishEpoch > types.EpochID(firstEpoch) {
+			nonce := vrfNonces[atx.SmesherID]
+			result.Data.Atxs = append(result.Data.Atxs, toShortAtx(newvATX(t, atx), commitments[atx.SmesherID], &nonce))
+		}
+	}
+
+	accounts := make(map[types.Address]*types.Account)
+	for _, account := range allAccounts {
+		if account.Layer <= snapshot {
+			if a, ok := accounts[account.Address]; !ok {
+				accounts[account.Address] = account
+			} else {
+				if account.Layer > a.Layer {
+					accounts[account.Address] = account
+				}
+			}
+		}
+	}
+
+	for _, account := range accounts {
+		result.Data.Accounts = append(result.Data.Accounts, checkpoint.Account{
+			Address:  account.Address.Bytes(),
+			Balance:  account.Balance,
+			Nonce:    account.NextNonce,
+			Template: account.TemplateAddress.Bytes(),
+			State:    account.State,
+		})
+	}
+
 	return result
 }
 
-func newatx(id types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfnonce uint64, pubkey []byte) *types.ActivationTx {
+func newATX(id types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfNonce uint64, nodeID types.NodeID) *types.ActivationTx {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -87,16 +138,16 @@ func newatx(id types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfnonce 
 		},
 	}
 	atx.SetID(id)
-	if vrfnonce != 0 {
-		atx.VRFNonce = (*types.VRFPostIndex)(&vrfnonce)
+	if vrfNonce != 0 {
+		atx.VRFNonce = (*types.VRFPostIndex)(&vrfNonce)
 	}
-	atx.SmesherID = types.BytesToNodeID(pubkey)
+	atx.SmesherID = nodeID
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 	return atx
 }
 
-func newvatx(t *testing.T, atx *types.ActivationTx) *types.VerifiedActivationTx {
+func newvATX(t *testing.T, atx *types.ActivationTx) *types.VerifiedActivationTx {
 	vatx, err := atx.Verify(1111, 12)
 	require.NoError(t, err)
 	return vatx
@@ -119,7 +170,7 @@ func toShortAtx(v *types.VerifiedActivationTx, cmt *types.ATXID, nonce *types.VR
 
 func createMesh(t *testing.T, db *sql.Database, atxes []*types.ActivationTx, accts []*types.Account) {
 	for _, atx := range atxes {
-		require.NoError(t, atxs.Add(db, newvatx(t, atx)))
+		require.NoError(t, atxs.Add(db, newvATX(t, atx)))
 	}
 
 	for _, it := range accts {
@@ -162,7 +213,7 @@ func TestRunner_Generate(t *testing.T) {
 			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			err = checkpoint.Generate(ctx, fs, db, dir, snapshot, numEpochs)
+			err = checkpoint.Generate(ctx, fs, db, dir, snapshot, 2)
 			if tc.fail {
 				require.Error(t, err)
 				return
@@ -173,9 +224,10 @@ func TestRunner_Generate(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, checkpoint.ValidateSchema(persisted))
 			var got checkpoint.Checkpoint
-			expected := expectedCheckpoint(t, numEpochs)
+			expected := expectedCheckpoint(t, snapshot, numEpochs)
 			require.NoError(t, json.Unmarshal(persisted, &got))
-			require.Equal(t, *expected, got)
+			j, _ := json.Marshal(expected)
+			require.Equalf(t, *expected, got, "expected: %s\ngot: %s", j, persisted)
 		})
 	}
 }
@@ -202,9 +254,9 @@ func TestRunner_Generate_Error(t *testing.T) {
 			snapshot := types.LayerID(5)
 			var atx *types.ActivationTx
 			if tc.missingCommitment {
-				atx = newatx(types.ATXID{13}, nil, 2, 1, 11, []byte("smesher1"))
+				atx = newATX(types.ATXID{13}, nil, 2, 1, 11, types.BytesToNodeID([]byte("smesher1")))
 			} else if tc.missingVrf {
-				atx = newatx(types.ATXID{13}, &types.ATXID{11}, 2, 1, 0, []byte("smesher1"))
+				atx = newATX(types.ATXID{13}, &types.ATXID{11}, 2, 1, 0, types.BytesToNodeID([]byte("smesher1")))
 			}
 			createMesh(t, db, []*types.ActivationTx{atx}, allAccounts)
 
