@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/post/config"
+	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -36,6 +38,25 @@ const (
 )
 
 func TestMain(m *testing.M) {
+	logger := log.NewDefault("activation_test")
+
+	tmp, _ := os.MkdirTemp("", "post")
+	defer os.RemoveAll(tmp)
+
+	opts := DefaultPostSetupOpts()
+	opts.DataDir = tmp
+	opts.ProviderID = int(initialization.CPUProviderID())
+	opts.Scrypt.N = 2 // Speedup initialization in tests.
+
+	init, _ := initialization.NewInitializer(
+		initialization.WithNodeId(types.EmptyNodeID.Bytes()),
+		initialization.WithCommitmentAtxId(types.EmptyATXID.Bytes()),
+		initialization.WithConfig(config.DefaultConfig()),
+		initialization.WithInitOpts(config.InitOpts(opts)),
+		initialization.WithLogger(logger.Zap()),
+	)
+	init.Initialize(context.Background())
+
 	types.SetLayersPerEpoch(layersPerEpoch)
 	res := m.Run()
 	os.Exit(res)
