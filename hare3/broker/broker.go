@@ -27,12 +27,6 @@ type stateQuerier interface {
 }
 
 type mesh interface {
-	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
-	GetEpochAtx(types.EpochID, types.NodeID) (*types.ActivationTxHeader, error)
-	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
-	Proposals(types.LayerID) ([]*types.Proposal, error)
-	Ballot(types.BallotID) (*types.Ballot, error)
-	IsMalicious(types.NodeID) (bool, error)
 	AddMalfeasanceProof(types.NodeID, *types.MalfeasanceProof, *sql.Tx) error
 	GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error)
 }
@@ -49,6 +43,14 @@ func newLayerState() *layerState {
 		handler:     hare3.NewHandler(nil, nil, nil, nil),
 		coinChooser: weakcoin.NewChooser(),
 	}
+}
+
+// layerState is a container to simplify keeping track of the state for a given layer.
+type layerState struct {
+	// Stores all the messages that were not dropped by the handler
+	messages    map[types.Hash20]*hare.Message
+	handler     *hare3.Handler
+	coinChooser *weakcoin.Chooser
 }
 
 // Stores the message against its hash for later retrieval in the case that
@@ -81,14 +83,6 @@ func (s *layerState) buildMalfeasanceProof(a, b types.Hash20) *types.Malfeasance
 			},
 		},
 	}
-}
-
-// layerState is a container to simplify keeping track of the state for a given layer.
-type layerState struct {
-	// Stores all the messages that were not dropped by the handler
-	messages    map[types.Hash20]*hare.Message
-	handler     *hare3.Handler
-	coinChooser *weakcoin.Chooser
 }
 
 // Broker is the dispatcher of incoming Hare messages.
