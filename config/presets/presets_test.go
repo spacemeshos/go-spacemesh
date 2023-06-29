@@ -30,7 +30,7 @@ func TestCanGeneratePOST(t *testing.T) {
 				params.POST,
 				logtest.New(t),
 				cdb, goldenATXID,
-				activation.DefaultPostProvingOpts(),
+				params.SMESHING.ProvingOpts,
 			)
 			req.NoError(err)
 			req.NoError(mgr.PrepareInitializer(context.Background(), opts))
