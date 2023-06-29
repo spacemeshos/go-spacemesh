@@ -13,33 +13,49 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/broker"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare3/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"golang.org/x/sync/errgroup"
 )
 
+// WeakCoinResult is used to communicate the result of the weak coin back to
+// the application, via a channel.
+type WeakCoinResult struct {
+	Layer types.LayerID
+	// A nil coin value means that no coins were received.
+	Coin *bool
+}
+
 // Protocol runner runs an instance of the hare3 protocol.
 type ProtocolRunner struct {
-	clock    RoundClock
-	protocol hare3.Protocol
-	maxRound hare3.AbsRound
-	gossiper NetworkGossiper
-	ac       *eligibility.ActiveCheck
+	clock        RoundClock
+	protocol     hare3.Protocol
+	coinChooser  *weakcoin.Chooser
+	maxRound     hare3.AbsRound
+	gossiper     NetworkGossiper
+	layer        types.LayerID
+	ac           *eligibility.ActiveCheck
+	weakcoinChan chan<- WeakCoinResult
 }
 
 func NewProtocolRunner(
 	clock RoundClock,
 	protocol *hare3.Protocol,
+	coinChooser *weakcoin.Chooser,
 	iterationLimit int8,
 	gossiper NetworkGossiper,
 	ac *eligibility.ActiveCheck,
+	weakcoinChan chan<- WeakCoinResult,
 ) *ProtocolRunner {
 	return &ProtocolRunner{
-		clock:    clock,
-		protocol: *protocol,
-		maxRound: hare3.NewAbsRound(iterationLimit, 0),
-		gossiper: gossiper,
-		ac:       ac,
+		clock:        clock,
+		protocol:     *protocol,
+		coinChooser:  coinChooser,
+		maxRound:     hare3.NewAbsRound(iterationLimit, 0),
+		gossiper:     gossiper,
+		ac:           ac,
+		weakcoinChan: weakcoinChan,
 	}
 }
 
@@ -53,15 +69,15 @@ func (r *ProtocolRunner) Run(ctx context.Context) ([]types.Hash20, error) {
 		if round == r.maxRound {
 			return nil, fmt.Errorf("hare protocol runner exceeded iteration limit of %d", r.maxRound.Iteration())
 		}
-		// The weak coin is calculated from pre-round messages, we calculate
-		// the coin after one round, we are not concerned about late messages
-		// or equivocations affecting the outcome since the coin toss only
-		// needs to be good (in full consensus, unbiased and unpredictable)
-		// with probability p and p just needs to be greater than 0, I.E we
-		// just need one good coin toss to align voting and it's ok if this is
-		// delayed.
+		// The weak coin is calculated from pre-round messages, we select the
+		// coin after one round, we are not concerned about late messages
+		// affecting the outcome since the coin is weak (see package doc for
+		// hare3/weakcoin for an explanation of weak)
 		if round == hare3.Preround.Round()+1 {
-			// TODO how do we actually calculate this?
+			r.weakcoinChan <- WeakCoinResult{
+				Layer: r.layer,
+				Coin:  r.coinChooser.Choose(),
+			}
 		}
 		select {
 		// We await the beginning of the round, which is achieved by calling AwaitEndOfRound with (round - 1).
@@ -118,6 +134,7 @@ type HareRunner struct {
 	l               log.Log
 	db              *datastore.CachedDB
 	output          chan hare.LayerOutput
+	weakcoinChan    chan<- WeakCoinResult
 	eg              errgroup.Group
 
 	effectiveGenesis types.LayerID
@@ -126,6 +143,45 @@ type HareRunner struct {
 	roundDuration    time.Duration
 	committeeSize    int
 	nodeID           types.NodeID
+}
+
+func NewHareRunner(clock LayerClock,
+	gossiper NetworkGossiper,
+	oracle *heligibility.Oracle,
+	syncer *syncer.Syncer,
+	beaconRetriever *beacon.ProtocolDriver,
+	lc hare3.LeaderChecker,
+	b *broker.Broker,
+	l log.Log,
+	db *datastore.CachedDB,
+	output chan hare.LayerOutput,
+	weakcoinChan chan<- WeakCoinResult,
+	effectiveGenesis types.LayerID,
+	maxIterations int8,
+	wakeupDelta time.Duration,
+	roundDuration time.Duration,
+	committeeSize int,
+	nodeID types.NodeID,
+) *HareRunner {
+	return &HareRunner{
+		clock:            clock,
+		gossiper:         gossiper,
+		oracle:           oracle,
+		syncer:           syncer,
+		beaconRetriever:  beaconRetriever,
+		lc:               lc,
+		b:                b,
+		l:                l,
+		db:               db,
+		output:           output,
+		weakcoinChan:     weakcoinChan,
+		effectiveGenesis: effectiveGenesis,
+		maxIterations:    maxIterations,
+		wakeupDelta:      wakeupDelta,
+		roundDuration:    roundDuration,
+		committeeSize:    committeeSize,
+		nodeID:           nodeID,
+	}
 }
 
 func (r *HareRunner) Run(ctx context.Context) {
@@ -236,14 +292,14 @@ func (r *HareRunner) runLayer(
 	actives map[types.NodeID]struct{},
 	props []types.ProposalID,
 ) ([]types.ProposalID, error) {
-	handler := r.b.Register(ctx, layer)
+	handler, coinChooser := r.b.Register(ctx, layer)
 	roundClock := hare.NewSimpleRoundClock(r.clock.LayerToTime(layer), r.wakeupDelta, r.roundDuration)
 	initialSet := make([]types.Hash20, len(props))
 	for i := 0; i < len(props); i++ {
 		initialSet[i] = types.Hash20(props[i])
 	}
 	ac := eligibility.NewActiveCheck(layer, r.nodeID, r.committeeSize, r.oracle, r.l)
-	protocolRunner := NewProtocolRunner(roundClock, handler.Protocol(r.lc, initialSet), r.maxIterations, r.gossiper, ac)
+	protocolRunner := NewProtocolRunner(roundClock, handler.Protocol(r.lc, initialSet), coinChooser, r.maxIterations, r.gossiper, ac, r.weakcoinChan)
 	v, err := protocolRunner.Run(ctx)
 	if err != nil {
 		return nil, err

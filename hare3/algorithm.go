@@ -488,7 +488,7 @@ type OutputMessage struct {
 }
 
 // with int8 we have a max iterations of 17 before we overflow.
-// AbsRound (short for absolute round) represents a round of the hare protocol. The hare protocol progresses in interations and there are 7 rounds per iteration, exept for the first iteration which has a one off pre-round  the abs round starts at -1 and increments for each sucessive round.
+// AbsRound (short for absolute round) represents a round of the hare protocol. The hare protocol progresses in interations and there are 7 rounds per iteration, except for the first iteration which has a one off pre-round  the abs round starts at -1 and increments for each successive round.
 //
 // from the abs round both round and message type can be
 // the iteration and the round within that iteration can be derived.

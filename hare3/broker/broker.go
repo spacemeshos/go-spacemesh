@@ -46,19 +46,23 @@ type messageStore struct {
 	messages map[types.Hash20]*hare.Message
 }
 
-func newMessageStore() *messageStore {
-	return &messageStore{
+func newLayerState() *layerState {
+	return &layerState{
 		messages: make(map[types.Hash20]*hare.Message),
+		// TODO actually build the handler
+		handler:     hare3.NewHandler(nil, nil, nil, nil),
+		coinChooser: weakcoin.NewChooser(),
 	}
 }
 
-func (h *messageStore) storeMessage(hash types.Hash20, m *hare.Message) {
-	h.messages[hash] = m
+// Stores the message against its hash for later retrieval in the case that equivocation is detected, also adds the vrf to the coinChooser
+func (s *layerState) storeMessage(hash types.Hash20, m *hare.Message) {
+	s.messages[hash] = m
 }
 
-func (h *messageStore) buildMalfeasanceProof(a, b types.Hash20) *types.MalfeasanceProof {
+func (s *layerState) buildMalfeasanceProof(a, b types.Hash20) *types.MalfeasanceProof {
 	proofMsg := func(hash types.Hash20) types.HareProofMsg {
-		msg := h.messages[hash]
+		msg := s.messages[hash]
 
 		return types.HareProofMsg{
 			InnerMsg: types.HareMetadata{
@@ -72,7 +76,7 @@ func (h *messageStore) buildMalfeasanceProof(a, b types.Hash20) *types.Malfeasan
 	}
 
 	return &types.MalfeasanceProof{
-		Layer: h.messages[a].Layer,
+		Layer: s.messages[a].Layer,
 		Proof: types.Proof{
 			Type: types.HareEquivocation,
 			Data: &types.HareProof{
@@ -80,6 +84,14 @@ func (h *messageStore) buildMalfeasanceProof(a, b types.Hash20) *types.Malfeasan
 			},
 		},
 	}
+}
+
+// layerState is a container to simplify keeping track of the state for a given layer.
+type layerState struct {
+	// Stores all the messages that were not dropped by the handler
+	messages    map[types.Hash20]*hare.Message
+	handler     *hare3.Handler
+	coinChooser *weakcoin.Chooser
 }
 
 // Broker is the dispatcher of incoming Hare messages.
@@ -93,14 +105,7 @@ type Broker struct {
 	roleValidator validator     // provides eligibility validation
 	stateQuerier  stateQuerier  // provides activeness check
 	latestLayer   types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
-
-	// So put messages in messages, including early messages, when we start we
-	// iterate the messages and push them into the handler and when we need
-	// messages for constructing a malfeasance proof we have them right there.
-	messages map[types.LayerID]*messageStore
-	handlers map[types.LayerID]*hare3.Handler
-
-	coinChooser *weakcoin.Chooser
+	layerStates   map[types.LayerID]*layerState
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -111,7 +116,6 @@ func newBroker(
 	msh mesh,
 	edVerifier *signing.EdVerifier,
 	roleValidator validator,
-	coinChooser *weakcoin.Chooser,
 	stateQuerier stateQuerier,
 	log log.Log,
 ) *Broker {
@@ -120,9 +124,8 @@ func newBroker(
 		msh:           msh,
 		edVerifier:    edVerifier,
 		roleValidator: roleValidator,
-		coinChooser:   coinChooser,
 		stateQuerier:  stateQuerier,
-		messages:      make(map[types.LayerID]*messageStore),
+		layerStates:   make(map[types.LayerID]*layerState),
 		latestLayer:   types.GetEffectiveGenesis(),
 	}
 	b.ctx, b.cancel = context.WithCancel(context.Background())
@@ -200,11 +203,11 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	msgs := b.messages[hareMsg.Layer]
+	state := b.layerStates[hareMsg.Layer]
 
 	early := hareMsg.Layer == latestLayer+1
-	// Do a quick exit if this message is not early and not for a registered layer
-	if msgs == nil && !early {
+	// Exit now if this message is not early and not for a registered layer
+	if state == nil && !early {
 		return errors.New("consensus process not registered")
 	}
 
@@ -236,47 +239,45 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	}
 
 	if proof != nil {
-		// The way we signify a message from a know malfeasant identity to the
+		// The way we signify a message from a known malfeasant identity to the
 		// protocol is a message without values.
 		values = nil
 	}
 
 	// If the message is early we may need to initialize the message store and handler.
-	if early {
-		if msgs == nil {
-			msgs = newMessageStore()
-			b.messages[hareMsg.Layer] = msgs
-			// TODO actually build the handler
-			b.handlers[hareMsg.Layer] = hare3.NewHandler(nil, nil, nil, nil)
-		}
+	if early && state == nil {
+		state = newLayerState()
+		b.layerStates[hareMsg.Layer] = state
 	}
-	shouldRelay, equivocationHash := b.handlers[hareMsg.Layer].HandleMsg(hash, id, round, values)
+
+	shouldRelay, equivocationHash := state.handler.HandleMsg(hash, id, round, values)
 	// If we detect a new equivocation then store it.
 	if equivocationHash != nil {
-		proof = msgs.buildMalfeasanceProof(hash, *equivocationHash)
+		proof = state.buildMalfeasanceProof(hash, *equivocationHash)
 		err := b.msh.AddMalfeasanceProof(hareMsg.SmesherID, proof, nil)
 		if err != nil {
 			logger.With().Error("faild to add newly discovered malfeasance proof to mesh", log.Err(err))
 		}
 	}
 
-	// TODO change this `10` to preround, for now we just use the value.
-	if hareMsg.Type == 10 {
-		// If the message was not malfeasant we add it to the coinChooser,
-		// otherwise we remove the malfeasant identity from the coin chooser.
-		if proof == nil {
-			b.coinChooser.Add(hareMsg.SmesherID, hareMsg.Eligibility.Proof)
-		} else {
-			b.coinChooser.Remove(hareMsg.SmesherID)
-		}
-	}
-
-	// If this message shouldn't be relayed return an error to indicate this to the p2p system.
+	// If this message shouldn't be relayed (this is a message from an identity
+	// for which we previously detected equivocation) return an error to
+	// indicate this to the p2p system.
 	if !shouldRelay {
 		return errors.New("don't relay")
 	}
-	// Only store messages the get relayed
-	msgs.storeMessage(hash, hareMsg)
+
+	// The weak coin is calculated from pre-round messages, we are not overly
+	// concerned equivocations affecting the outcome since the coin is weak.
+	// (see package doc for hare3/weakcoin for an explanation of weak) However
+	// since at this point we know if the message was an equivocation based on
+	// the proof variable, we filter it anyway to save a few cycles.
+	if proof == nil && hare3.AbsRound(hareMsg.Round).Type() == hare3.Preround {
+		state.coinChooser.Put(&hareMsg.Eligibility.Proof)
+	}
+
+	// Only store messages that get relayed
+	state.storeMessage(hash, hareMsg)
 
 	// Returning nil lets the p2p gossipsub layer know that the received
 	// message was valid and it should relay it to the network.
@@ -285,23 +286,22 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 
 // Register a layer to receive messages
 // Note: the registering instance is assumed to be started and accepting messages.
-func (b *Broker) Register(ctx context.Context, id types.LayerID) *hare3.Handler {
+func (b *Broker) Register(ctx context.Context, id types.LayerID) (*hare3.Handler, *weakcoin.Chooser) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	b.latestLayer = id
-	msgs := b.messages[id]
-	if msgs == nil {
-		msgs = newMessageStore()
-		b.messages[id] = msgs
-		b.handlers[id] = hare3.NewHandler(nil, nil, nil, nil)
+	state := b.layerStates[id]
+	if state == nil {
+		state = newLayerState()
+		b.layerStates[id] = state
 	} else {
-		b.handleEarlyMessages(msgs.messages, b.handlers[id])
+		b.handleEarlyMessages(state.messages, state.handler)
 	}
 
 	// we return the handler so that we can extract the relevant sub protocols
 	// from it for use by the main protocol.
-	return b.handlers[id]
+	return state.handler, state.coinChooser
 }
 
 // Malfeasance detections that happened in the previous layer are not passed to
@@ -329,8 +329,7 @@ func (b *Broker) handleEarlyMessages(msgs map[types.Hash20]*hare.Message, handle
 func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	delete(b.messages, id)
-	delete(b.handlers, id)
+	delete(b.layerStates, id)
 	b.WithContext(ctx).With().Debug("hare broker unregistered layer", id)
 }
 

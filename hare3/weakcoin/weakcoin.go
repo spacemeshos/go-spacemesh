@@ -9,41 +9,42 @@
 // signature. It is verifiable since the signature can be verified with the
 // public key of the creator.
 //
-// The weak coin is something that should be agreed upon by all honest parties,
-// to achieve this all parties share their signatures and then the signature
-// that has the lowest value is accepted as the coin to use.
+// To find the coin all parties share their VRF and the one with the lowest
+// value is chosen, the coin value is determined by looking at the least
+// significant bit of the chosen VRF.
 //
-// To actually get a coin value from the signature we look at the least
-// significant bit.
+// The meaning of weak here is that the coin toss only needs to be "good"
+// (unbiased, unpredictable and in full consensus among honest parties) with
+// probability p > 0. I.E. eventually there is a "good" toss.
 package weakcoin
 
 import (
-	"errors"
-	"sort"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"golang.org/x/exp/maps"
 )
 
 type Chooser struct {
-	coins map[types.NodeID]types.VrfSignature
+	coin *types.VrfSignature
 }
 
-func (c *Chooser) Add(id types.NodeID, coin types.VrfSignature) {
-	c.coins[id] = coin
-}
+func NewChooser() *Chooser { return &Chooser{} }
 
-func (c *Chooser) Remove(id types.NodeID) {
-	delete(c.coins, id)
-}
-
-func (c *Chooser) Choose() (bool, error) {
-	if len(c.coins) == 0 {
-		return false, errors.New("no coins to choose from")
+// Put puts the coin into the chooser.
+func (c *Chooser) Put(coin *types.VrfSignature) {
+	switch {
+	case c.coin == nil:
+		c.coin = coin
+	case coin.Cmp(c.coin) == -1:
+		// if the given coin is smaller than the provided coin then store it.
+		c.coin = coin
 	}
-	vals := maps.Values(c.coins)
-	sort.Slice(vals, func(i, j int) bool {
-		return vals[i].Cmp(&vals[j]) == -1
-	})
-	return vals[0].LSB() == 1, nil
+}
+
+// Choose returns the coin value of the lowest seen coin or nil if no coins
+// have been seen.
+func (c *Chooser) Choose() *bool {
+	if c.coin == nil {
+		return nil
+	}
+	result := c.coin.LSB() == 1
+	return &result
 }
