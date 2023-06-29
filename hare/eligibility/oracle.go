@@ -506,3 +506,18 @@ func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
 	}
 	o.fallback[epoch] = activeSet
 }
+
+func (o *Oracle) IsIdentityActiveInConsensusRound(ctx context.Context, edID types.NodeID, layer types.LayerID, round uint32, committeeSize int) bool {
+	proof, err := o.Proof(ctx, layer, round)
+	if err != nil {
+		o.With().Error("failed to get eligibility proof from oracle", log.Err(err))
+		return false
+	}
+
+	eligibilityCount, err := o.CalcEligibility(ctx, layer, round, committeeSize, edID, proof)
+	if err != nil {
+		o.With().Error("failed to check eligibility", log.Err(err))
+		return false
+	}
+	return eligibilityCount > 0
+}

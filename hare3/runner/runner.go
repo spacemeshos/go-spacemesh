@@ -2,31 +2,29 @@ package runner
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	heligibility "github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/broker"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"golang.org/x/sync/errgroup"
 )
 
+// Protocol runner runs an instance of the hare3 protocol.
 type ProtocolRunner struct {
 	clock    RoundClock
 	protocol hare3.Protocol
 	maxRound hare3.AbsRound
 	gossiper NetworkGossiper
+	ac       *eligibility.ActiveCheck
 }
 
 func NewProtocolRunner(
@@ -34,33 +32,43 @@ func NewProtocolRunner(
 	protocol *hare3.Protocol,
 	iterationLimit int8,
 	gossiper NetworkGossiper,
+	ac *eligibility.ActiveCheck,
 ) *ProtocolRunner {
 	return &ProtocolRunner{
 		clock:    clock,
 		protocol: *protocol,
 		maxRound: hare3.NewAbsRound(iterationLimit, 0),
 		gossiper: gossiper,
+		ac:       ac,
 	}
 }
 
-// Run waits for successive rounds from the clock and drives the protocol round by round.
+// Run runs the protocol until it terminates and returns the result. If the
+// protocol exceeded the iteraion limit or the context expires an error will be
+// returned and the result will be nil.
 func (r *ProtocolRunner) Run(ctx context.Context) ([]types.Hash20, error) {
 	// ok want to actually use a lock here
 	for {
-		if r.protocol.Round() == r.maxRound {
+		round := r.protocol.Round()
+		if round == r.maxRound {
 			return nil, fmt.Errorf("hare protocol runner exceeded iteration limit of %d", r.maxRound.Iteration())
 		}
-		// The weak coin is calculated from pre-round messages we need to really be checking for the highest from gradecast i think.
-		if r.protocol.Round() == hare3.Preround.Round()+3 {
+		// The weak coin is calculated from pre-round messages, we calculate
+		// the coin after one round, we are not concerned about late messages
+		// or equivocations affecting the outcome since the coin toss only
+		// needs to be good (in full consensus, unbiased and unpredictable)
+		// with probability p and p just needs to be greater than 0, I.E we
+		// just need one good coin toss to align voting and it's ok if this is
+		// delayed.
+		if round == hare3.Preround.Round()+1 {
+			// TODO how do we actually calculate this?
 		}
 		select {
 		// We await the beginning of the round, which is achieved by calling AwaitEndOfRound with (round - 1).
-		case <-r.clock.AwaitEndOfRound(uint32(r.protocol.Round() - 1)):
-			// This will need to be set per round to determine if this parcicipant is active in this round.
-			var active bool
-			toSend, output := r.protocol.NextRound(active)
+		case <-r.clock.AwaitEndOfRound(uint32(round - 1)):
+			toSend, output := r.protocol.NextRound(r.ac.Active(ctx, round))
 			if toSend != nil {
-				msg, err := buildEncodedOutputMessgae(toSend)
+				msg, err := buildEncodedOutputMessage(toSend)
 				if err != nil {
 					// This should never happen
 					panic(err)
@@ -80,7 +88,7 @@ type NetworkGossiper interface {
 	Gossip(msg []byte) error
 }
 
-func buildEncodedOutputMessgae(m *hare3.OutputMessage) ([]byte, error) {
+func buildEncodedOutputMessage(m *hare3.OutputMessage) ([]byte, error) {
 	return nil, nil
 }
 
@@ -101,9 +109,8 @@ type LayerClock interface {
 
 type HareRunner struct {
 	clock           LayerClock
-	protocol        hare3.Protocol
 	gossiper        NetworkGossiper
-	oracle          *eligibility.Oracle
+	oracle          *heligibility.Oracle
 	syncer          *syncer.Syncer
 	beaconRetriever *beacon.ProtocolDriver
 	lc              hare3.LeaderChecker
@@ -117,6 +124,7 @@ type HareRunner struct {
 	maxIterations    int8
 	wakeupDelta      time.Duration
 	roundDuration    time.Duration
+	committeeSize    int
 	nodeID           types.NodeID
 }
 
@@ -234,7 +242,8 @@ func (r *HareRunner) runLayer(
 	for i := 0; i < len(props); i++ {
 		initialSet[i] = types.Hash20(props[i])
 	}
-	protocolRunner := NewProtocolRunner(roundClock, handler.Protocol(r.lc, initialSet), r.maxIterations, r.gossiper)
+	ac := eligibility.NewActiveCheck(layer, r.nodeID, r.committeeSize, r.oracle, r.l)
+	protocolRunner := NewProtocolRunner(roundClock, handler.Protocol(r.lc, initialSet), r.maxIterations, r.gossiper, ac)
 	v, err := protocolRunner.Run(ctx)
 	if err != nil {
 		return nil, err
@@ -244,103 +253,4 @@ func (r *HareRunner) runLayer(
 		result[i] = types.ProposalID(v[i])
 	}
 	return result, nil
-}
-
-func goodProposals(
-	ctx context.Context,
-	logger log.Log,
-	db *datastore.CachedDB,
-	nodeID types.NodeID,
-	lid types.LayerID,
-	epochBeacon types.Beacon,
-) []types.ProposalID {
-	props, err := proposals.GetByLayer(db, lid)
-	if err != nil {
-		if errors.Is(err, sql.ErrNotFound) {
-			logger.With().Warning("no proposals found for hare, using empty set", log.Context(ctx), lid, log.Err(err))
-		} else {
-			logger.With().Error("failed to get proposals for hare", log.Context(ctx), lid, log.Err(err))
-		}
-		return []types.ProposalID{}
-	}
-
-	var (
-		beacon        types.Beacon
-		result        []types.ProposalID
-		ownHdr        *types.ActivationTxHeader
-		ownTickHeight = uint64(math.MaxUint64)
-	)
-	// a non-smesher will not filter out any proposals, as it doesn't have voting power
-	// and only observes the consensus process.
-	ownHdr, err = db.GetEpochAtx(lid.GetEpoch(), nodeID)
-	if err != nil {
-		logger.With().Error("failed to get own atx", log.Context(ctx), lid, log.Err(err))
-		return []types.ProposalID{}
-	}
-	if ownHdr != nil {
-		ownTickHeight = ownHdr.TickHeight()
-	}
-	atxs := map[types.ATXID]int{}
-	for _, p := range props {
-		atxs[p.AtxID]++
-	}
-	for _, p := range props {
-		if p.IsMalicious() {
-			logger.With().Warning("not voting on proposal from malicious identity",
-				log.Stringer("id", p.ID()),
-			)
-			continue
-		}
-		if n := atxs[p.AtxID]; n > 1 {
-			logger.With().Warning("proposal with same atx added several times in the recorded set",
-				log.Int("n", n),
-				log.Stringer("id", p.ID()),
-				log.Stringer("atxid", p.AtxID),
-			)
-			continue
-		}
-		if ownHdr != nil {
-			hdr, err := db.GetAtxHeader(p.AtxID)
-			if err != nil {
-				logger.With().Error("failed to get atx", log.Context(ctx), lid, p.AtxID, log.Err(err))
-				return []types.ProposalID{}
-			}
-			if hdr.BaseTickHeight >= ownTickHeight {
-				// does not vote for future proposal
-				logger.With().Warning("proposal base tick height too high. skipping",
-					log.Context(ctx),
-					lid,
-					log.Uint64("proposal_height", hdr.BaseTickHeight),
-					log.Uint64("own_height", ownTickHeight),
-				)
-				continue
-			}
-		}
-		if p.EpochData != nil {
-			beacon = p.EpochData.Beacon
-		} else if p.RefBallot == types.EmptyBallotID {
-			logger.With().Error("proposal missing ref ballot", p.ID())
-			return []types.ProposalID{}
-		} else if refBallot, err := ballots.Get(db, p.RefBallot); err != nil {
-			logger.With().Error("failed to get ref ballot", p.ID(), p.RefBallot, log.Err(err))
-			return []types.ProposalID{}
-		} else if refBallot.EpochData == nil {
-			logger.With().Error("ref ballot missing epoch data", log.Context(ctx), lid, refBallot.ID())
-			return []types.ProposalID{}
-		} else {
-			beacon = refBallot.EpochData.Beacon
-		}
-
-		if beacon == epochBeacon {
-			result = append(result, p.ID())
-		} else {
-			logger.With().Warning("proposal has different beacon value",
-				log.Context(ctx),
-				lid,
-				p.ID(),
-				log.String("proposal_beacon", beacon.ShortString()),
-				log.String("epoch_beacon", epochBeacon.ShortString()))
-		}
-	}
-	return result
 }
