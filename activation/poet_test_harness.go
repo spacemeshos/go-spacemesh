@@ -7,6 +7,7 @@ import (
 
 	"github.com/spacemeshos/poet/config"
 	"github.com/spacemeshos/poet/server"
+	"github.com/spacemeshos/poet/service"
 )
 
 // HTTPPoetTestHarness utilizes a local self-contained poet server instance
@@ -20,7 +21,7 @@ type HTTPPoetOpt func(*config.Config)
 
 func WithGenesis(genesis time.Time) HTTPPoetOpt {
 	return func(cfg *config.Config) {
-		cfg.Service.Genesis = genesis.Format(time.RFC3339)
+		cfg.Service.Genesis = service.Genesis(genesis)
 	}
 }
 
