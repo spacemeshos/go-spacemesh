@@ -206,7 +206,9 @@ func (r *HareRunner) Run(ctx context.Context) {
 			log.Stringer("start_layer", startLayer))
 	}
 
-	for layer := startLayer; ; layer += 1 {
+	for l := startLayer; ; l += 1 {
+		// copy the loop variable
+		layer := l
 		select {
 		case <-r.clock.AwaitLayer(layer):
 			if !r.syncer.IsSynced(ctx) {

@@ -42,10 +42,6 @@ type validator interface {
 	ValidateEligibilityGossip(context.Context, *types.HareEligibilityGossip) bool
 }
 
-type messageStore struct {
-	messages map[types.Hash20]*hare.Message
-}
-
 func newLayerState() *layerState {
 	return &layerState{
 		messages: make(map[types.Hash20]*hare.Message),
@@ -55,7 +51,8 @@ func newLayerState() *layerState {
 	}
 }
 
-// Stores the message against its hash for later retrieval in the case that equivocation is detected, also adds the vrf to the coinChooser
+// Stores the message against its hash for later retrieval in the case that
+// equivocation is detected.
 func (s *layerState) storeMessage(hash types.Hash20, m *hare.Message) {
 	s.messages[hash] = m
 }
@@ -112,7 +109,7 @@ type Broker struct {
 	once   sync.Once
 }
 
-func newBroker(
+func NewBroker(
 	msh mesh,
 	edVerifier *signing.EdVerifier,
 	roleValidator validator,
@@ -144,11 +141,7 @@ func (b *Broker) Start(ctx context.Context) {
 	})
 }
 
-var (
-	errNotSynced         = errors.New("layer is not synced")
-	errInstanceNotSynced = errors.New("instance not synchronized")
-	errClosed            = errors.New("closed")
-)
+var errClosed = errors.New("closed")
 
 func parts(msg *hare.Message) (id []byte, round int8, values []types.Hash20) {
 	values = make([]types.Hash20, len(msg.Values))

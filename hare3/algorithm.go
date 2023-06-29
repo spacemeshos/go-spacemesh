@@ -67,7 +67,8 @@ const (
 
 	// d is the degree parameter of both the graded gossip and threshold gossip
 	// pprotocols, it is highest grade that can be assigned, grades start at 0.
-	d = 5
+	// TODO see if I actually need this.
+	// d = 5.
 )
 
 func (mt MsgType) Round() AbsRound {
