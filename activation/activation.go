@@ -405,7 +405,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		challenge.Sequence = prevAtx.Sequence + 1
 	}
 
-	if err = saveNipostChallenge(b.nipostBuilder.DataDir(), challenge); err != nil {
+	if err = SaveNipostChallenge(b.nipostBuilder.DataDir(), challenge); err != nil {
 		return nil, err
 	}
 	return challenge, nil
@@ -459,7 +459,7 @@ func (b *Builder) Coinbase() types.Address {
 }
 
 func (b *Builder) loadChallenge() (*types.NIPostChallenge, error) {
-	nipost, err := loadNipostChallenge(b.nipostBuilder.DataDir())
+	nipost, err := LoadNipostChallenge(b.nipostBuilder.DataDir())
 	if err != nil {
 		return nil, err
 	}

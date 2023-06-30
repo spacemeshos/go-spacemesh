@@ -205,6 +205,7 @@ func TestRecoverFromHttp(t *testing.T) {
 			fs := afero.NewMemMapFs()
 			cfg := &checkpoint.RecoverConfig{
 				GoldenAtx:      goldenAtx,
+				PostDataDir:    t.TempDir(),
 				DataDir:        t.TempDir(),
 				DbFile:         "test.sql",
 				PreserveOwnAtx: true,
@@ -249,6 +250,7 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
+		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		PreserveOwnAtx: true,
@@ -378,8 +380,10 @@ func createAtxChain(tb testing.TB, sig *signing.EdSigner) ([]*types.VerifiedActi
 	othAtx6 := newChainedAtx(tb, othAtx5.ID(), atx2.ID(), nil, 7, 5, 0, other)
 	// epoch 8
 	atx3 := newChainedAtx(tb, atx2.ID(), othAtx6.ID(), nil, 8, 2, 0, sig)
+	// epoch 9
+	othAtx7 := newChainedAtx(tb, othAtx6.ID(), atx3.ID(), nil, 9, 6, 0, other)
 
-	vatxs := []*types.VerifiedActivationTx{othAtx1, othAtx2, othAtx3, atx1, othAtx4, othAtx5, atx2, othAtx6, atx3}
+	vatxs := []*types.VerifiedActivationTx{othAtx1, othAtx2, othAtx3, atx1, othAtx4, othAtx5, atx2, othAtx6, atx3, othAtx7}
 	var proofs []*types.PoetProofMessage
 	for range vatxs {
 		proofMessage := &types.PoetProofMessage{
@@ -451,6 +455,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
+		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		PreserveOwnAtx: true,
@@ -472,6 +477,79 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 		require.NoError(t, poets.Add(olddb, types.PoetProofRef(vatx.GetPoetProofRef()), encoded, proofs[i].PoetServiceID, proofs[i].RoundID))
 	}
 	require.NoError(t, olddb.Close())
+
+	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
+	require.NoError(t, err)
+	require.NotNil(t, preserve)
+	// the two set of atxs have different received time. just compare IDs
+	require.ElementsMatch(t, atxIDs(vatxs[:len(vatxs)-1]), atxIDs(preserve.Deps))
+	require.ElementsMatch(t, proofs[:len(proofs)-1], preserve.Proofs)
+
+	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	require.NoError(t, err)
+	require.NotNil(t, newdb)
+	t.Cleanup(func() { require.NoError(t, newdb.Close()) })
+	verifyDbContent(t, newdb)
+	validateAndPreserveData(t, newdb, preserve.Deps, preserve.Proofs)
+	// note that poet proofs are not saved to newdb due to verification errors
+
+	restore, err := recovery.CheckpointInfo(newdb)
+	require.NoError(t, err)
+	require.EqualValues(t, recoverLayer, restore)
+
+	// sqlite create .sql, .sql-shm and .sql-wal files.
+	files, err := filepath.Glob(fmt.Sprintf("%s/backup.*/%s*", cfg.DataDir, cfg.DbFile))
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(files), 1)
+}
+
+func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodGet, r.Method)
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte(checkpointdata))
+		require.NoError(t, err)
+	}))
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	cfg := &checkpoint.RecoverConfig{
+		GoldenAtx:      goldenAtx,
+		PostDataDir:    t.TempDir(),
+		DataDir:        t.TempDir(),
+		DbFile:         "test.sql",
+		PreserveOwnAtx: true,
+		NodeID:         sig.NodeID(),
+		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Restore:        types.LayerID(recoverLayer),
+	}
+
+	olddb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	require.NoError(t, err)
+	require.NotNil(t, olddb)
+
+	vatxs, proofs := createAtxChain(t, sig)
+	validateAndPreserveData(t, olddb, vatxs, proofs)
+	// the proofs are not valid, but save them anyway for the purpose of testing
+	for i, vatx := range vatxs {
+		encoded, err := codec.Encode(proofs[i])
+		require.NoError(t, err)
+		require.NoError(t, poets.Add(olddb, types.PoetProofRef(vatx.GetPoetProofRef()), encoded, proofs[i].PoetServiceID, proofs[i].RoundID))
+	}
+	require.NoError(t, olddb.Close())
+
+	// write pending nipost challenge to simulate a pending atx still waiting for poet proof.
+	prevAtx := vatxs[len(vatxs)-2]
+	posAtx := vatxs[len(vatxs)-1]
+	require.NoError(t, activation.SaveNipostChallenge(cfg.PostDataDir, &types.NIPostChallenge{
+		PublishEpoch:   posAtx.PublishEpoch + 1,
+		Sequence:       prevAtx.Sequence + 1,
+		PrevATXID:      prevAtx.ID(),
+		PositioningATX: posAtx.ID(),
+	}))
 
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
@@ -586,6 +664,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
+		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		PreserveOwnAtx: true,
@@ -658,6 +737,7 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
+		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		PreserveOwnAtx: false,
@@ -718,6 +798,7 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
+		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		PreserveOwnAtx: true,
@@ -814,6 +895,7 @@ func TestRecover(t *testing.T) {
 			}
 			cfg := &checkpoint.RecoverConfig{
 				GoldenAtx:      goldenAtx,
+				PostDataDir:    t.TempDir(),
 				DataDir:        dataDir,
 				DbFile:         "test.sql",
 				PreserveOwnAtx: true,

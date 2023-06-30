@@ -177,6 +177,10 @@ func GetCommand() *cobra.Command {
 								log.Err(err),
 							)
 						}
+						app.log.With().Info("preserved poet proof after checkpoint",
+							log.Stringer("atx id", preserve.Deps[i].ID()),
+							log.Object("poet proof", poetProof),
+						)
 					}
 					for _, vatx := range preserve.Deps {
 						encoded, err := codec.Encode(vatx)
@@ -192,6 +196,9 @@ func GetCommand() *cobra.Command {
 								log.Err(err),
 							)
 						}
+						app.log.With().Info("preserved atx after checkpoint",
+							log.Object("atx", vatx),
+						)
 					}
 				}
 

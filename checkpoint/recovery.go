@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spf13/afero"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -381,18 +382,12 @@ func collectOwnAtxDeps(
 	var ref types.ATXID
 	var own bool
 	if atxid == types.EmptyATXID {
-		// check if any atx is being built
-		if cfg.PostDataDir == "" {
-			return nil, nil, nil
+		if m, _ := initialization.LoadMetadata(cfg.PostDataDir); m != nil {
+			ref = types.ATXID(types.BytesToHash(m.CommitmentAtxId))
+			logger.With().Debug("found commitment atx from metadata",
+				log.Stringer("commitment atx", ref),
+			)
 		}
-		m, err := initialization.LoadMetadata(cfg.PostDataDir)
-		if err != nil {
-			return nil, nil, fmt.Errorf("read post metdata %s: %w", cfg.PostDataDir, err)
-		}
-		ref = types.ATXID(types.BytesToHash(m.CommitmentAtxId))
-		logger.With().Debug("found commitment atx from metadata",
-			log.Stringer("commitment atx", ref),
-		)
 	} else {
 		ref = atxid
 		logger.With().Debug("found own atx",
@@ -401,15 +396,44 @@ func collectOwnAtxDeps(
 		own = true
 	}
 
+	// check for if miner is building any atx
+	nipostCh, _ := activation.LoadNipostChallenge(cfg.PostDataDir)
+	if ref == types.EmptyATXID && nipostCh == nil {
+		return nil, nil, nil
+	}
+
 	all := map[types.ATXID]struct{}{cfg.GoldenAtx: {}, types.EmptyATXID: {}}
 	for _, catx := range data.atxs {
 		all[catx.ID] = struct{}{}
 	}
-	logger.With().Info("trying to preserve atx and deps",
-		ref,
-		log.Bool("own", own),
+	var (
+		deps   []*types.VerifiedActivationTx
+		proofs []*types.PoetProofMessage
 	)
-	return collectDeps(db, cfg.GoldenAtx, ref, all)
+	if ref != types.EmptyATXID {
+		logger.With().Info("collecting atx and deps",
+			ref,
+			log.Bool("own", own),
+		)
+		deps, proofs, err = collectDeps(db, cfg.GoldenAtx, ref, all)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	if nipostCh != nil {
+		logger.With().Info("collecting pending atx and deps",
+			log.Object("nipost", nipostCh),
+		)
+		// any previous atx in nipost should already be captured earlier
+		// we only care about positioning atx here
+		deps2, proofs2, err := collectDeps(db, cfg.GoldenAtx, nipostCh.PositioningATX, all)
+		if err != nil {
+			return nil, nil, fmt.Errorf("deps from nipost positioning atx (%v): %w", nipostCh.PositioningATX, err)
+		}
+		deps = append(deps, deps2...)
+		proofs = append(proofs, proofs2...)
+	}
+	return deps, proofs, nil
 }
 
 func collectDeps(
@@ -446,7 +470,7 @@ func collect(
 	if atx.Golden() {
 		return fmt.Errorf("atx %v belong to previous snapshot. cannot be preserved", ref)
 	}
-	if atx.CommitmentATX != nil && *atx.CommitmentATX != goldenAtxID {
+	if atx.CommitmentATX != nil {
 		if err = collect(db, goldenAtxID, *atx.CommitmentATX, all, deps); err != nil {
 			return err
 		}
@@ -455,21 +479,15 @@ func collect(
 		if err != nil {
 			return fmt.Errorf("get commitment for ref atx %v: %w", ref, err)
 		}
-		if commitment != goldenAtxID {
-			if err = collect(db, goldenAtxID, commitment, all, deps); err != nil {
-				return err
-			}
-		}
-	}
-	if atx.PrevATXID != types.EmptyATXID {
-		if err = collect(db, goldenAtxID, atx.PrevATXID, all, deps); err != nil {
+		if err := collect(db, goldenAtxID, commitment, all, deps); err != nil {
 			return err
 		}
 	}
-	if atx.PositioningATX != goldenAtxID {
-		if err = collect(db, goldenAtxID, atx.PositioningATX, all, deps); err != nil {
-			return err
-		}
+	if err = collect(db, goldenAtxID, atx.PrevATXID, all, deps); err != nil {
+		return err
+	}
+	if err = collect(db, goldenAtxID, atx.PositioningATX, all, deps); err != nil {
+		return err
 	}
 	*deps = append(*deps, atx)
 	all[ref] = struct{}{}
