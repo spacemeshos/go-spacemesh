@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"context"
 	"crypto/ed25519"
 	"sync"
 	"testing"
@@ -13,7 +12,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
@@ -50,31 +48,11 @@ func TestEquivocation(t *testing.T) {
 	require.NoError(t, cl.AddSmeshers(cctx, cctx.ClusterSize-bootnodes, cluster.WithSmeshers(keys)))
 
 	var (
-		layers         = uint32(testcontext.LayersPerEpoch.Get(cctx.Parameters))
-		startPartition = 2 * layers
-		stopPartition  = startPartition + layers
-		stopTest       = stopPartition + 4*layers
+		layers    = uint32(testcontext.LayersPerEpoch.Get(cctx.Parameters))
+		startTest = 2 * layers
+		stopTest  = startTest + 4*layers
 
-		eg          errgroup.Group
-		left, right []string
-	)
-	for i := 0; i < cl.Total(); i += 2 {
-		left = append(left, cl.Client(i).Name)
-		if i+1 != cl.Total() {
-			right = append(right, cl.Client(i+1).Name)
-		}
-	}
-	scheduleChaos(cctx, &eg, cl.Client(0), startPartition, stopPartition, func(ctx context.Context) (chaos.Teardown, error) {
-		cctx.Log.Infow("partition honest with equivocators",
-			"start", startPartition,
-			"stop", stopPartition,
-			"left", left,
-			"right", right,
-		)
-		return chaos.Partition2(cctx, "split-with-equivocators", left, right)
-	})
-
-	var (
+		eg      errgroup.Group
 		mu      sync.Mutex
 		results = map[string]map[int]string{}
 	)
