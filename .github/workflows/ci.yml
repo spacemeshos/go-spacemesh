@@ -117,6 +117,7 @@ jobs:
         with:
           check-latest: true
           go-version-file: "go.mod"
+          cache: ${{ runner.arch != 'arm64' }}
       - name: Add OpenCL support - Ubuntu
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
@@ -155,6 +156,7 @@ jobs:
         with:
           check-latest: true
           go-version-file: "go.mod"
+          cache: ${{ runner.arch != 'arm64' }}
       - name: Add OpenCL support - Ubuntu
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
@@ -216,6 +218,7 @@ jobs:
         with:
           check-latest: true
           go-version-file: "go.mod"
+          cache: ${{ runner.arch != 'arm64' }}
       - name: Override SDKROOT for macOS
         if: ${{ contains(matrix.os, 'macos') && runner.arch == 'arm64' }}
         run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> $GITHUB_ENV
