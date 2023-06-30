@@ -391,12 +391,15 @@ func (app *App) LoadCheckpoint(ctx context.Context) error {
 		DataDir:        app.Config.DataDir(),
 		DbFile:         dbFile,
 		PreserveOwnAtx: app.Config.Recovery.PreserveOwnAtx,
+		NodeID:         app.edSgn.NodeID(),
+		Uri:            checkpointFile,
+		Restore:        restore,
 	}
 	app.log.WithContext(ctx).With().Info("recover from checkpoint",
 		log.String("url", checkpointFile),
 		log.Stringer("restore", restore),
 	)
-	return checkpoint.Recover(ctx, app.log, afero.NewOsFs(), cfg, app.edSgn.NodeID(), checkpointFile, restore)
+	return checkpoint.Recover(ctx, app.log, afero.NewOsFs(), cfg)
 }
 
 func (app *App) Started() <-chan struct{} {

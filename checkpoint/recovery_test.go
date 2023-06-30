@@ -203,11 +203,14 @@ func TestRecoverFromHttp(t *testing.T) {
 				DataDir:        t.TempDir(),
 				DbFile:         "test.sql",
 				PreserveOwnAtx: true,
+				NodeID:         types.NodeID{2, 3, 4},
+				Uri:            tc.uri,
+				Restore:        types.LayerID(recoverLayer),
 			}
 			bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 			db := sql.InMemory()
-			newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg, types.NodeID{2, 3, 4}, tc.uri, types.LayerID(recoverLayer))
+			newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg)
 			if len(tc.expErr) > 0 {
 				require.ErrorContains(t, err, tc.expErr)
 				return
@@ -244,14 +247,16 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		PreserveOwnAtx: true,
+		NodeID:         types.NodeID{2, 3, 4},
+		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Restore:        types.LayerID(recoverLayer),
 	}
 	bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 	require.NoError(t, fs.MkdirAll(bsdir, 0o700))
-	url := fmt.Sprintf("%s/snapshot-15", ts.URL)
 	db := sql.InMemory()
 	types.SetEffectiveGenesis(0)
 	require.NoError(t, recovery.SetCheckpoint(db, types.LayerID(recoverLayer)))
-	newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg, types.NodeID{2, 3, 4}, url, types.LayerID(recoverLayer))
+	newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg)
 	require.NoError(t, err)
 	require.Nil(t, newdb)
 	require.EqualValues(t, recoverLayer-1, types.GetEffectiveGenesis())
@@ -303,18 +308,21 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	nid := types.NodeID{1, 2, 3}
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		PreserveOwnAtx: true,
+		NodeID:         nid,
+		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Restore:        types.LayerID(recoverLayer),
 	}
 
 	olddb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, olddb)
 
-	nid := types.NodeID{1, 2, 3}
 	vatxs, proofs := createAtxChain(t, nid)
 	for i, vatx := range vatxs {
 		require.NoError(t, atxs.Add(olddb, vatx))
@@ -324,8 +332,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	}
 	require.NoError(t, olddb.Close())
 
-	url := fmt.Sprintf("%s/snapshot-15", ts.URL)
-	require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url, types.LayerID(recoverLayer)))
+	require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg))
 
 	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
@@ -362,19 +369,22 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	nid := types.NodeID{1, 2, 3}
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
 		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		PreserveOwnAtx: true,
+		NodeID:         nid,
+		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Restore:        types.LayerID(recoverLayer),
 	}
 
 	olddb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, olddb)
 
-	nid := types.NodeID{1, 2, 3}
 	vatxs, proofs := createAtxChain(t, nid)
 	var expected []*types.VerifiedActivationTx
 	for i, vatx := range vatxs {
@@ -396,8 +406,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 		CommitmentAtxId: commitment.Bytes(),
 	}))
 
-	url := fmt.Sprintf("%s/snapshot-15", ts.URL)
-	require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url, types.LayerID(recoverLayer)))
+	require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg))
 
 	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
@@ -434,17 +443,20 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	nid := types.NodeID{1, 2, 3}
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		PreserveOwnAtx: true,
+		NodeID:         nid,
+		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Restore:        types.LayerID(recoverLayer),
 	}
 
 	olddb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, olddb)
-	nid := types.NodeID{1, 2, 3}
 	vatxs, proofs := createAtxChain(t, nid)
 	for i, vatx := range vatxs {
 		if i == 0 {
@@ -469,8 +481,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	}
 	require.NoError(t, olddb.Close())
 
-	url := fmt.Sprintf("%s/snapshot-15", ts.URL)
-	require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url, types.LayerID(recoverLayer)))
+	require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg))
 
 	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
@@ -499,17 +510,20 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	nid := types.NodeID{1, 2, 3}
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		PreserveOwnAtx: false,
+		NodeID:         nid,
+		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Restore:        types.LayerID(recoverLayer),
 	}
 
 	olddb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, olddb)
-	nid := types.NodeID{1, 2, 3}
 	vatxs, proofs := createAtxChain(t, nid)
 	for i, vatx := range vatxs {
 		require.NoError(t, atxs.Add(olddb, vatx))
@@ -519,8 +533,7 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	}
 	require.NoError(t, olddb.Close())
 
-	url := fmt.Sprintf("%s/snapshot-15", ts.URL)
-	require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url, types.LayerID(recoverLayer)))
+	require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg))
 
 	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
@@ -549,27 +562,30 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      goldenAtx,
-		DataDir:        t.TempDir(),
-		DbFile:         "test.sql",
-		PreserveOwnAtx: true,
-	}
-
-	olddb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
-	require.NoError(t, err)
-	require.NotNil(t, olddb)
 	data, err := hex.DecodeString("0230c5d75d42b84f98800eceb47bc9cc4d803058900a50346a09ff61d56b6582")
 	require.NoError(t, err)
 	nid := types.BytesToNodeID(data)
 	data, err = hex.DecodeString("98e47278c1f58acfd2b670a730f28898f74eb140482a07b91ff81f9ff0b7d9f4")
 	require.NoError(t, err)
 	atx := newatx(types.ATXID(types.BytesToHash(data)), nil, 3, 1, 0, nid.Bytes())
+
+	cfg := &checkpoint.RecoverConfig{
+		GoldenAtx:      goldenAtx,
+		DataDir:        t.TempDir(),
+		DbFile:         "test.sql",
+		PreserveOwnAtx: true,
+		NodeID:         nid,
+		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Restore:        types.LayerID(recoverLayer),
+	}
+
+	olddb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	require.NoError(t, err)
+	require.NotNil(t, olddb)
 	require.NoError(t, atxs.Add(olddb, newvatx(t, atx)))
 	require.NoError(t, olddb.Close())
 
-	url := fmt.Sprintf("%s/snapshot-15", ts.URL)
-	require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg, nid, url, types.LayerID(recoverLayer)))
+	require.NoError(t, checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg))
 
 	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
@@ -653,10 +669,12 @@ func TestRecover(t *testing.T) {
 				DataDir:        dataDir,
 				DbFile:         "test.sql",
 				PreserveOwnAtx: true,
+				NodeID:         types.NodeID{2, 3, 4},
+				Uri:            fmt.Sprintf("file://%s", filepath.ToSlash(src)),
+				Restore:        types.LayerID(recoverLayer),
 			}
 
-			uri := fmt.Sprintf("file://%s", filepath.ToSlash(src))
-			err := checkpoint.Recover(ctx, logtest.New(t), fs, cfg, types.NodeID{2, 3, 4}, uri, types.LayerID(recoverLayer))
+			err := checkpoint.Recover(ctx, logtest.New(t), fs, cfg)
 			if tc.fail {
 				require.Error(t, err)
 				return

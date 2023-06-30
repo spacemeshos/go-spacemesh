@@ -54,6 +54,9 @@ type RecoverConfig struct {
 	DataDir        string
 	DbFile         string
 	PreserveOwnAtx bool
+	NodeID         types.NodeID
+	Uri            string
+	Restore        types.LayerID
 }
 
 func RecoveryDir(dataDir string) string {
@@ -164,16 +167,13 @@ func Recover(
 	logger log.Log,
 	fs afero.Fs,
 	cfg *RecoverConfig,
-	nodeID types.NodeID,
-	uri string,
-	restore types.LayerID,
 ) error {
 	db, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	if err != nil {
 		return fmt.Errorf("open old database: %w", err)
 	}
 	defer db.Close()
-	newdb, err := RecoverWithDb(ctx, logger, db, fs, cfg, nodeID, uri, restore)
+	newdb, err := RecoverWithDb(ctx, logger, db, fs, cfg)
 	if err != nil {
 		return err
 	}
@@ -191,27 +191,24 @@ func RecoverWithDb(
 	db *sql.Database,
 	fs afero.Fs,
 	cfg *RecoverConfig,
-	nodeID types.NodeID,
-	uri string,
-	restore types.LayerID,
 ) (*sql.Database, error) {
 	oldRestore, err := recovery.CheckpointInfo(db)
 	if err != nil {
 		return nil, fmt.Errorf("get last checkpoint: %w", err)
 	}
-	if oldRestore >= restore {
+	if oldRestore >= cfg.Restore {
 		types.SetEffectiveGenesis(oldRestore.Uint32() - 1)
 		return nil, nil
 	}
 	if err = fs.RemoveAll(filepath.Join(cfg.DataDir, bootstrap.DirName)); err != nil {
 		return nil, fmt.Errorf("remove old bootstrap data: %w", err)
 	}
-	logger.With().Info("recover from uri", log.String("uri", uri))
-	cpfile, err := copyToLocalFile(ctx, logger, fs, cfg.DataDir, uri, restore)
+	logger.With().Info("recover from uri", log.String("uri", cfg.Uri))
+	cpfile, err := copyToLocalFile(ctx, logger, fs, cfg.DataDir, cfg.Uri, cfg.Restore)
 	if err != nil {
 		return nil, err
 	}
-	return recoverFromLocalFile(ctx, logger, db, fs, cfg, nodeID, cpfile, restore)
+	return recoverFromLocalFile(ctx, logger, db, fs, cfg, cpfile)
 }
 
 type recoverydata struct {
@@ -223,13 +220,12 @@ func preserveOwnData(
 	logger log.Log,
 	db *sql.Database,
 	cfg *RecoverConfig,
-	nodeID types.NodeID,
 	data *recoverydata,
 ) ([]*types.VerifiedActivationTx, [][]byte, error) {
 	if !cfg.PreserveOwnAtx {
 		return nil, nil, nil
 	}
-	atxid, err := atxs.GetLastIDByNodeID(db, nodeID)
+	atxid, err := atxs.GetLastIDByNodeID(db, cfg.NodeID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, nil, fmt.Errorf("query own last atx id: %w", err)
 	}
@@ -370,12 +366,10 @@ func recoverFromLocalFile(
 	db *sql.Database,
 	fs afero.Fs,
 	cfg *RecoverConfig,
-	nodeID types.NodeID,
 	file string,
-	restore types.LayerID,
 ) (*sql.Database, error) {
 	logger.With().Info("recovering from checkpoint file", log.String("file", file))
-	newGenesis := restore - 1
+	newGenesis := cfg.Restore - 1
 	data, err := checkpointData(fs, file, newGenesis)
 	if err != nil {
 		return nil, err
@@ -384,7 +378,7 @@ func recoverFromLocalFile(
 		log.Int("num_accounts", len(data.accounts)),
 		log.Int("num_atxs", len(data.atxs)),
 	)
-	deps, proofs, err := preserveOwnData(logger, db, cfg, nodeID, data)
+	deps, proofs, err := preserveOwnData(logger, db, cfg, data)
 	if err != nil {
 		logger.With().Error("failed to preserve own atx", log.Err(err))
 		// continue to recover from checkpoint despite failure to preserve own atx
@@ -471,7 +465,7 @@ func recoverFromLocalFile(
 				)
 			}
 		}
-		if err = recovery.SetCheckpoint(tx, restore); err != nil {
+		if err = recovery.SetCheckpoint(tx, cfg.Restore); err != nil {
 			return fmt.Errorf("save checkppoint info: %w", err)
 		}
 		return nil
