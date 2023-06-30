@@ -2392,7 +2392,6 @@ func FuzzParse(f *testing.F) {
 		}
 	}
 	f.Fuzz(func(t *testing.T, version int, principal []byte, method int, payload []byte, args []byte, sig []byte) {
-		t.Parallel()
 		var (
 			buf = bytes.NewBuffer(nil)
 			enc = scale.NewEncoder(buf)
