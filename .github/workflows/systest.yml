@@ -115,7 +115,7 @@ jobs:
           size: 30
           bootstrap: 2m
           level: info
-          clusters: 7
+          clusters: 8
         run: make -C systest run test_name=.
 
       - name: Delete pod
