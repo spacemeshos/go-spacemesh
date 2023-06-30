@@ -59,13 +59,6 @@ func (f *full) countBallot(logger *zap.Logger, ballot *ballotInfo) {
 			case against:
 				block.margin = block.margin.Sub(ballot.weight)
 			}
-			logger.Debug("counting margin",
-				zap.Stringer("block", block.id),
-				zap.Stringer("vote", vote),
-				zap.Uint32("ballot layer", uint32(ballot.layer)),
-				zap.Stringer("ballot", ballot.id),
-				zap.Float64("margin", block.margin.Float()),
-			)
 		}
 		if empty {
 			layer.empty = layer.empty.Add(ballot.weight)
