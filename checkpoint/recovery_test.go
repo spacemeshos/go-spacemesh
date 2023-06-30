@@ -42,7 +42,7 @@ const recoverLayer uint32 = 18
 
 var goldenAtx = types.ATXID{1}
 
-func atxequal(tb testing.TB, satx checkpoint.ShortAtx, vatx *types.VerifiedActivationTx, commitAtx types.ATXID, vrfnonce types.VRFPostIndex) {
+func atxequal(tb testing.TB, satx types.AtxSnapshot, vatx *types.VerifiedActivationTx, commitAtx types.ATXID, vrfnonce types.VRFPostIndex) {
 	require.True(tb, bytes.Equal(satx.ID, vatx.ID().Bytes()))
 	require.EqualValues(tb, satx.Epoch, vatx.PublishEpoch)
 	require.True(tb, bytes.Equal(satx.CommitmentAtx, commitAtx.Bytes()))
@@ -56,7 +56,7 @@ func atxequal(tb testing.TB, satx checkpoint.ShortAtx, vatx *types.VerifiedActiv
 	require.True(tb, vatx.Golden())
 }
 
-func accountequal(tb testing.TB, cacct checkpoint.Account, acct *types.Account) {
+func accountequal(tb testing.TB, cacct types.AccountSnapshot, acct *types.Account) {
 	require.True(tb, bytes.Equal(cacct.Address, acct.Address.Bytes()))
 	require.Equal(tb, cacct.Balance, acct.Balance)
 	require.Equal(tb, cacct.Nonce, acct.NextNonce)
@@ -70,13 +70,13 @@ func accountequal(tb testing.TB, cacct checkpoint.Account, acct *types.Account) 
 }
 
 func verifyDbContent(tb testing.TB, db *sql.Database) {
-	var expected checkpoint.Checkpoint
+	var expected types.Checkpoint
 	require.NoError(tb, json.Unmarshal([]byte(checkpointdata), &expected))
-	expAtx := map[types.ATXID]checkpoint.ShortAtx{}
+	expAtx := map[types.ATXID]types.AtxSnapshot{}
 	for _, satx := range expected.Data.Atxs {
 		expAtx[types.ATXID(types.BytesToHash(satx.ID))] = satx
 	}
-	expAcct := map[types.Address]checkpoint.Account{}
+	expAcct := map[types.Address]types.AccountSnapshot{}
 	for _, acct := range expected.Data.Accounts {
 		var addr types.Address
 		copy(addr[:], acct.Address)

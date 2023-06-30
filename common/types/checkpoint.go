@@ -1,4 +1,4 @@
-package checkpoint
+package types
 
 type Checkpoint struct {
 	Version string    `json:"version"`
@@ -6,12 +6,12 @@ type Checkpoint struct {
 }
 
 type InnerData struct {
-	CheckpointId string     `json:"id"`
-	Atxs         []ShortAtx `json:"atxs"`
-	Accounts     []Account  `json:"accounts"`
+	CheckpointId string            `json:"id"`
+	Atxs         []AtxSnapshot     `json:"atxs"`
+	Accounts     []AccountSnapshot `json:"accounts"`
 }
 
-type ShortAtx struct {
+type AtxSnapshot struct {
 	ID             []byte `json:"id"`
 	Epoch          uint32 `json:"epoch"`
 	CommitmentAtx  []byte `json:"commitmentAtx"`
@@ -24,7 +24,7 @@ type ShortAtx struct {
 	Coinbase       []byte `json:"coinbase"`
 }
 
-type Account struct {
+type AccountSnapshot struct {
 	Address  []byte `json:"address"`
 	Balance  uint64 `json:"balance"`
 	Nonce    uint64 `json:"nonce"`

@@ -44,22 +44,22 @@ var allAccounts = []*types.Account{
 	{Layer: types.LayerID(7), Address: types.Address{4, 4}, NextNonce: 1, Balance: 31, TemplateAddress: &types.Address{3}, State: []byte("state47")},
 }
 
-func expectedCheckpoint(t *testing.T) *checkpoint.Checkpoint {
-	return &checkpoint.Checkpoint{
+func expectedCheckpoint(t *testing.T) *types.Checkpoint {
+	return &types.Checkpoint{
 		Version: "https://spacemesh.io/checkpoint.schema.json.1.0",
-		Data: checkpoint.InnerData{
+		Data: types.InnerData{
 			CheckpointId: "snapshot-5",
-			Atxs: []checkpoint.ShortAtx{
+			Atxs: []types.AtxSnapshot{
 				toShortAtx(newvatx(t, allAtxs[3]), allAtxs[0].CommitmentATX, allAtxs[0].VRFNonce),
 				toShortAtx(newvatx(t, allAtxs[2]), allAtxs[0].CommitmentATX, allAtxs[0].VRFNonce),
 				toShortAtx(newvatx(t, allAtxs[4]), allAtxs[4].CommitmentATX, allAtxs[4].VRFNonce),
 				toShortAtx(newvatx(t, allAtxs[6]), allAtxs[5].CommitmentATX, allAtxs[5].VRFNonce),
 				toShortAtx(newvatx(t, allAtxs[5]), allAtxs[5].CommitmentATX, allAtxs[5].VRFNonce),
 			},
-			Accounts: []checkpoint.Account{
-				{types.Address{1, 1}.Bytes(), 111, 5, types.Address{2}.Bytes(), []byte("state15")},
-				{types.Address{2, 2}.Bytes(), 311, 14, types.Address{2}.Bytes(), []byte("state24")},
-				{types.Address{3, 3}.Bytes(), 124, 1, types.Address{3}.Bytes(), []byte("state35")},
+			Accounts: []types.AccountSnapshot{
+				{Address: types.Address{1, 1}.Bytes(), Balance: 111, Nonce: 5, Template: types.Address{2}.Bytes(), State: []byte("state15")},
+				{Address: types.Address{2, 2}.Bytes(), Balance: 311, Nonce: 14, Template: types.Address{2}.Bytes(), State: []byte("state24")},
+				{Address: types.Address{3, 3}.Bytes(), Balance: 124, Nonce: 1, Template: types.Address{3}.Bytes(), State: []byte("state35")},
 			},
 		},
 	}
@@ -98,8 +98,8 @@ func newvatx(tb testing.TB, atx *types.ActivationTx) *types.VerifiedActivationTx
 	return vatx
 }
 
-func toShortAtx(v *types.VerifiedActivationTx, cmt *types.ATXID, nonce *types.VRFPostIndex) checkpoint.ShortAtx {
-	return checkpoint.ShortAtx{
+func toShortAtx(v *types.VerifiedActivationTx, cmt *types.ATXID, nonce *types.VRFPostIndex) types.AtxSnapshot {
+	return types.AtxSnapshot{
 		ID:             v.ID().Bytes(),
 		Epoch:          v.PublishEpoch.Uint32(),
 		CommitmentAtx:  cmt.Bytes(),
@@ -168,7 +168,7 @@ func TestRunner_Generate(t *testing.T) {
 			persisted, err := afero.ReadFile(fs, fname)
 			require.NoError(t, err)
 			require.NoError(t, checkpoint.ValidateSchema(persisted))
-			var got checkpoint.Checkpoint
+			var got types.Checkpoint
 			expected := expectedCheckpoint(t)
 			require.NoError(t, json.Unmarshal(persisted, &got))
 			require.Equal(t, *expected, got)

@@ -22,10 +22,10 @@ const (
 	dirPerm       = 0o700
 )
 
-func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID) (*Checkpoint, error) {
-	checkpoint := &Checkpoint{
+func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID) (*types.Checkpoint, error) {
+	checkpoint := &types.Checkpoint{
 		Version: SchemaVersion,
-		Data: InnerData{
+		Data: types.InnerData{
 			CheckpointId: fmt.Sprintf("snapshot-%d", snapshot),
 		},
 	}
@@ -53,7 +53,7 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID)
 		atxSnapshot[i].VRFNonce = vrfNonce
 	}
 	for _, catx := range atxSnapshot {
-		checkpoint.Data.Atxs = append(checkpoint.Data.Atxs, ShortAtx{
+		checkpoint.Data.Atxs = append(checkpoint.Data.Atxs, types.AtxSnapshot{
 			ID:             catx.ID.Bytes(),
 			Epoch:          catx.Epoch.Uint32(),
 			CommitmentAtx:  catx.CommitmentATX.Bytes(),
@@ -72,7 +72,7 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID)
 		return nil, fmt.Errorf("accounts snapshot: %w", err)
 	}
 	for _, acct := range acctSnapshot {
-		a := Account{
+		a := types.AccountSnapshot{
 			Address: acct.Address.Bytes(),
 			Balance: acct.Balance,
 			Nonce:   acct.NextNonce,

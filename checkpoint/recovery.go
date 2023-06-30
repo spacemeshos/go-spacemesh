@@ -321,7 +321,7 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 	if err = ValidateSchema(data); err != nil {
 		return nil, err
 	}
-	var checkpoint Checkpoint
+	var checkpoint types.Checkpoint
 	if err = json.Unmarshal(data, &checkpoint); err != nil {
 		return nil, fmt.Errorf("%w: unmarshal checkpoint from %v", err, file)
 	}
