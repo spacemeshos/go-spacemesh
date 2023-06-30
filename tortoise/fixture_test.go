@@ -626,6 +626,12 @@ func (s *session) runActions(actions []action) {
 	}
 }
 
+func (s *session) runOn(trt *Tortoise) {
+	for _, a := range s.actions {
+		a.execute(trt)
+	}
+}
+
 func (s *session) runRandomTopoN(n int) {
 	for i := 0; i < n; i++ {
 		s.runRandomTopo()
