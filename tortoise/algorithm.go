@@ -153,6 +153,7 @@ func (t *Tortoise) OnMalfeasance(id types.NodeID) {
 	}
 	t.logger.Debug("on malfeasence", zap.Stringer("id", id))
 	t.trtl.makrMalfeasant(id)
+	malfeasantNumber.Inc()
 	if t.tracer != nil {
 		t.tracer.On(&MalfeasanceTrace{ID: id})
 	}
@@ -497,4 +498,13 @@ func (t *Tortoise) Mode() Mode {
 		return Full
 	}
 	return Verifying
+}
+
+// resetPending compares stored opinion with computed opinion and sets
+// pending layer to the layer above equal layer.
+// this method is meant to be used only in recovery from disk codepath.
+func (t *Tortoise) resetPending(lid types.LayerID, opinion types.Hash32) {
+	if t.trtl.layer(lid).opinion == opinion {
+		t.trtl.pending = lid + 1
+	}
 }

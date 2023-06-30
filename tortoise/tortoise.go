@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals/util"
-	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
 
 var (
@@ -154,7 +153,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 			var opinion *types.Opinion
 			opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
 			if err == nil {
-				metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last - base.layer))
+				layerDistanceToBaseBallot.Observe(float64(t.last - base.layer))
 				t.logger.Info("encoded votes",
 					log.ZContext(ctx),
 					zap.Stringer("base ballot", base.id),
@@ -196,8 +195,7 @@ func (t *turtle) encodeVotes(
 		layer := t.layer(lvote.lid)
 		if lvote.vote == abstain && layer.hareTerminated {
 			return nil, fmt.Errorf("ballot %s can't be used as a base ballot", base.id)
-		}
-		if lvote.vote != abstain && !layer.hareTerminated {
+		} else if lvote.vote != abstain && !layer.hareTerminated {
 			t.logger.Debug("voting abstain on the layer",
 				log.ZContext(ctx),
 				zap.Stringer("base layer", base.layer),
@@ -205,6 +203,10 @@ func (t *turtle) encodeVotes(
 				zap.Uint32("lid", lvote.lid.Uint32()),
 			)
 			votes.Abstain = append(votes.Abstain, lvote.lid)
+			continue
+		} else if lvote.vote == abstain && !layer.hareTerminated {
+			// there is nothing to encode if hare didn't terminate
+			// and base ballot voted abstain on the previous layer
 			continue
 		}
 		for _, block := range layer.blocks {
