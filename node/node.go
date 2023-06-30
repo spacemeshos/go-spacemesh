@@ -39,6 +39,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
@@ -150,13 +151,50 @@ func GetCommand() *cobra.Command {
 					return fmt.Errorf("could not retrieve identity: %w", err)
 				}
 
-				if err := app.LoadCheckpoint(ctx); err != nil {
+				preserve, err := app.LoadCheckpoint(ctx)
+				if err != nil {
 					return err
 				}
 
 				if err := app.Initialize(); err != nil {
 					return err
 				}
+
+				if preserve != nil {
+					for i, poetProof := range preserve.Proofs {
+						encoded, err := codec.Encode(poetProof)
+						if err != nil {
+							app.log.With().Error("failed to encode poet proof after checkpoint",
+								log.Stringer("atx id", preserve.Deps[i].ID()),
+								log.Object("poet proof", poetProof),
+								log.Err(err),
+							)
+						}
+						if err := app.poetDb.ValidateAndStoreMsg(ctx, app.host.ID(), encoded); err != nil {
+							app.log.With().Error("failed to preserve poet proof after checkpoint",
+								log.Stringer("atx id", preserve.Deps[i].ID()),
+								log.Object("poet proof", poetProof),
+								log.Err(err),
+							)
+						}
+					}
+					for _, vatx := range preserve.Deps {
+						encoded, err := codec.Encode(vatx)
+						if err != nil {
+							app.log.With().Error("failed to encode atx after checkpoint",
+								log.Object("atx", vatx),
+								log.Err(err),
+							)
+						}
+						if err := app.atxHandler.HandleAtxData(ctx, app.host.ID(), encoded); err != nil {
+							app.log.With().Error("failed to preserve atx after checkpoint",
+								log.Object("atx", vatx),
+								log.Err(err),
+							)
+						}
+					}
+				}
+
 				// This blocks until the context is finished or until an error is produced
 				err = app.Start(ctx)
 
@@ -330,6 +368,7 @@ type App struct {
 	ptimesync          *peersync.Sync
 	tortoise           *tortoise.Tortoise
 	updater            *bootstrap.Updater
+	poetDb             *activation.PoetDb
 	postVerifier       *activation.OffloadingPostVerifier
 
 	host *p2p.Host
@@ -364,7 +403,7 @@ func defaultRecoveryFile(dataDir string) (string, types.LayerID, error) {
 	return fmt.Sprintf("file://%s", filepath.ToSlash(files[0])), restore, nil
 }
 
-func (app *App) LoadCheckpoint(ctx context.Context) error {
+func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, error) {
 	var (
 		checkpointFile = app.Config.Recovery.Uri
 		restore        = types.LayerID(app.Config.Recovery.Restore)
@@ -372,18 +411,18 @@ func (app *App) LoadCheckpoint(ctx context.Context) error {
 	)
 	if len(checkpointFile) == 0 {
 		if !app.Config.Recovery.RecoverFromDefaultDir {
-			return nil
+			return nil, nil
 		}
 		checkpointFile, restore, err = defaultRecoveryFile(app.Config.DataDir())
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if len(checkpointFile) == 0 {
-		return nil
+		return nil, nil
 	}
 	if restore == 0 {
-		return fmt.Errorf("restore layer not set")
+		return nil, fmt.Errorf("restore layer not set")
 	}
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      types.ATXID(app.Config.Genesis.GoldenATX()),
@@ -914,6 +953,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	app.atxBuilder = atxBuilder
 	app.postSetupMgr = postSetupMgr
 	app.atxHandler = atxHandler
+	app.poetDb = poetDb
 	app.fetcher = fetcher
 	app.beaconProtocol = beaconProtocol
 	app.tortoise = trtl

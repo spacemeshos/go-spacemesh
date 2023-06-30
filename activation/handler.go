@@ -466,7 +466,7 @@ func (h *Handler) GetPosAtxID() (types.ATXID, error) {
 	return id, nil
 }
 
-// HandleAtxData handles atxs received either by gossip or sync.
+// HandleAtxData handles atxs received by sync.
 func (h *Handler) HandleAtxData(ctx context.Context, peer p2p.Peer, data []byte) error {
 	err := h.HandleGossipAtx(ctx, peer, data)
 	if errors.Is(err, errKnownAtx) {

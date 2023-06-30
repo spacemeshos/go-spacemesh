@@ -66,18 +66,12 @@ func expectedCheckpoint(t *testing.T) *checkpoint.Checkpoint {
 }
 
 func newatx(id types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfnonce uint64, pubkey []byte) *types.ActivationTx {
-	return newChainedAtx(id, types.EmptyATXID, goldenAtx, commitAtx, epoch, seq, vrfnonce, pubkey)
-}
-
-func newChainedAtx(id, prev, pos types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfnonce uint64, pubkey []byte) *types.ActivationTx {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch:   types.EpochID(epoch),
-				Sequence:       seq,
-				PrevATXID:      prev,
-				PositioningATX: pos,
-				CommitmentATX:  commitAtx,
+				PublishEpoch:  types.EpochID(epoch),
+				Sequence:      seq,
+				CommitmentATX: commitAtx,
 			},
 			NIPost: &types.NIPost{
 				PostMetadata: &types.PostMetadata{
@@ -98,9 +92,9 @@ func newChainedAtx(id, prev, pos types.ATXID, commitAtx *types.ATXID, epoch uint
 	return atx
 }
 
-func newvatx(t *testing.T, atx *types.ActivationTx) *types.VerifiedActivationTx {
+func newvatx(tb testing.TB, atx *types.ActivationTx) *types.VerifiedActivationTx {
 	vatx, err := atx.Verify(1111, 12)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return vatx
 }
 
