@@ -532,7 +532,7 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 
 	h.registerHashes(&atx, peer)
 	if err := h.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
-		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %w",
+		return fmt.Errorf("received atx (%v) with syntactically invalid or missing poet proof (%x): %w",
 			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err,
 		)
 	}

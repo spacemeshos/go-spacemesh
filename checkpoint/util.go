@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,11 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"github.com/spf13/afero"
+)
+
+var (
+	ErrCheckpointNotFound    = errors.New("checkpoint not found")
+	ErrUrlSchemeNotSupported = errors.New("url scheme not supported")
 )
 
 type RecoveryFile struct {
@@ -104,7 +110,13 @@ func httpToLocalFile(ctx context.Context, resource *url.URL, fs afero.Fs, dst st
 	}
 	resp, err := (&http.Client{}).Do(req)
 	if err != nil {
-		return fmt.Errorf("http get bootstrap file: %w", err)
+		if _, ok := err.(*url.Error); ok {
+			return ErrCheckpointNotFound
+		}
+		return fmt.Errorf("http get recovery file: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return ErrCheckpointNotFound
 	}
 	defer resp.Body.Close()
 	rf, err := NewRecoveryFile(fs, dst)

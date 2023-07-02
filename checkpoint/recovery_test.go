@@ -6,11 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -110,62 +107,6 @@ func verifyDbContent(tb testing.TB, db *sql.Database) {
 	require.Empty(tb, extra)
 }
 
-func TestReadCheckpointAndDie(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointdata))
-		require.NoError(t, err)
-	}))
-	defer ts.Close()
-
-	t.Run("all good", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		uri := fmt.Sprintf("%s/snapshot-15", ts.URL)
-		dataDir := t.TempDir()
-		require.Panics(t, func() {
-			checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, uri, types.LayerID(recoverLayer))
-		})
-
-		fname := checkpoint.RecoveryFilename(dataDir, filepath.Base(uri), types.LayerID(recoverLayer))
-		got, err := os.ReadFile(fname)
-		require.NoError(t, err)
-		require.True(t, bytes.Equal([]byte(checkpointdata), got))
-	})
-
-	t.Run("file does not exist", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		uri := "file:///snapshot-15"
-		dataDir := t.TempDir()
-		got := checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, uri, types.LayerID(recoverLayer))
-		want := &fs.PathError{}
-		require.ErrorAs(t, got, &want)
-
-		fname := checkpoint.RecoveryFilename(dataDir, filepath.Base(uri), types.LayerID(recoverLayer))
-		_, err := os.ReadFile(fname)
-		require.ErrorIs(t, err, os.ErrNotExist)
-	})
-
-	t.Run("invalid uri", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		uri := fmt.Sprintf("%s^/snapshot-15", ts.URL)
-		dataDir := t.TempDir()
-		got := checkpoint.ReadCheckpointAndDie(ctx, logtest.New(t), dataDir, uri, types.LayerID(recoverLayer))
-		want := &url.Error{}
-		require.ErrorAs(t, got, &want)
-
-		fname := checkpoint.RecoveryFilename(dataDir, filepath.Base(uri), types.LayerID(recoverLayer))
-		_, err := os.ReadFile(fname)
-		require.ErrorIs(t, err, os.ErrNotExist)
-	})
-}
-
 func TestRecoverFromHttp(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodGet, r.Method)
@@ -178,7 +119,7 @@ func TestRecoverFromHttp(t *testing.T) {
 	tt := []struct {
 		name   string
 		uri    string
-		expErr string
+		expErr error
 	}{
 		{
 			name: "http",
@@ -187,12 +128,12 @@ func TestRecoverFromHttp(t *testing.T) {
 		{
 			name:   "url unreachable",
 			uri:    "http://nowhere/snapshot-15",
-			expErr: "dial tcp: lookup nowhere",
+			expErr: checkpoint.ErrCheckpointNotFound,
 		},
 		{
 			name:   "ftp",
 			uri:    "ftp://snapshot-15",
-			expErr: "uri scheme not supported",
+			expErr: checkpoint.ErrUrlSchemeNotSupported,
 		},
 	}
 
@@ -216,13 +157,15 @@ func TestRecoverFromHttp(t *testing.T) {
 			bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 			db := sql.InMemory()
-			preserve, newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg)
-			if len(tc.expErr) > 0 {
-				require.ErrorContains(t, err, tc.expErr)
+			preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg)
+			if tc.expErr != nil {
+				require.ErrorIs(t, err, tc.expErr)
 				return
 			}
 			require.NoError(t, err)
 			require.Nil(t, preserve)
+			newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+			require.NoError(t, err)
 			require.NotNil(t, newdb)
 			defer newdb.Close()
 			verifyDbContent(t, newdb)
@@ -263,10 +206,9 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	db := sql.InMemory()
 	types.SetEffectiveGenesis(0)
 	require.NoError(t, recovery.SetCheckpoint(db, types.LayerID(recoverLayer)))
-	preserve, newdb, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg)
+	preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
-	require.Nil(t, newdb)
 	require.EqualValues(t, recoverLayer-1, types.GetEffectiveGenesis())
 	exist, err := afero.Exists(fs, bsdir)
 	require.NoError(t, err)
@@ -926,42 +868,6 @@ func TestRecover(t *testing.T) {
 				require.Len(t, files, 2)
 			} else {
 				require.Len(t, files, 1)
-			}
-		})
-	}
-}
-
-func TestParseRestoreLayer(t *testing.T) {
-	tt := []struct {
-		name  string
-		fname string
-		exp   types.LayerID
-	}{
-		{
-			name:  "good",
-			fname: "snapshot-15-restore-18",
-			exp:   types.LayerID(18),
-		},
-		{
-			name:  "no restore",
-			fname: "snapshot-18",
-			exp:   types.LayerID(0),
-		},
-		{
-			name:  "snapshot later than restore",
-			fname: "snapshot-18-restore-15",
-			exp:   types.LayerID(0),
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			restore, err := checkpoint.ParseRestoreLayer(filepath.Join(checkpoint.RecoveryDir(t.TempDir()), tc.fname))
-			if tc.exp == 0 {
-				require.Error(t, err)
-			} else {
-				require.Equal(t, tc.exp, restore)
 			}
 		})
 	}
