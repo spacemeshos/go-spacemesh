@@ -650,6 +650,14 @@ func BootstrapperUrl(endpoint string) DeploymentFlag {
 	return DeploymentFlag{Name: "--bootstrap-url", Value: endpoint}
 }
 
+func CheckpointUrl(endpoint string) DeploymentFlag {
+	return DeploymentFlag{Name: "--recovery-uri", Value: endpoint}
+}
+
+func CheckpointLayer(restoreLayer uint32) DeploymentFlag {
+	return DeploymentFlag{Name: "--recovery-layer", Value: strconv.Itoa(int(restoreLayer))}
+}
+
 const (
 	genesisTimeFlag  = "--genesis-time"
 	genesisExtraData = "--genesis-extra-data"
