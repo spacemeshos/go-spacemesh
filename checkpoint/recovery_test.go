@@ -107,7 +107,7 @@ func verifyDbContent(tb testing.TB, db *sql.Database) {
 	require.Empty(tb, extra)
 }
 
-func TestRecoverFromHttp(t *testing.T) {
+func TestRecover(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodGet, r.Method)
 		w.WriteHeader(http.StatusOK)
@@ -772,103 +772,4 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	files, err := filepath.Glob(fmt.Sprintf("%s/backup.*/%s*", cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(files), 1)
-}
-
-func TestRecover(t *testing.T) {
-	tt := []struct {
-		name           string
-		fname, oldFile string
-		dir            string
-		missing, fail  bool
-		invalidData    []byte
-	}{
-		{
-			name:  "from local file",
-			dir:   "checkpoint",
-			fname: "snapshot-15",
-		},
-		{
-			name:    "old recovery file",
-			dir:     "checkpoint",
-			fname:   "snapshot-15",
-			oldFile: "snapshot-10",
-		},
-		{
-			name:    "file does not exist",
-			dir:     "checkpoint",
-			fname:   "snapshot-15",
-			missing: true,
-			fail:    true,
-		},
-		{
-			name:  "from recovery file",
-			dir:   "recovery",
-			fname: "snapshot-15-restore-18",
-		},
-		{
-			name:        "invalid data",
-			fname:       "snapshot-15-restore-18",
-			dir:         "recovery",
-			missing:     false,
-			invalidData: []byte("invalid"),
-			fail:        true,
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-
-			dataDir := t.TempDir()
-			fs := afero.NewMemMapFs()
-			if tc.oldFile != "" {
-				old := filepath.Join(checkpoint.RecoveryDir(dataDir), tc.oldFile)
-				require.NoError(t, afero.WriteFile(fs, old, []byte{1, 2, 3}, 0o600))
-			}
-			src := filepath.Join(dataDir, tc.dir, tc.fname)
-			if !tc.missing {
-				if tc.invalidData != nil {
-					require.NoError(t, afero.WriteFile(fs, src, tc.invalidData, 0o600))
-				} else {
-					require.NoError(t, afero.WriteFile(fs, src, []byte(checkpointdata), 0o600))
-				}
-			}
-			cfg := &checkpoint.RecoverConfig{
-				GoldenAtx:      goldenAtx,
-				PostDataDir:    t.TempDir(),
-				DataDir:        dataDir,
-				DbFile:         "test.sql",
-				PreserveOwnAtx: true,
-				NodeID:         types.NodeID{2, 3, 4},
-				Uri:            fmt.Sprintf("file://%s", filepath.ToSlash(src)),
-				Restore:        types.LayerID(recoverLayer),
-			}
-
-			preserve, err := checkpoint.Recover(ctx, logtest.New(t), fs, cfg)
-			if tc.fail {
-				require.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			require.Nil(t, preserve)
-			db, err := sql.Open("file:" + filepath.Join(dataDir, cfg.DbFile))
-			require.NoError(t, err)
-			require.NotNil(t, db)
-			t.Cleanup(func() { require.NoError(t, db.Close()) })
-			verifyDbContent(t, db)
-			restore, err := recovery.CheckpointInfo(db)
-			require.NoError(t, err)
-			require.EqualValues(t, recoverLayer, restore)
-
-			files, err := afero.Glob(fs, fmt.Sprintf("%s*", checkpoint.RecoveryDir(dataDir)))
-			require.NoError(t, err)
-			if tc.oldFile != "" {
-				require.Len(t, files, 2)
-			} else {
-				require.Len(t, files, 1)
-			}
-		})
-	}
 }

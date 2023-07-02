@@ -63,34 +63,6 @@ func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, 
 	if err != nil {
 		return "", fmt.Errorf("%w: parse recovery URI %v", err, uri)
 	}
-	dst := RecoveryFilename(dataDir, filepath.Base(parsed.String()), restore)
-	if parsed.Scheme == "file" {
-		src := filepath.Join(parsed.Host, parsed.Path)
-		_, err = fs.Stat(src)
-		if err != nil {
-			return "", fmt.Errorf("stat checkpoint file %v: %w", src, err)
-		}
-		if src != dst {
-			if bdir, err := backupRecovery(fs, RecoveryDir(dataDir)); err != nil {
-				return "", err
-			} else if bdir != "" {
-				logger.With().Info("old recovery data backed up",
-					log.Context(ctx),
-					log.String("dir", bdir),
-				)
-			}
-			if err = CopyFile(fs, src, dst); err != nil {
-				return "", err
-			}
-			logger.With().Debug("copied file",
-				log.Context(ctx),
-				log.String("from", src),
-				log.String("to", dst),
-			)
-		}
-		return dst, nil
-	}
-
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return "", fmt.Errorf("%w: %s", ErrUrlSchemeNotSupported, uri)
 	}
@@ -102,6 +74,7 @@ func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, 
 			log.String("dir", bdir),
 		)
 	}
+	dst := RecoveryFilename(dataDir, filepath.Base(parsed.String()), restore)
 	if err = httpToLocalFile(ctx, parsed, fs, dst); err != nil {
 		return "", err
 	}
