@@ -71,7 +71,7 @@ const (
 	// d is the degree parameter of both the graded gossip and threshold gossip
 	// protocols, it is highest grade that can be assigned, grades start at 0.
 	// TODO see if I actually need this.
-	// d = 5.
+	d = 5
 )
 
 func (mt MsgType) Round() AbsRound {
@@ -90,6 +90,40 @@ type GradedGossiper interface {
 	ReceiveMsg(hash, id types.Hash20, valueHash *types.Hash20, round AbsRound, grade uint8) (result GradedGossipResult, equivocationHash *types.Hash20)
 }
 
+type DefaultGradedGossiper struct{}
+
+// ReceiveMsg implements GradedGossiper.
+func (*DefaultGradedGossiper) ReceiveMsg(
+	hash types.Hash20,
+	id types.Hash20,
+	valueHash *types.Hash20,
+	round AbsRound,
+	grade uint8,
+) (result GradedGossipResult, equivocationHash *types.Hash20) {
+	return SendValue, nil
+}
+
+// ThresholdState holds the graded votes for a value and also records if this
+// value has been retrieved.
+type GradedVotes struct {
+	votes [d]uint16
+}
+
+func (s GradedVotes) Vote(grade uint8) {
+	// Grade is 1 indexed so we subtract 1
+	s.votes[grade-1]++
+}
+
+func (s GradedVotes) CumulativeVote(minGrade uint8) uint16 {
+	var count uint16
+
+	// Grade is 1 indexed so we subtract 1
+	for i := minGrade - 1; i < d; i++ {
+		count += s.votes[i]
+	}
+	return count
+}
+
 // TrhesholdGradedGossiper acts as a specialized value store, it ingests
 // messages and provides a mechanism to retrieve values that appeared in some
 // threshold of ingested messages with a given grade. Messages received more
@@ -97,15 +131,115 @@ type GradedGossiper interface {
 // ignored.
 type TrhesholdGradedGossiper interface {
 	// ReceiveMsg ingests the given message inputs, for later retrieval through
-	// RetrieveThresholdMessages. The inputs are the id of the message
-	// originator, the values contained in the message, the message round and a
-	// grade.
-	ReceiveMsg(id types.Hash20, values []types.Hash20, msgRound, currRound AbsRound, grade uint8)
+	// RetrieveThresholdMessages. The inputs are the message sender, the values
+	// contained in the message, the message round, the current round and a
+	// grade. Note that since this component is downstream from graded gossip
+	// we will get at most 2 messages per identity in the case of a node that
+	// equivocates in the round, otherwise we will get just one message per
+	// node.
+	ReceiveMsg(senderID types.Hash20, values []types.Hash20, msgRound, currRound AbsRound, grade uint8)
 
 	// This function outputs the values that were part of messages sent at
 	// msgRound and reached the threshold with grade at least minGrade by round
 	// "msgRound + d + 1 - minGrade".
 	RetrieveThresholdMessages(msgRound AbsRound, minGrade uint8) (values []types.Hash20)
+}
+
+// Ensure takes a nested map and ensures that there is a nested map entry for
+// key k. It returns the nested map entry.
+func Ensure[K1, K2 comparable, V any](m map[K1]map[K2]V, k K1) map[K2]V {
+	entry, ok := m[k]
+	if !ok {
+		entry = make(map[K2]V)
+		m[k] = entry
+	}
+	return entry
+}
+
+// Ensure2 takes a nested map and ensures that there is a doubly nested map entry for k1 and k2.
+// It returns the nested map.
+func Ensure2[K1, K2, K3 comparable, V any](m map[K1]map[K2]map[K3]V, k1 K1, k2 K2) map[K3]V {
+	k1Entry := Ensure(m, k1)
+	return Ensure(k1Entry, k2)
+}
+
+type votes struct {
+	grade  uint8
+	values []types.Hash20
+}
+
+type DefaultThresholdGossiper struct {
+	// count maps the message round to sender ids to values to the grade of the vote for that value.
+	//
+	// E.G. The votes received for a value sent in a message with round R with
+	// at least grade 3 would be:
+	// count[R][V].CumulativeVote(3)
+	count map[AbsRound]map[types.Hash20]votes
+
+	// sentValues tracks the sender ids for which we have received non nil
+	// values in a given message round. It is used when we receive a message
+	// with nil values to determine whether the message is a newly detected
+	// equivocation or a message from a known equivocator. We need to know this
+	// so we can avoid double counting votes from newly detected equivocations.
+	// sentValues map[AbsRound]map[types.Hash20]bool
+
+	// maliciousVotes tracks the number of detected malicious parties by grade.
+	// We don't need to track the sender ID of malicious parties since
+	// GradedGossiper limits us to one malicious message per id per round.
+	maliciousVotes GradedVotes
+
+	threshold uint16
+}
+
+// ReceiveMsg implements TrhesholdGradedGossiper.
+func (t *DefaultThresholdGossiper) ReceiveMsg(senderID types.Hash20, values []types.Hash20, msgRound, currRound AbsRound, grade uint8) {
+	if currRound-msgRound > d {
+		// Message received too late
+		return
+	}
+	if values != nil {
+		// Ensure there is a map entry for this round
+		votesBySender := Ensure(t.count, msgRound)
+		// Store the votes and grade against the sender id
+		votesBySender[senderID] = votes{
+			values: values,
+			grade:  grade,
+		}
+	} else {
+		// Delete any good votes that the id may have had
+		delete(t.count[msgRound], senderID)
+		// Record the grade for this malicious vote, its not important to
+		// record the sender id for this malicious vote since we should receive
+		// at most one from graded gossip.
+		t.maliciousVotes.Vote(grade)
+	}
+}
+
+// RetrieveThresholdMessages implements TrhesholdGradedGossiper.
+func (t *DefaultThresholdGossiper) RetrieveThresholdMessages(msgRound AbsRound, minGrade uint8) (values []types.Hash20) {
+	// maps values to the good votes they have received.
+	goodVotes := make(map[types.Hash20]GradedVotes)
+
+	// Tally all the votes from all senders for each value
+	votesBySender := Ensure(t.count, msgRound)
+	for _, v := range votesBySender {
+		for _, value := range v.values {
+			goodVotes[value].Vote(v.grade)
+		}
+	}
+	var results []types.Hash20
+	// Find out the number of maliciousVotes for this round and grade.
+	maliciousVote := t.maliciousVotes.CumulativeVote(minGrade)
+
+	// Find all values where the good and malicious votes sum to greater than
+	// the threshold and there is at least one good vote.
+	for value, v := range goodVotes {
+		goodVote := v.CumulativeVote(minGrade)
+		if goodVote > 0 && goodVote+maliciousVote > t.threshold {
+			results = append(results, value)
+		}
+	}
+	return results
 }
 
 type GradecastedSet struct {
@@ -132,18 +266,30 @@ type Gradecaster interface {
 	RetrieveGradecastedMessages(msgRound AbsRound) []GradecastedSet
 }
 
+type DefaultGradecaster struct{}
+
+// ReceiveMsg implements Gradecaster.
+func (*DefaultGradecaster) ReceiveMsg(id types.Hash20, values []types.Hash20, msgRound AbsRound, grade uint8) {
+	panic("unimplemented")
+}
+
+// RetrieveGradecastedMessages implements Gradecaster.
+func (*DefaultGradecaster) RetrieveGradecastedMessages(msgRound AbsRound) []GradecastedSet {
+	panic("unimplemented")
+}
+
 type LeaderChecker interface {
 	IsLeader(vk types.Hash20, round AbsRound) bool
 }
 
 // gradeKey3 returns a grade from 0-3.
 func gradeKey3(key []byte) uint8 {
-	return 0
+	return 3
 }
 
 // gradeKey5 returns a grade from 0-5.
 func gradeKey5(key []byte) uint8 {
-	return 0
+	return 5
 }
 
 // RoundProvider provides a simple way to discover what is the current round.
@@ -184,7 +330,6 @@ func NewHandler(gg GradedGossiper, tgg TrhesholdGradedGossiper, gc Gradecaster, 
 func (h *Handler) HandleMsg(hash types.Hash20, vk []byte, round int8, values []types.Hash20) (bool, *types.Hash20) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	// TODO max round check
 	r := AbsRound(round)
 	var g uint8
 	switch r.Type() {

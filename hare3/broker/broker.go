@@ -40,7 +40,7 @@ func newLayerState() *layerState {
 	return &layerState{
 		messages: make(map[types.Hash20]*hare.Message),
 		// TODO actually build the handler
-		handler:     hare3.NewHandler(nil, nil, nil, nil),
+		// handler:     hare3.NewHandler(nil, nil, nil, nil),
 		coinChooser: weakcoin.NewChooser(),
 	}
 }
