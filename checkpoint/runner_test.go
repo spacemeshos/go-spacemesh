@@ -29,29 +29,29 @@ func TestMain(m *testing.M) {
 var allAtxs = map[types.NodeID][]*types.ActivationTx{
 	// smesher 1 has had 7 ATXs, one in each epoch from 1 to 7
 	types.BytesToNodeID([]byte("smesher1")): {
-		newATX(types.ATXID{17}, nil, 7, 6, 0, types.BytesToNodeID([]byte("smesher1"))),
-		newATX(types.ATXID{16}, nil, 6, 5, 0, types.BytesToNodeID([]byte("smesher1"))),
-		newATX(types.ATXID{15}, nil, 5, 4, 0, types.BytesToNodeID([]byte("smesher1"))),
-		newATX(types.ATXID{14}, nil, 4, 3, 0, types.BytesToNodeID([]byte("smesher1"))),
-		newATX(types.ATXID{13}, nil, 3, 2, 0, types.BytesToNodeID([]byte("smesher1"))),
-		newATX(types.ATXID{12}, nil, 2, 1, 0, types.BytesToNodeID([]byte("smesher1"))),
-		newATX(types.ATXID{11}, &types.ATXID{1}, 1, 0, 123, types.BytesToNodeID([]byte("smesher1"))),
+		newatx(types.ATXID{17}, nil, 7, 6, 0, types.BytesToNodeID([]byte("smesher1"))),
+		newatx(types.ATXID{16}, nil, 6, 5, 0, types.BytesToNodeID([]byte("smesher1"))),
+		newatx(types.ATXID{15}, nil, 5, 4, 0, types.BytesToNodeID([]byte("smesher1"))),
+		newatx(types.ATXID{14}, nil, 4, 3, 0, types.BytesToNodeID([]byte("smesher1"))),
+		newatx(types.ATXID{13}, nil, 3, 2, 0, types.BytesToNodeID([]byte("smesher1"))),
+		newatx(types.ATXID{12}, nil, 2, 1, 0, types.BytesToNodeID([]byte("smesher1"))),
+		newatx(types.ATXID{11}, &types.ATXID{1}, 1, 0, 123, types.BytesToNodeID([]byte("smesher1"))),
 	},
 
 	// smesher 2 has had 1 ATX in epoch 7
 	types.BytesToNodeID([]byte("smesher2")): {
-		newATX(types.ATXID{27}, &types.ATXID{2}, 7, 0, 152, types.BytesToNodeID([]byte("smesher2"))),
+		newatx(types.ATXID{27}, &types.ATXID{2}, 7, 0, 152, types.BytesToNodeID([]byte("smesher2"))),
 	},
 
 	// smesher 4 has had 1 ATX in epoch 2
 	types.BytesToNodeID([]byte("smesher3")): {
-		newATX(types.ATXID{32}, &types.ATXID{3}, 2, 0, 211, types.BytesToNodeID([]byte("smesher3"))),
+		newatx(types.ATXID{32}, &types.ATXID{3}, 2, 0, 211, types.BytesToNodeID([]byte("smesher3"))),
 	},
 
 	// smesher 4 has had 1 ATX in epoch 3 and one in epoch 7
 	types.BytesToNodeID([]byte("smesher4")): {
-		newATX(types.ATXID{47}, nil, 7, 1, 0, types.BytesToNodeID([]byte("smesher4"))),
-		newATX(types.ATXID{43}, &types.ATXID{4}, 4, 0, 420, types.BytesToNodeID([]byte("smesher4"))),
+		newatx(types.ATXID{47}, nil, 7, 1, 0, types.BytesToNodeID([]byte("smesher4"))),
+		newatx(types.ATXID{43}, &types.ATXID{4}, 4, 0, 420, types.BytesToNodeID([]byte("smesher4"))),
 	},
 }
 
@@ -86,7 +86,7 @@ func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *chec
 			n = numAtxs
 		}
 		for i := 0; i < n; i++ {
-			atxs = append(atxs, toShortAtx(newvATX(t, identity[i]), identity[len(identity)-1].CommitmentATX, identity[len(identity)-1].VRFNonce))
+			atxs = append(atxs, toShortAtx(newvatx(t, identity[i]), identity[len(identity)-1].CommitmentATX, identity[len(identity)-1].VRFNonce))
 		}
 	}
 
@@ -118,7 +118,7 @@ func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *chec
 	return result
 }
 
-func newATX(id types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfNonce uint64, nodeID types.NodeID) *types.ActivationTx {
+func newatx(id types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfnonce uint64, nodeID types.NodeID) *types.ActivationTx {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -131,8 +131,8 @@ func newATX(id types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfNonce 
 		},
 	}
 	atx.SetID(id)
-	if vrfNonce != 0 {
-		atx.VRFNonce = (*types.VRFPostIndex)(&vrfNonce)
+	if vrfnonce != 0 {
+		atx.VRFNonce = (*types.VRFPostIndex)(&vrfnonce)
 	}
 	atx.SmesherID = nodeID
 	atx.SetEffectiveNumUnits(atx.NumUnits)
@@ -140,7 +140,7 @@ func newATX(id types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfNonce 
 	return atx
 }
 
-func newvATX(t *testing.T, atx *types.ActivationTx) *types.VerifiedActivationTx {
+func newvatx(t *testing.T, atx *types.ActivationTx) *types.VerifiedActivationTx {
 	vatx, err := atx.Verify(1111, 12)
 	require.NoError(t, err)
 	return vatx
@@ -164,7 +164,7 @@ func toShortAtx(v *types.VerifiedActivationTx, cmt *types.ATXID, nonce *types.VR
 func createMesh(t *testing.T, db *sql.Database, identities map[types.NodeID][]*types.ActivationTx, accts []*types.Account) {
 	for _, identity := range identities {
 		for _, atx := range identity {
-			require.NoError(t, atxs.Add(db, newvATX(t, atx)))
+			require.NoError(t, atxs.Add(db, newvatx(t, atx)))
 		}
 	}
 
@@ -268,9 +268,9 @@ func TestRunner_Generate_Error(t *testing.T) {
 			snapshot := types.LayerID(5)
 			var atx *types.ActivationTx
 			if tc.missingCommitment {
-				atx = newATX(types.ATXID{13}, nil, 2, 1, 11, types.BytesToNodeID([]byte("smesher1")))
+				atx = newatx(types.ATXID{13}, nil, 2, 1, 11, types.BytesToNodeID([]byte("smesher1")))
 			} else if tc.missingVrf {
-				atx = newATX(types.ATXID{13}, &types.ATXID{11}, 2, 1, 0, types.BytesToNodeID([]byte("smesher1")))
+				atx = newatx(types.ATXID{13}, &types.ATXID{11}, 2, 1, 0, types.BytesToNodeID([]byte("smesher1")))
 			}
 			createMesh(t, db, map[types.NodeID][]*types.ActivationTx{
 				types.BytesToNodeID([]byte("smesher1")): {atx},
