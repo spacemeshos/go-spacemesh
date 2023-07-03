@@ -109,12 +109,12 @@ type GradedVotes struct {
 	votes [d]uint16
 }
 
-func (s GradedVotes) Vote(grade uint8) {
+func (s *GradedVotes) Vote(grade uint8) {
 	// Grade is 1 indexed so we subtract 1
 	s.votes[grade-1]++
 }
 
-func (s GradedVotes) CumulativeVote(minGrade uint8) uint16 {
+func (s *GradedVotes) CumulativeVote(minGrade uint8) uint16 {
 	var count uint16
 
 	// Grade is 1 indexed so we subtract 1
@@ -168,7 +168,7 @@ type votes struct {
 	values []types.Hash20
 }
 
-type DefaultThresholdGossiper struct {
+type DefaultThresholdGradedGossiper struct {
 	// count maps the message round to sender ids to values to the grade of the vote for that value.
 	//
 	// E.G. The votes received for a value sent in a message with round R with
@@ -176,23 +176,26 @@ type DefaultThresholdGossiper struct {
 	// count[R][V].CumulativeVote(3)
 	count map[AbsRound]map[types.Hash20]votes
 
-	// sentValues tracks the sender ids for which we have received non nil
-	// values in a given message round. It is used when we receive a message
-	// with nil values to determine whether the message is a newly detected
-	// equivocation or a message from a known equivocator. We need to know this
-	// so we can avoid double counting votes from newly detected equivocations.
-	// sentValues map[AbsRound]map[types.Hash20]bool
-
 	// maliciousVotes tracks the number of detected malicious parties by grade.
 	// We don't need to track the sender ID of malicious parties since
 	// GradedGossiper limits us to one malicious message per id per round.
-	maliciousVotes GradedVotes
+	maliciousVotes *GradedVotes
 
+	// Values with more votes than the threshold are considered to have passed
+	// the threshold.
 	threshold uint16
 }
 
+func NewDefaultThresholdGradedGossiper(threshold uint16) *DefaultThresholdGradedGossiper {
+	return &DefaultThresholdGradedGossiper{
+		count:          make(map[AbsRound]map[types.Hash20]votes),
+		maliciousVotes: &GradedVotes{},
+		threshold:      threshold,
+	}
+}
+
 // ReceiveMsg implements TrhesholdGradedGossiper.
-func (t *DefaultThresholdGossiper) ReceiveMsg(senderID types.Hash20, values []types.Hash20, msgRound, currRound AbsRound, grade uint8) {
+func (t *DefaultThresholdGradedGossiper) ReceiveMsg(senderID types.Hash20, values []types.Hash20, msgRound, currRound AbsRound, grade uint8) {
 	if currRound-msgRound > d {
 		// Message received too late
 		return
@@ -216,15 +219,20 @@ func (t *DefaultThresholdGossiper) ReceiveMsg(senderID types.Hash20, values []ty
 }
 
 // RetrieveThresholdMessages implements TrhesholdGradedGossiper.
-func (t *DefaultThresholdGossiper) RetrieveThresholdMessages(msgRound AbsRound, minGrade uint8) (values []types.Hash20) {
+func (t *DefaultThresholdGradedGossiper) RetrieveThresholdMessages(msgRound AbsRound, minGrade uint8) (values []types.Hash20) {
 	// maps values to the good votes they have received.
-	goodVotes := make(map[types.Hash20]GradedVotes)
+	goodVotes := make(map[types.Hash20]*GradedVotes)
 
 	// Tally all the votes from all senders for each value
 	votesBySender := Ensure(t.count, msgRound)
 	for _, v := range votesBySender {
 		for _, value := range v.values {
-			goodVotes[value].Vote(v.grade)
+			gv, ok := goodVotes[value]
+			if !ok {
+				gv = &GradedVotes{}
+				goodVotes[value] = gv
+			}
+			gv.Vote(v.grade)
 		}
 	}
 	var results []types.Hash20
