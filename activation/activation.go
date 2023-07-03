@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -198,6 +199,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 			return ctx.Err()
 		case <-b.syncer.RegisterForATXSynced():
 			// ensure we are ATX synced before starting the PoST Session
+			events.EmitWaitSyncATXs()
 		}
 
 		// If start session returns any error other than context.Canceled
