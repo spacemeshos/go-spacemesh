@@ -1,12 +1,15 @@
 package checkpoint_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 
@@ -233,10 +236,10 @@ func TestRunner_Generate(t *testing.T) {
 			expected := expectedCheckpoint(t, snapshot, tc.numAtxs)
 			require.NoError(t, json.Unmarshal(persisted, &got))
 
-			require.Equal(t, expected.Version, got.Version)
-			require.Equal(t, expected.Data.CheckpointId, got.Data.CheckpointId)
-			require.ElementsMatch(t, expected.Data.Accounts, got.Data.Accounts)
-			require.ElementsMatch(t, expected.Data.Atxs, got.Data.Atxs)
+			require.True(t, cmp.Equal(*expected, got, cmpopts.EquateEmpty(),
+				cmpopts.SortSlices(func(a, b checkpoint.ShortAtx) bool { return bytes.Compare(a.ID, b.ID) < 0 }),
+				cmpopts.SortSlices(func(a, b checkpoint.Account) bool { return bytes.Compare(a.Address, b.Address) < 0 }),
+			), cmp.Diff(*expected, got))
 		})
 	}
 }
