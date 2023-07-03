@@ -1095,7 +1095,7 @@ func TestHandler_FetchAtxReferences(t *testing.T) {
 		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
 		atx := newAtx(t, sig, challenge, nipost, 2, coinbase)
 
-		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PositioningATX, atx.PrevATXID}).Return(nil)
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.InAnyOrder([]types.ATXID{atx.PositioningATX, atx.PrevATXID})).Return(nil)
 		require.NoError(t, atxHdlr.FetchAtxReferences(context.Background(), atx))
 	})
 
@@ -1135,7 +1135,7 @@ func TestHandler_FetchAtxReferences(t *testing.T) {
 		atx := newAtx(t, sig, challenge, nipost, 2, coinbase)
 		atx.CommitmentATX = &commitATX
 
-		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PositioningATX, *atx.CommitmentATX}).Return(nil)
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.InAnyOrder([]types.ATXID{atx.PositioningATX, *atx.CommitmentATX})).Return(nil)
 		require.NoError(t, atxHdlr.FetchAtxReferences(context.Background(), atx))
 	})
 

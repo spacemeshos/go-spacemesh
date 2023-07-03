@@ -9,7 +9,6 @@ import (
 
 	"github.com/spacemeshos/post/shared"
 	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -561,30 +560,26 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 // FetchAtxReferences fetches referenced ATXs from peers if they are not found in db.
 func (h *Handler) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) error {
 	logger := h.log.WithContext(ctx)
-	var atxIDs []types.ATXID
+	atxIDs := make(map[types.ATXID]struct{}, 3)
 	if atx.PositioningATX != types.EmptyATXID && atx.PositioningATX != h.goldenATXID {
 		logger.With().Debug("fetching pos atx", atx.PositioningATX, atx.ID())
-		atxIDs = append(atxIDs, atx.PositioningATX)
+		atxIDs[atx.PositioningATX] = struct{}{}
 	}
 
 	if atx.PrevATXID != types.EmptyATXID {
 		logger.With().Debug("fetching prev atx", atx.PrevATXID, atx.ID())
-		if !slices.Contains(atxIDs, atx.PrevATXID) {
-			atxIDs = append(atxIDs, atx.PrevATXID)
-		}
+		atxIDs[atx.PrevATXID] = struct{}{}
 	}
 	if atx.CommitmentATX != nil && *atx.CommitmentATX != h.goldenATXID {
 		logger.With().Debug("fetching commitment atx", *atx.CommitmentATX, atx.ID())
-		if !slices.Contains(atxIDs, *atx.CommitmentATX) {
-			atxIDs = append(atxIDs, *atx.CommitmentATX)
-		}
+		atxIDs[*atx.CommitmentATX] = struct{}{}
 	}
 
 	if len(atxIDs) == 0 {
 		return nil
 	}
 
-	if err := h.fetcher.GetAtxs(ctx, atxIDs); err != nil {
+	if err := h.fetcher.GetAtxs(ctx, maps.Keys(atxIDs)); err != nil {
 		return fmt.Errorf("fetch referenced atxs: %w", err)
 	}
 	logger.With().Debug("done fetching references for atx", atx.ID())
