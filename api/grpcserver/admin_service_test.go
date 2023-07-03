@@ -20,9 +20,8 @@ import (
 )
 
 const (
-	snapshot  uint32 = 15
-	restore   uint32 = 17
-	numEpochs int    = 4
+	snapshot uint32 = 15
+	restore  uint32 = 17
 )
 
 func newatx(tb testing.TB, db *sql.Database) {

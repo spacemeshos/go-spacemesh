@@ -50,7 +50,7 @@ func (a AdminService) CheckpointStream(req *pb.CheckpointStreamRequest, stream p
 	snapshot := types.LayerID(req.SnapshotLayer)
 	numAtxs := int(req.NumAtxs)
 	if numAtxs < 2 {
-		numAtxs = 2
+		numAtxs = 2 // default
 	}
 	err := checkpoint.Generate(stream.Context(), afero.NewOsFs(), a.db, a.dataDir, snapshot, numAtxs)
 	if err != nil {
