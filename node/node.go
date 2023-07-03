@@ -643,6 +643,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	}
 	app.eg.Go(func() error {
 		for rst := range beaconProtocol.Results() {
+			events.EmitBeacon(rst.Epoch, rst.Beacon)
 			trtl.OnBeacon(rst.Epoch, rst.Beacon)
 		}
 		app.log.Debug("beacon results watcher exited")
