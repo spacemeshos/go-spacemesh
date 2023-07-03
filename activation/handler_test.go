@@ -1078,50 +1078,105 @@ func BenchmarkGetAtxHeaderWithConcurrentProcessAtx(b *testing.B) {
 // Check that we're not trying to sync an ATX that references the golden ATX or an empty ATX (i.e. not adding it to the sync queue).
 func TestHandler_FetchAtxReferences(t *testing.T) {
 	goldenATXID := types.ATXID{2, 3, 4}
-	atxHdlr := newTestHandler(t, goldenATXID)
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	coinbase := types.Address{2, 4, 5}
 
-	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, types.LayerID(22).GetEpoch(), nil)
-	nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+	posATX := types.ATXID{1, 2, 3}
+	prevATX := types.ATXID{4, 5, 6}
+	commitATX := types.ATXID{7, 8, 9}
 
-	atx1 := newAtx(t, sig, challenge, nipost, 2, coinbase)
-	atx1.PositioningATX = types.ATXID{1, 2, 3} // should be fetched
-	atx1.PrevATXID = types.ATXID{4, 5, 6}      // should be fetched
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx1.PositioningATX, atx1.PrevATXID}).Return(nil)
-	require.NoError(t, atxHdlr.FetchAtxReferences(context.Background(), atx1))
+	t.Run("valid prev and pos ATX", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newTestHandler(t, goldenATXID)
 
-	atx2 := newAtx(t, sig, challenge, nipost, 2, coinbase)
-	atx2.PositioningATX = goldenATXID     // should *NOT* be fetched
-	atx2.PrevATXID = types.ATXID{2, 3, 4} // should be fetched
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx2.PrevATXID}).Return(nil)
-	require.NoError(t, atxHdlr.FetchAtxReferences(context.Background(), atx2))
+		coinbase := types.Address{2, 4, 5}
+		challenge := newChallenge(1, prevATX, posATX, types.LayerID(22).GetEpoch(), nil)
+		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		atx := newAtx(t, sig, challenge, nipost, 2, coinbase)
 
-	atx3 := newAtx(t, sig, challenge, nipost, 2, coinbase)
-	atx3.PositioningATX = types.EmptyATXID // should *NOT* be fetched
-	atx3.PrevATXID = types.ATXID{3, 4, 5}  // should be fetched
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx3.PrevATXID}).Return(nil)
-	require.NoError(t, atxHdlr.FetchAtxReferences(context.Background(), atx3))
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.InAnyOrder([]types.ATXID{atx.PositioningATX, atx.PrevATXID})).Return(nil)
+		require.NoError(t, atxHdlr.FetchAtxReferences(context.Background(), atx))
+	})
 
-	atx4 := newAtx(t, sig, challenge, nipost, 2, coinbase)
-	atx4.PositioningATX = types.ATXID{5, 6, 7} // should be fetched
-	atx4.PrevATXID = types.EmptyATXID          // should *NOT* be fetched
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx4.PositioningATX}).Return(nil)
-	require.NoError(t, atxHdlr.FetchAtxReferences(context.Background(), atx4))
+	t.Run("valid prev ATX and golden pos ATX", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newTestHandler(t, goldenATXID)
 
-	atx5 := newAtx(t, sig, challenge, nipost, 2, coinbase)
-	atx5.PositioningATX = types.EmptyATXID // should *NOT* be fetched
-	atx5.PrevATXID = types.EmptyATXID      // should *NOT* be fetched
-	require.NoError(t, atxHdlr.FetchAtxReferences(context.Background(), atx5))
+		coinbase := types.Address{2, 4, 5}
+		challenge := newChallenge(1, prevATX, goldenATXID, types.LayerID(22).GetEpoch(), nil)
+		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		atx := newAtx(t, sig, challenge, nipost, 2, coinbase)
 
-	atx6 := newAtx(t, sig, challenge, nipost, 2, coinbase)
-	atxid := types.ATXID{1, 2, 3}
-	atx6.PositioningATX = atxid // should be fetched
-	atx6.PrevATXID = atxid      // should be fetched
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atxid}).Return(nil)
-	require.NoError(t, atxHdlr.FetchAtxReferences(context.Background(), atx6))
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PrevATXID}).Return(nil)
+		require.NoError(t, atxHdlr.FetchAtxReferences(context.Background(), atx))
+	})
+
+	t.Run("valid prev ATX and empty pos ATX", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newTestHandler(t, goldenATXID)
+
+		coinbase := types.Address{2, 4, 5}
+		challenge := newChallenge(1, prevATX, types.EmptyATXID, types.LayerID(22).GetEpoch(), nil)
+		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		atx := newAtx(t, sig, challenge, nipost, 2, coinbase)
+
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PrevATXID}).Return(nil)
+		require.NoError(t, atxHdlr.FetchAtxReferences(context.Background(), atx))
+	})
+
+	t.Run("empty prev ATX, valid pos ATX and valid commitment ATX", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newTestHandler(t, goldenATXID)
+
+		coinbase := types.Address{2, 4, 5}
+		challenge := newChallenge(1, types.EmptyATXID, posATX, types.LayerID(22).GetEpoch(), nil)
+		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		atx := newAtx(t, sig, challenge, nipost, 2, coinbase)
+		atx.CommitmentATX = &commitATX
+
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.InAnyOrder([]types.ATXID{atx.PositioningATX, *atx.CommitmentATX})).Return(nil)
+		require.NoError(t, atxHdlr.FetchAtxReferences(context.Background(), atx))
+	})
+
+	t.Run("empty prev ATX, valid pos ATX and golden commitment ATX", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newTestHandler(t, goldenATXID)
+
+		coinbase := types.Address{2, 4, 5}
+		challenge := newChallenge(1, types.EmptyATXID, posATX, types.LayerID(22).GetEpoch(), nil)
+		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		atx := newAtx(t, sig, challenge, nipost, 2, coinbase)
+		atx.CommitmentATX = &goldenATXID
+
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PositioningATX}).Return(nil)
+		require.NoError(t, atxHdlr.FetchAtxReferences(context.Background(), atx))
+	})
+
+	t.Run("empty prev ATX, empty pos ATX", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newTestHandler(t, goldenATXID)
+
+		coinbase := types.Address{2, 4, 5}
+		challenge := newChallenge(1, types.EmptyATXID, types.EmptyATXID, types.LayerID(22).GetEpoch(), nil)
+		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		atx := newAtx(t, sig, challenge, nipost, 2, coinbase)
+
+		require.NoError(t, atxHdlr.FetchAtxReferences(context.Background(), atx))
+	})
+
+	t.Run("same prev and pos ATX", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newTestHandler(t, goldenATXID)
+
+		coinbase := types.Address{2, 4, 5}
+		challenge := newChallenge(1, prevATX, prevATX, types.LayerID(22).GetEpoch(), nil)
+		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		atx := newAtx(t, sig, challenge, nipost, 2, coinbase)
+
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PrevATXID}).Return(nil)
+		require.NoError(t, atxHdlr.FetchAtxReferences(context.Background(), atx))
+	})
 }
 
 func TestHandler_AtxWeight(t *testing.T) {
