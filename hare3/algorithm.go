@@ -43,6 +43,7 @@ package hare3
 
 import (
 	"sync"
+	"time"
 
 	"golang.org/x/exp/slices"
 
@@ -91,13 +92,15 @@ type GradedGossiper interface {
 
 // TrhesholdGradedGossiper acts as a specialized value store, it ingests
 // messages and provides a mechanism to retrieve values that appeared in some
-// threshold of ingested messages with a given grade.
+// threshold of ingested messages with a given grade. Messages received more
+// than d (the degree of the trheshold gossip instance) rounds late are
+// ignored.
 type TrhesholdGradedGossiper interface {
 	// ReceiveMsg ingests the given message inputs, for later retrieval through
 	// RetrieveThresholdMessages. The inputs are the id of the message
 	// originator, the values contained in the message, the message round and a
 	// grade.
-	ReceiveMsg(id types.Hash20, values []types.Hash20, msgRound AbsRound, grade uint8)
+	ReceiveMsg(id types.Hash20, values []types.Hash20, msgRound, currRound AbsRound, grade uint8)
 
 	// This function outputs the values that were part of messages sent at
 	// msgRound and reached the threshold with grade at least minGrade by round
@@ -121,7 +124,7 @@ type Gradecaster interface {
 	// RetrieveGradecastedMessages. The inputs are the id of the message
 	// originator, the values contained in the message, the message round and a
 	// grade.
-	ReceiveMsg(id types.Hash20, values []types.Hash20, msgRound AbsRound, grade uint8)
+	ReceiveMsg(id types.Hash20, values []types.Hash20, msgRound, currRound AbsRound, grade uint8)
 
 	// Since gradecast always outputs at msgRound+3 it is assumed that callers
 	// Only call this function at msgRound+3. Returns all sets of values output
@@ -143,6 +146,16 @@ func gradeKey5(key []byte) uint8 {
 	return 0
 }
 
+// RoundProvider provides a simple way to discover what is the current round.
+type RoundProvider struct {
+	layerTime     time.Time
+	roundDuration time.Duration
+}
+
+func (rp *RoundProvider) CurrentRound() AbsRound {
+	return AbsRound(time.Since(rp.layerTime) / rp.roundDuration)
+}
+
 // Handler performs message handling, there is a handler per instance of each
 // hare protocol, and as such the handler does not need to be aware of the
 // session id. It is also assumed that some higher level handler performs the
@@ -152,14 +165,16 @@ type Handler struct {
 	gg  GradedGossiper
 	tgg TrhesholdGradedGossiper
 	gc  Gradecaster
+	rp  *RoundProvider
 	mu  *sync.Mutex
 }
 
-func NewHandler(gg GradedGossiper, tgg TrhesholdGradedGossiper, gc Gradecaster, protocolMu *sync.Mutex) *Handler {
+func NewHandler(gg GradedGossiper, tgg TrhesholdGradedGossiper, gc Gradecaster, rp *RoundProvider, protocolMu *sync.Mutex) *Handler {
 	return &Handler{
 		gg:  gg,
 		tgg: tgg,
 		gc:  gc,
+		rp:  rp,
 		mu:  protocolMu,
 	}
 }
@@ -218,15 +233,17 @@ func (h *Handler) HandleMsg(hash types.Hash20, vk []byte, round int8, values []t
 		// Indicates valid message, set values to message values.
 		gradedGossipValues = values
 	}
+
+	curr := h.rp.CurrentRound()
 	// Pass results to gradecast or threshold gossip.
 	// Only proposals are gradecasted, all other message types are passed to
 	// threshold gossip.
 	if r.Type() == Propose {
 		// Send to gradecast
-		h.gc.ReceiveMsg(id, gradedGossipValues, r, g)
+		h.gc.ReceiveMsg(id, gradedGossipValues, r, curr, g)
 	} else {
 		// Pass result to threshold gossip
-		h.tgg.ReceiveMsg(id, gradedGossipValues, r, g)
+		h.tgg.ReceiveMsg(id, gradedGossipValues, r, curr, g)
 	}
 	return true, equivocationHash
 }
