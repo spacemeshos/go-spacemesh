@@ -22,7 +22,7 @@ const (
 	dirPerm       = 0o700
 )
 
-func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID, numEpochs int) (*Checkpoint, error) {
+func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID, numAtxs int) (*Checkpoint, error) {
 	checkpoint := &Checkpoint{
 		Version: SchemaVersion,
 		Data: InnerData{
@@ -36,7 +36,7 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID,
 	}
 	defer tx.Release()
 
-	atxSnapshot, err := atxs.LatestN(tx, numEpochs)
+	atxSnapshot, err := atxs.LatestN(tx, numAtxs)
 	if err != nil {
 		return nil, fmt.Errorf("atxs snapshot: %w", err)
 	}
@@ -88,8 +88,8 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID,
 	return checkpoint, nil
 }
 
-func Generate(ctx context.Context, fs afero.Fs, db *sql.Database, dataDir string, snapshot types.LayerID, numEpochs int) error {
-	checkpoint, err := checkpointDB(ctx, db, snapshot, numEpochs)
+func Generate(ctx context.Context, fs afero.Fs, db *sql.Database, dataDir string, snapshot types.LayerID, numAtxs int) error {
+	checkpoint, err := checkpointDB(ctx, db, snapshot, numAtxs)
 	if err != nil {
 		return err
 	}

@@ -63,7 +63,7 @@ func TestAdminService_Checkpoint(t *testing.T) {
 	logtest.SetupGlobal(t)
 	db := sql.InMemory()
 	createMesh(t, db)
-	svc := NewAdminService(db, t.TempDir(), logtest.New(t), numEpochs)
+	svc := NewAdminService(db, t.TempDir(), logtest.New(t))
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -99,7 +99,7 @@ func TestAdminService_Checkpoint(t *testing.T) {
 func TestAdminService_CheckpointError(t *testing.T) {
 	logtest.SetupGlobal(t)
 	db := sql.InMemory()
-	svc := NewAdminService(db, t.TempDir(), logtest.New(t), numEpochs)
+	svc := NewAdminService(db, t.TempDir(), logtest.New(t))
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -116,7 +116,7 @@ func TestAdminService_CheckpointError(t *testing.T) {
 func TestAdminService_RecoveryFileMissing(t *testing.T) {
 	logtest.SetupGlobal(t)
 	db := sql.InMemory()
-	svc := NewAdminService(db, t.TempDir(), logtest.New(t), numEpochs)
+	svc := NewAdminService(db, t.TempDir(), logtest.New(t))
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

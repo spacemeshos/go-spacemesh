@@ -250,11 +250,6 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().Uint32Var(&cfg.LayersPerEpoch, "layers-per-epoch",
 		cfg.LayersPerEpoch, "number of layers in epoch")
 
-	/**======================== Checkpoint Flags ========================== **/
-
-	cmd.PersistentFlags().IntVar(&cfg.CheckpointEpochs, "checkpoint-epochs",
-		cfg.CheckpointEpochs, "number of epochs saved for a checkpoint")
-
 	/**======================== PoET Flags ========================== **/
 
 	cmd.PersistentFlags().DurationVar(&cfg.POET.PhaseShift, "phase-shift",
