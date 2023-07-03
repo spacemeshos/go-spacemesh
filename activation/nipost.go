@@ -14,6 +14,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -189,6 +190,8 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		}
 		getProofsCtx, cancel := context.WithDeadline(ctx, poetProofDeadline)
 		defer cancel()
+
+		events.EmitPoetWaitEnd(challenge.PublishEpoch, challenge.TargetEpoch(), now.Sub(poetProofDeadline))
 		poetProofRef, membership, err := nb.getBestProof(getProofsCtx, nb.state.Challenge)
 		if err != nil {
 			return nil, 0, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
@@ -206,11 +209,13 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	if nb.state.NIPost.Post == nil {
 		nb.log.With().Info("starting post execution", log.Binary("challenge", nb.state.PoetProofRef[:]))
 		startTime := time.Now()
+		events.EmitPostStart(nb.state.PoetProofRef[:])
 		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(ctx, nb.state.PoetProofRef[:])
 		if err != nil {
+			events.EmitPostFailure()
 			return nil, 0, fmt.Errorf("failed to generate Post: %v", err)
 		}
-
+		events.EmitPostComplete(nb.state.PoetProofRef[:])
 		postGenDuration = time.Since(startTime)
 		nb.log.With().Info("finished post execution", log.Duration("duration", postGenDuration))
 

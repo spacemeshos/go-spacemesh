@@ -14,7 +14,7 @@ const (
 	TypeWaitAtxs      = "Download ATXs"
 	TypeInitStart     = "Init Start"
 	TypeInitComplete  = "Init Complete"
-	TypePost          = "Post Start"
+	TypePostStart     = "Post Start"
 	TypePostComplete  = "Post Complete"
 	TypePoetWait      = "Poet Wait"
 	TypePoetWaitEnd   = "Poet Wait End"
@@ -43,18 +43,6 @@ func EmitBeacon(epoch types.EpochID, beacon types.Beacon) {
 		help,
 		false,
 		EventBeacon{Epoch: epoch, Beacon: beacon},
-	)
-}
-
-type EventWaitSyncATXs struct{}
-
-func EmitWaitSyncATXs() {
-	const help = "Node downloading latest atxs, in order to select optimal ATX for protocol."
-	emitUsersEvents(
-		TypeWaitAtxs,
-		help,
-		false,
-		EventWaitSyncATXs{},
 	)
 }
 
@@ -88,47 +76,60 @@ func EmitInitComplete(failure bool) {
 }
 
 type EventPoetWait struct {
-	Wait time.Duration `json:"wait"`
+	Current types.EpochID `json:"current"`
+	Publish types.EpochID `json:"publish"`
+	Wait    time.Duration `json:"wait"`
 }
 
-func EmitPoetWait(wait time.Duration) {
-	const help = "Node needs to wait for poet registration window to open."
+func EmitPoetWait(current, publish types.EpochID, wait time.Duration) {
+	const help = "Node needs to wait for poet registration window in current epoch to open." +
+		"Once opened it will submit challenge and wait till poet round ends in publish epoch."
 	emitUsersEvents(
 		TypePoetWait,
 		help,
 		false,
-		EventPoetWait{Wait: wait},
+		EventPoetWait{Current: current, Publish: publish, Wait: wait},
 	)
 }
 
-func EmitPoetWaitEnd(wait time.Duration) {
-	const help = "Node needs to wait for poet to complete."
+type EventPoetWaitEnd struct {
+	Publish types.EpochID `json:"publish"`
+	Target  types.EpochID `json:"target"`
+	Wait    time.Duration `json:"wait"`
+}
+
+func EmitPoetWaitEnd(publish, target types.EpochID, wait time.Duration) {
+	const help = "Node needs to wait for poet to complete in publish epoch." +
+		"Once completed it will compute post and publish an ATX that will be eligible for " +
+		"rewards in target epoch."
 	emitUsersEvents(
 		TypePoetWaitEnd,
 		help,
 		false,
-		EventPoetWait{Wait: wait},
+		EventPoetWaitEnd{Publish: publish, Target: target, Wait: wait},
 	)
 }
 
-type EventPost struct{}
+type EventPost struct {
+	Challenge []byte `json:"challenge"`
+}
 
-func EmitPost() {
-	const help = "Node started post execution."
+func EmitPostStart(challennge []byte) {
+	const help = "Node started post execution for challenge from a poet."
 	emitUsersEvents(
-		TypePost,
+		TypePostStart,
 		help,
 		false,
-		EventPost{},
+		EventPost{Challenge: challennge},
 	)
 }
 
 type EventPostComplete struct {
-	Challenge []byte
+	Challenge []byte `json:"challenge"`
 }
 
 func EmitPostComplete(challenge []byte) {
-	const help = "Node finished post execution."
+	const help = "Node finished post execution for challenge."
 	emitUsersEvents(
 		TypePostComplete,
 		help,
@@ -150,18 +151,13 @@ func EmitPostFailure() {
 type EventAtxPublished struct {
 	Current types.EpochID `json:"current"`
 	Target  types.EpochID `json:"target"`
-	Layer   types.LayerID `json:"layer"`
 	ID      types.ATXID   `json:"id"`
-	Weight  uint64        `json:"weight"`
-	Height  uint64        `json:"height"`
 	Wait    time.Duration `json:"wait"`
 }
 
 func EmitAtxPublished(
-	layer types.LayerID,
 	current, target types.EpochID,
 	id types.ATXID,
-	weight, height uint64,
 	wait time.Duration,
 ) {
 	const help = "Published activation. " +
@@ -173,10 +169,7 @@ func EmitAtxPublished(
 		&EventAtxPublished{
 			Current: current,
 			Target:  target,
-			Layer:   layer,
 			ID:      id,
-			Weight:  weight,
-			Height:  height,
 			Wait:    wait,
 		},
 	)
@@ -186,7 +179,7 @@ type EventEligibilities struct {
 	Epoch         types.EpochID               `json:"epoch"`
 	Beacon        types.Beacon                `json:"beacon"`
 	ATX           types.ATXID                 `json:"atx"`
-	ActiveSetHash types.Hash32                `json:"active-set-hash"`
+	ActiveSetSize uint32                      `json:"active-set-size"`
 	Eligibilities []types.ProposalEligibility `json:"eligibilities"`
 }
 
@@ -194,7 +187,7 @@ func EmitEligibilities(
 	epoch types.EpochID,
 	beacon types.Beacon,
 	atx types.ATXID,
-	activeset types.Hash32,
+	activeSetSize uint32,
 	eligibilities []types.ProposalEligibility,
 ) {
 	const help = "Computed eligibilities for the epoch. " +
@@ -208,7 +201,7 @@ func EmitEligibilities(
 			Epoch:         epoch,
 			Beacon:        beacon,
 			ATX:           atx,
-			ActiveSetHash: activeset,
+			ActiveSetSize: activeSetSize,
 			Eligibilities: eligibilities,
 		},
 	)
@@ -217,10 +210,9 @@ func EmitEligibilities(
 type EventProposalCreated struct {
 	Layer    types.LayerID    `json:"layer"`
 	Proposal types.ProposalID `json:"proposal"`
-	ATX      types.ATXID      `json:"atx"`
 }
 
-func EmitProposal(layer types.LayerID, proposal types.ProposalID, atx types.ATXID) {
+func EmitProposal(layer types.LayerID, proposal types.ProposalID) {
 	const help = "Published proposal. Rewards will be received, once proposal is included into the block."
 	emitUsersEvents(
 		TypeProposal,
@@ -229,7 +221,6 @@ func EmitProposal(layer types.LayerID, proposal types.ProposalID, atx types.ATXI
 		EventProposalCreated{
 			Layer:    layer,
 			Proposal: proposal,
-			ATX:      atx,
 		},
 	)
 }
@@ -238,7 +229,7 @@ func emitUsersEvents(typ EventType, help string, failure bool, details any) {
 	mu.RLock()
 	defer mu.RUnlock()
 	if reporter != nil {
-		if err := reporter.eventsEmitter.Emit(&UserEvent{
+		if err := reporter.eventsEmitter.Emit(UserEvent{
 			Timestamp: time.Now(),
 			Type:      typ,
 			Help:      help,
