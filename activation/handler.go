@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/post/shared"
 	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -557,21 +558,28 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	return nil
 }
 
-// FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db.
+// FetchAtxReferences fetches referenced ATXs from peers if they are not found in db.
 func (h *Handler) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) error {
 	logger := h.log.WithContext(ctx)
 	var atxIDs []types.ATXID
 	if atx.PositioningATX != types.EmptyATXID && atx.PositioningATX != h.goldenATXID {
-		logger.With().Debug("going to fetch pos atx", atx.PositioningATX, atx.ID())
+		logger.With().Debug("fetching pos atx", atx.PositioningATX, atx.ID())
 		atxIDs = append(atxIDs, atx.PositioningATX)
 	}
 
 	if atx.PrevATXID != types.EmptyATXID {
-		logger.With().Debug("going to fetch prev atx", atx.PrevATXID, atx.ID())
-		if len(atxIDs) < 1 || atx.PrevATXID != atxIDs[0] {
+		logger.With().Debug("fetching prev atx", atx.PrevATXID, atx.ID())
+		if !slices.Contains(atxIDs, atx.PrevATXID) {
 			atxIDs = append(atxIDs, atx.PrevATXID)
 		}
 	}
+	if atx.CommitmentATX != nil && *atx.CommitmentATX != h.goldenATXID {
+		logger.With().Debug("fetching commitment atx", *atx.CommitmentATX, atx.ID())
+		if !slices.Contains(atxIDs, *atx.CommitmentATX) {
+			atxIDs = append(atxIDs, *atx.CommitmentATX)
+		}
+	}
+
 	if len(atxIDs) == 0 {
 		return nil
 	}
