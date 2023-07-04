@@ -947,13 +947,17 @@ func TestAdminEvents(t *testing.T) {
 		&pb.Event_InitComplete{},
 		&pb.Event_PostStart{},
 		&pb.Event_PostComplete{},
+		&pb.Event_PoetWait{},
 		&pb.Event_PoetWaitChallenge{},
+		&pb.Event_PostStart{},
+		&pb.Event_PostComplete{},
+		&pb.Event_AtxPublished{},
 	}
-	_ = success
-	for {
+	for _, ev := range success {
 		msg, err := stream.Recv()
 		require.NoError(t, err)
-		t.Logf("EVENT: %v. %v", time.Now(), msg)
+		t.Logf("EVENT: %v", msg)
+		require.IsType(t, ev, msg.Details)
 	}
 }
 
