@@ -27,7 +27,7 @@ func TestMain(m *testing.M) {
 }
 
 var allAtxs = map[types.NodeID][]*types.ActivationTx{
-	// smesher 1 has had 7 ATXs, one in each epoch from 1 to 7
+	// smesher 1 has 7 ATXs, one in each epoch from 1 to 7
 	types.BytesToNodeID([]byte("smesher1")): {
 		newatx(types.ATXID{17}, nil, 7, 6, 0, types.BytesToNodeID([]byte("smesher1"))),
 		newatx(types.ATXID{16}, nil, 6, 5, 0, types.BytesToNodeID([]byte("smesher1"))),
@@ -38,17 +38,17 @@ var allAtxs = map[types.NodeID][]*types.ActivationTx{
 		newatx(types.ATXID{11}, &types.ATXID{1}, 1, 0, 123, types.BytesToNodeID([]byte("smesher1"))),
 	},
 
-	// smesher 2 has had 1 ATX in epoch 7
+	// smesher 2 has 1 ATX in epoch 7
 	types.BytesToNodeID([]byte("smesher2")): {
 		newatx(types.ATXID{27}, &types.ATXID{2}, 7, 0, 152, types.BytesToNodeID([]byte("smesher2"))),
 	},
 
-	// smesher 4 has had 1 ATX in epoch 2
+	// smesher 4 has 1 ATX in epoch 2
 	types.BytesToNodeID([]byte("smesher3")): {
 		newatx(types.ATXID{32}, &types.ATXID{3}, 2, 0, 211, types.BytesToNodeID([]byte("smesher3"))),
 	},
 
-	// smesher 4 has had 1 ATX in epoch 3 and one in epoch 7
+	// smesher 4 has 1 ATX in epoch 3 and one in epoch 7
 	types.BytesToNodeID([]byte("smesher4")): {
 		newatx(types.ATXID{47}, nil, 7, 1, 0, types.BytesToNodeID([]byte("smesher4"))),
 		newatx(types.ATXID{43}, &types.ATXID{4}, 4, 0, 420, types.BytesToNodeID([]byte("smesher4"))),
@@ -79,28 +79,28 @@ func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *chec
 		require.Fail(t, "numEpochs must be at least 2")
 	}
 
-	atxs := make([]checkpoint.ShortAtx, 0, numAtxs*len(allAtxs))
-	for _, identity := range allAtxs {
-		n := len(identity)
+	atxData := make([]checkpoint.ShortAtx, 0, numAtxs*len(allAtxs))
+	for _, atxs := range allAtxs {
+		n := len(atxs)
 		if n > numAtxs {
 			n = numAtxs
 		}
 		for i := 0; i < n; i++ {
-			atxs = append(atxs, toShortAtx(newvatx(t, identity[i]), identity[len(identity)-1].CommitmentATX, identity[len(identity)-1].VRFNonce))
+			atxData = append(atxData, toShortAtx(newvatx(t, atxs[i]), atxs[len(atxs)-1].CommitmentATX, atxs[len(atxs)-1].VRFNonce))
 		}
 	}
 
-	result.Data.Atxs = atxs
+	result.Data.Atxs = atxData
 
 	accounts := make(map[types.Address]*types.Account)
 	for _, account := range allAccounts {
 		if account.Layer <= snapshot {
-			if a, ok := accounts[account.Address]; !ok {
+			a, ok := accounts[account.Address]
+			switch {
+			case !ok:
 				accounts[account.Address] = account
-			} else {
-				if account.Layer > a.Layer {
-					accounts[account.Address] = account
-				}
+			case account.Layer > a.Layer:
+				accounts[account.Address] = account
 			}
 		}
 	}
