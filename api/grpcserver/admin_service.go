@@ -21,6 +21,7 @@ import (
 )
 
 const chunksize = 1024
+const defaultNumAtxs = 4
 
 // AdminService exposes endpoints for node administration.
 type AdminService struct {
@@ -49,8 +50,8 @@ func (a AdminService) CheckpointStream(req *pb.CheckpointStreamRequest, stream p
 	// - locally as the node already loads db query result in memory
 	snapshot := types.LayerID(req.SnapshotLayer)
 	numAtxs := int(req.NumAtxs)
-	if numAtxs < 2 {
-		numAtxs = 2 // default
+	if numAtxs < defaultNumAtxs {
+		numAtxs = defaultNumAtxs
 	}
 	err := checkpoint.Generate(stream.Context(), afero.NewOsFs(), a.db, a.dataDir, snapshot, numAtxs)
 	if err != nil {
@@ -61,9 +62,7 @@ func (a AdminService) CheckpointStream(req *pb.CheckpointStreamRequest, stream p
 		return status.Errorf(codes.Unavailable, "can't send header")
 	}
 	f, err := os.Open(fname)
-	defer func() {
-		_ = f.Close()
-	}()
+	defer f.Close()
 	if err != nil {
 		return status.Errorf(codes.Internal, fmt.Sprintf("failed to open file %s: %s", fname, err.Error()))
 	}
