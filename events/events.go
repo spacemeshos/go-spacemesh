@@ -3,90 +3,68 @@ package events
 import (
 	"time"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type EventType string
-
-const (
-	TypeBeacon        = "Beacon"
-	TypeInitStart     = "Init Start"
-	TypeInitComplete  = "Init Complete"
-	TypePostStart     = "Post Start"
-	TypePostComplete  = "Post Complete"
-	TypePoetWaitStart = "Poet Wait Start"
-	TypePoetWaitEnd   = "Poet Wait End"
-	TypeATXPublished  = "ATX Published"
-	TypeEligibilities = "Eligibilities"
-	TypeProposal      = "Proposal"
-)
-
 type UserEvent struct {
-	Timestamp time.Time `json:"timestamp"`
-	Help      string    `json:"help"`
-	Failure   bool      `json:"failure"`
-	Type      EventType `json:"type"`
-	Details   any       `json:"details"`
-}
-
-type EventBeacon struct {
-	Epoch  types.EpochID `json:"epoch"`
-	Beacon types.Beacon  `json:"beacon"`
+	Event *pb.Event
 }
 
 func EmitBeacon(epoch types.EpochID, beacon types.Beacon) {
 	const help = "Node computed randomness beacon, it will be used to determine eligibility to participate in the consensus."
-	emitUsersEvents(
-		TypeBeacon,
+	emitUserEvent(
 		help,
 		false,
-		EventBeacon{Epoch: epoch, Beacon: beacon},
+		&pb.Event_Beacon{
+			Beacon: &pb.EventBeacon{
+				Epoch:  epoch.Uint32(),
+				Beacon: beacon[:],
+			},
+		},
 	)
-}
-
-type EventInitStart struct {
-	Smesher    types.NodeID `json:"smesher"`
-	Commitment types.ATXID  `json:"commitment"`
 }
 
 func EmitInitStart(smesher types.NodeID, commitment types.ATXID) {
 	const help = "Node started post data initialization. Note that init is noop if node restarted when init was ready."
-	emitUsersEvents(
-		TypeInitStart,
+	emitUserEvent(
 		help,
 		false,
-		EventInitStart{
-			Smesher:    smesher,
-			Commitment: commitment,
+		&pb.Event_InitStart{
+			InitStart: &pb.EventInitStart{
+				Smesher:    smesher[:],
+				Commitment: commitment[:],
+			},
 		},
 	)
 }
 
 func EmitInitComplete(failure bool) {
-	const help = "Node completed post data initialization. On failure examine logs."
-	emitUsersEvents(
-		TypeInitComplete,
+	const help = "Node completed post data initialization."
+	emitUserEvent(
 		help,
 		failure,
-		struct{}{},
+		&pb.Event_InitComplete{
+			InitComplete: &pb.EventInitComplete{},
+		},
 	)
 }
 
-type EventPoetWait struct {
-	Current types.EpochID `json:"current"`
-	Publish types.EpochID `json:"publish"`
-	Wait    time.Duration `json:"wait"`
-}
-
 func EmitPoetWait(current, publish types.EpochID, wait time.Duration) {
-	const help = "Node needs to wait for poet registration window in current epoch to open." +
+	const help = "Node needs to wait for poet registration window in current epoch to open. " +
 		"Once opened it will submit challenge and wait till poet round ends in publish epoch."
-	emitUsersEvents(
-		TypePoetWaitStart,
+	emitUserEvent(
 		help,
 		false,
-		EventPoetWait{Current: current, Publish: publish, Wait: wait},
+		&pb.Event_PoetWait{PoetWait: &pb.EventPoetWait{
+			Current: current.Uint32(),
+			Public:  current.Uint32(),
+			Wait:    durationpb.New(wait),
+		}},
 	)
 }
 
@@ -98,59 +76,46 @@ type EventPoetWaitEnd struct {
 
 func EmitPoetWaitEnd(publish, target types.EpochID, wait time.Duration) {
 	const help = "Node needs to wait for poet to complete in publish epoch." +
-		"Once completed it will compute post and publish an ATX that will be eligible for " +
-		"rewards in target epoch."
-	emitUsersEvents(
-		TypePoetWaitEnd,
+		"Once completed, node fetches challenge from poet and run post on that challenge. " +
+		"After that publish an ATX that will be eligible for rewards in target epoch."
+	emitUserEvent(
 		help,
 		false,
-		EventPoetWaitEnd{Publish: publish, Target: target, Wait: wait},
+		&pb.Event_PoetWaitChallenge{
+			PoetWaitChallenge: &pb.EventPoetWaitChallenge{
+				Publish: publish.Uint32(),
+				Target:  target.Uint32(),
+				Wait:    durationpb.New(wait),
+			},
+		},
 	)
 }
 
-type EventPost struct {
-	Challenge []byte `json:"challenge"`
-}
-
-func EmitPostStart(challennge []byte) {
+func EmitPostStart(challenge []byte) {
 	const help = "Node started post execution for the challenge from poet."
-	emitUsersEvents(
-		TypePostStart,
+	emitUserEvent(
 		help,
 		false,
-		EventPost{Challenge: challennge},
+		&pb.Event_PostStart{PostStart: &pb.EventPostStart{Challenge: challenge}},
 	)
-}
-
-type EventPostComplete struct {
-	Challenge []byte `json:"challenge"`
 }
 
 func EmitPostComplete(challenge []byte) {
 	const help = "Node finished post execution for challenge."
-	emitUsersEvents(
-		TypePostComplete,
+	emitUserEvent(
 		help,
 		false,
-		EventPostComplete{Challenge: challenge},
+		&pb.Event_PostComplete{PostComplete: &pb.EventPostComplete{Challenge: challenge}},
 	)
 }
 
 func EmitPostFailure() {
 	const help = "Failed to compute post."
-	emitUsersEvents(
-		TypePostComplete,
+	emitUserEvent(
 		help,
 		true,
-		EventPostComplete{},
+		&pb.Event_PostFailed{PostFailed: &pb.EventPostFailed{}},
 	)
-}
-
-type EventAtxPublished struct {
-	Current types.EpochID `json:"current"`
-	Target  types.EpochID `json:"target"`
-	ID      types.ATXID   `json:"id"`
-	Wait    time.Duration `json:"wait"`
 }
 
 func EmitAtxPublished(
@@ -160,25 +125,18 @@ func EmitAtxPublished(
 ) {
 	const help = "Published activation for the current epoch. " +
 		"Node needs to wait till the start of the target epoch in order to be eligible for rewards."
-	emitUsersEvents(
-		TypeATXPublished,
+	emitUserEvent(
 		help,
 		false,
-		&EventAtxPublished{
-			Current: current,
-			Target:  target,
-			ID:      id,
-			Wait:    wait,
+		&pb.Event_AtxPublished{
+			AtxPublished: &pb.EventAtxPubished{
+				Current: current.Uint32(),
+				Target:  target.Uint32(),
+				Id:      id[:],
+				Wait:    durationpb.New(wait),
+			},
 		},
 	)
-}
-
-type EventEligibilities struct {
-	Epoch         types.EpochID               `json:"epoch"`
-	Beacon        types.Beacon                `json:"beacon"`
-	ATX           types.ATXID                 `json:"atx"`
-	ActiveSetSize uint32                      `json:"active-set-size"`
-	Eligibilities []types.ProposalEligibility `json:"eligibilities"`
 }
 
 func EmitEligibilities(
@@ -191,49 +149,56 @@ func EmitEligibilities(
 	const help = "Computed eligibilities for the epoch. " +
 		"Rewards will be received after publishing proposals at specified layers. " +
 		"Total amount of rewards in SMH will be based on other participants in the layer."
-	emitUsersEvents(
-		TypeEligibilities,
+	emitUserEvent(
 		help,
 		false,
-		EventEligibilities{
-			Epoch:         epoch,
-			Beacon:        beacon,
-			ATX:           atx,
-			ActiveSetSize: activeSetSize,
-			Eligibilities: eligibilities,
+		&pb.Event_Eligibilities{
+			Eligibilities: &pb.EventEligibilities{
+				Epoch:         epoch.Uint32(),
+				Beacon:        beacon[:],
+				Atx:           atx[:],
+				ActiveSetSize: activeSetSize,
+				Eligibilities: castEligibilities(eligibilities),
+			},
 		},
 	)
 }
 
-type EventProposalCreated struct {
-	Layer    types.LayerID    `json:"layer"`
-	Proposal types.ProposalID `json:"proposal"`
+func castEligibilities(eligs []types.ProposalEligibility) []*pb.ProposalEligibility {
+	rst := make([]*pb.ProposalEligibility, len(eligs))
+	for i := range eligs {
+		rst[i] = &pb.ProposalEligibility{
+			Layer: eligs[i].Layer.Uint32(),
+			Count: eligs[i].Count,
+		}
+	}
+	return rst
 }
 
 func EmitProposal(layer types.LayerID, proposal types.ProposalID) {
 	const help = "Published proposal. Rewards will be received, once proposal is included into the block."
-	emitUsersEvents(
-		TypeProposal,
+	emitUserEvent(
 		help,
 		false,
-		EventProposalCreated{
-			Layer:    layer,
-			Proposal: proposal,
+		&pb.Event_Proposal{
+			Proposal: &pb.EventProposal{
+				Layer:    layer.Uint32(),
+				Proposal: proposal[:],
+			},
 		},
 	)
 }
 
-func emitUsersEvents(typ EventType, help string, failure bool, details any) {
+func emitUserEvent(help string, failure bool, details pb.IsEventDetails) {
 	mu.RLock()
 	defer mu.RUnlock()
 	if reporter != nil {
-		if err := reporter.eventsEmitter.Emit(UserEvent{
-			Timestamp: time.Now(),
-			Type:      typ,
+		if err := reporter.eventsEmitter.Emit(UserEvent{Event: &pb.Event{
+			Timestamp: timestamppb.New(time.Now()),
 			Help:      help,
 			Failure:   failure,
 			Details:   details,
-		}); err != nil {
+		}}); err != nil {
 			log.With().Error("failed to emit event", log.Err(err))
 		}
 	}

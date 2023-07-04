@@ -2,7 +2,6 @@ package grpcserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,7 +13,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -116,17 +114,7 @@ func (a AdminService) EventsStream(req *pb.EventStreamRequest, stream pb.AdminSe
 		case <-sub.Full():
 			return status.Errorf(codes.Canceled, "buffer is full")
 		case ev := <-sub.Out():
-			encoded, err := json.Marshal(ev.Details)
-			if err != nil {
-				return status.Errorf(codes.Internal, "failed to encode event to json."+err.Error())
-			}
-			if err := stream.Send(&pb.Event{
-				Timestamp: timestamppb.New(ev.Timestamp),
-				Failure:   ev.Failure,
-				Type:      string(ev.Type),
-				Help:      ev.Help,
-				Details:   string(encoded),
-			}); err != nil {
+			if err := stream.Send(ev.Event); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
 		}
