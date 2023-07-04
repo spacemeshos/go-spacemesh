@@ -133,7 +133,7 @@ func TestCheckpoint(t *testing.T) {
 	tctx.Log.Debugw("query checkpoint data", "query url", queryUrl)
 	data, err := query(tctx, queryUrl)
 	require.NoError(t, err)
-	require.True(t, bytes.Equal(newSnapshot.Bytes(), data))
+	require.Equal(t, newSnapshot.String(), string(data))
 
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)

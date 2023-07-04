@@ -102,13 +102,13 @@ func Recover(
 	}
 	defer db.Close()
 	preserve, err := RecoverWithDb(ctx, logger, db, fs, cfg)
-	if err != nil {
-		if errors.Is(err, ErrCheckpointNotFound) {
-			logger.With().Info("no checkpoint file available. not recovering",
-				log.String("uri", cfg.Uri),
-			)
-			return nil, nil
-		}
+	switch {
+	case errors.Is(err, ErrCheckpointNotFound):
+		logger.With().Info("no checkpoint file available. not recovering",
+			log.String("uri", cfg.Uri),
+		)
+		return nil, nil
+	case err != nil:
 		return nil, err
 	}
 	return preserve, nil

@@ -635,13 +635,13 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	}))
 	validateAndPreserveData(t, olddb, vatxs[1:], proofs[1:])
 	// the proofs are not valid, but save them anyway for the purpose of testing
-	for i, vatx := range vatxs {
+	for i, proof := range proofs {
 		if i == 0 {
 			continue
 		}
-		encoded, err := codec.Encode(proofs[i])
+		encoded, err := codec.Encode(proof)
 		require.NoError(t, err)
-		require.NoError(t, poets.Add(olddb, types.PoetProofRef(vatx.GetPoetProofRef()), encoded, proofs[i].PoetServiceID, proofs[i].RoundID))
+		require.NoError(t, poets.Add(olddb, types.PoetProofRef(vatxs[i].GetPoetProofRef()), encoded, proof.PoetServiceID, proof.RoundID))
 	}
 	require.NoError(t, olddb.Close())
 

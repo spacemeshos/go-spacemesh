@@ -109,16 +109,17 @@ func httpToLocalFile(ctx context.Context, resource *url.URL, fs afero.Fs, dst st
 		return fmt.Errorf("create http request: %w", err)
 	}
 	resp, err := (&http.Client{}).Do(req)
-	if err != nil {
-		if _, ok := err.(*url.Error); ok {
-			return ErrCheckpointNotFound
-		}
+	urlErr := &url.Error{}
+	switch {
+	case errors.As(err, &urlErr):
+		return ErrCheckpointNotFound
+	case err != nil:
 		return fmt.Errorf("http get recovery file: %w", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return ErrCheckpointNotFound
 	}
-	defer resp.Body.Close()
 	rf, err := NewRecoveryFile(fs, dst)
 	if err != nil {
 		return fmt.Errorf("new recovery file %w", err)

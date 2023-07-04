@@ -151,7 +151,7 @@ func GetCommand() *cobra.Command {
 					return fmt.Errorf("could not retrieve identity: %w", err)
 				}
 
-				preserve, err := app.LoadCheckpoint(ctx)
+				app.preserve, err = app.LoadCheckpoint(ctx)
 				if err != nil {
 					return err
 				}
@@ -161,7 +161,7 @@ func GetCommand() *cobra.Command {
 				}
 
 				// This blocks until the context is finished or until an error is produced
-				err = app.Start(ctx, preserve)
+				err = app.Start(ctx)
 
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
@@ -335,6 +335,7 @@ type App struct {
 	updater            *bootstrap.Updater
 	poetDb             *activation.PoetDb
 	postVerifier       *activation.OffloadingPostVerifier
+	preserve           *checkpoint.PreservedData
 	errCh              chan error
 
 	host *p2p.Host
@@ -1257,7 +1258,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
 }
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
-func (app *App) Start(ctx context.Context, preserve *checkpoint.PreservedData) error {
+func (app *App) Start(ctx context.Context) error {
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
 	// using context passed down to them)
 	logger := app.log.WithContext(ctx)
@@ -1372,51 +1373,7 @@ func (app *App) Start(ctx context.Context, preserve *checkpoint.PreservedData) e
 	}
 
 	// need post verifying service to start first
-	if preserve != nil {
-		for i, poetProof := range preserve.Proofs {
-			encoded, err := codec.Encode(poetProof)
-			if err != nil {
-				app.log.With().Error("failed to encode poet proof after checkpoint",
-					log.Stringer("atx id", preserve.Deps[i].ID()),
-					log.Object("poet proof", poetProof),
-					log.Err(err),
-				)
-			} else {
-				if err := app.poetDb.ValidateAndStoreMsg(ctx, p2p.NoPeer, encoded); err != nil {
-					app.log.With().Error("failed to preserve poet proof after checkpoint",
-						log.Stringer("atx id", preserve.Deps[i].ID()),
-						log.String("poet proof ref", preserve.Deps[i].GetPoetProofRef().ShortString()),
-						log.Err(err),
-					)
-				} else {
-					app.log.With().Info("preserved poet proof after checkpoint",
-						log.Stringer("atx id", preserve.Deps[i].ID()),
-						log.String("poet proof ref", preserve.Deps[i].GetPoetProofRef().ShortString()),
-					)
-				}
-			}
-		}
-		for _, vatx := range preserve.Deps {
-			encoded, err := codec.Encode(vatx)
-			if err != nil {
-				app.log.With().Error("failed to encode atx after checkpoint",
-					log.Inline(vatx),
-					log.Err(err),
-				)
-			} else {
-				if err := app.atxHandler.HandleAtxData(ctx, p2p.NoPeer, encoded); err != nil {
-					app.log.With().Error("failed to preserve atx after checkpoint",
-						log.Inline(vatx),
-						log.Err(err),
-					)
-				} else {
-					app.log.With().Info("preserved atx after checkpoint",
-						log.Inline(vatx),
-					)
-				}
-			}
-		}
-	}
+	app.preserveAfterRecovery(ctx)
 
 	if err := app.startAPIServices(ctx); err != nil {
 		return err
@@ -1451,6 +1408,55 @@ func (app *App) Start(ctx context.Context, preserve *checkpoint.PreservedData) e
 		return nil
 	case err = <-app.errCh:
 		return err
+	}
+}
+
+func (app *App) preserveAfterRecovery(ctx context.Context) {
+	if app.preserve == nil {
+		return
+	}
+	for i, poetProof := range app.preserve.Proofs {
+		encoded, err := codec.Encode(poetProof)
+		if err != nil {
+			app.log.With().Error("failed to encode poet proof after checkpoint",
+				log.Stringer("atx id", app.preserve.Deps[i].ID()),
+				log.Object("poet proof", poetProof),
+				log.Err(err),
+			)
+			continue
+		}
+		if err := app.poetDb.ValidateAndStoreMsg(ctx, p2p.NoPeer, encoded); err != nil {
+			app.log.With().Error("failed to preserve poet proof after checkpoint",
+				log.Stringer("atx id", app.preserve.Deps[i].ID()),
+				log.String("poet proof ref", app.preserve.Deps[i].GetPoetProofRef().ShortString()),
+				log.Err(err),
+			)
+			continue
+		}
+		app.log.With().Info("preserved poet proof after checkpoint",
+			log.Stringer("atx id", app.preserve.Deps[i].ID()),
+			log.String("poet proof ref", app.preserve.Deps[i].GetPoetProofRef().ShortString()),
+		)
+	}
+	for _, vatx := range app.preserve.Deps {
+		encoded, err := codec.Encode(vatx)
+		if err != nil {
+			app.log.With().Error("failed to encode atx after checkpoint",
+				log.Inline(vatx),
+				log.Err(err),
+			)
+			continue
+		}
+		if err := app.atxHandler.HandleAtxData(ctx, p2p.NoPeer, encoded); err != nil {
+			app.log.With().Error("failed to preserve atx after checkpoint",
+				log.Inline(vatx),
+				log.Err(err),
+			)
+			continue
+		}
+		app.log.With().Info("preserved atx after checkpoint",
+			log.Inline(vatx),
+		)
 	}
 }
 

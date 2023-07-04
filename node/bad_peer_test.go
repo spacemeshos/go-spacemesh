@@ -56,11 +56,11 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	})
 	g := errgroup.Group{}
 	g.Go(func() error {
-		return app1.Start(ctx, nil)
+		return app1.Start(ctx)
 	})
 	<-app1.Started()
 	g.Go(func() error {
-		return app2.Start(ctx, nil)
+		return app2.Start(ctx)
 	})
 	<-app2.Started()
 
