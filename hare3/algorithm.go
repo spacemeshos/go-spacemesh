@@ -133,15 +133,15 @@ type TrhesholdGradedGossiper interface {
 	// ReceiveMsg ingests the given message inputs, for later retrieval through
 	// RetrieveThresholdMessages. The inputs are the message sender, the values
 	// contained in the message, the message round, the current round and a
-	// grade. Note that since this component is downstream from graded gossip
-	// we will get at most 2 messages per identity in the case of a node that
-	// equivocates in the round, otherwise we will get just one message per
-	// node.
+	// grade, the grade must be between 1 and d inclusive. Note that since this
+	// component is downstream from graded it expects at most 2 messages per
+	// identity in the case of a node that equivocates in the round and
+	// otherwise expects just one message per node.
 	ReceiveMsg(senderID types.Hash20, values []types.Hash20, msgRound, currRound AbsRound, grade uint8)
 
 	// This function outputs the values that were part of messages sent at
 	// msgRound and reached the threshold with grade at least minGrade by round
-	// "msgRound + d + 1 - minGrade".
+	// "msgRound + d + 1 - minGrade". minGrade must be between 1 and d inclusive.
 	RetrieveThresholdMessages(msgRound AbsRound, minGrade uint8) (values []types.Hash20)
 }
 
@@ -156,11 +156,14 @@ func Ensure[K1, K2 comparable, V any](m map[K1]map[K2]V, k K1) map[K2]V {
 	return entry
 }
 
-// Ensure2 takes a nested map and ensures that there is a doubly nested map entry for k1 and k2.
-// It returns the nested map.
-func Ensure2[K1, K2, K3 comparable, V any](m map[K1]map[K2]map[K3]V, k1 K1, k2 K2) map[K3]V {
-	k1Entry := Ensure(m, k1)
-	return Ensure(k1Entry, k2)
+// EnsureValue takes a map and enures that there is a value for the given key.
+func EnsureValue[K1 comparable, V any](m map[K1]V, k K1, constructor func() V) V {
+	entry, ok := m[k]
+	if !ok {
+		entry = constructor()
+		m[k] = entry
+	}
+	return entry
 }
 
 type votes struct {
@@ -179,7 +182,7 @@ type DefaultThresholdGradedGossiper struct {
 	// maliciousVotes tracks the number of detected malicious parties by grade.
 	// We don't need to track the sender ID of malicious parties since
 	// GradedGossiper limits us to one malicious message per id per round.
-	maliciousVotes *GradedVotes
+	maliciousVotes map[AbsRound]*GradedVotes
 
 	// Values with more votes than the threshold are considered to have passed
 	// the threshold.
@@ -189,21 +192,25 @@ type DefaultThresholdGradedGossiper struct {
 func NewDefaultThresholdGradedGossiper(threshold uint16) *DefaultThresholdGradedGossiper {
 	return &DefaultThresholdGradedGossiper{
 		count:          make(map[AbsRound]map[types.Hash20]votes),
-		maliciousVotes: &GradedVotes{},
+		maliciousVotes: make(map[AbsRound]*GradedVotes),
 		threshold:      threshold,
 	}
+}
+
+func NewGradedVotes() *GradedVotes {
+	return &GradedVotes{}
 }
 
 // ReceiveMsg implements TrhesholdGradedGossiper.
 func (t *DefaultThresholdGradedGossiper) ReceiveMsg(senderID types.Hash20, values []types.Hash20, msgRound, currRound AbsRound, grade uint8) {
 	if currRound-msgRound > d {
-		// Message received too late
+		// Message received too late.
 		return
 	}
 	if values != nil {
-		// Ensure there is a map entry for this round
+		// Ensure there is a map entry for this round.
 		votesBySender := Ensure(t.count, msgRound)
-		// Store the votes and grade against the sender id
+		// Store the votes and grade against the sender id.
 		votesBySender[senderID] = votes{
 			values: values,
 			grade:  grade,
@@ -214,7 +221,8 @@ func (t *DefaultThresholdGradedGossiper) ReceiveMsg(senderID types.Hash20, value
 		// Record the grade for this malicious vote, its not important to
 		// record the sender id for this malicious vote since we should receive
 		// at most one from graded gossip.
-		t.maliciousVotes.Vote(grade)
+		votesByRound := EnsureValue(t.maliciousVotes, msgRound, NewGradedVotes)
+		votesByRound.Vote(grade)
 	}
 }
 
@@ -227,17 +235,14 @@ func (t *DefaultThresholdGradedGossiper) RetrieveThresholdMessages(msgRound AbsR
 	votesBySender := Ensure(t.count, msgRound)
 	for _, v := range votesBySender {
 		for _, value := range v.values {
-			gv, ok := goodVotes[value]
-			if !ok {
-				gv = &GradedVotes{}
-				goodVotes[value] = gv
-			}
+			gv := EnsureValue(goodVotes, value, NewGradedVotes)
 			gv.Vote(v.grade)
 		}
 	}
 	var results []types.Hash20
 	// Find out the number of maliciousVotes for this round and grade.
-	maliciousVote := t.maliciousVotes.CumulativeVote(minGrade)
+	votesByRound := EnsureValue(t.maliciousVotes, msgRound, NewGradedVotes)
+	maliciousVote := votesByRound.CumulativeVote(minGrade)
 
 	// Find all values where the good and malicious votes sum to greater than
 	// the threshold and there is at least one good vote.
