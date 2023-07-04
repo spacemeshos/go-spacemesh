@@ -15,7 +15,7 @@ type GradedGossiper interface {
 	// There are 3 different results that graded gossip can output:
 	//
 	// * SendValue indicates that the message be forwarded to downstream sub
-	// protocols (Gradecaster & TrhesholdGradedGossiper) and ultimately that
+	// protocols (Gradecaster & ThresholdGradedGossiper) and ultimately that
 	// the message should be relayed to the network. Note that the first
 	// message in a round from a known malicious identity needs to be
 	// forwarded, since hare3 includes the number of known malicious entities
