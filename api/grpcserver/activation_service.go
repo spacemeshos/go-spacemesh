@@ -13,11 +13,13 @@ import (
 )
 
 type activationService struct {
+	goldenAtx   types.ATXID
 	atxProvider atxProvider
 }
 
-func NewActivationService(atxProvider atxProvider) *activationService {
+func NewActivationService(atxProvider atxProvider, goldenAtx types.ATXID) *activationService {
 	return &activationService{
+		goldenAtx:   goldenAtx,
 		atxProvider: atxProvider,
 	}
 }
@@ -30,11 +32,24 @@ func (s *activationService) RegisterService(server *Server) {
 
 // Get implements v1.ActivationServiceServer.
 func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*pb.GetResponse, error) {
-	if l := len(request.Id); l != types.ATXIDSize {
+	var atxId types.ATXID
+	l := len(request.Id)
+	if l == 0 {
+		id, err := s.atxProvider.MaxHeightAtx()
+		if err != nil {
+			return &pb.GetResponse{
+				Atx: &pb.Activation{
+					Id: &pb.ActivationId{Id: s.goldenAtx.Bytes()},
+				},
+			}, nil
+		}
+		atxId = id
+	} else if l != types.ATXIDSize {
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid ATX ID length (%d), expected (%d)", l, types.ATXIDSize))
+	} else {
+		atxId = types.ATXID(types.BytesToHash(request.Id))
 	}
 
-	atxId := types.ATXID(types.BytesToHash(request.Id))
 	logger := log.GetLogger().WithFields(log.Stringer("id", atxId))
 
 	atx, err := s.atxProvider.GetFullAtx(atxId)
