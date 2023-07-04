@@ -116,20 +116,51 @@ type GradedGossiper interface {
 	// * One good message.
 	// * One malicious message from a known eqiuvotator.
 	// * One good message followed by a malicious message indicating equivocation.
-	ReceiveMsg(hash, id types.Hash20, valueHash *types.Hash20, round AbsRound, grade uint8) (result GradedGossipResult, equivocationHash *types.Hash20)
+	ReceiveMsg(
+		hash,
+		id types.Hash20,
+		valueHash *types.Hash20,
+		msgRound AbsRound,
+	) (result GradedGossipResult, equivocationHash *types.Hash20)
 }
 
-type DefaultGradedGossiper struct{}
+type ggstate struct {
+	hash      types.Hash20
+	valueHash *types.Hash20
+}
+
+type DefaultGradedGossiper struct {
+	// msgs maps message round to sender id to ...
+	msgs map[AbsRound]map[types.Hash20]*ggstate
+}
 
 // ReceiveMsg implements GradedGossiper.
-func (*DefaultGradedGossiper) ReceiveMsg(
+func (gg *DefaultGradedGossiper) ReceiveMsg(
 	hash types.Hash20,
 	id types.Hash20,
 	valueHash *types.Hash20,
-	round AbsRound,
+	msgRound AbsRound,
 	grade uint8,
 ) (result GradedGossipResult, equivocationHash *types.Hash20) {
-	return SendValue, nil
+	senderStates := Ensure(gg.msgs, msgRound)
+	state := senderStates[id]
+	switch {
+	case state == nil:
+		// If there was no previous message for this identity, store the
+		// message and forward it.
+		senderStates[id] = &ggstate{
+			hash:      hash,
+			valueHash: valueHash,
+		}
+		return SendValue, nil
+	case state.valueHash == nil:
+		// This indicates that we've already forwarded a message indicating that this entity is malicious, so we drop further messages.
+		return DropMessage, nil
+	default:
+		// In this case we have detected a new equivocation, we return the hash
+		// of the previous message so that the caller can generate a proof.
+		return SendEquivocationProof, &state.hash
+	}
 }
 
 // ThresholdState holds the graded votes for a value and also records if this
@@ -479,7 +510,7 @@ func (h *Handler) HandleMsg(hash types.Hash20, vk []byte, round int8, values []t
 	// drop the message. This then covers the case where we get a second
 	// message from a prior known equivocator or we get a third message from an
 	// identity equivocating in this round.
-	result, eHash := h.gg.ReceiveMsg(hash, id, valuesHash, r, g)
+	result, eHash := h.gg.ReceiveMsg(hash, id, valuesHash, r)
 	switch result {
 	case DropMessage:
 		// Indicates prior equivocation, drop the message.
