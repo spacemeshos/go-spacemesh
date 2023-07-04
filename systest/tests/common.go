@@ -324,7 +324,7 @@ func maxLayer(i, j uint32) uint32 {
 	return j
 }
 
-func nextFirstLayer(current uint32, size uint32) uint32 {
+func nextFirstLayer(current, size uint32) uint32 {
 	if over := current % size; over != 0 {
 		current += size - over
 	}
@@ -358,7 +358,7 @@ func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, cli
 	return err
 }
 
-func submitSpend(ctx context.Context, cluster *cluster.Cluster, account int, receiver types.Address, amount uint64, nonce uint64, client *cluster.NodeClient) error {
+func submitSpend(ctx context.Context, cluster *cluster.Cluster, account int, receiver types.Address, amount, nonce uint64, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	_, err := submitTransaction(ctx,

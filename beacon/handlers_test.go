@@ -106,7 +106,7 @@ func checkProposals(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, expec
 	}
 }
 
-func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID, valid proposalList, pValid proposalList, corruptSignature bool) *FirstVotingMessage {
+func createFirstVote(t *testing.T, signer *signing.EdSigner, epoch types.EpochID, valid, pValid proposalList, corruptSignature bool) *FirstVotingMessage {
 	logger := logtest.New(t)
 	msg := &FirstVotingMessage{
 		FirstVotingMessageBody: FirstVotingMessageBody{

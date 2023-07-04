@@ -142,7 +142,7 @@ func TestMinerOracle(t *testing.T) {
 	testMinerOracleAndProposalValidator(t, 2, 2)
 }
 
-func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersPerEpoch uint32) {
+func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch uint32) {
 	o := createTestOracle(t, layerSize, layersPerEpoch, 0)
 
 	ctrl := gomock.NewController(t)
