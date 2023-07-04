@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/afero"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -17,13 +18,24 @@ import (
 const (
 	SchemaVersion = "https://spacemesh.io/checkpoint.schema.json.1.0"
 
+	CommandString = "grpcurl -plaintext -d '%s' 0.0.0.0:9093 spacemesh.v1.AdminService.CheckpointStream"
+
 	checkpointDir = "checkpoint"
 	schemaFile    = "schema.json"
 	dirPerm       = 0o700
 )
 
 func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID, numAtxs int) (*Checkpoint, error) {
+	request, err := json.Marshal(&pb.CheckpointStreamRequest{
+		SnapshotLayer: uint32(snapshot),
+		NumAtxs:       uint32(numAtxs),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
 	checkpoint := &Checkpoint{
+		Command: fmt.Sprintf(CommandString, request),
 		Version: SchemaVersion,
 		Data: InnerData{
 			CheckpointId: fmt.Sprintf("snapshot-%d", snapshot),

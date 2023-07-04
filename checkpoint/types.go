@@ -1,6 +1,7 @@
 package checkpoint
 
 type Checkpoint struct {
+	Command string    `json:"description"`
 	Version string    `json:"version"`
 	Data    InnerData `json:"data"`
 }

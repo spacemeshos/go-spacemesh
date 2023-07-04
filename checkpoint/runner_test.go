@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -68,7 +70,15 @@ var allAccounts = []*types.Account{
 
 func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *checkpoint.Checkpoint {
 	t.Helper()
+
+	request, err := json.Marshal(&pb.CheckpointStreamRequest{
+		SnapshotLayer: uint32(snapshot),
+		NumAtxs:       uint32(numAtxs),
+	})
+	require.NoError(t, err)
+
 	result := &checkpoint.Checkpoint{
+		Command: fmt.Sprintf(checkpoint.CommandString, request),
 		Version: "https://spacemesh.io/checkpoint.schema.json.1.0",
 		Data: checkpoint.InnerData{
 			CheckpointId: "snapshot-5",
