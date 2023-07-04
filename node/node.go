@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -960,7 +959,6 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	cfg.Service.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
 	cfg.Service.CycleGap = app.Config.POET.CycleGap
 	cfg.Service.PhaseShift = app.Config.POET.PhaseShift
-	cfg.Service.PowDifficulty = math.MaxUint64
 	srv, err := server.New(ctx, *cfg)
 	if err != nil {
 		return fmt.Errorf("init poet server: %w", err)
