@@ -33,7 +33,7 @@ require (
 	github.com/pyroscope-io/pyroscope v0.37.2
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.0
 	github.com/seehuhn/mt19937 v1.0.0
-	github.com/spacemeshos/api/release/go v1.12.1-0.20230704085524-b93332933766
+	github.com/spacemeshos/api/release/go v1.12.1-0.20230704092720-edf164e650b8
 	github.com/spacemeshos/economics v0.1.0
 	github.com/spacemeshos/fixed v0.1.0
 	github.com/spacemeshos/go-scale v1.1.10

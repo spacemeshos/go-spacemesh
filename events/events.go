@@ -75,7 +75,7 @@ type EventPoetWaitEnd struct {
 }
 
 func EmitPoetWaitEnd(publish, target types.EpochID, wait time.Duration) {
-	const help = "Node needs to wait for poet to complete in publish epoch." +
+	const help = "Node needs to wait for poet to complete in publish epoch. " +
 		"Once completed, node fetches challenge from poet and run post on that challenge. " +
 		"After that publish an ATX that will be eligible for rewards in target epoch."
 	emitUserEvent(
@@ -110,11 +110,11 @@ func EmitPostComplete(challenge []byte) {
 }
 
 func EmitPostFailure() {
-	const help = "Failed to compute post."
+	const help = "Node failed post execution."
 	emitUserEvent(
 		help,
 		true,
-		&pb.Event_PostFailed{PostFailed: &pb.EventPostFailed{}},
+		&pb.Event_PostComplete{PostComplete: &pb.EventPostComplete{}},
 	)
 }
 
