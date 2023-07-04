@@ -124,6 +124,13 @@ jobs:
       - name: Override SDKROOT for macOS
         if: ${{ contains(matrix.os, 'macos') && runner.arch == 'arm64' }}
         run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> $GITHUB_ENV
+      - name: disable Windows Defender - Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
+      - name: Add OpenCL support - Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: choco install opencl-intel-cpu-runtime
       - name: setup env
         run: make install
       - name: build
