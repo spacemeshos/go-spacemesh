@@ -913,6 +913,7 @@ func TestAdminEvents(t *testing.T) {
 	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
 	cfg.SMESHING.Opts.DataDir = t.TempDir()
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
 	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
 	signer, err := app.LoadOrCreateEdSigner()
@@ -956,7 +957,6 @@ func TestAdminEvents(t *testing.T) {
 	for _, ev := range success {
 		msg, err := stream.Recv()
 		require.NoError(t, err)
-		t.Logf("EVENT: %v", msg)
 		require.IsType(t, ev, msg.Details)
 	}
 }
