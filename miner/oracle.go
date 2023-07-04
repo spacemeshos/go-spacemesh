@@ -99,7 +99,7 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon, 
 	if err != nil {
 		return nil, err
 	}
-	emitEpochEligibility(beacon, ee)
+	events.EmitEligibilities(ee.Epoch, beacon, ee.Atx, uint32(len(ee.ActiveSet)), ee.Proofs)
 	o.cache = ee
 	return ee, nil
 }
@@ -198,15 +198,4 @@ func (o *Oracle) calcEligibilityProofs(atx *types.ActivationTxHeader, epoch type
 		Proofs:    eligibilityProofs,
 		Slots:     numEligibleSlots,
 	}, nil
-}
-
-func emitEpochEligibility(beacon types.Beacon, elig *EpochEligibility) {
-	eligs := make([]types.ProposalEligibility, 0, len(elig.Proofs))
-	for lid := range elig.Proofs {
-		eligs = append(eligs, types.ProposalEligibility{
-			Layer: lid,
-			Count: uint32(len(elig.Proofs)),
-		})
-	}
-	events.EmitEligibilities(elig.Epoch, beacon, elig.Atx, uint32(len(elig.ActiveSet)), eligs)
 }

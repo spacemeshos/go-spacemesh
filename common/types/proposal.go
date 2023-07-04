@@ -20,7 +20,7 @@ const (
 	ProposalIDSize = Hash32Length
 )
 
-//go:generate scalegen -types Proposal,InnerProposal,ProposalID
+//go:generate scalegen
 
 // ProposalID is a 20-byte blake3 sum of the serialized ballot used to identify a Proposal.
 type ProposalID Hash20
@@ -171,9 +171,4 @@ func ProposalIDsToHashes(ids []ProposalID) []Hash32 {
 		hashes = append(hashes, id.AsHash32())
 	}
 	return hashes
-}
-
-type ProposalEligibility struct {
-	Layer LayerID `json:"layer"`
-	Count uint32  `json:"count"`
 }

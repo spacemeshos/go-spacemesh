@@ -144,7 +144,7 @@ func EmitEligibilities(
 	beacon types.Beacon,
 	atx types.ATXID,
 	activeSetSize uint32,
-	eligibilities []types.ProposalEligibility,
+	eligibilities map[types.LayerID][]types.VotingEligibility,
 ) {
 	const help = "Computed eligibilities for the epoch. " +
 		"Rewards will be received after publishing proposals at specified layers. " +
@@ -164,13 +164,13 @@ func EmitEligibilities(
 	)
 }
 
-func castEligibilities(eligs []types.ProposalEligibility) []*pb.ProposalEligibility {
-	rst := make([]*pb.ProposalEligibility, len(eligs))
-	for i := range eligs {
-		rst[i] = &pb.ProposalEligibility{
-			Layer: eligs[i].Layer.Uint32(),
-			Count: eligs[i].Count,
-		}
+func castEligibilities(proofs map[types.LayerID][]types.VotingEligibility) []*pb.ProposalEligibility {
+	rst := make([]*pb.ProposalEligibility, 0, len(proofs))
+	for lid, eligs := range proofs {
+		rst = append(rst, &pb.ProposalEligibility{
+			Layer: lid.Uint32(),
+			Count: uint32(len(eligs)),
+		})
 	}
 	return rst
 }
