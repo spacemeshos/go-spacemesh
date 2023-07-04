@@ -62,7 +62,9 @@ func (a AdminService) CheckpointStream(req *pb.CheckpointStreamRequest, stream p
 		return status.Errorf(codes.Unavailable, "can't send header")
 	}
 	f, err := os.Open(fname)
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	if err != nil {
 		return status.Errorf(codes.Internal, fmt.Sprintf("failed to open file %s: %s", fname, err.Error()))
 	}
