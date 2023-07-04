@@ -20,8 +20,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-const chunksize = 1024
-const defaultNumAtxs = 4
+const (
+	chunksize      = 1024
+	defaultNumAtxs = 4
+)
 
 // AdminService exposes endpoints for node administration.
 type AdminService struct {
