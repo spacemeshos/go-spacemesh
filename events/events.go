@@ -11,12 +11,11 @@ type EventType string
 
 const (
 	TypeBeacon        = "Beacon"
-	TypeWaitAtxs      = "Download ATXs"
 	TypeInitStart     = "Init Start"
 	TypeInitComplete  = "Init Complete"
 	TypePostStart     = "Post Start"
 	TypePostComplete  = "Post Complete"
-	TypePoetWait      = "Poet Wait"
+	TypePoetWaitStart = "Poet Wait Start"
 	TypePoetWaitEnd   = "Poet Wait End"
 	TypeATXPublished  = "ATX Published"
 	TypeEligibilities = "Eligibilities"
@@ -48,7 +47,6 @@ func EmitBeacon(epoch types.EpochID, beacon types.Beacon) {
 
 type EventInitStart struct {
 	Smesher    types.NodeID `json:"smesher"`
-	Genesis    types.Hash20 `json:"genesis"`
 	Commitment types.ATXID  `json:"commitment"`
 }
 
@@ -85,7 +83,7 @@ func EmitPoetWait(current, publish types.EpochID, wait time.Duration) {
 	const help = "Node needs to wait for poet registration window in current epoch to open." +
 		"Once opened it will submit challenge and wait till poet round ends in publish epoch."
 	emitUsersEvents(
-		TypePoetWait,
+		TypePoetWaitStart,
 		help,
 		false,
 		EventPoetWait{Current: current, Publish: publish, Wait: wait},
@@ -115,7 +113,7 @@ type EventPost struct {
 }
 
 func EmitPostStart(challennge []byte) {
-	const help = "Node started post execution for challenge from a poet."
+	const help = "Node started post execution for the challenge from poet."
 	emitUsersEvents(
 		TypePostStart,
 		help,
@@ -160,8 +158,8 @@ func EmitAtxPublished(
 	id types.ATXID,
 	wait time.Duration,
 ) {
-	const help = "Published activation. " +
-		"Node needs to wait till the start of target epoch in order to be eligible for rewards."
+	const help = "Published activation for the current epoch. " +
+		"Node needs to wait till the start of the target epoch in order to be eligible for rewards."
 	emitUsersEvents(
 		TypeATXPublished,
 		help,
@@ -192,7 +190,7 @@ func EmitEligibilities(
 ) {
 	const help = "Computed eligibilities for the epoch. " +
 		"Rewards will be received after publishing proposals at specified layers. " +
-		"Total amount of rewards will be based on other participants in the layer."
+		"Total amount of rewards in SMH will be based on other participants in the layer."
 	emitUsersEvents(
 		TypeEligibilities,
 		help,
