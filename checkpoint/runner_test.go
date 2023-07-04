@@ -11,10 +11,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
