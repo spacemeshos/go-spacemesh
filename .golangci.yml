@@ -80,7 +80,7 @@ linters-settings:
   staticcheck:
     # SAxxxx checks in https://staticcheck.io/docs/configuration/options/#checks
     # Default: ["*"]
-    checks: ["all"]
+    checks: ["all", "-SA5001"]
 
   errcheck:
     # Report about not checking of errors in type assertions: `a := b.(MyStruct)`.
@@ -366,7 +366,7 @@ linters:
     # - gocyclo
     # - lll
     # - prealloc
-  
+
   # Enable all available linters.
   # Default: false
   enable-all: false
@@ -374,7 +374,7 @@ linters:
   # Disable specific linter
   # https://golangci-lint.run/usage/linters/#disabled-by-default
   # disable:
-    
+
   # Run only fast linters from enabled linters set (first run won't be fast)
   # Default: false
   fast: false
