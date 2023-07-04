@@ -62,7 +62,7 @@ func EmitPoetWait(current, publish types.EpochID, wait time.Duration) {
 		false,
 		&pb.Event_PoetWait{PoetWait: &pb.EventPoetWait{
 			Current: current.Uint32(),
-			Public:  current.Uint32(),
+			Publish: publish.Uint32(),
 			Wait:    durationpb.New(wait),
 		}},
 	)

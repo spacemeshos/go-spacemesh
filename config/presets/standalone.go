@@ -48,14 +48,14 @@ func standalone() config.Config {
 	conf.POST.K1 = 12
 	conf.POST.K2 = 4
 	conf.POST.K3 = 4
-	conf.POST.LabelsPerUnit = 128
-	conf.POST.MaxNumUnits = 4
-	conf.POST.MinNumUnits = 2
+	conf.POST.LabelsPerUnit = 64
+	conf.POST.MaxNumUnits = 2
+	conf.POST.MinNumUnits = 1
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = true
 	conf.SMESHING.Opts.ProviderID = int(initialization.CPUProviderID())
-	conf.SMESHING.Opts.NumUnits = 2
+	conf.SMESHING.Opts.NumUnits = 1
 	conf.SMESHING.Opts.Throttle = true
 	conf.SMESHING.Opts.DataDir = conf.DataDirParent
 

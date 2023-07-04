@@ -906,6 +906,57 @@ func TestFlock(t *testing.T) {
 	})
 }
 
+func TestAdminEvents(t *testing.T) {
+	cfg, err := presets.Get("standalone")
+	require.NoError(t, err)
+	cfg.DataDirParent = t.TempDir()
+	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
+	cfg.SMESHING.Opts.DataDir = t.TempDir()
+	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
+
+	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
+	signer, err := app.LoadOrCreateEdSigner()
+	require.NoError(t, err)
+	app.edSgn = signer // why is it like that?
+	require.NoError(t, app.Initialize())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var eg errgroup.Group
+	eg.Go(func() error {
+		return app.Start(ctx)
+	})
+	t.Cleanup(func() { eg.Wait() })
+
+	conn, err := grpc.Dial(
+		cfg.API.PrivateListener,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(5*time.Second),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() { conn.Close() })
+	client := pb.NewAdminServiceClient(conn)
+
+	tctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
+	require.NoError(t, err)
+	defer stream.CloseSend()
+	success := []pb.IsEventDetails{
+		&pb.Event_InitStart{},
+		&pb.Event_InitComplete{},
+		&pb.Event_PostStart{},
+		&pb.Event_PostComplete{},
+		&pb.Event_PoetWaitChallenge{},
+	}
+	_ = success
+	for {
+		msg, err := stream.Recv()
+		require.NoError(t, err)
+		t.Logf("EVENT: %v. %v", time.Now(), msg)
+	}
+}
+
 func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg, err := LoadConfigFromFile()
 	if err != nil {
