@@ -110,14 +110,6 @@ jobs:
           - [self-hosted, macos, arm64]
           - windows-latest
     steps:
-      - name: checkout
-        uses: actions/checkout@v3
-      - name: set up go
-        uses: actions/setup-go@v4
-        with:
-          check-latest: true
-          go-version-file: "go.mod"
-          cache: ${{ runner.arch != 'arm64' }}
       - name: Add OpenCL support - Ubuntu
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
@@ -128,9 +120,14 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
-      - name: Add OpenCL support - Windows
-        if: ${{ matrix.os == 'windows-latest' }}
-        run: choco install opencl-intel-cpu-runtime
+      - name: checkout
+        uses: actions/checkout@v3
+      - name: set up go
+        uses: actions/setup-go@v4
+        with:
+          check-latest: true
+          go-version-file: "go.mod"
+          cache: ${{ runner.arch != 'arm64' }}
       - name: setup env
         run: make install
       - name: build
