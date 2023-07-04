@@ -57,6 +57,8 @@ jobs:
     # should not take more than 7-8 mins
     timeout-minutes: 10
     steps:
+      - name: Add OpenCL support
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
@@ -64,8 +66,6 @@ jobs:
         with:
           check-latest: true
           go-version-file: "go.mod"
-      - name: Add OpenCL support
-        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: fmt, tidy, generate
         run: |
           make install
@@ -89,8 +89,6 @@ jobs:
         with:
           check-latest: true
           go-version-file: "go.mod"
-      - name: Add OpenCL support
-        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: setup env
         run: make install
       - name: lint
@@ -110,6 +108,16 @@ jobs:
           - [self-hosted, macos, arm64]
           - windows-latest
     steps:
+      - name: Add OpenCL support - Ubuntu
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
+      - name: Override SDKROOT for macOS
+        if: ${{ contains(matrix.os, 'macos') && runner.arch == 'arm64' }}
+        run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> $GITHUB_ENV
+      - name: disable Windows Defender - Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
@@ -118,12 +126,6 @@ jobs:
           check-latest: true
           go-version-file: "go.mod"
           cache: ${{ runner.arch != 'arm64' }}
-      - name: Add OpenCL support - Ubuntu
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
-      - name: Override SDKROOT for macOS
-        if: ${{ contains(matrix.os, 'macos') && runner.arch == 'arm64' }}
-        run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> $GITHUB_ENV
       - name: setup env
         run: make install
       - name: build

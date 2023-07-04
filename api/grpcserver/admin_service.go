@@ -20,7 +20,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-const chunksize = 1024
+const (
+	chunksize      = 1024
+	defaultNumAtxs = 4
+)
 
 // AdminService exposes endpoints for node administration.
 type AdminService struct {
@@ -48,7 +51,11 @@ func (a AdminService) CheckpointStream(req *pb.CheckpointStreamRequest, stream p
 	// - on the client side (default limit on the receiving end)
 	// - locally as the node already loads db query result in memory
 	snapshot := types.LayerID(req.SnapshotLayer)
-	err := checkpoint.Generate(stream.Context(), afero.NewOsFs(), a.db, a.dataDir, snapshot)
+	numAtxs := int(req.NumAtxs)
+	if numAtxs < defaultNumAtxs {
+		numAtxs = defaultNumAtxs
+	}
+	err := checkpoint.Generate(stream.Context(), afero.NewOsFs(), a.db, a.dataDir, snapshot, numAtxs)
 	if err != nil {
 		return status.Errorf(codes.Internal, fmt.Sprintf("failed to create checkpoint: %s", err.Error()))
 	}

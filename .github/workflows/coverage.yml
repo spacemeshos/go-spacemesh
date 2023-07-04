@@ -24,7 +24,7 @@ jobs:
         with:
           check-latest: true
           go-version-file: "go.mod"
-      - name: Add OpenCL support
+      - name: Add OpenCL support - Ubuntu
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: setup env
         run: make install
