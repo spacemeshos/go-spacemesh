@@ -37,7 +37,7 @@ func maxWeight(a, b uint64) uint64 {
 }
 
 // GetNumEligibleSlots calculates the number of eligible slots for a smesher in an epoch.
-func GetNumEligibleSlots(weight, minWeight, totalWeight uint64, committeeSize uint32, layersPerEpoch uint32) (uint32, error) {
+func GetNumEligibleSlots(weight, minWeight, totalWeight uint64, committeeSize, layersPerEpoch uint32) (uint32, error) {
 	if totalWeight == 0 {
 		return 0, ErrZeroTotalWeight
 	}

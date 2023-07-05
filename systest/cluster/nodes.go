@@ -177,7 +177,7 @@ func (n *NodeClient) resetConn(conn *grpc.ClientConn) {
 	}
 }
 
-func (n *NodeClient) Invoke(ctx context.Context, method string, args any, reply any, opts ...grpc.CallOption) error {
+func (n *NodeClient) Invoke(ctx context.Context, method string, args, reply any, opts ...grpc.CallOption) error {
 	conn, err := n.ensureConn(ctx)
 	if err != nil {
 		return err
@@ -380,7 +380,7 @@ func waitPod(ctx *testcontext.Context, id string) (*apiv1.Pod, error) {
 	}
 }
 
-func nodeLabels(name string, id string) map[string]string {
+func nodeLabels(name, id string) map[string]string {
 	return map[string]string{
 		// app identifies resource kind (Node, Poet).
 		// It can be used to select all Pods of given kind.
