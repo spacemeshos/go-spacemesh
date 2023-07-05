@@ -49,6 +49,14 @@ func putEncoderBuffer(b *bytes.Buffer) {
 	encoderPool.Put(b)
 }
 
+func MustEncode(value Encodable) []byte {
+	buf, err := Encode(value)
+	if err != nil {
+		panic(err)
+	}
+	return buf
+}
+
 // Encode value to a byte buffer.
 func Encode(value Encodable) ([]byte, error) {
 	b := getEncoderBuffer()
@@ -60,6 +68,13 @@ func Encode(value Encodable) ([]byte, error) {
 	buf := make([]byte, n)
 	copy(buf, b.Bytes())
 	return buf, nil
+}
+
+func MustDecode(buf []byte, value Decodable) {
+	err := Decode(buf, value)
+	if err != nil {
+		panic(err)
+	}
 }
 
 // Decode value from a byte buffer.

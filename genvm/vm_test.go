@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
@@ -2041,15 +2042,6 @@ func TestVaultValidation(t *testing.T) {
 	})
 }
 
-func FuzzParse(f *testing.F) {
-	f.Fuzz(func(t *testing.T, data []byte) {
-		tt := newTester(t).addSingleSig(1).applyGenesis()
-		t.Cleanup(func() { tt.db.Close() })
-		req := tt.Validation(types.NewRawTx(data))
-		req.Parse()
-	})
-}
-
 func BenchmarkTransactions(b *testing.B) {
 	bench := func(b *testing.B, tt *tester, txs []types.Transaction) {
 		lid := types.GetEffectiveGenesis().Add(2)
@@ -2349,6 +2341,79 @@ func notVerified(raw ...types.RawTx) []types.Transaction {
 		rst = append(rst, types.Transaction{RawTx: tx})
 	}
 	return rst
+}
+
+func FuzzParse(f *testing.F) {
+	tt := newTester(f).
+		withSeed(111). // constant seed to generate same addresses on every run
+		addSingleSig(1).
+		addMultisig(1, 2, 3).
+		addMultisig(1, 1, 1).
+		addVesting(1, 2, 3).
+		addVesting(1, 1, 1).
+		applyGenesis()
+	skipped, _, err := tt.Apply(ApplyContext{Layer: types.LayerID(3)},
+		notVerified(tt.spawnAll()...), nil)
+	require.NoError(tt, err)
+	require.Empty(tt, skipped)
+
+	versions := []int{0, 1, math.MaxInt}
+	methods := []int{
+		core.MethodSpawn, core.MethodSpend, vesting.MethodDrainVault,
+		777, math.MaxInt,
+	}
+	args := [][]byte{{}}
+	payload := codec.MustEncode(&core.Payload{GasPrice: 1})
+	payloads := [][]byte{{}, payload}
+	for _, acc := range tt.accounts {
+		args = append(args, codec.MustEncode(acc.spawnArgs()))
+		args = append(args, codec.MustEncode(&wallet.SpendArguments{
+			Destination: types.Address{1, 1, 1, 1},
+			Amount:      100,
+		}))
+		args = append(args, codec.MustEncode(&vesting.DrainVaultArguments{
+			Vault: tt.accounts[1].getAddress(),
+			SpendArguments: vault.SpendArguments{
+				Destination: types.Address{1, 1, 1, 1},
+				Amount:      100,
+			},
+		}))
+		payloads = append(payloads, append(acc.getTemplate().Bytes(), payload...))
+	}
+	for _, acc := range tt.accounts {
+		for _, version := range versions {
+			for _, method := range methods {
+				for _, payload := range payloads {
+					for _, arg := range args {
+						f.Add(version, acc.getAddress().Bytes(), method, payload, arg, []byte{})
+					}
+				}
+			}
+		}
+	}
+	f.Fuzz(func(t *testing.T, version int, principal []byte, method int, payload []byte, args []byte, sig []byte) {
+		var (
+			buf = bytes.NewBuffer(nil)
+			enc = scale.NewEncoder(buf)
+		)
+		_, err := scale.EncodeCompact64(enc, uint64(version))
+		require.NoError(t, err)
+		_, err = scale.EncodeByteArray(enc, principal)
+		require.NoError(t, err)
+		_, err = scale.EncodeCompact64(enc, uint64(method))
+		require.NoError(t, err)
+		_, err = scale.EncodeByteArray(enc, payload)
+		require.NoError(t, err)
+		_, err = scale.EncodeByteArray(enc, args)
+		require.NoError(t, err)
+		_, err = scale.EncodeByteArray(enc, sig)
+		require.NoError(t, err)
+		req := tt.VM.Validation(types.NewRawTx(buf.Bytes()))
+		_, err = req.Parse()
+		if err == nil {
+			_ = req.Verify()
+		}
+	})
 }
 
 func TestMain(m *testing.M) {

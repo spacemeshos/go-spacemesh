@@ -57,6 +57,8 @@ jobs:
     # should not take more than 7-8 mins
     timeout-minutes: 10
     steps:
+      - name: Add OpenCL support
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
@@ -64,8 +66,6 @@ jobs:
         with:
           check-latest: true
           go-version-file: "go.mod"
-      - name: Add OpenCL support
-        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: fmt, tidy, generate
         run: |
           make install
@@ -89,8 +89,6 @@ jobs:
         with:
           check-latest: true
           go-version-file: "go.mod"
-      - name: Add OpenCL support
-        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: setup env
         run: make install
       - name: lint
@@ -110,6 +108,16 @@ jobs:
           - [self-hosted, macos, arm64]
           - windows-latest
     steps:
+      - name: Add OpenCL support - Ubuntu
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
+      - name: Override SDKROOT for macOS
+        if: ${{ contains(matrix.os, 'macos') && runner.arch == 'arm64' }}
+        run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> $GITHUB_ENV
+      - name: disable Windows Defender - Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
@@ -117,12 +125,7 @@ jobs:
         with:
           check-latest: true
           go-version-file: "go.mod"
-      - name: Add OpenCL support - Ubuntu
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
-      - name: Override SDKROOT for macOS
-        if: ${{ contains(matrix.os, 'macos') && runner.arch == 'arm64' }}
-        run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> "$GITHUB_ENV"
+          cache: ${{ runner.arch != 'arm64' }}
       - name: setup env
         run: make install
       - name: build
@@ -134,10 +137,13 @@ jobs:
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os:
           - ubuntu-latest
+          - [self-hosted, linux, arm64]
+          - macos-latest
+          - [self-hosted, macos, arm64]
     steps:
       # as we use some request to localhost, sometimes it gives us flaky tests. try to disable tcp offloading for fix it
       # https://github.com/actions/virtual-environments/issues/1187
@@ -146,6 +152,19 @@ jobs:
         run: |
           sudo ethtool -K eth0 tx off
           sudo ethtool -K eth0 rx off
+      - name: disable TCP/UDP offload - MacOS
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: |
+          sudo sysctl -w net.link.generic.system.hwcksum_tx=0
+          sudo sysctl -w net.link.generic.system.hwcksum_rx=0
+      - name: disable TCP/UDP offload - Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          Disable-NetAdapterChecksumOffload -Name * -TcpIPv4 -UdpIPv4 -TcpIPv6 -UdpIPv6
+      - name: disable Windows Defender - Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
       - name: checkout
         uses: actions/checkout@v3
         with:
@@ -155,12 +174,16 @@ jobs:
         with:
           check-latest: true
           go-version-file: "go.mod"
+          cache: ${{ runner.arch != 'arm64' }}
       - name: Add OpenCL support - Ubuntu
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: Override SDKROOT for macOS
         if: ${{ contains(matrix.os, 'macos') && runner.arch == 'arm64' }}
-        run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> "$GITHUB_ENV"
+        run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> $GITHUB_ENV
+      - name: Add OpenCL support - Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: choco install opencl-intel-cpu-runtime
       - name: setup env
         run: make install
       - name: Clear test cache
@@ -187,13 +210,15 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - [self-hosted, linux, arm64]
-          - macos-latest
-          - [self-hosted, macos, arm64]
           - windows-latest
     steps:
       # as we use some request to localhost, sometimes it gives us flaky tests. try to disable tcp offloading for fix it
       # https://github.com/actions/virtual-environments/issues/1187
+      - name: disable TCP/UDP offload - Ubuntu
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          sudo ethtool -K eth0 tx off
+          sudo ethtool -K eth0 rx off
       - name: disable TCP/UDP offload - MacOS
         if: ${{ matrix.os == 'macos-latest' }}
         run: |
@@ -216,9 +241,13 @@ jobs:
         with:
           check-latest: true
           go-version-file: "go.mod"
+          cache: ${{ runner.arch != 'arm64' }}
+      - name: Add OpenCL support - Ubuntu
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: Override SDKROOT for macOS
         if: ${{ contains(matrix.os, 'macos') && runner.arch == 'arm64' }}
-        run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> "$GITHUB_ENV"
+        run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> $GITHUB_ENV
       - name: Add OpenCL support - Windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: choco install opencl-intel-cpu-runtime
@@ -227,7 +256,7 @@ jobs:
       - name: Clear test cache
         run: make clear-test-cache
       - name: unit tests
-        timeout-minutes: 45
+        timeout-minutes: 35
         env:
           GOTESTSUM_FORMAT: standard-verbose
           GOTESTSUM_JUNITFILE: unit-tests.xml

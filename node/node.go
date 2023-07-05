@@ -955,7 +955,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 		return err
 	}
 	cfg.RawRESTListener = parsed.Host
-	cfg.Service.Genesis = app.Config.Genesis.GenesisTime
+	cfg.Service.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime)
 	cfg.Service.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
 	cfg.Service.CycleGap = app.Config.POET.CycleGap
 	cfg.Service.PhaseShift = app.Config.POET.PhaseShift
