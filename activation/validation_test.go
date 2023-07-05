@@ -9,7 +9,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
-	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/require"
 
@@ -97,9 +96,13 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 
 		posAtxId := types.ATXID{1, 2, 3}
 		commitmentAtxId := types.ATXID{5, 6, 7}
+		initialPost := &types.Post{
+			Nonce:   0,
+			Indices: make([]byte, 10),
+		}
 
 		challenge := newChallenge(0, types.EmptyATXID, posAtxId, 2, &commitmentAtxId)
-		challenge.InitialPost = &types.Post{}
+		challenge.InitialPostIndices = initialPost.Indices
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{
@@ -108,7 +111,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			},
 		}, nil)
 
-		err := v.InitialNIPostChallenge(&challenge, atxProvider, goldenATXID)
+		err := v.InitialNIPostChallenge(&challenge, atxProvider, goldenATXID, initialPost.Indices)
 		require.NoError(t, err)
 	})
 
@@ -116,13 +119,17 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		t.Parallel()
 
 		posAtxId := types.ATXID{1, 2, 3}
+		initialPost := &types.Post{
+			Nonce:   0,
+			Indices: make([]byte, 10),
+		}
 
 		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2).GetEpoch(), &goldenATXID)
-		challenge.InitialPost = &types.Post{}
+		challenge.InitialPostIndices = initialPost.Indices
 
 		atxProvider := NewMockatxProvider(ctrl)
 
-		err := v.InitialNIPostChallenge(&challenge, atxProvider, goldenATXID)
+		err := v.InitialNIPostChallenge(&challenge, atxProvider, goldenATXID, initialPost.Indices)
 		require.NoError(t, err)
 	})
 
@@ -132,29 +139,50 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		challenge := &types.NIPostChallenge{
 			Sequence: 1,
 		}
-		err := v.InitialNIPostChallenge(challenge, nil, goldenATXID)
+		err := v.InitialNIPostChallenge(challenge, nil, goldenATXID, nil)
 		require.EqualError(t, err, "no prevATX declared, but sequence number not zero")
 	})
 
-	t.Run("missing initial post", func(t *testing.T) {
+	t.Run("missing initial post indices", func(t *testing.T) {
 		t.Parallel()
 		posAtxId := types.ATXID{1, 2, 3}
 
 		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2).GetEpoch(), &goldenATXID)
 
-		err := v.InitialNIPostChallenge(&challenge, nil, goldenATXID)
-		require.EqualError(t, err, "no prevATX declared, but initial Post is not included in challenge")
+		err := v.InitialNIPostChallenge(&challenge, nil, goldenATXID, nil)
+		require.EqualError(t, err, "no prevATX declared, but initial Post indices is not included in challenge")
+	})
+
+	t.Run("wrong initial post indices", func(t *testing.T) {
+		t.Parallel()
+
+		posAtxId := types.ATXID{1, 2, 3}
+		initialPost := &types.Post{
+			Nonce:   0,
+			Indices: make([]byte, 10),
+		}
+
+		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2).GetEpoch(), &goldenATXID)
+		challenge.InitialPostIndices = make([]byte, 10)
+		challenge.InitialPostIndices[0] = 1
+
+		err := v.InitialNIPostChallenge(&challenge, nil, goldenATXID, initialPost.Indices)
+		require.EqualError(t, err, "initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
 	})
 
 	t.Run("missing commitment atx", func(t *testing.T) {
 		t.Parallel()
 
 		posAtxId := types.ATXID{1, 2, 3}
+		initialPost := &types.Post{
+			Nonce:   0,
+			Indices: make([]byte, 10),
+		}
 
 		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2).GetEpoch(), nil)
-		challenge.InitialPost = &types.Post{}
+		challenge.InitialPostIndices = initialPost.Indices
 
-		err := v.InitialNIPostChallenge(&challenge, nil, goldenATXID)
+		err := v.InitialNIPostChallenge(&challenge, nil, goldenATXID, initialPost.Indices)
 		require.EqualError(t, err, "no prevATX declared, but commitmentATX is missing")
 	})
 
@@ -163,9 +191,13 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 
 		posAtxId := types.ATXID{1, 2, 3}
 		commitmentAtxId := types.ATXID{5, 6, 7}
+		initialPost := &types.Post{
+			Nonce:   0,
+			Indices: make([]byte, 10),
+		}
 
 		challenge := newChallenge(0, types.EmptyATXID, posAtxId, 1, &commitmentAtxId)
-		challenge.InitialPost = &types.Post{}
+		challenge.InitialPostIndices = initialPost.Indices
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{
@@ -174,7 +206,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			},
 		}, nil)
 
-		err := v.InitialNIPostChallenge(&challenge, atxProvider, goldenATXID)
+		err := v.InitialNIPostChallenge(&challenge, atxProvider, goldenATXID, initialPost.Indices)
 		require.EqualError(t, err, "challenge pubepoch (1) must be after commitment atx pubepoch (2)")
 	})
 }
@@ -303,7 +335,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		require.EqualError(t, err, "sequence number is not one more than prev sequence number")
 	})
 
-	t.Run("challenge contains initial post", func(t *testing.T) {
+	t.Run("challenge contains initial post indices", func(t *testing.T) {
 		t.Parallel()
 
 		nodeId := types.RandomNodeID()
@@ -312,7 +344,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		posAtxId := types.ATXID{1, 2, 3}
 
 		challenge := newChallenge(10, prevAtxId, posAtxId, 2, nil)
-		challenge.InitialPost = &types.Post{}
+		challenge.InitialPostIndices = make([]byte, 10)
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
@@ -324,7 +356,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		}, nil)
 
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
-		require.EqualError(t, err, "prevATX declared, but initial Post is included in challenge")
+		require.EqualError(t, err, "prevATX declared, but initial Post indices is included in challenge")
 	})
 
 	t.Run("challenge contains commitment atx", func(t *testing.T) {
@@ -350,29 +382,6 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
 		require.EqualError(t, err, "prevATX declared, but commitmentATX is included")
 	})
-}
-
-func Test_Validation_Post(t *testing.T) {
-	// Arrange
-	layers := types.GetLayersPerEpoch()
-	types.SetLayersPerEpoch(layersPerEpochBig)
-	t.Cleanup(func() { types.SetLayersPerEpoch(layers) })
-
-	ctrl := gomock.NewController(t)
-	poetDbAPI := NewMockpoetDbAPI(ctrl)
-	postCfg := DefaultPostConfig()
-	postVerifier := NewMockPostVerifier(ctrl)
-
-	v := NewValidator(poetDbAPI, postCfg, logtest.New(t).WithName("validator"), postVerifier)
-
-	post := types.Post{}
-	meta := types.PostMetadata{}
-
-	postVerifier.EXPECT().Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any()).Return(nil)
-	require.NoError(t, v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1))
-
-	postVerifier.EXPECT().Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any()).Return(errors.New("invalid"))
-	require.Error(t, v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1))
 }
 
 func Test_Validation_PositioningAtx(t *testing.T) {

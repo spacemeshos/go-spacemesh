@@ -145,7 +145,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			PublishEpoch: ev.LayerID.GetEpoch(),
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
-		atx := types.NewActivationTx(nipost, addr, nil, c.units, nil)
+		atx := types.NewActivationTx(nipost, addr, nil, c.units, nil, nil)
 		if err := activation.SignAndFinalizeAtx(c.signer, atx); err != nil {
 			c.logger.With().Fatal("failed to sign atx", log.Err(err))
 		}

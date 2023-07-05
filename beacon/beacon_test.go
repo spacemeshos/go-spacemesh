@@ -123,6 +123,7 @@ func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *si
 		types.Address{},
 		nil,
 		numUnits,
+		nil,
 		&nonce,
 	)
 

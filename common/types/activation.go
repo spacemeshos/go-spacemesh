@@ -69,19 +69,20 @@ func (t *ATXID) UnmarshalText(buf []byte) error {
 var EmptyATXID = ATXID{}
 
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
-// PoET membership proof.
+// PoET membership proof. It includes ATX sequence number, the previous ATX's ID (for all but the first in the sequence),
+// the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
+// the first ATX in the sequence also the commitment Merkle root.
 type NIPostChallenge struct {
 	PublishEpoch EpochID
 	// Sequence number counts the number of ancestors of the ATX. It sequentially increases for each ATX in the chain.
 	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against that miner.
-	Sequence uint64
-	// the previous ATX's ID (for all but the first in the sequence)
+	Sequence       uint64
 	PrevATXID      ATXID
 	PositioningATX ATXID
 
 	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
-	CommitmentATX *ATXID
-	InitialPost   *Post
+	CommitmentATX      *ATXID
+	InitialPostIndices []byte `scale:"max=8000"` // needs to hold K2*8 bytes at most
 }
 
 func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -96,7 +97,7 @@ func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if c.CommitmentATX != nil {
 		encoder.AddString("CommitmentATX", c.CommitmentATX.String())
 	}
-	encoder.AddObject("InitialPost", c.InitialPost)
+	encoder.AddBinary("InitialPostIndices", c.InitialPostIndices)
 	return nil
 }
 
@@ -136,9 +137,10 @@ type InnerActivationTx struct {
 	Coinbase Address
 	NumUnits uint32
 
-	NIPost   *NIPost
-	NodeID   *NodeID
-	VRFNonce *VRFPostIndex
+	NIPost      *NIPost
+	InitialPost *Post
+	NodeID      *NodeID
+	VRFNonce    *VRFPostIndex
 
 	// the following fields are kept private and from being serialized
 	id                ATXID     // non-exported cache of the ATXID
@@ -176,6 +178,7 @@ func NewActivationTx(
 	coinbase Address,
 	nipost *NIPost,
 	numUnits uint32,
+	initialPost *Post,
 	nonce *VRFPostIndex,
 ) *ActivationTx {
 	atx := &ActivationTx{
@@ -184,8 +187,9 @@ func NewActivationTx(
 			Coinbase:        coinbase,
 			NumUnits:        numUnits,
 
-			NIPost:   nipost,
-			VRFNonce: nonce,
+			NIPost:      nipost,
+			InitialPost: initialPost,
+			VRFNonce:    nonce,
 		},
 	}
 	return atx

@@ -54,7 +54,7 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, PublishEpoch
 }
 
 func newAtx(t testing.TB, sig *signing.EdSigner, challenge types.NIPostChallenge, nipost *types.NIPost, numUnits uint32, coinbase types.Address) *types.ActivationTx {
-	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil)
+	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil, nil)
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
 	return atx
@@ -154,11 +154,13 @@ func assertLastAtx(r *require.Assertions, nodeID types.NodeID, poetRef types.Has
 		r.Equal(prevAtx.Sequence+1, atx.Sequence)
 		r.Equal(prevAtx.ID(), atx.PrevATXID)
 		r.Nil(atx.InitialPost)
+		r.Nil(atx.InitialPostIndices)
 		r.Nil(atx.VRFNonce)
 	} else {
 		r.Zero(atx.Sequence)
 		r.Equal(types.EmptyATXID, atx.PrevATXID)
 		r.NotNil(atx.InitialPost)
+		r.NotNil(atx.InitialPostIndices)
 		r.NotNil(atx.VRFNonce)
 	}
 	r.Equal(posAtx.ID(), atx.PositioningATX)
@@ -231,7 +233,7 @@ func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID, sig *signing
 	challenge := types.NIPostChallenge{
 		PublishEpoch: epoch,
 	}
-	atx := types.NewActivationTx(challenge, types.Address{}, nil, 2, nil)
+	atx := types.NewActivationTx(challenge, types.Address{}, nil, 2, nil, nil)
 	atx.SetEffectiveNumUnits(2)
 	return addAtx(t, db, sig, atx)
 }
@@ -677,7 +679,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	r.NoError(atxs.Add(tab.cdb, vPosAtx))
 
 	challenge = newChallenge(0, types.EmptyATXID, posAtx.ID(), prevAtxPostEpoch, nil)
-	challenge.InitialPost = initialPost
+	challenge.InitialPostIndices = initialPost.Indices
 	prevAtx := newAtx(t, tab.sig, challenge, nipost, 2, types.Address{})
 	prevAtx.InitialPost = initialPost
 	SignAndFinalizeAtx(tab.sig, prevAtx)
@@ -739,6 +741,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 		r.Equal(prevAtx.Sequence+1, atx.Sequence)
 		r.Equal(prevAtx.ID(), atx.PrevATXID)
 		r.Nil(atx.InitialPost)
+		r.Nil(atx.InitialPostIndices)
 
 		r.Equal(posAtx.ID(), atx.PositioningATX)
 		r.Equal(postAtxPubEpoch+1, atx.PublishEpoch)
@@ -827,6 +830,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		r.Zero(atx.Sequence)
 		r.Equal(types.EmptyATXID, atx.PrevATXID)
 		r.NotNil(atx.InitialPost)
+		r.NotNil(atx.InitialPostIndices)
 
 		r.Equal(posAtx.ID(), atx.PositioningATX)
 		r.Equal(posEpoch+1, atx.PublishEpoch)

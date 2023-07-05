@@ -44,7 +44,7 @@ func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error)
 		total += n
 	}
 	{
-		n, err := scale.EncodeOption(enc, t.InitialPost)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.InitialPostIndices, 8000)
 		if err != nil {
 			return total, err
 		}
@@ -93,12 +93,12 @@ func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error)
 		t.CommitmentATX = field
 	}
 	{
-		field, n, err := scale.DecodeOption[Post](dec)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 8000)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.InitialPost = field
+		t.InitialPostIndices = field
 	}
 	return total, nil
 }
@@ -127,6 +127,13 @@ func (t *InnerActivationTx) EncodeScale(enc *scale.Encoder) (total int, err erro
 	}
 	{
 		n, err := scale.EncodeOption(enc, t.NIPost)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeOption(enc, t.InitialPost)
 		if err != nil {
 			return total, err
 		}
@@ -179,6 +186,14 @@ func (t *InnerActivationTx) DecodeScale(dec *scale.Decoder) (total int, err erro
 		}
 		total += n
 		t.NIPost = field
+	}
+	{
+		field, n, err := scale.DecodeOption[Post](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.InitialPost = field
 	}
 	{
 		field, n, err := scale.DecodeOption[NodeID](dec)
