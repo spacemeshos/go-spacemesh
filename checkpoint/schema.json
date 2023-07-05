@@ -5,10 +5,15 @@
   "description": "checkpoint data for recovery",
   "type": "object",
   "required": [
+    "command",
     "version",
     "data"
   ],
   "properties": {
+    "command": {
+      "description": "command to execute",
+      "type": "string"
+    },
     "version": {
       "description": "version of the checkpoint file. same as schema's $id",
       "type": "string"

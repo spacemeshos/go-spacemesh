@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -21,6 +20,7 @@ import (
 )
 
 const checkpointdata = `{
+"command": "grpcurl -plaintext -d '{\"snapshot_layer\":15,\"num_atxs\":2}' 0.0.0.0:9093 spacemesh.v1.AdminService.CheckpointStream",
 "version":"https://spacemesh.io/checkpoint.schema.json.1.0",
 "data":{
   "id":"snapshot-15-restore-18",
@@ -83,15 +83,15 @@ func queryUrl(t *testing.T, ctx context.Context, url string) []byte {
 	return got
 }
 
-func updateCheckpoint(t *testing.T, ctx context.Context, data []byte) {
+func updateCheckpoint(t *testing.T, ctx context.Context, data string) {
 	endpoint := fmt.Sprintf("http://localhost:%d/updateCheckpoint", port)
-	formData := url.Values{"checkpoint": []string{string(data)}}
+	formData := url.Values{"checkpoint": []string{data}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(formData.Encode()))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := (&http.Client{}).Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	resp.Body.Close()
 }
 
 func TestServer(t *testing.T) {
@@ -138,10 +138,9 @@ func TestServer(t *testing.T) {
 	got := queryCheckpoint(t, ctx)
 	require.Empty(t, got)
 
-	chdata := []byte(checkpointdata)
-	updateCheckpoint(t, ctx, chdata)
+	updateCheckpoint(t, ctx, checkpointdata)
 	got = queryCheckpoint(t, ctx)
-	require.True(t, bytes.Equal(chdata, got))
+	require.Equal(t, checkpointdata, string(got))
 
 	cancel()
 	srv.Stop(ctx)
