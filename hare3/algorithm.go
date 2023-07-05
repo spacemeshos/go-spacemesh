@@ -148,7 +148,7 @@ func NewHandler(gg GradedGossiper, tgg ThresholdGradedGossiper, gc Gradecaster, 
 
 // HandleMsg handles an incoming message, it returns a boolean indicating
 // whether the message should be regossipped to peers.
-func (h *Handler) HandleMsg(hash types.Hash20, vk []byte, round int8, values []types.Hash20) (bool, *types.Hash20) {
+func (h *Handler) HandleMsg(hash types.Hash20, vk []byte, round AbsRound, values []types.Hash20) (bool, *types.Hash20) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	r := AbsRound(round)
@@ -160,31 +160,12 @@ func (h *Handler) HandleMsg(hash types.Hash20, vk []byte, round int8, values []t
 		g = gradeKey5(vk)
 	}
 	id := hashBytes(vk)
-	var valuesHash *types.Hash20
 
-	// if Values is equal to nil, it is an indication of equivocation, so we leave valuesHash nil to indicate equivocation to graded gossip
-	if values != nil {
-		h := toHash(values)
-		valuesHash = &h
-	}
-
-	var gradedGossipValues []types.Hash20
 	var equivocationHash *types.Hash20
-	// We now have a new rule as explained by Tal, that in fact malfeasance
-	// proofs are essentially roundless, i.e. they affect all rounds, so we
-	// should just store a map of identity to malfeasance proof inside gg and
-	// then check it on exit whenever a message goes through.
-	//
 	// Nil values signifies a message from a known malicious actor, however we
 	// still need to forward the first such message per identity to the network
-	// though so that they also insert it into their protocols. So we need an
-	// outcome that is send equivocation proof but with a nil equivocation hash
-	// in order to handle this case. Internally the implementation will track
-	// to see if there was a previous outcome with nil values and if so will
-	// drop the message. This then covers the case where we get a second
-	// message from a prior known equivocator or we get a third message from an
-	// identity equivocating in this round.
-	result, eHash := h.gg.ReceiveMsg(hash, id, valuesHash, r)
+	// though so that they also insert it into their protocols.
+	result, eHash := h.gg.ReceiveMsg(hash, id, values, r)
 	switch result {
 	case DropMessage:
 		// Indicates prior equivocation, drop the message.
@@ -192,24 +173,26 @@ func (h *Handler) HandleMsg(hash types.Hash20, vk []byte, round int8, values []t
 	case SendEquivocationProof:
 		// Indicates new instance of equivocation notify gradecast or threshold
 		// gossip with nil values.
-		gradedGossipValues = nil
 		// Set the equivocationHash so that the caller can look up the message.
 		equivocationHash = eHash
-	case SendValue:
-		// Indicates valid message, set values to message values.
-		gradedGossipValues = values
 	}
 
 	curr := h.rp.CurrentRound()
+	// In the case of early messages we just set the curr round to be equal to
+	// the message round. I.E. we assume they were delivered perfectly on time.
+	if curr < round {
+		curr = round
+	}
+
 	// Pass results to gradecast or threshold gossip.
 	// Only proposals are gradecasted, all other message types are passed to
 	// threshold gossip.
 	if r.Type() == Propose {
 		// Send to gradecast
-		h.gc.ReceiveMsg(id, gradedGossipValues, r, curr, g)
+		h.gc.ReceiveMsg(id, values, r, curr, g)
 	} else {
 		// Pass result to threshold gossip
-		h.tgg.ReceiveMsg(id, gradedGossipValues, r, curr, g)
+		h.tgg.ReceiveMsg(id, values, r, curr, g)
 	}
 	return true, equivocationHash
 }
