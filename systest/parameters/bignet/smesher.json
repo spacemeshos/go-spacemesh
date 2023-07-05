@@ -39,8 +39,8 @@
         "post-k3": 37
     },
     "smeshing": {
-        "smeshing-proving-opts": {
-            "smeshing-opts-proving-powflags": 110
+        "smeshing-verifying-opts": {
+            "smeshing-opts-verifying-workers": 4
         }
     }
 }
