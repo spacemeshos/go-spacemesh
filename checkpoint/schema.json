@@ -5,7 +5,6 @@
   "description": "checkpoint data for recovery",
   "type": "object",
   "required": [
-    "command",
     "version",
     "data"
   ],
