@@ -47,16 +47,10 @@ func defaultPoetClientFunc(address string, cfg PoetConfig) (PoetProvingServiceCl
 }
 
 func checkRetry(ctx context.Context, resp *http.Response, err error) (bool, error) {
-	if retry, err := retryablehttp.DefaultRetryPolicy(ctx, resp, err); retry || err != nil {
-		return retry, err
-	}
-	if err != nil {
-		return false, nil
-	}
-	if resp.StatusCode == http.StatusNotFound {
+	if resp != nil && resp.StatusCode == http.StatusNotFound {
 		return true, nil
 	}
-	return false, nil
+	return retryablehttp.DefaultRetryPolicy(ctx, resp, err)
 }
 
 type PoetClientOpts func(*HTTPPoetClient)
