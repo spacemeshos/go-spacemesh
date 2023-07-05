@@ -68,7 +68,14 @@ func NewGradecaster() *DefaultGradecaster {
 }
 
 // ReceiveMsg implements Gradecaster.
-func (g *DefaultGradecaster) ReceiveMsg(id types.Hash20, values []types.Hash20, msgRound, currRound AbsRound, grade uint8) {
+func (g *DefaultGradecaster) ReceiveMsg(id types.Hash20, values []types.Hash20,
+	msgRound, currRound AbsRound, grade uint8,
+) {
+	if msgRound-currRound > 3 {
+		// Messages that arrive more than 3 rounds late have no bearing on the
+		// output of gradecast.
+		return
+	}
 	senderStates := Ensure(g.messages, msgRound)
 	state, ok := senderStates[id]
 	if !ok {

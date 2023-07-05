@@ -15,6 +15,10 @@ var (
 	val2 = randHash20()
 	val3 = randHash20()
 
+	msgHash1 = randHash20()
+	msgHash2 = randHash20()
+	msgHash3 = randHash20()
+
 	values1 = []types.Hash20{val1}
 	values2 = []types.Hash20{val1, val2}
 	values3 = []types.Hash20{val1, val2, val3}
@@ -24,6 +28,7 @@ var (
 	r1   = NewAbsRound(0, 1)
 	r2   = NewAbsRound(0, 2)
 	r3   = NewAbsRound(0, 3)
+	r4   = NewAbsRound(0, 4)
 )
 
 func randHash20() types.Hash20 {
