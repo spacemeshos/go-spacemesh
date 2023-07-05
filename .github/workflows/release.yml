@@ -54,12 +54,12 @@ jobs:
         if: ${{ contains(matrix.os, 'macos') && runner.arch == 'arm64' }}
         run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> $GITHUB_ENV
 
-        # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
       - name: Build go-spacemesh
         shell: bash
         run: |
           make install
           make build VERSION=${{ github.ref }} BIN_DIR_WIN=./build
+
       - name: Create release archive
         shell: bash
         env:
@@ -80,7 +80,7 @@ jobs:
         uses: google-github-actions/upload-cloud-storage@v0
         with:
           path: ${{ env.OUTNAME }}.zip
-          destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/
+          destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref }}/
 
   release:
     runs-on: ubuntu-latest
@@ -89,12 +89,6 @@ jobs:
       - name: Check out Git repository
         uses: actions/checkout@v3
 
-      - name: Read version.txt
-        id: version
-        uses: juliangruber/read-file-action@v1
-        with:
-          path: ./version.txt
-
       - name: Create Release
         uses: actions/create-release@v1
         id: create_release
@@ -102,13 +96,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name:  ${{ github.ref }}
-          release_name: Release ${{ steps.version.outputs.content }}
+          release_name: Release ${{ github.ref }}
           body: |
             ## Zip Files
-            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Windows.zip
-            - macOS: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macOS.zip
-            - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macOS_ARM64.zip
-            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Linux.zip
-            - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Linux_ARM64.zip
+            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref }}/Windows.zip
+            - macOS: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref }}/macOS.zip
+            - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref }}/macOS_ARM64.zip
+            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref }}/Linux.zip
+            - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref }}/Linux_ARM64.zip
           draft: false
           prerelease: true
