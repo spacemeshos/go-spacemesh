@@ -927,6 +927,7 @@ func TestAdminEvents(t *testing.T) {
 	})
 	t.Cleanup(func() {
 		cancel()
+
 		eg.Wait()
 	})
 
