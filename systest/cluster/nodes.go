@@ -259,6 +259,21 @@ func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (
 	}, nil
 }
 
+func pvc(ctx *testcontext.Context, id string) error {
+	_, err := ctx.Client.CoreV1().PersistentVolumeClaims(ctx.Namespace).Apply(
+		ctx,
+		corev1.PersistentVolumeClaim(id, ctx.Namespace).
+			WithSpec(corev1.PersistentVolumeClaimSpec().
+				WithStorageClassName(ctx.Storage.Class).
+				WithAccessModes(apiv1.ReadWriteOnce).
+				WithResources(corev1.ResourceRequirements().WithRequests(apiv1.ResourceList{
+					apiv1.ResourceStorage: resource.MustParse(ctx.Storage.Size),
+				})),
+			),
+		apimetav1.ApplyOptions{FieldManager: "test"})
+	return err
+}
+
 func deployBootnodeSvc(ctx *testcontext.Context, id string) error {
 	labels := nodeLabels(bootnodeApp, id)
 	svc := corev1.Service(id, ctx.Namespace).
@@ -468,6 +483,10 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 	for _, flag := range flags {
 		cmd = append(cmd, flag.Flag())
 	}
+	if err := pvc(ctx, id); err != nil {
+		return fmt.Errorf("failed to create pvc for id %s: %w", id, err)
+	}
+
 	deployment := appsv1.Deployment(id, ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(appsv1.DeploymentSpec().
@@ -487,8 +506,7 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 						corev1.Volume().WithName("config").
 							WithConfigMap(corev1.ConfigMapVolumeSource().WithName(spacemeshConfigMapName)),
 						corev1.Volume().WithName("data").
-							WithEmptyDir(corev1.EmptyDirVolumeSource().
-								WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
+							WithPersistentVolumeClaim(corev1.PersistentVolumeClaimVolumeSource().WithClaimName(id)),
 					).
 					WithDNSConfig(corev1.PodDNSConfig().WithOptions(
 						corev1.PodDNSConfigOption().WithName("timeout").WithValue("1"),
