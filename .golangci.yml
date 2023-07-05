@@ -590,7 +590,7 @@ linters-settings:
   staticcheck:
     # SAxxxx checks in https://staticcheck.io/docs/configuration/options/#checks
     # Default: ["*"]
-    checks: ["all", "-SA5001"]
+    checks: ["all"]
 
 issues:
   # List of regexps of issue texts to exclude.
