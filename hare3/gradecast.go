@@ -4,7 +4,7 @@ import "github.com/spacemeshos/go-spacemesh/common/types"
 
 // GradecastedSet encapsulates the output from gradecast for a given identity.
 type GradecastedSet struct {
-	vk     types.Hash20
+	id     types.Hash20
 	values []types.Hash20
 	grade  uint8
 }
@@ -109,7 +109,7 @@ func (g *DefaultGradecaster) RetrieveGradecastedMessages(msgRound AbsRound) []Gr
 		grade := state.gradecastGrade(msgRound)
 		if grade > 0 {
 			results = append(results, GradecastedSet{
-				vk:     sender,
+				id:     sender,
 				values: state.values,
 				grade:  grade,
 			})

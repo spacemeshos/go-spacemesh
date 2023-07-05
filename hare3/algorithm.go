@@ -392,7 +392,7 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 				}
 				// Check leader
 				// Round 5 condition d
-				if !p.lc.IsLeader(c.vk, NewAbsRound(j, 2)) {
+				if !p.lc.IsLeader(c.id, NewAbsRound(j, 2)) {
 					continue
 				}
 				// Check grade

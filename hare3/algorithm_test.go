@@ -23,6 +23,7 @@ var (
 	r0   = NewAbsRound(0, 0)
 	r1   = NewAbsRound(0, 1)
 	r2   = NewAbsRound(0, 2)
+	r3   = NewAbsRound(0, 3)
 )
 
 func randHash20() types.Hash20 {
