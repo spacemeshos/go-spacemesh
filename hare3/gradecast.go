@@ -26,7 +26,7 @@ type Gradecaster interface {
 
 	// Since gradecast always outputs at msgRound+3 it is assumed that callers
 	// Only call this function at msgRound+3. Returns all sets of values output
-	// by gradcast at msgRound+3 along with their grading.
+	// by gradcast at msgRound+3 with grades 1 or 2 along with their grading.
 	RetrieveGradecastedMessages(msgRound AbsRound) []GradecastedSet
 }
 

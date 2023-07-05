@@ -366,9 +366,6 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 	case Commit:
 		candidates := p.gc.RetrieveGradecastedMessages(NewAbsRound(j, 2))
 		for _, c := range candidates {
-			if c.grade < 1 {
-				continue
-			}
 			if isSubset(c.values, p.Vi[2]) {
 				// Add to valid proposals for this iteration
 				p.Ti[j][toHash(c.values)] = c.values
