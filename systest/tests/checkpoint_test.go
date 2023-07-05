@@ -133,7 +133,9 @@ func TestCheckpoint(t *testing.T) {
 	tctx.Log.Debugw("query checkpoint data", "query url", queryUrl)
 	data, err := query(tctx, queryUrl)
 	require.NoError(t, err)
-	require.Equal(t, newSnapshot.String(), string(data))
+	var result types.Checkpoint
+	require.NoError(t, json.Unmarshal(data, &result))
+	require.Equal(t, snapshot, result)
 
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
