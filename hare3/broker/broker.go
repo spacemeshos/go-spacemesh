@@ -53,12 +53,6 @@ type layerState struct {
 	coinChooser *weakcoin.Chooser
 }
 
-// Stores the message against its hash for later retrieval in the case that
-// equivocation is detected.
-func (s *layerState) storeMessage(hash types.Hash20, m *hare.Message) {
-	s.messages[hash] = m
-}
-
 func (s *layerState) buildMalfeasanceProof(a, b types.Hash20) *types.MalfeasanceProof {
 	proofMsg := func(hash types.Hash20) types.HareProofMsg {
 		msg := s.messages[hash]
@@ -197,6 +191,12 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	if state == nil && !early {
 		return errors.New("consensus process not registered")
 	}
+	if state != nil {
+		_, ok := state.messages[hash]
+		if ok {
+			return errors.New("duplicate message received")
+		}
+	}
 
 	if !b.edVerifier.Verify(signing.HARE, hareMsg.SmesherID, hareMsg.SignedBytes(), hareMsg.Signature) {
 		logger.With().Error("failed to verify signature",
@@ -264,7 +264,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	}
 
 	// Only store messages that get relayed
-	state.storeMessage(hash, hareMsg)
+	state.messages[hash] = hareMsg
 
 	// Returning nil lets the p2p gossipsub layer know that the received
 	// message was valid and it should relay it to the network.
@@ -298,13 +298,12 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (*hare3.Handler
 // been detected to be malfeasant since the early message was processed.
 func (b *Broker) handleEarlyMessages(msgs map[types.Hash20]*hare.Message, handler *hare3.Handler) {
 	for k, v := range msgs {
-		id, round, values := parts(v)
-		handler.HandleMsg(k, id, round, values)
 		proof, err := b.msh.GetMalfeasanceProof(v.SmesherID)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			b.With().Panic("re-handling early messages, failed to check malicious identity", log.Stringer("smesher", v.SmesherID), log.Err(err))
 		}
 		if proof != nil {
+			id, round, _ := parts(v)
 			// The way we signify a message from a know malfeasant identity to the
 			// protocol is a message without values.
 			handler.HandleMsg(k, id, round, nil)
