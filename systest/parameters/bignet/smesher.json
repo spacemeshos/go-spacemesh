@@ -37,5 +37,10 @@
         "post-k1": 26,
         "post-k2": 37,
         "post-k3": 37
+    },
+    "smeshing": {
+        "smeshing-proving-opts": {
+            "smeshing-opts-proving-powflags": 110
+        }
     }
 }
