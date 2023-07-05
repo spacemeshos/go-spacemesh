@@ -921,12 +921,14 @@ func TestAdminEvents(t *testing.T) {
 	app.edSgn = signer // why is it like that?
 	require.NoError(t, app.Initialize())
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	var eg errgroup.Group
 	eg.Go(func() error {
 		return app.Start(ctx)
 	})
-	t.Cleanup(func() { eg.Wait() })
+	t.Cleanup(func() {
+		cancel()
+		eg.Wait()
+	})
 
 	conn, err := grpc.Dial(
 		cfg.API.PrivateListener,
@@ -938,7 +940,7 @@ func TestAdminEvents(t *testing.T) {
 	t.Cleanup(func() { conn.Close() })
 	client := pb.NewAdminServiceClient(conn)
 
-	tctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	tctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
 	require.NoError(t, err)
