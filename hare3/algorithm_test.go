@@ -16,8 +16,6 @@ var (
 	val3 = randHash20()
 
 	msgHash1 = randHash20()
-	msgHash2 = randHash20()
-	msgHash3 = randHash20()
 
 	values1 = []types.Hash20{val1}
 	values2 = []types.Hash20{val1, val2}
