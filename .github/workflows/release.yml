@@ -42,25 +42,9 @@ jobs:
           go-version-file: "go.mod"
           cache: ${{ runner.arch != 'arm64' }}
 
-      - if: matrix.os == 'windows-latest'
-        name: Install dependencies in windows
-        uses: crazy-max/ghaction-chocolatey@v2
-        with:
-          args: install make wget zip
-
-      - name: setup env
-        run: |
-          echo "::set-env name=GOPATH::$(go env GOPATH)"
-          echo "::add-path::$(go env GOPATH)/bin"
-        shell: bash
-        env:
-          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
-
-      - name: Read version.txt
-        id: version
-        uses: juliangruber/read-file-action@v1
-        with:
-          path: ./version.txt
+      - name: Install dependencies in windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: choco install make wget zip
 
       - name: Add OpenCL support for Linux
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -75,7 +59,7 @@ jobs:
         shell: bash
         run: |
           make install
-          make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
+          make build VERSION=${{ github.ref }} BIN_DIR_WIN=./build
       - name: Create release archive
         shell: bash
         env:

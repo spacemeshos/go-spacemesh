@@ -7,7 +7,7 @@ import (
 	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 
@@ -164,7 +164,7 @@ func DropPeerOnValidationReject(handler GossipHandler, h host.Host, logger log.L
 	}
 }
 
-func msgID(msg *pb.Message) string {
+func msgID(msg *pubsubpb.Message) string {
 	hasher := hash.New()
 	if msg.Topic != nil {
 		hasher.Write([]byte(*msg.Topic))

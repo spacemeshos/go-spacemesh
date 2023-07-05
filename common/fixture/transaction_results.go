@@ -54,7 +54,7 @@ func (g *TransactionResultGenerator) WithAddresses(n int) *TransactionResultGene
 }
 
 // WithLayers updates layers.
-func (g *TransactionResultGenerator) WithLayers(start int, n int) *TransactionResultGenerator {
+func (g *TransactionResultGenerator) WithLayers(start, n int) *TransactionResultGenerator {
 	g.Layers = nil
 	for i := 1; i <= n; i++ {
 		g.Layers = append(g.Layers, types.LayerID(uint32(start+i)))

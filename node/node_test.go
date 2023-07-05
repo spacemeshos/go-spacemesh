@@ -264,7 +264,7 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 	return buf.String()
 }
 
-func callEndpoint(t *testing.T, endpoint, payload string, address string) (string, int) {
+func callEndpoint(t *testing.T, endpoint, payload, address string) (string, int) {
 	url := fmt.Sprintf("http://%s/%s", address, endpoint)
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.NoError(t, err)

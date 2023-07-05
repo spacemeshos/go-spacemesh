@@ -185,7 +185,7 @@ func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.Poet
 	return &proof, members, nil
 }
 
-func (c *HTTPPoetClient) req(ctx context.Context, method string, path string, reqBody proto.Message, resBody proto.Message) error {
+func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, resBody proto.Message) error {
 	jsonReqBody, err := protojson.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("marshaling request body: %w", err)

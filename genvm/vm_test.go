@@ -315,7 +315,7 @@ func (t *tester) addMultisig(total, k, n int) *tester {
 	return t
 }
 
-func (t *tester) addVesting(total int, k, n int) *tester {
+func (t *tester) addVesting(total, k, n int) *tester {
 	for i := 0; i < total; i++ {
 		ms := t.createMultisig(k, n, vesting.TemplateAddress)
 		t.addAccount(&vestingAccount{*ms})
@@ -2391,7 +2391,7 @@ func FuzzParse(f *testing.F) {
 			}
 		}
 	}
-	f.Fuzz(func(t *testing.T, version int, principal []byte, method int, payload []byte, args []byte, sig []byte) {
+	f.Fuzz(func(t *testing.T, version int, principal []byte, method int, payload, args, sig []byte) {
 		var (
 			buf = bytes.NewBuffer(nil)
 			enc = scale.NewEncoder(buf)
