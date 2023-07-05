@@ -1149,6 +1149,7 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	if app.updater != nil {
+		log.Info("stopping updater")
 		app.updater.Close()
 	}
 

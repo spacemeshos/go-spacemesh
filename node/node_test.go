@@ -907,6 +907,9 @@ func TestFlock(t *testing.T) {
 }
 
 func TestAdminEvents(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	cfg, err := presets.Get("standalone")
 	require.NoError(t, err)
 	cfg.DataDirParent = t.TempDir()
@@ -918,18 +921,20 @@ func TestAdminEvents(t *testing.T) {
 	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
 	signer, err := app.LoadOrCreateEdSigner()
 	require.NoError(t, err)
-	app.edSgn = signer // why is it like that?
+	app.edSgn = signer // it should not be like this
 	require.NoError(t, app.Initialize())
 	ctx, cancel := context.WithCancel(context.Background())
 	var eg errgroup.Group
 	eg.Go(func() error {
-		return app.Start(ctx)
+		if err := app.Start(ctx); err != nil {
+			return err
+		}
+		app.Cleanup(context.Background())
+		app.eg.Wait() // it should not be like this
+		return nil
 	})
-	t.Cleanup(func() {
-		cancel()
-
-		eg.Wait()
-	})
+	t.Cleanup(func() { eg.Wait() })
+	t.Cleanup(cancel)
 
 	conn, err := grpc.Dial(
 		cfg.API.PrivateListener,
