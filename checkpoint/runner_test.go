@@ -68,7 +68,7 @@ var allAccounts = []*types.Account{
 	{Layer: types.LayerID(7), Address: types.Address{4, 4}, NextNonce: 1, Balance: 31, TemplateAddress: &types.Address{3}, State: []byte("state47")},
 }
 
-func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *checkpoint.Checkpoint {
+func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *types.Checkpoint {
 	t.Helper()
 
 	request, err := json.Marshal(&pb.CheckpointStreamRequest{
@@ -77,10 +77,10 @@ func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *chec
 	})
 	require.NoError(t, err)
 
-	result := &checkpoint.Checkpoint{
+	result := &types.Checkpoint{
 		Command: fmt.Sprintf(checkpoint.CommandString, request),
 		Version: "https://spacemesh.io/checkpoint.schema.json.1.0",
-		Data: checkpoint.InnerData{
+		Data: types.InnerData{
 			CheckpointId: "snapshot-5",
 		},
 	}
@@ -89,7 +89,7 @@ func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *chec
 		require.Fail(t, "numEpochs must be at least 2")
 	}
 
-	atxData := make([]checkpoint.ShortAtx, 0, numAtxs*len(allAtxs))
+	atxData := make([]types.AtxSnapshot, 0, numAtxs*len(allAtxs))
 	for _, atxs := range allAtxs {
 		n := len(atxs)
 		if n > numAtxs {
@@ -116,7 +116,7 @@ func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *chec
 	}
 
 	for _, account := range accounts {
-		result.Data.Accounts = append(result.Data.Accounts, checkpoint.Account{
+		result.Data.Accounts = append(result.Data.Accounts, types.AccountSnapshot{
 			Address:  account.Address.Bytes(),
 			Balance:  account.Balance,
 			Nonce:    account.NextNonce,
@@ -136,6 +136,11 @@ func newatx(id types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfnonce 
 				Sequence:      seq,
 				CommitmentATX: commitAtx,
 			},
+			NIPost: &types.NIPost{
+				PostMetadata: &types.PostMetadata{
+					Challenge: types.RandomBytes(5),
+				},
+			},
 			NumUnits: 2,
 			Coinbase: types.Address{1, 2, 3},
 		},
@@ -150,14 +155,14 @@ func newatx(id types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfnonce 
 	return atx
 }
 
-func newvatx(t *testing.T, atx *types.ActivationTx) *types.VerifiedActivationTx {
+func newvatx(tb testing.TB, atx *types.ActivationTx) *types.VerifiedActivationTx {
 	vatx, err := atx.Verify(1111, 12)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return vatx
 }
 
-func toShortAtx(v *types.VerifiedActivationTx, cmt *types.ATXID, nonce *types.VRFPostIndex) checkpoint.ShortAtx {
-	return checkpoint.ShortAtx{
+func toShortAtx(v *types.VerifiedActivationTx, cmt *types.ATXID, nonce *types.VRFPostIndex) types.AtxSnapshot {
+	return types.AtxSnapshot{
 		ID:             v.ID().Bytes(),
 		Epoch:          v.PublishEpoch.Uint32(),
 		CommitmentAtx:  cmt.Bytes(),
@@ -242,13 +247,13 @@ func TestRunner_Generate(t *testing.T) {
 			persisted, err := afero.ReadFile(fs, fname)
 			require.NoError(t, err)
 			require.NoError(t, checkpoint.ValidateSchema(persisted))
-			var got checkpoint.Checkpoint
+			var got types.Checkpoint
 			expected := expectedCheckpoint(t, snapshot, tc.numAtxs)
 			require.NoError(t, json.Unmarshal(persisted, &got))
 
 			require.True(t, cmp.Equal(*expected, got, cmpopts.EquateEmpty(),
-				cmpopts.SortSlices(func(a, b checkpoint.ShortAtx) bool { return bytes.Compare(a.ID, b.ID) < 0 }),
-				cmpopts.SortSlices(func(a, b checkpoint.Account) bool { return bytes.Compare(a.Address, b.Address) < 0 }),
+				cmpopts.SortSlices(func(a, b types.AtxSnapshot) bool { return bytes.Compare(a.ID, b.ID) < 0 }),
+				cmpopts.SortSlices(func(a, b types.AccountSnapshot) bool { return bytes.Compare(a.Address, b.Address) < 0 }),
 			), cmp.Diff(*expected, got))
 		})
 	}

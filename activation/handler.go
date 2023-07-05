@@ -466,7 +466,7 @@ func (h *Handler) GetPosAtxID() (types.ATXID, error) {
 	return id, nil
 }
 
-// HandleAtxData handles atxs received either by gossip or sync.
+// HandleAtxData handles atxs received by sync.
 func (h *Handler) HandleAtxData(ctx context.Context, peer p2p.Peer, data []byte) error {
 	err := h.HandleGossipAtx(ctx, peer, data)
 	if errors.Is(err, errKnownAtx) {
@@ -532,7 +532,7 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 
 	h.registerHashes(&atx, peer)
 	if err := h.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
-		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %w",
+		return fmt.Errorf("received atx (%v) with syntactically invalid or missing poet proof (%x): %w",
 			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err,
 		)
 	}
