@@ -50,7 +50,9 @@ func checkRetry(ctx context.Context, resp *http.Response, err error) (bool, erro
 	if retry, err := retryablehttp.DefaultRetryPolicy(ctx, resp, err); retry || err != nil {
 		return retry, err
 	}
-
+	if err != nil {
+		return false, nil
+	}
 	if resp.StatusCode == http.StatusNotFound {
 		return true, nil
 	}
