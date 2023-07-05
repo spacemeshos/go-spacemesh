@@ -2,6 +2,7 @@ package hare3
 
 import "github.com/spacemeshos/go-spacemesh/common/types"
 
+// GradecastedSet encapsulates the output from gradecast for a given identity.
 type GradecastedSet struct {
 	vk     types.Hash20
 	values []types.Hash20
@@ -58,6 +59,12 @@ func (s msgState) gradecastGrade(msgRound AbsRound) uint8 {
 type DefaultGradecaster struct {
 	// Maps message round to sender to message state
 	messages map[AbsRound]map[types.Hash20]*msgState
+}
+
+func NewGradecaster() *DefaultGradecaster {
+	return &DefaultGradecaster{
+		messages: make(map[AbsRound]map[types.Hash20]*msgState),
+	}
 }
 
 // ReceiveMsg implements Gradecaster.
