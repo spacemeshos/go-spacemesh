@@ -98,9 +98,6 @@ func DefaultConfig() Config {
 
 // randomPeer returns a random peer from current peer list.
 func randomPeer(peers []p2p.Peer) p2p.Peer {
-	if len(peers) == 0 {
-		log.Fatal("cannot send fetch: no peers found")
-	}
 	return peers[rand.Intn(len(peers))]
 }
 
@@ -459,6 +456,10 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	peer2requests := make(map[p2p.Peer][]RequestMessage)
 	peers := f.host.GetPeers()
+	if len(peers) == 0 {
+		// in loop() we will try again after the batchTimeout
+		return nil
+	}
 
 	for _, req := range requests {
 		p, exists := f.hashToPeers.GetRandom(req.Hash, req.Hint, rng)
