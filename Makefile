@@ -140,15 +140,6 @@ cover: get-libs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -timeout 0 -p 1 -coverpkg=./... $(UNIT_TESTS)
 .PHONY: cover
 
-tag-and-build:
-	git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && git --no-pager diff && exit 1)
-	git tag ${VERSION}
-	git push origin ${VERSION}
-	DOCKER_BUILDKIT=1 docker build -t go-spacemesh:${VERSION} .
-	docker tag go-spacemesh:${VERSION} $(DOCKER_HUB)/go-spacemesh:${VERSION}
-	docker push $(DOCKER_HUB)/go-spacemesh:${VERSION}
-.PHONY: tag-and-build
-
 list-versions:
 	@echo "Latest 5 tagged versions:\n"
 	@git for-each-ref --sort=-creatordate --count=5 --format '%(creatordate:short): %(refname:short)' refs/tags
