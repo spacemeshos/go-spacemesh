@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"math/rand"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/rand"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -94,20 +94,15 @@ func storeNodeHashes(t *testing.T, db *sql.Database, diverge, max int) {
 }
 
 func serveHashReq(t *testing.T, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
-	var (
-		hashes = []types.Hash32{}
-		count  uint
-	)
+	hashes := make([]types.Hash32, 0, req.Count())
 	for lid := req.From; lid.Before(req.To); lid = lid.Add(req.Step) {
 		hashes = append(hashes, layerHash(int(lid.Uint32()), true))
-		count++
 	}
 
 	hashes = append(hashes, layerHash(int(req.To.Uint32()), true))
-	count++
 
-	expCount := req.Count()
-	require.Equal(t, expCount, count, fmt.Sprintf("%#v; count exp: %v, got %v", req, expCount, count))
+	expCount := int(req.Count())
+	require.Equal(t, expCount, len(hashes), fmt.Sprintf("%#v; count exp: %v, got %v", req, expCount, len(hashes)))
 	mh := &fetch.MeshHashes{
 		Hashes: hashes,
 	}
@@ -124,16 +119,18 @@ func TestForkFinder_FindFork_Permutation(t *testing.T) {
 	}
 	expected := diverge - 1
 	for lid := max; lid > expected; lid-- {
-		tf := newTestForkFinderWithDuration(t, time.Hour, logtest.New(t))
-		storeNodeHashes(t, tf.db, diverge, max)
-		tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
-			func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
-				return serveHashReq(t, req)
-			}).AnyTimes()
+		t.Run("lid="+strconv.Itoa(lid), func(t *testing.T) {
+			tf := newTestForkFinderWithDuration(t, time.Hour, logtest.New(t))
+			storeNodeHashes(t, tf.db, diverge, max)
+			tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
+					return serveHashReq(t, req)
+				}).AnyTimes()
 
-		fork, err := tf.FindFork(context.Background(), peer, types.LayerID(uint32(lid)), layerHash(lid, true))
-		require.NoError(t, err, fmt.Sprintf("lid: %v", lid))
-		require.EqualValues(t, expected, fork.Uint32())
+			fork, err := tf.FindFork(context.Background(), peer, types.LayerID(uint32(lid)), layerHash(lid, true))
+			require.NoError(t, err, fmt.Sprintf("lid: %v", lid))
+			require.Equal(t, expected, int(fork))
+		})
 	}
 }
 
