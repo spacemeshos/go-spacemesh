@@ -103,5 +103,5 @@ jobs:
             - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux.zip
             - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux_ARM64.zip
           generate_release_notes: true
-          draft: true
+          draft: false
           prerelease: true
