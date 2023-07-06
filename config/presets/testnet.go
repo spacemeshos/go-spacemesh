@@ -67,6 +67,5 @@ func testnet() config.Config {
 	conf.Beacon.VotingRoundDuration = 50 * time.Second
 	conf.Beacon.WeakCoinRoundDuration = 10 * time.Second
 
-	conf.Recovery.RecoverFromDefaultDir = false
 	return conf
 }

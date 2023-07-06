@@ -1,12 +1,17 @@
 package checkpoint_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 
@@ -23,14 +28,33 @@ func TestMain(m *testing.M) {
 	os.Exit(res)
 }
 
-var allAtxs = []*types.ActivationTx{
-	newatx(types.ATXID{12}, &types.ATXID{1}, 1, 0, 123, []byte("smesher1")),
-	newatx(types.ATXID{13}, nil, 2, 1, 0, []byte("smesher1")),
-	newatx(types.ATXID{14}, nil, 3, 2, 0, []byte("smesher1")),
-	newatx(types.ATXID{15}, nil, 4, 3, 0, []byte("smesher1")),
-	newatx(types.ATXID{23}, &types.ATXID{2}, 3, 0, 152, []byte("smesher2")),
-	newatx(types.ATXID{32}, &types.ATXID{3}, 2, 0, 211, []byte("smesher3")),
-	newatx(types.ATXID{34}, nil, 4, 1, 0, []byte("smesher3")),
+var allAtxs = map[types.NodeID][]*types.ActivationTx{
+	// smesher 1 has 7 ATXs, one in each epoch from 1 to 7
+	types.BytesToNodeID([]byte("smesher1")): {
+		newatx(types.ATXID{17}, nil, 7, 6, 0, types.BytesToNodeID([]byte("smesher1"))),
+		newatx(types.ATXID{16}, nil, 6, 5, 0, types.BytesToNodeID([]byte("smesher1"))),
+		newatx(types.ATXID{15}, nil, 5, 4, 0, types.BytesToNodeID([]byte("smesher1"))),
+		newatx(types.ATXID{14}, nil, 4, 3, 0, types.BytesToNodeID([]byte("smesher1"))),
+		newatx(types.ATXID{13}, nil, 3, 2, 0, types.BytesToNodeID([]byte("smesher1"))),
+		newatx(types.ATXID{12}, nil, 2, 1, 0, types.BytesToNodeID([]byte("smesher1"))),
+		newatx(types.ATXID{11}, &types.ATXID{1}, 1, 0, 123, types.BytesToNodeID([]byte("smesher1"))),
+	},
+
+	// smesher 2 has 1 ATX in epoch 7
+	types.BytesToNodeID([]byte("smesher2")): {
+		newatx(types.ATXID{27}, &types.ATXID{2}, 7, 0, 152, types.BytesToNodeID([]byte("smesher2"))),
+	},
+
+	// smesher 4 has 1 ATX in epoch 2
+	types.BytesToNodeID([]byte("smesher3")): {
+		newatx(types.ATXID{32}, &types.ATXID{3}, 2, 0, 211, types.BytesToNodeID([]byte("smesher3"))),
+	},
+
+	// smesher 4 has 1 ATX in epoch 3 and one in epoch 7
+	types.BytesToNodeID([]byte("smesher4")): {
+		newatx(types.ATXID{47}, nil, 7, 1, 0, types.BytesToNodeID([]byte("smesher4"))),
+		newatx(types.ATXID{43}, &types.ATXID{4}, 4, 0, 420, types.BytesToNodeID([]byte("smesher4"))),
+	},
 }
 
 var allAccounts = []*types.Account{
@@ -44,34 +68,78 @@ var allAccounts = []*types.Account{
 	{Layer: types.LayerID(7), Address: types.Address{4, 4}, NextNonce: 1, Balance: 31, TemplateAddress: &types.Address{3}, State: []byte("state47")},
 }
 
-func expectedCheckpoint(t *testing.T) *checkpoint.Checkpoint {
-	return &checkpoint.Checkpoint{
+func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *types.Checkpoint {
+	t.Helper()
+
+	request, err := json.Marshal(&pb.CheckpointStreamRequest{
+		SnapshotLayer: uint32(snapshot),
+		NumAtxs:       uint32(numAtxs),
+	})
+	require.NoError(t, err)
+
+	result := &types.Checkpoint{
+		Command: fmt.Sprintf(checkpoint.CommandString, request),
 		Version: "https://spacemesh.io/checkpoint.schema.json.1.0",
-		Data: checkpoint.InnerData{
+		Data: types.InnerData{
 			CheckpointId: "snapshot-5",
-			Atxs: []checkpoint.ShortAtx{
-				toShortAtx(newvatx(t, allAtxs[3]), allAtxs[0].CommitmentATX, allAtxs[0].VRFNonce),
-				toShortAtx(newvatx(t, allAtxs[2]), allAtxs[0].CommitmentATX, allAtxs[0].VRFNonce),
-				toShortAtx(newvatx(t, allAtxs[4]), allAtxs[4].CommitmentATX, allAtxs[4].VRFNonce),
-				toShortAtx(newvatx(t, allAtxs[6]), allAtxs[5].CommitmentATX, allAtxs[5].VRFNonce),
-				toShortAtx(newvatx(t, allAtxs[5]), allAtxs[5].CommitmentATX, allAtxs[5].VRFNonce),
-			},
-			Accounts: []checkpoint.Account{
-				{types.Address{1, 1}.Bytes(), 111, 5, types.Address{2}.Bytes(), []byte("state15")},
-				{types.Address{2, 2}.Bytes(), 311, 14, types.Address{2}.Bytes(), []byte("state24")},
-				{types.Address{3, 3}.Bytes(), 124, 1, types.Address{3}.Bytes(), []byte("state35")},
-			},
 		},
 	}
+
+	if numAtxs < 2 {
+		require.Fail(t, "numEpochs must be at least 2")
+	}
+
+	atxData := make([]types.AtxSnapshot, 0, numAtxs*len(allAtxs))
+	for _, atxs := range allAtxs {
+		n := len(atxs)
+		if n > numAtxs {
+			n = numAtxs
+		}
+		for i := 0; i < n; i++ {
+			atxData = append(atxData, toShortAtx(newvatx(t, atxs[i]), atxs[len(atxs)-1].CommitmentATX, atxs[len(atxs)-1].VRFNonce))
+		}
+	}
+
+	result.Data.Atxs = atxData
+
+	accounts := make(map[types.Address]*types.Account)
+	for _, account := range allAccounts {
+		if account.Layer <= snapshot {
+			a, ok := accounts[account.Address]
+			switch {
+			case !ok:
+				accounts[account.Address] = account
+			case account.Layer > a.Layer:
+				accounts[account.Address] = account
+			}
+		}
+	}
+
+	for _, account := range accounts {
+		result.Data.Accounts = append(result.Data.Accounts, types.AccountSnapshot{
+			Address:  account.Address.Bytes(),
+			Balance:  account.Balance,
+			Nonce:    account.NextNonce,
+			Template: account.TemplateAddress.Bytes(),
+			State:    account.State,
+		})
+	}
+
+	return result
 }
 
-func newatx(id types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfnonce uint64, pubkey []byte) *types.ActivationTx {
+func newatx(id types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfnonce uint64, nodeID types.NodeID) *types.ActivationTx {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PublishEpoch:  types.EpochID(epoch),
 				Sequence:      seq,
 				CommitmentATX: commitAtx,
+			},
+			NIPost: &types.NIPost{
+				PostMetadata: &types.PostMetadata{
+					Challenge: types.RandomBytes(5),
+				},
 			},
 			NumUnits: 2,
 			Coinbase: types.Address{1, 2, 3},
@@ -81,20 +149,20 @@ func newatx(id types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfnonce 
 	if vrfnonce != 0 {
 		atx.VRFNonce = (*types.VRFPostIndex)(&vrfnonce)
 	}
-	atx.SmesherID = types.BytesToNodeID(pubkey)
+	atx.SmesherID = nodeID
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 	return atx
 }
 
-func newvatx(t *testing.T, atx *types.ActivationTx) *types.VerifiedActivationTx {
+func newvatx(tb testing.TB, atx *types.ActivationTx) *types.VerifiedActivationTx {
 	vatx, err := atx.Verify(1111, 12)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return vatx
 }
 
-func toShortAtx(v *types.VerifiedActivationTx, cmt *types.ATXID, nonce *types.VRFPostIndex) checkpoint.ShortAtx {
-	return checkpoint.ShortAtx{
+func toShortAtx(v *types.VerifiedActivationTx, cmt *types.ATXID, nonce *types.VRFPostIndex) types.AtxSnapshot {
+	return types.AtxSnapshot{
 		ID:             v.ID().Bytes(),
 		Epoch:          v.PublishEpoch.Uint32(),
 		CommitmentAtx:  cmt.Bytes(),
@@ -108,9 +176,11 @@ func toShortAtx(v *types.VerifiedActivationTx, cmt *types.ATXID, nonce *types.VR
 	}
 }
 
-func createMesh(t *testing.T, db *sql.Database, atxes []*types.ActivationTx, accts []*types.Account) {
-	for _, atx := range atxes {
-		require.NoError(t, atxs.Add(db, newvatx(t, atx)))
+func createMesh(t *testing.T, db *sql.Database, identities map[types.NodeID][]*types.ActivationTx, accts []*types.Account) {
+	for _, identity := range identities {
+		for _, atx := range identity {
+			require.NoError(t, atxs.Add(db, newvatx(t, atx)))
+		}
 	}
 
 	for _, it := range accts {
@@ -120,15 +190,29 @@ func createMesh(t *testing.T, db *sql.Database, atxes []*types.ActivationTx, acc
 
 func TestRunner_Generate(t *testing.T) {
 	tcs := []struct {
-		desc  string
-		atxes []*types.ActivationTx
-		accts []*types.Account
-		fail  bool
+		desc    string
+		atxes   map[types.NodeID][]*types.ActivationTx
+		numAtxs int
+		accts   []*types.Account
+		fail    bool
 	}{
 		{
-			desc:  "all good",
-			atxes: allAtxs,
-			accts: allAccounts,
+			desc:    "all good, 2 atxs",
+			atxes:   allAtxs,
+			numAtxs: 2,
+			accts:   allAccounts,
+		},
+		{
+			desc:    "all good, 4 atxs",
+			atxes:   allAtxs,
+			numAtxs: 4,
+			accts:   allAccounts,
+		},
+		{
+			desc:    "all good, 7 atxs",
+			atxes:   allAtxs,
+			numAtxs: 7,
+			accts:   allAccounts,
 		},
 		{
 			desc:  "no atxs",
@@ -153,7 +237,7 @@ func TestRunner_Generate(t *testing.T) {
 			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			err = checkpoint.Generate(ctx, fs, db, dir, snapshot)
+			err = checkpoint.Generate(ctx, fs, db, dir, snapshot, tc.numAtxs)
 			if tc.fail {
 				require.Error(t, err)
 				return
@@ -163,15 +247,21 @@ func TestRunner_Generate(t *testing.T) {
 			persisted, err := afero.ReadFile(fs, fname)
 			require.NoError(t, err)
 			require.NoError(t, checkpoint.ValidateSchema(persisted))
-			var got checkpoint.Checkpoint
-			expected := expectedCheckpoint(t)
+			var got types.Checkpoint
+			expected := expectedCheckpoint(t, snapshot, tc.numAtxs)
 			require.NoError(t, json.Unmarshal(persisted, &got))
-			require.Equal(t, *expected, got)
+
+			require.True(t, cmp.Equal(*expected, got, cmpopts.EquateEmpty(),
+				cmpopts.SortSlices(func(a, b types.AtxSnapshot) bool { return bytes.Compare(a.ID, b.ID) < 0 }),
+				cmpopts.SortSlices(func(a, b types.AccountSnapshot) bool { return bytes.Compare(a.Address, b.Address) < 0 }),
+			), cmp.Diff(*expected, got))
 		})
 	}
 }
 
 func TestRunner_Generate_Error(t *testing.T) {
+	const numEpochs = 2
+
 	tcs := []struct {
 		desc              string
 		missingVrf        bool
@@ -193,18 +283,20 @@ func TestRunner_Generate_Error(t *testing.T) {
 			snapshot := types.LayerID(5)
 			var atx *types.ActivationTx
 			if tc.missingCommitment {
-				atx = newatx(types.ATXID{13}, nil, 2, 1, 11, []byte("smesher1"))
+				atx = newatx(types.ATXID{13}, nil, 2, 1, 11, types.BytesToNodeID([]byte("smesher1")))
 			} else if tc.missingVrf {
-				atx = newatx(types.ATXID{13}, &types.ATXID{11}, 2, 1, 0, []byte("smesher1"))
+				atx = newatx(types.ATXID{13}, &types.ATXID{11}, 2, 1, 0, types.BytesToNodeID([]byte("smesher1")))
 			}
-			createMesh(t, db, []*types.ActivationTx{atx}, allAccounts)
+			createMesh(t, db, map[types.NodeID][]*types.ActivationTx{
+				types.BytesToNodeID([]byte("smesher1")): {atx},
+			}, allAccounts)
 
 			fs := afero.NewMemMapFs()
 			dir, err := afero.TempDir(fs, "", "Generate")
 			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			err = checkpoint.Generate(ctx, fs, db, dir, snapshot)
+			err = checkpoint.Generate(ctx, fs, db, dir, snapshot, numEpochs)
 			if tc.missingCommitment {
 				require.ErrorContains(t, err, "atxs snapshot commitment")
 			} else if tc.missingVrf {

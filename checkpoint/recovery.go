@@ -2,17 +2,16 @@ package checkpoint
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"path/filepath"
-	"regexp"
-	"strconv"
 
+	"github.com/spacemeshos/post/initialization"
 	"github.com/spf13/afero"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -24,10 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/recovery"
 )
 
-const (
-	recoveryDir = "recovery"
-	fileRegex   = "snapshot-(?P<Snapshot>[1-9][0-9]*)-restore-(?P<Restore>[1-9][0-9]*)"
-)
+const recoveryDir = "recovery"
 
 type Config struct {
 	Uri     string `mapstructure:"recovery-uri"`
@@ -35,9 +31,6 @@ type Config struct {
 
 	// set to false if atxs are not compatible before and after the checkpoint recovery.
 	PreserveOwnAtx bool `mapstructure:"preserve-own-atx"`
-
-	// only set for systests. recovery from file in $DataDir/recovery
-	RecoverFromDefaultDir bool
 }
 
 func DefaultConfig() Config {
@@ -48,9 +41,13 @@ func DefaultConfig() Config {
 
 type RecoverConfig struct {
 	GoldenAtx      types.ATXID
+	PostDataDir    string
 	DataDir        string
 	DbFile         string
 	PreserveOwnAtx bool
+	NodeID         types.NodeID
+	Uri            string
+	Restore        types.LayerID
 }
 
 func RecoveryDir(dataDir string) string {
@@ -58,48 +55,7 @@ func RecoveryDir(dataDir string) string {
 }
 
 func RecoveryFilename(dataDir, base string, restore types.LayerID) string {
-	matches := regexp.MustCompile(fileRegex).FindStringSubmatch(base)
-	if len(matches) > 0 {
-		return filepath.Join(RecoveryDir(dataDir), base)
-	}
 	return filepath.Join(RecoveryDir(dataDir), fmt.Sprintf("%s-restore-%d", base, restore.Uint32()))
-}
-
-// ParseRestoreLayer parses the restore layer from the filename.
-// only used in systests when RecoverFromDefaultDir is true.
-// DO NOT USE in production as inferring metadata from filename is not robust and error-prone.
-func ParseRestoreLayer(fname string) (types.LayerID, error) {
-	matches := regexp.MustCompile(fileRegex).FindStringSubmatch(fname)
-	if len(matches) != 3 {
-		return 0, fmt.Errorf("unrecogized recovery file %s", fname)
-	}
-	s, err := strconv.Atoi(matches[1])
-	if err != nil {
-		return 0, fmt.Errorf("parse snapshot layer %s: %w", fname, err)
-	}
-	r, err := strconv.Atoi(matches[2])
-	if err != nil {
-		return 0, fmt.Errorf("parse restore layer %s: %w", fname, err)
-	}
-	snapshot := types.LayerID(s)
-	restore := types.LayerID(r)
-	if restore <= snapshot {
-		return 0, fmt.Errorf("inconsistent restore layer %s: %w", fname, err)
-	}
-	return restore, nil
-}
-
-// ReadCheckpointAndDie copies the checkpoint file from uri and panic to restart
-// the node and recover from the checkpoint data just copied.
-// only used in systests. only has effect when RecoverFromDefaultDir is true.
-func ReadCheckpointAndDie(ctx context.Context, logger log.Log, dataDir, uri string, restore types.LayerID) error {
-	fs := afero.NewOsFs()
-	file, err := copyToLocalFile(ctx, logger, fs, dataDir, uri, restore)
-	if err != nil {
-		return fmt.Errorf("copy checkpoint file before restart: %w", err)
-	}
-	logger.With().Panic("restart to recover from checkpoint", log.String("file", file))
-	return nil
 }
 
 func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, uri string, restore types.LayerID) (string, error) {
@@ -107,36 +63,8 @@ func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, 
 	if err != nil {
 		return "", fmt.Errorf("%w: parse recovery URI %v", err, uri)
 	}
-	dst := RecoveryFilename(dataDir, filepath.Base(parsed.String()), restore)
-	if parsed.Scheme == "file" {
-		src := filepath.Join(parsed.Host, parsed.Path)
-		_, err = fs.Stat(src)
-		if err != nil {
-			return "", fmt.Errorf("stat checkpoint file %v: %w", src, err)
-		}
-		if src != dst {
-			if bdir, err := backupRecovery(fs, RecoveryDir(dataDir)); err != nil {
-				return "", err
-			} else if bdir != "" {
-				logger.With().Info("old recovery data backed up",
-					log.Context(ctx),
-					log.String("dir", bdir),
-				)
-			}
-			if err = CopyFile(fs, src, dst); err != nil {
-				return "", err
-			}
-			logger.With().Debug("copied file",
-				log.Context(ctx),
-				log.String("from", src),
-				log.String("to", dst),
-			)
-		}
-		return dst, nil
-	}
-
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", fmt.Errorf("uri scheme not supported: %s", uri)
+		return "", fmt.Errorf("%w: %s", ErrUrlSchemeNotSupported, uri)
 	}
 	if bdir, err := backupRecovery(fs, RecoveryDir(dataDir)); err != nil {
 		return "", err
@@ -146,6 +74,7 @@ func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, 
 			log.String("dir", bdir),
 		)
 	}
+	dst := RecoveryFilename(dataDir, filepath.Base(parsed.String()), restore)
 	if err = httpToLocalFile(ctx, parsed, fs, dst); err != nil {
 		return "", err
 	}
@@ -156,30 +85,33 @@ func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, 
 	return dst, nil
 }
 
+type PreservedData struct {
+	Deps   []*types.VerifiedActivationTx
+	Proofs []*types.PoetProofMessage
+}
+
 func Recover(
 	ctx context.Context,
 	logger log.Log,
 	fs afero.Fs,
 	cfg *RecoverConfig,
-	nodeID types.NodeID,
-	uri string,
-	restore types.LayerID,
-) error {
+) (*PreservedData, error) {
 	db, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	if err != nil {
-		return fmt.Errorf("open old database: %w", err)
+		return nil, fmt.Errorf("open old database: %w", err)
 	}
 	defer db.Close()
-	newdb, err := RecoverWithDb(ctx, logger, db, fs, cfg, nodeID, uri, restore)
-	if err != nil {
-		return err
+	preserve, err := RecoverWithDb(ctx, logger, db, fs, cfg)
+	switch {
+	case errors.Is(err, ErrCheckpointNotFound):
+		logger.With().Info("no checkpoint file available. not recovering",
+			log.String("uri", cfg.Uri),
+		)
+		return nil, nil
+	case err != nil:
+		return nil, err
 	}
-	if newdb != nil {
-		if err = newdb.Close(); err != nil {
-			return fmt.Errorf("close new db: %w", err)
-		}
-	}
-	return nil
+	return preserve, nil
 }
 
 func RecoverWithDb(
@@ -188,93 +120,29 @@ func RecoverWithDb(
 	db *sql.Database,
 	fs afero.Fs,
 	cfg *RecoverConfig,
-	nodeID types.NodeID,
-	uri string,
-	restore types.LayerID,
-) (*sql.Database, error) {
+) (*PreservedData, error) {
 	oldRestore, err := recovery.CheckpointInfo(db)
 	if err != nil {
 		return nil, fmt.Errorf("get last checkpoint: %w", err)
 	}
-	if oldRestore >= restore {
+	if oldRestore >= cfg.Restore {
 		types.SetEffectiveGenesis(oldRestore.Uint32() - 1)
 		return nil, nil
 	}
 	if err = fs.RemoveAll(filepath.Join(cfg.DataDir, bootstrap.DirName)); err != nil {
 		return nil, fmt.Errorf("remove old bootstrap data: %w", err)
 	}
-	logger.With().Info("recover from uri", log.String("uri", uri))
-	cpfile, err := copyToLocalFile(ctx, logger, fs, cfg.DataDir, uri, restore)
+	logger.With().Info("recover from uri", log.String("uri", cfg.Uri))
+	cpfile, err := copyToLocalFile(ctx, logger, fs, cfg.DataDir, cfg.Uri, cfg.Restore)
 	if err != nil {
 		return nil, err
 	}
-	return recoverFromLocalFile(ctx, logger, db, fs, cfg, nodeID, cpfile, restore)
+	return recoverFromLocalFile(ctx, logger, db, fs, cfg, cpfile)
 }
 
 type recoverydata struct {
 	accounts []*types.Account
 	atxs     []*atxs.CheckpointAtx
-}
-
-type ownAtxData struct {
-	atx      *types.VerifiedActivationTx
-	preserve []*types.VerifiedActivationTx
-	proof    []byte
-}
-
-func preserveOwnData(
-	db *sql.Database,
-	cfg *RecoverConfig,
-	nodeID types.NodeID,
-	data *recoverydata,
-) (ownAtxData, error) {
-	var own ownAtxData
-	if !cfg.PreserveOwnAtx {
-		return own, nil
-	}
-	atxid, err := atxs.GetLastIDByNodeID(db, nodeID)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return own, fmt.Errorf("query own last atx id: %w", err)
-	}
-	if atxid == types.EmptyATXID {
-		return own, nil
-	}
-	all := map[types.ATXID]struct{}{}
-	for _, catx := range data.atxs {
-		all[catx.ID] = struct{}{}
-	}
-	if _, ok := all[atxid]; ok {
-		return own, nil
-	}
-
-	own.atx, err = atxs.Get(db, atxid)
-	if err != nil {
-		return own, fmt.Errorf("get own atx: %w", err)
-	}
-	own.preserve = append(own.preserve, own.atx)
-	deps := map[types.ATXID]struct{}{own.atx.PrevATXID: {}}
-	deps[own.atx.PositioningATX] = struct{}{}
-	if own.atx.CommitmentATX != nil {
-		deps[*own.atx.CommitmentATX] = struct{}{}
-	}
-	for id := range deps {
-		if id == types.EmptyATXID || id == cfg.GoldenAtx {
-			continue
-		}
-		if _, ok := all[id]; ok {
-			continue
-		}
-		dep, err := atxs.Get(db, id)
-		if err != nil {
-			return own, fmt.Errorf("get dep atx: %w", err)
-		}
-		own.preserve = append(own.preserve, dep)
-	}
-	own.proof, err = poets.Get(db, types.PoetProofRef(own.atx.GetPoetProofRef()))
-	if err != nil {
-		return own, fmt.Errorf("get own atx proof: %w", err)
-	}
-	return own, nil
 }
 
 func recoverFromLocalFile(
@@ -283,23 +151,27 @@ func recoverFromLocalFile(
 	db *sql.Database,
 	fs afero.Fs,
 	cfg *RecoverConfig,
-	nodeID types.NodeID,
 	file string,
-	restore types.LayerID,
-) (*sql.Database, error) {
+) (*PreservedData, error) {
 	logger.With().Info("recovering from checkpoint file", log.String("file", file))
-	newGenesis := restore - 1
+	newGenesis := cfg.Restore - 1
 	data, err := checkpointData(fs, file, newGenesis)
 	if err != nil {
 		return nil, err
 	}
 	logger.With().Info("recovery data contains",
-		log.Int("num_accounts", len(data.accounts)),
-		log.Int("num_atxs", len(data.atxs)),
+		log.Int("num accounts", len(data.accounts)),
+		log.Int("num atxs", len(data.atxs)),
 	)
-	own, err := preserveOwnData(db, cfg, nodeID, data)
+	deps, proofs, err := collectOwnAtxDeps(logger, db, cfg, data)
 	if err != nil {
-		return nil, err
+		logger.With().Error("failed to collect deps for own atx", log.Err(err))
+		// continue to recover from checkpoint despite failure to preserve own atx
+	} else if len(deps) > 0 {
+		logger.With().Info("collected own atx deps",
+			log.Context(ctx),
+			log.Int("own atx deps", len(deps)),
+		)
 	}
 	if err := db.Close(); err != nil {
 		return nil, fmt.Errorf("close old db: %w", err)
@@ -319,11 +191,11 @@ func recoverFromLocalFile(
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite db %w", err)
 	}
+	defer newdb.Close()
 	logger.With().Info("populating new database",
 		log.Context(ctx),
 		log.Int("num accounts", len(data.accounts)),
 		log.Int("num atxs", len(data.atxs)),
-		log.Int("own atx and deps", len(own.preserve)),
 	)
 	if err = newdb.WithTx(ctx, func(tx *sql.Tx) error {
 		for _, acct := range data.accounts {
@@ -347,32 +219,7 @@ func recoverFromLocalFile(
 				catx.SmesherID,
 			)
 		}
-		if len(own.preserve) != 0 {
-			for _, atx := range own.preserve {
-				if err = atxs.Add(tx, atx); err != nil {
-					return fmt.Errorf("preserve atx %s: %w", atx.ID().String(), err)
-				}
-				logger.With().Info("atx preserved",
-					log.Context(ctx),
-					atx.ID(),
-				)
-			}
-			ref := types.PoetProofRef(own.atx.GetPoetProofRef())
-			var proofMessage types.PoetProofMessage
-			if err = codec.Decode(own.proof, &proofMessage); err != nil {
-				return fmt.Errorf("deocde proof: %w", err)
-			}
-			if err = poets.Add(tx, ref, own.proof, proofMessage.PoetServiceID, proofMessage.RoundID); err != nil {
-				return fmt.Errorf("add own atx proof %s: %w", own.atx.ID().String(), err)
-			}
-			logger.With().Info("own atx proof saved",
-				log.Context(ctx),
-				log.String("poet service id", hex.EncodeToString(proofMessage.PoetServiceID)),
-				log.String("poet round id", proofMessage.RoundID),
-				own.atx.ID(),
-			)
-		}
-		if err = recovery.SetCheckpoint(tx, restore); err != nil {
+		if err = recovery.SetCheckpoint(tx, cfg.Restore); err != nil {
 			return fmt.Errorf("save checkppoint info: %w", err)
 		}
 		return nil
@@ -387,7 +234,11 @@ func recoverFromLocalFile(
 		log.Context(ctx),
 		types.GetEffectiveGenesis(),
 	)
-	return newdb, nil
+	var preserve *PreservedData
+	if len(deps) > 0 {
+		preserve = &PreservedData{Deps: deps, Proofs: proofs}
+	}
+	return preserve, nil
 }
 
 func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recoverydata, error) {
@@ -398,7 +249,7 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 	if err = ValidateSchema(data); err != nil {
 		return nil, err
 	}
-	var checkpoint Checkpoint
+	var checkpoint types.Checkpoint
 	if err = json.Unmarshal(data, &checkpoint); err != nil {
 		return nil, fmt.Errorf("%w: unmarshal checkpoint from %v", err, file)
 	}
@@ -441,4 +292,148 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 		accounts: allAccts,
 		atxs:     allAtxs,
 	}, nil
+}
+
+func collectOwnAtxDeps(
+	logger log.Log,
+	db *sql.Database,
+	cfg *RecoverConfig,
+	data *recoverydata,
+) ([]*types.VerifiedActivationTx, []*types.PoetProofMessage, error) {
+	if !cfg.PreserveOwnAtx {
+		return nil, nil, nil
+	}
+	atxid, err := atxs.GetLastIDByNodeID(db, cfg.NodeID)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return nil, nil, fmt.Errorf("query own last atx id: %w", err)
+	}
+	var ref types.ATXID
+	var own bool
+	if atxid == types.EmptyATXID {
+		if m, _ := initialization.LoadMetadata(cfg.PostDataDir); m != nil {
+			ref = types.ATXID(types.BytesToHash(m.CommitmentAtxId))
+			logger.With().Debug("found commitment atx from metadata",
+				log.Stringer("commitment atx", ref),
+			)
+		}
+	} else {
+		ref = atxid
+		logger.With().Debug("found own atx",
+			log.Stringer("own atx", ref),
+		)
+		own = true
+	}
+
+	// check for if miner is building any atx
+	nipostCh, _ := activation.LoadNipostChallenge(cfg.PostDataDir)
+	if ref == types.EmptyATXID && nipostCh == nil {
+		return nil, nil, nil
+	}
+
+	all := map[types.ATXID]struct{}{cfg.GoldenAtx: {}, types.EmptyATXID: {}}
+	for _, catx := range data.atxs {
+		all[catx.ID] = struct{}{}
+	}
+	var (
+		deps   []*types.VerifiedActivationTx
+		proofs []*types.PoetProofMessage
+	)
+	if ref != types.EmptyATXID {
+		logger.With().Info("collecting atx and deps",
+			ref,
+			log.Bool("own", own),
+		)
+		deps, proofs, err = collectDeps(db, cfg.GoldenAtx, ref, all)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	if nipostCh != nil {
+		logger.With().Info("collecting pending atx and deps",
+			log.Object("nipost", nipostCh),
+		)
+		// any previous atx in nipost should already be captured earlier
+		// we only care about positioning atx here
+		deps2, proofs2, err := collectDeps(db, cfg.GoldenAtx, nipostCh.PositioningATX, all)
+		if err != nil {
+			return nil, nil, fmt.Errorf("deps from nipost positioning atx (%v): %w", nipostCh.PositioningATX, err)
+		}
+		deps = append(deps, deps2...)
+		proofs = append(proofs, proofs2...)
+	}
+	return deps, proofs, nil
+}
+
+func collectDeps(
+	db *sql.Database,
+	goldenAtxId types.ATXID,
+	ref types.ATXID,
+	all map[types.ATXID]struct{},
+) ([]*types.VerifiedActivationTx, []*types.PoetProofMessage, error) {
+	var deps []*types.VerifiedActivationTx
+	if err := collect(db, goldenAtxId, ref, all, &deps); err != nil {
+		return nil, nil, err
+	}
+	proofs, err := poetProofs(db, deps)
+	if err != nil {
+		return nil, nil, err
+	}
+	return deps, proofs, nil
+}
+
+func collect(
+	db *sql.Database,
+	goldenAtxID types.ATXID,
+	ref types.ATXID,
+	all map[types.ATXID]struct{},
+	deps *[]*types.VerifiedActivationTx,
+) error {
+	if _, ok := all[ref]; ok {
+		return nil
+	}
+	atx, err := atxs.Get(db, ref)
+	if err != nil {
+		return fmt.Errorf("get ref atx: %w", err)
+	}
+	if atx.Golden() {
+		return fmt.Errorf("atx %v belong to previous snapshot. cannot be preserved", ref)
+	}
+	if atx.CommitmentATX != nil {
+		if err = collect(db, goldenAtxID, *atx.CommitmentATX, all, deps); err != nil {
+			return err
+		}
+	} else {
+		commitment, err := atxs.CommitmentATX(db, atx.SmesherID)
+		if err != nil {
+			return fmt.Errorf("get commitment for ref atx %v: %w", ref, err)
+		}
+		if err := collect(db, goldenAtxID, commitment, all, deps); err != nil {
+			return err
+		}
+	}
+	if err = collect(db, goldenAtxID, atx.PrevATXID, all, deps); err != nil {
+		return err
+	}
+	if err = collect(db, goldenAtxID, atx.PositioningATX, all, deps); err != nil {
+		return err
+	}
+	*deps = append(*deps, atx)
+	all[ref] = struct{}{}
+	return nil
+}
+
+func poetProofs(db *sql.Database, vatxs []*types.VerifiedActivationTx) ([]*types.PoetProofMessage, error) {
+	var proofs []*types.PoetProofMessage
+	for _, vatx := range vatxs {
+		proof, err := poets.Get(db, types.PoetProofRef(vatx.GetPoetProofRef()))
+		if err != nil {
+			return nil, fmt.Errorf("get poet proof (%v): %w", vatx.ID(), err)
+		}
+		var msg types.PoetProofMessage
+		if err := codec.Decode(proof, &msg); err != nil {
+			return nil, fmt.Errorf("decode poet proof (%v): %w", vatx.ID(), err)
+		}
+		proofs = append(proofs, &msg)
+	}
+	return proofs, nil
 }

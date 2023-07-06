@@ -8,7 +8,7 @@ import (
 	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -89,7 +89,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	p := types.Proposal{}
 	bytes, err := codec.Encode(&p)
 	require.NoError(t, err)
-	m := &pb.Message{
+	m := &pubsubpb.Message{
 		Data:  bytes,
 		Topic: &protocol,
 	}
@@ -104,7 +104,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	}
 
 	// Send message that results in ValidationReject
-	m = &pb.Message{
+	m = &pubsubpb.Message{
 		Data:  make([]byte, 20),
 		Topic: &protocol,
 	}
@@ -150,8 +150,8 @@ func getStream(c network.Conn, p protocol.ID, dir network.Direction) network.Str
 	return nil
 }
 
-func rpcWithMessages(msgs ...*pb.Message) *pubsub.RPC {
-	return &pubsub.RPC{RPC: pb.RPC{Publish: msgs}}
+func rpcWithMessages(msgs ...*pubsubpb.Message) *pubsub.RPC {
+	return &pubsub.RPC{RPC: pubsubpb.RPC{Publish: msgs}}
 }
 
 func writeRpc(rpc *pubsub.RPC, s network.Stream) error {
