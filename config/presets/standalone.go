@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	postCfg "github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -20,6 +21,7 @@ func standalone() config.Config {
 	conf := config.DefaultConfig()
 	conf.Address = types.DefaultTestAddressConfig()
 
+	conf.TIME.Peersync.Disable = true
 	conf.Standalone = true
 	conf.DataDirParent = filepath.Join(os.TempDir(), "spacemesh")
 	conf.FileLock = filepath.Join(conf.DataDirParent, "LOCK")
@@ -48,16 +50,17 @@ func standalone() config.Config {
 	conf.POST.K1 = 12
 	conf.POST.K2 = 4
 	conf.POST.K3 = 4
-	conf.POST.LabelsPerUnit = 128
-	conf.POST.MaxNumUnits = 4
-	conf.POST.MinNumUnits = 2
+	conf.POST.LabelsPerUnit = 64
+	conf.POST.MaxNumUnits = 2
+	conf.POST.MinNumUnits = 1
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = true
 	conf.SMESHING.Opts.ProviderID = int(initialization.CPUProviderID())
-	conf.SMESHING.Opts.NumUnits = 2
+	conf.SMESHING.Opts.NumUnits = 1
 	conf.SMESHING.Opts.Throttle = true
 	conf.SMESHING.Opts.DataDir = conf.DataDirParent
+	conf.SMESHING.ProvingOpts.Flags = postCfg.RecommendedPowFlags()
 
 	conf.Beacon.Kappa = 40
 	conf.Beacon.Theta = big.NewRat(1, 4)
@@ -71,7 +74,7 @@ func standalone() config.Config {
 	conf.Beacon.VotesLimit = 100
 
 	conf.PoETServers = []string{"http://0.0.0.0:10010"}
-	conf.POET.GracePeriod = 10 * time.Second
+	conf.POET.GracePeriod = 5 * time.Second
 	conf.POET.CycleGap = 30 * time.Second
 	conf.POET.PhaseShift = 30 * time.Second
 

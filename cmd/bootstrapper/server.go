@@ -16,7 +16,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
-	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -279,15 +278,6 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := r.FormValue("checkpoint")
-
-	// validate
-	if err := checkpoint.ValidateSchema([]byte(data)); err != nil {
-		s.logger.With().Warning("invalid checkpoint data", log.Err(err))
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "validate checkpoint err: %v", err)
-		return
-	}
-
 	filename := CheckpointFilename()
 	err := afero.WriteFile(s.fs, filename, []byte(data), 0o600)
 	if err != nil {

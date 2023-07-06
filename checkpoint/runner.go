@@ -25,7 +25,7 @@ const (
 	dirPerm       = 0o700
 )
 
-func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID, numAtxs int) (*Checkpoint, error) {
+func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID, numAtxs int) (*types.Checkpoint, error) {
 	request, err := json.Marshal(&pb.CheckpointStreamRequest{
 		SnapshotLayer: uint32(snapshot),
 		NumAtxs:       uint32(numAtxs),
@@ -34,10 +34,10 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID,
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
-	checkpoint := &Checkpoint{
+	checkpoint := &types.Checkpoint{
 		Command: fmt.Sprintf(CommandString, request),
 		Version: SchemaVersion,
-		Data: InnerData{
+		Data: types.InnerData{
 			CheckpointId: fmt.Sprintf("snapshot-%d", snapshot),
 		},
 	}
@@ -65,7 +65,7 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID,
 		atxSnapshot[i].VRFNonce = vrfNonce
 	}
 	for _, catx := range atxSnapshot {
-		checkpoint.Data.Atxs = append(checkpoint.Data.Atxs, ShortAtx{
+		checkpoint.Data.Atxs = append(checkpoint.Data.Atxs, types.AtxSnapshot{
 			ID:             catx.ID.Bytes(),
 			Epoch:          catx.Epoch.Uint32(),
 			CommitmentAtx:  catx.CommitmentATX.Bytes(),
@@ -84,7 +84,7 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID,
 		return nil, fmt.Errorf("accounts snapshot: %w", err)
 	}
 	for _, acct := range acctSnapshot {
-		a := Account{
+		a := types.AccountSnapshot{
 			Address: acct.Address.Bytes(),
 			Balance: acct.Balance,
 			Nonce:   acct.NextNonce,

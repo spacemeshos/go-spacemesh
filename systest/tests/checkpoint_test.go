@@ -3,13 +3,12 @@ package tests
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -24,10 +23,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func reuseCluster(tctx *testcontext.Context) (*cluster.Cluster, error) {
+func reuseCluster(tctx *testcontext.Context, restoreLayer uint32) (*cluster.Cluster, error) {
 	return cluster.ReuseWait(tctx,
 		cluster.WithKeys(10),
 		cluster.WithBootstrapEpochs([]int{2, 4, 5}),
+		cluster.WithSmesherFlag(cluster.CheckpointUrl(fmt.Sprintf("%s/checkpoint", cluster.BootstrapperEndpoint(0)))),
+		cluster.WithSmesherFlag(cluster.CheckpointLayer(restoreLayer)),
 	)
 }
 
@@ -53,7 +54,7 @@ func TestCheckpoint(t *testing.T) {
 	lastEpoch := uint32(8)
 
 	// need to bootstrap the checkpoint epoch and the next epoch as the beacon protocol was interrupted in the last epoch
-	cl, err := reuseCluster(tctx)
+	cl, err := reuseCluster(tctx, restoreLayer)
 	require.NoError(t, err)
 
 	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
@@ -86,7 +87,7 @@ func TestCheckpoint(t *testing.T) {
 	var checkpoints [][]byte
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
-		data, err := checkpointAndRecover(tctx, client, snapshotLayer, restoreLayer)
+		data, err := snapshotNode(tctx, client, snapshotLayer)
 		require.NoError(t, err)
 		checkpoints = append(checkpoints, data)
 	}
@@ -102,6 +103,45 @@ func TestCheckpoint(t *testing.T) {
 	}
 	require.Empty(t, diffs)
 
+	// remove some atx from the snapshot so miners should preserve their own
+	var snapshot types.Checkpoint
+	require.NoError(t, json.Unmarshal(checkpoints[0], &snapshot))
+	// make half of the cluster preserve their own atx and chain
+	numKept := (oldSize - cl.Bootnodes()) / 2
+	var newAtxs []types.AtxSnapshot
+	preserved := map[types.NodeID]struct{}{}
+	for _, atx := range snapshot.Data.Atxs {
+		smesher := types.BytesToNodeID(atx.PublicKey)
+		if _, ok := preserved[smesher]; ok || len(preserved) < numKept {
+			preserved[smesher] = struct{}{}
+			newAtxs = append(newAtxs, atx)
+		}
+	}
+	snapshot.Data.Atxs = newAtxs
+	newSnapshot := bytes.NewBuffer(nil)
+	require.NoError(t, json.NewEncoder(newSnapshot).Encode(&snapshot))
+
+	ip, err := cl.Bootstrapper(0).Resolve(tctx)
+	require.NoError(t, err)
+	tctx.Log.Debugw("resolved bootstrapper", "ip", ip)
+	endpoint := fmt.Sprintf("http://%s:%d", ip, 80)
+	updateUrl := fmt.Sprintf("%s/updateCheckpoint", endpoint)
+	tctx.Log.Infow("submit checkpoint data", "update url", updateUrl)
+	require.NoError(t, updateCheckpointServer(tctx, updateUrl, newSnapshot.Bytes()))
+
+	queryUrl := fmt.Sprintf("%s/checkpoint", endpoint)
+	tctx.Log.Debugw("query checkpoint data", "query url", queryUrl)
+	data, err := query(tctx, queryUrl)
+	require.NoError(t, err)
+	var result types.Checkpoint
+	require.NoError(t, json.Unmarshal(data, &result))
+	require.Equal(t, snapshot, result)
+
+	for i := 0; i < cl.Total(); i++ {
+		client := cl.Client(i)
+		require.NoError(t, recoverNode(tctx, client))
+	}
+
 	tctx.Log.Infow("wait for cluster to recover", "wait", layerDuration)
 	select {
 	case <-time.After(layerDuration):
@@ -110,7 +150,7 @@ func TestCheckpoint(t *testing.T) {
 	}
 
 	tctx.Log.Infow("rediscovering cluster")
-	cl, err = reuseCluster(tctx)
+	cl, err = reuseCluster(tctx, restoreLayer)
 	require.NoError(t, err)
 
 	tctx.Log.Infow("checking account balances")
@@ -130,31 +170,10 @@ func TestCheckpoint(t *testing.T) {
 	tctx.Log.Infow("waiting for all miners to be smeshing", "last epoch", checkpointEpoch+2)
 	ensureSmeshing(t, tctx, cl, checkpointEpoch+2)
 
-	ip, err := cl.Bootstrapper(0).Resolve(tctx)
-	require.NoError(t, err)
-	tctx.Log.Debugw("resolved bootstrapper", "ip", ip)
-
-	endpoint := fmt.Sprintf("http://%s:%d", ip, 80)
-	updateUrl := fmt.Sprintf("%s/updateCheckpoint", endpoint)
-	tctx.Log.Infow("submit checkpoint data", "update url", updateUrl)
-	require.NoError(t, updateCheckpointServer(tctx, updateUrl, checkpoints[0]))
-
-	queryUrl := fmt.Sprintf("%s/checkpoint", endpoint)
-	tctx.Log.Debugw("query checkpoint data", "query url", queryUrl)
-	data, err := query(tctx, queryUrl)
-	require.NoError(t, err)
-	require.True(t, bytes.Equal(checkpoints[0], data))
-
 	// increase the cluster size to the original test size
 	tctx.Log.Info("cluster size changed to ", size)
 	tctx.ClusterSize = size
-
-	tctx.Log.Infow("adding smesher with checkpoint url",
-		"checkpoint url", queryUrl, "restore layer", restoreLayer)
-	require.NoError(t, cl.AddSmeshers(tctx, addedLater,
-		cluster.DeploymentFlag{Name: "--recovery-uri", Value: queryUrl},
-		cluster.DeploymentFlag{Name: "--recovery-layer", Value: strconv.Itoa(int(restoreLayer))},
-	))
+	require.NoError(t, cl.AddSmeshers(tctx, addedLater))
 
 	tctx.Log.Infow("waiting for all miners to be smeshing", "last epoch", lastEpoch)
 	ensureSmeshing(t, tctx, cl, lastEpoch)
@@ -229,7 +248,7 @@ func updateCheckpointServer(ctx *testcontext.Context, endpoint string, chdata []
 	return resp.Body.Close()
 }
 
-func checkpointAndRecover(ctx *testcontext.Context, client *cluster.NodeClient, snapshot, restore uint32) ([]byte, error) {
+func snapshotNode(ctx *testcontext.Context, client *cluster.NodeClient, snapshot uint32) ([]byte, error) {
 	smshr := pb.NewAdminServiceClient(client)
 	stream, err := smshr.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshot})
 	if err != nil {
@@ -251,16 +270,17 @@ func checkpointAndRecover(ctx *testcontext.Context, client *cluster.NodeClient, 
 			return nil, fmt.Errorf("write data to buffer: %w", err)
 		}
 	}
-	// recover
-	_, err = smshr.Recover(ctx, &pb.RecoverRequest{
-		Uri:          filepath.Join("file:///data/state/checkpoint", fmt.Sprintf("snapshot-%d", snapshot)),
-		RestoreLayer: restore,
-	})
-	if err == nil {
-		return nil, errors.New("recover should return error but did not")
-	}
 	ctx.Log.Debugw("checkpoint file received", "client", client.Name, "size", len(result.Bytes()))
 	return result.Bytes(), nil
+}
+
+func recoverNode(ctx *testcontext.Context, client *cluster.NodeClient) error {
+	smshr := pb.NewAdminServiceClient(client)
+	_, err := smshr.Recover(ctx, &pb.RecoverRequest{})
+	if err == nil {
+		return errors.New("recover should return error but did not")
+	}
+	return nil
 }
 
 type acctState struct {
