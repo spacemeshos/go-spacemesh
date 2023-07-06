@@ -170,7 +170,7 @@ func New(
 		return NewSimpleRoundClock(layerTime, wakeupDelta, roundDuration)
 	}
 
-	ev := newEligibilityValidator(rolacle, conf.N, conf.ExpectedLeaders, logger)
+	ev := NewEligibilityValidator(rolacle, conf.N, conf.ExpectedLeaders, logger)
 	h.mchMalfeasance = make(chan *types.MalfeasanceGossip, conf.N)
 	h.sign = sign
 	h.blockGenCh = ch

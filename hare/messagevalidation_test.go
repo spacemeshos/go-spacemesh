@@ -88,7 +88,7 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
-	ev := newEligibilityValidator(mo, 1, 5, logtest.New(t))
+	ev := NewEligibilityValidator(mo, 1, 5, logtest.New(t))
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
-	ev := newEligibilityValidator(mo, 1, 5, logtest.New(t))
+	ev := NewEligibilityValidator(mo, 1, 5, logtest.New(t))
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -121,7 +121,7 @@ func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
 func TestEligibilityValidator_validateRole_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
-	ev := newEligibilityValidator(mo, 1, 5, logtest.New(t))
+	ev := NewEligibilityValidator(mo, 1, 5, logtest.New(t))
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)

@@ -23,7 +23,7 @@ type eligibilityValidator struct {
 	log.Log
 }
 
-func newEligibilityValidator(oracle Rolacle, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
+func NewEligibilityValidator(oracle Rolacle, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
 	return &eligibilityValidator{oracle, maxExpActives, expLeaders, logger}
 }
 
