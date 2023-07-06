@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -274,10 +275,13 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 	// Create the initial post and save it.
 	startTime := time.Now()
 	var err error
+	events.EmitPostStart(shared.ZeroChallenge)
 	b.initialPost, _, err = b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge)
 	if err != nil {
+		events.EmitPostFailure()
 		return fmt.Errorf("post execution: %w", err)
 	}
+	events.EmitPostComplete(shared.ZeroChallenge)
 	metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
 
 	if err := savePost(b.nipostBuilder.DataDir(), b.initialPost); err != nil {
@@ -376,6 +380,9 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 			log.Uint32("current epoch", current.Uint32()),
 			log.Duration("wait", wait),
 		)
+		if wait > 0 {
+			events.EmitPoetWaitRound(current, current+1, wait)
+		}
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -516,6 +523,12 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	}
 
 	logger.Event().Info("atx published", log.Inline(atx), log.Int("size", size))
+
+	events.EmitAtxPublished(
+		atx.PublishEpoch, atx.TargetEpoch(),
+		atx.ID(),
+		time.Until(b.layerClock.LayerToTime(atx.TargetEpoch().FirstLayer())),
+	)
 
 	select {
 	case <-atxReceived:

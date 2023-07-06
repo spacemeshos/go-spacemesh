@@ -411,53 +411,49 @@ type EventReporter struct {
 	rewardEmitter      event.Emitter
 	resultsEmitter     event.Emitter
 	proposalsEmitter   event.Emitter
+	eventsEmitter      event.Emitter
 	stopChan           chan struct{}
 }
 
 func newEventReporter() *EventReporter {
 	bus := eventbus.NewBus()
-
 	transactionEmitter, err := bus.Emitter(new(Transaction))
 	if err != nil {
 		log.With().Panic("failed to create transaction emitter", log.Err(err))
 	}
-
 	activationEmitter, err := bus.Emitter(new(ActivationTx))
 	if err != nil {
 		log.With().Panic("failed to create activation emitter", log.Err(err))
 	}
-
 	layerEmitter, err := bus.Emitter(new(LayerUpdate))
 	if err != nil {
 		log.With().Panic("failed to create layer emitter", log.Err(err))
 	}
-
 	statusEmitter, err := bus.Emitter(new(Status))
 	if err != nil {
 		log.With().Panic("failed to create status emitter", log.Err(err))
 	}
-
 	accountEmitter, err := bus.Emitter(new(Account))
 	if err != nil {
 		log.With().Panic("failed to create account emitter", log.Err(err))
 	}
-
 	rewardEmitter, err := bus.Emitter(new(Reward))
 	if err != nil {
 		log.With().Panic("failed to create reward emitter", log.Err(err))
 	}
-
 	resultsEmitter, err := bus.Emitter(new(types.TransactionWithResult))
 	if err != nil {
 		log.With().Panic("failed to create receipt emitter", log.Err(err))
 	}
-
 	errorEmitter, err := bus.Emitter(new(NodeError))
 	if err != nil {
 		log.With().Panic("failed to create error emitter", log.Err(err))
 	}
-
 	proposalsEmitter, err := bus.Emitter(new(EventProposal))
+	if err != nil {
+		log.With().Panic("failed to to create proposal emitter", log.Err(err))
+	}
+	eventsEmitter, err := bus.Emitter(new(UserEvent))
 	if err != nil {
 		log.With().Panic("failed to to create proposal emitter", log.Err(err))
 	}
@@ -473,6 +469,7 @@ func newEventReporter() *EventReporter {
 		resultsEmitter:     resultsEmitter,
 		errorEmitter:       errorEmitter,
 		proposalsEmitter:   proposalsEmitter,
+		eventsEmitter:      eventsEmitter,
 		stopChan:           make(chan struct{}),
 	}
 }
