@@ -459,9 +459,6 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	peer2requests := make(map[p2p.Peer][]RequestMessage)
 	peers := f.host.GetPeers()
-	if len(peers) == 0 {
-		panic("no peers")
-	}
 
 	for _, req := range requests {
 		p, exists := f.hashToPeers.GetRandom(req.Hash, req.Hint, rng)
