@@ -511,3 +511,59 @@ func CloseEventReporter() {
 		reporter = nil
 	}
 }
+
+func newRing[T any](size int) *ring[T] {
+	return &ring[T]{
+		data:  make([]T, size),
+		empty: true,
+	}
+}
+
+// ring is an insert only ring buffer data structure
+type ring[T any] struct {
+	data    []T
+	current uint
+	empty   bool
+}
+
+func (r *ring[T]) cap() int {
+	return len(r.data)
+}
+
+func (r *ring[T]) insert(value T) {
+	r.data[r.current%uint(len(r.data))] = value
+	r.current++
+	r.current %= uint(len(r.data))
+	r.empty = false
+}
+
+func (r *ring[T]) iterate(iter func(val T) bool) {
+	if r.empty {
+		return
+	}
+	i := r.current
+	for {
+		val := r.data[i]
+		if !iter(val) {
+			return
+		}
+		i = (i + 1) % uint(len(r.data))
+		if i == r.current {
+			break
+		}
+	}
+}
+
+type bufferedEmitter[T any] struct {
+	event.Emitter
+
+	mu     sync.Mutex
+	buffer *ring[T]
+}
+
+func (b *bufferedEmitter[T]) Emit(val any) error {
+	b.mu.Lock()
+	b.buffer.insert(val.(T))
+	b.mu.Unlock()
+	return b.Emitter.Emit(val)
+}
