@@ -16,6 +16,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -94,4 +95,29 @@ func (a AdminService) CheckpointStream(req *pb.CheckpointStreamRequest, stream p
 func (a AdminService) Recover(_ context.Context, _ *pb.RecoverRequest) (*empty.Empty, error) {
 	a.logger.Panic("going to recover from checkpoint")
 	return &empty.Empty{}, nil
+}
+
+func (a AdminService) EventsStream(req *pb.EventStreamRequest, stream pb.AdminService_EventsStreamServer) error {
+	sub, err := events.Subscribe[events.UserEvent]()
+	if err != nil {
+		return status.Errorf(codes.FailedPrecondition, err.Error())
+	}
+	defer sub.Close()
+	// send empty header after subscribing to the channel.
+	// this is optional but allows subscriber to wait until stream is fully initialized.
+	if err := stream.SendHeader(metadata.MD{}); err != nil {
+		return status.Errorf(codes.Unavailable, "can't send header")
+	}
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case <-sub.Full():
+			return status.Errorf(codes.Canceled, "buffer is full")
+		case ev := <-sub.Out():
+			if err := stream.Send(ev.Event); err != nil {
+				return fmt.Errorf("send to stream: %w", err)
+			}
+		}
+	}
 }

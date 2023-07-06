@@ -435,8 +435,10 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		}
 		if err = pb.publisher.Publish(newCtx, pubsub.ProposalProtocol, data); err != nil {
 			pb.logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
+		} else {
+			events.EmitProposal(layerID, p.ID())
+			events.ReportProposal(events.ProposalCreated, p)
 		}
-		events.ReportProposal(events.ProposalCreated, p)
 		return nil
 	})
 	return nil

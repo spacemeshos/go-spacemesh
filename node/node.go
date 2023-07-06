@@ -616,6 +616,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	}
 	app.eg.Go(func() error {
 		for rst := range beaconProtocol.Results() {
+			events.EmitBeacon(rst.Epoch, rst.Beacon)
 			trtl.OnBeacon(rst.Epoch, rst.Beacon)
 		}
 		app.log.Debug("beacon results watcher exited")
@@ -1122,6 +1123,7 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	if app.updater != nil {
+		log.Info("stopping updater")
 		app.updater.Close()
 	}
 
