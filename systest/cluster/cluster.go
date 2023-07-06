@@ -73,6 +73,9 @@ func WithSmesherFlag(flag DeploymentFlag) Opt {
 func WithKeys(n int) Opt {
 	return func(c *Cluster) {
 		c.accounts = accounts{keys: genSigners(n)}
+		for _, key := range c.accounts.keys {
+			c.genesisBalances[key.Address().String()] = initBalance
+		}
 	}
 }
 
@@ -85,6 +88,19 @@ func WithBootstrapperFlag(flag DeploymentFlag) Opt {
 func WithBootstrapEpochs(epochs []int) Opt {
 	return func(c *Cluster) {
 		c.bootstrapEpochs = epochs
+	}
+}
+
+type GenAccount struct {
+	Address types.Address
+	Balance uint64
+}
+
+func WithGenesisBalances(gaccs ...GenAccount) Opt {
+	return func(c *Cluster) {
+		for _, acc := range gaccs {
+			c.genesisBalances[acc.Address.String()] = acc.Balance
+		}
 	}
 }
 
@@ -144,6 +160,7 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 		poetFlags:         map[string]DeploymentFlag{},
 		bootstrapperFlags: map[string]DeploymentFlag{},
 		bootstrapEpochs:   []int{2},
+		genesisBalances:   map[string]uint64{},
 	}
 	genesis := GenesisTime(time.Now().Add(cctx.BootstrapDuration))
 	cluster.addFlag(genesis)
@@ -156,10 +173,7 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	for _, opt := range opts {
 		opt(cluster)
 	}
-	if len(cluster.keys) > 0 {
-		cluster.addFlag(Accounts(genGenesis(cluster.keys)))
-	}
-
+	cluster.addFlag(Accounts(cluster.genesisBalances))
 	return cluster
 }
 
@@ -171,6 +185,7 @@ type Cluster struct {
 	bootstrapperFlags map[string]DeploymentFlag
 
 	accounts
+	genesisBalances map[string]uint64
 
 	bootnodes     int
 	smeshers      int
@@ -671,14 +686,6 @@ func (a *accounts) Recover(ctx *testcontext.Context) error {
 	}
 	a.persisted = true
 	return nil
-}
-
-func genGenesis(signers []*signer) (rst map[string]uint64) {
-	rst = map[string]uint64{}
-	for _, sig := range signers {
-		rst[sig.Address().String()] = initBalance
-	}
-	return
 }
 
 type signer struct {

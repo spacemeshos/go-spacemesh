@@ -3215,3 +3215,33 @@ func TestOnMalfeasance(t *testing.T) {
 		s.runInorder()
 	})
 }
+
+func TestBaseAbstain(t *testing.T) {
+	s := newSession(t)
+	activeset := []*atxAction{
+		s.smesher(0).atx(1, new(aopt).height(10).weight(100)),
+	}
+	s.beacon(1, "a")
+	s.smesher(0).atx(1).ballot(1, new(bopt).
+		beacon("a").
+		activeset(activeset...).
+		eligibilities(s.layerSize))
+	s.smesher(0).atx(1).ballot(2, new(bopt).
+		eligibilities(s.layerSize).
+		votes(new(evotes).
+			base(s.smesher(0).atx(1).ballot(1)).
+			abstain(1),
+		))
+	s.block(1, "aa", 0)
+	s.tally(2)
+
+	trt := s.tortoise()
+	s.runOn(trt)
+	op, err := trt.EncodeVotes(context.Background())
+	require.NoError(t, err)
+	base := s.smesher(0).atx(1).ballot(2)
+	require.Equal(t, op.Base, base.ID)
+	require.Equal(t, op.Abstain, []types.LayerID{base.Layer})
+	require.Empty(t, op.Support)
+	require.Empty(t, op.Against)
+}

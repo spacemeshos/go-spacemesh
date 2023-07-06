@@ -5,7 +5,6 @@ import (
 	"errors"
 	"math"
 	"math/rand"
-	"reflect"
 	"sort"
 	"testing"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
@@ -38,7 +38,7 @@ const (
 	nonce            = uint64(1234)
 )
 
-func newTx(tb testing.TB, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
+func newTx(tb testing.TB, nonce, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
 	tb.Helper()
 	var dest types.Address
 	_, err := rand.Read(dest[:])
@@ -46,7 +46,7 @@ func newTx(tb testing.TB, nonce uint64, amount, fee uint64, signer *signing.EdSi
 	return newTxWthRecipient(tb, dest, nonce, amount, fee, signer)
 }
 
-func newTxWthRecipient(tb testing.TB, dest types.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
+func newTxWthRecipient(tb testing.TB, dest types.Address, nonce, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
 	tb.Helper()
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
 		nonce,
@@ -163,7 +163,7 @@ func TestSelectProposalTXs(t *testing.T) {
 		for _, id := range got2 {
 			m2[id] = struct{}{}
 		}
-		return !reflect.DeepEqual(m1, m2)
+		return !maps.Equal(m1, m2)
 	}, 100*time.Millisecond, 20*time.Millisecond)
 }
 

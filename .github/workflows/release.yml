@@ -16,11 +16,11 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-latest
           - os: ubuntu-latest
-          - os: windows-latest
-          - os: [self-hosted, macos, arm64]
           - os: [self-hosted, linux, arm64]
+          - os: macos-latest
+          - os: [self-hosted, macos, arm64]
+          - os: windows-latest
     steps:
       - shell: bash
         run: |
@@ -40,41 +40,26 @@ jobs:
         with:
           check-latest: true
           go-version-file: "go.mod"
+          cache: ${{ runner.arch != 'arm64' }}
 
-      - if: matrix.os == 'windows-latest'
-        name: Install dependencies in windows
-        uses: crazy-max/ghaction-chocolatey@v2
-        with:
-          args: install make wget zip
-
-      - name: setup env
-        run: |
-          echo "::set-env name=GOPATH::$(go env GOPATH)"
-          echo "::add-path::$(go env GOPATH)/bin"
-        shell: bash
-        env:
-          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
-
-      - name: Read version.txt
-        id: version
-        uses: juliangruber/read-file-action@v1
-        with:
-          path: ./version.txt
+      - name: Install dependencies in windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: choco install make wget zip
 
       - name: Add OpenCL support for Linux
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
 
-      - name: Oveeride SDKROOT for macOS
+      - name: Override SDKROOT for macOS
         if: ${{ contains(matrix.os, 'macos') && runner.arch == 'arm64' }}
-        run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> "$GITHUB_ENV"
+        run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> $GITHUB_ENV
 
         # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
       - name: Build go-spacemesh
         shell: bash
         run: |
           make install
-          make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
+          make build VERSION=${{ github.ref }} BIN_DIR_WIN=./build
       - name: Create release archive
         shell: bash
         env:

@@ -12,6 +12,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -964,7 +965,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	require.NotNil(t, built)
 
 	// the challenge remains
-	got, err := loadNipostChallenge(tab.nipostBuilder.DataDir())
+	got, err := LoadNipostChallenge(tab.nipostBuilder.DataDir())
 	require.NoError(t, err)
 	require.NotEmpty(t, got)
 
@@ -988,7 +989,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 		})
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	require.ErrorIs(t, tab.PublishActivationTx(context.Background()), ErrATXChallengeExpired)
-	got, err = loadNipostChallenge(tab.nipostBuilder.DataDir())
+	got, err = LoadNipostChallenge(tab.nipostBuilder.DataDir())
 	require.ErrorIs(t, err, os.ErrNotExist)
 	require.Empty(t, got)
 
@@ -1006,15 +1007,16 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	require.NotEqual(t, built.NIPostChallenge, built2.NIPostChallenge)
 	require.Equal(t, built.TargetEpoch()+1, built2.TargetEpoch())
 
-	got, err = loadNipostChallenge(tab.nipostBuilder.DataDir())
+	got, err = LoadNipostChallenge(tab.nipostBuilder.DataDir())
 	require.ErrorIs(t, err, os.ErrNotExist)
 	require.Empty(t, got)
 }
 
 func TestBuilder_RetryPublishActivationTx(t *testing.T) {
-	retryInterval := 10 * time.Microsecond
+	retryInterval := 50 * time.Microsecond
 	genesis := time.Now()
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: 10 * time.Millisecond}), WithPoetRetryInterval(retryInterval))
+	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: 150 * time.Millisecond}), WithPoetRetryInterval(retryInterval))
+	tab.log = logtest.New(t, zap.InfoLevel)
 	posEpoch := types.EpochID(0)
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
 	poetBytes := []byte("66666")
@@ -1038,18 +1040,23 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 	expectedTries := 3
 	tries := 0
+	var last time.Time
 	builderConfirmation := make(chan struct{})
-	// TODO(dshulyak) maybe measure time difference between attempts. It should be no less than retryInterval
-	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).Times(expectedTries).DoAndReturn(
 		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, time.Duration, error) {
+			now := time.Now()
+			if now.Sub(last) < retryInterval {
+				require.FailNow(t, "retry interval not respected")
+			}
+
 			tries++
-			if tries == expectedTries {
-				close(builderConfirmation)
-			} else if tries < expectedTries {
+			t.Logf("try %d: %s", tries, now)
+			if tries < expectedTries {
 				return nil, 0, ErrPoetServiceUnstable
 			}
+			close(builderConfirmation)
 			return newNIPostWithChallenge(t, challenge.Hash(), poetBytes), 0, nil
-		}).Times(expectedTries)
+		})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	runnerExit := make(chan struct{})
@@ -1064,8 +1071,8 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 	select {
 	case <-builderConfirmation:
-	case <-time.After(time.Second * 10):
-		require.FailNow(t, "failed waiting for required number of tries to occur")
+	case <-time.After(5 * time.Second):
+		require.FailNowf(t, "failed waiting for required number of tries", "only tried %d times", tries)
 	}
 }
 

@@ -39,6 +39,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
@@ -150,13 +151,15 @@ func GetCommand() *cobra.Command {
 					return fmt.Errorf("could not retrieve identity: %w", err)
 				}
 
-				if err := app.LoadCheckpoint(ctx); err != nil {
+				app.preserve, err = app.LoadCheckpoint(ctx)
+				if err != nil {
 					return err
 				}
 
 				if err := app.Initialize(); err != nil {
 					return err
 				}
+
 				// This blocks until the context is finished or until an error is produced
 				err = app.Start(ctx)
 
@@ -330,7 +333,10 @@ type App struct {
 	ptimesync          *peersync.Sync
 	tortoise           *tortoise.Tortoise
 	updater            *bootstrap.Updater
+	poetDb             *activation.PoetDb
 	postVerifier       *activation.OffloadingPostVerifier
+	preserve           *checkpoint.PreservedData
+	errCh              chan error
 
 	host *p2p.Host
 
@@ -339,63 +345,30 @@ type App struct {
 	eg      *errgroup.Group
 }
 
-// this code path is only used during systest after admin::Recover() RPC causing
-// the node to log.fatal and restart without reading any new config.
-// the expected action for node operator is to supply new config with
-// --checkpoint-file and --restore-layer via config file or cmdline options.
-func defaultRecoveryFile(dataDir string) (string, types.LayerID, error) {
-	recoverDir := checkpoint.RecoveryDir(dataDir)
-	files, err := filepath.Glob(fmt.Sprintf("%s%s*", recoverDir, string([]rune{filepath.Separator})))
-	if err != nil {
-		return "", 0, nil
-	}
-	if len(files) == 0 {
-		// remove the directory regardless
-		_ = os.Remove(recoverDir)
-		return "", 0, nil
-	}
-	if len(files) > 1 {
-		return "", 0, fmt.Errorf("multiple checkpoint files found [%v]. delete all and re-download", files)
-	}
-	restore, err := checkpoint.ParseRestoreLayer(filepath.Base(files[0]))
-	if err != nil {
-		return "", 0, err
-	}
-	return fmt.Sprintf("file://%s", filepath.ToSlash(files[0])), restore, nil
-}
-
-func (app *App) LoadCheckpoint(ctx context.Context) error {
-	var (
-		checkpointFile = app.Config.Recovery.Uri
-		restore        = types.LayerID(app.Config.Recovery.Restore)
-		err            error
-	)
+func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, error) {
+	checkpointFile := app.Config.Recovery.Uri
+	restore := types.LayerID(app.Config.Recovery.Restore)
 	if len(checkpointFile) == 0 {
-		if !app.Config.Recovery.RecoverFromDefaultDir {
-			return nil
-		}
-		checkpointFile, restore, err = defaultRecoveryFile(app.Config.DataDir())
-		if err != nil {
-			return err
-		}
-	}
-	if len(checkpointFile) == 0 {
-		return nil
+		return nil, nil
 	}
 	if restore == 0 {
-		return fmt.Errorf("restore layer not set")
+		return nil, fmt.Errorf("restore layer not set")
 	}
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      types.ATXID(app.Config.Genesis.GoldenATX()),
+		PostDataDir:    app.Config.SMESHING.Opts.DataDir,
 		DataDir:        app.Config.DataDir(),
 		DbFile:         dbFile,
 		PreserveOwnAtx: app.Config.Recovery.PreserveOwnAtx,
+		NodeID:         app.edSgn.NodeID(),
+		Uri:            checkpointFile,
+		Restore:        restore,
 	}
 	app.log.WithContext(ctx).With().Info("recover from checkpoint",
 		log.String("url", checkpointFile),
 		log.Stringer("restore", restore),
 	)
-	return checkpoint.Recover(ctx, app.log, afero.NewOsFs(), cfg, app.edSgn.NodeID(), checkpointFile, restore)
+	return checkpoint.Recover(ctx, app.log, afero.NewOsFs(), cfg)
 }
 
 func (app *App) Started() <-chan struct{} {
@@ -643,6 +616,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	}
 	app.eg.Go(func() error {
 		for rst := range beaconProtocol.Results() {
+			events.EmitBeacon(rst.Epoch, rst.Beacon)
 			trtl.OnBeacon(rst.Epoch, rst.Beacon)
 		}
 		app.log.Debug("beacon results watcher exited")
@@ -910,6 +884,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	app.atxBuilder = atxBuilder
 	app.postSetupMgr = postSetupMgr
 	app.atxHandler = atxHandler
+	app.poetDb = poetDb
 	app.fetcher = fetcher
 	app.beaconProtocol = beaconProtocol
 	app.tortoise = trtl
@@ -954,7 +929,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 		return err
 	}
 	cfg.RawRESTListener = parsed.Host
-	cfg.Service.Genesis = app.Config.Genesis.GenesisTime
+	cfg.Service.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime)
 	cfg.Service.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
 	cfg.Service.CycleGap = app.Config.POET.CycleGap
 	cfg.Service.PhaseShift = app.Config.POET.PhaseShift
@@ -973,15 +948,15 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	return nil
 }
 
-func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
+func (app *App) listenToUpdates(ctx context.Context) {
 	app.eg.Go(func() error {
 		ch, err := app.updater.Subscribe()
 		if err != nil {
-			appErr <- err
+			app.errCh <- err
 			return nil
 		}
 		if err := app.updater.Start(); err != nil {
-			appErr <- err
+			app.errCh <- err
 			return nil
 		}
 		for update := range ch {
@@ -991,7 +966,7 @@ func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 			default:
 				if update.Data.Beacon != types.EmptyBeacon {
 					if err := app.beaconProtocol.UpdateBeacon(update.Data.Epoch, update.Data.Beacon); err != nil {
-						appErr <- err
+						app.errCh <- err
 						return nil
 					}
 				}
@@ -1004,7 +979,7 @@ func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 	})
 }
 
-func (app *App) startServices(ctx context.Context, appErr chan error) error {
+func (app *App) startServices(ctx context.Context) error {
 	if err := app.fetcher.Start(); err != nil {
 		return fmt.Errorf("failed to start fetcher: %w", err)
 	}
@@ -1041,7 +1016,7 @@ func (app *App) startServices(ctx context.Context, appErr chan error) error {
 	}
 
 	if app.updater != nil {
-		app.listenToUpdates(ctx, appErr)
+		app.listenToUpdates(ctx)
 	}
 	return nil
 }
@@ -1148,6 +1123,7 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	if app.updater != nil {
+		log.Info("stopping updater")
 		app.updater.Close()
 	}
 
@@ -1305,14 +1281,14 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	/* Setup monitoring */
-	appErr := make(chan error, 100)
+	app.errCh = make(chan error, 100)
 	if app.Config.PprofHTTPServer {
 		logger.Info("starting pprof server")
 		srv := &http.Server{Addr: ":6060"}
 		defer srv.Shutdown(ctx)
 		app.eg.Go(func() error {
 			if err := srv.ListenAndServe(); err != nil {
-				appErr <- fmt.Errorf("cannot start pprof http server: %w", err)
+				app.errCh <- fmt.Errorf("cannot start pprof http server: %w", err)
 			}
 			return nil
 		})
@@ -1394,9 +1370,12 @@ func (app *App) Start(ctx context.Context) error {
 			app.host.ID().String(), app.Config.Genesis.GenesisID().ShortString())
 	}
 
-	if err := app.startServices(ctx, appErr); err != nil {
+	if err := app.startServices(ctx); err != nil {
 		return err
 	}
+
+	// need post verifying service to start first
+	app.preserveAfterRecovery(ctx)
 
 	if err := app.startAPIServices(ctx); err != nil {
 		return err
@@ -1420,7 +1399,7 @@ func (app *App) Start(ctx context.Context) error {
 	// TODO: pass app.eg to components and wait for them collectively
 	if app.ptimesync != nil {
 		app.eg.Go(func() error {
-			appErr <- app.ptimesync.Wait()
+			app.errCh <- app.ptimesync.Wait()
 			return nil
 		})
 	}
@@ -1429,8 +1408,57 @@ func (app *App) Start(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return nil
-	case err = <-appErr:
+	case err = <-app.errCh:
 		return err
+	}
+}
+
+func (app *App) preserveAfterRecovery(ctx context.Context) {
+	if app.preserve == nil {
+		return
+	}
+	for i, poetProof := range app.preserve.Proofs {
+		encoded, err := codec.Encode(poetProof)
+		if err != nil {
+			app.log.With().Error("failed to encode poet proof after checkpoint",
+				log.Stringer("atx id", app.preserve.Deps[i].ID()),
+				log.Object("poet proof", poetProof),
+				log.Err(err),
+			)
+			continue
+		}
+		if err := app.poetDb.ValidateAndStoreMsg(ctx, p2p.NoPeer, encoded); err != nil {
+			app.log.With().Error("failed to preserve poet proof after checkpoint",
+				log.Stringer("atx id", app.preserve.Deps[i].ID()),
+				log.String("poet proof ref", app.preserve.Deps[i].GetPoetProofRef().ShortString()),
+				log.Err(err),
+			)
+			continue
+		}
+		app.log.With().Info("preserved poet proof after checkpoint",
+			log.Stringer("atx id", app.preserve.Deps[i].ID()),
+			log.String("poet proof ref", app.preserve.Deps[i].GetPoetProofRef().ShortString()),
+		)
+	}
+	for _, vatx := range app.preserve.Deps {
+		encoded, err := codec.Encode(vatx)
+		if err != nil {
+			app.log.With().Error("failed to encode atx after checkpoint",
+				log.Inline(vatx),
+				log.Err(err),
+			)
+			continue
+		}
+		if err := app.atxHandler.HandleAtxData(ctx, p2p.NoPeer, encoded); err != nil {
+			app.log.With().Error("failed to preserve atx after checkpoint",
+				log.Inline(vatx),
+				log.Err(err),
+			)
+			continue
+		}
+		app.log.With().Info("preserved atx after checkpoint",
+			log.Inline(vatx),
+		)
 	}
 }
 

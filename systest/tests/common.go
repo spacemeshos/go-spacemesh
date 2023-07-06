@@ -207,6 +207,25 @@ func waitLayer(ctx *testcontext.Context, node *cluster.NodeClient, lid uint32) e
 	}
 }
 
+func waitTransaction(ctx context.Context,
+	eg *errgroup.Group,
+	client *cluster.NodeClient,
+	id []byte,
+) {
+	eg.Go(func() error {
+		api := pb.NewTransactionServiceClient(client)
+		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true, Id: id})
+		if err != nil {
+			return err
+		}
+		_, err = rsts.Recv()
+		if err != nil {
+			return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
+		}
+		return nil
+	})
+}
+
 func watchTransactionResults(ctx context.Context,
 	eg *errgroup.Group,
 	client *cluster.NodeClient,
@@ -305,7 +324,7 @@ func maxLayer(i, j uint32) uint32 {
 	return j
 }
 
-func nextFirstLayer(current uint32, size uint32) uint32 {
+func nextFirstLayer(current, size uint32) uint32 {
 	if over := current % size; over != 0 {
 		current += size - over
 	}
@@ -321,6 +340,15 @@ func getNonce(ctx context.Context, client *cluster.NodeClient, address types.Add
 	return resp.AccountWrapper.StateProjected.Counter, nil
 }
 
+func currentBalance(ctx context.Context, client *cluster.NodeClient, address types.Address) (uint64, error) {
+	gstate := pb.NewGlobalStateServiceClient(client)
+	resp, err := gstate.Account(ctx, &pb.AccountRequest{AccountId: &pb.AccountId{Address: address.String()}})
+	if err != nil {
+		return 0, err
+	}
+	return resp.AccountWrapper.StateCurrent.Balance.Value, nil
+}
+
 func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -330,7 +358,7 @@ func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, cli
 	return err
 }
 
-func submitSpend(ctx context.Context, cluster *cluster.Cluster, account int, receiver types.Address, amount uint64, nonce uint64, client *cluster.NodeClient) error {
+func submitSpend(ctx context.Context, cluster *cluster.Cluster, account int, receiver types.Address, amount, nonce uint64, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	_, err := submitTransaction(ctx,

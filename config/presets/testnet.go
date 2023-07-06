@@ -3,7 +3,6 @@ package presets
 import (
 	"time"
 
-	postCfg "github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -58,8 +57,6 @@ func testnet() config.Config {
 	conf.SMESHING.Opts.ProviderID = int(initialization.CPUProviderID())
 	conf.SMESHING.Opts.NumUnits = 2
 	conf.SMESHING.Opts.Throttle = true
-	// Override proof of work flags to use light mode (less memory intensive)
-	conf.SMESHING.ProvingOpts.Flags = postCfg.RecommendedPowFlags()
 
 	conf.Beacon.FirstVotingRoundDuration = 3 * time.Minute
 	conf.Beacon.GracePeriodDuration = 10 * time.Second
@@ -70,6 +67,5 @@ func testnet() config.Config {
 	conf.Beacon.VotingRoundDuration = 50 * time.Second
 	conf.Beacon.WeakCoinRoundDuration = 10 * time.Second
 
-	conf.Recovery.RecoverFromDefaultDir = false
 	return conf
 }

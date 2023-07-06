@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/afero"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -17,15 +18,26 @@ import (
 const (
 	SchemaVersion = "https://spacemesh.io/checkpoint.schema.json.1.0"
 
+	CommandString = "grpcurl -plaintext -d '%s' 0.0.0.0:9093 spacemesh.v1.AdminService.CheckpointStream"
+
 	checkpointDir = "checkpoint"
 	schemaFile    = "schema.json"
 	dirPerm       = 0o700
 )
 
-func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID) (*Checkpoint, error) {
-	checkpoint := &Checkpoint{
+func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID, numAtxs int) (*types.Checkpoint, error) {
+	request, err := json.Marshal(&pb.CheckpointStreamRequest{
+		SnapshotLayer: uint32(snapshot),
+		NumAtxs:       uint32(numAtxs),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	checkpoint := &types.Checkpoint{
+		Command: fmt.Sprintf(CommandString, request),
 		Version: SchemaVersion,
-		Data: InnerData{
+		Data: types.InnerData{
 			CheckpointId: fmt.Sprintf("snapshot-%d", snapshot),
 		},
 	}
@@ -36,7 +48,7 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID)
 	}
 	defer tx.Release()
 
-	atxSnapshot, err := atxs.LatestN(tx, 2)
+	atxSnapshot, err := atxs.LatestN(tx, numAtxs)
 	if err != nil {
 		return nil, fmt.Errorf("atxs snapshot: %w", err)
 	}
@@ -53,7 +65,7 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID)
 		atxSnapshot[i].VRFNonce = vrfNonce
 	}
 	for _, catx := range atxSnapshot {
-		checkpoint.Data.Atxs = append(checkpoint.Data.Atxs, ShortAtx{
+		checkpoint.Data.Atxs = append(checkpoint.Data.Atxs, types.AtxSnapshot{
 			ID:             catx.ID.Bytes(),
 			Epoch:          catx.Epoch.Uint32(),
 			CommitmentAtx:  catx.CommitmentATX.Bytes(),
@@ -72,7 +84,7 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID)
 		return nil, fmt.Errorf("accounts snapshot: %w", err)
 	}
 	for _, acct := range acctSnapshot {
-		a := Account{
+		a := types.AccountSnapshot{
 			Address: acct.Address.Bytes(),
 			Balance: acct.Balance,
 			Nonce:   acct.NextNonce,
@@ -88,8 +100,8 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID)
 	return checkpoint, nil
 }
 
-func Generate(ctx context.Context, fs afero.Fs, db *sql.Database, dataDir string, snapshot types.LayerID) error {
-	checkpoint, err := checkpointDB(ctx, db, snapshot)
+func Generate(ctx context.Context, fs afero.Fs, db *sql.Database, dataDir string, snapshot types.LayerID, numAtxs int) error {
+	checkpoint, err := checkpointDB(ctx, db, snapshot, numAtxs)
 	if err != nil {
 		return err
 	}

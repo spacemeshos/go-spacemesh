@@ -62,7 +62,7 @@ func WithHttpClient(c *http.Client) Opt {
 	}
 }
 
-func NewGenerator(btcEndpoint string, smEndpoint string, opts ...Opt) *Generator {
+func NewGenerator(btcEndpoint, smEndpoint string, opts ...Opt) *Generator {
 	g := &Generator{
 		logger:      log.NewNop(),
 		fs:          afero.NewOsFs(),

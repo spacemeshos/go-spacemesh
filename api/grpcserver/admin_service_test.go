@@ -3,9 +3,7 @@ package grpcserver
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -19,10 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
-const (
-	snapshot uint32 = 15
-	restore  uint32 = 17
-)
+const snapshot uint32 = 15
 
 func newatx(tb testing.TB, db *sql.Database) {
 	atx := &types.ActivationTx{
@@ -110,20 +105,4 @@ func TestAdminService_CheckpointError(t *testing.T) {
 	require.NoError(t, err)
 	_, err = stream.Recv()
 	require.ErrorContains(t, err, sql.ErrNotFound.Error())
-}
-
-func TestAdminService_RecoveryFileMissing(t *testing.T) {
-	logtest.SetupGlobal(t)
-	db := sql.InMemory()
-	svc := NewAdminService(db, t.TempDir(), logtest.New(t))
-	t.Cleanup(launchServer(t, cfg, svc))
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
-	c := pb.NewAdminServiceClient(conn)
-
-	fname := filepath.Join(t.TempDir(), "snapshot")
-	_, err := c.Recover(ctx, &pb.RecoverRequest{Uri: fmt.Sprintf("file://%s", fname), RestoreLayer: restore})
-	require.Error(t, err)
 }

@@ -287,6 +287,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 
 	mgr := newTestPostManager(t)
 	mgr.opts.MaxFileSize = 4096
+	mgr.opts.NumUnits = mgr.cfg.MaxNumUnits
 
 	// Create data.
 	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
@@ -423,7 +424,6 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 
 	opts := DefaultPostSetupOpts()
 	opts.DataDir = tb.TempDir()
-	opts.NumUnits = cfg.MaxNumUnits
 	opts.ProviderID = int(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 

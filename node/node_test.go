@@ -264,7 +264,7 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 	return buf.String()
 }
 
-func callEndpoint(t *testing.T, endpoint, payload string, address string) (string, int) {
+func callEndpoint(t *testing.T, endpoint, payload, address string) (string, int) {
 	url := fmt.Sprintf("http://%s/%s", address, endpoint)
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.NoError(t, err)
@@ -904,6 +904,69 @@ func TestFlock(t *testing.T) {
 		require.NoError(t, app.Lock())
 		t.Cleanup(app.Unlock)
 	})
+}
+
+func TestAdminEvents(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	cfg, err := presets.Get("standalone")
+	require.NoError(t, err)
+	cfg.DataDirParent = t.TempDir()
+	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
+	cfg.SMESHING.Opts.DataDir = t.TempDir()
+	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
+
+	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
+	signer, err := app.LoadOrCreateEdSigner()
+	require.NoError(t, err)
+	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
+	require.NoError(t, app.Initialize())
+	ctx, cancel := context.WithCancel(context.Background())
+	var eg errgroup.Group
+	eg.Go(func() error {
+		if err := app.Start(ctx); err != nil {
+			return err
+		}
+		app.Cleanup(context.Background())
+		app.eg.Wait() // https://github.com/spacemeshos/go-spacemesh/issues/4653
+		return nil
+	})
+	t.Cleanup(func() { eg.Wait() })
+	t.Cleanup(cancel)
+
+	conn, err := grpc.Dial(
+		cfg.API.PrivateListener,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(5*time.Second),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() { conn.Close() })
+	client := pb.NewAdminServiceClient(conn)
+
+	tctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
+	require.NoError(t, err)
+	defer stream.CloseSend()
+	success := []pb.IsEventDetails{
+		&pb.Event_InitStart{},
+		&pb.Event_InitComplete{},
+		&pb.Event_PostStart{},
+		&pb.Event_PostComplete{},
+		&pb.Event_PoetWaitRound{},
+		&pb.Event_PoetWaitProof{},
+		&pb.Event_PostStart{},
+		&pb.Event_PostComplete{},
+		&pb.Event_AtxPublished{},
+	}
+	for _, ev := range success {
+		msg, err := stream.Recv()
+		require.NoError(t, err)
+		require.IsType(t, ev, msg.Details)
+	}
 }
 
 func getTestDefaultConfig(tb testing.TB) *config.Config {
