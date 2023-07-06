@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/weakcoin"
@@ -15,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
 
 var errNilInner = errors.New("nil inner message")
@@ -24,11 +27,6 @@ var errNilInner = errors.New("nil inner message")
 // An error is set iff the identity could not be checked for activeness.
 type stateQuerier interface {
 	IsIdentityActiveOnConsensusView(context.Context, types.NodeID, types.LayerID) (bool, error)
-}
-
-type mesh interface {
-	AddMalfeasanceProof(types.NodeID, *types.MalfeasanceProof, *sql.Tx) error
-	GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error)
 }
 
 type validator interface {
@@ -85,7 +83,7 @@ type Broker struct {
 	log.Log
 	mu sync.RWMutex
 
-	msh           mesh
+	cdb           *datastore.CachedDB
 	edVerifier    *signing.EdVerifier
 	roleValidator validator     // provides eligibility validation
 	stateQuerier  stateQuerier  // provides activeness check
@@ -98,7 +96,7 @@ type Broker struct {
 }
 
 func NewBroker(
-	msh mesh,
+	cdb *datastore.CachedDB,
 	edVerifier *signing.EdVerifier,
 	roleValidator validator,
 	stateQuerier stateQuerier,
@@ -106,7 +104,7 @@ func NewBroker(
 ) *Broker {
 	b := &Broker{
 		Log:           log,
-		msh:           msh,
+		cdb:           cdb,
 		edVerifier:    edVerifier,
 		roleValidator: roleValidator,
 		stateQuerier:  stateQuerier,
@@ -220,7 +218,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	logger.With().Debug("broker reported hare message as valid")
 
 	id, round, values := parts(hareMsg)
-	proof, err := b.msh.GetMalfeasanceProof(hareMsg.SmesherID)
+	proof, err := b.cdb.GetMalfeasanceProof(hareMsg.SmesherID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		logger.With().Panic("failed to check malicious identity", log.Stringer("smesher", hareMsg.SmesherID), log.Err(err))
 	}
@@ -241,10 +239,19 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	// If we detect a new equivocation then store it.
 	if equivocationHash != nil {
 		proof = state.buildMalfeasanceProof(hash, *equivocationHash)
-		err := b.msh.AddMalfeasanceProof(hareMsg.SmesherID, proof, nil)
+
+		encoded, err := codec.Encode(proof)
 		if err != nil {
-			logger.With().Error("faild to add newly discovered malfeasance proof to mesh", log.Err(err))
+			b.WithContext(ctx).With().Panic("failed to encode MalfeasanceProof", log.Err(err))
 		}
+		if err := identities.SetMalicious(b.cdb, hareMsg.SmesherID, encoded); err != nil {
+			b.With().Error("faild to store newly discovered malfeasance proof",
+				log.Context(ctx),
+				hareMsg.SmesherID,
+				log.Err(err),
+			)
+		}
+		b.cdb.CacheMalfeasanceProof(hareMsg.SmesherID, proof)
 	}
 
 	// If this message shouldn't be relayed (this is a message from an identity
@@ -298,7 +305,7 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (*hare3.Handler
 // been detected to be malfeasant since the early message was processed.
 func (b *Broker) handleEarlyMessages(msgs map[types.Hash20]*hare.Message, handler *hare3.Handler) {
 	for k, v := range msgs {
-		proof, err := b.msh.GetMalfeasanceProof(v.SmesherID)
+		proof, err := b.cdb.GetMalfeasanceProof(v.SmesherID)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			b.With().Panic("re-handling early messages, failed to check malicious identity", log.Stringer("smesher", v.SmesherID), log.Err(err))
 		}
