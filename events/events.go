@@ -54,13 +54,13 @@ func EmitInitComplete(failure bool) {
 	)
 }
 
-func EmitPoetWait(current, publish types.EpochID, wait time.Duration) {
+func EmitPoetWaitRound(current, publish types.EpochID, wait time.Duration) {
 	const help = "Node needs to wait for poet registration window in current epoch to open. " +
 		"Once opened it will submit challenge and wait till poet round ends in publish epoch."
 	emitUserEvent(
 		help,
 		false,
-		&pb.Event_PoetWait{PoetWait: &pb.EventPoetWait{
+		&pb.Event_PoetWaitRound{PoetWaitRound: &pb.EventPoetWaitRound{
 			Current: current.Uint32(),
 			Publish: publish.Uint32(),
 			Wait:    durationpb.New(wait),
@@ -74,15 +74,15 @@ type EventPoetWaitEnd struct {
 	Wait    time.Duration `json:"wait"`
 }
 
-func EmitPoetWaitEnd(publish, target types.EpochID, wait time.Duration) {
+func EmitPoetWaitProof(publish, target types.EpochID, wait time.Duration) {
 	const help = "Node needs to wait for poet to complete in publish epoch. " +
-		"Once completed, node fetches challenge from poet and run post on that challenge. " +
+		"Once completed, node fetches proof from poet and runs post on that proof. " +
 		"After that publish an ATX that will be eligible for rewards in target epoch."
 	emitUserEvent(
 		help,
 		false,
-		&pb.Event_PoetWaitChallenge{
-			PoetWaitChallenge: &pb.EventPoetWaitChallenge{
+		&pb.Event_PoetWaitProof{
+			PoetWaitProof: &pb.EventPoetWaitProof{
 				Publish: publish.Uint32(),
 				Target:  target.Uint32(),
 				Wait:    durationpb.New(wait),

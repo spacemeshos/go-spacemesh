@@ -921,7 +921,7 @@ func TestAdminEvents(t *testing.T) {
 	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
 	signer, err := app.LoadOrCreateEdSigner()
 	require.NoError(t, err)
-	app.edSgn = signer // it should not be like this
+	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
 	require.NoError(t, app.Initialize())
 	ctx, cancel := context.WithCancel(context.Background())
 	var eg errgroup.Group
@@ -930,7 +930,7 @@ func TestAdminEvents(t *testing.T) {
 			return err
 		}
 		app.Cleanup(context.Background())
-		app.eg.Wait() // it should not be like this
+		app.eg.Wait() // https://github.com/spacemeshos/go-spacemesh/issues/4653
 		return nil
 	})
 	t.Cleanup(func() { eg.Wait() })

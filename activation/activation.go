@@ -381,7 +381,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 			log.Duration("wait", wait),
 		)
 		if wait > 0 {
-			events.EmitPoetWait(current, current+1, wait)
+			events.EmitPoetWaitRound(current, current+1, wait)
 		}
 		select {
 		case <-ctx.Done():

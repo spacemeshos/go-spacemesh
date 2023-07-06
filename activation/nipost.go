@@ -191,7 +191,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		getProofsCtx, cancel := context.WithDeadline(ctx, poetProofDeadline)
 		defer cancel()
 
-		events.EmitPoetWaitEnd(challenge.PublishEpoch, challenge.TargetEpoch(), time.Until(poetRoundEnd))
+		events.EmitPoetWaitProof(challenge.PublishEpoch, challenge.TargetEpoch(), time.Until(poetRoundEnd))
 		poetProofRef, membership, err := nb.getBestProof(getProofsCtx, nb.state.Challenge)
 		if err != nil {
 			return nil, 0, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
