@@ -129,12 +129,12 @@ func (b *Broker) Start(ctx context.Context) {
 
 var errClosed = errors.New("closed")
 
-func parts(msg *hare.Message) (id []byte, round hare3.AbsRound, values []types.Hash20) {
+func parts(msg *hare.Message) (id types.NodeID, round hare3.AbsRound, values []types.Hash20) {
 	values = make([]types.Hash20, len(msg.Values))
 	for i := range msg.Values {
 		values[i] = types.Hash20(msg.Values[i])
 	}
-	return msg.SmesherID[:], hare3.AbsRound(msg.Round), values
+	return msg.SmesherID, hare3.AbsRound(msg.Round), values
 }
 
 // HandleMessage receives messages from the network and forwards them to the

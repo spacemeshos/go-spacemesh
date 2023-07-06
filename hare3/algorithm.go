@@ -100,16 +100,16 @@ func EnsureValue[K1 comparable, V any](m map[K1]V, k K1, constructor func() V) V
 }
 
 type LeaderChecker interface {
-	IsLeader(vk types.Hash20, round AbsRound) bool
+	IsLeader(vk types.NodeID, round AbsRound) bool
 }
 
 // gradeKey3 returns a grade from 0-3.
-func gradeKey3(key []byte) uint8 {
+func gradeKey3(key types.NodeID) uint8 {
 	return 3
 }
 
 // gradeKey5 returns a grade from 0-5.
-func gradeKey5(key []byte) uint8 {
+func gradeKey5(key types.NodeID) uint8 {
 	return 5
 }
 
@@ -148,18 +148,17 @@ func NewHandler(gg GradedGossiper, tgg ThresholdGradedGossiper, gc Gradecaster, 
 
 // HandleMsg handles an incoming message, it returns a boolean indicating
 // whether the message should be regossipped to peers.
-func (h *Handler) HandleMsg(hash types.Hash20, vk []byte, round AbsRound, values []types.Hash20) (bool, *types.Hash20) {
+func (h *Handler) HandleMsg(hash types.Hash20, id types.NodeID, round AbsRound, values []types.Hash20) (bool, *types.Hash20) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	r := AbsRound(round)
 	var g uint8
 	switch r.Type() {
 	case Propose:
-		g = gradeKey3(vk)
+		g = gradeKey3(id)
 	default:
-		g = gradeKey5(vk)
+		g = gradeKey5(id)
 	}
-	id := hashBytes(vk)
 
 	var equivocationHash *types.Hash20
 	// Nil values signifies a message from a known malicious actor, however we
@@ -442,10 +441,6 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 	}
 
 	return nil, nil
-}
-
-func hashBytes(v []byte) types.Hash20 {
-	return types.Hash20{}
 }
 
 type OutputMessage struct {

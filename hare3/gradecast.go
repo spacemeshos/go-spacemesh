@@ -4,7 +4,7 @@ import "github.com/spacemeshos/go-spacemesh/common/types"
 
 // GradecastedSet encapsulates the output from gradecast for a given identity.
 type GradecastedSet struct {
-	id     types.Hash20
+	id     types.NodeID
 	values []types.Hash20
 	grade  uint8
 }
@@ -22,7 +22,7 @@ type Gradecaster interface {
 	// grade. If values is nil it indicates a message from a malicious entity.
 	// Note that since this component is downstream from graded gossip it
 	// expects at most 2 messages per identity per round.
-	ReceiveMsg(id types.Hash20, values []types.Hash20, msgRound, currRound AbsRound, grade uint8)
+	ReceiveMsg(id types.NodeID, values []types.Hash20, msgRound, currRound AbsRound, grade uint8)
 
 	// Since gradecast always outputs at msgRound+3 it is assumed that callers
 	// Only call this function at msgRound+3. Returns all sets of values output
@@ -58,17 +58,17 @@ func (s msgState) gradecastGrade(msgRound AbsRound) uint8 {
 
 type DefaultGradecaster struct {
 	// Maps message round to sender to message state
-	messages map[AbsRound]map[types.Hash20]*msgState
+	messages map[AbsRound]map[types.NodeID]*msgState
 }
 
 func NewGradecaster() *DefaultGradecaster {
 	return &DefaultGradecaster{
-		messages: make(map[AbsRound]map[types.Hash20]*msgState),
+		messages: make(map[AbsRound]map[types.NodeID]*msgState),
 	}
 }
 
 // ReceiveMsg implements Gradecaster.
-func (g *DefaultGradecaster) ReceiveMsg(id types.Hash20, values []types.Hash20,
+func (g *DefaultGradecaster) ReceiveMsg(id types.NodeID, values []types.Hash20,
 	msgRound, currRound AbsRound, grade uint8,
 ) {
 	if msgRound-currRound > 3 {

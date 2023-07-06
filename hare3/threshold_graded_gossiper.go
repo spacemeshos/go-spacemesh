@@ -37,7 +37,7 @@ type ThresholdGradedGossiper interface {
 	//
 	// Note that since this component is downstream from graded gossip it
 	// expects at most 2 messages per identity per round.
-	ReceiveMsg(senderID types.Hash20, values []types.Hash20, msgRound, currRound AbsRound, grade uint8)
+	ReceiveMsg(senderID types.NodeID, values []types.Hash20, msgRound, currRound AbsRound, grade uint8)
 
 	// This function outputs the values that were part of messages sent at
 	// msgRound and reached the threshold with grade at least minGrade by round
@@ -56,7 +56,7 @@ type DefaultThresholdGradedGossiper struct {
 	// E.G. The votes received for a value sent in a message with round R with
 	// at least grade 3 would be:
 	// count[R][V].CumulativeVote(3)
-	count map[AbsRound]map[types.Hash20]votes
+	count map[AbsRound]map[types.NodeID]votes
 
 	// maliciousVotes tracks the number of detected malicious parties by grade.
 	// We don't need to track the sender ID of malicious parties since
@@ -70,7 +70,7 @@ type DefaultThresholdGradedGossiper struct {
 
 func NewDefaultThresholdGradedGossiper(threshold uint16) *DefaultThresholdGradedGossiper {
 	return &DefaultThresholdGradedGossiper{
-		count:          make(map[AbsRound]map[types.Hash20]votes),
+		count:          make(map[AbsRound]map[types.NodeID]votes),
 		maliciousVotes: make(map[AbsRound]*GradedVotes),
 		threshold:      threshold,
 	}
@@ -81,7 +81,7 @@ func NewGradedVotes() *GradedVotes {
 }
 
 // ReceiveMsg implements ThresholdGradedGossiper.
-func (t *DefaultThresholdGradedGossiper) ReceiveMsg(senderID types.Hash20, values []types.Hash20, msgRound, currRound AbsRound, grade uint8) {
+func (t *DefaultThresholdGradedGossiper) ReceiveMsg(senderID types.NodeID, values []types.Hash20, msgRound, currRound AbsRound, grade uint8) {
 	if currRound-msgRound > d {
 		// Message received too late.
 		return

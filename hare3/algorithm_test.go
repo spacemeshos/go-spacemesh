@@ -7,9 +7,9 @@ import (
 )
 
 var (
-	id1 = randHash20()
-	id2 = randHash20()
-	id3 = randHash20()
+	id1 = randID()
+	id2 = randID()
+	id3 = randID()
 
 	val1 = randHash20()
 	val2 = randHash20()
@@ -28,6 +28,12 @@ var (
 	r3   = NewAbsRound(0, 3)
 	r4   = NewAbsRound(0, 4)
 )
+
+func randID() types.NodeID {
+	var result types.NodeID
+	rand.Read(result[:])
+	return result
+}
 
 func randHash20() types.Hash20 {
 	var result types.Hash20

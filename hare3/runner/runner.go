@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/broker"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare3/leader"
 	"github.com/spacemeshos/go-spacemesh/hare3/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/syncer"
@@ -130,7 +131,6 @@ type HareRunner struct {
 	oracle          *heligibility.Oracle
 	syncer          *syncer.Syncer
 	beaconRetriever *beacon.ProtocolDriver
-	lc              hare3.LeaderChecker
 	b               *broker.Broker
 	l               log.Log
 	db              *datastore.CachedDB
@@ -143,6 +143,7 @@ type HareRunner struct {
 	wakeupDelta      time.Duration
 	roundDuration    time.Duration
 	committeeSize    int
+	expectedLeaders  int
 	nodeID           types.NodeID
 }
 
@@ -151,7 +152,6 @@ func NewHareRunner(clock LayerClock,
 	oracle *heligibility.Oracle,
 	syncer *syncer.Syncer,
 	beaconRetriever *beacon.ProtocolDriver,
-	lc hare3.LeaderChecker,
 	b *broker.Broker,
 	l log.Log,
 	db *datastore.CachedDB,
@@ -162,6 +162,7 @@ func NewHareRunner(clock LayerClock,
 	wakeupDelta time.Duration,
 	roundDuration time.Duration,
 	committeeSize int,
+	expectedLeaders int,
 	nodeID types.NodeID,
 ) *HareRunner {
 	return &HareRunner{
@@ -170,7 +171,6 @@ func NewHareRunner(clock LayerClock,
 		oracle:           oracle,
 		syncer:           syncer,
 		beaconRetriever:  beaconRetriever,
-		lc:               lc,
 		b:                b,
 		l:                l,
 		db:               db,
@@ -181,6 +181,7 @@ func NewHareRunner(clock LayerClock,
 		wakeupDelta:      wakeupDelta,
 		roundDuration:    roundDuration,
 		committeeSize:    committeeSize,
+		expectedLeaders:  expectedLeaders,
 		nodeID:           nodeID,
 	}
 }
@@ -258,9 +259,20 @@ func (r *HareRunner) Run(ctx context.Context) {
 			}
 			props := goodProposals(ctx, r.l, r.db, r.nodeID, layer, beacon)
 
+			actives, err := r.oracle.ActiveMap(ctx, layer)
+			if err != nil {
+				r.l.With().Info("no active set for epoch",
+					log.Context(ctx),
+					layer,
+				)
+				continue
+			}
+
+			lc := leader.NewDefaultLeaderChecker(r.oracle, r.expectedLeaders, actives, layer)
+
 			// Execute layer
 			r.eg.Go(func() error {
-				result, err := r.runLayer(log.WithNewSessionID(ctx), layer, props)
+				result, err := r.runLayer(log.WithNewSessionID(ctx), layer, props, lc)
 				// We log the error, which is either ctx timeout or iteration exceeded
 				if err != nil {
 					r.l.With().Info("hare terminated without agreement", layer, log.Err(err))
@@ -285,7 +297,7 @@ func (r *HareRunner) Run(ctx context.Context) {
 }
 
 // runLayer constructs a ProtocolRunner and returns the output of its Run method.
-func (r *HareRunner) runLayer(ctx context.Context, layer types.LayerID, props []types.ProposalID) ([]types.ProposalID, error) {
+func (r *HareRunner) runLayer(ctx context.Context, layer types.LayerID, props []types.ProposalID, lc hare3.LeaderChecker) ([]types.ProposalID, error) {
 	// The broker may have already created a handler and coinChooser in
 	// response to early messages, that's why we get them from the broker.
 	handler, coinChooser := r.b.Register(ctx, layer)
@@ -296,7 +308,7 @@ func (r *HareRunner) runLayer(ctx context.Context, layer types.LayerID, props []
 		initialSet[i] = types.Hash20(props[i])
 	}
 	ac := eligibility.NewActiveCheck(layer, r.nodeID, r.committeeSize, r.oracle, r.l)
-	protocolRunner := NewProtocolRunner(roundClock, handler.Protocol(r.lc, initialSet), coinChooser, r.maxIterations, r.gossiper, ac, r.weakcoinChan)
+	protocolRunner := NewProtocolRunner(roundClock, handler.Protocol(lc, initialSet), coinChooser, r.maxIterations, r.gossiper, ac, r.weakcoinChan)
 	v, err := protocolRunner.Run(ctx)
 	if err != nil {
 		return nil, err

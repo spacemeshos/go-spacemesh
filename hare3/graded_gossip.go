@@ -41,8 +41,8 @@ type GradedGossiper interface {
 	// * One malicious message from a known eqiuvotator.
 	// * One good message followed by a malicious message indicating equivocation.
 	ReceiveMsg(
-		hash,
-		id types.Hash20,
+		hash types.Hash20,
+		id types.NodeID,
 		values []types.Hash20,
 		msgRound AbsRound,
 	) (result GradedGossipResult, equivocationHash *types.Hash20)
@@ -57,17 +57,17 @@ type ggstate struct {
 
 type DefaultGradedGossiper struct {
 	// msgs maps message round to sender id to the graded gossiper state.
-	msgs map[AbsRound]map[types.Hash20]*ggstate
+	msgs map[AbsRound]map[types.NodeID]*ggstate
 }
 
 func NewDefaultGradedGossiper() *DefaultGradedGossiper {
-	return &DefaultGradedGossiper{msgs: make(map[AbsRound]map[types.Hash20]*ggstate)}
+	return &DefaultGradedGossiper{msgs: make(map[AbsRound]map[types.NodeID]*ggstate)}
 }
 
 // ReceiveMsg implements GradedGossiper.
 func (gg *DefaultGradedGossiper) ReceiveMsg(
 	hash types.Hash20,
-	id types.Hash20,
+	id types.NodeID,
 	values []types.Hash20,
 	msgRound AbsRound,
 ) (result GradedGossipResult, equivocationHash *types.Hash20) {
