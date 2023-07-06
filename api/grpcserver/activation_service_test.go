@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -16,14 +17,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-func TestGet_UnspecifiedAtxID_ReturnsGoldenAtxOnError(t *testing.T) {
+func Test_Highest_ReturnsGoldenAtxOnError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	atxProvider := grpcserver.NewMockatxProvider(ctrl)
 	goldenAtx := types.ATXID{2, 3, 4}
 	activationService := grpcserver.NewActivationService(atxProvider, goldenAtx)
 
 	atxProvider.EXPECT().MaxHeightAtx().Return(types.EmptyATXID, errors.New("blah"))
-	response, err := activationService.Get(context.Background(), &pb.GetRequest{})
+	response, err := activationService.Highest(context.Background(), &empty.Empty{})
 	require.NoError(t, err)
 	require.Equal(t, goldenAtx.Bytes(), response.Atx.Id.Id)
 	require.Nil(t, response.Atx.Layer)
@@ -34,7 +35,7 @@ func TestGet_UnspecifiedAtxID_ReturnsGoldenAtxOnError(t *testing.T) {
 	require.EqualValues(t, 0, response.Atx.Sequence)
 }
 
-func TestGet_UnspecifiedAtxID_ReturnsMaxTickHeight(t *testing.T) {
+func Test_Highest_ReturnsMaxTickHeight(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	atxProvider := grpcserver.NewMockatxProvider(ctrl)
 	goldenAtx := types.ATXID{2, 3, 4}
@@ -59,7 +60,7 @@ func TestGet_UnspecifiedAtxID_ReturnsMaxTickHeight(t *testing.T) {
 	atxProvider.EXPECT().MaxHeightAtx().Return(id, nil)
 	atxProvider.EXPECT().GetFullAtx(id).Return(&atx, nil)
 
-	response, err := activationService.Get(context.Background(), &pb.GetRequest{})
+	response, err := activationService.Highest(context.Background(), &empty.Empty{})
 	require.NoError(t, err)
 	require.Equal(t, atx.ID().Bytes(), response.Atx.Id.Id)
 	require.Equal(t, atx.PublishEpoch.Uint32(), response.Atx.Layer.Number)

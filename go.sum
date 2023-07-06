@@ -594,8 +594,10 @@ github.com/sirupsen/logrus v1.7.0/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic
 github.com/sirupsen/logrus v1.8.1 h1:dJKuHgqk1NNQlqoA6BTlM1Wf9DOH3NBjQyu0h9+AZZE=
 github.com/sourcegraph/annotate v0.0.0-20160123013949-f4cad6c6324d/go.mod h1:UdhH50NIW0fCiwBSr0co2m7BnFLdv4fQTgdqdJTHFeE=
 github.com/sourcegraph/syntaxhighlight v0.0.0-20170531221838-bd320f5d308e/go.mod h1:HuIsMU8RRBOtsCgI77wP899iHVBQpCmg4ErYMZB+2IA=
-github.com/spacemeshos/api/release/go v1.12.0 h1:9Yh1NkOxtskdD6qM/ErmEhsU4003tVjx1ZTzwEi3uy4=
-github.com/spacemeshos/api/release/go v1.12.0/go.mod h1:eWQMPaXyLLaxen7GW0fL/Nfxpiqsxt6XoK+obcIrAu4=
+github.com/spacemeshos/api/release/go v1.13.0 h1:CdkmErzlY8LCwoHlPXiU062xo2UoQS1fcGNkSu4kSJs=
+github.com/spacemeshos/api/release/go v1.13.0/go.mod h1:6dbFQWsygFOlpPdmNNwiBbqEXAvK+s11UJO70VI1Yaw=
+github.com/spacemeshos/api/release/go v1.13.1-0.20230706032927-b554d3da77b2 h1:qm6Oeem+MrrTo/c/s9/Ic9SpwfkQVzNNRnhfIe4cg98=
+github.com/spacemeshos/api/release/go v1.13.1-0.20230706032927-b554d3da77b2/go.mod h1:6dbFQWsygFOlpPdmNNwiBbqEXAvK+s11UJO70VI1Yaw=
 github.com/spacemeshos/economics v0.1.0 h1:PJAKbhBKqbbdCYTB29pkmc8sYqK3pKUAiuAvQxuSJEg=
 github.com/spacemeshos/economics v0.1.0/go.mod h1:Bz0wRDwCOUP1A6w3cPW6iuUBGME8Tz48sIriYiohsBg=
 github.com/spacemeshos/fixed v0.1.0 h1:20KIGvxLlAsuidQrvuwwHe6PrvqeTKzbJIsScbmnUPQ=
