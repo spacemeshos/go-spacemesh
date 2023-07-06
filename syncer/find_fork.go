@@ -167,15 +167,14 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 			return 0, err
 		}
 
-		dist := bnd.to.layer.Difference(bnd.from.layer)
-		delta := dist/uint32(fetch.MaxHashesInReq) + 1
-		ownHashes, err := layers.GetAggHashes(ff.db, bnd.from.layer, bnd.to.layer, delta)
+		req := fetch.NewMeshHashRequest(bnd.from.layer, bnd.to.layer)
+		ownHashes, err := layers.GetAggHashes(ff.db, req.From, req.To, req.Step)
 		if err != nil {
 			lg.With().Error("failed own hashes lookup", log.Err(err))
 			return 0, err
 		}
 
-		lid := bnd.from.layer
+		lid := req.From
 		var latestSame, oldestDiff *layerHash
 		for i, hash := range mh.Hashes {
 			ownHash := ownHashes[i]
@@ -195,9 +194,9 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 			}
 			latestSame = &layerHash{layer: lid, hash: hash}
 			ff.updateAgreement(peer, latestSame, time.Now())
-			lid = lid.Add(delta)
-			if lid.After(bnd.to.layer) {
-				lid = bnd.to.layer
+			lid = lid.Add(req.Step)
+			if lid.After(req.To) {
+				lid = req.To
 			}
 		}
 		if latestSame == nil || oldestDiff == nil {
@@ -281,15 +280,9 @@ func (ff *ForkFinder) sendRequest(ctx context.Context, logger log.Log, peer p2p.
 		logger.With().Fatal("invalid args", log.Object("boundary", bnd))
 	}
 
-	dist := bnd.to.layer.Difference(bnd.from.layer)
-	delta := dist/uint32(fetch.MaxHashesInReq) + 1
-	req := &fetch.MeshHashRequest{
-		From: bnd.from.layer,
-		To:   bnd.to.layer,
-		Step: delta,
-	}
+	req := fetch.NewMeshHashRequest(bnd.from.layer, bnd.to.layer)
 	count := req.Count()
-	logger.With().Debug("sending request", log.Uint32("delta", delta))
+	logger.With().Debug("sending request", log.Object("req", req))
 	mh, err := ff.fetcher.PeerMeshHashes(ctx, peer, req)
 	if err != nil {
 		return nil, fmt.Errorf("find fork hash req: %w", err)
