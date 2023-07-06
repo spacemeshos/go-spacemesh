@@ -45,13 +45,6 @@ func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*p
 		logger.With().Debug("failed to get the ATX", log.Err(err))
 		return nil, status.Error(codes.NotFound, "id was not found")
 	}
-
-	id := atx.ID()
-	if atxId != id {
-		logger.With().Error("ID of the received ATX is different than requested", log.Stringer("received ID", id))
-		return nil, status.Error(codes.Internal, "internal error")
-	}
-
 	return &pb.GetResponse{
 		Atx: convertActivation(atx),
 	}, nil
@@ -70,11 +63,6 @@ func (s *activationService) Highest(ctx context.Context, req *empty.Empty) (*pb.
 	if err != nil || atx == nil {
 		return nil, status.Error(codes.NotFound, fmt.Sprintf("atx id %v not found: %v", highest, err.Error()))
 	}
-
-	if highest != atx.ID() {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("wrong atx: want %v got %v", highest, atx.ID()))
-	}
-
 	return &pb.HighestResponse{
 		Atx: convertActivation(atx),
 	}, nil
