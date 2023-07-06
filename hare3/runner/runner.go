@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare3/leader"
 	"github.com/spacemeshos/go-spacemesh/hare3/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 )
 
@@ -91,7 +92,7 @@ func (r *ProtocolRunner) Run(ctx context.Context) ([]types.Hash20, error) {
 					// This should never happen
 					panic(err)
 				}
-				r.gossiper.Gossip(msg)
+				r.gossiper.Gossip(ctx, msg)
 			}
 			if output != nil {
 				return output, nil
@@ -100,10 +101,6 @@ func (r *ProtocolRunner) Run(ctx context.Context) ([]types.Hash20, error) {
 			return nil, ctx.Err()
 		}
 	}
-}
-
-type NetworkGossiper interface {
-	Gossip(msg []byte) error
 }
 
 func buildEncodedOutputMessage(m *hare3.OutputMessage) ([]byte, error) {
@@ -318,4 +315,25 @@ func (r *HareRunner) runLayer(ctx context.Context, layer types.LayerID, props []
 		result[i] = types.ProposalID(v[i])
 	}
 	return result, nil
+}
+
+type NetworkGossiper interface {
+	Gossip(ctx context.Context, msg []byte)
+}
+
+func NewDefaultGossiper(p pubsub.Publisher, l log.Log) *DefaultGossiper {
+	return &DefaultGossiper{
+		p: p,
+		l: l,
+	}
+}
+
+type DefaultGossiper struct {
+	p pubsub.Publisher
+	l log.Log
+}
+
+func (g *DefaultGossiper) Gossip(ctx context.Context, msg []byte) {
+	err := g.p.Publish(ctx, pubsub.HareProtocol, msg)
+	g.l.With().Error("error while publishing hare message", log.Err(err))
 }
