@@ -58,7 +58,7 @@ jobs:
         shell: bash
         run: |
           make install
-          make build VERSION=${{ github.ref }} BIN_DIR_WIN=./build
+          make build VERSION=${{ github.ref_name }} BIN_DIR_WIN=./build
 
       - name: Create release archive
         shell: bash
@@ -79,7 +79,7 @@ jobs:
         uses: google-github-actions/upload-cloud-storage@v0
         with:
           path: ${{ env.OUTNAME }}.zip
-          destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref }}/
+          destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
 
   release:
     runs-on: ubuntu-latest
@@ -94,14 +94,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name:  ${{ github.ref }}
+          tag_name:  ${{ github.ref_name }}
           body: |
             ## Zip Files
-            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref }}/Windows.zip
-            - macOS: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref }}/macOS.zip
-            - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref }}/macOS_ARM64.zip
-            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref }}/Linux.zip
-            - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref }}/Linux_ARM64.zip
+            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Windows.zip
+            - macOS: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/macOS.zip
+            - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/macOS_ARM64.zip
+            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux.zip
+            - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux_ARM64.zip
           generate_release_notes: true
           draft: true
           prerelease: true
