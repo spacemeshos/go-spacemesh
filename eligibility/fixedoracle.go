@@ -108,7 +108,7 @@ func cloneMap(m map[types.NodeID]struct{}) map[types.NodeID]struct{} {
 	return c
 }
 
-func pickUnique(pickCount int, orig map[types.NodeID]struct{}, dest map[types.NodeID]struct{}) {
+func pickUnique(pickCount int, orig, dest map[types.NodeID]struct{}) {
 	i := 0
 	for k := range orig { // randomly pass on clients
 		if i == pickCount { // pick exactly size

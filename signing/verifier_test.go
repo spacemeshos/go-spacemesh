@@ -73,7 +73,7 @@ func TestVerifier_WithPrefix(t *testing.T) {
 }
 
 func Fuzz_EdVerifier(f *testing.F) {
-	f.Fuzz(func(t *testing.T, msg []byte, prefix []byte) {
+	f.Fuzz(func(t *testing.T, msg, prefix []byte) {
 		signer, err := signing.NewEdSigner(signing.WithPrefix(prefix))
 		require.NoError(t, err)
 

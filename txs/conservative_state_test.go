@@ -38,7 +38,7 @@ const (
 	nonce            = uint64(1234)
 )
 
-func newTx(tb testing.TB, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
+func newTx(tb testing.TB, nonce, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
 	tb.Helper()
 	var dest types.Address
 	_, err := rand.Read(dest[:])
@@ -46,7 +46,7 @@ func newTx(tb testing.TB, nonce uint64, amount, fee uint64, signer *signing.EdSi
 	return newTxWthRecipient(tb, dest, nonce, amount, fee, signer)
 }
 
-func newTxWthRecipient(tb testing.TB, dest types.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
+func newTxWthRecipient(tb testing.TB, dest types.Address, nonce, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
 	tb.Helper()
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
 		nonce,

@@ -11,7 +11,7 @@ import (
 
 // StartPushingMetrics begins pushing metrics to the url specified by the --metrics-push flag
 // with period specified by the --metrics-push-period flag.
-func StartPushingMetrics(url string, username string, password string, periodSec int, nodeID, networkID string) {
+func StartPushingMetrics(url, username, password string, periodSec int, nodeID, networkID string) {
 	period := time.Duration(periodSec) * time.Second
 	ticker := time.NewTicker(period)
 

@@ -466,7 +466,7 @@ func (h *Handler) GetPosAtxID() (types.ATXID, error) {
 	return id, nil
 }
 
-// HandleAtxData handles atxs received either by gossip or sync.
+// HandleAtxData handles atxs received by sync.
 func (h *Handler) HandleAtxData(ctx context.Context, peer p2p.Peer, data []byte) error {
 	err := h.HandleGossipAtx(ctx, peer, data)
 	if errors.Is(err, errKnownAtx) {
@@ -532,7 +532,7 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 
 	h.registerHashes(&atx, peer)
 	if err := h.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
-		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %w",
+		return fmt.Errorf("received atx (%v) with syntactically invalid or missing poet proof (%x): %w",
 			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err,
 		)
 	}
@@ -557,26 +557,29 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	return nil
 }
 
-// FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db.
+// FetchAtxReferences fetches referenced ATXs from peers if they are not found in db.
 func (h *Handler) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) error {
 	logger := h.log.WithContext(ctx)
-	var atxIDs []types.ATXID
+	atxIDs := make(map[types.ATXID]struct{}, 3)
 	if atx.PositioningATX != types.EmptyATXID && atx.PositioningATX != h.goldenATXID {
-		logger.With().Debug("going to fetch pos atx", atx.PositioningATX, atx.ID())
-		atxIDs = append(atxIDs, atx.PositioningATX)
+		logger.With().Debug("fetching pos atx", atx.PositioningATX, atx.ID())
+		atxIDs[atx.PositioningATX] = struct{}{}
 	}
 
 	if atx.PrevATXID != types.EmptyATXID {
-		logger.With().Debug("going to fetch prev atx", atx.PrevATXID, atx.ID())
-		if len(atxIDs) < 1 || atx.PrevATXID != atxIDs[0] {
-			atxIDs = append(atxIDs, atx.PrevATXID)
-		}
+		logger.With().Debug("fetching prev atx", atx.PrevATXID, atx.ID())
+		atxIDs[atx.PrevATXID] = struct{}{}
 	}
+	if atx.CommitmentATX != nil && *atx.CommitmentATX != h.goldenATXID {
+		logger.With().Debug("fetching commitment atx", *atx.CommitmentATX, atx.ID())
+		atxIDs[*atx.CommitmentATX] = struct{}{}
+	}
+
 	if len(atxIDs) == 0 {
 		return nil
 	}
 
-	if err := h.fetcher.GetAtxs(ctx, atxIDs); err != nil {
+	if err := h.fetcher.GetAtxs(ctx, maps.Keys(atxIDs)); err != nil {
 		return fmt.Errorf("fetch referenced atxs: %w", err)
 	}
 	logger.With().Debug("done fetching references for atx", atx.ID())

@@ -85,14 +85,14 @@ func save(filename string, src scale.Encodable) error {
 	return nil
 }
 
-func saveNipostChallenge(dir string, ch *types.NIPostChallenge) error {
+func SaveNipostChallenge(dir string, ch *types.NIPostChallenge) error {
 	if err := save(filepath.Join(dir, challengeFilename), ch); err != nil {
 		return fmt.Errorf("saving nipost challenge: %w", err)
 	}
 	return nil
 }
 
-func loadNipostChallenge(dir string) (*types.NIPostChallenge, error) {
+func LoadNipostChallenge(dir string) (*types.NIPostChallenge, error) {
 	var ch types.NIPostChallenge
 	if err := load(filepath.Join(dir, challengeFilename), &ch); err != nil {
 		return nil, fmt.Errorf("loading nipost challenge: %w", err)

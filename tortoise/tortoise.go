@@ -510,7 +510,7 @@ func (t *turtle) computeEpochHeight(epoch types.EpochID) {
 	einfo.height = getMedian(heights)
 }
 
-func (t *turtle) onBlock(header types.BlockHeader, data bool, valid bool) {
+func (t *turtle) onBlock(header types.BlockHeader, data, valid bool) {
 	if header.LayerID <= t.evicted {
 		return
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -98,6 +99,7 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon, 
 	if err != nil {
 		return nil, err
 	}
+	events.EmitEligibilities(ee.Epoch, beacon, ee.Atx, uint32(len(ee.ActiveSet)), ee.Proofs)
 	o.cache = ee
 	return ee, nil
 }
