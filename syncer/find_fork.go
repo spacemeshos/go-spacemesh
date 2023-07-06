@@ -282,7 +282,7 @@ func (ff *ForkFinder) sendRequest(ctx context.Context, logger log.Log, peer p2p.
 
 	req := fetch.NewMeshHashRequest(bnd.from.layer, bnd.to.layer)
 	count := req.Count()
-	logger.With().Debug("sending request", log.Uint32("delta", req.Step))
+	logger.With().Debug("sending request", log.Object("req", req))
 	mh, err := ff.fetcher.PeerMeshHashes(ctx, peer, req)
 	if err != nil {
 		return nil, fmt.Errorf("find fork hash req: %w", err)

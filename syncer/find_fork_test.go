@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/rand"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -119,18 +119,16 @@ func TestForkFinder_FindFork_Permutation(t *testing.T) {
 	}
 	expected := diverge - 1
 	for lid := max; lid > expected; lid-- {
-		t.Run("lid="+strconv.Itoa(lid), func(t *testing.T) {
-			tf := newTestForkFinderWithDuration(t, time.Hour, logtest.New(t))
-			storeNodeHashes(t, tf.db, diverge, max)
-			tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
-				func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
-					return serveHashReq(t, req)
-				}).AnyTimes()
+		tf := newTestForkFinderWithDuration(t, time.Hour, logtest.New(t))
+		storeNodeHashes(t, tf.db, diverge, max)
+		tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
+			func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
+				return serveHashReq(t, req)
+			}).AnyTimes()
 
-			fork, err := tf.FindFork(context.Background(), peer, types.LayerID(uint32(lid)), layerHash(lid, true))
-			require.NoError(t, err, fmt.Sprintf("lid: %v", lid))
-			require.Equal(t, expected, int(fork))
-		})
+		fork, err := tf.FindFork(context.Background(), peer, types.LayerID(uint32(lid)), layerHash(lid, true))
+		require.NoError(t, err, fmt.Sprintf("lid: %v", lid))
+		require.Equal(t, expected, int(fork))
 	}
 }
 
