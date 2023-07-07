@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	stdtime "time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -13,8 +14,8 @@ import (
 )
 
 var (
-	extra = flag.String("extra", "", "genesis extra data")
-	time  = flag.String("time", "", "genesis time")
+	extra = flag.String("extra", "", "genesis extra data. valid size is between [1, 255]")
+	time  = flag.String("time", "", "genesis time. format "+stdtime.RFC3339)
 	n     = flag.Int("n", 10, "number of keys")
 )
 
