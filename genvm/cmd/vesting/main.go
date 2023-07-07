@@ -84,7 +84,7 @@ func main() {
 		VestingEnd:          types.LayerID(uint32(*end)),
 	}
 	vaultAddress := core.ComputePrincipal(vault.TemplateAddress, vaultArgs)
-	types.SetAddressHRP(*hrp)
+	types.SetNetworkHRP(*hrp)
 	fmt.Printf("vesting: %s\nvault: %s\n", vestingAddress.String(), vaultAddress.String())
 	fmt.Println("public keys:")
 	for i, key := range vestingArgs.PublicKeys {
