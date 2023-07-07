@@ -1038,7 +1038,7 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 	case grpcserver.Transaction:
 		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
 	case grpcserver.Activation:
-		return grpcserver.NewActivationService(app.cachedDB), nil
+		return grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX())), nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
@@ -1194,31 +1194,38 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	filename := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
 	log.Info("Looking for identity file at `%v`", filename)
 
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("failed to read identity file: %w", err)
-		}
-
-		log.Info("Identity file not found. Creating new identity...")
-
-		edSgn, err := signing.NewEdSigner(
-			signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
-		)
+	var data []byte
+	if len(app.Config.TestConfig.SmesherKey) > 0 {
+		log.With().Error("!!!TESTING!!! using pre-configured smesher key")
+		data = []byte(app.Config.TestConfig.SmesherKey)
+	} else {
+		var err error
+		data, err = os.ReadFile(filename)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create identity: %w", err)
-		}
-		if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
-			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
-		}
+			if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("failed to read identity file: %w", err)
+			}
 
-		err = os.WriteFile(filename, []byte(hex.EncodeToString(edSgn.PrivateKey())), 0o600)
-		if err != nil {
-			return nil, fmt.Errorf("failed to write identity file: %w", err)
-		}
+			log.Info("Identity file not found. Creating new identity...")
 
-		log.With().Info("created new identity", edSgn.PublicKey())
-		return edSgn, nil
+			edSgn, err := signing.NewEdSigner(
+				signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create identity: %w", err)
+			}
+			if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
+				return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
+			}
+
+			err = os.WriteFile(filename, []byte(hex.EncodeToString(edSgn.PrivateKey())), 0o600)
+			if err != nil {
+				return nil, fmt.Errorf("failed to write identity file: %w", err)
+			}
+
+			log.With().Info("created new identity", edSgn.PublicKey())
+			return edSgn, nil
+		}
 	}
 	dst := make([]byte, signing.PrivateKeySize)
 	n, err := hex.Decode(dst, data)

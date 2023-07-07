@@ -117,19 +117,12 @@ func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingReq
 
 // SmesherID returns the smesher ID of this node.
 func (s SmesherService) SmesherID(context.Context, *empty.Empty) (*pb.SmesherIDResponse, error) {
-	log.Info("GRPC SmesherService.SmesherID")
-
-	nodeID := s.smeshingProvider.SmesherID()
-	addr := types.GenerateAddress(nodeID[:])
-	return &pb.SmesherIDResponse{AccountId: &pb.AccountId{Address: addr.String()}}, nil
+	return &pb.SmesherIDResponse{PublicKey: s.smeshingProvider.SmesherID().Bytes()}, nil
 }
 
 // Coinbase returns the current coinbase setting of this node.
 func (s SmesherService) Coinbase(context.Context, *empty.Empty) (*pb.CoinbaseResponse, error) {
-	log.Info("GRPC SmesherService.Coinbase")
-
-	addr := s.smeshingProvider.Coinbase()
-	return &pb.CoinbaseResponse{AccountId: &pb.AccountId{Address: addr.String()}}, nil
+	return &pb.CoinbaseResponse{AccountId: &pb.AccountId{Address: s.smeshingProvider.Coinbase().String()}}, nil
 }
 
 // SetCoinbase sets the current coinbase setting of this node.

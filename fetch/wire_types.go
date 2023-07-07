@@ -51,11 +51,21 @@ type MeshHashRequest struct {
 	Step     uint32
 }
 
+func NewMeshHashRequest(from, to types.LayerID) *MeshHashRequest {
+	diff := to.Difference(from)
+	delta := diff/uint32(MaxHashesInReq-1) + 1
+	return &MeshHashRequest{
+		From: from,
+		To:   to,
+		Step: delta,
+	}
+}
+
 func (r *MeshHashRequest) Count() uint {
 	diff := r.To.Difference(r.From)
 	count := uint(diff/r.Step + 1)
 	if diff%r.Step != 0 {
-		// last layer is not a multiple of By, so we need to add it
+		// last layer is not a multiple of Step size, so we need to add it
 		count++
 	}
 	return count
