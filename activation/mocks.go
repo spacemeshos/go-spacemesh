@@ -419,21 +419,6 @@ func (mr *MockatxHandlerMockRecorder) AwaitAtx(id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AwaitAtx", reflect.TypeOf((*MockatxHandler)(nil).AwaitAtx), id)
 }
 
-// GetPosAtxID mocks base method.
-func (m *MockatxHandler) GetPosAtxID() (types.ATXID, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPosAtxID")
-	ret0, _ := ret[0].(types.ATXID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetPosAtxID indicates an expected call of GetPosAtxID.
-func (mr *MockatxHandlerMockRecorder) GetPosAtxID() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPosAtxID", reflect.TypeOf((*MockatxHandler)(nil).GetPosAtxID))
-}
-
 // UnsubscribeAtx mocks base method.
 func (m *MockatxHandler) UnsubscribeAtx(id types.ATXID) {
 	m.ctrl.T.Helper()

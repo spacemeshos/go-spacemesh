@@ -878,49 +878,6 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	b.Logf("\n>>> Total time: %v\n\n", time.Since(start))
 }
 
-func TestHandler_GetPosAtx(t *testing.T) {
-	// Arrange
-	r := require.New(t)
-
-	goldenATXID := types.ATXID{2, 3, 4}
-	atxHdlr := newTestHandler(t, goldenATXID)
-
-	currentLayer := types.LayerID(10)
-
-	sig, err := signing.NewEdSigner()
-	r.NoError(err)
-	otherSig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	coinbase := types.Address{2, 4, 5}
-
-	// Act & Assert
-
-	// ATX stored should become top ATX
-	atx1 := newActivationTx(t, sig, 0, types.EmptyATXID, types.EmptyATXID, nil, currentLayer.GetEpoch(), 0, 100, coinbase, 100, &types.NIPost{})
-	r.NoError(atxs.Add(atxHdlr.cdb, atx1))
-
-	id, err := atxHdlr.GetPosAtxID()
-	r.NoError(err)
-	r.Equal(atx1.ID(), id)
-
-	// higher-layer ATX stored should become new top ATX
-	atx2 := newActivationTx(t, otherSig, 0, types.EmptyATXID, types.EmptyATXID, nil, currentLayer.GetEpoch()+2, 0, 100, coinbase, 100, &types.NIPost{})
-	r.NoError(atxs.Add(atxHdlr.cdb, atx2))
-
-	id, err = atxHdlr.GetPosAtxID()
-	r.NoError(err)
-	r.Equal(atx2.ID(), id)
-
-	// lower-layer ATX stored should NOT become new top ATX
-	atx3 := newActivationTx(t, sig, 0, types.EmptyATXID, types.EmptyATXID, nil, currentLayer.GetEpoch()+1, 0, 100, coinbase, 100, &types.NIPost{})
-	r.NoError(atxs.Add(atxHdlr.cdb, atx3))
-
-	id, err = atxHdlr.GetPosAtxID()
-	r.NoError(err)
-	r.NotEqual(atx3.ID(), id)
-	r.Equal(atx2.ID(), id)
-}
-
 func TestHandler_AwaitAtx(t *testing.T) {
 	// Arrange
 	r := require.New(t)
