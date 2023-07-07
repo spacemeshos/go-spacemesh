@@ -29,28 +29,10 @@ var (
 )
 
 // Config is the configuration of the address package.
-type Config struct {
-	NetworkHRP string `mapstructure:"network-hrp"`
-}
-
 var networkHrp = "sm"
 
 func SetAddressHRP(update string) {
 	networkHrp = update
-}
-
-// DefaultAddressConfig returns the default configuration of the address package.
-func DefaultAddressConfig() *Config {
-	return &Config{
-		NetworkHRP: "sm",
-	}
-}
-
-// DefaultTestAddressConfig returns the default test configuration of the address package.
-func DefaultTestAddressConfig() *Config {
-	return &Config{
-		NetworkHRP: "stest",
-	}
 }
 
 // Address represents the address of a spacemesh account with AddressLength length.

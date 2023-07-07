@@ -17,8 +17,9 @@ func init() {
 
 func fastnet() config.Config {
 	conf := config.DefaultConfig()
-	conf.Address = types.DefaultTestAddressConfig()
 
+	conf.NetworkHRP = "fast"
+	types.SetAddressHRP(conf.NetworkHRP)
 	conf.BaseConfig.OptFilterThreshold = 90
 
 	conf.HARE.N = 800

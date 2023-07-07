@@ -15,7 +15,9 @@ func init() {
 
 func testnet() config.Config {
 	conf := config.DefaultConfig()
-	conf.Address = types.DefaultTestAddressConfig()
+
+	conf.NetworkHRP = "stest"
+	types.SetAddressHRP(conf.NetworkHRP)
 
 	conf.HARE.N = 800
 	conf.HARE.ExpectedLeaders = 10

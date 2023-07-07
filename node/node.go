@@ -135,8 +135,6 @@ func GetCommand() *cobra.Command {
 
 			run := func(ctx context.Context) error {
 				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-				types.SetAddressHRP(app.Config.Address.NetworkHRP)
-
 				// ensure all data folders exist
 				if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 					return fmt.Errorf("ensure folders exist: %w", err)
@@ -415,6 +413,8 @@ func (app *App) Unlock() {
 
 // Initialize parses and validates the node configuration and sets up logging.
 func (app *App) Initialize() error {
+	types.SetAddressHRP(app.Config.NetworkHRP)
+
 	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
 	var existing config.GenesisConfig
 	if err := existing.LoadFromFile(gpath); err != nil {
