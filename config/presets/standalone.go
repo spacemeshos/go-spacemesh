@@ -20,7 +20,7 @@ func init() {
 func standalone() config.Config {
 	conf := config.DefaultConfig()
 	conf.NetworkHRP = "standalone"
-	types.SetAddressHRP(conf.NetworkHRP)
+	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
 
 	conf.TIME.Peersync.Disable = true
 	conf.Standalone = true

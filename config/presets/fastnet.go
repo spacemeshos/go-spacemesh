@@ -19,7 +19,7 @@ func fastnet() config.Config {
 	conf := config.DefaultConfig()
 
 	conf.NetworkHRP = "fast"
-	types.SetAddressHRP(conf.NetworkHRP)
+	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
 	conf.BaseConfig.OptFilterThreshold = 90
 
 	conf.HARE.N = 800

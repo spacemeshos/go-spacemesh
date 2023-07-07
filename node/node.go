@@ -294,6 +294,7 @@ func New(opts ...Option) *App {
 	}
 	lvl := zap.NewAtomicLevelAt(zap.InfoLevel)
 	log.SetupGlobal(app.log.SetLevel(&lvl))
+	types.SetNetworkHRP(app.Config.NetworkHRP)
 	return app
 }
 
@@ -413,8 +414,6 @@ func (app *App) Unlock() {
 
 // Initialize parses and validates the node configuration and sets up logging.
 func (app *App) Initialize() error {
-	types.SetAddressHRP(app.Config.NetworkHRP)
-
 	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
 	var existing config.GenesisConfig
 	if err := existing.LoadFromFile(gpath); err != nil {
