@@ -49,6 +49,8 @@ import (
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare3/broker"
+	"github.com/spacemeshos/go-spacemesh/hare3/runner"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
@@ -315,28 +317,29 @@ type App struct {
 	mesh               *mesh.Mesh
 	cachedDB           *datastore.CachedDB
 	clock              *timesync.NodeClock
-	hare               *hare.Hare
-	hOracle            *eligibility.Oracle
-	blockGen           *blocks.Generator
-	certifier          *blocks.Certifier
-	postSetupMgr       *activation.PostSetupManager
-	atxBuilder         *activation.Builder
-	atxHandler         *activation.Handler
-	txHandler          *txs.TxHandler
-	validator          *activation.Validator
-	edVerifier         *signing.EdVerifier
-	beaconProtocol     *beacon.ProtocolDriver
-	log                log.Log
-	svm                *vm.VM
-	conState           *txs.ConservativeState
-	fetcher            *fetch.Fetch
-	ptimesync          *peersync.Sync
-	tortoise           *tortoise.Tortoise
-	updater            *bootstrap.Updater
-	poetDb             *activation.PoetDb
-	postVerifier       *activation.OffloadingPostVerifier
-	preserve           *checkpoint.PreservedData
-	errCh              chan error
+	hareRunner         *runner.HareRunner
+	// hare               *hare.Hare
+	hOracle        *eligibility.Oracle
+	blockGen       *blocks.Generator
+	certifier      *blocks.Certifier
+	postSetupMgr   *activation.PostSetupManager
+	atxBuilder     *activation.Builder
+	atxHandler     *activation.Handler
+	txHandler      *txs.TxHandler
+	validator      *activation.Validator
+	edVerifier     *signing.EdVerifier
+	beaconProtocol *beacon.ProtocolDriver
+	log            log.Log
+	svm            *vm.VM
+	conState       *txs.ConservativeState
+	fetcher        *fetch.Fetch
+	ptimesync      *peersync.Sync
+	tortoise       *tortoise.Tortoise
+	updater        *bootstrap.Updater
+	poetDb         *activation.PoetDb
+	postVerifier   *activation.OffloadingPostVerifier
+	preserve       *checkpoint.PreservedData
+	errCh          chan error
 
 	host *p2p.Host
 
@@ -740,23 +743,64 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 
 	hareCfg := app.Config.HARE
 	hareCfg.Hdist = app.Config.Tortoise.Hdist
-	app.hare = hare.New(
+	hareLog := app.addLogger(HareLogger, lg)
+	eligibilityValidator := hare.NewEligibilityValidator(app.hOracle, hareCfg.N, hareCfg.ExpectedLeaders, hareLog)
+	b := broker.NewBroker(
 		app.cachedDB,
-		hareCfg,
-		app.host,
-		app.edSgn,
 		app.edVerifier,
-		app.edSgn.NodeID(),
-		hareOutputCh,
-		newSyncer,
-		beaconProtocol,
+		eligibilityValidator,
 		app.hOracle,
-		patrol,
-		app.hOracle,
-		app.clock,
-		tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
-		app.addLogger(HareLogger, lg),
+		hareLog,
 	)
+	weakCoinNotifier := tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl}
+	weakcoinChan := make(chan runner.WeakCoinResult, 10) // TODO How much to buffer here?
+	app.eg.Go(func() error {
+		for {
+			select {
+			case c := <-weakcoinChan:
+				weakCoinNotifier.Set(c.Layer, *c.Coin)
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
+	app.hareRunner = runner.NewHareRunner(
+		app.clock,
+		runner.NewDefaultGossiper(app.host.PubSub, hareLog),
+		app.hOracle,
+		app.syncer,
+		app.beaconProtocol,
+		b,
+		hareLog,
+		app.cachedDB,
+		hareOutputCh,
+		weakcoinChan,
+		types.GetEffectiveGenesis(),
+		int8(hareCfg.LimitIterations),
+		hareCfg.WakeupDelta,
+		hareCfg.RoundDuration,
+		hareCfg.N,
+		hareCfg.ExpectedLeaders,
+		app.edSgn.NodeID(),
+	)
+
+	// app.hare = hare.New(
+	// 	app.cachedDB,
+	// 	hareCfg,
+	// 	app.host,
+	// 	app.edSgn,
+	// 	app.edVerifier,
+	// 	app.edSgn.NodeID(),
+	// 	hareOutputCh,
+	// 	newSyncer,
+	// 	beaconProtocol,
+	// 	app.hOracle,
+	// 	patrol,
+	// 	app.hOracle,
+	// 	app.clock,
+	// 	tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
+	// 	app.addLogger(HareLogger, lg),
+	// )
 
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
@@ -871,7 +915,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	app.host.Register(pubsub.ProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
 	app.host.Register(pubsub.AtxProtocol, pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx))
 	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, app.txHandler.HandleGossipTransaction))
-	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()))
+	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, b.HandleMessage))
 	app.host.Register(pubsub.BlockCertify, pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage))
 	app.host.Register(pubsub.MalfeasanceProof, pubsub.ChainGossipHandler(atxSyncHandler, malfeasanceHandler.HandleMalfeasanceProof))
 
@@ -991,9 +1035,11 @@ func (app *App) startServices(ctx context.Context) error {
 
 	app.blockGen.Start()
 	app.certifier.Start()
-	if err := app.hare.Start(ctx); err != nil {
-		return fmt.Errorf("cannot start hare: %w", err)
-	}
+	app.eg.Go(func() error {
+		app.hareRunner.Run(ctx)
+		return nil
+	})
+
 	if err := app.proposalBuilder.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start block producer: %w", err)
 	}
@@ -1140,10 +1186,6 @@ func (app *App) stopServices(ctx context.Context) {
 
 	if app.atxBuilder != nil {
 		_ = app.atxBuilder.StopSmeshing(false)
-	}
-
-	if app.hare != nil {
-		app.hare.Close()
 	}
 
 	if app.blockGen != nil {
