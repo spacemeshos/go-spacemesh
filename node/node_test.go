@@ -969,6 +969,13 @@ func TestAdminEvents(t *testing.T) {
 	}
 }
 
+func TestEmptyExtraData(t *testing.T) {
+	cfg := getTestDefaultConfig(t)
+	cfg.Genesis.ExtraData = ""
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+	require.Error(t, app.Initialize())
+}
+
 func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg, err := LoadConfigFromFile()
 	if err != nil {

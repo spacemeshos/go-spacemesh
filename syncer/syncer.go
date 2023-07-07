@@ -360,17 +360,17 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		return false
 	default:
 	}
-
-	if s.ticker.CurrentLayer().Uint32() == 0 {
-		return false
-	}
-
 	// at most one synchronize process can run at any time
 	if !s.setSyncerBusy() {
 		s.logger.WithContext(ctx).Info("sync is already running, giving up")
 		return false
 	}
 	defer s.setSyncerIdle()
+
+	s.setStateBeforeSync(ctx)
+	if s.ticker.CurrentLayer().Uint32() == 0 {
+		return false
+	}
 
 	// no need to worry about race condition for s.run. only one instance of synchronize can run at a time
 	s.logger.WithContext(ctx).With().Debug("starting sync run",
@@ -381,8 +381,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		log.Stringer("in_state", s.mesh.LatestLayerInState()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()),
 	)
-
-	s.setStateBeforeSync(ctx)
 	// TODO
 	// https://github.com/spacemeshos/go-spacemesh/issues/3970
 	// https://github.com/spacemeshos/go-spacemesh/issues/3987
