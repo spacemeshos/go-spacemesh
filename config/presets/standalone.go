@@ -19,8 +19,6 @@ func init() {
 
 func standalone() config.Config {
 	conf := config.DefaultConfig()
-	conf.Address = types.DefaultTestAddressConfig()
-
 	conf.TIME.Peersync.Disable = true
 	conf.Standalone = true
 	conf.DataDirParent = filepath.Join(os.TempDir(), "spacemesh")

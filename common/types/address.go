@@ -33,21 +33,24 @@ type Config struct {
 	NetworkHRP string `mapstructure:"network-hrp"`
 }
 
-var conf = &Config{
-	NetworkHRP: "sm",
+var networkHrp = "sm"
+
+func SetAddressHRP(update string) {
+	networkHrp = update
 }
 
 // DefaultAddressConfig returns the default configuration of the address package.
 func DefaultAddressConfig() *Config {
-	return conf
+	return &Config{
+		NetworkHRP: "sm",
+	}
 }
 
 // DefaultTestAddressConfig returns the default test configuration of the address package.
 func DefaultTestAddressConfig() *Config {
-	conf = &Config{
+	return &Config{
 		NetworkHRP: "stest",
 	}
-	return conf
 }
 
 // Address represents the address of a spacemesh account with AddressLength length.
@@ -71,9 +74,8 @@ func StringToAddress(src string) (Address, error) {
 	if len(dataConverted) != AddressLength+1 {
 		return addr, fmt.Errorf("expected %d bytes, got %d: %w", AddressLength, len(data), ErrWrongAddressLength)
 	}
-
-	if conf.NetworkHRP != hrp {
-		return addr, fmt.Errorf("wrong network id: expected `%s`, got `%s`: %w", conf.NetworkHRP, hrp, ErrUnsupportedNetwork)
+	if networkHrp != hrp {
+		return addr, fmt.Errorf("wrong network id: expected `%s`, got `%s`: %w", networkHrp, hrp, ErrUnsupportedNetwork)
 	}
 	// check that first 4 bytes are 0.
 	for i := 0; i < AddressReservedSpace; i++ {
@@ -106,7 +108,7 @@ func (a Address) String() string {
 		log.Panic("error converting bech32 bits: ", err.Error())
 	}
 
-	result, err := bech32.Encode(conf.NetworkHRP, dataConverted)
+	result, err := bech32.Encode(networkHrp, dataConverted)
 	if err != nil {
 		log.Panic("error encoding to bech32: ", err.Error())
 	}
@@ -146,5 +148,5 @@ func GenerateAddress(publicKey []byte) Address {
 
 // GetHRPNetwork returns the Human-Readable-Part of bech32 addresses for a networkID.
 func (a Address) GetHRPNetwork() string {
-	return conf.NetworkHRP
+	return networkHrp
 }
