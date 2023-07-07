@@ -20,12 +20,12 @@ type Decodable = scale.Decodable
 
 // EncodeTo encodes value to a writer stream.
 func EncodeTo(w io.Writer, value Encodable) (int, error) {
-	return value.EncodeScale(scale.NewEncoder(w))
+	return value.EncodeScale(scale.NewEncoder(w, scale.WithEncodeMaxNested(6)))
 }
 
 // DecodeFrom decodes a value using data from a reader stream.
 func DecodeFrom(r io.Reader, value Decodable) (int, error) {
-	return value.DecodeScale(scale.NewDecoder(r))
+	return value.DecodeScale(scale.NewDecoder(r, scale.WithDecodeMaxNested(6)))
 }
 
 // TODO(dshulyak) this is a temporary solution to improve encoder allocations.
@@ -49,17 +49,32 @@ func putEncoderBuffer(b *bytes.Buffer) {
 	encoderPool.Put(b)
 }
 
+func MustEncode(value Encodable) []byte {
+	buf, err := Encode(value)
+	if err != nil {
+		panic(err)
+	}
+	return buf
+}
+
 // Encode value to a byte buffer.
 func Encode(value Encodable) ([]byte, error) {
 	b := getEncoderBuffer()
 	defer putEncoderBuffer(b)
-	_, err := EncodeTo(b, value)
+	n, err := EncodeTo(b, value)
 	if err != nil {
 		return nil, err
 	}
-	buf := make([]byte, len(b.Bytes()))
+	buf := make([]byte, n)
 	copy(buf, b.Bytes())
 	return buf, nil
+}
+
+func MustDecode(buf []byte, value Decodable) {
+	err := Decode(buf, value)
+	if err != nil {
+		panic(err)
+	}
 }
 
 // Decode value from a byte buffer.

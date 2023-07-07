@@ -145,18 +145,55 @@ func TestProcessed(t *testing.T) {
 func TestGetAggHashes(t *testing.T) {
 	db := sql.InMemory()
 
-	lids := []types.LayerID{types.LayerID(9), types.LayerID(11), types.LayerID(7)}
-	got, err := GetAggHashes(db, lids)
-	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Empty(t, got)
+	hashes := make(map[types.LayerID]types.Hash32)
 
-	aggHashes := []types.Hash32{{6}, {7}, {8}}
-	expected := []types.Hash32{{8}, {6}, {7}} // in layer order
-	for i, lid := range lids {
-		require.NoError(t, SetMeshHash(db, lid, aggHashes[i]))
+	for i := 1; i < 100; i++ {
+		lid := types.LayerID(i)
+		hash := types.RandomHash()
+		hashes[lid] = hash
+		require.NoError(t, SetMeshHash(db, lid, hash))
 	}
 
-	got, err = GetAggHashes(db, lids)
-	require.NoError(t, err)
-	require.Equal(t, expected, got)
+	t.Run("missing layers", func(t *testing.T) {
+		from := types.LayerID(107)
+		to := types.LayerID(111)
+		by := uint32(1)
+		got, err := GetAggHashes(db, from, to, by)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.Empty(t, got)
+	})
+
+	t.Run("partially missing layers", func(t *testing.T) {
+		from := types.LayerID(70)
+		to := types.LayerID(111)
+		by := uint32(1)
+		got, err := GetAggHashes(db, from, to, by)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.Empty(t, got)
+	})
+
+	tt := []struct {
+		name   string
+		from   types.LayerID
+		to     types.LayerID
+		by     uint32
+		layers []types.LayerID
+	}{
+		{"from=to", types.LayerID(10), types.LayerID(10), 1, []types.LayerID{10}},
+		{"from<to", types.LayerID(10), types.LayerID(20), 1, []types.LayerID{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}},
+		{"from<to, by=2", types.LayerID(10), types.LayerID(20), 2, []types.LayerID{10, 12, 14, 16, 18, 20}},
+		{"from<to, by=3", types.LayerID(10), types.LayerID(20), 3, []types.LayerID{10, 13, 16, 19, 20}},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := GetAggHashes(db, tc.from, tc.to, tc.by)
+			require.NoError(t, err)
+			require.Equal(t, len(tc.layers), len(got))
+			for i, lid := range tc.layers {
+				expected := hashes[lid]
+				require.Equal(t, expected, got[i])
+			}
+		})
+	}
 }

@@ -2,16 +2,16 @@ package p2p
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
@@ -55,13 +55,17 @@ type Host struct {
 	cfg    Config
 	logger log.Log
 
+	closed struct {
+		sync.Mutex
+		closed bool
+	}
+
 	host.Host
 	*pubsub.PubSub
 
 	nodeReporter func()
 
 	discovery *peerexchange.Discovery
-	hs        *handshake.Handshake
 }
 
 // TODO(dshulyak) IsBootnode should be a configuration option.
@@ -79,7 +83,7 @@ func isBootnode(h host.Host, bootnodes []string) (bool, error) {
 }
 
 // Upgrade creates Host instance from host.Host.
-func Upgrade(h host.Host, genesisID types.Hash20, opts ...Opt) (*Host, error) {
+func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	fh := &Host{
 		ctx:    context.Background(),
 		cfg:    DefaultConfig(),
@@ -111,7 +115,6 @@ func Upgrade(h host.Host, genesisID types.Hash20, opts ...Opt) (*Host, error) {
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
 	}
-	fh.hs = handshake.New(fh, genesisID, handshake.WithLog(fh.logger))
 	if fh.nodeReporter != nil {
 		fh.Network().Notify(&network.NotifyBundle{
 			ConnectedF: func(network.Network, network.Conn) {
@@ -135,10 +138,25 @@ func (fh *Host) PeerCount() uint64 {
 	return uint64(len(fh.Host.Network().Peers()))
 }
 
+func (fh *Host) Start() error {
+	fh.closed.Lock()
+	defer fh.closed.Unlock()
+	if fh.closed.closed {
+		return errors.New("p2p: closed")
+	}
+	fh.discovery.StartScan()
+	return nil
+}
+
 // Stop background workers and release external resources.
 func (fh *Host) Stop() error {
+	fh.closed.Lock()
+	defer fh.closed.Unlock()
+	if fh.closed.closed {
+		return errors.New("p2p: closed")
+	}
+	fh.closed.closed = true
 	fh.discovery.Stop()
-	fh.hs.Stop()
 	if err := fh.Host.Close(); err != nil {
 		return fmt.Errorf("failed to close libp2p host: %w", err)
 	}

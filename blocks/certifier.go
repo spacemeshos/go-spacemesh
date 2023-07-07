@@ -71,24 +71,6 @@ func WithCertifierLogger(logger log.Log) CertifierOpt {
 	}
 }
 
-func withNonceFetcher(nf nonceFetcher) CertifierOpt {
-	return func(c *Certifier) {
-		c.nonceFetcher = nf
-	}
-}
-
-type defaultFetcher struct {
-	cdb *datastore.CachedDB
-}
-
-func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	nonce, err := f.cdb.VRFNonce(nodeID, epoch)
-	if err != nil {
-		return types.VRFPostIndex(0), fmt.Errorf("get vrf nonce: %w", err)
-	}
-	return nonce, nil
-}
-
 type certInfo struct {
 	registered, done bool
 	totalEligibility uint16
@@ -104,16 +86,15 @@ type Certifier struct {
 	ctx    context.Context
 	cancel func()
 
-	db           *datastore.CachedDB
-	oracle       hare.Rolacle
-	nodeID       types.NodeID
-	signer       *signing.EdSigner
-	nonceFetcher nonceFetcher
-	edVerifier   *signing.EdVerifier
-	publisher    pubsub.Publisher
-	layerClock   layerClock
-	beacon       system.BeaconGetter
-	tortoise     system.Tortoise
+	db         *datastore.CachedDB
+	oracle     hare.Rolacle
+	nodeID     types.NodeID
+	signer     *signing.EdSigner
+	edVerifier *signing.EdVerifier
+	publisher  pubsub.Publisher
+	layerClock layerClock
+	beacon     system.BeaconGetter
+	tortoise   system.Tortoise
 
 	mu          sync.Mutex
 	certifyMsgs map[types.LayerID]map[types.BlockID]*certInfo
@@ -153,9 +134,6 @@ func NewCertifier(
 	}
 	for _, opt := range opts {
 		opt(c)
-	}
-	if c.nonceFetcher == nil {
-		c.nonceFetcher = defaultFetcher{cdb: db}
 	}
 	c.collector = newCollector(c)
 
@@ -232,7 +210,7 @@ func (c *Certifier) createIfNeeded(lid types.LayerID, bid types.BlockID) {
 // RegisterForCert register to generate a certificate for the specified layer/block.
 func (c *Certifier) RegisterForCert(ctx context.Context, lid types.LayerID, bid types.BlockID) error {
 	logger := c.logger.WithContext(ctx).WithFields(lid, bid)
-	logger.Info("certifier registered")
+	logger.Debug("certifier registered")
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -247,24 +225,15 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 	if _, err := c.beacon.GetBeacon(lid.GetEpoch()); err != nil {
 		return errBeaconNotAvailable
 	}
-	nonce, err := c.nonceFetcher.VRFNonce(c.nodeID, lid.GetEpoch())
-	if err != nil { // never submitted an atx, not eligible
-		if errors.Is(err, sql.ErrNotFound) {
-			return nil
-		}
-		return fmt.Errorf("failed to get own vrf nonce: %w", err)
-	}
-
 	// check if the node is eligible to certify the hare output
-	proof, err := c.oracle.Proof(ctx, nonce, lid, eligibility.CertifyRound)
+	proof, err := c.oracle.Proof(ctx, lid, eligibility.CertifyRound)
 	if err != nil {
 		logger.With().Error("failed to get eligibility proof to certify", log.Err(err))
 		return err
 	}
 
-	eligibilityCount, err := c.oracle.CalcEligibility(ctx, lid, eligibility.CertifyRound, c.cfg.CommitteeSize, c.nodeID, nonce, proof)
+	eligibilityCount, err := c.oracle.CalcEligibility(ctx, lid, eligibility.CertifyRound, c.cfg.CommitteeSize, c.nodeID, proof)
 	if err != nil {
-		logger.With().Error("failed to check eligibility to certify", log.Err(err))
 		return err
 	}
 	if eligibilityCount == 0 { // not eligible
@@ -291,24 +260,6 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 		return err
 	}
 	return nil
-}
-
-// HandleCertifyMessage is the gossip receiver for certify message.
-func (c *Certifier) HandleCertifyMessage(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
-	if c.isShuttingDown() {
-		return pubsub.ValidationIgnore
-	}
-
-	err := c.handleRawCertifyMsg(ctx, msg)
-	switch {
-	case err == nil:
-		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedData):
-		c.logger.WithContext(ctx).With().Warning("malformed cert msg", log.Stringer("peer", peer), log.Err(err))
-		return pubsub.ValidationReject
-	default:
-		return pubsub.ValidationIgnore
-	}
 }
 
 // NumCached returns the number of layers being cached in memory.
@@ -374,7 +325,20 @@ func (c *Certifier) expected(lid types.LayerID) bool {
 	return !lid.Before(start) && !lid.After(current.Add(c.cfg.LayerBuffer))
 }
 
-func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error {
+func (c *Certifier) HandleCertifyMessage(ctx context.Context, peer p2p.Peer, data []byte) error {
+	err := c.handleCertifyMessage(ctx, peer, data)
+	if err != nil && errors.Is(err, errMalformedData) {
+		c.logger.WithContext(ctx).With().Warning("malformed cert msg", log.Stringer("peer", peer), log.Err(err))
+	}
+	return err
+}
+
+// HandleCertifyMessage is the gossip receiver for certify message.
+func (c *Certifier) handleCertifyMessage(ctx context.Context, _ p2p.Peer, data []byte) error {
+	if c.isShuttingDown() {
+		return errors.New("certifier shutting down")
+	}
+
 	logger := c.logger.WithContext(ctx)
 	var msg types.CertifyMessage
 	if err := codec.Decode(data, &msg); err != nil {

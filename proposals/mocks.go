@@ -7,6 +7,7 @@ package proposals
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
@@ -127,7 +128,7 @@ func (m *MockballotDecoder) EXPECT() *MockballotDecoderMockRecorder {
 }
 
 // DecodeBallot mocks base method.
-func (m *MockballotDecoder) DecodeBallot(arg0 *types.Ballot) (*tortoise.DecodedBallot, error) {
+func (m *MockballotDecoder) DecodeBallot(arg0 *types.BallotTortoiseData) (*tortoise.DecodedBallot, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DecodeBallot", arg0)
 	ret0, _ := ret[0].(*tortoise.DecodedBallot)
@@ -242,4 +243,55 @@ func (m *MocknonceFetcher) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (type
 func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknonceFetcher)(nil).VRFNonce), arg0, arg1)
+}
+
+// MocklayerClock is a mock of layerClock interface.
+type MocklayerClock struct {
+	ctrl     *gomock.Controller
+	recorder *MocklayerClockMockRecorder
+}
+
+// MocklayerClockMockRecorder is the mock recorder for MocklayerClock.
+type MocklayerClockMockRecorder struct {
+	mock *MocklayerClock
+}
+
+// NewMocklayerClock creates a new mock instance.
+func NewMocklayerClock(ctrl *gomock.Controller) *MocklayerClock {
+	mock := &MocklayerClock{ctrl: ctrl}
+	mock.recorder = &MocklayerClockMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocklayerClock) EXPECT() *MocklayerClockMockRecorder {
+	return m.recorder
+}
+
+// CurrentLayer mocks base method.
+func (m *MocklayerClock) CurrentLayer() types.LayerID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CurrentLayer")
+	ret0, _ := ret[0].(types.LayerID)
+	return ret0
+}
+
+// CurrentLayer indicates an expected call of CurrentLayer.
+func (mr *MocklayerClockMockRecorder) CurrentLayer() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentLayer", reflect.TypeOf((*MocklayerClock)(nil).CurrentLayer))
+}
+
+// LayerToTime mocks base method.
+func (m *MocklayerClock) LayerToTime(arg0 types.LayerID) time.Time {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LayerToTime", arg0)
+	ret0, _ := ret[0].(time.Time)
+	return ret0
+}
+
+// LayerToTime indicates an expected call of LayerToTime.
+func (mr *MocklayerClockMockRecorder) LayerToTime(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerToTime", reflect.TypeOf((*MocklayerClock)(nil).LayerToTime), arg0)
 }

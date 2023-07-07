@@ -21,12 +21,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var (
 	errKnownAtx      = errors.New("known atx")
-	errMalformedData = errors.New("malformed data")
+	errMalformedData = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
 	errMaliciousATX  = errors.New("malicious atx")
 )
 
@@ -45,7 +46,8 @@ type Handler struct {
 	tickSize        uint64
 	goldenATXID     types.ATXID
 	nipostValidator nipostValidator
-	atxReceivers    []AtxReceiver
+	beacon          AtxReceiver
+	tortoise        system.Tortoise
 	log             log.Log
 	mu              sync.Mutex
 	atxChannels     map[types.ATXID]*atxChan
@@ -64,7 +66,8 @@ func NewHandler(
 	tickSize uint64,
 	goldenATXID types.ATXID,
 	nipostValidator nipostValidator,
-	atxReceivers []AtxReceiver,
+	beacon AtxReceiver,
+	tortoise system.Tortoise,
 	log log.Log,
 	poetCfg PoetConfig,
 ) *Handler {
@@ -77,10 +80,11 @@ func NewHandler(
 		tickSize:        tickSize,
 		goldenATXID:     goldenATXID,
 		nipostValidator: nipostValidator,
-		atxReceivers:    atxReceivers,
 		log:             log,
 		atxChannels:     make(map[types.ATXID]*atxChan),
 		fetcher:         fetcher,
+		beacon:          beacon,
+		tortoise:        tortoise,
 		poetCfg:         poetCfg,
 	}
 }
@@ -139,11 +143,10 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 	if existingATX != nil { // Already processed
 		return nil
 	}
-	h.log.WithContext(ctx).With().Info("processing atx",
+	h.log.WithContext(ctx).With().Debug("processing atx",
 		atx.ID(),
 		atx.PublishEpoch,
 		log.Stringer("smesher", atx.SmesherID),
-		atx.PublishEpoch,
 	)
 	if err := h.ContextuallyValidateAtx(atx); err != nil {
 		h.log.WithContext(ctx).With().Warning("atx failed contextual validation",
@@ -152,7 +155,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 			log.Err(err),
 		)
 	} else {
-		h.log.WithContext(ctx).With().Info("atx is valid", atx.ID())
+		h.log.WithContext(ctx).With().Debug("atx is valid", atx.ID())
 	}
 	if err := h.storeAtx(ctx, atx); err != nil {
 		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
@@ -163,6 +166,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
 //
+//   - The PublishEpoch is less than or equal to the current epoch + 1.
 //   - If the sequence number is non-zero: PrevATX points to a syntactically valid ATX whose sequence number is one less
 //     than the current ATXs sequence number.
 //   - If the sequence number is zero: PrevATX is empty.
@@ -177,6 +181,11 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		commitmentATX *types.ATXID
 		err           error
 	)
+
+	current := h.clock.CurrentLayer()
+	if atx.PublishEpoch > current.GetEpoch()+1 {
+		return nil, fmt.Errorf("atx publish epoch is too far in the future: %d > %d", atx.PublishEpoch, current.GetEpoch()+1)
+	}
 
 	if atx.PrevATXID == types.EmptyATXID {
 		if err := h.validateInitialAtx(ctx, atx); err != nil {
@@ -208,7 +217,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	expectedChallengeHash := atx.NIPostChallenge.Hash()
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	leaves, err := h.nipostValidator.NIPost(atx.SmesherID, *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
+	leaves, err := h.nipostValidator.NIPost(ctx, atx.SmesherID, *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
@@ -216,7 +225,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	return atx.Verify(baseTickHeight, leaves/h.tickSize)
 }
 
-func (h *Handler) validateInitialAtx(_ context.Context, atx *types.ActivationTx) error {
+func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationTx) error {
 	if atx.InitialPost == nil {
 		return fmt.Errorf("no prevATX declared, but initial Post is not included")
 	}
@@ -225,7 +234,7 @@ func (h *Handler) validateInitialAtx(_ context.Context, atx *types.ActivationTx)
 		return fmt.Errorf("no prevATX declared, but NodeID is missing")
 	}
 
-	if err := h.nipostValidator.InitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, h.goldenATXID, atx.InitialPost.Indices); err != nil {
+	if err := h.nipostValidator.InitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, h.goldenATXID); err != nil {
 		return err
 	}
 
@@ -234,7 +243,7 @@ func (h *Handler) validateInitialAtx(_ context.Context, atx *types.ActivationTx)
 	initialPostMetadata := *atx.NIPost.PostMetadata
 	initialPostMetadata.Challenge = shared.ZeroChallenge
 
-	if err := h.nipostValidator.Post(atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
+	if err := h.nipostValidator.Post(ctx, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid initial Post: %w", err)
 	}
 
@@ -302,15 +311,11 @@ func (h *Handler) getCommitmentAtx(atx *types.ActivationTx) (*types.ATXID, error
 		return atx.CommitmentATX, nil
 	}
 
-	id, err := atxs.GetFirstIDByNodeID(h.cdb, atx.SmesherID)
+	id, err := atxs.CommitmentATX(h.cdb, atx.SmesherID)
 	if err != nil {
 		return nil, err
 	}
-	initialATX, err := h.cdb.GetAtxHeader(id)
-	if err != nil {
-		return nil, err
-	}
-	return initialATX.CommitmentATX, nil
+	return &id, nil
 }
 
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
@@ -357,7 +362,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		return fmt.Errorf("checking if node is malicious: %w", err)
 	}
 	var proof *types.MalfeasanceProof
-	if err = h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
+	if err := h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		if !malicious {
 			prev, err := atxs.GetByEpochAndNodeID(dbtx, atx.PublishEpoch, atx.SmesherID)
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
@@ -383,9 +388,14 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 						Data: &atxProof,
 					},
 				}
-				if err = h.cdb.AddMalfeasanceProof(atx.SmesherID, proof, dbtx); err != nil {
-					return fmt.Errorf("adding malfeasance proof: %w", err)
+				encoded, err := codec.Encode(proof)
+				if err != nil {
+					h.log.With().Panic("failed to encode MalfeasanceProof", log.Err(err))
 				}
+				if err := identities.SetMalicious(dbtx, atx.SmesherID, encoded); err != nil {
+					return fmt.Errorf("add malfeasance proof: %w", err)
+				}
+
 				h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
 					log.Stringer("smesher", atx.SmesherID),
 					log.Object("prev", prev),
@@ -393,13 +403,23 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				)
 			}
 		}
-		if err = atxs.Add(dbtx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		if err := atxs.Add(dbtx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
 		return nil
 	}); err != nil {
 		return fmt.Errorf("store atx: %w", err)
 	}
+	if proof != nil {
+		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
+		h.tortoise.OnMalfeasance(atx.SmesherID)
+	}
+	header, err := h.cdb.GetAtxHeader(atx.ID())
+	if err != nil {
+		return fmt.Errorf("get header for processed atx %s: %w", atx.ID(), err)
+	}
+	h.beacon.OnAtx(header)
+	h.tortoise.OnAtx(header.ToData())
 
 	// notify subscribers
 	if ch, found := h.atxChannels[atx.ID()]; found {
@@ -407,7 +427,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		delete(h.atxChannels, atx.ID())
 	}
 
-	h.log.WithContext(ctx).With().Info("finished storing atx in epoch", atx.ID(), atx.PublishEpoch)
+	h.log.WithContext(ctx).With().Debug("finished storing atx in epoch", atx.ID(), atx.PublishEpoch)
 
 	// broadcast malfeasance proof last as the verification of the proof will take place
 	// in the same goroutine
@@ -417,7 +437,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		}
 		encodedProof, err := codec.Encode(&gossip)
 		if err != nil {
-			h.log.Fatal("failed to encode MalfeasanceGossip", log.Err(err))
+			h.log.With().Fatal("failed to encode MalfeasanceGossip", log.Err(err))
 		}
 		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
 			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))
@@ -446,28 +466,9 @@ func (h *Handler) GetPosAtxID() (types.ATXID, error) {
 	return id, nil
 }
 
-// HandleGossipAtx handles the atx gossip data channel.
-func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
-	err := h.handleAtxData(ctx, peer, msg)
-	switch {
-	case err == nil:
-		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedData):
-		return pubsub.ValidationReject
-	case errors.Is(err, errKnownAtx):
-		return pubsub.ValidationIgnore
-	default:
-		h.log.WithContext(ctx).With().Warning("failed to process atx gossip",
-			log.Stringer("sender", peer),
-			log.Err(err),
-		)
-		return pubsub.ValidationIgnore
-	}
-}
-
-// HandleAtxData handles atxs received either by gossip or sync.
+// HandleAtxData handles atxs received by sync.
 func (h *Handler) HandleAtxData(ctx context.Context, peer p2p.Peer, data []byte) error {
-	err := h.handleAtxData(ctx, peer, data)
+	err := h.HandleGossipAtx(ctx, peer, data)
 	if errors.Is(err, errKnownAtx) {
 		return nil
 	}
@@ -485,11 +486,23 @@ func (h *Handler) registerHashes(atx *types.ActivationTx, peer p2p.Peer) {
 	h.fetcher.RegisterPeerHashes(peer, maps.Keys(hashes))
 }
 
-func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte) error {
+// HandleGossipAtx handles the atx gossip data channel.
+func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
+	err := h.handleGossipAtx(ctx, peer, msg)
+	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
+		h.log.WithContext(ctx).With().Warning("failed to process atx gossip",
+			log.Stringer("sender", peer),
+			log.Err(err),
+		)
+	}
+	return err
+}
+
+func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
 	receivedTime := time.Now()
 	var atx types.ActivationTx
-	if err := codec.Decode(data, &atx); err != nil {
-		return errMalformedData
+	if err := codec.Decode(msg, &atx); err != nil {
+		return fmt.Errorf("%w: %v", errMalformedData, err)
 	}
 
 	epochStart := h.clock.LayerToTime(atx.PublishEpoch.FirstLayer())
@@ -519,56 +532,54 @@ func (h *Handler) handleAtxData(ctx context.Context, peer p2p.Peer, data []byte)
 
 	h.registerHashes(&atx, peer)
 	if err := h.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
-		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
-			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
+		return fmt.Errorf("received atx (%v) with syntactically invalid or missing poet proof (%x): %w",
+			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err,
+		)
 	}
 
 	if err := h.FetchAtxReferences(ctx, &atx); err != nil {
-		return fmt.Errorf("received atx with missing references of prev or pos id %v, %v, %v, %v",
-			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
+		return fmt.Errorf("received atx (%v) with missing references of prev or pos id %v, %v: %w",
+			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), err,
+		)
 	}
 
 	vAtx, err := h.SyntacticallyValidateAtx(ctx, &atx)
 	if err != nil {
-		return fmt.Errorf("received syntactically invalid atx %v: %v", atx.ShortString(), err)
+		return fmt.Errorf("received syntactically invalid atx %v: %w", atx.ShortString(), err)
 	}
 	err = h.ProcessAtx(ctx, vAtx)
 	if err != nil {
-		return fmt.Errorf("cannot process atx %v: %v", atx.ShortString(), err)
+		return fmt.Errorf("cannot process atx %v: %w", atx.ShortString(), err)
 		// TODO(anton): blacklist peer
 	}
-	header, err := h.cdb.GetAtxHeader(vAtx.ID())
-	if err != nil {
-		return fmt.Errorf("get header for processed atx %s: %w", vAtx.ID(), err)
-	}
-	for _, r := range h.atxReceivers {
-		r.OnAtx(header)
-	}
 	events.ReportNewActivation(vAtx)
-	logger.With().Info("new atx", log.Inline(vAtx), log.Int("size", len(data)))
+	logger.With().Info("new atx", log.Inline(vAtx), log.Int("size", len(msg)))
 	return nil
 }
 
-// FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db.
+// FetchAtxReferences fetches referenced ATXs from peers if they are not found in db.
 func (h *Handler) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) error {
 	logger := h.log.WithContext(ctx)
-	var atxIDs []types.ATXID
+	atxIDs := make(map[types.ATXID]struct{}, 3)
 	if atx.PositioningATX != types.EmptyATXID && atx.PositioningATX != h.goldenATXID {
-		logger.With().Debug("going to fetch pos atx", atx.PositioningATX, atx.ID())
-		atxIDs = append(atxIDs, atx.PositioningATX)
+		logger.With().Debug("fetching pos atx", atx.PositioningATX, atx.ID())
+		atxIDs[atx.PositioningATX] = struct{}{}
 	}
 
 	if atx.PrevATXID != types.EmptyATXID {
-		logger.With().Debug("going to fetch prev atx", atx.PrevATXID, atx.ID())
-		if len(atxIDs) < 1 || atx.PrevATXID != atxIDs[0] {
-			atxIDs = append(atxIDs, atx.PrevATXID)
-		}
+		logger.With().Debug("fetching prev atx", atx.PrevATXID, atx.ID())
+		atxIDs[atx.PrevATXID] = struct{}{}
 	}
+	if atx.CommitmentATX != nil && *atx.CommitmentATX != h.goldenATXID {
+		logger.With().Debug("fetching commitment atx", *atx.CommitmentATX, atx.ID())
+		atxIDs[*atx.CommitmentATX] = struct{}{}
+	}
+
 	if len(atxIDs) == 0 {
 		return nil
 	}
 
-	if err := h.fetcher.GetAtxs(ctx, atxIDs); err != nil {
+	if err := h.fetcher.GetAtxs(ctx, maps.Keys(atxIDs)); err != nil {
 		return fmt.Errorf("fetch referenced atxs: %w", err)
 	}
 	logger.With().Debug("done fetching references for atx", atx.ID())

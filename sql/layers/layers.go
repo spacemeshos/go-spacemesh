@@ -2,7 +2,6 @@ package layers
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -197,10 +196,7 @@ func SetMeshHash(db sql.Executor, lid types.LayerID, aggHash types.Hash32) error
 
 // GetAggregatedHash for layer.
 func GetAggregatedHash(db sql.Executor, lid types.LayerID) (types.Hash32, error) {
-	var (
-		rst types.Hash32
-		err error
-	)
+	var rst types.Hash32
 	if rows, err := db.Exec("select aggregated_hash from layers where id = ?1",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Uint32()))
@@ -213,28 +209,26 @@ func GetAggregatedHash(db sql.Executor, lid types.LayerID) (types.Hash32, error)
 	} else if rows == 0 {
 		return rst, fmt.Errorf("%w layer %s", sql.ErrNotFound, lid)
 	}
-	return rst, err
+	return rst, nil
 }
 
-func makeInClause(num int) string {
-	var sb strings.Builder
-	for i := 0; i < num; i++ {
-		sb.WriteString("?")
-		if i < num-1 {
-			sb.WriteString(",")
-		}
+func GetAggHashes(db sql.Executor, from, to types.LayerID, by uint32) ([]types.Hash32, error) {
+	dist := to.Difference(from)
+	count := int(dist/by + 1)
+	if dist%by != 0 {
+		// last layer is not a multiple of By, so we need to add it
+		count++
 	}
-	return sb.String()
-}
-
-func GetAggHashes(db sql.Executor, lids []types.LayerID) ([]types.Hash32, error) {
-	hashes := make([]types.Hash32, 0, len(lids))
-	inClause := makeInClause(len(lids))
-	if _, err := db.Exec(fmt.Sprintf("select aggregated_hash from layers where id in (%s) order by id asc;", inClause),
+	hashes := make([]types.Hash32, 0, count)
+	if _, err := db.Exec(
+		`select aggregated_hash from layers
+	 	where id >= ?1 and id <= ?2 and
+			((id-?1)%?3 = 0 or id = ?2)
+		order by id asc;`,
 		func(stmt *sql.Statement) {
-			for i, lid := range lids {
-				stmt.BindInt64(i+1, int64(lid.Uint32()))
-			}
+			stmt.BindInt64(1, int64(from.Uint32()))
+			stmt.BindInt64(2, int64(to.Uint32()))
+			stmt.BindInt64(3, int64(by))
 		},
 		func(stmt *sql.Statement) bool {
 			var h types.Hash32
@@ -242,10 +236,10 @@ func GetAggHashes(db sql.Executor, lids []types.LayerID) ([]types.Hash32, error)
 			hashes = append(hashes, h)
 			return true
 		}); err != nil {
-		return nil, fmt.Errorf("get aggHashes %v: %w", lids, err)
+		return nil, fmt.Errorf("get aggHashes from %s to %s by %d: %w", from, to, by, err)
 	}
-	if len(hashes) != len(lids) {
-		return nil, fmt.Errorf("%w layers %s", sql.ErrNotFound, lids)
+	if len(hashes) != count {
+		return nil, fmt.Errorf("%w layers from %s to %s by %d", sql.ErrNotFound, from, to, by)
 	}
 	return hashes, nil
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/go-scale"
 
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -52,6 +53,14 @@ func (id *NodeID) EncodeScale(e *scale.Encoder) (int, error) {
 // DecodeScale implements scale codec interface.
 func (id *NodeID) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, id[:])
+}
+
+func (id *NodeID) MarshalText() ([]byte, error) {
+	return util.Base64Encode(id[:]), nil
+}
+
+func (id *NodeID) UnmarshalText(buf []byte) error {
+	return util.Base64Decode(id[:], buf)
 }
 
 // NodeIDsToHashes turns a list of NodeID into their Hash32 representation.

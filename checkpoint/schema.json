@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spacemesh.io/checkpoint.schema.json.1.0",
+  "title": "checkpoint data",
+  "description": "checkpoint data for recovery",
+  "type": "object",
+  "required": [
+    "command",
+    "version",
+    "data"
+  ],
+  "properties": {
+    "command": {
+      "description": "command to execute",
+      "type": "string"
+    },
+    "version": {
+      "description": "version of the checkpoint file. same as schema's $id",
+      "type": "string"
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "id",
+        "atxs",
+        "accounts"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "atxs": {
+          "description": "the set of golden ATXs",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "atx id",
+                "type": "string"
+              },
+              "epoch": {
+                "type": "integer"
+              },
+              "commitmentAtx": {
+                "type": "string"
+              },
+              "vrfNonce": {
+                "type": "integer"
+              },
+              "numUnits": {
+                "type": "integer"
+              },
+              "baseTickHeight": {
+                "type": "integer"
+              },
+              "tickCount": {
+                "type": "integer"
+              },
+              "publicKey": {
+                "type": "string"
+              },
+              "sequence": {
+                "type": "integer"
+              },
+              "coinbase": {
+                "type": "string"
+              }
+            }
+          },
+          "accounts": {
+            "description": "accounts snapshot",
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "balance": {
+                  "type": "integer"
+                },
+                "nonce": {
+                  "type": "integer"
+                },
+                "template": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+

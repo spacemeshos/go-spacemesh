@@ -37,35 +37,25 @@ const (
 	notCompleted = false
 )
 
-// procReport is the termination report of the CP.
-type procReport struct {
+// report is the termination report of the CP.
+type report struct {
 	id        types.LayerID // layer id
 	set       *Set          // agreed-upon set
-	coinflip  bool          // weak coin value
 	completed bool          // whether the CP completed
 }
 
-func (cpo procReport) ID() types.LayerID {
-	return cpo.id
-}
-
-func (cpo procReport) Set() *Set {
-	return cpo.set
-}
-
-func (cpo procReport) Coinflip() bool {
-	return cpo.coinflip
-}
-
-func (cpo procReport) Completed() bool {
-	return cpo.completed
-}
-
 func (proc *consensusProcess) report(completed bool) {
-	proc.comm.report <- procReport{proc.layer, proc.value, proc.preRoundTracker.coinflip, completed}
+	proc.comm.report <- report{id: proc.layer, set: proc.value, completed: completed}
 }
 
-var _ TerminationOutput = (*procReport)(nil)
+type wcReport struct {
+	id       types.LayerID
+	coinflip bool
+}
+
+func (proc *consensusProcess) reportWeakCoin() {
+	proc.comm.wc <- wcReport{id: proc.layer, coinflip: proc.preRoundTracker.coinflip}
+}
 
 // State holds the current state of the consensus process (aka the participant).
 type State struct {
@@ -151,7 +141,7 @@ func (ci *CountInfo) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 func (ci *CountInfo) Meet(threshold int) bool {
 	// at least one honest party with good message
-	return ci.hCount > 0 && ci.hCount+ci.keCount >= threshold
+	return ci.hCount > 0 && ci.hCount+ci.dhCount+ci.keCount >= threshold
 }
 
 type communication struct {
@@ -161,7 +151,8 @@ type communication struct {
 	// to this mchOut
 	mchOut chan<- *types.MalfeasanceGossip
 	// if the consensus process terminates, output the result to report
-	report chan TerminationOutput
+	report chan report
+	wc     chan wcReport
 }
 
 // consensusProcess is an entity (a single participant) in the Hare protocol.
@@ -180,7 +171,6 @@ type consensusProcess struct {
 	oracle           Rolacle // the roles oracle provider
 	signer           *signing.EdSigner
 	nid              types.NodeID
-	nonce            *types.VRFPostIndex
 	publisher        pubsub.Publisher
 	comm             communication
 	validator        messageValidator
@@ -208,8 +198,8 @@ func newConsensusProcess(
 	stateQuerier stateQuerier,
 	signing *signing.EdSigner,
 	edVerifier *signing.EdVerifier,
+	et *EligibilityTracker,
 	nid types.NodeID,
-	nonce *types.VRFPostIndex,
 	p2p pubsub.Publisher,
 	comm communication,
 	ev roleValidator,
@@ -226,14 +216,13 @@ func newConsensusProcess(
 		oracle:    oracle,
 		signer:    signing,
 		nid:       nid,
-		nonce:     nonce,
 		publisher: p2p,
 		cfg:       cfg,
 		comm:      comm,
 		pending:   make(map[types.NodeID]*Message, cfg.N),
 		Log:       logger,
 		mTracker:  newMsgsTracker(),
-		eTracker:  NewEligibilityTracker(cfg.N),
+		eTracker:  et,
 		clock:     clock,
 	}
 	proc.ctx, proc.cancel = context.WithCancel(ctx)
@@ -288,7 +277,7 @@ func (proc *consensusProcess) eventLoop() {
 	ctx := proc.ctx
 	logger := proc.WithContext(ctx).WithFields(proc.layer)
 	logger.With().Info("consensus process started",
-		log.String("current_set", proc.value.String()),
+		log.Stringer("current_set", proc.value),
 		log.Int("set_size", proc.value.Size()),
 	)
 
@@ -343,6 +332,7 @@ PreRound:
 		logger.With().Info("preround ended",
 			log.Int("set_size", proc.value.Size()))
 	}
+	proc.reportWeakCoin()
 	proc.advanceToNextRound(ctx) // K was initialized to -1, K should be 0
 
 	// start first iteration
@@ -383,7 +373,7 @@ PreRound:
 			endOfRound = proc.clock.AwaitEndOfRound(round)
 
 		case <-proc.ctx.Done(): // close event
-			logger.With().Info("terminating: received signal",
+			logger.With().Debug("terminating: received signal",
 				log.Uint32("current_round", proc.getRound()))
 			return
 		}
@@ -758,12 +748,9 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 
 // init a new message builder with the current state (s, k, ki) for this instance.
 func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error) {
-	if proc.nonce == nil {
-		proc.Log.Fatal("initDefaultBuilder: missing vrf nonce")
-	}
 	builder := newMessageBuilder().SetLayer(proc.layer)
 	builder = builder.SetRoundCounter(proc.getRound()).SetCommittedRound(proc.committedRound).SetValues(s)
-	proof, err := proc.oracle.Proof(context.TODO(), *proc.nonce, proc.layer, proc.getRound())
+	proof, err := proc.oracle.Proof(context.TODO(), proc.layer, proc.getRound())
 	if err != nil {
 		return nil, fmt.Errorf("init default builder: %w", err)
 	}
@@ -903,11 +890,6 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 		log.Uint32("current_round", proc.getRound()),
 		proc.layer)
 
-	if proc.nonce == nil {
-		logger.Debug("should not participate: identity missing vrf nonce")
-		return false
-	}
-
 	// query if identity is active
 	res, err := proc.oracle.IsIdentityActiveOnConsensusView(ctx, proc.signer.NodeID(), proc.layer)
 	if err != nil {
@@ -939,10 +921,7 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 // Returns the role matching the current round if eligible for this round, false otherwise.
 func (proc *consensusProcess) currentRole(ctx context.Context) role {
 	logger := proc.WithContext(ctx).WithFields(proc.layer)
-	if proc.nonce == nil {
-		logger.Fatal("currentRole: missing vrf nonce")
-	}
-	proof, err := proc.oracle.Proof(ctx, *proc.nonce, proc.layer, proc.getRound())
+	proof, err := proc.oracle.Proof(ctx, proc.layer, proc.getRound())
 	if err != nil {
 		logger.With().Error("failed to get eligibility proof from oracle", log.Err(err))
 		return passive
@@ -951,7 +930,7 @@ func (proc *consensusProcess) currentRole(ctx context.Context) role {
 	k := proc.getRound()
 
 	size := expectedCommitteeSize(k, proc.cfg.N, proc.cfg.ExpectedLeaders)
-	eligibilityCount, err := proc.oracle.CalcEligibility(ctx, proc.layer, k, size, proc.nid, *proc.nonce, proof)
+	eligibilityCount, err := proc.oracle.CalcEligibility(ctx, proc.layer, k, size, proc.nid, proof)
 	if err != nil {
 		logger.With().Error("failed to check eligibility", log.Err(err))
 		return passive

@@ -9,7 +9,7 @@ import (
 )
 
 // Timeskew adjusts CLOCK_REALTIME on the specified pods by the offset.
-func Timeskew(cctx *testcontext.Context, name string, offset string, pods ...string) (Teardown, error) {
+func Timeskew(cctx *testcontext.Context, name, offset string, pods ...string) (Teardown, error) {
 	tc := chaos.TimeChaos{}
 	tc.Name = name
 	tc.Namespace = cctx.Namespace

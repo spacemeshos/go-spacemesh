@@ -44,6 +44,7 @@ type txValidator interface {
 // atxProvider is used by ActivationService to get ATXes.
 type atxProvider interface {
 	GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error)
+	MaxHeightAtx() (types.ATXID, error)
 }
 
 type postSetupProvider interface {

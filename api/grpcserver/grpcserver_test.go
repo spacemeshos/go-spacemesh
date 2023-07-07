@@ -25,6 +25,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/merkle-tree"
+	"github.com/spacemeshos/poet/shared"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
@@ -46,6 +48,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
@@ -179,7 +182,7 @@ func TestMain(m *testing.M) {
 	addr1 = wallet.Address(signer1.PublicKey().Bytes())
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
-	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil, nil)
+	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil)
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx); err != nil {
@@ -192,7 +195,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil, nil)
+	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil)
 	atx2.SetEffectiveNumUnits(numUnits)
 	atx2.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx2); err != nil {
@@ -228,8 +231,25 @@ func TestMain(m *testing.M) {
 }
 
 func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
+	tree, err := merkle.NewTreeBuilder().
+		WithHashFunc(shared.HashMembershipTreeNode).
+		WithLeavesToProve(map[uint64]bool{0: true}).
+		Build()
+	if err != nil {
+		panic("failed to add leaf to tree")
+	}
+	if err := tree.AddLeaf(challenge[:]); err != nil {
+		panic("failed to add leaf to tree")
+	}
+	nodes := tree.Proof()
+	nodesH32 := make([]types.Hash32, 0, len(nodes))
+	for _, n := range nodes {
+		nodesH32 = append(nodesH32, types.BytesToHash(n))
+	}
 	return &types.NIPost{
-		Challenge: challenge,
+		Membership: types.MerkleProof{
+			Nodes: nodesH32,
+		},
 		Post: &types.Post{
 			Nonce:   0,
 			Indices: []byte(nil),
@@ -968,10 +988,8 @@ func TestSmesherService(t *testing.T) {
 		logtest.SetupGlobal(t)
 		res, err := c.SmesherID(context.Background(), &empty.Empty{})
 		require.NoError(t, err)
-		nodeAddr := types.GenerateAddress(signer.NodeID().Bytes())
-		resAddr, err := types.StringToAddress(res.AccountId.Address)
 		require.NoError(t, err)
-		require.Equal(t, nodeAddr.String(), resAddr.String())
+		require.Equal(t, signer.NodeID().Bytes(), res.PublicKey)
 	})
 
 	t.Run("SetCoinbaseMissingArgs", func(t *testing.T) {
@@ -1656,7 +1674,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	grpcStatus, ok := status.FromError(err)
 	req.True(ok)
 	req.Equal(codes.InvalidArgument, grpcStatus.Code())
-	req.Equal("Failed to verify transaction", grpcStatus.Message())
+	req.Contains(grpcStatus.Message(), "Failed to verify transaction")
 	req.Nil(res)
 }
 
@@ -2456,7 +2474,8 @@ func TestDebugService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	identity := NewMocknetworkIdentity(ctrl)
 	mOracle := NewMockoracle(ctrl)
-	svc := NewDebugService(conStateAPI, identity, mOracle)
+	db := sql.InMemory()
+	svc := NewDebugService(db, conStateAPI, identity, mOracle)
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -2465,7 +2484,7 @@ func TestDebugService(t *testing.T) {
 	c := pb.NewDebugServiceClient(conn)
 
 	t.Run("Accounts", func(t *testing.T) {
-		res, err := c.Accounts(context.Background(), &empty.Empty{})
+		res, err := c.Accounts(context.Background(), &pb.AccountsRequest{})
 		require.NoError(t, err)
 		require.Equal(t, 2, len(res.AccountWrapper))
 
@@ -2477,6 +2496,33 @@ func TestDebugService(t *testing.T) {
 		require.Contains(t, addresses, globalTx.Principal.String())
 		require.Contains(t, addresses, addr1.String())
 	})
+
+	t.Run("Accounts at layer", func(t *testing.T) {
+		lid := types.LayerID(11)
+		for address, balance := range conStateAPI.balances {
+			accounts.Update(db, &types.Account{
+				Address:   address,
+				Balance:   balance.Uint64(),
+				NextNonce: conStateAPI.nonces[address],
+				Layer:     lid,
+			})
+		}
+		res, err := c.Accounts(context.Background(), &pb.AccountsRequest{Layer: lid.Uint32()})
+		require.NoError(t, err)
+		require.Equal(t, 2, len(res.AccountWrapper))
+
+		// Get the list of addresses and compare them regardless of order
+		var addresses []string
+		for _, a := range res.AccountWrapper {
+			addresses = append(addresses, a.AccountId.Address)
+		}
+		require.Contains(t, addresses, globalTx.Principal.String())
+		require.Contains(t, addresses, addr1.String())
+
+		_, err = c.Accounts(context.Background(), &pb.AccountsRequest{Layer: lid.Uint32() - 1})
+		require.Error(t, err)
+	})
+
 	t.Run("networkID", func(t *testing.T) {
 		id := p2p.Peer("test")
 		identity.EXPECT().ID().Return(id)
@@ -2582,7 +2628,7 @@ func TestEventsReceived(t *testing.T) {
 
 	svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
 	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
-	conState.AddToCache(context.Background(), globalTx)
+	conState.AddToCache(context.Background(), globalTx, time.Now())
 
 	weight := new(big.Rat).SetFloat64(18.7)
 	require.NoError(t, err)

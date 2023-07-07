@@ -108,7 +108,7 @@ func cloneMap(m map[types.NodeID]struct{}) map[types.NodeID]struct{} {
 	return c
 }
 
-func pickUnique(pickCount int, orig map[types.NodeID]struct{}, dest map[types.NodeID]struct{}) {
+func pickUnique(pickCount int, orig, dest map[types.NodeID]struct{}) {
 	i := 0
 	for k := range orig { // randomly pass on clients
 		if i == pickCount { // pick exactly size
@@ -187,7 +187,7 @@ func (fo *FixedRolacle) Validate(context.Context, types.LayerID, uint32, int, ty
 }
 
 // CalcEligibility returns 1 if the miner is eligible in given layer, and 0 otherwise.
-func (fo *FixedRolacle) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, nonce types.VRFPostIndex, sig types.VrfSignature) (uint16, error) {
+func (fo *FixedRolacle) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig types.VrfSignature) (uint16, error) {
 	eligible, err := fo.eligible(ctx, layer, round, committeeSize, id, sig)
 	if eligible {
 		return 1, nil
@@ -226,7 +226,7 @@ func (fo *FixedRolacle) eligible(ctx context.Context, layer types.LayerID, round
 }
 
 // Proof generates a proof for the round. used to satisfy interface.
-func (fo *FixedRolacle) Proof(ctx context.Context, nonce types.VRFPostIndex, layer types.LayerID, round uint32) (types.VrfSignature, error) {
+func (fo *FixedRolacle) Proof(ctx context.Context, layer types.LayerID, round uint32) (types.VrfSignature, error) {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, round)
 	h := hash.New()

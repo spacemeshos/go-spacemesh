@@ -1,7 +1,9 @@
 package activation
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"testing"
 	"time"
 
@@ -195,11 +197,13 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.NoError(err)
 
 	// Verify the proof
-	err = verifying.Verify(&shared.Proof{
+	verifier, err := verifying.NewProofVerifier()
+	req.NoError(err)
+	defer verifier.Close()
+	err = verifier.Verify(&shared.Proof{
 		Nonce:   p.Nonce,
 		Indices: p.Indices,
-		K2Pow:   p.K2Pow,
-		K3Pow:   p.K3Pow,
+		Pow:     p.Pow,
 	}, &shared.ProofMetadata{
 		NodeId:          mgr.id.Bytes(),
 		CommitmentAtxId: mgr.goldenATXID.Bytes(),
@@ -208,6 +212,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 		LabelsPerUnit:   m.LabelsPerUnit,
 	},
 		config.DefaultConfig(),
+		logtest.New(t).WithName("verifying").Zap(),
 		verifying.WithLabelScryptParams(mgr.opts.Scrypt),
 	)
 	req.NoError(err)
@@ -282,6 +287,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 
 	mgr := newTestPostManager(t)
 	mgr.opts.MaxFileSize = 4096
+	mgr.opts.NumUnits = mgr.cfg.MaxNumUnits
 
 	// Create data.
 	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
@@ -389,7 +395,7 @@ func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *te
 
 	// add an atx by the same node
 	commitmentAtx := types.RandomATXID()
-	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, nil, 1, nil, nil)
+	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, nil, 1, nil)
 	atx.CommitmentATX = &commitmentAtx
 	addAtx(t, mgr.cdb, mgr.signer, atx)
 
@@ -418,14 +424,15 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 
 	opts := DefaultPostSetupOpts()
 	opts.DataDir = tb.TempDir()
-	opts.NumUnits = cfg.MaxNumUnits
 	opts.ProviderID = int(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
 	goldenATXID := types.ATXID{2, 3, 4}
 
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := NewPostSetupManager(id, cfg, logtest.New(tb), cdb, goldenATXID, DefaultPostProvingOpts())
+	provingOpts := DefaultPostProvingOpts()
+	provingOpts.Flags = config.RecommendedPowFlags()
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(tb), cdb, goldenATXID, provingOpts)
 	require.NoError(tb, err)
 
 	return &testPostManager{
@@ -434,4 +441,36 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 		signer:           sig,
 		cdb:              cdb,
 	}
+}
+
+func TestSettingPowDifficulty(t *testing.T) {
+	t.Parallel()
+	expected := bytes.Repeat([]byte{0x01, 0x02, 0x03, 0x04}, 8)
+	encoded := hex.EncodeToString(expected)
+	t.Run("parse 32B hex", func(t *testing.T) {
+		t.Parallel()
+		d := PowDifficulty{}
+		err := d.Set(encoded)
+		require.NoError(t, err)
+		require.Equal(t, expected, d[:])
+	})
+	t.Run("input too short", func(t *testing.T) {
+		t.Parallel()
+		d := PowDifficulty{}
+		require.Error(t, d.Set("123"))
+		require.Equal(t, PowDifficulty{}, d)
+	})
+	t.Run("input too long", func(t *testing.T) {
+		t.Parallel()
+		d := PowDifficulty{}
+		require.Error(t, d.Set(hex.EncodeToString(bytes.Repeat([]byte{0x01}, 33))))
+		require.Equal(t, PowDifficulty{}, d)
+	})
+	t.Run("not a hex string", func(t *testing.T) {
+		t.Parallel()
+		encoded := encoded[:len(encoded)-1] + "G"
+		d := PowDifficulty{}
+		require.Error(t, d.Set(encoded))
+		require.Equal(t, PowDifficulty{}, d)
+	})
 }

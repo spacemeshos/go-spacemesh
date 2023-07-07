@@ -47,14 +47,10 @@ func defaultPoetClientFunc(address string, cfg PoetConfig) (PoetProvingServiceCl
 }
 
 func checkRetry(ctx context.Context, resp *http.Response, err error) (bool, error) {
-	if retry, err := retryablehttp.DefaultRetryPolicy(ctx, resp, err); retry || err != nil {
-		return retry, err
-	}
-
-	if resp.StatusCode == http.StatusNotFound {
+	if resp != nil && resp.StatusCode == http.StatusNotFound {
 		return true, nil
 	}
-	return false, nil
+	return retryablehttp.DefaultRetryPolicy(ctx, resp, err)
 }
 
 type PoetClientOpts func(*HTTPPoetClient)
@@ -147,10 +143,10 @@ func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) (types.PoetServiceID
 }
 
 // Proof implements PoetProvingServiceClient.
-func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, error) {
+func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error) {
 	resBody := rpcapi.ProofResponse{}
 	if err := c.req(ctx, http.MethodGet, fmt.Sprintf("/v1/proofs/%s", roundID), nil, &resBody); err != nil {
-		return nil, fmt.Errorf("getting proof: %w", err)
+		return nil, nil, fmt.Errorf("getting proof: %w", err)
 	}
 
 	p := resBody.Proof.GetProof()
@@ -160,6 +156,10 @@ func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.Poet
 	for i, m := range pMembers {
 		copy(members[i][:], m)
 	}
+	statement, err := calcRoot(members)
+	if err != nil {
+		return nil, nil, fmt.Errorf("calculating root: %w", err)
+	}
 
 	proof := types.PoetProofMessage{
 		PoetProof: types.PoetProof{
@@ -168,20 +168,20 @@ func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.Poet
 				ProvenLeaves: p.GetProvenLeaves(),
 				ProofNodes:   p.GetProofNodes(),
 			},
-			Members:   members,
 			LeafCount: resBody.Proof.GetLeaves(),
 		},
 		PoetServiceID: resBody.Pubkey,
 		RoundID:       roundID,
+		Statement:     types.BytesToHash(statement),
 	}
 	if c.poetServiceID.ServiceID == nil {
 		c.poetServiceID.ServiceID = proof.PoetServiceID
 	}
 
-	return &proof, nil
+	return &proof, members, nil
 }
 
-func (c *HTTPPoetClient) req(ctx context.Context, method string, path string, reqBody proto.Message, resBody proto.Message) error {
+func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, resBody proto.Message) error {
 	jsonReqBody, err := protojson.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("marshaling request body: %w", err)

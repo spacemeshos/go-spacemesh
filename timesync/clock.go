@@ -166,7 +166,7 @@ func (t *NodeClock) CurrentLayer() types.LayerID {
 
 // AwaitLayer returns a channel that will be signaled when layer id layerID was ticked by the clock, or if this layer has passed
 // while sleeping. it does so by closing the returned channel.
-func (t *NodeClock) AwaitLayer(layerID types.LayerID) chan struct{} {
+func (t *NodeClock) AwaitLayer(layerID types.LayerID) <-chan struct{} {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 

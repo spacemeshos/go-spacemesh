@@ -3,8 +3,8 @@ name: Build and Release
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-  
-on:  
+
+on:
   push:
     tags:
       - '*'
@@ -16,11 +16,11 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-latest
           - os: ubuntu-latest
-          - os: windows-latest
-          - os: [self-hosted, macos, arm64]
           - os: [self-hosted, linux, arm64]
+          - os: macos-latest
+          - os: [self-hosted, macos, arm64]
+          - os: windows-latest
     steps:
       - shell: bash
         run: |
@@ -29,54 +29,45 @@ jobs:
           else
             echo "OUTNAME=${{ runner.os }}" >> $GITHUB_ENV
           fi
-
-      - name: Setup Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.19'
       
-      - if: matrix.os == 'windows-latest'
-        name: Install dependencies in windows
-        uses: crazy-max/ghaction-chocolatey@v2
-        with:
-          args: install make wget zip
-
-      - name: setup env
+      - name: Install dependencies in windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: choco install make wget zip
+      - name: Add OpenCL support - Ubuntu
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
+      - name: Override SDKROOT for macOS
+        if: ${{ contains(matrix.os, 'macos') && runner.arch == 'arm64' }}
+        run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> $GITHUB_ENV
+      - name: disable Windows Defender - Windows
+        if: ${{ matrix.os == 'windows-latest' }}
         run: |
-          echo "::set-env name=GOPATH::$(go env GOPATH)"
-          echo "::add-path::$(go env GOPATH)/bin"
-        shell: bash
-        env:
-          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+          Set-MpPreference -DisableRealtimeMonitoring $true
 
       - name: Check out Git repository
         uses: actions/checkout@v3
-
-      - name: Read version.txt
-        id: version
-        uses: juliangruber/read-file-action@v1
         with:
-          path: ./version.txt
-
-      # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
+          lfs: true
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          check-latest: true
+          go-version-file: "go.mod"
+          cache: ${{ runner.arch != 'arm64' }}
       - name: Build go-spacemesh
         shell: bash
         run: |
           make install
-          make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
-      - name: Get gpu-post release
+          make build VERSION=${{ github.ref_name }} BIN_DIR_WIN=./build
+
+      - name: Create release archive
         shell: bash
+        env:
+          OUTNAME: ${{ env.OUTNAME }}
         run: |
-          echo "OUTNAME = ${{ env.OUTNAME }} \n"
-
-          mkdir build_${{ runner.os }}
-          unzip libgpu-setup-*.zip -d build_${{ runner.os }}
-          
-          rm -f build_${{ runner.os }}/api.h
-          mv build_${{ runner.os }} $OUTNAME
-
+          mkdir $OUTNAME
           mv ./build/* $OUTNAME
-
+          rm -f $OUTNAME/post.h
           zip -r $OUTNAME.zip $OUTNAME
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v0
@@ -84,13 +75,12 @@ jobs:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
-      
       - name: Upload zip
         uses: google-github-actions/upload-cloud-storage@v0
         with:
           path: ${{ env.OUTNAME }}.zip
-          destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/
-  
+          destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
+
   release:
     runs-on: ubuntu-latest
     needs: build-and-upload
@@ -98,26 +88,20 @@ jobs:
       - name: Check out Git repository
         uses: actions/checkout@v3
 
-      - name: Read version.txt
-        id: version
-        uses: juliangruber/read-file-action@v1
-        with:
-          path: ./version.txt
-      
       - name: Create Release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v1
         id: create_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name:  ${{ github.ref }}
-          release_name: Release ${{ steps.version.outputs.content }}
+          tag_name:  ${{ github.ref_name }}
           body: |
             ## Zip Files
-            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Windows.zip
-            - macOS: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macOS.zip
-            - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macOS_ARM64.zip
-            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Linux.zip
-            - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Linux_ARM64.zip
+            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Windows.zip
+            - macOS: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/macOS.zip
+            - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/macOS_ARM64.zip
+            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux.zip
+            - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux_ARM64.zip
+          generate_release_notes: true
           draft: false
           prerelease: true

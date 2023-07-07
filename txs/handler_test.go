@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -14,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -119,8 +119,8 @@ func gossipExpectations(t *testing.T, fee uint64, hasErr, parseErr, addErr error
 		if parseErr == nil && fee != 0 {
 			req.EXPECT().Verify().Times(1).Return(verify)
 			if verify {
-				cstate.EXPECT().AddToCache(gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ context.Context, got *types.Transaction) error {
+				cstate.EXPECT().AddToCache(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, got *types.Transaction, _ time.Time) error {
 						assert.Equal(t, tx.ID, got.ID) // causing ID to be calculated
 						assert.Equal(t, tx, got)
 						return addErr
@@ -131,6 +131,14 @@ func gossipExpectations(t *testing.T, fee uint64, hasErr, parseErr, addErr error
 	return th, tx
 }
 
+func nilErr(err error) bool {
+	return err == nil
+}
+
+func isErr(err error) bool {
+	return err != nil
+}
+
 func Test_HandleGossip(t *testing.T) {
 	for _, tc := range []struct {
 		desc                     string
@@ -139,55 +147,55 @@ func Test_HandleGossip(t *testing.T) {
 		noHeader                 bool
 		hasErr, addErr, parseErr error
 		verify                   bool
-		expect                   pubsub.ValidationResult
+		expect                   func(error) bool
 	}{
 		{
 			desc:   "Success",
 			fee:    1,
 			verify: true,
-			expect: pubsub.ValidationAccept,
+			expect: nilErr,
 		},
 		{
 			desc:     "SuccessNoHeader",
 			fee:      1,
 			noHeader: true,
 			verify:   true,
-			expect:   pubsub.ValidationAccept,
+			expect:   nilErr,
 		},
 		{
 			desc:   "Dup",
 			fee:    1,
 			has:    true,
-			expect: pubsub.ValidationIgnore,
+			expect: isErr,
 		},
 		{
 			desc:   "HasFailed",
 			fee:    1,
 			hasErr: errors.New("test"),
-			expect: pubsub.ValidationIgnore,
+			expect: isErr,
 		},
 		{
 			desc:   "ParseFailed",
 			fee:    1,
 			addErr: errors.New("test"),
-			expect: pubsub.ValidationIgnore,
+			expect: isErr,
 		},
 		{
 			desc:   "VerifyFalse",
 			fee:    1,
-			expect: pubsub.ValidationIgnore,
+			expect: isErr,
 		},
 		{
 			desc:   "AddFailed",
 			fee:    1,
 			verify: true,
 			addErr: errors.New("test"),
-			expect: pubsub.ValidationIgnore,
+			expect: isErr,
 		},
 		{
 			desc:   "ZeroPrice",
 			fee:    1,
-			expect: pubsub.ValidationIgnore,
+			expect: isErr,
 		},
 	} {
 		tc := tc
@@ -196,9 +204,9 @@ func Test_HandleGossip(t *testing.T) {
 				tc.hasErr, tc.parseErr, tc.addErr,
 				tc.has, tc.verify, tc.noHeader,
 			)
-			require.Equal(t,
-				tc.expect,
-				th.HandleGossipTransaction(context.Background(), p2p.NoPeer, tx.Raw),
+
+			require.True(t,
+				tc.expect(th.HandleGossipTransaction(context.Background(), p2p.NoPeer, tx.Raw)),
 			)
 		})
 	}
@@ -219,7 +227,7 @@ func Test_HandleOwnGossip(t *testing.T) {
 	tx := newTx(t, 3, 10, 1, signer)
 
 	require.Equal(t,
-		pubsub.ValidationAccept,
+		nil,
 		th.HandleGossipTransaction(context.Background(), id, tx.Raw),
 	)
 }

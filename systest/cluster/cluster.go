@@ -28,6 +28,7 @@ import (
 var errNotInitialized = errors.New("cluster: not initialized")
 
 const (
+	initBalance      = 100000000000000000
 	defaultExtraData = "systest"
 	poetApp          = "poet"
 	bootnodeApp      = "boot"
@@ -72,12 +73,34 @@ func WithSmesherFlag(flag DeploymentFlag) Opt {
 func WithKeys(n int) Opt {
 	return func(c *Cluster) {
 		c.accounts = accounts{keys: genSigners(n)}
+		for _, key := range c.accounts.keys {
+			c.genesisBalances[key.Address().String()] = initBalance
+		}
 	}
 }
 
 func WithBootstrapperFlag(flag DeploymentFlag) Opt {
 	return func(c *Cluster) {
 		c.addBootstrapperFlag(flag)
+	}
+}
+
+func WithBootstrapEpochs(epochs []int) Opt {
+	return func(c *Cluster) {
+		c.bootstrapEpochs = epochs
+	}
+}
+
+type GenAccount struct {
+	Address types.Address
+	Balance uint64
+}
+
+func WithGenesisBalances(gaccs ...GenAccount) Opt {
+	return func(c *Cluster) {
+		for _, acc := range gaccs {
+			c.genesisBalances[acc.Address.String()] = acc.Balance
+		}
 	}
 }
 
@@ -111,7 +134,7 @@ func ReuseWait(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	return cl, nil
 }
 
-// Default deployes bootnodes, one poet and the smeshers according to the cluster size.
+// Default deploys bootnodes, one poet and the smeshers according to the cluster size.
 func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	cl := New(cctx, opts...)
 	bsize := defaultBootnodes(cctx.ClusterSize)
@@ -136,7 +159,8 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 		smesherFlags:      map[string]DeploymentFlag{},
 		poetFlags:         map[string]DeploymentFlag{},
 		bootstrapperFlags: map[string]DeploymentFlag{},
-		bootstrapEpoch:    2,
+		bootstrapEpochs:   []int{2},
+		genesisBalances:   map[string]uint64{},
 	}
 	genesis := GenesisTime(time.Now().Add(cctx.BootstrapDuration))
 	cluster.addFlag(genesis)
@@ -149,10 +173,7 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	for _, opt := range opts {
 		opt(cluster)
 	}
-	if len(cluster.keys) > 0 {
-		cluster.addFlag(Accounts(genGenesis(cluster.keys)))
-	}
-
+	cluster.addFlag(Accounts(cluster.genesisBalances))
 	return cluster
 }
 
@@ -164,6 +185,7 @@ type Cluster struct {
 	bootstrapperFlags map[string]DeploymentFlag
 
 	accounts
+	genesisBalances map[string]uint64
 
 	bootnodes     int
 	smeshers      int
@@ -171,7 +193,7 @@ type Cluster struct {
 	poets         []*NodeClient
 	bootstrappers []*NodeClient
 
-	bootstrapEpoch uint32
+	bootstrapEpochs []int
 }
 
 // GenesisID computes id from the configuration.
@@ -404,12 +426,10 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 	if err := c.persist(cctx); err != nil {
 		return err
 	}
-	flags := []DeploymentFlag{}
-	for _, flag := range c.smesherFlags {
-		flags = append(flags, flag)
-	}
-	flags = append(flags, StartSmeshing(false))
-	clients, err := deployNodes(cctx, bootnodeApp, c.bootnodes, c.bootnodes+n, flags)
+	clients, err := deployNodes(cctx, bootnodeApp, c.bootnodes, c.bootnodes+n,
+		WithFlags(maps.Values(c.smesherFlags)...),
+		WithFlags(StartSmeshing(false)),
+	)
 	if err != nil {
 		return err
 	}
@@ -422,8 +442,27 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 	return fillNetworkConfig(cctx, clients[0])
 }
 
+type SmesherDeploymentConfig struct {
+	flags []DeploymentFlag
+	keys  []ed25519.PrivateKey
+}
+
+type DeploymentOpt func(cfg *SmesherDeploymentConfig)
+
+func WithFlags(flags ...DeploymentFlag) DeploymentOpt {
+	return func(cfg *SmesherDeploymentConfig) {
+		cfg.flags = append(cfg.flags, flags...)
+	}
+}
+
+func WithSmeshers(keys []ed25519.PrivateKey) DeploymentOpt {
+	return func(cfg *SmesherDeploymentConfig) {
+		cfg.keys = keys
+	}
+}
+
 // AddSmeshers ...
-func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int) error {
+func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int, opts ...DeploymentOpt) error {
 	if err := c.resourceControl(tctx, n); err != nil {
 		return err
 	}
@@ -435,9 +474,8 @@ func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int) error {
 	if err != nil {
 		return fmt.Errorf("extracting p2p endpoints %w", err)
 	}
-	flags = append(flags, Bootnodes(endpoints...))
-	flags = append(flags, StartSmeshing(true))
-	clients, err := deployNodes(tctx, smesherApp, c.nextSmesher(), c.nextSmesher()+n, flags)
+	clients, err := deployNodes(tctx, smesherApp, c.nextSmesher(), c.nextSmesher()+n,
+		append(opts, WithFlags(flags...), WithFlags(Bootnodes(endpoints...), StartSmeshing(true)))...)
 	if err != nil {
 		return err
 	}
@@ -463,11 +501,20 @@ func (c *Cluster) AddBootstrapper(cctx *testcontext.Context, i int) error {
 		Name:  "--spacemesh-endpoint",
 		Value: fmt.Sprintf("dns:///%s:9092", c.clients[0].Name),
 	})
-	bs, err := deployBootstrapper(cctx, fmt.Sprintf("%s-%d", bootstrapperApp, i), c.bootstrapEpoch, flags...)
+	bs, err := deployBootstrapper(cctx, fmt.Sprintf("%s-%d", bootstrapperApp, i), c.bootstrapEpochs, flags...)
 	if err != nil {
 		return err
 	}
 	c.bootstrappers = append(c.bootstrappers, bs)
+	return nil
+}
+
+func (c *Cluster) DeleteBootstrappers(cctx *testcontext.Context) error {
+	for _, client := range c.bootstrappers {
+		if err := deleteServiceAndPod(cctx, client.Name); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -488,7 +535,7 @@ func (c *Cluster) DeletePoet(cctx *testcontext.Context, i int) error {
 	if poet == nil {
 		return nil
 	}
-	if err := deletePoet(cctx, poet.Name); err != nil {
+	if err := deleteServiceAndPod(cctx, poet.Name); err != nil {
 		return err
 	}
 	c.poets = append(c.poets[0:i], c.poets[i+1:]...)
@@ -538,6 +585,10 @@ func (c *Cluster) Poet(i int) *NodeClient {
 // Client returns client for i-th node, either bootnode or smesher.
 func (c *Cluster) Client(i int) *NodeClient {
 	return c.clients[i]
+}
+
+func (c *Cluster) Bootstrapper(i int) *NodeClient {
+	return c.bootstrappers[i]
 }
 
 // Wait for i-th client to be up.
@@ -650,14 +701,6 @@ func (a *accounts) Recover(ctx *testcontext.Context) error {
 	}
 	a.persisted = true
 	return nil
-}
-
-func genGenesis(signers []*signer) (rst map[string]uint64) {
-	rst = map[string]uint64{}
-	for _, sig := range signers {
-		rst[sig.Address().String()] = 100000000000000000
-	}
-	return
 }
 
 type signer struct {

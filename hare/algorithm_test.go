@@ -3,13 +3,13 @@ package hare
 import (
 	"context"
 	"errors"
-	"math/rand"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -136,9 +137,10 @@ func (mct *mockCommitTracker) BuildCertificate() *Certificate {
 
 type testBroker struct {
 	*Broker
-	mockMesh   *mocks.Mockmesh
-	mockStateQ *mocks.MockstateQuerier
-	mockSyncS  *smocks.MockSyncStateProvider
+	mockMesh      *mocks.Mockmesh
+	mockStateQ    *mocks.MockstateQuerier
+	mockSyncS     *smocks.MockSyncStateProvider
+	mockPublisher *pubsubmocks.MockPublisher
 }
 
 func buildBroker(tb testing.TB, testName string) *testBroker {
@@ -150,15 +152,16 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 	mockStateQ := mocks.NewMockstateQuerier(ctrl)
 	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
 	mockMesh := mocks.NewMockmesh(ctrl)
-	mch := make(chan *types.MalfeasanceGossip, 1)
 	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(tb, err)
+	mpub := pubsubmocks.NewMockPublisher(ctrl)
 	return &testBroker{
-		Broker: newBroker(mockMesh, edVerifier, &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
-			mch, limit, logtest.New(tb).WithName(testName)),
-		mockMesh:   mockMesh,
-		mockSyncS:  mockSyncS,
-		mockStateQ: mockStateQ,
+		Broker: newBroker(config.DefaultConfig(), mockMesh, edVerifier, &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
+			mpub, limit, logtest.New(tb).WithName(testName)),
+		mockMesh:      mockMesh,
+		mockSyncS:     mockSyncS,
+		mockStateQ:    mockStateQ,
+		mockPublisher: mpub,
 	}
 }
 
@@ -174,6 +177,44 @@ func (mev *mockEligibilityValidator) ValidateEligibilityGossip(context.Context, 
 	return atomic.LoadInt32(&mev.valid) != 0
 }
 
+// We assert that the threshold X is met as long as there is at least one
+// honest vote and the sum of honest, dishonest and known equivocator is >= X.
+func TestCountInfoMeetsTrheshold(t *testing.T) {
+	c := &CountInfo{}
+	c.IncHonest(1)
+	assert.True(t, c.Meet(1))
+	assert.False(t, c.Meet(2))
+
+	c = &CountInfo{}
+	c.IncDishonest(1)
+	assert.False(t, c.Meet(1))
+
+	c = &CountInfo{}
+	c.IncKnownEquivocator(1)
+	assert.False(t, c.Meet(1))
+
+	c = &CountInfo{}
+	c.IncKnownEquivocator(1)
+	c.IncDishonest(1)
+	assert.False(t, c.Meet(1))
+
+	c = &CountInfo{}
+	c.IncHonest(1)
+	c.IncKnownEquivocator(1)
+	assert.True(t, c.Meet(2))
+
+	c = &CountInfo{}
+	c.IncHonest(1)
+	c.IncDishonest(1)
+	assert.True(t, c.Meet(2))
+
+	c = &CountInfo{}
+	c.IncHonest(1)
+	c.IncDishonest(1)
+	c.IncKnownEquivocator(1)
+	assert.True(t, c.Meet(3))
+}
+
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
 	c := config.Config{N: 10, RoundDuration: 200 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
 	p := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
@@ -187,7 +228,6 @@ func TestConsensusProcess_TerminationLimit(t *testing.T) {
 func TestConsensusProcess_PassiveParticipant(t *testing.T) {
 	c := config.Config{N: 10, RoundDuration: 200 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
 	p := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
-	p.nonce = nil
 	p.Start()
 	require.Eventually(t, func() bool {
 		return p.getRound()/4 == uint32(1)
@@ -202,8 +242,8 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 
 	mo := mocks.NewMockRolacle(gomock.NewController(t))
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
-	mo.EXPECT().Proof(gomock.Any(), gomock.Any(), proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(2)
-	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(1), nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(2)
+	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
 	proc.oracle = mo
 	proc.value = NewSetFromValues(types.ProposalID{1}, types.ProposalID{2})
 
@@ -227,8 +267,8 @@ func TestConsensusProcess_StartAndStop(t *testing.T) {
 
 	mo := mocks.NewMockRolacle(gomock.NewController(t))
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).AnyTimes()
-	mo.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(types.EmptyVrfSignature, nil).AnyTimes()
-	mo.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(1), nil).AnyTimes()
+	mo.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return(types.EmptyVrfSignature, nil).AnyTimes()
+	mo.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).AnyTimes()
 	proc.oracle = mo
 
 	proc.value = NewSetFromValues(types.ProposalID{1}, types.ProposalID{2})
@@ -313,8 +353,8 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config, inbox 
 	edPubkey := edSigner.PublicKey()
 	nid := types.BytesToNodeID(edPubkey.Bytes())
 	oracle.Register(true, nid)
-	output := make(chan TerminationOutput, 1)
-	nonce := types.VRFPostIndex(rand.Uint64())
+	output := make(chan report, 1)
+	wc := make(chan wcReport, 1)
 
 	sq := mocks.NewMockstateQuerier(gomock.NewController(tb))
 	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
@@ -322,6 +362,7 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config, inbox 
 		inbox:  inbox,
 		mchOut: make(chan *types.MalfeasanceGossip),
 		report: output,
+		wc:     wc,
 	}
 	return newConsensusProcess(
 		context.Background(),
@@ -332,8 +373,8 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config, inbox 
 		sq,
 		edSigner,
 		edVerifier,
+		NewEligibilityTracker(cfg.N),
 		types.BytesToNodeID(edPubkey.Bytes()),
-		&nonce,
 		noopPubSub(tb),
 		comm,
 		truer{},
@@ -374,9 +415,9 @@ func TestConsensusProcess_isEligible_NotEligible(t *testing.T) {
 	mo := mocks.NewMockRolacle(ctrl)
 	proc.oracle = mo
 
-	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(1)
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
-	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(0), nil).Times(1)
+	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(0), nil).Times(1)
 	require.False(t, proc.shouldParticipate(context.Background()))
 }
 
@@ -387,9 +428,9 @@ func TestConsensusProcess_isEligible_Eligible(t *testing.T) {
 	mo := mocks.NewMockRolacle(ctrl)
 	proc.oracle = mo
 
-	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(1)
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
-	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(1), nil).Times(1)
+	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
 	require.True(t, proc.shouldParticipate(context.Background()))
 }
 
@@ -577,17 +618,6 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 		time.Second, 100*time.Millisecond, "expected proc.pending to have zero length")
 }
 
-func TestProcOutput_Id(t *testing.T) {
-	po := procReport{instanceID1, nil, false, false}
-	require.Equal(t, po.ID(), instanceID1)
-}
-
-func TestProcOutput_Set(t *testing.T) {
-	es := NewDefaultEmptySet()
-	po := procReport{instanceID1, es, false, false}
-	require.True(t, es.Equals(po.Set()))
-}
-
 func TestIterationFromCounter(t *testing.T) {
 	for i := uint32(0); i < 10; i++ {
 		require.Equal(t, i/4, inferIteration(i))
@@ -605,8 +635,8 @@ func TestConsensusProcess_beginStatusRound(t *testing.T) {
 
 	mo := mocks.NewMockRolacle(ctrl)
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
-	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(2)
-	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(1), nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(2)
+	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
 	proc.oracle = mo
 
 	s := NewDefaultEmptySet()
@@ -632,8 +662,8 @@ func TestConsensusProcess_beginProposalRound(t *testing.T) {
 
 	mo := mocks.NewMockRolacle(ctrl)
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
-	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(2)
-	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(1), nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(2)
+	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
 	proc.oracle = mo
 
 	statusTracker := newStatusTracker(logtest.New(t), statusRound, make(chan *types.MalfeasanceGossip), proc.eTracker, 1, 1)
@@ -668,16 +698,16 @@ func TestConsensusProcess_beginCommitRound(t *testing.T) {
 
 	preCommitTracker := proc.commitTracker
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
-	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(1)
-	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(0), nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(1)
+	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(0), nil).Times(1)
 	proc.beginCommitRound(context.Background())
 	require.NotEqual(t, preCommitTracker, proc.commitTracker)
 
 	mpt.isConflicting = false
 	mpt.proposedSet = NewSetFromValues(types.ProposalID{1})
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.layer).Return(true, nil).Times(1)
-	mo.EXPECT().Proof(gomock.Any(), *proc.nonce, proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(2)
-	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, *proc.nonce, gomock.Any()).Return(uint16(1), nil).Times(1)
+	mo.EXPECT().Proof(gomock.Any(), proc.layer, proc.getRound()).Return(types.EmptyVrfSignature, nil).Times(2)
+	mo.EXPECT().CalcEligibility(gomock.Any(), proc.layer, proc.getRound(), gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
 	proc.beginCommitRound(context.Background())
 	require.Equal(t, 1, network.getCount())
 }

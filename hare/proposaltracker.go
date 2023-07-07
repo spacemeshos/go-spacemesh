@@ -60,16 +60,18 @@ func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Message) {
 			InnerMsg: types.HareMetadata{
 				Layer:   pt.proposal.Layer,
 				Round:   pt.proposal.Round,
-				MsgHash: types.BytesToHash(pt.proposal.HashBytes()),
+				MsgHash: pt.proposal.signedHash,
 			},
+			SmesherID: pt.proposal.SmesherID,
 			Signature: pt.proposal.Signature,
 		}
 		this := &types.HareProofMsg{
 			InnerMsg: types.HareMetadata{
 				Layer:   msg.Layer,
 				Round:   msg.Round,
-				MsgHash: types.BytesToHash(msg.HashBytes()),
+				MsgHash: msg.signedHash,
 			},
+			SmesherID: msg.SmesherID,
 			Signature: msg.Signature,
 		}
 		if err := reportEquivocation(ctx, msg.SmesherID, prev, this, &msg.Eligibility, pt.malCh); err != nil {
@@ -113,16 +115,18 @@ func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Message) {
 				InnerMsg: types.HareMetadata{
 					Layer:   pt.proposal.Layer,
 					Round:   pt.proposal.Round,
-					MsgHash: types.BytesToHash(pt.proposal.HashBytes()),
+					MsgHash: pt.proposal.signedHash,
 				},
+				SmesherID: pt.proposal.SmesherID,
 				Signature: pt.proposal.Signature,
 			}
 			this := &types.HareProofMsg{
 				InnerMsg: types.HareMetadata{
 					Layer:   msg.Layer,
 					Round:   msg.Round,
-					MsgHash: types.BytesToHash(msg.HashBytes()),
+					MsgHash: msg.signedHash,
 				},
+				SmesherID: msg.SmesherID,
 				Signature: msg.Signature,
 			}
 			if err := reportEquivocation(ctx, msg.SmesherID, prev, this, &msg.Eligibility, pt.malCh); err != nil {

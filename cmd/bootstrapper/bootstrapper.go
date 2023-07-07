@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -52,7 +53,7 @@ func init() {
 	// options specific to one-time execution
 	cmd.PersistentFlags().BoolVar(&genBeacon, "beacon", false, "generate beacon")
 	cmd.PersistentFlags().BoolVar(&genActiveSet, "actives", false, "generate active set")
-	cmd.PersistentFlags().StringVar(&out, "out", "gs://my-bucket/spacemesh-fallback", "gs URI for upload")
+	cmd.PersistentFlags().StringVar(&out, "out", "gs://my-bucket", "gs URI for upload")
 	cmd.PersistentFlags().StringVar(&creds, "creds", "", "path to gcloud credential file")
 
 	// for systests only
@@ -77,9 +78,14 @@ var cmd = &cobra.Command{
 		if len(args) == 0 {
 			return fmt.Errorf("epoch not specfiied")
 		}
-		targetEpoch, err := strconv.Atoi(args[0])
-		if err != nil {
-			return fmt.Errorf("cannot convert %v to epoch: %w", args[0], err)
+		var targetEpochs []types.EpochID
+		epochs := strings.Split(args[0], ",")
+		for _, e := range epochs {
+			epoch, err := strconv.Atoi(e)
+			if err != nil {
+				return fmt.Errorf("cannot convert %v to epoch: %w", e, err)
+			}
+			targetEpochs = append(targetEpochs, types.EpochID(epoch))
 		}
 
 		log.JSONLog(true)
@@ -100,11 +106,14 @@ var cmd = &cobra.Command{
 			srv := NewServer(g, genFallback, port,
 				WithSrvFilesystem(afero.NewOsFs()),
 				WithSrvLogger(logger.WithName("server")),
-				WithBootstrapEpoch(types.EpochID(targetEpoch)),
+				WithBootstrapEpochs(targetEpochs),
 			)
 			return runServer(ctx, srv)
 		}
 
+		if len(targetEpochs) != 1 {
+			return fmt.Errorf("too many epochs specified")
+		}
 		// one-time execution
 		if !genBeacon && !genActiveSet {
 			return fmt.Errorf("no action specified via --beacon or --actives")
@@ -115,19 +124,19 @@ var cmd = &cobra.Command{
 		if genActiveSet && len(spacemeshEndpoint) == 0 {
 			return fmt.Errorf("missing spacemesh endpoint for active set generation")
 		}
-		bucket, path, err := parseToGsBucket(out)
+		gsBucket, gsPath, err := parseToGsBucket(out)
 		if err != nil {
 			return fmt.Errorf("parse output uri %v: %w", out, err)
 		}
-		if err = g.Generate(ctx, types.EpochID(targetEpoch), genBeacon, genActiveSet); err != nil {
+		persisted, err := g.Generate(ctx, targetEpochs[0], genBeacon, genActiveSet)
+		if err != nil {
 			return err
 		}
-		return upload(ctx, bucket, path)
+		return upload(ctx, persisted, gsBucket, gsPath)
 	},
 }
 
-func upload(ctx context.Context, bucket, path string) error {
-	filename := PersistedFilename()
+func upload(ctx context.Context, filename, gsBucket, gsPath string) error {
 	r, err := os.Open(filename)
 	if err != nil {
 		return fmt.Errorf("open generated file %v: %w", filename, err)
@@ -140,7 +149,8 @@ func upload(ctx context.Context, bucket, path string) error {
 	if err != nil {
 		return fmt.Errorf("create gs client: %w", err)
 	}
-	w := client.Bucket(bucket).Object(path).NewWriter(ctx)
+	objPath := fmt.Sprintf("%s/%s", gsPath, filepath.Base(filename))
+	w := client.Bucket(gsBucket).Object(objPath).NewWriter(ctx)
 	if _, err = io.Copy(w, r); err != nil {
 		return fmt.Errorf("copy to gs object (%v): %w", out, err)
 	}

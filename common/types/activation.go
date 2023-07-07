@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -56,24 +57,31 @@ func (t *ATXID) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, t[:])
 }
 
+func (t *ATXID) MarshalText() ([]byte, error) {
+	return util.Base64Encode(t[:]), nil
+}
+
+func (t *ATXID) UnmarshalText(buf []byte) error {
+	return util.Base64Decode(t[:], buf)
+}
+
 // EmptyATXID is a canonical empty ATXID.
 var EmptyATXID = ATXID{}
 
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
-// PoET membership proof. It includes ATX sequence number, the previous ATX's ID (for all but the first in the sequence),
-// the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
-// the first ATX in the sequence also the commitment Merkle root.
+// PoET membership proof.
 type NIPostChallenge struct {
 	PublishEpoch EpochID
 	// Sequence number counts the number of ancestors of the ATX. It sequentially increases for each ATX in the chain.
 	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against that miner.
-	Sequence       uint64
+	Sequence uint64
+	// the previous ATX's ID (for all but the first in the sequence)
 	PrevATXID      ATXID
 	PositioningATX ATXID
 
 	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
-	CommitmentATX      *ATXID
-	InitialPostIndices []byte `scale:"max=8000"` // needs to hold K2*8 bytes at most
+	CommitmentATX *ATXID
+	InitialPost   *Post
 }
 
 func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -88,17 +96,19 @@ func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if c.CommitmentATX != nil {
 		encoder.AddString("CommitmentATX", c.CommitmentATX.String())
 	}
-	encoder.AddBinary("InitialPostIndices", c.InitialPostIndices)
+	encoder.AddObject("InitialPost", c.InitialPost)
 	return nil
 }
 
 // Hash serializes the NIPostChallenge and returns its hash.
+// The serialized challenge is first prepended with a byte 0x00, and then hashed
+// for second preimage resistance of poet membership merkle tree.
 func (challenge *NIPostChallenge) Hash() Hash32 {
 	ncBytes, err := codec.Encode(challenge)
 	if err != nil {
 		log.With().Fatal("failed to encode NIPostChallenge", log.Err(err))
 	}
-	return CalcHash32(ncBytes)
+	return hash.Sum([]byte{0x00}, ncBytes)
 }
 
 // String returns a string representation of the NIPostChallenge, for logging purposes.
@@ -126,10 +136,9 @@ type InnerActivationTx struct {
 	Coinbase Address
 	NumUnits uint32
 
-	NIPost      *NIPost
-	InitialPost *Post
-	NodeID      *NodeID
-	VRFNonce    *VRFPostIndex
+	NIPost   *NIPost
+	NodeID   *NodeID
+	VRFNonce *VRFPostIndex
 
 	// the following fields are kept private and from being serialized
 	id                ATXID     // non-exported cache of the ATXID
@@ -157,6 +166,8 @@ type ActivationTx struct {
 
 	SmesherID NodeID
 	Signature EdSignature
+
+	golden bool
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
@@ -165,7 +176,6 @@ func NewActivationTx(
 	coinbase Address,
 	nipost *NIPost,
 	numUnits uint32,
-	initialPost *Post,
 	nonce *VRFPostIndex,
 ) *ActivationTx {
 	atx := &ActivationTx{
@@ -174,12 +184,22 @@ func NewActivationTx(
 			Coinbase:        coinbase,
 			NumUnits:        numUnits,
 
-			NIPost:      nipost,
-			InitialPost: initialPost,
-			VRFNonce:    nonce,
+			NIPost:   nipost,
+			VRFNonce: nonce,
 		},
 	}
 	return atx
+}
+
+// Golden returns true if atx is from a checkpoint snapshot.
+// a golden ATX is not verifiable, and is only allowed to be prev atx or positioning atx.
+func (atx *ActivationTx) Golden() bool {
+	return atx.golden
+}
+
+// SetGolden set atx to golden.
+func (atx *ActivationTx) SetGolden() {
+	atx.golden = true
 }
 
 // SignedBytes returns a signed data of the ActivationTx.
@@ -286,7 +306,7 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 	if atx.effectiveNumUnits == 0 {
 		return nil, fmt.Errorf("effective num units not set")
 	}
-	if atx.received.IsZero() {
+	if !atx.Golden() && atx.received.IsZero() {
 		return nil, fmt.Errorf("received time not set")
 	}
 	vAtx := &VerifiedActivationTx{
@@ -298,15 +318,24 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 	return vAtx, nil
 }
 
+// Merkle proof proving that a given leaf is included in the root of merkle tree.
+type MerkleProof struct {
+	// Nodes on path from leaf to root (not including leaf)
+	Nodes     []Hash32 `scale:"max=32"`
+	LeafIndex uint64
+}
+
 // NIPost is Non-Interactive Proof of Space-Time.
 // Given an id, a space parameter S, a duration D and a challenge C,
 // it can convince a verifier that (1) the prover expended S * D space-time
 // after learning the challenge C. (2) the prover did not know the NIPost until D time
 // after the prover learned C.
 type NIPost struct {
-	// Challenge is the challenge for the PoET which is
-	// constructed from fields in the activation transaction.
-	Challenge *Hash32
+	// Membership proves that the challenge for the PoET, which is
+	// constructed from fields in the activation transaction,
+	// is a member of the poet's proof.
+	// Proof.Root must match the Poet's POSW statement.
+	Membership MerkleProof
 
 	// Post is the proof that the prover data is still stored (or was recomputed) at
 	// the time he learned the challenge constructed from the PoET.
@@ -368,14 +397,7 @@ func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact64(enc, p.K2Pow)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact64(enc, p.K3Pow)
+		n, err := scale.EncodeCompact64(enc, p.Pow)
 		if err != nil {
 			return total, err
 		}
@@ -408,15 +430,7 @@ func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		p.K2Pow = field
-	}
-	{
-		field, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		p.K3Pow = field
+		p.Pow = field
 	}
 	return total, nil
 }

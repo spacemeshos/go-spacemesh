@@ -2,8 +2,10 @@ package activation
 
 import (
 	"context"
+	"io"
 	"time"
 
+	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -15,13 +17,17 @@ type AtxReceiver interface {
 	OnAtx(*types.ActivationTxHeader)
 }
 
+type PostVerifier interface {
+	io.Closer
+	Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error
+}
 type nipostValidator interface {
-	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID, expectedPostIndices []byte) error
+	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error
 	NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error
-	NIPost(nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error)
+	NIPost(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error)
 
 	NumUnits(cfg *PostConfig, numUnits uint32) error
-	Post(nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...verifying.OptionFunc) error
+	Post(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...verifying.OptionFunc) error
 	PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error
 
 	VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error
@@ -29,7 +35,7 @@ type nipostValidator interface {
 }
 
 type layerClock interface {
-	AwaitLayer(layerID types.LayerID) chan struct{}
+	AwaitLayer(layerID types.LayerID) <-chan struct{}
 	CurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
 }

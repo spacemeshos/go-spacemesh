@@ -29,6 +29,7 @@ ifeq ($(GOOS),windows)
 	platform := windows
 	export PATH := $(PATH):$(PROJ_DIR)build
 	EXE := .exe
+	CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-Bstatic -lpthread -Wl,-Bdynamic
 else
 	TEMP := /tmp
 	ifeq ($(GOOS),darwin)
@@ -49,104 +50,54 @@ else
 	endif
 endif
 
-ifneq ($(VERBOSE),)
-	$(info "OS: $(OS), HOST_OS: $(HOST_OS), GOOS: $(GOOS), GOARCH: $(GOARCH), BIN_DIR: $(BIN_DIR), platform: $(platform)")
-endif
-
-GPU_SETUP_REV = 0.1.29
-GPU_SETUP_ZIP = libgpu-setup-$(platform)-$(GPU_SETUP_REV).zip
-GPU_SETUP_URL_ZIP = https://github.com/spacemeshos/gpu-post/releases/download/v$(GPU_SETUP_REV)/$(GPU_SETUP_ZIP)
-ifeq ($(platform), windows)
-	GPU_SETUP_LIBS = gpu-setup.dll gpu-setup.lib libgpu-setup.a api.h
-else
-	ifeq ($(platform), $(filter $(platform), macos macos-m1))
-		GPU_SETUP_LIBS = libgpu-setup.dylib libMoltenVK.dylib libvulkan.1.dylib MoltenVK_icd.json api.h
-	else
-		GPU_SETUP_LIBS = libgpu-setup.so api.h
-	endif
-endif
-
-BINDIR_GPU_SETUP_LIBS = $(foreach X,$(GPU_SETUP_LIBS),$(BIN_DIR)$(X))
-$(BINDIR_GPU_SETUP_LIBS): $(PROJ_DIR)$(GPU_SETUP_ZIP)
-	mkdir -p $(dir $@)
-	unzip -o $(PROJ_DIR)$(GPU_SETUP_ZIP) -d $(dir $@) $(notdir $@)
-	touch $@
-
-$(PROJ_DIR)$(GPU_SETUP_ZIP):
-	curl -L $(GPU_SETUP_URL_ZIP) -o $(PROJ_DIR)$(GPU_SETUP_ZIP)
-
-get-gpu-setup: $(PROJ_DIR)$(GPU_SETUP_ZIP) $(BINDIR_GPU_SETUP_LIBS)
-.PHONY: get-gpu-setup
-
-POSTRS_SETUP_REV = 0.1.8
+POSTRS_SETUP_REV = 0.3.0
 POSTRS_SETUP_ZIP = libpost-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SETUP_URL_ZIP ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SETUP_ZIP)
+POSTRS_PROFILER_ZIP = profiler-$(platform)-v$(POSTRS_SETUP_REV).zip
+POSTRS_PROFILER_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_PROFILER_ZIP)
+
 ifeq ($(platform), windows)
-	POSTRS_SETUP_LIBS = prover.h post.dll
+	POSTRS_SETUP_LIBS = post.h post.dll
+	POSTRS_PROFILER_BIN = profiler.exe
 else
+	POSTRS_PROFILER_BIN = profiler
 	ifeq ($(platform), $(filter $(platform), macos macos-m1))
-		POSTRS_SETUP_LIBS = prover.h libpost.dylib
+		POSTRS_SETUP_LIBS = post.h libpost.dylib
 	else
-		POSTRS_SETUP_LIBS = prover.h libpost.so
+		POSTRS_SETUP_LIBS = post.h libpost.so
 	endif
 endif
 
 BINDIR_POSTRS_SETUP_LIBS = $(foreach X,$(POSTRS_SETUP_LIBS),$(BIN_DIR)$(X))
 $(BINDIR_POSTRS_SETUP_LIBS): $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
 	mkdir -p $(dir $@)
-	unzip -o -j $(PROJ_DIR)$(POSTRS_SETUP_ZIP) -d $(dir $@) "**/$(notdir $@)"
+	unzip -o -j $(PROJ_DIR)$(POSTRS_SETUP_ZIP) -d $(dir $@) $(notdir $@)
 	touch $@
 
 $(PROJ_DIR)$(POSTRS_SETUP_ZIP):
 	curl -L $(POSTRS_SETUP_URL_ZIP) -o $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
 
+$(BIN_DIR)$(POSTRS_PROFILER_BIN):
+	curl -L $(POSTRS_PROFILER_URL) -o $(PROJ_DIR)$(POSTRS_PROFILER_ZIP)
+	unzip -o -j $(PROJ_DIR)$(POSTRS_PROFILER_ZIP) -d $(BIN_DIR)
+
 get-postrs-lib: $(PROJ_DIR)$(POSTRS_SETUP_ZIP) $(BINDIR_POSTRS_SETUP_LIBS)
+get-postrs-profiler: $(BIN_DIR)$(POSTRS_PROFILER_BIN)
 
-SUBDIRS_LVL1 := $(foreach X,$(wildcard $(dir $(PROJ_DIR))*/.), $(lastword $(subst /, ,$(dir $(X)))))
-SUBDIRS_ONLY := $(sort \
-	$(foreach X,$(SUBDIRS_LVL1),\
-		$(foreach Y, $(wildcard $(X)/*_test.go), test-$(X)) ))
-SUBDIRS_ALL := $(sort \
-	$(foreach X,$(SUBDIRS_LVL1),\
-		$(foreach Y, $(wildcard $(X)/*/*_test.go), test-$(X)-all ) \
-		$(foreach Y, $(wildcard $(X)/*_test.go), test-$(X)-all ) ))
-SUBDIRS_LVL2 := $(sort \
-	$(foreach X,$(SUBDIRS_LVL1),\
-		$(foreach Y, $(wildcard $(X)/*/*_test.go), test-$(X)-$(lastword $(subst /, ,$(dir $(Y))) ))))
-
-# defines test-* targets from subdirs level 1 and 2
-$(SUBDIRS_ONLY): get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v ./$(@:test-%=%)
-$(SUBDIRS_LVL2): get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v ./$(subst -,/,$(@:test-%=%))/...
-$(SUBDIRS_ALL): get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v ./$(@:test-%-all=%)/...
-
-print-test-targets:
-	@for i in test-all test-tidy test-fmt \
-		$(sort \
-			$(SUBDIRS_LVL2) \
-			$(foreach X, $(SUBDIRS_ALL), $(if $(filter $(SUBDIRS_ONLY),$(X:%-all=%)), \
-				$(X:%-all=%)[-all],\
-				$(X)))); \
-	do echo $$i; \
-	done
-.PHONY: $(SUBDIRS_ALL) $(SUBDIRS_LVL2) $(SUBDIRS_ONLY) print-test-targets
-
-go-env: get-gpu-setup
+go-env: get-postrs-lib
 	go env -w CGO_CFLAGS="$(CGO_CFLAGS)"
 	go env -w CGO_LDFLAGS="$(CGO_LDFLAGS)"
 .PHONY: go-env
 
-go-env-test: get-gpu-setup
+go-env-test: get-postrs-lib
 	go env -w CGO_CFLAGS="$(CGO_CFLAGS)"
 	go env -w CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"
 .PHONY: go-env-test
 
-print-env: get-gpu-setup
+print-env: get-postrs-lib
 	@echo CGO_CFLAGS="\"$(CGO_CFLAGS)\"" CGO_LDFLAGS="\"$(CGO_LDFLAGS)\""
 .PHONY: print-env
 
-print-test-env: get-gpu-setup
+print-test-env: get-postrs-lib
 	@echo CGO_CFLAGS="\"$(CGO_CFLAGS)\"" CGO_LDFLAGS="\"$(CGO_TEST_LDFLAGS)\""
 .PHONY: print-test-env

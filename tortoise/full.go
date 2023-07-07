@@ -3,8 +3,9 @@ package tortoise
 import (
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 func newFullTortoise(config Config, state *state) *full {
@@ -29,7 +30,7 @@ type full struct {
 	delayed map[types.LayerID][]*ballotInfo
 }
 
-func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
+func (f *full) countBallot(logger *zap.Logger, ballot *ballotInfo) {
 	start := time.Now()
 	if f.shouldBeDelayed(logger, ballot) {
 		return
@@ -37,10 +38,6 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 	if ballot.malicious {
 		return
 	}
-	logger.With().Debug("counted votes from ballot",
-		log.Stringer("id", ballot.id),
-		log.Uint32("lid", ballot.layer.Uint32()),
-	)
 	for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
 		if !lvote.lid.After(f.evicted) {
 			break
@@ -54,7 +51,8 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 			if block.height > ballot.reference.height {
 				continue
 			}
-			switch lvote.getVote(block) {
+			vote := lvote.getVote(block)
+			switch vote {
 			case support:
 				empty = false
 				block.margin = block.margin.Add(ballot.weight)
@@ -92,7 +90,7 @@ func (f *full) countForLateBlock(block *blockInfo) {
 	lateBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
-func (f *full) countDelayed(logger log.Log, lid types.LayerID) {
+func (f *full) countDelayed(logger *zap.Logger, lid types.LayerID) {
 	delayed, exist := f.delayed[lid]
 	if !exist {
 		return
@@ -100,11 +98,11 @@ func (f *full) countDelayed(logger log.Log, lid types.LayerID) {
 	delete(f.delayed, lid)
 	for _, ballot := range delayed {
 		delayedBallots.Dec()
-		f.countBallot(logger.WithFields(log.Bool("delayed", true)), ballot)
+		f.countBallot(logger, ballot)
 	}
 }
 
-func (f *full) countVotes(logger log.Log) {
+func (f *full) countVotes(logger *zap.Logger) {
 	for lid := f.counted.Add(1); !lid.After(f.processed); lid = lid.Add(1) {
 		for _, ballot := range f.ballots[lid] {
 			f.countBallot(logger, ballot)
@@ -113,32 +111,32 @@ func (f *full) countVotes(logger log.Log) {
 	f.counted = f.processed
 }
 
-func (f *full) verify(logger log.Log, lid types.LayerID) bool {
+func (f *full) verify(logger *zap.Logger, lid types.LayerID) (bool, bool) {
 	threshold := f.globalThreshold(f.Config, lid)
 	layer := f.state.layer(lid)
 	empty := crossesThreshold(layer.empty, threshold) == support
 
-	logger = logger.WithFields(
-		log.String("verifier", "full"),
-		log.Stringer("counted layer", f.counted),
-		log.Stringer("candidate layer", lid),
-		log.Stringer("local threshold", f.localThreshold),
-		log.Stringer("global threshold", threshold),
-		log.Stringer("empty weight", layer.empty),
-		log.Bool("is empty", empty),
-	)
 	if len(layer.blocks) == 0 {
 		if empty {
-			logger.With().Debug("candidate layer is empty")
+			logger.Debug("candidate layer is empty",
+				zap.Uint32("candidate layer", lid.Uint32()),
+				zap.Float64("global threshold", threshold.Float()),
+				zap.Float64("empty weight", layer.empty.Float()),
+			)
 		} else {
-			logger.With().Debug("margin is too low to terminate layer as empty",
-				lid,
-				log.Stringer("margin", layer.empty),
+			logger.Debug("margin is too low to terminate layer as empty",
+				zap.Uint32("candidate layer", lid.Uint32()),
+				zap.Float64("global threshold", threshold.Float()),
+				zap.Float64("empty weight", layer.empty.Float()),
 			)
 		}
-		return empty
+		return empty, false
 	}
-	return verifyLayer(
+	logger.Debug("global treshold",
+		zap.Uint32("target", lid.Uint32()),
+		zap.Float64("threshold", threshold.Float()),
+	)
+	rst, changes := verifyLayer(
 		logger,
 		layer.blocks,
 		func(block *blockInfo) sign {
@@ -149,9 +147,22 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 			return decision
 		},
 	)
+	if changes {
+		logger.Info("candidate layer is verified",
+			zapBlocks(layer.blocks),
+			zap.String("verifier", "full"),
+			zap.Uint32("counted layer", f.counted.Uint32()),
+			zap.Uint32("candidate layer", lid.Uint32()),
+			zap.Float64("local threshold", f.localThreshold.Float()),
+			zap.Float64("global threshold", threshold.Float()),
+			zap.Float64("empty weight", layer.empty.Float()),
+			zap.Bool("is empty", empty),
+		)
+	}
+	return rst, changes
 }
 
-func (f *full) shouldBeDelayed(logger log.Log, ballot *ballotInfo) bool {
+func (f *full) shouldBeDelayed(logger *zap.Logger, ballot *ballotInfo) bool {
 	if !ballot.conditions.badBeacon {
 		return false
 	}
@@ -159,10 +170,10 @@ func (f *full) shouldBeDelayed(logger log.Log, ballot *ballotInfo) bool {
 	if !delay.After(f.last) {
 		return false
 	}
-	logger.With().Debug("ballot is delayed",
-		log.Stringer("id", ballot.id),
-		log.Uint32("ballot lid", ballot.layer.Uint32()),
-		log.Uint32("counted at", delay.Uint32()),
+	logger.Debug("ballot is delayed",
+		zap.Stringer("id", ballot.id),
+		zap.Uint32("ballot lid", ballot.layer.Uint32()),
+		zap.Uint32("counted at", delay.Uint32()),
 	)
 	delayedBallots.Inc()
 	f.delayed[delay] = append(f.delayed[delay], ballot)

@@ -24,6 +24,7 @@ temp.js
 /go-hare
 /cp.out
 /cover-all.out
+/trace
 cover.out
 coverage.html
 gcloud.json

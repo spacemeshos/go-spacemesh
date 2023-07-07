@@ -44,7 +44,7 @@ func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error)
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.InitialPostIndices, 8000)
+		n, err := scale.EncodeOption(enc, t.InitialPost)
 		if err != nil {
 			return total, err
 		}
@@ -93,12 +93,12 @@ func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error)
 		t.CommitmentATX = field
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 8000)
+		field, n, err := scale.DecodeOption[Post](dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.InitialPostIndices = field
+		t.InitialPost = field
 	}
 	return total, nil
 }
@@ -127,13 +127,6 @@ func (t *InnerActivationTx) EncodeScale(enc *scale.Encoder) (total int, err erro
 	}
 	{
 		n, err := scale.EncodeOption(enc, t.NIPost)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeOption(enc, t.InitialPost)
 		if err != nil {
 			return total, err
 		}
@@ -186,14 +179,6 @@ func (t *InnerActivationTx) DecodeScale(dec *scale.Decoder) (total int, err erro
 		}
 		total += n
 		t.NIPost = field
-	}
-	{
-		field, n, err := scale.DecodeOption[Post](dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.InitialPost = field
 	}
 	{
 		field, n, err := scale.DecodeOption[NodeID](dec)
@@ -301,9 +286,47 @@ func (t *ActivationTx) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	return total, nil
 }
 
+func (t *MerkleProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Nodes, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact64(enc, uint64(t.LeafIndex))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *MerkleProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[Hash32](dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Nodes = field
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.LeafIndex = uint64(field)
+	}
+	return total, nil
+}
+
 func (t *NIPost) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeOption(enc, t.Challenge)
+		n, err := t.Membership.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -328,12 +351,11 @@ func (t *NIPost) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *NIPost) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeOption[Hash32](dec)
+		n, err := t.Membership.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Challenge = field
 	}
 	{
 		field, n, err := scale.DecodeOption[Post](dec)

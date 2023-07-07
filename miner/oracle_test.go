@@ -89,7 +89,7 @@ func genBallotWithEligibility(
 	return ballot
 }
 
-func createTestOracle(tb testing.TB, layerSize, layersPerEpoch uint32) *testOracle {
+func createTestOracle(tb testing.TB, layerSize, layersPerEpoch uint32, minActiveSetWeight uint64) *testOracle {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
 	lg := logtest.New(tb)
@@ -97,7 +97,7 @@ func createTestOracle(tb testing.TB, layerSize, layersPerEpoch uint32) *testOrac
 	nodeID, edSigner, vrfSigner := generateNodeIDAndSigner(tb)
 
 	return &testOracle{
-		Oracle:    newMinerOracle(layerSize, layersPerEpoch, cdb, vrfSigner, nodeID, lg),
+		Oracle:    newMinerOracle(layerSize, layersPerEpoch, minActiveSetWeight, cdb, vrfSigner, nodeID, lg),
 		nodeID:    nodeID,
 		edSigner:  edSigner,
 		vrfSigner: vrfSigner,
@@ -142,8 +142,8 @@ func TestMinerOracle(t *testing.T) {
 	testMinerOracleAndProposalValidator(t, 2, 2)
 }
 
-func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersPerEpoch uint32) {
-	o := createTestOracle(t, layerSize, layersPerEpoch)
+func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch uint32) {
+	o := createTestOracle(t, layerSize, layersPerEpoch, 0)
 
 	ctrl := gomock.NewController(t)
 	mbc := mocks.NewMockBeaconCollector(ctrl)
@@ -153,7 +153,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 	nonceFetcher := proposals.NewMocknonceFetcher(ctrl)
 	nonce := types.VRFPostIndex(rand.Uint64())
 
-	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"), vrfVerifier,
+	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, 0, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"), vrfVerifier,
 		proposals.WithNonceFetcher(nonceFetcher),
 	)
 
@@ -195,7 +195,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 func TestOracle_OwnATXNotFound(t *testing.T) {
 	avgLayerSize := uint32(10)
 	layersPerEpoch := uint32(20)
-	o := createTestOracle(t, avgLayerSize, layersPerEpoch)
+	o := createTestOracle(t, avgLayerSize, layersPerEpoch, 0)
 	lid := types.LayerID(layersPerEpoch * 3)
 	ee, err := o.GetProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
 	require.ErrorIs(t, err, errMinerHasNoATXInPreviousEpoch)
@@ -205,7 +205,7 @@ func TestOracle_OwnATXNotFound(t *testing.T) {
 func TestOracle_EligibilityCached(t *testing.T) {
 	avgLayerSize := uint32(10)
 	layersPerEpoch := uint32(20)
-	o := createTestOracle(t, avgLayerSize, layersPerEpoch)
+	o := createTestOracle(t, avgLayerSize, layersPerEpoch, 0)
 	lid := types.LayerID(layersPerEpoch * 3)
 	epochInfo := genATXForTargetEpochs(t, o.cdb, lid.GetEpoch(), lid.GetEpoch()+1, o.edSigner, layersPerEpoch)
 	info, ok := epochInfo[lid.GetEpoch()]
@@ -218,4 +218,28 @@ func TestOracle_EligibilityCached(t *testing.T) {
 	ee2, err := o.GetProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
 	require.NoError(t, err)
 	require.Equal(t, ee1, ee2)
+}
+
+func TestOracle_MinimalActiveSetWeight(t *testing.T) {
+	avgLayerSize := uint32(10)
+	layersPerEpoch := uint32(20)
+
+	o := createTestOracle(t, avgLayerSize, layersPerEpoch, 0)
+	lid := types.LayerID(layersPerEpoch * 3)
+	epochInfo := genATXForTargetEpochs(t, o.cdb, lid.GetEpoch(), lid.GetEpoch()+1, o.edSigner, layersPerEpoch)
+
+	info, ok := epochInfo[lid.GetEpoch()]
+	require.True(t, ok)
+
+	ee1, err := o.GetProposalEligibility(lid, info.beacon, types.VRFPostIndex(1))
+	require.NoError(t, err)
+	require.NotNil(t, ee1)
+
+	o.minActiveSetWeight = 100000
+	o.cache.Epoch = 0
+	ee2, err := o.GetProposalEligibility(lid, info.beacon, types.VRFPostIndex(1))
+	require.NoError(t, err)
+	require.NotNil(t, ee1)
+
+	require.Less(t, ee2.Slots, ee1.Slots)
 }

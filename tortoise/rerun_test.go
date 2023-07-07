@@ -13,33 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
 
-func TestRecoverState(t *testing.T) {
-	ctx := context.Background()
-	const size = 10
-	s := sim.New(sim.WithLayerSize(size))
-	s.Setup()
-
-	cfg := defaultTestConfig()
-	cfg.LayerSize = size
-	tortoise := tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
-	var last, verified types.LayerID
-	for i := 0; i < 50; i++ {
-		last = s.Next()
-		tortoise.TallyVotes(ctx, last)
-		verified = tortoise.LatestComplete()
-	}
-	require.Equal(t, last.Sub(1), verified)
-
-	tortoise2 := tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
-	tortoise2.TallyVotes(ctx, last)
-	verified = tortoise2.LatestComplete()
-	require.Equal(t, last.Sub(1), verified)
-	tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
-	tortoise2.TallyVotes(ctx, last)
-	verified = tortoise2.LatestComplete()
-	require.Equal(t, last.Sub(1), verified)
-}
-
 func TestRerunRevertNonverifiedLayers(t *testing.T) {
 	ctx := context.Background()
 	const (
@@ -102,13 +75,13 @@ func testWindowCounting(tb testing.TB, maliciousLayers, windowSize int, expected
 		sim.WithSequence(10, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
 	) {
 		tortoise.TallyVotes(ctx, last)
+		processBlockUpdates(tb, tortoise, s.GetState(0).DB)
 	}
 	require.Equal(tb, last.Sub(1), tortoise.LatestComplete())
 
 	blks, err := blocks.IDsInLayer(s.GetState(0).DB, misverified)
 	require.NoError(tb, err)
 
-	processBlockUpdates(tb, tortoise, s.GetState(0).DB)
 	for _, blk := range blks {
 		validity, err := blocks.IsValid(s.GetState(0).DB, blk)
 		require.NoError(tb, err, "layer %s", misverified)

@@ -337,6 +337,21 @@ func (mr *MockatxProviderMockRecorder) GetFullAtx(id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFullAtx", reflect.TypeOf((*MockatxProvider)(nil).GetFullAtx), id)
 }
 
+// MaxHeightAtx mocks base method.
+func (m *MockatxProvider) MaxHeightAtx() (types.ATXID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MaxHeightAtx")
+	ret0, _ := ret[0].(types.ATXID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MaxHeightAtx indicates an expected call of MaxHeightAtx.
+func (mr *MockatxProviderMockRecorder) MaxHeightAtx() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxHeightAtx", reflect.TypeOf((*MockatxProvider)(nil).MaxHeightAtx))
+}
+
 // MockpostSetupProvider is a mock of postSetupProvider interface.
 type MockpostSetupProvider struct {
 	ctrl     *gomock.Controller

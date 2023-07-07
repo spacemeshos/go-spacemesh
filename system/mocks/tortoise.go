@@ -50,6 +50,18 @@ func (mr *MockTortoiseMockRecorder) LatestComplete() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestComplete", reflect.TypeOf((*MockTortoise)(nil).LatestComplete))
 }
 
+// OnAtx mocks base method.
+func (m *MockTortoise) OnAtx(arg0 *types.AtxTortoiseData) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "OnAtx", arg0)
+}
+
+// OnAtx indicates an expected call of OnAtx.
+func (mr *MockTortoiseMockRecorder) OnAtx(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnAtx", reflect.TypeOf((*MockTortoise)(nil).OnAtx), arg0)
+}
+
 // OnBlock mocks base method.
 func (m *MockTortoise) OnBlock(arg0 types.BlockHeader) {
 	m.ctrl.T.Helper()
@@ -72,6 +84,18 @@ func (m *MockTortoise) OnHareOutput(arg0 types.LayerID, arg1 types.BlockID) {
 func (mr *MockTortoiseMockRecorder) OnHareOutput(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnHareOutput", reflect.TypeOf((*MockTortoise)(nil).OnHareOutput), arg0, arg1)
+}
+
+// OnMalfeasance mocks base method.
+func (m *MockTortoise) OnMalfeasance(arg0 types.NodeID) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "OnMalfeasance", arg0)
+}
+
+// OnMalfeasance indicates an expected call of OnMalfeasance.
+func (mr *MockTortoiseMockRecorder) OnMalfeasance(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnMalfeasance", reflect.TypeOf((*MockTortoise)(nil).OnMalfeasance), arg0)
 }
 
 // OnWeakCoin mocks base method.
@@ -114,10 +138,10 @@ func (mr *MockTortoiseMockRecorder) TallyVotes(arg0, arg1 interface{}) *gomock.C
 }
 
 // Updates mocks base method.
-func (m *MockTortoise) Updates() map[types.LayerID]map[types.BlockID]bool {
+func (m *MockTortoise) Updates() []result.Layer {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Updates")
-	ret0, _ := ret[0].(map[types.LayerID]map[types.BlockID]bool)
+	ret0, _ := ret[0].([]result.Layer)
 	return ret0
 }
 

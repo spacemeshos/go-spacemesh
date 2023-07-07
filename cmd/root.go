@@ -6,10 +6,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/spacemeshos/go-spacemesh/cmd/flags"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
+	"github.com/spacemeshos/go-spacemesh/node/flags"
 )
 
 var cfg = config.DefaultConfig()
@@ -22,6 +22,12 @@ func ResetConfig() {
 func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringP("preset", "p", "",
 		fmt.Sprintf("preset overwrites default values of the config. options %+s", presets.Options()))
+
+	/** ======================== Checkpoint Flags ========================== **/
+	cmd.PersistentFlags().StringVar(&cfg.Recovery.Uri,
+		"recovery-uri", cfg.Recovery.Uri, "reset the node state based on the supplied checkpoint file")
+	cmd.PersistentFlags().Uint32Var(&cfg.Recovery.Restore,
+		"recovery-layer", cfg.Recovery.Restore, "restart the mesh with the checkpoint file at this layer")
 
 	/** ======================== BaseConfig Flags ========================== **/
 	cmd.PersistentFlags().StringVarP(&cfg.BaseConfig.ConfigFile,
@@ -62,8 +68,6 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&cfg.ProfilerName, "profiler-name",
 		cfg.ProfilerName, "the name to use when sending profiles")
 
-	cmd.PersistentFlags().IntVar(&cfg.SyncRequestTimeout, "sync-request-timeout",
-		cfg.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")
 	cmd.PersistentFlags().IntVar(&cfg.TxsPerProposal, "txs-per-proposal",
 		cfg.TxsPerProposal, "the number of transactions to select per proposal")
 	cmd.PersistentFlags().Uint64Var(&cfg.BlockGasLimit, "block-gas-limit",
@@ -76,8 +80,9 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().IntVar(&cfg.DatabaseConnections, "db-connections",
 		cfg.DatabaseConnections, "configure number of active connections to enable parallel read requests")
-	cmd.PersistentFlags().BoolVar(&cfg.P2P.Flood, "db-latency-metering",
+	cmd.PersistentFlags().BoolVar(&cfg.DatabaseLatencyMetering, "db-latency-metering",
 		cfg.DatabaseLatencyMetering, "if enabled collect latency histogram for every database query")
+
 	/** ======================== P2P Flags ========================== **/
 
 	cmd.PersistentFlags().StringVar(&cfg.P2P.Listen, "listen",
@@ -86,6 +91,21 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.P2P.Flood, "flood created messages to all peers")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.DisableNatPort, "disable-natport",
 		cfg.P2P.DisableNatPort, "disable nat port-mapping (if enabled upnp protocol is used to negotiate external port with router)")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.DisableReusePort,
+		"disable-reuseport",
+		cfg.P2P.DisableReusePort,
+		"disables SO_REUSEPORT for tcp sockets. Try disabling this if your node can't reach bootnodes in the network",
+	)
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.Metrics,
+		"p2p-metrics",
+		cfg.P2P.Metrics,
+		"enable extended metrics collection from libp2p components",
+	)
+	cmd.PersistentFlags().IntVar(&cfg.P2P.AcceptQueue,
+		"p2p-accept-queue",
+		cfg.P2P.AcceptQueue,
+		"number of connections that are fully setup before accepting new connections",
+	)
 	cmd.PersistentFlags().IntVar(&cfg.P2P.LowPeers, "low-peers",
 		cfg.P2P.LowPeers, "low watermark for the number of connections")
 	cmd.PersistentFlags().IntVar(&cfg.P2P.HighPeers, "high-peers",
@@ -188,6 +208,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.Tortoise.MaxExceptions, "number of exceptions tolerated for a base ballot")
 	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.BadBeaconVoteDelayLayers, "tortoise-delay-layers",
 		cfg.Tortoise.BadBeaconVoteDelayLayers, "number of layers to ignore a ballot with a different beacon")
+	cmd.PersistentFlags().BoolVar(&cfg.Tortoise.EnableTracer, "tortoise-enable-tracer",
+		cfg.Tortoise.EnableTracer, "recovrd every tortoise input/output into the loggin output")
 
 	// TODO(moshababo): add usage desc
 	cmd.PersistentFlags().Uint64Var(&cfg.POST.LabelsPerUnit, "post-labels-per-unit",
@@ -202,10 +224,7 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.POST.K2, "number of labels to prove")
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.K3, "post-k3",
 		cfg.POST.K3, "subset of labels to verify in a proof")
-	cmd.PersistentFlags().Uint64Var(&cfg.POST.K2PowDifficulty, "post-k2pow-difficulty",
-		cfg.POST.K2PowDifficulty, "difficulty of K2 proof of work")
-	cmd.PersistentFlags().Uint64Var(&cfg.POST.K3PowDifficulty, "post-k3pow-difficulty",
-		cfg.POST.K3PowDifficulty, "difficulty of K3 proof of work")
+	cmd.PersistentFlags().VarP(&cfg.POST.PowDifficulty, "post-pow-difficulty", "", "difficulty of randomx-based proof of work")
 
 	/**======================== Smeshing Flags ========================== **/
 
@@ -245,6 +264,11 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.Bootstrap.URL, "the url to query bootstrap data update")
 	cmd.PersistentFlags().StringVar(&cfg.Bootstrap.Version, "bootstrap-version",
 		cfg.Bootstrap.Version, "the update version of the bootstrap data")
+
+	/**======================== testing related flags ========================== **/
+	cmd.PersistentFlags().StringVar(&cfg.TestConfig.SmesherKey, "testing-smesher-key",
+		"", "import private smesher key for testing",
+	)
 
 	// Bind Flags to config
 	err := viper.BindPFlags(cmd.PersistentFlags())

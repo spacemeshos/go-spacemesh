@@ -24,7 +24,7 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)))
 	hashes := types.ATXIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleAtxData)
+	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage)
 }
 
 type dataReceiver func(context.Context, p2p.Peer, []byte) error
@@ -48,7 +48,7 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 				return ctx.Err()
 			case <-p.completed:
 				if p.err != nil {
-					return fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h, p.err)
+					return fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h.String(), p.err)
 				}
 				return nil
 			}
@@ -65,7 +65,7 @@ func (f *Fetch) GetMalfeasanceProofs(ctx context.Context, ids []types.NodeID) er
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting malfeasance proofs from peer", log.Int("num_proofs", len(ids)))
 	hashes := types.NodeIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.validators.malfeasance.HandleSyncedMalfeasanceProof)
+	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.validators.malfeasance.HandleMessage)
 }
 
 // GetBallots gets data for the specified BallotIDs and validates them.
@@ -75,7 +75,7 @@ func (f *Fetch) GetBallots(ctx context.Context, ids []types.BallotID) error {
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting ballots from peer", log.Int("num_ballots", len(ids)))
 	hashes := types.BallotIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.BallotDB, f.validators.ballot.HandleSyncedBallot)
+	return f.getHashes(ctx, hashes, datastore.BallotDB, f.validators.ballot.HandleMessage)
 }
 
 // GetProposals gets the data for given proposal IDs from peers.
@@ -85,7 +85,7 @@ func (f *Fetch) GetProposals(ctx context.Context, ids []types.ProposalID) error 
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting proposals from peer", log.Int("num_proposals", len(ids)))
 	hashes := types.ProposalIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.ProposalDB, f.validators.proposal.HandleSyncedProposal)
+	return f.getHashes(ctx, hashes, datastore.ProposalDB, f.validators.proposal.HandleMessage)
 }
 
 // GetBlocks gets the data for given block IDs from peers.
@@ -95,18 +95,18 @@ func (f *Fetch) GetBlocks(ctx context.Context, ids []types.BlockID) error {
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting blocks from peer", log.Int("num_blocks", len(ids)))
 	hashes := types.BlockIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.BlockDB, f.validators.block.HandleSyncedBlock)
+	return f.getHashes(ctx, hashes, datastore.BlockDB, f.validators.block.HandleMessage)
 }
 
 // GetProposalTxs fetches the txs provided as IDs and validates them, returns an error if one TX failed to be fetched.
 func (f *Fetch) GetProposalTxs(ctx context.Context, ids []types.TransactionID) error {
-	return f.getTxs(ctx, ids, f.validators.tx.HandleProposalTransaction)
+	return f.getTxs(ctx, ids, f.validators.txProposal.HandleMessage)
 }
 
 // GetBlockTxs fetches the txs provided as IDs and saves them, they will be validated
 // before block is applied.
 func (f *Fetch) GetBlockTxs(ctx context.Context, ids []types.TransactionID) error {
-	return f.getTxs(ctx, ids, f.validators.tx.HandleBlockTransaction)
+	return f.getTxs(ctx, ids, f.validators.txBlock.HandleMessage)
 }
 
 func (f *Fetch) getTxs(ctx context.Context, ids []types.TransactionID, receiver dataReceiver) error {
@@ -121,7 +121,7 @@ func (f *Fetch) getTxs(ctx context.Context, ids []types.TransactionID, receiver 
 // GetPoetProof gets poet proof from remote peer.
 func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	f.logger.WithContext(ctx).With().Debug("getting poet proof", log.Stringer("hash", id))
-	pm, err := f.getHash(ctx, id, datastore.POETDB, f.validators.poet.ValidateAndStoreMsg)
+	pm, err := f.getHash(ctx, id, datastore.POETDB, f.validators.poet.HandleMessage)
 	if err != nil {
 		return err
 	}
@@ -228,29 +228,11 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 	}
 }
 
-func iterateLayers(req *MeshHashRequest) ([]types.LayerID, error) {
-	var diff uint32
-	if req.To.After(req.From) {
-		diff = req.To.Difference(req.From)
-	}
-	if diff == 0 || diff > req.Delta*req.Steps || diff < req.Delta*(req.Steps-1) {
-		return nil, fmt.Errorf("%w: %v", errBadRequest, req)
-	}
-	lids := make([]types.LayerID, req.Steps+1)
-	lids[0] = req.From
-	for i := uint32(1); i <= req.Steps; i++ {
-		lids[i] = lids[i-1].Add(req.Delta)
-	}
-	if lids[req.Steps].After(req.To) {
-		lids[req.Steps] = req.To
-	}
-	return lids, nil
-}
-
 func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHashRequest) (*MeshHashes, error) {
 	f.logger.WithContext(ctx).With().Debug("requesting mesh hashes from peer",
 		log.Stringer("peer", peer),
-		log.Object("req", req))
+		log.Object("req", req),
+	)
 
 	var (
 		done    = make(chan error, 1)
@@ -259,11 +241,7 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 	)
 	reqData, err := codec.Encode(req)
 	if err != nil {
-		f.logger.Fatal("failed to encode mesh hash request", log.Err(err))
-	}
-	lids, err := iterateLayers(req)
-	if err != nil {
-		return nil, err
+		f.logger.With().Fatal("failed to encode mesh hash request", log.Err(err))
 	}
 
 	okCB := func(data []byte) {
@@ -285,7 +263,6 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 			return nil, err
 		}
 		return &MeshHashes{
-			Layers: lids,
 			Hashes: hashes,
 		}, nil
 	case <-ctx.Done():

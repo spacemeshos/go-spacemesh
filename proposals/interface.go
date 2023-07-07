@@ -2,6 +2,7 @@ package proposals
 
 import (
 	"context"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
@@ -20,7 +21,7 @@ type eligibilityValidator interface {
 
 type ballotDecoder interface {
 	GetMissingActiveSet(types.EpochID, []types.ATXID) []types.ATXID
-	DecodeBallot(*types.Ballot) (*tortoise.DecodedBallot, error)
+	DecodeBallot(*types.BallotTortoiseData) (*tortoise.DecodedBallot, error)
 	StoreBallot(*tortoise.DecodedBallot) error
 }
 
@@ -30,4 +31,9 @@ type vrfVerifier interface {
 
 type nonceFetcher interface {
 	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
+}
+
+type layerClock interface {
+	CurrentLayer() types.LayerID
+	LayerToTime(types.LayerID) time.Time
 }

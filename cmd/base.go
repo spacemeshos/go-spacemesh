@@ -9,9 +9,10 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/spacemeshos/go-spacemesh/cmd/flags"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/node/flags"
 )
 
 var (
@@ -72,6 +73,12 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
 					val = v
 				case "types.RoundID":
 					val = types.RoundID(viper.GetUint64(name))
+				case "activation.PowDifficulty":
+					dst := activation.PowDifficulty{}
+					if err := dst.UnmarshalText([]byte(viper.GetString(name))); err != nil {
+						panic(err.Error())
+					}
+					val = dst
 				default:
 					val = viper.Get(name)
 				}
@@ -149,6 +156,14 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
 
 			ff = reflect.TypeOf(appCFG.Bootstrap)
 			elem = reflect.ValueOf(&appCFG.Bootstrap).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appCFG.Recovery)
+			elem = reflect.ValueOf(&appCFG.Recovery).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appCFG.TestConfig)
+			elem = reflect.ValueOf(&appCFG.TestConfig).Elem()
 			assignFields(ff, elem, name)
 		}
 	})

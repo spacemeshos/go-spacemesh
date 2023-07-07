@@ -12,7 +12,6 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
-	pubsub "github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 // Mockcoin is a mock of coin interface.
@@ -78,10 +77,10 @@ func (mr *MockcoinMockRecorder) Get(arg0, arg1, arg2 interface{}) *gomock.Call {
 }
 
 // HandleProposal mocks base method.
-func (m *Mockcoin) HandleProposal(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) pubsub.ValidationResult {
+func (m *Mockcoin) HandleProposal(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HandleProposal", arg0, arg1, arg2)
-	ret0, _ := ret[0].(pubsub.ValidationResult)
+	ret0, _ := ret[0].(error)
 	return ret0
 }
 
@@ -190,10 +189,10 @@ func (m *MocklayerClock) EXPECT() *MocklayerClockMockRecorder {
 }
 
 // AwaitLayer mocks base method.
-func (m *MocklayerClock) AwaitLayer(arg0 types.LayerID) chan struct{} {
+func (m *MocklayerClock) AwaitLayer(arg0 types.LayerID) <-chan struct{} {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AwaitLayer", arg0)
-	ret0, _ := ret[0].(chan struct{})
+	ret0, _ := ret[0].(<-chan struct{})
 	return ret0
 }
 

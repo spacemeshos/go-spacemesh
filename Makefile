@@ -1,8 +1,9 @@
+VERSION ?= $(shell git describe --tags)
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 include Makefile-libs.Inc
 
 DOCKER_HUB ?= spacemeshos
-UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests)
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v cmd/node | grep -v cmd/gen-p2p-identity | grep -v cmd/trace | grep -v genvm/cmd)
 
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
@@ -10,16 +11,6 @@ BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
 export CGO_ENABLED := 1
 export CGO_CFLAGS := $(CGO_CFLAGS) -DSQLITE_ENABLE_DBSTAT_VTAB=1
-
-# These commands cause problems on Windows
-ifeq ($(OS),Windows_NT)
-  # Just assume we're in interactive mode on Windows
-  INTERACTIVE = 1
-  VERSION ?= $(shell type version.txt)
-else
-  INTERACTIVE := $(shell [ -t 0 ] && echo 1)
-  VERSION ?= $(shell cat version.txt)
-endif
 
 # Add an indicator to the branch name if dirty and use commithash if running in detached mode
 ifeq ($(BRANCH),HEAD)
@@ -58,31 +49,34 @@ all: install build
 .PHONY: all
 
 install:
-	go run scripts/check-go-version.go --major 1 --minor 19
+	git lfs install
 	go mod download
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.52.0
-	go install github.com/spacemeshos/go-scale/scalegen@v1.1.6
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.53.3
+	go install github.com/spacemeshos/go-scale/scalegen@v1.1.10
 	go install github.com/golang/mock/mockgen
-	go install gotest.tools/gotestsum@v1.9.0
-	go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
+	go install gotest.tools/gotestsum@v1.10.0
+	go install honnef.co/go/tools/cmd/staticcheck@v0.4.3
 .PHONY: install
 
-build: go-spacemesh
+build: go-spacemesh get-profiler
 .PHONY: build
 
-get-libs: get-gpu-setup get-postrs-lib
+get-libs: get-postrs-lib
 .PHONY: get-libs
 
+get-profiler: get-postrs-profiler
+.PHONY: get-profiler
+
 gen-p2p-identity:
-	cd $@ ; go build -o $(BIN_DIR)$@$(EXE) .
+	cd cmd/gen-p2p-identity ; go build -o $(BIN_DIR)$@$(EXE) .
 .PHONY: gen-p2p-identity
 
 go-spacemesh: get-libs
-	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
+	cd cmd/node ; go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
 .PHONY: go-spacemesh gen-p2p-identity
 
 bootstrapper:
-	echo $(BIN_DIR) ; cd cmd/bootstrapper ;  go build -o $(BIN_DIR)go-$@$(EXE) .
+	cd cmd/bootstrapper ;  go build -o $(BIN_DIR)go-$@$(EXE) .
 .PHONY: bootstrapper
 
 tidy:
@@ -145,17 +139,6 @@ lint-github-action: get-libs
 cover: get-libs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -timeout 0 -p 1 -coverpkg=./... $(UNIT_TESTS)
 .PHONY: cover
-
-tag-and-build:
-	git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && git --no-pager diff && exit 1)
-	printf "${VERSION}" > version.txt
-	git commit -m "bump version to ${VERSION}" version.txt
-	git tag ${VERSION}
-	git push origin ${VERSION}
-	DOCKER_BUILDKIT=1 docker build -t go-spacemesh:${VERSION} .
-	docker tag go-spacemesh:${VERSION} $(DOCKER_HUB)/go-spacemesh:${VERSION}
-	docker push $(DOCKER_HUB)/go-spacemesh:${VERSION}
-.PHONY: tag-and-build
 
 list-versions:
 	@echo "Latest 5 tagged versions:\n"

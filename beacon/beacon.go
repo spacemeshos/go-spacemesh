@@ -688,7 +688,7 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) e
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	defer pd.cleanupEpoch(epoch)
 
-	if epoch.IsGenesis() {
+	if epoch.FirstLayer() <= types.GetEffectiveGenesis() {
 		logger.Info("not running beacon protocol: genesis epochs")
 		return errGenesis
 	}
@@ -956,7 +956,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 	if err != nil {
 		pd.logger.With().Fatal("failed to serialize message for signing", log.Err(err))
 	}
-	sig := pd.edSigner.Sign(signing.BEACON, encoded)
+	sig := pd.edSigner.Sign(signing.BEACON_FIRST_MSG, encoded)
 
 	m := FirstVotingMessage{
 		FirstVotingMessageBody: mb,
@@ -1003,7 +1003,7 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 	if err != nil {
 		pd.logger.With().Fatal("failed to serialize message for signing", log.Err(err))
 	}
-	sig := pd.edSigner.Sign(signing.BEACON, encoded)
+	sig := pd.edSigner.Sign(signing.BEACON_FOLLOWUP_MSG, encoded)
 
 	m := FollowingVotingMessage{
 		FollowingVotingMessageBody: mb,

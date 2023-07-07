@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/cmd/node"
+	"github.com/spacemeshos/go-spacemesh/node"
 )
 
 var (

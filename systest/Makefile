@@ -5,7 +5,7 @@ tmpfile := $(shell mktemp /tmp/systest-XXX)
 test_name ?= TestSmeshing
 org ?= spacemeshos
 image_name ?= $(org)/systest:$(version_info)
-poet_image ?= spacemeshos/poet:v0.8.1
+poet_image ?= spacemeshos/poet:v0.8.5
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
 bs_image ?= $(org)/go-spacemesh-dev-bs:$(version_info)
 test_id ?= systest-$(version_info)
@@ -20,6 +20,7 @@ storage ?= standard=1Gi
 node_selector ?=
 namespace ?=
 label ?=
+count ?= 1
 
 configname ?= $(test_job_name)
 smesher_config ?= parameters/fastnet/smesher.json
@@ -32,7 +33,7 @@ ifeq ($(configname),$(test_job_name))
 	run_deps = config
 endif
 
-command := tests -test.v -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) \
+command := tests -test.v -test.count=$(count) -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) \
 -level=$(level) -labels=$(label) -configname=$(configname)
 
 .PHONY: docker

@@ -5,13 +5,13 @@
         "cycle-gap": "30s",
         "grace-period": "10s"
     },
-    "logging": {
-        "trtl": "debug"
+    "tortoise": {
+        "tortoise-enable-tracer": true
     },
     "api": {
         "grpc-public-services": [
             "debug", "global", "mesh", "node",
-            "transaction", "activation", "smesher"
+            "transaction", "activation", "admin", "smesher"
         ],
         "grpc-private-services": []
     }

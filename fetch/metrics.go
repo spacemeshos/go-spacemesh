@@ -8,6 +8,7 @@ import (
 const (
 	// subsystem shared by all metrics exposed by this package.
 	subsystem = "fetch"
+	hint      = "hint"
 )
 
 var (
@@ -15,13 +16,31 @@ var (
 		"cache_hits",
 		subsystem,
 		"Total hash-to-peer cache hits",
-		[]string{"hint"})
+		[]string{hint})
 
 	total = metrics.NewCounter(
 		"cache_lookup",
 		subsystem,
 		"Total hash-to-peer cache lookups",
-		[]string{"hint"})
+		[]string{hint})
+
+	totalHashReqs = metrics.NewCounter(
+		"hash_reqs",
+		subsystem,
+		"total hash requests",
+		[]string{hint})
+
+	hashMissing = metrics.NewCounter(
+		"hash_missing",
+		subsystem,
+		"total requests that hash is not present locally",
+		[]string{hint})
+
+	hashEmptyData = metrics.NewCounter(
+		"hash_empty",
+		subsystem,
+		"total request that hash has no data",
+		[]string{hint})
 )
 
 // logCacheHit logs cache hit.

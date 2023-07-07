@@ -2,6 +2,7 @@ package blocks
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -36,15 +37,17 @@ type meshState struct {
 }
 
 type proposalMetadata struct {
+	ctx        context.Context
 	lid        types.LayerID
 	proposals  []*types.Proposal
-	mtxs       []*types.MeshTransaction
+	tids       []types.TransactionID
 	tickHeight uint64
 	rewards    []types.AnyReward
 	optFilter  bool
 }
 
 func getProposalMetadata(
+	ctx context.Context,
 	logger log.Log,
 	cdb *datastore.CachedDB,
 	cfg Config,
@@ -53,10 +56,11 @@ func getProposalMetadata(
 ) (*proposalMetadata, error) {
 	var (
 		md = &proposalMetadata{
+			ctx:       ctx,
 			lid:       lid,
 			proposals: proposals,
-			mtxs:      []*types.MeshTransaction{},
 		}
+		mtxs       []*types.MeshTransaction
 		seen       = make(map[types.TransactionID]struct{})
 		meshHashes = make(map[types.Hash32]*meshState)
 		err        error
@@ -88,10 +92,9 @@ func getProposalMetadata(
 				return nil, fmt.Errorf("%w: inconsistent state: tx %s is missing header", errProposalTxHdrMissing, mtx.ID)
 			}
 			seen[tid] = struct{}{}
-			md.mtxs = append(md.mtxs, mtx)
+			mtxs = append(mtxs, mtx)
 		}
 	}
-
 	majority := cfg.OptFilterThreshold * len(proposals)
 	var majorityState *meshState
 	for _, ms := range meshHashes {
@@ -106,28 +109,39 @@ func getProposalMetadata(
 	}
 	if majorityState == nil {
 		logger.With().Info("no consensus on mesh hash. NOT doing optimistic filtering", lid)
-		return md, nil
+	} else {
+		ownMeshHash, err := layers.GetAggregatedHash(cdb, lid.Sub(1))
+		if err != nil {
+			return nil, fmt.Errorf("get prev mesh hash %w", err)
+		}
+		if ownMeshHash != majorityState.hash {
+			return nil, fmt.Errorf("%w: majority %v, node %v", errNodeHasBadMeshHash, majorityState.hash, ownMeshHash)
+		}
+		logger.With().Debug("consensus on mesh hash. doing optimistic filtering",
+			lid,
+			log.Stringer("mesh_hash", majorityState.hash))
+		md.optFilter = true
 	}
-	ownMeshHash, err := layers.GetAggregatedHash(cdb, lid.Sub(1))
-	if err != nil {
-		return nil, fmt.Errorf("get prev mesh hash %w", err)
+	if len(mtxs) > 0 {
+		var gasLimit uint64
+		if !md.optFilter {
+			gasLimit = cfg.BlockGasLimit
+		}
+		blockSeed := types.CalcProposalsHash32(types.ToProposalIDs(md.proposals), nil).Bytes()
+		md.tids, err = getBlockTXs(logger, mtxs, blockSeed, gasLimit)
+		if err != nil {
+			return nil, err
+		}
 	}
-	if ownMeshHash != majorityState.hash {
-		return nil, fmt.Errorf("%w: majority %v, node %v", errNodeHasBadMeshHash, majorityState.hash, ownMeshHash)
-	}
-	md.optFilter = true
-	logger.With().Info("consensus on mesh hash. doing optimistic filtering",
-		lid,
-		log.Stringer("mesh_hash", majorityState.hash))
 	return md, nil
 }
 
-func getBlockTXs(logger log.Log, pmd *proposalMetadata, blockSeed []byte, gasLimit uint64) ([]types.TransactionID, error) {
+func getBlockTXs(logger log.Log, mtxs []*types.MeshTransaction, blockSeed []byte, gasLimit uint64) ([]types.TransactionID, error) {
 	stateF := func(_ types.Address) (uint64, uint64) {
 		return 0, math.MaxUint64
 	}
 	txCache := txs.NewCache(stateF, logger)
-	if err := txCache.BuildFromTXs(pmd.mtxs, blockSeed); err != nil {
+	if err := txCache.BuildFromTXs(mtxs, blockSeed); err != nil {
 		return nil, fmt.Errorf("build txs for block: %w", err)
 	}
 	byAddrAndNonce := txCache.GetMempool(logger)
@@ -135,7 +149,7 @@ func getBlockTXs(logger log.Log, pmd *proposalMetadata, blockSeed []byte, gasLim
 		logger.With().Warning("no feasible txs for block")
 		return nil, nil
 	}
-	candidates := make([]*txs.NanoTX, 0, len(pmd.mtxs))
+	candidates := make([]*txs.NanoTX, 0, len(mtxs))
 	byTid := make(map[types.TransactionID]*txs.NanoTX)
 	for _, acctTXs := range byAddrAndNonce {
 		candidates = append(candidates, acctTXs...)

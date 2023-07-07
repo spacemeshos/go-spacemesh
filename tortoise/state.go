@@ -26,8 +26,9 @@ type (
 	}
 
 	atxInfo struct {
-		weight uint64
-		height uint64
+		weight     uint64
+		height     uint64
+		malfeasant bool
 	}
 
 	epochInfo struct {
@@ -54,11 +55,6 @@ type (
 		// last evicted layer
 		evicted types.LayerID
 
-		changedOpinion struct {
-			// sector of layers where opinion is different from previously computed opinion
-			min, max types.LayerID
-		}
-
 		epochs map[types.EpochID]*epochInfo
 		layers map[types.LayerID]*layerInfo
 		// ballots should not be referenced by other ballots
@@ -69,6 +65,10 @@ type (
 
 		// to efficiently find base and reference ballots
 		ballotRefs map[types.BallotID]*ballotInfo
+
+		// malnodes is a collection with all nodes that equivocated in history.
+		// each node id is 32 bytes. 100 000 of such nodes is only about ~3MB
+		malnodes map[types.NodeID]struct{}
 	}
 )
 
@@ -78,6 +78,7 @@ func newState() *state {
 		layers:     map[types.LayerID]*layerInfo{},
 		ballots:    map[types.LayerID][]*ballotInfo{},
 		ballotRefs: map[types.BallotID]*ballotInfo{},
+		malnodes:   map[types.NodeID]struct{}{},
 	}
 }
 
@@ -159,6 +160,15 @@ func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) {
 		block.height > layer.verifying.referenceHeight {
 		layer.verifying.referenceHeight = block.height
 	}
+}
+
+func (s *state) isMalfeasant(id types.NodeID) bool {
+	_, exists := s.malnodes[id]
+	return exists
+}
+
+func (s *state) makrMalfeasant(id types.NodeID) {
+	s.malnodes[id] = struct{}{}
 }
 
 type layerInfo struct {
@@ -398,7 +408,6 @@ type blockInfo struct {
 	margin weight
 
 	validity sign
-	emitted  sign // same as validity field if event was emitted
 
 	data bool // set to true if block is available locally
 }
@@ -419,11 +428,11 @@ type headerWithSign struct {
 	sign   sign
 }
 
-func decodeVotes(evicted types.LayerID, blid types.LayerID, base *ballotInfo, exceptions types.Votes) (votes, types.LayerID, error) {
+func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types.Votes) (votes, types.LayerID, error) {
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]headerWithSign{}
 	for _, header := range exceptions.Against {
-		from = minLayer(from, header.LayerID)
+		from = types.MinLayer(from, header.LayerID)
 		layerdiff, exist := diff[header.LayerID]
 		if !exist {
 			layerdiff = map[types.BlockID]headerWithSign{}
@@ -436,7 +445,7 @@ func decodeVotes(evicted types.LayerID, blid types.LayerID, base *ballotInfo, ex
 		layerdiff[header.ID] = headerWithSign{header, against}
 	}
 	for _, header := range exceptions.Support {
-		from = minLayer(from, header.LayerID)
+		from = types.MinLayer(from, header.LayerID)
 		layerdiff, exist := diff[header.LayerID]
 		if !exist {
 			layerdiff = map[types.BlockID]headerWithSign{}
@@ -449,7 +458,7 @@ func decodeVotes(evicted types.LayerID, blid types.LayerID, base *ballotInfo, ex
 		layerdiff[header.ID] = headerWithSign{header, support}
 	}
 	for _, lid := range exceptions.Abstain {
-		from = minLayer(from, lid)
+		from = types.MinLayer(from, lid)
 		_, exist := diff[lid]
 		if !exist {
 			diff[lid] = map[types.BlockID]headerWithSign{}

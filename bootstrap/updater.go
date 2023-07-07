@@ -23,7 +23,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -36,8 +36,12 @@ import (
 )
 
 const (
-	DefaultURL = "http://localhost:3000/bootstrap"
-	DirName    = "bootstrap"
+	DefaultURL      = "http://localhost:3000/bootstrap"
+	DirName         = "bootstrap"
+	suffixLen       = 2
+	SuffixBeacon    = "bc"
+	SuffixActiveSet = "as"
+	SuffixBoostrap  = "bs"
 
 	httpTimeout   = 5 * time.Second
 	notifyTimeout = time.Second
@@ -54,33 +58,32 @@ type Config struct {
 	URL     string `mapstructure:"bootstrap-url"`
 	Version string `mapstructure:"bootstrap-version"`
 
-	DataDir   string
-	Interval  time.Duration
-	NumToKeep int
+	DataDir  string
+	Interval time.Duration
 }
 
 func DefaultConfig() Config {
 	return Config{
-		URL:       DefaultURL,
-		Version:   "https://spacemesh.io/bootstrap.schema.json.1.0",
-		DataDir:   os.TempDir(),
-		Interval:  30 * time.Second,
-		NumToKeep: 10,
+		URL:      DefaultURL,
+		Version:  "https://spacemesh.io/bootstrap.schema.json.1.0",
+		DataDir:  os.TempDir(),
+		Interval: 30 * time.Second,
 	}
 }
 
 type Updater struct {
 	cfg    Config
 	logger log.Log
+	clock  layerClock
 	fs     afero.Fs
 	client *http.Client
 	once   sync.Once
+	stop   chan struct{}
 	eg     errgroup.Group
 
-	mu           sync.Mutex
-	subscribers  []chan *VerifiedUpdate
-	lastUpdateId int64 // ID (unix timestamp) of the last update
-	etag         string
+	mu          sync.Mutex
+	subscribers []chan *VerifiedUpdate
+	updates     map[types.EpochID]map[string]struct{}
 }
 
 type Opt func(*Updater)
@@ -109,12 +112,15 @@ func WithHttpClient(c *http.Client) Opt {
 	}
 }
 
-func New(opts ...Opt) *Updater {
+func New(clock layerClock, opts ...Opt) *Updater {
 	u := &Updater{
-		cfg:    DefaultConfig(),
-		logger: log.NewNop(),
-		fs:     afero.NewOsFs(),
-		client: &http.Client{},
+		cfg:     DefaultConfig(),
+		logger:  log.NewNop(),
+		clock:   clock,
+		fs:      afero.NewOsFs(),
+		client:  &http.Client{},
+		stop:    make(chan struct{}),
+		updates: map[types.EpochID]map[string]struct{}{},
 	}
 	for _, opt := range opts {
 		opt(u)
@@ -122,107 +128,173 @@ func New(opts ...Opt) *Updater {
 	return u
 }
 
-func (u *Updater) Subscribe() chan *VerifiedUpdate {
+func (u *Updater) Subscribe() (<-chan *VerifiedUpdate, error) {
+	select {
+	case <-u.stop: // prevent subscribing after closing
+		return nil, errors.New("updater has been closed")
+	default:
+	}
+
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	ch := make(chan *VerifiedUpdate, 10)
 	u.subscribers = append(u.subscribers, ch)
-	return ch
+	return ch, nil
 }
 
 func (u *Updater) Load(ctx context.Context) error {
-	verified, err := load(u.fs, u.cfg)
+	loaded, err := load(u.fs, u.cfg, u.clock.CurrentLayer().GetEpoch())
 	if err != nil {
 		return err
 	}
-	if verified != nil {
+	for _, verified := range loaded {
 		if err = u.updateAndNotify(ctx, verified); err != nil {
 			return err
 		}
-		u.logger.With().Info("loaded boostrap file", log.Inline(verified))
+		u.logger.With().Info("loaded bootstrap file", log.Inline(verified))
+		u.addUpdate(verified.Data.Epoch, verified.Persisted[len(verified.Persisted)-suffixLen:])
 	}
 	return nil
 }
 
-func (u *Updater) Start(ctx context.Context) {
+func (u *Updater) Start() error {
+	if len(u.cfg.DataDir) == 0 {
+		return fmt.Errorf("data dir not set %s", u.cfg.DataDir)
+	}
 	u.once.Do(func() {
 		u.eg.Go(func() error {
+			ctx := log.WithNewSessionID(context.Background())
 			if err := u.Load(ctx); err != nil {
 				return err
 			}
-			wait := time.Duration(0)
 			u.logger.With().Info("start listening to update",
 				log.String("source", u.cfg.URL),
 				log.Duration("interval", u.cfg.Interval),
 			)
 			for {
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-time.After(wait):
-					ctx := log.WithNewSessionID(ctx)
-					if err := u.DoIt(ctx); err != nil {
-						updateFailureCount.Add(1)
-						u.logger.With().Debug("failed to get bootstrap update", log.Err(err))
-					}
+				if err := u.DoIt(ctx); err != nil {
+					updateFailureCount.Add(1)
+					u.logger.With().Debug("failed to get bootstrap update", log.Err(err))
 				}
-				wait = u.cfg.Interval
+				select {
+				case <-u.stop:
+					return nil
+				case <-time.After(u.cfg.Interval):
+				}
 			}
 		})
 	})
+	return nil
 }
 
-func (u *Updater) Close() {
+func (u *Updater) Close() error {
+	u.mu.Lock()
+	select {
+	case <-u.stop: // prevent closing the channel twice
+	default:
+		close(u.stop)
+	}
+	u.mu.Unlock()
+
+	err := u.eg.Wait()
+
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	for _, ch := range u.subscribers {
 		close(ch)
 	}
-	_ = u.eg.Wait()
+	u.subscribers = nil
+	return err
 }
 
-func (u *Updater) latestUpdateId() int64 {
+func (u *Updater) addUpdate(epoch types.EpochID, suffix string) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	return u.lastUpdateId
+	if _, ok := u.updates[epoch]; !ok {
+		u.updates[epoch] = map[string]struct{}{}
+	}
+	u.updates[epoch][suffix] = struct{}{}
 }
 
-func (u *Updater) setEtag(etag string) {
+func (u *Updater) downloaded(epoch types.EpochID, suffix string) bool {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	u.etag = etag
-}
-
-func (u *Updater) getEtag() string {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	return u.etag
+	if _, ok := u.updates[epoch]; ok {
+		_, ok2 := u.updates[epoch][suffix]
+		return ok2
+	}
+	return false
 }
 
 func (u *Updater) DoIt(ctx context.Context) error {
-	verified, data, err := u.get(ctx)
+	current := u.clock.CurrentLayer().GetEpoch()
+	defer func() {
+		if err := u.prune(current); err != nil {
+			u.logger.With().Error("failed to prune",
+				log.Context(ctx),
+				log.Uint32("current epoch", current.Uint32()),
+				log.Err(err),
+			)
+		}
+	}()
+	for _, epoch := range requiredEpochs(current) {
+		verified, cached, err := u.checkEpochUpdate(ctx, epoch, SuffixBoostrap)
+		if err != nil {
+			return err
+		}
+		if verified != nil || cached {
+			// if we have the bootstrap update, no need to look for others
+			continue
+		}
+		for _, suffix := range []string{SuffixBeacon, SuffixActiveSet} {
+			if _, _, err = u.checkEpochUpdate(ctx, epoch, suffix); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func UpdateName(epoch types.EpochID, suffix string) string {
+	return fmt.Sprintf("epoch-%d-update-%s", epoch, suffix)
+}
+
+func makeUri(url string, epoch types.EpochID, suffix string) string {
+	return fmt.Sprintf("%s/%s", url, UpdateName(epoch, suffix))
+}
+
+func (u *Updater) checkEpochUpdate(ctx context.Context, epoch types.EpochID, suffix string) (*VerifiedUpdate, bool, error) {
+	uri := makeUri(u.cfg.URL, epoch, suffix)
+	if u.downloaded(epoch, suffix) {
+		return nil, true, nil
+	}
+	verified, data, err := u.get(ctx, uri)
 	if err != nil {
-		return err
+		return nil, false, err
 	}
-	if verified == nil { // no new update
-		return nil
+	if verified == nil { // update doesn't exist
+		return nil, false, nil
 	}
-	verified.Persisted, err = persist(ctx, u.logger, u.fs, u.cfg, verified.UpdateId, data)
-	if err != nil {
-		return err
+	u.addUpdate(epoch, suffix)
+	filename := PersistFilename(u.cfg.DataDir, epoch, filepath.Base(uri))
+	if err = u.fs.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
+		return nil, false, fmt.Errorf("%w: create bootstrap data dir: %s", err, filename)
 	}
+	if err = afero.WriteFile(u.fs, filename, data, 0o400); err != nil {
+		return nil, false, fmt.Errorf("persist bootstrap %s: %w", filename, err)
+	}
+	verified.Persisted = filename
 	u.logger.WithContext(ctx).With().Info("new bootstrap file", log.Inline(verified))
 	if err = u.updateAndNotify(ctx, verified); err != nil {
-		return err
+		return verified, false, err
 	}
 	updateOkCount.Add(1)
-	return nil
+	return verified, false, nil
 }
 
 func (u *Updater) updateAndNotify(ctx context.Context, verified *VerifiedUpdate) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	u.lastUpdateId = verified.UpdateId
 	notifyCtx, cancel := context.WithTimeout(ctx, notifyTimeout)
 	defer cancel()
 	for _, ch := range u.subscribers {
@@ -235,8 +307,8 @@ func (u *Updater) updateAndNotify(ctx context.Context, verified *VerifiedUpdate)
 	return nil
 }
 
-func (u *Updater) get(ctx context.Context) (*VerifiedUpdate, []byte, error) {
-	resource, err := url.Parse(u.cfg.URL)
+func (u *Updater) get(ctx context.Context, uri string) (*VerifiedUpdate, []byte, error) {
+	resource, err := url.Parse(uri)
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse bootstrap uri: %w", err)
 	}
@@ -247,48 +319,45 @@ func (u *Updater) get(ctx context.Context) (*VerifiedUpdate, []byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, httpTimeout)
 	defer cancel()
 	t0 := time.Now()
-	etag, data, err := query(ctx, u.client, resource, u.getEtag())
+	data, err := query(ctx, u.client, resource)
 	if err != nil {
 		queryFailureCount.Add(1)
 		return nil, nil, err
 	}
 	queryDuration.WithLabelValues(labelQuery).Observe(float64(time.Since(t0)))
 	queryOkCount.Add(1)
-	u.setEtag(etag)
 	if len(data) == 0 { // no update data
 		return nil, nil, nil
 	}
 	received.Add(float64(len(data)))
-	verified, err := validate(u.cfg, resource.String(), data, u.latestUpdateId())
+	verified, err := validate(u.cfg, resource.String(), data)
 	if err != nil {
 		return nil, nil, err
 	}
 	return verified, data, nil
 }
 
-func query(ctx context.Context, client *http.Client, resource *url.URL, etag string) (string, []byte, error) {
+func query(ctx context.Context, client *http.Client, resource *url.URL) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, resource.String(), nil)
 	if err != nil {
-		return "", nil, fmt.Errorf("create http request: %w", err)
+		return nil, fmt.Errorf("create http request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("If-None-Match", etag)
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", nil, fmt.Errorf("http get bootstrap file: %w", err)
+		return nil, fmt.Errorf("http get bootstrap file: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", nil, fmt.Errorf("bootstrap read resonse: %w", err)
+		return nil, fmt.Errorf("bootstrap read resonse: %w", err)
 	}
-	if resp.StatusCode == http.StatusNotModified {
-		queryCachedCount.Add(1)
-	}
-	return resp.Header.Get("Etag"), data, nil
+	return data, nil
 }
 
-func validate(cfg Config, source string, data []byte, lastUpdateId int64) (*VerifiedUpdate, error) {
+func validate(cfg Config, source string, data []byte) (*VerifiedUpdate, error) {
 	if err := ValidateSchema(data); err != nil {
 		return nil, err
 	}
@@ -298,7 +367,7 @@ func validate(cfg Config, source string, data []byte, lastUpdateId int64) (*Veri
 		return nil, fmt.Errorf("unmarshal %s: %w", source, err)
 	}
 
-	verified, err := validateData(cfg, update, lastUpdateId)
+	verified, err := validateData(cfg, update)
 	if err != nil {
 		return nil, err
 	}
@@ -320,15 +389,11 @@ func ValidateSchema(data []byte) error {
 	return nil
 }
 
-func validateData(cfg Config, update *Update, lastUpdateId int64) (*VerifiedUpdate, error) {
+func validateData(cfg Config, update *Update) (*VerifiedUpdate, error) {
 	if update.Version != cfg.Version {
 		return nil, fmt.Errorf("%w: expected %v, got %v", ErrWrongVersion, cfg.Version, update.Version)
 	}
-	if update.Data.UpdateId <= lastUpdateId {
-		return nil, nil
-	}
 	verified := &VerifiedUpdate{
-		UpdateId: update.Data.UpdateId,
 		Data: &EpochOverride{
 			Epoch: types.EpochID(update.Data.Epoch.ID),
 		},
@@ -350,74 +415,83 @@ func validateData(cfg Config, update *Update, lastUpdateId int64) (*VerifiedUpda
 	return verified, nil
 }
 
-func load(fs afero.Fs, cfg Config) (*VerifiedUpdate, error) {
-	dir, err := bootstrapDir(fs, cfg.DataDir)
-	if err != nil {
-		return nil, err
-	}
-	files, err := afero.ReadDir(fs, dir)
-	if err != nil {
+func load(fs afero.Fs, cfg Config, current types.EpochID) ([]*VerifiedUpdate, error) {
+	dir := bootstrapDir(cfg.DataDir)
+	_, err := fs.Stat(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	} else if err != nil {
 		return nil, fmt.Errorf("read bootstrap dir %v: %w", dir, err)
 	}
-	if len(files) == 0 {
-		return nil, nil
+	var loaded []*VerifiedUpdate
+	for _, epoch := range requiredEpochs(current) {
+		edir := epochDir(cfg.DataDir, epoch)
+		files, err := afero.ReadDir(fs, edir)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		} else if err != nil {
+			return nil, fmt.Errorf("read epoch dir %v: %w", dir, err)
+		}
+		for _, f := range files {
+			persisted := filepath.Join(edir, f.Name())
+			data, err := afero.ReadFile(fs, persisted)
+			if err != nil {
+				return nil, fmt.Errorf("read bootstrap file %v: %w", persisted, err)
+			}
+			verified, err := validate(cfg, persisted, data)
+			if err != nil {
+				return nil, err
+			}
+			verified.Persisted = persisted
+			loaded = append(loaded, verified)
+		}
 	}
-	sort.Slice(files, func(i, j int) bool { return files[i].Name() > files[j].Name() })
-	persisted := filepath.Join(dir, files[0].Name())
-	data, err := afero.ReadFile(fs, persisted)
-	if err != nil {
-		return nil, fmt.Errorf("read bootstrap file %v: %w", persisted, err)
-	}
-	verified, err := validate(cfg, persisted, data, 0)
-	if err != nil {
-		return nil, err
-	}
-	return verified, nil
+	return loaded, nil
 }
 
-func persist(ctx context.Context, logger log.Log, fs afero.Fs, cfg Config, id int64, data []byte) (string, error) {
-	if len(cfg.DataDir) == 0 {
-		return "", nil
-	}
-	dir, err := bootstrapDir(fs, cfg.DataDir)
-	if err != nil {
-		return "", err
-	}
-	filename := PersistFilename(dir, id)
-	if err = afero.WriteFile(fs, filename, data, 0o400); err != nil {
-		return "", fmt.Errorf("persist bootstrap: %w", err)
-	}
-	if err = prune(fs, dir, cfg.NumToKeep); err != nil {
-		logger.WithContext(ctx).With().Warning("failed to prune bootstrap files", log.Err(err))
-	}
-	return filename, nil
+func requiredEpochs(current types.EpochID) []types.EpochID {
+	return []types.EpochID{current - 1, current, current + 1}
 }
 
-func prune(fs afero.Fs, dir string, numToKeep int) error {
-	files, err := afero.ReadDir(fs, dir)
-	if err != nil {
-		return err
+func (u *Updater) prune(current types.EpochID) error {
+	toKeep := map[string]struct{}{}
+	required := requiredEpochs(current)
+	for _, epoch := range required {
+		toKeep[strconv.Itoa(int(epoch))] = struct{}{}
 	}
-	if len(files) < numToKeep {
-		return nil
+	dir := bootstrapDir(u.cfg.DataDir)
+	files, err := afero.ReadDir(u.fs, dir)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("list bootstrap dir %s: %w", dir, err)
 	}
-	sort.Slice(files, func(i, j int) bool { return files[i].Name() > files[j].Name() })
-	for _, f := range files[numToKeep:] {
-		if err = fs.Remove(filepath.Join(dir, f.Name())); err != nil {
+	for _, f := range files {
+		if f.IsDir() {
+			if _, ok := toKeep[f.Name()]; ok {
+				continue
+			}
+		}
+		if err = u.fs.RemoveAll(filepath.Join(dir, f.Name())); err != nil {
 			return err
+		}
+	}
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	for epoch := range u.updates {
+		if epoch < required[0] {
+			delete(u.updates, epoch)
 		}
 	}
 	return nil
 }
 
-func bootstrapDir(fs afero.Fs, dataDir string) (string, error) {
-	dir := filepath.Join(dataDir, DirName)
-	if err := fs.MkdirAll(dir, 0o700); err != nil {
-		return "", fmt.Errorf("create bootstrap data dir: %w", err)
-	}
-	return dir, nil
+func bootstrapDir(dataDir string) string {
+	return filepath.Join(dataDir, DirName)
 }
 
-func PersistFilename(dir string, id int64) string {
-	return filepath.Join(dir, fmt.Sprintf("%10d-%v", id, time.Now().UTC().Format(format)))
+func epochDir(dataDir string, epoch types.EpochID) string {
+	return filepath.Join(bootstrapDir(dataDir), strconv.Itoa(int(epoch)))
+}
+
+func PersistFilename(dataDir string, epoch types.EpochID, basename string) string {
+	return filepath.Join(epochDir(dataDir, epoch), fmt.Sprintf("%s-%v", basename, time.Now().UTC().Format(format)))
 }

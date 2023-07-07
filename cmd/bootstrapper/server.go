@@ -7,14 +7,20 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"path/filepath"
+	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/spf13/afero"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
+
+const fileRegex = "/epoch-(?P<Epoch>[0-9]+)-update-(?P<Suffix>[a-z]+)"
 
 type NetworkParam struct {
 	Genesis      time.Time
@@ -38,12 +44,13 @@ func (np *NetworkParam) updateActiveSetTime(targetEpoch types.EpochID) time.Time
 // one on disk, even tho it's for an old epoch.
 type Server struct {
 	*http.Server
-	eg             errgroup.Group
-	logger         log.Log
-	fs             afero.Fs
-	gen            *Generator
-	genFallback    bool
-	bootstrapEpoch types.EpochID
+	eg              errgroup.Group
+	logger          log.Log
+	fs              afero.Fs
+	gen             *Generator
+	genFallback     bool
+	bootstrapEpochs []types.EpochID
+	regex           *regexp.Regexp
 }
 
 type SrvOpt func(*Server)
@@ -60,20 +67,21 @@ func WithSrvFilesystem(fs afero.Fs) SrvOpt {
 	}
 }
 
-func WithBootstrapEpoch(e types.EpochID) SrvOpt {
+func WithBootstrapEpochs(epochs []types.EpochID) SrvOpt {
 	return func(s *Server) {
-		s.bootstrapEpoch = e
+		s.bootstrapEpochs = epochs
 	}
 }
 
 func NewServer(gen *Generator, fallback bool, port int, opts ...SrvOpt) *Server {
 	s := &Server{
-		Server:         &http.Server{Addr: fmt.Sprintf(":%d", port)},
-		logger:         log.NewNop(),
-		fs:             afero.NewOsFs(),
-		gen:            gen,
-		genFallback:    fallback,
-		bootstrapEpoch: types.EpochID(2),
+		Server:          &http.Server{Addr: fmt.Sprintf(":%d", port)},
+		logger:          log.NewNop(),
+		fs:              afero.NewOsFs(),
+		gen:             gen,
+		genFallback:     fallback,
+		bootstrapEpochs: []types.EpochID{2},
+		regex:           regexp.MustCompile(fileRegex),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -97,15 +105,19 @@ func (s *Server) Start(ctx context.Context, errCh chan error, params *NetworkPar
 }
 
 func (s *Server) loop(ctx context.Context, errCh chan error, params *NetworkParam) {
-	wait := time.Until(params.updateBeaconTime(s.bootstrapEpoch))
-	select {
-	case <-time.After(wait):
-		if err := s.GenBootstrap(ctx, s.bootstrapEpoch); err != nil {
-			errCh <- err
+	var last types.EpochID
+	for _, epoch := range s.bootstrapEpochs {
+		wait := time.Until(params.updateBeaconTime(epoch))
+		select {
+		case <-time.After(wait):
+			if err := s.GenBootstrap(ctx, epoch); err != nil {
+				errCh <- err
+				return
+			}
+			last = epoch
+		case <-ctx.Done():
 			return
 		}
-	case <-ctx.Done():
-		return
 	}
 
 	if !s.genFallback {
@@ -115,12 +127,12 @@ func (s *Server) loop(ctx context.Context, errCh chan error, params *NetworkPara
 	// start generating fallback data
 	s.eg.Go(
 		func() error {
-			s.genDataLoop(ctx, errCh, s.bootstrapEpoch, params.updateActiveSetTime, s.GenFallbackActiveSet)
+			s.genDataLoop(ctx, errCh, last, params.updateActiveSetTime, s.GenFallbackActiveSet)
 			return nil
 		})
 	s.eg.Go(
 		func() error {
-			s.genDataLoop(ctx, errCh, s.bootstrapEpoch+1, params.updateBeaconTime, s.GenFallbackBeacon)
+			s.genDataLoop(ctx, errCh, last+1, params.updateBeaconTime, s.GenFallbackBeacon)
 			return nil
 		})
 }
@@ -138,19 +150,25 @@ func (s *Server) GenBootstrap(ctx context.Context, epoch types.EpochID) error {
 	if err != nil {
 		return err
 	}
-	return s.gen.GenUpdate(epoch, epochBeacon(epoch), actives)
+	suffix := bootstrap.SuffixBoostrap
+	_, err = s.gen.GenUpdate(epoch, epochBeacon(epoch), actives, suffix)
+	return err
 }
 
 func (s *Server) GenFallbackBeacon(_ context.Context, epoch types.EpochID) error {
-	return s.gen.GenUpdate(epoch, epochBeacon(epoch), nil)
+	suffix := bootstrap.SuffixBeacon
+	_, err := s.gen.GenUpdate(epoch, epochBeacon(epoch), nil, suffix)
+	return err
 }
 
 func (s *Server) GenFallbackActiveSet(ctx context.Context, epoch types.EpochID) error {
+	suffix := bootstrap.SuffixActiveSet
 	actives, err := getPartialActiveSet(ctx, s.gen.SmEndpoint(), epoch)
 	if err != nil {
 		return err
 	}
-	return s.gen.GenUpdate(epoch, types.EmptyBeacon, actives)
+	_, err = s.gen.GenUpdate(epoch, types.EmptyBeacon, actives, suffix)
+	return err
 }
 
 // in systests, we want to be sure the nodes use the fallback data unconditionally
@@ -193,6 +211,8 @@ func (s *Server) startHttp(ch chan error) {
 		return
 	}
 	http.HandleFunc("/", s.handle)
+	http.HandleFunc("/checkpoint", s.handleCheckpoint)
+	http.HandleFunc("/updateCheckpoint", s.handleUpdate)
 	s.logger.With().Info("server starts serving", log.String("addr", ln.Addr().String()))
 	if err = s.Serve(ln); err != nil {
 		ch <- err
@@ -200,23 +220,73 @@ func (s *Server) startHttp(ch chan error) {
 }
 
 func (s *Server) Stop(ctx context.Context) {
+	s.logger.With().Info("shutting down server")
 	_ = s.Shutdown(ctx)
 	_ = s.eg.Wait()
 }
 
-func (s *Server) handle(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	data, err := afero.ReadFile(s.fs, PersistedFilename())
+func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
+	matches := s.regex.FindStringSubmatch(r.URL.String())
+	if len(matches) != 3 {
+		s.logger.With().Error("unrecognized url", log.String("url", r.URL.String()))
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	e, err := strconv.Atoi(matches[1])
+	if err != nil {
+		s.logger.With().Error("unrecognized url", log.String("url", r.URL.String()), log.Err(err))
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	epoch := types.EpochID(e)
+	suffix := matches[2]
+	serveFile := PersistedFilename(epoch, suffix)
+	s.servefile(serveFile, w)
+}
+
+func (s *Server) handleCheckpoint(w http.ResponseWriter, _ *http.Request) {
+	s.servefile(CheckpointFilename(), w)
+}
+
+func (s *Server) servefile(f string, w http.ResponseWriter) {
+	data, err := afero.ReadFile(s.fs, f)
 	if err != nil && errors.Is(err, afero.ErrFileNotFound) {
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "servefile %s: %v", f, err)
 		return
 	}
 
 	if _, err = w.Write(data); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "write response %s: %v", f, err)
 		return
 	}
+}
+
+func CheckpointFilename() string {
+	return filepath.Join(dataDir, "spacemesh-checkpoint")
+}
+
+func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "ParseForm err: %v", err)
+		return
+	}
+	data := r.FormValue("checkpoint")
+	filename := CheckpointFilename()
+	err := afero.WriteFile(s.fs, filename, []byte(data), 0o600)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "save checkpoint err: %v", err)
+		return
+	}
+	s.logger.With().Info("saved checkpoint data",
+		log.String("data", data),
+		log.String("filename", filename),
+	)
 }

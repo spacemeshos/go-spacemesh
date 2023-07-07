@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -101,7 +102,7 @@ func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 	// epochs, so just return the current layer instead
 	curLayerObj := s.genTime.CurrentLayer()
 	curLayer = curLayerObj.Uint32()
-	if curLayerObj.GetEpoch().IsGenesis() {
+	if curLayerObj <= types.GetEffectiveGenesis() {
 		latestLayer = s.mesh.LatestLayer().Uint32()
 		verifiedLayer = latestLayer
 	} else {

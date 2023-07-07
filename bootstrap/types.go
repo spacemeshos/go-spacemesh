@@ -11,8 +11,7 @@ type Update struct {
 }
 
 type InnerData struct {
-	UpdateId int64     `json:"id"`
-	Epoch    EpochData `json:"epoch"`
+	Epoch EpochData `json:"epoch"`
 }
 
 type EpochData struct {
@@ -22,7 +21,6 @@ type EpochData struct {
 }
 
 type VerifiedUpdate struct {
-	UpdateId  int64
 	Data      *EpochOverride
 	Persisted string
 }

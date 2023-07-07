@@ -7,7 +7,7 @@ import (
 	"math"
 	"sync"
 
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/spacemeshos/fixed"
 	"golang.org/x/exp/maps"
 
@@ -51,7 +51,7 @@ var (
 	errZeroCommitteeSize = errors.New("zero committee size")
 	errEmptyActiveSet    = errors.New("empty active set")
 	errZeroTotalWeight   = errors.New("zero total weight")
-	errMinerNotActive    = errors.New("miner not active in epoch")
+	ErrNotActive         = errors.New("oracle: miner is not active in epoch")
 )
 
 type cachedActiveSet struct {
@@ -66,33 +66,11 @@ type Oracle struct {
 	cdb            *datastore.CachedDB
 	vrfSigner      *signing.VRFSigner
 	vrfVerifier    vrfVerifier
-	nonceFetcher   nonceFetcher
 	layersPerEpoch uint32
-	activesCache   cache
+	activesCache   activeSetCache
 	fallback       map[types.EpochID][]types.ATXID
 	cfg            config.Config
 	log.Log
-}
-
-type defaultFetcher struct {
-	cdb *datastore.CachedDB
-}
-
-func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	nonce, err := f.cdb.VRFNonce(nodeID, epoch)
-	if err != nil {
-		return types.VRFPostIndex(0), fmt.Errorf("get vrf nonce: %w", err)
-	}
-	return nonce, nil
-}
-
-// Opt for configuring Validator.
-type Opt func(h *Oracle)
-
-func withNonceFetcher(nf nonceFetcher) Opt {
-	return func(h *Oracle) {
-		h.nonceFetcher = nf
-	}
 }
 
 // New returns a new eligibility oracle instance.
@@ -104,14 +82,13 @@ func New(
 	layersPerEpoch uint32,
 	cfg config.Config,
 	logger log.Log,
-	opts ...Opt,
 ) *Oracle {
-	ac, err := lru.New(activesCacheSize)
+	ac, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
 	if err != nil {
 		logger.With().Fatal("failed to create lru cache for active set", log.Err(err))
 	}
 
-	o := &Oracle{
+	return &Oracle{
 		beacons:        beacons,
 		cdb:            db,
 		vrfVerifier:    vrfVerifier,
@@ -122,36 +99,26 @@ func New(
 		cfg:            cfg,
 		Log:            logger,
 	}
-	for _, opt := range opts {
-		opt(o)
-	}
-
-	if o.nonceFetcher == nil {
-		o.nonceFetcher = defaultFetcher{cdb: db}
-	}
-
-	return o
 }
 
 //go:generate scalegen -types VrfMessage
 
-// VrfMessage is a verification message.
+// VrfMessage is a verification message. It is also the payload for the signature in `types.HareEligibility`.
 type VrfMessage struct {
-	Type   types.EligibilityType
-	Nonce  types.VRFPostIndex
+	Type   types.EligibilityType // always types.EligibilityHare
 	Beacon types.Beacon
 	Round  uint32
 	Layer  types.LayerID
 }
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round).
-func (o *Oracle) buildVRFMessage(ctx context.Context, nonce types.VRFPostIndex, layer types.LayerID, round uint32) ([]byte, error) {
+func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
 	beacon, err := o.beacons.GetBeacon(layer.GetEpoch())
 	if err != nil {
 		return nil, fmt.Errorf("get beacon: %w", err)
 	}
 
-	msg := VrfMessage{Type: types.EligibilityHare, Nonce: nonce, Beacon: beacon, Round: round, Layer: layer}
+	msg := VrfMessage{Type: types.EligibilityHare, Beacon: beacon, Round: round, Layer: layer}
 	buf, err := codec.Encode(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Fatal("failed to encode", log.Err(err))
@@ -180,7 +147,7 @@ func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.
 			log.String("actives", fmt.Sprintf("%v", actives)),
 			layer, log.Stringer("id.Key", id),
 		)
-		return 0, errMinerNotActive
+		return 0, fmt.Errorf("%w: %v", ErrNotActive, id)
 	}
 	return w, nil
 }
@@ -189,7 +156,7 @@ func calcVrfFrac(vrfSig types.VrfSignature) fixed.Fixed {
 	return fixed.FracFromBytes(vrfSig[:8])
 }
 
-func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, nonce types.VRFPostIndex, vrfSig types.VrfSignature) (int, fixed.Fixed, fixed.Fixed, bool, error) {
+func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, vrfSig types.VrfSignature) (int, fixed.Fixed, fixed.Fixed, bool, error) {
 	logger := o.WithContext(ctx).WithFields(
 		layer,
 		layer.GetEpoch(),
@@ -207,11 +174,10 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	// this is cheap in case the node is not eligible
 	minerWeight, err := o.minerWeight(ctx, layer, id)
 	if err != nil {
-		logger.With().Error("failed to get miner weight", log.Err(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
-	msg, err := o.buildVRFMessage(ctx, nonce, layer, round)
+	msg, err := o.buildVRFMessage(ctx, layer, round)
 	if err != nil {
 		logger.With().Warning("could not build vrf message", log.Err(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
@@ -219,9 +185,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 
 	// validate message
 	if !o.vrfVerifier.Verify(id, msg, vrfSig) {
-		logger.With().Debug("eligibility: a node did not pass vrf signature verification",
-			log.FieldNamed("sender_vrf_nonce", nonce),
-		)
+		logger.Debug("eligibility: a node did not pass vrf signature verification")
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, nil
 	}
 
@@ -265,16 +229,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 // Validate validates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is the role
 // proof and assuming commSize as the expected committee size.
 func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig types.VrfSignature, eligibilityCount uint16) (bool, error) {
-	nonce, err := o.nonceFetcher.VRFNonce(id, layer.GetEpoch())
-	if err != nil {
-		o.Log.WithContext(ctx).With().Warning("failed to find nonce for node",
-			log.Stringer("smesher", id),
-			log.Err(err),
-		)
-		return false, fmt.Errorf("nonce not found for node %s: %w", id, err)
-	}
-
-	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, nonce, sig)
+	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, sig)
 	if done || err != nil {
 		return false, err
 	}
@@ -316,10 +271,9 @@ func (o *Oracle) CalcEligibility(
 	round uint32,
 	committeeSize int,
 	id types.NodeID,
-	nonce types.VRFPostIndex,
 	vrfSig types.VrfSignature,
 ) (uint16, error) {
-	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, nonce, vrfSig)
+	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, vrfSig)
 	if done {
 		return 0, err
 	}
@@ -362,8 +316,8 @@ func (o *Oracle) CalcEligibility(
 }
 
 // Proof returns the role proof for the current Layer & Round.
-func (o *Oracle) Proof(ctx context.Context, nonce types.VRFPostIndex, layer types.LayerID, round uint32) (types.VrfSignature, error) {
-	msg, err := o.buildVRFMessage(ctx, nonce, layer, round)
+func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) (types.VrfSignature, error) {
+	msg, err := o.buildVRFMessage(ctx, layer, round)
 	if err != nil {
 		return types.EmptyVrfSignature, err
 	}
@@ -377,23 +331,23 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 	}
 	targetEpoch := targetLayer.GetEpoch()
 	// the first bootstrap data targets first epoch after genesis (epoch 2)
-	if targetEpoch != (types.GetEffectiveGenesis().GetEpoch()+1) &&
+	// and the epoch where checkpoint recovery happens
+	if targetEpoch > types.GetEffectiveGenesis().Add(1).GetEpoch() &&
 		targetLayer.Difference(targetEpoch.FirstLayer()) < o.cfg.ConfidenceParam {
 		targetEpoch -= 1
 	}
-	logger := o.WithContext(ctx).WithFields(
-		log.FieldNamed("target_layer", targetLayer),
-		log.FieldNamed("target_layer_epoch", targetLayer.GetEpoch()),
-		log.FieldNamed("target_epoch", targetEpoch),
+	o.WithContext(ctx).With().Debug("hare oracle getting active set",
+		log.Stringer("target_layer", targetLayer),
+		log.Stringer("target_layer_epoch", targetLayer.GetEpoch()),
+		log.Stringer("target_epoch", targetEpoch),
 	)
-	logger.Debug("hare oracle getting active set")
 
 	o.lock.Lock()
 	defer o.lock.Unlock()
 	if value, exists := o.activesCache.Get(targetEpoch); exists {
-		return value.(*cachedActiveSet), nil
+		return value, nil
 	}
-	activeSet, err := o.computeActiveSet(logger, targetEpoch)
+	activeSet, err := o.computeActiveSet(ctx, targetEpoch)
 	if err != nil {
 		return nil, err
 	}
@@ -409,7 +363,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 	for _, weight := range activeWeights {
 		aset.total += weight
 	}
-	logger.With().Info("got hare active set", log.Int("count", len(activeWeights)))
+	o.WithContext(ctx).With().Info("got hare active set", log.Int("count", len(activeWeights)))
 	o.activesCache.Add(targetEpoch, aset)
 	return aset, nil
 }
@@ -430,10 +384,13 @@ func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]ty
 	return activeSet, nil
 }
 
-func (o *Oracle) computeActiveSet(logger log.Log, targetEpoch types.EpochID) ([]types.ATXID, error) {
+func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]types.ATXID, error) {
 	activeSet, ok := o.fallback[targetEpoch]
 	if ok {
-		logger.With().Info("using fallback active set", log.Int("size", len(activeSet)))
+		o.WithContext(ctx).With().Info("using fallback active set",
+			targetEpoch,
+			log.Int("size", len(activeSet)),
+		)
 		return activeSet, nil
 	}
 	bid, err := certificates.FirstInEpoch(o.cdb, targetEpoch)
@@ -513,7 +470,6 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID types
 	}()
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
-		o.WithContext(ctx).With().Error("error getting active set", layer, log.Err(err))
 		return false, err
 	}
 	_, exist := actives.set[edID]

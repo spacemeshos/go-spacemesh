@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -71,7 +72,6 @@ type Builder struct {
 	nipostBuilder     nipostBuilder
 	postSetupProvider postSetupProvider
 	initialPost       *types.Post
-	initialPostMeta   *types.PostMetadata
 
 	// smeshingMutex protects `StartSmeshing` and `StopSmeshing` from concurrent access
 	smeshingMutex sync.Mutex
@@ -80,7 +80,7 @@ type Builder struct {
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
 	syncer                syncer
-	log                   log.Log
+	log                   log.Logger
 	parentCtx             context.Context
 	stop                  context.CancelFunc
 	poetCfg               PoetConfig
@@ -204,7 +204,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 		// If start session returns any error other than context.Canceled
 		// (which is how we signal it to stop) then we panic.
 		if err := b.postSetupProvider.StartSession(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			b.log.Panic(fmt.Sprintf("initialization failed: %v", err))
+			b.log.Panic("initialization failed: %v", err)
 		}
 
 		b.run(ctx)
@@ -248,7 +248,7 @@ func (b *Builder) SmesherID() types.NodeID {
 }
 
 func (b *Builder) run(ctx context.Context) {
-	if err := b.generateProof(ctx); err != nil {
+	if err := b.generateInitialPost(ctx); err != nil {
 		b.log.Error("Failed to generate proof: %s", err)
 		return
 	}
@@ -261,19 +261,32 @@ func (b *Builder) run(ctx context.Context) {
 	b.loop(ctx)
 }
 
-func (b *Builder) generateProof(ctx context.Context) error {
-	// don't generate the commitment every time smeshing is starting, but once only.
-	if _, err := b.cdb.GetLastAtx(b.nodeID); err != nil {
-		// Once initialized, run the execution phase with zero-challenge,
-		// to create the initial proof (the commitment).
-		startTime := time.Now()
-		b.initialPost, b.initialPostMeta, err = b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge)
-		if err != nil {
-			return fmt.Errorf("post execution: %w", err)
-		}
-		metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
+func (b *Builder) generateInitialPost(ctx context.Context) error {
+	// Generate the initial POST if we don't have an ATX...
+	if _, err := b.cdb.GetLastAtx(b.nodeID); err == nil {
+		return nil
+	}
+	// ...and if we don't have an initial POST persisted already.
+	if post, err := loadPost(b.nipostBuilder.DataDir()); err == nil {
+		b.initialPost = post
+		return nil
 	}
 
+	// Create the initial post and save it.
+	startTime := time.Now()
+	var err error
+	events.EmitPostStart(shared.ZeroChallenge)
+	b.initialPost, _, err = b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge)
+	if err != nil {
+		events.EmitPostFailure()
+		return fmt.Errorf("post execution: %w", err)
+	}
+	events.EmitPostComplete(shared.ZeroChallenge)
+	metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
+
+	if err := savePost(b.nipostBuilder.DataDir(), b.initialPost); err != nil {
+		b.log.With().Warning("failed to save initial post: %w", log.Err(err))
+	}
 	return nil
 }
 
@@ -367,6 +380,9 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 			log.Uint32("current epoch", current.Uint32()),
 			log.Duration("wait", wait),
 		)
+		if wait > 0 {
+			events.EmitPoetWaitRound(current, current+1, wait)
+		}
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -390,13 +406,13 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 			return nil, fmt.Errorf("failed to get commitment ATX: %w", err)
 		}
 		challenge.CommitmentATX = &commitmentAtx
-		challenge.InitialPostIndices = b.initialPost.Indices
+		challenge.InitialPost = b.initialPost
 	} else {
 		challenge.PrevATXID = prevAtx.ID
 		challenge.Sequence = prevAtx.Sequence + 1
 	}
 
-	if err = saveNipostChallenge(b.nipostBuilder.DataDir(), challenge); err != nil {
+	if err = SaveNipostChallenge(b.nipostBuilder.DataDir(), challenge); err != nil {
 		return nil, err
 	}
 	return challenge, nil
@@ -450,7 +466,7 @@ func (b *Builder) Coinbase() types.Address {
 }
 
 func (b *Builder) loadChallenge() (*types.NIPostChallenge, error) {
-	nipost, err := loadNipostChallenge(b.nipostBuilder.DataDir())
+	nipost, err := LoadNipostChallenge(b.nipostBuilder.DataDir())
 	if err != nil {
 		return nil, err
 	}
@@ -507,6 +523,12 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	}
 
 	logger.Event().Info("atx published", log.Inline(atx), log.Int("size", size))
+
+	events.EmitAtxPublished(
+		atx.PublishEpoch, atx.TargetEpoch(),
+		atx.ID(),
+		time.Until(b.layerClock.LayerToTime(atx.TargetEpoch().FirstLayer())),
+	)
 
 	select {
 	case <-atxReceived:
@@ -572,12 +594,10 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	case <-b.syncer.RegisterForATXSynced():
 	}
 
-	var initialPost *types.Post
 	var nonce *types.VRFPostIndex
 	var nodeID *types.NodeID
 	if challenge.PrevATXID == types.EmptyATXID {
 		nodeID = &b.nodeID
-		initialPost = b.initialPost
 		nonce, err = b.postSetupProvider.VRFNonce()
 		if err != nil {
 			return nil, fmt.Errorf("build atx: %w", err)
@@ -589,7 +609,6 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 		b.Coinbase(),
 		nipost,
 		b.postSetupProvider.LastOpts().NumUnits,
-		initialPost,
 		nonce,
 	)
 	atx.InnerActivationTx.NodeID = nodeID

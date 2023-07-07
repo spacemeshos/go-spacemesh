@@ -39,6 +39,18 @@ var (
 		"Number of epochs in the state",
 		[]string{},
 	).WithLabelValues()
+	atxsNumber = metrics.NewGauge(
+		"atxs",
+		namespace,
+		"number of atxs in the tortoise state",
+		[]string{},
+	).WithLabelValues()
+	malfeasantNumber = metrics.NewGauge(
+		"malfeasant",
+		namespace,
+		"number of malfeasant identities",
+		[]string{},
+	).WithLabelValues()
 )
 
 var (
@@ -78,7 +90,6 @@ var (
 	)
 	waitBallotDuration   = onBallotHist.WithLabelValues("wait")
 	decodeBallotDuration = onBallotHist.WithLabelValues("decode")
-	storeBallotDuration  = onBallotHist.WithLabelValues("store")
 	fcountBallotDuration = onBallotHist.WithLabelValues("full_count")
 	vcountBallotDuration = onBallotHist.WithLabelValues("verifying_count")
 )
@@ -143,3 +154,12 @@ var (
 	waitEncodeVotes    = encodeVotesHist.WithLabelValues("wait")
 	executeEncodeVotes = encodeVotesHist.WithLabelValues("execute")
 )
+
+// LayerDistanceToBaseBallot checks how far back a node needs to find a good ballot.
+var layerDistanceToBaseBallot = metrics.NewHistogramWithBuckets(
+	"layer_distance_to_base_ballot",
+	namespace,
+	"How far back a node needs to find a good ballot",
+	[]string{},
+	prometheus.ExponentialBuckets(1, 2, 16),
+).WithLabelValues()

@@ -13,15 +13,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
+func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, sendFor uint32) {
 	var (
 		// start sending transactions after two layers or after genesis
-		first              = maxLayer(currentLayer(tctx, t, cl.Client(0))+2, 8)
-		sendFor     uint32 = 8
-		stopSending        = first + sendFor
-		stopWaiting        = stopSending + 4
-		batch              = 10
-		amount             = 100
+		first       = maxLayer(currentLayer(tctx, t, cl.Client(0))+2, 8)
+		stopSending = first + sendFor
+		batch       = 10
+		amount      = 100
 
 		// each account creates spawn transaction in the first layer
 		// plus batch number of spend transactions in every layer after that
@@ -30,7 +28,6 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 	tctx.Log.Debugw("running transactions test",
 		"from", first,
 		"stop sending", stopSending,
-		"stop waiting", stopWaiting,
 		"expected transactions", expectedCount,
 	)
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
@@ -40,7 +37,7 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 	before := response.AccountWrapper.StateCurrent.Balance
 
 	eg, ctx := errgroup.WithContext(tctx)
-	sendTransactions(ctx, eg, tctx.Log, cl, first, stopSending, batch, amount)
+	require.NoError(t, sendTransactions(ctx, eg, tctx.Log, cl, first, stopSending, receiver, batch, amount))
 	txs := make([][]*pb.Transaction, cl.Total())
 
 	for i := 0; i < cl.Total(); i++ {

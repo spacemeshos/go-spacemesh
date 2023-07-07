@@ -114,7 +114,7 @@ func IsValid(db sql.Executor, id types.BlockID) (rst bool, err error) {
 	}); err != nil {
 		return false, fmt.Errorf("select verified %s: %w", id, err)
 	} else if rows == 0 {
-		return false, fmt.Errorf("%w block %s is not in the database", sql.ErrNotFound, err)
+		return false, fmt.Errorf("%w block %s is not in the database", sql.ErrNotFound, id)
 	}
 	return rst, err
 }

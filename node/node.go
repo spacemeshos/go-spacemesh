@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -20,6 +21,10 @@ import (
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
+	poetconfig "github.com/spacemeshos/poet/config"
+	"github.com/spacemeshos/poet/server"
+	"github.com/spacemeshos/post/verifying"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -32,8 +37,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
+	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
@@ -49,6 +55,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/node/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
@@ -68,6 +75,7 @@ import (
 const (
 	edKeyFileName   = "key.bin"
 	genesisFileName = "genesis.json"
+	dbFile          = "state.sql"
 )
 
 // Logger names.
@@ -92,6 +100,7 @@ const (
 	ProposalBuilderLogger  = "proposalBuilder"
 	ProposalListenerLogger = "proposalListener"
 	NipostBuilderLogger    = "nipostBuilder"
+	NipostValidatorLogger  = "nipostValidator"
 	Fetcher                = "fetcher"
 	TimeSyncLogger         = "timesync"
 	VMLogger               = "vm"
@@ -125,9 +134,32 @@ func GetCommand() *cobra.Command {
 			)
 
 			run := func(ctx context.Context) error {
-				if err = app.Initialize(); err != nil {
+				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
+
+				// ensure all data folders exist
+				if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
+					return fmt.Errorf("ensure folders exist: %w", err)
+				}
+
+				if err := app.Lock(); err != nil {
+					return fmt.Errorf("failed to get exclusive file lock: %w", err)
+				}
+				defer app.Unlock()
+
+				/* Create or load miner identity */
+				if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
+					return fmt.Errorf("could not retrieve identity: %w", err)
+				}
+
+				app.preserve, err = app.LoadCheckpoint(ctx)
+				if err != nil {
 					return err
 				}
+
+				if err := app.Initialize(); err != nil {
+					return err
+				}
+
 				// This blocks until the context is finished or until an error is produced
 				err = app.Start(ctx)
 
@@ -185,12 +217,6 @@ func init() {
 	grpclog = grpc_logsettable.ReplaceGrpcLoggerV2()
 }
 
-// Service is a general service interface that specifies the basic start/stop functionality.
-type Service interface {
-	Start(ctx context.Context) error
-	Close()
-}
-
 func loadConfig(c *cobra.Command) (*config.Config, error) {
 	conf, err := LoadConfigFromFile()
 	if err != nil {
@@ -221,6 +247,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
 		mapstructureutil.BigRatDecodeFunc(),
+		mapstructure.TextUnmarshallerHookFunc(),
 	)
 
 	// load config if it was loaded to the viper
@@ -275,7 +302,7 @@ func New(opts ...Option) *App {
 type App struct {
 	*cobra.Command
 	fileLock           *flock.Flock
-	nodeID             types.NodeID
+	edSgn              *signing.EdSigner
 	Config             *config.Config
 	db                 *sql.Database
 	dbMetrics          *dbmetrics.DBMetricsCollector
@@ -306,6 +333,10 @@ type App struct {
 	ptimesync          *peersync.Sync
 	tortoise           *tortoise.Tortoise
 	updater            *bootstrap.Updater
+	poetDb             *activation.PoetDb
+	postVerifier       *activation.OffloadingPostVerifier
+	preserve           *checkpoint.PreservedData
+	errCh              chan error
 
 	host *p2p.Host
 
@@ -314,7 +345,33 @@ type App struct {
 	eg      *errgroup.Group
 }
 
-func (app *App) Started() chan struct{} {
+func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, error) {
+	checkpointFile := app.Config.Recovery.Uri
+	restore := types.LayerID(app.Config.Recovery.Restore)
+	if len(checkpointFile) == 0 {
+		return nil, nil
+	}
+	if restore == 0 {
+		return nil, fmt.Errorf("restore layer not set")
+	}
+	cfg := &checkpoint.RecoverConfig{
+		GoldenAtx:      types.ATXID(app.Config.Genesis.GoldenATX()),
+		PostDataDir:    app.Config.SMESHING.Opts.DataDir,
+		DataDir:        app.Config.DataDir(),
+		DbFile:         dbFile,
+		PreserveOwnAtx: app.Config.Recovery.PreserveOwnAtx,
+		NodeID:         app.edSgn.NodeID(),
+		Uri:            checkpointFile,
+		Restore:        restore,
+	}
+	app.log.WithContext(ctx).With().Info("recover from checkpoint",
+		log.String("url", checkpointFile),
+		log.Stringer("restore", restore),
+	)
+	return checkpoint.Recover(ctx, app.log, afero.NewOsFs(), cfg)
+}
+
+func (app *App) Started() <-chan struct{} {
 	return app.started
 }
 
@@ -322,11 +379,14 @@ func (app *App) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
-// Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
-func (app *App) Initialize() (err error) {
-	// ensure all data folders exist
-	if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
-		return fmt.Errorf("ensure folders exist: %w", err)
+// Lock locks the app for exclusive use. It returns an error if the app is already locked.
+func (app *App) Lock() error {
+	lockdir := filepath.Dir(app.Config.FileLock)
+	if _, err := os.Stat(lockdir); errors.Is(err, os.ErrNotExist) {
+		err := os.Mkdir(lockdir, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("creating dir %s for lock %s: %w", lockdir, app.Config.FileLock, err)
+		}
 	}
 	fl := flock.New(app.Config.FileLock)
 	locked, err := fl.TryLock()
@@ -336,7 +396,24 @@ func (app *App) Initialize() (err error) {
 		return fmt.Errorf("only one spacemesh instance should be running (locking file %s)", fl.Path())
 	}
 	app.fileLock = fl
+	return nil
+}
 
+// Unlock unlocks the app. It is a no-op if the app is not locked.
+func (app *App) Unlock() {
+	if app.fileLock == nil {
+		return
+	}
+	if err := app.fileLock.Unlock(); err != nil {
+		log.With().Error("failed to unlock file",
+			log.String("path", app.fileLock.Path()),
+			log.Err(err),
+		)
+	}
+}
+
+// Initialize parses and validates the node configuration and sets up logging.
+func (app *App) Initialize() error {
 	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
 	var existing config.GenesisConfig
 	if err := existing.LoadFromFile(gpath); err != nil {
@@ -396,14 +473,6 @@ func (app *App) getAppInfo() string {
 // Cleanup stops all app services.
 func (app *App) Cleanup(ctx context.Context) {
 	log.Info("app cleanup starting...")
-	if app.fileLock != nil {
-		if err := app.fileLock.Unlock(); err != nil {
-			log.With().Error("failed to unlock file",
-				log.String("path", app.fileLock.Path()),
-				log.Err(err),
-			)
-		}
-	}
 	app.stopServices(ctx)
 	// add any other Cleanup tasks here....
 	log.Info("app cleanup completed")
@@ -456,20 +525,31 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
-func (app *App) initServices(
-	ctx context.Context,
-	sgn *signing.EdSigner,
-	poetClients []activation.PoetProvingServiceClient,
-	vrfSigner *signing.VRFSigner,
-	clock *timesync.NodeClock,
-) error {
-	nodeID := sgn.NodeID()
+func (app *App) initServices(ctx context.Context, poetClients []activation.PoetProvingServiceClient) error {
+	vrfSigner, err := app.edSgn.VRFSigner()
+	if err != nil {
+		return fmt.Errorf("could not create vrf signer: %w", err)
+	}
 	layerSize := app.Config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
-	lg := app.log.Named(nodeID.ShortString()).WithFields(nodeID)
+	lg := app.log.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
-	validator := activation.NewValidator(poetDb, app.Config.POST)
+
+	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
+	postVerifiers := make([]activation.PostVerifier, 0, app.Config.SMESHING.VerifyingOpts.Workers)
+	lg.Debug("creating post verifier")
+	verifier, err := activation.NewPostVerifier(app.Config.POST, nipostValidatorLogger, verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags))
+	lg.With().Debug("created post verifier", log.Err(err))
+	if err != nil {
+		return err
+	}
+	for i := 0; i < app.Config.SMESHING.VerifyingOpts.Workers; i++ {
+		postVerifiers = append(postVerifiers, verifier)
+	}
+	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
+
+	validator := activation.NewValidator(poetDb, app.Config.POST, nipostValidatorLogger, app.postVerifier)
 	app.validator = validator
 
 	cfg := vm.DefaultConfig()
@@ -503,14 +583,13 @@ func (app *App) initServices(
 		return errors.New("invalid golden atx id")
 	}
 
-	var err error
 	app.edVerifier, err = signing.NewEdVerifier(signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
 	if err != nil {
 		return fmt.Errorf("failed to create signature verifier: %w", err)
 	}
 
 	vrfVerifier := signing.NewVRFVerifier()
-	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.edVerifier, vrfSigner, vrfVerifier, app.cachedDB, clock,
+	beaconProtocol := beacon.New(app.edSgn.NodeID(), app.host, app.edSgn, app.edVerifier, vrfSigner, vrfVerifier, app.cachedDB, app.clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
@@ -521,16 +600,23 @@ func (app *App) initServices(
 	if trtlCfg.BadBeaconVoteDelayLayers == 0 {
 		trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 	}
-	trtl, err := tortoise.Recover(app.cachedDB, beaconProtocol,
-		tortoise.WithContext(ctx),
+	trtlopts := []tortoise.Opt{
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
+	}
+	if trtlCfg.EnableTracer {
+		app.log.With().Info("tortoise will trace execution")
+		trtlopts = append(trtlopts, tortoise.WithTracer())
+	}
+	trtl, err := tortoise.Recover(
+		app.cachedDB, beaconProtocol, trtlopts...,
 	)
 	if err != nil {
 		return fmt.Errorf("can't recover tortoise state: %w", err)
 	}
 	app.eg.Go(func() error {
 		for rst := range beaconProtocol.Results() {
+			events.EmitBeacon(rst.Epoch, rst.Beacon)
 			trtl.OnBeacon(rst.Epoch, rst.Beacon)
 		}
 		app.log.Debug("beacon results watcher exited")
@@ -538,7 +624,7 @@ func (app *App) initServices(
 	})
 
 	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(ExecutorLogger, lg))
-	msh, err := mesh.NewMesh(app.cachedDB, clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
+	msh, err := mesh.NewMesh(app.cachedDB, app.clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
@@ -552,14 +638,15 @@ func (app *App) initServices(
 	atxHandler := activation.NewHandler(
 		app.cachedDB,
 		app.edVerifier,
-		clock,
+		app.clock,
 		app.host,
 		fetcherWrapped,
 		layersPerEpoch,
 		app.Config.TickSize,
 		goldenATXID,
 		validator,
-		[]activation.AtxReceiver{trtl, beaconProtocol},
+		beaconProtocol,
+		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
 		poetCfg,
 	)
@@ -571,14 +658,15 @@ func (app *App) initServices(
 			app.Config.HareEligibility.ConfidenceParam, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.edVerifier, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, clock,
+	proposalListener := proposals.NewHandler(app.cachedDB, app.edVerifier, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, app.clock,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
-			LayerSize:      layerSize,
-			LayersPerEpoch: layersPerEpoch,
-			GoldenATXID:    goldenATXID,
-			MaxExceptions:  trtlCfg.MaxExceptions,
-			Hdist:          trtlCfg.Hdist,
+			LayerSize:              layerSize,
+			LayersPerEpoch:         layersPerEpoch,
+			GoldenATXID:            goldenATXID,
+			MaxExceptions:          trtlCfg.MaxExceptions,
+			Hdist:                  trtlCfg.Hdist,
+			MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
 		}),
 	)
 
@@ -594,14 +682,16 @@ func (app *App) initServices(
 	app.hOracle = eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
-	app.Config.Bootstrap.DataDir = app.Config.DataDir()
-	app.Config.Bootstrap.Interval = app.Config.LayerDuration / 5
+	bscfg := app.Config.Bootstrap
+	bscfg.DataDir = app.Config.DataDir()
+	bscfg.Interval = app.Config.LayerDuration / 5
 	app.updater = bootstrap.New(
-		bootstrap.WithConfig(app.Config.Bootstrap),
+		app.clock,
+		bootstrap.WithConfig(bscfg),
 		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
 	)
 
-	app.certifier = blocks.NewCertifier(app.cachedDB, app.hOracle, nodeID, sgn, app.edVerifier, app.host, clock, beaconProtocol, trtl,
+	app.certifier = blocks.NewCertifier(app.cachedDB, app.hOracle, app.edSgn.NodeID(), app.edSgn, app.edVerifier, app.host, app.clock, beaconProtocol, trtl,
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
@@ -621,15 +711,17 @@ func (app *App) initServices(
 
 	patrol := layerpatrol.New()
 	syncerConf := syncer.Config{
-		SyncInterval:     time.Duration(app.Config.SyncInterval) * time.Second,
+		Interval:         app.Config.Sync.Interval,
+		EpochEndFraction: 0.8,
 		HareDelayLayers:  app.Config.Tortoise.Zdist,
 		SyncCertDistance: app.Config.Tortoise.Hdist,
-		MaxHashesInReq:   100,
 		MaxStaleDuration: time.Hour,
+		Standalone:       app.Config.Standalone,
 	}
-	newSyncer := syncer.NewSyncer(app.cachedDB, clock, beaconProtocol, msh, fetcher, patrol, app.certifier,
+	newSyncer := syncer.NewSyncer(app.cachedDB, app.clock, beaconProtocol, msh, trtl, fetcher, patrol, app.certifier,
 		syncer.WithConfig(syncerConf),
-		syncer.WithLogger(app.addLogger(SyncLogger, lg)))
+		syncer.WithLogger(app.addLogger(SyncLogger, lg)),
+	)
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
 
@@ -652,24 +744,24 @@ func (app *App) initServices(
 		app.cachedDB,
 		hareCfg,
 		app.host,
-		sgn,
+		app.edSgn,
 		app.edVerifier,
-		nodeID,
+		app.edSgn.NodeID(),
 		hareOutputCh,
 		newSyncer,
 		beaconProtocol,
 		app.hOracle,
 		patrol,
 		app.hOracle,
-		clock,
+		app.clock,
 		tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
 		app.addLogger(HareLogger, lg),
 	)
 
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
-		clock,
-		sgn,
+		app.clock,
+		app.edSgn,
 		vrfSigner,
 		app.cachedDB,
 		app.host,
@@ -677,15 +769,16 @@ func (app *App) initServices(
 		beaconProtocol,
 		newSyncer,
 		app.conState,
-		miner.WithNodeID(nodeID),
+		miner.WithNodeID(app.edSgn.NodeID()),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
+		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
 
 	postSetupMgr, err := activation.NewPostSetupManager(
-		nodeID,
+		app.edSgn.NodeID(),
 		app.Config.POST,
 		app.addLogger(PostLogger, lg),
 		app.cachedDB, goldenATXID,
@@ -696,15 +789,15 @@ func (app *App) initServices(
 	}
 
 	nipostBuilder := activation.NewNIPostBuilder(
-		nodeID,
+		app.edSgn.NodeID(),
 		postSetupMgr,
 		poetClients,
 		poetDb,
 		app.Config.SMESHING.Opts.DataDir,
 		app.addLogger(NipostBuilderLogger, lg),
-		sgn,
+		app.edSgn,
 		poetCfg,
-		clock,
+		app.clock,
 	)
 
 	var coinbaseAddr types.Address
@@ -725,14 +818,14 @@ func (app *App) initServices(
 	}
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
-		nodeID,
-		sgn,
+		app.edSgn.NodeID(),
+		app.edSgn,
 		app.cachedDB,
 		atxHandler,
 		app.host,
 		nipostBuilder,
 		postSetupMgr,
-		clock,
+		app.clock,
 		newSyncer,
 		app.addLogger("atxBuilder", lg),
 		activation.WithContext(ctx),
@@ -746,20 +839,30 @@ func (app *App) initServices(
 		app.host.ID(),
 		app.hare,
 		app.edVerifier,
+		trtl,
 	)
-	fetcher.SetValidators(atxHandler, poetDb, proposalListener, blockHandler, proposalListener, app.txHandler, malfeasanceHandler)
+	fetcher.SetValidators(
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(atxHandler.HandleAtxData, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(proposalListener.HandleSyncedBallot, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(blockHandler.HandleSyncedBlock, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(proposalListener.HandleSyncedProposal, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleBlockTransaction, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleProposalTransaction, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(malfeasanceHandler.HandleSyncedMalfeasanceProof, app.host, lg)),
+	)
 
-	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
+	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
 		if newSyncer.ListenToGossip() {
-			return pubsub.ValidationAccept
+			return nil
 		}
-		return pubsub.ValidationIgnore
+		return errors.New("not synced for gossip")
 	}
-	atxSyncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
+	atxSyncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
 		if newSyncer.ListenToATXGossip() {
-			return pubsub.ValidationAccept
+			return nil
 		}
-		return pubsub.ValidationIgnore
+		return errors.New("not synced for gossip")
 	}
 
 	app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
@@ -777,11 +880,11 @@ func (app *App) initServices(
 	app.proposalListener = proposalListener
 	app.mesh = msh
 	app.syncer = newSyncer
-	app.clock = clock
 	app.svm = state
 	app.atxBuilder = atxBuilder
 	app.postSetupMgr = postSetupMgr
 	app.atxHandler = atxHandler
+	app.poetDb = poetDb
 	app.fetcher = fetcher
 	app.beaconProtocol = beaconProtocol
 	app.tortoise = trtl
@@ -793,14 +896,69 @@ func (app *App) initServices(
 			peersync.WithConfig(app.Config.TIME.Peersync),
 		)
 	}
-
+	if err := app.host.Start(); err != nil {
+		return err
+	}
 	return nil
 }
 
-func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
+func (app *App) launchStandalone(ctx context.Context) error {
+	if !app.Config.Standalone {
+		return nil
+	}
+	if len(app.Config.PoETServers) != 1 {
+		return fmt.Errorf("to launch in a standalone mode provide single local address for poet: %v", app.Config.PoETServers)
+	}
+	value := types.Beacon{}
+	genesis := app.Config.Genesis.GenesisID()
+	copy(value[:], genesis[:])
+	epoch := types.GetEffectiveGenesis().GetEpoch() + 1
+	app.log.With().Warning("using standalone mode for bootstrapping beacon",
+		log.Uint32("epoch", epoch.Uint32()),
+		log.Stringer("beacon", value),
+	)
+	if err := app.beaconProtocol.UpdateBeacon(epoch, value); err != nil {
+		return fmt.Errorf("update standalone beacon: %w", err)
+	}
+	cfg := poetconfig.DefaultConfig()
+	cfg.PoetDir = filepath.Join(app.Config.DataDir(), "poet")
+	cfg.DataDir = cfg.PoetDir
+	cfg.LogDir = cfg.PoetDir
+	parsed, err := url.Parse(app.Config.PoETServers[0])
+	if err != nil {
+		return err
+	}
+	cfg.RawRESTListener = parsed.Host
+	cfg.Service.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime)
+	cfg.Service.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
+	cfg.Service.CycleGap = app.Config.POET.CycleGap
+	cfg.Service.PhaseShift = app.Config.POET.PhaseShift
+	srv, err := server.New(ctx, *cfg)
+	if err != nil {
+		return fmt.Errorf("init poet server: %w", err)
+	}
+	app.log.With().Warning("lauching poet in standalone mode", log.Any("config", cfg))
 	app.eg.Go(func() error {
-		ch := app.updater.Subscribe()
-		app.updater.Start(ctx)
+		if err := srv.Start(ctx); err != nil {
+			app.log.With().Error("poet server failed", log.Err(err))
+			return err
+		}
+		return nil
+	})
+	return nil
+}
+
+func (app *App) listenToUpdates(ctx context.Context) {
+	app.eg.Go(func() error {
+		ch, err := app.updater.Subscribe()
+		if err != nil {
+			app.errCh <- err
+			return nil
+		}
+		if err := app.updater.Start(); err != nil {
+			app.errCh <- err
+			return nil
+		}
 		for update := range ch {
 			select {
 			case <-ctx.Done():
@@ -808,7 +966,7 @@ func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 			default:
 				if update.Data.Beacon != types.EmptyBeacon {
 					if err := app.beaconProtocol.UpdateBeacon(update.Data.Epoch, update.Data.Beacon); err != nil {
-						appErr <- err
+						app.errCh <- err
 						return nil
 					}
 				}
@@ -821,14 +979,15 @@ func (app *App) listenToUpdates(ctx context.Context, appErr chan error) {
 	})
 }
 
-func (app *App) startServices(ctx context.Context, appErr chan error) error {
+func (app *App) startServices(ctx context.Context) error {
 	if err := app.fetcher.Start(); err != nil {
 		return fmt.Errorf("failed to start fetcher: %w", err)
 	}
 	app.eg.Go(func() error {
-		app.startSyncer(ctx)
+		app.postVerifier.Start(ctx)
 		return nil
 	})
+	app.syncer.Start()
 	app.beaconProtocol.Start(ctx)
 
 	app.blockGen.Start()
@@ -857,7 +1016,7 @@ func (app *App) startServices(ctx context.Context, appErr chan error) error {
 	}
 
 	if app.updater != nil {
-		app.listenToUpdates(ctx, appErr)
+		app.listenToUpdates(ctx)
 	}
 	return nil
 }
@@ -865,19 +1024,21 @@ func (app *App) startServices(ctx context.Context, appErr chan error) error {
 func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcserver.ServiceAPI, error) {
 	switch svc {
 	case grpcserver.Debug:
-		return grpcserver.NewDebugService(app.conState, app.host, app.hOracle), nil
+		return grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle), nil
 	case grpcserver.GlobalState:
 		return grpcserver.NewGlobalStateService(app.mesh, app.conState), nil
 	case grpcserver.Mesh:
 		return grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal)), nil
 	case grpcserver.Node:
 		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
+	case grpcserver.Admin:
+		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.log.WithName("admin")), nil
 	case grpcserver.Smesher:
 		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
 	case grpcserver.Transaction:
 		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
 	case grpcserver.Activation:
-		return grpcserver.NewActivationService(app.cachedDB), nil
+		return grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX())), nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
@@ -962,6 +1123,7 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	if app.updater != nil {
+		log.Info("stopping updater")
 		app.updater.Close()
 	}
 
@@ -1020,6 +1182,10 @@ func (app *App) stopServices(ctx context.Context) {
 		app.dbMetrics.Close()
 	}
 
+	if app.postVerifier != nil {
+		app.postVerifier.Close()
+	}
+
 	events.CloseEventReporter()
 }
 
@@ -1028,31 +1194,38 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	filename := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
 	log.Info("Looking for identity file at `%v`", filename)
 
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("failed to read identity file: %w", err)
-		}
-
-		log.Info("Identity file not found. Creating new identity...")
-
-		edSgn, err := signing.NewEdSigner(
-			signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
-		)
+	var data []byte
+	if len(app.Config.TestConfig.SmesherKey) > 0 {
+		log.With().Error("!!!TESTING!!! using pre-configured smesher key")
+		data = []byte(app.Config.TestConfig.SmesherKey)
+	} else {
+		var err error
+		data, err = os.ReadFile(filename)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create identity: %w", err)
-		}
-		if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
-			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
-		}
+			if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("failed to read identity file: %w", err)
+			}
 
-		err = os.WriteFile(filename, []byte(hex.EncodeToString(edSgn.PrivateKey())), 0o600)
-		if err != nil {
-			return nil, fmt.Errorf("failed to write identity file: %w", err)
-		}
+			log.Info("Identity file not found. Creating new identity...")
 
-		log.With().Info("created new identity", edSgn.PublicKey())
-		return edSgn, nil
+			edSgn, err := signing.NewEdSigner(
+				signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create identity: %w", err)
+			}
+			if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
+				return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
+			}
+
+			err = os.WriteFile(filename, []byte(hex.EncodeToString(edSgn.PrivateKey())), 0o600)
+			if err != nil {
+				return nil, fmt.Errorf("failed to write identity file: %w", err)
+			}
+
+			log.With().Info("created new identity", edSgn.PublicKey())
+			return edSgn, nil
+		}
 	}
 	dst := make([]byte, signing.PrivateKeySize)
 	n, err := hex.Decode(dst, data)
@@ -1071,20 +1244,14 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	}
 
 	log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
-
 	return edSgn, nil
-}
-
-func (app *App) startSyncer(ctx context.Context) {
-	app.syncer.Start(ctx)
 }
 
 func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
 	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
-
-	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, "state.sql"),
+	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 	)
@@ -1092,7 +1259,6 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
 	app.db = sqlDB
-
 	if app.Config.CollectMetrics {
 		app.dbMetrics = dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
 	}
@@ -1122,14 +1288,14 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	/* Setup monitoring */
-	appErr := make(chan error, 100)
+	app.errCh = make(chan error, 100)
 	if app.Config.PprofHTTPServer {
 		logger.Info("starting pprof server")
 		srv := &http.Server{Addr: ":6060"}
 		defer srv.Shutdown(ctx)
 		app.eg.Go(func() error {
 			if err := srv.ListenAndServe(); err != nil {
-				appErr <- fmt.Errorf("cannot start pprof http server: %w", err)
+				app.errCh <- fmt.Errorf("cannot start pprof http server: %w", err)
 			}
 			return nil
 		})
@@ -1149,12 +1315,7 @@ func (app *App) Start(ctx context.Context) error {
 		defer p.Stop()
 	}
 
-	/* Create or load miner identity */
-
-	edSgn, err := app.LoadOrCreateEdSigner()
-	if err != nil {
-		return fmt.Errorf("could not retrieve identity: %w", err)
-	}
+	lg := logger.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
 
 	poetClients := make([]activation.PoetProvingServiceClient, 0, len(app.Config.PoETServers))
 	for _, address := range app.Config.PoETServers {
@@ -1165,17 +1326,13 @@ func (app *App) Start(ctx context.Context) error {
 		poetClients = append(poetClients, client)
 	}
 
-	app.nodeID = edSgn.NodeID()
-
-	lg := logger.Named(app.nodeID.ShortString()).WithFields(app.nodeID)
-
 	/* Initialize all protocol services */
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
 	if err != nil {
 		return fmt.Errorf("cannot parse genesis time %s: %w", app.Config.Genesis.GenesisTime, err)
 	}
-	clock, err := timesync.NewClock(
+	app.clock, err = timesync.NewClock(
 		timesync.WithLayerDuration(app.Config.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(gTime),
@@ -1192,32 +1349,21 @@ func (app *App) Start(ctx context.Context) error {
 	p2plog := app.addLogger(P2PLogger, lg)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
-	app.host, err = p2p.New(ctx, p2plog, cfg, app.Config.Genesis.GenesisID(),
+	prologue := fmt.Sprintf("%x-%v",
+		app.Config.Genesis.GenesisID(),
+		types.GetEffectiveGenesis(),
+	)
+	app.host, err = p2p.New(ctx, p2plog, cfg, []byte(prologue),
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
 
-	dbStorepath := app.Config.DataDir()
-	if err = app.setupDBs(ctx, lg, dbStorepath); err != nil {
+	if err := app.setupDBs(ctx, lg, app.Config.DataDir()); err != nil {
 		return err
 	}
-	// need db to initialize the vrf signer
-	vrfSigner, err := edSgn.VRFSigner()
-	if err != nil {
-		return fmt.Errorf("could not create vrf signer: %w", err)
-	}
-
-	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-	err = app.initServices(
-		ctx,
-		edSgn,
-		poetClients,
-		vrfSigner,
-		clock,
-	)
-	if err != nil {
+	if err := app.initServices(ctx, poetClients); err != nil {
 		return fmt.Errorf("cannot start services: %w", err)
 	}
 
@@ -1226,19 +1372,27 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	if app.Config.MetricsPush != "" {
-		metrics.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
+		metrics.StartPushingMetrics(app.Config.MetricsPush,
+			app.Config.MetricsPushUser, app.Config.MetricsPushPass, app.Config.MetricsPushPeriod,
 			app.host.ID().String(), app.Config.Genesis.GenesisID().ShortString())
 	}
 
-	if err := app.startServices(ctx, appErr); err != nil {
+	if err := app.startServices(ctx); err != nil {
 		return err
 	}
+
+	// need post verifying service to start first
+	app.preserveAfterRecovery(ctx)
 
 	if err := app.startAPIServices(ctx); err != nil {
 		return err
 	}
 
-	events.SubscribeToLayers(clock)
+	if err := app.launchStandalone(ctx); err != nil {
+		return err
+	}
+
+	events.SubscribeToLayers(app.clock)
 	logger.Info("app started")
 
 	// notify anyone who might be listening that the app has finished starting.
@@ -1252,7 +1406,7 @@ func (app *App) Start(ctx context.Context) error {
 	// TODO: pass app.eg to components and wait for them collectively
 	if app.ptimesync != nil {
 		app.eg.Go(func() error {
-			appErr <- app.ptimesync.Wait()
+			app.errCh <- app.ptimesync.Wait()
 			return nil
 		})
 	}
@@ -1261,9 +1415,62 @@ func (app *App) Start(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return nil
-	case err = <-appErr:
+	case err = <-app.errCh:
 		return err
 	}
+}
+
+func (app *App) preserveAfterRecovery(ctx context.Context) {
+	if app.preserve == nil {
+		return
+	}
+	for i, poetProof := range app.preserve.Proofs {
+		encoded, err := codec.Encode(poetProof)
+		if err != nil {
+			app.log.With().Error("failed to encode poet proof after checkpoint",
+				log.Stringer("atx id", app.preserve.Deps[i].ID()),
+				log.Object("poet proof", poetProof),
+				log.Err(err),
+			)
+			continue
+		}
+		if err := app.poetDb.ValidateAndStoreMsg(ctx, p2p.NoPeer, encoded); err != nil {
+			app.log.With().Error("failed to preserve poet proof after checkpoint",
+				log.Stringer("atx id", app.preserve.Deps[i].ID()),
+				log.String("poet proof ref", app.preserve.Deps[i].GetPoetProofRef().ShortString()),
+				log.Err(err),
+			)
+			continue
+		}
+		app.log.With().Info("preserved poet proof after checkpoint",
+			log.Stringer("atx id", app.preserve.Deps[i].ID()),
+			log.String("poet proof ref", app.preserve.Deps[i].GetPoetProofRef().ShortString()),
+		)
+	}
+	for _, vatx := range app.preserve.Deps {
+		encoded, err := codec.Encode(vatx)
+		if err != nil {
+			app.log.With().Error("failed to encode atx after checkpoint",
+				log.Inline(vatx),
+				log.Err(err),
+			)
+			continue
+		}
+		if err := app.atxHandler.HandleAtxData(ctx, p2p.NoPeer, encoded); err != nil {
+			app.log.With().Error("failed to preserve atx after checkpoint",
+				log.Inline(vatx),
+				log.Err(err),
+			)
+			continue
+		}
+		app.log.With().Info("preserved atx after checkpoint",
+			log.Inline(vatx),
+		)
+	}
+}
+
+func (app *App) Host() *p2p.Host {
+	return app.host
 }
 
 type layerFetcher struct {

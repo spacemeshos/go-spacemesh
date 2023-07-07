@@ -12,12 +12,8 @@
     },
     "data": {
       "type": "object",
-      "required": ["id", "epoch"],
+      "required": ["epoch"],
       "properties": {
-        "id": {
-          "type": "integer",
-          "exclusiveMinimum": 0
-        },
         "epoch": {
           "type": "object",
           "properties": {

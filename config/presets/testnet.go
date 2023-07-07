@@ -40,15 +40,14 @@ func testnet() config.Config {
 	conf.LayerAvgSize = 50
 	conf.LayerDuration = 120 * time.Second
 	conf.LayersPerEpoch = 60
-	conf.SyncRequestTimeout = 60_000
 
 	conf.Tortoise.Hdist = 60
 	conf.Tortoise.Zdist = 10
 	conf.Tortoise.BadBeaconVoteDelayLayers = 30
 
-	conf.POST.K1 = 273
-	conf.POST.K2 = 300
-	conf.POST.K3 = 100
+	conf.POST.K1 = 26
+	conf.POST.K2 = 37
+	conf.POST.K3 = 37
 	conf.POST.LabelsPerUnit = 20 * 1024 / 16 // 20 kB units
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
