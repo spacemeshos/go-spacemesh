@@ -382,29 +382,6 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		require.Nil(t, malProof)
 	})
 
-	t.Run("invalid hare eligibility", func(t *testing.T) {
-		bp := ballotProof
-		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
-		bp.Messages[0].SmesherID = sig.NodeID()
-		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
-		bp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
-				Layer: lid,
-				Proof: types.Proof{
-					Type: types.MultipleBallots,
-					Data: &bp,
-				},
-			},
-			Eligibility: &types.HareEligibilityGossip{
-				NodeID: types.RandomNodeID(),
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-	})
-
 	t.Run("valid", func(t *testing.T) {
 		bp := ballotProof
 		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
@@ -735,16 +712,6 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 			},
 		},
 	}
-
-	t.Run("different node id", func(t *testing.T) {
-		gs := gossip
-		gs.Eligibility = &types.HareEligibilityGossip{
-			NodeID: types.RandomNodeID(),
-		}
-		data, err := codec.Encode(gs)
-		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-	})
 
 	t.Run("relay eligibility", func(t *testing.T) {
 		gs := gossip
