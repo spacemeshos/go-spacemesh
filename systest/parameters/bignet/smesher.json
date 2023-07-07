@@ -5,8 +5,8 @@
         "layer-duration": "3m"
     },
     "poet": {
-        "phase-shift": "500m",
-        "cycle-gap": "500m",
+        "phase-shift": "400m",
+        "cycle-gap": "400m",
         "grace-period": "10m"
     },
     "tortoise": {
