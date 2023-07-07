@@ -92,6 +92,28 @@ func TestVerify(t *testing.T) {
 	}
 }
 
+func TestVerifyOneOfOne(t *testing.T) {
+	pub, pk, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	key := core.PublicKey{}
+	copy(key[:], pub)
+	ms := MultiSig{
+		Required:   uint8(1),
+		PublicKeys: []core.PublicKey{key},
+	}
+	empty := types.Hash20{}
+	message := []byte("message")
+	signed := append(empty[:], message...)
+	signature := prepSigFromKeys(t, signed, []ed25519.PrivateKey{pk}, 0)
+	require.True(t,
+		ms.Verify(
+			&core.Context{},
+			append(message, signature...),
+			scale.NewDecoder(bytes.NewReader(signature)),
+		),
+	)
+}
+
 func BenchmarkVerify(b *testing.B) {
 	const keys = 10
 	privates := []ed25519.PrivateKey{}
