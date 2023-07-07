@@ -97,6 +97,15 @@ func (s NodeService) Status(ctx context.Context, _ *pb.StatusRequest) (*pb.Statu
 	}, nil
 }
 
+func (s NodeService) NodeInfo(context.Context, *empty.Empty) (*pb.NodeInfoResponse, error) {
+	return &pb.NodeInfoResponse{
+		Hrp:              types.NetworkHRP(),
+		FirstGenesis:     types.FirstEffectiveGenesis().Uint32(),
+		EffectiveGenesis: types.GetEffectiveGenesis().Uint32(),
+		EpochSize:        types.GetLayersPerEpoch(),
+	}, nil
+}
+
 func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 	// We cannot get meaningful data from the mesh during the genesis epochs since there are no blocks in these
 	// epochs, so just return the current layer instead
