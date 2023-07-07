@@ -457,6 +457,7 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 	peer2requests := make(map[p2p.Peer][]RequestMessage)
 	peers := f.host.GetPeers()
 	if len(peers) == 0 {
+		log.Info("cannot send fetch: no peers found")
 		// in loop() we will try again after the batchTimeout
 		return nil
 	}
