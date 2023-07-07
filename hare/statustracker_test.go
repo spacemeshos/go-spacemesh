@@ -338,7 +338,7 @@ func verifyMalfeasanceProof(t *testing.T, sig *signing.EdSigner, gossip *types.M
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	createIdentity(t, cdb.Database, sig)
-	nodeID, err := malfeasance.Validate(context.Background(), lg, cdb, edVerifier, nil, gossip)
+	nodeID, err := malfeasance.Validate(context.Background(), lg, cdb, edVerifier, gossip)
 	require.NoError(t, err)
 	require.Equal(t, sig.NodeID(), nodeID)
 }

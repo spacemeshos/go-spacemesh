@@ -580,7 +580,7 @@ func TestEquivocation(t *testing.T) {
 		close(ch)
 		for gossip := range ch {
 			require.Equal(t, badGuy.NodeID(), gossip.Eligibility.NodeID)
-			nid, err := malfeasance.Validate(ctx, lg, cdb, test.brokers[0].edVerifier, nil, gossip)
+			nid, err := malfeasance.Validate(ctx, lg, cdb, test.brokers[0].edVerifier, gossip)
 			require.NoError(t, err)
 			require.Equal(t, badGuy.NodeID(), nid)
 		}

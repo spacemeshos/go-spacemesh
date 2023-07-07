@@ -714,7 +714,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			require.NoError(t, codec.Decode(data, &got))
-			nodeID, err := malfeasance.Validate(context.Background(), atxHdlr.log, atxHdlr.cdb, atxHdlr.edVerifier, nil, &got)
+			nodeID, err := malfeasance.Validate(context.Background(), atxHdlr.log, atxHdlr.cdb, atxHdlr.edVerifier, &got)
 			require.NoError(t, err)
 			require.Equal(t, sig.NodeID(), nodeID)
 			return nil
