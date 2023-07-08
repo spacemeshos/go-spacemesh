@@ -21,6 +21,11 @@ func TestRingBuffer(t *testing.T) {
 		buffer := newRing[int](cap)
 		for i := 0; i < cap*2; i++ {
 			buffer.insert(i)
+			if i < cap {
+				require.Equal(t, i+1, buffer.Len())
+			} else {
+				require.Equal(t, cap, buffer.Len())
+			}
 		}
 		require.Equal(t, cap, buffer.Len())
 		expect := cap
@@ -29,7 +34,7 @@ func TestRingBuffer(t *testing.T) {
 			expect++
 			return true
 		})
-		require.Equal(t, cap*2-1, expect)
+		require.Equal(t, cap*2, expect)
 	})
 	t.Run("terminate", func(t *testing.T) {
 		buffer := newRing[int](cap)
@@ -57,6 +62,6 @@ func TestRingBuffer(t *testing.T) {
 			expect++
 			return true
 		})
-		require.Equal(t, cap/2-1, expect)
+		require.Equal(t, cap/2, expect)
 	})
 }

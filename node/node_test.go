@@ -955,6 +955,7 @@ func TestAdminEvents(t *testing.T) {
 		stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
 		require.NoError(t, err)
 		success := []pb.IsEventDetails{
+			&pb.Event_Beacon{},
 			&pb.Event_InitStart{},
 			&pb.Event_InitComplete{},
 			&pb.Event_PostStart{},

@@ -109,7 +109,6 @@ func (a AdminService) EventsStream(req *pb.EventStreamRequest, stream pb.AdminSe
 		return status.Errorf(codes.Unavailable, "can't send header")
 	}
 	buf.Iterate(func(ev events.UserEvent) bool {
-		fmt.Println(ev.Event.Help)
 		err = stream.Send(ev.Event)
 		return err == nil
 	})

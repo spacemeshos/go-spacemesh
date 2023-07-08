@@ -570,10 +570,13 @@ func (r *Ring[T]) insert(value T) {
 }
 
 func (r *Ring[T]) Copy() *Ring[T] {
-	cp := *r
-	cp.data = make([]T, r.Len())
+	cp := &Ring[T]{
+		first: r.first,
+		last:  r.last,
+		data:  make([]T, r.Len()),
+	}
 	copy(cp.data, r.data)
-	return &cp
+	return cp
 }
 
 func (r *Ring[T]) Len() int {
@@ -590,7 +593,20 @@ func (r *Ring[T]) Iterate(iter func(val T) bool) {
 	if r.last == -1 {
 		return
 	}
-	for i := r.first; i != r.last; i = (i + 1) % len(r.data) {
+	if r.last > r.first {
+		for i := r.first; i <= r.last; i++ {
+			if !iter(r.data[i]) {
+				return
+			}
+		}
+		return
+	}
+	for i := r.first; i < len(r.data); i++ {
+		if !iter(r.data[i]) {
+			return
+		}
+	}
+	for i := 0; i < r.first; i++ {
 		if !iter(r.data[i]) {
 			return
 		}
