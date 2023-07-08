@@ -193,7 +193,7 @@ func emitUserEvent(help string, failure bool, details pb.IsEventDetails) {
 	mu.RLock()
 	defer mu.RUnlock()
 	if reporter != nil {
-		if err := reporter.eventsEmitter.Emit(UserEvent{Event: &pb.Event{
+		if err := reporter.EmitUserEvent(UserEvent{Event: &pb.Event{
 			Timestamp: timestamppb.New(time.Now()),
 			Help:      help,
 			Failure:   failure,

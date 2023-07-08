@@ -98,7 +98,7 @@ func (a AdminService) Recover(_ context.Context, _ *pb.RecoverRequest) (*empty.E
 }
 
 func (a AdminService) EventsStream(req *pb.EventStreamRequest, stream pb.AdminService_EventsStreamServer) error {
-	sub, err := events.Subscribe[events.UserEvent]()
+	sub, buf, err := events.SubscribeUserEvents(events.WithBuffer(1000))
 	if err != nil {
 		return status.Errorf(codes.FailedPrecondition, err.Error())
 	}
@@ -107,6 +107,14 @@ func (a AdminService) EventsStream(req *pb.EventStreamRequest, stream pb.AdminSe
 	// this is optional but allows subscriber to wait until stream is fully initialized.
 	if err := stream.SendHeader(metadata.MD{}); err != nil {
 		return status.Errorf(codes.Unavailable, "can't send header")
+	}
+	buf.Iterate(func(ev events.UserEvent) bool {
+		fmt.Println(ev.Event.Help)
+		err = stream.Send(ev.Event)
+		return err == nil
+	})
+	if err != nil {
+		return fmt.Errorf("send buffered to stream: %w", err)
 	}
 	for {
 		select {

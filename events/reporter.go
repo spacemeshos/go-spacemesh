@@ -333,6 +333,15 @@ func SubscribeToLayers(ticker LayerClock) {
 	}()
 }
 
+func SubscribeUserEvents(opts ...SubOpt) (*BufferedSubscription[UserEvent], *Ring[UserEvent], error) {
+	mu.RLock()
+	defer mu.RUnlock()
+	if reporter == nil {
+		return nil, nil, nil
+	}
+	return reporter.SubUserEvents(opts...)
+}
+
 // The status of a layer
 // TODO: this list is woefully inadequate and does not map to reality. See https://github.com/spacemeshos/api/issues/144.
 const (
@@ -411,8 +420,30 @@ type EventReporter struct {
 	rewardEmitter      event.Emitter
 	resultsEmitter     event.Emitter
 	proposalsEmitter   event.Emitter
-	eventsEmitter      event.Emitter
-	stopChan           chan struct{}
+	events             struct {
+		sync.Mutex
+		buf     *Ring[UserEvent]
+		emitter event.Emitter
+	}
+	stopChan chan struct{}
+}
+
+func (r *EventReporter) EmitUserEvent(ev UserEvent) error {
+	r.events.Lock()
+	defer r.events.Unlock()
+	r.events.buf.insert(ev)
+	return r.events.emitter.Emit(ev)
+}
+
+func (r *EventReporter) SubUserEvents(opts ...SubOpt) (*BufferedSubscription[UserEvent], *Ring[UserEvent], error) {
+	r.events.Lock()
+	defer r.events.Unlock()
+	sub, err := Subscribe[UserEvent](opts...)
+	if err != nil {
+		return nil, nil, err
+	}
+	buf := r.events.buf.Copy()
+	return sub, buf, nil
 }
 
 func newEventReporter() *EventReporter {
@@ -458,7 +489,7 @@ func newEventReporter() *EventReporter {
 		log.With().Panic("failed to to create proposal emitter", log.Err(err))
 	}
 
-	return &EventReporter{
+	reporter := &EventReporter{
 		bus:                bus,
 		transactionEmitter: transactionEmitter,
 		activationEmitter:  activationEmitter,
@@ -469,9 +500,11 @@ func newEventReporter() *EventReporter {
 		resultsEmitter:     resultsEmitter,
 		errorEmitter:       errorEmitter,
 		proposalsEmitter:   proposalsEmitter,
-		eventsEmitter:      eventsEmitter,
 		stopChan:           make(chan struct{}),
 	}
+	reporter.events.buf = newRing[UserEvent](100)
+	reporter.events.emitter = eventsEmitter
+	return reporter
 }
 
 // CloseEventReporter shuts down the event reporting service and closes open channels.
@@ -512,58 +545,54 @@ func CloseEventReporter() {
 	}
 }
 
-func newRing[T any](size int) *ring[T] {
-	return &ring[T]{
-		data:  make([]T, size),
-		empty: true,
+func newRing[T any](size int) *Ring[T] {
+	return &Ring[T]{
+		last: -1,
+		data: make([]T, size),
 	}
 }
 
-// ring is an insert only ring buffer data structure
-type ring[T any] struct {
-	data    []T
-	current uint
-	empty   bool
+// Ring is an insert only buffer.
+type Ring[T any] struct {
+	data        []T
+	first, last int
 }
 
-func (r *ring[T]) cap() int {
-	return len(r.data)
+func (r *Ring[T]) insert(value T) {
+	last := r.last
+	r.last++
+	r.last %= len(r.data)
+	r.data[r.last] = value
+	if last != -1 && r.first == r.last {
+		r.first++
+		r.first %= len(r.data)
+	}
 }
 
-func (r *ring[T]) insert(value T) {
-	r.data[r.current%uint(len(r.data))] = value
-	r.current++
-	r.current %= uint(len(r.data))
-	r.empty = false
+func (r *Ring[T]) Copy() *Ring[T] {
+	cp := *r
+	cp.data = make([]T, r.Len())
+	copy(cp.data, r.data)
+	return &cp
 }
 
-func (r *ring[T]) iterate(iter func(val T) bool) {
-	if r.empty {
+func (r *Ring[T]) Len() int {
+	if r.last == -1 {
+		return 0
+	}
+	if r.first > r.last {
+		return len(r.data)
+	}
+	return r.last - r.first + 1
+}
+
+func (r *Ring[T]) Iterate(iter func(val T) bool) {
+	if r.last == -1 {
 		return
 	}
-	i := r.current
-	for {
-		val := r.data[i]
-		if !iter(val) {
+	for i := r.first; i != r.last; i = (i + 1) % len(r.data) {
+		if !iter(r.data[i]) {
 			return
 		}
-		i = (i + 1) % uint(len(r.data))
-		if i == r.current {
-			break
-		}
 	}
-}
-
-type bufferedEmitter[T any] struct {
-	event.Emitter
-
-	mu     sync.Mutex
-	buffer *ring[T]
-}
-
-func (b *bufferedEmitter[T]) Emit(val any) error {
-	b.mu.Lock()
-	b.buffer.insert(val.(T))
-	b.mu.Unlock()
-	return b.Emitter.Emit(val)
 }
