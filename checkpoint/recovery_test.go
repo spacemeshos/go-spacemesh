@@ -555,7 +555,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 		require.NoError(t, poets.Add(olddb, types.PoetProofRef(vatx.GetPoetProofRef()), encoded, proofs[i].PoetServiceID, proofs[i].RoundID))
 	}
 
-	commitment, err := atxs.GetAtxIDWithMaxHeight(olddb)
+	commitment, err := atxs.GetIDWithMaxHeight(olddb, types.EmptyNodeID)
 	require.NoError(t, err)
 	require.NoError(t, olddb.Close())
 
