@@ -308,14 +308,17 @@ func GetAtxIDWithMaxHeight(db sql.Executor) (types.ATXID, error) {
 		var id types.ATXID
 		stmt.ColumnBytes(0, id[:])
 		height := uint64(stmt.ColumnInt64(1)) + uint64(stmt.ColumnInt64(2))
-		if height >= max {
+		if height > max {
 			max = height
 			rst = id
 		}
 		return true
 	}
 
-	if rows, err := db.Exec("select id, base_tick_height, tick_count, epoch from atxs where epoch >= (select max(epoch) from atxs)-1;", nil, dec); err != nil {
+	if rows, err := db.Exec(`
+		select id, base_tick_height, tick_count 
+		from atxs where epoch >= (select max(epoch) from atxs)-1
+		order by epoch desc;`, nil, dec); err != nil {
 		return types.ATXID{}, fmt.Errorf("select positioning atx: %w", err)
 	} else if rows == 0 {
 		return types.ATXID{}, sql.ErrNotFound

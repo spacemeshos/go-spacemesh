@@ -603,8 +603,16 @@ func TestPositioningID(t *testing.T) {
 			desc: "highest in prev epoch",
 			atxs: []header{
 				{coinbase: types.Address{1}, base: 1, count: 3, epoch: 1}, // too old
-				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 2},
-				{coinbase: types.Address{2}, base: 1, count: 1, epoch: 3},
+				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 2},
+				{coinbase: types.Address{3}, base: 1, count: 1, epoch: 3},
+			},
+			expect: 1,
+		},
+		{
+			desc: "prefer later epoch",
+			atxs: []header{
+				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 2},
 			},
 			expect: 1,
 		},
