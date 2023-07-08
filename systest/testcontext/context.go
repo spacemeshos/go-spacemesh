@@ -281,6 +281,9 @@ func New(t *testing.T, opts ...Opt) *Context {
 	}
 	config, err := rest.InClusterConfig()
 	require.NoError(t, err)
+	// with defaults (5/10) client is throttled to much
+	config.QPS = 50
+	config.Burst = 100
 
 	clientset, err := kubernetes.NewForConfig(config)
 	require.NoError(t, err)
