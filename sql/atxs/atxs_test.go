@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
 
 const layersPerEpoch = 5
@@ -577,12 +578,15 @@ func newAtx(signer *signing.EdSigner, opts ...createAtxOpt) (*types.VerifiedActi
 	return atx.Verify(0, 1)
 }
 
-func createIdentities(tb testing.TB, n int) []*signing.EdSigner {
+func createIdentities(tb testing.TB, db sql.Executor, n int, midxs ...int) []*signing.EdSigner {
 	var sigs []*signing.EdSigner
 	for i := 0; i < n; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(tb, err)
 		sigs = append(sigs, sig)
+	}
+	for _, idx := range midxs {
+		require.NoError(tb, identities.SetMalicious(db, sigs[idx].NodeID(), []byte("bad")))
 	}
 	return sigs
 }
@@ -597,6 +601,7 @@ func TestGetIDWithMaxHeight(t *testing.T) {
 		desc   string
 		atxs   []header
 		pref   int
+		midxs  []int
 		expect int
 	}{
 		{
@@ -641,6 +646,28 @@ func TestGetIDWithMaxHeight(t *testing.T) {
 			expect: 1,
 		},
 		{
+			desc: "skip malicious id",
+			atxs: []header{
+				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{3}, base: 1, count: 1, epoch: 2},
+			},
+			pref:   1,
+			midxs:  []int{0, 1},
+			expect: 2,
+		},
+		{
+			desc: "skip malicious id not found",
+			atxs: []header{
+				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{3}, base: 1, count: 2, epoch: 2},
+			},
+			pref:   1,
+			midxs:  []int{0, 1, 2},
+			expect: -1,
+		},
+		{
 			desc: "by tick height",
 			atxs: []header{
 				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
@@ -652,7 +679,7 @@ func TestGetIDWithMaxHeight(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			db := sql.InMemory()
-			sigs := createIdentities(t, len(tc.atxs))
+			sigs := createIdentities(t, db, len(tc.atxs), tc.midxs...)
 			ids := []types.ATXID{}
 			for i, atx := range tc.atxs {
 				full := &types.ActivationTx{
@@ -679,7 +706,7 @@ func TestGetIDWithMaxHeight(t *testing.T) {
 				pref = sigs[tc.pref].NodeID()
 			}
 			rst, err := atxs.GetIDWithMaxHeight(db, pref)
-			if len(tc.atxs) == 0 {
+			if len(tc.atxs) == 0 || tc.expect < 0 {
 				require.ErrorIs(t, err, sql.ErrNotFound)
 			} else {
 				require.Equal(t, ids[tc.expect], rst)
