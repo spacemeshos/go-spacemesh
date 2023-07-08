@@ -259,7 +259,7 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 			mvalidator.EXPECT().NIPostChallenge(&vatx.ActivationTx.NIPostChallenge, cdb, vatx.SmesherID)
 		}
 		mvalidator.EXPECT().PositioningAtx(&vatx.PositioningATX, cdb, goldenAtx, vatx.PublishEpoch, layersPerEpoch)
-		mvalidator.EXPECT().NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits)
+		mvalidator.EXPECT().NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits).Return(uint64(1111111), nil)
 		mreceiver.EXPECT().OnAtx(gomock.Any())
 		mtrtl.EXPECT().OnAtx(gomock.Any())
 		require.NoError(tb, atxHandler.HandleAtxData(context.Background(), "self", encoded))

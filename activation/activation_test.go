@@ -666,7 +666,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), poetBytes)
 	posAtx := newAtx(t, otherSigner, challenge, nipost, 2, types.Address{})
 	SignAndFinalizeAtx(otherSigner, posAtx)
-	vPosAtx, err := posAtx.Verify(0, 1)
+	vPosAtx, err := posAtx.Verify(0, 2)
 	r.NoError(err)
 	r.NoError(atxs.Add(tab.cdb, vPosAtx))
 
