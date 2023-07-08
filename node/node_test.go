@@ -824,6 +824,22 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 	})
 }
 
+func TestHRP(t *testing.T) {
+	c := &cobra.Command{}
+	cmd.AddCommands(c)
+	t.Cleanup(cmd.ResetConfig)
+
+	data := `{"main": {"network-hrp": "TEST"}}`
+	cfg := filepath.Join(t.TempDir(), "config.json")
+	require.NoError(t, os.WriteFile(cfg, []byte(data), 0o600))
+	require.NoError(t, c.ParseFlags([]string{"-c=" + cfg}))
+	conf, err := loadConfig(c)
+	require.NoError(t, err)
+	app := New(WithConfig(conf))
+	require.NotNil(t, app)
+	require.Equal(t, "TEST", types.NetworkHRP())
+}
+
 func TestGenesisConfig(t *testing.T) {
 	t.Run("config is written to a file", func(t *testing.T) {
 		app := New()

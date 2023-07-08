@@ -15,7 +15,9 @@ func init() {
 
 func testnet() config.Config {
 	conf := config.DefaultConfig()
-	conf.Address = types.DefaultTestAddressConfig()
+
+	conf.NetworkHRP = "stest"
+	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
 
 	conf.HARE.N = 800
 	conf.HARE.ExpectedLeaders = 10

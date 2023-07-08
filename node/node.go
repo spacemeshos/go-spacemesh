@@ -135,7 +135,6 @@ func GetCommand() *cobra.Command {
 
 			run := func(ctx context.Context) error {
 				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-
 				// ensure all data folders exist
 				if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 					return fmt.Errorf("ensure folders exist: %w", err)
@@ -295,6 +294,7 @@ func New(opts ...Option) *App {
 	}
 	lvl := zap.NewAtomicLevelAt(zap.InfoLevel)
 	log.SetupGlobal(app.log.SetLevel(&lvl))
+	types.SetNetworkHRP(app.Config.NetworkHRP)
 	return app
 }
 

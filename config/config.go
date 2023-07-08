@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
@@ -44,7 +43,6 @@ func init() {
 // Config defines the top level configuration for a spacemesh node.
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
-	Address         *types.Config         `mapstructure:"address"`
 	Genesis         *GenesisConfig        `mapstructure:"genesis"`
 	Tortoise        tortoise.Config       `mapstructure:"tortoise"`
 	P2P             p2p.Config            `mapstructure:"p2p"`
@@ -117,6 +115,8 @@ type BaseConfig struct {
 
 	DatabaseConnections     int  `mapstructure:"db-connections"`
 	DatabaseLatencyMetering bool `mapstructure:"db-latency-metering"`
+
+	NetworkHRP string `mapstructure:"network-hrp"`
 }
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
@@ -131,7 +131,6 @@ type SmeshingConfig struct {
 // DefaultConfig returns the default configuration for a spacemesh node.
 func DefaultConfig() Config {
 	return Config{
-		Address:         types.DefaultAddressConfig(),
 		BaseConfig:      defaultBaseConfig(),
 		Genesis:         DefaultGenesisConfig(),
 		Tortoise:        tortoise.DefaultConfig(),
@@ -159,7 +158,6 @@ func DefaultTestConfig() Config {
 	conf.BaseConfig = defaultTestConfig()
 	conf.P2P = p2p.DefaultConfig()
 	conf.API = grpcserver.DefaultTestConfig()
-	conf.Address = types.DefaultTestAddressConfig()
 	return conf
 }
 
@@ -184,6 +182,7 @@ func defaultBaseConfig() BaseConfig {
 		OptFilterThreshold:  90,
 		TickSize:            100,
 		DatabaseConnections: 16,
+		NetworkHRP:          "sm",
 	}
 }
 
@@ -201,6 +200,7 @@ func DefaultSmeshingConfig() SmeshingConfig {
 func defaultTestConfig() BaseConfig {
 	conf := defaultBaseConfig()
 	conf.MetricsPort += 10000
+	conf.NetworkHRP = "stest"
 	return conf
 }
 
