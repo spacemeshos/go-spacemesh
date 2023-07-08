@@ -36,11 +36,15 @@
         "post-min-numunits": 2,
         "post-k1": 26,
         "post-k2": 37,
-        "post-k3": 37
+        "post-k3": 2
     },
     "smeshing": {
         "smeshing-verifying-opts": {
             "smeshing-opts-verifying-workers": 4
         }
+    },
+    "logging": {
+        "atxHandler": "warn"
+
     }
 }
