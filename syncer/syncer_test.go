@@ -652,3 +652,15 @@ func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 	require.Equal(t, current.GetEpoch(), ts.syncer.lastAtxEpoch())
 	types.SetEffectiveGenesis(types.FirstEffectiveGenesis().Uint32())
 }
+
+func TestSyncBeforeGenesis(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+	ts.mTicker.advanceToLayer(0)
+	require.False(t, ts.syncer.synchronize(context.Background()))
+	select {
+	case <-ts.syncer.RegisterForATXSynced():
+	default:
+		require.Fail(t, "should consider atxs to be synced")
+	}
+	require.True(t, ts.syncer.IsSynced(context.Background()))
+}

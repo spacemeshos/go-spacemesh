@@ -16,6 +16,10 @@ func TestGenesisID(t *testing.T) {
 		require.NoError(t, cfg1.Validate())
 		require.NotEqual(t, cfg1.GenesisID(), cfg2.GenesisID())
 	})
+	t.Run("require non-empty", func(t *testing.T) {
+		cfg := GenesisConfig{GenesisTime: "2023-03-15T18:00:00Z"}
+		require.ErrorContains(t, cfg.Validate(), "wait until extra-data is available")
+	})
 	t.Run("consistent", func(t *testing.T) {
 		cfg := GenesisConfig{ExtraData: "one", GenesisTime: "2023-03-15T18:00:00Z"}
 		require.NoError(t, cfg.Validate())
