@@ -281,6 +281,8 @@ func New(t *testing.T, opts ...Opt) *Context {
 	}
 	config, err := rest.InClusterConfig()
 	require.NoError(t, err)
+	config.QPS = 200
+	config.Burst = 200
 
 	clientset, err := kubernetes.NewForConfig(config)
 	require.NoError(t, err)

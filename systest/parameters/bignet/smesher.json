@@ -5,7 +5,7 @@
         "layer-duration": "3m"
     },
     "poet": {
-        "phase-shift": "400m",
+        "phase-shift": "500m",
         "cycle-gap": "400m",
         "grace-period": "10m"
     },
@@ -36,7 +36,7 @@
         "post-min-numunits": 2,
         "post-k1": 26,
         "post-k2": 37,
-        "post-k3": 2
+        "post-k3": 1
     },
     "smeshing": {
         "smeshing-verifying-opts": {
@@ -45,6 +45,5 @@
     },
     "logging": {
         "atxHandler": "warn"
-
     }
 }

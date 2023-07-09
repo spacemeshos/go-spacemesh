@@ -468,7 +468,6 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 	for _, flag := range flags {
 		cmd = append(cmd, flag.Flag())
 	}
-
 	deployment := appsv1.Deployment(id, ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(appsv1.DeploymentSpec().
