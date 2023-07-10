@@ -31,7 +31,7 @@ func DefaultConfig() Config {
 	return Config{
 		Listen:             "/ip4/0.0.0.0/tcp/7513",
 		Flood:              false,
-		MinPeers:           6,
+		MinPeers:           20,
 		LowPeers:           40,
 		HighPeers:          100,
 		GracePeersShutdown: 30 * time.Second,
