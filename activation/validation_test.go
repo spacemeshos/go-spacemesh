@@ -575,10 +575,7 @@ func TestValidator_Validate(t *testing.T) {
 	postProvider := newTestPostManager(t)
 	nipost := buildNIPost(t, postProvider, postProvider.cfg, challenge, poetDb)
 
-	opts := []verifying.OptionFunc{
-		verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
-		verifying.WithPowCreator(postProvider.id.Bytes()),
-	}
+	opts := []verifying.OptionFunc{verifying.WithLabelScryptParams(postProvider.opts.Scrypt)}
 
 	logger := logtest.New(t).WithName("validator")
 	verifier, err := NewPostVerifier(postProvider.cfg, logger)

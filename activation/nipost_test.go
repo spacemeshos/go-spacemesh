@@ -301,7 +301,6 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		challenge.Hash(),
 		postProvider.opts.NumUnits,
 		verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
-		verifying.WithPowCreator(postProvider.id.Bytes()),
 	)
 	r.NoError(err)
 }
