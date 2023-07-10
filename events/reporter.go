@@ -339,7 +339,7 @@ func SubscribeUserEvents(opts ...SubOpt) (*BufferedSubscription[UserEvent], *Rin
 	if reporter == nil {
 		return nil, nil, nil
 	}
-	return reporter.SubUserEvents(opts...)
+	return reporter.subUserEvents(opts...)
 }
 
 // The status of a layer
@@ -428,14 +428,14 @@ type EventReporter struct {
 	stopChan chan struct{}
 }
 
-func (r *EventReporter) EmitUserEvent(ev UserEvent) error {
+func (r *EventReporter) emitUserEvent(ev UserEvent) error {
 	r.events.Lock()
 	defer r.events.Unlock()
 	r.events.buf.insert(ev)
 	return r.events.emitter.Emit(ev)
 }
 
-func (r *EventReporter) SubUserEvents(opts ...SubOpt) (*BufferedSubscription[UserEvent], *Ring[UserEvent], error) {
+func (r *EventReporter) subUserEvents(opts ...SubOpt) (*BufferedSubscription[UserEvent], *Ring[UserEvent], error) {
 	r.events.Lock()
 	defer r.events.Unlock()
 	sub, err := Subscribe[UserEvent](opts...)
