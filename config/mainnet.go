@@ -41,6 +41,7 @@ func MainnetConfig() Config {
 		},
 		Genesis: &GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
+			Accounts:    map[string]uint64{},
 		},
 		Tortoise: tortoise.Config{
 			Hdist:                    200,
