@@ -36,8 +36,8 @@ func MainnetConfig() Config {
 			TxsPerProposal: 700,       // TODO
 			BlockGasLimit:  100107000, // 3000 of spends
 
-			OptFilterThreshold: 90,        // TODO
-			TickSize:           1_000_000, // TODO
+			OptFilterThreshold: 90, // TODO
+			TickSize:           9331200,
 		},
 		Genesis: &GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
@@ -48,7 +48,7 @@ func MainnetConfig() Config {
 			WindowSize:               10000,
 			MaxExceptions:            1000,
 			BadBeaconVoteDelayLayers: 4032,
-			MinimalActiveSetWeight:   100 * 1_000_000, // TODO known units per tick size
+			MinimalActiveSetWeight:   100 * 9331200, // TODO known units per tick size
 		},
 		HARE: hareConfig.Config{
 			N:               200,
@@ -64,12 +64,15 @@ func MainnetConfig() Config {
 		Beacon: beacon.Config{
 			Kappa:                    40,
 			Q:                        big.NewRat(1, 3),
+			Theta:                    big.NewRat(1, 4),
 			GracePeriodDuration:      10 * time.Minute,
 			ProposalDuration:         4 * time.Minute,
 			FirstVotingRoundDuration: 30 * time.Minute,
 			RoundsNumber:             300,
 			VotingRoundDuration:      4 * time.Minute,
 			WeakCoinRoundDuration:    4 * time.Minute,
+			VotesLimit:               100,
+			BeaconSyncWeightUnits:    800,
 		},
 		POET: activation.PoetConfig{
 			PhaseShift:        240 * time.Hour,
