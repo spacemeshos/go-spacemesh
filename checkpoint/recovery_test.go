@@ -259,7 +259,7 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 			mvalidator.EXPECT().NIPostChallenge(&vatx.ActivationTx.NIPostChallenge, cdb, vatx.SmesherID)
 		}
 		mvalidator.EXPECT().PositioningAtx(&vatx.PositioningATX, cdb, goldenAtx, vatx.PublishEpoch, layersPerEpoch)
-		mvalidator.EXPECT().NIPost(gomock.Any(), vatx.PublishEpoch, vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits)
+		mvalidator.EXPECT().NIPost(gomock.Any(), vatx.PublishEpoch, vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits).Return(uint64(1111111), nil)
 		mreceiver.EXPECT().OnAtx(gomock.Any())
 		mtrtl.EXPECT().OnAtx(gomock.Any())
 		require.NoError(tb, atxHandler.HandleAtxData(context.Background(), "self", encoded))
@@ -555,7 +555,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 		require.NoError(t, poets.Add(olddb, types.PoetProofRef(vatx.GetPoetProofRef()), encoded, proofs[i].PoetServiceID, proofs[i].RoundID))
 	}
 
-	commitment, err := atxs.GetAtxIDWithMaxHeight(olddb)
+	commitment, err := atxs.GetIDWithMaxHeight(olddb, types.EmptyNodeID)
 	require.NoError(t, err)
 	require.NoError(t, olddb.Close())
 

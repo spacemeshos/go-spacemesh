@@ -48,7 +48,6 @@ type nipostBuilder interface {
 }
 
 type atxHandler interface {
-	GetPosAtxID() (types.ATXID, error)
 	AwaitAtx(id types.ATXID) chan struct{}
 	UnsubscribeAtx(id types.ATXID)
 }
