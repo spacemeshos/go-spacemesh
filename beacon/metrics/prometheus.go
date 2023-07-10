@@ -37,6 +37,12 @@ type BeaconMetricsCollector struct {
 	calculatedBeaconWeight *prometheus.Desc
 }
 
+var nameCalculatedWeight = prometheus.BuildFQName(metrics.Namespace, subsystem, "beacon_calculated_weight")
+
+func MetricNameCalculatedWeight() string {
+	return nameCalculatedWeight
+}
+
 // NewBeaconMetricsCollector creates a prometheus Collector for beacons.
 func NewBeaconMetricsCollector(cb GatherCB, logger log.Logger) *BeaconMetricsCollector {
 	bmc := &BeaconMetricsCollector{
@@ -51,7 +57,7 @@ func NewBeaconMetricsCollector(cb GatherCB, logger log.Logger) *BeaconMetricsCol
 			"Weight of beacons collected from blocks for each epoch and value",
 			[]string{labelEpoch, labelBeacon}, nil),
 		calculatedBeaconWeight: prometheus.NewDesc(
-			prometheus.BuildFQName(metrics.Namespace, subsystem, "beacon_calculated_weight"),
+			nameCalculatedWeight,
 			"Weight of the beacon calculated by the node for each epoch",
 			[]string{labelEpoch, labelBeacon}, nil),
 	}
