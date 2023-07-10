@@ -457,15 +457,6 @@ func (h *Handler) GetEpochAtxs(epochID types.EpochID) (ids []types.ATXID, err er
 	return
 }
 
-// GetPosAtxID returns the best (highest layer id), currently known to this node, pos atx id.
-func (h *Handler) GetPosAtxID() (types.ATXID, error) {
-	id, err := atxs.GetAtxIDWithMaxHeight(h.cdb)
-	if err != nil {
-		return types.EmptyATXID, fmt.Errorf("failed to get positioning atx: %w", err)
-	}
-	return id, nil
-}
-
 // HandleAtxData handles atxs received by sync.
 func (h *Handler) HandleAtxData(ctx context.Context, peer p2p.Peer, data []byte) error {
 	err := h.HandleGossipAtx(ctx, peer, data)
