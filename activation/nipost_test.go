@@ -116,34 +116,93 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
 	poetDb.EXPECT().GetProof(gomock.Any()).Return(
 		&types.PoetProof{}, &challengeHash, nil,
-	)
-	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
+	).AnyTimes()
+	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	postProvider := newTestPostManager(t)
+	t.Run("POST with pow creator ID", func(t *testing.T) {
+		t.Parallel()
+		postCfg := DefaultPostConfig()
+		postCfg.PowDifficulty[0] = 64
+		postProvider := newTestPostManager(t, withPostConfig(postCfg))
+		logger := logtest.New(t).WithName("validator")
+		verifier, err := NewPostVerifier(postProvider.Config(), logger)
+		r.NoError(err)
+		defer verifier.Close()
 
-	postCfg := DefaultPostConfig()
-	logger := logtest.New(t).WithName("validator")
-	nipost := buildNIPost(t, postProvider, postCfg, challenge, poetDb)
-	verifier, err := NewPostVerifier(postCfg, logger)
-	r.NoError(err)
-	defer verifier.Close()
-	v := NewValidator(
-		poetDb,
-		postCfg,
-		logger,
-		verifier,
-	)
-	_, err = v.NIPost(
-		context.Background(),
-		postProvider.id,
-		postProvider.commitmentAtxId,
-		nipost,
-		challengeHash,
-		postProvider.opts.NumUnits,
-		verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
-		verifying.WithPowCreator(postProvider.id.Bytes()),
-	)
-	r.NoError(err)
+		nipost := buildNIPost(t, postProvider, postProvider.Config(), challenge, poetDb)
+		v := NewValidator(
+			poetDb,
+			postProvider.Config(),
+			logger,
+			verifier,
+		)
+		_, err = v.NIPost(
+			context.Background(),
+			postProvider.id,
+			postProvider.commitmentAtxId,
+			nipost,
+			challengeHash,
+			postProvider.opts.NumUnits,
+			verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
+			verifying.WithPowCreator(postProvider.id.Bytes()),
+		)
+		r.NoError(err)
+
+		_, err = v.NIPost(
+			context.Background(),
+			postProvider.id,
+			postProvider.commitmentAtxId,
+			nipost,
+			challengeHash,
+			postProvider.opts.NumUnits,
+			verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
+			// no pow creator id -> proof invalid
+		)
+		r.Error(err)
+	})
+	t.Run("POST without pow creator ID", func(t *testing.T) {
+		t.Parallel()
+		postCfg := DefaultPostConfig()
+		// miner ID in K2 POW since future epoch - won't kick in.
+		postCfg.MinerIDInK2PowSinceEpoch = challenge.PublishEpoch.Uint32() + 1
+		postCfg.PowDifficulty[0] = 64
+		postProvider := newTestPostManager(t, withPostConfig(postCfg))
+		logger := logtest.New(t).WithName("validator")
+		verifier, err := NewPostVerifier(postProvider.Config(), logger)
+		r.NoError(err)
+		defer verifier.Close()
+
+		nipost := buildNIPost(t, postProvider, postCfg, challenge, poetDb)
+		v := NewValidator(
+			poetDb,
+			postCfg,
+			logger,
+			verifier,
+		)
+		_, err = v.NIPost(
+			context.Background(),
+			postProvider.id,
+			postProvider.commitmentAtxId,
+			nipost,
+			challengeHash,
+			postProvider.opts.NumUnits,
+			verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
+		)
+		r.NoError(err)
+
+		_, err = v.NIPost(
+			context.Background(),
+			postProvider.id,
+			postProvider.commitmentAtxId,
+			nipost,
+			challengeHash,
+			postProvider.opts.NumUnits,
+			verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
+			// extra pow creator ID -> proof invalid
+			verifying.WithPowCreator(postProvider.id.Bytes()),
+		)
+		r.Error(err)
+	})
 }
 
 func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetClient {

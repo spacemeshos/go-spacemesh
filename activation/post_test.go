@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -413,14 +414,31 @@ type testPostManager struct {
 	cdb    *datastore.CachedDB
 }
 
-func newTestPostManager(tb testing.TB) *testPostManager {
+type newPostSetupMgrOptions struct {
+	cfg PostConfig
+}
+
+type newPostSetupMgrOptionFunc func(*newPostSetupMgrOptions)
+
+func withPostConfig(cfg PostConfig) newPostSetupMgrOptionFunc {
+	return func(o *newPostSetupMgrOptions) {
+		o.cfg = cfg
+	}
+}
+
+func newTestPostManager(tb testing.TB, o ...newPostSetupMgrOptionFunc) *testPostManager {
 	tb.Helper()
+
+	options := newPostSetupMgrOptions{
+		cfg: DefaultPostConfig(),
+	}
+	for _, opt := range o {
+		opt(&options)
+	}
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	id := sig.NodeID()
-
-	cfg := DefaultPostConfig()
 
 	opts := DefaultPostSetupOpts()
 	opts.DataDir = tb.TempDir()
@@ -432,7 +450,7 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
 	provingOpts := DefaultPostProvingOpts()
 	provingOpts.Flags = config.RecommendedPowFlags()
-	mgr, err := NewPostSetupManager(id, cfg, logtest.New(tb), cdb, goldenATXID, provingOpts)
+	mgr, err := NewPostSetupManager(id, options.cfg, logtest.New(tb, zapcore.DebugLevel), cdb, goldenATXID, provingOpts)
 	require.NoError(tb, err)
 
 	return &testPostManager{
