@@ -106,7 +106,6 @@ func TestPostSetup(t *testing.T) {
 func TestNIPostBuilderWithClients(t *testing.T) {
 	t.Parallel()
 	logtest.SetupGlobal(t)
-	r := require.New(t)
 
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
@@ -127,7 +126,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		postProvider := newTestPostManager(t, withPostConfig(postCfg))
 		logger := logtest.New(t).WithName("validator")
 		verifier, err := NewPostVerifier(postProvider.Config(), logger)
-		r.NoError(err)
+		require.NoError(t, err)
 		defer verifier.Close()
 
 		nipost := buildNIPost(t, postProvider, postProvider.Config(), challenge, poetDb)
@@ -147,7 +146,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 			postProvider.opts.NumUnits,
 			verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
 		)
-		r.NoError(err)
+		require.NoError(t, err)
 
 		_, err = v.NIPost(
 			context.Background(),
@@ -158,9 +157,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 			challengeHash,
 			postProvider.opts.NumUnits,
 			verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
-			// no pow creator id -> proof invalid
 		)
-		r.Error(err)
+		require.Error(t, err)
 	})
 	t.Run("POST without pow creator ID", func(t *testing.T) {
 		t.Parallel()
@@ -171,7 +169,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		postProvider := newTestPostManager(t, withPostConfig(postCfg))
 		logger := logtest.New(t).WithName("validator")
 		verifier, err := NewPostVerifier(postProvider.Config(), logger)
-		r.NoError(err)
+		require.NoError(t, err)
 		defer verifier.Close()
 
 		nipost := buildNIPost(t, postProvider, postCfg, challenge, poetDb)
@@ -191,7 +189,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 			postProvider.opts.NumUnits,
 			verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
 		)
-		r.NoError(err)
+		require.NoError(t, err)
 
 		_, err = v.NIPost(
 			context.Background(),
@@ -202,10 +200,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 			challengeHash,
 			postProvider.opts.NumUnits,
 			verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
-			// extra pow creator ID -> proof invalid
-			verifying.WithPowCreator(postProvider.id.Bytes()),
 		)
-		r.Error(err)
+		require.Error(t, err)
 	})
 }
 
