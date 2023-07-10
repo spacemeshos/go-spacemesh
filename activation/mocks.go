@@ -11,6 +11,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	proving "github.com/spacemeshos/post/proving"
 	shared "github.com/spacemeshos/post/shared"
 	verifying "github.com/spacemeshos/post/verifying"
 )
@@ -589,9 +590,13 @@ func (mr *MockpostSetupProviderMockRecorder) Config() *gomock.Call {
 }
 
 // GenerateProof mocks base method.
-func (m *MockpostSetupProvider) GenerateProof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (m *MockpostSetupProvider) GenerateProof(ctx context.Context, challenge []byte, options ...proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateProof", ctx, challenge)
+	varargs := []interface{}{ctx, challenge}
+	for _, a := range options {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GenerateProof", varargs...)
 	ret0, _ := ret[0].(*types.Post)
 	ret1, _ := ret[1].(*types.PostMetadata)
 	ret2, _ := ret[2].(error)
@@ -599,9 +604,10 @@ func (m *MockpostSetupProvider) GenerateProof(ctx context.Context, challenge []b
 }
 
 // GenerateProof indicates an expected call of GenerateProof.
-func (mr *MockpostSetupProviderMockRecorder) GenerateProof(ctx, challenge interface{}) *gomock.Call {
+func (mr *MockpostSetupProviderMockRecorder) GenerateProof(ctx, challenge interface{}, options ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateProof", reflect.TypeOf((*MockpostSetupProvider)(nil).GenerateProof), ctx, challenge)
+	varargs := append([]interface{}{ctx, challenge}, options...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateProof", reflect.TypeOf((*MockpostSetupProvider)(nil).GenerateProof), varargs...)
 }
 
 // LastOpts mocks base method.

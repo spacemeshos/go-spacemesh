@@ -5,6 +5,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
@@ -68,7 +69,7 @@ type postSetupProvider interface {
 	PrepareInitializer(ctx context.Context, opts PostSetupOpts) error
 	StartSession(context context.Context) error
 	Reset() error
-	GenerateProof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error)
+	GenerateProof(ctx context.Context, challenge []byte, options ...proving.OptionFunc) (*types.Post, *types.PostMetadata, error)
 	CommitmentAtx() (types.ATXID, error)
 	VRFNonce() (*types.VRFPostIndex, error)
 	LastOpts() *PostSetupOpts

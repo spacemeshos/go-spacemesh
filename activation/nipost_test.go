@@ -9,6 +9,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-scale/tester"
+	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -49,8 +50,9 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	postProvider := NewMockpostSetupProvider(ctrl)
+	postProvider.EXPECT().Config().Return(PostConfig{})
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
-	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any())
+	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any())
 
 	poetProvider := defaultPoetServiceMock(t, []byte("poet"))
 	poetProvider.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{
@@ -139,6 +141,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		challengeHash,
 		postProvider.opts.NumUnits,
 		verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
+		verifying.WithPowCreator(postProvider.id.Bytes()),
 	)
 	r.NoError(err)
 }
@@ -238,6 +241,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		challenge.Hash(),
 		postProvider.opts.NumUnits,
 		verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
+		verifying.WithPowCreator(postProvider.id.Bytes()),
 	)
 	r.NoError(err)
 }
@@ -248,6 +252,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	dir := t.TempDir()
 
 	postProvider := NewMockpostSetupProvider(gomock.NewController(t))
+	postProvider.EXPECT().Config().Return(PostConfig{}).AnyTimes()
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete}).AnyTimes()
 
 	challenge := types.NIPostChallenge{
@@ -284,7 +289,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	nb := NewNIPostBuilder(nodeID, postProvider, []PoetProvingServiceClient{poetProver},
 		poetDb, dir, logtest.New(t), sig, PoetConfig{}, mclock)
 
-	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).Times(1)
+	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
 	req.NoError(err)
 	req.NotNil(nipost)
@@ -296,7 +301,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	sig, err = signing.NewEdSigner()
 	req.NoError(err)
 	nb = NewNIPostBuilder(nodeID, postProvider, []PoetProvingServiceClient{poetProver}, poetDb, dir, logtest.New(t), sig, PoetConfig{}, mclock)
-	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).Return(nil, nil, fmt.Errorf("error")).Times(1)
+	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil, fmt.Errorf("error")).Times(1)
 	// check that proof ref is not called again
 	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge2)
 	req.Nil(nipost)
@@ -308,7 +313,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	sig, err = signing.NewEdSigner()
 	req.NoError(err)
 	nb = NewNIPostBuilder(nodeID, postProvider, []PoetProvingServiceClient{poetProver}, poetDb, dir, logtest.New(t), sig, PoetConfig{}, mclock)
-	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).Times(1)
+	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	// check that proof ref is not called again
 	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge2)
 	req.NoError(err)
@@ -316,7 +321,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 
 	// test state not loading if other challenge provided
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
-	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).Times(1)
+	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge3)
 	req.NoError(err)
 	req.NotNil(nipost)
@@ -365,9 +370,10 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 		PhaseShift: layerDuration * layersPerEpoch / 2,
 	}
 	postProvider := NewMockpostSetupProvider(ctrl)
+	postProvider.EXPECT().Config().Return(PostConfig{})
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
-	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, challenge []byte, _ proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
 			return &types.Post{}, &types.PostMetadata{
 				Challenge: challenge,
 			}, nil
@@ -423,9 +429,10 @@ func TestNIPostBuilder_ManyPoETs_WaitingForProof_DeadlineReached(t *testing.T) {
 		GracePeriod: layerDuration * layersPerEpoch / 2,
 	}
 	postProvider := NewMockpostSetupProvider(ctrl)
+	postProvider.EXPECT().Config().Return(PostConfig{})
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
-	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, challenge []byte, _ proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
 			return &types.Post{}, &types.PostMetadata{
 				Challenge: challenge,
 			}, nil
@@ -482,9 +489,10 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	req.NoError(err)
 	postProvider := NewMockpostSetupProvider(ctrl)
+	postProvider.EXPECT().Config().Return(PostConfig{})
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
-	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, challenge []byte, _ proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
 			return &types.Post{}, &types.PostMetadata{
 				Challenge: challenge,
 			}, nil
@@ -726,9 +734,10 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 		PhaseShift: layerDuration * layersPerEpoch / 2,
 	}
 	postProvider := NewMockpostSetupProvider(ctrl)
+	postProvider.EXPECT().Config().Return(PostConfig{})
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete}).Times(2)
-	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, challenge []byte, _ proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
 			return &types.Post{}, &types.PostMetadata{
 				Challenge: challenge,
 			}, nil

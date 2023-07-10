@@ -242,6 +242,7 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 		mtrtl,
 		lg,
 		activation.PoetConfig{},
+		activation.PostConfig{},
 	)
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).AnyTimes()
 	for i, vatx := range deps {
@@ -253,13 +254,13 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 		mfetch.EXPECT().GetPoetProof(gomock.Any(), vatx.GetPoetProofRef())
 		if vatx.InitialPost != nil {
 			mvalidator.EXPECT().InitialNIPostChallenge(&vatx.ActivationTx.NIPostChallenge, gomock.Any(), goldenAtx).AnyTimes()
-			mvalidator.EXPECT().Post(gomock.Any(), vatx.SmesherID, *vatx.CommitmentATX, vatx.InitialPost, gomock.Any(), vatx.NumUnits)
+			mvalidator.EXPECT().Post(gomock.Any(), vatx.SmesherID, *vatx.CommitmentATX, vatx.InitialPost, gomock.Any(), vatx.NumUnits, gomock.Any())
 			mvalidator.EXPECT().VRFNonce(vatx.SmesherID, *vatx.CommitmentATX, vatx.VRFNonce, gomock.Any(), vatx.NumUnits)
 		} else {
 			mvalidator.EXPECT().NIPostChallenge(&vatx.ActivationTx.NIPostChallenge, cdb, vatx.SmesherID)
 		}
 		mvalidator.EXPECT().PositioningAtx(&vatx.PositioningATX, cdb, goldenAtx, vatx.PublishEpoch, layersPerEpoch)
-		mvalidator.EXPECT().NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits)
+		mvalidator.EXPECT().NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits, gomock.Any())
 		mreceiver.EXPECT().OnAtx(gomock.Any())
 		mtrtl.EXPECT().OnAtx(gomock.Any())
 		require.NoError(tb, atxHandler.HandleAtxData(context.Background(), "self", encoded))
