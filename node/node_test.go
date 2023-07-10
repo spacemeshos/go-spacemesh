@@ -964,24 +964,29 @@ func TestAdminEvents(t *testing.T) {
 
 	tctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
-	require.NoError(t, err)
-	defer stream.CloseSend()
-	success := []pb.IsEventDetails{
-		&pb.Event_InitStart{},
-		&pb.Event_InitComplete{},
-		&pb.Event_PostStart{},
-		&pb.Event_PostComplete{},
-		&pb.Event_PoetWaitRound{},
-		&pb.Event_PoetWaitProof{},
-		&pb.Event_PostStart{},
-		&pb.Event_PostComplete{},
-		&pb.Event_AtxPublished{},
-	}
-	for _, ev := range success {
-		msg, err := stream.Recv()
+
+	// 4 is arbitrary, if we received events once, they must be
+	// cached and should be returned immediately
+	for i := 0; i < 4; i++ {
+		stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
 		require.NoError(t, err)
-		require.IsType(t, ev, msg.Details)
+		success := []pb.IsEventDetails{
+			&pb.Event_Beacon{},
+			&pb.Event_InitStart{},
+			&pb.Event_InitComplete{},
+			&pb.Event_PostStart{},
+			&pb.Event_PostComplete{},
+			&pb.Event_PoetWaitRound{},
+			&pb.Event_PoetWaitProof{},
+			&pb.Event_PostStart{},
+			&pb.Event_PostComplete{},
+			&pb.Event_AtxPublished{},
+		}
+		for _, ev := range success {
+			msg, err := stream.Recv()
+			require.NoError(t, err, "stream %d", i)
+			require.IsType(t, ev, msg.Details, "stream %d", i)
+		}
 	}
 }
 
