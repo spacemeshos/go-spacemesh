@@ -74,9 +74,17 @@ func decodeKeys(dir string) []core.PublicKey {
 
 func main() {
 	flag.Parse()
+
 	vestingArgs := &multisig.SpawnArguments{
 		Required:   uint8(*k),
 		PublicKeys: decodeKeys(*dir),
+	}
+	if int(vestingArgs.Required) > len(vestingArgs.PublicKeys) {
+		fmt.Printf("requires more signatures (%d) then public keys (%d) in the wallet\n",
+			vestingArgs.Required,
+			len(vestingArgs.PublicKeys),
+		)
+		os.Exit(1)
 	}
 	vestingAddress := core.ComputePrincipal(vesting.TemplateAddress, vestingArgs)
 	vaultArgs := &vault.SpawnArguments{
