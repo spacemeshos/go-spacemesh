@@ -3,7 +3,7 @@
 FROM ubuntu:22.04 AS linux
 ENV DEBIAN_FRONTEND noninteractive
 ENV SHELL /bin/bash
-ARG TZ=US/Eastern
+ARG TZ=Etc/UTC
 ENV TZ $TZ
 USER root
 RUN set -ex \
