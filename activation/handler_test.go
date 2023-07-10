@@ -101,7 +101,7 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID) *testHandler {
 	mbeacon := NewMockAtxReceiver(ctrl)
 	mtortoise := mocks.NewMockTortoise(ctrl)
 
-	atxHdlr := NewHandler(cdb, verifier, mclock, mpub, mockFetch, types.GetLayersPerEpoch(), 1, goldenATXID, mValidator, mbeacon, mtortoise, lg, PoetConfig{}, PostConfig{})
+	atxHdlr := NewHandler(cdb, verifier, mclock, mpub, mockFetch, types.GetLayersPerEpoch(), 1, goldenATXID, mValidator, mbeacon, mtortoise, lg, PoetConfig{})
 	return &testHandler{
 		Handler: atxHdlr,
 

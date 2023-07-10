@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/post/shared"
-	"github.com/spacemeshos/post/verifying"
 	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -54,7 +53,6 @@ type Handler struct {
 	atxChannels     map[types.ATXID]*atxChan
 	fetcher         system.Fetcher
 	poetCfg         PoetConfig
-	postCfg         PostConfig
 }
 
 // NewHandler returns a data handler for ATX.
@@ -72,7 +70,6 @@ func NewHandler(
 	tortoise system.Tortoise,
 	log log.Log,
 	poetCfg PoetConfig,
-	postCfg PostConfig,
 ) *Handler {
 	return &Handler{
 		cdb:             cdb,
@@ -89,7 +86,6 @@ func NewHandler(
 		beacon:          beacon,
 		tortoise:        tortoise,
 		poetCfg:         poetCfg,
-		postCfg:         postCfg,
 	}
 }
 
@@ -221,14 +217,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	expectedChallengeHash := atx.NIPostChallenge.Hash()
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	verifyingOpts := []verifying.OptionFunc{}
-	if atx.PublishEpoch >= types.EpochID(h.postCfg.MinerIDInK2PowSinceEpoch) {
-		powCreatorId := atx.SmesherID
-		h.log.With().Info("Verifying NiPOST with pow creator ID", log.Named("id", powCreatorId))
-		verifyingOpts = append(verifyingOpts, verifying.WithPowCreator(powCreatorId.Bytes()))
-	}
-
-	leaves, err := h.nipostValidator.NIPost(ctx, atx.SmesherID, *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits, verifyingOpts...)
+	leaves, err := h.nipostValidator.NIPost(ctx, atx.PublishEpoch, atx.SmesherID, *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
@@ -254,14 +243,7 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 	initialPostMetadata := *atx.NIPost.PostMetadata
 	initialPostMetadata.Challenge = shared.ZeroChallenge
 
-	verifyingOpts := []verifying.OptionFunc{}
-	if atx.PublishEpoch >= types.EpochID(h.postCfg.MinerIDInK2PowSinceEpoch) {
-		powCreatorId := atx.SmesherID
-		h.log.With().Info("Verifying Initial POST with pow creator ID", log.Named("id", powCreatorId))
-		verifyingOpts = append(verifyingOpts, verifying.WithPowCreator(powCreatorId.Bytes()))
-	}
-
-	if err := h.nipostValidator.Post(ctx, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits, verifyingOpts...); err != nil {
+	if err := h.nipostValidator.Post(ctx, atx.PublishEpoch, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid initial Post: %w", err)
 	}
 

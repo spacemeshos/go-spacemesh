@@ -123,6 +123,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		t.Parallel()
 		postCfg := DefaultPostConfig()
 		postCfg.PowDifficulty[0] = 64
+		postCfg.MinerIDInK2PowSinceEpoch = 2
 		postProvider := newTestPostManager(t, withPostConfig(postCfg))
 		logger := logtest.New(t).WithName("validator")
 		verifier, err := NewPostVerifier(postProvider.Config(), logger)
@@ -138,18 +139,19 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		)
 		_, err = v.NIPost(
 			context.Background(),
+			challenge.PublishEpoch,
 			postProvider.id,
 			postProvider.commitmentAtxId,
 			nipost,
 			challengeHash,
 			postProvider.opts.NumUnits,
 			verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
-			verifying.WithPowCreator(postProvider.id.Bytes()),
 		)
 		r.NoError(err)
 
 		_, err = v.NIPost(
 			context.Background(),
+			0,
 			postProvider.id,
 			postProvider.commitmentAtxId,
 			nipost,
@@ -181,6 +183,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		)
 		_, err = v.NIPost(
 			context.Background(),
+			challenge.PublishEpoch,
 			postProvider.id,
 			postProvider.commitmentAtxId,
 			nipost,
@@ -192,6 +195,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 
 		_, err = v.NIPost(
 			context.Background(),
+			types.EpochID(postCfg.MinerIDInK2PowSinceEpoch),
 			postProvider.id,
 			postProvider.commitmentAtxId,
 			nipost,
@@ -294,6 +298,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	v := NewValidator(poetDb, postProvider.cfg, logger, verifier)
 	_, err = v.NIPost(
 		context.Background(),
+		challenge.PublishEpoch,
 		postProvider.id,
 		postProvider.goldenATXID,
 		nipost,
