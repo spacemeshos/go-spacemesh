@@ -121,7 +121,9 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	t.Run("POST with pow creator ID", func(t *testing.T) {
 		t.Parallel()
 		postCfg := DefaultPostConfig()
-		postCfg.PowDifficulty[0] = 64
+		// lower threshold lowers probility of false positive
+		// when checking the negative variant
+		postCfg.PowDifficulty[0] = 1
 		postCfg.MinerIDInK2PowSinceEpoch = 2
 		postProvider := newTestPostManager(t, withPostConfig(postCfg))
 		logger := logtest.New(t).WithName("validator")
@@ -165,7 +167,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		postCfg := DefaultPostConfig()
 		// miner ID in K2 POW since future epoch - won't kick in.
 		postCfg.MinerIDInK2PowSinceEpoch = challenge.PublishEpoch.Uint32() + 1
-		postCfg.PowDifficulty[0] = 64
+		postCfg.PowDifficulty[0] = 1
 		postProvider := newTestPostManager(t, withPostConfig(postCfg))
 		logger := logtest.New(t).WithName("validator")
 		verifier, err := NewPostVerifier(postProvider.Config(), logger)
