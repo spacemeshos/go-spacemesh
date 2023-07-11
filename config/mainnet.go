@@ -84,8 +84,7 @@ func MainnetConfig() Config {
 		},
 		POST: activation.PostConfig{
 			MinNumUnits:   4,
-			MaxNumUnits:   1000,
-			LabelsPerUnit: 4294967296, // TODO 64GB / 16 ?
+			LabelsPerUnit: 4294967296,
 			K1:            26,
 			K2:            37,
 			K3:            37,
