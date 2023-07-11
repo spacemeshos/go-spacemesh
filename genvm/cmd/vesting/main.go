@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/pem"
 	"flag"
@@ -58,12 +59,14 @@ func decodeKeys(dir string) []core.PublicKey {
 			}
 			keys = append(keys, key)
 		} else {
+			data = bytes.Trim(data, "\n")
 			key := [ed25519.PublicKeySize]byte{}
 			n, err := hex.Decode(key[:], data)
 			must(err)
 			if n != len(key) {
 				must(fmt.Errorf("key in file %s can't be decoded from hex into %d bytes", fname, len(key)))
 			}
+			keys = append(keys, key)
 		}
 	}
 	return keys
@@ -71,9 +74,17 @@ func decodeKeys(dir string) []core.PublicKey {
 
 func main() {
 	flag.Parse()
+
 	vestingArgs := &multisig.SpawnArguments{
 		Required:   uint8(*k),
 		PublicKeys: decodeKeys(*dir),
+	}
+	if int(vestingArgs.Required) > len(vestingArgs.PublicKeys) {
+		fmt.Printf("requires more signatures (%d) then public keys (%d) in the wallet\n",
+			vestingArgs.Required,
+			len(vestingArgs.PublicKeys),
+		)
+		os.Exit(1)
 	}
 	vestingAddress := core.ComputePrincipal(vesting.TemplateAddress, vestingArgs)
 	vaultArgs := &vault.SpawnArguments{
