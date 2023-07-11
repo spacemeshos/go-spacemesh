@@ -10,6 +10,7 @@ import (
 
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
+	"github.com/spacemeshos/post/proving"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
@@ -206,7 +207,14 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	if nb.state.NIPost.Post == nil {
 		nb.log.With().Info("starting post execution", log.Binary("challenge", nb.state.PoetProofRef[:]))
 		startTime := time.Now()
-		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(ctx, nb.state.PoetProofRef[:])
+
+		opts := []proving.OptionFunc{}
+		if pubEpoch >= types.EpochID(nb.postSetupProvider.Config().MinerIDInK2PowSinceEpoch) {
+			nb.log.With().Info("Using nodeID as PoW creator")
+			opts = append(opts, proving.WithPowCreator(nb.nodeID.Bytes()))
+		}
+
+		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(ctx, nb.state.PoetProofRef[:], opts...)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to generate Post: %v", err)
 		}

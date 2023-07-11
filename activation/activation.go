@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
@@ -274,7 +275,7 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 	// Create the initial post and save it.
 	startTime := time.Now()
 	var err error
-	b.initialPost, _, err = b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge)
+	b.initialPost, _, err = b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge, proving.WithPowCreator(b.nodeID.Bytes()))
 	if err != nil {
 		return fmt.Errorf("post execution: %w", err)
 	}
