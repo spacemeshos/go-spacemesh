@@ -20,14 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
-var DefaultDifficulty PowDifficulty
-
-func init() {
-	for i := range DefaultDifficulty {
-		DefaultDifficulty[i] = 0xFF
-	}
-}
-
 // PostSetupProvider represent a compute provider for Post setup data creation.
 type PostSetupProvider initialization.Provider
 

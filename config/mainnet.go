@@ -21,6 +21,11 @@ import (
 )
 
 func MainnetConfig() Config {
+	var postPowDifficulty activation.PowDifficulty
+	if err := postPowDifficulty.UnmarshalText([]byte("00037ec8ec25e6d2c00000000000000000000000000000000000000000000000")); err != nil {
+		panic(err)
+	}
+
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:       defaultDataDir,
@@ -90,7 +95,7 @@ func MainnetConfig() Config {
 			K1:            26,
 			K2:            37,
 			K3:            37,
-			PowDifficulty: activation.DefaultDifficulty,
+			PowDifficulty: postPowDifficulty,
 		},
 		Bootstrap: bootstrap.Config{
 			URL:      "https://bootstrap.spacemesh.network/mainnet",
