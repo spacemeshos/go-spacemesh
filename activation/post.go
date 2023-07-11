@@ -389,13 +389,20 @@ func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) 
 	case err == nil:
 		return types.ATXID(types.BytesToHash(m.CommitmentAtxId)), nil
 	case errors.Is(err, initialization.ErrStateMetadataFileMissing):
-		// if this node has already published at least one ATX get its commitment ATX from the DB
-		atxId, err := atxs.CommitmentATX(mgr.db, mgr.id)
+		// if this node has already published an ATX, get its initial ATX and from it the commitment ATX
+		atxId, err := atxs.GetFirstIDByNodeID(mgr.db, mgr.id)
 		if err == nil {
-			return atxId, nil
+			atx, err := atxs.Get(mgr.db, atxId)
+			if err != nil {
+				return types.EmptyATXID, err
+			}
+			if atx.CommitmentATX == nil {
+				return types.EmptyATXID, fmt.Errorf("initial ATX %s does not contain a commitment ATX", atxId)
+			}
+			return *atx.CommitmentATX, nil
 		}
 
-		// if this node has not yet published ATXs select the best ATX with `findCommitmentAtx`
+		// if this node has not published an ATX select the best ATX with `findCommitmentAtx`
 		return mgr.findCommitmentAtx(ctx)
 	default:
 		return types.EmptyATXID, fmt.Errorf("load metadata: %w", err)
