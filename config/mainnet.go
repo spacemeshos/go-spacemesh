@@ -33,11 +33,12 @@ func MainnetConfig() Config {
 			LayerDuration:  5 * time.Minute,
 			LayersPerEpoch: 4032,
 
-			TxsPerProposal: 700,       // TODO
+			TxsPerProposal: 700,       // https://github.com/spacemeshos/go-spacemesh/issues/4559
 			BlockGasLimit:  100107000, // 3000 of spends
 
-			OptFilterThreshold: 90, // TODO
-			TickSize:           9331200,
+			OptFilterThreshold: 90,
+
+			TickSize: 9331200,
 		},
 		Genesis: &GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
@@ -49,7 +50,8 @@ func MainnetConfig() Config {
 			WindowSize:               10000,
 			MaxExceptions:            1000,
 			BadBeaconVoteDelayLayers: 4032,
-			MinimalActiveSetWeight:   100 * 9331200, // TODO known units per tick size
+			// TODO update it with safe but reasonble minimum weight in network before first ballot
+			MinimalActiveSetWeight: 1000 * 9331200,
 		},
 		HARE: hareConfig.Config{
 			N:               200,
