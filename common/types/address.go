@@ -33,7 +33,7 @@ var networkHrp = "sm"
 
 func SetNetworkHRP(update string) {
 	networkHrp = update
-	log.With().Info("network hrp updated", log.String("hrp", update))
+	log.With().Debug("network hrp updated", log.String("hrp", update))
 }
 
 func NetworkHRP() string {

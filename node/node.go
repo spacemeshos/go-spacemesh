@@ -233,7 +233,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 	if err := config.LoadConfig(viper.GetString("config"), viper.GetViper()); err != nil {
 		return nil, err
 	}
-	conf := config.DefaultConfig()
+	conf := config.MainnetConfig()
 	if name := viper.GetString("preset"); len(name) > 0 {
 		preset, err := presets.Get(name)
 		if err != nil {
