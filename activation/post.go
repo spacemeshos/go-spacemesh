@@ -396,6 +396,9 @@ func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) 
 			if err != nil {
 				return types.EmptyATXID, err
 			}
+			if atx.CommitmentATX == nil {
+				return types.EmptyATXID, fmt.Errorf("initial ATX %s does not contain a commitment ATX", atxId)
+			}
 			return *atx.CommitmentATX, nil
 		}
 
