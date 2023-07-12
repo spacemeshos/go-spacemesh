@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/spacemeshos/economics/constants"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
