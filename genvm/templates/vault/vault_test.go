@@ -84,7 +84,7 @@ func TestAvailable(t *testing.T) {
 			end:    constants.VestEnd,
 			lid:    constants.VestEnd - 1,
 			total:  constants.TotalVaulted,
-			expect: 20288543279774,
+			expect: 149999524353120243,
 		},
 		{
 			desc:   "after vest end",

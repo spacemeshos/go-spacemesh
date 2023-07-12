@@ -2,6 +2,9 @@ package vm
 
 import (
 	"bytes"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -12,6 +15,7 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
+	"github.com/spacemeshos/economics/constants"
 	"github.com/spacemeshos/economics/rewards"
 	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
@@ -2414,6 +2418,151 @@ func FuzzParse(f *testing.F) {
 			_ = req.Verify()
 		}
 	})
+}
+
+const metaFile = "meta.json"
+
+type vestingMeta struct {
+	Initial  float64 `json:"initial"`
+	Total    float64 `json:"total"`
+	Required uint8   `json:"required"`
+	HRP      string  `json:"hrp"`
+}
+
+func TestVestingData(t *testing.T) {
+	data, err := filepath.Abs("./data")
+	require.NoError(t, err)
+
+	entries, err := os.ReadDir(data)
+	if err != nil && errors.Is(err, os.ErrNotExist) {
+		t.Skip("directory with data is empty")
+	}
+	genesis := types.GetEffectiveGenesis()
+	for _, entry := range entries {
+		require.True(t, entry.Type().IsDir())
+		t.Run(entry.Name(), func(t *testing.T) {
+			sub, err := os.ReadDir(filepath.Join(data, entry.Name()))
+			require.NoError(t, err)
+			metadata, err := os.ReadFile(filepath.Join(data, entry.Name(), metaFile))
+			require.NoError(t, err)
+			var meta vestingMeta
+			require.NoError(t, json.Unmarshal(metadata, &meta))
+
+			privates := []ed25519.PrivateKey{}
+			vestArgs := &multisig.SpawnArguments{
+				Required: meta.Required,
+			}
+			for _, key := range sub {
+				if key.Name() == metaFile {
+					continue
+				}
+				data, err := os.ReadFile(filepath.Join(data, entry.Name(), key.Name()))
+				require.NoError(t, err)
+				pk, err := hex.DecodeString(string(data))
+				require.NoError(t, err)
+				pk = bytes.Trim(pk, "\n")
+				privates = append(privates, ed25519.PrivateKey(pk))
+				var public core.PublicKey
+				copy(public[:], signing.Public(pk))
+				vestArgs.PublicKeys = append(vestArgs.PublicKeys, public)
+			}
+			vestaddr := core.ComputePrincipal(vesting.TemplateAddress, vestArgs)
+			vaultArgs := &vault.SpawnArguments{
+				Owner:               vestaddr,
+				InitialUnlockAmount: uint64(meta.Initial),
+				TotalAmount:         uint64(meta.Total),
+				VestingStart:        constants.VestStart,
+				VestingEnd:          constants.VestEnd,
+			}
+			vaultaddr := core.ComputePrincipal(vault.TemplateAddress, vaultArgs)
+			types.SetNetworkHRP(meta.HRP)
+			t.Logf("vesting address: %v. parameters: %s", vestaddr.String(), vestArgs)
+			t.Logf("vault address: %v. parameters: %s", vaultaddr.String(), vaultArgs)
+
+			vm := New(sql.InMemory(), WithLogger(logtest.New(t)))
+			require.NoError(t, vm.ApplyGenesis(
+				[]core.Account{
+					{Address: vestaddr, Balance: 300_000}, // give a bit to vesting account as it needs to get funds for 2 spawns and drain vault
+					{Address: vaultaddr, Balance: uint64(meta.Total)},
+				},
+			))
+			vestaccount := &vestingAccount{
+				multisigAccount{
+					k:        int(meta.Required),
+					pks:      privates,
+					address:  vestaddr,
+					template: vesting.TemplateAddress,
+				},
+			}
+			nonce := uint64(0)
+			ineffective, _, err := vm.Apply(ApplyContext{Layer: genesis + 1},
+				notVerified(types.NewRawTx(vestaccount.selfSpawn(nonce))),
+				nil,
+			)
+			require.Empty(t, ineffective)
+			require.NoError(t, err)
+			nonce++
+			ineffective, _, err = vm.Apply(ApplyContext{Layer: genesis + 2},
+				notVerified(types.NewRawTx(vestaccount.spawn(vault.TemplateAddress, vaultArgs, nonce))),
+				nil,
+			)
+			require.Empty(t, ineffective)
+			require.NoError(t, err)
+			nonce++
+
+			before, err := vm.GetBalance(vestaddr)
+			require.NoError(t, err)
+			ineffective, rst, err := vm.Apply(ApplyContext{Layer: constants.VestStart},
+				notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(meta.Initial), nonce))),
+				nil,
+			)
+			require.Empty(t, ineffective)
+			require.NoError(t, err)
+			after, err := vm.GetBalance(vestaddr)
+			require.NoError(t, err)
+			require.Equal(t, before+uint64(meta.Initial)-rst[0].Fee, after)
+			nonce++
+
+			drained := uint64(0)
+			remaining := uint64(meta.Total - meta.Initial)
+			fee := 0
+			// execute drain tx every 1000 layers
+			for i := constants.VestStart + 1; i < constants.VestEnd; i += 1000 {
+				before, err := vm.GetBalance(vestaddr)
+				require.NoError(t, err)
+
+				drain := new(big.Int).SetUint64(uint64(meta.Total - meta.Initial))
+				drain.Mul(drain, new(big.Int).SetUint64(uint64(i)-constants.VestStart))
+				drain.Div(drain, new(big.Int).SetUint64(constants.VestEnd-constants.VestStart))
+				drain.Sub(drain, new(big.Int).SetUint64(drained))
+
+				ineffective, rst, err = vm.Apply(ApplyContext{Layer: types.LayerID(i)},
+					notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(drain.Uint64()), nonce))),
+					nil,
+				)
+				require.Empty(t, ineffective)
+				require.NoError(t, err)
+				nonce++
+				fee += int(rst[0].Fee)
+				drained += drain.Uint64()
+				remaining -= drain.Uint64()
+
+				after, err := vm.GetBalance(vestaddr)
+				require.NoError(t, err)
+				require.Equal(t, int(before+uint64(drain.Uint64())-rst[0].Fee), int(after))
+			}
+			ineffective, _, err = vm.Apply(ApplyContext{Layer: constants.VestEnd},
+				notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(remaining), nonce))),
+				nil,
+			)
+			require.Empty(t, ineffective)
+			require.NoError(t, err)
+
+			zero, err := vm.GetBalance(vaultaddr)
+			require.NoError(t, err)
+			require.Zero(t, zero)
+		})
+	}
 }
 
 func TestMain(m *testing.M) {
