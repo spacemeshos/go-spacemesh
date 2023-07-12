@@ -27,7 +27,7 @@ func must(err error) {
 func main() {
 	flag.Parse()
 	types.SetNetworkHRP(*hrp)
-	if *config == "" {
+	if len(*config) == 0 {
 		fmt.Println("please specify config with -c=<path to file>")
 		os.Exit(1)
 	}
