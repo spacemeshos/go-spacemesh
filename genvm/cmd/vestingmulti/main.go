@@ -104,9 +104,11 @@ func main() {
 		}
 	case "go":
 		fmt.Println("func MainnetAccounts() map[string]uint64 {")
+		fmt.Println("    return map[string]uint64{")
 		for _, output := range outputs {
-			fmt.Printf("    \"%s\": %d,\n", output.Address, output.Balance)
+			fmt.Printf("        \"%s\": %d,\n", output.Address, output.Balance)
 		}
+		fmt.Println("    }")
 		fmt.Println("}")
 	}
 }
