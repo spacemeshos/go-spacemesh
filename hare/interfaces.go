@@ -33,7 +33,7 @@ type mesh interface {
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 	Proposals(types.LayerID) ([]*types.Proposal, error)
 	Ballot(types.BallotID) (*types.Ballot, error)
-	GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error)
+	GetMalfeasanceProof(types.NodeID) (*types.MalfeasanceProof, error)
 	Cache() *datastore.CachedDB
 }
 
