@@ -5,7 +5,8 @@ This tool generates an address for vesting and vault accounts, based on the set 
 - total number of keys used in vesting multisig
 - required signatures
 - total vested amount
-- initial vested amount
+
+Amount that is unlocked at the start of vesting is 1/4 of total vested amount.
 
 #### How to use it (with openssl example)?
 
