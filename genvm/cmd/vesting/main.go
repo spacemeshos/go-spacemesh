@@ -21,13 +21,10 @@ import (
 )
 
 var (
-	dir     = flag.String("d", ".", "directory with public keys (.pem or .hex)")
-	k       = flag.Int("k", 3, "number of required signatures")
-	start   = flag.Uint("start", constants.VestStart, "start of the vesting")
-	end     = flag.Uint("end", constants.VestEnd, "end of the vesting")
-	initial = flag.Uint("initial", 1_000_000, "amount unlocked at the start")
-	total   = flag.Uint("total", 10_000_000, "amount unlocked incrementally over end-start period")
-	hrp     = flag.String("hrp", "sm", "network human readable prefix")
+	dir   = flag.String("d", ".", "directory with public keys (.pem or .hex). it will be used if keys are not provided with commandline")
+	k     = flag.Int("k", 1, "number of required signatures")
+	total = flag.Float64("total", 10e9, "total vaulted amount. 1/4 of it is vested at the VestStart (~1 year)")
+	hrp   = flag.String("hrp", "sm", "network human readable prefix")
 
 	hexkeys []string
 )
@@ -109,9 +106,9 @@ func main() {
 	vaultArgs := &vault.SpawnArguments{
 		Owner:               vestingAddress,
 		TotalAmount:         uint64(*total),
-		InitialUnlockAmount: uint64(*initial),
-		VestingStart:        types.LayerID(uint32(*start)),
-		VestingEnd:          types.LayerID(uint32(*end)),
+		InitialUnlockAmount: uint64(*total) / 4,
+		VestingStart:        types.LayerID(constants.VestStart),
+		VestingEnd:          types.LayerID(constants.VestEnd),
 	}
 	vaultAddress := core.ComputePrincipal(vault.TemplateAddress, vaultArgs)
 	types.SetNetworkHRP(*hrp)
