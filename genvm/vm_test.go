@@ -2531,25 +2531,25 @@ func TestVestingData(t *testing.T) {
 				before, err := vm.GetBalance(vestaddr)
 				require.NoError(t, err)
 
-				drain := uint64(meta.Total - meta.Initial)
-				drain *= (uint64(i) - constants.VestStart)
-				drain /= (constants.VestEnd - constants.VestStart)
-				drain -= drained
+				drain := new(big.Int).SetUint64(uint64(meta.Total - meta.Initial))
+				drain.Mul(drain, new(big.Int).SetUint64(uint64(i)-constants.VestStart))
+				drain.Div(drain, new(big.Int).SetUint64(constants.VestEnd-constants.VestStart))
+				drain.Sub(drain, new(big.Int).SetUint64(drained))
 
 				ineffective, rst, err = vm.Apply(ApplyContext{Layer: types.LayerID(i)},
-					notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(drain), nonce))),
+					notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(drain.Uint64()), nonce))),
 					nil,
 				)
 				require.Empty(t, ineffective)
 				require.NoError(t, err)
 				nonce++
 				fee += int(rst[0].Fee)
-				drained += drain
-				remaining -= drain
+				drained += drain.Uint64()
+				remaining -= drain.Uint64()
 
 				after, err := vm.GetBalance(vestaddr)
 				require.NoError(t, err)
-				require.Equal(t, int(before+uint64(drain)-rst[0].Fee), int(after))
+				require.Equal(t, int(before+uint64(drain.Uint64())-rst[0].Fee), int(after))
 			}
 			ineffective, _, err = vm.Apply(ApplyContext{Layer: constants.VestEnd},
 				notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(remaining), nonce))),

@@ -2,6 +2,7 @@ package vault
 
 import (
 	"errors"
+	"math/big"
 
 	"github.com/spacemeshos/go-scale"
 
@@ -43,10 +44,10 @@ func (v *Vault) Available(lid core.LayerID) uint64 {
 	if !lid.Before(v.VestingEnd) {
 		return v.TotalAmount
 	}
-	incremental := v.TotalAmount - v.InitialUnlockAmount
-	incremental *= uint64(lid.Difference(v.VestingStart))
-	incremental /= uint64(v.VestingEnd.Difference(v.VestingStart))
-	return v.InitialUnlockAmount + incremental
+	incremental := new(big.Int).SetUint64(v.TotalAmount - v.InitialUnlockAmount)
+	incremental.Mul(incremental, new(big.Int).SetUint64(uint64(lid.Difference(v.VestingStart))))
+	incremental.Div(incremental, new(big.Int).SetUint64(uint64(v.VestingEnd.Difference(v.VestingStart))))
+	return v.InitialUnlockAmount + incremental.Uint64()
 }
 
 // Spend transaction.

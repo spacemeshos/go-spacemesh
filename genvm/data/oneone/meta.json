@@ -1,6 +1,6 @@
 {
-    "initial": 10000e9, 
-    "total": 30000e9, 
+    "initial": 1000000e9,
+    "total": 3000000e9,
     "required": 1,
     "hrp": "sm"
 }
