@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"flag"
 	"fmt"
@@ -25,6 +26,7 @@ var (
 	k     = flag.Int("k", 1, "number of required signatures")
 	total = flag.Float64("total", 10e9, "total vaulted amount. 1/4 of it is vested at the VestStart (~1 year)")
 	hrp   = flag.String("hrp", "sm", "network human readable prefix")
+	debug = flag.Bool("debug", false, "output all data. otherwise output only vault and balance in json format")
 
 	hexkeys []string
 )
@@ -88,6 +90,11 @@ func decodeHexKey(data []byte) [ed25519.PublicKeySize]byte {
 	return key
 }
 
+type vaultInfo struct {
+	Address string `json:"address"`
+	Balance uint64 `json:"balance"`
+}
+
 func main() {
 	flag.Parse()
 
@@ -112,9 +119,20 @@ func main() {
 	}
 	vaultAddress := core.ComputePrincipal(vault.TemplateAddress, vaultArgs)
 	types.SetNetworkHRP(*hrp)
-	fmt.Printf("vesting: %s\nvault: %s\n", vestingAddress.String(), vaultAddress.String())
-	fmt.Println("public keys:")
-	for i, key := range vestingArgs.PublicKeys {
-		fmt.Printf("%d: %x\n", i, key[:])
+	if *debug {
+		fmt.Printf("vesting: %s\nvault: %s\n", vestingAddress.String(), vaultAddress.String())
+		fmt.Println("public keys:")
+		for i, key := range vestingArgs.PublicKeys {
+			fmt.Printf("%d: %x\n", i, key[:])
+		}
+	} else {
+		info := vaultInfo{
+			Address: vaultAddress.String(),
+			Balance: uint64(*total),
+		}
+		enc := json.NewEncoder(os.Stdout)
+		if err := enc.Encode(&info); err != nil {
+			must(err)
+		}
 	}
 }
