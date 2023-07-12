@@ -120,11 +120,9 @@ func main() {
 	vaultAddress := core.ComputePrincipal(vault.TemplateAddress, vaultArgs)
 	types.SetNetworkHRP(*hrp)
 	if *debug {
-		fmt.Printf("vesting: %s\nvault: %s\n", vestingAddress.String(), vaultAddress.String())
-		fmt.Println("public keys:")
-		for i, key := range vestingArgs.PublicKeys {
-			fmt.Printf("%d: %x\n", i, key[:])
-		}
+		fmt.Printf("vesting address: %s.\nparameters: %s", vestingAddress.String(), vestingArgs)
+		fmt.Println("---")
+		fmt.Printf("vault address: %s.\nparameters: %s\n", vaultAddress.String(), vaultArgs)
 	} else {
 		info := vaultInfo{
 			Address: vaultAddress.String(),
