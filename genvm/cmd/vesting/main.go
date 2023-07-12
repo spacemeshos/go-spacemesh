@@ -27,7 +27,16 @@ var (
 	initial = flag.Uint("initial", 1_000_000, "amount unlocked at the start")
 	total   = flag.Uint("total", 10_000_000, "amount unlocked incrementally over end-start period")
 	hrp     = flag.String("hrp", "sm", "network human readable prefix")
+
+	hexkeys []string
 )
+
+func init() {
+	flag.Func("key", "add a public key to multisig encoded in hex (64 characters, without 0x)", func(key string) error {
+		hexkeys = append(hexkeys, key)
+		return nil
+	})
+}
 
 func must(err error) {
 	if err != nil {
@@ -39,9 +48,15 @@ func must(err error) {
 const pemext = ".pem"
 
 func decodeKeys(dir string) []core.PublicKey {
+	var keys []core.PublicKey
+	if len(hexkeys) > 0 {
+		for _, data := range hexkeys {
+			keys = append(keys, decodeHexKey([]byte(data)))
+		}
+		return keys
+	}
 	files, err := os.ReadDir(dir)
 	must(err)
-	var keys []core.PublicKey
 	for _, file := range files {
 		fname := filepath.Join(dir, file.Name())
 		f, err := os.Open(fname)
@@ -58,15 +73,20 @@ func decodeKeys(dir string) []core.PublicKey {
 			}
 			keys = append(keys, key)
 		} else {
-			key := [ed25519.PublicKeySize]byte{}
-			n, err := hex.Decode(key[:], data)
-			must(err)
-			if n != len(key) {
-				must(fmt.Errorf("key in file %s can't be decoded from hex into %d bytes", fname, len(key)))
-			}
+			keys = append(keys, decodeHexKey(data))
 		}
 	}
 	return keys
+}
+
+func decodeHexKey(data []byte) [ed25519.PublicKeySize]byte {
+	key := [ed25519.PublicKeySize]byte{}
+	n, err := hex.Decode(key[:], data)
+	must(err)
+	if n != len(key) {
+		must(fmt.Errorf("key %s can't be decoded from hex into %d bytes", key, len(key)))
+	}
+	return key
 }
 
 func main() {
@@ -88,6 +108,6 @@ func main() {
 	fmt.Printf("vesting: %s\nvault: %s\n", vestingAddress.String(), vaultAddress.String())
 	fmt.Println("public keys:")
 	for i, key := range vestingArgs.PublicKeys {
-		fmt.Printf("%d: 0x%x\n", i, key[:])
+		fmt.Printf("%d: %x\n", i, key[:])
 	}
 }
