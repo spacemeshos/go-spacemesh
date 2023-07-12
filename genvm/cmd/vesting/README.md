@@ -22,9 +22,9 @@ openssl genpkey -algorithm ed25519 -out /tmp/privates/0.pem
 openssl genpkey -algorithm ed25519 -out /tmp/privates/1.pem
 openssl genpkey -algorithm ed25519 -out /tmp/privates/2.pem
 
-openssl pkey -in /tmp/privates/0.pem -out /tmp/publics/0.pem
-openssl pkey -in /tmp/privates/1.pem -out /tmp/publics/1.pem
-openssl pkey -in /tmp/privates/2.pem -out /tmp/publics/2.pem
+openssl pkey -in /tmp/privates/0.pem -pubout -out /tmp/publics/0.pem
+openssl pkey -in /tmp/privates/1.pem -pubout -out /tmp/publics/1.pem
+openssl pkey -in /tmp/privates/2.pem -pubout -out /tmp/publics/2.pem
 ```
 
 3. Generate account addresses.

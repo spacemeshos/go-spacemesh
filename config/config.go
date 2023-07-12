@@ -93,9 +93,6 @@ type BaseConfig struct {
 	ProfilerName string `mapstructure:"profiler-name"`
 	ProfilerURL  string `mapstructure:"profiler-url"`
 
-	OracleServer        string `mapstructure:"oracle_server"`
-	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
-
 	LayerDuration  time.Duration `mapstructure:"layer-duration"`
 	LayerAvgSize   uint32        `mapstructure:"layer-average-size"`
 	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`
@@ -103,8 +100,6 @@ type BaseConfig struct {
 	PoETServers []string `mapstructure:"poet-server"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
-
-	PublishEventsURL string `mapstructure:"events-url"`
 
 	TxsPerProposal int    `mapstructure:"txs-per-proposal"`
 	BlockGasLimit  uint64 `mapstructure:"block-gas-limit"`
@@ -170,10 +165,7 @@ func defaultBaseConfig() BaseConfig {
 		MetricsPort:         1010,
 		MetricsPush:         "", // "" = doesn't push
 		MetricsPushPeriod:   60,
-		ProfilerURL:         "",
 		ProfilerName:        "gp-spacemesh",
-		OracleServer:        "http://localhost:3030",
-		OracleServerWorldID: 0,
 		LayerDuration:       30 * time.Second,
 		LayersPerEpoch:      3,
 		PoETServers:         []string{"127.0.0.1"},

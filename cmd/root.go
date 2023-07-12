@@ -12,10 +12,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/node/flags"
 )
 
-var cfg = config.DefaultConfig()
+var cfg = config.MainnetConfig()
 
 func ResetConfig() {
-	cfg = config.DefaultConfig()
+	cfg = config.MainnetConfig()
 }
 
 // AddCommands adds cobra commands to the app.
@@ -46,10 +46,6 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.MetricsPush, "Push metrics to url")
 	cmd.PersistentFlags().IntVar(&cfg.MetricsPushPeriod, "metrics-push-period",
 		cfg.MetricsPushPeriod, "Push period")
-	cmd.PersistentFlags().StringVar(&cfg.OracleServer, "oracle_server",
-		cfg.OracleServer, "The oracle server url. (temporary) ")
-	cmd.PersistentFlags().IntVar(&cfg.OracleServerWorldID, "oracle_server_worldid",
-		cfg.OracleServerWorldID, "The worldid to use with the oracle server (temporary) ")
 	cmd.PersistentFlags().StringArrayVar(&cfg.PoETServers, "poet-server",
 		cfg.PoETServers, "The poet server url. (temporary) Can be passed multiple times")
 	cmd.PersistentFlags().StringVar(&cfg.Genesis.GenesisTime, "genesis-time",
