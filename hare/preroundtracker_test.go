@@ -12,33 +12,10 @@ import (
 )
 
 const (
-	k              = 1
 	ki             = preRound
 	lowThresh10    = 10
 	lowDefaultSize = 100
 )
-
-func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.Proposal {
-	p := &types.Proposal{
-		InnerProposal: types.InnerProposal{
-			Ballot: types.Ballot{
-				InnerBallot: types.InnerBallot{
-					Layer: layerID,
-					AtxID: types.RandomATXID(),
-					EpochData: &types.EpochData{
-						Beacon: types.RandomBeacon(),
-					},
-				},
-			},
-			TxIDs: txs,
-		},
-	}
-	signer, _ := signing.NewEdSigner()
-	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
-	p.Initialize()
-	return p
-}
 
 func BuildPreRoundMsg(sig *signing.EdSigner, s *Set, roleProof types.VrfSignature) *Message {
 	builder := newMessageBuilder()
