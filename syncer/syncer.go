@@ -220,6 +220,10 @@ func (s *Syncer) IsBeaconSynced(epoch types.EpochID) bool {
 // Start starts the main sync loop that tries to sync data for every SyncInterval.
 func (s *Syncer) Start() {
 	s.syncOnce.Do(func() {
+		if s.ticker.CurrentLayer().GetEpoch() == 0 {
+			s.setATXSynced()
+		}
+
 		ctx, cancel := context.WithCancel(context.Background())
 		s.stop = cancel
 		s.logger.WithContext(ctx).Info("starting syncer loop")
@@ -233,6 +237,7 @@ func (s *Syncer) Start() {
 					s.logger.WithContext(ctx).Info("stopping sync to shutdown")
 					return fmt.Errorf("shutdown context done: %w", ctx.Err())
 				case <-s.syncTimer.C:
+					// fmt.Printf("%v: sync timer fired\n", time.Now().Format(time.RFC3339))
 					ok := s.synchronize(ctx)
 					if ok {
 						runSuccess.Inc()
@@ -365,6 +370,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		s.logger.WithContext(ctx).Info("sync is already running, giving up")
 		return false
 	}
+	fmt.Printf("%v: syncing\n", time.Now().Format(time.RFC3339))
 	defer s.setSyncerIdle()
 
 	s.setStateBeforeSync(ctx)

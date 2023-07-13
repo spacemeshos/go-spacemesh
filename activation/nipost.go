@@ -145,6 +145,8 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	poetProofDeadline := poetRoundEnd.Add(nb.poetCfg.GracePeriod)
 
 	logger.With().Info("building nipost",
+		log.Time("epoch start", nb.layerClock.LayerToTime((pubEpoch-1).FirstLayer())),
+		log.Time("epoch end", nb.layerClock.LayerToTime((pubEpoch).FirstLayer())),
 		log.Time("poet round start", poetRoundStart),
 		log.Time("poet round end", poetRoundEnd),
 		log.Time("next poet round start", nextPoetRoundStart),

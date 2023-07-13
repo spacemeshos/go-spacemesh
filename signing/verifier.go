@@ -2,6 +2,7 @@ package signing
 
 import (
 	"crypto/ed25519"
+	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -41,6 +42,9 @@ func NewEdVerifier(opts ...VerifierOptionFunc) (*EdVerifier, error) {
 
 // Verify verifies that a signature matches public key and message.
 func (es *EdVerifier) Verify(d Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+	if d == ATX {
+		fmt.Printf("Verifying atx, prefix: %x nodeID: %s message: %x sig: %x\n", es.prefix, nodeID.String(), m, sig)
+	}
 	msg := make([]byte, 0, len(es.prefix)+1+len(m))
 	msg = append(msg, es.prefix...)
 	msg = append(msg, byte(d))

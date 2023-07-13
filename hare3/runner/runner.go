@@ -190,21 +190,27 @@ func (r *HareRunner) Run(ctx context.Context) {
 	var startLayer types.LayerID
 	if currentLayer < r.effectiveGenesis {
 		startLayer = r.effectiveGenesis + 1
-		r.l.WithContext(ctx).Info(
+		toWait := time.Until(r.clock.LayerToTime(startLayer))
+		r.l.WithContext(ctx).With().Info(
 			"hare runner awaiting start layer",
+			log.Stringer("time_to_wait", toWait),
 			log.Stringer("current_layer", currentLayer),
 			log.Stringer("effective_genesis", r.effectiveGenesis),
 			log.Stringer("start_layer", r.effectiveGenesis))
 	} else {
 		// We wait for the subsequent layer so that we can be sure of being on time.
 		startLayer = currentLayer + 1
-		r.l.WithContext(ctx).Info(
+		toWait := time.Until(r.clock.LayerToTime(startLayer))
+		r.l.WithContext(ctx).With().Info(
 			"hare runner awaiting start layer",
+			log.Stringer("time_to_wait", toWait),
 			log.Stringer("current_layer", currentLayer),
 			log.Stringer("start_layer", startLayer))
 	}
 
 	for l := startLayer; ; l += 1 {
+		r.l.WithContext(ctx).With().Debug("hare runner starting layer", log.Stringer("current_layer", l))
+
 		// copy the loop variable, it's used in a go-routine below.
 		layer := l
 		select {
