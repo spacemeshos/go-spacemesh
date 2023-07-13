@@ -217,7 +217,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	expectedChallengeHash := atx.NIPostChallenge.Hash()
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	leaves, err := h.nipostValidator.NIPost(ctx, atx.SmesherID, *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
+	leaves, err := h.nipostValidator.NIPost(ctx, atx.PublishEpoch, atx.SmesherID, *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
@@ -243,7 +243,7 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 	initialPostMetadata := *atx.NIPost.PostMetadata
 	initialPostMetadata.Challenge = shared.ZeroChallenge
 
-	if err := h.nipostValidator.Post(ctx, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
+	if err := h.nipostValidator.Post(ctx, atx.PublishEpoch, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid initial Post: %w", err)
 	}
 
@@ -455,15 +455,6 @@ func (h *Handler) GetEpochAtxs(epochID types.EpochID) (ids []types.ATXID, err er
 		log.Int("count", len(ids)),
 		log.String("atxs", fmt.Sprint(ids)))
 	return
-}
-
-// GetPosAtxID returns the best (highest layer id), currently known to this node, pos atx id.
-func (h *Handler) GetPosAtxID() (types.ATXID, error) {
-	id, err := atxs.GetAtxIDWithMaxHeight(h.cdb)
-	if err != nil {
-		return types.EmptyATXID, fmt.Errorf("failed to get positioning atx: %w", err)
-	}
-	return id, nil
 }
 
 // HandleAtxData handles atxs received by sync.

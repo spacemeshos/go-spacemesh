@@ -94,20 +94,15 @@ func storeNodeHashes(t *testing.T, db *sql.Database, diverge, max int) {
 }
 
 func serveHashReq(t *testing.T, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
-	var (
-		hashes = []types.Hash32{}
-		count  uint
-	)
+	hashes := make([]types.Hash32, 0, req.Count())
 	for lid := req.From; lid.Before(req.To); lid = lid.Add(req.Step) {
 		hashes = append(hashes, layerHash(int(lid.Uint32()), true))
-		count++
 	}
 
 	hashes = append(hashes, layerHash(int(req.To.Uint32()), true))
-	count++
 
-	expCount := req.Count()
-	require.Equal(t, expCount, count, fmt.Sprintf("%#v; count exp: %v, got %v", req, expCount, count))
+	expCount := int(req.Count())
+	require.Equal(t, expCount, len(hashes), fmt.Sprintf("%#v; count exp: %v, got %v", req, expCount, len(hashes)))
 	mh := &fetch.MeshHashes{
 		Hashes: hashes,
 	}
@@ -133,7 +128,7 @@ func TestForkFinder_FindFork_Permutation(t *testing.T) {
 
 		fork, err := tf.FindFork(context.Background(), peer, types.LayerID(uint32(lid)), layerHash(lid, true))
 		require.NoError(t, err, fmt.Sprintf("lid: %v", lid))
-		require.EqualValues(t, expected, fork.Uint32())
+		require.Equal(t, expected, int(fork))
 	}
 }
 

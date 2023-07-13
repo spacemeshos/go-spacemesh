@@ -368,11 +368,11 @@ func Test_Validation_Post(t *testing.T) {
 	post := types.Post{}
 	meta := types.PostMetadata{}
 
-	postVerifier.EXPECT().Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any()).Return(nil)
-	require.NoError(t, v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1))
+	postVerifier.EXPECT().Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any(), gomock.Any()).Return(nil)
+	require.NoError(t, v.Post(context.Background(), types.EpochID(0), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1))
 
-	postVerifier.EXPECT().Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any()).Return(errors.New("invalid"))
-	require.Error(t, v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1))
+	postVerifier.EXPECT().Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any(), gomock.Any()).Return(errors.New("invalid"))
+	require.Error(t, v.Post(context.Background(), types.EpochID(0), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1))
 }
 
 func Test_Validation_PositioningAtx(t *testing.T) {
@@ -582,33 +582,33 @@ func TestValidator_Validate(t *testing.T) {
 	r.NoError(err)
 	defer verifier.Close()
 	v := NewValidator(poetDb, postProvider.cfg, logger, verifier)
-	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
+	_, err = v.NIPost(context.Background(), challenge.PublishEpoch, postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
 	r.NoError(err)
 
-	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, types.BytesToHash([]byte("lerner")), postProvider.opts.NumUnits, opts...)
+	_, err = v.NIPost(context.Background(), challenge.PublishEpoch, postProvider.id, postProvider.commitmentAtxId, nipost, types.BytesToHash([]byte("lerner")), postProvider.opts.NumUnits, opts...)
 	r.Contains(err.Error(), "invalid membership proof")
 
 	newNIPost := *nipost
 	newNIPost.Post = &types.Post{}
-	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, &newNIPost, challengeHash, postProvider.opts.NumUnits, opts...)
+	_, err = v.NIPost(context.Background(), challenge.PublishEpoch, postProvider.id, postProvider.commitmentAtxId, &newNIPost, challengeHash, postProvider.opts.NumUnits, opts...)
 	r.Contains(err.Error(), "invalid Post")
 
 	newPostCfg := postProvider.cfg
 	newPostCfg.MinNumUnits = postProvider.opts.NumUnits + 1
 	v = NewValidator(poetDb, newPostCfg, logtest.New(t).WithName("validator"), nil)
-	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
+	_, err = v.NIPost(context.Background(), challenge.PublishEpoch, postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
 	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", newPostCfg.MinNumUnits, postProvider.opts.NumUnits))
 
 	newPostCfg = postProvider.cfg
 	newPostCfg.MaxNumUnits = postProvider.opts.NumUnits - 1
 	v = NewValidator(poetDb, newPostCfg, logtest.New(t).WithName("validator"), nil)
-	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
+	_, err = v.NIPost(context.Background(), challenge.PublishEpoch, postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
 	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", newPostCfg.MaxNumUnits, postProvider.opts.NumUnits))
 
 	newPostCfg = postProvider.cfg
 	newPostCfg.LabelsPerUnit = nipost.PostMetadata.LabelsPerUnit + 1
 	v = NewValidator(poetDb, newPostCfg, logtest.New(t).WithName("validator"), nil)
-	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
+	_, err = v.NIPost(context.Background(), challenge.PublishEpoch, postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
 	r.EqualError(err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", newPostCfg.LabelsPerUnit, nipost.PostMetadata.LabelsPerUnit))
 }
 

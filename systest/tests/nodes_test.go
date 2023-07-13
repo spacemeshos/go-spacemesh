@@ -18,7 +18,7 @@ import (
 
 func init() {
 	// systest runs with `fastnet` preset. this init need to generate addresses with same hrp network prefix as fastnet.
-	types.DefaultTestAddressConfig()
+	types.SetNetworkHRP("stest")
 }
 
 func TestAddNodes(t *testing.T) {

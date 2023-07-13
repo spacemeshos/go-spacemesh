@@ -11,6 +11,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	proving "github.com/spacemeshos/post/proving"
 	shared "github.com/spacemeshos/post/shared"
 	verifying "github.com/spacemeshos/post/verifying"
 )
@@ -144,9 +145,9 @@ func (mr *MocknipostValidatorMockRecorder) InitialNIPostChallenge(challenge, atx
 }
 
 // NIPost mocks base method.
-func (m *MocknipostValidator) NIPost(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error) {
+func (m *MocknipostValidator) NIPost(ctx context.Context, publishEpoch types.EpochID, nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error) {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{ctx, nodeId, atxId, NIPost, expectedChallenge, numUnits}
+	varargs := []interface{}{ctx, publishEpoch, nodeId, atxId, NIPost, expectedChallenge, numUnits}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
@@ -157,9 +158,9 @@ func (m *MocknipostValidator) NIPost(ctx context.Context, nodeId types.NodeID, a
 }
 
 // NIPost indicates an expected call of NIPost.
-func (mr *MocknipostValidatorMockRecorder) NIPost(ctx, nodeId, atxId, NIPost, expectedChallenge, numUnits interface{}, opts ...interface{}) *gomock.Call {
+func (mr *MocknipostValidatorMockRecorder) NIPost(ctx, publishEpoch, nodeId, atxId, NIPost, expectedChallenge, numUnits interface{}, opts ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{ctx, nodeId, atxId, NIPost, expectedChallenge, numUnits}, opts...)
+	varargs := append([]interface{}{ctx, publishEpoch, nodeId, atxId, NIPost, expectedChallenge, numUnits}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NIPost", reflect.TypeOf((*MocknipostValidator)(nil).NIPost), varargs...)
 }
 
@@ -206,9 +207,9 @@ func (mr *MocknipostValidatorMockRecorder) PositioningAtx(id, atxs, goldenATXID,
 }
 
 // Post mocks base method.
-func (m *MocknipostValidator) Post(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...verifying.OptionFunc) error {
+func (m *MocknipostValidator) Post(ctx context.Context, publishEpoch types.EpochID, nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...verifying.OptionFunc) error {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{ctx, nodeId, atxId, Post, PostMetadata, numUnits}
+	varargs := []interface{}{ctx, publishEpoch, nodeId, atxId, Post, PostMetadata, numUnits}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
@@ -218,9 +219,9 @@ func (m *MocknipostValidator) Post(ctx context.Context, nodeId types.NodeID, atx
 }
 
 // Post indicates an expected call of Post.
-func (mr *MocknipostValidatorMockRecorder) Post(ctx, nodeId, atxId, Post, PostMetadata, numUnits interface{}, opts ...interface{}) *gomock.Call {
+func (mr *MocknipostValidatorMockRecorder) Post(ctx, publishEpoch, nodeId, atxId, Post, PostMetadata, numUnits interface{}, opts ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{ctx, nodeId, atxId, Post, PostMetadata, numUnits}, opts...)
+	varargs := append([]interface{}{ctx, publishEpoch, nodeId, atxId, Post, PostMetadata, numUnits}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Post", reflect.TypeOf((*MocknipostValidator)(nil).Post), varargs...)
 }
 
@@ -419,21 +420,6 @@ func (mr *MockatxHandlerMockRecorder) AwaitAtx(id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AwaitAtx", reflect.TypeOf((*MockatxHandler)(nil).AwaitAtx), id)
 }
 
-// GetPosAtxID mocks base method.
-func (m *MockatxHandler) GetPosAtxID() (types.ATXID, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPosAtxID")
-	ret0, _ := ret[0].(types.ATXID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetPosAtxID indicates an expected call of GetPosAtxID.
-func (mr *MockatxHandlerMockRecorder) GetPosAtxID() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPosAtxID", reflect.TypeOf((*MockatxHandler)(nil).GetPosAtxID))
-}
-
 // UnsubscribeAtx mocks base method.
 func (m *MockatxHandler) UnsubscribeAtx(id types.ATXID) {
 	m.ctrl.T.Helper()
@@ -589,9 +575,13 @@ func (mr *MockpostSetupProviderMockRecorder) Config() *gomock.Call {
 }
 
 // GenerateProof mocks base method.
-func (m *MockpostSetupProvider) GenerateProof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (m *MockpostSetupProvider) GenerateProof(ctx context.Context, challenge []byte, options ...proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateProof", ctx, challenge)
+	varargs := []interface{}{ctx, challenge}
+	for _, a := range options {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GenerateProof", varargs...)
 	ret0, _ := ret[0].(*types.Post)
 	ret1, _ := ret[1].(*types.PostMetadata)
 	ret2, _ := ret[2].(error)
@@ -599,9 +589,10 @@ func (m *MockpostSetupProvider) GenerateProof(ctx context.Context, challenge []b
 }
 
 // GenerateProof indicates an expected call of GenerateProof.
-func (mr *MockpostSetupProviderMockRecorder) GenerateProof(ctx, challenge interface{}) *gomock.Call {
+func (mr *MockpostSetupProviderMockRecorder) GenerateProof(ctx, challenge interface{}, options ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateProof", reflect.TypeOf((*MockpostSetupProvider)(nil).GenerateProof), ctx, challenge)
+	varargs := append([]interface{}{ctx, challenge}, options...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateProof", reflect.TypeOf((*MockpostSetupProvider)(nil).GenerateProof), varargs...)
 }
 
 // LastOpts mocks base method.

@@ -262,6 +262,10 @@ func (db *CachedDB) IdentityExists(nodeID types.NodeID) (bool, error) {
 	return true, nil
 }
 
+func (db *CachedDB) MaxHeightAtx() (types.ATXID, error) {
+	return atxs.GetIDWithMaxHeight(db, types.EmptyNodeID)
+}
+
 // Hint marks which DB should be queried for a certain provided hash.
 type Hint string
 

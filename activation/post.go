@@ -32,6 +32,8 @@ type PostConfig struct {
 	K2            uint32        `mapstructure:"post-k2"`
 	K3            uint32        `mapstructure:"post-k3"`
 	PowDifficulty PowDifficulty `mapstructure:"post-pow-difficulty"`
+	// Since when to include the miner ID in the K2 pow.
+	MinerIDInK2PowSinceEpoch uint32 `mapstructure:"post-minerid-in-k2-pow-since-epoch"`
 }
 
 func (c PostConfig) ToConfig() config.Config {
@@ -394,6 +396,9 @@ func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) 
 			if err != nil {
 				return types.EmptyATXID, err
 			}
+			if atx.CommitmentATX == nil {
+				return types.EmptyATXID, fmt.Errorf("initial ATX %s does not contain a commitment ATX", atxId)
+			}
 			return *atx.CommitmentATX, nil
 		}
 
@@ -408,7 +413,7 @@ func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) 
 // It will use the ATX with the highest height seen by the node and defaults to the goldenATX,
 // when no ATXs have yet been published.
 func (mgr *PostSetupManager) findCommitmentAtx(ctx context.Context) (types.ATXID, error) {
-	atx, err := atxs.GetAtxIDWithMaxHeight(mgr.db)
+	atx, err := atxs.GetIDWithMaxHeight(mgr.db, types.EmptyNodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		mgr.logger.With().Info("using golden atx as commitment atx")
@@ -435,7 +440,7 @@ func (mgr *PostSetupManager) Reset() error {
 }
 
 // GenerateProof generates a new Post.
-func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte, options ...proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
 	mgr.mu.Lock()
 
 	if mgr.state != PostSetupStateComplete {
@@ -444,12 +449,15 @@ func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte
 	}
 	mgr.mu.Unlock()
 
-	proof, proofMetadata, err := proving.Generate(ctx, challenge, mgr.cfg.ToConfig(), mgr.logger.Zap(),
+	opts := []proving.OptionFunc{
 		proving.WithDataSource(mgr.cfg.ToConfig(), mgr.id.Bytes(), mgr.commitmentAtxId.Bytes(), mgr.lastOpts.DataDir),
 		proving.WithNonces(mgr.provingOpts.Nonces),
 		proving.WithThreads(mgr.provingOpts.Threads),
 		proving.WithPowFlags(mgr.provingOpts.Flags),
-	)
+	}
+	opts = append(opts, options...)
+
+	proof, proofMetadata, err := proving.Generate(ctx, challenge, mgr.cfg.ToConfig(), mgr.logger.Zap(), opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate proof: %w", err)
 	}

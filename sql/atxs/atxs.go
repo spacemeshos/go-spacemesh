@@ -294,8 +294,12 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 	return nil
 }
 
-// GetAtxIDWithMaxHeight returns the ID of the atx from the last epoch with the highest (or tied for the highest) tick height.
-func GetAtxIDWithMaxHeight(db sql.Executor) (types.ATXID, error) {
+// GetIDWithMaxHeight returns the ID of the atx from the last 2 epoch with the highest (or tied for the highest) tick height.
+// it is possible that some poet servers are faster than others and the network ends up having its highest ticked atx still in
+// previous epoch and the atxs building on top of it have not been published yet. selecting from the last two epochs to strike
+// a balance between being fair to honest miners while not giving unfair advantage for malicious actors who retroactively
+// publish a high tick atx many epochs back.
+func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID) (types.ATXID, error) {
 	var (
 		rst types.ATXID
 		max uint64
@@ -305,13 +309,24 @@ func GetAtxIDWithMaxHeight(db sql.Executor) (types.ATXID, error) {
 		stmt.ColumnBytes(0, id[:])
 		height := uint64(stmt.ColumnInt64(1)) + uint64(stmt.ColumnInt64(2))
 		if height >= max {
-			max = height
-			rst = id
+			var smesher types.NodeID
+			stmt.ColumnBytes(3, smesher[:])
+			if height > max {
+				max = height
+				rst = id
+			} else if pref != types.EmptyNodeID && smesher == pref {
+				// height is equal. prefer atxs from `pref`
+				rst = id
+			}
 		}
 		return true
 	}
 
-	if rows, err := db.Exec("select id, base_tick_height, tick_count, epoch from atxs where epoch = (select max(epoch) from atxs);", nil, dec); err != nil {
+	if rows, err := db.Exec(`
+		select id, base_tick_height, tick_count, pubkey
+		from atxs left join identities using(pubkey)
+		where identities.pubkey is null and epoch >= (select max(epoch) from atxs)-1
+		order by epoch desc;`, nil, dec); err != nil {
 		return types.ATXID{}, fmt.Errorf("select positioning atx: %w", err)
 	} else if rows == 0 {
 		return types.ATXID{}, sql.ErrNotFound

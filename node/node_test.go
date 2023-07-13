@@ -824,6 +824,22 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 	})
 }
 
+func TestHRP(t *testing.T) {
+	c := &cobra.Command{}
+	cmd.AddCommands(c)
+	t.Cleanup(cmd.ResetConfig)
+
+	data := `{"main": {"network-hrp": "TEST"}}`
+	cfg := filepath.Join(t.TempDir(), "config.json")
+	require.NoError(t, os.WriteFile(cfg, []byte(data), 0o600))
+	require.NoError(t, c.ParseFlags([]string{"-c=" + cfg}))
+	conf, err := loadConfig(c)
+	require.NoError(t, err)
+	app := New(WithConfig(conf))
+	require.NotNil(t, app)
+	require.Equal(t, "TEST", types.NetworkHRP())
+}
+
 func TestGenesisConfig(t *testing.T) {
 	t.Run("config is written to a file", func(t *testing.T) {
 		app := New()
@@ -948,25 +964,37 @@ func TestAdminEvents(t *testing.T) {
 
 	tctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
-	require.NoError(t, err)
-	defer stream.CloseSend()
-	success := []pb.IsEventDetails{
-		&pb.Event_InitStart{},
-		&pb.Event_InitComplete{},
-		&pb.Event_PostStart{},
-		&pb.Event_PostComplete{},
-		&pb.Event_PoetWaitRound{},
-		&pb.Event_PoetWaitProof{},
-		&pb.Event_PostStart{},
-		&pb.Event_PostComplete{},
-		&pb.Event_AtxPublished{},
-	}
-	for _, ev := range success {
-		msg, err := stream.Recv()
+
+	// 4 is arbitrary, if we received events once, they must be
+	// cached and should be returned immediately
+	for i := 0; i < 4; i++ {
+		stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
 		require.NoError(t, err)
-		require.IsType(t, ev, msg.Details)
+		success := []pb.IsEventDetails{
+			&pb.Event_Beacon{},
+			&pb.Event_InitStart{},
+			&pb.Event_InitComplete{},
+			&pb.Event_PostStart{},
+			&pb.Event_PostComplete{},
+			&pb.Event_PoetWaitRound{},
+			&pb.Event_PoetWaitProof{},
+			&pb.Event_PostStart{},
+			&pb.Event_PostComplete{},
+			&pb.Event_AtxPublished{},
+		}
+		for _, ev := range success {
+			msg, err := stream.Recv()
+			require.NoError(t, err, "stream %d", i)
+			require.IsType(t, ev, msg.Details, "stream %d", i)
+		}
 	}
+}
+
+func TestEmptyExtraData(t *testing.T) {
+	cfg := getTestDefaultConfig(t)
+	cfg.Genesis.ExtraData = ""
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+	require.Error(t, app.Initialize())
 }
 
 func getTestDefaultConfig(tb testing.TB) *config.Config {

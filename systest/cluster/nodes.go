@@ -2,6 +2,8 @@ package cluster
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -394,15 +396,22 @@ func labelSelector(id string) string {
 	return fmt.Sprintf("id=%s", id)
 }
 
-func deployNodes(ctx *testcontext.Context, kind string, from, to int, flags []DeploymentFlag) ([]*NodeClient, error) {
+func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...DeploymentOpt) ([]*NodeClient, error) {
 	var (
 		eg      errgroup.Group
 		clients = make(chan *NodeClient, to-from)
+		cfg     = SmesherDeploymentConfig{}
 	)
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	if delta := to - from; len(cfg.keys) > 0 && len(cfg.keys) != delta {
+		return nil, fmt.Errorf("keys must be overwritten for all or none members of the cluster: delta %d, keys %d %v", delta, len(cfg.keys), cfg.keys)
+	}
 	for i := from; i < to; i++ {
 		i := i
-		finalFlags := make([]DeploymentFlag, len(flags), len(flags)+ctx.PoetSize)
-		copy(finalFlags, flags)
+		finalFlags := make([]DeploymentFlag, len(cfg.flags), len(cfg.flags)+ctx.PoetSize)
+		copy(finalFlags, cfg.flags)
 		for idx := 0; idx < ctx.PoetSize; idx++ {
 			finalFlags = append(finalFlags, PoetEndpoint(MakePoetEndpoint(idx)))
 		}
@@ -411,6 +420,10 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, flags []De
 		} else {
 			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(0)))
 		}
+		if len(cfg.keys) > 0 {
+			finalFlags = append(finalFlags, SmesherKey(cfg.keys[i-from]))
+		}
+
 		eg.Go(func() error {
 			id := fmt.Sprintf("%s-%d", kind, i)
 			labels := nodeLabels(kind, id)
@@ -704,4 +717,8 @@ func StartSmeshing(start bool) DeploymentFlag {
 
 func GenerateFallback() DeploymentFlag {
 	return DeploymentFlag{Name: "--fallback", Value: fmt.Sprintf("%v", true)}
+}
+
+func SmesherKey(key ed25519.PrivateKey) DeploymentFlag {
+	return DeploymentFlag{Name: "--testing-smesher-key", Value: hex.EncodeToString(key)}
 }

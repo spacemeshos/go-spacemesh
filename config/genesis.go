@@ -41,6 +41,9 @@ func (g *GenesisConfig) GoldenATX() types.Hash32 {
 
 // Validate GenesisConfig.
 func (g *GenesisConfig) Validate() error {
+	if len(g.ExtraData) == 0 {
+		return fmt.Errorf("wait until genesis-extra-data is available")
+	}
 	if len(g.ExtraData) > 255 {
 		return fmt.Errorf("extra-data is longer than 255 symbols: %s", g.ExtraData)
 	}

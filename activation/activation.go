@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
@@ -24,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 // PoetConfig is the configuration to interact with the poet server.
@@ -276,7 +278,7 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 	startTime := time.Now()
 	var err error
 	events.EmitPostStart(shared.ZeroChallenge)
-	b.initialPost, _, err = b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge)
+	b.initialPost, _, err = b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge, proving.WithPowCreator(b.nodeID.Bytes()))
 	if err != nil {
 		events.EmitPostFailure()
 		return fmt.Errorf("post execution: %w", err)
@@ -641,9 +643,9 @@ func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, 
 	return len(buf), nil
 }
 
-// GetPositioningAtx returns atx id from the newest epoch with the highest tick height.
+// GetPositioningAtx returns atx id with the highest tick height.
 func (b *Builder) GetPositioningAtx() (types.ATXID, error) {
-	id, err := b.atxHandler.GetPosAtxID()
+	id, err := atxs.GetIDWithMaxHeight(b.cdb, b.nodeID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
 			b.log.With().Info("using golden atx as positioning atx", b.goldenATXID)

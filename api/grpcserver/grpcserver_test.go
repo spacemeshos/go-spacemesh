@@ -640,6 +640,14 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, layerCurrent.Uint32(), res.Status.TopLayer.Number)
 			require.Equal(t, layerVerified.Uint32(), res.Status.VerifiedLayer.Number)
 		}},
+		{"NodeInfo", func(t *testing.T) {
+			resp, err := c.NodeInfo(ctx, &empty.Empty{})
+			require.NoError(t, err)
+			require.Equal(t, resp.Hrp, types.NetworkHRP())
+			require.Equal(t, resp.FirstGenesis, types.FirstEffectiveGenesis().Uint32())
+			require.Equal(t, resp.EffectiveGenesis, types.GetEffectiveGenesis().Uint32())
+			require.Equal(t, resp.EpochSize, types.GetLayersPerEpoch())
+		}},
 		// NOTE: ErrorStream and StatusStream have comprehensive, E2E tests in cmd/node/node_test.go.
 	}
 
@@ -988,10 +996,8 @@ func TestSmesherService(t *testing.T) {
 		logtest.SetupGlobal(t)
 		res, err := c.SmesherID(context.Background(), &empty.Empty{})
 		require.NoError(t, err)
-		nodeAddr := types.GenerateAddress(signer.NodeID().Bytes())
-		resAddr, err := types.StringToAddress(res.AccountId.Address)
 		require.NoError(t, err)
-		require.Equal(t, nodeAddr.String(), resAddr.String())
+		require.Equal(t, signer.NodeID().Bytes(), res.PublicKey)
 	})
 
 	t.Run("SetCoinbaseMissingArgs", func(t *testing.T) {

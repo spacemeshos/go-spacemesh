@@ -17,8 +17,9 @@ func init() {
 
 func fastnet() config.Config {
 	conf := config.DefaultConfig()
-	conf.Address = types.DefaultTestAddressConfig()
 
+	conf.NetworkHRP = "stest"
+	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
 	conf.BaseConfig.OptFilterThreshold = 90
 
 	conf.HARE.N = 800
@@ -32,6 +33,7 @@ func fastnet() config.Config {
 
 	conf.Genesis = &config.GenesisConfig{
 		ExtraData: "fastnet",
+		Accounts:  map[string]uint64{},
 	}
 
 	conf.LayerAvgSize = 50

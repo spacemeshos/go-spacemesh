@@ -19,7 +19,8 @@ func init() {
 
 func standalone() config.Config {
 	conf := config.DefaultConfig()
-	conf.Address = types.DefaultTestAddressConfig()
+	conf.NetworkHRP = "standalone"
+	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
 
 	conf.TIME.Peersync.Disable = true
 	conf.Standalone = true
@@ -35,6 +36,7 @@ func standalone() config.Config {
 
 	conf.Genesis = &config.GenesisConfig{
 		ExtraData: "standalone",
+		Accounts:  map[string]uint64{},
 	}
 
 	conf.LayerAvgSize = 50

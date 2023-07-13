@@ -1,0 +1,6 @@
+{
+    "initial": 20000e9, 
+    "total": 50000e9, 
+    "required": 2,
+    "hrp": "sm"
+}

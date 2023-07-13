@@ -1,3 +1,4 @@
+VERSION ?= $(shell git describe --tags)
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 include Makefile-libs.Inc
 
@@ -10,16 +11,6 @@ BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
 export CGO_ENABLED := 1
 export CGO_CFLAGS := $(CGO_CFLAGS) -DSQLITE_ENABLE_DBSTAT_VTAB=1
-
-# These commands cause problems on Windows
-ifeq ($(OS),Windows_NT)
-  # Just assume we're in interactive mode on Windows
-  INTERACTIVE = 1
-  VERSION ?= $(shell type version.txt)
-else
-  INTERACTIVE := $(shell [ -t 0 ] && echo 1)
-  VERSION ?= $(shell cat version.txt)
-endif
 
 # Add an indicator to the branch name if dirty and use commithash if running in detached mode
 ifeq ($(BRANCH),HEAD)
@@ -148,17 +139,6 @@ lint-github-action: get-libs
 cover: get-libs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -timeout 0 -p 1 -coverpkg=./... $(UNIT_TESTS)
 .PHONY: cover
-
-tag-and-build:
-	git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && git --no-pager diff && exit 1)
-	printf "${VERSION}" > version.txt
-	git commit -m "bump version to ${VERSION}" version.txt
-	git tag ${VERSION}
-	git push origin ${VERSION}
-	DOCKER_BUILDKIT=1 docker build -t go-spacemesh:${VERSION} .
-	docker tag go-spacemesh:${VERSION} $(DOCKER_HUB)/go-spacemesh:${VERSION}
-	docker push $(DOCKER_HUB)/go-spacemesh:${VERSION}
-.PHONY: tag-and-build
 
 list-versions:
 	@echo "Latest 5 tagged versions:\n"

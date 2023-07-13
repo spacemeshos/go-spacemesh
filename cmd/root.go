@@ -12,10 +12,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/node/flags"
 )
 
-var cfg = config.DefaultConfig()
+var cfg = config.MainnetConfig()
 
 func ResetConfig() {
-	cfg = config.DefaultConfig()
+	cfg = config.MainnetConfig()
 }
 
 // AddCommands adds cobra commands to the app.
@@ -46,10 +46,6 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.MetricsPush, "Push metrics to url")
 	cmd.PersistentFlags().IntVar(&cfg.MetricsPushPeriod, "metrics-push-period",
 		cfg.MetricsPushPeriod, "Push period")
-	cmd.PersistentFlags().StringVar(&cfg.OracleServer, "oracle_server",
-		cfg.OracleServer, "The oracle server url. (temporary) ")
-	cmd.PersistentFlags().IntVar(&cfg.OracleServerWorldID, "oracle_server_worldid",
-		cfg.OracleServerWorldID, "The worldid to use with the oracle server (temporary) ")
 	cmd.PersistentFlags().StringArrayVar(&cfg.PoETServers, "poet-server",
 		cfg.PoETServers, "The poet server url. (temporary) Can be passed multiple times")
 	cmd.PersistentFlags().StringVar(&cfg.Genesis.GenesisTime, "genesis-time",
@@ -75,7 +71,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&cfg.OptFilterThreshold, "optimistic-filtering-threshold",
 		cfg.OptFilterThreshold, "threshold for optimistic filtering in percentage")
 
-	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(cfg.Genesis.Accounts), "accounts", "a",
+	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(map[string]uint64{}), "accounts", "a",
 		"List of prefunded accounts")
 
 	cmd.PersistentFlags().IntVar(&cfg.DatabaseConnections, "db-connections",
@@ -264,6 +260,11 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.Bootstrap.URL, "the url to query bootstrap data update")
 	cmd.PersistentFlags().StringVar(&cfg.Bootstrap.Version, "bootstrap-version",
 		cfg.Bootstrap.Version, "the update version of the bootstrap data")
+
+	/**======================== testing related flags ========================== **/
+	cmd.PersistentFlags().StringVar(&cfg.TestConfig.SmesherKey, "testing-smesher-key",
+		"", "import private smesher key for testing",
+	)
 
 	// Bind Flags to config
 	err := viper.BindPFlags(cmd.PersistentFlags())

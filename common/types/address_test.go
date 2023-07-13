@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	types.DefaultTestAddressConfig()
+	types.SetNetworkHRP("stest")
 }
 
 func TestAddress_NewAddress(t *testing.T) {

@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
 
 const layersPerEpoch = 5
@@ -577,7 +578,20 @@ func newAtx(signer *signing.EdSigner, opts ...createAtxOpt) (*types.VerifiedActi
 	return atx.Verify(0, 1)
 }
 
-func TestPositioningID(t *testing.T) {
+func createIdentities(tb testing.TB, db sql.Executor, n int, midxs ...int) []*signing.EdSigner {
+	var sigs []*signing.EdSigner
+	for i := 0; i < n; i++ {
+		sig, err := signing.NewEdSigner()
+		require.NoError(tb, err)
+		sigs = append(sigs, sig)
+	}
+	for _, idx := range midxs {
+		require.NoError(tb, identities.SetMalicious(db, sigs[idx].NodeID(), []byte("bad")))
+	}
+	return sigs
+}
+
+func TestGetIDWithMaxHeight(t *testing.T) {
 	type header struct {
 		coinbase    types.Address
 		base, count uint64
@@ -586,6 +600,8 @@ func TestPositioningID(t *testing.T) {
 	for _, tc := range []struct {
 		desc   string
 		atxs   []header
+		pref   int
+		midxs  []int
 		expect int
 	}{
 		{
@@ -594,10 +610,62 @@ func TestPositioningID(t *testing.T) {
 		{
 			desc: "by epoch",
 			atxs: []header{
-				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
-				{coinbase: types.Address{2}, base: 1, count: 1, epoch: 2},
+				{coinbase: types.Address{1}, base: 1, count: 1, epoch: 1},
+				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 2},
 			},
 			expect: 1,
+			pref:   -1,
+		},
+		{
+			desc: "highest in prev epoch",
+			atxs: []header{
+				{coinbase: types.Address{1}, base: 1, count: 3, epoch: 1}, // too old
+				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 2},
+				{coinbase: types.Address{3}, base: 1, count: 1, epoch: 3},
+			},
+			pref:   -1,
+			expect: 1,
+		},
+		{
+			desc: "prefer later epoch",
+			atxs: []header{
+				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 2},
+			},
+			pref:   -1,
+			expect: 1,
+		},
+		{
+			desc: "prefer node id",
+			atxs: []header{
+				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{3}, base: 1, count: 2, epoch: 2},
+			},
+			pref:   1,
+			expect: 1,
+		},
+		{
+			desc: "skip malicious id",
+			atxs: []header{
+				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{3}, base: 1, count: 1, epoch: 2},
+			},
+			pref:   1,
+			midxs:  []int{0, 1},
+			expect: 2,
+		},
+		{
+			desc: "skip malicious id not found",
+			atxs: []header{
+				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{3}, base: 1, count: 2, epoch: 2},
+			},
+			pref:   1,
+			midxs:  []int{0, 1, 2},
+			expect: -1,
 		},
 		{
 			desc: "by tick height",
@@ -605,13 +673,15 @@ func TestPositioningID(t *testing.T) {
 				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
 				{coinbase: types.Address{2}, base: 1, count: 1, epoch: 1},
 			},
+			pref:   -1,
 			expect: 0,
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			db := sql.InMemory()
+			sigs := createIdentities(t, db, len(tc.atxs), tc.midxs...)
 			ids := []types.ATXID{}
-			for _, atx := range tc.atxs {
+			for i, atx := range tc.atxs {
 				full := &types.ActivationTx{
 					InnerActivationTx: types.InnerActivationTx{
 						NIPostChallenge: types.NIPostChallenge{
@@ -621,10 +691,7 @@ func TestPositioningID(t *testing.T) {
 						NumUnits: 2,
 					},
 				}
-
-				sig, err := signing.NewEdSigner()
-				require.NoError(t, err)
-				require.NoError(t, activation.SignAndFinalizeAtx(sig, full))
+				require.NoError(t, activation.SignAndFinalizeAtx(sigs[i], full))
 
 				full.SetEffectiveNumUnits(full.NumUnits)
 				full.SetReceived(time.Now())
@@ -634,8 +701,12 @@ func TestPositioningID(t *testing.T) {
 				require.NoError(t, atxs.Add(db, vAtx))
 				ids = append(ids, full.ID())
 			}
-			rst, err := atxs.GetAtxIDWithMaxHeight(db)
-			if len(tc.atxs) == 0 {
+			var pref types.NodeID
+			if tc.pref > 0 {
+				pref = sigs[tc.pref].NodeID()
+			}
+			rst, err := atxs.GetIDWithMaxHeight(db, pref)
+			if len(tc.atxs) == 0 || tc.expect < 0 {
 				require.ErrorIs(t, err, sql.ErrNotFound)
 			} else {
 				require.Equal(t, ids[tc.expect], rst)
